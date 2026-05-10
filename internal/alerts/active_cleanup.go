@@ -252,6 +252,21 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 		if alert.CanonicalKind == string(alertspecs.AlertSpecKindConnectivity) && strings.HasPrefix(alert.ResourceID, "pbs") {
 			continue
 		}
+		// Agent-sourced resources (Unraid, standalone Linux hosts, TrueNAS,
+		// any platform reached via Pulse Agent) do not appear in the
+		// existingNodes map — that map is built only from Proxmox nodes
+		// and PBS instances. Without this carve-out, every cleanup cycle
+		// removes the agent alert because alert.Node is empty or unmapped,
+		// then the next poll re-creates the alert as "new", calls
+		// AddAlert, and appends a fresh history row. Result observed in
+		// the wild: 3,980 history entries in 7 days for what were really
+		// a small number of persistent issues (e.g. an Unraid array
+		// running without parity protection generating one entry per
+		// 30-second poll). Agent resource IDs are namespaced as
+		// "agent:<id>...", so this carve-out matches that pattern.
+		if strings.HasPrefix(alert.ResourceID, "agent:") {
+			continue
+		}
 
 		node := alert.Node
 		if node == "" || !existingNodes[node] {

@@ -11316,6 +11316,62 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 			t.Errorf("expected 1 alert, got %d", count)
 		}
 	})
+
+	t.Run("preserves agent-sourced alerts even when node not in existingNodes map", func(t *testing.T) {
+		// Agent-sourced resources (Unraid, standalone Linux hosts, TrueNAS,
+		// anything reached via Pulse Agent) do not appear in existingNodes
+		// — that map is built from Proxmox nodes and PBS instances.
+		// Without the agent: ResourceID carve-out, the cleanup pass
+		// removes the alert every cycle and the next poll re-creates it
+		// as new, calling AddAlert and appending a duplicate history row.
+		// The 30-second cycle produces ~3,980 history entries in 7 days
+		// for what should be a handful of persistent issues. This test
+		// locks in the carve-out.
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["agent-unraid-array"] = &Alert{
+			ID:         "agent-unraid-array",
+			ResourceID: "agent:de6d3fee-2595-6c2b-6b08-43db6b0ab427/storage:unraid-array",
+			Type:       "storage-topology",
+			Node:       "", // Agent alerts often have no Proxmox-style node.
+		}
+		m.activeAlerts["agent-cpu"] = &Alert{
+			ID:         "agent-cpu",
+			ResourceID: "agent:de6d3fee-2595-6c2b-6b08-43db6b0ab427",
+			Type:       "cpu",
+			Node:       "",
+		}
+		m.activeAlerts["proxmox-stale"] = &Alert{
+			ID:   "proxmox-stale",
+			Node: "decommissioned-pve",
+		}
+		m.mu.Unlock()
+
+		// Only the legitimate Proxmox nodes are in the map — neither agent
+		// resource appears here, mirroring production behaviour where
+		// existingNodes is sourced from state.Nodes + state.PBSInstances.
+		existingNodes := map[string]bool{"pve1": true}
+
+		m.CleanupAlertsForNodes(existingNodes)
+		time.Sleep(50 * time.Millisecond)
+
+		m.mu.RLock()
+		_, unraidStays := testLookupActiveAlert(t, m, "agent-unraid-array")
+		_, agentCPUStays := testLookupActiveAlert(t, m, "agent-cpu")
+		_, staleStays := testLookupActiveAlert(t, m, "proxmox-stale")
+		m.mu.RUnlock()
+
+		if !unraidStays {
+			t.Error("agent-sourced Unraid alert must survive cleanup; carve-out missing")
+		}
+		if !agentCPUStays {
+			t.Error("agent-sourced CPU alert must survive cleanup; carve-out missing")
+		}
+		if staleStays {
+			t.Error("non-agent alert with stale node must still be removed (control case)")
+		}
+	})
 }
 
 func TestCheckZFSPoolHealth(t *testing.T) {
