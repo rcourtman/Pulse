@@ -4411,3 +4411,16 @@ summary table (resource, type, status, avg CPU/memory/disk, alert
 count) remains rendered from the same per-resource aggregates
 above the narrative section, so every named outlier is verifiable
 against the table immediately below it.
+Both narrators (single-resource and fleet) carry a detection-
+boundary invariant in their system prompts: a "warning" or
+"critical" classification on any observation, outlier, or pattern
+must be backed by a Patrol finding, an alert, or a hard-threshold
+breach visible in the structured input (cpu max above 90, memory
+avg above 85, disk avg above 85, failed or high-wear disks, or
+storage pools at 90 percent or more). Trends the narrator infers
+from metric data without that backing are constrained to "info"
+severity. The same constraint applies to recommendations.
+Detection and severity classification are owned by Patrol; the
+report narrators summarize Patrol's work and must not function as
+parallel classifiers, so the report PDF cannot become a back-door
+detection surface that diverges from Patrol's findings store.

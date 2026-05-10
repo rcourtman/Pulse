@@ -1813,3 +1813,20 @@ deliberately not propagated through the multi-report path; a
 50-resource fleet report performs exactly one AI call (the fleet
 narrator) rather than 51 (one per resource plus a fleet-level
 summary).
+
+Both the single-resource and fleet narrator system prompts also
+encode an explicit detection-boundary invariant: Pulse Patrol is the
+canonical detection layer, and the report narrators must function as
+summarizers of Patrol's classified state rather than parallel
+detectors. The narrator may classify an observation at "warning" or
+"critical" severity only when it is backed by a Patrol finding, an
+alert, or a hard-threshold breach in the structured input (cpu max
+above 90, memory avg above 85, disk avg above 85, failed or
+high-wear disks, storage pools at 90 percent or more). Patterns it
+notices in the metric data without that backing may be mentioned at
+"info" severity but must not be promoted. Recommendations follow
+the same rule: no remediation for inferred issues that lack a
+finding, alert, or threshold breach. This keeps the report
+narrative honestly retrospective on Patrol's work and prevents
+silent shadow-classification competing with Patrol's detection
+rules.
