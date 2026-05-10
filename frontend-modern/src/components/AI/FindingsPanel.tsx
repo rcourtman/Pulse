@@ -1036,26 +1036,40 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <div class="text-xs font-medium text-base-content mb-2">Lifecycle</div>
             <div class="space-y-1">
               <For each={[...(finding.lifecycle || [])].slice(-6).reverse()}>
-                {(event) => (
-                  <div class="text-xs text-muted flex items-start justify-between gap-2">
-                    <span class="truncate">
-                      <span class="font-medium text-base-content">
-                        {formatFindingLifecycleType(event.type)}
+                {(event) => {
+                  const typeLabel = formatFindingLifecycleType(event.type);
+                  // Some historical events have a message that just restates
+                  // the type label ("Detected" / "Detected by Pulse Patrol").
+                  // Drop the message in that case so the row reads cleanly.
+                  const showMessage = () => {
+                    const msg = event.message?.trim();
+                    if (!msg) return false;
+                    return !msg.toLowerCase().startsWith(typeLabel.toLowerCase());
+                  };
+                  // A from->to span where from === to is a no-op transition
+                  // (a heartbeat that pre-dates the lifecycle dedupe fix).
+                  // Hide it; only render real transitions.
+                  const showTransition = () =>
+                    Boolean(event.from) && Boolean(event.to) && event.from !== event.to;
+                  return (
+                    <div class="text-xs text-muted flex items-start justify-between gap-2">
+                      <span class="truncate">
+                        <span class="font-medium text-base-content">{typeLabel}</span>
+                        <Show when={showMessage()}>
+                          {' '}
+                          <span>{event.message}</span>
+                        </Show>
+                        <Show when={showTransition()}>
+                          {' '}
+                          <span class="text-muted">
+                            ({event.from} {'->'} {event.to})
+                          </span>
+                        </Show>
                       </span>
-                      <Show when={event.message}>
-                        {' '}
-                        <span>{event.message}</span>
-                      </Show>
-                      <Show when={event.from && event.to}>
-                        {' '}
-                        <span class="text-muted">
-                          ({event.from} {'->'} {event.to})
-                        </span>
-                      </Show>
-                    </span>
-                    <span class="shrink-0">{formatRelativeTime(event.at)}</span>
-                  </div>
-                )}
+                      <span class="shrink-0">{formatRelativeTime(event.at)}</span>
+                    </div>
+                  );
+                }}
               </For>
             </div>
           </div>

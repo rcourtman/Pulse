@@ -34,6 +34,53 @@ func TestFindingsStore_AddRecordsDetectedLifecycleEvent(t *testing.T) {
 	}
 }
 
+func TestFindingsStore_RedetectionDoesNotAppendHeartbeatLifecycleEvent(t *testing.T) {
+	store := NewFindingsStore()
+	f := &Finding{
+		ID:           "lf-heartbeat",
+		ResourceID:   "host-runtime-error",
+		ResourceName: "host-runtime-error",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryReliability,
+		Title:        "Provider analysis error",
+		Description:  "Pulse Patrol reached the configured provider, but the provider did not complete the request.",
+	}
+	if !store.Add(f) {
+		t.Fatal("expected first add to create finding")
+	}
+	initialLen := len(store.Get(f.ID).Lifecycle)
+	if initialLen == 0 {
+		t.Fatal("expected first add to record at least one lifecycle event")
+	}
+
+	// Simulate three additional Patrol scans re-detecting the same active
+	// finding. None of these are state transitions — TimesRaised and
+	// LastSeenAt should still update, but no new lifecycle events should
+	// be appended (the lifecycle records transitions, not heartbeats).
+	for i := 0; i < 3; i++ {
+		if !store.Add(&Finding{
+			ID:           f.ID,
+			ResourceID:   "host-runtime-error",
+			ResourceName: "host-runtime-error",
+			Severity:     FindingSeverityWarning,
+			Category:     FindingCategoryReliability,
+			Title:        "Provider analysis error",
+			Description:  "Pulse Patrol reached the configured provider, but the provider did not complete the request.",
+		}) {
+			t.Fatalf("expected re-detection %d to update existing finding", i+1)
+		}
+	}
+
+	got := store.Get(f.ID)
+	if got.TimesRaised != 1+3 {
+		t.Fatalf("expected timesRaised=4 after three re-detections, got %d", got.TimesRaised)
+	}
+	if len(got.Lifecycle) != initialLen {
+		t.Fatalf("expected lifecycle length to remain %d after heartbeat re-detections, got %d (events: %+v)",
+			initialLen, len(got.Lifecycle), got.Lifecycle)
+	}
+}
+
 func TestFindingsStore_RegressionIncrementsAndRecordsLifecycleEvent(t *testing.T) {
 	store := NewFindingsStore()
 	f := &Finding{

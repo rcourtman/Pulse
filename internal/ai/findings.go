@@ -1263,7 +1263,12 @@ func (s *FindingsStore) Add(f *Finding) bool {
 			}
 		}
 		s.syncLoopStateLocked(existing)
-		s.appendLifecycleLocked(existing, "detected", "Detected by Pulse Patrol", existing.LoopState, existing.LoopState, nil)
+		// Re-detections of an existing finding are heartbeats, not transitions.
+		// TimesRaised and LastSeenAt already track recurrence. The actual
+		// transition events ("regressed", "reminded", "suppression_lifted",
+		// etc.) are emitted from their own branches above; appending an
+		// additional "detected (same -> same)" event on every Patrol scan
+		// pollutes the lifecycle with no-op rows.
 		severity := existing.Severity
 		s.mu.Unlock()
 		s.scheduleSave()
