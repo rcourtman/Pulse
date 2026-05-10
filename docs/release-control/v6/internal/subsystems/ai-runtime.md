@@ -580,6 +580,17 @@ runtime cost control, and shared AI transport surfaces.
 
 ## Current State
 
+The overall health score (`calculateOverallHealth` in
+`internal/ai/intelligence.go`) tiers the "recent Patrol errors" coverage
+factor by the ratio of errored runs to relevant runs in the scoring
+window. Above 50% of recent runs erroring is a `-30` impact and is
+described as "Most recent Patrol runs encountered errors"; above 25%
+is `-20`; otherwise the original `-10` light-tier description applies.
+This prevents the score chip from showing grade A while the same
+assessment surface warns the operator that coverage is incomplete or
+recent runs failed, which previously happened whenever one successful
+manual run sat among many failed startup runs.
+
 Stale-finding auto-resolve (`reconcileStaleFindings` in
 `internal/ai/patrol_ai.go`) is gated on the category whitelist exposed by
 `CategorySupportsStaleAutoResolve` in `internal/ai/findings.go`. Only

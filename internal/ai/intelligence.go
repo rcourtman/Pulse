@@ -1114,10 +1114,31 @@ func summarizeRecentPatrolCoverage(
 			impact:      20,
 		}, true
 	case recentErrors > 0:
+		// Tier the impact by error ratio so the score actually reflects how
+		// unreliable recent runs have been. The previous flat 10-point impact
+		// could not separate "1 error in 10 runs" (mostly healthy) from
+		// "8 errors in 10 runs" (mostly broken) — both produced grade A and
+		// contradicted the "recent Patrol runs encountered errors" warning
+		// the same factor surfaces. Dominant-error periods now drop the
+		// score out of the A band so the grade and the warning agree.
+		ratio := float64(recentErrors) / float64(len(relevant))
+		var impact float64
+		var description string
+		switch {
+		case ratio > 0.5:
+			impact = 30
+			description = fmt.Sprintf("Most recent Patrol runs encountered errors (%d of %d); the current health summary is not reliable until coverage stabilizes.", recentErrors, len(relevant))
+		case ratio > 0.25:
+			impact = 20
+			description = fmt.Sprintf("Recent Patrol runs encountered errors (%d of %d), so the current health summary may be incomplete.", recentErrors, len(relevant))
+		default:
+			impact = 10
+			description = "Recent Patrol runs encountered errors, so the current health summary may be incomplete."
+		}
 		return patrolCoverageFactor{
 			name:        "Recent Patrol errors",
-			description: "Recent Patrol runs encountered errors, so the current health summary may be incomplete.",
-			impact:      10,
+			description: description,
+			impact:      impact,
 		}, true
 	default:
 		return patrolCoverageFactor{}, false

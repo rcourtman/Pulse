@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -150,6 +151,98 @@ func TestIntelligence_getTopFindings_Empty(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
 	if got := intel.getTopFindings(nil, 5); got != nil {
 		t.Errorf("expected nil for empty findings, got %v", got)
+	}
+}
+
+// When most recent runs error but at least one successful full run exists, the
+// score model must drop out of grade A. The previous flat 10-point penalty
+// produced grade A even with 8 of 9 recent runs failing — the user saw
+// "Coverage incomplete, recent runs errored" alongside an "A 95/100" chip.
+// Tiering by error ratio aligns the grade with the warning.
+func TestIntelligence_GetSummary_DominantRecentErrorsDropOutOfGradeA(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	runHistory := NewPatrolRunHistoryStore(20)
+	now := time.Now()
+	// One successful full patrol — keeps hasSuccessfulFullRun=true so we land
+	// on the tiered case-4 branch instead of the no-successful-run branches.
+	runHistory.Add(PatrolRunRecord{
+		ID:               "manual-ok",
+		Type:             "patrol",
+		TriggerReason:    "manual",
+		CompletedAt:      now.Add(-2 * time.Hour),
+		ErrorCount:       0,
+		Status:           "healthy",
+		ResourcesChecked: 50,
+	})
+	// Eight subsequent startup runs all errored — the dominant-error case
+	// observed in the wild that previously still produced grade A.
+	for i := 0; i < 8; i++ {
+		runHistory.Add(PatrolRunRecord{
+			ID:               fmt.Sprintf("startup-error-%d", i),
+			Type:             "patrol",
+			TriggerReason:    "startup",
+			CompletedAt:      now.Add(-time.Duration(60-i*5) * time.Minute),
+			ErrorCount:       1,
+			Status:           "error",
+			ResourcesChecked: 58,
+		})
+	}
+	intel.SetRunHistoryStore(runHistory)
+
+	summary := intel.GetSummary()
+	if summary.OverallHealth.Grade == HealthGradeA {
+		t.Fatalf("expected non-A grade when most recent runs errored, got %s (score %f)",
+			summary.OverallHealth.Grade, summary.OverallHealth.Score)
+	}
+	var coverageFactor *HealthFactor
+	for i := range summary.OverallHealth.Factors {
+		if summary.OverallHealth.Factors[i].Category == "coverage" {
+			coverageFactor = &summary.OverallHealth.Factors[i]
+			break
+		}
+	}
+	if coverageFactor == nil {
+		t.Fatal("expected coverage factor in overall health")
+	}
+	if !strings.Contains(coverageFactor.Description, "Most recent Patrol runs encountered errors") {
+		t.Fatalf("expected dominant-error description, got %q", coverageFactor.Description)
+	}
+}
+
+// A single error among many successful runs should still warn but not punish
+// the grade out of A — the "occasional error" case stays at the lighter 10-pt
+// penalty so a transient single failure doesn't flip the headline.
+func TestIntelligence_GetSummary_OccasionalRecentErrorStaysInGradeA(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	runHistory := NewPatrolRunHistoryStore(20)
+	now := time.Now()
+	for i := 0; i < 9; i++ {
+		runHistory.Add(PatrolRunRecord{
+			ID:               fmt.Sprintf("patrol-ok-%d", i),
+			Type:             "patrol",
+			TriggerReason:    "scheduled",
+			CompletedAt:      now.Add(-time.Duration(60-i*5) * time.Minute),
+			ErrorCount:       0,
+			Status:           "healthy",
+			ResourcesChecked: 50,
+		})
+	}
+	runHistory.Add(PatrolRunRecord{
+		ID:               "patrol-error-1",
+		Type:             "patrol",
+		TriggerReason:    "scheduled",
+		CompletedAt:      now.Add(-2 * time.Minute),
+		ErrorCount:       1,
+		Status:           "error",
+		ResourcesChecked: 58,
+	})
+	intel.SetRunHistoryStore(runHistory)
+
+	summary := intel.GetSummary()
+	// Light tier: -10 penalty against a 100 starting score = 90, still grade A.
+	if summary.OverallHealth.Grade != HealthGradeA {
+		t.Fatalf("expected grade A for 1-error-in-10, got %s (score %f)",
+			summary.OverallHealth.Grade, summary.OverallHealth.Score)
 	}
 }
 
