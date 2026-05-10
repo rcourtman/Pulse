@@ -117,7 +117,7 @@ export const ResponsiveMetricCell: Component<ResponsiveMetricCellProps> = (props
 
   const defaultFallback = (
     <div class="h-4 flex items-center justify-center">
-      <span class="text-xs text-muted">—</span>
+      <span class="text-xs text-muted" aria-hidden="true">—</span>
     </div>
   );
 
@@ -193,7 +193,7 @@ export const DualMetricCell: Component<{
 
   const defaultFallback = (
     <div class="h-4 flex items-center justify-center">
-      <span class="text-xs text-muted">—</span>
+      <span class="text-xs text-muted" aria-hidden="true">—</span>
     </div>
   );
 

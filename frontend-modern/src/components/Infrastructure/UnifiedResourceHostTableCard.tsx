@@ -456,7 +456,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           when={cpuPercentValue() !== null}
                           fallback={
                             <div class="flex justify-center">
-                              <span class="text-xs">—</span>
+                              <span class="text-xs" aria-hidden="true">—</span>
                             </div>
                           }
                         >
@@ -477,7 +477,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           when={memoryPercentValue() !== null}
                           fallback={
                             <div class="flex justify-center">
-                              <span class="text-xs">—</span>
+                              <span class="text-xs" aria-hidden="true">—</span>
                             </div>
                           }
                         >
@@ -503,7 +503,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           when={diskPercentValue() !== null}
                           fallback={
                             <div class="flex justify-center">
-                              <span class="text-xs">—</span>
+                              <span class="text-xs" aria-hidden="true">—</span>
                             </div>
                           }
                         >
@@ -536,7 +536,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                               when={availabilityProbe()}
                               fallback={
                                 <div class="text-center">
-                                  <span class="text-xs text-slate-400">—</span>
+                                  <span class="text-xs text-slate-400" aria-hidden="true">—</span>
                                 </div>
                               }
                             >
@@ -615,7 +615,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           when={resource.diskIO}
                           fallback={
                             <div class="text-center">
-                              <span class="text-xs text-slate-400">—</span>
+                              <span class="text-xs text-slate-400" aria-hidden="true">—</span>
                             </div>
                           }
                         >
@@ -676,7 +676,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                         <div class="flex justify-center">
                           <Show
                             when={resource.uptime}
-                            fallback={<span class="text-xs text-slate-400">—</span>}
+                            fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
                           >
                             <span class="text-xs text-base-content whitespace-nowrap">
                               {formatUptime(resource.uptime ?? 0)}
@@ -693,7 +693,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                         <div class="flex justify-center">
                           <Show
                             when={resource.temperature != null}
-                            fallback={<span class="text-xs text-slate-400">—</span>}
+                            fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
                           >
                             <span
                               class={`text-xs whitespace-nowrap font-medium ${

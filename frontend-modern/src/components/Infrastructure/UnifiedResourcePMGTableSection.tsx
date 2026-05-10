@@ -226,7 +226,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                       <div class="flex justify-center">
                         <Show
                           when={pmgRow()?.queue != null}
-                          fallback={<span class="text-xs text-slate-400">—</span>}
+                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
                         >
                           <span class={`text-xs font-medium ${queueClass()}`}>
                             {pmgRow()!.queue}
@@ -239,7 +239,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                       <div class="flex justify-center">
                         <Show
                           when={pmgRow()?.deferred != null}
-                          fallback={<span class="text-xs text-slate-400">—</span>}
+                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
                         >
                           <span class="text-xs text-base-content">{pmgRow()!.deferred}</span>
                         </Show>
@@ -254,7 +254,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                       <div class="flex justify-center">
                         <Show
                           when={pmgRow()?.hold != null}
-                          fallback={<span class="text-xs text-slate-400">—</span>}
+                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
                         >
                           <span class="text-xs text-base-content">{pmgRow()!.hold}</span>
                         </Show>
@@ -265,7 +265,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                       <div class="flex justify-center">
                         <Show
                           when={pmgRow()?.nodes != null}
-                          fallback={<span class="text-xs text-slate-400">—</span>}
+                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
                         >
                           <span class="text-xs text-base-content">{pmgRow()!.nodes}</span>
                         </Show>
@@ -276,7 +276,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                       <div class="flex justify-center">
                         <Show
                           when={pmgRow()?.health}
-                          fallback={<span class="text-xs text-slate-400">—</span>}
+                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
                         >
                           <span class={`text-xs font-medium ${healthClass()}`}>
                             {pmgRow()!.health}
@@ -303,7 +303,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                       <div class="flex justify-center">
                         <Show
                           when={resource.uptime}
-                          fallback={<span class="text-xs text-slate-400">—</span>}
+                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
                         >
                           <span class="text-xs text-base-content whitespace-nowrap">
                             {formatUptime(resource.uptime ?? 0)}
@@ -316,7 +316,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                       <div class="flex justify-center">
                         <Show
                           when={serviceLink()}
-                          fallback={<span class="text-xs text-slate-400">—</span>}
+                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
                         >
                           {(link) => (
                             <a

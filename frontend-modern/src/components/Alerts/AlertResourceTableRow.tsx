@@ -337,7 +337,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
               <TableCell class="p-1 px-2 text-center align-middle">
                 <Show
                   when={onToggle}
-                  fallback={<span class="text-sm text-slate-400">-</span>}
+                  fallback={<span class="text-sm text-slate-400" aria-hidden="true">-</span>}
                 >
                   <div class="flex items-center justify-center">
                     <StatusBadge
@@ -360,7 +360,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
             <TableCell class="p-1 px-2 text-center align-middle">
               <Show
                 when={alertResourceSupportsMetric(props.resource.type, metric)}
-                fallback={<span class="text-sm text-muted">-</span>}
+                fallback={<span class="text-sm text-muted" aria-hidden="true">-</span>}
               >
                 <Show
                   when={isEditing()}
@@ -528,7 +528,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
             }
 
             if (!props.onToggleNodeConnectivity) {
-              return <span class="text-sm text-slate-400">-</span>;
+              return <span class="text-sm text-slate-400" aria-hidden="true">-</span>;
             }
 
             const globalOfflineDisabled = props.globalDisableOfflineFlag?.() ?? false;
@@ -581,7 +581,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                   props.resource.disableConnectivity);
 
               return (
-                <Show when={showEdit || showRevert} fallback={<span class="text-xs text-muted">—</span>}>
+                <Show when={showEdit || showRevert} fallback={<span class="text-xs text-muted" aria-hidden="true">—</span>}>
                   <Show when={showEdit}>
                     <button
                       type="button"

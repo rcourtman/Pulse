@@ -492,7 +492,7 @@ export const RecoveryProtectedInventorySection: Component<
                       <TableCell class="hidden md:table-cell whitespace-nowrap px-3 py-1.5">
                         <Show
                           when={itemTypePresentation}
-                          fallback={<span class="text-muted">—</span>}
+                          fallback={<span class="text-muted" aria-hidden="true">—</span>}
                         >
                           <span class={itemTypePresentation?.tableBadgeClasses}>
                             {itemTypePresentation?.label}

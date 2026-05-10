@@ -212,7 +212,7 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                       <div class="flex justify-center">
                         <Show
                           when={pbsRow()?.datastores != null}
-                          fallback={<span class="text-xs text-slate-400">—</span>}
+                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
                         >
                           <span class="text-xs text-base-content">{pbsRow()!.datastores}</span>
                         </Show>
@@ -223,7 +223,7 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                       <div class="flex justify-center">
                         <Show
                           when={pbsRow()?.activity}
-                          fallback={<span class="text-xs text-slate-400">—</span>}
+                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
                         >
                           <div
                             class="flex flex-col items-center leading-tight"
@@ -244,7 +244,7 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                       <div class="flex justify-center">
                         <Show
                           when={pbsRow()?.health}
-                          fallback={<span class="text-xs text-slate-400">—</span>}
+                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
                         >
                           <span class={`text-xs font-medium ${healthClass()}`}>
                             {pbsRow()!.health}
@@ -271,7 +271,7 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                       <div class="flex justify-center">
                         <Show
                           when={resource.uptime}
-                          fallback={<span class="text-xs text-slate-400">—</span>}
+                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
                         >
                           <span class="text-xs text-base-content whitespace-nowrap">
                             {formatUptime(resource.uptime ?? 0)}
@@ -284,7 +284,7 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                       <div class="flex justify-center">
                         <Show
                           when={serviceLink()}
-                          fallback={<span class="text-xs text-slate-400">—</span>}
+                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
                         >
                           {(link) => (
                             <a

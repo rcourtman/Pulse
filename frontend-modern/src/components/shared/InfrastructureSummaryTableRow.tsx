@@ -364,7 +364,7 @@ export const InfrastructureSummaryTableRow: Component<InfrastructureSummaryTable
                     node()!.temperature?.available) &&
                   props.table.isTemperatureMonitoringEnabled(node()!)
                 }
-                fallback={<span class="text-xs text-muted">-</span>}
+                fallback={<span class="text-xs text-muted" aria-hidden="true">-</span>}
               >
                 {(() => {
                   const value = cpuTemperatureValue() as number;

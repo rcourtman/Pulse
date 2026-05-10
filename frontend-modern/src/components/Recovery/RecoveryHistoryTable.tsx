@@ -238,7 +238,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                   <TableCell class="whitespace-nowrap px-3 py-1 text-center">
                                     <Show
                                       when={itemTypePresentation}
-                                      fallback={<span class="text-muted">—</span>}
+                                      fallback={<span class="text-muted" aria-hidden="true">—</span>}
                                     >
                                       <span class={itemTypePresentation?.tableBadgeClasses}>
                                         {itemTypePresentation?.label}
@@ -365,7 +365,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                         </span>
                                       )
                                     ) : (
-                                      <span class="text-muted">—</span>
+                                      <span class="text-muted" aria-hidden="true">—</span>
                                     )}
                                   </TableCell>
                                 );

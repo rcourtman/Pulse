@@ -381,7 +381,7 @@ export const AICostDashboard: Component = () => {
                   <div class="text-lg font-semibold text-base-content">
                     <Show
                       when={estimatedTotalUSD() != null}
-                      fallback={<span class="text-muted">—</span>}
+                      fallback={<span class="text-muted" aria-hidden="true">—</span>}
                     >
                       {formatUSD(estimatedTotalUSD() ?? 0)}
                     </Show>
@@ -429,7 +429,7 @@ export const AICostDashboard: Component = () => {
                   <div class="text-sm font-semibold text-base-content mt-1">
                     <Show
                       when={parsedBudgetUSD30d() != null}
-                      fallback={<span class="text-muted">—</span>}
+                      fallback={<span class="text-muted" aria-hidden="true">—</span>}
                     >
                       {formatUSD(parsedBudgetUSD30d() ?? 0)}
                     </Show>
@@ -564,7 +564,7 @@ export const AICostDashboard: Component = () => {
                           <TableCell class="py-2 px-2 text-right text-base-content">
                             <Show
                               when={t.pricing_known}
-                              fallback={<span class="text-muted">—</span>}
+                              fallback={<span class="text-muted" aria-hidden="true">—</span>}
                             >
                               {formatUSD(t.estimated_usd ?? 0)}
                             </Show>
@@ -606,7 +606,7 @@ export const AICostDashboard: Component = () => {
                         <TableCell class="py-2 px-2 text-right text-base-content">
                           <Show
                             when={pm.pricing_known}
-                            fallback={<span class="text-muted">—</span>}
+                            fallback={<span class="text-muted" aria-hidden="true">—</span>}
                           >
                             {formatUSD(pm.estimated_usd ?? 0)}
                           </Show>

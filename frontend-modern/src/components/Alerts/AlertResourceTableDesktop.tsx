@@ -167,7 +167,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
               <TableCell class="p-1 px-2 text-center align-middle">
                 <Show
                   when={props.table.onToggleGlobalDisable}
-                  fallback={<span class="text-sm text-slate-400">-</span>}
+                  fallback={<span class="text-sm text-slate-400" aria-hidden="true">-</span>}
                 >
                   <div class="flex items-center justify-center">
                     <TogglePrimitive
@@ -255,7 +255,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                     fallback={
                       <Show
                         when={props.table.onToggleGlobalDisableOffline}
-                        fallback={<span class="text-sm text-slate-400">-</span>}
+                        fallback={<span class="text-sm text-slate-400" aria-hidden="true">-</span>}
                       >
                         {(() => {
                           const defaultDisabled = props.table.globalDisableOfflineFlag?.() ?? false;
@@ -355,7 +355,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                     </button>
                   </Show>
                   <Show when={!props.table.showDelayColumn && !props.hasCustomGlobalDefaults()}>
-                    <span class="text-sm text-slate-400">-</span>
+                    <span class="text-sm text-slate-400" aria-hidden="true">-</span>
                   </Show>
                 </div>
               </TableCell>
@@ -375,7 +375,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                 <TableCell class="p-1 px-2 border-r border-border" />
               </Show>
               <TableCell class="p-1 px-2 text-center align-middle">
-                <span class="text-sm">-</span>
+                <span class="text-sm" aria-hidden="true">-</span>
               </TableCell>
               <TableCell class="p-1 px-2 align-middle">
                 <span class="text-xs font-semibold uppercase tracking-wide text-muted inline-flex items-center gap-1">
@@ -429,11 +429,11 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
               </For>
               <Show when={props.table.showOfflineAlertsColumn}>
                 <TableCell class="p-1 px-2 text-center align-middle">
-                  <span class="text-sm">-</span>
+                  <span class="text-sm" aria-hidden="true">-</span>
                 </TableCell>
               </Show>
               <TableCell class="p-1 px-2 text-center align-middle">
-                <span class="text-sm">-</span>
+                <span class="text-sm" aria-hidden="true">-</span>
               </TableCell>
             </TableRow>
           </Show>
