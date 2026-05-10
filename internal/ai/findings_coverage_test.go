@@ -225,6 +225,133 @@ func TestFindingsStore_SetPersistence_RetiresLegacyAlertMirrorFindings(t *testin
 	}
 }
 
+func TestFindingsStore_SetPersistence_ResetsRegressionCounterPollutedByBogusCycles(t *testing.T) {
+	store := NewFindingsStore()
+	store.saveDebounce = 5 * time.Millisecond
+	now := time.Now()
+	lastRegress := now.Add(-30 * time.Minute)
+	saved := make(chan map[string]*Finding, 1)
+
+	withBogusCycle := &Finding{
+		ID:               "with-bogus",
+		Severity:         FindingSeverityWarning,
+		ResourceID:       "vm-bogus",
+		Title:            "Backup failed",
+		Source:           "ai-analysis",
+		Category:         FindingCategoryBackup,
+		LastSeenAt:       now,
+		RegressionCount:  6,
+		LastRegressionAt: &lastRegress,
+		Lifecycle: []FindingLifecycleEvent{
+			{At: now.Add(-3 * time.Hour), Type: "detected"},
+			{At: now.Add(-2 * time.Hour), Type: "auto_resolved", Message: "No longer detected by patrol"},
+			{At: now.Add(-90 * time.Minute), Type: "regressed", Message: "Finding re-detected after resolution"},
+			{At: now.Add(-60 * time.Minute), Type: "auto_resolved", Message: "Resource no longer exists in infrastructure"},
+			{At: lastRegress, Type: "regressed", Message: "Finding re-detected after resolution"},
+		},
+	}
+
+	withRealCycle := &Finding{
+		ID:               "with-real",
+		Severity:         FindingSeverityWarning,
+		ResourceID:       "vm-real",
+		Title:            "High CPU usage",
+		Source:           "ai-analysis",
+		Category:         FindingCategoryPerformance,
+		LastSeenAt:       now,
+		RegressionCount:  2,
+		LastRegressionAt: &lastRegress,
+		Lifecycle: []FindingLifecycleEvent{
+			{At: now.Add(-2 * time.Hour), Type: "detected"},
+			// An LLM-driven explicit resolve (empty message via Resolve(_,true)
+			// is NOT one of the bogus-signature reasons) — the regression
+			// counter that follows reflects a legitimate recurrence and
+			// must be preserved.
+			{At: now.Add(-90 * time.Minute), Type: "auto_resolved"},
+			{At: lastRegress, Type: "regressed", Message: "Finding re-detected after resolution"},
+		},
+	}
+
+	alreadyMigrated := &Finding{
+		ID:               "already",
+		Severity:         FindingSeverityWarning,
+		ResourceID:       "vm-already",
+		Title:            "Backup failed",
+		Source:           "ai-analysis",
+		Category:         FindingCategoryBackup,
+		LastSeenAt:       now,
+		RegressionCount:  4,
+		LastRegressionAt: &lastRegress,
+		Lifecycle: []FindingLifecycleEvent{
+			{At: now.Add(-3 * time.Hour), Type: "auto_resolved", Message: "No longer detected by patrol"},
+			{At: now.Add(-2 * time.Hour), Type: "regression_counter_reset"},
+			// Genuine regressions accrued after the migration must be kept.
+			{At: now.Add(-90 * time.Minute), Type: "regressed"},
+		},
+	}
+
+	p := &recordingPersistence{
+		findings: map[string]*Finding{
+			withBogusCycle.ID:  withBogusCycle,
+			withRealCycle.ID:   withRealCycle,
+			alreadyMigrated.ID: alreadyMigrated,
+		},
+		saved: saved,
+	}
+
+	if err := store.SetPersistence(p); err != nil {
+		t.Fatalf("SetPersistence failed: %v", err)
+	}
+
+	bogus := store.Get("with-bogus")
+	if bogus.RegressionCount != 0 {
+		t.Fatalf("expected polluted regression counter reset to 0, got %d", bogus.RegressionCount)
+	}
+	if bogus.LastRegressionAt != nil {
+		t.Fatal("expected LastRegressionAt cleared on reset")
+	}
+	foundResetEvent := false
+	for _, e := range bogus.Lifecycle {
+		if e.Type == "regression_counter_reset" {
+			foundResetEvent = true
+			break
+		}
+	}
+	if !foundResetEvent {
+		t.Fatal("expected regression_counter_reset lifecycle event on the migrated finding")
+	}
+
+	real := store.Get("with-real")
+	if real.RegressionCount != 2 {
+		t.Fatalf("finding without bogus signature must keep its regression counter; got %d", real.RegressionCount)
+	}
+	for _, e := range real.Lifecycle {
+		if e.Type == "regression_counter_reset" {
+			t.Fatal("finding without bogus signature must not gain a reset event")
+		}
+	}
+
+	already := store.Get("already")
+	if already.RegressionCount != 4 {
+		t.Fatalf("already-migrated finding must not be reset again; got %d", already.RegressionCount)
+	}
+	resetCount := 0
+	for _, e := range already.Lifecycle {
+		if e.Type == "regression_counter_reset" {
+			resetCount++
+		}
+	}
+	if resetCount != 1 {
+		t.Fatalf("already-migrated finding must keep exactly one reset event, got %d", resetCount)
+	}
+
+	select {
+	case <-saved:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timed out waiting for migration save")
+	}
+}
+
 func TestFindingsStore_scheduleSave_NoPersistence(t *testing.T) {
 	store := NewFindingsStore()
 

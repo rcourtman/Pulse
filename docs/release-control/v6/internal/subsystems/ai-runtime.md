@@ -599,7 +599,16 @@ alert-mirror findings already persisted from an earlier build,
 auto-resolves any active finding matching the legacy signature
 (title `"Active alert detected"`, source `ai-analysis`, category
 `general`) with a clear retirement reason; the pass is idempotent
-and self-cleaning.
+and self-cleaning. The same load pass also resets the
+`RegressionCount` and clears `LastRegressionAt` on any active
+finding whose lifecycle contains an `auto_resolved` event with one
+of the two known bogus-signature reasons ("No longer detected by
+patrol", "Resource no longer exists in infrastructure"), because
+the counter was inflated by the absence-based auto-resolve paths
+that have since been gated or removed. The reset appends a
+`regression_counter_reset` lifecycle event so the migration only
+fires once per finding; genuine recurrences from then on accrue
+cleanly.
 
 The overall health score (`calculateOverallHealth` in
 `internal/ai/intelligence.go`) tiers the "recent Patrol errors" coverage

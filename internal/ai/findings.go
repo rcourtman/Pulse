@@ -886,6 +886,30 @@ func (s *FindingsStore) SetPersistence(p FindingsPersistence) error {
 				})
 				normalizedLoadedState = true
 			}
+			// Reset regression counters polluted by bogus auto_resolve
+			// cycles. Before the category gate (commit b44d5892f) and the
+			// resource-presence gate that still needs the same treatment,
+			// findings of event/persistent categories were being
+			// auto-resolved on absence and re-detected next run, each
+			// cycle incrementing RegressionCount. The counter became
+			// unreliable as a signal — the user sees "regressed 6×" but
+			// most of those regressions weren't real recurrences, they
+			// were the system fighting itself. Once a finding shows
+			// evidence of the bogus pattern in its lifecycle, treat the
+			// entire counter as suspect and reset it; genuine recurrences
+			// will accrue cleanly from here. Idempotent: after reset,
+			// the lifecycle is annotated with a regression_counter_reset
+			// event so the migration only fires once per finding.
+			if f.ResolvedAt == nil && findingHasBogusAutoResolveCycle(f) {
+				f.RegressionCount = 0
+				f.LastRegressionAt = nil
+				f.Lifecycle = append(f.Lifecycle, FindingLifecycleEvent{
+					At:      time.Now(),
+					Type:    "regression_counter_reset",
+					Message: "Regression counter reset on migration: prior auto_resolve cycles were driven by the now-removed absence-based auto-resolve paths.",
+				})
+				normalizedLoadedState = true
+			}
 			// Ensure derived fields are consistent after load.
 			f.syncLoopState()
 			s.findings[id] = f
@@ -900,6 +924,48 @@ func (s *FindingsStore) SetPersistence(p FindingsPersistence) error {
 		}
 	}
 	return nil
+}
+
+// findingHasBogusAutoResolveCycle reports whether the finding's lifecycle
+// contains evidence of the absence-based auto_resolve pattern that was
+// removed in the b44d5892f category gate and the alert-mirror rip. The
+// signature is an `auto_resolved` lifecycle event whose message matches
+// one of the two reasons the legacy absence paths stamped:
+//
+//   - "No longer detected by patrol" — emitted by reconcileStaleFindings
+//     when the LLM didn't re-mention a seeded finding in a successful run
+//   - "Resource no longer exists in infrastructure" — emitted when a
+//     finding's resource was missing from the current inventory snapshot
+//
+// Either reason on an active finding means at least one prior regression
+// was driven by the system fighting itself, not by a genuine recurrence,
+// so the cumulative counter is no longer trustworthy.
+func findingHasBogusAutoResolveCycle(f *Finding) bool {
+	if f == nil {
+		return false
+	}
+	if f.RegressionCount == 0 {
+		return false
+	}
+	bogus := false
+	for _, e := range f.Lifecycle {
+		if e.Type == "regression_counter_reset" {
+			// Already migrated — must not be re-applied even if other
+			// auto_resolved events in the same lifecycle match the bogus
+			// signature. Genuine regressions accrued after the reset
+			// stand on their own and the counter is now trustworthy.
+			return false
+		}
+		if e.Type != "auto_resolved" {
+			continue
+		}
+		switch e.Message {
+		case "No longer detected by patrol",
+			"Resource no longer exists in infrastructure":
+			bogus = true
+		}
+	}
+	return bogus
 }
 
 // isLegacyAlertMirrorFinding reports whether the finding looks like an
