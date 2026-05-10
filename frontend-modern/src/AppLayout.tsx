@@ -184,6 +184,24 @@ export function AppLayout(props: AppLayoutProps) {
     }
   });
 
+  // Reflect the active tab in the browser tab title so multi-tab use,
+  // browser history, and screen-reader page-title announcements all
+  // identify the current Pulse surface instead of every page reading
+  // as the bare app name.
+  const tabTitleByActive: Record<NonNullable<ReturnType<typeof getActiveTabForPath>>, string> = {
+    infrastructure: 'Infrastructure',
+    workloads: 'Workloads',
+    storage: 'Storage',
+    recovery: 'Recovery',
+    alerts: 'Alerts',
+    ai: 'Patrol',
+    settings: 'Settings',
+  };
+  createEffect(() => {
+    const active = getActiveTabForPath(location.pathname);
+    document.title = active ? `${tabTitleByActive[active]} · Pulse` : 'Pulse';
+  });
+
   const toggleKioskMode = () => {
     setKioskMode(!kioskMode());
   };
