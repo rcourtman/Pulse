@@ -232,7 +232,7 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
           </svg>
         );
       default:
-        return <span class="text-slate-400">—</span>;
+        return <span class="text-slate-400" aria-hidden="true">—</span>;
     }
   };
 

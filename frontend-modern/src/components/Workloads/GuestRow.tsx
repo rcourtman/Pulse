@@ -199,7 +199,7 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('info')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center text-xs text-muted whitespace-nowrap">
-              <Show when={infoValue()} fallback={<span class="">—</span>}>
+              <Show when={infoValue()} fallback={<span class="" aria-hidden="true">—</span>}>
                 <InfoTooltipCell
                   value={infoValue()}
                   tooltip={infoTooltip()}
@@ -214,7 +214,7 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('vmid')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center text-xs text-muted whitespace-nowrap">
-              <Show when={displayId()} fallback={<span class="">—</span>}>
+              <Show when={displayId()} fallback={<span class="" aria-hidden="true">—</span>}>
                 {displayId()}
               </Show>
             </div>
@@ -284,7 +284,7 @@ export function GuestRow(props: GuestRowProps) {
             <div class="flex justify-center">
               <Show
                 when={ipAddresses().length > 0 || hasNetworkInterfaces()}
-                fallback={<span class="text-xs text-slate-400">—</span>}
+                fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
               >
                 <NetworkInfoCell
                   ipAddresses={ipAddresses()}
@@ -299,7 +299,7 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('uptime')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
-              <Show when={isRunning()} fallback={<span class="text-xs text-slate-400">—</span>}>
+              <Show when={isRunning()} fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}>
                 <span
                   class={`text-xs whitespace-nowrap ${props.guest.uptime > 0 && props.guest.uptime < 3600 ? 'text-orange-500' : 'text-muted'}`}
                 >
@@ -318,7 +318,7 @@ export function GuestRow(props: GuestRowProps) {
             <div class="flex justify-center">
               <Show
                 when={props.guest.node}
-                fallback={<span class="text-xs text-slate-400">—</span>}
+                fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
               >
                 <button
                   type="button"
@@ -342,7 +342,7 @@ export function GuestRow(props: GuestRowProps) {
             <div class="flex items-center justify-center gap-1.5">
               <Show
                 when={workloadType() === 'app-container' && dockerImage()}
-                fallback={<span class="text-xs ">—</span>}
+                fallback={<span class="text-xs " aria-hidden="true">—</span>}
               >
                 <span class="text-xs text-muted truncate max-w-[140px]" title={dockerImage()}>
                   {getShortImageName(dockerImage())}
@@ -366,7 +366,7 @@ export function GuestRow(props: GuestRowProps) {
             <div class="flex justify-center">
               <Show
                 when={workloadType() === 'pod' && namespace()}
-                fallback={<span class="text-xs ">—</span>}
+                fallback={<span class="text-xs " aria-hidden="true">—</span>}
               >
                 <span class="text-xs text-muted truncate max-w-[120px]" title={namespace()}>
                   {namespace()}
@@ -380,7 +380,7 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('context')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex items-center justify-center gap-1.5">
-              <Show when={contextLabel()} fallback={<span class="text-xs ">—</span>}>
+              <Show when={contextLabel()} fallback={<span class="text-xs " aria-hidden="true">—</span>}>
                 <Show
                   when={isPveWorkload() && clusterName()}
                   fallback={
@@ -407,13 +407,13 @@ export function GuestRow(props: GuestRowProps) {
             <div class="flex justify-center">
               <Show
                 when={supportsBackup()}
-                fallback={<span class="text-xs text-slate-400">—</span>}
+                fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
               >
                 <Show when={!props.guest.template}>
                   <BackupStatusCell lastBackup={props.guest.lastBackup} />
                 </Show>
                 <Show when={props.guest.template}>
-                  <span class="text-xs text-slate-400">—</span>
+                  <span class="text-xs text-slate-400" aria-hidden="true">—</span>
                 </Show>
               </Show>
             </div>
@@ -441,7 +441,7 @@ export function GuestRow(props: GuestRowProps) {
               <Show
                 when={hasOsInfo()}
                 fallback={
-                  <Show when={ociImage()} fallback={<span class="text-xs text-slate-400">—</span>}>
+                  <Show when={ociImage()} fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}>
                     {/* For OCI containers without guest agent, show image name in OS column */}
                     <span
                       class="text-xs text-cyan-600 dark:text-cyan-400 truncate max-w-[100px]"
@@ -469,7 +469,7 @@ export function GuestRow(props: GuestRowProps) {
               when={isRunning()}
               fallback={
                 <div class="text-center">
-                  <span class="text-xs text-slate-400">—</span>
+                  <span class="text-xs text-slate-400" aria-hidden="true">—</span>
                 </div>
               }
             >
@@ -508,7 +508,7 @@ export function GuestRow(props: GuestRowProps) {
               when={isRunning()}
               fallback={
                 <div class="text-center">
-                  <span class="text-xs text-slate-400">—</span>
+                  <span class="text-xs text-slate-400" aria-hidden="true">—</span>
                 </div>
               }
             >
