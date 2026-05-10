@@ -65,10 +65,20 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
         </div>
 
         <Show when={state.urlError()}>
-          <p class="mt-1.5 text-[11px] text-red-600 dark:text-red-400">{state.urlError()}</p>
+          <p
+            role="alert"
+            aria-live="assertive"
+            class="mt-1.5 text-[11px] text-red-600 dark:text-red-400"
+          >
+            {state.urlError()}
+          </p>
         </Show>
         <Show when={state.urlSuccess()}>
-          <p class="mt-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
+          <p
+            role="status"
+            aria-live="polite"
+            class="mt-1.5 text-[11px] text-emerald-600 dark:text-emerald-400"
+          >
             {state.urlSuccess()}
           </p>
         </Show>

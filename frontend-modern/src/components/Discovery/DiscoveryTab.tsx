@@ -301,7 +301,11 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
       {/* Scan Success */}
       <Show when={scanSuccess()}>
-        <div class="mb-4 rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900">
+        <div
+          role="status"
+          aria-live="polite"
+          class="mb-4 rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900"
+        >
           <div class="flex items-center gap-2">
             <svg
               class="w-5 h-5 text-green-500 dark:text-green-400"
