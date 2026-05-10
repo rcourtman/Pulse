@@ -162,7 +162,7 @@ export const FilterChip: Component<FilterChipProps> = (props) => {
               onKeyDown={handleSearchKeyDown}
               placeholder="Filter values..."
               aria-label={`Filter ${props.filter.label} values`}
-              class="w-full bg-transparent py-1.5 pl-7 pr-2 text-xs text-base-content placeholder-muted outline-none"
+              class="w-full bg-transparent py-1.5 pl-7 pr-2 text-xs text-base-content placeholder-muted outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:rounded"
             />
           </div>
           <div class="max-h-64 overflow-y-auto py-1">
