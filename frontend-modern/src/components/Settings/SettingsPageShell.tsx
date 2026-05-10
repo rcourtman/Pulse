@@ -1,4 +1,4 @@
-import { Accessor, Component, For, JSX, Setter, Show, createSignal } from 'solid-js';
+import { Accessor, Component, For, JSX, Setter, Show } from 'solid-js';
 import ChevronRight from 'lucide-solid/icons/chevron-right';
 import { Card } from '@/components/shared/Card';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -32,29 +32,8 @@ interface SettingsPageShellProps {
 }
 
 export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
-  const [focusedNavigationExpanded, setFocusedNavigationExpanded] = createSignal(false);
   const unsavedChangesBanner = () => getSettingsUnsavedChangesBanner();
   const infrastructureWorkspaceActive = () => isInfrastructureSettingsTab(props.activeTab());
-  const effectiveSidebarCollapsed = () =>
-    infrastructureWorkspaceActive() && !props.isMobileMenuOpen()
-      ? !focusedNavigationExpanded()
-      : props.sidebarCollapsed();
-  const collapseSidebar = () => {
-    if (infrastructureWorkspaceActive() && !props.isMobileMenuOpen()) {
-      setFocusedNavigationExpanded(false);
-      return;
-    }
-
-    props.setSidebarCollapsed(true);
-  };
-  const expandSidebar = () => {
-    if (infrastructureWorkspaceActive() && !props.isMobileMenuOpen()) {
-      setFocusedNavigationExpanded(true);
-      return;
-    }
-
-    props.setSidebarCollapsed(false);
-  };
   const isSidebarItemActive = (itemId: SettingsTab) =>
     itemId === 'infrastructure-systems'
       ? isInfrastructureSettingsTab(props.activeTab())
@@ -114,21 +93,21 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
 
       <Card padding="none" class="relative flex lg:flex-row overflow-hidden min-h-[600px]">
         <div
-          class={`${props.isMobileMenuOpen() ? 'flex flex-col w-full' : 'hidden lg:flex lg:flex-col'} ${effectiveSidebarCollapsed() ? 'lg:w-16 lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-border lg:border-b-0 lg:border-r lg:align-top flex-shrink-0 transition-all duration-200 bg-surface lg:bg-transparent z-10`}
+          class={`${props.isMobileMenuOpen() ? 'flex flex-col w-full' : 'hidden lg:flex lg:flex-col'} ${props.sidebarCollapsed() ? 'lg:w-16 lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-border lg:border-b-0 lg:border-r lg:align-top flex-shrink-0 transition-all duration-200 bg-surface lg:bg-transparent z-10`}
           aria-label={SETTINGS_SHELL_COPY.navigationAriaLabel}
-          aria-expanded={!effectiveSidebarCollapsed()}
+          aria-expanded={!props.sidebarCollapsed()}
         >
           <div
-            class={`sticky top-0 ${effectiveSidebarCollapsed() ? 'px-2' : 'px-4'} py-5 space-y-5 transition-all duration-200`}
+            class={`sticky top-0 ${props.sidebarCollapsed() ? 'px-2' : 'px-4'} py-5 space-y-5 transition-all duration-200`}
           >
-            <Show when={!effectiveSidebarCollapsed()}>
+            <Show when={!props.sidebarCollapsed()}>
               <div class="flex items-center justify-between pb-2 border-b border-border">
                 <h2 class="text-sm font-semibold text-base-content">
                   {SETTINGS_SHELL_COPY.navigationTitle}
                 </h2>
                 <button
                   type="button"
-                  onClick={collapseSidebar}
+                  onClick={() => props.setSidebarCollapsed(true)}
                   class="p-1 rounded-md hover:bg-surface-hover transition-colors"
                   aria-label={SETTINGS_SHELL_COPY.collapseSidebarLabel}
                 >
@@ -143,10 +122,10 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                 </button>
               </div>
             </Show>
-            <Show when={effectiveSidebarCollapsed()}>
+            <Show when={props.sidebarCollapsed()}>
               <button
                 type="button"
-                onClick={expandSidebar}
+                onClick={() => props.setSidebarCollapsed(false)}
                 class="w-full p-2 rounded-md hover:bg-surface-hover transition-colors"
                 aria-label={SETTINGS_SHELL_COPY.expandSidebarLabel}
               >
@@ -161,7 +140,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
               </button>
             </Show>
             <div id="settings-sidebar-menu" class="space-y-4">
-              <Show when={!effectiveSidebarCollapsed()}>
+              <Show when={!props.sidebarCollapsed()}>
                 <div class="px-2 pb-2">
                   <SearchInput
                     value={props.searchQuery}
@@ -190,7 +169,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                   <div class="mb-6 lg:mb-2 lg:space-y-2">
                     <Show
                       when={
-                        !effectiveSidebarCollapsed() &&
+                        !props.sidebarCollapsed() &&
                         !(group.items.length === 1 && group.items[0]?.label === group.label)
                       }
                     >
@@ -207,13 +186,13 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                               type="button"
                               aria-current={isActive() ? 'page' : undefined}
                               disabled={item.disabled}
-                              class={`group flex w-full items-center ${effectiveSidebarCollapsed() ? 'justify-center' : 'justify-between'} lg:rounded-md ${effectiveSidebarCollapsed() ? 'px-2 py-2.5' : 'px-4 py-3.5 lg:px-3 lg:py-2'} text-[15px] lg:text-sm font-medium transition-colors ${item.disabled ? 'opacity-60 cursor-not-allowed text-muted' : isActive() ? 'lg:bg-blue-50 text-blue-600 dark:lg:bg-blue-900 dark:text-blue-300 lg:dark:text-blue-200 bg-surface' : ' lg:hover:bg-surface-hover hover:text-base-content active:bg-surface-hover lg:active:bg-transparent'}`}
+                              class={`group flex w-full items-center ${props.sidebarCollapsed() ? 'justify-center' : 'justify-between'} lg:rounded-md ${props.sidebarCollapsed() ? 'px-2 py-2.5' : 'px-4 py-3.5 lg:px-3 lg:py-2'} text-[15px] lg:text-sm font-medium transition-colors ${item.disabled ? 'opacity-60 cursor-not-allowed text-muted' : isActive() ? 'lg:bg-blue-50 text-blue-600 dark:lg:bg-blue-900 dark:text-blue-300 lg:dark:text-blue-200 bg-surface' : ' lg:hover:bg-surface-hover hover:text-base-content active:bg-surface-hover lg:active:bg-transparent'}`}
                               onClick={() => {
                                 if (item.disabled) return;
                                 props.setActiveTab(item.id);
                                 props.setIsMobileMenuOpen(false);
                               }}
-                              title={effectiveSidebarCollapsed() ? item.label : undefined}
+                              title={props.sidebarCollapsed() ? item.label : undefined}
                             >
                               <div class="flex items-center gap-3.5 lg:gap-2.5 w-full">
                                 <div
@@ -224,7 +203,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                                     {...(item.iconProps || {})}
                                   />
                                 </div>
-                                <Show when={!effectiveSidebarCollapsed()}>
+                                <Show when={!props.sidebarCollapsed()}>
                                   <span
                                     class={`truncate flex-1 text-left ${isActive() ? 'font-semibold lg:font-medium' : ''}`}
                                   >
