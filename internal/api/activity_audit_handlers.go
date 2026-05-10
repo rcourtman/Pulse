@@ -14,6 +14,7 @@ import (
 
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
+	"github.com/rs/zerolog/log"
 )
 
 // validAuditEventID matches canonical action IDs plus UUID-style audit IDs.
@@ -104,6 +105,7 @@ func (h *AuditHandlers) HandleListAuditEvents(w http.ResponseWriter, r *http.Req
 	// Query events from the current logger
 	events, err := logger.Query(filter)
 	if err != nil {
+		log.Error().Err(err).Str("org_id", orgID).Msg("audit list: query failed")
 		writeErrorResponse(w, http.StatusInternalServerError, "query_failed", "Failed to query audit events", nil)
 		return
 	}
@@ -114,6 +116,7 @@ func (h *AuditHandlers) HandleListAuditEvents(w http.ResponseWriter, r *http.Req
 
 	totalCount, err := logger.Count(countFilter)
 	if err != nil {
+		log.Error().Err(err).Str("org_id", orgID).Msg("audit list: count failed")
 		writeErrorResponse(w, http.StatusInternalServerError, "query_failed", "Failed to count audit events", nil)
 		return
 	}
