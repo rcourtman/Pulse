@@ -174,6 +174,7 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                               props.setForm(extraField().inputField, event.currentTarget.value)
                             }
                             placeholder={extraField().placeholder}
+                            aria-label={`${getAIProviderDisplayName(config.provider)} ${extraField().label}`}
                             class={controlClass()}
                             disabled={props.saving()}
                           />
@@ -198,6 +199,9 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                           ? config.configuredPlaceholder
                           : config.placeholder
                       }
+                      aria-label={`${getAIProviderDisplayName(config.provider)} ${
+                        config.inputType === 'url' ? 'server URL' : 'API key'
+                      }`}
                       class={controlClass()}
                       disabled={props.saving()}
                     />

@@ -254,6 +254,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
                         props.updateCustomFieldInput(index, { key: e.currentTarget.value })
                       }
                       placeholder={ALERT_WEBHOOK_CUSTOM_FIELD_KEY_PLACEHOLDER}
+                      aria-label={`Custom field ${index + 1} key`}
                       class={controlClass('flex-1 px-2 py-1.5 text-xs font-mono')}
                     />
                   </div>
@@ -266,6 +267,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
                     placeholder={
                       field().placeholder || ALERT_WEBHOOK_CUSTOM_FIELD_VALUE_PLACEHOLDER
                     }
+                    aria-label={`Custom field ${index + 1} value`}
                     class={controlClass('flex-1 px-2 py-1.5 text-xs font-mono')}
                   />
                   <Show when={!field().required}>
@@ -306,6 +308,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
                   value={header().key}
                   onInput={(e) => props.updateHeaderInput(index, { key: e.currentTarget.value })}
                   placeholder={ALERT_WEBHOOK_HEADER_KEY_PLACEHOLDER}
+                  aria-label={`Custom header ${index + 1} name`}
                   class={controlClass('flex-1 px-2 py-1.5 text-xs font-mono')}
                 />
                 <input
@@ -313,6 +316,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
                   value={header().value}
                   onInput={(e) => props.updateHeaderInput(index, { value: e.currentTarget.value })}
                   placeholder={ALERT_WEBHOOK_HEADER_VALUE_PLACEHOLDER}
+                  aria-label={`Custom header ${index + 1} value`}
                   class={controlClass('flex-1 px-2 py-1.5 text-xs font-mono')}
                 />
                 <button

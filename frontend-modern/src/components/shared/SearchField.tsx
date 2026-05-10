@@ -23,6 +23,7 @@ export const SearchField: Component<SearchFieldProps> = (props) => {
         onInput={(e) => props.onChange(e.currentTarget.value)}
         onKeyDown={search.handleKeyDown}
         onBlur={search.handleBlur}
+        aria-label={props.title ?? props.placeholder ?? 'Search'}
         class={`w-full pl-8 sm:pl-9 ${search.inputPaddingRight()} py-1.5 sm:py-2 text-sm border border-border rounded-md
  bg-surface text-base-content placeholder-muted
  focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all disabled:opacity-60 disabled:cursor-not-allowed ${props.inputClass ?? ''}`}

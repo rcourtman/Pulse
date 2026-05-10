@@ -22,6 +22,7 @@ export function TagInput(props: TagInputProps) {
               type="button"
               class={TAG_INPUT_REMOVE_BUTTON_CLASS}
               onClick={(event) => state.handleRemoveTag(event, index())}
+              aria-label={getTagInputRemoveTitle(tag)}
               title={getTagInputRemoveTitle(tag)}
             >
               <X class="w-3 h-3" />
@@ -37,6 +38,7 @@ export function TagInput(props: TagInputProps) {
         onKeyDown={state.handleKeyDown}
         onBlur={state.handleBlur}
         placeholder={getTagInputPlaceholder(props.tags.length, props.placeholder)}
+        aria-label={getTagInputPlaceholder(props.tags.length, props.placeholder)}
         class={TAG_INPUT_FIELD_CLASS}
       />
     </div>

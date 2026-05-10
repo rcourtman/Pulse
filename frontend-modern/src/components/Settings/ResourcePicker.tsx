@@ -159,6 +159,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
             type="text"
             class={`${formControl} w-40`}
             placeholder="Filter by tag..."
+            aria-label="Filter resources by tag"
             value={tagFilter()}
             onInput={(e) => setTagFilter(e.currentTarget.value)}
           />
