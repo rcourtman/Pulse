@@ -179,12 +179,15 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   });
 
   // The Patrol findings endpoint defaults to active-only. When the
-  // operator switches to the Resolved tab, we need to fetch the full
+  // operator switches to a tab that needs history (Resolved, or All —
+  // both surfaces are meaningless if they only show what the Active
+  // tab already shows), fetch the full
   // active+resolved+dismissed+snoozed set so the audit-trail filter has
   // data to show. The trust strip credits "N auto-resolved" without
-  // this load and the Resolved tab is otherwise empty.
+  // this load and those tabs are otherwise empty.
   createEffect(() => {
-    if (filter() === 'resolved' && isPatrolFindingsSource()) {
+    const f = filter();
+    if ((f === 'resolved' || f === 'all') && isPatrolFindingsSource()) {
       void aiIntelligenceStore.loadPatrolFindings({ includeResolved: true });
     }
   });
