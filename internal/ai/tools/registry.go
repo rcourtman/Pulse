@@ -138,6 +138,16 @@ func normalizeToolGovernance(tool RegisteredTool) ToolGovernance {
 	return governance
 }
 
+// allNames returns the canonical list of registered tool names in
+// registration order. Internal helper for KnownToolNames.
+func (r *ToolRegistry) allNames() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]string, len(r.order))
+	copy(out, r.order)
+	return out
+}
+
 // Execute runs a tool by name
 func (r *ToolRegistry) Execute(ctx context.Context, e *PulseToolExecutor, name string, args map[string]interface{}) (CallToolResult, error) {
 	r.mu.RLock()

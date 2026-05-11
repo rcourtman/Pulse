@@ -3,6 +3,8 @@ package chat
 import (
 	"regexp"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 )
 
 // Compiled regexes for structural tool call artifacts from various LLM providers.
@@ -28,6 +30,20 @@ var (
 	// never falls through to showing raw DSML to the user as the
 	// assistant's "final response."
 	dsmlRe = regexp.MustCompile(`</?[\|｜]+/?DSML[\|｜]*`)
+
+	// Plain-JSON tool-call leak: weak local models (qwen2.5:11b/14b and
+	// similar small Ollama models) frequently emit Pulse tool invocations
+	// as JSON inside content instead of through the structured tool_calls
+	// channel. The leak shape is a JSON object whose first key is "name"
+	// with a value matching a known Pulse tool, optionally wrapped in a
+	// markdown code fence. Anchored on (?:^|\n) so prose containing JSON
+	// fragments inline (e.g. "the field {"name":"x"} in the schema") is
+	// not stripped. The captured tool name is gated against the canonical
+	// allowlist in tools.IsKnownToolName so arbitrary JSON the user might
+	// legitimately share is left untouched.
+	jsonToolCallRe = regexp.MustCompile(
+		`(?:^|\n)[ \t]*(?:` + "```" + `[ \t]*(?:json|JSON)?[ \t]*\n?[ \t]*)?\{[ \t\n]*"name"[ \t]*:[ \t]*"([a-zA-Z_][a-zA-Z0-9_]*)"`,
+	)
 )
 
 // cleanToolCallArtifacts removes LLM-internal tool call format leakage from content.
@@ -86,6 +102,12 @@ func cleanToolCallArtifacts(content string) string {
 		content = strings.TrimSpace(content[:loc[0]])
 	}
 
+	// Plain-JSON tool-call leak from weak local models (qwen2.5 small).
+	// Allowlist-gated to avoid stripping legitimate user JSON.
+	if idx := findJSONToolCallLeak(content); idx >= 0 {
+		content = strings.TrimSpace(content[:idx])
+	}
+
 	return content
 }
 
@@ -121,6 +143,32 @@ func containsToolCallMarker(content string) bool {
 	if minimaxMarkerRe.MatchString(content) {
 		return true
 	}
+	if findJSONToolCallLeak(content) >= 0 {
+		return true
+	}
 
 	return false
+}
+
+// findJSONToolCallLeak returns the byte offset to strip from when a plain-JSON
+// tool-call leak is found, or -1 if none. A match must (a) sit at start of
+// content or after a newline, (b) be a JSON object whose first key is "name",
+// and (c) reference a tool in tools.IsKnownToolName's allowlist. Returning
+// the position of the leading newline (or 0) lets the caller preserve any
+// natural-language text before the leak via TrimSpace.
+func findJSONToolCallLeak(content string) int {
+	if content == "" {
+		return -1
+	}
+	matches := jsonToolCallRe.FindAllStringSubmatchIndex(content, -1)
+	for _, m := range matches {
+		if len(m) < 4 || m[2] < 0 || m[3] < 0 {
+			continue
+		}
+		name := content[m[2]:m[3]]
+		if tools.IsKnownToolName(name) {
+			return m[0]
+		}
+	}
+	return -1
 }

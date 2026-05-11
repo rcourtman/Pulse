@@ -29,6 +29,59 @@ func TestCleanToolCallArtifacts(t *testing.T) {
 		{"minimax marker", "Response\nminimax:tool_call {\"name\":\"x\"}", "Response"},
 		{"only markers no content", "<tool_call>junk</tool_call>", ""},
 		{"whitespace before marker trimmed", "Hello   \n<tool_call>x</tool_call>", "Hello"},
+
+		// Plain-JSON tool-call leak — qwen2.5 small models route the
+		// invocation into content instead of through tool_calls.
+		// Natural-language prose before the leak must be preserved.
+		{
+			"qwen2.5 leak: pulse_query get include",
+			"Para obtener la IP de cada nodo, necesito especificar el ID del recurso. Sin embargo, puedo intentar obtener la información de todos los nodos de una vez.\n\n{\"name\": \"pulse_query\", \"parameters\": {\"action\":\"get\",\"include\":\"ip\"}}",
+			"Para obtener la IP de cada nodo, necesito especificar el ID del recurso. Sin embargo, puedo intentar obtener la información de todos los nodos de una vez.",
+		},
+		{
+			"qwen2.5 leak: pulse_discovery get_node_ips",
+			"Voy a recoger las IPs de los nodos ahora.\n{\"name\": \"pulse_discovery\", \"parameters\": {\"action\":\"get_node_ips\"}}",
+			"Voy a recoger las IPs de los nodos ahora.",
+		},
+		{
+			"qwen2.5 leak: pulse_query resource_id",
+			"Looking up resource 233.\n{\"name\": \"pulse_query\", \"parameters\": {\"action\":\"get\",\"resource_id\":\"233\"}}",
+			"Looking up resource 233.",
+		},
+		{
+			"qwen2.5 leak with code-fence wrapper",
+			"Here's the call I want to make:\n```json\n{\"name\": \"pulse_query\", \"parameters\": {\"action\":\"get\"}}\n```",
+			"Here's the call I want to make:",
+		},
+		{
+			"qwen2.5 leak only no prose",
+			"{\"name\": \"pulse_query\", \"parameters\": {\"action\":\"get\"}}",
+			"",
+		},
+		// Negative: unrelated JSON the user might share — no "name" field
+		// matching an allowlisted tool, so the sanitiser leaves it alone.
+		{
+			"negative: unrelated JSON object",
+			"Here's some data: {\"foo\": \"bar\"}",
+			"Here's some data: {\"foo\": \"bar\"}",
+		},
+		{
+			"negative: JSON with name but not a tool",
+			"Resource: {\"name\": \"my-vm\", \"cpu\": 50}",
+			"Resource: {\"name\": \"my-vm\", \"cpu\": 50}",
+		},
+		{
+			"negative: name field not in allowlist",
+			"Strange output: {\"name\": \"frobnicate\", \"parameters\": {}}",
+			"Strange output: {\"name\": \"frobnicate\", \"parameters\": {}}",
+		},
+		// Edge: tool name appears as substring in prose — no JSON
+		// structure, so the regex does not fire.
+		{
+			"edge: tool name as substring in prose",
+			"You can call the pulse_query tool to look up resources.",
+			"You can call the pulse_query tool to look up resources.",
+		},
 	}
 
 	for _, tt := range tests {
@@ -64,6 +117,14 @@ func TestContainsToolCallMarker(t *testing.T) {
 		{"minimax marker", "minimax:tool_call {}", true},
 		{"minimax in middle", "text\nminimax:tool_call x", true},
 		{"partial minimax no match", "the minimax:tool_callx", false}, // \b prevents this
+
+		// Plain-JSON tool-call leak detection during streaming.
+		{"json leak pulse_query", "{\"name\": \"pulse_query\", \"parameters\": {}}", true},
+		{"json leak pulse_discovery", "prose\n{\"name\": \"pulse_discovery\", \"parameters\": {}}", true},
+		{"json leak with code-fence", "answer\n```json\n{\"name\": \"pulse_query\"}", true},
+		{"json non-tool name", "{\"name\": \"frobnicate\", \"parameters\": {}}", false},
+		{"json unrelated object", "{\"foo\": \"bar\"}", false},
+		{"tool name as prose substring", "the pulse_query tool is useful", false},
 	}
 
 	for _, tt := range tests {
