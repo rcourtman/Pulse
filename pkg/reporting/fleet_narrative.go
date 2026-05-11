@@ -59,26 +59,29 @@ type FleetAggregate struct {
 }
 
 // FleetNarrative is the cross-resource interpretation rendered into
-// the fleet summary cover. Source values mirror Narrative.
+// the fleet summary cover. Source values mirror Narrative. JSON tags
+// keep the shape consistent with NarrativeBullet — without them the
+// chat tool returns capital-letter keys for the same fields that
+// appear lowercase in the AI narrator's system prompt schema.
 type FleetNarrative struct {
-	Source           string
-	HealthStatus     string
-	HealthMessage    string
-	ExecutiveSummary string
-	Outliers         []FleetOutlier
-	Patterns         []NarrativeBullet
-	Recommendations  []string
-	PeriodComparison string
-	Disclaimer       string
+	Source           string            `json:"source"`
+	HealthStatus     string            `json:"health_status"`
+	HealthMessage    string            `json:"health_message"`
+	ExecutiveSummary string            `json:"executive_summary,omitempty"`
+	Outliers         []FleetOutlier    `json:"outliers,omitempty"`
+	Patterns         []NarrativeBullet `json:"patterns,omitempty"`
+	Recommendations  []string          `json:"recommendations,omitempty"`
+	PeriodComparison string            `json:"period_comparison,omitempty"`
+	Disclaimer       string            `json:"disclaimer,omitempty"`
 }
 
 // FleetOutlier names a single resource the operator should pay
 // attention to and why. The Reason is rendered verbatim in the PDF.
 type FleetOutlier struct {
-	ResourceID   string
-	ResourceName string
-	Reason       string
-	Severity     string
+	ResourceID   string `json:"resource_id"`
+	ResourceName string `json:"resource_name,omitempty"`
+	Reason       string `json:"reason"`
+	Severity     string `json:"severity"`
 }
 
 // FleetNarrator produces a FleetNarrative from a FleetNarrativeInput.

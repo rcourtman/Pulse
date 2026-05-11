@@ -25,21 +25,26 @@ const (
 // produced either by the heuristic narrator (deterministic thresholds) or
 // by an AI narrator that reads the same NarrativeInput.
 type Narrative struct {
-	Source           string            // NarrativeSourceHeuristic or NarrativeSourceAI
-	HealthStatus     string            // HEALTHY / WARNING / CRITICAL
-	HealthMessage    string            // one-line summary shown next to HealthStatus
-	ExecutiveSummary string            // optional prose (AI populates, heuristic leaves empty)
-	Observations     []NarrativeBullet // ordered list rendered as bullets
-	Recommendations  []string          // ordered list rendered as numbered actions
-	PeriodComparison string            // optional prose summarising deltas vs PriorPeriod
-	Disclaimer       string            // optional footer (e.g. AI provenance note)
+	Source           string            `json:"source"`                      // NarrativeSourceHeuristic or NarrativeSourceAI
+	HealthStatus     string            `json:"health_status"`               // HEALTHY / WARNING / CRITICAL
+	HealthMessage    string            `json:"health_message"`              // one-line summary shown next to HealthStatus
+	ExecutiveSummary string            `json:"executive_summary,omitempty"` // optional prose (AI populates, heuristic leaves empty)
+	Observations     []NarrativeBullet `json:"observations,omitempty"`      // ordered list rendered as bullets
+	Recommendations  []string          `json:"recommendations,omitempty"`   // ordered list rendered as numbered actions
+	PeriodComparison string            `json:"period_comparison,omitempty"` // optional prose summarising deltas vs PriorPeriod
+	Disclaimer       string            `json:"disclaimer,omitempty"`        // optional footer (e.g. AI provenance note)
 }
 
 // NarrativeBullet is a single observation entry with a severity classification
-// the renderer maps to a colour swatch.
+// the renderer maps to a colour swatch. JSON tags use lowercase keys to
+// match the shape the AI narrator's system prompt asks for and the chat
+// tool consumers expect — without them the embedded type serialises with
+// capital field names, which is inconsistent with the rest of the JSON
+// surface and confuses downstream models that get back a different shape
+// than the schema they were taught.
 type NarrativeBullet struct {
-	Text     string
-	Severity string
+	Text     string `json:"text"`
+	Severity string `json:"severity"`
 }
 
 // NarrativeInput is the data passed to a Narrator. It is denormalised from
