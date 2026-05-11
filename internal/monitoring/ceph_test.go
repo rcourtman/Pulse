@@ -116,6 +116,7 @@ func TestPollCephCluster(t *testing.T) {
 
 func TestPollCephClusterChecksPoolStorageThresholds(t *testing.T) {
 	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	defer manager.Stop()
 	manager.UpdateConfig(alerts.AlertConfig{
 		Enabled:         true,
 		ActivationState: alerts.ActivationActive,
