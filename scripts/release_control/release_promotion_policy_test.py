@@ -37,6 +37,47 @@ def normalize_ws(text: str) -> str:
     return " ".join(text.split())
 
 
+_RC_DRAFT_PACKET_NAME_RE = re.compile(r"^RELEASE_NOTES_v6_RC(\d+)_DRAFT\.md$")
+
+
+def discover_rc_draft_packets() -> tuple[tuple[int, str, str, str], ...]:
+    """Return (rc_number, release_notes, changelog, support_pack) for every in-repo RC draft packet, sorted by RC.
+
+    Driven from the filesystem so adding a new RC packet automatically extends
+    every test that loops over the discovered set; nobody has to edit hardcoded
+    dict entries per RC.
+    """
+    packets: list[tuple[int, str, str, str]] = []
+    releases_dir = REPO_ROOT / "docs" / "releases"
+    for path in sorted(releases_dir.glob("RELEASE_NOTES_v6_RC*_DRAFT.md")):
+        match = _RC_DRAFT_PACKET_NAME_RE.match(path.name)
+        if not match:
+            continue
+        n = int(match.group(1))
+        packets.append(
+            (
+                n,
+                f"docs/releases/RELEASE_NOTES_v6_RC{n}_DRAFT.md",
+                f"docs/releases/V6_CHANGELOG_RC{n}_DRAFT.md",
+                f"docs/releases/V6_RC{n}_OPERATOR_SUPPORT_PACK_DRAFT.md",
+            )
+        )
+    return tuple(sorted(packets))
+
+
+def rc_packet_paths_for_version(version: str) -> tuple[str, str, str] | None:
+    """Return the (release_notes, changelog, support_pack) draft paths for a 6.0.0-rc.N VERSION, or None otherwise."""
+    match = re.match(r"^6\.0\.0-rc\.(\d+)$", version)
+    if not match:
+        return None
+    n = int(match.group(1))
+    return (
+        f"docs/releases/RELEASE_NOTES_v6_RC{n}_DRAFT.md",
+        f"docs/releases/V6_CHANGELOG_RC{n}_DRAFT.md",
+        f"docs/releases/V6_RC{n}_OPERATOR_SUPPORT_PACK_DRAFT.md",
+    )
+
+
 def staged_files() -> tuple[str, ...]:
     result = subprocess.run(
         ["git", "diff", "--cached", "--name-only"],
@@ -128,33 +169,30 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
 
     def test_release_notes_index_points_at_current_rc_packet(self) -> None:
         release_index = read("docs/RELEASE_NOTES.md")
-        self.assertIn("docs/releases/RELEASE_NOTES_v6.md", release_index)
-        self.assertIn("docs/releases/V6_CHANGELOG.md", release_index)
-        self.assertIn("docs/UPGRADE_v6.md", release_index)
-        self.assertIn("docs/releases/RELEASE_NOTES_v6_RC1.md", release_index)
-        self.assertIn("docs/releases/V6_CHANGELOG_RC1.md", release_index)
-        self.assertIn("docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md", release_index)
-        self.assertIn("docs/releases/RELEASE_NOTES_v6_RC2_DRAFT.md", release_index)
-        self.assertIn("docs/releases/V6_CHANGELOG_RC2_DRAFT.md", release_index)
-        self.assertIn("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md", release_index)
-        self.assertIn("docs/releases/RELEASE_NOTES_v6_RC3_DRAFT.md", release_index)
-        self.assertIn("docs/releases/V6_CHANGELOG_RC3_DRAFT.md", release_index)
-        self.assertIn("docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md", release_index)
-        self.assertIn("docs/releases/RELEASE_NOTES_v6_RC4_DRAFT.md", release_index)
-        self.assertIn("docs/releases/V6_CHANGELOG_RC4_DRAFT.md", release_index)
-        self.assertIn("docs/releases/V6_RC4_OPERATOR_SUPPORT_PACK_DRAFT.md", release_index)
-        self.assertIn("docs/releases/RELEASE_NOTES_v6_RC5_DRAFT.md", release_index)
-        self.assertIn("docs/releases/V6_CHANGELOG_RC5_DRAFT.md", release_index)
-        self.assertIn("docs/releases/V6_RC5_OPERATOR_SUPPORT_PACK_DRAFT.md", release_index)
+        # Stable + shipped-RC1 packet paths are hardcoded because they don't
+        # follow the *_DRAFT.md naming pattern that distinguishes in-flight
+        # prerelease packets.
+        for path in (
+            "docs/releases/RELEASE_NOTES_v6.md",
+            "docs/releases/V6_CHANGELOG.md",
+            "docs/UPGRADE_v6.md",
+            "docs/releases/RELEASE_NOTES_v6_RC1.md",
+            "docs/releases/V6_CHANGELOG_RC1.md",
+            "docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md",
+        ):
+            self.assertIn(path, release_index)
+        # Every discovered RC draft packet (rc.2 onward) must be linked.
+        for _, release_notes, changelog, support_pack in discover_rc_draft_packets():
+            with self.subTest(packet=release_notes):
+                self.assertIn(release_notes, release_index)
+                self.assertIn(changelog, release_index)
+                self.assertIn(support_pack, release_index)
 
     def test_operator_support_packs_keep_free_first_paid_continuity_wording(self) -> None:
-        for rel in (
-            "docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md",
-            "docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md",
-            "docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md",
-            "docs/releases/V6_RC4_OPERATOR_SUPPORT_PACK_DRAFT.md",
-            "docs/releases/V6_RC5_OPERATOR_SUPPORT_PACK_DRAFT.md",
-        ):
+        support_pack_paths = ("docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md",) + tuple(
+            support_pack for _, _, _, support_pack in discover_rc_draft_packets()
+        )
+        for rel in support_pack_paths:
             with self.subTest(rel=rel):
                 support_pack = read(rel)
                 self.assertIn(
@@ -218,33 +256,16 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             self.assertIn(f"`v{current_version}`", release_notes)
             self.assertIn(f"Pulse v{current_version}", changelog)
         else:
-            packets = {
-                "6.0.0-rc.2": (
-                    "docs/releases/RELEASE_NOTES_v6_RC2_DRAFT.md",
-                    "docs/releases/V6_CHANGELOG_RC2_DRAFT.md",
-                    "docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md",
-                ),
-                "6.0.0-rc.3": (
-                    "docs/releases/RELEASE_NOTES_v6_RC3_DRAFT.md",
-                    "docs/releases/V6_CHANGELOG_RC3_DRAFT.md",
-                    "docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md",
-                ),
-                "6.0.0-rc.4": (
-                    "docs/releases/RELEASE_NOTES_v6_RC4_DRAFT.md",
-                    "docs/releases/V6_CHANGELOG_RC4_DRAFT.md",
-                    "docs/releases/V6_RC4_OPERATOR_SUPPORT_PACK_DRAFT.md",
-                ),
-                "6.0.0-rc.5": (
-                    "docs/releases/RELEASE_NOTES_v6_RC5_DRAFT.md",
-                    "docs/releases/V6_CHANGELOG_RC5_DRAFT.md",
-                    "docs/releases/V6_RC5_OPERATOR_SUPPORT_PACK_DRAFT.md",
-                ),
-            }
-            self.assertIn(current_version, packets)
+            packet_paths = rc_packet_paths_for_version(current_version)
+            self.assertIsNotNone(
+                packet_paths,
+                f"VERSION={current_version} does not match the 6.0.0-rc.N pattern",
+            )
+            release_notes_path, changelog_path, operator_pack_path = packet_paths
 
-            release_notes = read(packets[current_version][0])
-            changelog = read(packets[current_version][1])
-            operator_pack = read(packets[current_version][2])
+            release_notes = read(release_notes_path)
+            changelog = read(changelog_path)
+            operator_pack = read(operator_pack_path)
 
             self.assertIn(f"Pulse v{current_version} Draft Release Notes", release_notes)
             self.assertIn(f"`v{current_version}`", release_notes)
@@ -274,13 +295,21 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         if current_version == "6.0.0":
             self.assertIn("docs/releases/RELEASE_NOTES_v6.md", upgrade_guide)
             self.assertIn("docs/releases/V6_CHANGELOG.md", upgrade_guide)
-            self.assertNotIn("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md", upgrade_guide)
+            for _, _, _, support_pack in discover_rc_draft_packets():
+                self.assertNotIn(support_pack, upgrade_guide)
+            self.assertNotIn("docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md", upgrade_guide)
         else:
-            self.assertEqual(current_version, "6.0.0-rc.5")
-            self.assertIn("docs/releases/V6_RC5_OPERATOR_SUPPORT_PACK_DRAFT.md", upgrade_guide)
-            self.assertNotIn("docs/releases/V6_RC4_OPERATOR_SUPPORT_PACK_DRAFT.md", upgrade_guide)
-            self.assertNotIn("docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md", upgrade_guide)
-            self.assertNotIn("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md", upgrade_guide)
+            packet_paths = rc_packet_paths_for_version(current_version)
+            self.assertIsNotNone(
+                packet_paths,
+                f"VERSION={current_version} does not match the 6.0.0-rc.N pattern",
+            )
+            current_support_pack = packet_paths[2]
+            self.assertIn(current_support_pack, upgrade_guide)
+            for _, _, _, support_pack in discover_rc_draft_packets():
+                if support_pack == current_support_pack:
+                    continue
+                self.assertNotIn(support_pack, upgrade_guide)
             self.assertNotIn("docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md", upgrade_guide)
 
     def test_prerelease_feedback_template_uses_generic_current_rc_wording(self) -> None:
@@ -541,7 +570,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("operators know the update signer changed", normalize_ws(runbook))
         self.assertIn("manual reinstall or other explicit trust-migration path", normalize_ws(runbook))
         self.assertIn("points at the current in-repo draft packet", runbook)
-        self.assertIn('export RC_VERSION="6.0.0-rc.5"', runbook)
+        # Runbook example version tracks the current VERSION file (any active 6.0.0-rc.N).
+        current_version = read("VERSION").strip()
+        if rc_packet_paths_for_version(current_version) is not None:
+            self.assertIn(f'export RC_VERSION="{current_version}"', runbook)
         self.assertIn("printf '%s\\n' \"$RC_VERSION\" > VERSION", runbook)
         self.assertIn("markdown text from the current release-notes packet", runbook)
         self.assertIn("Keep the current release-notes, changelog, and operator-support packet in", runbook)

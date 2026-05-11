@@ -3,11 +3,29 @@
 
 from __future__ import annotations
 
+import re
 import tempfile
 import unittest
 from pathlib import Path
 
 import render_release_body
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_RC_DRAFT_PACKET_NAME_RE = re.compile(r"^RELEASE_NOTES_v6_RC(\d+)_DRAFT\.md$")
+
+
+def _discover_rc_draft_packet_paths() -> tuple[str, ...]:
+    """Return release_notes + changelog + support_pack relpaths for every in-repo RC draft packet."""
+    paths: list[tuple[int, str]] = []
+    for path in sorted((_REPO_ROOT / "docs" / "releases").glob("RELEASE_NOTES_v6_RC*_DRAFT.md")):
+        match = _RC_DRAFT_PACKET_NAME_RE.match(path.name)
+        if not match:
+            continue
+        n = int(match.group(1))
+        paths.append((n, f"docs/releases/RELEASE_NOTES_v6_RC{n}_DRAFT.md"))
+        paths.append((n, f"docs/releases/V6_CHANGELOG_RC{n}_DRAFT.md"))
+        paths.append((n, f"docs/releases/V6_RC{n}_OPERATOR_SUPPORT_PACK_DRAFT.md"))
+    return tuple(rel for _, rel in sorted(paths))
 
 
 class RenderReleaseBodyTest(unittest.TestCase):
@@ -95,22 +113,11 @@ Old metadata section.
             self.assertIn("- Rollback target: v5.1.28", body)
 
     def test_current_release_packets_use_pulse_mobile_handoff_copy(self) -> None:
-        repo_root = Path(__file__).resolve().parents[2]
-        packet_paths = (
-            "docs/releases/RELEASE_NOTES_v6.md",
-            "docs/releases/RELEASE_NOTES_v6_RC2_DRAFT.md",
-            "docs/releases/V6_CHANGELOG_RC2_DRAFT.md",
-            "docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md",
-            "docs/releases/RELEASE_NOTES_v6_RC3_DRAFT.md",
-            "docs/releases/V6_CHANGELOG_RC3_DRAFT.md",
-            "docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md",
-            "docs/releases/RELEASE_NOTES_v6_RC4_DRAFT.md",
-            "docs/releases/V6_CHANGELOG_RC4_DRAFT.md",
-            "docs/releases/V6_RC4_OPERATOR_SUPPORT_PACK_DRAFT.md",
-            "docs/releases/RELEASE_NOTES_v6_RC5_DRAFT.md",
-            "docs/releases/V6_CHANGELOG_RC5_DRAFT.md",
-            "docs/releases/V6_RC5_OPERATOR_SUPPORT_PACK_DRAFT.md",
-        )
+        repo_root = _REPO_ROOT
+        # Stable release notes are hardcoded; every in-repo RC draft packet is
+        # discovered from the filesystem so adding a new RC doesn't require
+        # editing this tuple.
+        packet_paths = ("docs/releases/RELEASE_NOTES_v6.md",) + _discover_rc_draft_packet_paths()
 
         for relative_path in packet_paths:
             with self.subTest(relative_path=relative_path):
