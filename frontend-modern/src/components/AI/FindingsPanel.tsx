@@ -1388,8 +1388,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   onClick={(e) => handleStartDismiss(finding, 'expected_behavior', e)}
                   class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
                   disabled={actionLoading() === finding.id}
+                  title="Tell Pulse this finding represents an expected state for this resource — it will stay quiet about it but surface again on severity escalation"
                 >
-                  Dismiss: Expected
+                  Remember as expected
                 </button>
                 <button
                   type="button"
@@ -1403,12 +1404,17 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </Show>
           </div>
         </Show>
-        {/* Inline dismiss confirmation */}
+        {/* Inline dismiss confirmation. The header verb tracks the
+            intent: "Remembering as" for expected_behavior (future-looking,
+            "Pulse should know this is expected"), "Dismiss as" for the
+            other reasons (past-looking, "make this go away"). */}
         <Show when={dismissingId() === finding.id}>
           <div class="mt-2 p-2 rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900">
             <div class="flex items-center gap-2 mb-1.5">
               <span class="text-xs font-medium text-red-700 dark:text-red-300">
-                Dismiss as: {formatIdentifierLabel(dismissReason())}
+                {dismissReason() === 'expected_behavior'
+                  ? 'Remembering as expected'
+                  : `Dismiss as: ${formatIdentifierLabel(dismissReason())}`}
               </span>
             </div>
             <Show when={dismissReason() === 'will_fix_later'}>
@@ -1420,8 +1426,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </Show>
             <Show when={dismissReason() === 'expected_behavior'}>
               <p class="text-[11px] text-muted mb-1.5">
-                Pulse will keep this finding visible as acknowledged but won't re-notify
-                you for it. Severity escalation will still wake it.
+                Pulse will keep this finding visible as acknowledged and remember
+                that this state is expected on this resource. It won't re-notify
+                you for it, but severity escalation will still wake it.
               </p>
             </Show>
             <Show when={dismissReason() === 'not_an_issue'}>
