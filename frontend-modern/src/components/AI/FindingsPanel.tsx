@@ -1258,149 +1258,173 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           </div>
         </Show>
 
-        {/* Add Note / Discuss with Assistant buttons */}
-        <div class="mt-3 flex flex-wrap gap-2 text-xs">
-          <Show when={editingNoteId() !== finding.id && !finding.userNote}>
+        {/* Action area, grouped by intent. Each cluster sits in its own
+            flex container so the eye reads them as semantically distinct:
+              - Ask Pulse Assistant: action-style AI handoffs (Explain,
+                Investigate, Why, optional Verify fix) plus the
+                open-ended Discuss entry.
+              - Operator memory + share: Add Note and Copy summary.
+            The two clusters are separated by a faint vertical divider
+            (border-l) so the row reads as two intents rather than
+            ten flat buttons. */}
+        <div class="mt-3 flex flex-wrap items-start gap-x-4 gap-y-2 text-xs">
+          <div class="flex flex-wrap gap-1.5">
             <button
               type="button"
-              onClick={(e) => handleStartEditNote(finding, e)}
+              onClick={(e) => handleExplainFinding(finding, e)}
               class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
+              title="Ask Pulse Assistant to explain what we know about this finding using the attached evidence"
             >
               <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
                   stroke-width="2"
-                  d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              Add Note
+              Explain
             </button>
-          </Show>
-          <button
-            type="button"
-            onClick={(e) => handleExplainFinding(finding, e)}
-            class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
-            title="Ask Pulse Assistant to explain what we know about this finding using the attached evidence"
-          >
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            Explain
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleInvestigateFinding(finding, e)}
-            class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
-            title="Ask Pulse Assistant to actively investigate using metrics, alerts, and state — not just summarize"
-          >
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-            Investigate
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleWhyFinding(finding, e)}
-            class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
-            title="Ask Pulse Assistant to explain the cause using recent changes, correlations, and incident history"
-          >
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            Why
-          </button>
-          <Show when={hasAppliedFix(finding)}>
             <button
               type="button"
-              onClick={(e) => handleVerifyFixFinding(finding, e)}
+              onClick={(e) => handleInvestigateFinding(finding, e)}
               class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
-              title="Ask Pulse Assistant to verify whether the applied fix actually resolved the underlying condition"
+              title="Ask Pulse Assistant to actively investigate using metrics, alerts, and state — not just summarize"
             >
               <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
                   stroke-width="2"
-                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                 />
               </svg>
-              Verify fix
+              Investigate
             </button>
-          </Show>
-          <button
-            type="button"
-            onClick={(e) => handleCopyFindingSummary(finding, e)}
-            class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
-            title="Copy a Markdown summary of this finding for sharing with a teammate"
-          >
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
-              />
-            </svg>
-            Copy summary
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleDiscussWithAssistant(finding, e)}
-            class="px-2 py-1 rounded bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900 flex items-center gap-1 transition-colors"
-          >
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-              />
-            </svg>
-            Discuss with Assistant
-          </button>
+            <button
+              type="button"
+              onClick={(e) => handleWhyFinding(finding, e)}
+              class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
+              title="Ask Pulse Assistant to explain the cause using recent changes, correlations, and incident history"
+            >
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              Why
+            </button>
+            <Show when={hasAppliedFix(finding)}>
+              <button
+                type="button"
+                onClick={(e) => handleVerifyFixFinding(finding, e)}
+                class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
+                title="Ask Pulse Assistant to verify whether the applied fix actually resolved the underlying condition"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                  />
+                </svg>
+                Verify fix
+              </button>
+            </Show>
+            <button
+              type="button"
+              onClick={(e) => handleDiscussWithAssistant(finding, e)}
+              class="px-2 py-1 rounded bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900 flex items-center gap-1 transition-colors"
+              title="Open Pulse Assistant with this finding's context, no auto-prompt — drive the conversation yourself"
+            >
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                />
+              </svg>
+              Discuss
+            </button>
+          </div>
+          <div class="flex flex-wrap gap-1.5 sm:border-l sm:border-border-subtle sm:pl-4">
+            <Show when={editingNoteId() !== finding.id && !finding.userNote}>
+              <button
+                type="button"
+                onClick={(e) => handleStartEditNote(finding, e)}
+                class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
+                title="Add an operator note that Patrol will see on future runs of this finding"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
+                  />
+                </svg>
+                Add Note
+              </button>
+            </Show>
+            <button
+              type="button"
+              onClick={(e) => handleCopyFindingSummary(finding, e)}
+              class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
+              title="Copy a Markdown summary of this finding for sharing with a teammate"
+            >
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
+                />
+              </svg>
+              Copy summary
+            </button>
+          </div>
         </div>
 
         <Show when={finding.status === 'active'}>
-          <div class="mt-3 flex flex-wrap gap-2 text-xs">
-            <Show when={manualControls.acknowledge && !finding.acknowledgedAt}>
-              <button
-                type="button"
-                onClick={(e) => handleAcknowledge(finding, e)}
-                class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
-                disabled={actionLoading() === finding.id}
-              >
-                Acknowledge
-              </button>
-            </Show>
-            <Show when={manualControls.acknowledge && finding.status === 'active'}>
-              <button
-                type="button"
-                onClick={(e) => handleResolve(finding, e)}
-                class="px-2 py-1 rounded border border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-900"
-                title="Mark this finding as resolved. Use when you have fixed the issue out-of-band."
-                disabled={actionLoading() === finding.id}
-              >
-                Mark resolved
-              </button>
+          {/* Lifecycle decisions, grouped by consequence:
+                - Decide: Acknowledge (mark aware), Mark resolved (close out)
+                - Delay: Snooze 1h / 24h / 7d (re-surface later)
+                - Dismiss/promote: Not an issue / Remember as expected /
+                  Later / Create rule (permanent pattern)
+              Visual dividers (border-l) separate the clusters so the
+              operator reads three distinct intents rather than one
+              undifferentiated row of 9. */}
+          <div class="mt-3 flex flex-wrap items-start gap-x-4 gap-y-2 text-xs">
+            <Show when={manualControls.acknowledge}>
+              <div class="flex flex-wrap gap-1.5">
+                <Show when={!finding.acknowledgedAt}>
+                  <button
+                    type="button"
+                    onClick={(e) => handleAcknowledge(finding, e)}
+                    class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
+                    disabled={actionLoading() === finding.id}
+                  >
+                    Acknowledge
+                  </button>
+                </Show>
+                <button
+                  type="button"
+                  onClick={(e) => handleResolve(finding, e)}
+                  class="px-2 py-1 rounded border border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-900"
+                  title="Mark this finding as resolved. Use when you have fixed the issue out-of-band."
+                  disabled={actionLoading() === finding.id}
+                >
+                  Mark resolved
+                </button>
+              </div>
             </Show>
             <Show when={manualControls.snooze}>
-              <>
+              <div class="flex flex-wrap gap-1.5 sm:border-l sm:border-border-subtle sm:pl-4">
                 <button
                   type="button"
                   onClick={(e) => handleSnooze(finding, 1, e)}
@@ -1425,10 +1449,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 >
                   Snooze 7d
                 </button>
-              </>
+              </div>
             </Show>
             <Show when={manualControls.dismiss}>
-              <>
+              <div class="flex flex-wrap gap-1.5 sm:border-l sm:border-border-subtle sm:pl-4">
                 <button
                   type="button"
                   onClick={(e) => handleStartDismiss(finding, 'not_an_issue', e)}
@@ -1463,7 +1487,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 >
                   Create rule from this
                 </button>
-              </>
+              </div>
             </Show>
           </div>
         </Show>
