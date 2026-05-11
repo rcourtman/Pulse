@@ -309,6 +309,40 @@ export async function dismissFinding(
 }
 
 /**
+ * Create a permanent suppression rule from a finding.
+ *
+ * Unlike dismissFinding (which acts on a single instance), this records a
+ * durable pattern: future findings on the same {resource, category}
+ * pair will be auto-dismissed by the backend's
+ * isSuppressedInternal/MatchesSuppressionRule machinery. Used by the
+ * per-finding "Create rule from this" button so an operator who has
+ * been silencing the same noisy pattern repeatedly can promote that
+ * judgment into a remembered rule rather than dismissing every recurrence.
+ *
+ * The description is required by the backend — it's the operator's
+ * stated reason, surfaced when the rule is later listed or audited.
+ * Pass an empty resourceId or category to broaden the rule's scope
+ * (e.g. all categories on this resource, or this category on any
+ * resource).
+ */
+export async function createSuppressionRuleFromFinding(input: {
+  resourceId: string;
+  resourceName: string;
+  category: string;
+  description: string;
+}): Promise<{ success: boolean; message: string; rule: { id: string } }> {
+  return apiFetchJSON('/api/ai/patrol/suppressions', {
+    method: 'POST',
+    body: JSON.stringify({
+      resource_id: input.resourceId,
+      resource_name: input.resourceName,
+      category: input.category,
+      description: input.description,
+    }),
+  });
+}
+
+/**
  * Set or update a user note on a finding
  * Notes provide context that Patrol sees on future runs.
  * @param findingId The ID of the finding

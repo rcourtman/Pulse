@@ -30,6 +30,7 @@ import {
 import { useResources } from '@/hooks/useResources';
 import { InvestigationSection, ApprovalSection } from '@/components/patrol';
 import { AIAPI, type ApprovalRequest, type RemediationPlan } from '@/api/ai';
+import { createSuppressionRuleFromFinding } from '@/api/patrol';
 import type { PatrolRunRecord, PatrolRuntimeState } from '@/api/patrol';
 import { buildResolvedResourceSurfaceLinks } from '@/routing/resourceLinks';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
@@ -632,6 +633,59 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         return true;
       default:
         return false;
+    }
+  };
+
+  // Create rule from this is the promotion path: take the operator's
+  // implicit pattern (silencing the same {resource, category} pair
+  // repeatedly) and turn it into a durable suppression rule the backend
+  // remembers. After creation, future findings matching the rule
+  // auto-dismiss inside FindingsStore.isSuppressedInternal rather than
+  // re-surfacing every Patrol run. The button confirms the scope and
+  // requires a reason so the rule has audit context.
+  const [creatingRuleForId, setCreatingRuleForId] = createSignal<string | null>(null);
+  const [createRuleDescription, setCreateRuleDescription] = createSignal('');
+
+  const handleStartCreateRule = (finding: UnifiedFinding, e: Event) => {
+    e.stopPropagation();
+    setCreatingRuleForId(finding.id);
+    setCreateRuleDescription(finding.userNote || '');
+    setExpandedId(finding.id);
+  };
+
+  const handleCancelCreateRule = (e: Event) => {
+    e.stopPropagation();
+    setCreatingRuleForId(null);
+  };
+
+  const handleConfirmCreateRule = async (finding: UnifiedFinding, e: Event) => {
+    e.stopPropagation();
+    const description = createRuleDescription().trim();
+    if (!description) {
+      notificationStore.error('A reason for the rule is required');
+      return;
+    }
+    setActionLoading(finding.id);
+    try {
+      await createSuppressionRuleFromFinding({
+        resourceId: finding.resourceId,
+        resourceName: finding.resourceName,
+        category: finding.category || '',
+        description,
+      });
+      notificationStore.success(
+        `Rule created: future ${finding.category || 'matching'} findings on ${finding.resourceName} will auto-dismiss`,
+      );
+      setCreatingRuleForId(null);
+      // Refresh so the operator sees the finding update (typically the
+      // rule takes effect on next Patrol cycle, but the local view
+      // should reflect the audit-trail-of-record).
+      void aiIntelligenceStore.loadDashboardData();
+    } catch (err) {
+      console.error('Failed to create suppression rule:', err);
+      notificationStore.error('Failed to create suppression rule');
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -1400,8 +1454,66 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 >
                   Dismiss: Later
                 </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleStartCreateRule(finding, e)}
+                  class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
+                  disabled={actionLoading() === finding.id}
+                  title="Promote this dismissal into a permanent rule — future findings on this resource for this category will auto-dismiss without surfacing"
+                >
+                  Create rule from this
+                </button>
               </>
             </Show>
+          </div>
+        </Show>
+        {/* Inline create-rule confirmation. Confirms scope (resource +
+            category) and requires a reason so the persisted rule has
+            audit context. Mirrors the dismiss-confirmation panel
+            visually but uses neutral surface styling — this isn't a
+            dismissal, it's a permanent commitment. */}
+        <Show when={creatingRuleForId() === finding.id}>
+          <div class="mt-2 p-2 rounded border border-border bg-surface-alt">
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="text-xs font-medium text-base-content">
+                Create suppression rule for{' '}
+                <span class="font-semibold">{finding.resourceName}</span>
+                <Show when={finding.category}>
+                  {' '}({finding.category})
+                </Show>
+              </span>
+            </div>
+            <p class="text-[11px] text-muted mb-1.5">
+              Future findings matching this resource and category will be
+              auto-dismissed by Patrol without surfacing as new findings.
+              You can list or remove rules later from the suppressions
+              management surface.
+            </p>
+            <textarea
+              class="w-full text-xs px-2 py-1.5 rounded border border-border bg-surface text-base-content resize-none focus:outline-none focus:ring-1 focus:ring-blue-400"
+              rows={2}
+              value={createRuleDescription()}
+              onInput={(e) => setCreateRuleDescription(e.currentTarget.value)}
+              placeholder="Why this rule? (required — e.g. 'delly backups are intentionally off-site, ignore failures')"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <div class="flex gap-2 mt-1.5">
+              <button
+                type="button"
+                onClick={(e) => handleConfirmCreateRule(finding, e)}
+                class="px-3 py-1 text-xs font-medium rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                disabled={actionLoading() === finding.id || !createRuleDescription().trim()}
+              >
+                Create rule
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelCreateRule}
+                class="px-3 py-1 text-xs font-medium rounded border border-border hover:bg-surface-hover"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </Show>
         {/* Inline dismiss confirmation. The header verb tracks the
