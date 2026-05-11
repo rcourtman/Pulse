@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import agent_preflight
@@ -11,14 +12,21 @@ class AgentPreflightTest(unittest.TestCase):
             "active_profile_id": "v6",
             "active_target_id": "v6-rc-stabilization",
         }
+        # Use a window around `now` so the claim stays active regardless of
+        # when the test is run. The fixture must remain valid as wall-clock
+        # time advances; a fixed historical window expires and silently
+        # breaks the active-claim split.
+        now = datetime.now(timezone.utc)
+        claimed_at = (now - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        expires_at = (now + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
         status_payload = {
             "work_claims": [
                 {
                     "id": "codex-lane-l13",
                     "agent_id": "codex",
                     "work_item": {"kind": "lane", "id": "L13"},
-                    "claimed_at": "2026-03-20T10:00:00Z",
-                    "expires_at": "2026-03-20T12:00:00Z",
+                    "claimed_at": claimed_at,
+                    "expires_at": expires_at,
                 }
             ]
         }
