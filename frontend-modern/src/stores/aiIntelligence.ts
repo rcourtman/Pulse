@@ -442,11 +442,11 @@ export const aiIntelligenceStore = {
     }
   },
 
-  async loadPatrolFindings() {
+  async loadPatrolFindings(options?: { includeResolved?: boolean }) {
     setPatrolFindingsLoading(true);
     setPatrolFindingsError(null);
     try {
-      const findings = await getPatrolFindings();
+      const findings = await getPatrolFindings(options);
       const now = Date.now();
       setPatrolFindings(findings.map((item) => normalizePatrolFindingRecord(item, now)));
     } catch (e) {

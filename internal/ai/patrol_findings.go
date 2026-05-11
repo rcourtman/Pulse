@@ -658,6 +658,64 @@ func (p *PatrolService) GetAllFindings() []*Finding {
 	return findings
 }
 
+// GetAllFindingsIncludingResolved returns active + resolved + dismissed +
+// snoozed findings at warning severity or higher, sorted by severity then
+// recency. Used by the Resolved tab in the Patrol UI so operators can audit
+// the auto_resolved set credited in the trust strip — without this path
+// the strip surfaced "8 auto-resolved" but the operator could not click
+// through to see what those eight were.
+func (p *PatrolService) GetAllFindingsIncludingResolved() []*Finding {
+	all := p.findings.GetAll(nil)
+	normalizeFindingResourceTypes(all)
+
+	// Two orderings — they look similar but they're inverse:
+	//   filterOrder is "low-to-high severity" (info=0, ..., critical=3) so
+	//     `>= minOrder` keeps everything at or above the floor. This is the
+	//     same convention FindingsStore.GetActive uses.
+	//   sortOrder is "high-to-low priority" (critical=0, ..., info=3) so a
+	//     `<` comparison surfaces critical first in the result slice.
+	// Conflating the two earlier let watch-severity findings leak through
+	// the warning floor in the test, because watch's "sort priority"
+	// number was higher than warning's even though its severity is lower.
+	filterOrder := map[FindingSeverity]int{
+		FindingSeverityInfo:     0,
+		FindingSeverityWatch:    1,
+		FindingSeverityWarning:  2,
+		FindingSeverityCritical: 3,
+	}
+	sortOrder := map[FindingSeverity]int{
+		FindingSeverityCritical: 0,
+		FindingSeverityWarning:  1,
+		FindingSeverityWatch:    2,
+		FindingSeverityInfo:     3,
+	}
+	minOrder := filterOrder[FindingSeverityWarning]
+
+	filtered := make([]*Finding, 0, len(all))
+	for _, f := range all {
+		if filterOrder[f.Severity] >= minOrder {
+			filtered = append(filtered, f)
+		}
+	}
+
+	sort.Slice(filtered, func(i, j int) bool {
+		// Active first, then resolved — operator typically wants to review
+		// the live set before drilling into history.
+		ai := filtered[i].IsActive()
+		aj := filtered[j].IsActive()
+		if ai != aj {
+			return ai
+		}
+		if sortOrder[filtered[i].Severity] != sortOrder[filtered[j].Severity] {
+			return sortOrder[filtered[i].Severity] < sortOrder[filtered[j].Severity]
+		}
+		// Most recent activity first within each bucket.
+		return filtered[i].LastSeenAt.After(filtered[j].LastSeenAt)
+	})
+
+	return filtered
+}
+
 func normalizeFindingResourceTypes(findings []*Finding) {
 	for _, f := range findings {
 		if f == nil {

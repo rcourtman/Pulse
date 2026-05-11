@@ -1123,6 +1123,101 @@ func TestPatrolFindingCreatorAdapter_ResolveFinding_RejectsOutOfScopeFinding(t *
 	}
 }
 
+func TestPatrolService_GetAllFindingsIncludingResolved_IncludesResolvedAndDismissedSortsActiveFirst(t *testing.T) {
+	// GetAllFindingsIncludingResolved is the audit-trail accessor used by the
+	// Patrol UI's Resolved tab. Until it landed, the trust strip credited
+	// "N auto-resolved" but the operator could not click through to see
+	// what those N findings actually were — the /api/ai/patrol/findings
+	// endpoint only returned active findings. This test locks in:
+	//   - resolved + dismissed findings are returned (not just active)
+	//   - the warning-severity floor still applies (watch/info filtered)
+	//   - active findings sort before resolved within the result
+	ps := NewPatrolService(nil, nil)
+	now := time.Now()
+	older := now.Add(-2 * time.Hour)
+	pastResolved := now.Add(-time.Hour)
+
+	active := &Finding{
+		ID:           "active-warn",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryReliability,
+		ResourceID:   "vm-1",
+		ResourceName: "web",
+		Title:        "Active warning",
+		DetectedAt:   older,
+		LastSeenAt:   now,
+	}
+	resolved := &Finding{
+		ID:           "resolved-warn",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryBackup,
+		ResourceID:   "vm-2",
+		ResourceName: "db",
+		Title:        "Resolved backup failure",
+		DetectedAt:   older,
+		LastSeenAt:   older,
+		ResolvedAt:   &pastResolved,
+		AutoResolved: true,
+	}
+	dismissed := &Finding{
+		ID:              "dismissed-warn",
+		Severity:        FindingSeverityWarning,
+		Category:        FindingCategoryGeneral,
+		ResourceID:      "vm-3",
+		ResourceName:    "cache",
+		Title:           "Dismissed as expected",
+		DetectedAt:      older,
+		LastSeenAt:      older,
+		DismissedReason: "expected_behavior",
+	}
+	belowSeverity := &Finding{
+		ID:           "watch-noise",
+		Severity:     FindingSeverityWatch,
+		Category:     FindingCategoryPerformance,
+		ResourceID:   "vm-4",
+		ResourceName: "noise",
+		Title:        "Below warning floor",
+		DetectedAt:   older,
+		LastSeenAt:   now,
+	}
+
+	ps.findings.Add(active)
+	ps.findings.Add(resolved)
+	ps.findings.Add(dismissed)
+	ps.findings.Add(belowSeverity)
+
+	got := ps.GetAllFindingsIncludingResolved()
+	gotIDs := make([]string, 0, len(got))
+	for _, f := range got {
+		gotIDs = append(gotIDs, f.ID)
+	}
+
+	// Active-warn must be first (active before resolved/dismissed).
+	if len(got) == 0 || got[0].ID != "active-warn" {
+		t.Fatalf("expected active finding first, got order %v", gotIDs)
+	}
+	// Resolved and dismissed warnings must be present.
+	resolvedSeen := false
+	dismissedSeen := false
+	for _, f := range got {
+		if f.ID == "resolved-warn" {
+			resolvedSeen = true
+		}
+		if f.ID == "dismissed-warn" {
+			dismissedSeen = true
+		}
+		if f.ID == "watch-noise" {
+			t.Errorf("watch-severity finding leaked through warning floor: %v", gotIDs)
+		}
+	}
+	if !resolvedSeen {
+		t.Errorf("expected resolved finding in result, got %v", gotIDs)
+	}
+	if !dismissedSeen {
+		t.Errorf("expected dismissed finding in result, got %v", gotIDs)
+	}
+}
+
 func TestPatrolService_HasDeterministicVerifierForKey(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 

@@ -178,6 +178,17 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     }
   });
 
+  // The Patrol findings endpoint defaults to active-only. When the
+  // operator switches to the Resolved tab, we need to fetch the full
+  // active+resolved+dismissed+snoozed set so the audit-trail filter has
+  // data to show. The trust strip credits "N auto-resolved" without
+  // this load and the Resolved tab is otherwise empty.
+  createEffect(() => {
+    if (filter() === 'resolved' && isPatrolFindingsSource()) {
+      void aiIntelligenceStore.loadPatrolFindings({ includeResolved: true });
+    }
+  });
+
   // Filter and sort findings
   const hasUnknownRunSnapshot = createMemo(
     () => props.runSnapshot !== undefined && props.filterFindingIds === undefined,

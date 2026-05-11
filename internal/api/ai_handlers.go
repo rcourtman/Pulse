@@ -5590,9 +5590,17 @@ func (h *AISettingsHandler) HandleGetPatrolFindings(w http.ResponseWriter, r *ht
 
 	// Check for resource_id query parameter
 	resourceID := r.URL.Query().Get("resource_id")
+	// include_resolved=1 returns active + resolved + dismissed + snoozed
+	// findings, so the Patrol UI's Resolved tab can audit the
+	// auto_resolved set credited in the trust strip. Default behaviour
+	// remains active-only for clients that just want to render the
+	// live findings list.
+	includeResolved := r.URL.Query().Get("include_resolved") == "1"
 	var findings []*ai.Finding
 	if resourceID != "" {
 		findings = patrol.GetFindingsForResource(resourceID)
+	} else if includeResolved {
+		findings = patrol.GetAllFindingsIncludingResolved()
 	} else {
 		findings = patrol.GetAllFindings()
 	}

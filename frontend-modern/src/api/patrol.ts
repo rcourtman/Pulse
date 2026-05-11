@@ -236,8 +236,13 @@ export async function getPatrolStatus(): Promise<PatrolStatus> {
   return apiFetchJSON<PatrolStatus>('/api/ai/patrol/status');
 }
 
-export async function getPatrolFindings(): Promise<Finding[]> {
-  const findings = await apiFetchJSON<Finding[]>('/api/ai/patrol/findings');
+export async function getPatrolFindings(
+  options?: { includeResolved?: boolean },
+): Promise<Finding[]> {
+  const path = options?.includeResolved
+    ? '/api/ai/patrol/findings?include_resolved=1'
+    : '/api/ai/patrol/findings';
+  const findings = await apiFetchJSON<Finding[]>(path);
   return arrayOrEmpty<Finding>(findings).map((finding) =>
     promoteLegacyAlertIdentifier(finding as Finding & { alert_identifier?: string }),
   );
