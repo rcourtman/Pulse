@@ -87,7 +87,10 @@ show_snapshot_status() {
         echo -e "${GREEN}✓ Running (PID: ${snapshot_pid}, ${snapshot_count} snapshots)${NC}"
     else
         echo -e "${YELLOW}⚠ Not running (optional - protects against accidental file loss)${NC}"
-        echo "   Start: ./scripts/watch-snapshot.sh &"
+        # Path-prefixed reference removed: the watch-snapshot.sh helper isn't a
+        # tracked script (it's a Mac-only launchd-wrapper for the local
+        # PulseSnapshots.app). Operators who have it know where it lives.
+        echo "   Start: watch-snapshot.sh &"
     fi
 }
 

@@ -121,17 +121,22 @@ load_standalone_manifest() {
 
 has_external_path_reference() {
   local script="$1"
-  local pattern result_line ref_file normalized
+  local pattern ref_file normalized
 
+  # Use `git grep` instead of `rg` so the test works on CI runners without
+  # ripgrep installed (the GitHub Actions ubuntu image doesn't ship rg).
+  # Earlier this called `rg --hidden -F` which silently failed with
+  # "command not found" on those runners, flagging every script as
+  # unreferenced. `git grep` is always available in a git checkout, scans
+  # only tracked files (which is what we want — no node_modules noise),
+  # and matches rg's speed.
   for pattern in "${script}" "./${script}"; do
-    while IFS= read -r result_line; do
-      ref_file="${result_line%%:*}"
-      normalized="${ref_file#${ROOT_DIR}/}"
-      normalized="${normalized#./}"
+    while IFS= read -r ref_file; do
+      normalized="${ref_file#./}"
       [[ "${normalized}" == "${script}" ]] && continue
       [[ "${normalized}" == "scripts/standalone.manifest" ]] && continue
       return 0
-    done < <(rg --hidden -n -F "${pattern}" "${ROOT_DIR}" --glob '!**/.git/**' || true)
+    done < <(git -C "${ROOT_DIR}" grep -F -l "${pattern}" -- ':!scripts/standalone.manifest' 2>/dev/null || true)
   done
 
   return 1
