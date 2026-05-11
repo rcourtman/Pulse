@@ -12,7 +12,7 @@
   "properties": {
     "version": {
       "type": "integer",
-      "const": 12
+      "const": 13
     },
     "shared_ownerships": {
       "type": "array",
@@ -62,6 +62,15 @@
           }
         },
         "owned_files": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "release_cycle_artifact_globs": {
+          "description": "Glob patterns for files this subsystem owns but that are per-release-cycle artifacts (RC packet drafts, version-pointer docs, regenerated record files) rather than contract-shape surfaces. Changes matching any of these globs skip the contract-update requirement check for this subsystem; the file is still considered subsystem-tracked otherwise. Use sparingly: contract-shape files (Dockerfiles, workflow YAMLs, runbook procedures) belong in owned_files, not here.",
           "type": "array",
           "uniqueItems": true,
           "items": {

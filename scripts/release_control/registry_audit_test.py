@@ -11,7 +11,7 @@ class RegistryAuditTest(unittest.TestCase):
 
     def test_audit_registry_payload_accepts_valid_minimal_registry(self) -> None:
         payload = {
-            "version": 12,
+            "version": 13,
             "shared_ownerships": [],
             "subsystems": [
                 {
@@ -55,7 +55,7 @@ class RegistryAuditTest(unittest.TestCase):
 
     def test_audit_registry_payload_accepts_cross_repo_owned_prefixes(self) -> None:
         payload = {
-            "version": 12,
+            "version": 13,
             "shared_ownerships": [],
             "subsystems": [
                 {
@@ -101,7 +101,7 @@ class RegistryAuditTest(unittest.TestCase):
 
     def test_audit_registry_payload_flags_unknown_lane_and_missing_contract(self) -> None:
         payload = {
-            "version": 12,
+            "version": 13,
             "shared_ownerships": [],
             "subsystems": [
                 {
@@ -130,7 +130,7 @@ class RegistryAuditTest(unittest.TestCase):
 
     def test_audit_registry_payload_flags_explicit_coverage_gap(self) -> None:
         payload = {
-            "version": 12,
+            "version": 13,
             "shared_ownerships": [],
             "subsystems": [
                 {
@@ -173,7 +173,7 @@ class RegistryAuditTest(unittest.TestCase):
 
     def test_audit_registry_payload_requires_explicit_coverage_flag_true(self) -> None:
         payload = {
-            "version": 12,
+            "version": 13,
             "shared_ownerships": [],
             "subsystems": [
                 {
@@ -218,7 +218,7 @@ class RegistryAuditTest(unittest.TestCase):
 
     def test_audit_registry_payload_rejects_uncanonical_ordering(self) -> None:
         payload = {
-            "version": 12,
+            "version": 13,
             "shared_ownerships": [],
             "subsystems": [
                 {
@@ -318,7 +318,7 @@ class RegistryAuditTest(unittest.TestCase):
 
     def test_audit_registry_payload_rejects_fully_shadowed_path_policy(self) -> None:
         payload = {
-            "version": 12,
+            "version": 13,
             "shared_ownerships": [],
             "subsystems": [
                 {
@@ -371,7 +371,7 @@ class RegistryAuditTest(unittest.TestCase):
 
     def test_audit_registry_payload_requires_declared_shared_ownership(self) -> None:
         payload = {
-            "version": 12,
+            "version": 13,
             "shared_ownerships": [],
             "subsystems": [
                 {
@@ -441,7 +441,7 @@ class RegistryAuditTest(unittest.TestCase):
 
     def test_audit_registry_payload_rejects_stale_or_wrong_shared_ownership(self) -> None:
         payload = {
-            "version": 12,
+            "version": 13,
             "shared_ownerships": [
                 {
                     "path": "internal/api/resources.go",

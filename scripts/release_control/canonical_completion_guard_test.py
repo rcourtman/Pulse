@@ -4069,5 +4069,78 @@ class ContractNeutralOverrideTest(unittest.TestCase):
         self.assertIn("contract-neutral", stderr_value)
 
 
+class ReleaseCycleArtifactGuardTest(unittest.TestCase):
+    """The release_cycle_artifact_globs field in a subsystem rule lets
+    per-RC-cycle artifacts (packet drafts, version-pointer docs, regenerated
+    record files) skip the contract-update + verification requirements
+    without losing the subsystem-tracked status. The lookup tool still
+    reports ownership; the shape guard just doesn't demand a contract delta.
+    Contract-shape files (Dockerfile, workflow YAMLs, runbook) still
+    trigger as normal."""
+
+    def test_rc_draft_packets_register_as_cycle_artifacts(self):
+        impacted = infer_impacted_subsystems(
+            [
+                "docs/releases/RELEASE_NOTES_v6_RC5_DRAFT.md",
+                "docs/releases/V6_CHANGELOG_RC5_DRAFT.md",
+                "docs/releases/V6_RC5_OPERATOR_SUPPORT_PACK_DRAFT.md",
+            ]
+        )
+        self.assertIn("deployment-installability", impacted)
+        entry = impacted["deployment-installability"]
+        # All three files are tracked as touches AND as cycle artifacts.
+        self.assertEqual(set(entry["touched_runtime_files"]), set(entry["cycle_artifact_files"]))
+        # No contract-update requirement since every touch is a cycle artifact.
+        self.assertEqual(required_contract_updates([
+            "docs/releases/RELEASE_NOTES_v6_RC5_DRAFT.md",
+            "docs/releases/V6_CHANGELOG_RC5_DRAFT.md",
+            "docs/releases/V6_RC5_OPERATOR_SUPPORT_PACK_DRAFT.md",
+        ]), {})
+
+    def test_version_pointer_docs_register_as_cycle_artifacts(self):
+        impacted = infer_impacted_subsystems(
+            ["docs/RELEASE_NOTES.md", "docs/UPGRADE_v6.md"]
+        )
+        self.assertIn("deployment-installability", impacted)
+        self.assertEqual(
+            required_contract_updates(["docs/RELEASE_NOTES.md", "docs/UPGRADE_v6.md"]),
+            {},
+        )
+
+    def test_contract_shape_files_still_require_contract_update(self):
+        impacted = infer_impacted_subsystems(["docker-compose.yml"])
+        self.assertIn("deployment-installability", impacted)
+        self.assertEqual(
+            impacted["deployment-installability"]["cycle_artifact_files"],
+            [],
+            "docker-compose.yml is a contract-shape file, not a cycle artifact",
+        )
+        required = required_contract_updates(["docker-compose.yml"])
+        self.assertIn(
+            "docs/release-control/v6/internal/subsystems/deployment-installability.md",
+            required,
+        )
+
+    def test_mixed_artifact_and_shape_only_requires_contract_update_for_shape(self):
+        paths = [
+            "docs/releases/RELEASE_NOTES_v6_RC5_DRAFT.md",
+            "scripts/install-docker.sh",
+        ]
+        impacted = infer_impacted_subsystems(paths)
+        entry = impacted["deployment-installability"]
+        self.assertEqual(
+            set(entry["cycle_artifact_files"]),
+            {"docs/releases/RELEASE_NOTES_v6_RC5_DRAFT.md"},
+        )
+        required = required_contract_updates(paths)
+        contract_path = "docs/release-control/v6/internal/subsystems/deployment-installability.md"
+        self.assertIn(contract_path, required)
+        # The contract update requirement carries the non-artifact file only.
+        self.assertEqual(
+            required[contract_path]["touched_runtime_files"],
+            ["scripts/install-docker.sh"],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

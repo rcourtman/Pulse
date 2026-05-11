@@ -9,6 +9,7 @@ staged in the same commit.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
 from pathlib import Path
@@ -154,6 +155,19 @@ def subsystem_matches_path(rule: dict, path: str) -> bool:
     )
 
 
+def is_release_cycle_artifact(rule: dict, path: str) -> bool:
+    """Return True if path matches one of this subsystem's release_cycle_artifact_globs.
+
+    Release-cycle artifacts (RC packet drafts, version-pointer docs, regenerated
+    record files) are tracked by the subsystem but are per-release-cycle content
+    rather than contract-shape surfaces. They skip the contract-update
+    requirement and verification requirements so routine RC-cycle maintenance
+    doesn't need the contract-neutral bypass.
+    """
+    globs = tuple(rule.get("release_cycle_artifact_globs", []))
+    return any(fnmatch.fnmatchcase(path, glob) for glob in globs)
+
+
 def path_policy_matches(policy: dict, path: str) -> bool:
     prefixes = tuple(policy.get("match_prefixes", []))
     exact_files = tuple(policy.get("match_files", []))
@@ -253,20 +267,36 @@ def infer_impacted_subsystems(
         for rule in rules:
             if not subsystem_matches_path(rule, path):
                 continue
-            impacted.setdefault(
+            entry = impacted.setdefault(
                 str(rule["id"]),
                 {
                     "id": str(rule["id"]),
                     "contract": str(rule["contract"]),
                     "touched_runtime_files": [],
+                    "cycle_artifact_files": [],
                     "verification": dict(rule.get("verification", {})),
                 },
-            )["touched_runtime_files"].append(path)
+            )
+            entry["touched_runtime_files"].append(path)
+            if is_release_cycle_artifact(rule, path):
+                # Path is owned by this subsystem but is a per-release-cycle
+                # artifact (RC packet draft, version-pointer doc, regenerated
+                # record). Tracked here so the lookup tool can still report
+                # ownership; contract-update / verification requirement
+                # builders consult this list to exclude these paths.
+                entry["cycle_artifact_files"].append(path)
 
     for subsystem_id, data in impacted.items():
+        # Verification requirements derive from non-cycle-artifact touches only.
+        # Release-cycle artifacts (RC packet drafts, version-pointer docs) don't
+        # trigger verification proof requirements.
+        cycle_artifacts = set(data.get("cycle_artifact_files", []))
+        non_artifact_files = [
+            path for path in data["touched_runtime_files"] if path not in cycle_artifacts
+        ]
         data["verification_requirements"] = build_verification_requirements(
             rules_by_id[subsystem_id],
-            data["touched_runtime_files"],
+            non_artifact_files,
         )
 
     return impacted
@@ -283,19 +313,38 @@ def required_contract_updates(
     contract_index = load_contract_index(staged=use_staged_contract_index)
 
     for subsystem_id, data in impacted_subsystems.items():
+        # Contract update requirement triggers on non-cycle-artifact touches
+        # only. If every touched file is a release-cycle artifact (RC packet
+        # draft, version-pointer doc, regenerated record), there's no
+        # contract-shape change to require — the contract describes the
+        # release process, not the per-RC content of any specific cycle.
+        cycle_artifacts = set(data.get("cycle_artifact_files", []))
+        contract_impacting = sorted(
+            set(data["touched_runtime_files"]) - cycle_artifacts
+        )
+        if not contract_impacting:
+            continue
         required[data["contract"]] = {
             "subsystem": subsystem_id,
             "contract": data["contract"],
             "reason": "owner",
-            "touched_runtime_files": sorted(set(data["touched_runtime_files"])),
+            "touched_runtime_files": contract_impacting,
             "matched_references": [],
         }
 
+    # Dependent-reference contracts also skip cycle artifacts — the contract
+    # describes the release process, not specific RC packet contents.
+    cycle_artifact_paths = {
+        path
+        for data in impacted_subsystems.values()
+        for path in data.get("cycle_artifact_files", [])
+    }
     touched_runtime_files = sorted(
         {
             path
             for data in impacted_subsystems.values()
             for path in data.get("touched_runtime_files", [])
+            if path not in cycle_artifact_paths
         }
     )
     for path in touched_runtime_files:

@@ -1,5 +1,5 @@
 {
-  "version": 12,
+  "version": 13,
   "shared_ownerships": [
     {
       "path": "frontend-modern/src/api/agentProfiles.ts",
@@ -2741,6 +2741,13 @@
         "tests/integration/tests/helpers.ts",
         "tests/integration/tests/runtime-defaults.ts",
         "VERSION"
+      ],
+      "release_cycle_artifact_globs": [
+        "docs/RELEASE_NOTES.md",
+        "docs/UPGRADE_v6.md",
+        "docs/releases/RELEASE_NOTES_v6_RC*_DRAFT.md",
+        "docs/releases/V6_CHANGELOG_RC*_DRAFT.md",
+        "docs/releases/V6_RC*_OPERATOR_SUPPORT_PACK_DRAFT.md"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
