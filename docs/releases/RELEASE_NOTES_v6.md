@@ -71,6 +71,26 @@ Pulse Account, the in-product `Plans & Billing` surface, and related pricing
 copy now describe self-hosted upgrades as plan selection plus paid extras
 instead of buying more monitored-system capacity.
 
+### Pulse Cloud launches with v6
+
+Pulse Cloud is the hosted version of Pulse. Each Cloud account gets a
+dedicated, isolated workspace at `*.cloud.pulserelay.pro` with managed hosting,
+daily automated backups, and Relay pre-configured for Pulse Mobile pairing. All
+Cloud tiers include the full Pro feature set.
+
+| Plan | Price | Monitored systems | Support |
+|---|---|---:|---|
+| Cloud Starter | $29/month or $249/year | 10 | Community |
+| Cloud Power | $49/month or $449/year | 30 | Priority |
+| Cloud Max | $79/month or $699/year | 75 | Priority |
+
+A 14-day trial is included on every Cloud plan, no credit card required. An
+early-signup founding rate of $19/month is available on Cloud Starter; see
+`docs/architecture/v6-pricing-and-tiering.md` for current eligibility. Cloud
+signup is handled at `cloud.pulserelay.pro`. Full Cloud setup, migration, and
+FAQ live in `docs/CLOUD.md`. The MSP multi-tenant ladder remains a separate
+hosted product; see the MSP section of the pricing doc.
+
 ## Upgrade Guidance For Existing v5 Users
 
 1. Back up the current system and keep direct console access available.
