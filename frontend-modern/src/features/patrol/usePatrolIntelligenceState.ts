@@ -505,6 +505,11 @@ export function usePatrolIntelligenceState() {
   );
   const blockedAt = createMemo(() => patrolStatus()?.blocked_at);
   const patrolReadiness = createMemo(() => patrolStatus()?.readiness ?? null);
+  // Pulse records the last preflight result on AISettings.patrol_preflight
+  // (provider/model/duration/recommendation) so we can surface a concrete
+  // diagnosis on the readiness banner instead of a one-line "Provider
+  // connection issue" that forces operators to spelunk dev tools.
+  const patrolPreflight = createMemo(() => aiRuntimeSettings()?.patrol_preflight ?? null);
   const readinessBlocksPatrol = createMemo(() => patrolReadiness()?.status === 'not_ready');
   const showBlockedBanner = createMemo(() => runtimeState() === 'blocked');
   const showReadinessBanner = createMemo(() => {
@@ -934,6 +939,7 @@ export function usePatrolIntelligenceState() {
     patrolAnomalyTriggers,
     patrolInterval,
     patrolModel,
+    patrolPreflight,
     patrolReadiness,
     patrolRunHistory,
     runtimeState,

@@ -3,8 +3,18 @@ import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { formatRelativeTime } from '@/utils/format';
+import { getAIProviderDisplayName } from '@/utils/aiProviderPresentation';
 import { PATROL_PROVIDER_SETTINGS_ACTION } from '@/utils/patrolRuntimeActions';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
+
+// Strip a provider prefix ("deepseek:deepseek-v4-flash" -> "deepseek-v4-flash")
+// so the model id reads cleanly to operators without losing the provider
+// label that's already rendered alongside it.
+function modelIdWithoutProviderPrefix(modelId: string | undefined): string {
+  if (!modelId) return '';
+  const colonIndex = modelId.indexOf(':');
+  return colonIndex > 0 ? modelId.substring(colonIndex + 1) : modelId;
+}
 
 export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceState }) {
   const state = props.state;
@@ -98,6 +108,65 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
                 >
                   {state.patrolReadiness()?.summary}
                 </p>
+                {/* Concrete diagnosis: which provider and model failed, and
+                    the preflight recommendation. Without these the banner
+                    summary alone ("Provider connection issue") leaves the
+                    operator with nothing actionable. */}
+                <Show
+                  when={
+                    state.patrolReadiness()?.provider || state.patrolReadiness()?.model
+                  }
+                >
+                  <p
+                    class={`text-xs mt-1 ${
+                      state.patrolReadiness()?.status === 'not_ready'
+                        ? 'text-red-700 dark:text-red-200'
+                        : 'text-amber-700 dark:text-amber-300'
+                    }`}
+                  >
+                    <Show when={state.patrolReadiness()?.provider}>
+                      <span class="font-medium">Provider:</span>{' '}
+                      {getAIProviderDisplayName(state.patrolReadiness()!.provider!)}
+                    </Show>
+                    <Show
+                      when={
+                        state.patrolReadiness()?.provider && state.patrolReadiness()?.model
+                      }
+                    >
+                      {' · '}
+                    </Show>
+                    <Show when={state.patrolReadiness()?.model}>
+                      <span class="font-medium">Model:</span>{' '}
+                      <code class="font-mono">
+                        {modelIdWithoutProviderPrefix(state.patrolReadiness()!.model)}
+                      </code>
+                    </Show>
+                    <Show
+                      when={
+                        state.patrolPreflight()?.duration_ms !== undefined &&
+                        state.patrolPreflight()!.duration_ms > 0
+                      }
+                    >
+                      {' · '}
+                      <span class="font-medium">Preflight:</span>{' '}
+                      {(state.patrolPreflight()!.duration_ms / 1000).toFixed(1)}s
+                      <Show when={state.patrolPreflight()?.tool_call_observed === false}>
+                        , no tool call observed
+                      </Show>
+                    </Show>
+                  </p>
+                </Show>
+                <Show when={state.patrolPreflight()?.recommendation}>
+                  <p
+                    class={`text-xs mt-1 italic ${
+                      state.patrolReadiness()?.status === 'not_ready'
+                        ? 'text-red-700 dark:text-red-200'
+                        : 'text-amber-700 dark:text-amber-300'
+                    }`}
+                  >
+                    {state.patrolPreflight()!.recommendation}
+                  </p>
+                </Show>
               </div>
             </div>
             <a
