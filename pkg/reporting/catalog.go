@@ -181,11 +181,11 @@ func DescribeReportingCatalog() ReportingCatalog {
 		Description: "Generate performance reports and current-state exports across infrastructure and workloads.",
 		LockedState: ReportingLockedStateDefinition{
 			Title:       "Advanced Reporting",
-			Description: "Generate PDF and CSV performance reports plus current-state VM inventory exports across infrastructure and workload resources on paid self-hosted and hosted plans.",
+			Description: "AI-narrated performance reports for a single resource or your full fleet, with an executive summary, outlier callouts, and period-over-period changes. PDF and CSV formats, plus current-state VM inventory exports. AI narration uses Pulse Assistant when configured; reports fall back to a deterministic summary otherwise. Available on paid self-hosted and hosted plans.",
 		},
 		Guidance: ReportingGuidanceDefinition{
 			Title:       "Advanced Insights",
-			Description: "Performance reports come from the historical metrics store, while VM inventory export captures the current runtime state for spreadsheet-friendly fleet reviews. Use reports for trends and the inventory export for current allocation and usage snapshots.",
+			Description: "Performance reports include an AI-narrated executive summary, fleet outliers, and period-over-period comparison. They draw from the historical metrics store and Patrol findings within the window. The VM inventory export captures current runtime state for spreadsheet-friendly fleet reviews. Use reports for retrospective trends and the inventory export for current allocation snapshots.",
 		},
 		PerformanceReport: DescribePerformanceReport(),
 		VMInventoryExport: DescribeVMInventoryExport(),
