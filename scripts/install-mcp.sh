@@ -18,8 +18,8 @@
 #   PULSE_MCP_REPO      GitHub repo to download from. Default: rcourtman/Pulse.
 #   PULSE_MCP_NO_VERIFY If "1", skip SHA256 verification (not recommended).
 #
-# After install, configure your MCP client per the README:
-#   https://github.com/rcourtman/Pulse/blob/main/cmd/pulse-mcp/README.md
+# After install, configure your MCP client per `cmd/pulse-mcp/README.md` in the
+# Pulse repository (or `docs/AGENT_SUBSTRATE.md` in your installed Pulse server).
 #
 # pulse-mcp is the stdio JSON-RPC adapter that wraps Pulse's agent
 # surface for Claude Desktop, Claude Code, and other MCP clients.
@@ -181,8 +181,8 @@ Build from source: go install github.com/rcourtman/pulse-go-rewrite/cmd/pulse-mc
     log "next steps:"
     log "  1. Mint a Pulse API token in Settings -> API Access (with monitoring:read,"
     log "     and monitoring:write if you want the operator-state write tools)."
-    log "  2. Wire pulse-mcp into your MCP client per:"
-    log "     https://github.com/${REPO}/blob/main/cmd/pulse-mcp/README.md"
+    log "  2. Wire pulse-mcp into your MCP client per the cmd/pulse-mcp/README.md"
+    log "     in the Pulse repository (or docs/AGENT_SUBSTRATE.md in your Pulse install)."
 }
 
 main "$@"

@@ -13,8 +13,8 @@
 #   PULSE_MCP_REPO      GitHub repo. Default: rcourtman/Pulse.
 #   PULSE_MCP_NO_VERIFY If "1", skip SHA256 verification (not recommended).
 #
-# After install, configure your MCP client per the README:
-#   https://github.com/rcourtman/Pulse/blob/main/cmd/pulse-mcp/README.md
+# After install, configure your MCP client per `cmd/pulse-mcp/README.md`
+# in the Pulse repository (or your installed Pulse server's `docs/AGENT_SUBSTRATE.md`).
 
 param (
     [string]$Version = $env:PULSE_MCP_VERSION,
@@ -122,8 +122,8 @@ function Main {
     Write-Log 'next steps:'
     Write-Log '  1. Mint a Pulse API token in Settings -> API Access (with monitoring:read,'
     Write-Log '     and monitoring:write if you want the operator-state write tools).'
-    Write-Log '  2. Wire pulse-mcp into your MCP client per:'
-    Write-Log "     https://github.com/$Repo/blob/main/cmd/pulse-mcp/README.md"
+    Write-Log '  2. Wire pulse-mcp into your MCP client per the cmd/pulse-mcp/README.md'
+    Write-Log '     in the Pulse repository (or docs/AGENT_SUBSTRATE.md in your Pulse install).'
 }
 
 Main
