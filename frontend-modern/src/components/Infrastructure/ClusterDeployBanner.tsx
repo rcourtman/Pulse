@@ -17,7 +17,11 @@ export const ClusterDeployBanner: Component<ClusterDeployBannerProps> = (props) 
   // 1. Non-empty cluster name (not Standalone)
   // 2. At least one resource has platformType === 'proxmox-pve'
   // 3. At least one resource has agent?.agentId (source agent exists)
-  // 4. At least one PVE node does NOT have an agent (unmonitored)
+  // 4. At least one *reachable* PVE node does NOT have an agent
+  //
+  // Offline nodes are excluded: we can't deploy a Pulse Unified Agent to
+  // a node we can't reach, and a node going temporarily offline is not
+  // the same situation as a never-onboarded cluster peer.
   const deployInfo = createMemo(() => {
     const resources = props.group.resources;
     const cluster = props.group.cluster;
@@ -33,7 +37,9 @@ export const ClusterDeployBanner: Component<ClusterDeployBannerProps> = (props) 
     const hasSourceAgent = pveNodes.some((r) => r.agent?.agentId);
     if (!hasSourceAgent) return null;
 
-    const unmonitoredCount = pveNodes.filter((r) => !r.agent?.agentId).length;
+    const unmonitoredCount = pveNodes.filter(
+      (r) => !r.agent?.agentId && r.status !== 'offline',
+    ).length;
     if (unmonitoredCount === 0) return null;
 
     return { cluster, unmonitoredCount };

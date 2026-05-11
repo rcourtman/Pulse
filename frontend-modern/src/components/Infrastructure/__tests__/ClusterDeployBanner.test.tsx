@@ -17,8 +17,12 @@ import type { Resource } from '@/types/resource';
 
 /* ── helpers ──────────────────────────────────────────────────── */
 
-/** Minimal PVE node resource with optional agent */
-function makePveNode(id: string, agentId?: string): Resource {
+/** Minimal PVE node resource with optional agent and overridable status */
+function makePveNode(
+  id: string,
+  agentId?: string,
+  status: Resource['status'] = 'online',
+): Resource {
   return {
     id,
     type: 'agent',
@@ -27,7 +31,7 @@ function makePveNode(id: string, agentId?: string): Resource {
     platformId: 'pve1',
     platformType: 'proxmox-pve',
     sourceType: 'api',
-    status: 'online',
+    status,
     agent: agentId ? { agentId } : undefined,
   } as Resource;
 }
@@ -115,6 +119,26 @@ describe('ClusterDeployBanner', () => {
       render(() => <ClusterDeployBanner group={group} onDeploy={vi.fn()} />);
       expect(screen.getByText('1 node unmonitored')).toBeInTheDocument();
       expect(screen.getByText('Review & Deploy')).toBeInTheDocument();
+    });
+
+    it('does not count offline no-agent nodes (cannot deploy to an unreachable host)', () => {
+      const group = makeGroup('my-cluster', [
+        makePveNode('node1', 'agent-1'), // source agent
+        makePveNode('offline-node', undefined, 'offline'), // offline, no agent
+      ]);
+      render(() => <ClusterDeployBanner group={group} onDeploy={vi.fn()} />);
+      expect(screen.queryByText(/unmonitored/)).not.toBeInTheDocument();
+      expect(screen.queryByText('Review & Deploy')).not.toBeInTheDocument();
+    });
+
+    it('still counts online no-agent nodes when other no-agent nodes are offline', () => {
+      const group = makeGroup('my-cluster', [
+        makePveNode('node1', 'agent-1'),
+        makePveNode('online-no-agent'),
+        makePveNode('offline-no-agent', undefined, 'offline'),
+      ]);
+      render(() => <ClusterDeployBanner group={group} onDeploy={vi.fn()} />);
+      expect(screen.getByText('1 node unmonitored')).toBeInTheDocument();
     });
   });
 
