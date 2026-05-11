@@ -117,7 +117,7 @@ describe('ClusterDeployBanner', () => {
         makePveNode('node2'), // unmonitored
       ]);
       render(() => <ClusterDeployBanner group={group} onDeploy={vi.fn()} />);
-      expect(screen.getByText('1 node unmonitored')).toBeInTheDocument();
+      expect(screen.getByText('1 node ready for Pulse Agent')).toBeInTheDocument();
       expect(screen.getByText('Review & Deploy')).toBeInTheDocument();
     });
 
@@ -127,7 +127,7 @@ describe('ClusterDeployBanner', () => {
         makePveNode('offline-node', undefined, 'offline'), // offline, no agent
       ]);
       render(() => <ClusterDeployBanner group={group} onDeploy={vi.fn()} />);
-      expect(screen.queryByText(/unmonitored/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/ready for Pulse Agent/)).not.toBeInTheDocument();
       expect(screen.queryByText('Review & Deploy')).not.toBeInTheDocument();
     });
 
@@ -138,18 +138,18 @@ describe('ClusterDeployBanner', () => {
         makePveNode('offline-no-agent', undefined, 'offline'),
       ]);
       render(() => <ClusterDeployBanner group={group} onDeploy={vi.fn()} />);
-      expect(screen.getByText('1 node unmonitored')).toBeInTheDocument();
+      expect(screen.getByText('1 node ready for Pulse Agent')).toBeInTheDocument();
     });
   });
 
-  describe('unmonitored count display', () => {
-    it('shows singular "node" for 1 unmonitored', () => {
+  describe('deployable count display', () => {
+    it('shows singular "node" for 1 deployable', () => {
       const group = makeGroup('cluster-a', [makePveNode('node1', 'agent-1'), makePveNode('node2')]);
       render(() => <ClusterDeployBanner group={group} onDeploy={vi.fn()} />);
-      expect(screen.getByText('1 node unmonitored')).toBeInTheDocument();
+      expect(screen.getByText('1 node ready for Pulse Agent')).toBeInTheDocument();
     });
 
-    it('shows plural "nodes" for multiple unmonitored', () => {
+    it('shows plural "nodes" for multiple deployable', () => {
       const group = makeGroup('cluster-a', [
         makePveNode('node1', 'agent-1'),
         makePveNode('node2'),
@@ -157,7 +157,7 @@ describe('ClusterDeployBanner', () => {
         makePveNode('node4'),
       ]);
       render(() => <ClusterDeployBanner group={group} onDeploy={vi.fn()} />);
-      expect(screen.getByText('3 nodes unmonitored')).toBeInTheDocument();
+      expect(screen.getByText('3 nodes ready for Pulse Agent')).toBeInTheDocument();
     });
   });
 
@@ -198,7 +198,7 @@ describe('ClusterDeployBanner', () => {
         makePveNode('node2'),
       ]);
       render(() => <ClusterDeployBanner group={group} onDeploy={vi.fn()} />);
-      expect(screen.getByText('1 node unmonitored')).toBeInTheDocument();
+      expect(screen.getByText('1 node ready for Pulse Agent')).toBeInTheDocument();
     });
 
     it('ignores non-PVE platform nodes', () => {
@@ -208,7 +208,7 @@ describe('ClusterDeployBanner', () => {
         makePveNode('pve-node2'),
       ]);
       render(() => <ClusterDeployBanner group={group} onDeploy={vi.fn()} />);
-      expect(screen.getByText('1 node unmonitored')).toBeInTheDocument();
+      expect(screen.getByText('1 node ready for Pulse Agent')).toBeInTheDocument();
     });
 
     it('does not treat non-PVE agent as a PVE source agent', () => {

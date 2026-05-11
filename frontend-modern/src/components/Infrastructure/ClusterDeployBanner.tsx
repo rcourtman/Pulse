@@ -9,8 +9,8 @@ interface ClusterDeployBannerProps {
 }
 
 /**
- * Compact inline banner shown in cluster group headers when unmonitored
- * PVE nodes exist and a source agent is available to deploy from.
+ * Compact inline banner shown in cluster group headers when reachable PVE
+ * nodes lack a Pulse Agent and a source agent is available to deploy from.
  */
 export const ClusterDeployBanner: Component<ClusterDeployBannerProps> = (props) => {
   // Visibility conditions:
@@ -37,12 +37,12 @@ export const ClusterDeployBanner: Component<ClusterDeployBannerProps> = (props) 
     const hasSourceAgent = pveNodes.some((r) => r.agent?.agentId);
     if (!hasSourceAgent) return null;
 
-    const unmonitoredCount = pveNodes.filter(
+    const deployableCount = pveNodes.filter(
       (r) => !r.agent?.agentId && r.status !== 'offline',
     ).length;
-    if (unmonitoredCount === 0) return null;
+    if (deployableCount === 0) return null;
 
-    return { cluster, unmonitoredCount };
+    return { cluster, deployableCount };
   });
 
   return (
@@ -52,7 +52,7 @@ export const ClusterDeployBanner: Component<ClusterDeployBannerProps> = (props) 
           <div class="flex items-center gap-1.5 text-[11px] text-blue-600 dark:text-blue-400">
             <InfoIcon class="w-3 h-3" />
             <span>
-              {info().unmonitoredCount} node{info().unmonitoredCount !== 1 ? 's' : ''} unmonitored
+              {info().deployableCount} node{info().deployableCount !== 1 ? 's' : ''} ready for Pulse Agent
             </span>
           </div>
           <button
