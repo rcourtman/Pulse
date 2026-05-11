@@ -401,10 +401,13 @@ func TestOpenAIClient_ChatStream_ToolChoiceNone_DropsTools(t *testing.T) {
 }
 
 func TestOpenAIClient_Chat_DeepSeekCoercesForcedToolChoiceToAuto(t *testing.T) {
-	// DeepSeek's API server-side aliases v4-flash/v4-pro to deepseek-reasoner,
-	// which rejects forced tool_choice with HTTP 400. Pulse coerces any DeepSeek
-	// forced tool_choice to "auto" so Patrol stays functional regardless of how
-	// DeepSeek routes the requested id.
+	// Empirical: DeepSeek's API rejects tool_choice=required with HTTP 400
+	// for the canonical chat models (verified via live preflight against
+	// deepseek-v4-flash on 2026-05-11, deterministic 400 in 275ms). DeepSeek's
+	// official docs claim required is supported, but server behavior
+	// disagrees. Pulse coerces forced tool_choice to "auto" for any DeepSeek
+	// model so Patrol stays functional; the soft "model did not emit a tool
+	// call" warning surface handles auto-mode preflight outcomes correctly.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var got map[string]interface{}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
@@ -439,9 +442,8 @@ func TestOpenAIClient_Chat_DeepSeekCoercesForcedToolChoiceToAuto(t *testing.T) {
 }
 
 func TestOpenAIClient_ChatStream_DeepSeekCoercesAnyToolChoiceToAuto(t *testing.T) {
-	// DeepSeek's API server-side aliases v4-flash/v4-pro to deepseek-reasoner,
-	// which rejects forced tool_choice with HTTP 400. Pulse coerces any DeepSeek
-	// forced tool_choice to "auto" on streaming requests as well.
+	// Streaming variant of the same coercion. See the non-streaming test
+	// for the empirical-evidence note.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var got map[string]interface{}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
@@ -471,6 +473,9 @@ func TestOpenAIClient_ChatStream_DeepSeekCoercesAnyToolChoiceToAuto(t *testing.T
 }
 
 func TestOpenAIClient_Chat_UnknownDeepSeekModelCoercesForcedToolChoiceToAuto(t *testing.T) {
+	// Unknown DeepSeek model ids share the canonical-models' coercion
+	// behavior. Until DeepSeek's documented tool_choice=required support
+	// actually works server-side, every DeepSeek request gets auto.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var got map[string]interface{}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))

@@ -181,10 +181,26 @@ func (c *OpenAIClient) shouldSendReasoningContent() bool {
 }
 
 func (c *OpenAIClient) supportsForcedToolChoice(model string) bool {
-	// DeepSeek's API server-side aliases v4-flash/v4-pro to deepseek-reasoner,
-	// which rejects forced tool_choice with HTTP 400. Always coerce to "auto"
-	// for any DeepSeek model so Patrol stays functional regardless of how
-	// DeepSeek routes the requested id.
+	// Empirical: DeepSeek's API returns HTTP 400 ("provider rejected
+	// forced tool selection") when tool_choice=required is sent against
+	// the canonical chat models, including deepseek-v4-flash. DeepSeek's
+	// official chat-completion docs list `required` as a supported value
+	// with no model-specific restriction (verified at
+	// https://api-docs.deepseek.com/api/create-chat-completion on
+	// 2026-05-11), but their server behavior disagrees with their docs.
+	// A live preflight against deepseek-v4-flash with required produced
+	// `cause: tool_choice_rejected` in 275ms — a deterministic 400, not
+	// a transient. The legacy `deepseek-reasoner` id is documented as a
+	// thinking-mode alias for v4-flash on the pricing page and shares
+	// the same behavior.
+	//
+	// Until DeepSeek's API matches their docs, coerce forced tool_choice
+	// to "auto" for any DeepSeek model so Patrol stays functional. With
+	// auto, the model is free to skip the tool call and preflight may
+	// record tool_call_observed=false; that is handled as a soft warning
+	// ("Model did not emit a tool call during preflight") rather than a
+	// hard failure, which is the correct surface for a model that
+	// supports tools but is not under forced selection.
 	return !c.isDeepSeek()
 }
 
