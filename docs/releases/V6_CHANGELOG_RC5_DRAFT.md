@@ -25,10 +25,10 @@ The changelog was audited against every feature/runtime commit in the exact
 code-backed release-validation range for the current candidate:
 
 - `v6.0.0-rc.4`: `4aa91f6af37be08c93ff19e44f307735d1b9cb70`
-- validation-risk commit: `52416cec6fdb42c0bf753d52ad870f4dfede5e1e`
-- range: `v6.0.0-rc.4..52416cec6fdb42c0bf753d52ad870f4dfede5e1e`
-- commit count: `426`
-- changed scope: `687` files, `84642` insertions, `16632` deletions
+- validation-risk commit: `e36945741e1db5d763ab63eeeda18a58acda23c5`
+- range: `v6.0.0-rc.4..e36945741e1db5d763ab63eeeda18a58acda23c5`
+- commit count: `428`
+- changed scope: `694` files, `85715` insertions, `16639` deletions
 
 Those commits are grouped in this changelog rather than listed one by one.
 The range carries: the agent-substrate HTTP contract and `cmd/pulse-mcp` /
@@ -267,6 +267,13 @@ public alerts API is unchanged.
 - SSHSIG is verified on in-app update artifacts
 - patrol-main session bounded at 200 messages to stop unbounded disk growth
 - AGENT-side update signer trust migration guidance carries through
+- weak local Ollama models (qwen2.5:11b, qwen2.5:14b, similar) that emit
+  Pulse tool invocations as plain JSON inside content instead of through
+  the structured `tool_calls` channel are now sanitised by extending
+  `cleanToolCallArtifacts` and `containsToolCallMarker` with a registry-
+  sourced canonical-tool allowlist pass; users no longer see raw
+  `{"name": "pulse_query", ...}` payloads as the assistant's final
+  response
 
 ## What existing v5 users should re-test in `rc.5`
 

@@ -180,8 +180,8 @@ Old metadata section.
             repo_root / "docs/releases/V6_RC5_OPERATOR_SUPPORT_PACK_DRAFT.md"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("52416cec6fdb42c0bf753d52ad870f4dfede5e1e", release_notes)
-        self.assertIn("commit count: `426`", changelog)
+        self.assertIn("e36945741e1db5d763ab63eeeda18a58acda23c5", release_notes)
+        self.assertIn("commit count: `428`", changelog)
         self.assertIn("agent-substrate HTTP contract", release_notes)
         self.assertIn("/api/agent/capabilities", changelog)
         self.assertIn("Pulse Intelligence", support_pack)

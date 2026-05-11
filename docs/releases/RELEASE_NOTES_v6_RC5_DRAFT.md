@@ -38,15 +38,16 @@ work into a retestable v6 candidate:
   Proxmox VE, PBS, PMG, and Unraid agent hosts
 - a sizable alerts-manager refactor (decomposition only, no API change)
 
-This packet was audited against `426` commits in the exact code-backed
+This packet was audited against `428` commits in the exact code-backed
 `rc.4` to `rc.5` pre-publication validation range, from the published
 `v6.0.0-rc.4` tag commit `4aa91f6af37be08c93ff19e44f307735d1b9cb70` through
-validation-risk commit `52416cec6fdb42c0bf753d52ad870f4dfede5e1e`. That
-range covers 687 files changed, 84642 insertions, 16632 deletions, and
+validation-risk commit `e36945741e1db5d763ab63eeeda18a58acda23c5`. That
+range covers 694 files changed, 85715 insertions, 16639 deletions, and
 includes the agent-substrate, Patrol intelligence, operator-state,
 action-governance, AI reporting, availability-probe, accessibility,
 DeepSeek V4, platform-identity, and alerts-decomposition work, plus the
-RC5 packet and release-validation commits.
+RC5 packet and release-validation commits including the plain-JSON
+tool-call sanitisation for weak local models.
 
 ## Support Stance
 
