@@ -589,13 +589,31 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   };
 
-  // Pre-fill input when opened with an initialPrompt (e.g., "Discuss with Assistant" from findings)
+  // Pre-fill input when opened with an initialPrompt (e.g., "Discuss with
+  // Assistant" from findings). When autoSendInitialPrompt is true,
+  // immediately submit instead of waiting for the operator to press Enter
+  // — used by action-style entry points like "Explain" where clicking the
+  // button is itself the operator's decision to invoke the action.
   createEffect(() => {
     const ctx = aiChatStore.context;
     if (ctx.initialPrompt && isOpen()) {
-      setInput(ctx.initialPrompt);
-      // Clear so it doesn't re-fire on subsequent opens
+      const promptToSend = ctx.initialPrompt;
+      const shouldAutoSend = Boolean(ctx.autoSendInitialPrompt);
+      setInput(promptToSend);
+      // Clear flags so they don't re-fire on subsequent opens
       aiChatStore.clearInitialPrompt?.();
+      aiChatStore.clearAutoSendFlag?.();
+      if (shouldAutoSend) {
+        // Defer to the next tick so the input signal has propagated to
+        // handleSubmit's `input()` read, and so the drawer mount /
+        // session-load effects can settle. handleSubmit itself guards
+        // against empty prompts and against double-firing while a chat
+        // is in flight, so this is safe.
+        queueMicrotask(() => {
+          if (!isOpen()) return;
+          handleSubmit();
+        });
+      }
     }
   });
 

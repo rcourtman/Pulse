@@ -559,7 +559,16 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       nextStepAction,
       intent,
     });
-    aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
+    // Explain is an action-style entry point — clicking the button is the
+    // operator asking "do the explaining for me," not "open chat so I can
+    // type a question." Auto-submit the handoff prompt so the analysis is
+    // already in flight when the drawer is on screen. Discuss with
+    // Assistant keeps the previous behaviour (pre-fill, operator drives)
+    // because that entry is open-ended by intent.
+    aiChatStore.openWithPrompt(handoff.prompt, {
+      ...handoff.context,
+      autoSendInitialPrompt: intent === 'explain',
+    });
   };
 
   const handleDiscussWithAssistant = async (finding: UnifiedFinding, e: Event) => {

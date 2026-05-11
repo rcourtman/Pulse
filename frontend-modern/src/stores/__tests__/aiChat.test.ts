@@ -135,6 +135,37 @@ describe('aiChatStore', () => {
     });
   });
 
+  it('threads autoSendInitialPrompt through openWithPrompt and clears it on clearAutoSendFlag', () => {
+    // Action-style entry points (Explain, Investigate, eventually Verify
+    // fix) set autoSendInitialPrompt: true so the chat surface submits
+    // immediately on open instead of pre-filling the input and waiting
+    // for Enter. Discuss-style entries leave it falsy.
+    aiChatStore.openWithPrompt('Explain this Patrol finding', {
+      targetType: 'vm',
+      targetId: 'vm-100',
+      autoSendInitialPrompt: true,
+    });
+
+    expect(aiChatStore.context.initialPrompt).toBe('Explain this Patrol finding');
+    expect(aiChatStore.context.autoSendInitialPrompt).toBe(true);
+
+    aiChatStore.clearAutoSendFlag();
+
+    expect(aiChatStore.context.autoSendInitialPrompt).toBeUndefined();
+    // The initialPrompt is independent — clearAutoSendFlag must not also
+    // clear the prompt itself (the chat effect still needs to read and
+    // submit it before its own clearInitialPrompt runs).
+    expect(aiChatStore.context.initialPrompt).toBe('Explain this Patrol finding');
+  });
+
+  it('defaults autoSendInitialPrompt to undefined when not provided', () => {
+    aiChatStore.openWithPrompt('discuss this', {
+      targetType: 'vm',
+      targetId: 'vm-200',
+    });
+    expect(aiChatStore.context.autoSendInitialPrompt).toBeUndefined();
+  });
+
   it('preserves scoped autonomous-mode overrides for pre-filled prompts', () => {
     aiChatStore.openWithPrompt('brief me', {
       targetType: 'dashboard',
