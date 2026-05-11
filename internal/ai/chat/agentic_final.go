@@ -16,6 +16,12 @@ import (
 // ensureFinalTextResponse checks if the result messages contain any assistant text.
 // If not, it makes one last text-only LLM call to force the model to summarize its findings.
 // This prevents the loop from exiting silently after making tool calls without answering.
+//
+// cost-recording-exempt: any tokens this final summary turn consumes
+// flow into a.totalInputTokens / a.totalOutputTokens via the done
+// event, and the orchestrator (chat.Service.recordChatTurnCost)
+// records the loop totals after ExecuteWithTools returns. Recording
+// here would double-count.
 func (a *AgenticLoop) ensureFinalTextResponse(
 	ctx context.Context,
 	sessionID string,

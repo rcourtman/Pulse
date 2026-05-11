@@ -220,10 +220,18 @@ func (a *AgenticLoop) Execute(ctx context.Context, sessionID string, messages []
 }
 
 // ExecuteWithTools runs the agentic loop with a filtered tool set
+//
+// cost-recording-exempt: the loop accumulates token totals via stream
+// callbacks but cost is recorded by the orchestrator that owns the
+// loop (chat.Service.recordChatTurnCost for user chat; patrol_ai.go
+// for patrol-via-chat). Recording here would double-count.
 func (a *AgenticLoop) ExecuteWithTools(ctx context.Context, sessionID string, messages []Message, tools []providers.Tool, callback StreamCallback) ([]Message, error) {
 	return a.executeWithTools(ctx, sessionID, messages, tools, callback)
 }
 
+// cost-recording-exempt: orchestrator (chat.Service or patrol caller)
+// records cost from the loop's GetTotal{Input,Output}Tokens after this
+// returns. See ExecuteWithTools above.
 func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, messages []Message, tools []providers.Tool, callback StreamCallback) ([]Message, error) {
 	// Snapshot maxTurns under the lock — callers may override via SetMaxTurns
 	// before calling ExecuteWithTools, and this avoids races with concurrent sessions.
