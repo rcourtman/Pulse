@@ -65,6 +65,7 @@ import {
   getFindingSubjectPresentation,
   getFindingTitlePresentation,
   getFindingRecencyPresentation,
+  findingHasAppliedFix,
   hasFindingInvestigationDetails,
   hasFindingInvestigationHandoffPointer,
   getInvestigationConfidenceBadgeClasses,
@@ -632,23 +633,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     await openFindingInAssistant(finding, 'verify_fix');
   };
 
-  // True when the finding has an investigation outcome indicating that
-  // some remediation step has run against it — anything past "fix
-  // queued." For these states, Verify fix is a meaningful action; for
-  // fix_queued (still awaiting approval) and earlier states there is
-  // nothing applied yet to verify, and for fix_failed the fix didn't
-  // complete so verification doesn't apply.
-  const hasAppliedFix = (finding: UnifiedFinding): boolean => {
-    switch (finding.investigationOutcome) {
-      case 'fix_executed':
-      case 'fix_verified':
-      case 'fix_verification_failed':
-      case 'fix_verification_unknown':
-        return true;
-      default:
-        return false;
-    }
-  };
+  // hasAppliedFix logic lives in @/utils/aiFindingPresentation as
+  // findingHasAppliedFix so the investigation-outcome switch stays in a
+  // shared adapter (per the resource-type-boundaries test).
 
   // Create rule from this is the promotion path: take the operator's
   // implicit pattern (silencing the same {resource, category} pair
@@ -1333,7 +1320,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </svg>
               Why
             </button>
-            <Show when={hasAppliedFix(finding) && finding.status === 'active'}>
+            <Show when={findingHasAppliedFix(finding) && finding.status === 'active'}>
               <button
                 type="button"
                 onClick={(e) => handleVerifyFixFinding(finding, e)}
@@ -1428,15 +1415,17 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                     Acknowledge
                   </button>
                 </Show>
-                <button
-                  type="button"
-                  onClick={(e) => handleResolve(finding, e)}
-                  class="px-2 py-1 rounded border border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-900"
-                  title="Mark this finding as resolved. Use when you have fixed the issue out-of-band."
-                  disabled={actionLoading() === finding.id}
-                >
-                  Mark resolved
-                </button>
+                <Show when={manualControls.acknowledge && finding.status === 'active'}>
+                  <button
+                    type="button"
+                    onClick={(e) => handleResolve(finding, e)}
+                    class="px-2 py-1 rounded border border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-900"
+                    title="Mark this finding as resolved. Use when you have fixed the issue out-of-band."
+                    disabled={actionLoading() === finding.id}
+                  >
+                    Mark resolved
+                  </button>
+                </Show>
               </div>
             </Show>
             <Show when={manualControls.snooze}>

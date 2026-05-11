@@ -1154,9 +1154,17 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getByTestId('patrol-recommended-next-step-action')).toHaveTextContent(
         'Run Patrol',
       );
+      expect(findingsPanelState.latestProps).not.toBeNull();
+    });
+
+    // Patrol summary verification + activity-mix copy live behind the
+    // "Show details" toggle since commit 174d2b04d. Expand the section so
+    // the deeper assertions can find the text.
+    fireEvent.click(screen.getByTestId('patrol-summary-details-toggle'));
+
+    await waitFor(() => {
       expect(screen.getByText('No recent full patrol')).toBeInTheDocument();
       expect(screen.getAllByText(/Last activity/i)).toHaveLength(1);
-      expect(findingsPanelState.latestProps).not.toBeNull();
     });
 
     expect(screen.queryByText('No issues found')).not.toBeInTheDocument();
@@ -1328,6 +1336,13 @@ describe('AIIntelligence entitlement gating', () => {
           'Patrol has an active runtime issue: Provider billing or quota issue. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
         ),
       ).toBeInTheDocument();
+    });
+
+    // "Runtime issues" and "Latest activity" both live in the collapsible
+    // Patrol summary detail section (commit 174d2b04d).
+    fireEvent.click(screen.getByTestId('patrol-summary-details-toggle'));
+
+    await waitFor(() => {
       expect(screen.getByText('Runtime issues')).toBeInTheDocument();
       expect(screen.getByText('Latest activity')).toBeInTheDocument();
     });
@@ -1485,6 +1500,13 @@ describe('AIIntelligence entitlement gating', () => {
     };
 
     render(() => <AIIntelligence />);
+
+    // "Recent activity mix" copy lives in the collapsible Patrol summary
+    // detail section (commit 174d2b04d). Expand before asserting.
+    await waitFor(() => {
+      expect(screen.getByTestId('patrol-summary-details-toggle')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('patrol-summary-details-toggle'));
 
     await waitFor(() => {
       expect(

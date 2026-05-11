@@ -617,6 +617,25 @@ export const doesFindingNeedAttention = (
   );
 };
 
+// True when the finding has an investigation outcome indicating that some
+// remediation step has run against it — anything past "fix queued." For these
+// states, Verify fix is a meaningful action; for fix_queued (still awaiting
+// approval) and earlier states there is nothing applied yet to verify, and
+// for fix_failed the fix didn't complete so verification doesn't apply.
+export const findingHasAppliedFix = (
+  finding: Pick<UnifiedFinding, 'investigationOutcome'>,
+): boolean => {
+  switch (finding.investigationOutcome) {
+    case 'fix_executed':
+    case 'fix_verified':
+    case 'fix_verification_failed':
+    case 'fix_verification_unknown':
+      return true;
+    default:
+      return false;
+  }
+};
+
 export const getFindingLoopStateBadgeClasses = (loopState: string): string =>
   FINDING_LOOP_STATE_CLASSES[loopState] || DEFAULT_LOOP_STATE_CLASSES;
 

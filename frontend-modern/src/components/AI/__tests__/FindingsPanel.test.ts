@@ -51,9 +51,12 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('buildPatrolAssistantFindingHandoff');
     expect(findingsPanelSource).toContain('buildPatrolAssistantApprovalBriefingInput');
     expect(findingsPanelSource).toContain('buildPatrolAssistantProposedFixBriefingInput');
-    expect(findingsPanelSource).toContain(
-      'aiChatStore.openWithPrompt(handoff.prompt, handoff.context)',
-    );
+    // openWithPrompt receives the handoff context spread inline (so the call
+    // site can layer autoSendInitialPrompt for verb-style entrypoints like
+    // Investigate / Why / Verify fix). The base handoff.context must still
+    // flow through.
+    expect(findingsPanelSource).toContain('aiChatStore.openWithPrompt(handoff.prompt, {');
+    expect(findingsPanelSource).toContain('...handoff.context');
     expect(findingsPanelSource).toContain('investigationOutcome: finding.investigationOutcome');
     expect(findingsPanelSource).toContain('investigationStatus: finding.investigationStatus');
     expect(findingsPanelSource).toContain('remediationId: finding.remediationPlanId');
