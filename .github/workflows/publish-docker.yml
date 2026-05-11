@@ -183,49 +183,6 @@ jobs:
           push-to-registry: true
           create-storage-record: false
 
-      - name: Build and push Pulse agent image (multi-arch)
-        id: build_agent_image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          file: ./Dockerfile
-          target: agent_runtime
-          platforms: linux/amd64,linux/arm64
-          push: true
-          provenance: mode=max
-          sbom: true
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-agent:buildcache
-          build-args: |
-            VERSION=${{ steps.version.outputs.tag }}
-            PULSE_LICENSE_PUBLIC_KEY_SHA256=${{ steps.license_key_cache.outputs.sha256 }}
-            PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
-          secrets: |
-            pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
-            pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
-          tags: |
-            rcourtman/pulse-agent:${{ steps.version.outputs.tag }}
-            rcourtman/pulse-agent:${{ steps.version.outputs.version }}
-            ${{ steps.version.outputs.is_prerelease != 'true' && 'rcourtman/pulse-agent:latest' || '' }}
-            ghcr.io/${{ github.repository_owner }}/pulse-agent:${{ steps.version.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/pulse-agent:${{ steps.version.outputs.version }}
-            ${{ steps.version.outputs.is_prerelease != 'true' && format('ghcr.io/{0}/pulse-agent:latest', github.repository_owner) || '' }}
-
-      - name: Attest Pulse agent image on Docker Hub
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4
-        with:
-          subject-name: docker.io/rcourtman/pulse-agent
-          subject-digest: ${{ steps.build_agent_image.outputs.digest }}
-          push-to-registry: true
-          create-storage-record: false
-
-      - name: Attest Pulse agent image on GHCR
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4
-        with:
-          subject-name: ghcr.io/${{ github.repository_owner }}/pulse-agent
-          subject-digest: ${{ steps.build_agent_image.outputs.digest }}
-          push-to-registry: true
-          create-storage-record: false
-
       - name: Output image information
         run: |
           IS_PRERELEASE="${{ steps.version.outputs.is_prerelease }}"
@@ -238,12 +195,8 @@ jobs:
             echo "  - rcourtman/pulse:latest"
           fi
           echo ""
-          echo "Agent images (linux/amd64, linux/arm64):"
-          echo "  - rcourtman/pulse-agent:${{ steps.version.outputs.tag }}"
-          echo "  - rcourtman/pulse-agent:${{ steps.version.outputs.version }}"
-          if [ "$IS_PRERELEASE" != "true" ]; then
-            echo "  - rcourtman/pulse-agent:latest"
-          fi
+          echo "Pulse Agent binaries ship as release assets, not as a Docker image."
+          echo "See the GitHub release page for pulse-agent-{darwin,freebsd,linux,windows}-{amd64,arm64,...}."
           echo ""
           if [ "$IS_PRERELEASE" = "true" ]; then
             echo "Note: :latest tags were NOT updated (this is a prerelease)"
