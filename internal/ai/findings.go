@@ -861,16 +861,31 @@ func (s *FindingsStore) SetPersistence(p FindingsPersistence) error {
 			if normalizeLoadedFinding(f) {
 				normalizedLoadedState = true
 			}
-			// One-shot retirement of legacy alert-mirror findings. The
+			// One-shot cleanup of legacy alert-mirror findings. The
 			// deterministic detectAlertSignals → SignalActiveAlert path
-			// has been removed; any active "Active alert detected"
-			// finding still persisted from an earlier build is a stale
-			// mirror of an alert that already owns its own canonical
-			// surface. Retire it on load with a clear reason so the
-			// trust strip, regression counter, and health score stop
-			// reflecting the duplicate. Idempotent — after the first
-			// load with this code, no findings match the pattern.
-			if isLegacyAlertMirrorFinding(f) {
+			// has been removed; any "Active alert detected" finding
+			// still persisted from an earlier build is a stale mirror
+			// of an alert that already owns its own canonical surface.
+			//
+			//   - Active mirrors are retired (auto-resolved with a
+			//     clear reason) so the trust strip, regression counter,
+			//     and health score stop reflecting the duplicate while
+			//     the operator can still see why the finding closed.
+			//   - Already-resolved mirrors are purged entirely. They
+			//     were never canonical Patrol output and have no
+			//     operator value in the Resolved tab; leaving them in
+			//     place clutters the surface and inflates the
+			//     "regressed" totals on the trust strip.
+			//
+			// Idempotent — after the first load with this code, no
+			// findings match the pattern.
+			if legacyAlertMirrorShape(f) {
+				if f.ResolvedAt != nil {
+					// Purge: do not rehydrate. The deletion is persisted
+					// by the scheduleSave() call after the load loop.
+					normalizedLoadedState = true
+					continue
+				}
 				now := time.Now()
 				prevLoopState := f.LoopState
 				f.ResolvedAt = &now
@@ -978,15 +993,17 @@ func findingHasBogusAutoResolveCycle(f *Finding) bool {
 	return hasAutoResolve
 }
 
-// isLegacyAlertMirrorFinding reports whether the finding looks like an
-// active "Active alert detected" finding produced by the now-removed
+// legacyAlertMirrorShape reports whether the finding looks like an
+// "Active alert detected" finding produced by the now-removed
 // detectAlertSignals → SignalActiveAlert deterministic emitter. The title
 // is the only surface that ever produced exactly this string, so matching
 // on it is safe even without source/category checks; the additional
-// checks tighten the match to avoid retiring a hypothetical operator-
-// authored finding with the same name.
-func isLegacyAlertMirrorFinding(f *Finding) bool {
-	if f == nil || f.ResolvedAt != nil {
+// checks tighten the match to avoid touching a hypothetical operator-
+// authored finding with the same name. The predicate is state-agnostic:
+// callers branch on ResolvedAt to choose between active-retirement and
+// resolved-purge behavior.
+func legacyAlertMirrorShape(f *Finding) bool {
+	if f == nil {
 		return false
 	}
 	if f.Title != "Active alert detected" {

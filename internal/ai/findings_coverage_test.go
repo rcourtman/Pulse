@@ -129,6 +129,7 @@ func TestFindingsStore_SetPersistence_RetiresLegacyAlertMirrorFindings(t *testin
 	now := time.Now()
 	saved := make(chan map[string]*Finding, 1)
 
+	resolvedAt := now.Add(-13 * time.Hour)
 	p := &recordingPersistence{
 		findings: map[string]*Finding{
 			// Active "Active alert detected" finding from the removed
@@ -141,6 +142,23 @@ func TestFindingsStore_SetPersistence_RetiresLegacyAlertMirrorFindings(t *testin
 				Source:     "ai-analysis",
 				Category:   FindingCategoryGeneral,
 				LastSeenAt: now,
+			},
+			// Already-resolved legacy mirror finding — must be purged
+			// from the in-memory store and from disk on next save.
+			// These have no canonical operator value and clutter the
+			// Resolved tab / inflate the regressed totals on the trust
+			// strip if left in place.
+			"legacy-mirror-resolved": {
+				ID:              "legacy-mirror-resolved",
+				Severity:        FindingSeverityWarning,
+				ResourceID:      "vm-101",
+				Title:           "Active alert detected",
+				Source:          "ai-analysis",
+				Category:        FindingCategoryGeneral,
+				LastSeenAt:      resolvedAt,
+				ResolvedAt:      &resolvedAt,
+				AutoResolved:    true,
+				RegressionCount: 3,
 			},
 			// Distinct finding with matching title but different source —
 			// should NOT be retired (defensive: never retire something we
@@ -199,6 +217,13 @@ func TestFindingsStore_SetPersistence_RetiresLegacyAlertMirrorFindings(t *testin
 		t.Fatal("legacy mirror retirement must append an auto_resolved lifecycle event")
 	}
 
+	// Already-resolved legacy mirror must be purged entirely. The
+	// public Get path applies suppression but Get on a non-existent ID
+	// returns nil; that's the contract we want.
+	if got := store.Get("legacy-mirror-resolved"); got != nil {
+		t.Fatalf("resolved legacy mirror must be purged from the store on load; got %+v", got)
+	}
+
 	foreign := store.Get("foreign-title-match")
 	if foreign == nil {
 		t.Fatal("expected foreign-title-match to load")
@@ -219,6 +244,9 @@ func TestFindingsStore_SetPersistence_RetiresLegacyAlertMirrorFindings(t *testin
 	case persisted := <-saved:
 		if persisted["legacy-mirror"].ResolvedAt == nil {
 			t.Fatal("retired mirror state must be persisted back")
+		}
+		if _, stillPersisted := persisted["legacy-mirror-resolved"]; stillPersisted {
+			t.Fatal("purged resolved legacy mirror must not be persisted back to disk")
 		}
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("timed out waiting for retirement save")
