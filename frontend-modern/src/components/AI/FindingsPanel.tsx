@@ -1299,22 +1299,24 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </svg>
               Explain
             </button>
-            <button
-              type="button"
-              onClick={(e) => handleInvestigateFinding(finding, e)}
-              class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
-              title="Ask Pulse Assistant to actively investigate using metrics, alerts, and state — not just summarize"
-            >
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-              Investigate
-            </button>
+            <Show when={finding.status === 'active'}>
+              <button
+                type="button"
+                onClick={(e) => handleInvestigateFinding(finding, e)}
+                class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
+                title="Ask Pulse Assistant to actively investigate using metrics, alerts, and state — not just summarize"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+                Investigate
+              </button>
+            </Show>
             <button
               type="button"
               onClick={(e) => handleWhyFinding(finding, e)}
@@ -1331,7 +1333,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </svg>
               Why
             </button>
-            <Show when={hasAppliedFix(finding)}>
+            <Show when={hasAppliedFix(finding) && finding.status === 'active'}>
               <button
                 type="button"
                 onClick={(e) => handleVerifyFixFinding(finding, e)}
