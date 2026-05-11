@@ -1,6 +1,13 @@
 name: Release Dry Run
 
 on:
+  # Weekly drift watchdog: fires every Tuesday 07:00 UTC against pulse/v6-release
+  # so fixture, manifest, and load-calibration drift surfaces a week at a time
+  # instead of piling up until an RC publish. Scheduled runs use the input
+  # defaults below. Update rollback_version once v6 GA ships and a different
+  # stable line becomes the rollback target.
+  schedule:
+    - cron: '0 7 * * 2'
   workflow_dispatch:
     inputs:
       version:
@@ -15,6 +22,7 @@ on:
         description: 'Required rollback stable version to rehearse (for example 5.1.14 or v5.1.14)'
         required: true
         type: string
+        default: '5.1.29'
       ga_date:
         description: 'Stable v6.0.0 rehearsal only: planned GA publish date (YYYY-MM-DD)'
         required: false
