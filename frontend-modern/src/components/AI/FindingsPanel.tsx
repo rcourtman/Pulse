@@ -518,7 +518,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
   const openFindingInAssistant = async (
     finding: UnifiedFinding,
-    intent: 'discuss' | 'explain' | 'investigate' | 'why',
+    intent: 'discuss' | 'explain' | 'investigate' | 'why' | 'verify_fix',
   ) => {
     await aiIntelligenceStore.loadPendingApprovals();
     const subject = getFindingSubjectPresentation(finding).label;
@@ -569,7 +569,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     aiChatStore.openWithPrompt(handoff.prompt, {
       ...handoff.context,
       autoSendInitialPrompt:
-        intent === 'explain' || intent === 'investigate' || intent === 'why',
+        intent === 'explain' ||
+        intent === 'investigate' ||
+        intent === 'why' ||
+        intent === 'verify_fix',
     });
   };
 
@@ -602,6 +605,34 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const handleWhyFinding = async (finding: UnifiedFinding, e: Event) => {
     e.stopPropagation();
     await openFindingInAssistant(finding, 'why');
+  };
+
+  // Verify fix is the post-remediation check. After a fix has been
+  // executed against this finding, the operator asks the Assistant
+  // whether it actually worked — confirming the underlying condition
+  // cleared rather than trusting the fix command's exit code. Only
+  // meaningful when a fix has been applied (see hasAppliedFix).
+  const handleVerifyFixFinding = async (finding: UnifiedFinding, e: Event) => {
+    e.stopPropagation();
+    await openFindingInAssistant(finding, 'verify_fix');
+  };
+
+  // True when the finding has an investigation outcome indicating that
+  // some remediation step has run against it — anything past "fix
+  // queued." For these states, Verify fix is a meaningful action; for
+  // fix_queued (still awaiting approval) and earlier states there is
+  // nothing applied yet to verify, and for fix_failed the fix didn't
+  // complete so verification doesn't apply.
+  const hasAppliedFix = (finding: UnifiedFinding): boolean => {
+    switch (finding.investigationOutcome) {
+      case 'fix_executed':
+      case 'fix_verified':
+      case 'fix_verification_failed':
+      case 'fix_verification_unknown':
+        return true;
+      default:
+        return false;
+    }
   };
 
   // Copy a Markdown summary of the finding to the clipboard so the operator
@@ -1240,6 +1271,24 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </svg>
             Why
           </button>
+          <Show when={hasAppliedFix(finding)}>
+            <button
+              type="button"
+              onClick={(e) => handleVerifyFixFinding(finding, e)}
+              class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
+              title="Ask Pulse Assistant to verify whether the applied fix actually resolved the underlying condition"
+            >
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                />
+              </svg>
+              Verify fix
+            </button>
+          </Show>
           <button
             type="button"
             onClick={(e) => handleCopyFindingSummary(finding, e)}

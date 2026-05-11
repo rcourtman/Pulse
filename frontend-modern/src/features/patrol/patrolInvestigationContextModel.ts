@@ -97,7 +97,16 @@ export interface PatrolInvestigationRecordPresentation {
 // rather than current state: recent changes around detection time,
 // learned correlations, prior incident memory, regression history.
 // Action-style and auto-sent like Explain and Investigate.
-export type PatrolAssistantFindingIntent = 'discuss' | 'explain' | 'investigate' | 'why';
+// 'verify_fix' = post-remediation verification — ask the LLM to confirm
+// whether the recently-applied fix actually resolved the underlying
+// condition. Only meaningful when a fix has been applied to the
+// finding (investigation outcome is one of the fix-* states).
+export type PatrolAssistantFindingIntent =
+  | 'discuss'
+  | 'explain'
+  | 'investigate'
+  | 'why'
+  | 'verify_fix';
 
 export interface PatrolAssistantFindingPromptInput {
   title: string;
@@ -557,6 +566,16 @@ export function buildPatrolAssistantFindingPrompt(
       'and what would have to be true for the cause to recur. ' +
       'If the cause requires verification through a Pulse tool call, do that; do not run anything ' +
       'that changes state without operator approval.';
+  } else if (input.intent === 'verify_fix') {
+    prompt =
+      `Verify the fix applied to this Patrol finding: "${title}" on ${subject}. ` +
+      'A remediation step has been executed against this finding — confirm whether the underlying ' +
+      'condition has actually cleared. Use the Pulse tools (metrics, resource state, recent alerts, ' +
+      'service health) to check the current evidence against the original signal that fired this ' +
+      'finding, not against an unrelated state. ' +
+      'Then answer: is the condition cleared, what evidence supports that judgment, ' +
+      'how confident are you, and is there any residual risk the operator should monitor for. ' +
+      'Do not execute any new state-changing commands; verification is read-only.';
   } else {
     prompt = `I'd like to discuss this Patrol finding: "${title}" on ${subject}.`;
   }
@@ -564,7 +583,8 @@ export function buildPatrolAssistantFindingPrompt(
     hasRecord &&
     input.intent !== 'explain' &&
     input.intent !== 'investigate' &&
-    input.intent !== 'why'
+    input.intent !== 'why' &&
+    input.intent !== 'verify_fix'
   ) {
     prompt +=
       '\n\nPulse Patrol has a structured investigation record for this finding. Use that record as the main context before suggesting next actions.';

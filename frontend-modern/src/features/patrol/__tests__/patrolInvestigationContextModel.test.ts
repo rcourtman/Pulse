@@ -951,6 +951,35 @@ describe('patrolInvestigationContextModel', () => {
     expect(explainPrompt).toContain('vm-101');
   });
 
+  it('seeds a verify_fix-intent prompt that asks the LLM to confirm the fix actually worked', () => {
+    // Verify fix is the post-remediation check. After a fix has run,
+    // the operator asks "did that actually clear the underlying
+    // condition" — and the LLM should check via Pulse tools rather
+    // than trust the fix command's exit code. Verification is
+    // read-only; no state-changing tool calls.
+    const prompt = buildPatrolAssistantFindingPrompt({
+      title: 'Backup job failing',
+      subject: 'vm-101',
+      description: 'Datastore quota exhausted',
+      intent: 'verify_fix',
+    });
+
+    expect(prompt).toContain('Verify the fix applied to this Patrol finding');
+    expect(prompt).toContain('Backup job failing');
+    expect(prompt).toContain('vm-101');
+    // The verification dimensions: condition cleared, evidence,
+    // confidence, residual risk.
+    expect(prompt.toLowerCase()).toContain('condition');
+    expect(prompt.toLowerCase()).toContain('cleared');
+    expect(prompt.toLowerCase()).toContain('evidence');
+    expect(prompt.toLowerCase()).toContain('confident');
+    expect(prompt.toLowerCase()).toMatch(/residual|monitor/);
+    // Read-only safety: no state-changing commands during verification.
+    expect(prompt.toLowerCase()).toContain('read-only');
+    expect(prompt).not.toContain("I'd like to discuss");
+    expect(prompt).not.toContain('Investigate this Patrol finding now');
+  });
+
   it('seeds a why-intent prompt that focuses on cause, not current state', () => {
     // Why-did-this-happen is the diagnostic counterpart to Explain. Where
     // Explain says "tell me what we know" and Investigate says "go find
