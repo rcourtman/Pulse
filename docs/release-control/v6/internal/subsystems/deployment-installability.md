@@ -174,7 +174,7 @@ server-side update execution surfaces.
    operator support packet must describe that same candidate instead of leaving
    the branch on a newer version string while the in-repo packet still speaks
    for an older RC.
-   Later corrective RCs such as `rc.3` and `rc.4` must also carry the live stable
+   Later corrective RCs such as `rc.3`, `rc.4`, and `rc.5` must also carry the live stable
    rollback target and any prerelease trust-root continuity caveat in the
    current release notes, changelog, operator support pack, upgrade guide, and
    release-control evidence record before the release workflow is dispatched.

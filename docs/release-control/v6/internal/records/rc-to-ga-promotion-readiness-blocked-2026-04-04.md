@@ -8,25 +8,22 @@
 
 1. The latest shipped Pulse v6 prerelease tag is `v6.0.0-rc.4`.
 2. That shipped prerelease tag resolves to commit `4aa91f6af37be08c93ff19e44f307735d1b9cb70`.
-3. The selected remote ref `origin/pulse/v6-release` is still behind the current
-   local governed branch state, so `Release Dry Run` would exercise stale remote
-   control-plane metadata instead of the intended candidate.
-4. The governed release profile in `docs/release-control/control_plane.json`
+3. The governed release profile in `docs/release-control/control_plane.json`
    currently declares both `prerelease_branch` and `stable_branch` as
    `pulse/v6-release`.
-5. The active control-plane target is still `v6-product-lane-expansion`, not
+4. The active control-plane target is still `v6-product-lane-expansion`, not
    `v6-ga-promotion`.
-6. The active local `pulse/v6-release` branch currently reports `VERSION=6.0.0-rc.4`, so the
+5. The active local `pulse/v6-release` branch currently reports `VERSION=6.0.0-rc.5`, so the
    working line is still prerelease and there is not yet a governed local stable
    `6.0.0` candidate.
-7. There is still no governed `Prerelease-to-GA Rehearsal Record` proving a successful
+6. There is still no governed `Prerelease-to-GA Rehearsal Record` proving a successful
    non-publish `Release Dry Run` for the eventual stable `6.0.0` candidate.
-8. `docs/releases/RELEASE_NOTES_v6.md` and
+7. `docs/releases/RELEASE_NOTES_v6.md` and
    `docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md` now carry the
    currently proposed exact dates for the eventual GA notice:
    - `v6` GA date: `2026-04-20`
    - `v5` end-of-support date: `2026-07-19`
-9. There is still no governed `Release Dry Run` artifact or rehearsal record
+8. There is still no governed `Release Dry Run` artifact or rehearsal record
    exercising stable inputs for:
    - `version=6.0.0`
    - `promoted_from_tag=v6.0.0-rc.4`
@@ -43,7 +40,7 @@
 
 The blocker is no longer missing governance text. The remaining problem is that
 the control plane still holds v6 on the pre-GA prerelease line, the working
-version is still prerelease (`6.0.0-rc.4`), and there is still no exercised
+version is still prerelease (`6.0.0-rc.5`), and there is still no exercised
 `Release Dry Run` record proving the eventual stable `6.0.0`
 candidate is ready for GA-style promotion. Until that rehearsal exists, stable
 users would still be the first real cohort for the final promotion path.

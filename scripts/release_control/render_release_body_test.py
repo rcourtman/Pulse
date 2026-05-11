@@ -107,6 +107,9 @@ Old metadata section.
             "docs/releases/RELEASE_NOTES_v6_RC4_DRAFT.md",
             "docs/releases/V6_CHANGELOG_RC4_DRAFT.md",
             "docs/releases/V6_RC4_OPERATOR_SUPPORT_PACK_DRAFT.md",
+            "docs/releases/RELEASE_NOTES_v6_RC5_DRAFT.md",
+            "docs/releases/V6_CHANGELOG_RC5_DRAFT.md",
+            "docs/releases/V6_RC5_OPERATOR_SUPPORT_PACK_DRAFT.md",
         )
 
         for relative_path in packet_paths:
@@ -164,6 +167,26 @@ Old metadata section.
         self.assertIn("tenant\nmonitor broadcast guard", changelog)
         self.assertIn("live auth-env watcher teardown", release_notes)
         self.assertIn("join live config watcher goroutines", changelog)
+
+    def test_rc5_packet_records_commit_coverage_and_agent_substrate(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        release_notes = (repo_root / "docs/releases/RELEASE_NOTES_v6_RC5_DRAFT.md").read_text(
+            encoding="utf-8"
+        )
+        changelog = (repo_root / "docs/releases/V6_CHANGELOG_RC5_DRAFT.md").read_text(
+            encoding="utf-8"
+        )
+        support_pack = (
+            repo_root / "docs/releases/V6_RC5_OPERATOR_SUPPORT_PACK_DRAFT.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("52416cec6fdb42c0bf753d52ad870f4dfede5e1e", release_notes)
+        self.assertIn("commit count: `426`", changelog)
+        self.assertIn("agent-substrate HTTP contract", release_notes)
+        self.assertIn("/api/agent/capabilities", changelog)
+        self.assertIn("Pulse Intelligence", support_pack)
+        self.assertIn("operator-state", changelog)
+        self.assertIn("Pulse Mobile pairing for handoff", support_pack)
 
     def test_agent_paradigm_release_notes_blurb_documents_distribution_path(self) -> None:
         """The agent-paradigm source draft must keep its honest scope:
