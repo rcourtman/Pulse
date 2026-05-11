@@ -260,7 +260,7 @@ Support floor fields are recorded in this order: `setup`, `visibility`,
 
 | Profile | Family | Governance | Readiness | Host identity tokens | Runtime platform | Storage family | Support floor |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `unraid` | `Unraid` | `supported` | `supported` | `unraid` | `linux` | `onprem` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=supported`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
+| `unraid` | `Unraid` | `supported` | `supported` | `unraid`, `unraid-os`, `unraid os` | `linux` | `onprem` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=supported`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
 
 ### Current support rows
 

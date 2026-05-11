@@ -19,7 +19,7 @@ var (
 	numberedPlatformListRE     = regexp.MustCompile("^\\d+\\.\\s+`([^`]+)`")
 	currentSupportMatrixRE     = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|")
 	currentSupportSetupRowRE   = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|\\s+([^|]+?)\\s+\\|")
-	agentHostProfileTableRowRE = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|")
+	agentHostProfileTableRowRE = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+(.+?)\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|")
 )
 
 type platformSupportManifest struct {
@@ -265,7 +265,7 @@ func TestUnraidRemainsInPresentationOnlyVocabularyAndAgentHostProfiles(t *testin
 	if profile.ReadinessStage != "supported" {
 		t.Fatalf("unraid readiness stage = %q, want supported", profile.ReadinessStage)
 	}
-	if diff := diffPlatformSets([]string{"unraid"}, profile.HostIdentityTokens); diff != "" {
+	if diff := diffPlatformSets([]string{"unraid", "unraid-os", "unraid os"}, profile.HostIdentityTokens); diff != "" {
 		t.Fatalf("unraid host identity tokens drifted from the host-profile model:\n%s", diff)
 	}
 	if profile.RuntimePlatform != "linux" {
@@ -285,7 +285,7 @@ func TestUnraidRemainsInPresentationOnlyVocabularyAndAgentHostProfiles(t *testin
 	}
 	if !strings.Contains(
 		model,
-		"| `unraid` | `Unraid` | `supported` | `supported` | `unraid` | `linux` | `onprem` |",
+		"| `unraid` | `Unraid` | `supported` | `supported` | `unraid`, `unraid-os`, `unraid os` | `linux` | `onprem` |",
 	) {
 		t.Fatal("expected platform support model to keep the unraid host-profile row")
 	}

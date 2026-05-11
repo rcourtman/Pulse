@@ -1247,7 +1247,8 @@ func TestContract_AISettingsBYOKOverrideDoesNotExposeQuickstartInventoryJSONSnap
 			"configured_providers":["openai"],
 			"control_level":"read_only",
 			"protected_guests":[],
-			"discovery_enabled":false
+			"discovery_enabled":false,
+			"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 		}`
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
@@ -3225,7 +3226,8 @@ func TestContract_HostedAISettingsDoesNotAutoBootstrapQuickstartJSONSnapshot(t *
 		"configured_providers":[],
 		"control_level":"read_only",
 		"protected_guests":[],
-		"discovery_enabled":false
+		"discovery_enabled":false,
+		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
@@ -3284,7 +3286,8 @@ func TestContract_AISettingsRetiredQuickstartAliasJSONSnapshot(t *testing.T) {
 		"configured_providers":[],
 		"control_level":"read_only",
 		"protected_guests":[],
-		"discovery_enabled":false
+		"discovery_enabled":false,
+		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
@@ -3348,7 +3351,8 @@ func TestContract_AISettingsOllamaAuthJSONSnapshot(t *testing.T) {
 			"configured_providers":["ollama"],
 			"control_level":"read_only",
 			"protected_guests":[],
-			"discovery_enabled":false
+			"discovery_enabled":false,
+			"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 		}`
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
@@ -3397,11 +3401,11 @@ func TestContract_ReportingCatalogJSONSnapshot(t *testing.T) {
 		"description":"Generate performance reports and current-state exports across infrastructure and workloads.",
 		"lockedState":{
 			"title":"Advanced Reporting",
-			"description":"Generate PDF and CSV performance reports plus current-state VM inventory exports across infrastructure and workload resources on paid self-hosted and hosted plans."
+			"description":"AI-narrated performance reports for a single resource or your full fleet, with an executive summary, outlier callouts, and period-over-period changes. PDF and CSV formats, plus current-state VM inventory exports. AI narration uses Pulse Assistant when configured; reports fall back to a deterministic summary otherwise. Available on paid self-hosted and hosted plans."
 		},
 		"guidance":{
 			"title":"Advanced Insights",
-			"description":"Performance reports come from the historical metrics store, while VM inventory export captures the current runtime state for spreadsheet-friendly fleet reviews. Use reports for trends and the inventory export for current allocation and usage snapshots."
+			"description":"Performance reports include an AI-narrated executive summary, fleet outliers, and period-over-period comparison. They draw from the historical metrics store and Patrol findings within the window. The VM inventory export captures current runtime state for spreadsheet-friendly fleet reviews. Use reports for retrospective trends and the inventory export for current allocation snapshots."
 		},
 		"performanceReport":{
 			"id":"performance_reports",
@@ -3841,7 +3845,8 @@ func TestContract_HostedTenantAISettingsDoesNotAutoBootstrapQuickstartJSONSnapsh
 		"configured_providers":[],
 		"control_level":"read_only",
 		"protected_guests":[],
-		"discovery_enabled":false
+		"discovery_enabled":false,
+		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
