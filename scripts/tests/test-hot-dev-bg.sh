@@ -834,6 +834,16 @@ test_root_playwright_wrapper_prefers_managed_browser_runtime() {
 }
 EOF
 
+  # The root playwright.config.ts imports @playwright/test, which is a
+  # devDependency of tests/integration/ — not installed in environments
+  # that haven't run the integration-tests setup (CI smoke job, fresh
+  # clones). Skip the wrapper-behavior assertion in those environments
+  # rather than blow up on a missing module.
+  if ! (cd "${ROOT_DIR}" && node -e "require.resolve('@playwright/test')") >/dev/null 2>&1; then
+    echo "[SKIP] root-playwright wrapper check (@playwright/test not installed)"
+    return 0
+  fi
+
   output="$(
     cd "${ROOT_DIR}" && \
       PULSE_E2E_RUNTIME_STATE_PATH="${runtime_state}" \
