@@ -16,7 +16,10 @@ import { createTooltipSystem } from './components/shared/Tooltip';
 import { TokenRevealDialog } from './components/TokenRevealDialog';
 import { UpdateProgressModal } from './components/UpdateProgressModal';
 import { UpdatesAPI, type UpdateStatus } from './api/updates';
-import { AIChat } from './components/AI/Chat';
+// AIChat is the side-panel chat UI plus its store deps (markdown rendering,
+// tool-call formatting, prompt scaffolding). Lazy-load behind aiChatStore.isOpen
+// so the entry bundle stays out of "everything users might ever click."
+const AIChat = lazy(() => import('./components/AI/Chat').then((m) => ({ default: m.AIChat })));
 import { aiChatStore } from './stores/aiChat';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useKioskMode } from '@/hooks/useKioskMode';
@@ -406,8 +409,12 @@ function App() {
                             {props.children}
                           </AppLayout>
                         </div>
-                        {/* AI Panel - slides in from right, pushes content */}
-                        <AIChat onClose={() => aiChatStore.close()} />
+                        {/* AI Panel - slides in from right, pushes content.
+                            Mounted only when open so the lazy chunk only
+                            downloads on first chat-open click. */}
+                        <Show when={aiChatStore.isOpenSignal()}>
+                          <AIChat onClose={() => aiChatStore.close()} />
+                        </Show>
                       </div>
                       <KeyboardShortcutsModal
                         isOpen={shortcutsOpen()}

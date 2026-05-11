@@ -5,34 +5,34 @@
   "defaultThresholdPercent": 15,
   "chunks": {
     "index": {
-      "baselineGzip": 128886
+      "baselineGzip": 117548
     },
     "Alerts": {
-      "baselineGzip": 84692
+      "baselineGzip": 84724
     },
     "Settings": {
-      "baselineGzip": 84417
+      "baselineGzip": 84570
     },
     "InfrastructureWorkspace": {
-      "baselineGzip": 72406
+      "baselineGzip": 72487
     },
     "AIIntelligence": {
-      "baselineGzip": 63969
+      "baselineGzip": 63997
     },
     "Infrastructure": {
-      "baselineGzip": 61643
+      "baselineGzip": 61725
     },
     "Workloads": {
-      "baselineGzip": 48496
+      "baselineGzip": 48573
     },
     "Storage": {
-      "baselineGzip": 39249
+      "baselineGzip": 39286
     },
     "Recovery": {
-      "baselineGzip": 30353
+      "baselineGzip": 30393
     },
     "ScrollToTopButton": {
-      "baselineGzip": 24582
+      "baselineGzip": 24621
     },
     "vendor-ai": {
       "baselineGzip": 20801
@@ -41,48 +41,51 @@
       "baselineGzip": 17298
     },
     "searchParams": {
-      "baselineGzip": 13394
+      "baselineGzip": 13393
     },
     "APIAccessPanel": {
-      "baselineGzip": 10695
+      "baselineGzip": 10767
     },
     "vendor": {
       "baselineGzip": 9853
     },
     "vendor-icons": {
-      "baselineGzip": 9621
+      "baselineGzip": 9595
     },
     "ReportingPanel": {
-      "baselineGzip": 8724
+      "baselineGzip": 8803
     },
     "AuditLogPanel": {
-      "baselineGzip": 8292
+      "baselineGzip": 8357
     },
     "routeStateNavigation": {
-      "baselineGzip": 7708
+      "baselineGzip": 7709
     },
     "UpdatesSettingsPanel": {
-      "baselineGzip": 6623
+      "baselineGzip": 6663
     },
     "Ceph": {
-      "baselineGzip": 6336
+      "baselineGzip": 6345
     },
     "SecurityAuthPanel": {
-      "baselineGzip": 5960
+      "baselineGzip": 5948
     },
     "DiagnosticsPanel": {
-      "baselineGzip": 5684
+      "baselineGzip": 5723
     },
     "HelpIcon": {
-      "baselineGzip": 5377
+      "baselineGzip": 5382
+    },
+    "useUnifiedResources": {
+      "baselineGzip": 5261
     },
     "OrganizationSharingPanel": {
-      "baselineGzip": 5195
+      "baselineGzip": 5214
     }
   },
   "totals": {
     "js": {
-      "baselineGzip": 878113
+      "baselineGzip": 883834
     },
     "css": {
       "baselineGzip": 24654
