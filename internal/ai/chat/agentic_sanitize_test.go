@@ -12,6 +12,13 @@ func TestCleanToolCallArtifacts(t *testing.T) {
 		{"clean content unchanged", "Hello, how can I help?", "Hello, how can I help?"},
 		{"DeepSeek DSML unicode", "Here is my answer<｜DSML｜function_calls>...", "Here is my answer"},
 		{"DeepSeek DSML ascii", "Response text<|DSML|invoke>...", "Response text"},
+		// deepseek-v4-flash emits the double-pipe variant. Found by
+		// exercising pulse_summarize in real chat — the user saw the
+		// raw DSML as the assistant's "final response" because the
+		// fast-path only listed single-pipe.
+		{"DeepSeek DSML double-pipe unicode", "Summary done<｜｜DSML｜｜tool_calls>more", "Summary done"},
+		{"DeepSeek DSML double-pipe ascii", "Result<||DSML||tool_calls>extra", "Result"},
+		{"DeepSeek DSML triple-pipe regex backstop", "Output<｜｜｜DSML｜｜｜function_call>", "Output"},
 		{"XML tool_call envelope", "My response\n<tool_call>{\"name\":\"foo\"}</tool_call>", "My response"},
 		{"XML tool_calls envelope", "Answer here\n<tool_calls>\n{\"name\":\"bar\"}\n</tool_calls>", "Answer here"},
 		{"XML function_call envelope", "Done.\n<function_call>test</function_call>", "Done."},
@@ -45,6 +52,8 @@ func TestContainsToolCallMarker(t *testing.T) {
 		{"normal angle brackets", "<div>html</div>", false},
 		{"DeepSeek DSML unicode", "text<｜DSML｜func>", true},
 		{"DeepSeek DSML ascii", "text<|DSML|func>", true},
+		{"DeepSeek DSML double-pipe unicode", "text<｜｜DSML｜｜func>", true},
+		{"DeepSeek DSML double-pipe ascii", "text<||DSML||func>", true},
 		{"tool_call tag", "<tool_call>json</tool_call>", true},
 		{"tool_calls tag", "<tool_calls>json</tool_calls>", true},
 		{"function_call tag", "<function_call>json</function_call>", true},
