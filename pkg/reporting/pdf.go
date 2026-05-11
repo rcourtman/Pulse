@@ -224,6 +224,16 @@ func (g *PDFGenerator) writeExecutiveSummary(pdf *fpdf.Fpdf, data *ReportData) {
 		} else {
 			healthMessage = fmt.Sprintf("%d warnings detected - review recommended", warningAlerts)
 		}
+	} else if data.TotalPoints == 0 && len(data.Summary.ByMetric) == 0 {
+		// No metrics arrived for the requested window. Reporting
+		// HEALTHY would green-light an empty report and mislead the
+		// operator into thinking the resource is fine when really
+		// Pulse has no data to evaluate. Fall back to a muted
+		// "NO DATA" card so the executive summary stays consistent
+		// with the "Data Points: 0" line on the cover.
+		healthStatus = "NO DATA"
+		healthColor = colorTextMuted
+		healthMessage = "No metrics reported during the selected window"
 	}
 
 	// Health Status Card
@@ -412,6 +422,19 @@ func (g *PDFGenerator) writeExecutiveSummary(pdf *fpdf.Fpdf, data *ReportData) {
 			pdf.SetFont("Arial", "I", 8)
 			pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
 			pdf.MultiCell(pageWidth-40, 4, disclaimer, "", "L", false)
+		} else if data.Narrative.Source == NarrativeSourceHeuristic {
+			// Discoverability nudge: when the report fell back to the
+			// deterministic heuristic narrator, surface a one-line tip
+			// so users learn the AI upgrade exists. Without this, a
+			// user whose AI is unconfigured (or whose provider failed)
+			// has zero indication that AI-narrated reports are a
+			// separate capability behind Pulse Assistant.
+			pdf.Ln(4)
+			pdf.SetFont("Arial", "I", 8)
+			pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
+			pdf.MultiCell(pageWidth-40, 4,
+				"Tip: Configure Pulse Assistant in Settings to add AI-narrated executive summaries, fleet outlier detection, and period-over-period comparison to future reports.",
+				"", "L", false)
 		}
 	}
 
@@ -2009,6 +2032,18 @@ func writeFleetNarrativeSection(pdf *fpdf.Fpdf, fn *FleetNarrative) {
 		pdf.SetFont("Arial", "I", 8)
 		pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
 		pdf.MultiCell(bodyWidth, 4, disclaimer, "", "L", false)
+	} else if fn.Source == NarrativeSourceHeuristic {
+		// Same discoverability nudge as the single-resource path: a
+		// heuristic fleet narrative is functional but doesn't surface
+		// the AI capability that would have produced this section.
+		// Without the nudge, the user has no signal that fleet AI
+		// synthesis is a thing they could enable.
+		pdf.Ln(4)
+		pdf.SetFont("Arial", "I", 8)
+		pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
+		pdf.MultiCell(bodyWidth, 4,
+			"Tip: Configure Pulse Assistant in Settings to add AI-narrated fleet synthesis with named outliers, cross-cutting patterns, and period-over-period comparison to future reports.",
+			"", "L", false)
 	}
 }
 
