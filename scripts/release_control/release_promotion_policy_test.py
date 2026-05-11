@@ -570,8 +570,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4", publish)
         self.assertIn("subject-name: docker.io/rcourtman/pulse", publish)
         self.assertIn("subject-name: ghcr.io/${{ github.repository_owner }}/pulse", publish)
-        self.assertIn("subject-name: docker.io/rcourtman/pulse-agent", publish)
-        self.assertIn("subject-name: ghcr.io/${{ github.repository_owner }}/pulse-agent", publish)
+        # pulse-agent ships as release-asset binaries, not as a Docker image
+        # (see commit dropping the agent image publish steps). The agent
+        # attestation subject-names intentionally do not appear here.
+        self.assertNotIn("subject-name: docker.io/rcourtman/pulse-agent", publish)
+        self.assertNotIn("subject-name: ghcr.io/${{ github.repository_owner }}/pulse-agent", publish)
         self.assertIn("create-storage-record: false", publish)
         self.assertIn("id: license_key_cache", publish)
         self.assertIn("PULSE_LICENSE_PUBLIC_KEY_SHA256=${{ steps.license_key_cache.outputs.sha256 }}", publish)
