@@ -697,7 +697,24 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         matrix = read("docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md")
         self.assertIn(promotion_metadata_envelope(), normalize_ws(matrix))
         expected = blocked_record.build_blocked_record(record_date="2026-04-04")
-        self.assertEqual(blocked, expected)
+        if blocked != expected:
+            record_path = REPO_ROOT / "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-04-04.md"
+            if os.environ.get("BLESS_GOVERNANCE_FIXTURES") == "1":
+                record_path.write_text(expected, encoding="utf-8")
+                self.skipTest(
+                    "Regenerated rc-to-ga-promotion-readiness-blocked-2026-04-04.md "
+                    "under BLESS_GOVERNANCE_FIXTURES=1; stage the file and rerun without the env var."
+                )
+            self.fail(
+                "Blocked-record fixture drifted from build_blocked_record() output. "
+                "This usually means VERSION bumped or a new RC tag landed since the "
+                "fixture was last regenerated. To fix, run either:\n"
+                "  python3 scripts/release_control/record_rc_to_ga_blocked.py "
+                "--output docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-04-04.md "
+                "--record-date 2026-04-04\n"
+                "  (or)\n"
+                "  BLESS_GOVERNANCE_FIXTURES=1 python3 -m unittest release_promotion_policy_test"
+            )
 
 
 if __name__ == "__main__":
