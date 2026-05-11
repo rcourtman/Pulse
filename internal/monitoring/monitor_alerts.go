@@ -47,6 +47,35 @@ func (m *Monitor) SetAlertResolvedAICallback(callback func(*alerts.Alert)) {
 	log.Info().Msg("alert-resolved AI callback registered")
 }
 
+// SetConnectionsSnapshotLister registers the closure that produces platform
+// connection snapshots once per monitor poll cycle. The api layer owns the
+// closure because it owns the config + persistence inputs the aggregator
+// needs. Passing nil disables the connection-degraded check on this monitor.
+func (m *Monitor) SetConnectionsSnapshotLister(lister func() []alerts.ConnectionSnapshot) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.connectionsSnapshotLister = lister
+}
+
+// checkConnectionAlerts runs CheckConnection against every platform
+// connection snapshot the registered lister returns. Invoked from the main
+// poll tick so a wedged PVE / PBS / PMG / VMware / TrueNAS connection escalates
+// into the top-nav alert stream instead of staying behind on the Settings page.
+func (m *Monitor) checkConnectionAlerts() {
+	defer recoverFromPanic("checkConnectionAlerts")
+
+	m.mu.RLock()
+	lister := m.connectionsSnapshotLister
+	m.mu.RUnlock()
+
+	if lister == nil || m.alertManager == nil {
+		return
+	}
+	for _, snap := range lister() {
+		m.alertManager.CheckConnection(snap)
+	}
+}
+
 func (m *Monitor) handleAlertFired(alert *alerts.Alert) {
 	if alert == nil {
 		return

@@ -931,6 +931,7 @@ type Monitor struct {
 	alertManager               *alerts.Manager
 	alertResolvedAICallback    func(*alerts.Alert)
 	alertTriggeredAICallback   func(*alerts.Alert)
+	connectionsSnapshotLister  func() []alerts.ConnectionSnapshot // returns platform connection snapshots for the connection-degraded check
 	incidentStore              *memory.IncidentStore
 	notificationMgr            *notifications.NotificationManager
 	configPersist              *config.ConfigPersistence
@@ -1850,6 +1851,11 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 				// Poll real infrastructure
 				go m.poll(ctx, wsHub)
 			}
+			// Connection-degraded alerts derive from the unified connections
+			// ledger, which lives behind the api layer. We invoke the
+			// registered lister here so a wedged PVE/PBS/PMG/VMware/TrueNAS
+			// connection escalates into the top-nav alert stream.
+			go m.checkConnectionAlerts()
 
 		case <-broadcastTicker.C:
 			// Broadcast current state regardless of polling status

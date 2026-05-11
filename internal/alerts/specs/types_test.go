@@ -339,6 +339,26 @@ func TestResourceAlertSpecValidateAllowsProxmoxDiskMigrationBridgeType(t *testin
 	}
 }
 
+func TestResourceAlertSpecValidateAllowsConnectionMigrationBridgeType(t *testing.T) {
+	t.Parallel()
+
+	spec := ResourceAlertSpec{
+		ID:           "pve:delly-connection-degraded",
+		ResourceID:   "pve:delly",
+		ResourceType: unifiedresources.ResourceType("connection"),
+		Kind:         AlertSpecKindDiscreteState,
+		Severity:     AlertSeverityWarning,
+		DiscreteState: &DiscreteStateSpec{
+			StateKey:      "connection-degraded",
+			TriggerStates: []string{"stale", "unreachable", "unauthorized"},
+		},
+	}
+
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
 func TestResourceAlertSpecValidateRejectsNonCanonicalAlias(t *testing.T) {
 	t.Parallel()
 

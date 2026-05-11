@@ -46,6 +46,7 @@ type Manager struct {
 	pendingAlerts map[string]time.Time // Track when thresholds were first exceeded
 	// Offline confirmation tracking
 	nodeOfflineCount             map[string]int                  // Track consecutive offline counts for nodes (legacy)
+	connectionDegradedCount      map[string]int                  // Track consecutive degraded counts for platform connections (pve/pbs/pmg/vmware/truenas)
 	offlineConfirmations         map[string]int                  // Track consecutive offline counts for all resources
 	offlineRecoveryConfirmations map[string]int                  // Track consecutive healthy confirmations before clearing poll-driven offline alerts
 	dockerOfflineCount           map[string]int                  // Track consecutive offline counts for Docker hosts
@@ -122,6 +123,7 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 		resolvedAlias:                   make(map[string]string),
 		pendingAlerts:                   make(map[string]time.Time),
 		nodeOfflineCount:                make(map[string]int),
+		connectionDegradedCount:         make(map[string]int),
 		offlineConfirmations:            make(map[string]int),
 		offlineRecoveryConfirmations:    make(map[string]int),
 		dockerOfflineCount:              make(map[string]int),

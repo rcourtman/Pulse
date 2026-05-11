@@ -6,8 +6,6 @@ import (
 	"net/http"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 )
 
@@ -49,41 +47,7 @@ func (h *ConnectionsHandlers) HandleList(w http.ResponseWriter, r *http.Request)
 	persistence := h.getPersistence(ctx)
 	monitor := h.getMonitor(ctx)
 
-	inputs := aggregatorInputs{}
-
-	if cfg != nil {
-		inputs.pveInstances = cfg.PVEInstances
-		inputs.pbsInstances = cfg.PBSInstances
-		inputs.pmgInstances = cfg.PMGInstances
-	}
-
-	if persistence != nil {
-		if vmw, err := persistence.LoadVMwareConfig(); err == nil {
-			inputs.vmwareInstances = vmw
-		}
-		if tn, err := persistence.LoadTrueNASConfig(); err == nil {
-			inputs.truenasInstances = tn
-		}
-		if availability, err := persistence.LoadAvailabilityTargets(); err == nil {
-			inputs.availabilityTargets = availability
-		}
-	}
-
-	if monitor != nil {
-		inputs.hosts = monitor.HostsSnapshot()
-		inputs.instanceHealth = instanceHealthByKey(monitor.SchedulerHealth())
-		inputs.availabilityStatuses = monitor.AvailabilityStatusSnapshot()
-	} else {
-		inputs.hosts = []models.Host{}
-		inputs.instanceHealth = map[string]monitoring.InstanceHealth{}
-		inputs.availabilityStatuses = map[string]monitoring.AvailabilityProbeStatus{}
-	}
-	if mock.IsMockEnabled() {
-		mockTargets, mockStatuses := mockAvailabilityConnectionInputs()
-		inputs.availabilityTargets = mergeAvailabilityTargets(inputs.availabilityTargets, mockTargets)
-		inputs.availabilityStatuses = mergeAvailabilityStatuses(inputs.availabilityStatuses, mockStatuses)
-	}
-	inputs.expectedAgentVersion = currentAgentTargetVersion()
+	inputs := buildAggregatorInputs(ctx, cfg, persistence, monitor)
 
 	connections := buildConnections(inputs)
 	writeJSON(w, http.StatusOK, ConnectionsListResponse{

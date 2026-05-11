@@ -390,6 +390,19 @@ func (r *Router) setupRoutes() {
 		r.configHandlers.getPersistence,
 		r.configHandlers.getMonitor,
 	)
+	if r.monitor != nil {
+		// Drive the connection-degraded alert off the same aggregator the
+		// HTTP handler uses, so the active-notification stream stays in
+		// lockstep with the Settings → Infrastructure badges. Single-tenant
+		// only for now; multi-tenant per-org wiring is a follow-up.
+		getCfg := r.configHandlers.getConfig
+		getPersist := r.configHandlers.getPersistence
+		monitor := r.monitor
+		r.monitor.SetConnectionsSnapshotLister(func() []alerts.ConnectionSnapshot {
+			ctx := context.Background()
+			return BuildAlertConnectionSnapshots(ctx, getCfg(ctx), getPersist(ctx), monitor)
+		})
+	}
 	r.availabilityHandlers = NewAvailabilityHandlers(
 		r.configHandlers.getPersistence,
 		r.configHandlers.getMonitor,
