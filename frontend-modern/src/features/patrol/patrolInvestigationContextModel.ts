@@ -86,7 +86,14 @@ export interface PatrolInvestigationRecordPresentation {
   error?: string;
 }
 
-export type PatrolAssistantFindingIntent = 'discuss' | 'explain';
+// 'discuss' = open-ended chat entry, operator drives.
+// 'explain' = action-style "do the explaining," auto-sent.
+// 'investigate' = action-style "run the investigation now using tools" —
+// the prompt explicitly invites the LLM to query metrics/alerts/state
+// rather than just narrate the attached context, and the surface
+// auto-sends the prompt so the work is already in flight on the screen
+// the operator lands on.
+export type PatrolAssistantFindingIntent = 'discuss' | 'explain' | 'investigate';
 
 export interface PatrolAssistantFindingPromptInput {
   title: string;
@@ -526,10 +533,19 @@ export function buildPatrolAssistantFindingPrompt(
       'Walk me through what we know, why it matters for the affected workloads, ' +
       'how confident the analysis is, and whether the recommended action is the right next step. ' +
       'Use the structured investigation record and operational memory in the attached context as the primary source.';
+  } else if (input.intent === 'investigate') {
+    prompt =
+      `Investigate this Patrol finding now: "${title}" on ${subject}. ` +
+      'Do not just summarize the attached context — actively use the Pulse tools available to you ' +
+      '(metrics, alerts, resource state, recent changes, correlations) to gather fresh evidence ' +
+      'about the current state of the affected resource and any related resources. ' +
+      'Then synthesize: what is the root cause given the current evidence, ' +
+      'what is your confidence, what is the safe next step, and is the recommended action still right? ' +
+      'If any command-running step is involved, surface it for governed approval rather than executing on your own judgment.';
   } else {
     prompt = `I'd like to discuss this Patrol finding: "${title}" on ${subject}.`;
   }
-  if (hasRecord && input.intent !== 'explain') {
+  if (hasRecord && input.intent !== 'explain' && input.intent !== 'investigate') {
     prompt +=
       '\n\nPulse Patrol has a structured investigation record for this finding. Use that record as the main context before suggesting next actions.';
   }

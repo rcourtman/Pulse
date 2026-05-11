@@ -951,6 +951,36 @@ describe('patrolInvestigationContextModel', () => {
     expect(explainPrompt).toContain('vm-101');
   });
 
+  it('seeds an investigate-intent prompt that instructs active tool use, not just narration', () => {
+    // Investigate is the action counterpart to Explain. Where Explain says
+    // "tell me what we know," Investigate says "go find out what's true
+    // right now" — the prompt must explicitly direct the LLM toward its
+    // Pulse tools (metrics, alerts, state) rather than just summarizing
+    // the attached briefing.
+    const prompt = buildPatrolAssistantFindingPrompt({
+      title: 'Backup job failing',
+      subject: 'vm-101',
+      description: 'Datastore quota exhausted',
+      intent: 'investigate',
+    });
+
+    expect(prompt).toContain('Investigate this Patrol finding now');
+    expect(prompt).toContain('Backup job failing');
+    expect(prompt).toContain('vm-101');
+    // Active-tool-use instruction — the differentiator vs Explain.
+    expect(prompt.toLowerCase()).toContain('actively use the pulse tools');
+    expect(prompt.toLowerCase()).toMatch(/metrics|alerts|resource state|recent changes/);
+    // Synthesis instruction — root cause + confidence + safe next step.
+    expect(prompt.toLowerCase()).toContain('root cause');
+    expect(prompt.toLowerCase()).toContain('confidence');
+    expect(prompt.toLowerCase()).toContain('safe next step');
+    // Safety: any command-running must route through governed approval,
+    // not the LLM's own judgment.
+    expect(prompt.toLowerCase()).toContain('governed approval');
+    // Must not be the open-ended Discuss prompt.
+    expect(prompt).not.toContain("I'd like to discuss");
+  });
+
   it('surfaces investigation impact and rollback when the backend record carries them', () => {
     const presentation = buildPatrolInvestigationRecordPresentation({
       id: 'record-2',

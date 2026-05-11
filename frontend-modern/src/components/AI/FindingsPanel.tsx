@@ -518,7 +518,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
   const openFindingInAssistant = async (
     finding: UnifiedFinding,
-    intent: 'discuss' | 'explain',
+    intent: 'discuss' | 'explain' | 'investigate',
   ) => {
     await aiIntelligenceStore.loadPendingApprovals();
     const subject = getFindingSubjectPresentation(finding).label;
@@ -559,15 +559,15 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       nextStepAction,
       intent,
     });
-    // Explain is an action-style entry point — clicking the button is the
-    // operator asking "do the explaining for me," not "open chat so I can
-    // type a question." Auto-submit the handoff prompt so the analysis is
-    // already in flight when the drawer is on screen. Discuss with
-    // Assistant keeps the previous behaviour (pre-fill, operator drives)
-    // because that entry is open-ended by intent.
+    // Explain and Investigate are action-style entry points — clicking
+    // the button is the operator asking "do this for me," not "open chat
+    // so I can type a question." Auto-submit the handoff prompt so the
+    // work is already in flight when the drawer is on screen. Discuss
+    // with Assistant keeps the previous behaviour (pre-fill, operator
+    // drives) because that entry is open-ended by intent.
     aiChatStore.openWithPrompt(handoff.prompt, {
       ...handoff.context,
-      autoSendInitialPrompt: intent === 'explain',
+      autoSendInitialPrompt: intent === 'explain' || intent === 'investigate',
     });
   };
 
@@ -579,6 +579,17 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const handleExplainFinding = async (finding: UnifiedFinding, e: Event) => {
     e.stopPropagation();
     await openFindingInAssistant(finding, 'explain');
+  };
+
+  // Investigate is the active counterpart to Explain. Explain says "tell me
+  // what we already know"; Investigate says "go find out what's true right
+  // now." The prompt instructs the LLM to use its Pulse tools (metrics,
+  // alerts, state, recent changes, correlations) rather than just narrate
+  // the attached context, and the surface auto-sends so the work is in
+  // flight when the operator lands.
+  const handleInvestigateFinding = async (finding: UnifiedFinding, e: Event) => {
+    e.stopPropagation();
+    await openFindingInAssistant(finding, 'investigate');
   };
 
   // Copy a Markdown summary of the finding to the clipboard so the operator
@@ -1173,7 +1184,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             type="button"
             onClick={(e) => handleExplainFinding(finding, e)}
             class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
-            title="Open Assistant with an explanation prompt"
+            title="Ask Pulse Assistant to explain what we know about this finding using the attached evidence"
           >
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -1184,6 +1195,22 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               />
             </svg>
             Explain
+          </button>
+          <button
+            type="button"
+            onClick={(e) => handleInvestigateFinding(finding, e)}
+            class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
+            title="Ask Pulse Assistant to actively investigate using metrics, alerts, and state — not just summarize"
+          >
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            Investigate
           </button>
           <button
             type="button"
