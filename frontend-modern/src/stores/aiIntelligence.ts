@@ -200,6 +200,15 @@ const [findingsError, setFindingsError] = createSignal<string | null>(null);
 const [patrolFindings, setPatrolFindings] = createSignal<UnifiedFinding[]>([]);
 const [patrolFindingsLoading, setPatrolFindingsLoading] = createSignal(false);
 const [patrolFindingsError, setPatrolFindingsError] = createSignal<string | null>(null);
+// Sticky preference: once a surface asks for include-resolved data,
+// subsequent unscoped loadPatrolFindings calls (from polling, dashboard
+// refresh, etc.) keep returning the expanded set. Otherwise the
+// Resolved/All tabs would intermittently empty whenever a polling
+// loadDashboardData overwrote the include-resolved load with the
+// active-only default. Reset to false when nothing on screen needs the
+// expanded set (no current call site does this; FindingsPanel's effect
+// would set it back to true the moment Resolved/All becomes active).
+let patrolFindingsIncludeResolvedPreference = false;
 
 function normalizeUnifiedFindingRecord(item: UnifiedFindingRecord, now: number): UnifiedFinding {
   const alertIdentifier = item.alertIdentifier;
@@ -443,10 +452,22 @@ export const aiIntelligenceStore = {
   },
 
   async loadPatrolFindings(options?: { includeResolved?: boolean }) {
+    // Sticky preference: once a caller has explicitly asked for the
+    // expanded set, treat all subsequent loads (including unscoped
+    // polling refreshes) as expanded so the Resolved/All tab data does
+    // not blink to empty between polls. The Patrol findings endpoint
+    // is cheap; the per-finding cap keeps the payload bounded.
+    if (options?.includeResolved) {
+      patrolFindingsIncludeResolvedPreference = true;
+    }
+    const includeResolved =
+      options?.includeResolved === true || patrolFindingsIncludeResolvedPreference;
     setPatrolFindingsLoading(true);
     setPatrolFindingsError(null);
     try {
-      const findings = await getPatrolFindings(options);
+      const findings = await getPatrolFindings(
+        includeResolved ? { includeResolved: true } : undefined,
+      );
       const now = Date.now();
       setPatrolFindings(findings.map((item) => normalizePatrolFindingRecord(item, now)));
     } catch (e) {
