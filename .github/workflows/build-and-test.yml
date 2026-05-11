@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - main
+      - pulse/v6-release
   pull_request:
     branches:
       - main
+      - pulse/v6-release
   workflow_dispatch:
 
 permissions:
