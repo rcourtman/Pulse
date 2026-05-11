@@ -288,7 +288,10 @@ func TestHandleDismissFinding_MethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleDismissFinding_InvalidReason(t *testing.T) {
-	t.Parallel()
+	// InitSessionStore mutates a package-global singleton; running parallel
+	// with TestHandleSnoozeFinding_DurationValidation (which also calls it)
+	// races on store shutdown vs in-flight handler requests. Keep this test
+	// serial until the handler stops depending on the global session store.
 
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
@@ -318,7 +321,9 @@ func TestHandleDismissFinding_InvalidReason(t *testing.T) {
 }
 
 func TestHandleSnoozeFinding_DurationValidation(t *testing.T) {
-	t.Parallel()
+	// Serial pairing with TestHandleDismissFinding_InvalidReason — see the
+	// note there. InitSessionStore is package-global and races under
+	// t.Parallel() with other tests that touch the session store.
 
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
