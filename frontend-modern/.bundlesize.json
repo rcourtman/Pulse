@@ -1,76 +1,91 @@
 {
   "$comment": "Frontend bundle size baseline. Run 'npm run check:bundlesize' to validate. To update: run 'node scripts/check-bundle-size.mjs --update-baseline' after vite build.",
   "version": 1,
-  "generated": "2026-03-08",
+  "generated": "2026-05-11",
   "defaultThresholdPercent": 15,
   "chunks": {
-    "settings-admin": {
-      "baselineGzip": 98810
+    "index": {
+      "baselineGzip": 128886
     },
     "Alerts": {
-      "baselineGzip": 73583
+      "baselineGzip": 84692
     },
-    "ai-ui": {
-      "baselineGzip": 66859
+    "Settings": {
+      "baselineGzip": 84417
     },
-    "Dashboard": {
-      "baselineGzip": 51227
-    },
-    "settings-heavy": {
-      "baselineGzip": 50623
-    },
-    "settings-core": {
-      "baselineGzip": 48009
-    },
-    "Infrastructure": {
-      "baselineGzip": 40221
-    },
-    "Storage": {
-      "baselineGzip": 27840
-    },
-    "settings-auth": {
-      "baselineGzip": 21283
-    },
-    "vendor-ai": {
-      "baselineGzip": 20729
-    },
-    "ScrollToTopButton": {
-      "baselineGzip": 19018
-    },
-    "RecoveryRoute": {
-      "baselineGzip": 18844
-    },
-    "vendor-solid": {
-      "baselineGzip": 17262
-    },
-    "index": {
-      "baselineGzip": 13848
-    },
-    "settings-shell": {
-      "baselineGzip": 13061
+    "InfrastructureWorkspace": {
+      "baselineGzip": 72406
     },
     "AIIntelligence": {
-      "baselineGzip": 10281
+      "baselineGzip": 63969
+    },
+    "Infrastructure": {
+      "baselineGzip": 61643
+    },
+    "Workloads": {
+      "baselineGzip": 48496
+    },
+    "Storage": {
+      "baselineGzip": 39249
+    },
+    "Recovery": {
+      "baselineGzip": 30353
+    },
+    "ScrollToTopButton": {
+      "baselineGzip": 24582
+    },
+    "vendor-ai": {
+      "baselineGzip": 20801
+    },
+    "vendor-solid": {
+      "baselineGzip": 17298
+    },
+    "searchParams": {
+      "baselineGzip": 13394
+    },
+    "APIAccessPanel": {
+      "baselineGzip": 10695
     },
     "vendor": {
       "baselineGzip": 9853
     },
     "vendor-icons": {
-      "baselineGzip": 8712
+      "baselineGzip": 9621
+    },
+    "ReportingPanel": {
+      "baselineGzip": 8724
+    },
+    "AuditLogPanel": {
+      "baselineGzip": 8292
+    },
+    "routeStateNavigation": {
+      "baselineGzip": 7708
+    },
+    "UpdatesSettingsPanel": {
+      "baselineGzip": 6623
     },
     "Ceph": {
-      "baselineGzip": 6786
+      "baselineGzip": 6336
     },
-    "summaryTimeRange": {
-      "baselineGzip": 6535
+    "SecurityAuthPanel": {
+      "baselineGzip": 5960
+    },
+    "DiagnosticsPanel": {
+      "baselineGzip": 5684
+    },
+    "HelpIcon": {
+      "baselineGzip": 5377
+    },
+    "OrganizationSharingPanel": {
+      "baselineGzip": 5195
     }
   },
   "totals": {
     "js": {
-      "baselineGzip": 647002
+      "baselineGzip": 878113
     },
     "css": {
-      "baselineGzip": 22344
+      "baselineGzip": 24654
     }
   }
 }
