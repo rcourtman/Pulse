@@ -799,8 +799,16 @@ test_integration_quick_start_distinguishes_embedded_frontend_from_hot_dev() {
 }
 
 test_acceptance_doc_distinguishes_embedded_frontend_from_hot_dev() {
-  local output
-  output="$(sed -n '412,420p' "${ROOT_DIR}/docs/architecture/v6-acceptance-tests.md")"
+  local doc_path output
+  doc_path="${ROOT_DIR}/docs/architecture/v6-acceptance-tests.md"
+  # The architecture doc is a local working draft not currently tracked in
+  # git; skip the wording-pin assertion in environments where it isn't
+  # checked out (CI, fresh clones) rather than fail the suite.
+  if [[ ! -f "${doc_path}" ]]; then
+    echo "[SKIP] acceptance-doc wording check (docs/architecture/v6-acceptance-tests.md not present)"
+    return 0
+  fi
+  output="$(sed -n '412,420p' "${doc_path}")"
 
   assert_contains "acceptance doc keeps embedded frontend wording" "${output}" "against the embedded frontend at \`http://localhost:7655\`"
   assert_contains "acceptance doc distinguishes managed hot-dev shell" "${output}" "managed hot-dev browser shell on \`http://127.0.0.1:5173\`"
