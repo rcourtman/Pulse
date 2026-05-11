@@ -1005,13 +1005,26 @@ func (a *patrolFindingCreatorAdapter) ResolveFinding(findingID, reason string) e
 		defer verifyCancel()
 		verified, verifyErr := a.patrol.VerifyFixResolved(verifyCtx, finding.ResourceID, finding.ResourceType, finding.Key, findingID)
 		if verifyErr != nil {
-			log.Warn().
+			// Fail closed. Resolution of an event/persistent finding is
+			// effectively permanent (next detection will register as a
+			// regression, inflating counters and re-running the cycle the
+			// rest of this branch's work spent commits closing). If the
+			// deterministic verifier cannot confidently say the failure
+			// signal is gone, we don't have grounds to honor the LLM's
+			// judgment, even charitably — the LLM's "current investigation
+			// didn't surface a fresh failure" is exactly the signal that
+			// produced the bogus auto_resolved → re-detected cycles in
+			// the first place. Surfacing the error back to the tool lets
+			// the LLM choose to retry or escalate to the operator instead.
+			log.Info().
 				Err(verifyErr).
 				Str("finding_id", findingID).
 				Str("category", string(finding.Category)).
 				Str("key", finding.Key).
-				Msg("AI Patrol: deterministic verifier inconclusive on resolve attempt; allowing resolve")
-		} else if !verified {
+				Msg("AI Patrol: rejected LLM resolve — deterministic verifier was inconclusive (fail closed)")
+			return fmt.Errorf("cannot resolve %s: deterministic verification was inconclusive (%v). Confirm the underlying issue is actually fixed by running the verifier separately, or let the operator mark resolved", findingID, verifyErr)
+		}
+		if !verified {
 			log.Info().
 				Str("finding_id", findingID).
 				Str("category", string(finding.Category)).

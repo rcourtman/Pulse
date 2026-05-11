@@ -1171,6 +1171,52 @@ func TestPatrolFindingCreatorAdapter_ResolveFinding_SkipsVerifierForCategoriesTh
 	}
 }
 
+func TestPatrolFindingCreatorAdapter_ResolveFinding_RejectsWhenVerifierIsInconclusive(t *testing.T) {
+	// For event/persistent categories with a registered deterministic
+	// verifier (backup-failed in this case), an inconclusive verifier
+	// outcome must reject the LLM's resolve attempt. Earlier behaviour
+	// was "fail open — allow resolve and warn" which let the
+	// auto_resolved → re-detected cycle continue any time the verifier
+	// errored. Resolution of an event finding is effectively permanent
+	// (next detection registers as a regression and inflates counters),
+	// so the safe default is to refuse and ask the operator or a
+	// re-run to confirm.
+	//
+	// We trigger the inconclusive path by calling VerifyFixResolved on
+	// a service that doesn't have a chat service / executor wired up,
+	// which causes getExecutorForVerification to return an
+	// ErrVerificationUnknown error — exactly the "fail-closed" code
+	// path the gate now defends.
+	ps := NewPatrolService(nil, nil)
+	finding := &Finding{
+		ID:           "backup-1",
+		Key:          "backup-failed",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryBackup,
+		ResourceID:   "vm-100",
+		ResourceName: "delly",
+		ResourceType: "backup",
+		Title:        "Backup failed",
+		DetectedAt:   time.Now().Add(-time.Hour),
+		LastSeenAt:   time.Now().Add(-time.Hour),
+	}
+	ps.findings.Add(finding)
+
+	adapter := newPatrolFindingCreatorAdapterState(ps, newPatrolRuntimeState(models.StateSnapshot{}))
+	err := adapter.ResolveFinding(finding.ID, "no backup failures in current investigation")
+	if err == nil {
+		t.Fatal("expected resolve to fail when deterministic verifier is inconclusive; got nil error (fail-open regression)")
+	}
+	if !strings.Contains(err.Error(), "inconclusive") {
+		t.Errorf("expected error to mention 'inconclusive', got: %v", err)
+	}
+	if stored := ps.findings.Get(finding.ID); stored == nil {
+		t.Fatal("expected finding to remain in store")
+	} else if stored.ResolvedAt != nil {
+		t.Fatalf("expected finding to remain unresolved on inconclusive verification, got ResolvedAt=%v", stored.ResolvedAt)
+	}
+}
+
 func TestPatrolFindingCreatorAdapter_ResolveFinding_FallsThroughWhenNoVerifierAvailable(t *testing.T) {
 	// Reliability category does NOT support stale-auto-resolve, but
 	// "node-offline" has no deterministic verifier. The gate must fall
