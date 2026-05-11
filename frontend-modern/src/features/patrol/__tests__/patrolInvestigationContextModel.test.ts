@@ -951,6 +951,37 @@ describe('patrolInvestigationContextModel', () => {
     expect(explainPrompt).toContain('vm-101');
   });
 
+  it('seeds a why-intent prompt that focuses on cause, not current state', () => {
+    // Why-did-this-happen is the diagnostic counterpart to Explain. Where
+    // Explain says "tell me what we know" and Investigate says "go find
+    // out what's true now," Why focuses the LLM on cause — recent
+    // changes, correlations, prior incidents, regression patterns. Not
+    // "is it bad right now" but "what made it become bad."
+    const prompt = buildPatrolAssistantFindingPrompt({
+      title: 'Backup job failing',
+      subject: 'vm-101',
+      description: 'Datastore quota exhausted',
+      intent: 'why',
+    });
+
+    expect(prompt).toContain('Why did this Patrol finding happen');
+    expect(prompt).toContain('Backup job failing');
+    expect(prompt).toContain('vm-101');
+    expect(prompt.toLowerCase()).toContain('cause, not on current state');
+    // The diagnostic signals the prompt directs the LLM toward.
+    expect(prompt.toLowerCase()).toMatch(/recent changes|correlations|prior incidents|regression/);
+    // Synthesis: what caused it, what evidence supports the cause, what
+    // would have to be true for it to recur.
+    expect(prompt.toLowerCase()).toContain('most likely caused');
+    expect(prompt.toLowerCase()).toContain('evidence');
+    expect(prompt.toLowerCase()).toContain('recur');
+    // Safety: cause investigation may need tools but must not run
+    // anything that changes state without operator approval.
+    expect(prompt.toLowerCase()).toContain('operator approval');
+    expect(prompt).not.toContain("I'd like to discuss");
+    expect(prompt).not.toContain('Investigate this Patrol finding now');
+  });
+
   it('seeds an investigate-intent prompt that instructs active tool use, not just narration', () => {
     // Investigate is the action counterpart to Explain. Where Explain says
     // "tell me what we know," Investigate says "go find out what's true

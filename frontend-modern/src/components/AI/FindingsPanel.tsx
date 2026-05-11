@@ -518,7 +518,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
   const openFindingInAssistant = async (
     finding: UnifiedFinding,
-    intent: 'discuss' | 'explain' | 'investigate',
+    intent: 'discuss' | 'explain' | 'investigate' | 'why',
   ) => {
     await aiIntelligenceStore.loadPendingApprovals();
     const subject = getFindingSubjectPresentation(finding).label;
@@ -559,15 +559,17 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       nextStepAction,
       intent,
     });
-    // Explain and Investigate are action-style entry points — clicking
-    // the button is the operator asking "do this for me," not "open chat
-    // so I can type a question." Auto-submit the handoff prompt so the
-    // work is already in flight when the drawer is on screen. Discuss
-    // with Assistant keeps the previous behaviour (pre-fill, operator
-    // drives) because that entry is open-ended by intent.
+    // Explain, Investigate, and Why-did-this-happen are action-style
+    // entry points — clicking the button is the operator asking "do this
+    // for me," not "open chat so I can type a question." Auto-submit the
+    // handoff prompt so the work is already in flight when the drawer is
+    // on screen. Discuss with Assistant keeps the previous behaviour
+    // (pre-fill, operator drives) because that entry is open-ended by
+    // intent.
     aiChatStore.openWithPrompt(handoff.prompt, {
       ...handoff.context,
-      autoSendInitialPrompt: intent === 'explain' || intent === 'investigate',
+      autoSendInitialPrompt:
+        intent === 'explain' || intent === 'investigate' || intent === 'why',
     });
   };
 
@@ -590,6 +592,16 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const handleInvestigateFinding = async (finding: UnifiedFinding, e: Event) => {
     e.stopPropagation();
     await openFindingInAssistant(finding, 'investigate');
+  };
+
+  // Why is the diagnostic counterpart. Where Explain says "what we know"
+  // and Investigate says "what's true now," Why says "what caused this":
+  // the prompt focuses the LLM on recent changes around detection time,
+  // learned correlations, prior incidents, and regression history rather
+  // than current state.
+  const handleWhyFinding = async (finding: UnifiedFinding, e: Event) => {
+    e.stopPropagation();
+    await openFindingInAssistant(finding, 'why');
   };
 
   // Copy a Markdown summary of the finding to the clipboard so the operator
@@ -1211,6 +1223,22 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               />
             </svg>
             Investigate
+          </button>
+          <button
+            type="button"
+            onClick={(e) => handleWhyFinding(finding, e)}
+            class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
+            title="Ask Pulse Assistant to explain the cause using recent changes, correlations, and incident history"
+          >
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            Why
           </button>
           <button
             type="button"

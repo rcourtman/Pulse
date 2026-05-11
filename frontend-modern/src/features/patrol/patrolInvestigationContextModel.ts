@@ -93,7 +93,11 @@ export interface PatrolInvestigationRecordPresentation {
 // rather than just narrate the attached context, and the surface
 // auto-sends the prompt so the work is already in flight on the screen
 // the operator lands on.
-export type PatrolAssistantFindingIntent = 'discuss' | 'explain' | 'investigate';
+// 'why' = diagnostic "why did this happen" — focuses the LLM on cause
+// rather than current state: recent changes around detection time,
+// learned correlations, prior incident memory, regression history.
+// Action-style and auto-sent like Explain and Investigate.
+export type PatrolAssistantFindingIntent = 'discuss' | 'explain' | 'investigate' | 'why';
 
 export interface PatrolAssistantFindingPromptInput {
   title: string;
@@ -542,10 +546,26 @@ export function buildPatrolAssistantFindingPrompt(
       'Then synthesize: what is the root cause given the current evidence, ' +
       'what is your confidence, what is the safe next step, and is the recommended action still right? ' +
       'If any command-running step is involved, surface it for governed approval rather than executing on your own judgment.';
+  } else if (input.intent === 'why') {
+    prompt =
+      `Why did this Patrol finding happen: "${title}" on ${subject}? ` +
+      'Focus on cause, not on current state. Look at recent changes around the detection time, ' +
+      'learned correlations with other resources, prior incidents for this resource, and any ' +
+      'regression history that suggests a recurring trigger. ' +
+      'Then answer: what most likely caused this to fire now, ' +
+      'what evidence in the attached context supports that cause, ' +
+      'and what would have to be true for the cause to recur. ' +
+      'If the cause requires verification through a Pulse tool call, do that; do not run anything ' +
+      'that changes state without operator approval.';
   } else {
     prompt = `I'd like to discuss this Patrol finding: "${title}" on ${subject}.`;
   }
-  if (hasRecord && input.intent !== 'explain' && input.intent !== 'investigate') {
+  if (
+    hasRecord &&
+    input.intent !== 'explain' &&
+    input.intent !== 'investigate' &&
+    input.intent !== 'why'
+  ) {
     prompt +=
       '\n\nPulse Patrol has a structured investigation record for this finding. Use that record as the main context before suggesting next actions.';
   }
