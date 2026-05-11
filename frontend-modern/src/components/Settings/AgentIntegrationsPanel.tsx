@@ -1,5 +1,6 @@
 import { Component, createMemo, createResource, createSignal, For, Show } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
+import { AGENT_SUBSTRATE_DOC_URL } from '@/utils/docsLinks';
 import CopyCommandBlock from './CopyCommandBlock';
 
 // AgentCapability mirrors the wire shape of one entry in
@@ -80,9 +81,10 @@ function formatMcpConfig(origin: string): string {
   return JSON.stringify(config, null, 2);
 }
 
-const AGENT_PROBE_README = 'https://github.com/rcourtman/Pulse/blob/main/cmd/agent-probe/main.go';
-const PULSE_MCP_README = 'https://github.com/rcourtman/Pulse/blob/main/cmd/pulse-mcp/README.md';
-const SUBSTRATE_DOC = 'https://github.com/rcourtman/Pulse/blob/main/docs/AGENT_SUBSTRATE.md';
+// All three external resources (the MCP adapter README, the agent-probe HTTP
+// example, the substrate design notes) are consolidated under the shipped
+// AGENT_SUBSTRATE.md doc, which links out to the cmd/* source files. Avoids
+// frontend-runtime links pointing at unpinned GitHub main paths.
 
 export const AgentIntegrationsPanel: Component = () => {
   const [manifest] = createResource(fetchManifest);
@@ -164,19 +166,13 @@ export const AgentIntegrationsPanel: Component = () => {
           />
           <p class="text-xs text-muted">
             See{' '}
-            <a class="text-blue-600 hover:underline dark:text-blue-300" href={PULSE_MCP_README} target="_blank" rel="noreferrer">
-              cmd/pulse-mcp/README.md
-            </a>{' '}
-            for build instructions, the <code class="font-mono">--emit-notifications</code> flag,
-            and known limitations. The companion HTTP example is at{' '}
-            <a class="text-blue-600 hover:underline dark:text-blue-300" href={AGENT_PROBE_README} target="_blank" rel="noreferrer">
-              cmd/agent-probe
-            </a>
-            . Background and the substrate's design notes live in{' '}
-            <a class="text-blue-600 hover:underline dark:text-blue-300" href={SUBSTRATE_DOC} target="_blank" rel="noreferrer">
+            <a class="text-blue-600 hover:underline dark:text-blue-300" href={AGENT_SUBSTRATE_DOC_URL} target="_blank" rel="noreferrer">
               docs/AGENT_SUBSTRATE.md
-            </a>
-            .
+            </a>{' '}
+            for build instructions on <code class="font-mono">cmd/pulse-mcp</code>{' '}
+            (including the <code class="font-mono">--emit-notifications</code> flag and known
+            limitations), the companion HTTP example at <code class="font-mono">cmd/agent-probe</code>,
+            and the substrate's design notes.
           </p>
         </div>
 

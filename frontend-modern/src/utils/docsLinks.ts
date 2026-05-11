@@ -12,3 +12,4 @@ export const PROXY_AUTH_DOC_URL = getShippedDocUrl('PROXY_AUTH.md');
 export const SECURITY_DOC_URL = getShippedDocUrl('SECURITY.md');
 export const TERMS_DOC_URL = getShippedDocUrl('TERMS.md');
 export const API_TOKEN_SCOPES_DOC_URL = CONFIGURATION_DOC_URL;
+export const AGENT_SUBSTRATE_DOC_URL = getShippedDocUrl('AGENT_SUBSTRATE.md');
