@@ -165,6 +165,16 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const sourceFindings = createMemo(() =>
     isPatrolFindingsSource() ? aiIntelligenceStore.patrolFindings : aiIntelligenceStore.findings,
   );
+  const sourceFindingsLoading = createMemo(() =>
+    isPatrolFindingsSource()
+      ? aiIntelligenceStore.patrolFindingsLoading
+      : aiIntelligenceStore.findingsLoading,
+  );
+  const sourceFindingsError = createMemo(() =>
+    isPatrolFindingsSource()
+      ? aiIntelligenceStore.patrolFindingsError
+      : aiIntelligenceStore.findingsError,
+  );
   const sourceFindingsNeedingAttention = createMemo(() =>
     isPatrolFindingsSource()
       ? aiIntelligenceStore.patrolFindingsNeedingAttention
@@ -1796,20 +1806,20 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       </Show>
 
       {/* Loading/Error states */}
-      <Show when={aiIntelligenceStore.findingsLoading}>
+      <Show when={sourceFindingsLoading()}>
         <div class="p-4 text-sm text-muted flex items-center gap-2">
           <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
           Loading findings...
         </div>
       </Show>
 
-      <Show when={aiIntelligenceStore.findingsError && !aiIntelligenceStore.findingsLoading}>
+      <Show when={sourceFindingsError() && !sourceFindingsLoading()}>
         <div class="p-4 text-sm text-red-600 dark:text-red-400">
-          {aiIntelligenceStore.findingsError}
+          {sourceFindingsError()}
         </div>
       </Show>
 
-      <Show when={!aiIntelligenceStore.findingsLoading}>
+      <Show when={!sourceFindingsLoading()}>
         <Card padding="none" class="overflow-hidden">
           {/* Content */}
           <div class="divide-y divide-border-subtle">

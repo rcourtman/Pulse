@@ -80,6 +80,10 @@ Patrol-specific presentation helpers.
    may remain available to cross-product AI surfaces, but the Patrol page,
    selected-run findings panel, badges, and active-finding summaries must not
    infer current Patrol evidence by filtering the unified threshold/AI feed.
+   The same source boundary owns loading and error state: Patrol findings must
+   render from `patrolFindings`, `patrolFindingsLoading`, and
+   `patrolFindingsError` instead of letting a pending unified findings request
+   mask direct Patrol evidence that has already loaded.
 2. Keep Patrol-specific copy and badge logic inside the governed Patrol presentation helpers instead of page-local branches
    Patrol assessment copy must not present an all-clear health prediction while
    active Patrol findings or Patrol runtime issues are still present. The

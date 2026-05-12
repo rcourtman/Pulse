@@ -675,6 +675,8 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain("findingsSource?: 'unified' | 'patrol'");
       expect(findingsPanelSource).toContain('aiIntelligenceStore.loadPatrolFindings()');
       expect(findingsPanelSource).toContain('aiIntelligenceStore.patrolFindings');
+      expect(findingsPanelSource).toContain('aiIntelligenceStore.patrolFindingsLoading');
+      expect(findingsPanelSource).toContain('aiIntelligenceStore.patrolFindingsError');
       expect(findingsPanelSource).toContain('aiIntelligenceStore.patrolFindingsSignal()');
       expect(findingsPanelSource).toContain('aiIntelligenceStore.patrolFindingsNeedingAttention');
       expect(findingsPanelSource).toContain(

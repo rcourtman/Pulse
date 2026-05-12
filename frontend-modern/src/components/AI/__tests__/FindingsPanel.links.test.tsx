@@ -66,7 +66,11 @@ const mockState = vi.hoisted(() => {
 
   return {
     findings,
+    findingsError: null as string | null,
+    findingsLoading: false,
     patrolFindings,
+    patrolFindingsError: null as string | null,
+    patrolFindingsLoading: false,
     getResource,
     getRemediationPlans,
     loadFindings,
@@ -123,19 +127,19 @@ vi.mock('@/stores/aiIntelligence', () => ({
       return mockState.findings;
     },
     get findingsLoading() {
-      return false;
+      return mockState.findingsLoading;
     },
     get findingsError() {
-      return null;
+      return mockState.findingsError;
     },
     get patrolFindings() {
       return mockState.patrolFindings;
     },
     get patrolFindingsLoading() {
-      return false;
+      return mockState.patrolFindingsLoading;
     },
     get patrolFindingsError() {
-      return null;
+      return mockState.patrolFindingsError;
     },
     get findingsNeedingAttention() {
       return [];
@@ -178,6 +182,10 @@ describe('FindingsPanel resource links', () => {
     mockState.loadPatrolFindings.mockClear();
     mockState.getRemediationPlans.mockClear();
     mockState.getResource.mockClear();
+    mockState.findingsLoading = false;
+    mockState.findingsError = null;
+    mockState.patrolFindingsLoading = false;
+    mockState.patrolFindingsError = null;
 
     if (typeof window.requestAnimationFrame !== 'function') {
       window.requestAnimationFrame = ((callback: FrameRequestCallback) =>
@@ -215,6 +223,18 @@ describe('FindingsPanel resource links', () => {
     await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
 
     expect(mockState.loadFindings).not.toHaveBeenCalled();
+    expect(screen.getByText('Provider connection issue')).toBeInTheDocument();
+  });
+
+  it('renders Patrol findings while the unified findings request is still loading', async () => {
+    mockState.findingsLoading = true;
+    mockState.patrolFindingsLoading = false;
+
+    render(() => <FindingsPanel findingsSource="patrol" />);
+
+    await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
+
+    expect(screen.queryByText('Loading findings...')).not.toBeInTheDocument();
     expect(screen.getByText('Provider connection issue')).toBeInTheDocument();
   });
 });
