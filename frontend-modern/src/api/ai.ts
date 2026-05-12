@@ -494,6 +494,51 @@ export interface RemediationPlan {
   risk_level: 'low' | 'medium' | 'high';
   status: 'pending' | 'approved' | 'executing' | 'completed' | 'failed' | 'rolled_back';
   created_at: string;
+  // Optional deterministic action proposal attached by the patrol pipeline
+  // (currently only forecast-driven capacity proposals - see internal/ai/forecast).
+  // RequiresApproval is invariant on every proposal; Allowed=false signals
+  // a preflight-only proposal (no write capability wired yet).
+  proposed_action_plan?: ProposedActionPlan;
+}
+
+// ProposedActionPlan mirrors pkg/aicontracts.ProposedActionPlan on the
+// wire. The "capacity_forecast" Source value tells FindingsPanel to render
+// the distinguishable forecast approval card; anything else falls back to
+// the generic remediation plan card.
+export interface ProposedActionPlan {
+  actionId: string;
+  capabilityName?: string;
+  allowed: boolean;
+  requiresApproval: boolean;
+  approvalPolicy?: string;
+  message?: string;
+  source?: 'capacity_forecast' | string;
+  projectedMetric?: ProposedMetricSummary;
+  preflight?: ProposedActionPreflight;
+  plannedAt?: string;
+  expiresAt?: string;
+}
+
+// ProposedMetricSummary is the operator-facing snapshot rendered at the
+// top of the capacity-forecast approval card.
+export interface ProposedMetricSummary {
+  metric: string;
+  currentValue: number;
+  predictedValue?: number;
+  thresholdValue?: number;
+  timeToThresholdSeconds?: number | null;
+}
+
+// ProposedActionPreflight mirrors unifiedresources.ActionPreflight on the
+// wire, narrowed to the fields the proposal card surfaces.
+export interface ProposedActionPreflight {
+  target?: string;
+  currentState?: string;
+  intendedChange?: string;
+  dryRunAvailable: boolean;
+  dryRunSummary?: string;
+  safetyChecks?: string[];
+  verificationSteps?: string[];
 }
 
 export interface RemediationStep {

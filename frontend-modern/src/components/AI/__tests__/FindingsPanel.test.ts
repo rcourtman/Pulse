@@ -236,6 +236,41 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('text-amber-600 dark:text-amber-400');
   });
 
+  it('renders a distinct capacity-forecast approval card when a forecast-driven proposal is attached', () => {
+    // The capacity-forecast card variant is only rendered when the
+    // RemediationPlan carries a proposed_action_plan with
+    // source === 'capacity_forecast' AND the finding category is
+    // 'capacity'. Pin the wiring so the variant doesn't accidentally take
+    // over the generic remediation plan card.
+    expect(findingsPanelSource).toContain("finding.category === 'capacity'");
+    expect(findingsPanelSource).toContain("proposal()?.source === 'capacity_forecast'");
+    expect(findingsPanelSource).toContain('isCapacityForecastProposal()');
+    expect(findingsPanelSource).toContain('data-testid="capacity-forecast-approval-card"');
+    // Card must surface current/projected/threshold so the operator can
+    // decide without digging into Patrol metrics.
+    expect(findingsPanelSource).toContain('metric!.currentValue.toFixed(1)');
+    expect(findingsPanelSource).toContain('metric!.predictedValue!.toFixed(1)');
+    expect(findingsPanelSource).toContain('metric!.thresholdValue!.toFixed(0)');
+    // Approval-gated by contract; the badge must communicate that even when
+    // the action is preflight-only (Allowed=false).
+    expect(findingsPanelSource).toContain('requires approval');
+    expect(findingsPanelSource).toContain('p.allowed === false');
+    expect(findingsPanelSource).toContain('preflight only');
+    // Must reuse the existing approval handlers - approve flows through
+    // AIAPI.approveRemediationPlan, reject flows through handleDismissPlan.
+    // No bypass / parallel state machine.
+    expect(findingsPanelSource).toContain('handleApproveProposedPlan');
+    expect(findingsPanelSource).toContain('AIAPI.approveRemediationPlan(plan.id)');
+    expect(findingsPanelSource).toContain('data-testid="capacity-forecast-approve"');
+    expect(findingsPanelSource).toContain('data-testid="capacity-forecast-reject"');
+    // The fallback path keeps the generic remediation plan card unchanged
+    // for non-capacity findings or capacity findings without a proposal -
+    // both must continue to read "Open In Assistant" / "Dismiss" as
+    // before, with no capacity-forecast affordances bleeding through.
+    expect(findingsPanelSource).toContain('fallback={(()');
+    expect(findingsPanelSource).toContain('Open In Assistant');
+  });
+
   it('renders the operator-facing Impact line between Description and Recommendation', () => {
     // The expanded finding card must surface Finding.Impact directly so
     // detection-time consequence-if-ignored copy reaches the operator on the
