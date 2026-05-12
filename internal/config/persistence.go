@@ -2231,10 +2231,12 @@ type AIFindingRecord struct {
 	SnoozedUntil    *time.Time `json:"snoozed_until,omitempty"`
 	AlertIdentifier string     `json:"-"`
 	// User feedback fields - enables persistence of dismissal state
-	DismissedReason string `json:"dismissed_reason,omitempty"`
-	UserNote        string `json:"user_note,omitempty"`
-	TimesRaised     int    `json:"times_raised"`
-	Suppressed      bool   `json:"suppressed"`
+	DismissedReason string     `json:"dismissed_reason,omitempty"`
+	UserNote        string     `json:"user_note,omitempty"`
+	TimesRaised     int        `json:"times_raised"`
+	Suppressed      bool       `json:"suppressed"`
+	RemindAt        *time.Time `json:"remind_at,omitempty"`
+	RemindCount     int        `json:"remind_count,omitempty"`
 
 	// Investigation fields - tracks autonomous AI investigation of findings
 	InvestigationSessionID string                           `json:"investigation_session_id,omitempty"`

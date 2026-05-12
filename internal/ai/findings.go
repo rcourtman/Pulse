@@ -186,6 +186,12 @@ type Finding struct {
 	// "you said you'd fix this on <date>, it's still happening." Only
 	// populated for reason == "will_fix_later".
 	RemindAt *time.Time `json:"remind_at,omitempty"`
+	// RemindCount counts how many times a will_fix_later commitment has
+	// surfaced past its RemindAt deadline. Incremented next to each
+	// "reminded" lifecycle event (both the re-detection path and the
+	// proactive sweep). Survives the clear of RemindAt so the curator UI
+	// can show "reminded 3x".
+	RemindCount int `json:"remind_count,omitempty"`
 
 	// Investigation fields - tracks autonomous AI investigation of findings
 	InvestigationSessionID string                           `json:"investigation_session_id,omitempty"` // Chat session ID if being investigated
@@ -230,6 +236,7 @@ type findingJSON struct {
 	TimesRaised                int                              `json:"times_raised"`
 	Suppressed                 bool                             `json:"suppressed"`
 	RemindAt                   *time.Time                       `json:"remind_at,omitempty"`
+	RemindCount                int                              `json:"remind_count,omitempty"`
 	InvestigationSessionID     string                           `json:"investigation_session_id,omitempty"`
 	InvestigationStatus        string                           `json:"investigation_status,omitempty"`
 	InvestigationOutcome       string                           `json:"investigation_outcome,omitempty"`
@@ -274,6 +281,7 @@ func (f Finding) MarshalJSON() ([]byte, error) {
 		TimesRaised:                f.TimesRaised,
 		Suppressed:                 f.Suppressed,
 		RemindAt:                   f.RemindAt,
+		RemindCount:                f.RemindCount,
 		InvestigationSessionID:     f.InvestigationSessionID,
 		InvestigationStatus:        f.InvestigationStatus,
 		InvestigationOutcome:       f.InvestigationOutcome,
@@ -323,6 +331,7 @@ func (f *Finding) UnmarshalJSON(data []byte) error {
 		TimesRaised:                payload.TimesRaised,
 		Suppressed:                 payload.Suppressed,
 		RemindAt:                   payload.RemindAt,
+		RemindCount:                payload.RemindCount,
 		InvestigationSessionID:     payload.InvestigationSessionID,
 		InvestigationStatus:        payload.InvestigationStatus,
 		InvestigationOutcome:       payload.InvestigationOutcome,
@@ -1354,6 +1363,7 @@ func (s *FindingsStore) Add(f *Finding) bool {
 				if prevRemindAt != nil {
 					meta["remind_at"] = prevRemindAt.Format(time.RFC3339)
 				}
+				existing.RemindCount++
 				s.appendLifecycleLocked(existing, "reminded", "will_fix_later remind-at deadline passed; re-surfacing finding", string(FindingLoopStateDismissed), string(FindingLoopStateDetected), meta)
 			}
 			if operatorStateLifted {

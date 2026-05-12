@@ -62,6 +62,8 @@ func findingsToRecords(findings map[string]*Finding) map[string]*config.AIFindin
 			UserNote:        f.UserNote,
 			TimesRaised:     f.TimesRaised,
 			Suppressed:      f.Suppressed,
+			RemindAt:        f.RemindAt,
+			RemindCount:     f.RemindCount,
 			// Investigation fields
 			InvestigationSessionID: f.InvestigationSessionID,
 			InvestigationStatus:    f.InvestigationStatus,
@@ -119,6 +121,8 @@ func recordsToFindings(records map[string]*config.AIFindingRecord) map[string]*F
 			UserNote:        r.UserNote,
 			TimesRaised:     r.TimesRaised,
 			Suppressed:      r.Suppressed,
+			RemindAt:        r.RemindAt,
+			RemindCount:     r.RemindCount,
 			// Investigation fields
 			InvestigationSessionID: r.InvestigationSessionID,
 			InvestigationStatus:    r.InvestigationStatus,
