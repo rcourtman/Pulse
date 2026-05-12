@@ -12206,7 +12206,10 @@ func TestContract_ActionDecisionJSONSnapshot(t *testing.T) {
 						"outcome":"approved",
 						"reason":"inside maintenance window"
 					}
-				]
+				],
+				"verificationOutcome":{
+					"status":"unknown"
+				}
 			}
 		},
 		"event":{
@@ -12383,6 +12386,9 @@ func TestContract_ActionExecutionJSONSnapshot(t *testing.T) {
 				"result":{
 					"success":true,
 					"output":"restart dispatched"
+				},
+				"verificationOutcome":{
+					"status":"unknown"
 				}
 			}
 		},
@@ -12705,6 +12711,9 @@ func TestContract_UnifiedActionAuditsJSONSnapshot(t *testing.T) {
 					Success: true,
 					Output:  "done",
 				},
+				VerificationOutcome: unifiedresources.VerificationOutcome{
+					Status: unifiedresources.VerificationUnknown,
+				},
 			},
 		},
 		Count:      1,
@@ -12765,6 +12774,9 @@ func TestContract_UnifiedActionAuditsJSONSnapshot(t *testing.T) {
 				"result":{
 					"success":true,
 					"output":"done"
+				},
+				"verificationOutcome":{
+					"status":"unknown"
 				}
 			}
 		],

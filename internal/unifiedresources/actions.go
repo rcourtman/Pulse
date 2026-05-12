@@ -117,16 +117,71 @@ type ActionVerificationResult struct {
 	Note    string    `json:"note,omitempty"`
 }
 
+// VerificationStatus classifies the post-execution read-after-write outcome
+// for an action.
+//
+// The progression is read as: did Pulse confirm the intended state after the
+// write?
+//   - VerificationUnknown:    no verification has been attempted yet, or the
+//     record predates the verifier substrate. Default for older audits on
+//     read so the contract surface stays additive.
+//   - VerificationVerified:   a postcondition was evaluated and matched.
+//   - VerificationUnverified: a postcondition was attempted but could not
+//     conclude (e.g. agent unreachable inside the window). Distinct from
+//     failure so operators are not misled into thinking the action broke.
+//   - VerificationFailed:     a postcondition was evaluated and did not
+//     match - the write claims to have succeeded but the world disagrees.
+type VerificationStatus string
+
+const (
+	VerificationUnknown    VerificationStatus = "unknown"
+	VerificationVerified   VerificationStatus = "verified"
+	VerificationUnverified VerificationStatus = "unverified"
+	VerificationFailed     VerificationStatus = "failed"
+)
+
+// VerificationOutcome is the durable verification projection persisted on
+// the action audit record. EvidenceSummary carries an optional one-line
+// human-readable note about what evidence (or its absence) drove the
+// status - e.g. "systemctl ActiveState=active observed within 12s".
+type VerificationOutcome struct {
+	Status          VerificationStatus `json:"status"`
+	EvidenceSummary string             `json:"evidenceSummary,omitempty"`
+}
+
+// IsValidVerificationStatus reports whether the given status is one of the
+// closed enum values.
+func IsValidVerificationStatus(status VerificationStatus) bool {
+	switch status {
+	case VerificationUnknown, VerificationVerified, VerificationUnverified, VerificationFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+// NormalizeVerificationOutcome coerces empty or unrecognized statuses to
+// VerificationUnknown so older audit records read without breaking the
+// closed enum contract, and trims EvidenceSummary.
+func NormalizeVerificationOutcome(outcome VerificationOutcome) VerificationOutcome {
+	outcome.EvidenceSummary = strings.TrimSpace(outcome.EvidenceSummary)
+	if outcome.Status == "" || !IsValidVerificationStatus(outcome.Status) {
+		outcome.Status = VerificationUnknown
+	}
+	return outcome
+}
+
 // ActionAuditRecord tracks the full end-to-end lifecycle of a tool invocation.
 type ActionAuditRecord struct {
-	ID        string                 `json:"id"`
-	CreatedAt time.Time              `json:"createdAt"`
-	UpdatedAt time.Time              `json:"updatedAt"`
-	State     ActionState            `json:"state"`
-	Request   ActionRequest          `json:"request"`
-	Plan      ActionPlan             `json:"plan"`
-	Approvals []ActionApprovalRecord `json:"approvals,omitempty"`
-	Result    *ExecutionResult       `json:"result,omitempty"`
+	ID                  string                 `json:"id"`
+	CreatedAt           time.Time              `json:"createdAt"`
+	UpdatedAt           time.Time              `json:"updatedAt"`
+	State               ActionState            `json:"state"`
+	Request             ActionRequest          `json:"request"`
+	Plan                ActionPlan             `json:"plan"`
+	Approvals           []ActionApprovalRecord `json:"approvals,omitempty"`
+	Result              *ExecutionResult       `json:"result,omitempty"`
+	VerificationOutcome VerificationOutcome    `json:"verificationOutcome"`
 }
 
 // ActionLifecycleEvent represents an append-only state transition in an action's life.
@@ -434,6 +489,7 @@ func NormalizeActionAuditRecord(record ActionAuditRecord) (ActionAuditRecord, er
 		}
 	}
 	record.Plan.Preflight = NormalizeActionPreflight(record.Plan.Preflight, record.Request, record.Plan)
+	record.VerificationOutcome = NormalizeVerificationOutcome(record.VerificationOutcome)
 
 	for i := range record.Approvals {
 		record.Approvals[i].Actor = strings.TrimSpace(record.Approvals[i].Actor)

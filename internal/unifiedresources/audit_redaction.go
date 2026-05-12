@@ -89,5 +89,6 @@ func RedactAuditRecord(record ActionAuditRecord) ActionAuditRecord {
 		redacted.ErrorMessage = RedactAuditText(redacted.ErrorMessage)
 		record.Result = &redacted
 	}
+	record.VerificationOutcome.EvidenceSummary = RedactAuditText(record.VerificationOutcome.EvidenceSummary)
 	return record
 }
