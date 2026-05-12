@@ -1,11 +1,31 @@
 name: Promote Floating Tags
 run-name: Promote Floating Tags ${{ inputs.tag }}
 
-# Triggered automatically when publish-docker.yml completes, or manually
+# Triggers:
+# - workflow_run: chains off publish-docker.yml completion. Historically the
+#   primary path, but the chain only fires when publish-docker succeeds — and
+#   when publish-docker fails (rc.3 → rc.5 all failed at the now-removed
+#   pulse-agent push step), the floating tags don't promote and customers
+#   pulling rcourtman/pulse:latest are stuck on whatever the previous tag was.
+# - workflow_call: called explicitly from create-release.yml after
+#   validate_release_assets succeeds. Defensive backup so a workflow_run
+#   failure doesn't silently leave latest/major/minor tags unpromoted.
+# - workflow_dispatch: manual backfill path.
+
 on:
   workflow_run:
     workflows: ["Publish Docker Images"]
     types: [completed]
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag (e.g., v6.0.0). Required for workflow_call."
+        required: true
+        type: string
+      prerelease:
+        description: "Is this a prerelease?"
+        required: true
+        type: boolean
   workflow_dispatch:
     inputs:
       tag:
@@ -24,8 +44,9 @@ permissions:
 jobs:
   promote-images:
     runs-on: ubuntu-24.04
-    # Only run if workflow_dispatch OR if workflow_run completed successfully
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    # workflow_dispatch and workflow_call always run; workflow_run only when
+    # the triggering Publish Docker Images run completed successfully.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
       packages: write
@@ -35,33 +56,37 @@ jobs:
         id: extract
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_PRERELEASE: ${{ inputs.prerelease }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Manual dispatch - use inputs directly
-            TAG="${{ inputs.tag }}"
-            PRERELEASE="${{ inputs.prerelease }}"
+          # inputs.tag is set by both workflow_dispatch and workflow_call. Fall
+          # back to the workflow_run derivation only when running as a chain
+          # downstream of publish-docker.yml.
+          if [ -n "${INPUT_TAG}" ]; then
+            TAG="${INPUT_TAG}"
+            PRERELEASE="${INPUT_PRERELEASE}"
           else
             # workflow_run trigger - extract from the triggering workflow's inputs
             # The publish-docker workflow was triggered with a tag input
             RUN_ID="${{ github.event.workflow_run.id }}"
             echo "Extracting inputs from workflow run ${RUN_ID}..."
-            
+
             # Get the workflow run details to extract the tag
             WORKFLOW_DATA=$(gh api repos/${{ github.repository }}/actions/runs/${RUN_ID})
             TAG=$(echo "$WORKFLOW_DATA" | jq -r '.head_branch // ""')
-            
+
             # If head_branch is main, we need to get it from the run's inputs
             # The inputs are stored in the run's display_title or we parse from artifacts
             if [ "$TAG" = "main" ] || [ -z "$TAG" ]; then
               # Try to get from run name which typically includes the tag
               TAG=$(echo "$WORKFLOW_DATA" | jq -r '.display_title' | grep -oP 'v\d+\.\d+\.\d+(-[a-zA-Z]+\.\d+)?' || echo "")
             fi
-            
+
             if [ -z "$TAG" ]; then
               echo "::error::Could not extract tag from workflow_run"
               exit 1
             fi
-            
+
             # Detect prerelease from tag
             if [[ "$TAG" =~ -rc\.[0-9]+$ ]] || [[ "$TAG" =~ -alpha\.[0-9]+$ ]] || [[ "$TAG" =~ -beta\.[0-9]+$ ]]; then
               PRERELEASE="true"
@@ -69,7 +94,7 @@ jobs:
               PRERELEASE="false"
             fi
           fi
-          
+
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "prerelease=${PRERELEASE}" >> $GITHUB_OUTPUT
           echo "Promoting floating tags for ${TAG} (prerelease: ${PRERELEASE})"

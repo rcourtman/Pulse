@@ -329,6 +329,16 @@ server-side update execution surfaces.
    `release` and `workflow_dispatch` triggers, and its chart-version
    resolver must prefer inputs over the release-event tag when inputs are
    present so all three entry paths converge on the same identity.
+   `create-release.yml` must apply the same explicit `workflow_call` to
+   `promote-floating-tags.yml`. Its legacy `workflow_run` chain off
+   `publish-docker.yml` silently stops promoting `latest` / major / minor
+   tags whenever `publish-docker.yml` fails (rc.3 → rc.5 all failed at the
+   removed pulse-agent push step), leaving customers on stale floating
+   tags with no warning. `promote-floating-tags.yml` must expose
+   `workflow_call` inputs (`tag`, `prerelease`) and its tag resolver must
+   prefer those over the workflow_run-derived tag, and the create-release
+   wiring must gate on `validate_release_assets` succeeding so the docker
+   image is guaranteed pullable before promotion.
    Generated chart docs are part of the packaged release artifact, not a
    disposable byproduct: when the stable candidate version changes, the checked
    in `deploy/helm/pulse/README.md` output must be regenerated from the same

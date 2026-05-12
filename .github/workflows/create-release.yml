@@ -1112,3 +1112,25 @@ jobs:
     with:
       chart_version: ${{ needs.prepare.outputs.version }}
       app_version: ${{ needs.prepare.outputs.version }}
+
+  # Defensive backup to promote-floating-tags.yml's workflow_run chain off
+  # publish-docker.yml. The chain works when publish-docker succeeds, but a
+  # publish-docker failure (rc.3 → rc.5 all failed at the now-removed
+  # pulse-agent push) silently left latest/major/minor tags unpromoted —
+  # customers pulling rcourtman/pulse:latest stayed on whatever the previous
+  # successful release tagged. Calling promote-floating-tags as workflow_call
+  # after validate_release_assets succeeds (which itself waits for the docker
+  # image to be pullable) guarantees the floating tags advance.
+  promote_floating_tags:
+    needs:
+      - prepare
+      - validate_release_assets
+    if: ${{ always() && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/promote-floating-tags.yml
+    secrets: inherit
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+      prerelease: ${{ needs.prepare.outputs.is_prerelease == 'true' }}

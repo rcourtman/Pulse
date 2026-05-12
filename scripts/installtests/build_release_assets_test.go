@@ -183,6 +183,16 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`publish_helm_chart:`,
 		`chart_version: ${{ needs.prepare.outputs.version }}`,
 		`app_version: ${{ needs.prepare.outputs.version }}`,
+		// promote-floating-tags chains off publish-docker via workflow_run,
+		// but when publish-docker fails (rc.3 → rc.5 all did) the chain
+		// silently doesn't fire and latest/major/minor docker tags stay
+		// stale. Defensive workflow_call backup, gated on
+		// validate_release_assets succeeding (which waits for the image to
+		// be pullable, so the tag points at a real manifest).
+		`uses: ./.github/workflows/promote-floating-tags.yml`,
+		`promote_floating_tags:`,
+		`tag: ${{ needs.prepare.outputs.tag }}`,
+		`prerelease: ${{ needs.prepare.outputs.is_prerelease == 'true' }}`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(workflow, needle) {
@@ -946,6 +956,40 @@ func TestInstallShSmokeWorkflowPresent(t *testing.T) {
 	for _, needle := range required {
 		if !strings.Contains(workflow, needle) {
 			t.Fatalf("install-sh-smoke.yml missing required smoke step: %s", needle)
+		}
+	}
+}
+
+func TestPromoteFloatingTagsReachableViaWorkflowCall(t *testing.T) {
+	// promote-floating-tags.yml's `workflow_run` chain off publish-docker
+	// silently stops working when publish-docker fails (rc.3 → rc.5 all
+	// failed at the now-removed pulse-agent push step). Without the
+	// floating tags promoted, customers pulling rcourtman/pulse:latest
+	// stay on the previous release tag. Adding workflow_call so
+	// create-release.yml can drive promotion explicitly after
+	// validate_release_assets succeeds — same defensive shape as
+	// publish-helm-chart and install-sh-smoke.
+	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "promote-floating-tags.yml"))
+	if err != nil {
+		t.Fatalf("read promote-floating-tags.yml: %v", err)
+	}
+	workflow := string(workflowBytes)
+	required := []string{
+		`workflow_call:`,
+		`tag:`,
+		`description: "Release tag (e.g., v6.0.0). Required for workflow_call."`,
+		`prerelease:`,
+		`type: boolean`,
+		// Job condition must accept workflow_call alongside workflow_dispatch.
+		`github.event_name == 'workflow_call'`,
+		// Tag resolver must prefer inputs over the workflow_run derivation
+		// when running through workflow_call / workflow_dispatch.
+		`if [ -n "${INPUT_TAG}" ]; then`,
+		`TAG="${INPUT_TAG}"`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(workflow, needle) {
+			t.Fatalf("promote-floating-tags.yml missing required workflow_call wiring: %s", needle)
 		}
 	}
 }
