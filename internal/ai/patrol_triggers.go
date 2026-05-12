@@ -33,6 +33,7 @@ const (
 	TriggerReasonManual          TriggerReason = "manual"         // User-initiated patrol
 	TriggerReasonAlertFired      TriggerReason = "alert_fired"    // New alert triggered
 	TriggerReasonAlertCleared    TriggerReason = "alert_cleared"  // Alert was resolved
+	TriggerReasonAlertFlapping   TriggerReason = "alert_flapping" // Alert flapping detected and suppressed
 	TriggerReasonAnomalyDetected TriggerReason = "anomaly"        // Baseline breach detected
 	TriggerReasonUserAction      TriggerReason = "user_action"    // User dismissed/snoozed finding
 	TriggerReasonConfigChanged   TriggerReason = "config_changed" // System configuration changed
@@ -352,7 +353,7 @@ func (tm *TriggerManager) SetEventTriggersEnabled(enabled bool) {
 // (alerts firing/clearing, anomaly detection) as opposed to user-initiated or scheduled triggers.
 func isEventDrivenTrigger(reason TriggerReason) bool {
 	switch reason {
-	case TriggerReasonAlertFired, TriggerReasonAlertCleared, TriggerReasonAnomalyDetected:
+	case TriggerReasonAlertFired, TriggerReasonAlertCleared, TriggerReasonAlertFlapping, TriggerReasonAnomalyDetected:
 		return true
 	default:
 		return false
@@ -361,7 +362,7 @@ func isEventDrivenTrigger(reason TriggerReason) bool {
 
 func (cfg PatrolEventTriggerConfig) allows(reason TriggerReason) bool {
 	switch reason {
-	case TriggerReasonAlertFired, TriggerReasonAlertCleared:
+	case TriggerReasonAlertFired, TriggerReasonAlertCleared, TriggerReasonAlertFlapping:
 		return cfg.AlertTriggersEnabled
 	case TriggerReasonAnomalyDetected:
 		return cfg.AnomalyTriggersEnabled
@@ -661,5 +662,28 @@ func ScheduledPatrolScope() PatrolScope {
 		Reason:   TriggerReasonScheduled,
 		Context:  "Scheduled patrol",
 		Priority: triggerPriorityScheduled,
+	}
+}
+
+// FlappingPostmortemPatrolScope creates a patrol scope for an alert that the
+// alerts manager has just transitioned into flapping suppression. The intent
+// is to produce a finding that explains WHAT is flapping, WHY Pulse suppressed
+// it, and what the operator can do about it -- so users see the diagnosis,
+// not silence. Priority matches anomaly detection (medium-high) because a
+// suppressed flap is operationally similar: signal Pulse already saw, that
+// the user has not yet.
+func FlappingPostmortemPatrolScope(alertIdentifier, resourceID, resourceType, alertType string) PatrolScope {
+	context := "Flapping: " + alertType
+	if alertType == "" {
+		context = "Flapping detected"
+	}
+	return PatrolScope{
+		ResourceIDs:     []string{resourceID},
+		ResourceTypes:   patrolScopeResourceTypes(resourceType),
+		Depth:           PatrolDepthQuick,
+		Reason:          TriggerReasonAlertFlapping,
+		Context:         context,
+		Priority:        triggerPriorityAnomaly,
+		AlertIdentifier: alertIdentifier,
 	}
 }
