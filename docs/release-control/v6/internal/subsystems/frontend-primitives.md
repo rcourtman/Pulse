@@ -1019,7 +1019,11 @@ prompt explain the same operator-facing priority.
     without parsing a compressed context sentence. The same feature helper owns
     recommendation-aware suggested prompts; shared drawer primitives must render
     those prompts without replacing a provider-settings recovery path with
-    generic coverage wording. Finding-level drawer opens may also pass one bounded
+    generic coverage wording. Assessment-level Patrol prompts, action labels,
+    and safety notes must also prioritize active findings, pending approvals,
+    and governed action references over secondary coverage caveats, reserving
+    coverage-gap-first wording for assessments with no active findings.
+    Finding-level drawer opens may also pass one bounded
     model-only finding context, one target resource reference, one safe
     route-owned next-step action label/href, and one `handoff_actions` reference
     for a live approval or proposed fix. It must not expose raw command or
@@ -2474,7 +2478,9 @@ or polling lifecycle. The Patrol feature is the current reference shape:
 feature shell, `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
 owns the runtime state machine, `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
 owns the pure investigation-context summary and Patrol-to-Assistant operator
-briefing derivation,
+briefing derivation, including the rule that active findings, pending
+approvals, and governed action references outrank secondary coverage caveats
+when building the Assistant prompt, action label, and safety note,
 `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` owns canonical AI
 summary normalization at the shared store boundary, and the Patrol-owned
 header/banner/summary/workspace section files under

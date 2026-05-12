@@ -551,6 +551,12 @@ the canonical monitored-system blocked payload.
    so the drawer does not fall back to generic assessment copy when governed
    actions are present or when the summary already exposes a concrete
    recommended next step
+   and that same Patrol investigation-context owner, so coverage signals from
+   the canonical AI summary remain secondary caveats when the same assessment
+   carries active findings, pending approvals, or governed action references;
+   Assistant prompt emphasis, briefing action labels, and safety notes must
+   lead with finding priority, affected resources, evidence, and the governed
+   next step instead of recasting the whole handoff as a coverage gap
    and that same Patrol investigation-context owner, so coverage-incomplete
    assessments with no active infrastructure findings are serialized as a
    verification-gap handoff: prompt and visible briefing copy must explain what

@@ -182,6 +182,21 @@ describe('PatrolIntelligenceSummary', () => {
         },
       }),
       manualRunRequested: () => false,
+      patrolRunHistory: {
+        value: () => [
+          {
+            id: 'run-scoped-1',
+            started_at: '2026-05-06T12:00:00Z',
+            completed_at: '2026-05-06T12:01:00Z',
+            type: 'scoped',
+            status: 'error',
+            resources_checked: 0,
+            new_findings: 0,
+            error_count: 1,
+            finding_ids: [],
+          },
+        ],
+      },
       patrolStream: {
         phase: () => 'Running',
         currentTool: () => '',

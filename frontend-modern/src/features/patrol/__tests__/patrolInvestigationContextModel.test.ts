@@ -451,6 +451,75 @@ describe('patrolInvestigationContextModel', () => {
     });
   });
 
+  it('prioritizes active findings over secondary coverage caveats in assessment handoffs', () => {
+    const handoff = buildPatrolAssessmentAssistantHandoff({
+      assessment: {
+        title: 'Issues detected',
+        description:
+          'Patrol surfaced one active warning finding in your infrastructure. Review the active findings for more detail.',
+        eyebrow: 'Patrol assessment',
+      },
+      overallHealth: {
+        grade: 'B',
+        score: 85,
+        prediction: 'Coverage is incomplete for secondary activity.',
+        factors: [{ category: 'coverage' }],
+      },
+      verification: {
+        title: 'Recently verified',
+        description: 'The most recent full patrol completed successfully and checked 58 resources.',
+        lastFullRunAt: '2026-05-12T21:22:35Z',
+        activityMixLabel: '8 full, 3 alert-cleared',
+      },
+      latestRun: {
+        kindLabel: 'Full patrol',
+        status: { label: 'issues found' },
+        timestamp: '2026-05-12T21:22:35Z',
+        coverageSummary: 'Checked 58 resources',
+        findingsSnapshotAvailable: true,
+      },
+      investigationContext: {
+        recentChangeCount: 3,
+        correlationCount: 70,
+        governedResourceCount: 55,
+        hasContext: true,
+        summaryText: '3 recent changes · 70 correlations · 55 policy-covered resources',
+      },
+      recommendedNextStep: {
+        title: 'Review active findings',
+        description:
+          'Use the findings workspace to prioritize current risk, recent changes, and governed remediation.',
+        actionLabel: 'Review findings',
+        actionKind: 'review_findings',
+      },
+      activeFindings: [
+        {
+          id: 'finding-backup',
+          title: 'Backup failed',
+          severity: 'warning',
+          status: 'active',
+          resourceId: 'backup-delly',
+          resourceName: 'delly',
+          resourceType: 'backup',
+        },
+      ],
+    });
+
+    expect(handoff.prompt).toContain('Start by prioritizing 1 active finding');
+    expect(handoff.prompt).not.toContain('why Patrol coverage is incomplete');
+    expect(handoff.prompt).not.toContain('what the latest scoped activity did and did not prove');
+    expect(handoff.context.briefing).toMatchObject({
+      actionLabel: 'Recommended: Review findings',
+      safetyNote:
+        'Assistant can explain the Patrol recommendation; Patrol runs, settings changes, diagnostics, and remediation remain operator-controlled.',
+      suggestedPrompts: [
+        'Prioritize findings and safest next step',
+        'Explain recent changes and correlations',
+        'List evidence to verify before action',
+      ],
+    });
+  });
+
   it('links route-owned Patrol assessment recommendations in Assistant briefing', () => {
     const handoff = buildPatrolAssessmentAssistantHandoff({
       assessment: {

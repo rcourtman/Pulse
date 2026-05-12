@@ -620,6 +620,12 @@ must not pair an `Issues detected` headline with a raw coverage-only
 `overall_health.prediction` sentence from a separate source; when active
 findings and incomplete verification are both true, the Patrol summary should
 describe both in one canonical assessment message.
+The same precedence applies to Patrol-to-Assistant assessment handoffs. An
+active finding, pending approval, or governed action reference must remain the
+primary Assistant prompt and briefing posture even when the attached model
+context carries a secondary coverage caveat. Coverage-incomplete language such
+as explaining scoped activity or a full-run gap is the primary handoff framing
+only for coverage-only assessments with no active findings.
 That same assessment contract must also distinguish Patrol-owned runtime
 findings from infrastructure findings. When the only active Patrol findings are
 synthetic Patrol service/runtime conditions such as the `ai-service`

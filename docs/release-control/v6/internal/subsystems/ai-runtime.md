@@ -635,6 +635,13 @@ This prevents the score chip from showing grade A while the same
 assessment surface warns the operator that coverage is incomplete or
 recent runs failed, which previously happened whenever one successful
 manual run sat among many failed startup runs.
+Downstream Assistant handoffs must treat that coverage factor as a
+secondary caveat when Patrol also carries active findings, pending
+approvals, or governed action references. The coverage-gap explanation
+and scoped-activity prompt are primary Assistant framing only for
+coverage-only assessments; active Patrol findings keep the prompt,
+briefing action label, and safety note focused on finding priority,
+affected resources, evidence, and the governed next step.
 
 Absence-based auto-resolve paths in `internal/ai/patrol_ai.go` are
 all gated on the category whitelist exposed by

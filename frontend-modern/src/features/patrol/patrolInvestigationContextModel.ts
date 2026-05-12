@@ -897,24 +897,8 @@ function buildPatrolAssessmentAssistantPrompt(
   description: string,
   handoffActions: AIChatHandoffAction[],
 ): string {
-  const pendingApprovalCount = normalizeAssessmentPendingApprovalCount(input.activeFindings);
-  const actionCount = handoffActions.length;
-  const hasCoverageGap = assessmentHasCoverageGap(input);
   const recommendationInstruction = buildPatrolAssessmentRecommendationPromptInstruction(input);
-  const reviewInstruction =
-    pendingApprovalCount > 0
-      ? `Start by reviewing ${formatAssessmentMetricCount(
-          'pending governed approvals',
-          pendingApprovalCount,
-        )}, approval policy, dry-run posture, and the safest next step from the attached context.`
-      : actionCount > 0
-        ? `Start by reviewing ${formatAssessmentMetricCount(
-            'governed action references',
-            actionCount,
-          )}, risk, and the safest next step from the attached context.`
-        : hasCoverageGap
-          ? 'Start by explaining why Patrol coverage is incomplete, what the latest scoped activity did and did not prove, and whether a full Patrol verification should run before action.'
-          : 'Use the attached model-only Patrol assessment context before suggesting next actions. Help me understand priority, risk, and safe next steps.';
+  const reviewInstruction = buildPatrolAssessmentReviewPromptInstruction(input, handoffActions);
 
   return [
     `Discuss the current Pulse Patrol assessment: ${title}.`,
@@ -925,6 +909,43 @@ function buildPatrolAssessmentAssistantPrompt(
   ]
     .filter(isNonEmptyString)
     .join('\n\n');
+}
+
+function buildPatrolAssessmentReviewPromptInstruction(
+  input: PatrolAssessmentAssistantHandoffInput,
+  handoffActions: AIChatHandoffAction[],
+): string {
+  const pendingApprovalCount = normalizeAssessmentPendingApprovalCount(input.activeFindings);
+  const actionCount = handoffActions.length;
+  const activeFindingCount = normalizeNonNegativeCount(input.activeFindings?.length);
+  const hasCoverageOnlyGap = assessmentHasCoverageGap(input) && activeFindingCount === 0;
+
+  if (pendingApprovalCount > 0) {
+    return `Start by reviewing ${formatAssessmentMetricCount(
+      'pending governed approvals',
+      pendingApprovalCount,
+    )}, approval policy, dry-run posture, and the safest next step from the attached context.`;
+  }
+
+  if (actionCount > 0) {
+    return `Start by reviewing ${formatAssessmentMetricCount(
+      'governed action references',
+      actionCount,
+    )}, risk, and the safest next step from the attached context.`;
+  }
+
+  if (activeFindingCount > 0) {
+    return `Start by prioritizing ${formatAssessmentMetricCount(
+      'active findings',
+      activeFindingCount,
+    )}, affected resources, evidence, verification caveats, and the safest next step from the attached context.`;
+  }
+
+  if (hasCoverageOnlyGap) {
+    return 'Start by explaining why Patrol coverage is incomplete, what the latest scoped activity did and did not prove, and whether a full Patrol verification should run before action.';
+  }
+
+  return 'Use the attached model-only Patrol assessment context before suggesting next actions. Help me understand priority, risk, and safe next steps.';
 }
 
 function buildPatrolAssessmentAssistantBriefing(
@@ -1058,7 +1079,9 @@ function buildPatrolAssessmentActionPosture(
 ): { actionLabel: string; actionHref?: string; safetyNote: string } {
   const pendingApprovalCount = normalizeAssessmentPendingApprovalCount(input.activeFindings);
   const actionCount = handoffActions.length;
+  const activeFindingCount = normalizeNonNegativeCount(input.activeFindings?.length);
   const hasCoverageGap = assessmentHasCoverageGap(input);
+  const hasCoverageOnlyGap = hasCoverageGap && activeFindingCount === 0;
   const recommendedNextStep = normalizeAssessmentRecommendedNextStep(input.recommendedNextStep);
   const recommendedNextStepActionHref =
     getAssessmentRecommendedNextStepActionHref(recommendedNextStep);
@@ -1100,7 +1123,7 @@ function buildPatrolAssessmentActionPosture(
     };
   }
 
-  if (hasCoverageGap) {
+  if (hasCoverageOnlyGap) {
     return {
       actionLabel: recommendedNextStep?.actionLabel
         ? `Recommended: ${recommendedNextStep.actionLabel}`
