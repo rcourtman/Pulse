@@ -880,6 +880,55 @@ func TestBuildReleasePackagesPulseMcpForAllPlatforms(t *testing.T) {
 	}
 }
 
+func TestInstallShSmokeWorkflowPresent(t *testing.T) {
+	// End-to-end install.sh smoke gate. validate-release.sh catches asset-
+	// identity drift at build time (right banner / right --version handler /
+	// right signature key). This workflow proves the documented secure-install
+	// commands actually install and boot Pulse end-to-end against the
+	// published GitHub Release, which is the surface that broke silently
+	// across v6 rc.1 → rc.5. Removing or weakening any of these assertions
+	// reopens that regression class.
+	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "install-sh-smoke.yml"))
+	if err != nil {
+		t.Fatalf("read install-sh-smoke.yml: %v", err)
+	}
+	workflow := string(workflowBytes)
+	required := []string{
+		// Inputs and triggers.
+		`name: install.sh Smoke (Published Release)`,
+		`workflow_call:`,
+		`workflow_dispatch:`,
+		// Pull straight from the published release URL (not local release/).
+		`releases/download/${TAG}`,
+		`install.sh.sshsig`,
+		`pulse-${TAG}-linux-amd64.tar.gz`,
+		// README key extraction + actual ssh-keygen verify against the
+		// downloaded asset.
+		`grep -oE 'ssh-ed25519 [A-Za-z0-9+/=]+ pulse-installer' README.md`,
+		`ssh-keygen -Y verify \`,
+		`-I pulse-installer \`,
+		`-n pulse-install \`,
+		`-s install.sh.sshsig < install.sh`,
+		// Server-installer identity assertions, mirroring validate-release.sh.
+		`grep -qE '^# Pulse Installer Script' install.sh`,
+		`grep -q 'Pulse Unified Agent Installer' install.sh`,
+		`grep -qE '^[[:space:]]*--version\)' install.sh`,
+		// End-to-end install in a privileged systemd container.
+		`jrei/systemd-debian:12`,
+		`bash install.sh --archive /smoke/${tarball} --disable-auto-updates`,
+		`systemctl is-active pulse`,
+		`curl -fsS http://127.0.0.1:7655/api/health`,
+		// Authoritative version check via /api/version (not /api/health).
+		`curl -fsS http://127.0.0.1:7655/api/version`,
+		`Installed version mismatch. Expected`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(workflow, needle) {
+			t.Fatalf("install-sh-smoke.yml missing required smoke step: %s", needle)
+		}
+	}
+}
+
 func repoFile(parts ...string) string {
 	root := filepath.Join("..", "..")
 	segments := append([]string{root}, parts...)

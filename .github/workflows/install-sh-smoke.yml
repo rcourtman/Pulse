@@ -1,0 +1,256 @@
+name: install.sh Smoke (Published Release)
+
+# End-to-end smoke that exercises the documented Proxmox-LXC / systemd
+# install flow against the published GitHub Release. Across v6 rc.1 → rc.5
+# the published install.sh asset was actually the agent installer (rejecting
+# --version) and the README's pinned signature key did not match the
+# pipeline's actual signing key, so anyone running the secure-install
+# snippet from the README hit one of two silent failure modes for ~30 days.
+# The validate-release.sh content checks catch the asset-identity drift at
+# build time; this workflow proves the documented commands actually install
+# and boot Pulse end-to-end in a clean Linux environment.
+#
+# Triggers:
+# - workflow_dispatch: run manually against any tag for verification.
+# - workflow_call: callable from create-release.yml so future releases get
+#   the gate automatically once it's stable.
+#
+# What it does:
+# 1. Downloads install.sh + install.sh.sshsig + the linux-amd64 tarball
+#    from the published release URL (not the local release/ dir).
+# 2. Extracts the README's pinned ed25519 key and runs the README's exact
+#    ssh-keygen -Y verify command. Catches README/key drift.
+# 3. Boots a privileged systemd Debian 12 container, runs
+#    `bash install.sh --archive <tarball> --enable-auto-updates` inside it
+#    (avoids the install.sh self-refetch loop that --version triggers; the
+#    re-fetched bytes are the same as what we already validated).
+# 4. Waits for systemd pulse.service to be active and hits /api/health
+#    from inside the container.
+# 5. Confirms /api/health reports the expected version.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v6.0.0-rc.6)'
+        required: true
+        type: string
+      version:
+        description: 'Version without v prefix (e.g., 6.0.0-rc.6)'
+        required: true
+        type: string
+      repository:
+        description: 'owner/repo to pull the published release from. Defaults to the workflow repository.'
+        required: false
+        type: string
+        default: ''
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v6.0.0-rc.6)'
+        required: true
+        type: string
+      version:
+        description: 'Version without v prefix (e.g., 6.0.0-rc.6)'
+        required: true
+        type: string
+      repository:
+        description: 'owner/repo to pull from (leave blank for current repo)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: install-sh-smoke-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository (for README key extraction)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Resolve release repository
+        id: repo
+        env:
+          INPUT_REPO: ${{ inputs.repository }}
+          DEFAULT_REPO: ${{ github.repository }}
+        run: |
+          repo="${INPUT_REPO:-$DEFAULT_REPO}"
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+          echo "Using release repository: $repo"
+
+      - name: Download published install.sh + sshsig + linux-amd64 tarball
+        env:
+          TAG: ${{ inputs.tag }}
+          REPO: ${{ steps.repo.outputs.repo }}
+        run: |
+          set -euo pipefail
+          mkdir -p smoke-workspace
+          cd smoke-workspace
+          base="https://github.com/${REPO}/releases/download/${TAG}"
+          echo "Pulling from ${base}/"
+
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
+            -o install.sh "${base}/install.sh"
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
+            -o install.sh.sshsig "${base}/install.sh.sshsig"
+
+          tarball="pulse-${TAG}-linux-amd64.tar.gz"
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
+            -o "${tarball}" "${base}/${tarball}"
+
+          echo "Downloaded:"
+          ls -la
+
+      - name: Verify install.sh signature with README's pinned key
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          readme_key=$(grep -oE 'ssh-ed25519 [A-Za-z0-9+/=]+ pulse-installer' README.md | head -1)
+          if [ -z "$readme_key" ]; then
+            echo "::error::Could not extract pulse-installer key from README.md"
+            exit 1
+          fi
+          echo "README pins: $readme_key"
+
+          allowed_signers=$(mktemp)
+          printf 'pulse-installer %s\n' "$readme_key" > "$allowed_signers"
+
+          cd smoke-workspace
+          if ! ssh-keygen -Y verify \
+                -f "$allowed_signers" \
+                -I pulse-installer \
+                -n pulse-install \
+                -s install.sh.sshsig < install.sh; then
+            echo "::error::Published install.sh.sshsig does not verify against the README's pinned key."
+            echo "::error::Either README.md is pinning the wrong key or the pipeline signed with a different key."
+            rm -f "$allowed_signers"
+            exit 1
+          fi
+          rm -f "$allowed_signers"
+          echo "✓ install.sh signature verifies against README's pinned key"
+
+      - name: Assert install.sh is the Pulse server installer
+        run: |
+          set -euo pipefail
+          cd smoke-workspace
+          if ! grep -qE '^# Pulse Installer Script' install.sh; then
+            echo "::error::install.sh banner is not the Pulse server installer"
+            exit 1
+          fi
+          if grep -q 'Pulse Unified Agent Installer' install.sh; then
+            echo "::error::install.sh is the agent installer, not the server installer"
+            exit 1
+          fi
+          if ! grep -qE '^[[:space:]]*--version\)' install.sh; then
+            echo "::error::install.sh does not handle --version"
+            exit 1
+          fi
+          echo "✓ install.sh is the server installer with --version support"
+
+      - name: Run install.sh end-to-end in a privileged systemd container
+        env:
+          TAG: ${{ inputs.tag }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          tarball="pulse-${TAG}-linux-amd64.tar.gz"
+          container_name="pulse-install-smoke-$$"
+
+          # Cleanup on exit no matter what.
+          trap 'docker rm -f "${container_name}" >/dev/null 2>&1 || true' EXIT
+
+          # jrei/systemd-debian:12 is a community systemd-in-Docker image used
+          # for Ansible / Molecule testing — small, no Pulse-specific assumptions.
+          docker run -d --rm \
+            --name "${container_name}" \
+            --privileged \
+            --tmpfs /tmp --tmpfs /run \
+            -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+            -v "$(pwd)/smoke-workspace:/smoke" \
+            -p 7655:7655 \
+            jrei/systemd-debian:12
+
+          echo "Waiting for systemd to be ready inside the container..."
+          for i in $(seq 1 30); do
+            if docker exec "${container_name}" systemctl is-system-running --wait 2>/dev/null | grep -qE '^(running|degraded)$'; then
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              docker logs "${container_name}" || true
+              echo "::error::systemd did not become ready inside the container"
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "✓ systemd is up"
+
+          echo "Installing prerequisites inside container..."
+          docker exec "${container_name}" bash -lc 'apt-get update -qq && apt-get install -y -qq curl ca-certificates jq sudo'
+
+          echo "Running install.sh --archive against the published tarball..."
+          # docker exec without -t leaves stdin without a TTY, which install.sh's
+          # safe_read helper detects and falls through to defaults on every prompt.
+          docker exec "${container_name}" \
+            bash -lc "cd /smoke && bash install.sh --archive /smoke/${tarball} --disable-auto-updates"
+
+          echo "Waiting for pulse.service to become active..."
+          for i in $(seq 1 60); do
+            state=$(docker exec "${container_name}" systemctl is-active pulse 2>/dev/null || true)
+            if [ "$state" = "active" ]; then
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              docker exec "${container_name}" systemctl status pulse --no-pager || true
+              docker exec "${container_name}" journalctl -u pulse --no-pager --lines=80 || true
+              echo "::error::pulse.service did not become active within 2 minutes"
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "✓ pulse.service is active"
+
+          echo "Hitting /api/health..."
+          for i in $(seq 1 30); do
+            if docker exec "${container_name}" curl -fsS http://127.0.0.1:7655/api/health >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              docker exec "${container_name}" systemctl status pulse --no-pager || true
+              docker exec "${container_name}" journalctl -u pulse --no-pager --lines=80 || true
+              echo "::error::/api/health did not respond within 60 seconds of service activation"
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "✓ /api/health responded 200"
+
+          echo "Confirming installed version matches ${VERSION} via /api/version..."
+          # /api/health intentionally does not include version; /api/version is
+          # the authoritative endpoint and is one of the canonical post-upgrade
+          # checks documented in docs/UPGRADE_v6.md.
+          version_payload=$(docker exec "${container_name}" curl -fsS http://127.0.0.1:7655/api/version)
+          echo "Version payload: ${version_payload}"
+          installed_version=$(echo "${version_payload}" | jq -r '.version // empty')
+          if [ -z "${installed_version}" ]; then
+            echo "::error::/api/version did not include a version field"
+            exit 1
+          fi
+          # Normalize: VERSION input is "6.0.0-rc.6", installed_version may be "v6.0.0-rc.6".
+          installed_version="${installed_version#v}"
+          if [ "${installed_version}" != "${VERSION}" ]; then
+            echo "::error::Installed version mismatch. Expected ${VERSION}, got ${installed_version}"
+            exit 1
+          fi
+          echo "✓ Installed version matches ${VERSION}"
+
+      - name: Smoke result
+        run: |
+          echo "::notice::install.sh smoke passed for tag ${{ inputs.tag }}"
