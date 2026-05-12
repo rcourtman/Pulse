@@ -2306,6 +2306,38 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, orgID, da
 			log.Info().Msg("AI Intelligence: Baseline anomaly callback wired to trigger manager")
 		}
 
+		// 11b. Wire alert-flapping callback to the trigger manager and surface
+		// a postmortem finding so the operator sees the diagnosis instead of
+		// silence. The alerts manager fires this callback exactly once per
+		// flapping transition (one-shot for the cooldown window); we both
+		// emit a reliability finding via Path B (direct FindingsStore.Add
+		// with a stable dedup ID derived from trackingKey) AND enqueue a
+		// scoped patrol so the postmortem context can be enriched later.
+		if monitor != nil {
+			if alertManager := monitor.GetAlertManager(); alertManager != nil {
+				alertManager.SetFlappingDetectedCallback(func(alert *alerts.Alert, trackingKey string) {
+					if alert == nil || trackingKey == "" {
+						return
+					}
+					emitFlappingPostmortemFinding(patrol, alertManager, alert, trackingKey)
+					scope := ai.FlappingPostmortemPatrolScope(
+						alert.ID,
+						alert.ResourceID,
+						alert.CanonicalKind,
+						alert.Type,
+					)
+					if triggerManager.TriggerPatrol(scope) {
+						log.Debug().
+							Str("alertID", alert.ID).
+							Str("trackingKey", trackingKey).
+							Str("alertType", alert.Type).
+							Msg("Flapping-detected triggered postmortem patrol via TriggerManager")
+					}
+				})
+				log.Info().Msg("AI Intelligence: Alert-flapping callback wired to trigger manager")
+			}
+		}
+
 		log.Info().Msg("AI Intelligence: Event-driven trigger manager initialized and started")
 	}
 
