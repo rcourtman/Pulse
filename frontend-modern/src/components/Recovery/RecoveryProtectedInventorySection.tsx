@@ -23,6 +23,7 @@ import {
   getRecoveryRollupInventoryStatusLabel,
   getRecoveryRollupInventoryStatusTextClass,
   getRecoveryRollupInventoryStatusVariant,
+  getRecoveryRollupStatusPillClass,
   getRecoverySpecialOutcomeTextClass,
 } from '@/utils/recoveryStatusPresentation';
 import {
@@ -458,6 +459,15 @@ export const RecoveryProtectedInventorySection: Component<
                               <Show when={secondaryLabel}>
                                 <span class="shrink-0 text-[10px] font-mono tabular-nums text-muted">
                                   {secondaryLabel}
+                                </span>
+                              </Show>
+                              <Show when={rollup.verifyIntent === 'stale'}>
+                                <span
+                                  class={`${getRecoveryRollupStatusPillClass('stale')} shrink-0`}
+                                  data-testid="recovery-protected-verify-due-badge"
+                                  title="Latest backup has not been verified within the staleness window"
+                                >
+                                  Verify due
                                 </span>
                               </Show>
                             </div>

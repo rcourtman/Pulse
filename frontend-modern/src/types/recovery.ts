@@ -34,7 +34,7 @@ export interface RecoveryPointDisplay {
   detailsSummary?: string;
 }
 
-export interface RecoveryPointDisplayTransport extends RecoveryPointDisplay {}
+export type RecoveryPointDisplayTransport = RecoveryPointDisplay;
 
 export interface RecoveryPoint {
   id: string;
@@ -90,6 +90,8 @@ export interface RecoveryPointsTransportResponse {
   meta: RecoveryResponseMeta;
 }
 
+export type VerifyIntent = 'verified' | 'stale' | 'unknown';
+
 export interface ProtectionRollup {
   rollupId: string;
   itemResourceId?: string;
@@ -103,6 +105,12 @@ export interface ProtectionRollup {
   lastOutcome?: RecoveryOutcome;
 
   platforms?: RecoveryPlatform[];
+
+  // VerifyIntent tracks whether the most recent successful backup for this
+  // subject has been verified within the staleness window. Omitted by older
+  // backends; absence is equivalent to "unknown".
+  verifyIntent?: VerifyIntent;
+  lastVerifiedAt?: string | null;
 }
 
 export interface ProtectionRollupTransport extends ProtectionRollup {
