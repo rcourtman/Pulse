@@ -42,6 +42,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/deploy"
+	"github.com/rcourtman/pulse-go-rewrite/internal/maintenancesentinel"
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -88,6 +89,8 @@ type Router struct {
 	aiHandler                       *AIHandler // AI chat handler
 	discoveryHandlers               *DiscoveryHandlers
 	resourceHandlers                *ResourceHandlers
+	maintenanceVerificationHandlers *MaintenanceVerificationHandlers
+	maintenanceSentinel             *maintenancesentinel.Sentinel
 	agentContextHandler             *AgentContextHandler
 	agentEventBroadcaster           *AgentEventBroadcaster
 	resourceRegistry                *unifiedresources.ResourceRegistry
@@ -436,6 +439,11 @@ func (r *Router) setupRoutes() {
 	r.unifiedAgentHandlers = NewUnifiedAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.kubernetesAgentHandlers.SetRecoveryIngestor(r.recoveryHandlers)
 	r.resourceHandlers = NewResourceHandlers(r.config)
+	r.maintenanceSentinel = r.buildMaintenanceVerificationSentinel()
+	r.maintenanceVerificationHandlers = NewMaintenanceVerificationHandlers(r.resourceHandlers, r.maintenanceSentinel)
+	if r.maintenanceSentinel != nil {
+		r.maintenanceSentinel.Start(r.lifecycleCtx)
+	}
 	r.agentContextHandler = NewAgentContextHandler(r.resourceHandlers)
 	// Wire pending-approvals into the bundle. The provider resolves
 	// the approval store at request time so multi-tenant rebuilds

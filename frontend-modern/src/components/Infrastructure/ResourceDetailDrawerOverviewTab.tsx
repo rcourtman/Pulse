@@ -29,6 +29,7 @@ import { ResourceChangeSummary } from './ResourceChangeSummary';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
 import { ResourceActionHistory } from './ResourceActionHistory';
 import { ResourceOperatorStateSection } from './ResourceOperatorStateSection';
+import { MaintenanceVerificationSection } from './MaintenanceVerificationSection';
 import {
   RESOURCE_CHANGE_KIND_ORDER,
   RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER,
@@ -569,6 +570,15 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             self-fetching keyed on the canonical resource id. */}
         <Show when={resource.id}>
           <ResourceOperatorStateSection resourceId={resource.id} />
+        </Show>
+
+        {/* Maintenance Verification Reports sit directly under the
+            operator-state section because the same operator who set
+            the maintenance window above is the one who needs to read
+            the verification result here. Self-fetching component;
+            empty state hides gracefully when no reports exist. */}
+        <Show when={resource.id}>
+          <MaintenanceVerificationSection resourceId={resource.id} />
         </Show>
 
         <Show when={drawer.actionAuditAvailable()}>

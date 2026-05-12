@@ -49,6 +49,22 @@ type ResourceStore interface {
 	GetResourceOperatorState(canonicalID string) (ResourceOperatorState, bool, error)
 	SetResourceOperatorState(state ResourceOperatorState) error
 	ClearResourceOperatorState(canonicalID string) error
+	// ListResourceOperatorStates returns every persisted operator-set
+	// state row. Used by background loops (e.g. the maintenance
+	// verification sentinel) that need to sweep the full set on each
+	// tick. Order is implementation-defined; the caller sorts if it
+	// cares.
+	ListResourceOperatorStates() ([]ResourceOperatorState, error)
+	// Loop reports — durable summaries written by background loops
+	// (currently only the maintenance-verification sentinel).
+	RecordLoopReport(report LoopReport) error
+	GetLoopReport(reportID string) (LoopReport, bool, error)
+	ListLoopReportsForResource(reportType LoopReportType, canonicalID string, limit int) ([]LoopReport, error)
+	UpdateLoopReportUserOutcome(reportID string, outcome LoopReportUserOutcome, reviewedBy, note string, reviewedAt time.Time) error
+	// FindLoopReportByWindow looks up an existing report by the
+	// (type, scope, window-end) triple so the sentinel can dedupe
+	// on each tick without scanning the whole table.
+	FindLoopReportByWindow(reportType LoopReportType, canonicalID string, windowEndedAt time.Time) (LoopReport, bool, error)
 	Close() error
 }
 
@@ -369,6 +385,38 @@ func (s *SQLiteResourceStore) initSchema() error {
 		set_by TEXT
 	);
 	CREATE INDEX IF NOT EXISTS idx_resource_operator_state_maintenance ON resource_operator_state(maintenance_end_at);
+
+	CREATE TABLE IF NOT EXISTS loop_reports (
+		id TEXT PRIMARY KEY,
+		report_type TEXT NOT NULL,
+		scope TEXT NOT NULL,
+		trigger TEXT NOT NULL,
+		goal TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL,
+		started_at DATETIME NOT NULL,
+		completed_at DATETIME NOT NULL,
+		window_started_at DATETIME,
+		window_ended_at DATETIME,
+		evidence_json TEXT NOT NULL DEFAULT '{}',
+		linked_finding_ids_json TEXT NOT NULL DEFAULT '[]',
+		linked_alert_ids_json TEXT NOT NULL DEFAULT '[]',
+		linked_action_ids_json TEXT NOT NULL DEFAULT '[]',
+		linked_patrol_run_id TEXT NOT NULL DEFAULT '',
+		recommendation TEXT NOT NULL DEFAULT '',
+		user_outcome TEXT NOT NULL DEFAULT '',
+		reviewed_at DATETIME,
+		reviewed_by TEXT NOT NULL DEFAULT '',
+		review_note TEXT NOT NULL DEFAULT ''
+	);
+	CREATE INDEX IF NOT EXISTS idx_loop_reports_scope_type_started
+		ON loop_reports(report_type, scope, started_at DESC);
+	-- Look-up index for FindLoopReportByWindow. Intentionally non-unique:
+	-- rerun records share (type, scope, window_ended_at) with the
+	-- original under a distinct id suffix. Tick-vs-tick dedup runs at
+	-- the sentinel layer (mutex + FindLoopReportByWindow check).
+	CREATE INDEX IF NOT EXISTS idx_loop_reports_window_lookup
+		ON loop_reports(report_type, scope, window_ended_at)
+		WHERE window_ended_at IS NOT NULL;
 	`
 
 	_, err := s.db.Exec(schema)
@@ -1565,11 +1613,13 @@ type MemoryStore struct {
 	actionLifecycleEvents []ActionLifecycleEvent
 	exportAudits          []ExportAuditRecord
 	resourceOperatorState map[string]ResourceOperatorState
+	loopReports           map[string]LoopReport
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		resourceOperatorState: make(map[string]ResourceOperatorState),
+		loopReports:           make(map[string]LoopReport),
 	}
 }
 

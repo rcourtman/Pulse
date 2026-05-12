@@ -57,6 +57,17 @@ func (r *Router) registerMonitoringResourceRoutes(
 		}
 		r.resourceHandlers.HandleResourceOperatorState(w, req)
 	}))
+	// Per-resource Maintenance Verification Reports. Listing and reading
+	// are monitoring-read; rerun is monitoring-write because it produces
+	// a new persisted record. Review (mark-reviewed) is monitoring-write
+	// for the same reason. Wired before the broad `/api/resources/`
+	// catch-all so the more specific paths route here.
+	if r.maintenanceVerificationHandlers != nil {
+		r.mux.HandleFunc("/api/resources/{id}/maintenance-verifications", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.maintenanceVerificationHandlers.HandleListForResource)))
+		r.mux.HandleFunc("POST /api/resources/{id}/maintenance-verifications/rerun", RequireAuth(r.config, RequireScope(config.ScopeMonitoringWrite, r.maintenanceVerificationHandlers.HandleRerun)))
+		r.mux.HandleFunc("/api/maintenance-verifications/{reportId}", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.maintenanceVerificationHandlers.HandleGet)))
+		r.mux.HandleFunc("POST /api/maintenance-verifications/{reportId}/review", RequireAuth(r.config, RequireScope(config.ScopeMonitoringWrite, r.maintenanceVerificationHandlers.HandleReview)))
+	}
 	r.mux.HandleFunc("/api/resources/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleResourceRoutes)))
 	// Agent-consumable bundled context — substrate for any LLM agent
 	// (in-process Patrol/Assistant or external) that needs the full
