@@ -4,6 +4,7 @@ import { Suspense, createSignal } from 'solid-js';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import { getPublicPricingUrl } from '@/utils/pricingHandoff';
+import patrolIntelligenceStateSource from '@/features/patrol/usePatrolIntelligenceState.ts?raw';
 
 import { AIIntelligence } from '../AIIntelligence';
 
@@ -327,6 +328,12 @@ const defaultAISettings = {
 };
 
 describe('AIIntelligence entitlement gating', () => {
+  it('keeps Patrol page refresh affordance bounded when supporting reads stall', () => {
+    expect(patrolIntelligenceStateSource).toContain('PATROL_REFRESH_TIMEOUT_MS');
+    expect(patrolIntelligenceStateSource).toContain('finishRefresh(requestId)');
+    expect(patrolIntelligenceStateSource).toContain('requestId === refreshRequestId');
+  });
+
   beforeEach(() => {
     resetCreateNonSuspendingQueryCacheForTest();
     resetAIRuntimeState();

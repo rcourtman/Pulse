@@ -86,6 +86,10 @@ Patrol-specific presentation helpers.
    mask direct Patrol evidence that has already loaded. Background Patrol
    refreshes must preserve already-loaded findings instead of replacing the
    workspace with a blocking loading state.
+   Patrol page refresh state must also be generation-aware and timeout-bounded:
+   slow or stalled supporting intelligence reads may continue in the background,
+   but they must not permanently disable the operator's Refresh control once
+   Patrol findings and status remain visible.
 2. Keep Patrol-specific copy and badge logic inside the governed Patrol presentation helpers instead of page-local branches
    Patrol assessment copy must not present an all-clear health prediction while
    active Patrol findings or Patrol runtime issues are still present. The

@@ -978,6 +978,11 @@ prompt explain the same operator-facing priority.
     that exist on `FindingsTrustSummary`; shared drawer/chrome
     primitives stay free of the trust shape so adding new trust signals
     goes through the contract first rather than per-shell branching.
+    Patrol header refresh controls stay on that same feature-owned shell
+    boundary: `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
+    must make the refresh affordance generation-aware and timeout-bounded, so
+    a slow supporting intelligence read cannot permanently disable the shared
+    Patrol header control while Patrol findings and status remain visible.
     That feature-owned
     presentation helper is the single emitter for investigation-record
     `impact` and `rollback` fields: when an investigation record exists but those fields
@@ -2506,6 +2511,11 @@ That same run-history ownership applies to assessment caveats: Patrol summary
 shells should not present `Recent coverage is incomplete` when the shared
 recency/verification helpers already prove a successful full patrol with
 non-zero resource coverage.
+That same Patrol shell ownership includes refresh affordance state:
+`frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` must keep
+operator refresh controls generation-aware and timeout-bounded, so a slow
+supporting intelligence read cannot permanently disable the shared Patrol header
+Refresh button while Patrol findings and status remain visible.
 That same Patrol shell should make scoped trigger policy legible without
 another navigation step. `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`
 should present alert-triggered and anomaly-triggered Patrol toggles as distinct

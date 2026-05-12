@@ -42,6 +42,8 @@ type PatrolAPIError = Error & {
   status?: number;
 };
 
+export const PATROL_REFRESH_TIMEOUT_MS = 15000;
+
 const patrolErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message.trim() ? error.message : fallback;
 
@@ -176,6 +178,8 @@ export function usePatrolIntelligenceState() {
   let safetyTimerRef: ReturnType<typeof setTimeout> | undefined;
   let scrollToFindingTimerRef: ReturnType<typeof setTimeout> | undefined;
   let findingScrollTimerRef: ReturnType<typeof setTimeout> | undefined;
+  let refreshTimeoutRef: ReturnType<typeof setTimeout> | undefined;
+  let refreshRequestId = 0;
   let refreshInterval: ReturnType<typeof setInterval>;
   let approvalPollInterval: ReturnType<typeof setInterval>;
 
@@ -199,6 +203,21 @@ export function usePatrolIntelligenceState() {
       clearTimeout(scrollToFindingTimerRef);
       scrollToFindingTimerRef = undefined;
     }
+  };
+
+  const clearRefreshTimeout = () => {
+    if (refreshTimeoutRef !== undefined) {
+      clearTimeout(refreshTimeoutRef);
+      refreshTimeoutRef = undefined;
+    }
+  };
+
+  const finishRefresh = (requestId: number) => {
+    if (requestId !== refreshRequestId) {
+      return;
+    }
+    clearRefreshTimeout();
+    setIsRefreshing(false);
   };
 
   const patrolStatusState = createNonSuspendingQuery<PatrolStatus | null, string>({
@@ -782,12 +801,23 @@ export function usePatrolIntelligenceState() {
   }
 
   async function loadAllData() {
+    const requestId = ++refreshRequestId;
+    clearRefreshTimeout();
     setIsRefreshing(true);
+    refreshTimeoutRef = setTimeout(() => {
+      if (requestId === refreshRequestId) {
+        refreshTimeoutRef = undefined;
+        setIsRefreshing(false);
+      }
+    }, PATROL_REFRESH_TIMEOUT_MS);
+
     try {
       await Promise.all([aiIntelligenceStore.loadDashboardData(), refetchPatrolStatus()]);
-      setActivityRefreshTrigger((prev) => prev + 1);
+      if (requestId === refreshRequestId) {
+        setActivityRefreshTrigger((prev) => prev + 1);
+      }
     } finally {
-      setIsRefreshing(false);
+      finishRefresh(requestId);
     }
   }
 
@@ -876,7 +906,10 @@ export function usePatrolIntelligenceState() {
     };
 
     document.addEventListener('visibilitychange', handleVisibility);
-    onCleanup(() => document.removeEventListener('visibilitychange', handleVisibility));
+    onCleanup(() => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      clearRefreshTimeout();
+    });
   });
 
   onCleanup(() => {

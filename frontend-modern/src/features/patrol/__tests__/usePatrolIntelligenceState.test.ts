@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  PATROL_REFRESH_TIMEOUT_MS,
   buildPatrolSettingsReadinessFailure,
   resolvePatrolAutonomyLevelForSave,
   resolvePatrolAutonomySettingsForSave,
 } from '../usePatrolIntelligenceState';
+import patrolIntelligenceStateSource from '../usePatrolIntelligenceState.ts?raw';
 import type { AISettings, PatrolReadiness } from '@/types/ai';
 
 const settingsWithReadiness = (patrolReadiness: PatrolReadiness): AISettings => ({
@@ -26,6 +28,15 @@ const settingsWithReadiness = (patrolReadiness: PatrolReadiness): AISettings => 
 });
 
 describe('usePatrolIntelligenceState', () => {
+  it('bounds refresh UI state with a generation-aware timeout', () => {
+    expect(PATROL_REFRESH_TIMEOUT_MS).toBe(15000);
+    expect(patrolIntelligenceStateSource).toContain('let refreshRequestId = 0;');
+    expect(patrolIntelligenceStateSource).toContain('const requestId = ++refreshRequestId;');
+    expect(patrolIntelligenceStateSource).toContain('if (requestId === refreshRequestId) {');
+    expect(patrolIntelligenceStateSource).toContain('setIsRefreshing(false);');
+    expect(patrolIntelligenceStateSource).toContain('clearRefreshTimeout();');
+  });
+
   describe('resolvePatrolAutonomyLevelForSave', () => {
     it('clamps stale paid autonomy to monitor when safe remediation is locked', () => {
       expect(resolvePatrolAutonomyLevelForSave('full', true, true)).toBe('monitor');
