@@ -9,12 +9,15 @@ import { logger } from './utils/logger';
 import { UpdateBanner } from './components/UpdateBanner';
 import { DemoBanner } from './components/DemoBanner';
 import { GitHubStarBanner } from './components/GitHubStarBanner';
-import { KeyboardShortcutsModal } from './components/shared/KeyboardShortcutsModal';
-import { CommandPaletteModal } from './components/shared/CommandPaletteModal';
+// Modals are only mounted when opened, so their code can stay out of the
+// entry bundle until first use (same pattern as AIChat below).
+const KeyboardShortcutsModal = lazy(() => import('./components/shared/KeyboardShortcutsModal').then((m) => ({ default: m.KeyboardShortcutsModal })));
+const CommandPaletteModal = lazy(() => import('./components/shared/CommandPaletteModal').then((m) => ({ default: m.CommandPaletteModal })));
 import { dialogStackHasBlockingDialog } from './components/shared/useDialogState';
 import { createTooltipSystem } from './components/shared/Tooltip';
-import { TokenRevealDialog } from './components/TokenRevealDialog';
-import { UpdateProgressModal } from './components/UpdateProgressModal';
+const TokenRevealDialog = lazy(() => import('./components/TokenRevealDialog').then((m) => ({ default: m.TokenRevealDialog })));
+import { tokenRevealStore } from './stores/tokenReveal';
+const UpdateProgressModal = lazy(() => import('./components/UpdateProgressModal').then((m) => ({ default: m.UpdateProgressModal })));
 import { UpdatesAPI, type UpdateStatus } from './api/updates';
 // AIChat is the side-panel chat UI plus its store deps (markdown rendering,
 // tool-call formatting, prompt scaffolding). Lazy-load behind aiChatStore.isOpen
@@ -162,16 +165,18 @@ function GlobalUpdateProgressWatcher() {
   });
 
   return (
-    <UpdateProgressModal
-      isOpen={showProgressModal()}
-      onClose={() => setShowProgressModal(false)}
-      onViewHistory={() => {
-        setShowProgressModal(false);
-        navigate('/settings/system-updates');
-      }}
-      connected={wsContext?.connected}
-      reconnecting={wsContext?.reconnecting}
-    />
+    <Show when={showProgressModal()}>
+      <UpdateProgressModal
+        isOpen={showProgressModal()}
+        onClose={() => setShowProgressModal(false)}
+        onViewHistory={() => {
+          setShowProgressModal(false);
+          navigate('/settings/system-updates');
+        }}
+        connected={wsContext?.connected}
+        reconnecting={wsContext?.reconnecting}
+      />
+    </Show>
   );
 }
 
@@ -416,15 +421,21 @@ function App() {
                           <AIChat onClose={() => aiChatStore.close()} />
                         </Show>
                       </div>
-                      <KeyboardShortcutsModal
-                        isOpen={shortcutsOpen()}
-                        onClose={() => setShortcutsOpen(false)}
-                      />
-                      <CommandPaletteModal
-                        isOpen={commandPaletteOpen()}
-                        onClose={() => setCommandPaletteOpen(false)}
-                      />
-                      <TokenRevealDialog />
+                      <Show when={shortcutsOpen()}>
+                        <KeyboardShortcutsModal
+                          isOpen={shortcutsOpen()}
+                          onClose={() => setShortcutsOpen(false)}
+                        />
+                      </Show>
+                      <Show when={commandPaletteOpen()}>
+                        <CommandPaletteModal
+                          isOpen={commandPaletteOpen()}
+                          onClose={() => setCommandPaletteOpen(false)}
+                        />
+                      </Show>
+                      <Show when={tokenRevealStore.state() !== null}>
+                        <TokenRevealDialog />
+                      </Show>
                       {/* AI Assistant Button moved to AppLayout to access kioskMode state */}
                       <TooltipRoot />
                     </DarkModeContext.Provider>

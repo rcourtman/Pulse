@@ -1,38 +1,38 @@
 {
   "$comment": "Frontend bundle size baseline. Run 'npm run check:bundlesize' to validate. To update: run 'node scripts/check-bundle-size.mjs --update-baseline' after vite build.",
   "version": 1,
-  "generated": "2026-05-11",
+  "generated": "2026-05-12",
   "defaultThresholdPercent": 15,
   "chunks": {
     "index": {
-      "baselineGzip": 117548
+      "baselineGzip": 111746
     },
     "Alerts": {
-      "baselineGzip": 84724
+      "baselineGzip": 84756
     },
     "Settings": {
-      "baselineGzip": 84570
+      "baselineGzip": 84628
     },
     "InfrastructureWorkspace": {
-      "baselineGzip": 72487
+      "baselineGzip": 72510
     },
     "AIIntelligence": {
-      "baselineGzip": 63997
+      "baselineGzip": 64020
     },
     "Infrastructure": {
-      "baselineGzip": 61725
+      "baselineGzip": 61769
     },
     "Workloads": {
-      "baselineGzip": 48573
+      "baselineGzip": 48657
     },
     "Storage": {
-      "baselineGzip": 39286
+      "baselineGzip": 39332
     },
     "Recovery": {
-      "baselineGzip": 30393
+      "baselineGzip": 30434
     },
     "ScrollToTopButton": {
-      "baselineGzip": 24621
+      "baselineGzip": 24678
     },
     "vendor-ai": {
       "baselineGzip": 20801
@@ -41,10 +41,10 @@
       "baselineGzip": 17298
     },
     "searchParams": {
-      "baselineGzip": 13393
+      "baselineGzip": 13392
     },
     "APIAccessPanel": {
-      "baselineGzip": 10767
+      "baselineGzip": 10792
     },
     "vendor": {
       "baselineGzip": 9853
@@ -53,39 +53,39 @@
       "baselineGzip": 9595
     },
     "ReportingPanel": {
-      "baselineGzip": 8803
+      "baselineGzip": 8831
     },
     "AuditLogPanel": {
-      "baselineGzip": 8357
+      "baselineGzip": 8392
     },
     "routeStateNavigation": {
-      "baselineGzip": 7709
+      "baselineGzip": 7724
     },
     "UpdatesSettingsPanel": {
-      "baselineGzip": 6663
+      "baselineGzip": 6699
     },
     "Ceph": {
-      "baselineGzip": 6345
+      "baselineGzip": 6379
     },
     "SecurityAuthPanel": {
-      "baselineGzip": 5948
+      "baselineGzip": 5959
     },
     "DiagnosticsPanel": {
-      "baselineGzip": 5723
+      "baselineGzip": 5738
     },
     "HelpIcon": {
-      "baselineGzip": 5382
+      "baselineGzip": 5381
     },
     "useUnifiedResources": {
       "baselineGzip": 5261
     },
     "OrganizationSharingPanel": {
-      "baselineGzip": 5214
+      "baselineGzip": 5244
     }
   },
   "totals": {
     "js": {
-      "baselineGzip": 883834
+      "baselineGzip": 889432
     },
     "css": {
       "baselineGzip": 24654
