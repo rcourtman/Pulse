@@ -422,6 +422,21 @@ function joinAssessmentParts(parts: string[]): string {
   return `${parts.slice(0, -1).join(', ')}, and ${parts.at(-1)}`;
 }
 
+function predictionReadsAsAllClear(prediction: string | undefined): boolean {
+  const normalized = String(prediction || '')
+    .trim()
+    .toLowerCase();
+  if (!normalized) return false;
+
+  return (
+    normalized.includes('healthy with no significant issue') ||
+    normalized.includes('no significant issues detected') ||
+    normalized.includes('no active issues') ||
+    normalized.includes('no issues detected') ||
+    normalized.includes('all clear')
+  );
+}
+
 function getFindingAssessmentDescription(args: {
   criticalFindings?: number;
   warningFindings?: number;
@@ -450,10 +465,12 @@ function getFindingAssessmentDescription(args: {
       return `${runtimeSummary} Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.`;
     }
 
-    return (
-      args.overallHealth?.prediction?.trim() ||
-      `${runtimeSummary} Review the Patrol runtime issue for more detail.`
-    );
+    const prediction = args.overallHealth?.prediction?.trim();
+    if (prediction && !predictionReadsAsAllClear(prediction)) {
+      return prediction;
+    }
+
+    return `${runtimeSummary} Review the Patrol runtime issue for more detail.`;
   }
 
   const findingSummaryParts: string[] = [];
@@ -490,10 +507,12 @@ function getFindingAssessmentDescription(args: {
     return `${findingSummary} Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.`;
   }
 
-  return (
-    args.overallHealth?.prediction?.trim() ||
-    `${findingSummary} Review the active findings for more detail.`
-  );
+  const prediction = args.overallHealth?.prediction?.trim();
+  if (prediction && !predictionReadsAsAllClear(prediction)) {
+    return prediction;
+  }
+
+  return `${findingSummary} Review the active findings for more detail.`;
 }
 
 function normalizeRunType(type: string | undefined): string {

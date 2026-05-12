@@ -82,6 +82,68 @@ describe('getPatrolSummaryPresentation', () => {
     });
   });
 
+  it('does not reuse an all-clear health prediction while active infrastructure findings exist', () => {
+    expect(
+      getPatrolAssessmentPresentation({
+        overallHealth: {
+          score: 95,
+          grade: 'A',
+          trend: 'stable',
+          factors: [],
+          prediction: 'Infrastructure is healthy with no significant issues detected.',
+        },
+        warningFindings: 1,
+        activeFindings: [
+          {
+            status: 'active',
+            severity: 'warning',
+            resourceId: 'vm-100',
+            resourceName: 'web-1',
+            title: 'Backup age drift',
+          },
+        ] as never,
+      }),
+    ).toEqual({
+      title: 'Issues detected',
+      description:
+        'Patrol surfaced 1 active warning finding in your infrastructure. Review the active findings for more detail.',
+      eyebrow: 'Patrol assessment',
+      compactLabel: 'Issues detected',
+      tone: 'warning',
+    });
+  });
+
+  it('does not reuse an all-clear health prediction while a Patrol runtime issue is active', () => {
+    expect(
+      getPatrolAssessmentPresentation({
+        overallHealth: {
+          score: 95,
+          grade: 'A',
+          trend: 'stable',
+          factors: [],
+          prediction: 'Infrastructure is healthy with no significant issues detected.',
+        },
+        warningFindings: 1,
+        activeFindings: [
+          {
+            status: 'active',
+            severity: 'warning',
+            resourceId: 'ai-service',
+            resourceName: 'Pulse Patrol Service',
+            title: 'Pulse Patrol: Provider billing or quota issue',
+          },
+        ] as never,
+      }),
+    ).toEqual({
+      title: 'Patrol runtime issue',
+      description:
+        'Patrol has an active runtime issue: Provider billing or quota issue. Review the Patrol runtime issue for more detail.',
+      eyebrow: 'Patrol assessment',
+      compactLabel: 'Patrol runtime issue',
+      tone: 'warning',
+    });
+  });
+
   it('combines active findings with the coverage caveat when both are present', () => {
     expect(
       getPatrolAssessmentPresentation({

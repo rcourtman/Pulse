@@ -81,6 +81,11 @@ Patrol-specific presentation helpers.
    selected-run findings panel, badges, and active-finding summaries must not
    infer current Patrol evidence by filtering the unified threshold/AI feed.
 2. Keep Patrol-specific copy and badge logic inside the governed Patrol presentation helpers instead of page-local branches
+   Patrol assessment copy must not present an all-clear health prediction while
+   active Patrol findings or Patrol runtime issues are still present. The
+   canonical summary helper owns that conflict resolution so the visible
+   assessment title, description, metrics, and recommended next step all speak
+   from the same current findings state.
 3. Update this contract whenever a new Patrol-specific page, store, helper, or presentation component becomes canonical runtime surface area
 4. Keep retired hosted-model and trial-like Patrol acquisition copy out of the
    normal self-hosted GA app. Patrol may parse legacy transport fields, but
