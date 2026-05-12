@@ -1128,7 +1128,11 @@ func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
 		}
 	}`, ollama.URL)
 
-	assertJSONSnapshot(t, rec.Body.Bytes(), want)
+	// patrol_preflight is now emitted on update responses with dynamic
+	// timestamps and durations that vary per run; strip it from the
+	// snapshot comparison and rely on dedicated preflight tests for its
+	// shape.
+	assertJSONSnapshot(t, rec.Body.Bytes(), want, "patrol_preflight")
 }
 
 func TestContract_PatrolStatusDoesNotSurfaceQuickstartActivation(t *testing.T) {
@@ -13257,20 +13261,51 @@ func mustStreamEvent(t *testing.T, eventType string, data interface{}) chat.Stre
 	}
 }
 
-func assertJSONSnapshot(t *testing.T, got []byte, want string) {
+func assertJSONSnapshot(t *testing.T, got []byte, want string, excludeKeys ...string) {
 	t.Helper()
+
+	// excludeKeys lets callers strip top-level fields whose values are
+	// dynamic per run (timestamps, durations) before snapshot comparison.
+	// The structural shape of the response is still validated; only the
+	// listed keys are removed from both `got` and `want`.
+	gotBytes := got
+	wantBytes := []byte(want)
+	if len(excludeKeys) > 0 {
+		var err error
+		gotBytes, err = stripJSONTopLevelKeys(got, excludeKeys)
+		if err != nil {
+			t.Fatalf("strip got json: %v", err)
+		}
+		wantBytes, err = stripJSONTopLevelKeys([]byte(want), excludeKeys)
+		if err != nil {
+			t.Fatalf("strip want json: %v", err)
+		}
+	}
 
 	var gotCompact bytes.Buffer
 	var wantCompact bytes.Buffer
-	if err := json.Compact(&gotCompact, got); err != nil {
+	if err := json.Compact(&gotCompact, gotBytes); err != nil {
 		t.Fatalf("compact got json: %v", err)
 	}
-	if err := json.Compact(&wantCompact, []byte(want)); err != nil {
+	if err := json.Compact(&wantCompact, wantBytes); err != nil {
 		t.Fatalf("compact want json: %v", err)
 	}
 	if gotCompact.String() != wantCompact.String() {
 		t.Fatalf("json snapshot mismatch\nwant: %s\ngot:  %s", wantCompact.String(), gotCompact.String())
 	}
+}
+
+// stripJSONTopLevelKeys removes the named top-level keys from a JSON object
+// and re-serializes. Used by assertJSONSnapshot to ignore dynamic fields.
+func stripJSONTopLevelKeys(data []byte, keys []string) ([]byte, error) {
+	var obj map[string]interface{}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return nil, err
+	}
+	for _, k := range keys {
+		delete(obj, k)
+	}
+	return json.Marshal(obj)
 }
 
 // TestContract_InvestigationProjectionCarriesNeverAutoRemediate pins
