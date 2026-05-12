@@ -174,6 +174,52 @@ describe('getPatrolSummaryPresentation', () => {
     });
   });
 
+  it('keeps Patrol runtime issues distinct from infrastructure warning findings', () => {
+    expect(
+      getPatrolAssessmentPresentation({
+        overallHealth: {
+          score: 65,
+          grade: 'C',
+          trend: 'stable',
+          factors: [
+            {
+              name: 'Patrol coverage incomplete',
+              impact: -0.35,
+              description: 'Patrol coverage is incomplete.',
+              category: 'coverage',
+            },
+          ],
+          prediction:
+            'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+        },
+        warningFindings: 2,
+        activeFindings: [
+          {
+            status: 'active',
+            severity: 'warning',
+            resourceId: 'ai-service',
+            resourceName: 'Pulse Patrol Service',
+            title: 'Pulse Patrol: Provider connection issue',
+          },
+          {
+            status: 'active',
+            severity: 'warning',
+            resourceId: 'backup-1',
+            resourceName: 'delly',
+            title: 'Backup failed',
+          },
+        ] as never,
+      }),
+    ).toEqual({
+      title: 'Issues detected',
+      description:
+        'Patrol surfaced 1 active warning finding in your infrastructure and 1 active Patrol runtime issue. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
+      eyebrow: 'Patrol assessment',
+      compactLabel: 'Issues detected',
+      tone: 'warning',
+    });
+  });
+
   it('classifies patrol-owned service failures as runtime issues instead of infrastructure issues', () => {
     expect(
       getPatrolAssessmentPresentation({

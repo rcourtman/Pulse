@@ -85,7 +85,9 @@ Patrol-specific presentation helpers.
    active Patrol findings or Patrol runtime issues are still present. The
    canonical summary helper owns that conflict resolution so the visible
    assessment title, description, metrics, and recommended next step all speak
-   from the same current findings state.
+   from the same current findings state. Patrol-owned runtime issues must stay
+   distinct from infrastructure findings in assessment copy rather than being
+   described as infrastructure warning findings about Patrol itself.
 3. Update this contract whenever a new Patrol-specific page, store, helper, or presentation component becomes canonical runtime surface area
 4. Keep retired hosted-model and trial-like Patrol acquisition copy out of the
    normal self-hosted GA app. Patrol may parse legacy transport fields, but

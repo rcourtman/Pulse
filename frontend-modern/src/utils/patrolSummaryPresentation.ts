@@ -198,6 +198,11 @@ function formatFindingCount(count: number, severity: 'critical' | 'warning'): st
   return `${count} active ${severity} finding${count === 1 ? '' : 's'}`;
 }
 
+function formatRuntimeIssueCount(count: number, severity: 'critical' | 'warning'): string {
+  const severityLabel = severity === 'critical' ? 'critical ' : '';
+  return `${count} active ${severityLabel}Patrol runtime issue${count === 1 ? '' : 's'}`;
+}
+
 function getRuntimeFindingSummaryLabel(finding: PatrolAssessmentFinding | undefined): string {
   const title = String(finding?.title || '').trim();
   if (!title) {
@@ -486,14 +491,10 @@ function getFindingAssessmentDescription(args: {
     );
   }
   if (classified.runtimeCritical > 0) {
-    findingSummaryParts.push(
-      `${formatFindingCount(classified.runtimeCritical, 'critical')} about its own runtime`,
-    );
+    findingSummaryParts.push(formatRuntimeIssueCount(classified.runtimeCritical, 'critical'));
   }
   if (classified.runtimeWarning > 0) {
-    findingSummaryParts.push(
-      `${formatFindingCount(classified.runtimeWarning, 'warning')} about its own runtime`,
-    );
+    findingSummaryParts.push(formatRuntimeIssueCount(classified.runtimeWarning, 'warning'));
   }
 
   const findingSummary =
