@@ -283,6 +283,45 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 		`Pulse Unified Agent Installer`,
 		`bash "$install_sh_path" --help`,
 		`Install specific version (e.g.`,
+		// README key drift guard — across v6 rc.2 → rc.5 the README pinned a
+		// stale ed25519 key that did not verify install.sh.sshsig, so anyone
+		// following the secure-install path saw "Could not verify signature".
+		// validate-release.sh must extract the README's pinned key and actually
+		// run ssh-keygen -Y verify against the signed installer.
+		`Validating README pinned signature key matches install.sh.sshsig`,
+		`grep -oE "ssh-ed25519 [A-Za-z0-9+/=]+ pulse-installer" "$readme_path"`,
+		`ssh-keygen -Y verify \`,
+		`README's pinned signature key does not verify install.sh.sshsig`,
+	}
+
+	readmeBytes, err := os.ReadFile(repoFile("README.md"))
+	if err != nil {
+		t.Fatalf("read README.md: %v", err)
+	}
+	readme := string(readmeBytes)
+	// Lock in the actual signing key documented to customers. This is the public
+	// counterpart of PULSE_UPDATE_SIGNING_KEY and matches what install.sh and
+	// scripts/pulse-auto-update.sh have embedded. A future edit cannot silently
+	// regress to the stale Ds21c5 key without tripping this assertion.
+	const correctReadmeKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer"
+	if !strings.Contains(readme, correctReadmeKey) {
+		t.Fatalf("README.md must pin the correct pulse-installer ed25519 key for install.sh signature verification")
+	}
+	const staleReadmeKey = "Ds21c5oPk2khrdHlsw1aZ9EJKoTsyalGzhb0hdwJrkV"
+	if strings.Contains(readme, staleReadmeKey) {
+		t.Fatalf("README.md still references the stale pulse-installer key Ds21c5...; rc.2 → rc.5 shipped this drift")
+	}
+
+	installDocsBytes, err := os.ReadFile(repoFile("docs", "INSTALL.md"))
+	if err != nil {
+		t.Fatalf("read docs/INSTALL.md: %v", err)
+	}
+	installDocs := string(installDocsBytes)
+	if !strings.Contains(installDocs, correctReadmeKey) {
+		t.Fatalf("docs/INSTALL.md must pin the correct pulse-installer ed25519 key")
+	}
+	if strings.Contains(installDocs, staleReadmeKey) {
+		t.Fatalf("docs/INSTALL.md still references the stale pulse-installer key Ds21c5...")
 	}
 	for _, needle := range localRequired {
 		if !strings.Contains(localValidator, needle) {

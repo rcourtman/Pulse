@@ -517,6 +517,45 @@ while IFS= read -r line; do
 done < checksums.txt
 success "SSH signature sidecars validated"
 
+# Actually run the README's documented verification step against install.sh.sshsig.
+# The README ships a hardcoded ed25519 pubkey and tells customers to verify
+# install.sh with it before running. Across v6 rc.2 → rc.5 (~20 days) the README
+# pinned a stale key (Ds21c5...) that didn't match the actual pipeline signing
+# key (MZd/...), so any customer who followed the secure-install path got
+# "Could not verify signature" and aborted. This check extracts the README's
+# pinned key and runs the exact verification command, so any drift between
+# documented key and actual signing key fails the release.
+info "Validating README pinned signature key matches install.sh.sshsig..."
+readme_path="$(cd "$(dirname "$0")/.." && pwd)/README.md"
+if [ ! -f "$readme_path" ]; then
+    error "README.md not found at $readme_path — cannot validate documented signature key"
+    exit 1
+fi
+readme_signing_key=$(grep -oE "ssh-ed25519 [A-Za-z0-9+/=]+ pulse-installer" "$readme_path" | head -1)
+if [ -z "$readme_signing_key" ]; then
+    error "Could not extract ed25519 pulse-installer key from README.md secure-install snippet"
+    exit 1
+fi
+if ! command -v ssh-keygen >/dev/null 2>&1; then
+    error "ssh-keygen not found — required to validate the README-documented signature path"
+    exit 1
+fi
+readme_allowed_signers=$(mktemp)
+printf 'pulse-installer %s\n' "$readme_signing_key" > "$readme_allowed_signers"
+if ! ssh-keygen -Y verify \
+    -f "$readme_allowed_signers" \
+    -I pulse-installer \
+    -n pulse-install \
+    -s install.sh.sshsig < install.sh >/dev/null 2>&1; then
+    rm -f "$readme_allowed_signers"
+    error "README's pinned signature key does not verify install.sh.sshsig"
+    error "Customers who follow the README's secure-install ssh-keygen step will see 'Could not verify signature' and abort"
+    error "Either update README.md/docs/INSTALL.md with the correct pulse-installer pubkey, or fix the release signing key"
+    exit 1
+fi
+rm -f "$readme_allowed_signers"
+success "README pinned signature key verifies install.sh.sshsig"
+
 # Validate individual .sha256 files exist and match checksums.txt
 info "Validating individual .sha256 files..."
 while IFS= read -r line; do
