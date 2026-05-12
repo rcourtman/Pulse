@@ -20,6 +20,8 @@ type callbackBus struct {
 	onUnacknowledged func(alert *Alert, user string)
 	onEscalate       func(alert *Alert, level int)
 
+	onFlappingDetected func(alert *Alert, trackingKey string)
+
 	nextCallbackID int
 }
 
@@ -144,6 +146,12 @@ func (b *callbackBus) setEscalateCallback(cb func(alert *Alert, level int)) {
 	b.onEscalate = cb
 }
 
+func (b *callbackBus) setFlappingDetectedCallback(cb func(alert *Alert, trackingKey string)) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.onFlappingDetected = cb
+}
+
 func (b *callbackBus) alertCallback() func(alert *Alert) {
 	b.mu.RLock()
 	cb := b.onAlert
@@ -234,6 +242,13 @@ func (b *callbackBus) escalateCallback() func(alert *Alert, level int) {
 	return cb
 }
 
+func (b *callbackBus) flappingDetectedCallback() func(alert *Alert, trackingKey string) {
+	b.mu.RLock()
+	cb := b.onFlappingDetected
+	b.mu.RUnlock()
+	return cb
+}
+
 // SetAlertCallback sets the callback for new alerts.
 func (m *Manager) SetAlertCallback(cb func(alert *Alert)) {
 	m.callbacks.setAlertCallback(cb)
@@ -287,6 +302,16 @@ func (m *Manager) SetUnacknowledgedCallback(cb func(alert *Alert, user string)) 
 // SetEscalateCallback sets the callback for escalated alerts.
 func (m *Manager) SetEscalateCallback(cb func(alert *Alert, level int)) {
 	m.callbacks.setEscalateCallback(cb)
+}
+
+// SetFlappingDetectedCallback registers a callback fired exactly once on the
+// transition into flapping suppression for a given trackingKey. The callback
+// is invoked from a goroutine -- the alerts manager lock is NOT held when it
+// runs -- so the callback is free to take its own locks or schedule a patrol.
+// It will NOT fire again for the same trackingKey while the flapping cooldown
+// window is active; subsequent suppressed dispatches are silent.
+func (m *Manager) SetFlappingDetectedCallback(cb func(alert *Alert, trackingKey string)) {
+	m.callbacks.setFlappingDetectedCallback(cb)
 }
 
 func (m *Manager) getAlertCallback() func(alert *Alert) {

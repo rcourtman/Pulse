@@ -4301,7 +4301,7 @@ func TestCheckFlapping(t *testing.T) {
 
 			// Call checkFlappingLocked
 			m.mu.Lock()
-			result := m.checkFlappingLocked(alertID)
+			result, _ := m.checkFlappingLocked(alertID)
 			m.mu.Unlock()
 
 			if result != tt.expectFlapping {
@@ -4354,7 +4354,7 @@ func TestCheckFlappingAlreadyFlapping(t *testing.T) {
 
 	// Call checkFlappingLocked - should return true but NOT update suppression
 	m.mu.Lock()
-	result := m.checkFlappingLocked(alertID)
+	result, _ := m.checkFlappingLocked(alertID)
 	m.mu.Unlock()
 
 	if !result {
@@ -4396,7 +4396,7 @@ func TestCheckFlappingWindowExpiry(t *testing.T) {
 
 	// Call checkFlappingLocked - old entries should be pruned
 	m.mu.Lock()
-	result := m.checkFlappingLocked(alertID)
+	result, _ := m.checkFlappingLocked(alertID)
 	historyLen := len(m.flappingHistory[alertID])
 	m.mu.Unlock()
 

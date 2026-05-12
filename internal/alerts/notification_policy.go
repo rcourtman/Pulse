@@ -8,12 +8,20 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// checkFlappingLocked detects alert flapping and returns true if alert should be suppressed.
+// checkFlappingLocked detects alert flapping and returns whether the alert
+// should be suppressed and whether this call is the first transition into
+// the flapping state for the current cooldown window. justTransitioned is
+// the signal callers use to fire a one-shot postmortem hook on first
+// detection -- it is true only on the call that flips
+// flappingActive[trackingKey] from false to true.
+//
 // It modifies flappingHistory, flappingActive, and suppressedUntil maps.
-// IMPORTANT: Caller MUST hold m.mu before calling this function.
-func (m *Manager) checkFlappingLocked(trackingKey string) bool {
+// IMPORTANT: Caller MUST hold m.mu before calling this function. The
+// transition signal is returned so the caller can dispatch the
+// flapping-detected callback OUTSIDE the lock (typically via a goroutine).
+func (m *Manager) checkFlappingLocked(trackingKey string) (suppress bool, justTransitioned bool) {
 	if !m.config.FlappingEnabled {
-		return false
+		return false, false
 	}
 
 	now := time.Now()
@@ -58,11 +66,12 @@ func (m *Manager) checkFlappingLocked(trackingKey string) bool {
 			if recordAlertSuppressed != nil {
 				recordAlertSuppressed("flapping")
 			}
+			return true, true
 		}
-		return true
+		return true, false
 	}
 
-	return false
+	return false, false
 }
 
 func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
@@ -82,8 +91,32 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 
 	trackingKey := canonicalTrackingKeyForAlert(alert)
 
-	// Check for flapping (caller must hold m.mu)
-	if m.checkFlappingLocked(trackingKey) {
+	// Check for flapping (caller must hold m.mu). When this call is the
+	// first transition into the flapping state for the current cooldown
+	// window, fire the flapping-detected callback so a postmortem patrol
+	// can be triggered. The callback runs in its own goroutine because
+	// the caller of dispatchAlert holds m.mu and the callback is allowed
+	// to take its own locks or re-enter the alerts package.
+	suppress, justTransitioned := m.checkFlappingLocked(trackingKey)
+	if justTransitioned {
+		cb := m.callbacks.flappingDetectedCallback()
+		if cb != nil {
+			alertCopy := cloneAlertForOutput(alert)
+			go func(a *Alert, key string, fn func(*Alert, string)) {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Error().
+							Interface("panic", r).
+							Str("alertID", a.ID).
+							Str("trackingKey", key).
+							Msg("Panic in onFlappingDetected callback")
+					}
+				}()
+				fn(a, key)
+			}(alertCopy, trackingKey, cb)
+		}
+	}
+	if suppress {
 		log.Debug().
 			Str("alertID", alert.ID).
 			Str("trackingKey", trackingKey).
