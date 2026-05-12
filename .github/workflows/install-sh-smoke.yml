@@ -59,12 +59,27 @@ on:
         required: false
         type: string
         default: ''
+  # Self-test on workflow edits: every change to this file re-runs the gate
+  # against the canonical known-good release (v5.1.30) on the working branch.
+  # This both validates the workflow before the next release depends on it
+  # (commit b69c8c800 wired it into create-release.yml without ever having
+  # exercised the container portion in CI) and serves as ongoing protection
+  # against regressions in the gate logic itself. The push trigger also
+  # registers the workflow for API / CLI dispatch — workflows on non-default
+  # branches with only workflow_call + workflow_dispatch never appear in the
+  # actions/workflows API until they are triggered by a non-dispatch event.
+  push:
+    branches:
+      - pulse/v6-release
+      - main
+    paths:
+      - '.github/workflows/install-sh-smoke.yml'
 
 permissions:
   contents: read
 
 concurrency:
-  group: install-sh-smoke-${{ inputs.tag }}
+  group: install-sh-smoke-${{ inputs.tag || 'self-test' }}
   cancel-in-progress: false
 
 jobs:
@@ -75,20 +90,31 @@ jobs:
       - name: Checkout repository (for README key extraction)
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Resolve release repository
-        id: repo
+      - name: Resolve smoke inputs
+        id: inputs
         env:
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_VERSION: ${{ inputs.version }}
           INPUT_REPO: ${{ inputs.repository }}
           DEFAULT_REPO: ${{ github.repository }}
         run: |
+          # Push-triggered self-test runs without workflow inputs; fall back to
+          # the canonical known-good release. v5.1.30 has the same server-
+          # installer banner, the same --version arg handler, and is signed
+          # with the same ed25519 key as v6 RCs, so it exercises the same
+          # code paths a real release would.
+          tag="${INPUT_TAG:-v5.1.30}"
+          version="${INPUT_VERSION:-5.1.30}"
           repo="${INPUT_REPO:-$DEFAULT_REPO}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "repo=$repo" >> "$GITHUB_OUTPUT"
-          echo "Using release repository: $repo"
+          echo "Resolved: tag=$tag version=$version repo=$repo"
 
       - name: Download published install.sh + sshsig + linux-amd64 tarball
         env:
-          TAG: ${{ inputs.tag }}
-          REPO: ${{ steps.repo.outputs.repo }}
+          TAG: ${{ steps.inputs.outputs.tag }}
+          REPO: ${{ steps.inputs.outputs.repo }}
         run: |
           set -euo pipefail
           mkdir -p smoke-workspace
@@ -110,7 +136,7 @@ jobs:
 
       - name: Verify install.sh signature with README's pinned key
         env:
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ steps.inputs.outputs.tag }}
         run: |
           set -euo pipefail
           readme_key=$(grep -oE 'ssh-ed25519 [A-Za-z0-9+/=]+ pulse-installer' README.md | head -1)
@@ -157,8 +183,8 @@ jobs:
 
       - name: Run install.sh end-to-end in a privileged systemd container
         env:
-          TAG: ${{ inputs.tag }}
-          VERSION: ${{ inputs.version }}
+          TAG: ${{ steps.inputs.outputs.tag }}
+          VERSION: ${{ steps.inputs.outputs.version }}
         run: |
           set -euo pipefail
           tarball="pulse-${TAG}-linux-amd64.tar.gz"
@@ -253,4 +279,4 @@ jobs:
 
       - name: Smoke result
         run: |
-          echo "::notice::install.sh smoke passed for tag ${{ inputs.tag }}"
+          echo "::notice::install.sh smoke passed for tag ${{ steps.inputs.outputs.tag }}"
