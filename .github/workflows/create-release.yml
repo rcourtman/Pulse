@@ -1075,7 +1075,9 @@ jobs:
   # published asset bundle being well-formed, so we only run it after the
   # cheaper content checks pass. Skipped for the historical-backfill path
   # since that flow re-uploads to an already-published release and the
-  # smoke would just re-confirm what hasn't changed.
+  # smoke would just re-confirm what hasn't changed. Also skipped for
+  # draft-only runs because draft release assets are not available at the
+  # public /releases/download/<tag>/ URL this smoke intentionally exercises.
   install_sh_smoke:
     needs:
       - prepare
@@ -1098,7 +1100,8 @@ jobs:
   # never triggered helm publish, leaving rcourtman.github.io/Pulse/index.yaml
   # without any v6 chart and breaking `helm install pulse pulse/pulse
   # --version 6.0.0-rc.5`. Calling the workflow explicitly here is the
-  # canonical fix.
+  # canonical fix. Draft-only runs must not publish the chart because the
+  # release has not crossed the operator-controlled publication boundary.
   publish_helm_chart:
     needs:
       - prepare
@@ -1120,7 +1123,9 @@ jobs:
   # customers pulling rcourtman/pulse:latest stayed on whatever the previous
   # successful release tagged. Calling promote-floating-tags as workflow_call
   # after validate_release_assets succeeds (which itself waits for the docker
-  # image to be pullable) guarantees the floating tags advance.
+  # image to be pullable) guarantees the floating tags advance. Draft-only
+  # runs must not promote floating tags because the release is still private
+  # promotion state.
   promote_floating_tags:
     needs:
       - prepare

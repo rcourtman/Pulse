@@ -133,7 +133,11 @@ server-side update execution surfaces.
    `create-release.yml` must call this workflow as a downstream
    `workflow_call` after `validate-release-assets.yml` succeeds for every
    release that is not a `historical_asset_backfill_only` run; without
-   that wiring the smoke gate exists but never protects a release.
+   that wiring the smoke gate exists but never protects a release. Draft-only
+   release runs are not a publication boundary and must skip downstream
+   install smoke, Helm chart publication, and floating tag promotion because
+   draft assets are not publicly downloadable and those publish steps would
+   advance externally visible state before operator publication.
    The README's pinned `pulse-installer` ed25519 key must verify
    `install.sh.sshsig` for the published release; this is enforced by
    `scripts/validate-release.sh` at build time and re-verified by

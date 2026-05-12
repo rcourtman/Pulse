@@ -207,6 +207,14 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		}
 	}
 
+	publishedReleaseGuard := `needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true'`
+	for _, job := range []string{"install_sh_smoke", "publish_helm_chart", "promote_floating_tags"} {
+		block := workflowJobBlock(t, workflow, job)
+		if !strings.Contains(block, publishedReleaseGuard) {
+			t.Fatalf("create-release.yml job %s must skip historical backfill and draft-only runs before invoking downstream workflow_call", job)
+		}
+	}
+
 	if !strings.Contains(workflow, `draft: ${{ github.event.inputs.draft_only == 'true' }}`) {
 		t.Fatal("create-release.yml must pass the actual draft_only state into validate-release-assets")
 	}
@@ -1114,4 +1122,27 @@ func repoFile(parts ...string) string {
 	root := filepath.Join("..", "..")
 	segments := append([]string{root}, parts...)
 	return filepath.Join(segments...)
+}
+
+func workflowJobBlock(t *testing.T, workflow, job string) string {
+	t.Helper()
+
+	startMarker := "\n  " + job + ":\n"
+	start := strings.Index(workflow, startMarker)
+	if start == -1 {
+		t.Fatalf("workflow missing job %s", job)
+	}
+	start += 1
+	rest := workflow[start+len("  "+job+":\n"):]
+	end := len(rest)
+	for _, line := range strings.Split(rest, "\n") {
+		if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "    ") {
+			candidate := strings.Index(rest, "\n"+line)
+			if candidate >= 0 {
+				end = candidate
+				break
+			}
+		}
+	}
+	return workflow[start : start+len("  "+job+":\n")+end]
 }
