@@ -88,6 +88,9 @@ Patrol-specific presentation helpers.
    from the same current findings state. Patrol-owned runtime issues must stay
    distinct from infrastructure findings in assessment copy rather than being
    described as infrastructure warning findings about Patrol itself.
+   Recency coverage copy must also come from the shared presentation helper:
+   use verified wording only for successful full patrols, and use neutral
+   checked wording for failed full patrols or scoped activity.
 3. Update this contract whenever a new Patrol-specific page, store, helper, or presentation component becomes canonical runtime surface area
 4. Keep retired hosted-model and trial-like Patrol acquisition copy out of the
    normal self-hosted GA app. Patrol may parse legacy transport fields, but

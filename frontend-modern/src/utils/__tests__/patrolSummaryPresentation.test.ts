@@ -838,6 +838,7 @@ describe('getPatrolSummaryPresentation', () => {
       label: 'Last activity',
       timestamp: '2026-03-12T09:59:00Z',
       resourcesChecked: 1,
+      resourcesCheckedLabel: 'checked 1 resource',
     });
   });
 
@@ -879,6 +880,49 @@ describe('getPatrolSummaryPresentation', () => {
       label: 'Last full patrol',
       timestamp: '2026-03-12T09:57:00Z',
       resourcesChecked: 58,
+      resourcesCheckedLabel: 'verified 58 resources',
+    });
+  });
+
+  it('uses checked coverage wording when a full patrol ends with errors', () => {
+    expect(
+      getPatrolRecencyPresentation({
+        runs: [
+          {
+            id: 'run-error',
+            started_at: '2026-03-12T09:50:00Z',
+            completed_at: '2026-03-12T09:57:00Z',
+            duration_ms: 420000,
+            type: 'patrol',
+            resources_checked: 58,
+            nodes_checked: 0,
+            guests_checked: 0,
+            docker_checked: 0,
+            storage_checked: 0,
+            hosts_checked: 0,
+            truenas_checked: 0,
+            pbs_checked: 0,
+            pmg_checked: 0,
+            kubernetes_checked: 0,
+            new_findings: 1,
+            existing_findings: 0,
+            rejected_findings: 0,
+            resolved_findings: 0,
+            auto_fix_count: 0,
+            findings_summary: '1 warning',
+            finding_ids: ['finding-1'],
+            error_count: 1,
+            status: 'error',
+            triage_flags: 0,
+            tool_call_count: 0,
+          },
+        ] as never,
+      }),
+    ).toEqual({
+      label: 'Last full patrol',
+      timestamp: '2026-03-12T09:57:00Z',
+      resourcesChecked: 58,
+      resourcesCheckedLabel: 'checked 58 resources',
     });
   });
 

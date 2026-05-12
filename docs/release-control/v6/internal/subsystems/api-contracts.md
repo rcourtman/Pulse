@@ -1083,12 +1083,13 @@ the canonical monitored-system blocked payload.
    a render-only consumer of the existing canonical signal so the
    header line and the workspace's detailed Trust strip stay aligned.
    The same page-header recency line also reads
-   `PatrolRecencyPresentation.resourcesChecked` — populated by
+   `PatrolRecencyPresentation.resourcesCheckedLabel` — derived by
    `getPatrolRecencyPresentation` from
-   `PatrolRunRecord.resources_checked` on the latest completed run —
+   `PatrolRunRecord.resources_checked` and the latest completed run outcome —
    so the operator sees coverage alongside recency without needing a
-   new API surface, and the field stays optional (omitted on zero) to
-   keep degenerate runs from rendering an alarm-shaped "verified 0"
+   new API surface. The label stays optional when coverage is zero, says
+   verified only for successful full patrols, and uses neutral checked wording
+   for errored full patrols or scoped activity.
    and the Assistant finding-context request contract, so `/api/ai/chat`
    payloads carrying `finding_id` may hydrate a structured investigation
    summary from the unified finding, but raw proposed-fix commands must stay

@@ -1299,11 +1299,11 @@ line is the entry-point summary so operators see active, regressed,
 and verified-fix counts before scrolling into the workspace tabs.
 The recency line beside the header actions also renders coverage
 alongside time when the canonical `getPatrolRecencyPresentation` helper
-returns `resourcesChecked` from the latest completed run. Render code
-must gate on `<Show when={recency().resourcesChecked}>` (truthy) so
-zero-coverage runs don't surface a misleading "verified 0 resources"
-line; the truthy gate also means the absence of the helper field
-gracefully omits the coverage span without code changes.
+returns `resourcesCheckedLabel` from the latest completed run. Render code
+must gate on `<Show when={recency().resourcesCheckedLabel}>` (truthy) so
+zero-coverage runs do not surface a misleading coverage phrase, failed or
+scoped runs use neutral checked wording, and only successful full patrols read
+as verified.
 
 `frontend-modern/src/utils/discoveryPresentation.ts` owns resource discovery
 command guidance targets. Discovery surfaces that need to tell operators where
@@ -2497,7 +2497,9 @@ sufficient as the only explanation path.
 That same shell rule also owns Patrol recency labels. Shared Patrol header and
 status-shell surfaces must keep `Last full patrol` tied only to the full-sweep
 transport fact and use `Last activity` for scoped or verification work instead
-of collapsing both timestamps back into a generic `Last run` label.
+of collapsing both timestamps back into a generic `Last run` label. Coverage
+phrases on those recency surfaces must come from the Patrol recency presenter
+instead of hardcoding verified wording in the shell.
 That same Patrol shell should make scoped trigger policy legible without
 another navigation step. `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`
 should present alert-triggered and anomaly-triggered Patrol toggles as distinct

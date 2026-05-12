@@ -88,12 +88,9 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                     compact: true,
                     emptyText: 'Never',
                   })}
-                  <Show when={recency().resourcesChecked}>
+                  <Show when={recency().resourcesCheckedLabel}>
                     {' '}
-                    <span class="text-muted">
-                      — verified {recency().resourcesChecked} resource
-                      {recency().resourcesChecked === 1 ? '' : 's'}
-                    </span>
+                    <span class="text-muted">— {recency().resourcesCheckedLabel}</span>
                   </Show>
                 </span>
                 <Show when={state.patrolStatus()?.next_patrol_at}>

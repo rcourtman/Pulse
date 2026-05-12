@@ -91,13 +91,12 @@ export interface PatrolVerificationPresentation {
 export interface PatrolRecencyPresentation {
   label: string;
   timestamp?: string;
-  // resourcesChecked is the coverage signal for the most recent completed
-  // run — populated from `PatrolRunRecord.resources_checked` when a run is
-  // available. Lets the page header read "Last full patrol: 3m ago —
-  // verified 47 resources", giving operators temporal AND coverage signal
-  // in one line. Stays optional because legacy fall-back paths
-  // (lastPatrolAt / lastActivityAt without a run record) carry no count.
+  // resourcesChecked is the raw coverage signal for the most recent
+  // completed run. resourcesCheckedLabel is the operator-facing phrase; it
+  // says "verified" only for successful full patrols and uses "checked" for
+  // limited or errored activity.
   resourcesChecked?: number;
+  resourcesCheckedLabel?: string;
 }
 
 type PatrolAssessmentFinding = Pick<
@@ -571,6 +570,16 @@ function hasRunErrors(run: PatrolRunRecord): boolean {
   );
 }
 
+function formatRecencyResourcesCheckedLabel(run: PatrolRunRecord): string | undefined {
+  const resourcesChecked = run.resources_checked || 0;
+  if (resourcesChecked <= 0) {
+    return undefined;
+  }
+
+  const verb = isFullPatrolRun(run) && !hasRunErrors(run) ? 'verified' : 'checked';
+  return `${verb} ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}`;
+}
+
 export function getPatrolAssessmentPresentation(args: {
   overallHealth?: IntelligenceHealthScore;
   runtimeState?: PatrolRuntimeState;
@@ -765,10 +774,12 @@ export function getPatrolRecencyPresentation(args: {
   const latestCompletedRun = (args.runs ?? []).find((run) => isCompletedPatrolRun(run));
   if (latestCompletedRun?.completed_at) {
     const resourcesChecked = latestCompletedRun.resources_checked || 0;
+    const resourcesCheckedLabel = formatRecencyResourcesCheckedLabel(latestCompletedRun);
     return {
       label: isFullPatrolRun(latestCompletedRun) ? 'Last full patrol' : 'Last activity',
       timestamp: latestCompletedRun.completed_at,
       resourcesChecked: resourcesChecked > 0 ? resourcesChecked : undefined,
+      resourcesCheckedLabel,
     };
   }
 
