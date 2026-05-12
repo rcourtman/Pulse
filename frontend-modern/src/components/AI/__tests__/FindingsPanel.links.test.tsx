@@ -237,4 +237,15 @@ describe('FindingsPanel resource links', () => {
     expect(screen.queryByText('Loading findings...')).not.toBeInTheDocument();
     expect(screen.getByText('Provider connection issue')).toBeInTheDocument();
   });
+
+  it('keeps loaded Patrol findings visible during a Patrol refresh', async () => {
+    mockState.patrolFindingsLoading = true;
+
+    render(() => <FindingsPanel findingsSource="patrol" />);
+
+    await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
+
+    expect(screen.queryByText('Loading findings...')).not.toBeInTheDocument();
+    expect(screen.getByText('Provider connection issue')).toBeInTheDocument();
+  });
 });

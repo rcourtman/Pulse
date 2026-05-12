@@ -83,7 +83,9 @@ Patrol-specific presentation helpers.
    The same source boundary owns loading and error state: Patrol findings must
    render from `patrolFindings`, `patrolFindingsLoading`, and
    `patrolFindingsError` instead of letting a pending unified findings request
-   mask direct Patrol evidence that has already loaded.
+   mask direct Patrol evidence that has already loaded. Background Patrol
+   refreshes must preserve already-loaded findings instead of replacing the
+   workspace with a blocking loading state.
 2. Keep Patrol-specific copy and badge logic inside the governed Patrol presentation helpers instead of page-local branches
    Patrol assessment copy must not present an all-clear health prediction while
    active Patrol findings or Patrol runtime issues are still present. The
