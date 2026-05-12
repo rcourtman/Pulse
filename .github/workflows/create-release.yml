@@ -1080,7 +1080,7 @@ jobs:
     needs:
       - prepare
       - validate_release_assets
-    if: ${{ always() && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     permissions:
       contents: read
     uses: ./.github/workflows/install-sh-smoke.yml
@@ -1103,7 +1103,7 @@ jobs:
     needs:
       - prepare
       - validate_release_assets
-    if: ${{ always() && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     permissions:
       contents: write
       packages: write
@@ -1125,7 +1125,7 @@ jobs:
     needs:
       - prepare
       - validate_release_assets
-    if: ${{ always() && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     permissions:
       contents: read
       packages: write

@@ -193,6 +193,13 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`promote_floating_tags:`,
 		`tag: ${{ needs.prepare.outputs.tag }}`,
 		`prerelease: ${{ needs.prepare.outputs.is_prerelease == 'true' }}`,
+		// Draft-only mode (draft_only=true input) keeps the release as a
+		// draft and skips the publish step. The three workflow_call'd
+		// downstreams must skip in that mode too — install-sh-smoke can't
+		// reach the /releases/download/<tag>/ URL of a draft (404), and
+		// helm publish + tag promotion would advance externally-visible
+		// state to a release that hasn't been promoted out of draft yet.
+		`needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true'`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(workflow, needle) {
