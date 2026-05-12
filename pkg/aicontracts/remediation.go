@@ -77,6 +77,64 @@ type RemediationPlan struct {
 	Warnings      []string          `json:"warnings,omitempty"`
 	CreatedAt     time.Time         `json:"created_at"`
 	ExpiresAt     *time.Time        `json:"expires_at,omitempty"`
+
+	// ProposedActionPlan is an optional deterministic remediation proposal
+	// attached by the patrol pipeline (currently only forecast-driven
+	// capacity proposals - see internal/ai/forecast.BuildActionPlanForFinding).
+	// It is a wire-side projection of unifiedresources.ActionPlan; the
+	// projection lives here so pkg/aicontracts stays free of a dependency
+	// on internal/. The frontend renders proposals with Source ==
+	// "capacity_forecast" as a distinguishable approve/reject card in
+	// FindingsPanel.tsx; everything else falls back to the generic plan
+	// surface. Always nil for plans that have no attached proposal -
+	// remediation behavior is unchanged when the field is absent.
+	ProposedActionPlan *ProposedActionPlan `json:"proposed_action_plan,omitempty"`
+}
+
+// ProposedActionPlan is the wire-side projection of a deterministic action
+// proposal attached to a RemediationPlan. RequiresApproval is invariant -
+// every proposed plan must carry an explicit approval gate. Allowed=false
+// signals "no write capability is wired yet; this is a preflight-only
+// proposal" - the operator may still approve to record intent, but
+// execution is not connected.
+type ProposedActionPlan struct {
+	ActionID         string                   `json:"actionId"`
+	CapabilityName   string                   `json:"capabilityName,omitempty"`
+	Allowed          bool                     `json:"allowed"`
+	RequiresApproval bool                     `json:"requiresApproval"`
+	ApprovalPolicy   string                   `json:"approvalPolicy,omitempty"`
+	Message          string                   `json:"message,omitempty"`
+	Source           string                   `json:"source,omitempty"`
+	ProjectedMetric  *ProposedMetricSummary   `json:"projectedMetric,omitempty"`
+	Preflight        *ProposedActionPreflight `json:"preflight,omitempty"`
+	PlannedAt        time.Time                `json:"plannedAt,omitempty"`
+	ExpiresAt        time.Time                `json:"expiresAt,omitempty"`
+}
+
+// ProposedActionPreflight mirrors unifiedresources.ActionPreflight on the
+// wire so the frontend can render the proposed change without depending on
+// internal types.
+type ProposedActionPreflight struct {
+	Target            string   `json:"target,omitempty"`
+	CurrentState      string   `json:"currentState,omitempty"`
+	IntendedChange    string   `json:"intendedChange,omitempty"`
+	DryRunAvailable   bool     `json:"dryRunAvailable"`
+	DryRunSummary     string   `json:"dryRunSummary,omitempty"`
+	SafetyChecks      []string `json:"safetyChecks,omitempty"`
+	VerificationSteps []string `json:"verificationSteps,omitempty"`
+}
+
+// ProposedMetricSummary is the operator-facing "why this proposal exists"
+// snapshot - current metric value, projected value at horizon, threshold,
+// and (optional) time-to-threshold-breach in seconds. The frontend renders
+// this in the capacity-forecast approval card so the operator can decide
+// without digging into Patrol metrics.
+type ProposedMetricSummary struct {
+	Metric                 string  `json:"metric"`
+	CurrentValue           float64 `json:"currentValue"`
+	PredictedValue         float64 `json:"predictedValue,omitempty"`
+	ThresholdValue         float64 `json:"thresholdValue,omitempty"`
+	TimeToThresholdSeconds *int64  `json:"timeToThresholdSeconds,omitempty"`
 }
 
 // RemediationExecution tracks the execution of a remediation plan.

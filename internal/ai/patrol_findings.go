@@ -190,6 +190,14 @@ func (p *PatrolService) generateRemediationPlan(finding *Finding) {
 		plan.Warnings = append(plan.Warnings, "Review steps carefully before execution")
 	}
 
+	// Capacity-forecast proposal attachment: when a capacity finding has
+	// a registered deterministic action template, attach the proposal so
+	// FindingsPanel can render the forecast approval card. RequiresApproval
+	// is invariant on the template side; we never auto-execute.
+	if proposal := buildCapacityActionProposal(finding); proposal != nil {
+		plan.ProposedActionPlan = proposal
+	}
+
 	if err := engine.CreatePlan(plan); err != nil {
 		log.Debug().
 			Err(err).
