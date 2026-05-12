@@ -541,6 +541,17 @@ export const investigationOutcomeColors: Record<InvestigationOutcome, string> = 
 
 export type PatrolRunStatus = 'healthy' | 'issues_found' | 'critical' | 'error';
 
+export type ToolCallVerificationStatus =
+  | 'unknown'
+  | 'verified'
+  | 'unverified'
+  | 'failed';
+
+export interface ToolCallVerification {
+  status: ToolCallVerificationStatus;
+  evidenceSummary?: string;
+}
+
 export interface ToolCallRecord {
   id: string;
   tool_name: string;
@@ -550,6 +561,7 @@ export interface ToolCallRecord {
   start_time: number;
   end_time: number;
   duration_ms: number;
+  verification?: ToolCallVerification;
 }
 
 export interface PatrolRunRecord {

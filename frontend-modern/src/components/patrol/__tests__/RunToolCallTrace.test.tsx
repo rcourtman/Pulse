@@ -51,4 +51,68 @@ describe('RunToolCallTrace', () => {
       await screen.findByText('Tool call details not available for this run.'),
     ).toBeInTheDocument();
   });
+
+  it('renders the verified column with the right state per tool call', async () => {
+    getPatrolRunWithToolCallsMock.mockResolvedValue({
+      id: 'run-verify',
+      tool_calls: [
+        {
+          id: 'call-verified',
+          tool_name: 'pulse_control',
+          input: '{}',
+          output: 'restart dispatched',
+          success: true,
+          duration_ms: 12,
+          verification: { status: 'verified', evidenceSummary: 'vm:42 status=running in 8s' },
+        },
+        {
+          id: 'call-failed',
+          tool_name: 'pulse_control',
+          input: '{}',
+          output: 'restart dispatched',
+          success: true,
+          duration_ms: 15,
+          verification: { status: 'failed', evidenceSummary: 'vm:42 still stopped after 2m' },
+        },
+        {
+          id: 'call-unknown',
+          tool_name: 'pulse_read',
+          input: '{}',
+          output: 'ok',
+          success: true,
+          duration_ms: 9,
+        },
+        {
+          id: 'call-inconclusive',
+          tool_name: 'pulse_control',
+          input: '{}',
+          output: 'restart dispatched',
+          success: true,
+          duration_ms: 11,
+          verification: { status: 'unverified', evidenceSummary: 'agent offline during window' },
+        },
+      ],
+    });
+
+    render(() => <RunToolCallTrace runId="run-verify" toolCallCount={4} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Tool calls \(4\)/ }));
+
+    const verified = await screen.findByTestId('tool-call-verified-call-verified');
+    expect(verified.getAttribute('data-verification-status')).toBe('verified');
+    expect(verified.getAttribute('aria-label')).toContain('Verified');
+    expect(verified.getAttribute('aria-label')).toContain('vm:42 status=running');
+
+    const failed = await screen.findByTestId('tool-call-verified-call-failed');
+    expect(failed.getAttribute('data-verification-status')).toBe('failed');
+    expect(failed.getAttribute('aria-label')).toContain('Verification failed');
+
+    const unknown = await screen.findByTestId('tool-call-verified-call-unknown');
+    expect(unknown.getAttribute('data-verification-status')).toBe('unknown');
+    expect(unknown.getAttribute('aria-label')).toContain('Verification not run');
+
+    const inconclusive = await screen.findByTestId('tool-call-verified-call-inconclusive');
+    expect(inconclusive.getAttribute('data-verification-status')).toBe('unverified');
+    expect(inconclusive.getAttribute('aria-label')).toContain('inconclusive');
+  });
 });
