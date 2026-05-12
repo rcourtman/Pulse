@@ -331,3 +331,17 @@ RUN ln -s pulse-agent-windows-amd64.exe /opt/pulse/bin/pulse-agent-windows-amd64
     ln -s pulse-agent-windows-arm64.exe /opt/pulse/bin/pulse-agent-windows-arm64 && \
     ln -s pulse-agent-windows-386.exe /opt/pulse/bin/pulse-agent-windows-386 && \
     chown -R pulse:pulse /opt/pulse
+
+# Arch-resolved /usr/local/bin/pulse-agent so the helm chart's agent workload
+# and `docker run rcourtman/pulse --entrypoint /usr/local/bin/pulse-agent`
+# can invoke the right unified-agent binary without juggling arch suffixes.
+# The chart's agent.enabled=true previously defaulted to a separate
+# ghcr.io/rcourtman/pulse-agent image that is no longer published; pointing it
+# at this image plus this symlink restores agent.enabled to a working state.
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        ln -s /opt/pulse/bin/pulse-agent-linux-arm64 /usr/local/bin/pulse-agent; \
+    elif [ "$TARGETARCH" = "arm" ]; then \
+        ln -s /opt/pulse/bin/pulse-agent-linux-armv7 /usr/local/bin/pulse-agent; \
+    else \
+        ln -s /opt/pulse/bin/pulse-agent-linux-amd64 /usr/local/bin/pulse-agent; \
+    fi

@@ -205,6 +205,15 @@ if [ "$SKIP_DOCKER" = false ]; then
     docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'set -euo pipefail; cd /opt/pulse/bin; required="pulse pulse-agent-linux-amd64 pulse-agent-linux-arm64 pulse-agent-linux-armv7 pulse-agent-linux-armv6 pulse-agent-linux-386 pulse-agent-darwin-amd64 pulse-agent-darwin-arm64 pulse-agent-windows-amd64.exe pulse-agent-windows-amd64 pulse-agent-windows-arm64.exe pulse-agent-windows-arm64 pulse-agent-windows-386.exe pulse-agent-windows-386 pulse-agent-freebsd-amd64 pulse-agent-freebsd-arm64"; for f in $required; do [ -e "$f" ] || { echo "missing binary $f" >&2; exit 1; }; [ -s "$f" ] || { echo "empty binary $f" >&2; exit 1; }; done; [ "$(readlink pulse-agent-windows-amd64)" = "pulse-agent-windows-amd64.exe" ] || { echo "unified agent windows amd64 symlink broken" >&2; exit 1; }; [ "$(readlink pulse-agent-windows-arm64)" = "pulse-agent-windows-arm64.exe" ] || { echo "unified agent windows arm64 symlink broken" >&2; exit 1; }; [ "$(readlink pulse-agent-windows-386)" = "pulse-agent-windows-386.exe" ] || { echo "unified agent windows 386 symlink broken" >&2; exit 1; }; echo "All binaries present"' || { error "Binary validation failed"; exit 1; }
     success "All downloadable binaries present"
 
+    # Validate the arch-resolved /usr/local/bin/pulse-agent symlink. The helm
+    # chart's agent workload (and `docker run rcourtman/pulse --entrypoint
+    # /usr/local/bin/pulse-agent`) depend on this path; without it the chart
+    # defaults to a non-existent image and `agent.enabled=true` hits
+    # ImagePullBackOff.
+    info "Validating /usr/local/bin/pulse-agent arch-resolved symlink..."
+    docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'set -euo pipefail; [ -L /usr/local/bin/pulse-agent ] || { echo "/usr/local/bin/pulse-agent is missing or not a symlink" >&2; exit 1; }; target=$(readlink /usr/local/bin/pulse-agent); case "$target" in /opt/pulse/bin/pulse-agent-linux-amd64|/opt/pulse/bin/pulse-agent-linux-arm64|/opt/pulse/bin/pulse-agent-linux-armv7) : ;; *) echo "/usr/local/bin/pulse-agent points at unexpected target: $target" >&2; exit 1 ;; esac; [ -x "$target" ] || { echo "/usr/local/bin/pulse-agent target is not executable" >&2; exit 1; }; echo "pulse-agent symlink resolves to $target"' || { error "/usr/local/bin/pulse-agent validation failed"; exit 1; }
+    success "/usr/local/bin/pulse-agent symlink is arch-resolved and executable"
+
     # Validate version embedding in Docker image binaries
     info "Validating version embedding in Docker image binaries..."
 

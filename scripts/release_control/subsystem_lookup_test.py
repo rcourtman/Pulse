@@ -4424,7 +4424,10 @@ class SubsystemLookupTest(unittest.TestCase):
             )
             self.assertEqual(
                 match["verification_requirement"]["exact_files"],
-                ["scripts/release_control/subsystem_lookup_test.py"],
+                [
+                    "scripts/installtests/build_release_assets_test.go",
+                    "scripts/release_control/subsystem_lookup_test.py",
+                ],
             )
 
     def test_lookup_paths_assigns_secure_storage_hardening_to_security_privacy(self) -> None:

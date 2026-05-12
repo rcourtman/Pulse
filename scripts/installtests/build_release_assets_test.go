@@ -940,6 +940,81 @@ func TestInstallShSmokeWorkflowPresent(t *testing.T) {
 	}
 }
 
+func TestHelmAgentRuntimePointsAtRealImage(t *testing.T) {
+	// The helm chart's agent.enabled=true workload used to default to
+	// ghcr.io/rcourtman/pulse-agent — an image that was never published.
+	// The chart now points at the main rcourtman/pulse image and uses an
+	// arch-resolved /usr/local/bin/pulse-agent symlink baked into the
+	// runtime stage. This test pins:
+	//   1. values.yaml uses the main image
+	//   2. values.yaml has the command override
+	//   3. the agent template renders the command
+	//   4. the Dockerfile creates the symlink for every supported arch
+	//   5. validate-release.sh asserts the symlink exists in the published image
+	// Reverting any one of these unwires the chart back to ImagePullBackOff.
+
+	valuesBytes, err := os.ReadFile(repoFile("deploy", "helm", "pulse", "values.yaml"))
+	if err != nil {
+		t.Fatalf("read values.yaml: %v", err)
+	}
+	values := string(valuesBytes)
+	if !strings.Contains(values, "repository: rcourtman/pulse\n") {
+		t.Fatal("agent.image.repository must default to rcourtman/pulse (single-image agent + server)")
+	}
+	// Match the actual config value, not casual mentions in surrounding
+	// comments that explain why the default changed.
+	if strings.Contains(values, "repository: ghcr.io/rcourtman/pulse-agent") {
+		t.Fatal("agent.image.repository must not reference the never-published ghcr.io/rcourtman/pulse-agent image")
+	}
+	if !strings.Contains(values, "- /usr/local/bin/pulse-agent") {
+		t.Fatal("agent.command must default to /usr/local/bin/pulse-agent so the main image's server ENTRYPOINT is overridden")
+	}
+
+	agentTemplate, err := os.ReadFile(repoFile("deploy", "helm", "pulse", "templates", "agent.yaml"))
+	if err != nil {
+		t.Fatalf("read agent.yaml: %v", err)
+	}
+	tmpl := string(agentTemplate)
+	if !strings.Contains(tmpl, "{{- if .Values.agent.command }}") {
+		t.Fatal("agent.yaml template must conditionally render command from .Values.agent.command")
+	}
+	if !strings.Contains(tmpl, "command:\n            {{- toYaml .Values.agent.command | nindent 12 }}") {
+		t.Fatal("agent.yaml template must render command via toYaml so list values pass through correctly")
+	}
+
+	dockerfile, err := os.ReadFile(repoFile("Dockerfile"))
+	if err != nil {
+		t.Fatalf("read Dockerfile: %v", err)
+	}
+	dockerfileStr := string(dockerfile)
+	dockerfileRequired := []string{
+		`ln -s /opt/pulse/bin/pulse-agent-linux-arm64 /usr/local/bin/pulse-agent`,
+		`ln -s /opt/pulse/bin/pulse-agent-linux-armv7 /usr/local/bin/pulse-agent`,
+		`ln -s /opt/pulse/bin/pulse-agent-linux-amd64 /usr/local/bin/pulse-agent`,
+	}
+	for _, needle := range dockerfileRequired {
+		if !strings.Contains(dockerfileStr, needle) {
+			t.Fatalf("Dockerfile runtime stage missing arch-resolved pulse-agent symlink: %s", needle)
+		}
+	}
+
+	validateScript, err := os.ReadFile(repoFile("scripts", "validate-release.sh"))
+	if err != nil {
+		t.Fatalf("read validate-release.sh: %v", err)
+	}
+	validate := string(validateScript)
+	validateRequired := []string{
+		`Validating /usr/local/bin/pulse-agent arch-resolved symlink`,
+		`[ -L /usr/local/bin/pulse-agent ]`,
+		`/usr/local/bin/pulse-agent target is not executable`,
+	}
+	for _, needle := range validateRequired {
+		if !strings.Contains(validate, needle) {
+			t.Fatalf("validate-release.sh missing pulse-agent symlink guard: %s", needle)
+		}
+	}
+}
+
 func repoFile(parts ...string) string {
 	root := filepath.Join("..", "..")
 	segments := append([]string{root}, parts...)

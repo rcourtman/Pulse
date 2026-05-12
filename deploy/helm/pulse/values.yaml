@@ -113,9 +113,19 @@ agent:
     name: ""
     annotations: {}
   image:
-    repository: ghcr.io/rcourtman/pulse-agent
+    # Defaults to the main Pulse image; the runtime stage now ships an arch-
+    # resolved /usr/local/bin/pulse-agent symlink so the same image can serve
+    # both server and agent workloads. The previous default
+    # (ghcr.io/rcourtman/pulse-agent) was an image that was never published.
+    repository: rcourtman/pulse
     tag: ""
     pullPolicy: IfNotPresent
+  # Override the main image's server ENTRYPOINT so this pod runs as a unified
+  # agent. /usr/local/bin/pulse-agent is the arch-resolved symlink baked into
+  # the runtime stage. Override `agent.command` if you ship a custom image
+  # with a different agent binary path.
+  command:
+    - /usr/local/bin/pulse-agent
   env:
     - name: PULSE_URL
       value: http://pulse:7655

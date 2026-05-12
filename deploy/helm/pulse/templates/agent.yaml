@@ -44,6 +44,10 @@ spec:
         - name: pulse-agent
           image: "{{ .Values.agent.image.repository }}:{{ default .Chart.AppVersion .Values.agent.image.tag }}"
           imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
+          {{- if .Values.agent.command }}
+          command:
+            {{- toYaml .Values.agent.command | nindent 12 }}
+          {{- end }}
           {{- if .Values.agent.args }}
           args:
             {{- toYaml .Values.agent.args | nindent 12 }}

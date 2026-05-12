@@ -2796,6 +2796,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "scripts/installtests/build_release_assets_test.go",
               "scripts/release_control/subsystem_lookup_test.py"
             ]
           },

@@ -305,6 +305,18 @@ server-side update execution surfaces.
    chart metadata, default values, templates, and generated chart docs must
    stay on the validated release line rather than mutating `main` or packaging
    from whatever branch GitHub happened to check out.
+   The chart's `agent.enabled=true` workload must point at an image that is
+   actually published. The default `agent.image.repository` must be the main
+   `rcourtman/pulse` image (which is the only image `publish-docker.yml`
+   pushes); the agent template must override the server ENTRYPOINT via
+   `agent.command` so the pod runs as a unified agent; and the runtime stage
+   of `Dockerfile` must ship an arch-resolved `/usr/local/bin/pulse-agent`
+   symlink that picks `pulse-agent-linux-{amd64,arm64,armv7}` per `TARGETARCH`
+   so a single command default works across multi-arch nodes. The
+   never-published `ghcr.io/rcourtman/pulse-agent` is forbidden as a chart
+   default. `scripts/validate-release.sh` must assert the
+   `/usr/local/bin/pulse-agent` symlink exists, points at one of the
+   supported Linux arch binaries, and is executable in the published image.
    Generated chart docs are part of the packaged release artifact, not a
    disposable byproduct: when the stable candidate version changes, the checked
    in `deploy/helm/pulse/README.md` output must be regenerated from the same

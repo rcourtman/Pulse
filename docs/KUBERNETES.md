@@ -92,7 +92,10 @@ spec:
       containers:
         - name: pulse-agent
           image: rcourtman/pulse:latest
-          command: ["/opt/pulse/bin/pulse-agent-linux-amd64"]
+          # /usr/local/bin/pulse-agent is an arch-resolved symlink in the
+          # main Pulse image, so this manifest works on both amd64 and
+          # arm64 nodes without changes.
+          command: ["/usr/local/bin/pulse-agent"]
           args:
             - --enable-kubernetes
           env:
