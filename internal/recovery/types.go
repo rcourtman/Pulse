@@ -52,3 +52,11 @@ type ProtectionRollup = model.ProtectionRollup
 type ListPointsOptions = model.ListPointsOptions
 type PointsSeriesBucket = model.PointsSeriesBucket
 type PointsFacets = model.PointsFacets
+
+type VerifyIntent = model.VerifyIntent
+
+const (
+	VerifyIntentVerified VerifyIntent = model.VerifyIntentVerified
+	VerifyIntentStale    VerifyIntent = model.VerifyIntentStale
+	VerifyIntentUnknown  VerifyIntent = model.VerifyIntentUnknown
+)

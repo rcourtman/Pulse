@@ -103,6 +103,22 @@ type RecoveryPointDisplay struct {
 	DetailsSummary  string `json:"detailsSummary,omitempty"`
 }
 
+// VerifyIntent is a tri-state summary of whether a rollup's most recent
+// successful backup has been verified within the configured staleness window.
+type VerifyIntent string
+
+const (
+	// VerifyIntentVerified means a verification-bearing successful recovery
+	// point exists within the staleness window.
+	VerifyIntentVerified VerifyIntent = "verified"
+	// VerifyIntentStale means a successful backup exists for the subject but
+	// no verification-bearing point has landed within the staleness window.
+	VerifyIntentStale VerifyIntent = "stale"
+	// VerifyIntentUnknown means there is no information one way or the other
+	// (no successful backup, or no verification-bearing points at all).
+	VerifyIntentUnknown VerifyIntent = "unknown"
+)
+
 // ProtectionRollup is a per-resource summary derived from recovery points.
 type ProtectionRollup struct {
 	// RollupID is a stable identifier used for drill-down into points.
@@ -125,6 +141,16 @@ type ProtectionRollup struct {
 
 	// Providers that contributed points within the query window.
 	Providers []Provider `json:"providers,omitempty"`
+
+	// VerifyIntent summarises whether the most recent successful backup for
+	// this subject has been verified within the staleness window. Emitted
+	// omitempty so existing rollup payload snapshots stay stable for callers
+	// that have not opted into the read-side verify loop.
+	VerifyIntent VerifyIntent `json:"verifyIntent,omitempty"`
+	// LastVerifiedAt is the completion timestamp of the newest
+	// verification-bearing recovery point on the rollup window. Nil when no
+	// verified point exists in the window.
+	LastVerifiedAt *time.Time `json:"lastVerifiedAt,omitempty"`
 }
 
 type ListPointsOptions struct {

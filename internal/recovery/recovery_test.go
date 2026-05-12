@@ -1093,3 +1093,150 @@ func TestBuildRollupsFromPoints_PreservesLatestDisplayLabels(t *testing.T) {
 		t.Fatal("expected rollup display workload marker to be preserved")
 	}
 }
+
+func TestBuildRollupsFromPoints_VerifyIntent(t *testing.T) {
+	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
+	verified := true
+	unverified := false
+
+	insideWindow := now.Add(-2 * 24 * time.Hour)
+	outsideWindow := now.Add(-21 * 24 * time.Hour)
+
+	cases := []struct {
+		name           string
+		points         []RecoveryPoint
+		wantIntent     VerifyIntent
+		wantVerifiedAt *time.Time
+	}{
+		{
+			name: "verified within window",
+			points: []RecoveryPoint{
+				{
+					ID:                "p1",
+					Provider:          ProviderProxmoxPBS,
+					Kind:              KindBackup,
+					Mode:              ModeRemote,
+					Outcome:           OutcomeSuccess,
+					StartedAt:         &insideWindow,
+					CompletedAt:       &insideWindow,
+					Verified:          &verified,
+					SubjectResourceID: "vm-100",
+				},
+			},
+			wantIntent:     VerifyIntentVerified,
+			wantVerifiedAt: &insideWindow,
+		},
+		{
+			name: "successful backup but verification outside window is stale",
+			points: []RecoveryPoint{
+				{
+					ID:                "p-recent",
+					Provider:          ProviderProxmoxPBS,
+					Kind:              KindBackup,
+					Mode:              ModeRemote,
+					Outcome:           OutcomeSuccess,
+					StartedAt:         &insideWindow,
+					CompletedAt:       &insideWindow,
+					Verified:          &unverified,
+					SubjectResourceID: "vm-200",
+				},
+				{
+					ID:                "p-old-verified",
+					Provider:          ProviderProxmoxPBS,
+					Kind:              KindBackup,
+					Mode:              ModeRemote,
+					Outcome:           OutcomeSuccess,
+					StartedAt:         &outsideWindow,
+					CompletedAt:       &outsideWindow,
+					Verified:          &verified,
+					SubjectResourceID: "vm-200",
+				},
+			},
+			wantIntent:     VerifyIntentStale,
+			wantVerifiedAt: &outsideWindow,
+		},
+		{
+			name: "successful backup with no verification anywhere is stale",
+			points: []RecoveryPoint{
+				{
+					ID:                "p-fresh-unverified",
+					Provider:          ProviderProxmoxPBS,
+					Kind:              KindBackup,
+					Mode:              ModeRemote,
+					Outcome:           OutcomeSuccess,
+					StartedAt:         &insideWindow,
+					CompletedAt:       &insideWindow,
+					Verified:          &unverified,
+					SubjectResourceID: "vm-300",
+				},
+			},
+			wantIntent:     VerifyIntentStale,
+			wantVerifiedAt: nil,
+		},
+		{
+			name: "no successful backup is unknown",
+			points: []RecoveryPoint{
+				{
+					ID:                "p-fail",
+					Provider:          ProviderProxmoxPBS,
+					Kind:              KindBackup,
+					Mode:              ModeRemote,
+					Outcome:           OutcomeFailed,
+					StartedAt:         &insideWindow,
+					CompletedAt:       &insideWindow,
+					SubjectResourceID: "vm-400",
+				},
+			},
+			wantIntent:     VerifyIntentUnknown,
+			wantVerifiedAt: nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rollups := BuildRollupsFromPointsAt(tc.points, now)
+			if len(rollups) != 1 {
+				t.Fatalf("expected 1 rollup, got %d", len(rollups))
+			}
+			got := rollups[0]
+			if got.VerifyIntent != tc.wantIntent {
+				t.Fatalf("VerifyIntent = %q, want %q", got.VerifyIntent, tc.wantIntent)
+			}
+			if tc.wantVerifiedAt == nil {
+				if got.LastVerifiedAt != nil {
+					t.Fatalf("LastVerifiedAt = %v, want nil", got.LastVerifiedAt)
+				}
+			} else {
+				if got.LastVerifiedAt == nil {
+					t.Fatalf("LastVerifiedAt = nil, want %v", tc.wantVerifiedAt)
+				}
+				if !got.LastVerifiedAt.Equal(*tc.wantVerifiedAt) {
+					t.Fatalf("LastVerifiedAt = %v, want %v", got.LastVerifiedAt, tc.wantVerifiedAt)
+				}
+			}
+		})
+	}
+}
+
+func TestComputeVerifyIntentAt_BoundaryEqualsWindow(t *testing.T) {
+	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
+	// Exactly at the window boundary should still be verified (inclusive).
+	verifiedAt := now.Add(-BackupVerifyStaleWindow)
+	intent, ts := ComputeVerifyIntentAt(verifiedAt.UnixMilli(), verifiedAt.UnixMilli(), now)
+	if intent != VerifyIntentVerified {
+		t.Fatalf("boundary intent = %q, want %q", intent, VerifyIntentVerified)
+	}
+	if ts == nil || !ts.Equal(verifiedAt) {
+		t.Fatalf("boundary lastVerifiedAt = %v, want %v", ts, verifiedAt)
+	}
+
+	// One millisecond beyond the window flips to stale.
+	beyond := verifiedAt.Add(-time.Millisecond)
+	intent, ts = ComputeVerifyIntentAt(beyond.UnixMilli(), beyond.UnixMilli(), now)
+	if intent != VerifyIntentStale {
+		t.Fatalf("beyond boundary intent = %q, want %q", intent, VerifyIntentStale)
+	}
+	if ts == nil {
+		t.Fatalf("beyond boundary lastVerifiedAt = nil, want non-nil so UI can render history")
+	}
+}

@@ -228,6 +228,115 @@ func TestStore_ListRollups(t *testing.T) {
 	}
 }
 
+func TestStore_ListRollups_VerifyIntent(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "recovery.db")
+
+	store, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	// Truncate to millisecond precision: the persistence layer stores
+	// completion timestamps as int64 milliseconds, so any sub-millisecond
+	// precision in time.Now() would not round-trip and would fail the
+	// reflective Equal() assertion below.
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	recent := now.Add(-2 * 24 * time.Hour)
+	old := now.Add(-21 * 24 * time.Hour)
+
+	verified := true
+	unverified := false
+
+	points := []recovery.RecoveryPoint{
+		{
+			ID:                "verified-fresh",
+			Provider:          recovery.ProviderProxmoxPBS,
+			Kind:              recovery.KindBackup,
+			Mode:              recovery.ModeRemote,
+			Outcome:           recovery.OutcomeSuccess,
+			StartedAt:         &recent,
+			CompletedAt:       &recent,
+			Verified:          &verified,
+			SubjectResourceID: "vm-verified",
+		},
+		{
+			ID:                "stale-fresh-success",
+			Provider:          recovery.ProviderProxmoxPBS,
+			Kind:              recovery.KindBackup,
+			Mode:              recovery.ModeRemote,
+			Outcome:           recovery.OutcomeSuccess,
+			StartedAt:         &recent,
+			CompletedAt:       &recent,
+			Verified:          &unverified,
+			SubjectResourceID: "vm-stale",
+		},
+		{
+			ID:                "stale-old-verification",
+			Provider:          recovery.ProviderProxmoxPBS,
+			Kind:              recovery.KindBackup,
+			Mode:              recovery.ModeRemote,
+			Outcome:           recovery.OutcomeSuccess,
+			StartedAt:         &old,
+			CompletedAt:       &old,
+			Verified:          &verified,
+			SubjectResourceID: "vm-stale",
+		},
+		{
+			ID:                "unknown-failed-only",
+			Provider:          recovery.ProviderProxmoxPBS,
+			Kind:              recovery.KindBackup,
+			Mode:              recovery.ModeRemote,
+			Outcome:           recovery.OutcomeFailed,
+			StartedAt:         &recent,
+			CompletedAt:       &recent,
+			SubjectResourceID: "vm-unknown",
+		},
+	}
+
+	if err := store.UpsertPoints(context.Background(), points); err != nil {
+		t.Fatalf("UpsertPoints() error = %v", err)
+	}
+
+	got, _, err := store.ListRollups(context.Background(), recovery.ListPointsOptions{Page: 1, Limit: 50})
+	if err != nil {
+		t.Fatalf("ListRollups() error = %v", err)
+	}
+
+	intentByRollup := make(map[string]recovery.VerifyIntent, len(got))
+	verifiedAtByRollup := make(map[string]*time.Time, len(got))
+	for _, r := range got {
+		intentByRollup[r.RollupID] = r.VerifyIntent
+		verifiedAtByRollup[r.RollupID] = r.LastVerifiedAt
+	}
+
+	if intentByRollup["res:vm-verified"] != recovery.VerifyIntentVerified {
+		t.Fatalf("vm-verified intent = %q, want %q",
+			intentByRollup["res:vm-verified"], recovery.VerifyIntentVerified)
+	}
+	if intentByRollup["res:vm-stale"] != recovery.VerifyIntentStale {
+		t.Fatalf("vm-stale intent = %q, want %q",
+			intentByRollup["res:vm-stale"], recovery.VerifyIntentStale)
+	}
+	if intentByRollup["res:vm-unknown"] != recovery.VerifyIntentUnknown {
+		t.Fatalf("vm-unknown intent = %q, want %q",
+			intentByRollup["res:vm-unknown"], recovery.VerifyIntentUnknown)
+	}
+
+	if got := verifiedAtByRollup["res:vm-verified"]; got == nil || !got.Equal(recent) {
+		t.Fatalf("vm-verified lastVerifiedAt = %v, want %v", got, recent)
+	}
+	if got := verifiedAtByRollup["res:vm-stale"]; got == nil || !got.Equal(old) {
+		t.Fatalf("vm-stale lastVerifiedAt = %v, want historical %v", got, old)
+	}
+	if got := verifiedAtByRollup["res:vm-unknown"]; got != nil {
+		t.Fatalf("vm-unknown lastVerifiedAt = %v, want nil", got)
+	}
+}
+
 func TestStore_ListRollups_IgnoresMalformedSubjectRefJSON(t *testing.T) {
 	t.Parallel()
 

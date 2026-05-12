@@ -6,6 +6,46 @@ import (
 	"time"
 )
 
+// BackupVerifyStaleWindow is the default lookback used to decide whether a
+// successful backup has been verified recently enough. A successful backup
+// without a verification-bearing point inside this window flips the rollup's
+// VerifyIntent to stale. MVP keeps this as a package-level constant; a
+// future configurable plumbing change will replace it.
+const BackupVerifyStaleWindow = 7 * 24 * time.Hour
+
+// ComputeVerifyIntentAt returns the verify intent and the newest verified
+// timestamp for a subject, given the most recent successful attempt and the
+// newest verification-bearing point seen on the rollup. The "now" parameter
+// is injected so tests and the SQL rollup path stay deterministic.
+//
+// Semantics:
+//   - verified : a verification-bearing point exists within window of now
+//   - stale    : a successful backup exists, but no verification within window
+//   - unknown  : no successful backup at all (or no info)
+//
+// LastVerifiedAt is returned regardless of intent (when known) so consumers
+// can surface "last verified X days ago" alongside the badge.
+func ComputeVerifyIntentAt(lastSuccessMs, lastVerifiedMs int64, now time.Time) (VerifyIntent, *time.Time) {
+	windowMs := BackupVerifyStaleWindow.Milliseconds()
+	nowMs := now.UTC().UnixMilli()
+
+	var lastVerifiedAt *time.Time
+	if lastVerifiedMs > 0 {
+		t := time.UnixMilli(lastVerifiedMs).UTC()
+		lastVerifiedAt = &t
+	}
+
+	if lastSuccessMs <= 0 {
+		return VerifyIntentUnknown, lastVerifiedAt
+	}
+
+	if lastVerifiedMs > 0 && nowMs-lastVerifiedMs <= windowMs {
+		return VerifyIntentVerified, lastVerifiedAt
+	}
+
+	return VerifyIntentStale, lastVerifiedAt
+}
+
 func displayForRollupPoint(p RecoveryPoint) *RecoveryPointDisplay {
 	if p.Display != nil {
 		display := *p.Display
@@ -18,6 +58,12 @@ func displayForRollupPoint(p RecoveryPoint) *RecoveryPointDisplay {
 // This mirrors the sqlite rollup semantics (timestamp selection + success window)
 // so mock mode and in-memory consumers behave consistently with persisted stores.
 func BuildRollupsFromPoints(points []RecoveryPoint) []ProtectionRollup {
+	return BuildRollupsFromPointsAt(points, time.Now())
+}
+
+// BuildRollupsFromPointsAt is the now-injectable companion used by tests so
+// VerifyIntent staleness is deterministic regardless of wall-clock drift.
+func BuildRollupsFromPointsAt(points []RecoveryPoint, now time.Time) []ProtectionRollup {
 	if len(points) == 0 {
 		return []ProtectionRollup{}
 	}
@@ -30,8 +76,9 @@ func BuildRollupsFromPoints(points []RecoveryPoint) []ProtectionRollup {
 		latestID      string
 		latestOutcome Outcome
 
-		lastAttemptMs int64
-		lastSuccessMs int64
+		lastAttemptMs  int64
+		lastSuccessMs  int64
+		lastVerifiedMs int64
 
 		// Latest identity seen (ties resolved by latestTS/updated/id).
 		subjectRID string
@@ -113,6 +160,11 @@ func BuildRollupsFromPoints(points []RecoveryPoint) []ProtectionRollup {
 		if p.Outcome == OutcomeSuccess && tsMs > a.lastSuccessMs {
 			a.lastSuccessMs = tsMs
 		}
+		// Track the newest verification-bearing point on the rollup window so
+		// the VerifyIntent computation downstream can grade the subject.
+		if p.Verified != nil && *p.Verified && tsMs > a.lastVerifiedMs {
+			a.lastVerifiedMs = tsMs
+		}
 
 		// Latest-point identity + outcome: choose the point with the greatest ts,
 		// then updated, then id lexicographically.
@@ -155,6 +207,8 @@ func BuildRollupsFromPoints(points []RecoveryPoint) []ProtectionRollup {
 		}
 		sort.Slice(providers, func(i, j int) bool { return string(providers[i]) < string(providers[j]) })
 
+		verifyIntent, lastVerifiedAt := ComputeVerifyIntentAt(a.lastSuccessMs, a.lastVerifiedMs, now)
+
 		out = append(out, ProtectionRollup{
 			RollupID:          strings.TrimSpace(a.subjectKey),
 			SubjectResourceID: a.subjectRID,
@@ -164,6 +218,8 @@ func BuildRollupsFromPoints(points []RecoveryPoint) []ProtectionRollup {
 			LastSuccessAt:     lastSuccessAt,
 			LastOutcome:       a.latestOutcome,
 			Providers:         providers,
+			VerifyIntent:      verifyIntent,
+			LastVerifiedAt:    lastVerifiedAt,
 		})
 	}
 

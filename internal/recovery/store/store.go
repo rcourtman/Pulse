@@ -1629,6 +1629,7 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 				details_summary,
 				provider,
 				outcome,
+				verified,
 				` + tsExpr + ` AS ts_ms,
 				updated_at_ms,
 				id
@@ -1639,7 +1640,8 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 			SELECT
 				subject_key,
 				MAX(ts_ms) AS last_attempt_ms,
-				MAX(CASE WHEN outcome = 'success' THEN ts_ms END) AS last_success_ms
+				MAX(CASE WHEN outcome = 'success' THEN ts_ms END) AS last_success_ms,
+				MAX(CASE WHEN verified = 1 THEN ts_ms END) AS last_verified_ms
 			FROM filtered
 			GROUP BY subject_key
 		),
@@ -1706,6 +1708,7 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 			latest.details_summary,
 			agg.last_attempt_ms,
 			agg.last_success_ms,
+			agg.last_verified_ms,
 			(SELECT outcome FROM ranked r WHERE r.subject_key = agg.subject_key AND r.rn = 1) AS last_outcome,
 			providers.providers_csv
 		FROM agg
@@ -1739,6 +1742,7 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 		var detailsSummary sql.NullString
 		var lastAttemptMs sql.NullInt64
 		var lastSuccessMs sql.NullInt64
+		var lastVerifiedMs sql.NullInt64
 		var lastOutcome string
 		var providersRaw sql.NullString
 
@@ -1758,6 +1762,7 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 			&detailsSummary,
 			&lastAttemptMs,
 			&lastSuccessMs,
+			&lastVerifiedMs,
 			&lastOutcome,
 			&providersRaw,
 		); err != nil {
@@ -1774,6 +1779,17 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 			t := time.UnixMilli(lastSuccessMs.Int64).UTC()
 			lastSuccessAt = &t
 		}
+		var lastSuccessMsValue int64
+		if lastSuccessMs.Valid {
+			lastSuccessMsValue = lastSuccessMs.Int64
+		}
+		var lastVerifiedMsValue int64
+		if lastVerifiedMs.Valid {
+			lastVerifiedMsValue = lastVerifiedMs.Int64
+		}
+		verifyIntent, lastVerifiedAt := recovery.ComputeVerifyIntentAt(
+			lastSuccessMsValue, lastVerifiedMsValue, time.Now(),
+		)
 
 		var subjectRef recovery.ExternalRef
 		_ = decodeRecoveryJSONField(subjectKey, "subject_ref_json", subjectRefRaw, &subjectRef)
@@ -1820,6 +1836,8 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 			LastSuccessAt:     lastSuccessAt,
 			LastOutcome:       outcome,
 			Providers:         providers,
+			VerifyIntent:      verifyIntent,
+			LastVerifiedAt:    lastVerifiedAt,
 		})
 	}
 	if err := rows.Err(); err != nil {
