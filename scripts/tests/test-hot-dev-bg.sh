@@ -887,6 +887,14 @@ test_integration_runtime_defaults_centralize_managed_browser_detection() {
 
 test_integration_runtime_defaults_prefer_explicit_browser_override() {
   local output
+  # Raw Node can't load .ts files without the tsx loader or Node 22.6+'s
+  # --experimental-strip-types; skip when the integration deps aren't
+  # installed (CI smoke, fresh clones). Same reasoning as the wrapper
+  # check above.
+  if [[ ! -d "${ROOT_DIR}/tests/integration/node_modules" ]]; then
+    echo "[SKIP] runtime-defaults explicit-override check (tests/integration/node_modules not installed)"
+    return 0
+  fi
   output="$(
     ROOT_DIR="${ROOT_DIR}" \
     node --input-type=module <<'EOF'
@@ -911,6 +919,10 @@ EOF
 
 test_integration_runtime_defaults_honor_repo_root_override() {
   local output
+  if [[ ! -d "${ROOT_DIR}/tests/integration/node_modules" ]]; then
+    echo "[SKIP] runtime-defaults repo-root-override check (tests/integration/node_modules not installed)"
+    return 0
+  fi
   output="$(
     ROOT_DIR="${ROOT_DIR}" \
     node --input-type=module <<'EOF'
