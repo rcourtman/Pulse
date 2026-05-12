@@ -502,10 +502,22 @@ The relay protocol provides end-to-end encrypted remote access foundations for P
 2. Toggle relay **On**.
 3. Use the **QR Code** or **Deep Link** to pair a supported Pulse Mobile client.
 
-Relay has no environment-variable overrides. Enable/disable and the
-server URL are persisted in `relay.enc` and configured from
-**Settings → Relay**. The relay server URL defaults to
-`wss://relay.pulserelay.pro/ws/instance`.
+### Environment Overrides
+
+For headless / container deployments that need to bootstrap relay without
+going through the UI, two environment variables override the persisted
+`relay.enc` values at load time:
+
+| Variable | Description | Default |
+|---|---|---|
+| `PULSE_RELAY_ENABLED` | Enable/disable relay (`true`/`false`/`yes`/`no`/`1`/`0`). Unset or unrecognized values leave the file value untouched. | *(unset)* |
+| `PULSE_RELAY_SERVER` | Override relay server URL. Must be a valid `ws://` or `wss://` URL with no userinfo, query, or fragment. Invalid values are logged and ignored. | `wss://relay.pulserelay.pro/ws/instance` |
+
+Precedence: env vars beat the file. If you set `PULSE_RELAY_ENABLED=true`,
+saving the relay form in **Settings → Relay** will then persist the
+env-effective state to disk, so removing the env var later does not
+automatically revert relay back to its previous file-stored state — clear
+relay in the UI as well if you want to fully disable it.
 
 ### Security
 

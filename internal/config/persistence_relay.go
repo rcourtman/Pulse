@@ -20,14 +20,19 @@ func (c *ConfigPersistence) SaveRelayConfig(cfg relay.Config) error {
 }
 
 // LoadRelayConfig retrieves the persisted relay settings. Returns default config if none exists.
+// PULSE_RELAY_ENABLED / PULSE_RELAY_SERVER env vars override the file values
+// after load — see relay.ApplyEnvOverrides for the precedence rules.
 func (c *ConfigPersistence) LoadRelayConfig() (*relay.Config, error) {
 	cfg := relay.DefaultConfig()
 	if err := loadJSON(c, c.relayFile, true, cfg); err != nil {
 		if errors.Is(err, fs.ErrNotExist) || os.IsNotExist(err) {
-			return relay.DefaultConfig(), nil
+			cfg = relay.DefaultConfig()
+			relay.ApplyEnvOverrides(cfg)
+			return cfg, nil
 		}
 		return nil, err
 	}
 
+	relay.ApplyEnvOverrides(cfg)
 	return cfg, nil
 }

@@ -40,6 +40,16 @@ for Pulse instance bridging.
 1. Add or change desktop relay reconnect, registration, drain, proxy-stream, or encrypted channel behavior through `internal/relay/`
 2. Add or change relay control payload schemas, including mobile-visible push notification metadata, through `internal/relay/protocol.go`
 3. Add or change persisted relay enablement, server URL, or reconnect-safe default loading through `internal/config/persistence_relay.go`
+   `LoadRelayConfig` must apply environment-variable overrides
+   (`PULSE_RELAY_ENABLED`, `PULSE_RELAY_SERVER`) on top of the file-loaded
+   or default-fallback `relay.Config` via `relay.ApplyEnvOverrides`. The
+   env overrides must distinguish unset / empty / unparseable values
+   (file or default wins) from explicit `true`/`false`/valid-URL values
+   (env wins), and must reject invalid `PULSE_RELAY_SERVER` URLs through
+   the canonical `validateRelayServerURL` check rather than silently
+   accepting a malformed override. Saving the resulting `relay.Config`
+   from the UI is allowed to persist the env-effective state to disk;
+   the override is not stripped before save.
 4. Add or change the backend-owned mobile relay capability inventory and compatibility scope mapping through `internal/api/relay_mobile_capability.go`
 5. Add or change mobile relay reconnect, drain, channel, encryption, proxy, or identity behavior through `pulse-mobile:src/relay/`
 6. Keep desktop and mobile relay changes aligned with the governed server relay surfaces represented by the L7 lane evidence

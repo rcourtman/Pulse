@@ -2079,6 +2079,7 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
             [
                 "internal/relay/client_test.go",
+                "internal/relay/config_env_test.go",
                 "internal/relay/encryption_test.go",
             ],
         )

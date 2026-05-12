@@ -72,3 +72,46 @@ func TestConfigPersistenceLoadRelayConfigMigratesPlaintextFile(t *testing.T) {
 		t.Fatal("expected plaintext relay config to be rewritten encrypted")
 	}
 }
+
+func TestConfigPersistenceLoadRelayConfigAppliesEnvOverrideOverFile(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := NewConfigPersistence(tempDir)
+
+	// File says disabled with the default URL.
+	if err := cp.SaveRelayConfig(*relay.DefaultConfig()); err != nil {
+		t.Fatalf("SaveRelayConfig() error = %v", err)
+	}
+
+	// Env says enable + redirect to a private endpoint.
+	t.Setenv(relay.EnvRelayEnabled, "true")
+	t.Setenv(relay.EnvRelayServerURL, "wss://relay.internal.example/ws/instance")
+
+	cfg, err := cp.LoadRelayConfig()
+	if err != nil {
+		t.Fatalf("LoadRelayConfig() error = %v", err)
+	}
+	if !cfg.Enabled {
+		t.Fatalf("LoadRelayConfig() enabled = false, want true (env override should beat file)")
+	}
+	if cfg.ServerURL != "wss://relay.internal.example/ws/instance" {
+		t.Fatalf("LoadRelayConfig() server_url = %q, want env override", cfg.ServerURL)
+	}
+}
+
+func TestConfigPersistenceLoadRelayConfigAppliesEnvOverrideWithNoFile(t *testing.T) {
+	cp := NewConfigPersistence(t.TempDir())
+
+	t.Setenv(relay.EnvRelayEnabled, "yes")
+	t.Setenv(relay.EnvRelayServerURL, "wss://relay.internal.example/ws/instance")
+
+	cfg, err := cp.LoadRelayConfig()
+	if err != nil {
+		t.Fatalf("LoadRelayConfig() error = %v", err)
+	}
+	if !cfg.Enabled {
+		t.Fatalf("LoadRelayConfig() enabled = false, want true (env override on default-when-missing)")
+	}
+	if cfg.ServerURL != "wss://relay.internal.example/ws/instance" {
+		t.Fatalf("LoadRelayConfig() server_url = %q, want env override", cfg.ServerURL)
+	}
+}

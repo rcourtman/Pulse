@@ -53,10 +53,17 @@ Relay was designed with a zero-trust model:
 
 ### Environment Variables
 
+For headless / container deployments, two env vars override the persisted
+`relay.enc` values at load time. Unset leaves the file value untouched.
+
 | Variable | Description | Default |
 |---|---|---|
-| `PULSE_RELAY_ENABLED` | Enable/disable relay | `false` |
-| `PULSE_RELAY_SERVER` | Override relay server URL | `relay.pulserelay.pro` |
+| `PULSE_RELAY_ENABLED` | Enable/disable relay (`true`/`false`/`yes`/`no`/`1`/`0`). Unrecognized values are ignored. | *(unset)* |
+| `PULSE_RELAY_SERVER` | Override relay server URL. Must be `ws://` or `wss://`. Invalid values are logged and ignored. | `wss://relay.pulserelay.pro/ws/instance` |
+
+Env vars take precedence over the file at load. Saving from the UI after an
+env override is active persists the env-effective state to disk, so clearing
+the env var alone will not revert the change — disable in the UI too.
 
 ### Storage
 
