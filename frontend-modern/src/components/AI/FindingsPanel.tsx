@@ -82,7 +82,7 @@ interface FindingsPanelProps {
   showResolved?: boolean;
   maxItems?: number;
   onFindingClick?: (finding: UnifiedFinding) => void;
-  filterOverride?: 'all' | 'active' | 'resolved' | 'approvals' | 'attention';
+  filterOverride?: 'all' | 'active' | 'resolved' | 'approvals' | 'attention' | 'overdue';
   filterFindingIds?: string[];
   showControls?: boolean;
   scopeResourceIds?: string[];
@@ -146,7 +146,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const location = useLocation();
   const { get: getResource } = useResources();
   const [filter, setFilter] = createSignal<
-    'all' | 'active' | 'resolved' | 'approvals' | 'attention'
+    'all' | 'active' | 'resolved' | 'approvals' | 'attention' | 'overdue'
   >(props.filterOverride ?? 'active');
   const [sortBy, setSortBy] = createSignal<'severity' | 'time'>('severity');
   const [expandedId, setExpandedId] = createSignal<string | null>(null);
@@ -314,6 +314,23 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     } else if (filter() === 'approvals') {
       const approvalFindingIds = new Set(sourceFindingsWithPendingApprovals().map((f) => f.id));
       findings = findings.filter((f) => approvalFindingIds.has(f.id));
+    } else if (filter() === 'overdue') {
+      // Overdue surfaces will_fix_later commitments whose RemindAt
+      // deadline has already passed. The Go store's proactive sweep
+      // (SweepWillFixLaterReminders) wakes these on a 1h timer, but
+      // this filter lets the operator see them on demand — including
+      // any that the sweep has not yet promoted on this cycle.
+      const nowMs = Date.now();
+      findings = findings.filter((f) => {
+        if (f.dismissedReason !== 'will_fix_later') {
+          return false;
+        }
+        if (!f.remindAt) {
+          return false;
+        }
+        const due = Date.parse(f.remindAt);
+        return Number.isFinite(due) && due <= nowMs;
+      });
     }
 
     // Filter by specific finding IDs if provided
@@ -401,6 +418,17 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       ? scopedPendingApprovalCount()
       : sourceFindingsWithPendingApprovals().length,
   }));
+  // Count of will_fix_later commitments whose RemindAt deadline has
+  // already passed. Drives the Overdue commitments chip below.
+  const overdueCount = createMemo(() => {
+    const nowMs = Date.now();
+    return sourceFindings().filter((f) => {
+      if (f.dismissedReason !== 'will_fix_later') return false;
+      if (!f.remindAt) return false;
+      const due = Date.parse(f.remindAt);
+      return Number.isFinite(due) && due <= nowMs;
+    }).length;
+  });
   const patrolFindings = createMemo(() => {
     if (isPatrolFindingsSource()) {
       return filteredFindings();
@@ -410,15 +438,22 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     );
   });
   const filterOptions = createMemo(() => buildFindingFilterOptions(filterCounts()));
-  const emptyStateCopy = createMemo(() =>
-    getPatrolFindingsEmptyState({
-      filter: filter(),
+  const emptyStateCopy = createMemo(() => {
+    // 'overdue' is a FindingsPanel-local extension to the shared
+    // FindingsFilter union. The empty state for that case is rendered
+    // inline below (the <Show when={filter() === 'overdue'}> branch),
+    // so the value passed here is intentionally a no-op fallback that
+    // keeps the helper inside its FindingsFilter contract.
+    const currentFilter = filter();
+    const emptyFilter = currentFilter === 'overdue' ? 'all' : currentFilter;
+    return getPatrolFindingsEmptyState({
+      filter: emptyFilter,
       overallHealth: props.overallHealth,
       runtimeState: props.runtimeState,
       blockedReason: props.blockedReason,
       runSnapshot: props.runSnapshot,
-    }),
-  );
+    });
+  });
   const emptyStateTone = createMemo(() => getSemanticTonePresentation(emptyStateCopy().tone));
   // Auto-reset filter when the conditional filter buttons disappear
   createEffect(() => {
@@ -428,6 +463,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     if (filter() === 'approvals' && filterCounts().pendingApprovalCount === 0) {
       setFilter('active');
     }
+    if (filter() === 'overdue' && overdueCount() === 0) {
+      setFilter('active');
+    }
   });
   const showFilterControls = createMemo(
     () =>
@@ -435,10 +473,12 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       (useRunSnapshotScopedControls()
         ? runSnapshotScopedPatrolFindings().length > 0 ||
           filterCounts().needsAttentionCount > 0 ||
-          filterCounts().pendingApprovalCount > 0
+          filterCounts().pendingApprovalCount > 0 ||
+          overdueCount() > 0
         : allPatrolFindings().length > 0 ||
           filterCounts().needsAttentionCount > 0 ||
-          filterCounts().pendingApprovalCount > 0),
+          filterCounts().pendingApprovalCount > 0 ||
+          overdueCount() > 0),
   );
 
   const isOutOfScope = (finding: UnifiedFinding): boolean => {
@@ -1937,7 +1977,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <For each={filterOptions()}>
               {(option, index) => {
                 const isFirst = () => index() === 0;
-                const isLast = () => index() === filterOptions().length - 1;
+                const isLast = () => index() === filterOptions().length - 1 && overdueCount() === 0;
                 return (
                   <button
                     type="button"
@@ -1952,6 +1992,17 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 );
               }}
             </For>
+            <Show when={overdueCount() > 0}>
+              <button
+                type="button"
+                data-testid="findings-panel-filter-overdue"
+                onClick={() => setFilter('overdue')}
+                class={`px-2 py-1 border rounded-r ${segmentedButtonClass(filter() === 'overdue', false, 'warning')}`}
+                title="Will-fix-later commitments past their remind deadline"
+              >
+                Overdue commitments ({overdueCount()})
+              </button>
+            </Show>
           </div>
           <Show when={patrolFindings().length > 1}>
             <FormSelect
@@ -2027,9 +2078,13 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 </Show>
                 <Show when={filter() === 'attention'}>{emptyStateCopy().title}</Show>
                 <Show when={filter() === 'approvals'}>{emptyStateCopy().title}</Show>
+                <Show when={filter() === 'overdue'}>No overdue will-fix-later commitments.</Show>
                 <Show
                   when={
-                    filter() !== 'active' && filter() !== 'attention' && filter() !== 'approvals'
+                    filter() !== 'active' &&
+                    filter() !== 'attention' &&
+                    filter() !== 'approvals' &&
+                    filter() !== 'overdue'
                   }
                 >
                   {emptyStateCopy().title}
