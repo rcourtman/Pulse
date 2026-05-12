@@ -112,10 +112,14 @@ rm -f install.sh install.sh.sshsig
 <summary><strong>Manual systemd install (advanced)</strong></summary>
 
 ```bash
-# Download the correct tarball from GitHub Releases and extract it
-# https://github.com/rcourtman/Pulse/releases
+# Download and extract the architecture-specific tarball from GitHub Releases:
+#   https://github.com/rcourtman/Pulse/releases
+# e.g.
+#   curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/pulse-${PULSE_VERSION}-linux-amd64.tar.gz"
+#   tar -xzf "pulse-${PULSE_VERSION}-linux-amd64.tar.gz"
+# The extracted tree contains ./bin/pulse plus ./bin/pulse-agent-* and ./scripts/.
 
-sudo install -m 0755 pulse /usr/local/bin/pulse
+sudo install -m 0755 bin/pulse /usr/local/bin/pulse
 
 # Create systemd service
 sudo tee /etc/systemd/system/pulse.service > /dev/null << 'EOF'
