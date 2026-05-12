@@ -249,7 +249,11 @@ func (s *Service) resolveTenantLeaseContext(tenant *registry.Tenant, requestedSu
 			ctx.planVersion = pkglicensing.CanonicalizePlanVersion(stripeAccount.PlanVersion)
 		}
 		if ctx.subscriptionState == "" && stripeAccount != nil {
-			ctx.subscriptionState = pkglicensing.MapStripeSubscriptionStatusToState(stripeAccount.SubscriptionState)
+			// stripeAccount.SubscriptionState holds the normalized stored form
+			// (e.g. "trial", "past_due") written by
+			// normalizeStripeAccountSubscriptionState; use the stored-form
+			// parser, not the raw Stripe-status mapper.
+			ctx.subscriptionState = pkglicensing.ParseStoredSubscriptionState(stripeAccount.SubscriptionState)
 			if ctx.subscriptionState == pkglicensing.SubStateTrial && stripeAccount.TrialEndsAt == nil {
 				ctx.subscriptionState = pkglicensing.SubStateActive
 			}

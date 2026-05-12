@@ -224,6 +224,12 @@ or other self-hosted uncapped continuity plans.
    in any non-`active` lifecycle state must return an inactive hosted entitlement
    result even when the owning account's Stripe subscription is still active, so
    soft-deleted or suspended workspaces cannot keep refreshing runtime leases.
+   Hosted entitlement refresh must parse `stripe_accounts.subscription_state`
+   as the normalized stored vocabulary (`active`, `trial`, `past_due`,
+   `canceled`, and migration-tolerated terminal states), not as raw Stripe API
+   statuses such as `trialing`. Raw Stripe status mapping remains limited to
+   webhook/provisioner ingress; stored-row reads must use the licensing-owned
+   stored-state parser so active trials do not fail closed during lease refresh.
 3. Add or change control-plane plan storage through `internal/cloudcp/registry/models.go` and `internal/cloudcp/registry/registry.go`
 4. Add or change MSP account-scoped workspace provisioning entry handlers through `internal/cloudcp/account/tenant_handlers.go`
 5. Add or change public cloud self-serve signup price configuration,

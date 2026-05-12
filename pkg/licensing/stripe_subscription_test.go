@@ -30,6 +30,35 @@ func TestMapStripeSubscriptionStatusToState(t *testing.T) {
 	}
 }
 
+func TestParseStoredSubscriptionState(t *testing.T) {
+	tests := []struct {
+		name   string
+		stored string
+		want   SubscriptionState
+	}{
+		{name: "active", stored: "active", want: SubStateActive},
+		{name: "trial (normalized form, the one that was misparsed)", stored: "trial", want: SubStateTrial},
+		{name: "past_due", stored: "past_due", want: SubStateGrace},
+		{name: "canceled", stored: "canceled", want: SubStateCanceled},
+		{name: "grace tolerated for migration", stored: "grace", want: SubStateGrace},
+		{name: "suspended tolerated for migration", stored: "suspended", want: SubStateSuspended},
+		{name: "expired tolerated for migration", stored: "expired", want: SubStateExpired},
+		{name: "raw stripe trialing must NOT be accepted here", stored: "trialing", want: SubStateExpired},
+		{name: "unknown fails closed", stored: "garbage", want: SubStateExpired},
+		{name: "blank fails closed", stored: "", want: SubStateExpired},
+		{name: "trim and case", stored: "  TRIAL  ", want: SubStateTrial},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ParseStoredSubscriptionState(tt.stored)
+			if got != tt.want {
+				t.Fatalf("state=%q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestShouldGrantPaidCapabilities(t *testing.T) {
 	tests := []struct {
 		name  string

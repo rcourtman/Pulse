@@ -262,6 +262,69 @@ func TestRefreshPaidEntitlementRejectsDeletedTenantWithActiveBilling(t *testing.
 	}
 }
 
+func TestRefreshPaidEntitlementGrantsLeaseForNormalizedTrialStored(t *testing.T) {
+	// Regression: stripe_accounts.subscription_state is stored in the
+	// normalized form ("trial"), not the raw Stripe form ("trialing"). The
+	// refresh path used to pass that stored form to the raw-Stripe mapper,
+	// which fail-closed to SubStateExpired and rejected the refresh with
+	// HTTP 410 Gone, silently demoting paying trial tenants to community
+	// tier mid-trial. Once the resolver uses ParseStoredSubscriptionState,
+	// a normalized "trial" with no trial_ends_at must produce a valid lease.
+	svc, pub, reg := newTestServiceWithBaseURL(t, "https://cloud.example.com")
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatalf("GenerateAccountID: %v", err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindIndividual,
+		DisplayName: "Pulse Labs",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{
+		AccountID:         accountID,
+		StripeCustomerID:  "fake-test-customer-normalized-trial",
+		PlanVersion:       "cloud_starter",
+		SubscriptionState: "trial", // normalized stored form, NOT the raw "trialing"
+	}); err != nil {
+		t.Fatalf("CreateStripeAccount: %v", err)
+	}
+
+	tenant := &registry.Tenant{
+		ID:          "t-SERVICE_NORMALIZED_TRIAL",
+		AccountID:   accountID,
+		Email:       "owner@example.com",
+		State:       registry.TenantStateActive,
+		PlanVersion: "cloud_starter",
+	}
+	if err := reg.Create(tenant); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	now := time.Unix(1710000000, 0).UTC()
+	svc.SetNow(func() time.Time { return now })
+	if _, _, err := reg.StoreOrIssueHostedEntitlement(tenant.ID, "etr_normalized_trial", now); err != nil {
+		t.Fatalf("StoreOrIssueHostedEntitlement: %v", err)
+	}
+
+	result, err := svc.RefreshEntitlement("etr_normalized_trial", "t-service_normalized_trial.cloud.example.com")
+	if err != nil {
+		t.Fatalf("RefreshEntitlement returned %v for a normalized trial tenant; it should succeed", err)
+	}
+	if result == nil || result.EntitlementJWT == "" {
+		t.Fatalf("expected a signed entitlement lease, got %#v", result)
+	}
+	claims, err := pkglicensing.VerifyEntitlementLeaseToken(result.EntitlementJWT, pub, "t-service_normalized_trial.cloud.example.com", now)
+	if err != nil {
+		t.Fatalf("VerifyEntitlementLeaseToken: %v", err)
+	}
+	if claims.SubscriptionState != pkglicensing.SubStateActive {
+		t.Fatalf("claims.SubscriptionState=%q, want %q (trial with nil trial_ends_at must be treated as active)", claims.SubscriptionState, pkglicensing.SubStateActive)
+	}
+}
+
 func TestRefreshPaidEntitlementCanonicalizesBaseURLForExpectedHost(t *testing.T) {
 	svc, pub, reg := newTestServiceWithBaseURL(t, "https://Cloud.Example.com:8443/admin")
 
