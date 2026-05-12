@@ -13440,6 +13440,26 @@ func TestContract_SubscribeEventsCapabilityListsApprovalPending(t *testing.T) {
 	}
 }
 
+// TestContract_AgentEventsHeartbeatIsStreamLocal pins that
+// heartbeat keepalives are written to the connected SSE response
+// rather than published through the broadcaster. Heartbeats are
+// connection health signals, not product events; publishing them
+// globally makes N subscribers create N heartbeat events that fan
+// out to every other subscriber.
+func TestContract_AgentEventsHeartbeatIsStreamLocal(t *testing.T) {
+	source, err := os.ReadFile("agent_events.go")
+	if err != nil {
+		t.Fatalf("read agent_events.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "writeAgentSSEEvent(w, b.stampEvent(AgentEvent{Kind: AgentEventHeartbeat}))") {
+		t.Error("HandleAgentEvents must write heartbeat events directly to the connected response")
+	}
+	if strings.Contains(src, "case <-heartbeat.C:\n\t\t\tb.Publish(AgentEvent{Kind: AgentEventHeartbeat})") {
+		t.Error("HandleAgentEvents must not publish heartbeat events through the broadcaster")
+	}
+}
+
 // TestContract_AgentEventsStreamPublishesOnActionCompleted pins the
 // agent SSE stream's third producer hook: the executor's
 // post-completion callback must publish action.completed events for

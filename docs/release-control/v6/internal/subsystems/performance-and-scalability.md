@@ -529,7 +529,10 @@ callback on its own goroutine after the approval is persisted, and
 post-completion callback on its own goroutine after the audit
 record is persisted. Goroutine dispatch keeps the approval and
 dispatch hot paths independent of consumer drain rate; per-event
-cost is one channel send per subscriber.
+cost is one channel send per subscriber. Heartbeats are the
+exception: each SSE handler writes its own keepalive directly to
+its response, so concurrent subscribers do not turn one
+connection's heartbeat ticker into a global N-subscriber fan-out.
 
 The `action.completed` payload's `verification` block is a small
 fixed-shape projection (5 fields, no embedded output) so adding

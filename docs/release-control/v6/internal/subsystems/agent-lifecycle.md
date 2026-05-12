@@ -946,10 +946,13 @@ prefixes preserved verbatim; successful dispatches carry a
 broker's read-after-write probe — so agents close the
 "did it actually work?" loop without polling /api/actions/{id}),
 and a 15-second heartbeat keepalive.
-The broadcaster drops events for slow subscribers rather than
-blocking publishers, so the patrol-finding runtime, the approval
-store's post-create callback, and the executor's post-completion
-callback can publish without ever stalling on consumer slowness.
+The broadcaster drops real published events for slow subscribers
+rather than blocking publishers, so the patrol-finding runtime, the
+approval store's post-create callback, and the executor's
+post-completion callback can publish without ever stalling on
+consumer slowness. Heartbeats are stream-local keepalives written
+to each connected response; one subscriber's heartbeat ticker must
+not publish heartbeat events to every other subscriber.
 The agent runtime keeps the broadcaster wired across restarts, and
 the capabilities manifest declares the stream under
 `subscribe_events` so the surface stays self-describing.

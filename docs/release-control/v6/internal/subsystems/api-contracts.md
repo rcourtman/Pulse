@@ -1388,14 +1388,17 @@ raw action and verification commands follow the same `ai:execute`
 redaction rule on the stream;
 refused dispatches omit `verification` because the probe never
 runs) — and `heartbeat` every 15 seconds so an idle connection
-can confirm the stream is alive. Each event carries a monotonic ID so agents
-can dedupe and reason about ordering. The broadcaster drops events
-for slow subscribers rather than blocking the publish path —
-publishers (the patrol findings runtime, the approval store's
-post-create callback, the executor's post-completion callback)
-cannot stall on consumer slowness. The stream sits behind
-`monitoring:read` and runs through the same auth path as the rest
-of the agent surface; the capabilities manifest declares the stream
+can confirm the stream is alive. Each event carries a monotonic ID
+so agents can dedupe and reason about ordering. Heartbeats are
+stream-local keepalives written directly to the connected response,
+not global broadcaster publishes, so concurrent subscribers do not
+multiply heartbeat fan-out for one another. The broadcaster drops
+real published events for slow subscribers rather than blocking the
+publish path — publishers (the patrol findings runtime, the
+approval store's post-create callback, the executor's
+post-completion callback) cannot stall on consumer slowness. The
+stream sits behind `monitoring:read` and runs through the same auth
+path as the rest of the agent surface; the capabilities manifest declares the stream
 under `subscribe_events` so external agents discover it without
 out-of-band documentation.
 

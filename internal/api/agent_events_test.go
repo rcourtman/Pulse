@@ -229,6 +229,70 @@ func TestHandleAgentEvents_StreamsConnectedAndPublishedEvents(t *testing.T) {
 	}
 }
 
+func TestHandleAgentEvents_HeartbeatsAreStreamLocal(t *testing.T) {
+	b := NewAgentEventBroadcaster()
+	b.heartbeatInterval = 20 * time.Millisecond
+
+	otherEvents, unsubscribe := b.Subscribe()
+	defer unsubscribe()
+
+	server := httptest.NewServer(http.HandlerFunc(b.HandleAgentEvents))
+	defer server.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatalf("NewRequestWithContext: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	defer resp.Body.Close()
+
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) && b.SubscriberCount() < 2 {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if b.SubscriberCount() < 2 {
+		t.Fatalf("subscriber count = %d; want at least 2", b.SubscriberCount())
+	}
+
+	heartbeatSeen := make(chan string, 1)
+	go func() {
+		scanner := bufio.NewScanner(resp.Body)
+		var collected strings.Builder
+		for scanner.Scan() {
+			line := scanner.Text()
+			collected.WriteString(line)
+			collected.WriteString("\n")
+			if strings.Contains(line, "\"kind\":\"heartbeat\"") {
+				heartbeatSeen <- collected.String()
+				return
+			}
+		}
+	}()
+
+	select {
+	case payload := <-heartbeatSeen:
+		if !strings.Contains(payload, "event: heartbeat") {
+			t.Fatalf("heartbeat must be serialized as an SSE event; payload=%s", payload)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for stream-local heartbeat")
+	}
+
+	select {
+	case event := <-otherEvents:
+		t.Fatalf("stream-local heartbeat leaked to another subscriber: %+v", event)
+	case <-time.After(3 * b.heartbeatInterval):
+		// Pass: the direct subscriber did not receive the handler's
+		// heartbeat. Real events still fan out through Publish.
+	}
+}
+
 // nonFlushingResponseWriter is a ResponseWriter that explicitly does
 // NOT implement http.Flusher, so we can verify the SSE handler
 // degrades cleanly on writers that can't stream. Standard

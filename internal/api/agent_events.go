@@ -135,11 +135,12 @@ type AgentEventActionCompletedPayload struct {
 // fills, the broadcaster drops events for that subscriber rather
 // than blocking the global publish path.
 type AgentEventBroadcaster struct {
-	mu          sync.RWMutex
-	subscribers map[uint64]chan AgentEvent
-	nextSubID   uint64
-	nextEventID uint64
-	bufSize     int
+	mu                sync.RWMutex
+	subscribers       map[uint64]chan AgentEvent
+	nextSubID         uint64
+	nextEventID       uint64
+	bufSize           int
+	heartbeatInterval time.Duration
 }
 
 // NewAgentEventBroadcaster creates a broadcaster with a per-subscriber
@@ -149,8 +150,9 @@ type AgentEventBroadcaster struct {
 // per subscriber.
 func NewAgentEventBroadcaster() *AgentEventBroadcaster {
 	return &AgentEventBroadcaster{
-		subscribers: make(map[uint64]chan AgentEvent),
-		bufSize:     64,
+		subscribers:       make(map[uint64]chan AgentEvent),
+		bufSize:           64,
+		heartbeatInterval: 15 * time.Second,
 	}
 }
 
@@ -185,10 +187,7 @@ func (b *AgentEventBroadcaster) Subscribe() (<-chan AgentEvent, func()) {
 // path — agents that need replay must use a different mechanism
 // (none currently exposed; future event log can layer on top).
 func (b *AgentEventBroadcaster) Publish(event AgentEvent) {
-	if event.At.IsZero() {
-		event.At = time.Now().UTC()
-	}
-	event.ID = atomic.AddUint64(&b.nextEventID, 1)
+	event = b.stampEvent(event)
 
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -206,6 +205,21 @@ func (b *AgentEventBroadcaster) Publish(event AgentEvent) {
 				Msg("Agent events: dropping event for slow subscriber")
 		}
 	}
+}
+
+func (b *AgentEventBroadcaster) stampEvent(event AgentEvent) AgentEvent {
+	if event.At.IsZero() {
+		event.At = time.Now().UTC()
+	}
+	event.ID = atomic.AddUint64(&b.nextEventID, 1)
+	return event
+}
+
+func (b *AgentEventBroadcaster) currentHeartbeatInterval() time.Duration {
+	if b.heartbeatInterval <= 0 {
+		return 15 * time.Second
+	}
+	return b.heartbeatInterval
 }
 
 // SubscriberCount returns the number of current subscribers. Used by
@@ -258,7 +272,7 @@ func (b *AgentEventBroadcaster) HandleAgentEvents(w http.ResponseWriter, r *http
 	})
 	flusher.Flush()
 
-	heartbeat := time.NewTicker(15 * time.Second)
+	heartbeat := time.NewTicker(b.currentHeartbeatInterval())
 	defer heartbeat.Stop()
 
 	for {
@@ -272,7 +286,8 @@ func (b *AgentEventBroadcaster) HandleAgentEvents(w http.ResponseWriter, r *http
 			writeAgentSSEEvent(w, redactAgentEventCommandsForRequest(event, r))
 			flusher.Flush()
 		case <-heartbeat.C:
-			b.Publish(AgentEvent{Kind: AgentEventHeartbeat})
+			writeAgentSSEEvent(w, b.stampEvent(AgentEvent{Kind: AgentEventHeartbeat}))
+			flusher.Flush()
 		}
 	}
 }
