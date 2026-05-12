@@ -1089,3 +1089,26 @@ jobs:
       tag: ${{ needs.prepare.outputs.tag }}
       version: ${{ needs.prepare.outputs.version }}
       repository: ${{ github.repository }}
+
+  # Publish the Helm chart for this release. publish-helm-chart.yml also
+  # listens for `release: published` events directly, but the create_release
+  # publish step PATCHes a draft release to draft=false rather than creating
+  # it as draft=false from the start — that GitHub-documented path does NOT
+  # fire `release: published`. Across v6 rc.1 → rc.5 the release-event branch
+  # never triggered helm publish, leaving rcourtman.github.io/Pulse/index.yaml
+  # without any v6 chart and breaking `helm install pulse pulse/pulse
+  # --version 6.0.0-rc.5`. Calling the workflow explicitly here is the
+  # canonical fix.
+  publish_helm_chart:
+    needs:
+      - prepare
+      - validate_release_assets
+    if: ${{ always() && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
+    permissions:
+      contents: write
+      packages: write
+    uses: ./.github/workflows/publish-helm-chart.yml
+    secrets: inherit
+    with:
+      chart_version: ${{ needs.prepare.outputs.version }}
+      app_version: ${{ needs.prepare.outputs.version }}

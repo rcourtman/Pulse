@@ -1,8 +1,31 @@
 name: Publish Helm Chart
 
+# Triggers:
+# - release: published — fires when a release is initially created with
+#   draft=false (legacy publish path).
+# - workflow_call — called from create-release.yml after validate_release_assets
+#   succeeds. create-release.yml's publish step creates releases as drafts and
+#   PATCHes to draft=false later, which does NOT fire the `release: published`
+#   webhook (GitHub-documented quirk). Without this workflow_call trigger,
+#   v6 rc.1 → rc.5 published successfully but never produced a Helm chart on
+#   rcourtman.github.io/Pulse/index.yaml — customers running
+#   `helm install pulse pulse/pulse --version 6.0.0-rc.5` got chart-not-found.
+# - workflow_dispatch — manual backfill / re-publish path.
+
 on:
   release:
     types: [published]
+  workflow_call:
+    inputs:
+      chart_version:
+        description: "Chart version (e.g., 6.0.0-rc.5). Required for workflow_call."
+        required: true
+        type: string
+      app_version:
+        description: "Application version to embed (defaults to chart version)."
+        required: false
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       chart_version:
@@ -25,22 +48,26 @@ jobs:
     steps:
       - name: Determine chart version
         id: versions
+        env:
+          INPUT_CHART_VERSION: ${{ inputs.chart_version }}
+          INPUT_APP_VERSION: ${{ inputs.app_version }}
+          RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            CHART_VERSION="${{ inputs.chart_version }}"
-            if [ -z "$CHART_VERSION" ]; then
-              echo "::error::chart_version input is required when running manually"
-              exit 1
-            fi
-            APP_VERSION="${{ inputs.app_version }}"
+          # inputs.chart_version is set by both workflow_dispatch and
+          # workflow_call (from create-release.yml). Fall back to the
+          # release-event tag only when running from a `release: published`
+          # webhook with no inputs.
+          if [ -n "${INPUT_CHART_VERSION}" ]; then
+            CHART_VERSION="${INPUT_CHART_VERSION}"
+            APP_VERSION="${INPUT_APP_VERSION}"
             if [ -z "$APP_VERSION" ]; then
               APP_VERSION="$CHART_VERSION"
             fi
             RELEASE_TAG="v${CHART_VERSION}"
           else
-            RELEASE_TAG="${{ github.event.release.tag_name }}"
+            RELEASE_TAG="${RELEASE_TAG_NAME}"
             if [ -z "$RELEASE_TAG" ]; then
-              echo "::error::Release tag is empty"
+              echo "::error::No chart_version input supplied and release event has no tag_name"
               exit 1
             fi
             CHART_VERSION="${RELEASE_TAG#v}"

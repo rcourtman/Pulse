@@ -317,6 +317,18 @@ server-side update execution surfaces.
    default. `scripts/validate-release.sh` must assert the
    `/usr/local/bin/pulse-agent` symlink exists, points at one of the
    supported Linux arch binaries, and is executable in the published image.
+   `create-release.yml` must trigger `publish-helm-chart.yml` via an explicit
+   `workflow_call` after `validate_release_assets` succeeds, not rely on
+   GitHub's `release: published` webhook. The webhook does not fire when a
+   release is created as draft and later PATCHed to `draft=false` (the path
+   `create-release.yml` uses for draft validation), so without the explicit
+   call the chart silently never publishes — v6 rc.1 through rc.5 all
+   shipped without any chart on the GitHub Pages helm index. The
+   `publish-helm-chart.yml` workflow must therefore expose a `workflow_call`
+   input schema (`chart_version`, `app_version`) alongside the legacy
+   `release` and `workflow_dispatch` triggers, and its chart-version
+   resolver must prefer inputs over the release-event tag when inputs are
+   present so all three entry paths converge on the same identity.
    Generated chart docs are part of the packaged release artifact, not a
    disposable byproduct: when the stable candidate version changes, the checked
    in `deploy/helm/pulse/README.md` output must be regenerated from the same

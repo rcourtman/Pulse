@@ -173,6 +173,16 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`needs.validate_release_assets.result == 'success'`,
 		`needs.prepare.outputs.historical_asset_backfill_only != 'true'`,
 		`repository: ${{ github.repository }}`,
+		// Helm chart publish must be called explicitly from create-release
+		// because the draft→PATCH(draft=false) publish path does NOT fire
+		// the `release: published` webhook (GitHub-documented quirk). v6
+		// rc.1 → rc.5 published successfully but never produced a Helm
+		// chart on the GitHub Pages index, breaking
+		// `helm install pulse pulse/pulse --version 6.0.0-rc.X`.
+		`uses: ./.github/workflows/publish-helm-chart.yml`,
+		`publish_helm_chart:`,
+		`chart_version: ${{ needs.prepare.outputs.version }}`,
+		`app_version: ${{ needs.prepare.outputs.version }}`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(workflow, needle) {
@@ -936,6 +946,40 @@ func TestInstallShSmokeWorkflowPresent(t *testing.T) {
 	for _, needle := range required {
 		if !strings.Contains(workflow, needle) {
 			t.Fatalf("install-sh-smoke.yml missing required smoke step: %s", needle)
+		}
+	}
+}
+
+func TestPublishHelmChartReachableViaWorkflowCall(t *testing.T) {
+	// v6 rc.1 → rc.5 published successfully but never published a Helm
+	// chart because `release: published` does not fire when a release is
+	// created as draft and later PATCHed to draft=false (the path
+	// create-release.yml uses). The fix is an explicit workflow_call from
+	// create-release.yml — wired in `publish_helm_chart` job — that runs
+	// after validate_release_assets succeeds. Both the trigger declaration
+	// on publish-helm-chart.yml and the wiring in create-release.yml must
+	// be present; reverting either reopens the chart-not-published gap.
+	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "publish-helm-chart.yml"))
+	if err != nil {
+		t.Fatalf("read publish-helm-chart.yml: %v", err)
+	}
+	workflow := string(workflowBytes)
+	required := []string{
+		`workflow_call:`,
+		`chart_version:`,
+		`description: "Chart version (e.g., 6.0.0-rc.5). Required for workflow_call."`,
+		`required: true`,
+		`type: string`,
+		`app_version:`,
+		// The chart-version resolver must accept inputs from both
+		// workflow_call and workflow_dispatch, falling back to the
+		// release-event tag only when no inputs are present.
+		`if [ -n "${INPUT_CHART_VERSION}" ]; then`,
+		`RELEASE_TAG="${RELEASE_TAG_NAME}"`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(workflow, needle) {
+			t.Fatalf("publish-helm-chart.yml missing required workflow_call wiring: %s", needle)
 		}
 	}
 }
