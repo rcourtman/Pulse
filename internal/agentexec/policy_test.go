@@ -1,6 +1,11 @@
 package agentexec
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+	"time"
+)
 
 func TestCompilePatternsIgnoresInvalidRegex(t *testing.T) {
 	res := compilePatterns([]string{"^df(\\s|$)", "["})
@@ -82,5 +87,102 @@ func TestPolicyHelpers(t *testing.T) {
 	}
 	if !p.IsAutoApproved("ping -c 1 -W 1 10.0.0.1") {
 		t.Fatalf("expected single-target ping probe to be auto approved")
+	}
+}
+
+func TestDefaultPolicyVerifyWindow(t *testing.T) {
+	p := DefaultPolicy()
+	if p.VerifyWindow != DefaultVerifyWindow {
+		t.Fatalf("default verify window = %v, want %v", p.VerifyWindow, DefaultVerifyWindow)
+	}
+}
+
+func TestNormalizeVerifyWindowBounds(t *testing.T) {
+	cases := []struct {
+		in   time.Duration
+		want time.Duration
+	}{
+		{0, DefaultVerifyWindow},
+		{-1 * time.Second, DefaultVerifyWindow},
+		{30 * time.Second, 30 * time.Second},
+		{DefaultVerifyWindow, DefaultVerifyWindow},
+		{MaxVerifyWindow, MaxVerifyWindow},
+		{MaxVerifyWindow + time.Second, MaxVerifyWindow},
+		{1 * time.Hour, MaxVerifyWindow},
+	}
+	for _, tc := range cases {
+		if got := NormalizeVerifyWindow(tc.in); got != tc.want {
+			t.Fatalf("NormalizeVerifyWindow(%v) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestCommandPolicyNormalizeBoundsInPlace(t *testing.T) {
+	p := &CommandPolicy{VerifyWindow: time.Hour}
+	p.Normalize()
+	if p.VerifyWindow != MaxVerifyWindow {
+		t.Fatalf("Normalize did not clamp verify_window: got %v, want %v", p.VerifyWindow, MaxVerifyWindow)
+	}
+
+	q := &CommandPolicy{VerifyWindow: 0}
+	q.Normalize()
+	if q.VerifyWindow != DefaultVerifyWindow {
+		t.Fatalf("Normalize did not default verify_window: got %v, want %v", q.VerifyWindow, DefaultVerifyWindow)
+	}
+}
+
+func TestCommandPolicyJSONRoundtripVerifyWindow(t *testing.T) {
+	original := &CommandPolicy{
+		AutoApprove:     []string{"^df$"},
+		RequireApproval: []string{"^systemctl\\s+restart"},
+		Blocked:         []string{"^reboot$"},
+		VerifyWindow:    90 * time.Second,
+	}
+
+	raw, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(raw), `"verify_window":"1m30s"`) {
+		t.Fatalf("verify_window should serialize as a duration string; got %s", raw)
+	}
+
+	var decoded CommandPolicy
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if decoded.VerifyWindow != 90*time.Second {
+		t.Fatalf("roundtripped verify_window = %v, want %v", decoded.VerifyWindow, 90*time.Second)
+	}
+}
+
+func TestCommandPolicyJSONUnmarshalAppliesBounds(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		want time.Duration
+	}{
+		{"empty defaults to default window", `{}`, DefaultVerifyWindow},
+		{"zero string defaults to default", `{"verify_window":"0s"}`, DefaultVerifyWindow},
+		{"over-cap clamps to max", `{"verify_window":"1h"}`, MaxVerifyWindow},
+		{"reasonable value passes through", `{"verify_window":"5m"}`, 5 * time.Minute},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var p CommandPolicy
+			if err := json.Unmarshal([]byte(tc.raw), &p); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if p.VerifyWindow != tc.want {
+				t.Fatalf("verify_window = %v, want %v", p.VerifyWindow, tc.want)
+			}
+		})
+	}
+}
+
+func TestCommandPolicyJSONUnmarshalRejectsInvalidDuration(t *testing.T) {
+	var p CommandPolicy
+	if err := json.Unmarshal([]byte(`{"verify_window":"not-a-duration"}`), &p); err == nil {
+		t.Fatalf("expected error for invalid verify_window")
 	}
 }

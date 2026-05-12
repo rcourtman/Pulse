@@ -1,22 +1,44 @@
 package agentexec
 
 import (
+	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
 
+// DefaultVerifyWindow is the default duration the verifier substrate waits
+// for a postcondition to settle after a write capability has been dispatched.
+// Two minutes is enough for restart-class operations on a healthy host while
+// staying short enough that an operator watching a run does not feel stalled.
+const DefaultVerifyWindow = 2 * time.Minute
+
+// MaxVerifyWindow is the hard upper bound for the verify window. A larger
+// value would let an agent (or a misconfigured policy) pin the audit record
+// in "executing" for too long while polling for a postcondition. Fifteen
+// minutes covers slow rollouts (kubectl rollout, big VM boot) without
+// leaving the action dangling indefinitely.
+const MaxVerifyWindow = 15 * time.Minute
+
 // CommandPolicy defines what commands are allowed, blocked, or require approval
 type CommandPolicy struct {
 	// AutoApprove patterns - commands matching these are automatically allowed
-	AutoApprove []string
+	AutoApprove []string `json:"auto_approve"`
 
 	// RequireApproval patterns - commands matching these need user approval
-	RequireApproval []string
+	RequireApproval []string `json:"require_approval"`
 
 	// Blocked patterns - commands matching these are never allowed
-	Blocked []string
+	Blocked []string `json:"blocked"`
+
+	// VerifyWindow is the maximum wall-clock duration the verifier substrate
+	// waits for a postcondition to settle after a write capability has been
+	// dispatched. Zero / negative values are coerced to DefaultVerifyWindow
+	// by NormalizeVerifyWindow; values above MaxVerifyWindow are clamped.
+	VerifyWindow time.Duration `json:"verify_window"`
 
 	// compiled regex patterns
 	autoApproveRe     []*regexp.Regexp
@@ -24,9 +46,85 @@ type CommandPolicy struct {
 	blockedRe         []*regexp.Regexp
 }
 
+// NormalizeVerifyWindow returns the bounded verify window for a policy:
+// values <= 0 fall back to DefaultVerifyWindow, values above MaxVerifyWindow
+// are clamped to MaxVerifyWindow. Returned value is always within
+// [DefaultVerifyWindow, MaxVerifyWindow] except where the operator
+// explicitly picked something in (0, DefaultVerifyWindow]; we keep
+// operator-chosen small windows rather than silently widening them.
+func NormalizeVerifyWindow(d time.Duration) time.Duration {
+	if d <= 0 {
+		return DefaultVerifyWindow
+	}
+	if d > MaxVerifyWindow {
+		return MaxVerifyWindow
+	}
+	return d
+}
+
+// Normalize applies the verifier-substrate floor to the policy in place:
+// VerifyWindow is bounded to [(0,], MaxVerifyWindow] with the documented
+// default. Other policy fields are left alone; pattern compilation lives
+// in compile().
+func (p *CommandPolicy) Normalize() {
+	if p == nil {
+		return
+	}
+	p.VerifyWindow = NormalizeVerifyWindow(p.VerifyWindow)
+}
+
+// policyJSON is the wire-format shadow of CommandPolicy used to serialize
+// VerifyWindow as a Go duration string (e.g. "2m0s") rather than the raw
+// nanosecond integer time.Duration would otherwise produce. The other
+// pattern slices are passed through unchanged.
+type policyJSON struct {
+	AutoApprove     []string `json:"auto_approve"`
+	RequireApproval []string `json:"require_approval"`
+	Blocked         []string `json:"blocked"`
+	VerifyWindow    string   `json:"verify_window"`
+}
+
+// MarshalJSON emits the policy with VerifyWindow as a Go duration string so
+// the operator-facing config remains human-readable.
+func (p *CommandPolicy) MarshalJSON() ([]byte, error) {
+	if p == nil {
+		return []byte("null"), nil
+	}
+	window := NormalizeVerifyWindow(p.VerifyWindow)
+	return json.Marshal(policyJSON{
+		AutoApprove:     p.AutoApprove,
+		RequireApproval: p.RequireApproval,
+		Blocked:         p.Blocked,
+		VerifyWindow:    window.String(),
+	})
+}
+
+// UnmarshalJSON parses the wire-format policy and applies NormalizeVerifyWindow
+// so deserialized values always satisfy the configured bounds.
+func (p *CommandPolicy) UnmarshalJSON(data []byte) error {
+	var shadow policyJSON
+	if err := json.Unmarshal(data, &shadow); err != nil {
+		return err
+	}
+	p.AutoApprove = shadow.AutoApprove
+	p.RequireApproval = shadow.RequireApproval
+	p.Blocked = shadow.Blocked
+	if shadow.VerifyWindow == "" {
+		p.VerifyWindow = DefaultVerifyWindow
+	} else {
+		d, err := time.ParseDuration(shadow.VerifyWindow)
+		if err != nil {
+			return fmt.Errorf("parse verify_window %q: %w", shadow.VerifyWindow, err)
+		}
+		p.VerifyWindow = NormalizeVerifyWindow(d)
+	}
+	return nil
+}
+
 // DefaultPolicy returns a sensible default command policy
 func DefaultPolicy() *CommandPolicy {
 	p := &CommandPolicy{
+		VerifyWindow: DefaultVerifyWindow,
 		AutoApprove: []string{
 			// System inspection
 			`^ps(\s|$)`,
@@ -209,6 +307,7 @@ func DefaultPolicy() *CommandPolicy {
 	}
 
 	p.compile()
+	p.Normalize()
 	return p
 }
 
