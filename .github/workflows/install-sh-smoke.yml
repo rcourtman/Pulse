@@ -59,27 +59,11 @@ on:
         required: false
         type: string
         default: ''
-  # Self-test on workflow edits: every change to this file re-runs the gate
-  # against the canonical known-good release (v5.1.30) on the working branch.
-  # This both validates the workflow before the next release depends on it
-  # (commit b69c8c800 wired it into create-release.yml without ever having
-  # exercised the container portion in CI) and serves as ongoing protection
-  # against regressions in the gate logic itself. The push trigger also
-  # registers the workflow for API / CLI dispatch — workflows on non-default
-  # branches with only workflow_call + workflow_dispatch never appear in the
-  # actions/workflows API until they are triggered by a non-dispatch event.
-  push:
-    branches:
-      - pulse/v6-release
-      - main
-    paths:
-      - '.github/workflows/install-sh-smoke.yml'
-
 permissions:
   contents: read
 
 concurrency:
-  group: install-sh-smoke-${{ inputs.tag || 'self-test' }}
+  group: install-sh-smoke-${{ inputs.tag }}
   cancel-in-progress: false
 
 jobs:
@@ -98,13 +82,14 @@ jobs:
           INPUT_REPO: ${{ inputs.repository }}
           DEFAULT_REPO: ${{ github.repository }}
         run: |
-          # Push-triggered self-test runs without workflow inputs; fall back to
-          # the canonical known-good release. v5.1.30 has the same server-
-          # installer banner, the same --version arg handler, and is signed
-          # with the same ed25519 key as v6 RCs, so it exercises the same
-          # code paths a real release would.
-          tag="${INPUT_TAG:-v5.1.30}"
-          version="${INPUT_VERSION:-5.1.30}"
+          # workflow_call and workflow_dispatch both require tag + version,
+          # so these should always be present when this job runs.
+          tag="${INPUT_TAG}"
+          version="${INPUT_VERSION}"
+          if [ -z "$tag" ] || [ -z "$version" ]; then
+            echo "::error::install-sh-smoke requires both tag and version inputs"
+            exit 1
+          fi
           repo="${INPUT_REPO:-$DEFAULT_REPO}"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
