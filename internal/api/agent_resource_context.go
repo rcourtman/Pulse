@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
@@ -197,25 +198,32 @@ func (f agentFindingsProviderFunc) ActiveFindingsForResource(resourceID string) 
 	return f(resourceID)
 }
 
-// AgentApprovalsProvider returns the still-pending approvals scoped
-// to a single resource as agent-stable summaries. The implementation
-// lives outside this package (the approval store is owned by the
-// AIHandler); this interface keeps the bundle handler decoupled
-// from the global approval store and lets tests pass a fake.
+// AgentApprovalsProvider returns still-pending approvals as
+// agent-stable projections. Per-resource context needs full
+// summaries; fleet context needs only a resource-keyed count map so
+// it can aggregate approval pressure without scanning the global
+// approval list once per resource. The implementation lives outside
+// this package (the approval store is owned by the AIHandler); this
+// interface keeps the bundle handler decoupled from the global
+// approval store and lets tests pass a fake.
 type AgentApprovalsProvider interface {
 	PendingApprovalsForResource(resourceID, orgID string) []AgentResourceApprovalSummary
+	PendingApprovalCountsByResource(orgID string) map[string]int
 }
 
-// agentApprovalsProviderFunc is a function adapter so wire-up code
-// can pass a closure without declaring a struct.
-type agentApprovalsProviderFunc func(resourceID, orgID string) []AgentResourceApprovalSummary
+// agentApprovalStoreProvider adapts the process-global approval
+// store into the agent context provider contract. It resolves the
+// store at request time so multi-tenant rebuilds that install a new
+// global store via approval.SetStore are honored without re-wiring
+// the router.
+type agentApprovalStoreProvider struct{}
 
-// PendingApprovalsForResource implements AgentApprovalsProvider.
-func (f agentApprovalsProviderFunc) PendingApprovalsForResource(resourceID, orgID string) []AgentResourceApprovalSummary {
-	if f == nil {
-		return nil
-	}
-	return f(resourceID, orgID)
+func (agentApprovalStoreProvider) PendingApprovalsForResource(resourceID, orgID string) []AgentResourceApprovalSummary {
+	return pendingApprovalsForResourceFromStore(approval.GetStore(), resourceID, orgID)
+}
+
+func (agentApprovalStoreProvider) PendingApprovalCountsByResource(orgID string) map[string]int {
+	return pendingApprovalCountsByResourceFromStore(approval.GetStore(), orgID)
 }
 
 // AgentContextHandler owns the agent-paradigm bundled context
@@ -410,21 +418,9 @@ func (h *AgentContextHandler) HandleFleetContext(w http.ResponseWriter, r *http.
 	// of fleet size — one scan suffices.
 	pendingByResource := map[string]int{}
 	if h.approvalsProvider != nil {
-		// The provider is keyed per-resource; for the fleet scan we
-		// take the resource-keyed projection per registry entry. This
-		// keeps the seam decoupled from approval-store internals at
-		// the cost of one extra map allocation per resource — still
-		// cheap, and tests can stub the provider without setting up
-		// a global approval store.
-		for _, resource := range resources {
-			canonical := unified.CanonicalResourceID(resource.ID)
-			if canonical == "" {
-				continue
-			}
-			pending := h.approvalsProvider.PendingApprovalsForResource(canonical, orgID)
-			if len(pending) > 0 {
-				pendingByResource[canonical] = len(pending)
-			}
+		counts := h.approvalsProvider.PendingApprovalCountsByResource(orgID)
+		if counts != nil {
+			pendingByResource = counts
 		}
 	}
 
@@ -545,7 +541,7 @@ func projectAgentResourceActions(
 // normalizes nil to []AgentResourceApprovalSummary{} so the wire
 // shape is always an array.
 func pendingApprovalsForResourceFromStore(store approvalsPendingProvider, resourceID, orgID string) []AgentResourceApprovalSummary {
-	if store == nil || strings.TrimSpace(resourceID) == "" {
+	if isNilApprovalsPendingProvider(store) || strings.TrimSpace(resourceID) == "" {
 		return nil
 	}
 	pending := store.GetPendingApprovals()
@@ -575,12 +571,53 @@ func pendingApprovalsForResourceFromStore(store approvalsPendingProvider, resour
 	return out
 }
 
+// pendingApprovalCountsByResourceFromStore is the fleet-context
+// companion to pendingApprovalsForResourceFromStore. It scans the
+// bounded pending-approval list once, applies the same org isolation
+// predicate, and groups counts by canonical resource id so the fleet
+// handler does not perform one store scan per resource.
+func pendingApprovalCountsByResourceFromStore(store approvalsPendingProvider, orgID string) map[string]int {
+	if isNilApprovalsPendingProvider(store) {
+		return nil
+	}
+	pending := store.GetPendingApprovals()
+	if len(pending) == 0 {
+		return nil
+	}
+	counts := map[string]int{}
+	for _, req := range pending {
+		if req == nil {
+			continue
+		}
+		if !approval.BelongsToOrg(req, orgID) {
+			continue
+		}
+		resourceID := req.CanonicalResourceID()
+		if resourceID == "" {
+			continue
+		}
+		counts[resourceID]++
+	}
+	if len(counts) == 0 {
+		return nil
+	}
+	return counts
+}
+
 // approvalsPendingProvider is the minimal accessor surface the
 // pending-approvals bundle filter depends on. The production
 // implementation is *approval.Store; the interface keeps the
 // function unit-testable without bringing the whole store up.
 type approvalsPendingProvider interface {
 	GetPendingApprovals() []*approval.ApprovalRequest
+}
+
+func isNilApprovalsPendingProvider(store approvalsPendingProvider) bool {
+	if store == nil {
+		return true
+	}
+	v := reflect.ValueOf(store)
+	return v.Kind() == reflect.Ptr && v.IsNil()
 }
 
 // projectAgentResourceVerification converts the canonical

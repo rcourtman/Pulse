@@ -1582,10 +1582,10 @@ wired at startup so the api package stays free of an
 `internal/ai` import; the patrol service holds the canonical
 findings store and projects each `Finding` into the snapshot
 shape. Pending approvals come through the parallel
-`AgentApprovalsProvider` adapter — the router wires a closure
-that resolves `approval.GetStore()` at request time (so
-multi-tenant store rebuilds stay honored), filters via
-`approval.BelongsToOrg` for tenant scope, and matches
+`AgentApprovalsProvider` adapter — the router wires a request-time
+approval-store provider that resolves `approval.GetStore()` on
+each read (so multi-tenant store rebuilds stay honored), filters
+via `approval.BelongsToOrg` for tenant scope, and matches
 `req.CanonicalResourceID()` against the requested resource so
 cross-resource approvals don't leak into the bundle. Active
 findings, pending approvals, and recent actions are always arrays
@@ -1608,11 +1608,12 @@ nil-checking; an empty registry surfaces as `resources: []`. The
 endpoint walks the registry once and reuses the same per-resource
 adapters as the per-resource bundle (operator-state via
 `unified.ResourceStore.GetResourceOperatorState`, findings via
-`AgentFindingsProvider`, pending approvals via
-`AgentApprovalsProvider`), so the fleet sweep is the per-resource
-bundle's wiring multiplied by N — no new dependencies. Agents pick
-a focus from the fleet view, then drill into the per-resource
-bundle for depth.
+`AgentFindingsProvider`, pending approvals via the
+`AgentApprovalsProvider` bulk count projection). Fleet-context
+approval counts must come from one org-scoped, resource-keyed scan
+of the bounded pending-approval list, not N calls to the
+per-resource approval summary helper. Agents pick a focus from the
+fleet view, then drill into the per-resource bundle for depth.
 
 The TS client `frontend-modern/src/api/resourceOperatorState.ts`
 mirrors the canonical Go shape from

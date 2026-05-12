@@ -554,14 +554,18 @@ finding volume.
 `/api/agent/fleet-context` is O(N) over registry size with bounded
 per-resource cost: one operator-state SQLite point lookup and one
 in-memory findings index lookup per resource, plus one bounded
-pending-approvals lookup per resource against the same store-scan
-ceiling that bounds the per-resource bundle. No action-audit reads
-in the fleet path — the rollup is intentionally light enough to
-serve the "where do I focus?" question without triggering N audit
-queries. Sized for the hundreds-of-resources regime that is
-canonical Pulse fleet scale; agents that need to scan tens of
-thousands of resources should narrow the registry first via the
-existing filtered list endpoints, not the fleet rollup.
+pending-approvals scan grouped by canonical resource id before the
+registry walk. Fleet context must not call the per-resource
+approval-summary helper once per resource; the approval list is
+bounded, but scanning it N times would make the rollup scale with
+resource cardinality and pending-approval cardinality. No
+action-audit reads in the fleet path — the rollup is intentionally
+light enough to serve the "where do I focus?" question without
+triggering N audit queries. Sized for the hundreds-of-resources
+regime that is canonical Pulse fleet scale; agents that need to
+scan tens of thousands of resources should narrow the registry
+first via the existing filtered list endpoints, not the fleet
+rollup.
 
 `/api/agent/capabilities` is unauthenticated and cacheable
 (`Cache-Control: public, max-age=300`); the manifest is a small,

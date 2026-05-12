@@ -971,9 +971,10 @@ prefixes preserved — in one call. The endpoint is read-only under
 `AgentFindingsProvider` adapter wired in `router.go` from the
 patrol service so the api package stays free of an `internal/ai`
 import; the parallel `AgentApprovalsProvider` adapter resolves the
-canonical approval store at request time and filters by
-canonical resource id and org. The agent runtime keeps both
-providers wired across restarts.
+canonical approval store at request time, filters full per-resource
+summaries by canonical resource id and org, and exposes a separate
+resource-keyed count projection for fleet reads. The agent runtime
+keeps both providers wired across restarts.
 
 `/api/agent/fleet-context` is the companion triage view: one read
 returns a thin per-resource rollup across every resource visible
@@ -983,9 +984,10 @@ to the org — identity, operator flags
 pending-approval count. Same auth scope (`monitoring:read`) and
 same provider wiring as the per-resource bundle; the fleet sweep
 walks the registry once and reuses the in-memory findings index,
-the bounded approval-store scan, and a per-resource operator-state
-SQLite point lookup. Agents pick "where do I focus?" from the
-fleet view and then drill into the per-resource bundle for depth.
+one bounded approval-store scan grouped by canonical resource id,
+and a per-resource operator-state SQLite point lookup. Agents pick
+"where do I focus?" from the fleet view and then drill into the
+per-resource bundle for depth.
 
 `/api/agent/capabilities` is registered in the router's
 `publicPaths` list so the global auth middleware does not gate

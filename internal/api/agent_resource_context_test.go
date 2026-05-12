@@ -44,6 +44,38 @@ func (s staticApprovalsProvider) PendingApprovalsForResource(resourceID, _ strin
 	return s.byResource[resourceID]
 }
 
+func (s staticApprovalsProvider) PendingApprovalCountsByResource(_ string) map[string]int {
+	if s.byResource == nil {
+		return nil
+	}
+	counts := map[string]int{}
+	for resourceID, pending := range s.byResource {
+		if len(pending) > 0 {
+			counts[resourceID] = len(pending)
+		}
+	}
+	if len(counts) == 0 {
+		return nil
+	}
+	return counts
+}
+
+type countingApprovalsProvider struct {
+	staticApprovalsProvider
+	resourceCalls int
+	countCalls    int
+}
+
+func (p *countingApprovalsProvider) PendingApprovalsForResource(resourceID, orgID string) []AgentResourceApprovalSummary {
+	p.resourceCalls++
+	return p.staticApprovalsProvider.PendingApprovalsForResource(resourceID, orgID)
+}
+
+func (p *countingApprovalsProvider) PendingApprovalCountsByResource(orgID string) map[string]int {
+	p.countCalls++
+	return p.staticApprovalsProvider.PendingApprovalCountsByResource(orgID)
+}
+
 // agentContextFixtureHandlers wires a ResourceHandlers around a
 // pre-built unified-resource seed (using the same
 // `resourceUnifiedSeedProvider` pattern from resources_test.go) plus
@@ -582,6 +614,58 @@ func TestHandleAgentFleetContext_PropagatesPendingApprovalCount(t *testing.T) {
 	}
 }
 
+func TestHandleAgentFleetContext_UsesBulkPendingApprovalCounts(t *testing.T) {
+	h, _, _ := fleetFixtureHandlers(t, []unified.Resource{
+		{ID: "vm:101", Type: "vm", Name: "db-01"},
+		{ID: "vm:202", Type: "vm", Name: "db-02"},
+		{ID: "container:web-1", Type: "container", Name: "web-1"},
+	})
+	approvals := &countingApprovalsProvider{
+		staticApprovalsProvider: staticApprovalsProvider{
+			byResource: map[string][]AgentResourceApprovalSummary{
+				"vm:101": {
+					{ID: "appr-1"},
+					{ID: "appr-2"},
+				},
+				"container:web-1": {
+					{ID: "appr-3"},
+				},
+			},
+		},
+	}
+	h.SetApprovalsProvider(approvals)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/fleet-context", nil)
+	h.HandleFleetContext(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if approvals.countCalls != 1 {
+		t.Fatalf("PendingApprovalCountsByResource calls = %d; want 1", approvals.countCalls)
+	}
+	if approvals.resourceCalls != 0 {
+		t.Fatalf("PendingApprovalsForResource calls = %d; want 0", approvals.resourceCalls)
+	}
+	var fleet AgentFleetContext
+	if err := json.NewDecoder(rec.Body).Decode(&fleet); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	byID := map[string]AgentFleetResourceSummary{}
+	for _, s := range fleet.Resources {
+		byID[s.CanonicalID] = s
+	}
+	if got := byID["vm:101"].PendingApprovalCount; got != 2 {
+		t.Errorf("vm:101 pendingApprovalCount = %d; want 2", got)
+	}
+	if got := byID["vm:202"].PendingApprovalCount; got != 0 {
+		t.Errorf("vm:202 pendingApprovalCount = %d; want 0", got)
+	}
+	if got := byID["container:web-1"].PendingApprovalCount; got != 1 {
+		t.Errorf("container:web-1 pendingApprovalCount = %d; want 1", got)
+	}
+}
+
 func TestHandleAgentFleetContext_EmptyArrayWhenRegistryEmpty(t *testing.T) {
 	// Empty registry must surface as `resources: []`, never null —
 	// agents iterate without nil-checking. This mirrors the
@@ -716,12 +800,67 @@ func TestPendingApprovalsForResource_EmptyInputsReturnNil(t *testing.T) {
 	if got := pendingApprovalsForResourceFromStore(nil, "vm:101", "org-a"); got != nil {
 		t.Errorf("nil store must return nil; got %+v", got)
 	}
+	var typedNil *approval.Store
+	if got := pendingApprovalsForResourceFromStore(typedNil, "vm:101", "org-a"); got != nil {
+		t.Errorf("typed nil store must return nil; got %+v", got)
+	}
 	store := newApprovalsTestStore(t)
 	if got := pendingApprovalsForResourceFromStore(store, "", "org-a"); got != nil {
 		t.Errorf("empty resource id must return nil; got %+v", got)
 	}
 	if got := pendingApprovalsForResourceFromStore(store, "vm:none", "org-a"); got != nil {
 		t.Errorf("empty store must return nil; got %+v", got)
+	}
+}
+
+func TestPendingApprovalCountsByResourceFromStore_EmptyInputsReturnNil(t *testing.T) {
+	if got := pendingApprovalCountsByResourceFromStore(nil, "org-a"); got != nil {
+		t.Errorf("nil store must return nil; got %+v", got)
+	}
+	var typedNil *approval.Store
+	if got := pendingApprovalCountsByResourceFromStore(typedNil, "org-a"); got != nil {
+		t.Errorf("typed nil store must return nil; got %+v", got)
+	}
+	store := newApprovalsTestStore(t)
+	if got := pendingApprovalCountsByResourceFromStore(store, "org-a"); got != nil {
+		t.Errorf("empty store must return nil; got %+v", got)
+	}
+}
+
+func TestPendingApprovalCountsByResourceFromStore_GroupsByOrgAndResource(t *testing.T) {
+	store := newApprovalsTestStore(t,
+		&approval.ApprovalRequest{
+			ID: "appr-org-a-vm-101-a", OrgID: "org-a",
+			Command: "systemctl restart nginx", TargetType: "vm", TargetID: "101", TargetName: "vm-101",
+		},
+		&approval.ApprovalRequest{
+			ID: "appr-org-a-vm-101-b", OrgID: "org-a",
+			Command: "systemctl restart nginx", TargetType: "vm", TargetID: "101", TargetName: "vm-101",
+		},
+		&approval.ApprovalRequest{
+			ID: "appr-org-a-vm-202", OrgID: "org-a",
+			Command: "systemctl restart nginx", TargetType: "vm", TargetID: "202", TargetName: "vm-202",
+		},
+		&approval.ApprovalRequest{
+			ID: "appr-org-b-vm-101", OrgID: "org-b",
+			Command: "systemctl restart nginx", TargetType: "vm", TargetID: "101", TargetName: "vm-101",
+		},
+	)
+
+	got := pendingApprovalCountsByResourceFromStore(store, "org-a")
+	if got["vm:101"] != 2 {
+		t.Errorf("vm:101 count = %d; want 2", got["vm:101"])
+	}
+	if got["vm:202"] != 1 {
+		t.Errorf("vm:202 count = %d; want 1", got["vm:202"])
+	}
+	if len(got) != 2 {
+		t.Errorf("counts len = %d; want 2; got %+v", len(got), got)
+	}
+
+	gotB := pendingApprovalCountsByResourceFromStore(store, "org-b")
+	if gotB["vm:101"] != 1 || len(gotB) != 1 {
+		t.Errorf("org-b counts = %+v; want only vm:101=1", gotB)
 	}
 }
 

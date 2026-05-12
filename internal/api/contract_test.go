@@ -13634,35 +13634,51 @@ func TestContract_AgentResourceContextEndpointSurfacesStableShape(t *testing.T) 
 // one read" contract for the governance dimension.
 //
 // The wire-up has two halves: router.go installs the provider with
-// a closure that delegates to a named function in
-// agent_resource_context.go, and that function applies the org and
-// resource filters. Both halves are pinned here so a refactor that
-// moves the filter logic still passes the test only if the
-// resulting code preserves the safety properties.
+// a provider that delegates to named functions in
+// agent_resource_context.go, and those functions apply the org and
+// resource filters while supporting the fleet endpoint's bulk count
+// projection. Both halves are pinned here so a refactor that moves
+// the filter logic still passes the test only if the resulting code
+// preserves the safety and scale properties.
 func TestContract_AgentResourceContextWiresApprovalsProvider(t *testing.T) {
 	router, err := os.ReadFile("router.go")
 	if err != nil {
 		t.Fatalf("read router.go: %v", err)
 	}
-	if !strings.Contains(string(router), "r.agentContextHandler.SetApprovalsProvider(agentApprovalsProviderFunc(") {
+	if !strings.Contains(string(router), "r.agentContextHandler.SetApprovalsProvider(agentApprovalStoreProvider{})") {
 		t.Error("router.go must wire the approvals provider on the agent context handler so the bundle's pendingApprovals section is populated")
 	}
-	if !strings.Contains(string(router), "pendingApprovalsForResourceFromStore(approval.GetStore(), resourceID, orgID)") {
-		t.Error("router.go must delegate to pendingApprovalsForResourceFromStore so the request-time store lookup and the filter logic stay together and stay testable")
+	if !strings.Contains(string(router), "approval.SetStore") {
+		t.Error("router.go must keep documenting that the agent approval provider resolves the process-global approval store at request time")
 	}
 
 	bundle, err := os.ReadFile("agent_resource_context.go")
 	if err != nil {
 		t.Fatalf("read agent_resource_context.go: %v", err)
 	}
+	if !strings.Contains(string(bundle), "type agentApprovalStoreProvider struct{}") {
+		t.Error("agent_resource_context.go must define the request-time approval store provider that router.go wires")
+	}
+	if !strings.Contains(string(bundle), "return pendingApprovalsForResourceFromStore(approval.GetStore(), resourceID, orgID)") {
+		t.Error("agentApprovalStoreProvider must resolve the approval store at request time for per-resource context reads")
+	}
+	if !strings.Contains(string(bundle), "return pendingApprovalCountsByResourceFromStore(approval.GetStore(), orgID)") {
+		t.Error("agentApprovalStoreProvider must use the bulk count helper for fleet context reads")
+	}
 	if !strings.Contains(string(bundle), "func pendingApprovalsForResourceFromStore(") {
 		t.Error("agent_resource_context.go must define pendingApprovalsForResourceFromStore as the named, testable filter — drift here breaks the cross-org / cross-resource isolation pins")
 	}
+	if !strings.Contains(string(bundle), "func pendingApprovalCountsByResourceFromStore(") {
+		t.Error("agent_resource_context.go must define pendingApprovalCountsByResourceFromStore so fleet context counts are grouped by one bounded pending-approval scan")
+	}
 	if !strings.Contains(string(bundle), "if !approval.BelongsToOrg(req, orgID)") {
-		t.Error("the named filter must scope pending approvals via BelongsToOrg so cross-tenant requests don't leak into a resource-context bundle")
+		t.Error("the named filters must scope pending approvals via BelongsToOrg so cross-tenant requests don't leak into an agent context bundle")
 	}
 	if !strings.Contains(string(bundle), "if req.CanonicalResourceID() != resourceID") {
 		t.Error("the named filter must filter pending approvals by CanonicalResourceID so the bundle only carries approvals targeting the requested resource")
+	}
+	if !strings.Contains(string(bundle), "counts[resourceID]++") {
+		t.Error("the bulk count helper must group pending approvals by canonical resource id instead of forcing fleet context into per-resource scans")
 	}
 }
 

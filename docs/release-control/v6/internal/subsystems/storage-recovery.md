@@ -1009,10 +1009,14 @@ The fleet view at `/api/agent/fleet-context` introduces no new
 persistence either — it walks the registry once and reads the same
 durable `resource_operator_state` table per resource, the same
 in-memory findings store, and the same in-memory approval store.
-The recovery posture is identical to the per-resource bundle: when
-the unified-resources store and the approval store rehydrate on
-startup, the fleet view recovers the same situated picture without
-any fleet-specific rehydration step.
+Fleet pending-approval counts may be grouped by canonical resource
+id from one bounded approval-store scan, but that is still a
+read-only projection over `approvals.json`, not a new recovery
+artifact or storage/recovery freshness signal. The recovery posture
+is identical to the per-resource bundle: when the unified-resources
+store and the approval store rehydrate on startup, the fleet view
+recovers the same situated picture without any fleet-specific
+rehydration step.
 
 The agent capabilities manifest at `/api/agent/capabilities` is
 hand-authored static data. There is no persistence to recover —
