@@ -38,17 +38,18 @@ Restrict access to specific users or groups:
 
 Automatically assign Pulse roles based on OIDC group membership. When a user logs in, Pulse checks their groups claim and assigns the corresponding roles.
 
-**Configuration via UI:**
-Go to **Settings → Security → Single Sign-On → Group Role Mappings** and add mappings like:
+**Configuration:**
+Group-role mappings are configured per SSO provider through the UI (or the
+SSO provider API for automated setup) — there is no environment-variable
+override. Go to **Settings → Security → Single Sign-On**, edit the provider,
+and populate **Group Role Mappings** with entries like:
 - `oidc-admins` → `admin`
 - `oidc-operators` → `operator`
 - `oidc-viewers` → `viewer`
 
-**Configuration via Environment:**
-```bash
-# Format: group1=role1,group2=role2
-OIDC_GROUP_ROLE_MAPPINGS="oidc-admins=admin,oidc-operators=operator"
-```
+The mappings persist on the provider record as a `groupRoleMappings` JSON
+field. Provider-level config (including this field) can be PUT through the
+SSO provider API for automated setup.
 
 **How it works:**
 - On each login, Pulse reads the user's groups from the configured groups claim.
@@ -109,7 +110,7 @@ For persistent sessions that don't require frequent re-authentication:
 | **`invalid_id_token`** | Issuer URL mismatch. Check logs (`LOG_LEVEL=debug`) to see the expected vs. received issuer. |
 | **`unexpected signature algorithm "HS256"`** | Your IdP is signing with HS256. Configure it to use **RS256**. |
 | **Redirect Loop** | Check `X-Forwarded-Proto` header (must be `https`) and cookie settings. |
-| **Self-Signed Certs** | Mount your CA bundle to `/etc/ssl/certs/oidc-ca.pem` and set `OIDC_CA_BUNDLE`. |
+| **Self-Signed Certs** | Set the **CA Bundle** field on the SSO provider to a host path readable by Pulse (e.g. `/etc/ssl/certs/oidc-ca.pem` mounted into the container). The field is stored on the provider record as `oidc.caBundle`; there is no `OIDC_CA_BUNDLE` env var. |
 
 ### Debugging
 Enable debug logs to trace the OIDC flow:

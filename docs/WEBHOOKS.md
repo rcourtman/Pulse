@@ -41,7 +41,9 @@ For generic webhooks, use Go templates to format the JSON payload.
 - `{{.ValueFormatted}}`, `{{.ThresholdFormatted}}`
 - `{{.StartTime}}`, `{{.Acknowledged}}`, `{{.AckTime}}`, `{{.AckUser}}`
 
-**Template helpers:** `title`, `upper`, `lower`, `printf`, `urlquery`/`urlencode`, `urlpath`
+**Template helpers:** `title`, `upper`, `lower`, `printf`, `urlquery`/`urlencode`, `urlpath`/`pathescape`, `jsonString`
+
+`jsonString` is the safe way to embed string values inside a JSON payload — it escapes quotes, backslashes, and control characters without wrapping the value in surrounding quotes, so you can write `"text": "{{.Message | jsonString}}"` and stay valid JSON even when the message contains `"` or newlines. Pulse's shipped templates use it extensively; prefer it over manual escaping in custom templates.
 
 **Service-specific notes:**
 - **Telegram**: include `chat_id` in the URL query string.

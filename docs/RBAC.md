@@ -177,7 +177,7 @@ A typical team configuration:
 | alice | `admin` | Full access to everything |
 | bob | `operator` | Can view nodes/VMs and manage alerts |
 | carol | `viewer` | Read-only access to monitoring views and metrics |
-| monitoring-bot | API token with `alerts:read` scope | Automated alert polling |
+| monitoring-bot | API token with `monitoring:read` scope | Automated alert polling |
 
 ---
 

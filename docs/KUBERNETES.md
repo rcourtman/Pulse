@@ -31,7 +31,7 @@ The Pulse Server is the central hub that collects metrics and manages agents.
       --set persistence.size=10Gi
     ```
 
-    > **Note**: For production, ensure you configure a proper `storageClass` or `deployment.strategy.type=Recreate` if using ReadWriteOnce (RWO) volumes.
+    > **Note**: For production, ensure you configure a proper `persistence.storageClass` or `strategy.type=Recreate` if using ReadWriteOnce (RWO) volumes. The chart's default `strategy.type` is `RollingUpdate`, which can hit Multi-Attach errors with RWO PVCs during upgrade.
 
 ### Option B: Generating Static Manifests (For Talos / GitOps)
 
@@ -44,7 +44,7 @@ helm template pulse pulse/pulse \
   --namespace pulse \
   --set persistence.enabled=true \
   > pulse-server.yaml
-```text
+```
 
 You can then apply this file:
 
