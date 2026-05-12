@@ -458,8 +458,10 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 		`pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}`,
 		`subject-name: docker.io/rcourtman/pulse`,
 		`subject-name: ghcr.io/${{ github.repository_owner }}/pulse`,
-		`subject-name: docker.io/rcourtman/pulse-agent`,
-		`subject-name: ghcr.io/${{ github.repository_owner }}/pulse-agent`,
+		// pulse-agent ships as release-asset binaries, not as a Docker
+		// image (see commit dropping the agent image publish steps).
+		// The agent attestation subject-names intentionally do not
+		// appear in publish-docker.yml.
 		`push-to-registry: true`,
 		`create-storage-record: false`,
 		`id-token: write`,
