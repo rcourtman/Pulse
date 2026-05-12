@@ -824,4 +824,20 @@ describe('aiIntelligenceStore', () => {
       'finding-later',
     ]);
   });
+
+  it('keeps resolved Patrol history bounded when the expanded findings set is sticky', async () => {
+    vi.mocked(getPatrolFindings).mockResolvedValue([]);
+
+    await aiIntelligenceStore.loadPatrolFindings({ includeResolved: true });
+    await aiIntelligenceStore.loadPatrolFindings();
+
+    expect(getPatrolFindings).toHaveBeenNthCalledWith(1, {
+      includeResolved: true,
+      limit: 200,
+    });
+    expect(getPatrolFindings).toHaveBeenNthCalledWith(2, {
+      includeResolved: true,
+      limit: 200,
+    });
+  });
 });

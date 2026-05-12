@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 func TestAgentEventBroadcaster_SubscribeReceivesPublishedEvents(t *testing.T) {
@@ -327,6 +329,75 @@ func TestAgentEventApprovalPendingKindIsStable(t *testing.T) {
 	if AgentEventApprovalPending != "approval.pending" {
 		t.Fatalf("AgentEventApprovalPending changed: got %q want %q",
 			AgentEventApprovalPending, "approval.pending")
+	}
+}
+
+func TestAgentEventCommandRedactionForMonitoringReadTokens(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/events", nil)
+	attachAPITokenRecord(req, &config.APITokenRecord{Scopes: []string{config.ScopeMonitoringRead}})
+
+	event := redactAgentEventCommandsForRequest(AgentEvent{
+		Kind: AgentEventActionCompleted,
+		Payload: AgentEventActionCompletedPayload{
+			ActionID: "action-1",
+			Command:  "systemctl restart nginx",
+			Verification: &AgentResourceActionVerification{
+				Ran:     true,
+				Success: true,
+				Command: "systemctl is-active nginx",
+			},
+		},
+	}, req)
+
+	payload, ok := event.Payload.(AgentEventActionCompletedPayload)
+	if !ok {
+		t.Fatalf("payload type: got %T", event.Payload)
+	}
+	if payload.Command != "" || !payload.CommandRedacted {
+		t.Fatalf("action command must be redacted for monitoring-read token; got %+v", payload)
+	}
+	if payload.Verification == nil {
+		t.Fatal("verification must remain present")
+	}
+	if payload.Verification.Command != "" || !payload.Verification.CommandRedacted {
+		t.Fatalf("verification command must be redacted for monitoring-read token; got %+v", payload.Verification)
+	}
+
+	approval := redactAgentEventCommandsForRequest(AgentEvent{
+		Kind: AgentEventApprovalPending,
+		Payload: AgentEventApprovalPendingPayload{
+			ApprovalID: "appr-1",
+			Command:    "systemctl restart nginx",
+		},
+	}, req)
+	approvalPayload, ok := approval.Payload.(AgentEventApprovalPendingPayload)
+	if !ok {
+		t.Fatalf("payload type: got %T", approval.Payload)
+	}
+	if approvalPayload.Command != "" || !approvalPayload.CommandRedacted {
+		t.Fatalf("approval command must be redacted for monitoring-read token; got %+v", approvalPayload)
+	}
+}
+
+func TestAgentEventCommandRedactionKeepsCommandsForActionTokens(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/events", nil)
+	attachAPITokenRecord(req, &config.APITokenRecord{
+		Scopes: []string{config.ScopeMonitoringRead, config.ScopeAIExecute},
+	})
+
+	event := redactAgentEventCommandsForRequest(AgentEvent{
+		Kind: AgentEventApprovalPending,
+		Payload: AgentEventApprovalPendingPayload{
+			ApprovalID: "appr-1",
+			Command:    "systemctl restart nginx",
+		},
+	}, req)
+	payload, ok := event.Payload.(AgentEventApprovalPendingPayload)
+	if !ok {
+		t.Fatalf("payload type: got %T", event.Payload)
+	}
+	if payload.Command != "systemctl restart nginx" || payload.CommandRedacted {
+		t.Fatalf("action-capable token should keep command; got %+v", payload)
 	}
 }
 

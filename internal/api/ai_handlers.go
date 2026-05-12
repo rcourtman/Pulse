@@ -5044,6 +5044,9 @@ const (
 	patrolReadinessReady    = ai.PatrolReadinessReady
 	patrolReadinessWarning  = ai.PatrolReadinessWarning
 	patrolReadinessNotReady = ai.PatrolReadinessNotReady
+
+	defaultResolvedPatrolFindingsLimit = 200
+	maxPatrolFindingsLimit             = 500
 )
 
 func (h *AISettingsHandler) buildPatrolReadiness(ctx context.Context, aiService *ai.Service, patrolAvailable bool) PatrolReadinessResponse {
@@ -5605,16 +5608,32 @@ func (h *AISettingsHandler) HandleGetPatrolFindings(w http.ResponseWriter, r *ht
 		findings = patrol.GetAllFindings()
 	}
 
-	// Optional limit parameter (for relay proxy clients with body size constraints)
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 && limit < len(findings) {
-			findings = findings[:limit]
-		}
+	limit := patrolFindingsLimitFromQuery(r.URL.Query(), includeResolved)
+	if limit > 0 && limit < len(findings) {
+		findings = findings[:limit]
 	}
 
 	if err := utils.WriteJSONResponse(w, findings); err != nil {
 		log.Error().Err(err).Msg("Failed to write patrol findings response")
 	}
+}
+
+func patrolFindingsLimitFromQuery(query url.Values, includeResolved bool) int {
+	limit := 0
+	if includeResolved {
+		limit = defaultResolvedPatrolFindingsLimit
+	}
+	if limitStr := query.Get("limit"); limitStr != "" {
+		parsed, err := strconv.Atoi(limitStr)
+		if err != nil || parsed <= 0 {
+			return limit
+		}
+		if parsed > maxPatrolFindingsLimit {
+			return maxPatrolFindingsLimit
+		}
+		return parsed
+	}
+	return limit
 }
 
 // HandleForcePatrol triggers an immediate patrol run (POST /api/ai/patrol/run)
@@ -6819,18 +6838,28 @@ func (h *AISettingsHandler) HandleAddSuppressionRule(w http.ResponseWriter, r *h
 	}
 
 	var req struct {
-		ResourceID   string `json:"resource_id"`   // Can be empty for "any resource"
-		ResourceName string `json:"resource_name"` // Human-readable name
-		Category     string `json:"category"`      // Can be empty for "any category"
-		Description  string `json:"description"`   // Required - user's reason
+		ResourceID      string `json:"resource_id"`       // Can be empty for "any resource" when AllowBroadScope is true
+		ResourceName    string `json:"resource_name"`     // Human-readable name
+		Category        string `json:"category"`          // Can be empty for "any category" when AllowBroadScope is true
+		Description     string `json:"description"`       // Required - user's reason
+		AllowBroadScope bool   `json:"allow_broad_scope"` // Required when resource or category is intentionally wildcarded
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
+	req.ResourceID = strings.TrimSpace(req.ResourceID)
+	req.ResourceName = strings.TrimSpace(req.ResourceName)
+	req.Category = strings.TrimSpace(req.Category)
+	req.Description = strings.TrimSpace(req.Description)
+
 	if req.Description == "" {
 		http.Error(w, "description is required", http.StatusBadRequest)
+		return
+	}
+	if (req.ResourceID == "" || req.Category == "") && !req.AllowBroadScope {
+		http.Error(w, "broad suppression scope requires allow_broad_scope", http.StatusBadRequest)
 		return
 	}
 

@@ -93,7 +93,7 @@ var agentCapabilitiesManifest = AgentCapabilitiesManifest{
 	Capabilities: []AgentCapability{
 		{
 			Name:          "get_resource_context",
-			Description:   "Return the situated picture of a resource — identity, operator-set state with maintenance-window-active flag, active findings, pending approvals scoped to this resource, recent actions including refused dispatches.",
+			Description:   "Return the situated picture of a resource — identity, operator-set state with maintenance-window-active flag, active findings, pending approvals scoped to this resource, recent actions including refused dispatches. Command fields are redacted for monitoring-read API tokens unless the token also has ai:execute.",
 			Category:      "context",
 			Method:        http.MethodGet,
 			Path:          "/api/agent/resource-context/{resourceId}",
@@ -141,7 +141,7 @@ var agentCapabilitiesManifest = AgentCapabilitiesManifest{
 		},
 		{
 			Name:          "subscribe_events",
-			Description:   "Subscribe to the SSE event stream for real-time notifications: finding.created when a new finding is raised, approval.pending when a remediation request enters StatusPending and waits on operator decision, action.completed when an action audit reaches a terminal state (Completed or Failed, including refused-before-dispatch failures with stable error-token prefixes; carries a verification block with the read-after-write probe outcome so agents close the certainty loop without polling /api/actions/{id}), heartbeat every 15s. Long-lived connection; agents listen instead of polling.",
+			Description:   "Subscribe to the SSE event stream for real-time notifications: finding.created when a new finding is raised, approval.pending when a remediation request enters StatusPending and waits on operator decision, action.completed when an action audit reaches a terminal state (Completed or Failed, including refused-before-dispatch failures with stable error-token prefixes; carries a verification block with the read-after-write probe outcome so agents close the certainty loop without polling /api/actions/{id}), heartbeat every 15s. Command fields are redacted for monitoring-read API tokens unless the token also has ai:execute. Long-lived connection; agents listen instead of polling.",
 			Category:      "context",
 			Method:        http.MethodGet,
 			Path:          "/api/agent/events",

@@ -11,6 +11,7 @@ import {
   getPatrolRunHistory,
   getPatrolRunHistoryWithToolCalls,
   getPatrolRunWithToolCalls,
+  createSuppressionRuleFromFinding,
   resolveFinding,
   type Finding as PatrolFinding,
 } from '@/api/patrol';
@@ -224,6 +225,23 @@ describe('patrol api', () => {
     });
   });
 
+  it('bounds include-resolved Patrol finding queries', async () => {
+    await getPatrolFindings({ includeResolved: true });
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/ai/patrol/findings?include_resolved=1&limit=200',
+    );
+
+    await getPatrolFindings({ includeResolved: true, limit: 25.9 });
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/ai/patrol/findings?include_resolved=1&limit=25',
+    );
+
+    await getPatrolFindings({ includeResolved: true, limit: 9999 });
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/ai/patrol/findings?include_resolved=1&limit=500',
+    );
+  });
+
   it('normalizes single patrol run payloads', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       id: 'run-2',
@@ -325,6 +343,53 @@ describe('patrol api', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/patrol/resolve', {
       method: 'POST',
       body: JSON.stringify({ finding_id: 'finding-resolve-123' }),
+    });
+  });
+
+  it('refuses to create broad suppression rules from a finding shortcut', async () => {
+    await expect(
+      createSuppressionRuleFromFinding({
+        resourceId: '',
+        resourceName: 'Any resource',
+        category: 'capacity',
+        description: 'Known pattern',
+      }),
+    ).rejects.toThrow('resource and category');
+    expect(apiFetchJSONMock).not.toHaveBeenCalled();
+
+    await expect(
+      createSuppressionRuleFromFinding({
+        resourceId: 'resource-1',
+        resourceName: 'resource-1',
+        category: '',
+        description: 'Known pattern',
+      }),
+    ).rejects.toThrow('resource and category');
+    expect(apiFetchJSONMock).not.toHaveBeenCalled();
+  });
+
+  it('trims scoped suppression rules created from findings', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      rule: { id: 'rule-1' },
+    } as any);
+
+    await createSuppressionRuleFromFinding({
+      resourceId: ' resource-1 ',
+      resourceName: ' node-1 ',
+      category: ' backup ',
+      description: ' Known backup exception ',
+    });
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/patrol/suppressions', {
+      method: 'POST',
+      body: JSON.stringify({
+        resource_id: 'resource-1',
+        resource_name: 'node-1',
+        category: 'backup',
+        description: 'Known backup exception',
+      }),
     });
   });
 

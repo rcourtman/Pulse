@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1983,6 +1984,26 @@ func TestHandleAddSuppressionRule_MethodNotAllowed(t *testing.T) {
 
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestPatrolFindingsLimitFromQuery(t *testing.T) {
+	t.Parallel()
+
+	if got := patrolFindingsLimitFromQuery(url.Values{}, false); got != 0 {
+		t.Fatalf("active-only default limit = %d, want 0", got)
+	}
+	if got := patrolFindingsLimitFromQuery(url.Values{}, true); got != defaultResolvedPatrolFindingsLimit {
+		t.Fatalf("include-resolved default limit = %d, want %d", got, defaultResolvedPatrolFindingsLimit)
+	}
+	if got := patrolFindingsLimitFromQuery(url.Values{"limit": []string{"25"}}, true); got != 25 {
+		t.Fatalf("explicit limit = %d, want 25", got)
+	}
+	if got := patrolFindingsLimitFromQuery(url.Values{"limit": []string{"9999"}}, true); got != maxPatrolFindingsLimit {
+		t.Fatalf("oversized limit = %d, want %d", got, maxPatrolFindingsLimit)
+	}
+	if got := patrolFindingsLimitFromQuery(url.Values{"limit": []string{"0"}}, true); got != defaultResolvedPatrolFindingsLimit {
+		t.Fatalf("invalid include-resolved limit = %d, want %d", got, defaultResolvedPatrolFindingsLimit)
 	}
 }
 

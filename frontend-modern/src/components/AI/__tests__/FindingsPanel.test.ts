@@ -144,6 +144,14 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toMatch(/>\s*Copy summary\s*</);
   });
 
+  it('keeps expanded finding actions behind a primary action and compact menus', () => {
+    expect(findingsPanelSource).toContain('getPrimaryAssistantFindingAction');
+    expect(findingsPanelSource).toContain('Assistant');
+    expect(findingsPanelSource).toContain('Manage');
+    expect(findingsPanelSource).toContain('min-w-40');
+    expect(findingsPanelSource).toContain('min-w-48');
+  });
+
   it('exposes a manual Mark resolved action that goes through the patrol resolve store action', () => {
     // The /api/ai/patrol/resolve endpoint exists server-side but had no
     // operator path on the canonical Patrol surface. An operator fixing
@@ -155,8 +163,22 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('handleResolve');
     expect(findingsPanelSource).toContain('aiIntelligenceStore.resolveFinding(finding.id)');
     expect(findingsPanelSource).toContain('Mark resolved');
-    expect(findingsPanelSource).toContain("manualControls.acknowledge && finding.status === 'active'");
+    expect(findingsPanelSource).toContain("finding.status === 'active'");
+    expect(findingsPanelSource).toContain('Show when={manualControls.acknowledge}');
     expect(findingsPanelSource).toContain('Finding marked resolved');
+  });
+
+  it('fails closed before creating a per-finding suppression rule without concrete scope', () => {
+    // Empty resource/category fields are backend wildcards. The per-finding
+    // shortcut must not turn missing metadata into a broad suppression rule.
+    expect(findingsPanelSource).toContain('getFindingSuppressionRuleScope');
+    expect(findingsPanelSource).toContain('canCreate: Boolean(resourceId && category)');
+    expect(findingsPanelSource).toContain('!scope.canCreate');
+    expect(findingsPanelSource).toContain('resourceId: scope.resourceId');
+    expect(findingsPanelSource).toContain('category: scope.category');
+    expect(findingsPanelSource).toContain(
+      'missing the resource or category needed for a scoped rule',
+    );
   });
 
   it('surfaces regressionCount as a pill on the collapsed finding row', () => {
@@ -192,7 +214,7 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('"Later" sets a');
   });
 
-  it("badges dismissed-as-will_fix_later rows with their pending remind-at deadline", () => {
+  it('badges dismissed-as-will_fix_later rows with their pending remind-at deadline', () => {
     // Once a finding is dismissed as will_fix_later, the row must surface the
     // pending reminder so the operator knows the commitment exists; otherwise
     // the only place the deadline lives is the lifecycle log. The amber tone
@@ -1120,7 +1142,11 @@ describe('aiFindingPresentation', () => {
       expect(
         getOperatorStateDismissCause({
           lifecycle: [
-            { at: '2026-04-01T00:00:00Z', type: 'dismissed', metadata: { reason: 'expected_behavior' } },
+            {
+              at: '2026-04-01T00:00:00Z',
+              type: 'dismissed',
+              metadata: { reason: 'expected_behavior' },
+            },
             { at: '2026-04-02T00:00:00Z', type: 'undismissed' },
             {
               at: '2026-04-03T00:00:00Z',
@@ -1146,7 +1172,11 @@ describe('aiFindingPresentation', () => {
               metadata: { operator_state_cause: 'maintenance_window' },
             },
             { at: '2026-04-02T00:00:00Z', type: 'undismissed' },
-            { at: '2026-04-03T00:00:00Z', type: 'dismissed', metadata: { reason: 'expected_behavior' } },
+            {
+              at: '2026-04-03T00:00:00Z',
+              type: 'dismissed',
+              metadata: { reason: 'expected_behavior' },
+            },
           ],
         } as never),
       ).toBe('');
@@ -1178,14 +1208,17 @@ describe('aiFindingPresentation', () => {
       // helper, not by re-implementing the lifecycle scan inline.
       expect(findingsPanelSource).toContain('getOperatorStateDismissCause(finding)');
       expect(findingsPanelSource).toContain('formatOperatorStateDismissCauseLabel(');
-      expect(findingsPanelSource).toMatch(/auto: \{formatOperatorStateDismissCauseLabel/);
+      expect(findingsPanelSource).toContain('auto:');
+      expect(findingsPanelSource).toContain(
+        'formatOperatorStateDismissCauseLabel(getOperatorStateDismissCause(finding))',
+      );
       // The badge sits next to the existing dismissed-reason badge in
       // source order so the two pieces of information read together
       // (the reason and the attribution).
       const dismissedReasonIndex = findingsPanelSource.indexOf(
         '({formatIdentifierLabel(finding.dismissedReason)})',
       );
-      const autoBadgeIndex = findingsPanelSource.indexOf('auto: {formatOperatorStateDismissCauseLabel');
+      const autoBadgeIndex = findingsPanelSource.indexOf('auto:');
       expect(dismissedReasonIndex).toBeGreaterThan(0);
       expect(autoBadgeIndex).toBeGreaterThan(0);
       expect(autoBadgeIndex).toBeGreaterThan(dismissedReasonIndex);

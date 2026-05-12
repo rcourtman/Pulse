@@ -41,46 +41,54 @@ type AgentResourceFindingSnapshot struct {
 // no derivable check, or the dispatch failed before verification
 // could run). Output is intentionally omitted from the projection
 // — verification stdout can be large; agents that need it follow
-// up via the audit endpoint.
+// up via the audit endpoint. Verification command follows the same
+// redaction rule as action commands.
 type AgentResourceActionVerification struct {
-	Ran     bool      `json:"ran"`
-	Success bool      `json:"success"`
-	Command string    `json:"command,omitempty"`
-	Note    string    `json:"note,omitempty"`
-	RanAt   time.Time `json:"ranAt,omitempty"`
+	Ran             bool      `json:"ran"`
+	Success         bool      `json:"success"`
+	Command         string    `json:"command,omitempty"`
+	CommandRedacted bool      `json:"commandRedacted,omitempty"`
+	Note            string    `json:"note,omitempty"`
+	RanAt           time.Time `json:"ranAt,omitempty"`
 }
 
 // AgentResourceActionSummary is the agent-consumable projection of an
 // action audit record. Includes the refusal-reason prefix tokens
 // (resource_remediation_locked:, plan_drift:) verbatim so agents can
-// branch on them without parsing the human message.
+// branch on them without parsing the human message. Command is present
+// only for session callers or API tokens with action execution scope;
+// monitoring-read tokens receive commandRedacted instead.
 type AgentResourceActionSummary struct {
-	ID             string                           `json:"id"`
-	CapabilityName string                           `json:"capabilityName"`
-	Command        string                           `json:"command,omitempty"`
-	State          string                           `json:"state"`
-	Success        bool                             `json:"success"`
-	ErrorMessage   string                           `json:"errorMessage,omitempty"`
-	Verification   *AgentResourceActionVerification `json:"verification,omitempty"`
-	RequestedBy    string                           `json:"requestedBy,omitempty"`
-	CreatedAt      time.Time                        `json:"createdAt"`
-	UpdatedAt      time.Time                        `json:"updatedAt"`
+	ID              string                           `json:"id"`
+	CapabilityName  string                           `json:"capabilityName"`
+	Command         string                           `json:"command,omitempty"`
+	CommandRedacted bool                             `json:"commandRedacted,omitempty"`
+	State           string                           `json:"state"`
+	Success         bool                             `json:"success"`
+	ErrorMessage    string                           `json:"errorMessage,omitempty"`
+	Verification    *AgentResourceActionVerification `json:"verification,omitempty"`
+	RequestedBy     string                           `json:"requestedBy,omitempty"`
+	CreatedAt       time.Time                        `json:"createdAt"`
+	UpdatedAt       time.Time                        `json:"updatedAt"`
 }
 
 // AgentResourceApprovalSummary is the agent-consumable projection of
 // a pending approval request scoped to a specific resource. Carries
 // just enough for an agent that holds approval authority to decide
 // whether to act, fetch full context via /api/approvals/{id}, or
-// escalate. Mirrors the shape of approval.pending SSE events so
-// "what's pending right now" (this bundle) and "what just became
-// pending" (the SSE stream) speak the same vocabulary.
+// escalate. Command is present only for session callers or API tokens
+// with action execution scope; monitoring-read tokens receive
+// commandRedacted instead. Mirrors the shape of approval.pending SSE
+// events so "what's pending right now" (this bundle) and "what just
+// became pending" (the SSE stream) speak the same vocabulary.
 type AgentResourceApprovalSummary struct {
-	ID          string    `json:"id"`
-	Command     string    `json:"command"`
-	RiskLevel   string    `json:"riskLevel"`
-	RequestedBy string    `json:"requestedBy,omitempty"`
-	RequestedAt time.Time `json:"requestedAt"`
-	ExpiresAt   time.Time `json:"expiresAt"`
+	ID              string    `json:"id"`
+	Command         string    `json:"command,omitempty"`
+	CommandRedacted bool      `json:"commandRedacted,omitempty"`
+	RiskLevel       string    `json:"riskLevel"`
+	RequestedBy     string    `json:"requestedBy,omitempty"`
+	RequestedAt     time.Time `json:"requestedAt"`
+	ExpiresAt       time.Time `json:"expiresAt"`
 }
 
 // AgentFleetFindingCounts is the per-severity finding rollup carried
@@ -336,6 +344,8 @@ func (h *AgentContextHandler) HandleResourceContext(w http.ResponseWriter, r *ht
 			bundle.RecentActions = []AgentResourceActionSummary{}
 		}
 	}
+
+	redactAgentResourceContextCommandsForRequest(&bundle, r)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(bundle)

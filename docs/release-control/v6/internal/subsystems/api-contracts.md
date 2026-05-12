@@ -1361,9 +1361,12 @@ notifications: `finding.created` when a new finding is raised
 (suppressed when the finding was auto-dismissed by operator-state),
 `approval.pending` when a remediation request enters
 `StatusPending` and is waiting on operator decision (carries
-`approvalId`, `resourceId`, target tuple, `command`, `riskLevel`,
-`requestedBy`, `requestedAt`, `expiresAt` — full detail stays
-behind `/api/approvals/{id}`, the event is a doorbell),
+`approvalId`, `resourceId`, target tuple, `riskLevel`,
+`requestedBy`, `requestedAt`, `expiresAt`, plus `command` only for
+session callers or API tokens that also carry `ai:execute`; plain
+`monitoring:read` tokens receive `commandRedacted:true` — full
+detail stays behind `/api/approvals/{id}`, the event is a
+doorbell),
 `action.completed` when an action audit reaches a terminal state —
 Completed, runtime-Failed, or refused-before-dispatch (refusals
 carry the stable error-token prefix `plan_drift:` or
@@ -1373,6 +1376,8 @@ dispatches carry a `verification` block — the agent-stable
 projection of the broker's read-after-write probe — with `ran`,
 `success`, `command`, `note`, `ranAt` so agents close the
 "did it actually work?" loop without a follow-up audit fetch;
+raw action and verification commands follow the same `ai:execute`
+redaction rule on the stream;
 refused dispatches omit `verification` because the probe never
 runs) — and `heartbeat` every 15 seconds so an idle connection
 can confirm the stream is alive. Each event carries a monotonic ID so agents
@@ -1550,13 +1555,17 @@ scoped to this resource as the `AgentResourceApprovalSummary`
 projection (id, command, riskLevel, requestedBy, requestedAt,
 expiresAt — same vocabulary as `approval.pending` SSE events so
 "what's pending right now" and "what just became pending" agree
-on shape), and recent action audits including refused dispatches
+on shape, with `commandRedacted:true` replacing raw command text
+for plain `monitoring:read` API tokens), and recent action audits
+including refused dispatches
 with their stable token prefixes (`resource_remediation_locked:`,
 `plan_drift:`) preserved verbatim and the same agent-stable
 `verification` block the SSE `action.completed` payload carries
 (shared `AgentResourceActionVerification` projection, shared
 `projectAgentResourceVerification` helper) so the bundle's depth
-view and the doorbell speak the same vocabulary on probe outcomes.
+view and the doorbell speak the same vocabulary on probe outcomes;
+action and verification command text follows the same `ai:execute`
+redaction rule.
 The shape is intentionally narrower than the full internal types
 so agents see a stable agent-paradigm contract, decoupled from
 internal type evolution.

@@ -292,8 +292,22 @@ Patrol-specific presentation helpers.
    reassuringly emphasized, medium is neutral, low is a soft amber.
    Findings without an investigation record (or without a recorded
    confidence) must show no confidence badge rather than defaulting to
-   one, mirroring the impact rule that absent metadata is not fabricated. The
-   TS API client mirrors (`UnifiedFindingRecord.impact`,
+   one, mirroring the impact rule that absent metadata is not fabricated.
+   Expanded Patrol finding cards must keep action density product-grade: one
+   primary Assistant intent button is visible inline (`Investigate`, `Verify
+   fix`, or `Explain` based on current finding state), while secondary
+   Assistant intents and operator management controls live behind compact
+   in-flow `Assistant` and `Manage` menus. Those menus must render inside the
+   expanded finding detail rather than as clipped floating panels, and the
+   per-finding "Create rule from this" action must remain disabled unless the
+   finding has both a concrete resource and category for a scoped suppression
+   rule.
+   The Patrol store owns the sticky expanded-history state for Resolved/All
+   views and must keep that data bounded: once resolved findings are requested,
+   subsequent Patrol finding loads continue to request include-resolved history
+   with the 200-item history limit instead of unbounded historical payloads or
+   a transient active-only refresh.
+   The TS API client mirrors (`UnifiedFindingRecord.impact`,
    `Finding.impact`) and the store normalizers
    (`normalizeUnifiedFindingRecord`, `normalizePatrolFindingRecord`) must
    carry impact through alongside description and recommendation rather

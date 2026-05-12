@@ -168,12 +168,9 @@ func (e *ReportEngine) Generate(req MetricReportRequest) (data []byte, contentTy
 		return nil, "", fmt.Errorf("failed to query metrics: %w", err)
 	}
 
-	// Build narrative interpretation. If req.Narrator is supplied (typically
-	// an LLM-backed implementation) it is invoked with a bounded timeout;
-	// nil/error/timeout falls back to the heuristic narrator. The prior
-	// period is queried with the same window length offset back so deltas
-	// can be expressed when the narrator wants them.
-	e.attachNarrative(reportData, req)
+	if reportFormatNeedsNarrative(req.Format) {
+		e.attachNarrative(reportData, req)
+	}
 
 	log.Debug().
 		Str("resourceType", reportData.ResourceType).
@@ -429,11 +426,9 @@ func (e *ReportEngine) GenerateMulti(req MultiReportRequest) (data []byte, conte
 		return nil, "", fmt.Errorf("all resources failed to query metrics")
 	}
 
-	// Build fleet-level narrative. If req.FleetNarrator is supplied
-	// (typically AI-backed) it is invoked with a bounded timeout;
-	// nil/error/timeout falls back to the heuristic fleet narrator so
-	// the fleet PDF always has narrative content.
-	e.attachFleetNarrative(multiData, req)
+	if reportFormatNeedsNarrative(req.Format) {
+		e.attachFleetNarrative(multiData, req)
+	}
 
 	log.Debug().
 		Int("resources", successCount).
@@ -540,6 +535,10 @@ func narrativeSource(data *ReportData) string {
 		return ""
 	}
 	return data.Narrative.Source
+}
+
+func reportFormatNeedsNarrative(format ReportFormat) bool {
+	return format == FormatPDF
 }
 
 // attachFleetNarrative populates multiData.FleetNarrative using

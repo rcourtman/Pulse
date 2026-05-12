@@ -249,6 +249,92 @@ func TestEngineGenerate_FindingsProviderInvoked(t *testing.T) {
 	}
 }
 
+func TestEngineGenerate_CSVSkipsNarratorAndFindingsProvider(t *testing.T) {
+	store := newReportingMetricsStore(t)
+	defer store.Close()
+
+	now := time.Now()
+	nodeID := "node-csv-narrative-skip"
+	for i := 0; i < 6; i++ {
+		ts := now.Add(time.Duration(-30+i*5) * time.Minute)
+		store.Write("node", nodeID, "cpu", 50.0, ts)
+	}
+	store.Flush()
+
+	provider := &stubFindingsProvider{
+		findings: []FindingSummary{{Severity: "warning", Title: "Should not load"}},
+	}
+	stub := &capturingNarrator{out: Narrative{HealthStatus: "HEALTHY"}}
+
+	engine := NewReportEngine(EngineConfig{MetricsStore: store})
+	req := MetricReportRequest{
+		ResourceType:     "node",
+		ResourceID:       nodeID,
+		Start:            now.Add(-1 * time.Hour),
+		End:              now.Add(time.Minute),
+		Format:           FormatCSV,
+		Narrator:         stub,
+		FindingsProvider: provider,
+	}
+	csv, contentType, err := engine.Generate(req)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if len(csv) == 0 {
+		t.Fatal("expected non-empty CSV")
+	}
+	if contentType != "text/csv" {
+		t.Fatalf("contentType = %q, want text/csv", contentType)
+	}
+	if stub.called {
+		t.Fatal("CSV generation invoked narrator")
+	}
+	if provider.called {
+		t.Fatal("CSV generation invoked findings provider")
+	}
+}
+
+func TestEngineGenerateMulti_CSVSkipsFleetNarrator(t *testing.T) {
+	store := newReportingMetricsStore(t)
+	defer store.Close()
+
+	now := time.Now()
+	for _, nodeID := range []string{"node-csv-fleet-a", "node-csv-fleet-b"} {
+		for i := 0; i < 6; i++ {
+			ts := now.Add(time.Duration(-30+i*5) * time.Minute)
+			store.Write("node", nodeID, "cpu", 60.0, ts)
+		}
+	}
+	store.Flush()
+
+	stub := &capturingFleetNarrator{out: FleetNarrative{HealthStatus: "HEALTHY"}}
+	engine := NewReportEngine(EngineConfig{MetricsStore: store})
+	req := MultiReportRequest{
+		Title:  "Fleet CSV narrative skip",
+		Start:  now.Add(-1 * time.Hour),
+		End:    now.Add(time.Minute),
+		Format: FormatCSV,
+		Resources: []MetricReportRequest{
+			{ResourceType: "node", ResourceID: "node-csv-fleet-a"},
+			{ResourceType: "node", ResourceID: "node-csv-fleet-b"},
+		},
+		FleetNarrator: stub,
+	}
+	csv, contentType, err := engine.GenerateMulti(req)
+	if err != nil {
+		t.Fatalf("GenerateMulti: %v", err)
+	}
+	if len(csv) == 0 {
+		t.Fatal("expected non-empty CSV")
+	}
+	if contentType != "text/csv" {
+		t.Fatalf("contentType = %q, want text/csv", contentType)
+	}
+	if stub.called {
+		t.Fatal("CSV generation invoked fleet narrator")
+	}
+}
+
 // TestEngineNarrativeFor_ReturnsStructuredNarrativeWithoutRendering
 // verifies the non-rendering entry point used by Pulse Assistant tools:
 // it must produce a Narrative grounded in the queried metrics without
@@ -377,6 +463,19 @@ type capturingNarrator struct {
 }
 
 func (c *capturingNarrator) Narrate(_ context.Context, in NarrativeInput) (Narrative, error) {
+	c.called = true
+	c.seen = in
+	return c.out, c.err
+}
+
+type capturingFleetNarrator struct {
+	out    FleetNarrative
+	err    error
+	called bool
+	seen   FleetNarrativeInput
+}
+
+func (c *capturingFleetNarrator) NarrateFleet(_ context.Context, in FleetNarrativeInput) (FleetNarrative, error) {
 	c.called = true
 	c.seen = in
 	return c.out, c.err

@@ -236,12 +236,36 @@ export async function getPatrolStatus(): Promise<PatrolStatus> {
   return apiFetchJSON<PatrolStatus>('/api/ai/patrol/status');
 }
 
-export async function getPatrolFindings(
-  options?: { includeResolved?: boolean },
-): Promise<Finding[]> {
-  const path = options?.includeResolved
-    ? '/api/ai/patrol/findings?include_resolved=1'
-    : '/api/ai/patrol/findings';
+const DEFAULT_PATROL_FINDINGS_HISTORY_LIMIT = 200;
+const MAX_PATROL_FINDINGS_HISTORY_LIMIT = 500;
+
+function normalizePatrolFindingsLimit(limit: number | undefined): number {
+  if (limit === undefined || !Number.isFinite(limit)) {
+    return DEFAULT_PATROL_FINDINGS_HISTORY_LIMIT;
+  }
+  const normalized = Math.floor(limit);
+  if (normalized < 1) {
+    return DEFAULT_PATROL_FINDINGS_HISTORY_LIMIT;
+  }
+  if (normalized > MAX_PATROL_FINDINGS_HISTORY_LIMIT) {
+    return MAX_PATROL_FINDINGS_HISTORY_LIMIT;
+  }
+  return normalized;
+}
+
+export async function getPatrolFindings(options?: {
+  includeResolved?: boolean;
+  limit?: number;
+}): Promise<Finding[]> {
+  const search = new URLSearchParams();
+  if (options?.includeResolved) {
+    search.set('include_resolved', '1');
+    search.set('limit', String(normalizePatrolFindingsLimit(options.limit)));
+  } else if (options?.limit !== undefined) {
+    search.set('limit', String(normalizePatrolFindingsLimit(options.limit)));
+  }
+  const query = search.toString();
+  const path = query ? `/api/ai/patrol/findings?${query}` : '/api/ai/patrol/findings';
   const findings = await apiFetchJSON<Finding[]>(path);
   return arrayOrEmpty<Finding>(findings).map((finding) =>
     promoteLegacyAlertIdentifier(finding as Finding & { alert_identifier?: string }),
@@ -326,9 +350,10 @@ export async function dismissFinding(
  *
  * The description is required by the backend — it's the operator's
  * stated reason, surfaced when the rule is later listed or audited.
- * Pass an empty resourceId or category to broaden the rule's scope
- * (e.g. all categories on this resource, or this category on any
- * resource).
+ * This per-finding helper is intentionally narrow: it refuses empty
+ * resource/category values so a noisy finding cannot accidentally create
+ * a wildcard suppression rule. Broader rules must come from an explicit
+ * rule-management surface.
  */
 export async function createSuppressionRuleFromFinding(input: {
   resourceId: string;
@@ -336,13 +361,24 @@ export async function createSuppressionRuleFromFinding(input: {
   category: string;
   description: string;
 }): Promise<{ success: boolean; message: string; rule: { id: string } }> {
+  const resourceId = input.resourceId.trim();
+  const resourceName = input.resourceName.trim() || resourceId;
+  const category = input.category.trim();
+  const description = input.description.trim();
+  if (!resourceId || !category) {
+    throw new Error('Suppression rules created from a finding require a resource and category');
+  }
+  if (!description) {
+    throw new Error('Suppression rules require a description');
+  }
+
   return apiFetchJSON('/api/ai/patrol/suppressions', {
     method: 'POST',
     body: JSON.stringify({
-      resource_id: input.resourceId,
-      resource_name: input.resourceName,
-      category: input.category,
-      description: input.description,
+      resource_id: resourceId,
+      resource_name: resourceName,
+      category,
+      description,
     }),
   });
 }

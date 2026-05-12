@@ -209,6 +209,7 @@ const [patrolFindingsError, setPatrolFindingsError] = createSignal<string | null
 // expanded set (no current call site does this; FindingsPanel's effect
 // would set it back to true the moment Resolved/All becomes active).
 let patrolFindingsIncludeResolvedPreference = false;
+const PATROL_FINDINGS_HISTORY_LIMIT = 200;
 
 function normalizeUnifiedFindingRecord(item: UnifiedFindingRecord, now: number): UnifiedFinding {
   const alertIdentifier = item.alertIdentifier;
@@ -466,7 +467,9 @@ export const aiIntelligenceStore = {
     setPatrolFindingsError(null);
     try {
       const findings = await getPatrolFindings(
-        includeResolved ? { includeResolved: true } : undefined,
+        includeResolved
+          ? { includeResolved: true, limit: PATROL_FINDINGS_HISTORY_LIMIT }
+          : undefined,
       );
       const now = Date.now();
       setPatrolFindings(findings.map((item) => normalizePatrolFindingRecord(item, now)));

@@ -103,6 +103,45 @@ interface FindingsPanelProps {
   >;
 }
 
+type FindingAssistantIntent = 'discuss' | 'explain' | 'investigate' | 'why' | 'verify_fix';
+
+function getPrimaryAssistantFindingAction(finding: UnifiedFinding): {
+  intent: FindingAssistantIntent;
+  label: string;
+  title: string;
+} {
+  if (findingHasAppliedFix(finding) && finding.status === 'active') {
+    return {
+      intent: 'verify_fix',
+      label: 'Verify fix',
+      title: 'Ask Pulse Assistant to verify whether the applied fix cleared the condition',
+    };
+  }
+  if (finding.status === 'active') {
+    return {
+      intent: 'investigate',
+      label: 'Investigate',
+      title: 'Ask Pulse Assistant to investigate this finding with the attached evidence',
+    };
+  }
+  return {
+    intent: 'explain',
+    label: 'Explain',
+    title: 'Ask Pulse Assistant to explain what happened and why it matters',
+  };
+}
+
+function getFindingSuppressionRuleScope(finding: UnifiedFinding) {
+  const resourceId = finding.resourceId.trim();
+  const category = finding.category.trim();
+  return {
+    resourceId,
+    resourceName: finding.resourceName.trim() || resourceId || 'this resource',
+    category,
+    canCreate: Boolean(resourceId && category),
+  };
+}
+
 export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const location = useLocation();
   const { get: getResource } = useResources();
@@ -534,7 +573,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
   const openFindingInAssistant = async (
     finding: UnifiedFinding,
-    intent: 'discuss' | 'explain' | 'investigate' | 'why' | 'verify_fix',
+    intent: FindingAssistantIntent,
   ) => {
     await aiIntelligenceStore.loadPendingApprovals();
     const subject = getFindingSubjectPresentation(finding).label;
@@ -649,6 +688,13 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
   const handleStartCreateRule = (finding: UnifiedFinding, e: Event) => {
     e.stopPropagation();
+    const scope = getFindingSuppressionRuleScope(finding);
+    if (!scope.canCreate) {
+      notificationStore.error(
+        'This finding is missing the resource or category needed for a scoped rule',
+      );
+      return;
+    }
     setCreatingRuleForId(finding.id);
     setCreateRuleDescription(finding.userNote || '');
     setExpandedId(finding.id);
@@ -666,16 +712,23 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       notificationStore.error('A reason for the rule is required');
       return;
     }
+    const scope = getFindingSuppressionRuleScope(finding);
+    if (!scope.canCreate) {
+      notificationStore.error(
+        'This finding is missing the resource or category needed for a scoped rule',
+      );
+      return;
+    }
     setActionLoading(finding.id);
     try {
       await createSuppressionRuleFromFinding({
-        resourceId: finding.resourceId,
-        resourceName: finding.resourceName,
-        category: finding.category || '',
+        resourceId: scope.resourceId,
+        resourceName: scope.resourceName,
+        category: scope.category,
         description,
       });
       notificationStore.success(
-        `Rule created: future ${finding.category || 'matching'} findings on ${finding.resourceName} will auto-dismiss`,
+        `Rule created: future ${scope.category} findings on ${scope.resourceName} will auto-dismiss`,
       );
       setCreatingRuleForId(null);
       // Refresh so the operator sees the finding update (typically the
@@ -967,11 +1020,15 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   class="ml-2 text-blue-600 dark:text-blue-400"
                   title="Auto-suppressed by Pulse based on operator-set state for this resource."
                 >
-                  {' · '}auto: {formatOperatorStateDismissCauseLabel(getOperatorStateDismissCause(finding))}
+                  {' · '}auto:{' '}
+                  {formatOperatorStateDismissCauseLabel(getOperatorStateDismissCause(finding))}
                 </span>
               </Show>
               <Show when={finding.dismissedReason === 'will_fix_later' && finding.remindAt}>
-                <span class="ml-2 text-amber-600 dark:text-amber-400" title="Pulse will surface this finding again on this date if it is still tripping.">
+                <span
+                  class="ml-2 text-amber-600 dark:text-amber-400"
+                  title="Pulse will surface this finding again on this date if it is still tripping."
+                >
                   {' · '}Reminding {formatTime(finding.remindAt!)}
                 </span>
               </Show>
@@ -1259,243 +1316,192 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           </div>
         </Show>
 
-        {/* Action area, grouped by intent. Each cluster sits in its own
-            flex container so the eye reads them as semantically distinct:
-              - Ask Pulse Assistant: action-style AI handoffs (Explain,
-                Investigate, Why, optional Verify fix) plus the
-                open-ended Discuss entry.
-              - Operator memory + share: Add Note and Copy summary.
-            The two clusters are separated by a faint vertical divider
-            (border-l) so the row reads as two intents rather than
-            ten flat buttons. */}
-        <div class="mt-3 flex flex-wrap items-start gap-x-4 gap-y-2 text-xs">
-          <div class="flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              onClick={(e) => handleExplainFinding(finding, e)}
-              class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
-              title="Ask Pulse Assistant to explain what we know about this finding using the attached evidence"
-            >
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              Explain
-            </button>
-            <Show when={finding.status === 'active'}>
-              <button
-                type="button"
-                onClick={(e) => handleInvestigateFinding(finding, e)}
-                class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
-                title="Ask Pulse Assistant to actively investigate using metrics, alerts, and state — not just summarize"
-              >
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-                Investigate
-              </button>
-            </Show>
-            <button
-              type="button"
-              onClick={(e) => handleWhyFinding(finding, e)}
-              class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
-              title="Ask Pulse Assistant to explain the cause using recent changes, correlations, and incident history"
-            >
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              Why
-            </button>
-            <Show when={findingHasAppliedFix(finding) && finding.status === 'active'}>
-              <button
-                type="button"
-                onClick={(e) => handleVerifyFixFinding(finding, e)}
-                class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
-                title="Ask Pulse Assistant to verify whether the applied fix actually resolved the underlying condition"
-              >
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-                  />
-                </svg>
-                Verify fix
-              </button>
-            </Show>
-            <button
-              type="button"
-              onClick={(e) => handleDiscussWithAssistant(finding, e)}
-              class="px-2 py-1 rounded bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900 flex items-center gap-1 transition-colors"
-              title="Open Pulse Assistant with this finding's context, no auto-prompt — drive the conversation yourself"
-            >
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                />
-              </svg>
-              Discuss
-            </button>
-          </div>
-          <div class="flex flex-wrap gap-1.5 sm:border-l sm:border-border-subtle sm:pl-4">
-            <Show when={editingNoteId() !== finding.id && !finding.userNote}>
-              <button
-                type="button"
-                onClick={(e) => handleStartEditNote(finding, e)}
-                class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
-                title="Add an operator note that Patrol will see on future runs of this finding"
-              >
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
-                  />
-                </svg>
-                Add Note
-              </button>
-            </Show>
-            <button
-              type="button"
-              onClick={(e) => handleCopyFindingSummary(finding, e)}
-              class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
-              title="Copy a Markdown summary of this finding for sharing with a teammate"
-            >
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
-                />
-              </svg>
-              Copy summary
-            </button>
-          </div>
-        </div>
+        <div
+          class="mt-3 flex flex-wrap items-start gap-2 text-xs"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              const action = getPrimaryAssistantFindingAction(finding);
+              e.stopPropagation();
+              void openFindingInAssistant(finding, action.intent);
+            }}
+            class="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-blue-700"
+            title={getPrimaryAssistantFindingAction(finding).title}
+          >
+            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            {getPrimaryAssistantFindingAction(finding).label}
+          </button>
 
-        <Show when={finding.status === 'active'}>
-          {/* Lifecycle decisions, grouped by consequence:
-                - Decide: Acknowledge (mark aware), Mark resolved (close out)
-                - Delay: Snooze 1h / 24h / 7d (re-surface later)
-                - Dismiss/promote: Not an issue / Remember as expected /
-                  Later / Create rule (permanent pattern)
-              Visual dividers (border-l) separate the clusters so the
-              operator reads three distinct intents rather than one
-              undifferentiated row of 9. */}
-          <div class="mt-3 flex flex-wrap items-start gap-x-4 gap-y-2 text-xs">
-            <Show when={manualControls.acknowledge}>
-              <div class="flex flex-wrap gap-1.5">
-                <Show when={!finding.acknowledgedAt}>
+          <details onClick={(e) => e.stopPropagation()}>
+            <summary class="list-none cursor-pointer rounded border border-border bg-surface px-3 py-1.5 font-medium text-base-content hover:bg-surface-hover">
+              Assistant
+            </summary>
+            <div class="mt-1 flex min-w-40 flex-col gap-1 rounded border border-border bg-surface p-1 shadow-sm">
+              <button
+                type="button"
+                onClick={(e) => handleExplainFinding(finding, e)}
+                class="rounded px-2 py-1 text-left hover:bg-surface-hover"
+              >
+                Explain
+              </button>
+              <Show when={finding.status === 'active'}>
+                <button
+                  type="button"
+                  onClick={(e) => handleInvestigateFinding(finding, e)}
+                  class="rounded px-2 py-1 text-left hover:bg-surface-hover"
+                >
+                  Investigate
+                </button>
+              </Show>
+              <button
+                type="button"
+                onClick={(e) => handleWhyFinding(finding, e)}
+                class="rounded px-2 py-1 text-left hover:bg-surface-hover"
+              >
+                Why
+              </button>
+              <Show when={findingHasAppliedFix(finding) && finding.status === 'active'}>
+                <button
+                  type="button"
+                  onClick={(e) => handleVerifyFixFinding(finding, e)}
+                  class="rounded px-2 py-1 text-left hover:bg-surface-hover"
+                >
+                  Verify fix
+                </button>
+              </Show>
+              <button
+                type="button"
+                onClick={(e) => handleDiscussWithAssistant(finding, e)}
+                class="rounded px-2 py-1 text-left hover:bg-surface-hover"
+              >
+                Discuss
+              </button>
+            </div>
+          </details>
+
+          <details onClick={(e) => e.stopPropagation()}>
+            <summary class="list-none cursor-pointer rounded border border-border bg-surface px-3 py-1.5 font-medium text-base-content hover:bg-surface-hover">
+              Manage
+            </summary>
+            <div class="mt-1 flex min-w-48 flex-col gap-1 rounded border border-border bg-surface p-1 shadow-sm">
+              <Show when={editingNoteId() !== finding.id && !finding.userNote}>
+                <button
+                  type="button"
+                  onClick={(e) => handleStartEditNote(finding, e)}
+                  class="rounded px-2 py-1 text-left hover:bg-surface-hover"
+                >
+                  Add Note
+                </button>
+              </Show>
+              <button
+                type="button"
+                onClick={(e) => handleCopyFindingSummary(finding, e)}
+                class="rounded px-2 py-1 text-left hover:bg-surface-hover"
+              >
+                Copy summary
+              </button>
+              <Show when={finding.status === 'active'}>
+                <Show when={manualControls.acknowledge && !finding.acknowledgedAt}>
                   <button
                     type="button"
                     onClick={(e) => handleAcknowledge(finding, e)}
-                    class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
+                    class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
                     disabled={actionLoading() === finding.id}
                   >
                     Acknowledge
                   </button>
                 </Show>
-                <Show when={manualControls.acknowledge && finding.status === 'active'}>
+                <Show when={manualControls.acknowledge}>
                   <button
                     type="button"
                     onClick={(e) => handleResolve(finding, e)}
-                    class="px-2 py-1 rounded border border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-900"
-                    title="Mark this finding as resolved. Use when you have fixed the issue out-of-band."
+                    class="rounded px-2 py-1 text-left text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-900"
                     disabled={actionLoading() === finding.id}
                   >
                     Mark resolved
                   </button>
                 </Show>
-              </div>
-            </Show>
-            <Show when={manualControls.snooze}>
-              <div class="flex flex-wrap gap-1.5 sm:border-l sm:border-border-subtle sm:pl-4">
-                <button
-                  type="button"
-                  onClick={(e) => handleSnooze(finding, 1, e)}
-                  class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
-                  disabled={actionLoading() === finding.id}
-                >
-                  Snooze 1h
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => handleSnooze(finding, 24, e)}
-                  class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
-                  disabled={actionLoading() === finding.id}
-                >
-                  Snooze 24h
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => handleSnooze(finding, 168, e)}
-                  class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
-                  disabled={actionLoading() === finding.id}
-                >
-                  Snooze 7d
-                </button>
-              </div>
-            </Show>
-            <Show when={manualControls.dismiss}>
-              <div class="flex flex-wrap gap-1.5 sm:border-l sm:border-border-subtle sm:pl-4">
-                <button
-                  type="button"
-                  onClick={(e) => handleStartDismiss(finding, 'not_an_issue', e)}
-                  class="px-2 py-1 rounded border border-border text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900"
-                  disabled={actionLoading() === finding.id}
-                >
-                  Dismiss: Not an issue
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => handleStartDismiss(finding, 'expected_behavior', e)}
-                  class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
-                  disabled={actionLoading() === finding.id}
-                  title="Tell Pulse this finding represents an expected state for this resource — it will stay quiet about it but surface again on severity escalation"
-                >
-                  Remember as expected
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
-                  class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
-                  disabled={actionLoading() === finding.id}
-                >
-                  Dismiss: Later
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => handleStartCreateRule(finding, e)}
-                  class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
-                  disabled={actionLoading() === finding.id}
-                  title="Promote this dismissal into a permanent rule — future findings on this resource for this category will auto-dismiss without surfacing"
-                >
-                  Create rule from this
-                </button>
-              </div>
-            </Show>
-          </div>
-        </Show>
+                <Show when={manualControls.snooze}>
+                  <button
+                    type="button"
+                    onClick={(e) => handleSnooze(finding, 1, e)}
+                    class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                    disabled={actionLoading() === finding.id}
+                  >
+                    Snooze 1h
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleSnooze(finding, 24, e)}
+                    class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                    disabled={actionLoading() === finding.id}
+                  >
+                    Snooze 24h
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleSnooze(finding, 168, e)}
+                    class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                    disabled={actionLoading() === finding.id}
+                  >
+                    Snooze 7d
+                  </button>
+                </Show>
+                <Show when={manualControls.dismiss}>
+                  <button
+                    type="button"
+                    onClick={(e) => handleStartDismiss(finding, 'not_an_issue', e)}
+                    class="rounded px-2 py-1 text-left text-red-600 hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900"
+                    disabled={actionLoading() === finding.id}
+                  >
+                    Dismiss: Not an issue
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleStartDismiss(finding, 'expected_behavior', e)}
+                    class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                    disabled={actionLoading() === finding.id}
+                  >
+                    Remember as expected
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
+                    class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                    disabled={actionLoading() === finding.id}
+                  >
+                    Dismiss: Later
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleStartCreateRule(finding, e)}
+                    class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                    disabled={
+                      actionLoading() === finding.id ||
+                      !getFindingSuppressionRuleScope(finding).canCreate
+                    }
+                    title={
+                      getFindingSuppressionRuleScope(finding).canCreate
+                        ? 'Promote this dismissal into a permanent rule for this resource and category'
+                        : 'This finding is missing the resource or category needed for a scoped rule'
+                    }
+                  >
+                    Create rule from this
+                  </button>
+                </Show>
+              </Show>
+            </div>
+          </details>
+        </div>
         {/* Inline create-rule confirmation. Confirms scope (resource +
             category) and requires a reason so the persisted rule has
             audit context. Mirrors the dismiss-confirmation panel
@@ -1506,17 +1512,16 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <div class="flex items-center gap-2 mb-1.5">
               <span class="text-xs font-medium text-base-content">
                 Create suppression rule for{' '}
-                <span class="font-semibold">{finding.resourceName}</span>
-                <Show when={finding.category}>
-                  {' '}({finding.category})
-                </Show>
+                <span class="font-semibold">
+                  {getFindingSuppressionRuleScope(finding).resourceName}
+                </span>{' '}
+                ({getFindingSuppressionRuleScope(finding).category})
               </span>
             </div>
             <p class="text-[11px] text-muted mb-1.5">
-              Future findings matching this resource and category will be
-              auto-dismissed by Patrol without surfacing as new findings.
-              You can list or remove rules later from the suppressions
-              management surface.
+              Future findings matching this resource and category will be auto-dismissed by Patrol
+              without surfacing as new findings. You can list or remove rules later from the
+              suppressions management surface.
             </p>
             <textarea
               class="w-full text-xs px-2 py-1.5 rounded border border-border bg-surface text-base-content resize-none focus:outline-none focus:ring-1 focus:ring-blue-400"
@@ -1561,21 +1566,21 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <Show when={dismissReason() === 'will_fix_later'}>
               <p class="text-[11px] text-amber-700 dark:text-amber-300 mb-1.5">
                 Pulse will stay quiet on this for 7 days, then surface it again on{' '}
-                <span class="font-semibold">{formatWillFixLaterRemindDate()}</span>{' '}
-                if it is still happening.
+                <span class="font-semibold">{formatWillFixLaterRemindDate()}</span> if it is still
+                happening.
               </p>
             </Show>
             <Show when={dismissReason() === 'expected_behavior'}>
               <p class="text-[11px] text-muted mb-1.5">
-                Pulse will keep this finding visible as acknowledged and remember
-                that this state is expected on this resource. It won't re-notify
-                you for it, but severity escalation will still wake it.
+                Pulse will keep this finding visible as acknowledged and remember that this state is
+                expected on this resource. It won't re-notify you for it, but severity escalation
+                will still wake it.
               </p>
             </Show>
             <Show when={dismissReason() === 'not_an_issue'}>
               <p class="text-[11px] text-muted mb-1.5">
-                Pulse will permanently suppress this and similar findings on this resource.
-                Use "Expected" or "Later" if the detection itself is correct.
+                Pulse will permanently suppress this and similar findings on this resource. Use
+                "Expected" or "Later" if the detection itself is correct.
               </p>
             </Show>
             {/* Recurrence hint: if a finding has regressed multiple times, the
@@ -1586,14 +1591,13 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <Show
               when={
                 (finding.regressionCount || 0) > 1 &&
-                (dismissReason() === 'not_an_issue' ||
-                  dismissReason() === 'expected_behavior')
+                (dismissReason() === 'not_an_issue' || dismissReason() === 'expected_behavior')
               }
             >
               <p class="text-[11px] text-amber-700 dark:text-amber-300 mb-1.5 italic">
-                Heads up: this finding has regressed {finding.regressionCount} times
-                before. If you intend to fix it eventually, "Later" sets a
-                7-day reminder instead of going silent permanently.
+                Heads up: this finding has regressed {finding.regressionCount} times before. If you
+                intend to fix it eventually, "Later" sets a 7-day reminder instead of going silent
+                permanently.
               </p>
             </Show>
             <textarea

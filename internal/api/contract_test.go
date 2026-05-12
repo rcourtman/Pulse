@@ -13675,6 +13675,26 @@ func TestContract_GetResourceContextCapabilityListsPendingApprovals(t *testing.T
 	}
 }
 
+func TestContract_AgentCommandPayloadsRequireActionScope(t *testing.T) {
+	source, err := os.ReadFile("agent_command_redaction.go")
+	if err != nil {
+		t.Fatalf("read agent_command_redaction.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "requestCanReadAgentCommandPayloads") {
+		t.Error("agent command redaction must stay behind a named request-scope helper")
+	}
+	if !strings.Contains(src, "token.HasScope(config.ScopeAIExecute)") {
+		t.Error("agent command payloads must require ai:execute on API-token callers, not only monitoring:read")
+	}
+	if !strings.Contains(src, "redactAgentEventCommandsForRequest") {
+		t.Error("agent SSE events must pass through command redaction before serialization")
+	}
+	if !strings.Contains(src, "redactAgentResourceContextCommandsForRequest") {
+		t.Error("agent resource-context bundles must pass through command redaction before serialization")
+	}
+}
+
 // TestContract_AgentFleetContextEndpointSurfacesStableShape pins the
 // agent-paradigm fleet view contract: the endpoint must return a
 // `resources` array (never null) so agents iterate without
@@ -13725,7 +13745,7 @@ func TestContract_ActionCompletedPayloadCarriesVerification(t *testing.T) {
 		t.Fatalf("read agent_events.go: %v", err)
 	}
 	src := string(source)
-	if !strings.Contains(src, "Verification   *AgentResourceActionVerification `json:\"verification,omitempty\"`") {
+	if !strings.Contains(src, "Verification    *AgentResourceActionVerification `json:\"verification,omitempty\"`") {
 		t.Error("AgentEventActionCompletedPayload must carry Verification as a *AgentResourceActionVerification — agents close the certainty loop on this field")
 	}
 }
@@ -13763,7 +13783,7 @@ func TestContract_AgentResourceActionSummaryCarriesVerification(t *testing.T) {
 		t.Fatalf("read agent_resource_context.go: %v", err)
 	}
 	src := string(source)
-	if !strings.Contains(src, "Verification   *AgentResourceActionVerification `json:\"verification,omitempty\"`") {
+	if !strings.Contains(src, "Verification    *AgentResourceActionVerification `json:\"verification,omitempty\"`") {
 		t.Error("AgentResourceActionSummary must carry Verification so the bundle's recent-actions and the action.completed SSE payload speak the same vocabulary")
 	}
 	if !strings.Contains(src, "func projectAgentResourceVerification(v *unified.ActionVerificationResult)") {

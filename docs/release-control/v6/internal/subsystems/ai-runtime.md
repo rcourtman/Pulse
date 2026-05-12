@@ -66,6 +66,15 @@ runtime cost control, and shared AI transport surfaces.
    logged server-side or attached as redacted internal Patrol evidence where
    governed, but they must not be returned through the browser provider-test
    contract.
+   Patrol findings history transport must stay bounded when resolved findings
+   are included: `/api/ai/patrol/findings?include_resolved=1` defaults to a
+   200-finding limit and caps explicit limits at 500, and the frontend Patrol
+   client/store must send the same bounded history request once the Resolved or
+   All view has made expanded history sticky. Per-finding suppression creation
+   is similarly narrow by default: the browser helper must require a concrete
+   resource ID and category, while backend broad/wildcard suppression scopes
+   require an explicit `allow_broad_scope` request from a dedicated rule
+   management surface.
 5. Add or change AI usage/cost dashboard presentation through `frontend-modern/src/components/AI/AICostDashboard.tsx` and `frontend-modern/src/utils/aiCostPresentation.ts`
 6. Add or change AI provider, control-level, chat/session, or explore-state presentation through `frontend-modern/src/components/AI/Chat/`, `frontend-modern/src/utils/aiProviderPresentation.ts`, `frontend-modern/src/utils/aiProviderHealthPresentation.ts`, `frontend-modern/src/utils/aiControlLevelPresentation.ts`, `frontend-modern/src/utils/aiChatPresentation.ts`, `frontend-modern/src/utils/aiSessionDiffPresentation.ts`, and `frontend-modern/src/utils/aiExplorePresentation.ts`
 7. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`

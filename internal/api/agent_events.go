@@ -28,20 +28,22 @@ const (
 	// AgentEventApprovalPending fires when a remediation request enters
 	// StatusPending and is waiting on an operator (or operator-acting
 	// agent) to approve, reject, or cancel. Payload carries the
-	// approval id, the resource it targets, the command, the assessed
-	// risk level, who requested it, and when it expires — enough for
-	// an agent that holds approval authority to decide whether to act,
-	// fetch full context via the approval endpoints, or escalate.
+	// approval id, the resource it targets, risk, who requested it,
+	// and when it expires. Raw command text is included only for
+	// action-capable API tokens; monitoring-read subscribers receive
+	// a redacted doorbell and can fetch governed detail through the
+	// approval/action surfaces when authorized.
 	AgentEventApprovalPending AgentEventKind = "approval.pending"
 
 	// AgentEventActionCompleted fires when an action audit reaches a
 	// terminal state — Completed (executed and verified) or Failed
 	// (refused before dispatch with a stable error-token prefix, or
 	// errored during execution). Payload carries the canonical action
-	// id, the resource it targeted, the capability and command, the
-	// outcome (success bool + optional error message), who acted,
-	// and the completion timestamp — enough for an agent to close
-	// the dispatch loop without polling the audit endpoint.
+	// id, the resource it targeted, the capability, the
+	// redacted-or-full command, the outcome (success bool + optional
+	// error message), who acted, and the completion timestamp —
+	// enough for an agent to close the dispatch loop without polling
+	// the audit endpoint.
 	AgentEventActionCompleted AgentEventKind = "action.completed"
 
 	// AgentEventHeartbeat is a keepalive that fires at a fixed
@@ -77,22 +79,24 @@ type AgentEventFindingCreatedPayload struct {
 
 // AgentEventApprovalPendingPayload is the payload shape for
 // approval.pending events. Carries the agent-decision-relevant
-// fields: which approval, against which resource, what command,
-// what risk, who requested it, and when it expires. Full request
-// detail (preflight, plan, raw context) stays behind the existing
-// /api/approvals/{id} endpoint — the event is a doorbell, not the
-// approval itself.
+// fields: which approval, against which resource, what risk, who
+// requested it, and when it expires. Command is present only when
+// the caller's token also has action execution authority; otherwise
+// CommandRedacted is true. Full request detail (preflight, plan,
+// raw context) stays behind the existing /api/approvals/{id}
+// endpoint — the event is a doorbell, not the approval itself.
 type AgentEventApprovalPendingPayload struct {
-	ApprovalID  string    `json:"approvalId"`
-	ResourceID  string    `json:"resourceId,omitempty"`
-	TargetType  string    `json:"targetType,omitempty"`
-	TargetID    string    `json:"targetId,omitempty"`
-	TargetName  string    `json:"targetName,omitempty"`
-	Command     string    `json:"command"`
-	RiskLevel   string    `json:"riskLevel"`
-	RequestedBy string    `json:"requestedBy,omitempty"`
-	RequestedAt time.Time `json:"requestedAt"`
-	ExpiresAt   time.Time `json:"expiresAt"`
+	ApprovalID      string    `json:"approvalId"`
+	ResourceID      string    `json:"resourceId,omitempty"`
+	TargetType      string    `json:"targetType,omitempty"`
+	TargetID        string    `json:"targetId,omitempty"`
+	TargetName      string    `json:"targetName,omitempty"`
+	Command         string    `json:"command,omitempty"`
+	CommandRedacted bool      `json:"commandRedacted,omitempty"`
+	RiskLevel       string    `json:"riskLevel"`
+	RequestedBy     string    `json:"requestedBy,omitempty"`
+	RequestedAt     time.Time `json:"requestedAt"`
+	ExpiresAt       time.Time `json:"expiresAt"`
 }
 
 // AgentEventActionCompletedPayload is the payload shape for
@@ -110,16 +114,17 @@ type AgentEventApprovalPendingPayload struct {
 // Full audit detail (lifecycle events, preflight, verification
 // stdout) stays behind the existing /api/actions/{id} endpoint.
 type AgentEventActionCompletedPayload struct {
-	ActionID       string                           `json:"actionId"`
-	ResourceID     string                           `json:"resourceId,omitempty"`
-	CapabilityName string                           `json:"capabilityName,omitempty"`
-	Command        string                           `json:"command,omitempty"`
-	State          string                           `json:"state"`
-	Success        bool                             `json:"success"`
-	ErrorMessage   string                           `json:"errorMessage,omitempty"`
-	Verification   *AgentResourceActionVerification `json:"verification,omitempty"`
-	RequestedBy    string                           `json:"requestedBy,omitempty"`
-	CompletedAt    time.Time                        `json:"completedAt"`
+	ActionID        string                           `json:"actionId"`
+	ResourceID      string                           `json:"resourceId,omitempty"`
+	CapabilityName  string                           `json:"capabilityName,omitempty"`
+	Command         string                           `json:"command,omitempty"`
+	CommandRedacted bool                             `json:"commandRedacted,omitempty"`
+	State           string                           `json:"state"`
+	Success         bool                             `json:"success"`
+	ErrorMessage    string                           `json:"errorMessage,omitempty"`
+	Verification    *AgentResourceActionVerification `json:"verification,omitempty"`
+	RequestedBy     string                           `json:"requestedBy,omitempty"`
+	CompletedAt     time.Time                        `json:"completedAt"`
 }
 
 // AgentEventBroadcaster is a thread-safe pub/sub for AgentEvents. A
@@ -264,7 +269,7 @@ func (b *AgentEventBroadcaster) HandleAgentEvents(w http.ResponseWriter, r *http
 			if !open {
 				return
 			}
-			writeAgentSSEEvent(w, event)
+			writeAgentSSEEvent(w, redactAgentEventCommandsForRequest(event, r))
 			flusher.Flush()
 		case <-heartbeat.C:
 			b.Publish(AgentEvent{Kind: AgentEventHeartbeat})

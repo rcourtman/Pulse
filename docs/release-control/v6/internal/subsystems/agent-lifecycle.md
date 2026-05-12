@@ -144,6 +144,14 @@ the API-owned action audit records `executing` before dispatch and the
 terminal execution result afterward. Dry-run-only plans remain planning evidence
 only; lifecycle surfaces must not present them as executable, dispatch them
 through agent-local command paths, or bypass the API fail-closed execution gate.
+Agent lifecycle consumers of `/api/agent/events` and
+`/api/agent/resource-context/{id}` must also honor the shared API command
+payload boundary: API tokens with monitoring/read scope receive
+`commandRedacted:true` instead of raw approval, action, or verification command
+text unless they also hold action execution scope. Lifecycle UI and agents may
+use those redacted events as doorbells or status summaries, but they must fetch
+governed detail through the approval/action surfaces and must not treat a
+monitoring-readable event stream as command disclosure or execution authority.
 
 The node setup modal boundary must keep guided setup and manual credential
 submission separate. For new PVE/PBS setup, API Inventory and Host Telemetry

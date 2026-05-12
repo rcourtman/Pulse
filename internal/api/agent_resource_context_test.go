@@ -355,6 +355,88 @@ func TestHandleAgentResourceContext_PendingApprovalsAreScopedToResource(t *testi
 	}
 }
 
+func TestHandleAgentResourceContext_RedactsCommandsForMonitoringReadTokens(t *testing.T) {
+	h, _ := agentContextFixtureHandlers(t, "vm:101")
+	now := time.Now().UTC()
+	expires := now.Add(5 * time.Minute)
+	h.SetApprovalsProvider(staticApprovalsProvider{
+		byResource: map[string][]AgentResourceApprovalSummary{
+			"vm:101": {
+				{
+					ID:          "appr-1",
+					Command:     "systemctl restart nginx",
+					RiskLevel:   "medium",
+					RequestedBy: "ai:patrol",
+					RequestedAt: now,
+					ExpiresAt:   expires,
+				},
+			},
+		},
+	})
+	store, err := h.resources.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	if err := store.RecordActionAudit(unified.ActionAuditRecord{
+		ID:        "act-1",
+		CreatedAt: now,
+		UpdatedAt: now,
+		State:     unified.ActionStateCompleted,
+		Request: unified.ActionRequest{
+			RequestID:      "req-1",
+			ResourceID:     "vm:101",
+			CapabilityName: "pulse_control",
+			RequestedBy:    "pulse_patrol",
+			Params:         map[string]any{"command": "systemctl restart nginx"},
+		},
+		Result: &unified.ExecutionResult{
+			Success: true,
+			Verification: &unified.ActionVerificationResult{
+				Ran:     true,
+				Success: true,
+				Command: "systemctl is-active nginx",
+				RanAt:   now,
+			},
+		},
+	}); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/resource-context/vm:101", nil)
+	token := &config.APITokenRecord{Scopes: []string{config.ScopeMonitoringRead}}
+	attachAPITokenRecord(req, token)
+
+	h.HandleResourceContext(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var bundle AgentResourceContext
+	if err := json.NewDecoder(rec.Body).Decode(&bundle); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(bundle.PendingApprovals) != 1 {
+		t.Fatalf("PendingApprovals len = %d; want 1", len(bundle.PendingApprovals))
+	}
+	if got := bundle.PendingApprovals[0]; got.Command != "" || !got.CommandRedacted {
+		t.Fatalf("pending approval command must be redacted for monitoring-read token; got %+v", got)
+	}
+	if len(bundle.RecentActions) != 1 {
+		t.Fatalf("RecentActions len = %d; want 1", len(bundle.RecentActions))
+	}
+	action := bundle.RecentActions[0]
+	if action.Command != "" || !action.CommandRedacted {
+		t.Fatalf("recent action command must be redacted for monitoring-read token; got %+v", action)
+	}
+	if action.Verification == nil {
+		t.Fatal("expected verification to remain present")
+	}
+	if action.Verification.Command != "" || !action.Verification.CommandRedacted {
+		t.Fatalf("verification command must be redacted for monitoring-read token; got %+v", action.Verification)
+	}
+}
+
 func TestHandleAgentResourceContext_PendingApprovalsEmptyArrayWhenNone(t *testing.T) {
 	// Absent or empty must surface as an empty array, not as a
 	// missing field — agents iterate without nil-checking. This

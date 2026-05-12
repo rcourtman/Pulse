@@ -281,6 +281,50 @@ func TestPatrolActionHandlers_NoAIService_ReturnStructuredServiceUnavailable(t *
 	}
 }
 
+func TestHandleAddSuppressionRuleRejectsImplicitBroadScope(t *testing.T) {
+	handler, patrol, _, _ := setupAIHandlerWithPatrol(t)
+
+	req := newLoopbackRequest(
+		http.MethodPost,
+		"/api/ai/patrol/suppressions",
+		strings.NewReader(`{"resource_id":"","resource_name":"Any","category":"capacity","description":"too broad"}`),
+	)
+	rec := httptest.NewRecorder()
+
+	handler.HandleAddSuppressionRule(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if rules := patrol.GetFindings().GetSuppressionRules(); len(rules) != 0 {
+		t.Fatalf("expected no suppression rules, got %d", len(rules))
+	}
+}
+
+func TestHandleAddSuppressionRuleAllowsExplicitBroadScope(t *testing.T) {
+	handler, patrol, _, _ := setupAIHandlerWithPatrol(t)
+
+	req := newLoopbackRequest(
+		http.MethodPost,
+		"/api/ai/patrol/suppressions",
+		strings.NewReader(`{"resource_id":"","resource_name":"Any","category":"capacity","description":"known capacity noise","allow_broad_scope":true}`),
+	)
+	rec := httptest.NewRecorder()
+
+	handler.HandleAddSuppressionRule(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	rules := patrol.GetFindings().GetSuppressionRules()
+	if len(rules) != 1 {
+		t.Fatalf("rules = %d, want 1", len(rules))
+	}
+	if rules[0].ResourceID != "" || rules[0].Category != ai.FindingCategoryCapacity {
+		t.Fatalf("unexpected rule scope: resource=%q category=%q", rules[0].ResourceID, rules[0].Category)
+	}
+}
+
 func TestHandleAcknowledgeFinding_PatrolAndUnified(t *testing.T) {
 	handler, patrol, unifiedStore, learningStore := setupAIHandlerWithPatrol(t)
 
