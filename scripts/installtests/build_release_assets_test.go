@@ -162,6 +162,17 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`Draft release ${RELEASE_ID} target_commitish is ${ACTUAL_TARGET_COMMITISH}, expected ${HEAD_SHA}.`,
 		`./scripts/backfill-release-assets.sh --tag "${{ needs.prepare.outputs.tag }}" --repo "${{ github.repository }}"`,
 		`./scripts/validate-published-release.sh "${{ needs.prepare.outputs.tag }}" "${{ github.repository }}"`,
+		// End-to-end install.sh smoke must run downstream of
+		// validate_release_assets on every release that is not a
+		// historical asset backfill. Without this wiring the smoke
+		// workflow exists but never actually protects a release —
+		// exactly the regression class that let rc.1 → rc.5 ship with
+		// broken install.sh.
+		`uses: ./.github/workflows/install-sh-smoke.yml`,
+		`install_sh_smoke:`,
+		`needs.validate_release_assets.result == 'success'`,
+		`needs.prepare.outputs.historical_asset_backfill_only != 'true'`,
+		`repository: ${{ github.repository }}`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(workflow, needle) {

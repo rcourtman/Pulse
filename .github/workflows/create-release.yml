@@ -1062,3 +1062,30 @@ jobs:
       release_id: ${{ needs.create_release.outputs.release_id }}
       draft: ${{ github.event.inputs.draft_only == 'true' }}
       target_commitish: ${{ needs.create_release.outputs.target_commitish }}
+
+  # End-to-end install.sh smoke against the just-published release. Catches
+  # runtime regressions in the documented Proxmox-LXC / systemd install flow
+  # that the build-time validate-release.sh checks cannot see: the script
+  # parses fine, signs cleanly, but fails to actually install or boot Pulse.
+  # This class of regression broke silently across v6 rc.1 → rc.5 because no
+  # existing gate exercised the documented secure-install commands against
+  # the published GitHub Release URL.
+  #
+  # Gated on validate_release_assets success — the smoke depends on the
+  # published asset bundle being well-formed, so we only run it after the
+  # cheaper content checks pass. Skipped for the historical-backfill path
+  # since that flow re-uploads to an already-published release and the
+  # smoke would just re-confirm what hasn't changed.
+  install_sh_smoke:
+    needs:
+      - prepare
+      - validate_release_assets
+    if: ${{ always() && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/install-sh-smoke.yml
+    secrets: inherit
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+      version: ${{ needs.prepare.outputs.version }}
+      repository: ${{ github.repository }}
