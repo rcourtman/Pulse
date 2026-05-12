@@ -120,6 +120,26 @@ server-side update execution surfaces.
 1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
 2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, the canonical version file, operator-facing release packet content, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, and `.github/workflows/validate-release-assets.yml`
 3. Add or change root server installer, shell installer, Docker bootstrap installer, Windows installer, container-agent installer, repo-root compose defaults, or auto-update script behavior through `install.sh`, `scripts/install.sh`, `scripts/install-docker.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, `docker-compose.yml`, and `scripts/pulse-auto-update.sh`
+   The top-level `install.sh` asset published on GitHub Releases must be the
+   root Pulse SERVER installer (the LXC / systemd / Proxmox VE installer that
+   accepts `--version vX.Y.Z`, `--rc`, `--stable`, and friends). The rendered
+   AGENT installer (`scripts/install.sh`) ships only inside release tarballs
+   at `./scripts/install.sh` and inside Docker images at
+   `/opt/pulse/scripts/install.sh`, and is served at the running server's
+   `/install.sh` endpoint; it is intentionally never the top-level GitHub
+   Releases asset. `internal/updates/adapter_installsh.go`,
+   `scripts/pulse-auto-update.sh`, and the root `install.sh`'s own
+   `--rc` / `--stable` / `--version` self-refetch flows all fetch
+   `releases/<tag>/install.sh` and execute it via `bash -s -- --version vX.Y.Z`,
+   and the README quickstart documents the same pattern. Publishing the agent
+   installer in that slot silently breaks every one of those flows because the
+   agent installer rejects `--version` as an unknown argument; this drift
+   shipped across v6 rc.1 → rc.5 (April 12 → May 11, 2026) before being caught.
+   `scripts/validate-release.sh` must therefore fail the release if the
+   published `install.sh` does not carry the server-installer banner, does not
+   handle `--version)` in its argument parser, contains the agent installer
+   banner string, or does not print the server installer's version-pinning
+   help line when invoked with `--help`.
    Deployment bootstrap token behavior remains a deployment-installability
    trust boundary even when the handler is API-owned. `internal/api/deploy_handlers.go`
    must preserve server-derived `owner_user_id` lineage on bootstrap tokens and

@@ -397,6 +397,41 @@ if [ $missing_count -gt 0 ]; then
 fi
 success "All ${#required_assets[@]} required release assets present"
 
+# Validate published install.sh is the Pulse SERVER installer.
+# Across v6 rc.1 → rc.5 the rendered AGENT installer was published here by
+# mistake, silently breaking the LXC quickstart, the in-product Update Pulse
+# button, and the pulse-auto-update.sh systemd timer for 30 days before anyone
+# noticed. This guard pins the asset identity so it cannot drift back.
+info "Validating install.sh is the Pulse server installer..."
+install_sh_path="install.sh"
+if [ ! -s "$install_sh_path" ]; then
+    error "install.sh is missing or empty"
+    exit 1
+fi
+if ! grep -qE '^# Pulse Installer Script' "$install_sh_path"; then
+    error "install.sh banner does not match the Pulse server installer"
+    error "If this fires, build-release.sh is publishing the wrong file (likely the agent installer)"
+    exit 1
+fi
+if ! grep -qE '^[[:space:]]*--version\)' "$install_sh_path"; then
+    error "install.sh is missing the --version arg handler — required by adapter_installsh, pulse-auto-update.sh, and the README quickstart"
+    exit 1
+fi
+if grep -q 'Pulse Unified Agent Installer' "$install_sh_path"; then
+    error "install.sh is the agent installer, not the server installer — releases must publish the root install.sh"
+    exit 1
+fi
+# Smoke: actually invoke `bash install.sh --help` and confirm it prints the
+# server-installer help text. Catches parse-time syntax breakage and confirms
+# the script is structurally executable, not just textually correct.
+install_help_output=$(bash "$install_sh_path" --help 2>&1 || true)
+if ! echo "$install_help_output" | grep -qF "Install specific version (e.g."; then
+    error "bash install.sh --help did not print the server installer's version-pinning help line"
+    error "Help output captured: $install_help_output"
+    exit 1
+fi
+success "install.sh is the Pulse server installer (handles --version, --help prints server help)"
+
 # Validate tarball contents
 section "Validating tarball contents"
 tar_arches=(linux-amd64 linux-arm64 linux-armv7 linux-armv6 linux-386)

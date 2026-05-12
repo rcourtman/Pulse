@@ -28,7 +28,14 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 		`source "${SCRIPT_DIR}/release_asset_common.sh"`,
 		`RENDERED_INSTALLERS_DIR="${BUILD_DIR}/rendered-installers"`,
 		`go run ./scripts/render_installers.go \`,
-		`cp "${RENDERED_INSTALLERS_DIR}/install.sh" "$RELEASE_DIR/install.sh"`,
+		// The published install.sh asset is the server installer (root install.sh).
+		// The rendered AGENT installer is shipped inside tarballs and Docker images
+		// at ./scripts/install.sh and served at the running server's /install.sh
+		// endpoint, but is intentionally not a top-level GitHub Releases asset:
+		// adapter_installsh, pulse-auto-update.sh, the root install.sh's own --rc/
+		// --version flows, and the README quickstart all expect releases/<tag>/install.sh
+		// to be the server installer that accepts --version vX.Y.Z.
+		`cp install.sh "$RELEASE_DIR/install.sh"`,
 		`[ -f "${RENDERED_INSTALLERS_DIR}/install.ps1" ] && cp "${RENDERED_INSTALLERS_DIR}/install.ps1" "$RELEASE_DIR/install.ps1"`,
 		`cp "$BUILD_DIR/pulse-agent-linux-amd64" "$RELEASE_DIR/"`,
 		`cp "$BUILD_DIR/pulse-agent-linux-arm64" "$RELEASE_DIR/"`,
@@ -42,8 +49,11 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 		}
 	}
 
-	if strings.Contains(script, `cp install.sh "$RELEASE_DIR/install.sh"`) {
-		t.Fatal("build-release.sh still copies the legacy root install.sh into release assets")
+	// Sanity-check the opposite drift: the rendered AGENT installer must NOT be
+	// the published install.sh asset. Publishing it there shipped a broken LXC
+	// install + auto-update path across every v6 RC (rc.1 → rc.5).
+	if strings.Contains(script, `cp "${RENDERED_INSTALLERS_DIR}/install.sh" "$RELEASE_DIR/install.sh"`) {
+		t.Fatal("build-release.sh must not publish the rendered agent install.sh as the top-level release asset")
 	}
 
 	requiredScriptWiring := []string{
@@ -264,6 +274,15 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 		`Install script endpoints returned required signature headers`,
 		`Download endpoints returned binaries with checksum and signature headers for all platforms/architectures`,
 		`Offline self-heal: download endpoint works with checksum and signature headers without outbound network`,
+		// Server installer identity guard — see the rc.1 → rc.5 regression where
+		// the rendered agent installer shipped as the top-level install.sh asset
+		// for 30 days before anyone noticed. Removing any of these unpins the asset.
+		`Validating install.sh is the Pulse server installer`,
+		`grep -qE '^# Pulse Installer Script'`,
+		`grep -qE '^[[:space:]]*--version\)'`,
+		`Pulse Unified Agent Installer`,
+		`bash "$install_sh_path" --help`,
+		`Install specific version (e.g.`,
 	}
 	for _, needle := range localRequired {
 		if !strings.Contains(localValidator, needle) {
