@@ -441,21 +441,56 @@ function predictionReadsAsAllClear(prediction: string | undefined): boolean {
   );
 }
 
+function predictionReadsAsCoverageGap(prediction: string | undefined): boolean {
+  const normalized = String(prediction || '')
+    .trim()
+    .toLowerCase();
+  if (!normalized) return false;
+
+  return (
+    normalized.includes('coverage is incomplete') ||
+    normalized.includes('coverage incomplete') ||
+    normalized.includes('not fully verified') ||
+    normalized.includes('limited to scoped runs') ||
+    normalized.includes('limited to targeted') ||
+    normalized.includes('runs encountered errors') ||
+    normalized.includes('ended with errors') ||
+    normalized.includes('summary may be incomplete')
+  );
+}
+
+function hasSuccessfulFullCoverageRun(runs: PatrolRunRecord[] | undefined): boolean {
+  const recentFullRun = (runs ?? [])
+    .filter((run) => isCompletedPatrolRun(run))
+    .find((run) => isFullPatrolRun(run));
+  return Boolean(
+    recentFullRun && !hasRunErrors(recentFullRun) && (recentFullRun.resources_checked || 0) > 0,
+  );
+}
+
 function getFindingAssessmentDescription(args: {
   criticalFindings?: number;
   warningFindings?: number;
   overallHealth?: IntelligenceHealthScore;
   activeFindings?: PatrolAssessmentFinding[];
+  runs?: PatrolRunRecord[];
 }): string {
   const criticalFindings = args.criticalFindings ?? 0;
   const warningFindings = args.warningFindings ?? 0;
-  const hasCoverageGap = Boolean(
+  const hasVerifiedFullCoverage = hasSuccessfulFullCoverageRun(args.runs);
+  const hasCoverageGapFactor = Boolean(
     args.overallHealth?.factors.some((factor) => factor.category === 'coverage'),
   );
+  const hasCoverageGap = hasCoverageGapFactor && !hasVerifiedFullCoverage;
   const classified = classifyActiveFindings(args.activeFindings);
   const activeRuntimeFindings = (args.activeFindings ?? []).filter(
     (finding) => finding.status === 'active' && isPatrolRuntimeFinding(finding),
   );
+  const shouldUsePrediction = (prediction: string | undefined): prediction is string => {
+    if (!prediction) return false;
+    if (predictionReadsAsAllClear(prediction)) return false;
+    return !(hasVerifiedFullCoverage && predictionReadsAsCoverageGap(prediction));
+  };
 
   if (classified.infrastructureTotal === 0 && classified.runtimeTotal === 1) {
     const runtimeFinding = activeRuntimeFindings[0];
@@ -470,7 +505,7 @@ function getFindingAssessmentDescription(args: {
     }
 
     const prediction = args.overallHealth?.prediction?.trim();
-    if (prediction && !predictionReadsAsAllClear(prediction)) {
+    if (shouldUsePrediction(prediction)) {
       return prediction;
     }
 
@@ -508,7 +543,7 @@ function getFindingAssessmentDescription(args: {
   }
 
   const prediction = args.overallHealth?.prediction?.trim();
-  if (prediction && !predictionReadsAsAllClear(prediction)) {
+  if (shouldUsePrediction(prediction)) {
     return prediction;
   }
 
@@ -587,8 +622,10 @@ export function getPatrolAssessmentPresentation(args: {
   criticalFindings?: number;
   warningFindings?: number;
   activeFindings?: PatrolAssessmentFinding[];
+  runs?: PatrolRunRecord[];
 }): PatrolAssessmentPresentation {
   const classified = classifyActiveFindings(args.activeFindings);
+  const hasVerifiedFullCoverage = hasSuccessfulFullCoverageRun(args.runs);
 
   if (
     args.runtimeState === 'blocked' ||
@@ -645,7 +682,10 @@ export function getPatrolAssessmentPresentation(args: {
     };
   }
 
-  if (args.overallHealth?.factors.some((factor) => factor.category === 'coverage')) {
+  if (
+    args.overallHealth?.factors.some((factor) => factor.category === 'coverage') &&
+    !hasVerifiedFullCoverage
+  ) {
     return {
       title: 'Coverage incomplete',
       description: getCoverageDescription(args.overallHealth),
@@ -656,10 +696,13 @@ export function getPatrolAssessmentPresentation(args: {
   }
 
   if (args.overallHealth && args.overallHealth.grade !== 'A') {
+    const prediction = args.overallHealth.prediction?.trim();
     return {
       title: 'Health requires attention',
       description:
-        args.overallHealth.prediction?.trim() || 'Patrol assessment still needs attention.',
+        prediction && !(hasVerifiedFullCoverage && predictionReadsAsCoverageGap(prediction))
+          ? prediction
+          : 'Patrol assessment still needs attention.',
       eyebrow: 'Patrol assessment',
       compactLabel: 'Health requires attention',
       tone: getHealthSummaryTone(args.overallHealth),

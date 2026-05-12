@@ -88,6 +88,10 @@ Patrol-specific presentation helpers.
    from the same current findings state. Patrol-owned runtime issues must stay
    distinct from infrastructure findings in assessment copy rather than being
    described as infrastructure warning findings about Patrol itself.
+   Assessment coverage caveats must also reconcile against current run-history
+   proof: a stale coverage factor or prediction must not claim recent coverage
+   is incomplete when the latest completed full Patrol run successfully checked
+   real resources.
    Recency coverage copy must also come from the shared presentation helper:
    use verified wording only for successful full patrols, and use neutral
    checked wording for failed full patrols or scoped activity.

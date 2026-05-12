@@ -1090,6 +1090,11 @@ the canonical monitored-system blocked payload.
    new API surface. The label stays optional when coverage is zero, says
    verified only for successful full patrols, and uses neutral checked wording
    for errored full patrols or scoped activity.
+   The primary Patrol assessment copy uses that same run-history-backed
+   coverage truth when reconciling AI summary coverage factors: a successful
+   full run with non-zero `resources_checked` suppresses stale
+   coverage-incomplete wording, while scoped, missing, zero-coverage, or errored
+   runs still allow the coverage caveat to surface.
    and the Assistant finding-context request contract, so `/api/ai/chat`
    payloads carrying `finding_id` may hydrate a structured investigation
    summary from the unified finding, but raw proposed-fix commands must stay

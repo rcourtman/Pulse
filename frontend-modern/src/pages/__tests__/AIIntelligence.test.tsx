@@ -1369,6 +1369,114 @@ describe('AIIntelligence entitlement gating', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('does not repeat stale coverage caveats after a successful full patrol verified resources', async () => {
+    hasFeatureMock.mockReturnValue(true);
+    licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
+    getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
+    getPatrolRunHistoryMock.mockResolvedValue([
+      {
+        id: 'run-full-success',
+        started_at: '2026-03-12T09:56:00Z',
+        completed_at: '2026-03-12T09:57:00Z',
+        duration_ms: 60000,
+        type: 'patrol',
+        trigger_reason: 'manual',
+        scope_resource_ids: [],
+        effective_scope_resource_ids: [],
+        scope_resource_types: [],
+        resources_checked: 58,
+        nodes_checked: 0,
+        guests_checked: 0,
+        docker_checked: 0,
+        storage_checked: 0,
+        hosts_checked: 0,
+        truenas_checked: 0,
+        pbs_checked: 0,
+        pmg_checked: 0,
+        kubernetes_checked: 0,
+        new_findings: 1,
+        existing_findings: 0,
+        rejected_findings: 0,
+        resolved_findings: 0,
+        auto_fix_count: 0,
+        findings_summary: '1 warning',
+        finding_ids: ['finding-1'],
+        error_count: 0,
+        status: 'issues_found',
+        triage_flags: 0,
+        tool_call_count: 0,
+      },
+    ]);
+    intelligenceState.findings = [
+      {
+        id: 'finding-1',
+        source: 'ai-patrol',
+        isThreshold: false,
+        status: 'active',
+        severity: 'warning',
+        resourceId: 'backup-1',
+        resourceName: 'delly',
+        resourceType: 'backup',
+        title: 'Backup failed',
+        detectedAt: '2026-03-12T09:57:00Z',
+      },
+    ];
+    intelligenceState.summary = {
+      timestamp: '2026-03-12T10:00:00Z',
+      overall_health: {
+        score: 85,
+        grade: 'B',
+        trend: 'stable',
+        factors: [
+          {
+            name: 'Patrol coverage incomplete',
+            impact: -0.35,
+            description:
+              'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+            category: 'coverage',
+          },
+        ],
+        prediction:
+          'Recent Patrol runs encountered errors, so the current health summary may be incomplete.',
+      },
+      findings_count: {
+        critical: 0,
+        warning: 1,
+        watch: 0,
+        info: 0,
+        total: 1,
+      },
+      predictions_count: 0,
+      recent_changes_count: 0,
+      learning: {
+        resources_with_knowledge: 0,
+        total_notes: 0,
+        resources_with_baselines: 0,
+        patterns_detected: 0,
+        correlations_learned: 0,
+        incidents_tracked: 0,
+      },
+    };
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/verified 58 resources/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'Patrol surfaced 1 active warning finding in your infrastructure. Review the active findings for more detail.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByText(
+        'Recent Patrol runs encountered errors, so the current health summary may be incomplete.',
+      ),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Recent coverage is also incomplete/i)).not.toBeInTheDocument();
+  });
+
   it('surfaces the recent activity mix in the verification summary when scoped runs are creating noise', async () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });

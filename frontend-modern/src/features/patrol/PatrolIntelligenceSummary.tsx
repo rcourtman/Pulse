@@ -114,6 +114,7 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       criticalFindings: summaryStats().criticalFindings,
       warningFindings: summaryStats().warningFindings,
       activeFindings: state.activePatrolFindings(),
+      runs: state.patrolRunHistory.value() ?? [],
     }),
   );
   const assessmentShellPresentation = createMemo(() =>

@@ -1303,7 +1303,9 @@ returns `resourcesCheckedLabel` from the latest completed run. Render code
 must gate on `<Show when={recency().resourcesCheckedLabel}>` (truthy) so
 zero-coverage runs do not surface a misleading coverage phrase, failed or
 scoped runs use neutral checked wording, and only successful full patrols read
-as verified.
+as verified. The primary Patrol assessment shell must pass the same run-history
+facts into `getPatrolAssessmentPresentation` so assessment coverage caveats do
+not contradict the header's verified full-run coverage state.
 
 `frontend-modern/src/utils/discoveryPresentation.ts` owns resource discovery
 command guidance targets. Discovery surfaces that need to tell operators where
@@ -2500,6 +2502,10 @@ transport fact and use `Last activity` for scoped or verification work instead
 of collapsing both timestamps back into a generic `Last run` label. Coverage
 phrases on those recency surfaces must come from the Patrol recency presenter
 instead of hardcoding verified wording in the shell.
+That same run-history ownership applies to assessment caveats: Patrol summary
+shells should not present `Recent coverage is incomplete` when the shared
+recency/verification helpers already prove a successful full patrol with
+non-zero resource coverage.
 That same Patrol shell should make scoped trigger policy legible without
 another navigation step. `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`
 should present alert-triggered and anomaly-triggered Patrol toggles as distinct
