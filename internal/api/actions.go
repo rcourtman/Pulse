@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -345,17 +346,38 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 	}
 
 	actor := actionDecisionActor(h, r)
-	started, startEvent, err := unified.BeginActionExecution(record, actor, time.Now().UTC())
+	if h.actionExecutor == nil {
+		writeJSONError(w, http.StatusNotImplemented, "action_executor_unavailable", "No action executor is configured for this API instance")
+		return
+	}
+
+	now := time.Now().UTC()
+	if err := unified.ValidateActionExecutionStart(record, now); err != nil {
+		writeActionExecutionApplyError(w, err)
+		return
+	}
+	if err := h.validateActionPlanFresh(orgID, record); err != nil {
+		if errors.Is(err, unified.ErrActionPlanDrift) {
+			if failed, persistErr := recordRefusedActionExecution(store, record, actor, now, err); persistErr == nil {
+				h.publishActionCompleted(failed)
+			} else {
+				writeJSONError(w, http.StatusInternalServerError, "action_execution_persist_failed", sanitizeErrorForClient(persistErr, "Failed to persist refused action execution"))
+				return
+			}
+			writeActionExecutionApplyError(w, err)
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, "action_plan_validation_failed", sanitizeErrorForClient(err, "Failed to validate action plan freshness"))
+		return
+	}
+
+	started, startEvent, err := unified.BeginActionExecution(record, actor, now)
 	if err != nil {
 		writeActionExecutionApplyError(w, err)
 		return
 	}
 	if execution.Reason != "" {
 		startEvent.Message = "Action execution started: " + execution.Reason
-	}
-	if h.actionExecutor == nil {
-		writeJSONError(w, http.StatusNotImplemented, "action_executor_unavailable", "No action executor is configured for this API instance")
-		return
 	}
 	if err := store.RecordActionExecutionStart(started, startEvent); err != nil {
 		writeActionExecutionPersistError(w, err)
@@ -375,6 +397,7 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 		writeActionExecutionPersistError(w, err)
 		return
 	}
+	h.publishActionCompleted(completed)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(actionExecutionResponse{
@@ -385,6 +408,106 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 	}); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "action_execution_encode_failed", "Failed to encode action execution")
 	}
+}
+
+func (h *ResourceHandlers) validateActionPlanFresh(orgID string, record unified.ActionAuditRecord) error {
+	if h == nil {
+		return fmt.Errorf("%w: resource handler unavailable", unified.ErrActionPlanDrift)
+	}
+	normalized, err := unified.NormalizeActionAuditRecord(record)
+	if err != nil {
+		return fmt.Errorf("%w: %v", unified.ErrActionPlanDrift, err)
+	}
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		return err
+	}
+	resource, ok := registry.Get(normalized.Request.ResourceID)
+	if !ok || resource == nil {
+		return fmt.Errorf("%w: resource %q is no longer present", unified.ErrActionPlanDrift, normalized.Request.ResourceID)
+	}
+	currentPlan, err := (actionplanner.Planner{Now: func() time.Time {
+		return normalized.Plan.PlannedAt
+	}}).Plan(normalized.Request, *resource)
+	if err != nil {
+		return fmt.Errorf("%w: %v", unified.ErrActionPlanDrift, err)
+	}
+	if currentPlan.ActionID != normalized.Plan.ActionID {
+		return fmt.Errorf("%w: action identity changed", unified.ErrActionPlanDrift)
+	}
+	if currentPlan.PlanHash != normalized.Plan.PlanHash {
+		return fmt.Errorf("%w: plan hash changed", unified.ErrActionPlanDrift)
+	}
+	if currentPlan.ResourceVersion != normalized.Plan.ResourceVersion {
+		return fmt.Errorf("%w: resource version changed", unified.ErrActionPlanDrift)
+	}
+	if currentPlan.PolicyVersion != normalized.Plan.PolicyVersion {
+		return fmt.Errorf("%w: capability policy changed", unified.ErrActionPlanDrift)
+	}
+	return nil
+}
+
+func recordRefusedActionExecution(store unified.ResourceStore, record unified.ActionAuditRecord, actor string, now time.Time, reason error) (unified.ActionAuditRecord, error) {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	} else {
+		now = now.UTC()
+	}
+	actor = strings.TrimSpace(actor)
+	if actor == "" {
+		actor = "api:authenticated"
+	}
+	record.State = unified.ActionStateFailed
+	record.UpdatedAt = now
+	record.Result = &unified.ExecutionResult{
+		Success:      false,
+		ErrorMessage: refusedActionExecutionMessage(reason),
+	}
+	normalized, err := unified.NormalizeActionAuditRecord(record)
+	if err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	if store == nil {
+		return unified.ActionAuditRecord{}, errors.New("action audit store unavailable")
+	}
+	if err := store.RecordActionAudit(normalized); err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	event, err := unified.NormalizeActionLifecycleEvent(unified.ActionLifecycleEvent{
+		ActionID:  normalized.ID,
+		Timestamp: now,
+		State:     unified.ActionStateFailed,
+		Actor:     actor,
+		Message:   normalized.Result.ErrorMessage,
+	})
+	if err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	if err := store.RecordActionLifecycleEvent(event); err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	return normalized, nil
+}
+
+func refusedActionExecutionMessage(reason error) string {
+	if errors.Is(reason, unified.ErrActionPlanDrift) {
+		return "plan_drift: action plan no longer matches the current resource contract; re-plan before executing"
+	}
+	message := strings.TrimSpace(fmt.Sprint(reason))
+	if message == "" {
+		message = "action execution refused before dispatch"
+	}
+	return message
+}
+
+func (h *ResourceHandlers) publishActionCompleted(record unified.ActionAuditRecord) {
+	if h == nil || h.actionCompleted == nil {
+		return
+	}
+	if record.State != unified.ActionStateCompleted && record.State != unified.ActionStateFailed {
+		return
+	}
+	h.actionCompleted(record)
 }
 
 func actionDecisionActor(h *ResourceHandlers, r *http.Request) string {
@@ -428,6 +551,8 @@ func writeActionExecutionApplyError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusConflict, "action_plan_expired", "Action plan has expired")
 	case errors.Is(err, unified.ErrActionDryRunOnly):
 		writeJSONError(w, http.StatusConflict, "action_dry_run_only", "Action plan is dry-run only and cannot be executed")
+	case errors.Is(err, unified.ErrActionPlanDrift):
+		writeJSONError(w, http.StatusConflict, "action_plan_drift", "Action plan no longer matches the current resource contract; re-plan before executing")
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "action_execution_failed", sanitizeErrorForClient(err, "Action execution failed"))
 	}

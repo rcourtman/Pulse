@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -360,6 +361,10 @@ func TestHandleExecuteActionRunsApprovedPlanThroughExecutor(t *testing.T) {
 	})
 	executor := &stubActionExecutor{result: &unified.ExecutionResult{Success: true, Output: "restart dispatched"}}
 	h.SetActionExecutor(executor)
+	published := make(chan unified.ActionAuditRecord, 1)
+	h.SetActionCompletedPublisher(func(record unified.ActionAuditRecord) {
+		published <- record
+	})
 
 	planRec := httptest.NewRecorder()
 	planReq := httptest.NewRequest(http.MethodPost, "/api/actions/plan", bytes.NewBufferString(`{
@@ -427,6 +432,14 @@ func TestHandleExecuteActionRunsApprovedPlanThroughExecutor(t *testing.T) {
 	if !ok || audit.State != unified.ActionStateCompleted || audit.Result == nil || audit.Result.Output != "restart dispatched" {
 		t.Fatalf("persisted execution audit = %#v, ok=%v", audit, ok)
 	}
+	select {
+	case eventRecord := <-published:
+		if eventRecord.ID != plan.ActionID || eventRecord.State != unified.ActionStateCompleted {
+			t.Fatalf("published action completion = %#v, want completed %q", eventRecord, plan.ActionID)
+		}
+	default:
+		t.Fatal("expected API action execution to publish a terminal action completion event")
+	}
 	events, err := store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 10)
 	if err != nil {
 		t.Fatalf("GetActionLifecycleEvents: %v", err)
@@ -442,6 +455,145 @@ func TestHandleExecuteActionRunsApprovedPlanThroughExecutor(t *testing.T) {
 		!seen[unified.ActionStateExecuting] ||
 		!seen[unified.ActionStateCompleted] {
 		t.Fatalf("events = %#v, want full planned-to-completed lifecycle", events)
+	}
+}
+
+func TestHandleExecuteActionRejectsStalePlanBeforeExecutor(t *testing.T) {
+	now := time.Date(2026, 5, 3, 10, 0, 0, 0, time.UTC)
+	resource := unified.Resource{
+		ID:        "vm:42",
+		Type:      unified.ResourceTypeVM,
+		Name:      "web-42",
+		Status:    unified.StatusWarning,
+		LastSeen:  now,
+		UpdatedAt: now,
+		Sources:   []unified.DataSource{unified.SourceProxmox},
+		Capabilities: []unified.ResourceCapability{
+			{
+				Name:                 "restart",
+				Type:                 unified.CapabilityTypeCommon,
+				Description:          "Restart the VM",
+				MinimumApprovalLevel: unified.ApprovalAdmin,
+				InternalHandler:      "proxmox.vm.restart",
+				Params: []unified.CapabilityParam{
+					{Name: "mode", Type: "string", Required: true, Enum: []string{"graceful", "force"}},
+				},
+			},
+		},
+	}
+	provider := &mutableResourceUnifiedSeedProvider{
+		snapshot:  models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{resource},
+		freshness: now,
+	}
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(provider)
+	executor := &stubActionExecutor{result: &unified.ExecutionResult{Success: true, Output: "should not run"}}
+	h.SetActionExecutor(executor)
+	published := make(chan unified.ActionAuditRecord, 1)
+	h.SetActionCompletedPublisher(func(record unified.ActionAuditRecord) {
+		published <- record
+	})
+
+	planRec := httptest.NewRecorder()
+	planReq := httptest.NewRequest(http.MethodPost, "/api/actions/plan", bytes.NewBufferString(`{
+		"requestId":"agent-run-stale-plan",
+		"resourceId":"vm:42",
+		"capabilityName":"restart",
+		"params":{"mode":"graceful"},
+		"reason":"Recover after confirmed outage",
+		"requestedBy":"agent:oncall-helper"
+	}`))
+	h.HandlePlanAction(planRec, planReq)
+	if planRec.Code != http.StatusOK {
+		t.Fatalf("plan status = %d, body=%s", planRec.Code, planRec.Body.String())
+	}
+	var plan unified.ActionPlan
+	if err := json.Unmarshal(planRec.Body.Bytes(), &plan); err != nil {
+		t.Fatalf("decode plan response: %v", err)
+	}
+
+	decisionRec := httptest.NewRecorder()
+	decisionReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/decision", bytes.NewBufferString(`{
+		"outcome":"approved",
+		"reason":"approved before resource changed"
+	}`))
+	decisionReq.SetPathValue("id", plan.ActionID)
+	decisionReq = decisionReq.WithContext(auth.WithUser(decisionReq.Context(), "operator@example.com"))
+	h.HandleDecideAction(decisionRec, decisionReq)
+	if decisionRec.Code != http.StatusOK {
+		t.Fatalf("decision status = %d, body=%s", decisionRec.Code, decisionRec.Body.String())
+	}
+
+	resource.Status = unified.StatusOnline
+	resource.UpdatedAt = now.Add(time.Second)
+	resource.Capabilities[0].MinimumApprovalLevel = unified.ApprovalMultiFactor
+	provider = &mutableResourceUnifiedSeedProvider{
+		snapshot:  models.StateSnapshot{LastUpdate: now.Add(time.Second)},
+		resources: []unified.Resource{resource},
+		freshness: now.Add(time.Second),
+	}
+	h.SetStateProvider(provider)
+	h.invalidateCache("default")
+
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("get store: %v", err)
+	}
+	approvedAudit, ok, err := store.GetActionAudit(plan.ActionID)
+	if err != nil {
+		t.Fatalf("GetActionAudit before execute: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected approved action audit before execute")
+	}
+	if err := h.validateActionPlanFresh("default", approvedAudit); !errors.Is(err, unified.ErrActionPlanDrift) {
+		t.Fatalf("expected current resource contract to drift before execute, got %v", err)
+	}
+
+	executeRec := httptest.NewRecorder()
+	executeReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/execute", bytes.NewBufferString(`{}`))
+	executeReq.SetPathValue("id", plan.ActionID)
+	executeReq = executeReq.WithContext(auth.WithUser(executeReq.Context(), "operator@example.com"))
+	h.HandleExecuteAction(executeRec, executeReq)
+	if executeRec.Code != http.StatusConflict {
+		t.Fatalf("execute status = %d, body=%s", executeRec.Code, executeRec.Body.String())
+	}
+	if !strings.Contains(executeRec.Body.String(), `"error":"action_plan_drift"`) {
+		t.Fatalf("execute body = %s", executeRec.Body.String())
+	}
+	if executor.calls != 0 {
+		t.Fatalf("stale plan should not call executor, calls=%d received=%#v", executor.calls, executor.received)
+	}
+
+	audit, ok, err := store.GetActionAudit(plan.ActionID)
+	if err != nil {
+		t.Fatalf("GetActionAudit: %v", err)
+	}
+	if !ok || audit.State != unified.ActionStateFailed || audit.Result == nil || !strings.HasPrefix(audit.Result.ErrorMessage, "plan_drift:") {
+		t.Fatalf("stale-plan audit = %#v, ok=%v", audit, ok)
+	}
+	select {
+	case eventRecord := <-published:
+		if eventRecord.ID != plan.ActionID || eventRecord.State != unified.ActionStateFailed {
+			t.Fatalf("published stale-plan completion = %#v, want failed %q", eventRecord, plan.ActionID)
+		}
+	default:
+		t.Fatal("expected stale-plan refusal to publish a terminal action completion event")
+	}
+	events, err := store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionLifecycleEvents: %v", err)
+	}
+	seenFailed := false
+	for _, event := range events {
+		if event.State == unified.ActionStateFailed && strings.HasPrefix(event.Message, "plan_drift:") {
+			seenFailed = true
+			break
+		}
+	}
+	if !seenFailed {
+		t.Fatalf("expected failed plan_drift lifecycle event, got %#v", events)
 	}
 }
 

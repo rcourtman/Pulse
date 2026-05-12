@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -343,6 +344,39 @@ func (b *AgentEventBroadcaster) PublishActionCompleted(payload AgentEventActionC
 		Kind:    AgentEventActionCompleted,
 		Payload: payload,
 	})
+}
+
+// PublishActionCompletedRecord converts a terminal action audit record into
+// the agent-stable action.completed payload. Both the Assistant executor and
+// API-owned execution endpoint route through this helper so agents hear the
+// same completion event regardless of which execution surface dispatched the
+// action.
+func (b *AgentEventBroadcaster) PublishActionCompletedRecord(record unifiedresources.ActionAuditRecord) {
+	if b == nil {
+		return
+	}
+	if record.State != unifiedresources.ActionStateCompleted && record.State != unifiedresources.ActionStateFailed {
+		return
+	}
+	payload := AgentEventActionCompletedPayload{
+		ActionID:       record.ID,
+		ResourceID:     record.Request.ResourceID,
+		CapabilityName: record.Request.CapabilityName,
+		State:          string(record.State),
+		RequestedBy:    record.Request.RequestedBy,
+		CompletedAt:    record.UpdatedAt,
+	}
+	if cmd, ok := record.Request.Params["command"].(string); ok {
+		payload.Command = cmd
+	}
+	if record.Result != nil {
+		payload.Success = record.Result.Success
+		payload.ErrorMessage = record.Result.ErrorMessage
+		if v := projectAgentResourceVerification(record.Result.Verification); v != nil {
+			payload.Verification = v
+		}
+	}
+	b.PublishActionCompleted(payload)
 }
 
 // AgentEventBroadcasterContextKey is the context key used to plumb

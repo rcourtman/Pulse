@@ -465,6 +465,14 @@ the canonical monitored-system blocked payload.
    action or an approval-free executable plan, must atomically persist the
    `executing` lifecycle state before invoking a registered executor, and must
    atomically persist the terminal `completed` or `failed` result afterward.
+   Before the endpoint enters `executing`, it must rebuild the current
+   resource/capability plan from the unified registry and compare the stored
+   action id, resource version, policy version, and plan hash. A mismatch is a
+   refused-before-dispatch `action_plan_drift` failure: the executor is not
+   called, the action audit is moved to `failed` with a `plan_drift:` result,
+   lifecycle evidence is appended, and the shared `action.completed` SSE bridge
+   publishes the terminal failure so agents do not poll a stale plan into
+   execution.
    Dry-run-only plans are not executable plans and must fail closed before any
    `executing` mutation. If no API executor is registered, the endpoint must
    fail closed without mutating the approved audit record or appending execution
@@ -1396,7 +1404,8 @@ multiply heartbeat fan-out for one another. The broadcaster drops
 real published events for slow subscribers rather than blocking the
 publish path — publishers (the patrol findings runtime, the
 approval store's post-create callback, the executor's
-post-completion callback) cannot stall on consumer slowness. The
+post-completion callback, and the API action-execution terminal
+publisher) cannot stall on consumer slowness. The
 stream sits behind `monitoring:read` and runs through the same auth
 path as the rest of the agent surface; the capabilities manifest declares the stream
 under `subscribe_events` so external agents discover it without
@@ -1432,7 +1441,10 @@ persisted. The callback is installed once per chat-service per
 org through `wireAIChatDependenciesForService` against
 `chatService.GetExecutor()`, so multi-tenant chat-service rebuilds
 re-wire the bridge without coupling the tools package to the api
-package. `action.completed` payloads preserve the canonical
+package. API-owned execution installs `ResourceHandlers` on the
+same `PublishActionCompletedRecord` projector so direct
+`/api/actions/{id}/execute` completions and stale-plan refusals
+emit the identical payload shape. `action.completed` payloads preserve the canonical
 refusal-token prefixes (`plan_drift:`, `resource_remediation_locked:`)
 on `errorMessage` verbatim so agents branch on the stable code
 without parsing human messages.
@@ -1686,7 +1698,7 @@ carries `missing_id`, `invalid_id`, `invalid_action_decision`,
 `invalid_action_execution`, `action_not_found`,
 `action_not_approved`, `action_already_executing`,
 `action_execution_final`, `action_dry_run_only`,
-`action_executor_unavailable`. 5xx internal-failure codes
+`action_plan_drift`, `action_executor_unavailable`. 5xx internal-failure codes
 (audit-store outages, encode failures) are not declared per
 capability; agents branch on 5xx generically.
 

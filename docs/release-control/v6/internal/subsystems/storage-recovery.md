@@ -118,7 +118,11 @@ without executing the underlying capability. Any storage/recovery execution
 handoff for the approved action must route through
 `POST /api/actions/{id}/execute` so the API-owned action audit records
 `executing` before dispatch and the terminal result afterward instead of
-creating storage-local action transport. Dry-run-only plans remain planning
+creating storage-local action transport. The API execution gate also owns
+stale-plan protection: if the current resource or capability no longer hashes
+to the stored plan, execution must fail as `action_plan_drift` with a failed
+audit row and `plan_drift:` result before any provider restore/remediation
+driver runs. Dry-run-only plans remain planning
 evidence only; storage and recovery surfaces must not present them as
 executable, dispatch them through provider-local restore/remediation paths, or
 bypass the API fail-closed execution gate.

@@ -31,6 +31,7 @@ type ResourceHandlers struct {
 	stateProvider       SnapshotProvider
 	tenantStateProvider TenantStateProvider
 	actionExecutor      ActionExecutor
+	actionCompleted     func(unified.ActionAuditRecord)
 }
 
 type registrySeed struct {
@@ -91,6 +92,14 @@ func (h *ResourceHandlers) SetTenantStateProvider(provider TenantStateProvider) 
 // SetActionExecutor configures the API-owned action execution driver.
 func (h *ResourceHandlers) SetActionExecutor(executor ActionExecutor) {
 	h.actionExecutor = executor
+}
+
+// SetActionCompletedPublisher configures the terminal action notification hook
+// used by the agent SSE bridge. It is intentionally outside the execution
+// driver so refused-before-dispatch failures and future executor
+// implementations all publish from the API-owned lifecycle boundary.
+func (h *ResourceHandlers) SetActionCompletedPublisher(publisher func(unified.ActionAuditRecord)) {
+	h.actionCompleted = publisher
 }
 
 // SetSupplementalRecordsProvider configures additional records for a source.

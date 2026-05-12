@@ -189,6 +189,11 @@ regression protection.
    before returning it to AI runtime, but it must not scan run history broadly,
    hydrate resource inventories, call models, or perform persistence fan-out as
    part of router setup or generic request admission.
+   API action-completion event bridging in `internal/api/router.go` follows
+   the same bounded-work rule: router wiring may connect the already-completed
+   action audit record to the agent SSE projection, but it must not perform
+   executor dispatch, resource rescans, model calls, or persistence fan-out on
+   the protected request setup path.
    Retiring self-hosted trial acquisition follows that same rule: removing
    `/auth/trial-activate` and `POST /api/license/trial/start` from public-path
    and CSRF inventories must stay as constant-time route-table absence rather

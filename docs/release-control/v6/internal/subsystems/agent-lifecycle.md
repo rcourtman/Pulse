@@ -950,7 +950,10 @@ The broadcaster drops real published events for slow subscribers
 rather than blocking publishers, so the patrol-finding runtime, the
 approval store's post-create callback, and the executor's
 post-completion callback can publish without ever stalling on
-consumer slowness. Heartbeats are stream-local keepalives written
+consumer slowness. API-owned action execution uses the same shared
+terminal publisher, including stale-plan `action_plan_drift`
+refusals that fail the audit with a `plan_drift:` result before any
+executor is called. Heartbeats are stream-local keepalives written
 to each connected response; one subscriber's heartbeat ticker must
 not publish heartbeat events to every other subscriber.
 The agent runtime keeps the broadcaster wired across restarts, and

@@ -12514,6 +12514,28 @@ func TestContract_ActionDryRunOnlyExecutionErrorJSONSnapshot(t *testing.T) {
 	}
 }
 
+func TestContract_APIActionExecutionRevalidatesPlanFreshness(t *testing.T) {
+	source, err := os.ReadFile("actions.go")
+	if err != nil {
+		t.Fatalf("read actions.go: %v", err)
+	}
+	src := string(source)
+	for _, snippet := range []string{
+		"if err := h.validateActionPlanFresh(orgID, record); err != nil",
+		"errors.Is(err, unified.ErrActionPlanDrift)",
+		"recordRefusedActionExecution(store, record, actor, now, err)",
+		"writeJSONError(w, http.StatusConflict, \"action_plan_drift\"",
+	} {
+		if !strings.Contains(src, snippet) {
+			t.Fatalf("actions.go must pin API execute plan freshness guard snippet %q", snippet)
+		}
+	}
+	if strings.Index(src, "if err := h.validateActionPlanFresh(orgID, record); err != nil") >
+		strings.Index(src, "started, startEvent, err := unified.BeginActionExecution(record, actor, now)") {
+		t.Fatal("HandleExecuteAction must validate plan freshness before entering executing state or calling the executor")
+	}
+}
+
 func TestContract_ResourceTimelineEndpointsIncludeRelatedChanges(t *testing.T) {
 	now := time.Date(2026, 4, 25, 22, 15, 0, 0, time.UTC)
 	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
@@ -13478,13 +13500,24 @@ func TestContract_AgentEventsStreamPublishesOnActionCompleted(t *testing.T) {
 	if !strings.Contains(src, "executor.SetOnActionCompleted(func(record unifiedresources.ActionAuditRecord)") {
 		t.Error("router.go must install the post-completion callback on the executor returned from chatService.GetExecutor() so the agent SSE stream is wired per-org")
 	}
-	if !strings.Contains(src, "broadcaster.PublishActionCompleted(payload)") {
-		t.Error("router.go must bridge action completion into PublishActionCompleted — drift means agents lose the push-notification path for dispatch outcomes")
+	if !strings.Contains(src, "broadcaster.PublishActionCompletedRecord(record)") {
+		t.Error("router.go must bridge executor action completion into PublishActionCompletedRecord — drift means agents lose the push-notification path for dispatch outcomes")
 	}
-	if !strings.Contains(src, "ActionID:       record.ID") {
+	if !strings.Contains(src, "r.resourceHandlers.SetActionCompletedPublisher(r.agentEventBroadcaster.PublishActionCompletedRecord)") {
+		t.Error("router.go must also bridge API-owned action execution completions into the agent SSE stream")
+	}
+	eventsSource, err := os.ReadFile("agent_events.go")
+	if err != nil {
+		t.Fatalf("read agent_events.go: %v", err)
+	}
+	eventsSrc := string(eventsSource)
+	if !strings.Contains(eventsSrc, "func (b *AgentEventBroadcaster) PublishActionCompletedRecord(record unifiedresources.ActionAuditRecord)") {
+		t.Error("agent_events.go must keep a shared action-audit-record projector for every action.completed producer")
+	}
+	if !strings.Contains(eventsSrc, "ActionID:       record.ID") {
 		t.Error("action.completed payload must carry the canonical action id so agents can correlate the event with /api/actions/{id}")
 	}
-	if !strings.Contains(src, "ResourceID:     record.Request.ResourceID") {
+	if !strings.Contains(eventsSrc, "ResourceID:     record.Request.ResourceID") {
 		t.Error("action.completed payload must carry the canonical resource id so agents can match it against the rest of Pulse")
 	}
 }
@@ -13932,6 +13965,7 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 		"action_execution_encode_failed":  true,
 		"action_execution_failed":         true,
 		"action_not_executing":            true,
+		"action_plan_validation_failed":   true,
 		"resource_registry_unavailable":   true,
 	}
 

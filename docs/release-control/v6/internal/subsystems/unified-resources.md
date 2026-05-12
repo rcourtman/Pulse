@@ -146,6 +146,12 @@ cross-source deduplication.
    `availability:<target-id>`, keep the probe address as hostname/platform
    identity when no stronger identity exists, and preserve availability payloads
    through clone, merge, API transport, and frontend decode paths.
+   Governed action execution freshness is part of the same resource-extension
+   contract: API execution consumers must re-plan against current resource
+   capabilities and policy before executor dispatch, treat action id,
+   `resourceVersion`, `policyVersion`, or `planHash` drift as
+   `action_plan_drift`, and record/publish a failed audit instead of leaving
+   executor adapters to make stale-approval decisions.
 2. Add typed accessors and views in `internal/unifiedresources/views.go`
 3. Add source ingestion/adaptation in the adapter layer only
    Infrastructure table platform presentation extends through
@@ -2273,7 +2279,10 @@ supplemental snapshots do not duplicate resource history.
 Action plans in `actions.go` still keep stale-plan protection to the canonical
 `resourceVersion`, `policyVersion`, and `planHash` fields, so stale execution
 checks stay in the shared resource action model rather than provider-local
-helpers.
+helpers. The API execution endpoint must consume that model before dispatch:
+it rebuilds the current resource/capability plan, rejects mismatched action id,
+resource version, policy version, or plan hash as `action_plan_drift`, and
+records the refusal as a failed action audit with a `plan_drift:` result.
 
 `actions.go` also owns the canonical drift error vocabulary for the
 governed-action broker. `ErrActionPlanDrift` is returned by brokers when

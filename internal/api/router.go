@@ -445,6 +445,9 @@ func (r *Router) setupRoutes() {
 	// read for the wrong org.
 	r.agentContextHandler.SetApprovalsProvider(agentApprovalStoreProvider{})
 	r.agentEventBroadcaster = NewAgentEventBroadcaster()
+	if r.resourceHandlers != nil && r.agentEventBroadcaster != nil {
+		r.resourceHandlers.SetActionCompletedPublisher(r.agentEventBroadcaster.PublishActionCompletedRecord)
+	}
 	if r.resourceHandlers != nil {
 		if store, err := r.resourceHandlers.getStore("default"); err == nil && store != nil {
 			r.monitorResourceAdapter = unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
@@ -2570,25 +2573,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 		if executor := chatService.GetExecutor(); executor != nil {
 			broadcaster := r.agentEventBroadcaster
 			executor.SetOnActionCompleted(func(record unifiedresources.ActionAuditRecord) {
-				payload := AgentEventActionCompletedPayload{
-					ActionID:       record.ID,
-					ResourceID:     record.Request.ResourceID,
-					CapabilityName: record.Request.CapabilityName,
-					State:          string(record.State),
-					RequestedBy:    record.Request.RequestedBy,
-					CompletedAt:    record.UpdatedAt,
-				}
-				if cmd, ok := record.Request.Params["command"].(string); ok {
-					payload.Command = cmd
-				}
-				if record.Result != nil {
-					payload.Success = record.Result.Success
-					payload.ErrorMessage = record.Result.ErrorMessage
-					if v := projectAgentResourceVerification(record.Result.Verification); v != nil {
-						payload.Verification = v
-					}
-				}
-				broadcaster.PublishActionCompleted(payload)
+				broadcaster.PublishActionCompletedRecord(record)
 			})
 		}
 	}
