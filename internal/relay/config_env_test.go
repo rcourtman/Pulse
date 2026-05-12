@@ -2,90 +2,82 @@ package relay
 
 import "testing"
 
-func TestApplyEnvOverridesUnsetLeavesConfigAlone(t *testing.T) {
-	t.Setenv(EnvRelayEnabled, "")
-	t.Setenv(EnvRelayServerURL, "")
+const fileServerURL = "wss://file.example/ws/instance"
 
-	cfg := &Config{Enabled: true, ServerURL: "wss://file.example/ws/instance"}
-	ApplyEnvOverrides(cfg)
-
-	if !cfg.Enabled {
-		t.Fatalf("Enabled = false, want true (file value preserved when env unset)")
+func TestApplyEnvOverridesTable(t *testing.T) {
+	cases := []struct {
+		name       string
+		envEnabled string
+		envURL     string
+		in         Config
+		want       Config
+	}{
+		{
+			name:       "unset leaves config alone",
+			envEnabled: "",
+			envURL:     "",
+			in:         Config{Enabled: true, ServerURL: fileServerURL},
+			want:       Config{Enabled: true, ServerURL: fileServerURL},
+		},
+		{
+			name:       "enabled true overrides file",
+			envEnabled: "true",
+			envURL:     "",
+			in:         Config{Enabled: false, ServerURL: DefaultServerURL},
+			want:       Config{Enabled: true, ServerURL: DefaultServerURL},
+		},
+		{
+			name:       "enabled false overrides file-enabled relay",
+			envEnabled: "false",
+			envURL:     "",
+			in:         Config{Enabled: true, ServerURL: DefaultServerURL},
+			want:       Config{Enabled: false, ServerURL: DefaultServerURL},
+		},
+		{
+			name:       "garbage bool does not override",
+			envEnabled: "maybe",
+			envURL:     "",
+			in:         Config{Enabled: true, ServerURL: DefaultServerURL},
+			want:       Config{Enabled: true, ServerURL: DefaultServerURL},
+		},
+		{
+			name:       "valid server URL overrides file",
+			envEnabled: "",
+			envURL:     "wss://relay.test.example/ws/instance",
+			in:         Config{Enabled: true, ServerURL: DefaultServerURL},
+			want:       Config{Enabled: true, ServerURL: "wss://relay.test.example/ws/instance"},
+		},
+		{
+			name:       "invalid server URL keeps file value",
+			envEnabled: "",
+			envURL:     "http://wrong-scheme.example/",
+			in:         Config{Enabled: true, ServerURL: fileServerURL},
+			want:       Config{Enabled: true, ServerURL: fileServerURL},
+		},
+		{
+			name:       "both overrides apply together",
+			envEnabled: "yes",
+			envURL:     "wss://relay.test.example/ws/instance",
+			in:         Config{Enabled: false, ServerURL: DefaultServerURL},
+			want:       Config{Enabled: true, ServerURL: "wss://relay.test.example/ws/instance"},
+		},
 	}
-	if cfg.ServerURL != "wss://file.example/ws/instance" {
-		t.Fatalf("ServerURL = %q, want file value preserved", cfg.ServerURL)
-	}
-}
 
-func TestApplyEnvOverridesEnabledTrueOverridesFile(t *testing.T) {
-	t.Setenv(EnvRelayEnabled, "true")
-	t.Setenv(EnvRelayServerURL, "")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(EnvRelayEnabled, tc.envEnabled)
+			t.Setenv(EnvRelayServerURL, tc.envURL)
 
-	cfg := &Config{Enabled: false, ServerURL: DefaultServerURL}
-	ApplyEnvOverrides(cfg)
+			cfg := tc.in
+			ApplyEnvOverrides(&cfg)
 
-	if !cfg.Enabled {
-		t.Fatalf("Enabled = false, want true (env override true)")
-	}
-}
-
-func TestApplyEnvOverridesEnabledFalseOverridesFile(t *testing.T) {
-	t.Setenv(EnvRelayEnabled, "false")
-	t.Setenv(EnvRelayServerURL, "")
-
-	cfg := &Config{Enabled: true, ServerURL: DefaultServerURL}
-	ApplyEnvOverrides(cfg)
-
-	if cfg.Enabled {
-		t.Fatalf("Enabled = true, want false (env override false should disable a file-enabled relay)")
-	}
-}
-
-func TestApplyEnvOverridesGarbageBoolIgnored(t *testing.T) {
-	t.Setenv(EnvRelayEnabled, "maybe")
-	t.Setenv(EnvRelayServerURL, "")
-
-	cfg := &Config{Enabled: true, ServerURL: DefaultServerURL}
-	ApplyEnvOverrides(cfg)
-
-	if !cfg.Enabled {
-		t.Fatalf("Enabled = false, want true (garbage bool should not override)")
-	}
-}
-
-func TestApplyEnvOverridesValidServerURLOverridesFile(t *testing.T) {
-	t.Setenv(EnvRelayEnabled, "")
-	t.Setenv(EnvRelayServerURL, "wss://relay.test.example/ws/instance")
-
-	cfg := &Config{Enabled: true, ServerURL: DefaultServerURL}
-	ApplyEnvOverrides(cfg)
-
-	if cfg.ServerURL != "wss://relay.test.example/ws/instance" {
-		t.Fatalf("ServerURL = %q, want env override", cfg.ServerURL)
-	}
-}
-
-func TestApplyEnvOverridesInvalidServerURLKeepsFile(t *testing.T) {
-	t.Setenv(EnvRelayEnabled, "")
-	t.Setenv(EnvRelayServerURL, "http://wrong-scheme.example/")
-
-	cfg := &Config{Enabled: true, ServerURL: "wss://file.example/ws/instance"}
-	ApplyEnvOverrides(cfg)
-
-	if cfg.ServerURL != "wss://file.example/ws/instance" {
-		t.Fatalf("ServerURL = %q, want file value preserved (invalid env URL should not override)", cfg.ServerURL)
-	}
-}
-
-func TestApplyEnvOverridesBothApplyTogether(t *testing.T) {
-	t.Setenv(EnvRelayEnabled, "yes")
-	t.Setenv(EnvRelayServerURL, "wss://relay.test.example/ws/instance")
-
-	cfg := &Config{Enabled: false, ServerURL: DefaultServerURL}
-	ApplyEnvOverrides(cfg)
-
-	if !cfg.Enabled || cfg.ServerURL != "wss://relay.test.example/ws/instance" {
-		t.Fatalf("ApplyEnvOverrides did not apply both overrides: %+v", cfg)
+			if cfg.Enabled != tc.want.Enabled {
+				t.Errorf("Enabled = %v, want %v", cfg.Enabled, tc.want.Enabled)
+			}
+			if cfg.ServerURL != tc.want.ServerURL {
+				t.Errorf("ServerURL = %q, want %q", cfg.ServerURL, tc.want.ServerURL)
+			}
+		})
 	}
 }
 

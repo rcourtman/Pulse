@@ -926,20 +926,17 @@ func TestBuildReleasePackagesPulseMcpForAllPlatforms(t *testing.T) {
 	}
 }
 
+// The three release-pipeline downstream workflows (install-sh-smoke,
+// promote-floating-tags, publish-helm-chart) all share the same root cause:
+// v6 rc.1 → rc.5 silently broke because GitHub's `release: published` webhook
+// doesn't fire when create-release.yml's draft → PATCH(draft=false) promotion
+// path is used, and `workflow_run` chains don't fire when their upstream
+// fails. The fix in each case is a workflow_call entry from create-release.yml
+// after validate_release_assets succeeds. The tests below pin the trigger
+// declarations and resolver logic so the regression class can't return.
+
 func TestInstallShSmokeWorkflowPresent(t *testing.T) {
-	// End-to-end install.sh smoke gate. validate-release.sh catches asset-
-	// identity drift at build time (right banner / right --version handler /
-	// right signature key). This workflow proves the documented secure-install
-	// commands actually install and boot Pulse end-to-end against the
-	// published GitHub Release, which is the surface that broke silently
-	// across v6 rc.1 → rc.5. Removing or weakening any of these assertions
-	// reopens that regression class.
-	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "install-sh-smoke.yml"))
-	if err != nil {
-		t.Fatalf("read install-sh-smoke.yml: %v", err)
-	}
-	workflow := string(workflowBytes)
-	required := []string{
+	assertFileContainsAll(t, repoFile(".github", "workflows", "install-sh-smoke.yml"),
 		// Inputs and triggers.
 		`name: install.sh Smoke (Published Release)`,
 		`workflow_call:`,
@@ -948,8 +945,7 @@ func TestInstallShSmokeWorkflowPresent(t *testing.T) {
 		`releases/download/${TAG}`,
 		`install.sh.sshsig`,
 		`pulse-${TAG}-linux-amd64.tar.gz`,
-		// README key extraction + actual ssh-keygen verify against the
-		// downloaded asset.
+		// README key extraction + ssh-keygen verify against the asset.
 		`grep -oE 'ssh-ed25519 [A-Za-z0-9+/=]+ pulse-installer' README.md`,
 		`ssh-keygen -Y verify \`,
 		`-I pulse-installer \`,
@@ -963,33 +959,16 @@ func TestInstallShSmokeWorkflowPresent(t *testing.T) {
 		`jrei/systemd-debian:12`,
 		`bash install.sh --archive /smoke/${tarball} --disable-auto-updates`,
 		`systemctl is-active pulse`,
-		`curl -fsS http://127.0.0.1:7655/api/health`,
+		// curl --retry handles its own poll loop instead of a bash for-loop.
+		`--retry 30 --retry-delay 2 --retry-connrefused --retry-all-errors http://127.0.0.1:7655/api/health`,
 		// Authoritative version check via /api/version (not /api/health).
 		`curl -fsS http://127.0.0.1:7655/api/version`,
 		`Installed version mismatch. Expected`,
-	}
-	for _, needle := range required {
-		if !strings.Contains(workflow, needle) {
-			t.Fatalf("install-sh-smoke.yml missing required smoke step: %s", needle)
-		}
-	}
+	)
 }
 
 func TestPromoteFloatingTagsReachableViaWorkflowCall(t *testing.T) {
-	// promote-floating-tags.yml's `workflow_run` chain off publish-docker
-	// silently stops working when publish-docker fails (rc.3 → rc.5 all
-	// failed at the now-removed pulse-agent push step). Without the
-	// floating tags promoted, customers pulling rcourtman/pulse:latest
-	// stay on the previous release tag. Adding workflow_call so
-	// create-release.yml can drive promotion explicitly after
-	// validate_release_assets succeeds — same defensive shape as
-	// publish-helm-chart and install-sh-smoke.
-	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "promote-floating-tags.yml"))
-	if err != nil {
-		t.Fatalf("read promote-floating-tags.yml: %v", err)
-	}
-	workflow := string(workflowBytes)
-	required := []string{
+	assertFileContainsAll(t, repoFile(".github", "workflows", "promote-floating-tags.yml"),
 		`workflow_call:`,
 		`tag:`,
 		`description: "Release tag (e.g., v6.0.0). Required for workflow_call."`,
@@ -997,50 +976,24 @@ func TestPromoteFloatingTagsReachableViaWorkflowCall(t *testing.T) {
 		`type: boolean`,
 		// Job condition must accept workflow_call alongside workflow_dispatch.
 		`github.event_name == 'workflow_call'`,
-		// Tag resolver must prefer inputs over the workflow_run derivation
-		// when running through workflow_call / workflow_dispatch.
+		// Tag resolver must prefer inputs over the workflow_run derivation.
 		`if [ -n "${INPUT_TAG}" ]; then`,
 		`TAG="${INPUT_TAG}"`,
-	}
-	for _, needle := range required {
-		if !strings.Contains(workflow, needle) {
-			t.Fatalf("promote-floating-tags.yml missing required workflow_call wiring: %s", needle)
-		}
-	}
+	)
 }
 
 func TestPublishHelmChartReachableViaWorkflowCall(t *testing.T) {
-	// v6 rc.1 → rc.5 published successfully but never published a Helm
-	// chart because `release: published` does not fire when a release is
-	// created as draft and later PATCHed to draft=false (the path
-	// create-release.yml uses). The fix is an explicit workflow_call from
-	// create-release.yml — wired in `publish_helm_chart` job — that runs
-	// after validate_release_assets succeeds. Both the trigger declaration
-	// on publish-helm-chart.yml and the wiring in create-release.yml must
-	// be present; reverting either reopens the chart-not-published gap.
-	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "publish-helm-chart.yml"))
-	if err != nil {
-		t.Fatalf("read publish-helm-chart.yml: %v", err)
-	}
-	workflow := string(workflowBytes)
-	required := []string{
+	assertFileContainsAll(t, repoFile(".github", "workflows", "publish-helm-chart.yml"),
 		`workflow_call:`,
 		`chart_version:`,
 		`description: "Chart version (e.g., 6.0.0-rc.5). Required for workflow_call."`,
 		`required: true`,
 		`type: string`,
 		`app_version:`,
-		// The chart-version resolver must accept inputs from both
-		// workflow_call and workflow_dispatch, falling back to the
-		// release-event tag only when no inputs are present.
+		// Chart-version resolver prefers inputs over release-event tag.
 		`if [ -n "${INPUT_CHART_VERSION}" ]; then`,
 		`RELEASE_TAG="${RELEASE_TAG_NAME}"`,
-	}
-	for _, needle := range required {
-		if !strings.Contains(workflow, needle) {
-			t.Fatalf("publish-helm-chart.yml missing required workflow_call wiring: %s", needle)
-		}
-	}
+	)
 }
 
 func TestHelmAgentRuntimePointsAtRealImage(t *testing.T) {
@@ -1085,43 +1038,40 @@ func TestHelmAgentRuntimePointsAtRealImage(t *testing.T) {
 		t.Fatal("agent.yaml template must render command via toYaml so list values pass through correctly")
 	}
 
-	dockerfile, err := os.ReadFile(repoFile("Dockerfile"))
-	if err != nil {
-		t.Fatalf("read Dockerfile: %v", err)
-	}
-	dockerfileStr := string(dockerfile)
-	dockerfileRequired := []string{
+	assertFileContainsAll(t, repoFile("Dockerfile"),
 		`ln -s /opt/pulse/bin/pulse-agent-linux-arm64 /usr/local/bin/pulse-agent`,
 		`ln -s /opt/pulse/bin/pulse-agent-linux-armv7 /usr/local/bin/pulse-agent`,
 		`ln -s /opt/pulse/bin/pulse-agent-linux-amd64 /usr/local/bin/pulse-agent`,
-	}
-	for _, needle := range dockerfileRequired {
-		if !strings.Contains(dockerfileStr, needle) {
-			t.Fatalf("Dockerfile runtime stage missing arch-resolved pulse-agent symlink: %s", needle)
-		}
-	}
+	)
 
-	validateScript, err := os.ReadFile(repoFile("scripts", "validate-release.sh"))
-	if err != nil {
-		t.Fatalf("read validate-release.sh: %v", err)
-	}
-	validate := string(validateScript)
-	validateRequired := []string{
+	assertFileContainsAll(t, repoFile("scripts", "validate-release.sh"),
 		`Validating /usr/local/bin/pulse-agent arch-resolved symlink`,
 		`[ -L /usr/local/bin/pulse-agent ]`,
 		`/usr/local/bin/pulse-agent target is not executable`,
-	}
-	for _, needle := range validateRequired {
-		if !strings.Contains(validate, needle) {
-			t.Fatalf("validate-release.sh missing pulse-agent symlink guard: %s", needle)
-		}
-	}
+	)
 }
 
 func repoFile(parts ...string) string {
 	root := filepath.Join("..", "..")
 	segments := append([]string{root}, parts...)
 	return filepath.Join(segments...)
+}
+
+// assertFileContainsAll reads the file at path and fails the test if any of
+// the required substrings is missing. The standard pinning-test shape in
+// this package.
+func assertFileContainsAll(t *testing.T, path string, required ...string) {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	s := string(content)
+	for _, needle := range required {
+		if !strings.Contains(s, needle) {
+			t.Fatalf("%s missing required substring: %s", path, needle)
+		}
+	}
 }
 
 func workflowJobBlock(t *testing.T, workflow, job string) string {

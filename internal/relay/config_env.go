@@ -1,32 +1,30 @@
 package relay
 
 import (
-	"os"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
-// Env vars for headless / container deployments that need to bootstrap relay
-// without going through Settings → Relay. They override the persisted file
-// config; if you set them you accept that UI changes will be re-overridden on
-// next start.
+// Env vars for headless / container deployments that bootstrap relay without
+// going through Settings → Relay. Saving from the UI after an override is
+// active persists the env-effective state to disk, so clearing the env alone
+// does not revert.
 const (
 	EnvRelayEnabled   = "PULSE_RELAY_ENABLED"
 	EnvRelayServerURL = "PULSE_RELAY_SERVER"
 )
 
 // ApplyEnvOverrides mutates cfg in place to reflect PULSE_RELAY_* environment
-// overrides. Unset / empty / unparseable env vars do not override; the file
-// (or default) value remains. Invalid server URLs are logged and ignored —
-// the override silently falls back rather than leaving relay wedged on a
-// malformed endpoint.
+// overrides. Unset / empty / unparseable env vars leave the file value
+// untouched; invalid server URLs are logged and ignored.
 func ApplyEnvOverrides(cfg *Config) {
 	if cfg == nil {
 		return
 	}
 
-	if rawEnabled := strings.TrimSpace(os.Getenv(EnvRelayEnabled)); rawEnabled != "" {
+	if rawEnabled := utils.GetenvTrim(EnvRelayEnabled); rawEnabled != "" {
 		if parsed, ok := parseEnvBool(rawEnabled); ok {
 			cfg.Enabled = parsed
 			log.Info().
@@ -41,7 +39,7 @@ func ApplyEnvOverrides(cfg *Config) {
 		}
 	}
 
-	if rawURL := strings.TrimSpace(os.Getenv(EnvRelayServerURL)); rawURL != "" {
+	if rawURL := utils.GetenvTrim(EnvRelayServerURL); rawURL != "" {
 		if err := validateRelayServerURL(rawURL); err != nil {
 			log.Warn().
 				Str("env_var", EnvRelayServerURL).
@@ -58,10 +56,8 @@ func ApplyEnvOverrides(cfg *Config) {
 	}
 }
 
-// parseEnvBool returns (value, ok). ok=false means the input was not a
-// recognizable boolean and the caller should leave the config field alone.
-// Distinct from utils.ParseBool which silently coerces everything unknown to
-// false; for env overrides we need to tell "unset" from "explicit false".
+// parseEnvBool distinguishes "unset" from "explicit false"; utils.ParseBool
+// can't (it coerces everything unrecognized to false).
 func parseEnvBool(rawValue string) (value bool, ok bool) {
 	switch strings.ToLower(strings.TrimSpace(rawValue)) {
 	case "1", "true", "yes", "y", "on":

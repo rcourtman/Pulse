@@ -25,14 +25,11 @@ func (c *ConfigPersistence) SaveRelayConfig(cfg relay.Config) error {
 func (c *ConfigPersistence) LoadRelayConfig() (*relay.Config, error) {
 	cfg := relay.DefaultConfig()
 	if err := loadJSON(c, c.relayFile, true, cfg); err != nil {
-		if errors.Is(err, fs.ErrNotExist) || os.IsNotExist(err) {
-			cfg = relay.DefaultConfig()
-			relay.ApplyEnvOverrides(cfg)
-			return cfg, nil
+		if !errors.Is(err, fs.ErrNotExist) && !os.IsNotExist(err) {
+			return nil, err
 		}
-		return nil, err
+		// File absent: cfg is already the default; fall through to env overrides.
 	}
-
 	relay.ApplyEnvOverrides(cfg)
 	return cfg, nil
 }

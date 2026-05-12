@@ -228,19 +228,13 @@ jobs:
           done
           echo "✓ pulse.service is active"
 
-          echo "Hitting /api/health..."
-          for i in $(seq 1 30); do
-            if docker exec "${container_name}" curl -fsS http://127.0.0.1:7655/api/health >/dev/null 2>&1; then
-              break
-            fi
-            if [ "$i" -eq 30 ]; then
-              docker exec "${container_name}" systemctl status pulse --no-pager || true
-              docker exec "${container_name}" journalctl -u pulse --no-pager --lines=80 || true
-              echo "::error::/api/health did not respond within 60 seconds of service activation"
-              exit 1
-            fi
-            sleep 2
-          done
+          echo "Hitting /api/health (curl --retry handles the poll loop)..."
+          if ! docker exec "${container_name}" curl -fsS --retry 30 --retry-delay 2 --retry-connrefused --retry-all-errors http://127.0.0.1:7655/api/health >/dev/null; then
+            docker exec "${container_name}" systemctl status pulse --no-pager || true
+            docker exec "${container_name}" journalctl -u pulse --no-pager --lines=80 || true
+            echo "::error::/api/health did not respond within 60 seconds of service activation"
+            exit 1
+          fi
           echo "✓ /api/health responded 200"
 
           echo "Confirming installed version matches ${VERSION} via /api/version..."
