@@ -502,12 +502,10 @@ The relay protocol provides end-to-end encrypted remote access foundations for P
 2. Toggle relay **On**.
 3. Use the **QR Code** or **Deep Link** to pair a supported Pulse Mobile client.
 
-### Environment Overrides
-
-| Variable | Description | Default |
-|---|---|---|
-| `PULSE_RELAY_ENABLED` | Enable/disable relay | `false` |
-| `PULSE_RELAY_SERVER` | Override relay server URL | `relay.pulserelay.pro` |
+Relay has no environment-variable overrides. Enable/disable and the
+server URL are persisted in `relay.enc` and configured from
+**Settings → Relay**. The relay server URL defaults to
+`wss://relay.pulserelay.pro/ws/instance`.
 
 ### Security
 
