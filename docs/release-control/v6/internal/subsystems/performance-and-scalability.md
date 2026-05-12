@@ -1207,6 +1207,13 @@ The aggregate `/api/charts/workloads-summary` endpoint now also has its own
 explicit API p95 budget constant, aligned with the per-workload charts budget,
 and `internal/api/slo_bench_test.go` must fail if that aggregate budget or its
 store-backed mixed-workload benchmark coverage drifts.
+The infrastructure and workload-summary chart endpoints may keep a short
+backend response cache for identical org/range/metric-scope summary requests,
+but only as presentation hot-path protection for repeated summary polling and
+remounts. The cached payloads must still be built from the canonical
+store-backed/read-state sources, must remain isolated by organization and
+explicit chart scope, and must not become telemetry freshness, lifecycle,
+recovery, or persistence authority.
 Those budgets also assume Kubernetes pod history lookups hit one canonical
 series key. Pod chart and history consumers must normalize bare pod IDs onto
 `k8s:<cluster>:pod:<uid>` before lookup; otherwise demo and mock workloads pay

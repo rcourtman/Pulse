@@ -105,6 +105,14 @@ product API routes free of maintainer commercial analytics.
 
 ## Shared Boundaries
 
+Summary-chart response caching is a shared API boundary:
+`internal/api/router.go` may serve a short cached JSON payload for repeated
+infrastructure-summary and workloads-summary requests with the same
+organization, range, metric set, and workload scope, but that cache is
+transport-only. It may amortize polling and remount cost, but it must not
+change normalized response shape, bypass monitor or read-state availability
+checks, merge tenants, or become the source of truth for telemetry freshness.
+
 1. `frontend-modern/src/api/agentProfiles.ts` shared with `agent-lifecycle`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/api/ai.ts` shared with `ai-runtime`: the AI frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
 3. `frontend-modern/src/api/nodes.ts` shared with `agent-lifecycle`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.

@@ -2166,6 +2166,14 @@ func TestContract_WorkloadChartMetricBudgetGuardrailsRemainCanonical(t *testing.
 		`vmBatchMetrics = monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration, workloadSummaryMetricOrder...)`,
 		`containerBatchMetrics = monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration, workloadSummaryMetricOrder...)`,
 		`dockerContainerBatchMetrics = monitor.GetGuestMetricsForChartBatch("dockerContainer", dockerContainerRequests, duration, workloadSummaryMetricOrder...)`,
+		`summaryChartsCacheTTL = 5 * time.Second`,
+		`infrastructureChartsCacheKey(req *http.Request, timeRange string, requestedMetricNames []string) string`,
+		`cachedInfrastructureChartsPayload`,
+		`cacheInfrastructureChartsPayload`,
+		`workloadsSummaryChartsCacheKey`,
+		`cachedWorkloadsSummaryChartsPayload`,
+		`cacheWorkloadsSummaryChartsPayload`,
+		`type workloadSummaryMetricBucket struct`,
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {

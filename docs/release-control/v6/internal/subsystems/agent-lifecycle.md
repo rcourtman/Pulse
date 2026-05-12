@@ -1205,6 +1205,12 @@ presentation-only on that same boundary: `internal/api/router.go` may batch
 those reads in parallel, but it must request only the canonical rendered
 metric set for workload cards instead of widening the hot path back to
 fetch-all metrics on behalf of install or reporting callers.
+The same presentation-only rule applies when shared infrastructure-summary or
+workloads-summary chart routes serve a short cached response for repeated
+org/range/scope requests: lifecycle-adjacent surfaces may render those charts
+as operator context, but agent registration, heartbeat, installer status,
+profile assignment, reporting freshness, and fleet-control readiness must not
+derive authority from the cached chart payload or its timestamp.
 That shared `internal/api/` dependency now also assumes hosted tenant AI and
 relay bootstrap reads use one effective hosted billing lease before
 lifecycle-adjacent flows inspect runtime readiness, so install and setup

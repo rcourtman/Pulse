@@ -140,6 +140,10 @@ type Router struct {
 	bootstrapTokenPath       string
 	checksumMu               sync.RWMutex
 	checksumCache            map[string]checksumCacheEntry
+	infrastructureChartsMu   sync.Mutex
+	infrastructureCharts     map[string]summaryChartsCacheEntry
+	workloadsSummaryChartsMu sync.Mutex
+	workloadsSummaryCharts   map[string]summaryChartsCacheEntry
 	installScriptClient      *http.Client
 	relayMu                  sync.RWMutex
 	relayClient              *relay.Client
@@ -154,6 +158,13 @@ type Router struct {
 	startedPatrolOrgs        map[string]bool
 	aiAutoFixEndpoints       extensions.AIAutoFixEndpoints
 	aiAlertAnalysisEndpoints extensions.AIAlertAnalysisEndpoints
+}
+
+const summaryChartsCacheTTL = 5 * time.Second
+
+type summaryChartsCacheEntry struct {
+	payload   []byte
+	expiresAt time.Time
 }
 
 func pulseBinDir() string {
@@ -6068,12 +6079,94 @@ func targetInfrastructureSummarySeriesPoints(duration time.Duration) int {
 	)
 }
 
+func infrastructureChartsCacheKey(req *http.Request, timeRange string, requestedMetricNames []string) string {
+	orgID := strings.TrimSpace(GetOrgID(req.Context()))
+	if orgID == "" {
+		orgID = "default"
+	}
+	return orgID + "|" + strings.TrimSpace(timeRange) + "|" + strings.Join(requestedMetricNames, ",")
+}
+
+func (r *Router) cachedInfrastructureChartsPayload(key string, now time.Time) ([]byte, bool) {
+	if r == nil || key == "" {
+		return nil, false
+	}
+	r.infrastructureChartsMu.Lock()
+	defer r.infrastructureChartsMu.Unlock()
+
+	entry, ok := r.infrastructureCharts[key]
+	if !ok {
+		return nil, false
+	}
+	if !now.Before(entry.expiresAt) {
+		delete(r.infrastructureCharts, key)
+		return nil, false
+	}
+	return entry.payload, true
+}
+
+func (r *Router) cacheInfrastructureChartsPayload(key string, payload []byte, now time.Time) {
+	if r == nil || key == "" || len(payload) == 0 {
+		return
+	}
+	r.infrastructureChartsMu.Lock()
+	defer r.infrastructureChartsMu.Unlock()
+	if r.infrastructureCharts == nil {
+		r.infrastructureCharts = make(map[string]summaryChartsCacheEntry, 8)
+	}
+	r.infrastructureCharts[key] = summaryChartsCacheEntry{
+		payload:   payload,
+		expiresAt: now.Add(summaryChartsCacheTTL),
+	}
+}
+
 func targetWorkloadsSummarySeriesPoints(duration time.Duration) int {
 	return targetBoundedSummarySeriesPoints(
 		duration,
 		workloadsSummaryMinSeriesPoints,
 		workloadsSummaryMaxSeriesPoints,
 	)
+}
+
+func workloadsSummaryChartsCacheKey(req *http.Request, timeRange, selectedNodeID string) string {
+	orgID := strings.TrimSpace(GetOrgID(req.Context()))
+	if orgID == "" {
+		orgID = "default"
+	}
+	return orgID + "|" + strings.TrimSpace(timeRange) + "|" + strings.TrimSpace(selectedNodeID)
+}
+
+func (r *Router) cachedWorkloadsSummaryChartsPayload(key string, now time.Time) ([]byte, bool) {
+	if r == nil || key == "" {
+		return nil, false
+	}
+	r.workloadsSummaryChartsMu.Lock()
+	defer r.workloadsSummaryChartsMu.Unlock()
+
+	entry, ok := r.workloadsSummaryCharts[key]
+	if !ok {
+		return nil, false
+	}
+	if !now.Before(entry.expiresAt) {
+		delete(r.workloadsSummaryCharts, key)
+		return nil, false
+	}
+	return entry.payload, true
+}
+
+func (r *Router) cacheWorkloadsSummaryChartsPayload(key string, payload []byte, now time.Time) {
+	if r == nil || key == "" || len(payload) == 0 {
+		return
+	}
+	r.workloadsSummaryChartsMu.Lock()
+	defer r.workloadsSummaryChartsMu.Unlock()
+	if r.workloadsSummaryCharts == nil {
+		r.workloadsSummaryCharts = make(map[string]summaryChartsCacheEntry, 8)
+	}
+	r.workloadsSummaryCharts[key] = summaryChartsCacheEntry{
+		payload:   payload,
+		expiresAt: now.Add(summaryChartsCacheTTL),
+	}
 }
 
 func aggregateInfrastructureSummaryBucketValue(
@@ -6914,7 +7007,17 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 		primarySourceHint = "store_or_memory_fallback"
 	}
 
-	currentTime := time.Now().UnixMilli()
+	now := time.Now()
+	cacheKey := infrastructureChartsCacheKey(req, timeRange, requestedMetricNames)
+	if payload, ok := r.cachedInfrastructureChartsPayload(cacheKey, now); ok {
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write(payload); err != nil {
+			log.Error().Err(err).Msg("Failed to write cached infrastructure chart data response")
+		}
+		return
+	}
+
+	currentTime := now.UnixMilli()
 	oldestTimestamp := currentTime
 
 	// Process Nodes - batch-load historical data (1-2 SQL calls instead of N×5).
@@ -7162,19 +7265,49 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 		},
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response.NormalizeCollections()); err != nil {
+	payload, err := json.Marshal(response.NormalizeCollections())
+	if err != nil {
 		log.Error().Err(err).Msg("Failed to encode infrastructure chart data response")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+	payload = append(payload, '\n')
+	r.cacheInfrastructureChartsPayload(cacheKey, payload, now)
+	w.Header().Set("Content-Type", "application/json")
+	if _, err := w.Write(payload); err != nil {
+		log.Error().Err(err).Msg("Failed to write infrastructure chart data response")
+	}
 }
 
 type workloadSummaryBuckets struct {
-	cpu     []float64
-	memory  []float64
-	disk    []float64
-	network []float64
+	cpu     workloadSummaryMetricBucket
+	memory  workloadSummaryMetricBucket
+	disk    workloadSummaryMetricBucket
+	network workloadSummaryMetricBucket
+}
+
+type workloadSummaryMetricBucket struct {
+	sum   float64
+	max   float64
+	count int
+}
+
+func (bucket *workloadSummaryMetricBucket) add(value float64) {
+	if bucket == nil {
+		return
+	}
+	if bucket.count == 0 || value > bucket.max {
+		bucket.max = value
+	}
+	bucket.sum += value
+	bucket.count++
+}
+
+func (bucket workloadSummaryMetricBucket) average() float64 {
+	if bucket.count == 0 {
+		return 0
+	}
+	return bucket.sum / float64(bucket.count)
 }
 
 type workloadsSummarySnapshot struct {
@@ -7368,13 +7501,13 @@ func appendWorkloadMetricPoints(
 		}
 		switch target {
 		case "cpu":
-			bucket.cpu = append(bucket.cpu, value)
+			bucket.cpu.add(value)
 		case "memory":
-			bucket.memory = append(bucket.memory, value)
+			bucket.memory.add(value)
 		case "disk":
-			bucket.disk = append(bucket.disk, value)
+			bucket.disk.add(value)
 		case "network":
-			bucket.network = append(bucket.network, value)
+			bucket.network.add(value)
 		}
 		added++
 	}
@@ -7418,33 +7551,9 @@ func mergeWorkloadNetworkPoints(
 	return points
 }
 
-func averageValue(values []float64) float64 {
-	if len(values) == 0 {
-		return 0
-	}
-	sum := 0.0
-	for _, value := range values {
-		sum += value
-	}
-	return sum / float64(len(values))
-}
-
-func maxValue(values []float64) float64 {
-	if len(values) == 0 {
-		return 0
-	}
-	max := values[0]
-	for i := 1; i < len(values); i++ {
-		if values[i] > max {
-			max = values[i]
-		}
-	}
-	return max
-}
-
 func buildWorkloadsSummaryMetric(
 	buckets map[int64]*workloadSummaryBuckets,
-	selector func(*workloadSummaryBuckets) []float64,
+	selector func(*workloadSummaryBuckets) workloadSummaryMetricBucket,
 ) WorkloadsSummaryMetricData {
 	keys := make([]int64, 0, len(buckets))
 	for ts := range buckets {
@@ -7457,17 +7566,17 @@ func buildWorkloadsSummaryMetric(
 		P95: make([]MetricPoint, 0, len(keys)),
 	}
 	for _, ts := range keys {
-		values := selector(buckets[ts])
-		if len(values) == 0 {
+		bucket := selector(buckets[ts])
+		if bucket.count == 0 {
 			continue
 		}
 		data.P50 = append(data.P50, MetricPoint{
 			Timestamp: ts,
-			Value:     averageValue(values),
+			Value:     bucket.average(),
 		})
 		data.P95 = append(data.P95, MetricPoint{
 			Timestamp: ts,
-			Value:     maxValue(values),
+			Value:     bucket.max,
 		})
 	}
 	return data
@@ -7621,6 +7730,15 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		http.Error(w, "State unavailable", http.StatusInternalServerError)
 		return
 	}
+
+	now := time.Now()
+	cacheKey := workloadsSummaryChartsCacheKey(req, timeRange, selectedNodeID)
+	if payload, ok := r.cachedWorkloadsSummaryChartsPayload(cacheKey, now); ok {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(payload)
+		return
+	}
+
 	mockModeEnabled := mock.IsMockEnabled()
 	metricsStoreEnabled := monitor.GetMetricsStore() != nil
 	primarySourceHint := "memory"
@@ -7628,8 +7746,8 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		primarySourceHint = "store_or_memory_fallback"
 	}
 
-	currentTime := time.Now().UnixMilli()
-	currentTimeTime := time.UnixMilli(currentTime)
+	currentTime := now.UnixMilli()
+	currentTimeTime := now
 	oldestTimestamp := currentTime
 	buckets := make(map[int64]*workloadSummaryBuckets)
 	guestPointCount := 0
@@ -8060,16 +8178,16 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		snapshots = append(snapshots, snapshot)
 	}
 
-	cpuMetric := buildWorkloadsSummaryMetric(buckets, func(bucket *workloadSummaryBuckets) []float64 {
+	cpuMetric := buildWorkloadsSummaryMetric(buckets, func(bucket *workloadSummaryBuckets) workloadSummaryMetricBucket {
 		return bucket.cpu
 	})
-	memoryMetric := buildWorkloadsSummaryMetric(buckets, func(bucket *workloadSummaryBuckets) []float64 {
+	memoryMetric := buildWorkloadsSummaryMetric(buckets, func(bucket *workloadSummaryBuckets) workloadSummaryMetricBucket {
 		return bucket.memory
 	})
-	diskMetric := buildWorkloadsSummaryMetric(buckets, func(bucket *workloadSummaryBuckets) []float64 {
+	diskMetric := buildWorkloadsSummaryMetric(buckets, func(bucket *workloadSummaryBuckets) workloadSummaryMetricBucket {
 		return bucket.disk
 	})
-	networkMetric := buildWorkloadsSummaryMetric(buckets, func(bucket *workloadSummaryBuckets) []float64 {
+	networkMetric := buildWorkloadsSummaryMetric(buckets, func(bucket *workloadSummaryBuckets) workloadSummaryMetricBucket {
 		return bucket.network
 	})
 	cpuMetric = normalizeWorkloadsSummaryMetricPointSeries(cpuMetric, duration)
@@ -8134,10 +8252,17 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		},
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response.NormalizeCollections()); err != nil {
+	payload, err := json.Marshal(response.NormalizeCollections())
+	if err != nil {
 		log.Error().Err(err).Msg("Failed to encode workloads summary chart data response")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	r.cacheWorkloadsSummaryChartsPayload(cacheKey, payload, now)
+
+	w.Header().Set("Content-Type", "application/json")
+	if _, err := w.Write(payload); err != nil {
+		log.Error().Err(err).Msg("Failed to encode workloads summary chart data response")
 		return
 	}
 }
