@@ -1027,6 +1027,58 @@ func legacyAlertMirrorShape(f *Finding) bool {
 	return true
 }
 
+// SweepWillFixLaterReminders proactively wakes will_fix_later commitments
+// whose RemindAt deadline has passed without waiting for re-detection. The
+// existing wake path in Add() only fires on re-detection — if patrol's
+// detection is sparse or the operational issue transiently clears between
+// runs, an overdue commitment can sit forever without surfacing. The sweep
+// closes that gap by walking all dismissed-will_fix_later findings on a
+// timer and converging them onto the same in-memory state the re-detection
+// path would have produced.
+//
+// Mirrors the field-clearing of the will_fix_later branch in Add (around
+// findings.go line 1366): clear DismissedReason, Suppressed, RemindAt,
+// AcknowledgedAt; keep UserNote because the operator's promise is still
+// relevant context; bump RemindCount; emit a "reminded" lifecycle event.
+//
+// Returns the number of findings woken. Caller is patrol_run.remindSweepLoop.
+func (s *FindingsStore) SweepWillFixLaterReminders(now time.Time) int {
+	s.mu.Lock()
+	swept := 0
+	for _, f := range s.findings {
+		if f == nil {
+			continue
+		}
+		if f.DismissedReason != DismissReasonWillFixLater {
+			continue
+		}
+		if f.RemindAt == nil {
+			continue
+		}
+		if !now.After(*f.RemindAt) {
+			continue
+		}
+		meta := map[string]string{
+			"reason_was": f.DismissedReason,
+			"remind_at":  f.RemindAt.Format(time.RFC3339),
+			"trigger":    "sweep",
+		}
+		f.RemindCount++
+		s.appendLifecycleLocked(f, "reminded", "will_fix_later remind-at deadline passed (sweep); re-surfacing finding", string(FindingLoopStateDismissed), string(FindingLoopStateDetected), meta)
+		f.DismissedReason = ""
+		f.Suppressed = false
+		f.RemindAt = nil
+		f.AcknowledgedAt = nil
+		f.LoopState = string(FindingLoopStateDetected)
+		swept++
+	}
+	s.mu.Unlock()
+	if swept > 0 {
+		s.scheduleSave()
+	}
+	return swept
+}
+
 // scheduleSave schedules a debounced save operation
 // This method is lock-safe and can be called without holding the store lock.
 func (s *FindingsStore) scheduleSave() {

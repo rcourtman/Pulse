@@ -27,6 +27,8 @@ const (
 	scopedPatrolRetryBackoff2 = 15 * time.Second // Second retry backoff for dropped scoped patrols
 	scopedPatrolMaxRetries    = 2                // Maximum re-queue attempts for dropped scoped patrols
 	scopedPatrolLogIDLimit    = 10               // Maximum number of effective scope IDs to log inline
+	remindSweepInterval       = time.Hour        // Cadence for the proactive will_fix_later remind sweep
+	remindSweepInitialDelay   = 30 * time.Second // First sweep runs shortly after start so a restart-with-overdue does not have to wait a full hour
 )
 
 // Start begins the background patrol loop
@@ -46,6 +48,7 @@ func (p *PatrolService) Start(ctx context.Context) {
 		Msg("Starting AI Patrol Service")
 
 	go p.patrolLoop(ctx)
+	go p.remindSweepLoop(ctx)
 }
 
 // Stop stops the patrol service. It signals the patrol loop to exit, then
@@ -191,6 +194,47 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 		case <-p.stopCh:
 			return
 
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// remindSweepLoop fires SweepWillFixLaterReminders on a 1h cadence so
+// will_fix_later commitments past their RemindAt deadline surface even
+// when patrol detection is sparse or the operational issue transiently
+// clears between runs. Runs an initial sweep ~30s after start so a
+// restart-with-overdue does not have to wait a full hour.
+func (p *PatrolService) remindSweepLoop(ctx context.Context) {
+	sweep := func() {
+		if p.findings == nil {
+			return
+		}
+		swept := p.findings.SweepWillFixLaterReminders(time.Now())
+		if swept > 0 {
+			log.Info().Int("swept", swept).Msg("Patrol remind-sweep promoted overdue will_fix_later commitments")
+		}
+	}
+
+	initialTimer := time.NewTimer(remindSweepInitialDelay)
+	defer initialTimer.Stop()
+	select {
+	case <-initialTimer.C:
+		sweep()
+	case <-p.stopCh:
+		return
+	case <-ctx.Done():
+		return
+	}
+
+	ticker := time.NewTicker(remindSweepInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			sweep()
+		case <-p.stopCh:
+			return
 		case <-ctx.Done():
 			return
 		}
