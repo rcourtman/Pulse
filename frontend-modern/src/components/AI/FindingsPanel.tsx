@@ -841,28 +841,23 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     return (
       <div
         id={`finding-${finding.id}`}
-        role="button"
-        tabIndex={0}
-        aria-expanded={expandedId() === finding.id}
-        aria-controls={`finding-${finding.id}-details`}
-        class={`p-3 cursor-pointer transition-colors ${
+        class={`p-3 transition-colors ${
           finding.status === 'active'
             ? finding.acknowledgedAt
               ? 'opacity-60 hover:opacity-80 bg-surface-alt'
               : 'hover:bg-surface-hover'
             : 'opacity-60 bg-surface-alt hover:opacity-80'
         }`}
-        onClick={toggleExpanded}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            toggleExpanded();
-          }
-        }}
       >
         {/* Finding header */}
         <div class="flex items-start justify-between gap-2">
-          <div class="flex-1 min-w-0">
+          <button
+            type="button"
+            aria-expanded={expandedId() === finding.id}
+            aria-controls={`finding-${finding.id}-details`}
+            class="min-w-0 flex-1 cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            onClick={toggleExpanded}
+          >
             <div class="flex items-center gap-2 flex-wrap">
               {/* Status badge for non-active findings */}
               <Show when={finding.status !== 'active'}>
@@ -1062,7 +1057,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 </span>
               </Show>
             </div>
-          </div>
+          </button>
           {/* Actions */}
           <div class="flex items-center gap-1 shrink-0">
             <Show when={finding.status === 'active'}>

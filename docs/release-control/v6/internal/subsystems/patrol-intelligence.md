@@ -283,6 +283,11 @@ Patrol-specific presentation helpers.
    The same panel also surfaces `investigation_record.confidence` as a
    badge in the collapsed finding row (next to the investigation outcome
    badge) so operators can scan trust without expanding every card.
+   Finding rows must keep their disclosure control separate from inline manual
+   controls: the row summary may be a keyboard-accessible expand/collapse
+   button, but acknowledge, snooze, dismiss, and other per-finding actions must
+   be sibling controls, not nested inside the disclosure button or a fake
+   role-button wrapper.
    `FindingsPanel.tsx` also renders the
    `previousResolvedFixSummary` operational-memory field directly on
    the expanded finding card with emerald-accented styling, so

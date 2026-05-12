@@ -112,6 +112,16 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('confidence');
   });
 
+  it('keeps collapsed finding disclosure separate from inline manual controls', () => {
+    // The collapsed finding row contains acknowledge/snooze/dismiss controls.
+    // Those controls must remain siblings of the disclosure button so the row
+    // does not expose one interactive control nested inside another.
+    expect(findingsPanelSource).not.toContain('role="button"');
+    expect(findingsPanelSource).toContain('aria-expanded={expandedId() === finding.id}');
+    expect(findingsPanelSource).toContain('onClick={toggleExpanded}');
+    expect(findingsPanelSource).toContain('</button>\n          {/* Actions */}');
+  });
+
   it('previews the will_fix_later remind-at deadline before the operator confirms dismiss', () => {
     // The backend now treats will_fix_later as a real operational commitment
     // (Finding.RemindAt, default 7 days), not a silent shut-up. The dismiss

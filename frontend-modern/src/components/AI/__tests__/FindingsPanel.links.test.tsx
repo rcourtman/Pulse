@@ -217,6 +217,25 @@ describe('FindingsPanel resource links', () => {
     );
   });
 
+  it('keeps finding disclosure separate from inline manual controls', async () => {
+    render(() => <FindingsPanel />);
+
+    await waitFor(() => expect(mockState.loadFindings).toHaveBeenCalled());
+
+    const disclosure = screen.getByRole('button', {
+      name: /Nextcloud failed readiness checks/,
+    });
+    const acknowledge = screen.getByRole('button', { name: 'Acknowledge' });
+
+    expect(disclosure).not.toContainElement(acknowledge);
+
+    fireEvent.click(disclosure);
+
+    expect(
+      screen.getByText('Nextcloud is unreachable for users until readiness recovers.'),
+    ).toBeInTheDocument();
+  });
+
   it('can render Patrol findings from the direct Patrol source', async () => {
     render(() => <FindingsPanel findingsSource="patrol" />);
 
