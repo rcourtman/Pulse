@@ -518,12 +518,17 @@ AI-only summary payloads, or page-local heuristics.
     intentionally narrower than the patrol-failure redactor: arbitrary
     URLs are preserved so operators can reference runbooks, ticket
     links, and GitHub issues in audit reasons.
-    Verification command output is part of the same persistence
-    boundary: `ActionVerificationResult.Command`, `Output`, and `Note`
-    must be redacted both on top-level `ActionAuditRecord.Verification`
-    and nested `ExecutionResult.Verification`, while `Ran=false`
-    normalization remains responsible for clearing verification details
-    rather than persisting redaction markers for unrun checks.
+    Verification command output is part of the same persistence and
+    readback boundary: `ActionVerificationResult.Command`, `Output`,
+    and `Note` must be replaced with stable redaction markers both on
+    top-level `ActionAuditRecord.Verification` and nested
+    `ExecutionResult.Verification`. Migrated legacy rows follow the same
+    contract when rehydrated, so API and frontend readers never surface
+    raw historical verification command, output, or note details. Stable
+    status and error-token prefixes such as `plan_drift:` remain
+    verbatim where agents depend on them. `Ran=false` normalization
+    remains responsible for clearing verification details rather than
+    persisting redaction markers for unrun checks.
 21. Keep post-execution verification outcome on the canonical execution
     result. `ExecutionResult.Verification` carries
     `ActionVerificationResult` with `Ran`, `Command`, `Output`,
@@ -564,11 +569,13 @@ AI-only summary payloads, or page-local heuristics.
     surfaces verification as a distinct outcome row alongside the
     dispatch result, with emerald tone for verified and amber for
     failed (matching the trust palette already used on the findings
-    panel). The render must show the verification command verbatim,
-    the captured output, and the optional broker note, so the
-    operator sees exactly what Pulse read back rather than a yes/no
-    summary. When `verification.ran` is false (no derivable check, or
-    feature disabled for the action class) nothing is rendered —
+    panel). The render must show the stable redaction markers returned
+    by the action-audit readback API for verification command, output,
+    and note fields, not raw command or historical output details; the
+    operator still sees whether Pulse ran the read-after-write probe and
+    whether it confirmed the intended state. When `verification.ran` is
+    false (no derivable check, or feature disabled for the action class)
+    nothing is rendered —
     operators must not see fabricated "verified" claims for actions
     where Pulse cannot read back.
 

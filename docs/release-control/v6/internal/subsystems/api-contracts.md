@@ -1006,12 +1006,16 @@ the canonical monitored-system blocked payload.
    `ran`, `command`, `output`, `success`, `ranAt`, and `note`. API
    consumers (specifically the Resource Action History on the
    infrastructure detail drawer) must round-trip the verification
-   block verbatim and render it as a distinct outcome row alongside
-   the dispatch `result`. Operators see what command Pulse ran as the
-   read-after-write check, what it returned, and whether it confirmed
-   the intended state — not just "command exit 0." When `ran=false`
-   (no derivable check, or feature disabled for the action class)
-   nothing must be rendered, matching the no-fabrication rule.
+   block as the action-audit readback API returns it and render it as a
+   distinct outcome row alongside the dispatch `result`. The `command`,
+   `output`, and `note` fields are redacted to stable markers at
+   persistence/readback boundaries, including migrated legacy rows, so
+   consumers must not expect or re-expose raw historical verification
+   details. Operators see whether Pulse ran the read-after-write probe
+   and whether it confirmed the intended state, not raw command output.
+   When `ran=false` (no derivable check, or feature disabled for the
+   action class) nothing must be rendered, matching the no-fabrication
+   rule.
    The patrol-status response (`PatrolStatusResponse`) carries an
    optional `trust` block of type `ai.FindingsTrustSummary` that
    surfaces the trust-metrics snapshot for the Patrol page. The block
@@ -1417,8 +1421,10 @@ dispatches carry a `verification` block — the agent-stable
 projection of the broker's read-after-write probe — with `ran`,
 `success`, `command`, `note`, `ranAt` so agents close the
 "did it actually work?" loop without a follow-up audit fetch;
-raw action and verification commands follow the same `ai:execute`
-redaction rule on the stream;
+action command disclosure follows the governed `ai:execute` rule, while
+verification command/note details in the action-audit projection remain
+stable redaction markers; stable error-token prefixes remain verbatim
+for agent branching;
 refused dispatches omit `verification` because the probe never
 runs) — and `heartbeat` every 15 seconds so an idle connection
 can confirm the stream is alive. Each event carries a monotonic ID
@@ -1612,8 +1618,9 @@ with their stable token prefixes (`resource_remediation_locked:`,
 (shared `AgentResourceActionVerification` projection, shared
 `projectAgentResourceVerification` helper) so the bundle's depth
 view and the doorbell speak the same vocabulary on probe outcomes;
-action and verification command text follows the same `ai:execute`
-redaction rule.
+action and verification command/note text follows the same stable-marker
+redaction rule as action-audit readback, while stable status/error
+prefixes remain verbatim.
 The shape is intentionally narrower than the full internal types
 so agents see a stable agent-paradigm contract, decoupled from
 internal type evolution.

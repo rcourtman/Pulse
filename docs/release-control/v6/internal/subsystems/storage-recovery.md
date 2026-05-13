@@ -259,9 +259,12 @@ bypass the API fail-closed execution gate.
    context boundary: monitoring/read API tokens receive redacted approval,
    action, and verification command payloads (`commandRedacted:true`) unless
    they also hold action execution scope. Storage and recovery consumers may
-   display those redacted records as status or evidence, but must not derive
-   backup, restore, storage remediation, or execution authority from the event
-   stream or resource-context bundle.
+   display those redacted records as status or evidence, and action-audit
+   verification command/output/note details read back from migrated legacy rows
+   must remain stable redaction markers rather than raw historical details.
+   Storage and recovery consumers must not derive backup, restore, storage
+   remediation, or execution authority from the event stream or resource-context
+   bundle.
    The `previous_resolved_fix_summary` operational-memory field carried on
    findings across regressions follows the same scope: storage and recovery
    surfaces may render it as adjacent finding context but must not

@@ -953,8 +953,10 @@ runtime-Failed, or refused-before-dispatch with stable
 `plan_drift:` / `resource_remediation_locked:` error-token
 prefixes preserved verbatim; successful dispatches carry a
 `verification` block — the agent-stable projection of the
-broker's read-after-write probe — so agents close the
-"did it actually work?" loop without polling /api/actions/{id}),
+broker's read-after-write probe, with verification command/note
+details redacted to stable markers at the action-audit readback
+boundary — so agents close the "did it actually work?" loop without
+polling /api/actions/{id}),
 and a 15-second heartbeat keepalive.
 The broadcaster drops real published events for slow subscribers
 rather than blocking publishers, so the patrol-finding runtime, the
