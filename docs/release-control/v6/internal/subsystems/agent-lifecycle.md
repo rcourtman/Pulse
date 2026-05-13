@@ -263,6 +263,11 @@ profile and assignment columns, but embedded table framing must route through
    the one-time `authToken` only and must not also send the long-lived
    `X-API-Token` header. The header-backed `agent:report` fallback exists only
    for update-only re-registration when setup-token fetch is unavailable.
+   Canonical auto-register WebSocket semantics must distinguish first-time node
+   creation from idempotent existing-node refreshes: only newly created PVE/PBS
+   nodes may emit `node_auto_registered`, while matched existing nodes that
+   rotate or refresh credentials must emit a non-toast configuration refresh
+   such as `nodes_changed`.
    Shared `internal/api/` session and auth changes consumed by lifecycle
    routes must preserve durable principal IDs as the authorization key. Agent
    lifecycle surfaces may display contact email when supplied by the shared

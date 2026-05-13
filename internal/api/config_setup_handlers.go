@@ -800,7 +800,14 @@ func buildAutoRegisterEventData(req *AutoRegisterRequest, host string, actualNam
 	}
 }
 
-func (h *ConfigHandlers) notifyAutoRegistrationSuccess(ctx context.Context, req *AutoRegisterRequest, host string, actualName string, tokenID string) {
+func autoRegisterWebSocketEventType(created bool) string {
+	if created {
+		return "node_auto_registered"
+	}
+	return "nodes_changed"
+}
+
+func (h *ConfigHandlers) notifyAutoRegistrationSuccess(ctx context.Context, req *AutoRegisterRequest, host string, actualName string, tokenID string, created bool) {
 	if h.getMonitor(ctx) != nil && h.getMonitor(ctx).GetDiscoveryService() != nil {
 		log.Info().Msg("Triggering discovery refresh after auto-registration")
 		h.getMonitor(ctx).GetDiscoveryService().ForceRefresh()
@@ -813,7 +820,7 @@ func (h *ConfigHandlers) notifyAutoRegistrationSuccess(ctx context.Context, req 
 
 	nodeInfo := buildAutoRegisterEventData(req, host, actualName, tokenID)
 	h.wsHub.BroadcastMessage(websocket.Message{
-		Type:      "node_auto_registered",
+		Type:      autoRegisterWebSocketEventType(created),
 		Data:      nodeInfo,
 		Timestamp: time.Now().Format(time.RFC3339),
 	})
@@ -838,7 +845,7 @@ func (h *ConfigHandlers) notifyAutoRegistrationSuccess(ctx context.Context, req 
 	log.Info().
 		Str("host", host).
 		Str("name", actualName).
-		Str("type", "node_auto_registered").
+		Str("type", autoRegisterWebSocketEventType(created)).
 		Msg("Broadcasted auto-registration success via WebSocket")
 }
 
@@ -1204,6 +1211,7 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 		Str("source", registrationSource).
 		Msg("Using caller-supplied token for canonical /api/auto-register completion")
 	// Add the node to configuration
+	created := false
 	if req.Type == "pve" {
 		pveDisplayName := h.disambiguateNodeName(r.Context(), serverName, host, "pve")
 		pveNode := config.PVEInstance{
@@ -1278,6 +1286,7 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			}
 			h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances, pveNode)
 			h.normalizePVEConfigState(r.Context())
+			created = true
 		}
 	} else if req.Type == "pbs" {
 		pbsDisplayName := h.disambiguateNodeName(r.Context(), serverName, host, "pbs")
@@ -1353,6 +1362,7 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 				return
 			}
 			h.getConfig(r.Context()).PBSInstances = append(h.getConfig(r.Context()).PBSInstances, pbsNode)
+			created = true
 		}
 	}
 
@@ -1379,7 +1389,7 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 		}()
 	}
 
-	h.notifyAutoRegistrationSuccess(r.Context(), req, host, actualName, fullTokenID)
+	h.notifyAutoRegistrationSuccess(r.Context(), req, host, actualName, fullTokenID, created)
 
 	response := buildCanonicalAutoRegisterResponse(req, host, actualName, fullTokenID, tokenValue)
 

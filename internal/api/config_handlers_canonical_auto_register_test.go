@@ -724,6 +724,15 @@ func TestBuildAutoRegisterEventDataUsesCanonicalAutoRegisterTokenIdentity(t *tes
 	}
 }
 
+func TestAutoRegisterWebSocketEventTypeDistinguishesCreatedFromExistingRefresh(t *testing.T) {
+	if got := autoRegisterWebSocketEventType(true); got != "node_auto_registered" {
+		t.Fatalf("created event type = %q, want node_auto_registered", got)
+	}
+	if got := autoRegisterWebSocketEventType(false); got != "nodes_changed" {
+		t.Fatalf("existing-node refresh event type = %q, want nodes_changed", got)
+	}
+}
+
 func TestHandleCanonicalAutoRegister_PVERotatesStoredPulseTokenOnCallerReplacement(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)

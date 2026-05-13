@@ -396,6 +396,12 @@ bypass the API fail-closed execution gate.
 11. Preserve the canonical setup-script `source="script"` marker through those same shared auto-register helpers, and reject non-canonical source labels there, so later canonical reruns can keep treating script-confirmed tokens differently from agent-created tokens without reviving arbitrary caller-label compatibility.
 12. Preserve the canonical auto-register node-type boundary in those same shared helpers so only supported `pve` and `pbs` registrations can complete, and unsupported runtime labels cannot bleed fake node identities into adjacent transport or recovery-adjacent state.
 13. Preserve the canonical auto-register token-identity boundary in those same shared helpers so only Pulse-managed `pulse-monitor@{pve|pbs}!pulse-<canonical-scope-slug>` token IDs matching the requested node type can complete, and arbitrary, cross-type, or non-Pulse-managed token identities cannot bleed into adjacent transport or recovery-adjacent state.
+    Preserve canonical auto-register event intent in those same shared helpers:
+    only first-time node creation may emit the toast-bearing
+    `node_auto_registered` WebSocket event, while idempotent existing-node
+    refreshes must stay on non-toast configuration-change events so adjacent
+    storage/recovery transport does not infer a second protected-system
+    admission from a credential refresh.
     That same adjacent transport boundary must also preserve disabled
     provider-connection admission truth. Storage- and recovery-adjacent setup
     surfaces may reflect zero-delta or removal-only monitored-system previews

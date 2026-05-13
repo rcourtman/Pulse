@@ -252,6 +252,11 @@ checks, merge tenants, or become the source of truth for telemetry freshness.
     That same shared boundary also owns reachable-host selection truth for canonical Proxmox registration: runtime callers may propose ordered `candidateHosts`, but the API contract must persist and echo the first candidate Pulse can actually reach instead of freezing the caller's rejected first preference into the stored node endpoint.
     That same canonical payload contract also owns strict-TLS truth for that selected host: `/api/auto-register` may only persist `VerifySSL=true` when Pulse actually captured a certificate fingerprint for the selected candidate, and it must not pretend public-CA verification is safe after every candidate fingerprint probe failed.
     That same contract now owns stale-marker verification as well: setup-token-authenticated `checkRegistration` requests may omit token completion fields and must answer `{registered:boolean}` from canonical candidate-host matching so runtime repair can distinguish real registrations from stale local marker files without rotating tokens first.
+    That same contract owns auto-register WebSocket event intent: a successful
+    completion that creates a new PVE/PBS node may broadcast
+    `node_auto_registered`, but successful idempotent matches or credential
+    refreshes for an already configured node must use a non-toast config-change
+    event such as `nodes_changed` instead of re-announcing first registration.
     That same shared setup contract also owns teardown symmetry for script-managed Proxmox nodes: `/api/auto-unregister` must accept the canonical `type`, normalized `host`, explicit `serverName`, optional canonical `tokenId`, request-body `authToken`, and `source:"script"` payload, and it must answer the same canonical success envelope on both real removals and idempotent no-op reruns so browser/runtime callers do not invent a second uninstall vocabulary.
     That same setup-script payload contract owns the Proxmox permission shape
     for generated scripts, runtime-side host-agent setup, and installer
