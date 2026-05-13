@@ -1,9 +1,26 @@
+import os
+from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 
-from contract_audit import audit_contract_payload, parse_args
+from contract_audit import audit_contract_payload, parse_args, repo_roots_for_status
 
 
 class ContractAuditTest(unittest.TestCase):
+    def git(self, repo_root: Path, *args: str) -> subprocess.CompletedProcess:
+        env = os.environ.copy()
+        for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"):
+            env.pop(name, None)
+        return subprocess.run(
+            ["git", *args],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
     def test_parse_args_accepts_staged_flag(self) -> None:
         args = parse_args(["--check", "--staged"])
         self.assertTrue(args.check)
@@ -366,6 +383,106 @@ Cross-repo relay ownership is explicit.
         )
 
         self.assertEqual(report["errors"], [])
+
+    def test_audit_contract_payload_resolves_sibling_repos_from_linked_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir) / "workspace"
+            repo_root = workspace / "repos" / "pulse"
+            sibling_root = workspace / "repos" / "pulse-mobile"
+            linked_worktree = workspace / ".worktrees" / "pulse-contract-audit-sibling-roots"
+            repo_root.mkdir(parents=True)
+            sibling_file = sibling_root / "src" / "relay" / "client.ts"
+            sibling_file.parent.mkdir(parents=True)
+            sibling_file.write_text("export const relayClient = true;\n", encoding="utf-8")
+
+            self.git(repo_root, "init")
+            (repo_root / "README.md").write_text("pulse\n", encoding="utf-8")
+            self.git(repo_root, "add", "README.md")
+            self.git(
+                repo_root,
+                "-c",
+                "user.name=Pulse Test",
+                "-c",
+                "user.email=pulse-test@example.invalid",
+                "commit",
+                "-m",
+                "initial",
+            )
+            self.git(repo_root, "worktree", "add", "--detach", str(linked_worktree), "HEAD")
+
+            status_payload = {
+                "scope": {
+                    "active_repos": ["pulse", "pulse-mobile"],
+                },
+                "lanes": [{"id": "L7"}],
+            }
+            repo_roots = repo_roots_for_status(status_payload, repo_root=linked_worktree)
+            self.assertEqual(repo_roots["pulse"], repo_root.resolve())
+            self.assertEqual(repo_roots["pulse-mobile"], sibling_root.resolve())
+
+            registry_payload = {
+                "subsystems": [
+                    {
+                        "id": "relay-runtime",
+                        "lane": "L7",
+                        "contract": "docs/release-control/v6/internal/subsystems/relay-runtime.md",
+                    }
+                ]
+            }
+            contract_texts = {
+                "docs/release-control/v6/internal/subsystems/relay-runtime.md": """# Relay Runtime Contract
+
+## Contract Metadata
+
+```json
+{
+  "subsystem_id": "relay-runtime",
+  "lane": "L7",
+  "contract_file": "docs/release-control/v6/internal/subsystems/relay-runtime.md",
+  "status_file": "docs/release-control/v6/internal/status.json",
+  "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
+  "dependency_subsystem_ids": []
+}
+```
+
+## Purpose
+
+Own relay runtime truth.
+
+## Canonical Files
+
+1. `pulse-mobile:src/relay/client.ts`
+
+## Shared Boundaries
+
+1. None.
+
+## Extension Points
+
+1. Add mobile relay reconnect behavior through `pulse-mobile:src/relay/`
+
+## Forbidden Paths
+
+1. Ad hoc mobile relay reconnect state.
+
+## Completion Obligations
+
+1. Keep mobile relay runtime changes tied to tests.
+
+## Current State
+
+Cross-repo relay ownership is explicit.
+""",
+            }
+
+            report = audit_contract_payload(
+                registry_payload=registry_payload,
+                status_payload=status_payload,
+                contract_texts=contract_texts,
+                repo_root=linked_worktree,
+            )
+
+            self.assertEqual(report["errors"], [])
 
     def test_audit_contract_payload_rejects_missing_extension_point_reference(self) -> None:
         registry_payload = {

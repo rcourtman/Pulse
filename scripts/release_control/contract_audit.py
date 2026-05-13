@@ -12,7 +12,12 @@ from typing import Any
 
 from canonical_completion_guard import REPO_ROOT, subsystem_matches_path
 from control_plane import DEFAULT_CONTROL_PLANE
-from repo_file_io import load_repo_json
+from repo_file_io import (
+    canonical_repo_id,
+    canonical_repo_root,
+    canonical_workspace_repos_root,
+    load_repo_json,
+)
 from subsystem_contracts import tracked_contract_files
 
 
@@ -68,7 +73,6 @@ PATH_SUFFIXES = (
     ".yaml",
     ".yml",
 )
-WORKSPACE_REPOS_ROOT = REPO_ROOT.parent
 
 
 def sorted_casefold(values: list[str]) -> list[str]:
@@ -110,25 +114,34 @@ def looks_like_repo_path(token: str) -> bool:
     return "/" in candidate or candidate.endswith(PATH_SUFFIXES)
 
 
-def repo_roots_for_status(status_payload: dict[str, Any]) -> dict[str, Path]:
+def repo_roots_for_status(status_payload: dict[str, Any], *, repo_root: Path | None = None) -> dict[str, Path]:
+    root = repo_root or REPO_ROOT
+    local_repo_id = canonical_repo_id(root)
+    local_repo_root = canonical_repo_root(root)
+    workspace_repos_root = canonical_workspace_repos_root(root)
     active_repos = [
         repo_id
         for repo_id in status_payload.get("scope", {}).get("active_repos", [])
         if isinstance(repo_id, str) and repo_id.strip()
     ]
-    repo_roots = {REPO_ROOT.name: REPO_ROOT}
+    repo_roots = {local_repo_id: local_repo_root}
     for repo_id in active_repos:
-        if repo_id == REPO_ROOT.name:
+        if repo_id == local_repo_id:
             continue
-        repo_roots[repo_id] = WORKSPACE_REPOS_ROOT / repo_id
+        repo_roots[repo_id] = workspace_repos_root / repo_id
     return repo_roots
 
 
-def resolve_repo_path_token(token: str, *, repo_roots: dict[str, Path]) -> Path | None:
+def resolve_repo_path_token(
+    token: str,
+    *,
+    repo_roots: dict[str, Path],
+    default_repo_id: str,
+) -> Path | None:
     raw = token.rstrip("/") if token.endswith("/") else token
     if not raw:
         return None
-    repo_id = REPO_ROOT.name
+    repo_id = default_repo_id
     repo_rel = raw
     if ":" in raw:
         repo_id, repo_rel = raw.split(":", 1)
@@ -160,8 +173,9 @@ def validate_repo_path_token(
     heading: str,
     errors: list[str],
     repo_roots: dict[str, Path],
+    default_repo_id: str,
 ) -> None:
-    resolved = resolve_repo_path_token(token, repo_roots=repo_roots)
+    resolved = resolve_repo_path_token(token, repo_roots=repo_roots, default_repo_id=default_repo_id)
     if resolved is None:
         errors.append(f"{rel} {heading} contains non-clean repo-relative path {token!r}")
         return
@@ -203,6 +217,7 @@ def audit_contract_text(
     content: str,
     *,
     repo_roots: dict[str, Path],
+    default_repo_id: str,
 ) -> tuple[dict[str, Any], list[str]]:
     errors: list[str] = []
     path_references: list[dict[str, str]] = []
@@ -258,6 +273,7 @@ def audit_contract_text(
                             heading=heading,
                             errors=errors,
                             repo_roots=repo_roots,
+                            default_repo_id=default_repo_id,
                         )
                         path_references.append({"heading": heading, "path": token})
             if heading == "## Extension Points":
@@ -270,6 +286,7 @@ def audit_contract_text(
                                 heading=heading,
                                 errors=errors,
                                 repo_roots=repo_roots,
+                                default_repo_id=default_repo_id,
                             )
                             path_references.append({"heading": heading, "path": token})
 
@@ -325,6 +342,7 @@ def audit_contract_payload(
     registry_payload: dict[str, Any],
     status_payload: dict[str, Any],
     contract_texts: dict[str, str],
+    repo_root: Path | None = None,
 ) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -348,7 +366,9 @@ def audit_contract_payload(
         for subsystem in registry_subsystems
         if isinstance(subsystem, dict) and isinstance(subsystem.get("contract"), str)
     }
-    repo_roots = repo_roots_for_status(status_payload)
+    local_repo_root = repo_root or REPO_ROOT
+    default_repo_id = canonical_repo_id(local_repo_root)
+    repo_roots = repo_roots_for_status(status_payload, repo_root=local_repo_root)
     expected_subsystem_ids = {
         str(subsystem.get("id", "")).strip()
         for subsystem in registry_subsystems
@@ -367,7 +387,12 @@ def audit_contract_payload(
     seen_subsystem_ids: set[str] = set()
 
     for rel in sorted(actual_contracts):
-        parsed, parse_errors = audit_contract_text(rel, contract_texts[rel], repo_roots=repo_roots)
+        parsed, parse_errors = audit_contract_text(
+            rel,
+            contract_texts[rel],
+            repo_roots=repo_roots,
+            default_repo_id=default_repo_id,
+        )
         errors.extend(parse_errors)
         metadata = parsed.get("metadata")
         subsystem = expected_contracts.get(rel)
@@ -491,6 +516,7 @@ def audit_contract_payload(
                     heading="## Shared Boundaries",
                     errors=errors,
                     repo_roots=repo_roots,
+                    default_repo_id=default_repo_id,
                 )
                 actual_shared_paths.append(shared_path)
                 if shared_path in seen_shared_paths:
