@@ -466,9 +466,8 @@ type PatrolService struct {
 	updateSafetyWatcher *UpdateSafetyWatcher
 	// PDM alert bridge -- polls the PDM resource list on each patrol cycle
 	// and emits reliability findings for offline nodes and failed guests.
-	// Nil source at MVP makes Observe a no-op; the real HTTP client is a
-	// follow-on.
-	pdmAlertBridge      *pdmAlertBridge
+	// Nil source makes Observe a no-op when PDM env configuration is absent.
+	pdmAlertBridge *pdmAlertBridge
 	// ReadState provides typed read-only views over resource state (VMs, nodes, hosts, etc.).
 	// This is injected separately from stateProvider since stateProvider also contains
 	// non-resource telemetry (alerts, backups, connection health) that isn't modeled as resources yet.
@@ -692,6 +691,6 @@ func NewPatrolService(aiService *Service, stateProvider StateProvider) *PatrolSe
 	p.stormThrottler = newFindingStormThrottler()
 	p.findings.SetStormThrottler(p.stormThrottler)
 	p.updateSafetyWatcher = newUpdateSafetyWatcher()
-	p.pdmAlertBridge = newPDMAlertBridge(nil)
+	p.pdmAlertBridge = newPDMAlertBridge(newPDMAlertSourceFromEnv())
 	return p
 }

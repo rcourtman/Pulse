@@ -6,10 +6,8 @@
 // into a known-offline state. Resources that come back online emit a lazy
 // resolve sentinel on the next observe trip -- there is no sweep goroutine.
 //
-// MVP: the real HTTP client is a follow-on; this lane ships only the
-// interface, the diff machinery, and a nil-source guard at the call site.
-// pdmAlertBridgeConfig is reserved for the future env-based credential
-// surface; the MVP leaves it zero-valued.
+// The real HTTP source is enabled only when the full PDM_API_URL,
+// PDM_API_TOKEN, and PDM_API_TOKEN_SECRET environment contract is present.
 package ai
 
 import (
@@ -30,7 +28,7 @@ const (
 
 // pdmAlertSource is the interface the bridge uses to fetch resource
 // snapshots. Unit tests inject a deterministic fake; the real implementation
-// (future) makes an authenticated HTTP call to /api2/json/resources.
+// makes an authenticated HTTP call to /api2/extjs/resources/list.
 type pdmAlertSource interface {
 	ResourceList(ctx context.Context) ([]pdmResource, error)
 }
@@ -44,9 +42,12 @@ type pdmResource struct {
 	Status   string // "online", "offline", "running", "stopped", "failed", "unknown"
 }
 
-// pdmAlertBridgeConfig is reserved for the forward-compatible credential
-// surface (PDM_API_URL, PDM_API_TOKEN). MVP leaves it zero-valued.
-type pdmAlertBridgeConfig struct{}
+type pdmAlertBridgeConfig struct {
+	APIURL             string
+	APIToken           string
+	APITokenSecret     string
+	InsecureSkipVerify bool
+}
 
 // pdmAlertBridge diffs PDM resource status across observe trips.
 type pdmAlertBridge struct {
