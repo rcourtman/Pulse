@@ -325,6 +325,8 @@ func (p *VMwarePoller) syncConnections() {
 
 			provider, err := p.newProvider(instance)
 			if err != nil {
+				at := time.Now().UTC()
+				p.recordConnectionFailureLocked(orgID, connectionID, err, at)
 				log.Warn().
 					Str("component", "vmware_poller").
 					Str("action", "build_provider").
@@ -368,7 +370,7 @@ func (p *VMwarePoller) syncConnections() {
 			}
 		}
 
-		if len(providers) == 0 {
+		if len(providers) == 0 && len(activeConnections) == 0 {
 			delete(p.providersByOrg, orgID)
 			delete(p.configsByOrg, orgID)
 			delete(p.statusByOrg, orgID)

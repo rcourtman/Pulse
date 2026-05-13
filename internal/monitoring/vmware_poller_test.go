@@ -225,6 +225,44 @@ func TestVMwarePollerConnectionSummariesCaptureFailuresWithoutClearingObservedSu
 	}
 }
 
+func TestVMwarePollerSyncRecordsProviderConstructionFailure(t *testing.T) {
+	mtp, persistence := newTestTenantPersistence(t)
+	connection := config.NewVMwareVCenterInstance()
+	connection.ID = "vc-build-fail"
+	connection.Host = "vc.build-fail.local"
+	connection.Username = "administrator@vsphere.local"
+	connection.Password = "secret"
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{connection}); err != nil {
+		t.Fatalf("SaveVMwareConfig() error = %v", err)
+	}
+
+	poller := NewVMwarePoller(mtp, time.Minute)
+	poller.newProvider = func(config.VMwareVCenterInstance) (vmwarePollerProvider, error) {
+		return nil, &vmware.ConnectionError{
+			Category: "auth",
+			Message:  "VMware credentials were rejected",
+		}
+	}
+
+	poller.syncConnections()
+	poller.syncConnections()
+
+	if providers := poller.providersByOrg["default"]; len(providers) != 0 {
+		t.Fatalf("expected provider construction failure to leave no providers, got %d", len(providers))
+	}
+
+	summary := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{connection})[connection.ID]
+	if summary.Poll == nil || summary.Poll.LastAttemptAt == nil || summary.Poll.LastError == nil {
+		t.Fatalf("expected provider construction failure in poll summary, got %+v", summary.Poll)
+	}
+	if summary.Poll.ConsecutiveFailures != 2 {
+		t.Fatalf("consecutive failures = %d, want 2", summary.Poll.ConsecutiveFailures)
+	}
+	if summary.Poll.LastError.Category != "auth" || !strings.Contains(summary.Poll.LastError.Message, "credentials were rejected") {
+		t.Fatalf("unexpected provider construction error summary: %+v", summary.Poll.LastError)
+	}
+}
+
 type failingVMwarePollerProvider struct {
 	err error
 }
