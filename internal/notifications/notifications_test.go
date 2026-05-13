@@ -3022,6 +3022,71 @@ func TestProcessQueuedNotification_UnknownType(t *testing.T) {
 	}
 }
 
+func TestProcessQueuedNotification_QuietHoursReplayUsesQueueRetryTime(t *testing.T) {
+	queue, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create queue: %v", err)
+	}
+	defer func() { _ = queue.Stop() }()
+
+	replayAt := time.Now().Add(time.Hour).UTC()
+	alert := &alerts.Alert{
+		ID:    "quiet-hours-alert",
+		Type:  "cpu",
+		Level: alerts.AlertLevelWarning,
+		Metadata: map[string]interface{}{
+			alerts.MetadataQuietHoursSuppressed:        true,
+			alerts.MetadataQuietHoursSuppressionReason: "non-critical",
+			alerts.MetadataQuietHoursReplayAt:          replayAt.Format(time.RFC3339),
+		},
+	}
+	jobs := buildNotificationDeliveryJobs(
+		EmailConfig{Enabled: true, SMTPHost: "smtp.example.com", SMTPPort: 587, From: "alerts@example.com", To: []string{"ops@example.com"}},
+		nil,
+		AppriseConfig{},
+		[]*alerts.Alert{alert},
+		eventAlert,
+		time.Time{},
+	)
+
+	nm := &NotificationManager{}
+	if failed := nm.enqueueNotificationJobs(queue, jobs); failed {
+		t.Fatal("did not expect quiet-hours replay enqueue to fall back")
+	}
+
+	pending, err := queue.GetPending(10)
+	if err != nil {
+		t.Fatalf("GetPending failed: %v", err)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("expected quiet-hours replay notification to wait for retry time, got %d pending", len(pending))
+	}
+
+	var queuedType string
+	var nextRetryAt int64
+	if err := queue.db.QueryRow(`SELECT type, next_retry_at FROM notification_queue WHERE type = ?`, "email").Scan(&queuedType, &nextRetryAt); err != nil {
+		t.Fatalf("failed to read queued quiet-hours notification: %v", err)
+	}
+	if queuedType != "email" {
+		t.Fatalf("queued type = %q, want email", queuedType)
+	}
+	if nextRetryAt != replayAt.Unix() {
+		t.Fatalf("next_retry_at = %d, want %d", nextRetryAt, replayAt.Unix())
+	}
+
+	readyAt := time.Now().Add(-time.Second).Unix()
+	if _, err := queue.db.Exec(`UPDATE notification_queue SET next_retry_at = ? WHERE type = ?`, readyAt, "email"); err != nil {
+		t.Fatalf("failed to move quiet-hours replay notification into retry window: %v", err)
+	}
+	pending, err = queue.GetPending(10)
+	if err != nil {
+		t.Fatalf("GetPending after replay window failed: %v", err)
+	}
+	if len(pending) != 1 || pending[0].ID == "" {
+		t.Fatalf("expected quiet-hours replay notification to become pending, got %#v", pending)
+	}
+}
+
 func TestGetQueue_NilQueue(t *testing.T) {
 	nm := &NotificationManager{}
 

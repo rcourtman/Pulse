@@ -8,6 +8,18 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	// MetadataQuietHoursSuppressed marks notifications that were held by alert
+	// quiet-hours policy and must be replayed by the notification queue.
+	MetadataQuietHoursSuppressed = "quietHoursSuppressed"
+	// MetadataQuietHoursSuppressionReason records the quiet-hours rule that
+	// deferred notification delivery.
+	MetadataQuietHoursSuppressionReason = "quietHoursSuppressionReason"
+	// MetadataQuietHoursReplayAt stores the earliest RFC3339 UTC time that the
+	// notification queue may retry delivery.
+	MetadataQuietHoursReplayAt = "quietHoursReplayAt"
+)
+
 // checkFlappingLocked detects alert flapping and returns whether the alert
 // should be suppressed and whether this call is the first transition into
 // the flapping state for the current cooldown window. justTransitioned is
@@ -134,13 +146,17 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 	}
 
 	if suppressed, reason := m.shouldSuppressNotification(alert); suppressed {
+		replayAt := m.quietHoursReplayAt()
+		markQuietHoursNotificationReplay(alert, reason, replayAt)
 		log.Debug().
 			Str("alertID", alert.ID).
 			Str("type", alert.Type).
 			Str("level", string(alert.Level)).
 			Str("quietHoursRule", reason).
-			Msg("Alert notification suppressed during quiet hours")
-		return false
+			Time("replayAt", replayAt).
+			Msg("Alert notification deferred during quiet hours")
+	} else {
+		clearQuietHoursNotificationReplay(alert)
 	}
 
 	if isMonitorOnlyAlert(alert) {
@@ -340,8 +356,82 @@ func (m *Manager) shouldSuppressNotification(alert *Alert) (bool, string) {
 	return false, ""
 }
 
-// ShouldSuppressNotification checks if a notification should be suppressed
-// during quiet hours. This is used by paths that bypass dispatchAlert, such as escalation.
+func (m *Manager) quietHoursReplayAt() time.Time {
+	nowFn := m.now
+	if nowFn == nil {
+		nowFn = time.Now
+	}
+	now := nowFn()
+
+	loc := m.quietHoursLoc
+	if loc == nil {
+		var err error
+		loc, err = time.LoadLocation(m.config.Schedule.QuietHours.Timezone)
+		if err != nil {
+			log.Warn().Err(err).Str("timezone", m.config.Schedule.QuietHours.Timezone).Msg("failed to load timezone for quiet-hours replay, using local time")
+			loc = time.Local
+		}
+		m.quietHoursLoc = loc
+	}
+
+	localNow := now.In(loc).Truncate(time.Minute)
+	startTime, startErr := time.ParseInLocation("15:04", m.config.Schedule.QuietHours.Start, loc)
+	endTime, endErr := time.ParseInLocation("15:04", m.config.Schedule.QuietHours.End, loc)
+	if startErr != nil || endErr != nil {
+		return now.Add(time.Minute).UTC()
+	}
+
+	startTime = time.Date(localNow.Year(), localNow.Month(), localNow.Day(), startTime.Hour(), startTime.Minute(), 0, 0, loc)
+	endTime = time.Date(localNow.Year(), localNow.Month(), localNow.Day(), endTime.Hour(), endTime.Minute(), 0, 0, loc)
+	endExclusive := endTime.Add(time.Minute)
+	if endTime.Before(startTime) && !localNow.Before(startTime) {
+		endExclusive = endExclusive.AddDate(0, 0, 1)
+	}
+
+	if !endExclusive.After(localNow) {
+		return now.Add(time.Minute).UTC()
+	}
+	return endExclusive.UTC()
+}
+
+func markQuietHoursNotificationReplay(alert *Alert, reason string, replayAt time.Time) {
+	if alert == nil {
+		return
+	}
+	if alert.Metadata == nil {
+		alert.Metadata = make(map[string]interface{}, 3)
+	}
+	alert.Metadata[MetadataQuietHoursSuppressed] = true
+	alert.Metadata[MetadataQuietHoursSuppressionReason] = reason
+	alert.Metadata[MetadataQuietHoursReplayAt] = replayAt.UTC().Format(time.RFC3339)
+}
+
+func clearQuietHoursNotificationReplay(alert *Alert) {
+	if alert == nil || alert.Metadata == nil {
+		return
+	}
+	delete(alert.Metadata, MetadataQuietHoursSuppressed)
+	delete(alert.Metadata, MetadataQuietHoursSuppressionReason)
+	delete(alert.Metadata, MetadataQuietHoursReplayAt)
+}
+
+func hasQuietHoursNotificationReplay(alert *Alert) bool {
+	if alert == nil || alert.Metadata == nil {
+		return false
+	}
+	if replayAt, ok := alert.Metadata[MetadataQuietHoursReplayAt].(string); ok && strings.TrimSpace(replayAt) != "" {
+		return true
+	}
+	if suppressed, ok := alert.Metadata[MetadataQuietHoursSuppressed].(bool); ok {
+		return suppressed
+	}
+	return false
+}
+
+// ShouldSuppressNotification checks whether a notification must be dropped at
+// the alert-policy layer. Quiet-hours matches are replayable, so this helper
+// annotates the alert for notification-queue retry and returns false to let
+// bypass callers hand the alert to the delivery owner.
 func (m *Manager) ShouldSuppressNotification(alert *Alert) bool {
 	if alert == nil {
 		return false
@@ -352,19 +442,26 @@ func (m *Manager) ShouldSuppressNotification(alert *Alert) bool {
 
 	suppressed, reason := m.shouldSuppressNotification(alert)
 	if suppressed {
+		replayAt := m.quietHoursReplayAt()
+		markQuietHoursNotificationReplay(alert, reason, replayAt)
 		log.Debug().
 			Str("alertID", alert.ID).
 			Str("type", alert.Type).
 			Str("level", string(alert.Level)).
 			Str("quietHoursRule", reason).
-			Msg("Notification suppressed during quiet hours")
+			Time("replayAt", replayAt).
+			Msg("Notification deferred during quiet hours")
+		return false
 	}
-	return suppressed
+	clearQuietHoursNotificationReplay(alert)
+	return false
 }
 
-// ShouldSuppressResolvedNotification checks if a recovery notification should be suppressed
-// during quiet hours. Recovery notifications follow the same quiet hours rules as their
-// corresponding alerts - if the original alert would have been suppressed, so is the recovery.
+// ShouldSuppressResolvedNotification checks if a recovery notification should be suppressed.
+// Recovery notifications keep the existing quiet-hours rule unless the firing
+// notification was already deferred into the owned queue replay path; in that
+// case the resolved notification is also allowed to enter the queue so the
+// close-the-loop delivery is not lost.
 func (m *Manager) ShouldSuppressResolvedNotification(alert *Alert) bool {
 	if alert == nil {
 		return false
@@ -381,7 +478,8 @@ func (m *Manager) ShouldSuppressResolvedNotification(alert *Alert) bool {
 		return true
 	}
 
-	if alert.LastNotified == nil {
+	quietHoursReplay := hasQuietHoursNotificationReplay(alert)
+	if alert.LastNotified == nil && !quietHoursReplay {
 		log.Debug().
 			Str("alertID", alert.ID).
 			Str("type", alert.Type).
@@ -391,6 +489,15 @@ func (m *Manager) ShouldSuppressResolvedNotification(alert *Alert) bool {
 
 	suppressed, reason := m.shouldSuppressNotification(alert)
 	if suppressed {
+		if quietHoursReplay {
+			log.Debug().
+				Str("alertID", alert.ID).
+				Str("type", alert.Type).
+				Str("level", string(alert.Level)).
+				Str("quietHoursRule", reason).
+				Msg("Recovery notification allowed into quiet-hours replay queue")
+			return false
+		}
 		log.Debug().
 			Str("alertID", alert.ID).
 			Str("type", alert.Type).

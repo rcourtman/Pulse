@@ -80,11 +80,51 @@ func TestShouldSuppressNotificationQuietHours(t *testing.T) {
 		}
 	})
 
-	t.Run("public suppression helper mirrors quiet hours policy", func(t *testing.T) {
+	t.Run("public suppression helper defers quiet hours through queue metadata", func(t *testing.T) {
 		m := newManagerWithQuietHoursSuppress(QuietHoursSuppression{Offline: true})
 		alert := &Alert{ID: "offline-public", Type: "connectivity", Level: AlertLevelCritical}
-		if !m.ShouldSuppressNotification(alert) {
-			t.Fatal("expected public quiet-hours suppression helper to return true")
+		if m.ShouldSuppressNotification(alert) {
+			t.Fatal("expected public quiet-hours helper to defer rather than drop")
+		}
+		if alert.Metadata[MetadataQuietHoursSuppressed] != true {
+			t.Fatalf("expected quiet-hours replay metadata, got %#v", alert.Metadata)
+		}
+		if alert.Metadata[MetadataQuietHoursSuppressionReason] != "offline" {
+			t.Fatalf("expected offline suppression reason, got %#v", alert.Metadata[MetadataQuietHoursSuppressionReason])
+		}
+	})
+
+	t.Run("dispatch annotates quiet-hours replay instead of dropping callback", func(t *testing.T) {
+		m := newManagerWithQuietHoursSuppress(QuietHoursSuppression{})
+		m.config.ActivationState = ActivationActive
+		var dispatched *Alert
+		m.SetAlertCallback(func(alert *Alert) {
+			dispatched = alert
+		})
+
+		alert := &Alert{ID: "warn-deferred", Type: "cpu", Level: AlertLevelWarning}
+		if !m.dispatchAlert(alert, false) {
+			t.Fatal("expected quiet-hours suppressed alert to dispatch for queued replay")
+		}
+		if dispatched == nil {
+			t.Fatal("expected alert callback to receive quiet-hours deferred alert")
+		}
+		if dispatched.Metadata[MetadataQuietHoursSuppressed] != true {
+			t.Fatalf("expected quiet-hours suppression metadata on dispatched alert, got %#v", dispatched.Metadata)
+		}
+		if dispatched.Metadata[MetadataQuietHoursSuppressionReason] != "non-critical" {
+			t.Fatalf("expected non-critical suppression reason, got %#v", dispatched.Metadata[MetadataQuietHoursSuppressionReason])
+		}
+		rawReplayAt, ok := dispatched.Metadata[MetadataQuietHoursReplayAt].(string)
+		if !ok || rawReplayAt == "" {
+			t.Fatalf("expected replay timestamp metadata, got %#v", dispatched.Metadata[MetadataQuietHoursReplayAt])
+		}
+		replayAt, err := time.Parse(time.RFC3339, rawReplayAt)
+		if err != nil {
+			t.Fatalf("expected RFC3339 replay timestamp, got %q: %v", rawReplayAt, err)
+		}
+		if !replayAt.After(m.now()) {
+			t.Fatalf("expected replay timestamp after quiet-hours suppression time, got %s", replayAt)
 		}
 	})
 
@@ -111,6 +151,23 @@ func TestShouldSuppressNotificationQuietHours(t *testing.T) {
 		}
 		if !m.ShouldSuppressResolvedNotification(alert) {
 			t.Fatal("expected recovery notification to be suppressed when LastNotified is nil")
+		}
+	})
+
+	t.Run("resolved notifications are not dropped when firing alert was deferred for quiet hours", func(t *testing.T) {
+		m := newManagerWithQuietHoursSuppress(QuietHoursSuppression{})
+		alert := &Alert{
+			ID:    "resolved-deferred",
+			Type:  "cpu",
+			Level: AlertLevelWarning,
+			Metadata: map[string]interface{}{
+				MetadataQuietHoursSuppressed:        true,
+				MetadataQuietHoursSuppressionReason: "non-critical",
+				MetadataQuietHoursReplayAt:          m.now().Add(time.Hour).UTC().Format(time.RFC3339),
+			},
+		}
+		if m.ShouldSuppressResolvedNotification(alert) {
+			t.Fatal("expected recovery notification to enter quiet-hours replay queue")
 		}
 	})
 }

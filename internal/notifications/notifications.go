@@ -342,6 +342,45 @@ func annotateResolvedMetadata(alert *alerts.Alert, resolvedAt time.Time) {
 	alert.Metadata[metadataResolvedAt] = resolvedAt.Format(time.RFC3339)
 }
 
+func quietHoursReplayAtForAlerts(alertList []*alerts.Alert, now time.Time) *time.Time {
+	var replayAt time.Time
+	for _, alert := range alertList {
+		if alert == nil || alert.Metadata == nil {
+			continue
+		}
+		raw, ok := alert.Metadata[alerts.MetadataQuietHoursReplayAt]
+		if !ok {
+			continue
+		}
+
+		var parsed time.Time
+		switch value := raw.(type) {
+		case string:
+			ts, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
+			if err != nil {
+				continue
+			}
+			parsed = ts
+		case time.Time:
+			parsed = value
+		case float64:
+			if value <= 0 {
+				continue
+			}
+			parsed = time.Unix(int64(value), 0)
+		}
+		if parsed.After(now) && (replayAt.IsZero() || parsed.After(replayAt)) {
+			replayAt = parsed
+		}
+	}
+
+	if replayAt.IsZero() {
+		return nil
+	}
+	replayAt = replayAt.UTC()
+	return &replayAt
+}
+
 // NormalizeAppriseConfig cleans and normalizes Apprise configuration values.
 func NormalizeAppriseConfig(cfg AppriseConfig) AppriseConfig {
 	normalized := cfg
@@ -1148,6 +1187,7 @@ func (n *NotificationManager) enqueueNotificationJobs(queue *NotificationQueue, 
 			Alerts:      job.Alerts,
 			Config:      configJSON,
 			MaxAttempts: 3,
+			NextRetryAt: quietHoursReplayAtForAlerts(job.Alerts, time.Now()),
 		}
 		if err := queue.Enqueue(notif); err != nil {
 			anyFailed = true
@@ -1160,6 +1200,9 @@ func (n *NotificationManager) enqueueNotificationJobs(queue *NotificationQueue, 
 			Str("type", job.Type).
 			Str("event", string(job.Event)).
 			Int("alertCount", len(job.Alerts))
+		if notif.NextRetryAt != nil {
+			logger = logger.Time("nextRetryAt", *notif.NextRetryAt)
+		}
 		if job.WebhookConfig != nil {
 			logger = logger.Str("webhookName", job.WebhookConfig.Name)
 		}
