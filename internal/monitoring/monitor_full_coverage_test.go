@@ -553,16 +553,55 @@ func TestMonitor_HostAgentManagement(t *testing.T) {
 		t.Errorf("UpdateHostAgentConfig failed: %v", err)
 	}
 
-	// Verify in state
+	// Verify desired config is persisted without rewriting the last reported
+	// applied command state.
 	hosts = m.state.GetHosts()
-	if len(hosts) != 1 || !hosts[0].CommandsEnabled {
-		t.Error("CommandsEnabled should be true")
+	if len(hosts) != 1 || hosts[0].CommandsEnabled {
+		t.Error("CommandsEnabled should remain the last reported agent value")
+	}
+	cfg := m.GetHostAgentConfig("host1")
+	if cfg.CommandsEnabled == nil || !*cfg.CommandsEnabled {
+		t.Fatalf("desired CommandsEnabled should be true, got %#v", cfg.CommandsEnabled)
 	}
 
 	// Test UpdateHostAgentConfig with non-existent host (should handle gracefully, creating metadata)
 	err = m.UpdateHostAgentConfig("host2", &enabled)
 	if err != nil {
 		t.Errorf("UpdateHostAgentConfig for new host failed: %v", err)
+	}
+}
+
+func TestMonitor_HostAgentConfigUpdatePreservesReportedCommandState(t *testing.T) {
+	m := &Monitor{
+		state:             models.NewState(),
+		hostMetadataStore: config.NewHostMetadataStore(t.TempDir(), nil),
+		config:            &config.Config{},
+	}
+	m.state.UpsertHost(models.Host{
+		ID:              "host-command-policy",
+		Hostname:        "host-command-policy",
+		CommandsEnabled: true,
+	})
+
+	desired := false
+	if err := m.UpdateHostAgentConfig("host-command-policy", &desired); err != nil {
+		t.Fatalf("UpdateHostAgentConfig: %v", err)
+	}
+
+	hosts := m.state.GetHosts()
+	if len(hosts) != 1 {
+		t.Fatalf("expected one host, got %d", len(hosts))
+	}
+	if !hosts[0].CommandsEnabled {
+		t.Fatalf("reported CommandsEnabled should remain true until the agent applies and reports the desired policy")
+	}
+
+	cfg := m.GetHostAgentConfig("host-command-policy")
+	if cfg.CommandsEnabled == nil || *cfg.CommandsEnabled {
+		t.Fatalf("desired CommandsEnabled = %#v, want false", cfg.CommandsEnabled)
+	}
+	if cfg.DesiredConfig == nil {
+		t.Fatal("expected desired config metadata for command-policy update")
 	}
 }
 

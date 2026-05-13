@@ -259,6 +259,41 @@ describe('useConnectionsLedger', () => {
         capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
       },
       {
+        id: 'agent:command-mismatch',
+        type: 'agent',
+        name: 'command-mismatch',
+        address: 'command-mismatch',
+        state: 'active',
+        stateReason: '',
+        enabled: true,
+        surfaces: ['host'],
+        scope: { host: true },
+        lastSeen: '2026-04-23T12:00:00Z',
+        lastError: null,
+        source: 'agent',
+        fleet: {
+          enrollmentState: 'enrolled',
+          livenessState: 'active',
+          versionDrift: 'current',
+          adapterHealth: 'healthy',
+          configRollout: 'reported',
+          credentialStatus: 'verified',
+          updateStatus: 'current',
+          remoteControl: 'enabled',
+          configDrift: { status: 'current' },
+          rollout: { status: 'current' },
+          credentialHealth: { status: 'verified', kind: 'agent-token' },
+          commandPolicy: {
+            status: 'enabled',
+            desired: 'disabled',
+            applied: 'enabled',
+            enforcement: 'drifted',
+            reason: 'agent still reports command execution enabled while desired policy disables it',
+          },
+        },
+        capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+      },
+      {
         id: 'agent:config-pending',
         type: 'agent',
         name: 'config-pending',
@@ -321,7 +356,7 @@ describe('useConnectionsLedger', () => {
 
     const { result } = renderHook(() => useConnectionsLedger());
 
-    await waitFor(() => expect(result.rows()).toHaveLength(6));
+    await waitFor(() => expect(result.rows()).toHaveLength(7));
     const byID = new Map(result.rows().map((row) => [row.id, row]));
 
     expect(byID.get('agent:drifted')?.fleetHighlights.map((signal) => signal.label)).toEqual([
@@ -340,6 +375,10 @@ describe('useConnectionsLedger', () => {
     expect(
       byID.get('agent:remote-disabled')?.fleetHighlights.map((signal) => signal.label),
     ).toEqual(['Remote control disabled']);
+    expect(
+      byID.get('agent:command-mismatch')?.fleetHighlights.map((signal) => signal.label),
+    ).toEqual(['Command policy mismatch']);
+    expect(byID.get('agent:command-mismatch')?.fleetHighlights[0]?.tone).toBe('critical');
     expect(byID.get('agent:config-pending')?.fleetHighlights.map((signal) => signal.label)).toEqual(
       ['Config pending', 'Remote control enabled'],
     );

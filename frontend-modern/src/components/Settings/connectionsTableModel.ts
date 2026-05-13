@@ -386,16 +386,28 @@ const commandPolicyFromFleet = (fleet: ConnectionFleetGovernance): ConnectionFle
 
   switch (fleet.remoteControl) {
     case 'enabled':
-      return { status: 'enabled', desired: 'enabled', applied: 'enabled', enforcement: 'in-sync' };
+      return {
+        status: 'enabled',
+        desired: 'unknown',
+        applied: 'enabled',
+        enforcement: 'not-applicable',
+      };
     case 'disabled':
       return {
         status: 'disabled',
-        desired: 'disabled',
+        desired: 'unknown',
         applied: 'disabled',
-        enforcement: 'in-sync',
+        enforcement: 'not-applicable',
       };
     case 'not-applicable':
       return { status: 'not-applicable', enforcement: 'not-applicable' };
+    case 'unknown':
+      return {
+        status: 'unknown',
+        desired: 'unknown',
+        applied: 'unknown',
+        enforcement: 'pending',
+      };
   }
 };
 
@@ -753,6 +765,25 @@ const updateSignal = (state: ConnectionFleetUpdateStatus): FleetGovernanceSignal
 };
 
 const commandPolicySignal = (state: ConnectionFleetCommandPolicy): FleetGovernanceSignal => {
+  if (state.enforcement === 'drifted') {
+    const desiredDisabledAppliedEnabled =
+      state.desired === 'disabled' && state.applied === 'enabled';
+    return {
+      key: 'command-policy',
+      label: 'Command policy mismatch',
+      detail: state.reason || 'Desired and applied command-policy states do not match.',
+      tone: desiredDisabledAppliedEnabled ? 'critical' : 'warning',
+    };
+  }
+  if (state.enforcement === 'pending') {
+    return {
+      key: 'command-policy',
+      label: 'Command policy pending',
+      detail: state.reason || 'Pulse is waiting for applied command-policy confirmation.',
+      tone: 'warning',
+    };
+  }
+
   switch (state.status) {
     case 'enabled':
       return {

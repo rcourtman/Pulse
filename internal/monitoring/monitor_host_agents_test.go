@@ -94,6 +94,40 @@ func TestFindLinkedProxmoxEntityWithHints_UsesExactEndpointHostnameBeforeNameFal
 	}
 }
 
+func TestMonitor_HostAgentConfigUpdatePreservesReportedCommandStateInHostState(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		hostMetadataStore: config.NewHostMetadataStore(t.TempDir(), nil),
+		config:            &config.Config{},
+	}
+	monitor.state.UpsertHost(models.Host{
+		ID:              "host-command-policy",
+		Hostname:        "host-command-policy",
+		CommandsEnabled: true,
+	})
+
+	desired := false
+	if err := monitor.UpdateHostAgentConfig("host-command-policy", &desired); err != nil {
+		t.Fatalf("UpdateHostAgentConfig: %v", err)
+	}
+
+	hosts := monitor.state.GetHosts()
+	if len(hosts) != 1 {
+		t.Fatalf("expected one host, got %d", len(hosts))
+	}
+	if !hosts[0].CommandsEnabled {
+		t.Fatalf("reported CommandsEnabled should remain true until the agent applies and reports the desired policy")
+	}
+
+	cfg := monitor.GetHostAgentConfig("host-command-policy")
+	if cfg.CommandsEnabled == nil || *cfg.CommandsEnabled {
+		t.Fatalf("desired CommandsEnabled = %#v, want false", cfg.CommandsEnabled)
+	}
+	if cfg.DesiredConfig == nil {
+		t.Fatal("expected desired config metadata for command-policy update")
+	}
+}
+
 func TestApplyDockerReport_RecreatedContainerAgentIDKeepsTokenBinding(t *testing.T) {
 	monitor := newTestMonitor(t)
 	token := &config.APITokenRecord{ID: "token-recreated-container", Name: "Docker Token"}

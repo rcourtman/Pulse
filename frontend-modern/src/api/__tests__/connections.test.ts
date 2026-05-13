@@ -147,9 +147,10 @@ describe('ConnectionsAPI', () => {
           },
           commandPolicy: {
             status: 'enabled',
-            desired: 'enabled',
+            desired: 'disabled',
             applied: 'enabled',
-            enforcement: 'in-sync',
+            enforcement: 'drifted',
+            reason: 'agent still reports command execution enabled while desired policy disables it',
           },
         },
         capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
@@ -187,9 +188,10 @@ describe('ConnectionsAPI', () => {
       },
       commandPolicy: {
         status: 'enabled',
-        desired: 'enabled',
+        desired: 'disabled',
         applied: 'enabled',
-        enforcement: 'in-sync',
+        enforcement: 'drifted',
+        reason: 'agent still reports command execution enabled while desired policy disables it',
       },
     });
   });

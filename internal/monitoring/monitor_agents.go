@@ -485,12 +485,6 @@ func (m *Monitor) UpdateHostAgentConfig(hostID string, commandsEnabled *bool) er
 		return fmt.Errorf("failed to save host config: %w", err)
 	}
 
-	// Also update the Host model in state for immediate UI feedback
-	// The agent will confirm on its next report, but this provides instant feedback
-	if commandsEnabled != nil {
-		m.state.SetHostCommandsEnabled(hostID, *commandsEnabled)
-	}
-
 	log.Info().
 		Str("hostId", hostID).
 		Interface("commandsEnabled", commandsEnabled).
@@ -1877,13 +1871,6 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	// Normalize vendor-managed internal RAID arrays out of host state so they do
 	// not surface as customer-facing degraded storage in APIs, resources, or alerts.
 	host.RAID = storagehealth.FilterVendorManagedSystemRAIDArrays(host, host.RAID)
-
-	// Apply any pending commands execution override from server config
-	// This ensures the UI remains stable when the user toggles this setting,
-	// even if the agent hasn't yet picked up the new config in this report cycle.
-	if cfg := m.GetHostAgentConfig(identifier); cfg.CommandsEnabled != nil {
-		host.CommandsEnabled = *cfg.CommandsEnabled
-	}
 
 	if len(host.LoadAverage) == 0 {
 		host.LoadAverage = nil

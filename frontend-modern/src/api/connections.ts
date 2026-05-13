@@ -38,7 +38,7 @@ export type ConnectionFleetUpdateStatus =
   | 'not-applicable'
   | 'unknown'
   | 'update-available';
-export type ConnectionFleetRemoteControl = 'disabled' | 'enabled' | 'not-applicable';
+export type ConnectionFleetRemoteControl = 'disabled' | 'enabled' | 'not-applicable' | 'unknown';
 export type ConnectionFleetConfigDriftStatus =
   | 'current'
   | 'drifted'
@@ -66,6 +66,18 @@ export type ConnectionFleetCommandPolicyStatus =
   | 'disabled'
   | 'enabled'
   | 'not-applicable'
+  | 'unknown';
+export type ConnectionFleetCommandPolicyState =
+  | 'disabled'
+  | 'enabled'
+  | 'not-applicable'
+  | 'unknown';
+export type ConnectionFleetCommandPolicyEnforcement =
+  | 'blocked'
+  | 'drifted'
+  | 'in-sync'
+  | 'not-applicable'
+  | 'pending'
   | 'unknown';
 
 export interface ConnectionFleetConfigFingerprint {
@@ -99,9 +111,9 @@ export interface ConnectionFleetCredentialHealth {
 
 export interface ConnectionFleetCommandPolicy {
   status: ConnectionFleetCommandPolicyStatus;
-  desired?: string;
-  applied?: string;
-  enforcement?: string;
+  desired?: ConnectionFleetCommandPolicyState;
+  applied?: ConnectionFleetCommandPolicyState;
+  enforcement?: ConnectionFleetCommandPolicyEnforcement;
   reason?: string;
 }
 

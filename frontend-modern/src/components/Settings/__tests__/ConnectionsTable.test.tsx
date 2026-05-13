@@ -169,6 +169,12 @@ describe('ConnectionsTable', () => {
                 tone: 'info',
               },
               {
+                key: 'command-policy',
+                label: 'Command policy mismatch',
+                detail: 'Desired disabled but the agent still reports commands enabled.',
+                tone: 'critical',
+              },
+              {
                 key: 'config-drift',
                 label: 'Config pending',
                 detail: 'Waiting for applied configuration confirmation.',
@@ -194,6 +200,10 @@ describe('ConnectionsTable', () => {
     expect(screen.getByText('Remote control disabled')).toHaveAttribute(
       'title',
       'Commands are disabled by policy.',
+    );
+    expect(screen.getByText('Command policy mismatch')).toHaveAttribute(
+      'title',
+      'Desired disabled but the agent still reports commands enabled.',
     );
     expect(screen.getByText('Config pending')).toHaveAttribute(
       'title',

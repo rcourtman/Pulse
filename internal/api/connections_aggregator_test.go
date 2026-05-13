@@ -32,13 +32,26 @@ func healthEntry(lastSuccess *time.Time, errMessage, errCategory string, breaker
 
 func desiredAgentConfigFingerprint(t *testing.T, commandsEnabled *bool, settings map[string]interface{}) ConnectionFleetConfigFingerprint {
 	t.Helper()
+	desired := desiredAgentConfig(t, commandsEnabled, settings)
+	if desired.Fingerprint == nil {
+		t.Fatal("expected desired config fingerprint")
+	}
+	return *desired.Fingerprint
+}
+
+func desiredAgentConfig(t *testing.T, commandsEnabled *bool, settings map[string]interface{}) connectionAgentDesiredConfig {
+	t.Helper()
 	metadata, err := remoteconfig.BuildDesiredConfigMetadata(commandsEnabled, settings)
 	if err != nil {
 		t.Fatalf("BuildDesiredConfigMetadata: %v", err)
 	}
-	return ConnectionFleetConfigFingerprint{
+	fingerprint := ConnectionFleetConfigFingerprint{
 		Version: metadata.Version,
 		Hash:    metadata.Hash,
+	}
+	return connectionAgentDesiredConfig{
+		Fingerprint:     &fingerprint,
+		CommandsEnabled: cloneBoolPtr(commandsEnabled),
 	}
 }
 
@@ -375,7 +388,8 @@ func TestBuildConnections_AgentVersionUpdateAvailability(t *testing.T) {
 
 func TestBuildConnections_AgentFleetGovernance(t *testing.T) {
 	now := time.Now()
-	currentDesired := desiredAgentConfigFingerprint(t, ptrBool(true), nil)
+	currentDesiredConfig := desiredAgentConfig(t, ptrBool(true), nil)
+	currentDesired := *currentDesiredConfig.Fingerprint
 	in := aggregatorInputs{
 		hosts: []models.Host{
 			{
@@ -396,8 +410,8 @@ func TestBuildConnections_AgentFleetGovernance(t *testing.T) {
 				Hostname: "pending",
 			},
 		},
-		agentDesiredConfigs: map[string]ConnectionFleetConfigFingerprint{
-			"current": currentDesired,
+		agentDesiredConfigs: map[string]connectionAgentDesiredConfig{
+			"current": currentDesiredConfig,
 		},
 		expectedAgentVersion: "6.0.2",
 		now:                  now,
@@ -433,6 +447,8 @@ func TestBuildConnections_AgentFleetGovernance(t *testing.T) {
 	}
 	if current.CommandPolicy == nil ||
 		current.CommandPolicy.Status != fleetStateEnabled ||
+		current.CommandPolicy.Desired != fleetStateEnabled ||
+		current.CommandPolicy.Applied != fleetStateEnabled ||
 		current.CommandPolicy.Enforcement != fleetCommandPolicyInSync {
 		t.Fatalf("current agent command policy = %+v", current.CommandPolicy)
 	}
@@ -443,7 +459,11 @@ func TestBuildConnections_AgentFleetGovernance(t *testing.T) {
 		outdated.RemoteControl != fleetStateDisabled {
 		t.Fatalf("outdated agent fleet governance = %+v", outdated)
 	}
-	if outdated.CommandPolicy == nil || outdated.CommandPolicy.Status != fleetStateDisabled {
+	if outdated.CommandPolicy == nil ||
+		outdated.CommandPolicy.Status != fleetStateDisabled ||
+		outdated.CommandPolicy.Desired != fleetStateUnknown ||
+		outdated.CommandPolicy.Applied != fleetStateDisabled ||
+		outdated.CommandPolicy.Enforcement != fleetCommandPolicyNotApplicable {
 		t.Fatalf("outdated agent command policy = %+v", outdated.CommandPolicy)
 	}
 
@@ -462,17 +482,93 @@ func TestBuildConnections_AgentFleetGovernance(t *testing.T) {
 		t.Fatalf("pending agent rollout = %+v", pending.Rollout)
 	}
 	if pending.CommandPolicy == nil ||
+		pending.CommandPolicy.Desired != fleetStateUnknown ||
 		pending.CommandPolicy.Applied != fleetStateUnknown ||
 		pending.CommandPolicy.Enforcement != fleetStatePending {
 		t.Fatalf("pending agent command policy = %+v", pending.CommandPolicy)
 	}
 }
 
+func TestBuildConnections_AgentCommandPolicyDesiredAppliedConvergence(t *testing.T) {
+	now := time.Now()
+	desiredDisabled := desiredAgentConfig(t, ptrBool(false), nil)
+	desiredEnabled := desiredAgentConfig(t, ptrBool(true), nil)
+	in := aggregatorInputs{
+		hosts: []models.Host{
+			{
+				ID:              "desired-disabled-applied-enabled",
+				Hostname:        "desired-disabled-applied-enabled",
+				LastSeen:        now,
+				CommandsEnabled: true,
+			},
+			{
+				ID:              "desired-enabled-applied-disabled",
+				Hostname:        "desired-enabled-applied-disabled",
+				LastSeen:        now,
+				CommandsEnabled: false,
+			},
+			{
+				ID:       "desired-disabled-unreported",
+				Hostname: "desired-disabled-unreported",
+			},
+		},
+		agentDesiredConfigs: map[string]connectionAgentDesiredConfig{
+			"desired-disabled-applied-enabled": desiredDisabled,
+			"desired-enabled-applied-disabled": desiredEnabled,
+			"desired-disabled-unreported":      desiredDisabled,
+		},
+		now: now,
+	}
+
+	got := buildConnections(in)
+	byID := map[string]Connection{}
+	for _, connection := range got {
+		byID[connection.ID] = connection
+	}
+
+	disabledDesired := byID["agent:desired-disabled-applied-enabled"].Fleet
+	if disabledDesired.RemoteControl != fleetStateEnabled {
+		t.Fatalf("remote control for desired-disabled/applied-enabled = %q, want applied enabled", disabledDesired.RemoteControl)
+	}
+	if disabledDesired.CommandPolicy == nil ||
+		disabledDesired.CommandPolicy.Status != fleetStateEnabled ||
+		disabledDesired.CommandPolicy.Desired != fleetStateDisabled ||
+		disabledDesired.CommandPolicy.Applied != fleetStateEnabled ||
+		disabledDesired.CommandPolicy.Enforcement != fleetCommandPolicyDrifted {
+		t.Fatalf("desired-disabled/applied-enabled command policy = %+v", disabledDesired.CommandPolicy)
+	}
+
+	enabledDesired := byID["agent:desired-enabled-applied-disabled"].Fleet
+	if enabledDesired.RemoteControl != fleetStateDisabled {
+		t.Fatalf("remote control for desired-enabled/applied-disabled = %q, want applied disabled", enabledDesired.RemoteControl)
+	}
+	if enabledDesired.CommandPolicy == nil ||
+		enabledDesired.CommandPolicy.Status != fleetStateDisabled ||
+		enabledDesired.CommandPolicy.Desired != fleetStateEnabled ||
+		enabledDesired.CommandPolicy.Applied != fleetStateDisabled ||
+		enabledDesired.CommandPolicy.Enforcement != fleetCommandPolicyDrifted {
+		t.Fatalf("desired-enabled/applied-disabled command policy = %+v", enabledDesired.CommandPolicy)
+	}
+
+	unreported := byID["agent:desired-disabled-unreported"].Fleet
+	if unreported.RemoteControl != fleetStateUnknown {
+		t.Fatalf("remote control for unreported agent = %q, want unknown", unreported.RemoteControl)
+	}
+	if unreported.CommandPolicy == nil ||
+		unreported.CommandPolicy.Status != fleetStateUnknown ||
+		unreported.CommandPolicy.Desired != fleetStateDisabled ||
+		unreported.CommandPolicy.Applied != fleetStateUnknown ||
+		unreported.CommandPolicy.Enforcement != fleetStatePending {
+		t.Fatalf("unreported command policy = %+v", unreported.CommandPolicy)
+	}
+}
+
 func TestBuildConnections_AgentConfigDriftUsesCanonicalDesiredMetadataWithoutSelfComparing(t *testing.T) {
 	now := time.Now()
-	desired := desiredAgentConfigFingerprint(t, ptrBool(true), map[string]interface{}{
+	desiredConfig := desiredAgentConfig(t, ptrBool(true), map[string]interface{}{
 		"interval": "10s",
 	})
+	desired := *desiredConfig.Fingerprint
 	in := aggregatorInputs{
 		hosts: []models.Host{
 			{
@@ -483,8 +579,8 @@ func TestBuildConnections_AgentConfigDriftUsesCanonicalDesiredMetadataWithoutSel
 				DiskExclude:     []string{"/dev/loop*"},
 			},
 		},
-		agentDesiredConfigs: map[string]ConnectionFleetConfigFingerprint{
-			"agent-1": desired,
+		agentDesiredConfigs: map[string]connectionAgentDesiredConfig{
+			"agent-1": desiredConfig,
 		},
 		now: now,
 	}

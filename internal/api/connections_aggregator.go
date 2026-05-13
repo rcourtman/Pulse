@@ -94,10 +94,15 @@ type aggregatorInputs struct {
 	availabilityTargets  []config.AvailabilityTarget
 	availabilityStatuses map[string]monitoring.AvailabilityProbeStatus
 	hosts                []models.Host
-	agentDesiredConfigs  map[string]ConnectionFleetConfigFingerprint
+	agentDesiredConfigs  map[string]connectionAgentDesiredConfig
 	instanceHealth       map[string]monitoring.InstanceHealth
 	expectedAgentVersion string
 	now                  time.Time
+}
+
+type connectionAgentDesiredConfig struct {
+	Fingerprint     *ConnectionFleetConfigFingerprint
+	CommandsEnabled *bool
 }
 
 // buildConnections produces a stable, sorted list of connection rows across
@@ -132,7 +137,7 @@ func buildConnections(in aggregatorInputs) []Connection {
 		out = append(out, buildAvailabilityConnection(target, in.availabilityStatuses[target.ID], now))
 	}
 	for _, host := range in.hosts {
-		desiredConfig := connectionAgentConfigFingerprintForHost(in.agentDesiredConfigs, host.ID)
+		desiredConfig := connectionAgentDesiredConfigForHost(in.agentDesiredConfigs, host.ID)
 		out = append(out, buildAgentConnection(host, in.expectedAgentVersion, now, desiredConfig))
 	}
 
@@ -343,7 +348,7 @@ func buildAvailabilityConnection(target config.AvailabilityTarget, status monito
 // buildAgentConnection derives a connection row from an agent Host record.
 // Agents have no pause toggle and no scope — reports are all-or-nothing —
 // so capability flags are off.
-func buildAgentConnection(host models.Host, expectedAgentVersion string, now time.Time, desiredConfig *ConnectionFleetConfigFingerprint) Connection {
+func buildAgentConnection(host models.Host, expectedAgentVersion string, now time.Time, desiredConfig *connectionAgentDesiredConfig) Connection {
 	name := host.DisplayName
 	if strings.TrimSpace(name) == "" {
 		name = host.Hostname
@@ -401,9 +406,13 @@ func buildAgentConnection(host models.Host, expectedAgentVersion string, now tim
 		AgentUpdateAvailable: updateAvailable,
 		Capabilities:         ConnectionCapabilities{SupportsPause: false, SupportsScope: false, SupportsTest: false},
 	}, now)
-	conn.Fleet.ConfigDrift = connectionFleetAgentConfigDrift(conn, desiredConfig)
+	var desiredFingerprint *ConnectionFleetConfigFingerprint
+	if desiredConfig != nil {
+		desiredFingerprint = desiredConfig.Fingerprint
+	}
+	conn.Fleet.ConfigDrift = connectionFleetAgentConfigDrift(conn, desiredFingerprint)
 	conn.Fleet.CredentialHealth = connectionFleetAgentCredentialHealth(conn, host, now)
-	conn.Fleet.CommandPolicy = connectionFleetAgentCommandPolicy(conn, host)
+	conn.Fleet.CommandPolicy = connectionFleetAgentCommandPolicy(conn, host, desiredConfig)
 	conn.Fleet.Rollout = connectionFleetRollout(conn)
 	return conn
 }
@@ -514,6 +523,9 @@ func connectionFleetUpdateStatus(conn Connection) string {
 func connectionFleetRemoteControl(conn Connection) string {
 	if conn.Type != ConnectionTypeAgent {
 		return fleetStateNotApplicable
+	}
+	if conn.LastSeen == nil {
+		return fleetStateUnknown
 	}
 	if conn.AgentIdentity != nil && conn.AgentIdentity.CommandsEnabled {
 		return fleetStateEnabled
@@ -734,45 +746,80 @@ func connectionFleetCommandPolicy(conn Connection) *ConnectionFleetCommandPolicy
 			Enforcement: fleetCommandPolicyNotApplicable,
 		}
 	}
-	if conn.AgentIdentity != nil && conn.AgentIdentity.CommandsEnabled {
+	if conn.LastSeen == nil {
 		return &ConnectionFleetCommandPolicy{
-			Status:      fleetStateEnabled,
-			Desired:     fleetStateEnabled,
-			Applied:     fleetStateEnabled,
-			Enforcement: fleetCommandPolicyInSync,
-			Reason:      "agent command execution is enabled and reported in policy",
+			Status:      fleetStateUnknown,
+			Desired:     fleetStateUnknown,
+			Applied:     fleetStateUnknown,
+			Enforcement: fleetStatePending,
+			Reason:      "waiting for the agent to report command-policy state",
 		}
 	}
+	applied := fleetStateDisabled
+	if conn.AgentIdentity != nil && conn.AgentIdentity.CommandsEnabled {
+		applied = fleetStateEnabled
+	}
 	return &ConnectionFleetCommandPolicy{
-		Status:      fleetStateDisabled,
-		Desired:     fleetStateDisabled,
-		Applied:     fleetStateDisabled,
-		Enforcement: fleetCommandPolicyInSync,
-		Reason:      "agent command execution is disabled by policy",
+		Status:      applied,
+		Desired:     fleetStateUnknown,
+		Applied:     applied,
+		Enforcement: fleetCommandPolicyNotApplicable,
+		Reason:      "no desired command-policy override is configured; reporting the agent-applied state",
 	}
 }
 
-func connectionFleetAgentCommandPolicy(conn Connection, host models.Host) *ConnectionFleetCommandPolicy {
-	policy := connectionFleetCommandPolicy(conn)
+func connectionFleetAgentCommandPolicy(conn Connection, host models.Host, desiredConfig *connectionAgentDesiredConfig) *ConnectionFleetCommandPolicy {
+	desired := fleetStateUnknown
+	if desiredConfig != nil && desiredConfig.CommandsEnabled != nil {
+		desired = connectionFleetCommandPolicyState(*desiredConfig.CommandsEnabled)
+	}
+
 	if conn.LastSeen == nil {
-		policy.Applied = fleetStateUnknown
-		policy.Enforcement = fleetStatePending
-		policy.Reason = "waiting for the agent to report command-policy state"
+		return &ConnectionFleetCommandPolicy{
+			Status:      fleetStateUnknown,
+			Desired:     desired,
+			Applied:     fleetStateUnknown,
+			Enforcement: fleetStatePending,
+			Reason:      "waiting for the agent to report command-policy state",
+		}
+	}
+
+	applied := connectionFleetCommandPolicyState(host.CommandsEnabled)
+	policy := &ConnectionFleetCommandPolicy{
+		Status:  applied,
+		Desired: desired,
+		Applied: applied,
+	}
+
+	if desired == fleetStateUnknown {
+		policy.Enforcement = fleetCommandPolicyNotApplicable
+		policy.Reason = "no desired command-policy override is configured; reporting the agent-applied state"
 		return policy
 	}
-	if host.CommandsEnabled {
-		policy.Status = fleetStateEnabled
-		policy.Desired = fleetStateEnabled
-		policy.Applied = fleetStateEnabled
-		policy.Reason = "agent command execution is enabled and reported in policy"
-	} else {
-		policy.Status = fleetStateDisabled
-		policy.Desired = fleetStateDisabled
-		policy.Applied = fleetStateDisabled
-		policy.Reason = "agent command execution is disabled by policy"
+	if desired == applied {
+		policy.Enforcement = fleetCommandPolicyInSync
+		if applied == fleetStateEnabled {
+			policy.Reason = "agent command execution matches the desired enabled policy"
+		} else {
+			policy.Reason = "agent command execution matches the desired disabled policy"
+		}
+		return policy
 	}
-	policy.Enforcement = fleetCommandPolicyInSync
+
+	policy.Enforcement = fleetCommandPolicyDrifted
+	if desired == fleetStateDisabled && applied == fleetStateEnabled {
+		policy.Reason = "agent still reports command execution enabled while desired policy disables it"
+	} else {
+		policy.Reason = "agent reports command execution disabled while desired policy enables it"
+	}
 	return policy
+}
+
+func connectionFleetCommandPolicyState(enabled bool) string {
+	if enabled {
+		return fleetStateEnabled
+	}
+	return fleetStateDisabled
 }
 
 func connectionConfigFingerprint(version string, payload any) *ConnectionFleetConfigFingerprint {
@@ -787,40 +834,46 @@ func connectionConfigFingerprint(version string, payload any) *ConnectionFleetCo
 	}
 }
 
-func connectionAgentDesiredConfigFingerprints(monitor *monitoring.Monitor, hosts []models.Host) map[string]ConnectionFleetConfigFingerprint {
+func connectionAgentDesiredConfigFingerprints(monitor *monitoring.Monitor, hosts []models.Host) map[string]connectionAgentDesiredConfig {
 	if monitor == nil || len(hosts) == 0 {
 		return nil
 	}
 
-	fingerprints := make(map[string]ConnectionFleetConfigFingerprint, len(hosts))
+	configs := make(map[string]connectionAgentDesiredConfig, len(hosts))
 	for _, host := range hosts {
 		hostID := strings.TrimSpace(host.ID)
 		if hostID == "" {
 			continue
 		}
 		cfg := monitor.GetHostAgentConfig(hostID)
-		if cfg.DesiredConfig == nil {
-			continue
+		desired := connectionAgentDesiredConfig{
+			CommandsEnabled: cloneBoolPtr(cfg.CommandsEnabled),
 		}
-		if fp := connectionConfigFingerprintFromMetadata(cfg.DesiredConfig.Version, cfg.DesiredConfig.Hash); fp != nil {
-			fingerprints[hostID] = *fp
+		if cfg.DesiredConfig != nil {
+			if fp := connectionConfigFingerprintFromMetadata(cfg.DesiredConfig.Version, cfg.DesiredConfig.Hash); fp != nil {
+				desired.Fingerprint = fp
+			}
 		}
+		configs[hostID] = desired
 	}
-	if len(fingerprints) == 0 {
+	if len(configs) == 0 {
 		return nil
 	}
-	return fingerprints
+	return configs
 }
 
-func connectionAgentConfigFingerprintForHost(fingerprints map[string]ConnectionFleetConfigFingerprint, hostID string) *ConnectionFleetConfigFingerprint {
-	if len(fingerprints) == 0 {
+func connectionAgentDesiredConfigForHost(configs map[string]connectionAgentDesiredConfig, hostID string) *connectionAgentDesiredConfig {
+	if len(configs) == 0 {
 		return nil
 	}
-	fp, ok := fingerprints[strings.TrimSpace(hostID)]
+	desired, ok := configs[strings.TrimSpace(hostID)]
 	if !ok {
 		return nil
 	}
-	return connectionConfigFingerprintFromMetadata(fp.Version, fp.Hash)
+	return &connectionAgentDesiredConfig{
+		Fingerprint:     cloneConnectionFleetConfigFingerprint(desired.Fingerprint),
+		CommandsEnabled: cloneBoolPtr(desired.CommandsEnabled),
+	}
 }
 
 func connectionConfigFingerprintFromMetadata(version, hash string) *ConnectionFleetConfigFingerprint {
@@ -833,6 +886,22 @@ func connectionConfigFingerprintFromMetadata(version, hash string) *ConnectionFl
 		Version: version,
 		Hash:    hash,
 	}
+}
+
+func cloneConnectionFleetConfigFingerprint(fp *ConnectionFleetConfigFingerprint) *ConnectionFleetConfigFingerprint {
+	if fp == nil {
+		return nil
+	}
+	copied := *fp
+	return &copied
+}
+
+func cloneBoolPtr(v *bool) *bool {
+	if v == nil {
+		return nil
+	}
+	copied := *v
+	return &copied
 }
 
 func connectionProxmoxCredentialKind(user, password, tokenName, tokenValue string) string {
