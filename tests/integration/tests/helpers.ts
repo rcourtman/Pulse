@@ -14,8 +14,11 @@ const runtimePrimaryAPIToken = (): string => {
     : "";
 };
 
+const explicitPrimaryAPIToken = (): string =>
+  String(process.env.PULSE_E2E_PRIMARY_API_TOKEN || "").trim();
+
 const configuredPrimaryAPIToken = (): string =>
-  runtimePrimaryAPIToken() || process.env.PULSE_E2E_PRIMARY_API_TOKEN || "";
+  explicitPrimaryAPIToken() || runtimePrimaryAPIToken();
 
 /**
  * Default admin credentials for testing
@@ -38,20 +41,55 @@ export const E2E_CREDENTIALS = {
 };
 
 const SETUP_HANDOFF_STORAGE_KEY = "pulse_setup_handoff";
-let ignoreConfiguredPrimaryAPIToken = false;
+let ignoreRuntimePrimaryAPIToken = false;
 
-const currentPrimaryAPIToken = (): string =>
-  String(
-    E2E_CREDENTIALS.primaryApiToken ||
-      (ignoreConfiguredPrimaryAPIToken ? "" : configuredPrimaryAPIToken()),
-  ).trim();
+type PrimaryAPITokenSource = "env" | "memory" | "runtime";
+
+type PrimaryAPITokenCandidate = {
+  source: PrimaryAPITokenSource;
+  token: string;
+};
+
+const primaryAPITokenCandidates = (): PrimaryAPITokenCandidate[] => {
+  const seen = new Set<string>();
+  const candidates: PrimaryAPITokenCandidate[] = [];
+  const add = (source: PrimaryAPITokenSource, token: unknown) => {
+    const nextToken = String(token || "").trim();
+    if (!nextToken || seen.has(nextToken)) {
+      return;
+    }
+    seen.add(nextToken);
+    candidates.push({ source, token: nextToken });
+  };
+
+  add("env", explicitPrimaryAPIToken());
+  add("memory", E2E_CREDENTIALS.primaryApiToken);
+  if (!ignoreRuntimePrimaryAPIToken) {
+    add("runtime", runtimePrimaryAPIToken());
+  }
+  return candidates;
+};
 
 const rememberPrimaryAPIToken = (token: unknown) => {
   const nextToken = String(token || "").trim();
   if (nextToken) {
     E2E_CREDENTIALS.primaryApiToken = nextToken;
-    ignoreConfiguredPrimaryAPIToken = false;
+    ignoreRuntimePrimaryAPIToken = false;
     persistRuntimePrimaryAPIToken(nextToken);
+  }
+};
+
+const forgetRejectedPrimaryAPIToken = (
+  candidate: PrimaryAPITokenCandidate,
+) => {
+  if (
+    candidate.source === "runtime" ||
+    candidate.token === runtimePrimaryAPIToken()
+  ) {
+    ignoreRuntimePrimaryAPIToken = true;
+  }
+  if (E2E_CREDENTIALS.primaryApiToken === candidate.token) {
+    E2E_CREDENTIALS.primaryApiToken = "";
   }
 };
 
@@ -428,9 +466,8 @@ async function resetFirstRunState(
     });
   const isAuthFailure = (status: number) => status === 401 || status === 403;
 
-  const primaryToken = currentPrimaryAPIToken();
-  if (primaryToken) {
-    const tokenRes = await reset({ "X-API-Token": primaryToken });
+  for (const candidate of primaryAPITokenCandidates()) {
+    const tokenRes = await reset({ "X-API-Token": candidate.token });
     if (tokenRes.ok()) {
       return (await tokenRes.json()) as ResetFirstRunResponse;
     }
@@ -440,21 +477,7 @@ async function resetFirstRunState(
       );
     }
 
-    // The reset route intentionally clears API tokens. A configured static
-    // token can therefore be valid for the first reset and stale for later
-    // first-session tests in the same managed runtime.
-    E2E_CREDENTIALS.primaryApiToken = "";
-    ignoreConfiguredPrimaryAPIToken = true;
-  }
-
-  const bypassRes = await reset({ "X-Admin-Bypass": "true" });
-  if (bypassRes.ok()) {
-    return (await bypassRes.json()) as ResetFirstRunResponse;
-  }
-  if (!isAuthFailure(bypassRes.status())) {
-    throw new Error(
-      `Failed to reset first-run state: ${bypassRes.status()} ${await bypassRes.text()}`,
-    );
+    forgetRejectedPrimaryAPIToken(candidate);
   }
 
   if (security.hasAuthentication !== false) {
@@ -469,7 +492,7 @@ async function resetFirstRunState(
   }
 
   throw new Error(
-    `Failed to reset first-run state: ${bypassRes.status()} ${await bypassRes.text()}`,
+    "Failed to reset first-run state: all configured API tokens were rejected and no authenticated session fallback is available",
   );
 }
 
@@ -601,37 +624,36 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
 }
 
 async function authenticateWithPrimaryAPIToken(page: Page): Promise<boolean> {
-  const token = currentPrimaryAPIToken();
-  if (!token) {
-    return false;
+  for (const candidate of primaryAPITokenCandidates()) {
+    await page.goto(`/?token=${encodeURIComponent(candidate.token)}`, {
+      waitUntil: "domcontentloaded",
+    });
+    await waitForAppShell(page);
+
+    const state = await Promise.race([
+      page
+        .waitForURL(AUTHENTICATED_URL, { timeout: 10_000 })
+        .then(() => "authenticated")
+        .catch(() => undefined),
+      page
+        .locator('input[name="username"]')
+        .waitFor({ state: "visible", timeout: 10_000 })
+        .then(() => "login")
+        .catch(() => undefined),
+    ]);
+
+    if (state === "authenticated") {
+      return true;
+    }
+
+    forgetRejectedPrimaryAPIToken(candidate);
+    await page
+      .evaluate(() => {
+        window.sessionStorage.removeItem("pulse_auth");
+      })
+      .catch(() => {});
   }
 
-  await page.goto(`/?token=${encodeURIComponent(token)}`, {
-    waitUntil: "domcontentloaded",
-  });
-  await waitForAppShell(page);
-
-  const state = await Promise.race([
-    page
-      .waitForURL(AUTHENTICATED_URL, { timeout: 10_000 })
-      .then(() => "authenticated")
-      .catch(() => undefined),
-    page
-      .locator('input[name="username"]')
-      .waitFor({ state: "visible", timeout: 10_000 })
-      .then(() => "login")
-      .catch(() => undefined),
-  ]);
-
-  if (state === "authenticated") {
-    return true;
-  }
-
-  await page
-    .evaluate(() => {
-      window.sessionStorage.removeItem("pulse_auth");
-    })
-    .catch(() => {});
   return false;
 }
 

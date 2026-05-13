@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
+  ensureAuthenticated,
   ensureFirstRunExperience,
   navigateToSettings,
   apiRequest,
@@ -101,7 +102,7 @@ test.describe.serial("First-session experience", () => {
       "Desktop-only first-session coverage",
     );
 
-    await ensureFirstRunExperience(page);
+    await ensureAuthenticated(page);
 
     // The Settings tab is rendered as a div[role="tab"] in the top utility bar.
     const settingsTab = page
@@ -122,7 +123,7 @@ test.describe.serial("First-session experience", () => {
       "Desktop-only first-session coverage",
     );
 
-    await ensureFirstRunExperience(page);
+    await ensureAuthenticated(page);
     await navigateToSettings(page);
 
     // The settings sidebar (div[aria-label="Settings navigation"]) lists category
@@ -151,7 +152,7 @@ test.describe.serial("First-session experience", () => {
       "Desktop-only first-session coverage",
     );
 
-    await ensureFirstRunExperience(page);
+    await ensureAuthenticated(page);
 
     // Visit a selection of key settings routes and verify the page renders
     // without console errors or blank screens.
@@ -228,7 +229,7 @@ test.describe.serial("First-session experience", () => {
       "Desktop-only first-session coverage",
     );
 
-    await ensureFirstRunExperience(page);
+    await ensureAuthenticated(page);
 
     // Query runtime capabilities to check feature access per-route without
     // depending on billing-only entitlements.
@@ -356,7 +357,7 @@ test.describe.serial("First-session experience", () => {
       "Desktop-only first-session coverage",
     );
 
-    await ensureFirstRunExperience(page);
+    await ensureAuthenticated(page);
     await page.goto("/settings/system-pro", { waitUntil: "domcontentloaded" });
     await page.waitForURL(/\/settings/, { timeout: 10_000 });
 
