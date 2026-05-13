@@ -1165,6 +1165,14 @@ type taskHistoryQuery struct {
 	Until         int64
 }
 
+const (
+	pbsTaskTypeBackup            = "backup"
+	pbsTaskTypeSyncJob           = "syncjob"
+	pbsTaskTypeVerificationJob   = "verificationjob"
+	pbsTaskTypePruneJob          = "prunejob"
+	pbsTaskTypeGarbageCollection = "garbage_collection"
+)
+
 func (c *Client) listTaskHistory(ctx context.Context, datastores []string, opts JobHealthOptions) ([]JobHealthEvidence, []JobHealthEvidence, error) {
 	now := time.Now()
 	until := now.Unix()
@@ -1235,24 +1243,24 @@ func buildTaskHistoryQueries(datastores []string, opts JobHealthOptions, since, 
 	if opts.MonitorBackups {
 		stores := uniqueNonEmptyStrings(datastores)
 		if len(stores) == 0 {
-			add("backup", "backup", "")
+			add("backup", pbsTaskTypeBackup, "")
 		} else {
 			for _, store := range stores {
-				add("backup", "backup", store)
+				add("backup", pbsTaskTypeBackup, store)
 			}
 		}
 	}
 	if opts.MonitorSyncJobs {
-		add("sync", "sync", "")
+		add("sync", pbsTaskTypeSyncJob, "")
 	}
 	if opts.MonitorVerifyJobs {
-		add("verify", "verif", "")
+		add("verify", pbsTaskTypeVerificationJob, "")
 	}
 	if opts.MonitorPruneJobs {
-		add("prune", "prune", "")
+		add("prune", pbsTaskTypePruneJob, "")
 	}
 	if opts.MonitorGarbageJobs {
-		add("garbage", "garbage", "")
+		add("garbage", pbsTaskTypeGarbageCollection, "")
 	}
 	return queries
 }

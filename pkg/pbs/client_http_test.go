@@ -136,6 +136,58 @@ func TestClient_GetJobHealthEvidence_MergesConfigAndTaskFacts(t *testing.T) {
 	}
 }
 
+func TestPBSJobTaskHistoryQueries_UsesWorkerTypeFilters(t *testing.T) {
+	queries := buildTaskHistoryQueries([]string{"fast", "fast", "slow"}, JobHealthOptions{
+		MonitorBackups:     true,
+		MonitorSyncJobs:    true,
+		MonitorVerifyJobs:  true,
+		MonitorPruneJobs:   true,
+		MonitorGarbageJobs: true,
+	}, 1700000000, 1700003600)
+
+	got := make(map[string][]taskHistoryQuery)
+	for _, query := range queries {
+		got[query.Family] = append(got[query.Family], query)
+		if query.Since != 1700000000 || query.Until != 1700003600 {
+			t.Fatalf("query %s bounds = (%d, %d), want (1700000000, 1700003600)", query.Family, query.Since, query.Until)
+		}
+	}
+
+	backupQueries := got["backup"]
+	if len(backupQueries) != 2 {
+		t.Fatalf("backup query count = %d, want 2: %#v", len(backupQueries), backupQueries)
+	}
+	backupStores := map[string]bool{}
+	for _, query := range backupQueries {
+		if query.TypeFilter != "backup" {
+			t.Fatalf("backup typefilter = %q, want backup", query.TypeFilter)
+		}
+		backupStores[query.Store] = true
+	}
+	if !backupStores["fast"] || !backupStores["slow"] {
+		t.Fatalf("backup stores = %#v, want fast and slow", backupStores)
+	}
+
+	for family, want := range map[string]string{
+		"sync":    "syncjob",
+		"verify":  "verificationjob",
+		"prune":   "prunejob",
+		"garbage": "garbage_collection",
+	} {
+		familyQueries := got[family]
+		if len(familyQueries) != 1 {
+			t.Fatalf("%s query count = %d, want 1: %#v", family, len(familyQueries), familyQueries)
+		}
+		query := familyQueries[0]
+		if query.TypeFilter != want {
+			t.Fatalf("%s typefilter = %q, want %q", family, query.TypeFilter, want)
+		}
+		if query.Store != "" {
+			t.Fatalf("%s store filter = %q, want empty", family, query.Store)
+		}
+	}
+}
+
 func TestClient_GetJobHealthEvidence_UsesBoundedFilteredTaskHistory(t *testing.T) {
 	oldLimit := pbsTaskHistoryPageLimit
 	oldPages := pbsTaskHistoryMaxPages
