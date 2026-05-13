@@ -2613,7 +2613,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 		if executor := chatService.GetExecutor(); executor != nil {
 			broadcaster := r.agentEventBroadcaster
 			executor.SetOnActionCompleted(func(record unifiedresources.ActionAuditRecord) {
-				broadcaster.PublishActionCompletedRecord(record)
+				r.publishActionCompletedAgentEvent(broadcaster, record)
 			})
 		}
 	}
@@ -2966,6 +2966,44 @@ func convertIncidentWindow(window *metrics.IncidentWindow) *tools.IncidentWindow
 		DataPoints:   points,
 		Summary:      summary,
 	}
+}
+
+func (r *Router) publishActionCompletedAgentEvent(broadcaster *AgentEventBroadcaster, record unifiedresources.ActionAuditRecord) {
+	if broadcaster == nil {
+		return
+	}
+	payload, ok := projectAgentActionCompletedPayload(record)
+	if !ok {
+		broadcaster.PublishActionCompletedRecord(record)
+		return
+	}
+	broadcaster.PublishActionCompleted(payload)
+}
+
+func projectAgentActionCompletedPayload(record unifiedresources.ActionAuditRecord) (AgentEventActionCompletedPayload, bool) {
+	if record.State != unifiedresources.ActionStateCompleted && record.State != unifiedresources.ActionStateFailed {
+		return AgentEventActionCompletedPayload{}, false
+	}
+
+	payload := AgentEventActionCompletedPayload{
+		ActionID:       record.ID,
+		ResourceID:     record.Request.ResourceID,
+		CapabilityName: record.Request.CapabilityName,
+		State:          string(record.State),
+		RequestedBy:    record.Request.RequestedBy,
+		CompletedAt:    record.UpdatedAt,
+	}
+	if cmd, ok := record.Request.Params["command"].(string); ok {
+		payload.Command = cmd
+	}
+	if record.Result != nil {
+		payload.Success = record.Result.Success
+		payload.ErrorMessage = record.Result.ErrorMessage
+		if v := projectAgentResourceVerification(record.Result.Verification); v != nil {
+			payload.Verification = v
+		}
+	}
+	return payload, true
 }
 
 // eventCorrelatorProviderWrapper adapts proxmox.EventCorrelator to tools.EventCorrelatorProvider.

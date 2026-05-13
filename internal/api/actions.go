@@ -346,14 +346,13 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 	}
 
 	actor := actionDecisionActor(h, r)
-	if h.actionExecutor == nil {
-		writeJSONError(w, http.StatusNotImplemented, "action_executor_unavailable", "No action executor is configured for this API instance")
-		return
-	}
-
 	now := time.Now().UTC()
 	if err := unified.ValidateActionExecutionStart(record, now); err != nil {
 		writeActionExecutionApplyError(w, err)
+		return
+	}
+	if h.actionExecutor == nil {
+		writeJSONError(w, http.StatusNotImplemented, "action_executor_unavailable", "No action executor is configured for this API instance")
 		return
 	}
 	if err := h.validateActionPlanFresh(orgID, record); err != nil {
