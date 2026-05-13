@@ -222,6 +222,7 @@ type AlertConfig struct {
 	AgentDefaults                  ThresholdConfig                `json:"agentDefaults"`
 	StorageDefault                 HysteresisThreshold            `json:"storageDefault"`
 	DiskFillByType                 map[string]HysteresisThreshold `json:"diskFillByType,omitempty"`
+	DiskTempByType                 map[string]HysteresisThreshold `json:"diskTempByType,omitempty"`
 	DockerDefaults                 DockerThresholdConfig          `json:"dockerDefaults"`
 	DockerIgnoredContainerPrefixes []string                       `json:"dockerIgnoredContainerPrefixes,omitempty"`
 	IgnoredGuestPrefixes           []string                       `json:"ignoredGuestPrefixes,omitempty"`

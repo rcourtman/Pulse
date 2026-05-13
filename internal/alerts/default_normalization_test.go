@@ -301,3 +301,97 @@ func TestDefaultAlertConfigSeedsDiskFillByType(t *testing.T) {
 		t.Fatalf("hdd = %+v ok=%v, want {Trigger:85 Clear:80}", hdd, ok)
 	}
 }
+
+func TestNormalizeDiskTempByType(t *testing.T) {
+	t.Run("nil map seeds nvme/sas/sata defaults", func(t *testing.T) {
+		cfg := &AlertConfig{}
+		alertconfig.NormalizeDiskTempByType(cfg)
+
+		if cfg.DiskTempByType == nil {
+			t.Fatal("expected DiskTempByType to be seeded, got nil")
+		}
+		nvme, ok := cfg.DiskTempByType["nvme"]
+		if !ok {
+			t.Fatal("nvme key not seeded")
+		}
+		if nvme.Trigger != 70 || nvme.Clear != 65 {
+			t.Fatalf("nvme = %+v, want {Trigger:70 Clear:65}", nvme)
+		}
+		sas, ok := cfg.DiskTempByType["sas"]
+		if !ok {
+			t.Fatal("sas key not seeded")
+		}
+		if sas.Trigger != 65 || sas.Clear != 60 {
+			t.Fatalf("sas = %+v, want {Trigger:65 Clear:60}", sas)
+		}
+		sata, ok := cfg.DiskTempByType["sata"]
+		if !ok {
+			t.Fatal("sata key not seeded")
+		}
+		if sata.Trigger != 55 || sata.Clear != 50 {
+			t.Fatalf("sata = %+v, want {Trigger:55 Clear:50}", sata)
+		}
+		if _, ok := cfg.DiskTempByType["hdd"]; ok {
+			t.Fatalf("hdd key should not be seeded for SMART temperature, map=%+v", cfg.DiskTempByType)
+		}
+	})
+
+	t.Run("operator customized values survive", func(t *testing.T) {
+		cfg := &AlertConfig{
+			DiskTempByType: map[string]HysteresisThreshold{
+				"nvme": {Trigger: 75, Clear: 68},
+			},
+		}
+		alertconfig.NormalizeDiskTempByType(cfg)
+
+		nvme := cfg.DiskTempByType["nvme"]
+		if nvme.Trigger != 75 || nvme.Clear != 68 {
+			t.Fatalf("nvme = %+v, want operator value {Trigger:75 Clear:68}", nvme)
+		}
+		if sas, ok := cfg.DiskTempByType["sas"]; !ok || sas.Trigger != 65 || sas.Clear != 60 {
+			t.Fatalf("sas = %+v ok=%v, want default {Trigger:65 Clear:60}", sas, ok)
+		}
+		if sata, ok := cfg.DiskTempByType["sata"]; !ok || sata.Trigger != 55 || sata.Clear != 50 {
+			t.Fatalf("sata = %+v ok=%v, want default {Trigger:55 Clear:50}", sata, ok)
+		}
+	})
+
+	t.Run("negative trigger resets to default", func(t *testing.T) {
+		cfg := &AlertConfig{
+			DiskTempByType: map[string]HysteresisThreshold{
+				"nvme": {Trigger: -1, Clear: 10},
+				"sas":  {Trigger: 64, Clear: -5},
+			},
+		}
+		alertconfig.NormalizeDiskTempByType(cfg)
+
+		nvme := cfg.DiskTempByType["nvme"]
+		if nvme.Trigger != 70 || nvme.Clear != 65 {
+			t.Fatalf("nvme = %+v, want default reset {Trigger:70 Clear:65}", nvme)
+		}
+		sas := cfg.DiskTempByType["sas"]
+		if sas.Trigger != 65 || sas.Clear != 60 {
+			t.Fatalf("sas = %+v, want default reset {Trigger:65 Clear:60}", sas)
+		}
+	})
+
+	t.Run("mixed case keys lowercase to canonical", func(t *testing.T) {
+		cfg := &AlertConfig{
+			DiskTempByType: map[string]HysteresisThreshold{
+				"NVMe": {Trigger: 72, Clear: 67},
+			},
+		}
+		alertconfig.NormalizeDiskTempByType(cfg)
+
+		if _, exists := cfg.DiskTempByType["NVMe"]; exists {
+			t.Fatalf("expected mixed-case key NVMe to be removed, map=%+v", cfg.DiskTempByType)
+		}
+		nvme, ok := cfg.DiskTempByType["nvme"]
+		if !ok {
+			t.Fatalf("expected lowercase nvme key, map=%+v", cfg.DiskTempByType)
+		}
+		if nvme.Trigger != 72 || nvme.Clear != 67 {
+			t.Fatalf("nvme = %+v, want preserved operator value {Trigger:72 Clear:67}", nvme)
+		}
+	})
+}

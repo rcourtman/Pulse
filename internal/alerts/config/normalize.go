@@ -284,6 +284,7 @@ func NormalizeAgentDefaults(config *AlertConfig) {
 	EnsureValidHysteresis(config.AgentDefaults.DiskTemperature, "agent.diskTemperature")
 
 	NormalizeDiskFillByType(config)
+	NormalizeDiskTempByType(config)
 }
 
 // diskFillByTypeDefaults returns the canonical per-type fill-% defaults.
@@ -335,6 +336,57 @@ func NormalizeDiskFillByType(config *AlertConfig) {
 		}
 		if current.Trigger <= 0 || current.Clear <= 0 {
 			config.DiskFillByType[key] = defaultVal
+		}
+	}
+}
+
+// diskTempByTypeDefaults returns the canonical per-type SMART temperature defaults.
+// Keys are lowercase HostDiskSMART.Type values.
+func diskTempByTypeDefaults() map[string]HysteresisThreshold {
+	return map[string]HysteresisThreshold{
+		"nvme": {Trigger: 70, Clear: 65},
+		"sas":  {Trigger: 65, Clear: 60},
+		"sata": {Trigger: 55, Clear: 50},
+	}
+}
+
+// NormalizeDiskTempByType ensures AlertConfig.DiskTempByType is seeded with
+// lowercase nvme/sas/sata defaults when nil, lowercases any existing keys,
+// and resets non-positive trigger or clear values to the default for that key.
+// Operator-customized positive values are preserved.
+func NormalizeDiskTempByType(config *AlertConfig) {
+	defaults := diskTempByTypeDefaults()
+	if config.DiskTempByType == nil {
+		copyMap := make(map[string]HysteresisThreshold, len(defaults))
+		for k, v := range defaults {
+			copyMap[k] = v
+		}
+		config.DiskTempByType = copyMap
+		return
+	}
+
+	for key, value := range config.DiskTempByType {
+		lower := strings.ToLower(strings.TrimSpace(key))
+		if lower == key {
+			continue
+		}
+		delete(config.DiskTempByType, key)
+		if lower == "" {
+			continue
+		}
+		if _, exists := config.DiskTempByType[lower]; !exists {
+			config.DiskTempByType[lower] = value
+		}
+	}
+
+	for key, defaultVal := range defaults {
+		current, ok := config.DiskTempByType[key]
+		if !ok {
+			config.DiskTempByType[key] = defaultVal
+			continue
+		}
+		if current.Trigger <= 0 || current.Clear <= 0 {
+			config.DiskTempByType[key] = defaultVal
 		}
 	}
 }
