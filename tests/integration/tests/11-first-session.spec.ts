@@ -1,11 +1,10 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "@playwright/test";
 import {
-  ensureAuthenticated,
   ensureFirstRunExperience,
   navigateToSettings,
   apiRequest,
   trackBrowserRequests,
-} from './helpers';
+} from "./helpers";
 
 /**
  * Dedicated first-session E2E test covering the full journey:
@@ -13,7 +12,7 @@ import {
  *
  * This satisfies L8 score-8 criteria: "Dedicated first-session E2E test
  * (wizard → settings discovery)" while also keeping the setup-completion
- * surface on real browser proof for both host-install and API-backed starts.
+ * surface on real browser proof for both source-picker and agent-managed starts.
  *
  * The opening test in this file forces the backend into deterministic
  * first-run state through the dev/test reset route, then completes the real
@@ -27,56 +26,103 @@ type RuntimeCapabilitiesPayload = {
 /** Selector for the settings sidebar (div with aria-label, not a nav element). */
 const SETTINGS_SIDEBAR = '[aria-label="Settings navigation"]';
 
-test.describe.serial('First-session experience', () => {
-  test('wizard completes and lands on infrastructure operations', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only first-session coverage');
+test.describe.serial("First-session experience", () => {
+  test("wizard completes and lands on Add infrastructure source picker", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only first-session coverage",
+    );
 
     await ensureFirstRunExperience(page);
 
-    // First-run security now hands off directly into the Infrastructure Operations install flow.
-    await expect(page).toHaveURL(/\/settings\/infrastructure\/install/);
+    await expect(page).toHaveURL(/\/settings\/infrastructure\?add=pick$/);
     await expect(
-      page.getByRole('heading', { name: 'Infrastructure Operations', exact: true }).first(),
+      page.getByText("Connected systems", { exact: true }),
     ).toBeVisible();
-    await expect(page.locator('#root')).toBeVisible();
+    const addDialog = page.getByRole("dialog", { name: "Add infrastructure" });
+    await expect(addDialog).toBeVisible();
+    await expect(
+      addDialog.getByText("Choose how Pulse should connect"),
+    ).toBeVisible();
+    await expect(
+      addDialog.getByRole("button", { name: /Install Pulse Agent/i }),
+    ).toBeVisible();
+    await expect(
+      addDialog.getByRole("button", { name: /Detect API platform/i }),
+    ).toBeVisible();
+    await expect(page.locator("#root")).toBeVisible();
 
     // The main content area should be rendered (not stuck on a spinner/blank).
-    const mainContent = page.locator('main, [role="main"], #root > div').first();
+    const mainContent = page
+      .locator('main, [role="main"], #root > div')
+      .first();
     await expect(mainContent).toBeVisible();
+
+    await page
+      .getByRole("button", {
+        name: "Close add infrastructure dialog",
+        exact: true,
+      })
+      .click();
+    await expect(page).toHaveURL(/\/settings\/infrastructure$/);
   });
 
-  test('wizard completion can hand off API-backed starts into platform connections', async ({
+  test("wizard completion can hand off directly to Pulse Agent install", async ({
     page,
   }, testInfo) => {
-    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only first-session coverage');
-
-    await ensureFirstRunExperience(page, { completionTarget: 'platforms' });
-
-    await expect(page).toHaveURL(/\/settings\/infrastructure\/platforms/);
-    await expect(
-      page.getByRole('heading', { name: 'Infrastructure Operations', exact: true }).first(),
-    ).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Platform connections' })).toHaveAttribute(
-      'aria-selected',
-      'true',
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only first-session coverage",
     );
-    await expect(page.getByText('TrueNAS', { exact: false }).first()).toBeVisible();
+
+    await ensureFirstRunExperience(page, { completionTarget: "agent" });
+
+    await expect(page).toHaveURL(/\/settings\/infrastructure\?add=agent$/);
+    await expect(
+      page.getByText("Connected systems", { exact: true }),
+    ).toBeVisible();
+    const agentDialog = page.getByRole("dialog", { name: "Add Pulse Agent" });
+    await expect(agentDialog).toBeVisible();
+    await expect(
+      agentDialog.getByRole("heading", { name: "Install on a host" }),
+    ).toBeVisible();
+    await expect(
+      agentDialog.getByText(
+        "This is the Pulse Agent handoff from first-run setup inside Add infrastructure.",
+      ),
+    ).toBeVisible();
   });
 
-  test('shell shows key navigation elements', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only first-session coverage');
+  test("shell shows key navigation elements", async ({ page }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only first-session coverage",
+    );
 
-    await ensureAuthenticated(page);
+    await ensureFirstRunExperience(page);
 
     // The Settings tab is rendered as a div[role="tab"] in the top utility bar.
-    const settingsTab = page.locator('[role="tab"]').filter({ hasText: 'Settings' }).first();
-    await expect(settingsTab, 'Settings tab should be visible in the top nav bar').toBeVisible();
+    const settingsTab = page
+      .locator('[role="tab"]')
+      .filter({ hasText: "Settings" })
+      .first();
+    await expect(
+      settingsTab,
+      "Settings tab should be visible in the top nav bar",
+    ).toBeVisible();
   });
 
-  test('settings discovery - all top-level categories render', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only first-session coverage');
+  test("settings discovery - all top-level categories render", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only first-session coverage",
+    );
 
-    await ensureAuthenticated(page);
+    await ensureFirstRunExperience(page);
     await navigateToSettings(page);
 
     // The settings sidebar (div[aria-label="Settings navigation"]) lists category
@@ -85,9 +131,9 @@ test.describe.serial('First-session experience', () => {
     const sidebar = page.locator(SETTINGS_SIDEBAR);
     await expect(sidebar).toBeVisible({ timeout: 10_000 });
 
-    const requiredCategories = ['Infrastructure', 'System', 'Security'];
-    if (process.env.PULSE_MULTI_TENANT_ENABLED === 'true') {
-      requiredCategories.splice(1, 0, 'Organization');
+    const requiredCategories = ["Infrastructure", "System", "Security"];
+    if (process.env.PULSE_MULTI_TENANT_ENABLED === "true") {
+      requiredCategories.splice(1, 0, "Organization");
     }
 
     for (const category of requiredCategories) {
@@ -99,25 +145,28 @@ test.describe.serial('First-session experience', () => {
     }
   });
 
-  test('settings panels load without errors', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only first-session coverage');
+  test("settings panels load without errors", async ({ page }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only first-session coverage",
+    );
 
-    await ensureAuthenticated(page);
+    await ensureFirstRunExperience(page);
 
     // Visit a selection of key settings routes and verify the page renders
     // without console errors or blank screens.
     const keyRoutes = [
-      '/settings/system-general',
-      '/settings/system-updates',
-      '/settings/security-overview',
-      '/settings/security-auth',
-      '/settings/system-pro',
+      "/settings/system-general",
+      "/settings/system-updates",
+      "/settings/security-overview",
+      "/settings/security-auth",
+      "/settings/system-pro",
     ] as const;
 
     const consoleErrors: string[] = [];
     const aiRequests = trackBrowserRequests(page, /\/api\/ai(\/|$)/);
-    page.on('console', (msg) => {
-      if (msg.type() === 'error') {
+    page.on("console", (msg) => {
+      if (msg.type() === "error") {
         consoleErrors.push(msg.text());
       }
     });
@@ -127,16 +176,17 @@ test.describe.serial('First-session experience', () => {
         consoleErrors.length = 0;
         aiRequests.clear();
 
-        await page.goto(route, { waitUntil: 'domcontentloaded' });
+        await page.goto(route, { waitUntil: "domcontentloaded" });
         await page.waitForURL(/\/settings/, { timeout: 10_000 });
-        await expect(page.locator('#root')).toBeVisible();
+        await expect(page.locator("#root")).toBeVisible();
 
         // Wait for the panel content to render. Scope to the settings content
         // area (everything after the sidebar) to avoid matching sidebar labels.
         // Fall back to a page-wide heading if the content area locator doesn't
         // match — some layouts render headings differently.
-        const panelHeading = page.locator('h1, h2, h3, [role="heading"]')
-          .filter({ hasNotText: 'Settings' })
+        const panelHeading = page
+          .locator('h1, h2, h3, [role="heading"]')
+          .filter({ hasNotText: "Settings" })
           .first();
         await expect(
           panelHeading,
@@ -147,22 +197,22 @@ test.describe.serial('First-session experience', () => {
 
         expect(
           aiRequests.count(),
-          `Non-AI settings route ${route} should not bootstrap AI endpoints: ${aiRequests.urls().join(', ')}`,
+          `Non-AI settings route ${route} should not bootstrap AI endpoints: ${aiRequests.urls().join(", ")}`,
         ).toBe(0);
 
         // Filter out benign console noise.
         const realErrors = consoleErrors.filter(
           (e) =>
-            !e.includes('Download the React DevTools') &&
-            !e.includes('Warning:') &&
-            !e.includes('favicon') &&
-            !e.includes('ERR_CONNECTION_REFUSED') &&
-            !e.includes('net::'),
+            !e.includes("Download the React DevTools") &&
+            !e.includes("Warning:") &&
+            !e.includes("favicon") &&
+            !e.includes("ERR_CONNECTION_REFUSED") &&
+            !e.includes("net::"),
         );
 
         expect(
           realErrors.length,
-          `Unexpected console errors on ${route}: ${realErrors.join('; ')}`,
+          `Unexpected console errors on ${route}: ${realErrors.join("; ")}`,
         ).toBe(0);
       }
     } finally {
@@ -170,34 +220,46 @@ test.describe.serial('First-session experience', () => {
     }
   });
 
-  test('gated panels do not flash unlocked content before license loads', async ({
+  test("gated panels do not flash unlocked content before license loads", async ({
     page,
   }, testInfo) => {
-    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only first-session coverage');
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only first-session coverage",
+    );
 
-    await ensureAuthenticated(page);
+    await ensureFirstRunExperience(page);
 
     // Query runtime capabilities to check feature access per-route without
     // depending on billing-only entitlements.
-    const runtimeRes = await apiRequest(page, '/api/license/runtime-capabilities');
+    const runtimeRes = await apiRequest(
+      page,
+      "/api/license/runtime-capabilities",
+    );
     expect(runtimeRes.ok()).toBeTruthy();
-    const runtimeCapabilities = (await runtimeRes.json()) as RuntimeCapabilitiesPayload;
+    const runtimeCapabilities =
+      (await runtimeRes.json()) as RuntimeCapabilitiesPayload;
     const features = new Set(runtimeCapabilities.capabilities || []);
-    const entitlementsRequests = trackBrowserRequests(page, '/api/license/entitlements');
+    const entitlementsRequests = trackBrowserRequests(
+      page,
+      "/api/license/entitlements",
+    );
 
     // Gated routes with their required feature. Gating is feature-based, not
     // tier-based — e.g. a "relay" tier has the relay feature but not
     // advanced_reporting or audit_logging.
     const gatedRoutes = [
-      { route: '/operations/reporting', feature: 'advanced_reporting' },
-      { route: '/settings/security-webhooks', feature: 'audit_logging' },
-      { route: '/settings/system-relay', feature: 'relay' },
+      { route: "/operations/reporting", feature: "advanced_reporting" },
+      { route: "/settings/security-webhooks", feature: "audit_logging" },
+      { route: "/settings/system-relay", feature: "relay" },
     ] as const;
 
     try {
       for (const { route, feature } of gatedRoutes) {
         const hasFeature = features.has(feature);
-        const routePattern = route.startsWith('/operations/') ? /\/operations/ : /\/settings/;
+        const routePattern = route.startsWith("/operations/")
+          ? /\/operations/
+          : /\/settings/;
 
         if (!hasFeature) {
           // Install a MutationObserver via addInitScript BEFORE navigating so it
@@ -205,7 +267,8 @@ test.describe.serial('First-session experience', () => {
           // flash before the paywall renders (flash-of-unlocked-content).
           await page.addInitScript(() => {
             (window as any).__pulseFlashDetected = false;
-            const SELECTOR = 'form input:not([type="search"]), form textarea, form select';
+            const SELECTOR =
+              'form input:not([type="search"]), form textarea, form select';
 
             const checkForFlash = () => {
               const els = document.querySelectorAll(SELECTOR);
@@ -231,9 +294,9 @@ test.describe.serial('First-session experience', () => {
             setTimeout(() => observer.disconnect(), 5000);
           });
 
-          await page.goto(route, { waitUntil: 'domcontentloaded' });
+          await page.goto(route, { waitUntil: "domcontentloaded" });
           await page.waitForURL(routePattern, { timeout: 10_000 });
-          await expect(page.locator('#root')).toBeVisible();
+          await expect(page.locator("#root")).toBeVisible();
 
           // Wait for the page to settle, then read the observer result.
           await page.waitForTimeout(2_000);
@@ -247,9 +310,11 @@ test.describe.serial('First-session experience', () => {
           ).toBe(false);
 
           // Paywall indicator should be visible.
-          const paywallIndicator = page.locator(
-            'text=/Upgrade|Pro Feature|Requires Pro|Requires Relay|Start.*Trial/i',
-          ).first();
+          const paywallIndicator = page
+            .locator(
+              "text=/Upgrade|Pro Feature|Requires Pro|Requires Relay|Start.*Trial/i",
+            )
+            .first();
           const isPaywallVisible = await paywallIndicator
             .isVisible({ timeout: 5_000 })
             .catch(() => false);
@@ -258,14 +323,14 @@ test.describe.serial('First-session experience', () => {
             `Gated route ${route} (feature=${feature}) should show paywall when feature is not available`,
           ).toBeTruthy();
         } else {
-          await page.goto(route, { waitUntil: 'domcontentloaded' });
+          await page.goto(route, { waitUntil: "domcontentloaded" });
           await page.waitForURL(routePattern, { timeout: 10_000 });
-          await expect(page.locator('#root')).toBeVisible();
+          await expect(page.locator("#root")).toBeVisible();
 
           // Licensed for this feature — the full panel content should render.
           const panelContent = page
-            .locator('h1, h2, h3, label, form')
-            .filter({ hasNotText: 'Settings' })
+            .locator("h1, h2, h3, label, form")
+            .filter({ hasNotText: "Settings" })
             .first();
           await expect(
             panelContent,
@@ -278,28 +343,35 @@ test.describe.serial('First-session experience', () => {
       entitlementsRequests.stop();
       expect(
         requestedURLs,
-        'Non-billing gated routes must not trigger billing entitlements reads in the browser shell',
+        "Non-billing gated routes must not trigger billing entitlements reads in the browser shell",
       ).toEqual([]);
     }
   });
 
-  test('Pro license panel is discoverable from settings', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only first-session coverage');
+  test("Pro license panel is discoverable from settings", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only first-session coverage",
+    );
 
-    await ensureAuthenticated(page);
-    await page.goto('/settings/system-pro', { waitUntil: 'domcontentloaded' });
+    await ensureFirstRunExperience(page);
+    await page.goto("/settings/system-pro", { waitUntil: "domcontentloaded" });
     await page.waitForURL(/\/settings/, { timeout: 10_000 });
 
     // The Pro panel should always render — either showing license details
     // (if licensed) or the activation/trial UI (if on free tier).
     // Scope assertions to content that is specific to the license panel,
     // not the sidebar label "Pulse Pro".
-    const licenseContent = page.locator(
-      'text=/Current License|Activate|License Key|Start.*Trial|Subscription|Free Tier/i',
-    ).first();
+    const licenseContent = page
+      .locator(
+        "text=/Current License|Activate|License Key|Start.*Trial|Subscription|Free Tier/i",
+      )
+      .first();
     await expect(
       licenseContent,
-      'Pro license panel should show license-specific content (not just sidebar label)',
+      "Pro license panel should show license-specific content (not just sidebar label)",
     ).toBeVisible({ timeout: 10_000 });
   });
 });

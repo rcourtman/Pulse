@@ -884,8 +884,10 @@ profile and assignment columns, but embedded table framing must route through
     into Add infrastructure instead of repeating competing install or dashboard
     CTAs across multiple sections. Once the first monitored system is
     already connected, that same surface must pivot its primary CTA and headline
-    to `/` so the operator is sent to the dashboard rather than being told to
-    connect the first source again. While the first source is still pending,
+    to `/settings/infrastructure` so the operator returns to the shared
+    infrastructure workspace rather than being told to connect the first source
+    again or being sent through a generic home/dashboard completion. While the
+    first source is still pending,
     that same completion narrative must describe Add infrastructure as the
     place where the operator chooses platform API inventory, Pulse Agent
     telemetry, or both. If the operator selects the direct agent path from that
@@ -2726,6 +2728,13 @@ setup: RC-proof and helpers must treat direct navigation into
 `/settings/infrastructure?add=pick` as the canonical completion path, rather
 than assuming an agent-only install landing or the legacy dashboard-only
 landing still defines successful wizard completion.
+For already-connected completion states, the `Open Infrastructure` action must
+return through the shared infrastructure workspace route
+`/settings/infrastructure`, not the root app shell or a dashboard alias. The
+source-picker and agent-install actions remain the explicit first-source
+handoffs at `/settings/infrastructure?add=pick` and
+`/settings/infrastructure?add=agent`, so setup-completion tests must assert the
+route helpers rather than allowing a generic home-route completion.
 That same `SetupCompletionPanel` boundary must also stay on the direct
 `setup-completion-source-picker-surface` proof path, rather than relying only
 on shared helper coverage or downstream install tests to catch lifecycle drift

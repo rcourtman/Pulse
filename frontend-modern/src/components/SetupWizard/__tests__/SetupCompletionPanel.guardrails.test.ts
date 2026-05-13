@@ -11,12 +11,18 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).toContain(
       "const AGENT_INSTALL_PATH = buildInfrastructureOnboardingPath('agent');",
     );
+    expect(setupCompletionPanelSource).toContain(
+      'const INFRASTRUCTURE_WORKSPACE_PATH = buildInfrastructureWorkspacePath();',
+    );
     expect(setupCompletionPanelSource).toContain('Add infrastructure');
     expect(setupCompletionPanelSource).toContain('Install Pulse Agent');
     expect(setupCompletionPanelSource).toContain('Credentials you must save now');
     expect(setupCompletionPanelSource).toContain('Shown during setup');
     expect(setupCompletionPanelSource).toContain('props.onComplete(ADD_INFRASTRUCTURE_PATH);');
     expect(setupCompletionPanelSource).toContain('props.onComplete(AGENT_INSTALL_PATH);');
+    expect(setupCompletionPanelSource).toContain(
+      'props.onComplete(INFRASTRUCTURE_WORKSPACE_PATH);',
+    );
     expect(setupCompletionPanelSource).toContain(
       'Use Add infrastructure to choose a platform API, Pulse Agent, or both',
     );
@@ -54,7 +60,9 @@ describe('SetupCompletionPanel guardrails', () => {
     );
     expect(setupCompletionPanelSource).not.toContain("title: 'What happens next'");
     expect(setupCompletionPanelSource).not.toContain("title: 'Open Add infrastructure'");
-    expect(setupCompletionPanelSource).not.toContain("title: 'Save the source and confirm coverage'");
+    expect(setupCompletionPanelSource).not.toContain(
+      "title: 'Save the source and confirm coverage'",
+    );
     expect(setupCompletionPanelSource).not.toContain('What to expect');
     expect(setupCompletionPanelSource).not.toContain('First system first');
     expect(setupCompletionPanelSource).not.toContain('Smart Auto-Detection');

@@ -414,6 +414,13 @@ server-side update execution surfaces.
    Infrastructure landing path rather than the retired `/dashboard` route, and
    any helper changes that rely on hot-dev browser/backend behavior must keep a
    managed-runtime recovery proof updated in the same slice.
+   When those helpers complete first-run setup, they must preserve the API token
+   emitted through the setup handoff and write it back to the managed runtime
+   state before later authenticated entry attempts. Stale configured tokens may
+   be discarded after backend auth failure, but reset and re-entry must still
+   use backend-owned dev reset, admin-bypass, session-login, or token-auth paths
+   instead of deleting runtime files, rebuilding bootstrap state, or accepting
+   the retired dashboard route as proof of authentication.
 8. Keep root-level Playwright wrapper routing on the canonical managed browser
    truth. `playwright.config.ts`, `tests/integration/playwright.config.ts`,
    and `tests/integration/tests/runtime-defaults.ts` must resolve the same
@@ -936,6 +943,11 @@ helper coverage that demonstrates browser-shell request tracking remains
 trustworthy when the same test also performs direct health or security-status
 API probes, and that authenticated bootstrap does not fall back to the retired
 Dashboard route.
+That proof pack must also cover first-session helper re-entry under the managed
+runtime: after the dev reset route drives the live setup wizard to Add
+infrastructure, the helper must persist the current primary API token into the
+runtime-state file and use that token for a later authenticated browser entry
+instead of depending on leftover session storage or a dashboard redirect.
 `scripts/hot-dev-bg.sh` must also supervise `scripts/hot-dev.sh` in an isolated
 child session so an unexpected owner-process death cannot leave orphaned
 watchers or health monitors behind. When the supervisor replaces the managed

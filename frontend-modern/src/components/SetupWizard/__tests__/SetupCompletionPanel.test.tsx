@@ -86,9 +86,7 @@ describe('SetupCompletionPanel', () => {
     expect(screen.getByText('Platform API')).toBeInTheDocument();
     expect(screen.getByText('Use both')).toBeInTheDocument();
     expect(
-      screen.getByText(
-        'Inventory and health from Proxmox, TrueNAS, VMware, PBS, or PMG.',
-      ),
+      screen.getByText('Inventory and health from Proxmox, TrueNAS, VMware, PBS, or PMG.'),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -205,7 +203,9 @@ describe('SetupCompletionPanel', () => {
         'Add infrastructure stays available for more Pulse Agent systems or platform API inventory when a platform manages the estate.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Open Infrastructure' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Open Infrastructure' }).length).toBeGreaterThan(
+      0,
+    );
     expect(screen.getAllByRole('button', { name: 'Add infrastructure' }).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Install Pulse Agent' })).not.toBeInTheDocument();
 
@@ -216,7 +216,7 @@ describe('SetupCompletionPanel', () => {
     fireEvent.click(
       within(nextStepCard as HTMLElement).getByRole('button', { name: 'Open Infrastructure' }),
     );
-    expect(onComplete).toHaveBeenCalledWith('/');
+    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure');
   });
 
   it('keeps add infrastructure available for API-backed starts after the first system connects', async () => {

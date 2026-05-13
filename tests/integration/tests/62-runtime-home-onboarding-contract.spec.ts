@@ -2,7 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test as base, expect } from "@playwright/test";
-import { createAuthenticatedStorageState } from "./helpers";
+import {
+  createAuthenticatedStorageState,
+  ensureAuthenticated,
+} from "./helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -42,6 +45,7 @@ test.describe("runtime-home onboarding contract", () => {
   test("opens the agent install handoff on the shared infrastructure workspace", async ({
     page,
   }) => {
+    await ensureAuthenticated(page);
     await page.goto("/settings/infrastructure?add=agent", {
       waitUntil: "domcontentloaded",
     });
@@ -78,6 +82,7 @@ test.describe("runtime-home onboarding contract", () => {
   test("opens the platform-pick handoff on the shared infrastructure workspace", async ({
     page,
   }) => {
+    await ensureAuthenticated(page);
     await page.goto("/settings/infrastructure?add=pick", {
       waitUntil: "domcontentloaded",
     });
@@ -104,6 +109,7 @@ test.describe("runtime-home onboarding contract", () => {
   test("normalizes legacy platform-management paths back to the inventory workspace", async ({
     page,
   }) => {
+    await ensureAuthenticated(page);
     await page.goto("/settings/infrastructure/platforms/truenas", {
       waitUntil: "domcontentloaded",
     });
@@ -116,7 +122,7 @@ test.describe("runtime-home onboarding contract", () => {
       }),
     ).toBeVisible();
     await expect(
-      page.getByText("Infrastructure systems", { exact: true }),
+      page.getByText("Connected systems", { exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: /Probe API endpoint/i }),

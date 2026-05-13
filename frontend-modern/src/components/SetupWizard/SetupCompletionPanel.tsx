@@ -5,7 +5,10 @@ import { apiFetchJSON } from '@/utils/apiClient';
 import { getPulseBaseUrl } from '@/utils/url';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
-import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrastructureWorkspaceModel';
+import {
+  buildInfrastructureOnboardingPath,
+  buildInfrastructureWorkspacePath,
+} from '@/components/Settings/infrastructureWorkspaceModel';
 import type { WizardState } from '../SetupWizard';
 import {
   buildSetupCompletionConnectedSystems,
@@ -35,6 +38,7 @@ const SOURCE_STRATEGY_OPTIONS = [
 
 const ADD_INFRASTRUCTURE_PATH = buildInfrastructureOnboardingPath('pick');
 const AGENT_INSTALL_PATH = buildInfrastructureOnboardingPath('agent');
+const INFRASTRUCTURE_WORKSPACE_PATH = buildInfrastructureWorkspacePath();
 
 export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
   const [copied, setCopied] = createSignal<'password' | 'admin-token' | null>(null);
@@ -155,7 +159,7 @@ Keep these credentials secure!
   };
 
   const handleOpenInfrastructure = () => {
-    props.onComplete('/');
+    props.onComplete(INFRASTRUCTURE_WORKSPACE_PATH);
   };
 
   const completionViewModel = createMemo(() => buildSetupCompletionViewModel(connectedSystems()));

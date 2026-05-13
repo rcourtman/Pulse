@@ -1,6 +1,11 @@
 import { expect, test } from '@playwright/test';
 
-import { ensureAuthenticated, trackBrowserRequests } from './helpers';
+import {
+  ensureAuthenticated,
+  ensureFirstRunExperience,
+  trackBrowserRequests,
+} from './helpers';
+import { readRuntimeState } from './runtime-defaults';
 import {
   killManagedDevRuntimeOwnerProcess,
   restartManagedDevRuntimeBackend,
@@ -41,6 +46,29 @@ test.describe.serial('Managed dev runtime recovery', () => {
     } finally {
       securityStatusRequests.stop();
     }
+  });
+
+  test('first-session helper preserves managed runtime auth after dev reset', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(120_000);
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only managed dev runtime coverage');
+    test.skip(!truthy(process.env.PULSE_E2E_USE_HOT_DEV), 'Runs only against the managed hot-dev runtime');
+
+    await ensureFirstRunExperience(page);
+    await expect(page).toHaveURL(/\/settings\/infrastructure\?add=pick$/);
+    await expect(page.getByRole('dialog', { name: 'Add infrastructure' })).toBeVisible();
+
+    expect(
+      String(readRuntimeState()?.primaryAPIToken || '').trim().length,
+      'expected first-session helper to persist the handoff API token to runtime state',
+    ).toBeGreaterThan(0);
+
+    await page.evaluate(() => {
+      window.sessionStorage.removeItem('pulse_auth');
+    });
+    await ensureAuthenticated(page);
+    await expect(page).not.toHaveURL(/\/dashboard(?:[/?#]|$)/);
   });
 
   test('browser shell distinguishes stream-only reconnect from total backend loss', async ({

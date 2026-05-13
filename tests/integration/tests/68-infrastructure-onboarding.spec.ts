@@ -2,7 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test as base, type Page } from "@playwright/test";
-import { createAuthenticatedStorageState } from "./helpers";
+import {
+  createAuthenticatedStorageState,
+  ensureAuthenticated,
+} from "./helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -64,6 +67,7 @@ async function stubConnectionsList(page: Page): Promise<void> {
 
 async function prepareOnboardingPage(page: Page): Promise<void> {
   await stubConnectionsList(page);
+  await ensureAuthenticated(page);
 }
 
 async function scrollToBottom(page: Page): Promise<void> {
@@ -181,7 +185,7 @@ test.describe("Infrastructure onboarding", () => {
     });
 
     await expect(
-      page.getByText("Infrastructure systems", { exact: true }),
+      page.getByText("Connected systems", { exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: /Run discovery/i }),
@@ -192,12 +196,12 @@ test.describe("Infrastructure onboarding", () => {
     await expect(
       page.getByRole("button", { name: /Discovery settings/i }),
     ).toBeVisible();
-    await expect(
-      page.getByText("VMware vCenter", { exact: true }),
-    ).toHaveCount(0);
-    await expect(
-      page.getByText("TrueNAS SCALE", { exact: true }),
-    ).toHaveCount(0);
+    await expect(page.getByText("VMware vCenter", { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(page.getByText("TrueNAS SCALE", { exact: true })).toHaveCount(
+      0,
+    );
     await expect(page.getByText("Proxmox VE", { exact: true })).toBeVisible();
     await expect(
       page.getByText("Standalone hosts", { exact: true }),
@@ -282,7 +286,7 @@ test.describe("Infrastructure onboarding", () => {
     });
 
     await expect(
-      page.getByText("Infrastructure systems", { exact: true }),
+      page.getByText("Connected systems", { exact: true }),
     ).toBeVisible();
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(
@@ -476,7 +480,7 @@ test.describe("Infrastructure onboarding", () => {
       timeout: 15_000,
     });
     await expect(
-      page.getByText("Infrastructure systems", { exact: true }),
+      page.getByText("Connected systems", { exact: true }),
     ).toBeVisible();
     await expect(page.getByText("Pulse Agent", { exact: true })).toBeVisible();
     await expect(

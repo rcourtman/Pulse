@@ -1,8 +1,10 @@
+import fs from "node:fs";
 import { Browser, Page, Request, expect } from "@playwright/test";
 import {
   preferredBrowserBaseURL,
   preferredPlaywrightRouteBaseURL,
   readRuntimeState,
+  runtimeStatePath,
 } from "./runtime-defaults";
 
 const runtimePrimaryAPIToken = (): string => {
@@ -11,6 +13,9 @@ const runtimePrimaryAPIToken = (): string => {
     ? parsed.primaryAPIToken.trim()
     : "";
 };
+
+const configuredPrimaryAPIToken = (): string =>
+  runtimePrimaryAPIToken() || process.env.PULSE_E2E_PRIMARY_API_TOKEN || "";
 
 /**
  * Default admin credentials for testing
@@ -27,10 +32,42 @@ const DEFAULT_E2E_BOOTSTRAP_TOKEN =
 export const E2E_CREDENTIALS = {
   bootstrapToken:
     process.env.PULSE_E2E_BOOTSTRAP_TOKEN || DEFAULT_E2E_BOOTSTRAP_TOKEN,
-  primaryApiToken:
-    process.env.PULSE_E2E_PRIMARY_API_TOKEN || runtimePrimaryAPIToken(),
+  primaryApiToken: configuredPrimaryAPIToken(),
   username: process.env.PULSE_E2E_USERNAME || ADMIN_CREDENTIALS.username,
   password: process.env.PULSE_E2E_PASSWORD || ADMIN_CREDENTIALS.password,
+};
+
+const SETUP_HANDOFF_STORAGE_KEY = "pulse_setup_handoff";
+let ignoreConfiguredPrimaryAPIToken = false;
+
+const currentPrimaryAPIToken = (): string =>
+  String(
+    E2E_CREDENTIALS.primaryApiToken ||
+      (ignoreConfiguredPrimaryAPIToken ? "" : configuredPrimaryAPIToken()),
+  ).trim();
+
+const rememberPrimaryAPIToken = (token: unknown) => {
+  const nextToken = String(token || "").trim();
+  if (nextToken) {
+    E2E_CREDENTIALS.primaryApiToken = nextToken;
+    ignoreConfiguredPrimaryAPIToken = false;
+    persistRuntimePrimaryAPIToken(nextToken);
+  }
+};
+
+const persistRuntimePrimaryAPIToken = (token: string) => {
+  try {
+    const runtimePath = runtimeStatePath();
+    const currentState = readRuntimeState() || {};
+    fs.writeFileSync(
+      runtimePath,
+      `${JSON.stringify({ ...currentState, primaryAPIToken: token }, null, 2)}\n`,
+      "utf8",
+    );
+  } catch {
+    // Runtime-state persistence is a managed-local optimization. In plain
+    // Playwright runs the in-process credential update is still sufficient.
+  }
 };
 
 async function waitForAppShell(page: Page, timeoutMs = 20_000) {
@@ -97,23 +134,29 @@ type ResetFirstRunResponse = {
   bootstrapToken?: string;
 };
 
-type SetupCompletionTarget = "install" | "platforms" | "none";
+type SetupCompletionTarget = "sources" | "agent" | "none";
 
 type CompleteSetupWizardOptions = {
   completionTarget?: SetupCompletionTarget;
 };
 
+type CompleteSetupWizardResult = {
+  apiToken?: string;
+};
+
+const AUTHENTICATED_URL = /\/(proxmox|nodes|hosts|docker|infrastructure)/;
+
 const SETUP_COMPLETION_HANDOFFS: Record<
   Exclude<SetupCompletionTarget, "none">,
   { buttonName: string; urlPattern: RegExp }
 > = {
-  install: {
-    buttonName: "Open Infrastructure Install",
-    urlPattern: /\/settings\/infrastructure\/install/,
+  sources: {
+    buttonName: "Add infrastructure",
+    urlPattern: /\/settings\/infrastructure\?add=pick$/,
   },
-  platforms: {
-    buttonName: "Open Platform connections",
-    urlPattern: /\/settings\/infrastructure\/platforms/,
+  agent: {
+    buttonName: "Install Pulse Agent",
+    urlPattern: /\/settings\/infrastructure\?add=agent$/,
   },
 };
 
@@ -121,8 +164,8 @@ async function completeSetupWizard(
   page: Page,
   bootstrapToken: string,
   options: CompleteSetupWizardOptions = {},
-) {
-  const completionTarget = options.completionTarget ?? "install";
+): Promise<CompleteSetupWizardResult> {
+  const completionTarget = options.completionTarget ?? "sources";
   if (!bootstrapToken) {
     throw new Error(
       "Pulse requires first-run setup but no bootstrap token is available",
@@ -136,14 +179,14 @@ async function completeSetupWizard(
   await expect(wizard).toBeVisible();
 
   const completionHeading = wizard.getByRole("heading", {
-    name: /install your first monitored host|first monitored host connected/i,
+    name: /choose your first infrastructure source|first monitored system connected/i,
   });
-  const openInstallWorkspaceButton = wizard.getByRole("button", {
-    name: "Open Infrastructure Install",
+  const addInfrastructureButton = wizard.getByRole("button", {
+    name: "Add infrastructure",
     exact: true,
   });
-  const openPlatformConnectionsButton = wizard.getByRole("button", {
-    name: "Open Platform connections",
+  const installPulseAgentButton = wizard.getByRole("button", {
+    name: "Install Pulse Agent",
     exact: true,
   });
   const securePulseHeading = wizard.getByText("Secure Pulse");
@@ -168,19 +211,17 @@ async function completeSetupWizard(
       (await completionHeading
         .isVisible({ timeout: 100 })
         .catch(() => false)) ||
-      (await openInstallWorkspaceButton
+      (await addInfrastructureButton
         .isVisible({ timeout: 100 })
         .catch(() => false)) ||
-      (await openPlatformConnectionsButton
+      (await installPulseAgentButton
         .isVisible({ timeout: 100 })
         .catch(() => false))
     ) {
       return "completion";
     }
     if (
-      await securePulseHeading
-        .isVisible({ timeout: 100 })
-        .catch(() => false)
+      await securePulseHeading.isVisible({ timeout: 100 }).catch(() => false)
     ) {
       return "security";
     }
@@ -238,10 +279,10 @@ async function completeSetupWizard(
             (await completionHeading
               .isVisible({ timeout: 250 })
               .catch(() => false)) ||
-            (await openInstallWorkspaceButton
+            (await addInfrastructureButton
               .isVisible({ timeout: 250 })
               .catch(() => false)) ||
-            (await openPlatformConnectionsButton
+            (await installPulseAgentButton
               .isVisible({ timeout: 250 })
               .catch(() => false))
           ) {
@@ -276,18 +317,20 @@ async function completeSetupWizard(
               (await completionHeading
                 .isVisible({ timeout: 250 })
                 .catch(() => false)) ||
-              (await openInstallWorkspaceButton
+              (await addInfrastructureButton
                 .isVisible({ timeout: 250 })
                 .catch(() => false)) ||
-              (await openPlatformConnectionsButton
+              (await installPulseAgentButton
                 .isVisible({ timeout: 250 })
                 .catch(() => false))
             ) {
               return "complete";
             }
             if (
-              completionTarget === "install" &&
-              SETUP_COMPLETION_HANDOFFS.install.urlPattern.test(page.url())
+              completionTarget !== "none" &&
+              SETUP_COMPLETION_HANDOFFS[completionTarget].urlPattern.test(
+                page.url(),
+              )
             ) {
               return "handoff";
             }
@@ -322,7 +365,7 @@ async function completeSetupWizard(
 
     if (!completionAction.urlPattern.test(page.url())) {
       throw new Error(
-        `Setup wizard completion did not hand off to ${completionAction.buttonName}: ${page.url()}`,
+        `Setup wizard completion did not hand off through ${completionAction.buttonName}: ${page.url()}`,
       );
     }
   } else if (onCompleteStep) {
@@ -336,6 +379,23 @@ async function completeSetupWizard(
   }
 
   await page.waitForLoadState("domcontentloaded");
+
+  const apiToken = await page
+    .evaluate((storageKey) => {
+      try {
+        const raw = window.sessionStorage.getItem(storageKey);
+        if (!raw) return "";
+        const payload = JSON.parse(raw) as { apiToken?: unknown };
+        return typeof payload.apiToken === "string"
+          ? payload.apiToken.trim()
+          : "";
+      } catch {
+        return "";
+      }
+    }, SETUP_HANDOFF_STORAGE_KEY)
+    .catch(() => "");
+
+  return { apiToken: apiToken || undefined };
 }
 
 export async function getSecurityStatus(page: Page): Promise<SecurityStatus> {
@@ -352,7 +412,65 @@ export async function maybeCompleteSetupWizard(page: Page) {
     return;
   }
 
-  await completeSetupWizard(page, E2E_CREDENTIALS.bootstrapToken);
+  const setup = await completeSetupWizard(page, E2E_CREDENTIALS.bootstrapToken);
+  rememberPrimaryAPIToken(setup.apiToken);
+}
+
+async function resetFirstRunState(
+  page: Page,
+  security: SecurityStatus,
+): Promise<ResetFirstRunResponse> {
+  const resetPath = "/api/security/dev/reset-first-run";
+  const reset = (headers?: Record<string, string>) =>
+    apiRequest(page, resetPath, {
+      method: "POST",
+      headers,
+    });
+  const isAuthFailure = (status: number) => status === 401 || status === 403;
+
+  const primaryToken = currentPrimaryAPIToken();
+  if (primaryToken) {
+    const tokenRes = await reset({ "X-API-Token": primaryToken });
+    if (tokenRes.ok()) {
+      return (await tokenRes.json()) as ResetFirstRunResponse;
+    }
+    if (!isAuthFailure(tokenRes.status())) {
+      throw new Error(
+        `Failed to reset first-run state: ${tokenRes.status()} ${await tokenRes.text()}`,
+      );
+    }
+
+    // The reset route intentionally clears API tokens. A configured static
+    // token can therefore be valid for the first reset and stale for later
+    // first-session tests in the same managed runtime.
+    E2E_CREDENTIALS.primaryApiToken = "";
+    ignoreConfiguredPrimaryAPIToken = true;
+  }
+
+  const bypassRes = await reset({ "X-Admin-Bypass": "true" });
+  if (bypassRes.ok()) {
+    return (await bypassRes.json()) as ResetFirstRunResponse;
+  }
+  if (!isAuthFailure(bypassRes.status())) {
+    throw new Error(
+      `Failed to reset first-run state: ${bypassRes.status()} ${await bypassRes.text()}`,
+    );
+  }
+
+  if (security.hasAuthentication !== false) {
+    await login(page);
+    const sessionRes = await reset();
+    if (sessionRes.ok()) {
+      return (await sessionRes.json()) as ResetFirstRunResponse;
+    }
+    throw new Error(
+      `Failed to reset first-run state after login fallback: ${sessionRes.status()} ${await sessionRes.text()}`,
+    );
+  }
+
+  throw new Error(
+    `Failed to reset first-run state: ${bypassRes.status()} ${await bypassRes.text()}`,
+  );
 }
 
 export async function ensureFirstRunExperience(
@@ -360,33 +478,11 @@ export async function ensureFirstRunExperience(
   options: CompleteSetupWizardOptions = {},
 ) {
   await waitForPulseReady(page);
-  const completionTarget = options.completionTarget ?? "install";
+  const completionTarget = options.completionTarget ?? "sources";
 
   let bootstrapToken = E2E_CREDENTIALS.bootstrapToken;
   const security = await getSecurityStatus(page);
-  let resetRes = await apiRequest(page, "/api/security/dev/reset-first-run", {
-    method: "POST",
-    headers: E2E_CREDENTIALS.primaryApiToken
-      ? { "X-API-Token": E2E_CREDENTIALS.primaryApiToken }
-      : undefined,
-  });
-  if (
-    resetRes.status() === 401 &&
-    !E2E_CREDENTIALS.primaryApiToken &&
-    security.hasAuthentication !== false
-  ) {
-    await login(page);
-    resetRes = await apiRequest(page, "/api/security/dev/reset-first-run", {
-      method: "POST",
-    });
-  }
-  if (!resetRes.ok()) {
-    throw new Error(
-      `Failed to reset first-run state: ${resetRes.status()} ${await resetRes.text()}`,
-    );
-  }
-
-  const payload = (await resetRes.json()) as ResetFirstRunResponse;
+  const payload = await resetFirstRunState(page, security);
   bootstrapToken = String(payload.bootstrapToken || "").trim();
   if (bootstrapToken === "") {
     throw new Error(
@@ -394,15 +490,18 @@ export async function ensureFirstRunExperience(
     );
   }
 
-  await completeSetupWizard(page, bootstrapToken, { completionTarget });
+  const setup = await completeSetupWizard(page, bootstrapToken, {
+    completionTarget,
+  });
+  rememberPrimaryAPIToken(setup.apiToken);
   const firstRunLandingPattern =
-    completionTarget === "platforms"
-      ? SETUP_COMPLETION_HANDOFFS.platforms.urlPattern
-      : /\/(settings\/infrastructure\/install|proxmox|nodes|hosts|docker|infrastructure)/;
+    completionTarget === "none"
+      ? /\/(settings\/infrastructure|proxmox|nodes|hosts|docker|infrastructure)/
+      : SETUP_COMPLETION_HANDOFFS[completionTarget].urlPattern;
   if (!firstRunLandingPattern.test(page.url())) {
-    if (completionTarget === "platforms") {
+    if (completionTarget !== "none") {
       throw new Error(
-        `First-run setup did not reach Platform connections: ${page.url()}`,
+        `First-run setup did not reach ${SETUP_COMPLETION_HANDOFFS[completionTarget].buttonName}: ${page.url()}`,
       );
     }
     await login(page);
@@ -428,8 +527,6 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
   await page.goto("/");
   await waitForAppShell(page);
 
-  const authenticatedURL =
-    /\/(proxmox|nodes|hosts|docker|infrastructure)/;
   const usernameInput = page.locator('input[name="username"]');
 
   const state = await Promise.race([
@@ -438,7 +535,7 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
       .then(() => "login")
       .catch(() => undefined),
     page
-      .waitForURL(authenticatedURL, { timeout: 15_000 })
+      .waitForURL(AUTHENTICATED_URL, { timeout: 15_000 })
       .then(() => "authenticated")
       .catch(() => undefined),
   ]);
@@ -471,7 +568,7 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
     .poll(
       async () => {
         const url = page.url();
-        if (authenticatedURL.test(url)) {
+        if (AUTHENTICATED_URL.test(url)) {
           return "authenticated";
         }
 
@@ -503,13 +600,48 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
     .toBe("authenticated");
 }
 
+async function authenticateWithPrimaryAPIToken(page: Page): Promise<boolean> {
+  const token = currentPrimaryAPIToken();
+  if (!token) {
+    return false;
+  }
+
+  await page.goto(`/?token=${encodeURIComponent(token)}`, {
+    waitUntil: "domcontentloaded",
+  });
+  await waitForAppShell(page);
+
+  const state = await Promise.race([
+    page
+      .waitForURL(AUTHENTICATED_URL, { timeout: 10_000 })
+      .then(() => "authenticated")
+      .catch(() => undefined),
+    page
+      .locator('input[name="username"]')
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .then(() => "login")
+      .catch(() => undefined),
+  ]);
+
+  if (state === "authenticated") {
+    return true;
+  }
+
+  await page
+    .evaluate(() => {
+      window.sessionStorage.removeItem("pulse_auth");
+    })
+    .catch(() => {});
+  return false;
+}
+
 export async function ensureAuthenticated(page: Page) {
   await waitForPulseReady(page);
   await maybeCompleteSetupWizard(page);
-  await login(page);
-  await expect(page).toHaveURL(
-    /\/(proxmox|nodes|hosts|docker|infrastructure)/,
-  );
+  if (!(await authenticateWithPrimaryAPIToken(page))) {
+    await login(page);
+  }
+  await expect(page).toHaveURL(AUTHENTICATED_URL);
 }
 
 export async function createAuthenticatedStorageState(
