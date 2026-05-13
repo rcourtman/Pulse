@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
@@ -343,11 +344,12 @@ func (m *Monitor) UnlinkHostAgent(hostID string) error {
 
 // HostAgentConfig represents server-side configuration for a host agent.
 type HostAgentConfig struct {
-	CommandsEnabled *bool                  `json:"commandsEnabled,omitempty"` // nil = use agent default
-	Settings        map[string]interface{} `json:"settings,omitempty"`        // Merged profile settings
-	IssuedAt        *time.Time             `json:"issuedAt,omitempty"`
-	ExpiresAt       *time.Time             `json:"expiresAt,omitempty"`
-	Signature       string                 `json:"signature,omitempty"`
+	CommandsEnabled *bool                               `json:"commandsEnabled,omitempty"` // nil = use agent default
+	Settings        map[string]interface{}              `json:"settings,omitempty"`        // Merged profile settings
+	DesiredConfig   *remoteconfig.DesiredConfigMetadata `json:"desiredConfig,omitempty"`
+	IssuedAt        *time.Time                          `json:"issuedAt,omitempty"`
+	ExpiresAt       *time.Time                          `json:"expiresAt,omitempty"`
+	Signature       string                              `json:"signature,omitempty"`
 }
 
 // GetHostAgentConfig returns the server-side configuration for a host agent.
@@ -390,6 +392,16 @@ func (m *Monitor) GetHostAgentConfig(hostID string) HostAgentConfig {
 		}
 	}
 
+	return attachDesiredConfigMetadata(cfg)
+}
+
+func attachDesiredConfigMetadata(cfg HostAgentConfig) HostAgentConfig {
+	metadata, err := remoteconfig.BuildDesiredConfigMetadata(cfg.CommandsEnabled, cfg.Settings)
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to build host agent desired config metadata")
+		return cfg
+	}
+	cfg.DesiredConfig = &metadata
 	return cfg
 }
 

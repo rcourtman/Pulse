@@ -6,6 +6,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
 )
 
 func TestGetHostAgentConfig_WithProfiles(t *testing.T) {
@@ -63,6 +64,8 @@ func TestGetHostAgentConfig_WithProfiles(t *testing.T) {
 		if val, ok := cfg.Settings["log_level"]; !ok || val != "debug" {
 			t.Errorf("Expected log_level='debug', got %v", val)
 		}
+
+		assertDesiredConfigMetadata(t, cfg)
 	})
 
 	// Test Case 2: Agent without assignment
@@ -72,6 +75,7 @@ func TestGetHostAgentConfig_WithProfiles(t *testing.T) {
 		if len(cfg.Settings) != 0 {
 			t.Errorf("Expected empty Settings for unassigned agent, got %v", cfg.Settings)
 		}
+		assertDesiredConfigMetadata(t, cfg)
 	})
 
 	// Test Case 3: Agent assigned to non-existent profile
@@ -89,5 +93,50 @@ func TestGetHostAgentConfig_WithProfiles(t *testing.T) {
 		if len(cfg.Settings) != 0 {
 			t.Errorf("Expected empty Settings for missing profile, got %v", cfg.Settings)
 		}
+		assertDesiredConfigMetadata(t, cfg)
 	})
+}
+
+func TestGetHostAgentConfig_FingerprintIncludesCommandDecision(t *testing.T) {
+	m := &Monitor{
+		hostMetadataStore: config.NewHostMetadataStore(t.TempDir(), nil),
+		config:            &config.Config{},
+		state:             models.NewState(),
+	}
+
+	hostID := "agent-command-decision"
+	before := m.GetHostAgentConfig(hostID)
+	assertDesiredConfigMetadata(t, before)
+
+	enabled := true
+	if err := m.UpdateHostAgentConfig(hostID, &enabled); err != nil {
+		t.Fatalf("UpdateHostAgentConfig: %v", err)
+	}
+
+	after := m.GetHostAgentConfig(hostID)
+	assertDesiredConfigMetadata(t, after)
+	if after.CommandsEnabled == nil || !*after.CommandsEnabled {
+		t.Fatalf("expected commandsEnabled=true, got %#v", after.CommandsEnabled)
+	}
+	if before.DesiredConfig == nil || after.DesiredConfig == nil {
+		t.Fatalf("expected desired config metadata before and after command decision")
+	}
+	if before.DesiredConfig.Hash == after.DesiredConfig.Hash {
+		t.Fatalf("expected command decision to change desired config hash")
+	}
+}
+
+func assertDesiredConfigMetadata(t *testing.T, cfg HostAgentConfig) {
+	t.Helper()
+
+	if cfg.DesiredConfig == nil {
+		t.Fatalf("expected desired config metadata")
+	}
+	expected, err := remoteconfig.BuildDesiredConfigMetadata(cfg.CommandsEnabled, cfg.Settings)
+	if err != nil {
+		t.Fatalf("BuildDesiredConfigMetadata: %v", err)
+	}
+	if *cfg.DesiredConfig != expected {
+		t.Fatalf("desired config metadata = %#v, want %#v", *cfg.DesiredConfig, expected)
+	}
 }

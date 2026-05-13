@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
@@ -28,11 +29,18 @@ func resetConfigSigningStateForTests() {
 func generateSigningKey(t *testing.T) string {
 	t.Helper()
 
+	_, priv := generateSigningKeyPair(t)
+	return priv
+}
+
+func generateSigningKeyPair(t *testing.T) (string, string) {
+	t.Helper()
+
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
-	return base64.StdEncoding.EncodeToString(priv)
+	return base64.StdEncoding.EncodeToString(priv.Public().(ed25519.PublicKey)), base64.StdEncoding.EncodeToString(priv)
 }
 
 func decodeErrorCode(t *testing.T, rec *httptest.ResponseRecorder) string {
@@ -329,6 +337,67 @@ func TestUnifiedAgentHandlers_HandleConfigSigningSuccess(t *testing.T) {
 	}
 	if !resp.Config.ExpiresAt.After(*resp.Config.IssuedAt) {
 		t.Fatalf("expected expiresAt after issuedAt")
+	}
+}
+
+func TestUnifiedAgentHandlers_HandleConfigSignsDesiredMetadata(t *testing.T) {
+	handler, monitor := newUnifiedAgentHandlers(t, nil)
+	hostID := seedUnifiedAgentHost(t, monitor)
+
+	commandsEnabled := true
+	if err := monitor.UpdateHostAgentConfig(hostID, &commandsEnabled); err != nil {
+		t.Fatalf("UpdateHostAgentConfig: %v", err)
+	}
+
+	publicKey, privateKey := generateSigningKeyPair(t)
+	t.Setenv("PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED", "true")
+	t.Setenv("PULSE_AGENT_CONFIG_SIGNING_KEY", privateKey)
+	t.Setenv("PULSE_AGENT_CONFIG_PUBLIC_KEYS", publicKey)
+	resetConfigSigningStateForTests()
+	t.Cleanup(resetConfigSigningStateForTests)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/"+hostID+"/config", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleConfig(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Success bool                       `json:"success"`
+		AgentID string                     `json:"agentId"`
+		Config  monitoring.HostAgentConfig `json:"config"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.AgentID != hostID {
+		t.Fatalf("expected agentId %q, got %q", hostID, resp.AgentID)
+	}
+	if resp.Config.DesiredConfig == nil {
+		t.Fatalf("expected desired config metadata")
+	}
+	expected, err := remoteconfig.BuildDesiredConfigMetadata(resp.Config.CommandsEnabled, resp.Config.Settings)
+	if err != nil {
+		t.Fatalf("BuildDesiredConfigMetadata: %v", err)
+	}
+	if *resp.Config.DesiredConfig != expected {
+		t.Fatalf("desired config metadata = %#v, want %#v", *resp.Config.DesiredConfig, expected)
+	}
+	if resp.Config.Signature == "" || resp.Config.IssuedAt == nil || resp.Config.ExpiresAt == nil {
+		t.Fatalf("expected signature and timestamps")
+	}
+
+	payload := remoteconfig.SignedConfigPayload{
+		AgentID:         resp.AgentID,
+		IssuedAt:        *resp.Config.IssuedAt,
+		ExpiresAt:       *resp.Config.ExpiresAt,
+		CommandsEnabled: resp.Config.CommandsEnabled,
+		Settings:        resp.Config.Settings,
+		DesiredConfig:   resp.Config.DesiredConfig,
+	}
+	if err := remoteconfig.VerifyConfigPayloadSignature(payload, resp.Config.Signature); err != nil {
+		t.Fatalf("VerifyConfigPayloadSignature: %v", err)
 	}
 }
 

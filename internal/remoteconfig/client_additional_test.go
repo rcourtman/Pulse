@@ -28,6 +28,10 @@ func TestClientFetchWithSignature(t *testing.T) {
 	expiresAt := issuedAt.Add(5 * time.Minute)
 	commands := true
 	settings := map[string]interface{}{"interval": "1m"}
+	desired, err := BuildDesiredConfigMetadata(&commands, settings)
+	if err != nil {
+		t.Fatalf("BuildDesiredConfigMetadata: %v", err)
+	}
 
 	payload := SignedConfigPayload{
 		AgentID:         "agent-1",
@@ -35,6 +39,7 @@ func TestClientFetchWithSignature(t *testing.T) {
 		ExpiresAt:       expiresAt,
 		CommandsEnabled: &commands,
 		Settings:        settings,
+		DesiredConfig:   &desired,
 	}
 	signature, err := SignConfigPayload(payload, priv)
 	if err != nil {
@@ -52,6 +57,7 @@ func TestClientFetchWithSignature(t *testing.T) {
 		}
 		resp.Config.CommandsEnabled = &commands
 		resp.Config.Settings = settings
+		resp.Config.DesiredConfig = &desired
 		resp.Config.IssuedAt = issuedAt
 		resp.Config.ExpiresAt = expiresAt
 		resp.Config.Signature = signature
@@ -74,6 +80,63 @@ func TestClientFetchWithSignature(t *testing.T) {
 	}
 	if gotSettings["interval"] != "1m" {
 		t.Fatalf("unexpected settings: %#v", gotSettings)
+	}
+}
+
+func TestClientFetchValidatesDesiredConfigMetadata(t *testing.T) {
+	commands := true
+	settings := map[string]interface{}{"interval": "1m"}
+	desired, err := BuildDesiredConfigMetadata(&commands, settings)
+	if err != nil {
+		t.Fatalf("BuildDesiredConfigMetadata: %v", err)
+	}
+
+	for _, tt := range []struct {
+		name       string
+		metadata   DesiredConfigMetadata
+		wantErr    bool
+		wantErrMsg string
+	}{
+		{name: "matches", metadata: desired},
+		{name: "mismatched hash", metadata: DesiredConfigMetadata{Version: desired.Version, Hash: "sha256:0000"}, wantErr: true, wantErrMsg: "desired config fingerprint mismatch"},
+		{name: "missing version", metadata: DesiredConfigMetadata{Hash: desired.Hash}, wantErr: true, wantErrMsg: "metadata is incomplete"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				resp := Response{
+					Success: true,
+					AgentID: "agent-1",
+				}
+				resp.Config.CommandsEnabled = &commands
+				resp.Config.Settings = settings
+				resp.Config.DesiredConfig = &tt.metadata
+				_ = json.NewEncoder(w).Encode(resp)
+			}))
+			defer ts.Close()
+
+			client := New(Config{
+				PulseURL: ts.URL,
+				APIToken: "token-123",
+				AgentID:  "agent-1",
+			})
+
+			gotSettings, gotCommands, err := client.Fetch(context.Background())
+			if tt.wantErr {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErrMsg) {
+					t.Fatalf("expected error containing %q, got %v", tt.wantErrMsg, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Fetch error: %v", err)
+			}
+			if gotCommands == nil || *gotCommands != true {
+				t.Fatalf("expected commands enabled, got %v", gotCommands)
+			}
+			if gotSettings["interval"] != "1m" {
+				t.Fatalf("unexpected settings: %#v", gotSettings)
+			}
+		})
 	}
 }
 

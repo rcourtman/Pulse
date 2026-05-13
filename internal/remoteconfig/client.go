@@ -59,6 +59,7 @@ type Response struct {
 	Config  struct {
 		CommandsEnabled *bool                  `json:"commandsEnabled,omitempty"`
 		Settings        map[string]interface{} `json:"settings,omitempty"`
+		DesiredConfig   *DesiredConfigMetadata `json:"desiredConfig,omitempty"`
 		IssuedAt        time.Time              `json:"issuedAt,omitempty"`
 		ExpiresAt       time.Time              `json:"expiresAt,omitempty"`
 		Signature       string                 `json:"signature,omitempty"`
@@ -179,6 +180,18 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 
 	responseAgentID := strings.TrimSpace(configResp.AgentID)
 
+	if configResp.Config.DesiredConfig != nil {
+		if err := ValidateDesiredConfigMetadata(*configResp.Config.DesiredConfig, configResp.Config.CommandsEnabled, configResp.Config.Settings); err != nil {
+			logger.Warn().
+				Err(err).
+				Str("action", "desired_config_metadata_invalid").
+				Str("agent_id", agentID).
+				Str("response_agent_id", responseAgentID).
+				Msg("Remote config desired metadata did not match config payload")
+			return nil, nil, fmt.Errorf("config desired metadata invalid: %w", err)
+		}
+	}
+
 	if configResp.Config.Signature != "" {
 		if responseAgentID == "" {
 			return nil, nil, fmt.Errorf("config signature missing agent metadata")
@@ -223,6 +236,7 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 			ExpiresAt:       configResp.Config.ExpiresAt,
 			CommandsEnabled: configResp.Config.CommandsEnabled,
 			Settings:        configResp.Config.Settings,
+			DesiredConfig:   configResp.Config.DesiredConfig,
 		}
 		if err := VerifyConfigPayloadSignature(payload, configResp.Config.Signature); err != nil {
 			logger.Warn().

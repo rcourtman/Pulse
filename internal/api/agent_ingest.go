@@ -378,6 +378,12 @@ func (h *UnifiedAgentHandlers) resolveConfigAgent(ctx context.Context, agentID s
 }
 
 func (h *UnifiedAgentHandlers) signAgentConfig(agentID string, cfg monitoring.HostAgentConfig) (monitoring.HostAgentConfig, error) {
+	var err error
+	cfg, err = ensureDesiredAgentConfigMetadata(cfg)
+	if err != nil {
+		return cfg, err
+	}
+
 	signatureRequired := isConfigSignatureRequired()
 	key, err := getConfigSigningKey()
 	if err != nil {
@@ -403,6 +409,7 @@ func (h *UnifiedAgentHandlers) signAgentConfig(agentID string, cfg monitoring.Ho
 		ExpiresAt:       expiresAt,
 		CommandsEnabled: cfg.CommandsEnabled,
 		Settings:        cfg.Settings,
+		DesiredConfig:   cfg.DesiredConfig,
 	}
 
 	signature, err := remoteconfig.SignConfigPayload(payload, key)
@@ -417,6 +424,15 @@ func (h *UnifiedAgentHandlers) signAgentConfig(agentID string, cfg monitoring.Ho
 	cfg.IssuedAt = &issuedAt
 	cfg.ExpiresAt = &expiresAt
 	cfg.Signature = signature
+	return cfg, nil
+}
+
+func ensureDesiredAgentConfigMetadata(cfg monitoring.HostAgentConfig) (monitoring.HostAgentConfig, error) {
+	metadata, err := remoteconfig.BuildDesiredConfigMetadata(cfg.CommandsEnabled, cfg.Settings)
+	if err != nil {
+		return cfg, fmt.Errorf("failed to build desired config metadata: %w", err)
+	}
+	cfg.DesiredConfig = &metadata
 	return cfg, nil
 }
 

@@ -1164,6 +1164,29 @@ Removes an agent from state.
 ### Agent Remote Config
 `GET /api/agents/agent/{agent_id}/config`  
 Returns the server-side config payload for an agent (used by remote config and debugging). Requires `agent:config:read`.
+The `config` object includes the merged desired settings, command enablement
+decision, and desired-config metadata. When signing is configured, the
+signature covers that metadata with the rest of the config payload:
+
+```json
+{
+  "success": true,
+  "agentId": "agent-123",
+  "config": {
+    "commandsEnabled": true,
+    "settings": {
+      "enable_docker": true
+    },
+    "desiredConfig": {
+      "version": "host-agent-config/v1",
+      "hash": "sha256:..."
+    },
+    "issuedAt": "2026-05-13T17:00:00Z",
+    "expiresAt": "2026-05-13T17:15:00Z",
+    "signature": "..."
+  }
+}
+```
 
 `PATCH /api/agents/agent/{agent_id}/config` (admin, `agent:manage`)  
 Updates server-side config for an agent (e.g., `commandsEnabled`).

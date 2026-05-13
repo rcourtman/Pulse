@@ -2,8 +2,10 @@ package remoteconfig
 
 import (
 	"crypto/ed25519"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -15,6 +17,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
+const desiredConfigFingerprintVersion = "host-agent-config/v1"
+
 // trustedConfigPublicKeysPEM contains trusted Ed25519 public keys for config verification.
 // In production builds, inject keys via ldflags to support rotation.
 var trustedConfigPublicKeysPEM = strings.TrimSpace(`
@@ -23,6 +27,12 @@ MCowBQYDK2VwAyEAlbXZQRx8jgMzwpXbbjOGcnA+9TG0lms/auxbPzY+Tdo=
 -----END PUBLIC KEY-----
 `)
 
+// DesiredConfigMetadata identifies the normalized desired config without exposing raw config values.
+type DesiredConfigMetadata struct {
+	Version string `json:"version"`
+	Hash    string `json:"hash"`
+}
+
 // SignedConfigPayload is the canonical payload used for config signing.
 type SignedConfigPayload struct {
 	AgentID         string
@@ -30,6 +40,7 @@ type SignedConfigPayload struct {
 	ExpiresAt       time.Time
 	CommandsEnabled *bool
 	Settings        map[string]interface{}
+	DesiredConfig   *DesiredConfigMetadata
 }
 
 // DecodeEd25519PrivateKey decodes a base64-encoded Ed25519 private key or seed.
@@ -69,6 +80,40 @@ func SignConfigPayload(payload SignedConfigPayload, privateKey ed25519.PrivateKe
 	return base64.StdEncoding.EncodeToString(signature), nil
 }
 
+// BuildDesiredConfigMetadata returns a deterministic, non-secret fingerprint for desired config.
+func BuildDesiredConfigMetadata(commandsEnabled *bool, settings map[string]interface{}) (DesiredConfigMetadata, error) {
+	canonical, err := canonicalDesiredConfigPayload(commandsEnabled, settings)
+	if err != nil {
+		return DesiredConfigMetadata{}, err
+	}
+
+	sum := sha256.Sum256(canonical)
+	return DesiredConfigMetadata{
+		Version: desiredConfigFingerprintVersion,
+		Hash:    "sha256:" + hex.EncodeToString(sum[:]),
+	}, nil
+}
+
+// ValidateDesiredConfigMetadata verifies that metadata matches the desired config payload.
+func ValidateDesiredConfigMetadata(metadata DesiredConfigMetadata, commandsEnabled *bool, settings map[string]interface{}) error {
+	metadata = normalizeDesiredConfigMetadata(metadata)
+	if metadata.Version == "" || metadata.Hash == "" {
+		return errors.New("desired config metadata is incomplete")
+	}
+
+	expected, err := BuildDesiredConfigMetadata(commandsEnabled, settings)
+	if err != nil {
+		return fmt.Errorf("build desired config metadata: %w", err)
+	}
+	if metadata.Version != expected.Version {
+		return fmt.Errorf("desired config version mismatch: expected %q, got %q", expected.Version, metadata.Version)
+	}
+	if metadata.Hash != expected.Hash {
+		return fmt.Errorf("desired config fingerprint mismatch: expected %q, got %q", expected.Hash, metadata.Hash)
+	}
+	return nil
+}
+
 // VerifyConfigPayloadSignature verifies a base64 signature against the trusted public keys.
 func VerifyConfigPayloadSignature(payload SignedConfigPayload, signatureBase64 string) error {
 	if signatureBase64 == "" {
@@ -106,6 +151,10 @@ func canonicalConfigPayload(payload SignedConfigPayload) ([]byte, error) {
 		ExpiresAt       string          `json:"expiresAt"`
 		CommandsEnabled *bool           `json:"commandsEnabled,omitempty"`
 		Settings        json.RawMessage `json:"settings,omitempty"`
+		DesiredConfig   *struct {
+			Version string `json:"version"`
+			Hash    string `json:"hash"`
+		} `json:"desiredConfig,omitempty"`
 	}
 
 	var settings json.RawMessage
@@ -117,12 +166,30 @@ func canonicalConfigPayload(payload SignedConfigPayload) ([]byte, error) {
 		settings = data
 	}
 
+	var desiredConfig *struct {
+		Version string `json:"version"`
+		Hash    string `json:"hash"`
+	}
+	if payload.DesiredConfig != nil {
+		normalized := normalizeDesiredConfigMetadata(*payload.DesiredConfig)
+		if normalized.Version != "" || normalized.Hash != "" {
+			desiredConfig = &struct {
+				Version string `json:"version"`
+				Hash    string `json:"hash"`
+			}{
+				Version: normalized.Version,
+				Hash:    normalized.Hash,
+			}
+		}
+	}
+
 	canonical := canonicalPayload{
 		AgentID:         strings.TrimSpace(payload.AgentID),
 		IssuedAt:        payload.IssuedAt.UTC().Format(time.RFC3339Nano),
 		ExpiresAt:       payload.ExpiresAt.UTC().Format(time.RFC3339Nano),
 		CommandsEnabled: payload.CommandsEnabled,
 		Settings:        settings,
+		DesiredConfig:   desiredConfig,
 	}
 
 	data, err := json.Marshal(canonical)
@@ -130,6 +197,42 @@ func canonicalConfigPayload(payload SignedConfigPayload) ([]byte, error) {
 		return nil, fmt.Errorf("marshal canonical payload: %w", err)
 	}
 	return data, nil
+}
+
+func canonicalDesiredConfigPayload(commandsEnabled *bool, settings map[string]interface{}) ([]byte, error) {
+	type canonicalDesiredConfig struct {
+		Version         string          `json:"version"`
+		CommandsEnabled *bool           `json:"commandsEnabled,omitempty"`
+		Settings        json.RawMessage `json:"settings,omitempty"`
+	}
+
+	var rawSettings json.RawMessage
+	if len(settings) > 0 {
+		data, err := marshalSortedMap(settings)
+		if err != nil {
+			return nil, fmt.Errorf("marshal canonical settings: %w", err)
+		}
+		rawSettings = data
+	}
+
+	payload := canonicalDesiredConfig{
+		Version:         desiredConfigFingerprintVersion,
+		CommandsEnabled: commandsEnabled,
+		Settings:        rawSettings,
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal canonical desired config payload: %w", err)
+	}
+	return data, nil
+}
+
+func normalizeDesiredConfigMetadata(metadata DesiredConfigMetadata) DesiredConfigMetadata {
+	return DesiredConfigMetadata{
+		Version: strings.TrimSpace(metadata.Version),
+		Hash:    strings.TrimSpace(metadata.Hash),
+	}
 }
 
 func trustedConfigPublicKeys() ([]ed25519.PublicKey, error) {

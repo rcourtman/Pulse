@@ -3948,6 +3948,12 @@ requirements without manual token replacement after upgrade. That
 canonicalization may live only at request-ingress and persistence/migration
 boundaries; live token records, runtime scope checks, and API payloads may not
 preserve or re-emit `host-agent:*` aliases.
+`GET /api/agents/agent/{id}/config` now also owns desired-config metadata in
+the backend API contract. The response `config.desiredConfig` carries a
+non-secret versioned hash computed after profile settings and command
+enablement decisions have been merged, and config signatures cover that
+metadata together with `commandsEnabled`, `settings`, `issuedAt`, and
+`expiresAt`.
 Agent profile delete and unassign clients must now also route canonical `204`
 success handling through shared allowed-status helpers in
 `frontend-modern/src/api/responseUtils.ts` instead of open-coding local
