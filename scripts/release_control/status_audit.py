@@ -18,7 +18,7 @@ from typing import Any
 
 from canonical_completion_guard import load_subsystem_rules
 from control_plane import DEFAULT_CONTROL_PLANE, active_target_blocking_levels, is_prerelease_version
-from repo_file_io import load_repo_json, read_repo_text
+from repo_file_io import canonical_workspace_repos_root, load_repo_json, read_repo_text
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -298,7 +298,7 @@ def repo_root_for_name(repo_name: str) -> Path:
         return Path(raw).expanduser().resolve()
     if repo_name == "pulse":
         return REPO_ROOT
-    return (REPO_ROOT.parent / repo_name).resolve()
+    return (canonical_workspace_repos_root(REPO_ROOT) / repo_name).resolve()
 
 
 def load_status_payload(*, staged: bool = False) -> dict[str, Any]:

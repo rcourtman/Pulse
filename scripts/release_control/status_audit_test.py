@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 from datetime import datetime, timezone
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -321,10 +322,123 @@ def base_payload(
 
 
 class StatusAuditTest(unittest.TestCase):
+    def git(self, repo_root: Path, *args: str) -> subprocess.CompletedProcess:
+        env = os.environ.copy()
+        for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"):
+            env.pop(name, None)
+        return subprocess.run(
+            ["git", *args],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
     def test_parse_args_accepts_staged_flag(self) -> None:
         args = parse_args(["--check", "--staged"])
         self.assertTrue(args.check)
         self.assertTrue(args.staged)
+
+    def test_audit_status_payload_resolves_sibling_repos_from_linked_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir) / "workspace"
+            repo_root = workspace / "repos" / "pulse"
+            sibling_root = workspace / "repos" / "pulse-mobile"
+            linked_worktree = workspace / ".worktrees" / "pulse-status-audit-sibling-roots"
+            repo_root.mkdir(parents=True)
+            sibling_root.mkdir(parents=True)
+
+            self.git(repo_root, "init")
+            (repo_root / "README.md").write_text("pulse\n", encoding="utf-8")
+            self.git(repo_root, "add", "README.md")
+            self.git(
+                repo_root,
+                "-c",
+                "user.name=Pulse Test",
+                "-c",
+                "user.email=pulse-test@example.invalid",
+                "commit",
+                "-m",
+                "initial",
+            )
+            self.git(repo_root, "worktree", "add", "--detach", str(linked_worktree), "HEAD")
+
+            write_file(linked_worktree, "docs/lane-proof.md")
+            write_file(linked_worktree, "docs/proof_test.go")
+            write_file(linked_worktree, "docs/hybrid_test.go")
+            write_file(sibling_root, "docs/mobile-proof.md")
+
+            payload = base_payload()
+            payload["scope"] = {
+                "active_repos": ["pulse", "pulse-mobile"],
+                "control_plane_repo": "pulse",
+                "ignored_repos": [],
+                "repo_catalog": [
+                    {
+                        "id": "pulse",
+                        "purpose": "Core repo and control plane.",
+                        "visibility": "public",
+                    },
+                    {
+                        "id": "pulse-mobile",
+                        "purpose": "Mobile client repo.",
+                        "visibility": "private",
+                    },
+                ],
+            }
+            payload["lanes"][0]["evidence"] = [
+                {"repo": "pulse", "path": "docs/lane-proof.md", "kind": "file"},
+                {"repo": "pulse-mobile", "path": "docs/mobile-proof.md", "kind": "file"},
+            ]
+
+            with mock.patch.object(status_audit, "REPO_ROOT", linked_worktree), mock.patch.dict(
+                os.environ,
+                {
+                    "PULSE_REPO_ROOT_PULSE": "",
+                    "PULSE_REPO_ROOT_PULSE_MOBILE": "",
+                },
+                clear=False,
+            ), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                self.assertEqual(status_audit.repo_root_for_name("pulse-mobile"), sibling_root.resolve())
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(report["lanes"][0]["repo_ids"], ["pulse", "pulse-mobile"])
+
+    def test_repo_root_for_name_keeps_env_override_from_linked_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir) / "workspace"
+            repo_root = workspace / "repos" / "pulse"
+            override_root = workspace / "custom" / "pulse-mobile"
+            linked_worktree = workspace / ".worktrees" / "pulse-status-audit-sibling-roots"
+            repo_root.mkdir(parents=True)
+            override_root.mkdir(parents=True)
+
+            self.git(repo_root, "init")
+            (repo_root / "README.md").write_text("pulse\n", encoding="utf-8")
+            self.git(repo_root, "add", "README.md")
+            self.git(
+                repo_root,
+                "-c",
+                "user.name=Pulse Test",
+                "-c",
+                "user.email=pulse-test@example.invalid",
+                "commit",
+                "-m",
+                "initial",
+            )
+            self.git(repo_root, "worktree", "add", "--detach", str(linked_worktree), "HEAD")
+
+            with mock.patch.object(status_audit, "REPO_ROOT", linked_worktree), mock.patch.dict(
+                os.environ,
+                {"PULSE_REPO_ROOT_PULSE_MOBILE": str(override_root)},
+                clear=False,
+            ):
+                self.assertEqual(status_audit.repo_root_for_name("pulse-mobile"), override_root.resolve())
 
     def test_audit_status_payload_derives_repo_and_release_readiness(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
