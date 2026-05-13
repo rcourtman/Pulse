@@ -4056,6 +4056,10 @@ type monitorUnifiedStateView struct {
 	freshness time.Time
 }
 
+type unifiedResourceReadStateLister interface {
+	GetAll() []unifiedresources.Resource
+}
+
 func monitorUnifiedStateViewFromSnapshot(snapshot models.StateSnapshot) monitorUnifiedStateView {
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestSnapshot(snapshot)
@@ -4078,6 +4082,37 @@ func monitorUnifiedStateViewFromResources(resources []unifiedresources.Resource,
 	}
 }
 
+func (m *Monitor) unifiedStateViewWithStandaloneHostContinuity(view monitorUnifiedStateView) monitorUnifiedStateView {
+	if m == nil || view.readState == nil {
+		return view
+	}
+
+	readState := m.readStateWithStandaloneHostContinuity(view.readState)
+	view.readState = readState
+
+	lister, ok := readState.(unifiedResourceReadStateLister)
+	if !ok {
+		return view
+	}
+
+	resources := lister.GetAll()
+	view.resources = resources
+	if view.freshness.IsZero() {
+		view.freshness = latestUnifiedResourceLastSeen(resources)
+	}
+	return view
+}
+
+func latestUnifiedResourceLastSeen(resources []unifiedresources.Resource) time.Time {
+	var latest time.Time
+	for _, resource := range resources {
+		if resource.LastSeen.After(latest) {
+			latest = resource.LastSeen
+		}
+	}
+	return latest
+}
+
 func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
 	if m == nil {
 		return monitorUnifiedStateView{}
@@ -4097,25 +4132,25 @@ func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
 	m.mu.RUnlock()
 
 	if store == nil {
-		return monitorUnifiedStateViewFromSnapshot(m.GetState())
+		return m.unifiedStateViewWithStandaloneHostContinuity(monitorUnifiedStateViewFromSnapshot(m.GetState()))
 	}
 
 	resources := store.GetAll()
 	freshness := unifiedResourceFreshness(store, state)
 
 	if readState, ok := store.(unifiedresources.ReadState); ok {
-		return monitorUnifiedStateView{
+		return m.unifiedStateViewWithStandaloneHostContinuity(monitorUnifiedStateView{
 			resources: resources,
 			readState: readState,
 			freshness: freshness,
-		}
+		})
 	}
 
 	if len(resources) > 0 || state == nil {
-		return monitorUnifiedStateViewFromResources(resources, freshness)
+		return m.unifiedStateViewWithStandaloneHostContinuity(monitorUnifiedStateViewFromResources(resources, freshness))
 	}
 
-	return monitorUnifiedStateViewFromSnapshot(m.GetState())
+	return m.unifiedStateViewWithStandaloneHostContinuity(monitorUnifiedStateViewFromSnapshot(m.GetState()))
 }
 
 func (m *Monitor) currentUnifiedResourceFreshness() time.Time {

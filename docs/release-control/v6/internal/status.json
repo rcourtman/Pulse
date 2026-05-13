@@ -3368,12 +3368,22 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/monitoring/monitor.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/monitoring/monitor_backup_poll_test.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
           "path": "internal/monitoring/monitor_backups.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/monitor_unified_state_test.go",
           "kind": "file"
         },
         {
@@ -4401,7 +4411,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Fleet governance and rollout control now has a first-class governed floor: /api/connections carries enrollment, liveness, version drift, adapter health, config rollout, credential status, update posture, and remote-control posture as a canonical fleet projection, and Infrastructure systems surfaces those facts as a central fleet-governance strip plus row-level attention signals without paid-surface or monitor-count gating. Deeper desired-vs-applied config drift, staged rollout operations, richer credential rotation state, and command-policy enforcement remain a named post-RC hardening track.",
+        "summary": "Fleet governance and rollout control now has a first-class governed floor: /api/connections carries enrollment, liveness, version drift, adapter health, config rollout, credential status, update posture, and remote-control posture as a canonical fleet projection, Infrastructure systems surfaces those facts as a central fleet-governance strip plus row-level attention signals without paid-surface or monitor-count gating, and first-login Infrastructure resource snapshots rehydrate recent standalone agent continuity instead of waiting for a fresh live report. Deeper desired-vs-applied config drift, staged rollout operations, richer credential rotation state, and command-policy enforcement remain a named post-RC hardening track.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -4495,6 +4505,26 @@
         {
           "repo": "pulse",
           "path": "internal/api/contract_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/resources.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/canonical_guardrails_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/monitor.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/monitor_unified_state_test.go",
           "kind": "file"
         }
       ]

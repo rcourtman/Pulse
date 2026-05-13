@@ -155,6 +155,12 @@ must emit canonical reason codes such as
 `supplemental_inventory_rebuild_pending` when usage cannot yet be resolved, so
 settings and support surfaces can show verification or recovery state without
 inventing their own readiness heuristics or falling back to a fake count.
+That same continuity rule applies to canonical unified resource snapshots.
+`internal/monitoring/monitor.go` must overlay recent standalone host-agent
+continuity records onto `UnifiedResourceSnapshot()` and
+`GetUnifiedReadStateOrSnapshot()` results, so first-login and post-restart
+Infrastructure views retain the durable agent-backed systems Pulse already
+knows about while live reports and supplemental providers catch up.
 That same monitoring owner also governs collector payload compatibility at the
 shared boundary. Podman container stats must honor Podman's compat payload when
 it exposes a direct CPU percentage and otherwise fall back to Podman's

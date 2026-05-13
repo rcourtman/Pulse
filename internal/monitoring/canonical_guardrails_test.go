@@ -268,6 +268,11 @@ func TestMonitoredSystemUsageReadinessGuardrailsRemainCanonical(t *testing.T) {
 			"hostContinuityStore:        config.NewHostContinuityStore(cfg.DataPath, nil),",
 			"func (m *Monitor) HostsSnapshot() []models.Host {",
 			"readState = m.readStateWithStandaloneHostContinuity(readState)",
+			"func (m *Monitor) unifiedStateViewWithStandaloneHostContinuity(view monitorUnifiedStateView) monitorUnifiedStateView {",
+			"view.readState = readState",
+			"view.resources = resources",
+			"func latestUnifiedResourceLastSeen(resources []unifiedresources.Resource) time.Time {",
+			"return m.unifiedStateViewWithStandaloneHostContinuity(monitorUnifiedStateView{",
 		},
 		"monitored_system_usage.go": {
 			"MonitoredSystemUsageUnavailableMonitorState",

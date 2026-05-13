@@ -177,6 +177,36 @@ func TestMonitorUnifiedResourceSnapshotFallsBackToSnapshotWhenStoreEmpty(t *test
 	}
 }
 
+func TestMonitorUnifiedResourceSnapshotIncludesRecentStandaloneHostContinuity(t *testing.T) {
+	now := time.Date(2026, 5, 13, 14, 30, 0, 0, time.UTC)
+	store := config.NewHostContinuityStore(t.TempDir(), nil)
+	if err := store.Upsert(config.HostContinuityEntry{
+		HostID:       "host-1",
+		ReportHostID: "machine-1",
+		Hostname:     "host-1.local",
+		DisplayName:  "Host One",
+		MachineID:    "machine-1",
+		AgentVersion: "6.0.0-rc.5",
+		LastSeen:     now,
+	}); err != nil {
+		t.Fatalf("Upsert continuity: %v", err)
+	}
+
+	m := &Monitor{
+		state:               models.NewState(),
+		resourceStore:       unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil)),
+		hostContinuityStore: store,
+	}
+
+	resources, freshness := m.UnifiedResourceSnapshot()
+	if !hasUnifiedResourceName(resources, "Host One") {
+		t.Fatalf("expected continuity-backed resource in unified snapshot, got %#v", resources)
+	}
+	if freshness.IsZero() {
+		t.Fatal("expected continuity-backed snapshot to carry non-zero freshness")
+	}
+}
+
 func TestMonitorUnifiedResourceSnapshotPrefersStoreFreshness(t *testing.T) {
 	state := models.NewState()
 	state.UpsertHost(models.Host{
