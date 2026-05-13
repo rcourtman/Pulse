@@ -135,7 +135,7 @@ function getPriorityToneClass(priority: StorageGrowthPlannerPriority): string {
     case 'unknown':
       return 'border-border bg-surface-alt text-muted';
     case 'stable':
-      return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300';
+      return 'border-green-200 bg-green-50 text-green-700 dark:border-green-900/60 dark:bg-green-950/30 dark:text-green-300';
   }
 }
 

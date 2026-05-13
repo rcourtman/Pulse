@@ -141,5 +141,8 @@ describe('storageGrowthPlannerPresentation', () => {
 
     expect(planner.topPools).toEqual([]);
     expect(planner.emptyTitle).toBe('No capacity planning pressure over 7d');
+    expect(planner.planningPools[0]?.priorityToneClass).toBe(
+      'border-green-200 bg-green-50 text-green-700 dark:border-green-900/60 dark:bg-green-950/30 dark:text-green-300',
+    );
   });
 });
