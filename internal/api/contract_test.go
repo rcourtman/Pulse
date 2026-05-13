@@ -13045,6 +13045,86 @@ func TestContract_ConnectionSystemMembersPayloadShapeStaysCanonical(t *testing.T
 	assertJSONSnapshot(t, body, want)
 }
 
+func TestContract_ConnectionSystemHostAgentAttachmentPayloadShapeStaysCanonical(t *testing.T) {
+	response := ConnectionsListResponse{
+		Connections: []Connection{
+			{
+				ID:          "pve:delly",
+				Type:        ConnectionTypePVE,
+				Name:        "delly",
+				Address:     "https://delly:8006",
+				HostAliases: []string{"delly"},
+				State:       ConnectionStateUnauthorized,
+				Enabled:     true,
+				Surfaces:    []string{"vms", "containers", "storage", "backups"},
+				Scope:       map[string]bool{"vms": true, "containers": true, "storage": true, "backups": true},
+				Source:      ConnectionSourceAgent,
+				Fleet: ConnectionFleetGovernance{
+					EnrollmentState:  fleetStateConfigured,
+					LivenessState:    string(ConnectionStateUnauthorized),
+					VersionDrift:     fleetStateNotApplicable,
+					AdapterHealth:    fleetStateBlocked,
+					ConfigRollout:    fleetStateConfigured,
+					CredentialStatus: fleetStateInvalid,
+					UpdateStatus:     fleetStateNotApplicable,
+					RemoteControl:    fleetStateNotApplicable,
+				},
+				Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
+			},
+			{
+				ID:          "agent:agent-delly",
+				Type:        ConnectionTypeAgent,
+				Name:        "delly",
+				Address:     "delly",
+				HostAliases: []string{"delly", "192.168.0.5"},
+				State:       ConnectionStateActive,
+				Enabled:     true,
+				Surfaces:    []string{"host"},
+				Scope:       map[string]bool{"host": true},
+				LastSeen:    timePtr(time.Date(2026, 5, 13, 23, 45, 0, 0, time.UTC)),
+				Source:      ConnectionSourceAgent,
+				Fleet: ConnectionFleetGovernance{
+					EnrollmentState:  fleetStateEnrolled,
+					LivenessState:    fleetStateActive,
+					VersionDrift:     fleetStateUnknown,
+					AdapterHealth:    fleetStateHealthy,
+					ConfigRollout:    fleetStateReported,
+					CredentialStatus: fleetStateVerified,
+					UpdateStatus:     fleetStateUnknown,
+					RemoteControl:    fleetStateDisabled,
+				},
+				Capabilities: ConnectionCapabilities{SupportsPause: false, SupportsScope: false, SupportsTest: false},
+			},
+		},
+		Systems: []ConnectionSystem{
+			{
+				ID:   "pve:delly",
+				Type: ConnectionTypePVE,
+				Components: []ConnectionSystemComponent{
+					{
+						ConnectionID: "pve:delly",
+						Type:         ConnectionTypePVE,
+						Role:         ConnectionSystemComponentRolePrimary,
+					},
+					{
+						ConnectionID: "agent:agent-delly",
+						Type:         ConnectionTypeAgent,
+						Role:         ConnectionSystemComponentRoleAttachment,
+					},
+				},
+			},
+		},
+	}
+
+	body, err := json.Marshal(response)
+	if err != nil {
+		t.Fatalf("marshal ConnectionsListResponse with direct host agent attachment: %v", err)
+	}
+
+	want := `{"connections":[{"id":"pve:delly","type":"pve","name":"delly","address":"https://delly:8006","hostAliases":["delly"],"state":"unauthorized","enabled":true,"surfaces":["vms","containers","storage","backups"],"scope":{"backups":true,"containers":true,"storage":true,"vms":true},"source":"agent","fleet":{"enrollmentState":"configured","livenessState":"unauthorized","versionDrift":"not-applicable","adapterHealth":"blocked","configRollout":"configured","credentialStatus":"invalid","updateStatus":"not-applicable","remoteControl":"not-applicable"},"capabilities":{"supportsPause":true,"supportsScope":true,"supportsTest":true}},{"id":"agent:agent-delly","type":"agent","name":"delly","address":"delly","hostAliases":["delly","192.168.0.5"],"state":"active","enabled":true,"surfaces":["host"],"scope":{"host":true},"lastSeen":"2026-05-13T23:45:00Z","source":"agent","fleet":{"enrollmentState":"enrolled","livenessState":"active","versionDrift":"unknown","adapterHealth":"healthy","configRollout":"reported","credentialStatus":"verified","updateStatus":"unknown","remoteControl":"disabled"},"capabilities":{"supportsPause":false,"supportsScope":false,"supportsTest":false}}],"systems":[{"id":"pve:delly","type":"pve","components":[{"connectionId":"pve:delly","type":"pve","role":"primary"},{"connectionId":"agent:agent-delly","type":"agent","role":"attachment"}]}]}`
+	assertJSONSnapshot(t, body, want)
+}
+
 func TestContract_AgentConnectionPayloadIncludesVersionFields(t *testing.T) {
 	conn := Connection{
 		ID:          "agent:host-1",

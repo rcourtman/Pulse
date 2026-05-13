@@ -2961,6 +2961,26 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/utils/connectionErrorPresentation.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/connections_grouping.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/connections_grouping_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/contract_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/resources.go",
           "kind": "file"
         },
@@ -3161,12 +3181,32 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/components/Workloads/__tests__/workloadInventorySourceIssues.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx",
           "kind": "file"
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Workloads/workloadInventorySourceIssues.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/components/Workloads/workloadSelectors.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Workloads/WorkloadsStateCards.tsx",
           "kind": "file"
         },
         {

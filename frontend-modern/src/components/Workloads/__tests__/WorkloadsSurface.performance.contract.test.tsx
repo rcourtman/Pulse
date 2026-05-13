@@ -25,6 +25,7 @@ import workloadsWorkloadViewportSyncSource from '../useWorkloadViewportSync.ts?r
 import workloadsWorkloadRouteStateSource from '../useWorkloadRouteState.ts?raw';
 import workloadsWorkloadUrlSyncSource from '../useWorkloadUrlSync.ts?raw';
 import workloadsStateSource from '../useWorkloadsState.ts?raw';
+import workloadInventorySourceIssuesSource from '../workloadInventorySourceIssues.ts?raw';
 import groupedTableWindowingSource from '../useGroupedTableWindowing.ts?raw';
 import thresholdSliderSource from '../ThresholdSlider.tsx?raw';
 import thresholdSliderModelSource from '../thresholdSliderModel.ts?raw';
@@ -170,6 +171,12 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
       loading: () => false,
       error: () => null,
     };
+  },
+}));
+
+vi.mock('@/api/connections', () => ({
+  ConnectionsAPI: {
+    list: vi.fn().mockResolvedValue({ connections: [], systems: [] }),
   },
 }));
 
@@ -656,6 +663,10 @@ describe('Workloads performance contract', () => {
       expect(workloadsStateSource).toContain('useWorkloadSelectionState');
       expect(workloadsStateSource).toContain('useWorkloadsDerivedState');
       expect(workloadsStateSource).toContain('useWorkloadRouteState');
+      expect(workloadsStateSource).toContain('buildWorkloadInventorySourceIssues');
+      expect(workloadsStateCardsSource).toContain('workloadInventoryIssues');
+      expect(workloadInventorySourceIssuesSource).toContain('WORKLOAD_CAPABLE_TYPES');
+      expect(workloadInventorySourceIssuesSource).toContain('formatConnectionErrorMessage');
       expect(workloadsStateSource).toContain('createWorkloadSortComparator');
       expect(workloadsStateSource).toContain('filterWorkloads(params)');
       expect(workloadsStateSource).not.toContain('useBreakpoint');

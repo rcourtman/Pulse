@@ -556,6 +556,11 @@ profile and assignment columns, but embedded table framing must route through
    columns: the landing table reuses the `System` and `Endpoint` cells for a
    short host fact such as OS/platform plus a reported endpoint, while the
    richer agent identity facts stay in the edit/detail surface.
+   Exact Proxmox host-agent attachments remain backend-authored through
+   `/api/connections` even when Proxmox workload inventory is blocked by
+   credentials or reachability; lifecycle surfaces must render that attached
+   agent as part of the API source row and must not re-offer host install or
+   standalone lifecycle actions for the same physical host.
    Public demo and other read-only settings posture must stay reporting-first
    on that same lifecycle-owned workspace boundary: infrastructure workspace
    routes may retain install and platform setup surfaces for manageable

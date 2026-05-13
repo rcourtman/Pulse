@@ -1,5 +1,6 @@
-import { createEffect, createMemo } from 'solid-js';
+import { createEffect, createMemo, createResource, onCleanup } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
+import { ConnectionsAPI, type ConnectionsListResponse } from '@/api/connections';
 import type { VM, Container, Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
 import { useWebSocket } from '@/contexts/appRuntime';
@@ -28,9 +29,15 @@ import { useWorkloadGuestMetadataState } from './useWorkloadGuestMetadataState';
 import { useWorkloadSelectionState } from './useWorkloadSelectionState';
 import { useWorkloadsDerivedState } from './useWorkloadsDerivedState';
 import { useWorkloadRouteState } from './useWorkloadRouteState';
+import { buildWorkloadInventorySourceIssues } from './workloadInventorySourceIssues';
 
 const WORKLOADS_INFRASTRUCTURE_SOURCES_QUERY =
   'type=agent,docker-host,k8s-cluster,k8s-node,pbs,pmg,storage,physical_disk,ceph';
+const WORKLOADS_CONNECTIONS_POLL_INTERVAL_MS = 15000;
+const EMPTY_CONNECTIONS_RESPONSE: ConnectionsListResponse = {
+  connections: [],
+  systems: [],
+};
 
 export interface WorkloadsSurfaceProps {
   vms: VM[];
@@ -59,6 +66,15 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     cacheKey: 'workloads-infrastructure-sources',
     enabled: workloadsEnabled,
   });
+  const connectionsResourceKey = createMemo(() => (workloadsEnabled() ? 'enabled' : null));
+  const [connectionsSnapshot, { refetch: refetchConnectionsSnapshot }] =
+    createResource<ConnectionsListResponse, string | null>(
+      connectionsResourceKey,
+      async () => ConnectionsAPI.list(),
+      {
+        initialValue: EMPTY_CONNECTIONS_RESPONSE,
+      },
+    );
 
   const dedupeGuests = (guests: WorkloadGuest[]): WorkloadGuest[] => {
     const seen = new Set<string>();
@@ -159,6 +175,9 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   const workloadsDisconnectedState = createMemo(() =>
     getWorkloadsDisconnectedState(reconnecting()),
   );
+  const workloadInventoryIssues = createMemo(() =>
+    buildWorkloadInventorySourceIssues(connectionsSnapshot()?.connections ?? []),
+  );
   const hasWorkloadsData = createMemo(() => allGuests().length > 0);
   const hasInfrastructureSources = createMemo(() =>
     workloadsEnabled()
@@ -183,9 +202,18 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   const reconnectSurface = () => {
     if (workloadsEnabled()) {
       void workloads.refetch();
+      void refetchConnectionsSnapshot();
     }
     reconnect();
   };
+
+  createEffect(() => {
+    if (!workloadsEnabled()) return;
+    const handle = window.setInterval(() => {
+      void refetchConnectionsSnapshot();
+    }, WORKLOADS_CONNECTIONS_POLL_INTERVAL_MS);
+    onCleanup(() => window.clearInterval(handle));
+  });
 
   let lastConnected = connected();
   let hasSeenConnectedState = connected();
@@ -392,6 +420,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     workloadsSummaryFallbackSnapshots,
     workloadsSummaryRange,
     workloadsSummaryVisibleIds,
+    workloadInventoryIssues,
     workloadsNoInventoryState,
     ws,
     groupingMode,

@@ -538,6 +538,18 @@ func resolveAgentAttachments(
 		}
 	}
 
+	for _, agent := range sortedConnectionsByID(connectionByID) {
+		if agent.Type != ConnectionTypeAgent {
+			continue
+		}
+		if _, exists := attachments[agent.ID]; exists {
+			continue
+		}
+		if primaryID := directProxmoxHostAttachment(agent, connectionByID); primaryID != "" {
+			register(agent.ID, primaryID, false, false)
+		}
+	}
+
 	for agentID, primaryID := range attachments {
 		if primaryID == "" {
 			delete(attachments, agentID)
@@ -545,6 +557,41 @@ func resolveAgentAttachments(
 	}
 
 	return attachments
+}
+
+func sortedConnectionsByID(connectionByID map[string]Connection) []Connection {
+	connections := make([]Connection, 0, len(connectionByID))
+	for _, connection := range connectionByID {
+		connections = append(connections, connection)
+	}
+	sort.Slice(connections, func(i, j int) bool {
+		return connections[i].ID < connections[j].ID
+	})
+	return connections
+}
+
+func directProxmoxHostAttachment(
+	agent Connection,
+	connectionByID map[string]Connection,
+) string {
+	if agent.Type != ConnectionTypeAgent {
+		return ""
+	}
+
+	var matchedID string
+	for _, primary := range sortedConnectionsByID(connectionByID) {
+		if primary.Type != ConnectionTypePVE || !primary.Enabled {
+			continue
+		}
+		if !connectionsShareHost(agent, primary) {
+			continue
+		}
+		if matchedID != "" {
+			return ""
+		}
+		matchedID = primary.ID
+	}
+	return matchedID
 }
 
 func buildProxmoxClusterNames(
@@ -679,7 +726,9 @@ func normalizedConnectionHost(connection Connection) string {
 func connectionHostCandidates(connection Connection) []string {
 	seen := make(map[string]struct{}, 2)
 	out := make([]string, 0, 2)
-	for _, candidate := range []string{connection.Address, connection.Name} {
+	candidates := []string{connection.Address, connection.Name}
+	candidates = append(candidates, connection.HostAliases...)
+	for _, candidate := range candidates {
 		normalized := normalizeHost(candidate)
 		if normalized == "" {
 			continue

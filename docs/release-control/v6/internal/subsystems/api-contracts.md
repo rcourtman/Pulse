@@ -93,6 +93,7 @@ product API routes free of maintainer commercial analytics.
 59. `internal/api/connections_handlers.go`
 60. `internal/api/connections_probe.go`
 61. `frontend-modern/src/api/connections.ts`
+62. `frontend-modern/src/utils/connectionErrorPresentation.ts`
 62. `frontend-modern/src/api/hostedSignup.ts`
 63. `internal/api/availability_handlers.go`
 64. `frontend-modern/src/api/availabilityTargets.ts`
@@ -856,7 +857,12 @@ the canonical monitored-system blocked payload.
     discovery and settings surfaces can reconcile hostname-only and IP-only
     views of the same enrolled machine instead of showing a second
     "discovered" candidate row for an already represented source member or
-    API-plus-agent source row. Agent-backed
+    API-plus-agent source row. Exact host-agent matches for a configured
+    Proxmox primary source must also attach through the backend systems
+    payload when workload node inventory is absent because credentials or
+    reachability are blocked, so the infrastructure ledger does not split the
+    same physical host into an API row plus a standalone host-agent row.
+    Agent-backed
     connections also own canonical version/update facts on that same payload:
     when a source or attachment is backed by Pulse Agent, `/api/connections`
     carries the

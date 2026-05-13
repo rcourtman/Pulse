@@ -28,7 +28,9 @@ regression protection.
 5. `internal/api/slo_bench_test.go`
 6. `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
 7. `frontend-modern/src/components/Workloads/WorkloadsStateCards.tsx`
-8. `frontend-modern/src/components/Workloads/WorkloadsStatsStrip.tsx`
+8. `frontend-modern/src/components/Workloads/workloadInventorySourceIssues.ts`
+9. `frontend-modern/src/components/Workloads/__tests__/workloadInventorySourceIssues.test.ts`
+10. `frontend-modern/src/components/Workloads/WorkloadsStatsStrip.tsx`
 9. `frontend-modern/src/components/Workloads/WorkloadsTable.tsx`
 10. `frontend-modern/src/components/Workloads/WorkloadPanel.tsx`
 11. `frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx`
@@ -209,6 +211,14 @@ regression protection.
    `platformData.sources` hints, and must not reconstruct platform identity by
    scanning sibling resources or making row-time API calls.
 5. Extend workload hot-path filter, sort, grouping, and stats math through `frontend-modern/src/components/Workloads/workloadSelectors.ts`, and extend workload identity, discovery routing, and node-topology helpers through `frontend-modern/src/components/Workloads/workloadTopology.ts`, rather than duplicating selector or topology logic in `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
+   Workloads source-health messaging must derive from the canonical
+   `/api/connections` ledger through
+   `frontend-modern/src/components/Workloads/workloadInventorySourceIssues.ts`.
+   The Workloads page may show a bounded partial-inventory banner when a
+   configured workload-capable source is unauthorized, unreachable, stale,
+   pending, or paused, but it must not fabricate VM/container rows from host
+   telemetry or hide source blockers just because another source still has
+   workload rows.
    The retired dashboard overview route must not return as a hot-path
    orientation shortcut. First-viewport system count, health, source coverage,
    and freshness now belong to Infrastructure and Add infrastructure, derived

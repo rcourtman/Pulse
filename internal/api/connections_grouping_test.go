@@ -426,3 +426,84 @@ func TestBuildConnectionSystems_GuestAgentStaysStandaloneWhenOnlyClusterInstance
 		t.Fatalf("guest agent should remain standalone, got %+v", guestSystem.Components)
 	}
 }
+
+func TestBuildConnectionSystems_AttachesHostAgentToMatchingProxmoxSourceWithoutNodeInventory(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("monitoring.New: %v", err)
+	}
+	t.Cleanup(func() { monitor.Stop() })
+
+	now := time.Date(2026, 5, 13, 23, 45, 0, 0, time.UTC)
+	connections := []Connection{
+		{
+			ID:           "pve:delly",
+			Type:         ConnectionTypePVE,
+			Name:         "delly",
+			Address:      "https://delly:8006",
+			HostAliases:  []string{"delly"},
+			State:        ConnectionStateUnauthorized,
+			Enabled:      true,
+			Surfaces:     []string{"vms", "containers", "storage", "backups"},
+			Scope:        map[string]bool{"vms": true, "containers": true, "storage": true, "backups": true},
+			Source:       ConnectionSourceAgent,
+			Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
+		},
+		{
+			ID:           "agent:agent-delly",
+			Type:         ConnectionTypeAgent,
+			Name:         "delly",
+			Address:      "delly",
+			HostAliases:  []string{"delly", "192.168.0.5"},
+			State:        ConnectionStateActive,
+			Enabled:      true,
+			Surfaces:     []string{"host"},
+			Scope:        map[string]bool{"host": true},
+			LastSeen:     &now,
+			Source:       ConnectionSourceAgent,
+			Capabilities: ConnectionCapabilities{SupportsPause: false, SupportsScope: false, SupportsTest: false},
+		},
+		{
+			ID:           "agent:agent-minipc",
+			Type:         ConnectionTypeAgent,
+			Name:         "minipc",
+			Address:      "minipc",
+			HostAliases:  []string{"minipc", "192.168.0.134"},
+			State:        ConnectionStateActive,
+			Enabled:      true,
+			Surfaces:     []string{"host"},
+			Scope:        map[string]bool{"host": true},
+			LastSeen:     &now,
+			Source:       ConnectionSourceAgent,
+			Capabilities: ConnectionCapabilities{SupportsPause: false, SupportsScope: false, SupportsTest: false},
+		},
+	}
+
+	systems := buildConnectionSystems(connections, monitor)
+	systemsByID := make(map[string]ConnectionSystem, len(systems))
+	for _, system := range systems {
+		systemsByID[system.ID] = system
+	}
+
+	dellySystem := systemsByID["pve:delly"]
+	if len(dellySystem.Components) != 2 {
+		t.Fatalf("expected delly API and agent components, got %+v", dellySystem.Components)
+	}
+
+	componentRoles := make(map[string]ConnectionSystemComponentRole, len(dellySystem.Components))
+	for _, component := range dellySystem.Components {
+		componentRoles[component.ConnectionID] = component.Role
+	}
+	if componentRoles["pve:delly"] != ConnectionSystemComponentRolePrimary {
+		t.Fatalf("pve:delly role = %q, want %q", componentRoles["pve:delly"], ConnectionSystemComponentRolePrimary)
+	}
+	if componentRoles["agent:agent-delly"] != ConnectionSystemComponentRoleAttachment {
+		t.Fatalf("agent:agent-delly role = %q, want %q", componentRoles["agent:agent-delly"], ConnectionSystemComponentRoleAttachment)
+	}
+
+	minipcSystem := systemsByID["agent:agent-minipc"]
+	if len(minipcSystem.Components) != 1 || minipcSystem.Components[0].Role != ConnectionSystemComponentRolePrimary {
+		t.Fatalf("minipc should remain standalone without a direct source host match, got %+v", minipcSystem.Components)
+	}
+}

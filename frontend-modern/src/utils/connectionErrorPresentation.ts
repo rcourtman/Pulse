@@ -68,7 +68,7 @@ const HUMANIZED_PATTERNS: { match: RegExp; headline: string; hint: string | null
     hint: TLS_HINT,
   },
   {
-    match: /\b401\b|unauthorized|invalid (?:credentials|api token)/i,
+    match: /\b401\b|unauthorized|authentication failed|invalid (?:credentials|api token)/i,
     headline: 'Authentication failed',
     hint: AUTH_HINT,
   },

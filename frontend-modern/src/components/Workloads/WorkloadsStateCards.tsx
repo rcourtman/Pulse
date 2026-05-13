@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 
 import {
   buildInfrastructureOnboardingPath,
@@ -25,6 +25,7 @@ type WorkloadsStateCardsProps = Pick<
   | 'kioskMode'
   | 'navigate'
   | 'reconnect'
+  | 'workloadInventoryIssues'
   | 'workloads'
 >;
 
@@ -59,6 +60,66 @@ export function WorkloadsStateCards(props: WorkloadsStateCardsProps) {
             description={props.workloadsLoadingState().description}
           />
         </Card>
+      </Show>
+
+      <Show
+        when={
+          props.connected() &&
+          props.initialDataReceived() &&
+          !props.workloads.loading() &&
+          props.workloadInventoryIssues().length > 0
+        }
+      >
+        <div
+          role="alert"
+          class="mb-3 rounded-md border border-amber-400/40 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100"
+        >
+          <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div class="min-w-0 space-y-2">
+              <div>
+                <p class="text-sm font-semibold">Workload inventory is incomplete</p>
+                <p class="mt-1 text-xs text-amber-900/80 dark:text-amber-100/75">
+                  One or more configured workload sources cannot currently report inventory.
+                </p>
+              </div>
+              <ul class="space-y-1.5">
+                <For each={props.workloadInventoryIssues().slice(0, 3)}>
+                  {(issue) => (
+                    <li class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span class="font-medium text-amber-950 dark:text-amber-50">
+                          {issue.name}
+                        </span>
+                        <span class="rounded border border-amber-400/40 px-1.5 py-0.5 text-[11px] font-medium uppercase text-amber-900 dark:border-amber-400/30 dark:text-amber-100">
+                          {issue.stateLabel}
+                        </span>
+                      </div>
+                      <p class="mt-0.5 text-xs text-amber-900/85 dark:text-amber-100/80">
+                        {issue.description}
+                      </p>
+                      <Show when={issue.detail}>
+                        {(detail) => (
+                          <p class="mt-0.5 text-xs text-amber-900/70 dark:text-amber-100/65">
+                            {detail()}
+                          </p>
+                        )}
+                      </Show>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </div>
+            <Show when={!props.kioskMode()}>
+              <button
+                type="button"
+                onClick={() => props.navigate(buildInfrastructureWorkspacePath())}
+                class="inline-flex shrink-0 items-center justify-center rounded-md border border-amber-500/40 bg-amber-100 px-3 py-1.5 text-xs font-medium text-amber-950 transition-colors hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:border-amber-400/30 dark:bg-amber-900/50 dark:text-amber-50 dark:hover:bg-amber-900"
+              >
+                Review sources
+              </button>
+            </Show>
+          </div>
+        </div>
       </Show>
 
       <Show

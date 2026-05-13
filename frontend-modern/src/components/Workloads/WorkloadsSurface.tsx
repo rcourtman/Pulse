@@ -65,6 +65,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
         kioskMode={state.kioskMode}
         navigate={state.navigate}
         reconnect={state.reconnectSurface}
+        workloadInventoryIssues={state.workloadInventoryIssues}
         workloads={state.workloads}
       />
 
