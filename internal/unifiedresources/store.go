@@ -433,6 +433,9 @@ func (s *SQLiteResourceStore) initSchema() error {
 	if err := s.migrateActionAuditsSchema(); err != nil {
 		return err
 	}
+	if err := s.migrateActionAuditRedaction(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -451,6 +454,73 @@ func (s *SQLiteResourceStore) migrateActionAuditsSchema() error {
 	if _, err := s.db.Exec("ALTER TABLE action_audits ADD COLUMN verification_outcome_json TEXT NOT NULL DEFAULT ''"); err != nil {
 		return fmt.Errorf("add action_audits.verification_outcome_json column: %w", err)
 	}
+	return nil
+}
+
+func (s *SQLiteResourceStore) migrateActionAuditRedaction() error {
+	rows, err := s.db.Query(`
+		SELECT id, result_json
+		FROM action_audits
+		WHERE result_json IS NOT NULL AND result_json != '' AND result_json != 'null'
+	`)
+	if err != nil {
+		return fmt.Errorf("query action audit redaction migration rows: %w", err)
+	}
+	defer rows.Close()
+
+	type redactionUpdate struct {
+		id         string
+		resultJSON string
+	}
+	var updates []redactionUpdate
+	for rows.Next() {
+		var id, resultJSON string
+		if err := rows.Scan(&id, &resultJSON); err != nil {
+			return fmt.Errorf("scan action audit redaction migration row: %w", err)
+		}
+		var result ExecutionResult
+		if err := json.Unmarshal([]byte(resultJSON), &result); err != nil {
+			return fmt.Errorf("unmarshal action audit result for redaction migration %q: %w", id, err)
+		}
+		redactedResult := redactActionExecutionResult(&result)
+		redactedJSON, err := json.Marshal(redactedResult)
+		if err != nil {
+			return fmt.Errorf("marshal action audit result for redaction migration %q: %w", id, err)
+		}
+		if string(redactedJSON) != resultJSON {
+			updates = append(updates, redactionUpdate{id: id, resultJSON: string(redactedJSON)})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate action audit redaction migration rows: %w", err)
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin action audit redaction migration: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	for _, update := range updates {
+		if _, err := tx.Exec(`
+			UPDATE action_audits
+			SET result_json = ?
+			WHERE id = ?
+		`, update.resultJSON, update.id); err != nil {
+			return fmt.Errorf("update action audit result redaction %q: %w", update.id, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit action audit redaction migration: %w", err)
+	}
+	committed = true
 	return nil
 }
 
@@ -1107,7 +1177,11 @@ func scanActionAuditRecord(scanner actionAuditScanner) (ActionAuditRecord, error
 	record.Request.RequestID = requestID
 	record.Request.ResourceID = CanonicalResourceID(record.Request.ResourceID)
 	_ = actionID
-	return normalizeActionAuditRecordFromStore(record), nil
+	return redactActionAuditRecordFromStore(record), nil
+}
+
+func redactActionAuditRecordFromStore(record ActionAuditRecord) ActionAuditRecord {
+	return RedactAuditRecord(normalizeActionAuditRecordFromStore(record))
 }
 
 func normalizeActionAuditRecordFromStore(record ActionAuditRecord) ActionAuditRecord {

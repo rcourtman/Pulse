@@ -90,6 +90,17 @@ func redactActionVerificationResult(result *ActionVerificationResult) *ActionVer
 	return redacted
 }
 
+func redactActionExecutionResult(result *ExecutionResult) *ExecutionResult {
+	if result == nil {
+		return nil
+	}
+	redacted := *result
+	redacted.Output = RedactAuditText(redacted.Output)
+	redacted.ErrorMessage = RedactAuditText(redacted.ErrorMessage)
+	redacted.Verification = redactActionVerificationResult(redacted.Verification)
+	return &redacted
+}
+
 // RedactAuditRecord returns a copy of the input ActionAuditRecord with
 // known secret shapes scrubbed from the operator-authored reason, the
 // params map's string values, execution output, and error text. Verification
@@ -111,13 +122,7 @@ func RedactAuditRecord(record ActionAuditRecord) ActionAuditRecord {
 		}
 		record.Request.Params = redactedParams
 	}
-	if record.Result != nil {
-		redacted := *record.Result
-		redacted.Output = RedactAuditText(redacted.Output)
-		redacted.ErrorMessage = RedactAuditText(redacted.ErrorMessage)
-		redacted.Verification = redactActionVerificationResult(redacted.Verification)
-		record.Result = &redacted
-	}
+	record.Result = redactActionExecutionResult(record.Result)
 	record.Verification = redactActionVerificationResult(record.Verification)
 	record.VerificationOutcome.EvidenceSummary = RedactAuditText(record.VerificationOutcome.EvidenceSummary)
 	return record

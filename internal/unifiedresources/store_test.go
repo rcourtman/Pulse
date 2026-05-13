@@ -458,6 +458,48 @@ func insertRawActionAuditForTest(t *testing.T, store *SQLiteResourceStore, recor
 	}
 }
 
+func rawActionAuditResultJSONForTest(t *testing.T, store *SQLiteResourceStore, id string) string {
+	t.Helper()
+	var resultJSON string
+	if err := store.db.QueryRow(`SELECT result_json FROM action_audits WHERE id = ?`, id).Scan(&resultJSON); err != nil {
+		t.Fatalf("query raw action audit result_json: %v", err)
+	}
+	return resultJSON
+}
+
+func assertActionAuditVerificationDetailsRedactedForTest(t *testing.T, record ActionAuditRecord, rawDetails ...string) {
+	t.Helper()
+	verification := CanonicalActionVerification(record)
+	if verification == nil {
+		t.Fatalf("expected canonical verification to remain present: %+v", record)
+	}
+	if verification.Command != auditVerificationCommandRedacted {
+		t.Fatalf("verification command was not redacted: %+v", verification)
+	}
+	if verification.Output != auditVerificationOutputRedacted {
+		t.Fatalf("verification output was not redacted: %+v", verification)
+	}
+	if verification.Note != auditVerificationNoteRedacted {
+		t.Fatalf("verification note was not redacted: %+v", verification)
+	}
+	if record.Result == nil || record.Result.Verification == nil {
+		t.Fatalf("expected result verification to remain aligned: %+v", record.Result)
+	}
+	if record.Result.Verification.Command != verification.Command || record.Result.Verification.Output != verification.Output || record.Result.Verification.Note != verification.Note {
+		t.Fatalf("result verification was not aligned with canonical verification: result=%+v canonical=%+v", record.Result.Verification, verification)
+	}
+
+	wire, err := json.Marshal(record)
+	if err != nil {
+		t.Fatalf("marshal action audit record for leak check: %v", err)
+	}
+	for _, rawDetail := range rawDetails {
+		if strings.Contains(string(wire), rawDetail) {
+			t.Fatalf("raw verification detail %q leaked through action audit read: %s", rawDetail, string(wire))
+		}
+	}
+}
+
 func TestRecordChange_RoundTrip(t *testing.T) {
 	store := newTestStore(t)
 	now := time.Now().UTC().Truncate(time.Second)
@@ -1344,9 +1386,12 @@ func TestActionAuditRecord_RoundTrip(t *testing.T) {
 	}
 }
 
-func TestActionAuditRecord_RoundTripLegacyResultVerificationCanonicalizesSQLiteRead(t *testing.T) {
+func TestActionAuditRecord_RoundTripLegacyResultVerificationRedactsSQLiteReads(t *testing.T) {
 	store := newTestStore(t)
 	now := time.Date(2026, 3, 18, 14, 0, 0, 0, time.UTC)
+	rawCommand := "systemctl is-active nginx --token legacy-command-secret"
+	rawOutput := "active legacy-output-secret"
+	rawNote := "legacy note password=legacy-note-secret"
 
 	insertRawActionAuditForTest(t, store, ActionAuditRecord{
 		ID:        "action-legacy-verification",
@@ -1369,9 +1414,10 @@ func TestActionAuditRecord_RoundTripLegacyResultVerificationCanonicalizesSQLiteR
 			Verification: &ActionVerificationResult{
 				Ran:     true,
 				Success: true,
-				Command: "systemctl is-active nginx",
-				Output:  "active",
+				Command: rawCommand,
+				Output:  rawOutput,
 				RanAt:   now.Add(30 * time.Second),
+				Note:    rawNote,
 			},
 		},
 	})
@@ -1383,11 +1429,86 @@ func TestActionAuditRecord_RoundTripLegacyResultVerificationCanonicalizesSQLiteR
 	if !ok {
 		t.Fatal("expected raw legacy action audit row")
 	}
-	if got.Verification == nil || got.Verification.Command != "systemctl is-active nginx" {
-		t.Fatalf("legacy result.verification was not restored onto top-level verification: %+v", got.Verification)
+	if got.Verification == nil || !got.Verification.Ran || !got.Verification.Success || !got.Verification.RanAt.Equal(now.Add(30*time.Second)) {
+		t.Fatalf("legacy verification semantics were not preserved: %+v", got.Verification)
 	}
-	if got.Result == nil || got.Result.Verification == nil || got.Result.Verification.Command != got.Verification.Command {
-		t.Fatalf("legacy result verification was not kept aligned: result=%+v canonical=%+v", got.Result, got.Verification)
+	assertActionAuditVerificationDetailsRedactedForTest(t, got, rawCommand, rawOutput, rawNote)
+
+	results, err := store.GetActionAudits("vm:legacy-verification", now.Add(-time.Hour), 10)
+	if err != nil {
+		t.Fatalf("GetActionAudits: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 raw legacy action audit row, got %d", len(results))
+	}
+	assertActionAuditVerificationDetailsRedactedForTest(t, results[0], rawCommand, rawOutput, rawNote)
+}
+
+func TestActionAuditRecord_LegacyResultVerificationMigrationRedactsSQLiteAtRest(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Date(2026, 3, 18, 15, 0, 0, 0, time.UTC)
+	rawCommand := "systemctl is-active nginx --token legacy-command-at-rest"
+	rawOutput := "active legacy-output-at-rest"
+	rawNote := "legacy note password=legacy-note-at-rest"
+
+	store, err := NewSQLiteResourceStore(dir, "testorg")
+	if err != nil {
+		t.Fatalf("NewSQLiteResourceStore: %v", err)
+	}
+	insertRawActionAuditForTest(t, store, ActionAuditRecord{
+		ID:        "action-legacy-at-rest",
+		CreatedAt: now,
+		UpdatedAt: now.Add(time.Minute),
+		State:     ActionStateCompleted,
+		Request: ActionRequest{
+			RequestID:      "req-legacy-at-rest",
+			ResourceID:     "vm:legacy-at-rest",
+			CapabilityName: "restart",
+			RequestedBy:    "agent:test",
+		},
+		Plan: ActionPlan{
+			ActionID:  "action-legacy-at-rest",
+			RequestID: "req-legacy-at-rest",
+			Allowed:   true,
+		},
+		Result: &ExecutionResult{
+			Success: true,
+			Verification: &ActionVerificationResult{
+				Ran:     true,
+				Success: true,
+				Command: rawCommand,
+				Output:  rawOutput,
+				RanAt:   now.Add(30 * time.Second),
+				Note:    rawNote,
+			},
+		},
+	})
+	before := rawActionAuditResultJSONForTest(t, store, "action-legacy-at-rest")
+	for _, rawDetail := range []string{rawCommand, rawOutput, rawNote} {
+		if !strings.Contains(before, rawDetail) {
+			t.Fatalf("raw setup did not persist %q before migration: %s", rawDetail, before)
+		}
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close store before migration reopen: %v", err)
+	}
+
+	store, err = NewSQLiteResourceStore(dir, "testorg")
+	if err != nil {
+		t.Fatalf("NewSQLiteResourceStore after raw legacy insert: %v", err)
+	}
+	defer store.Close()
+
+	after := rawActionAuditResultJSONForTest(t, store, "action-legacy-at-rest")
+	for _, rawDetail := range []string{rawCommand, rawOutput, rawNote} {
+		if strings.Contains(after, rawDetail) {
+			t.Fatalf("raw verification detail %q survived SQLite migration: %s", rawDetail, after)
+		}
+	}
+	for _, marker := range []string{auditVerificationCommandRedacted, auditVerificationOutputRedacted, auditVerificationNoteRedacted} {
+		if !strings.Contains(after, marker) {
+			t.Fatalf("expected migration marker %q in result_json, got %s", marker, after)
+		}
 	}
 }
 

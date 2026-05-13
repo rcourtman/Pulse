@@ -389,10 +389,17 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			// across future refactors.
 			"record = RedactAuditRecord(normalized)",
 			"normalizedRecord = RedactAuditRecord(normalizedRecord)",
+			// SQLite audit reads must also pass through the shared
+			// redaction boundary so legacy rows cannot expose verification
+			// command/output/note details after read-time normalization.
+			"func redactActionAuditRecordFromStore(record ActionAuditRecord) ActionAuditRecord",
+			"return redactActionAuditRecordFromStore(record), nil",
+			"func (s *SQLiteResourceStore) migrateActionAuditRedaction() error",
 		},
 		filepath.Join(".", "audit_redaction.go"): {
 			"func RedactAuditText(s string) string",
 			"func RedactAuditRecord(record ActionAuditRecord) ActionAuditRecord",
+			"func redactActionExecutionResult(result *ExecutionResult) *ExecutionResult",
 		},
 		filepath.Join("..", "api", "actions.go"): {
 			"type ActionExecutor interface",
