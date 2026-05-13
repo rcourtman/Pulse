@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -20,17 +21,18 @@ type allUnifiedResourceProvider interface {
 
 // RequestSanitizerForModel returns a sanitizer for non-local model traffic.
 // It is intentionally applied at the final provider transport boundary so
-// later tool-result turns cannot bypass the resource-policy posture exported
-// to the operator-facing Data Handling surface.
+// operator-entered prompts, handoff text, tool-result turns, and provider-bound
+// tool schemas cannot bypass prompt-secret or resource-policy sanitation.
 func RequestSanitizerForModel(model string, provider UnifiedResourceProvider) func(providers.ChatRequest) providers.ChatRequest {
-	if !ModelUsesExternalProvider(model) || provider == nil {
+	if !ModelUsesExternalProvider(model) {
 		return nil
 	}
 	resources := resourcePolicySanitizerResources(provider)
-	if len(resources) == 0 {
-		return nil
-	}
 	return func(req providers.ChatRequest) providers.ChatRequest {
+		req = sanitizeProviderRequestForPromptSecrets(req)
+		if len(resources) == 0 {
+			return req
+		}
 		return sanitizeProviderRequestForResources(req, resources)
 	}
 }
@@ -185,6 +187,112 @@ func sanitizeResourcePolicyValue(value interface{}, resources []unifiedresources
 		out := make(map[string]string, len(typed))
 		for key, nested := range typed {
 			out[key] = sanitizeResourcePolicyText(nested, resources)
+		}
+		return out
+	default:
+		return value
+	}
+}
+
+func sanitizeProviderRequestForPromptSecrets(req providers.ChatRequest) providers.ChatRequest {
+	req.System = sanitizePromptSecretText(req.System)
+
+	if len(req.Messages) > 0 {
+		req.Messages = append([]providers.Message(nil), req.Messages...)
+		for i := range req.Messages {
+			req.Messages[i] = sanitizeProviderMessageForPromptSecrets(req.Messages[i])
+		}
+	}
+	if len(req.Tools) > 0 {
+		req.Tools = append([]providers.Tool(nil), req.Tools...)
+		for i := range req.Tools {
+			req.Tools[i] = sanitizeProviderToolForPromptSecrets(req.Tools[i])
+		}
+	}
+	return req
+}
+
+func sanitizeProviderMessageForPromptSecrets(msg providers.Message) providers.Message {
+	msg.Content = sanitizePromptSecretText(msg.Content)
+	msg.ReasoningContent = sanitizePromptSecretText(msg.ReasoningContent)
+	if msg.ToolResult != nil {
+		toolResult := *msg.ToolResult
+		toolResult.Content = sanitizePromptSecretText(toolResult.Content)
+		msg.ToolResult = &toolResult
+	}
+	if len(msg.ToolCalls) > 0 {
+		msg.ToolCalls = append([]providers.ToolCall(nil), msg.ToolCalls...)
+		for i := range msg.ToolCalls {
+			msg.ToolCalls[i].Input = sanitizePromptSecretMap(msg.ToolCalls[i].Input, false)
+		}
+	}
+	return msg
+}
+
+func sanitizeProviderToolForPromptSecrets(tool providers.Tool) providers.Tool {
+	tool.Description = sanitizePromptSecretText(tool.Description)
+	tool.InputSchema = sanitizePromptSecretMap(tool.InputSchema, false)
+	return tool
+}
+
+func sanitizePromptSecretText(value string) string {
+	redacted, _ := safety.RedactSensitiveText(value)
+	return redacted
+}
+
+func sanitizePromptSecretSensitiveValue(value string) string {
+	redacted, _ := safety.RedactSensitiveValue(value)
+	return redacted
+}
+
+func sanitizePromptSecretMap(values map[string]interface{}, sensitiveParent bool) map[string]interface{} {
+	if len(values) == 0 {
+		return values
+	}
+	sanitized := make(map[string]interface{}, len(values))
+	for key, value := range values {
+		keyIsSensitive := safety.IsSensitiveFieldName(key)
+		valueIsSensitive := keyIsSensitive || sensitiveParent && safety.IsSensitiveValueCarrierFieldName(key)
+		sanitized[key] = sanitizePromptSecretValue(key, value, valueIsSensitive)
+	}
+	return sanitized
+}
+
+func sanitizePromptSecretValue(fieldName string, value interface{}, sensitiveValue bool) interface{} {
+	switch typed := value.(type) {
+	case string:
+		if sensitiveValue {
+			return sanitizePromptSecretSensitiveValue(typed)
+		}
+		return sanitizePromptSecretText(typed)
+	case []string:
+		out := make([]string, len(typed))
+		for i := range typed {
+			if sensitiveValue {
+				out[i] = sanitizePromptSecretSensitiveValue(typed[i])
+				continue
+			}
+			out[i] = sanitizePromptSecretText(typed[i])
+		}
+		return out
+	case []interface{}:
+		out := make([]interface{}, len(typed))
+		for i := range typed {
+			out[i] = sanitizePromptSecretValue(fieldName, typed[i], sensitiveValue)
+		}
+		return out
+	case map[string]interface{}:
+		return sanitizePromptSecretMap(typed, sensitiveValue)
+	case map[string]string:
+		out := make(map[string]string, len(typed))
+		for key, nested := range typed {
+			keyIsSensitive := safety.IsSensitiveFieldName(key)
+			valueIsSensitive := keyIsSensitive || sensitiveValue && safety.IsSensitiveValueCarrierFieldName(key)
+			if valueIsSensitive {
+				out[key] = sanitizePromptSecretSensitiveValue(nested)
+				continue
+			}
+			out[key] = sanitizePromptSecretText(nested)
 		}
 		return out
 	default:
