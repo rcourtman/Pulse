@@ -332,7 +332,18 @@ const buildRow = (
   const identitySubtitle = isStandaloneAgent
     ? (connectionAgentIdentitySummary(primaryConnection) ?? undefined)
     : undefined;
-  const fleetSignals = componentConnections.flatMap((connection) =>
+  const memberAgentConnectionIds = new Set(
+    members
+      .map((member) => member.agentConnection?.id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0),
+  );
+  const rowFleetSignalConnections = isCluster
+    ? componentConnections.filter(
+        (connection) =>
+          connection.id === primaryConnection.id || !memberAgentConnectionIds.has(connection.id),
+      )
+    : componentConnections;
+  const fleetSignals = rowFleetSignalConnections.flatMap((connection) =>
     fleetGovernanceSignalsForConnection(connection),
   );
 

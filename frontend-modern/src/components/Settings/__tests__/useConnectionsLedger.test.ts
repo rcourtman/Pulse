@@ -402,6 +402,20 @@ describe('useConnectionsLedger', () => {
         lastSeen: '2026-04-23T12:00:00Z',
         lastError: null,
         source: 'agent',
+        fleet: {
+          enrollmentState: 'configured',
+          livenessState: 'active',
+          versionDrift: 'not-applicable',
+          adapterHealth: 'healthy',
+          configRollout: 'configured',
+          credentialStatus: 'verified',
+          updateStatus: 'not-applicable',
+          remoteControl: 'not-applicable',
+          configDrift: { status: 'current' },
+          rollout: { status: 'current' },
+          credentialHealth: { status: 'verified', kind: 'token' },
+          commandPolicy: { status: 'not-applicable' },
+        },
         capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
       },
       {
@@ -417,6 +431,31 @@ describe('useConnectionsLedger', () => {
         lastSeen: '2026-04-23T12:00:00Z',
         lastError: null,
         source: 'agent',
+        fleet: {
+          enrollmentState: 'enrolled',
+          livenessState: 'active',
+          versionDrift: 'current',
+          adapterHealth: 'healthy',
+          configRollout: 'reported',
+          credentialStatus: 'verified',
+          updateStatus: 'current',
+          remoteControl: 'disabled',
+          configDrift: {
+            status: 'pending',
+            reason: 'Pulse has not received a comparable applied agent configuration fingerprint yet',
+          },
+          rollout: {
+            status: 'pending',
+            reason: 'waiting for the agent to report an applied configuration fingerprint',
+          },
+          credentialHealth: { status: 'verified', kind: 'agent-token' },
+          commandPolicy: {
+            status: 'disabled',
+            desired: 'unknown',
+            applied: 'disabled',
+            enforcement: 'not-applicable',
+          },
+        },
         capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
       },
       {
@@ -432,6 +471,31 @@ describe('useConnectionsLedger', () => {
         lastSeen: '2026-04-23T12:00:00Z',
         lastError: null,
         source: 'agent',
+        fleet: {
+          enrollmentState: 'enrolled',
+          livenessState: 'active',
+          versionDrift: 'current',
+          adapterHealth: 'healthy',
+          configRollout: 'reported',
+          credentialStatus: 'verified',
+          updateStatus: 'current',
+          remoteControl: 'disabled',
+          configDrift: {
+            status: 'pending',
+            reason: 'Pulse has not received a comparable applied agent configuration fingerprint yet',
+          },
+          rollout: {
+            status: 'pending',
+            reason: 'waiting for the agent to report an applied configuration fingerprint',
+          },
+          credentialHealth: { status: 'verified', kind: 'agent-token' },
+          commandPolicy: {
+            status: 'disabled',
+            desired: 'unknown',
+            applied: 'disabled',
+            enforcement: 'not-applicable',
+          },
+        },
         capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
       },
     ];
@@ -487,6 +551,7 @@ describe('useConnectionsLedger', () => {
       'agent:agent-delly',
       'agent:agent-minipc',
     ]);
+    expect(result.rows()[0].fleetHighlights.map((signal) => signal.label)).toEqual(['Fleet OK']);
     expect(result.rows()[0].members).toMatchObject([
       {
         id: 'node-delly',
@@ -497,6 +562,7 @@ describe('useConnectionsLedger', () => {
         hostAliases: ['delly', '192.168.0.10'],
         coverageLabels: ['Host telemetry'],
         statusLabel: 'Active',
+        fleetHighlights: [{ label: 'Remote control disabled' }],
         primary: true,
       },
       {
@@ -508,6 +574,7 @@ describe('useConnectionsLedger', () => {
         hostAliases: ['minipc', '192.168.0.11'],
         coverageLabels: ['Host telemetry'],
         statusLabel: 'Active',
+        fleetHighlights: [{ label: 'Remote control disabled' }],
         primary: false,
       },
     ]);

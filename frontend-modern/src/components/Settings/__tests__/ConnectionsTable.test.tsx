@@ -215,6 +215,47 @@ describe('ConnectionsTable', () => {
     );
   });
 
+  it('renders only visible fleet posture highlights, not raw passive handshakes', () => {
+    render(() => (
+      <ConnectionsTable
+        rows={() => [
+          row({
+            fleetSignals: [
+              {
+                key: 'config-drift',
+                label: 'Config pending',
+                detail:
+                  'Pulse has not received a comparable applied agent configuration fingerprint yet.',
+                tone: 'warning',
+              },
+              {
+                key: 'rollout',
+                label: 'Rollout pending',
+                detail: 'Waiting for the agent to report an applied configuration fingerprint.',
+                tone: 'warning',
+              },
+            ],
+            fleetHighlights: [
+              {
+                key: 'liveness',
+                label: 'Fleet OK',
+                detail: 'Visible fleet posture is healthy.',
+                tone: 'ok',
+              },
+            ],
+          }),
+        ]}
+      />
+    ));
+
+    expect(screen.getByText('Fleet OK')).toHaveAttribute(
+      'title',
+      'Visible fleet posture is healthy.',
+    );
+    expect(screen.queryByText('Config pending')).toBeNull();
+    expect(screen.queryByText('Rollout pending')).toBeNull();
+  });
+
   it('keeps large row sets bounded behind an explicit show-more path', () => {
     const rows = Array.from({ length: CONNECTIONS_TABLE_INITIAL_VISIBLE_ROWS + 5 }, (_, index) =>
       row({

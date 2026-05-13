@@ -196,6 +196,14 @@ const rowHasFleetTone = (
   predicate: (signal: FleetGovernanceSignal) => boolean,
 ): boolean => rowFleetSignals(row).some(predicate);
 
+const rowHasVisibleFleetTone = (
+  row: InfrastructureSystemRow,
+  predicate: (signal: FleetGovernanceSignal) => boolean,
+): boolean =>
+  [...row.fleetHighlights, ...row.members.flatMap((member) => member.fleetHighlights)].some(
+    predicate,
+  );
+
 const agentHostProfileRouteStep = (
   row: InfrastructureSystemRow,
 ): InfrastructureSourcePickerRouteStep | null => {
@@ -391,7 +399,10 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       props
         .rows()
         .filter((row) =>
-          rowHasFleetTone(row, (signal) => signal.tone === 'warning' || signal.tone === 'critical'),
+          rowHasVisibleFleetTone(
+            row,
+            (signal) => signal.tone === 'warning' || signal.tone === 'critical',
+          ),
         ).length,
   );
   const discoveryReadinessLabel = createMemo(() => {

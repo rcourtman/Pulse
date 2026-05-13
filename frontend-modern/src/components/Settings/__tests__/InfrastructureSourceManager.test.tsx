@@ -114,4 +114,50 @@ describe('InfrastructureSourceManager setup summary', () => {
     expect(screen.getByText('Credentials invalid')).toBeInTheDocument();
     expect(screen.getByText('Remote control enabled')).toBeInTheDocument();
   });
+
+  it('does not count hidden passive agent config handshakes as setup attention', () => {
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => [
+          row({
+            fleetSignals: [
+              signal({
+                key: 'config-drift',
+                label: 'Config pending',
+                detail:
+                  'Pulse has not received a comparable applied agent configuration fingerprint yet',
+                tone: 'warning',
+              }),
+              signal({
+                key: 'rollout',
+                label: 'Rollout pending',
+                detail: 'waiting for the agent to report an applied configuration fingerprint',
+                tone: 'warning',
+              }),
+              signal({
+                key: 'command-policy',
+                label: 'Remote control disabled',
+                tone: 'info',
+              }),
+            ],
+            fleetHighlights: [
+              signal({
+                key: 'command-policy',
+                label: 'Remote control disabled',
+                tone: 'info',
+              }),
+            ],
+          }),
+        ]}
+        discoveredNodes={() => []}
+        discoveryEnabled
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly
+      />
+    ));
+
+    expect(screen.getByText('Needs attention').nextElementSibling?.textContent).toBe('0 systems');
+    expect(screen.queryByText('Config pending')).toBeNull();
+    expect(screen.queryByText('Rollout pending')).toBeNull();
+  });
 });

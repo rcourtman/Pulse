@@ -843,10 +843,11 @@ export const fleetGovernanceSignalsForConnection = (
 export const visibleFleetGovernanceSignals = (
   signals: readonly FleetGovernanceSignal[],
 ): FleetGovernanceSignal[] => {
-  const attention = signals.filter(
+  const visibleSignals = signals.filter((signal) => !isPassiveAgentConfigConfirmationSignal(signal));
+  const attention = visibleSignals.filter(
     (signal) => signal.tone === 'critical' || signal.tone === 'warning',
   );
-  const control = signals.filter((signal) => signal.tone === 'info');
+  const control = visibleSignals.filter((signal) => signal.tone === 'info');
   if (attention.length + control.length > 0) {
     return [...attention, ...control].slice(0, 3);
   }
@@ -859,6 +860,18 @@ export const visibleFleetGovernanceSignals = (
       tone: 'ok',
     },
   ];
+};
+
+const isPassiveAgentConfigConfirmationSignal = (signal: FleetGovernanceSignal): boolean => {
+  if (signal.tone !== 'warning') return false;
+  if (signal.key !== 'config-drift' && signal.key !== 'rollout') return false;
+
+  const detail = signal.detail.toLowerCase();
+  return (
+    detail.includes('comparable applied agent config fingerprint') ||
+    detail.includes('comparable applied agent configuration fingerprint') ||
+    detail.includes('agent to report an applied configuration fingerprint')
+  );
 };
 
 export interface InfrastructureSystemMemberRow {

@@ -909,6 +909,26 @@ describe('InfrastructureWorkspace', () => {
       source: 'agent',
       capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
     });
+    const passiveAgentConfigSignals: InfrastructureSystemRow['fleetSignals'] = [
+      {
+        key: 'config-drift',
+        label: 'Config pending',
+        detail: 'Pulse has not received a comparable applied agent configuration fingerprint yet',
+        tone: 'warning',
+      },
+      {
+        key: 'rollout',
+        label: 'Rollout pending',
+        detail: 'waiting for the agent to report an applied configuration fingerprint',
+        tone: 'warning',
+      },
+    ];
+    const remoteControlDisabledSignal: InfrastructureSystemMemberRow['fleetHighlights'][number] = {
+      key: 'command-policy',
+      label: 'Remote control disabled',
+      detail: 'Commands are disabled by policy.',
+      tone: 'info',
+    };
 
     connectionState.connections = [primaryConnection, dellyAgent, minipcAgent];
     connectionState.rows = [
@@ -925,6 +945,15 @@ describe('InfrastructureWorkspace', () => {
         agentUpdateCount: 0,
         lastActivityText: '1m ago',
         ...emptyFleetRow,
+        fleetSignals: passiveAgentConfigSignals,
+        fleetHighlights: [
+          {
+            key: 'liveness',
+            label: 'Fleet OK',
+            detail: 'Visible fleet posture is healthy.',
+            tone: 'ok',
+          },
+        ],
         enabled: true,
         canEdit: true,
         canPause: true,
@@ -944,6 +973,8 @@ describe('InfrastructureWorkspace', () => {
             statusClassName: 'bg-green-100 text-green-800',
             lastActivityText: '1m ago',
             ...emptyFleetMember,
+            fleetSignals: passiveAgentConfigSignals,
+            fleetHighlights: [remoteControlDisabledSignal],
             primary: true,
             agentConnection: dellyAgent,
           },
@@ -958,6 +989,8 @@ describe('InfrastructureWorkspace', () => {
             statusClassName: 'bg-green-100 text-green-800',
             lastActivityText: '1m ago',
             ...emptyFleetMember,
+            fleetSignals: passiveAgentConfigSignals,
+            fleetHighlights: [remoteControlDisabledSignal],
             primary: false,
             agentConnection: minipcAgent,
           },
@@ -969,11 +1002,21 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     await waitFor(() => expect(screen.getByText('homelab')).toBeInTheDocument());
+    const readiness = screen.getByRole('region', {
+      name: /Infrastructure setup summary/i,
+    });
+    expect(within(readiness).getByText('Needs attention').nextElementSibling).toHaveTextContent(
+      '0 systems',
+    );
     expect(screen.getByText('Cluster · 2 nodes')).toBeInTheDocument();
+    expect(screen.getByText('Fleet OK')).toBeInTheDocument();
     expect(screen.getByText('Primary node')).toBeInTheDocument();
     expect(screen.getAllByText('Agent').length).toBeGreaterThan(0);
     expect(screen.getByText('delly')).toBeInTheDocument();
     expect(screen.getByText('minipc')).toBeInTheDocument();
+    expect(screen.getAllByText('Remote control disabled')).toHaveLength(2);
+    expect(screen.queryByText('Config pending')).toBeNull();
+    expect(screen.queryByText('Rollout pending')).toBeNull();
     expect(screen.getAllByText('Host telemetry').length).toBeGreaterThan(0);
     expect(screen.queryByText('Standalone hosts')).toBeNull();
     expect(screen.getAllByText('delly')).toHaveLength(1);

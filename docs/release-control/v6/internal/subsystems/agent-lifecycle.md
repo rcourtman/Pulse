@@ -243,6 +243,14 @@ the governed `Unraid` host-profile family and routes that group's add action
 back to the typed Unraid onboarding flow. Discovered source candidates remain
 attached to the base source group until a configured agent reports a governed
 host profile; discovery must not be visually inherited by a profiled group.
+The source-management ledger must keep source-level health and per-member
+agent posture separate. Cluster parent rows may summarize the primary source
+and their rendered members, but attached-agent fleet warnings that are already
+represented by member rows must not be duplicated onto the cluster parent.
+Passive agent config or rollout handshakes whose only cause is a missing
+comparable applied agent configuration fingerprint are not operator-actionable
+setup attention and must not be counted as a visible infrastructure problem
+unless a row or member still renders them as an actionable highlight.
 Configured-node settings tables follow the same boundary:
 `frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx` may own node,
 credential, capability, status, and action cells, but table scroll framing must

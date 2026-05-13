@@ -639,6 +639,13 @@ prompt explain the same operator-facing priority.
    backend-authored cluster members, the table primitive must render those
    nodes as child composition beneath the cluster row rather than flattening
    them back into peer top-level systems or hiding them entirely.
+   The systems table and setup summary must count the same visible posture
+   highlights they render, not hidden raw fleet signals. Passive attached-agent
+   config or rollout handshakes whose only cause is a missing comparable
+   applied configuration fingerprint may stay in the raw row model for deeper
+   diagnostics, but they must not create duplicate cluster-parent badges or a
+   `Needs attention` count when the visible row/member posture is otherwise
+   healthy.
    That same landing-shell boundary also owns represented-host dedupe between
    the unified ledger and the discovery strip. `InfrastructureWorkspace.tsx`,
    `frontend-modern/src/components/Settings/useConnectionsLedger.ts`, and
