@@ -157,6 +157,39 @@ func TestStoreWriteBatchUpsertsDuplicateRawMetric(t *testing.T) {
 	}
 }
 
+func TestCoalesceMetricBatchReducesPreSQLCardinalityAndPreservesLatestValue(t *testing.T) {
+	ts := time.Unix(1700000000, 123)
+	batch := []bufferedMetric{
+		{resourceType: "agent", resourceID: "host-1", metricType: "cpu", value: 10, timestamp: ts, tier: TierRaw},
+		{resourceType: "agent", resourceID: "host-1", metricType: "cpu", value: 20, timestamp: ts.Add(500 * time.Millisecond), tier: TierRaw},
+		{resourceType: "agent", resourceID: "host-1", metricType: "memory", value: 30, timestamp: ts, tier: TierRaw},
+		{resourceType: "agent", resourceID: "host-1", metricType: "cpu", value: 40, timestamp: ts, tier: TierMinute},
+		{resourceType: "agent", resourceID: "host-1", metricType: "cpu", value: 50, timestamp: ts.Add(time.Second), tier: TierRaw},
+	}
+
+	coalesced := coalesceMetricBatch(batch)
+	if len(coalesced) != 4 {
+		t.Fatalf("expected pre-SQL batch cardinality to drop from %d to 4, got %d: %+v", len(batch), len(coalesced), coalesced)
+	}
+
+	foundRawCPU := false
+	for _, metric := range coalesced {
+		if metric.resourceType == "agent" &&
+			metric.resourceID == "host-1" &&
+			metric.metricType == "cpu" &&
+			metric.timestamp.Unix() == ts.Unix() &&
+			metric.tier == TierRaw {
+			foundRawCPU = true
+			if metric.value != 20 {
+				t.Fatalf("expected latest duplicate raw CPU value to win before SQL execution, got %+v", metric)
+			}
+		}
+	}
+	if !foundRawCPU {
+		t.Fatalf("expected coalesced batch to retain raw CPU sample: %+v", coalesced)
+	}
+}
+
 func TestResolveStoreDBPathCanonicalizesOwnedPath(t *testing.T) {
 	root := t.TempDir()
 	rawPath := filepath.Join(root, "metrics", "..", "metrics", "metrics.db")

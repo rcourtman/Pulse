@@ -135,6 +135,14 @@ type bufferedMetric struct {
 	tier         Tier
 }
 
+type metricBatchKey struct {
+	resourceType  string
+	resourceID    string
+	metricType    string
+	timestampUnix int64
+	tier          Tier
+}
+
 // WriteMetric represents a metric sample to be written synchronously.
 type WriteMetric struct {
 	ResourceType string
@@ -661,6 +669,18 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 		return
 	}
 
+	inputCount := len(metrics)
+	metrics = coalesceMetricBatch(metrics)
+	if len(metrics) == 0 {
+		return
+	}
+	if len(metrics) < inputCount {
+		log.Debug().
+			Int("input_count", inputCount).
+			Int("count", len(metrics)).
+			Msg("Coalesced duplicate metrics before write")
+	}
+
 	var tx *pdb.InstrumentedTx
 	var err error
 
@@ -725,7 +745,34 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 		return
 	}
 
-	log.Debug().Int("count", len(metrics)).Msg("Wrote metrics batch")
+	log.Debug().Int("input_count", inputCount).Int("count", len(metrics)).Msg("Wrote metrics batch")
+}
+
+func coalesceMetricBatch(metrics []bufferedMetric) []bufferedMetric {
+	if len(metrics) < 2 {
+		return metrics
+	}
+
+	indexes := make(map[metricBatchKey]int, len(metrics))
+	coalesced := make([]bufferedMetric, 0, len(metrics))
+	for _, metric := range metrics {
+		key := metricBatchKey{
+			resourceType:  metric.resourceType,
+			resourceID:    metric.resourceID,
+			metricType:    metric.metricType,
+			timestampUnix: metric.timestamp.Unix(),
+			tier:          metric.tier,
+		}
+		if index, ok := indexes[key]; ok {
+			coalesced[index] = metric
+			continue
+		}
+
+		indexes[key] = len(coalesced)
+		coalesced = append(coalesced, metric)
+	}
+
+	return coalesced
 }
 
 // coalesceQueuedBatches drains any already-queued write batches so the worker
