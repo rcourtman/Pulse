@@ -105,13 +105,13 @@ func (w *UpdateSafetyWatcher) Observe(hosts []models.DockerHost, now time.Time) 
 					continue
 				}
 				// Digest changed -- transition to state B.
-				snap.priorDigest         = snap.digest
-				snap.changeDigest        = c.ImageDigest
-				snap.baseRestarts        = snap.restartCount
+				snap.priorDigest = snap.digest
+				snap.changeDigest = c.ImageDigest
+				snap.baseRestarts = snap.restartCount
 				snap.lastEmittedRestarts = snap.restartCount
-				snap.detectedAt          = now
-				snap.digest              = c.ImageDigest
-				snap.restartCount        = c.RestartCount
+				snap.detectedAt = now
+				snap.digest = c.ImageDigest
+				snap.restartCount = c.RestartCount
 
 				severity := FindingSeverityInfo
 				if c.RestartCount > snap.baseRestarts {
@@ -123,7 +123,28 @@ func (w *UpdateSafetyWatcher) Observe(hosts []models.DockerHost, now time.Time) 
 			}
 
 			// State B: change already detected, verifying stability.
-			snap.digest       = c.ImageDigest
+			if c.ImageDigest != snap.digest {
+				// Another image change landed before the prior verification
+				// window completed. Treat it as a fresh update and restart the
+				// window instead of resolving against stale evidence.
+				snap.priorDigest = snap.digest
+				snap.changeDigest = c.ImageDigest
+				snap.baseRestarts = snap.restartCount
+				snap.lastEmittedRestarts = snap.restartCount
+				snap.detectedAt = now
+				snap.digest = c.ImageDigest
+				snap.restartCount = c.RestartCount
+
+				severity := FindingSeverityInfo
+				if c.RestartCount > snap.baseRestarts {
+					severity = FindingSeverityWarning
+					snap.lastEmittedRestarts = c.RestartCount
+				}
+				emit = append(emit, buildUpdateSafetyFinding(key, host, c, snap, severity, now, now))
+				continue
+			}
+
+			snap.digest = c.ImageDigest
 			snap.restartCount = c.RestartCount
 			restartsAfterChange := c.RestartCount - snap.baseRestarts
 
@@ -138,10 +159,10 @@ func (w *UpdateSafetyWatcher) Observe(hosts []models.DockerHost, now time.Time) 
 				// Stable for the full window -- emit resolve sentinel and reset.
 				dedupKey := UpdateSafetyFindingPrefix + ":" + key
 				resolve = append(resolve, resolveSentinel{DedupKey: dedupKey, Reason: updateSafetyResolveReason})
-				snap.detectedAt          = time.Time{}
-				snap.priorDigest         = ""
-				snap.changeDigest        = ""
-				snap.baseRestarts        = 0
+				snap.detectedAt = time.Time{}
+				snap.priorDigest = ""
+				snap.changeDigest = ""
+				snap.baseRestarts = 0
 				snap.lastEmittedRestarts = 0
 			}
 			// Otherwise: still in window, no new restarts -- do nothing.

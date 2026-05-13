@@ -138,6 +138,43 @@ func TestUpdateSafety_StableWindowEmitsResolveSentinel(t *testing.T) {
 	}
 }
 
+// TestUpdateSafety_SecondDigestChangeResetsVerificationWindow verifies that a
+// second image update during the verification window restarts the window and
+// updates the existing finding evidence rather than resolving the old update.
+func TestUpdateSafety_SecondDigestChangeResetsVerificationWindow(t *testing.T) {
+	w := newUpdateSafetyWatcher()
+	t0 := time.Now()
+
+	w.Observe([]models.DockerHost{makeHost("h1", "c1", "sha256:aaa", 0)}, t0)
+
+	emit1, resolve1 := w.Observe([]models.DockerHost{makeHost("h1", "c1", "sha256:bbb", 0)}, t0.Add(5*time.Second))
+	if len(emit1) != 1 || len(resolve1) != 0 {
+		t.Fatalf("first update: want 1 emit and 0 resolves, got emit=%d resolve=%d", len(emit1), len(resolve1))
+	}
+
+	secondUpdateAt := t0.Add(20 * time.Second)
+	emit2, resolve2 := w.Observe([]models.DockerHost{makeHost("h1", "c1", "sha256:ccc", 0)}, secondUpdateAt)
+	if len(emit2) != 1 || len(resolve2) != 0 {
+		t.Fatalf("second update: want 1 emit and 0 resolves, got emit=%d resolve=%d", len(emit2), len(resolve2))
+	}
+	if emit2[0].Evidence != "prior_digest=sha256:bbb new_digest=sha256:ccc restart_count=0" {
+		t.Fatalf("second update evidence = %q", emit2[0].Evidence)
+	}
+
+	// The first update's window has elapsed, but the second update's window has
+	// not. Resolving now would close against stale evidence.
+	oldWindowElapsed := t0.Add(5*time.Second + updateSafetyVerifyWindow + time.Second)
+	emit3, resolve3 := w.Observe([]models.DockerHost{makeHost("h1", "c1", "sha256:ccc", 0)}, oldWindowElapsed)
+	if len(emit3) != 0 || len(resolve3) != 0 {
+		t.Fatalf("old window elapsed: want silent, got emit=%d resolve=%d", len(emit3), len(resolve3))
+	}
+
+	emit4, resolve4 := w.Observe([]models.DockerHost{makeHost("h1", "c1", "sha256:ccc", 0)}, secondUpdateAt.Add(updateSafetyVerifyWindow+time.Second))
+	if len(emit4) != 0 || len(resolve4) != 1 {
+		t.Fatalf("second window elapsed: want 0 emit and 1 resolve, got emit=%d resolve=%d", len(emit4), len(resolve4))
+	}
+}
+
 // TestUpdateSafety_EmptyDigestEmitsNothing verifies that containers with an
 // empty ImageDigest (agent not yet reporting one) are silently skipped.
 func TestUpdateSafety_EmptyDigestEmitsNothing(t *testing.T) {
