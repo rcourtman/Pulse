@@ -73,6 +73,9 @@ func TestLoadConfig_AllRequired(t *testing.T) {
 	if cfg.TenantLogMaxFile != 3 {
 		t.Errorf("TenantLogMaxFile = %d, want 3", cfg.TenantLogMaxFile)
 	}
+	if cfg.EmailReplyTo != "support@pulserelay.pro" {
+		t.Errorf("EmailReplyTo = %q, want support@pulserelay.pro", cfg.EmailReplyTo)
+	}
 	if cfg.StorageGuardrailsEnabled {
 		t.Errorf("StorageGuardrailsEnabled = true in development, want false")
 	}
@@ -99,6 +102,7 @@ func TestLoadConfig_CustomValues(t *testing.T) {
 	t.Setenv("CP_STORAGE_MAX_DOCKER_BUILD_CACHE", "1500MiB")
 	t.Setenv("CP_PROOF_TENANT_MAX_AGE", "6h")
 	t.Setenv("CP_PROOF_TENANT_MATCHERS", "proof,canary,proof")
+	t.Setenv("PULSE_EMAIL_REPLY_TO", "help@example.com")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -142,6 +146,9 @@ func TestLoadConfig_CustomValues(t *testing.T) {
 	}
 	if got := strings.Join(cfg.ProofTenantMatchers, ","); got != "proof,canary" {
 		t.Fatalf("ProofTenantMatchers = %q, want proof,canary", got)
+	}
+	if cfg.EmailReplyTo != "help@example.com" {
+		t.Fatalf("EmailReplyTo = %q, want help@example.com", cfg.EmailReplyTo)
 	}
 }
 

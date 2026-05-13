@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -19,6 +20,7 @@ type Sender interface {
 type Message struct {
 	From    string
 	To      string
+	ReplyTo string
 	Subject string
 	HTML    string
 	Text    string
@@ -26,14 +28,16 @@ type Message struct {
 
 // ResendSender sends emails via the Resend HTTP API.
 type ResendSender struct {
-	apiKey     string
-	httpClient *http.Client
+	apiKey         string
+	defaultReplyTo string
+	httpClient     *http.Client
 }
 
 // NewResendSender creates a Resend email sender.
-func NewResendSender(apiKey string) *ResendSender {
+func NewResendSender(apiKey, defaultReplyTo string) *ResendSender {
 	return &ResendSender{
-		apiKey: apiKey,
+		apiKey:         apiKey,
+		defaultReplyTo: defaultReplyTo,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -43,20 +47,30 @@ func NewResendSender(apiKey string) *ResendSender {
 type resendRequest struct {
 	From    string `json:"from"`
 	To      string `json:"to"`
+	ReplyTo string `json:"reply_to,omitempty"`
 	Subject string `json:"subject"`
 	HTML    string `json:"html,omitempty"`
 	Text    string `json:"text,omitempty"`
 }
 
-// Send sends an email via the Resend API.
-func (r *ResendSender) Send(ctx context.Context, msg Message) error {
-	payload := resendRequest{
+func (r *ResendSender) requestForMessage(msg Message) resendRequest {
+	replyTo := strings.TrimSpace(msg.ReplyTo)
+	if replyTo == "" {
+		replyTo = strings.TrimSpace(r.defaultReplyTo)
+	}
+	return resendRequest{
 		From:    msg.From,
 		To:      msg.To,
+		ReplyTo: replyTo,
 		Subject: msg.Subject,
 		HTML:    msg.HTML,
 		Text:    msg.Text,
 	}
+}
+
+// Send sends an email via the Resend API.
+func (r *ResendSender) Send(ctx context.Context, msg Message) error {
+	payload := r.requestForMessage(msg)
 
 	body, err := json.Marshal(payload)
 	if err != nil {

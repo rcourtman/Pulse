@@ -480,6 +480,11 @@ or other self-hosted uncapped continuity plans.
     by the Cloud paid subsystem even when a narrower support subsystem also
     owns a deployment, security, or relay-specific file in the same package
     tree.
+    Control-plane transactional email may use a no-reply sender for delivery,
+    but Resend delivery must set an explicit support reply path from
+    `PULSE_EMAIL_REPLY_TO`, defaulting to `support@pulserelay.pro`, so magic
+    links, checkout handoffs, and other hosted-account messages remain
+    directly replyable by customers.
 
 ## Forbidden Paths
 

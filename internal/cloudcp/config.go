@@ -62,6 +62,7 @@ type CPConfig struct {
 	RequireEmailProvider              bool
 	ResendAPIKey                      string // Resend API key (optional — if empty, emails are logged)
 	EmailFrom                         string // Sender email address (e.g. "noreply@pulserelay.pro")
+	EmailReplyTo                      string // Support reply address for transactional email
 }
 
 // TenantsDir returns the directory where per-tenant data is stored.
@@ -188,6 +189,7 @@ func LoadConfig() (*CPConfig, error) {
 		RequireEmailProvider:              envOrDefaultBool("CP_REQUIRE_EMAIL_PROVIDER", true),
 		ResendAPIKey:                      strings.TrimSpace(os.Getenv("RESEND_API_KEY")),
 		EmailFrom:                         envOrDefault("PULSE_EMAIL_FROM", "noreply@pulserelay.pro"),
+		EmailReplyTo:                      envOrDefault("PULSE_EMAIL_REPLY_TO", "support@pulserelay.pro"),
 	}
 	if strings.TrimSpace(cfg.TrialActivationPrivateKey) != "" {
 		publicKey, err := deriveTrialActivationPublicKey(cfg.TrialActivationPrivateKey)
@@ -301,6 +303,9 @@ func (c *CPConfig) validate() error {
 		}
 		if strings.TrimSpace(c.EmailFrom) == "" {
 			return fmt.Errorf("PULSE_EMAIL_FROM is required when CP_REQUIRE_EMAIL_PROVIDER=true")
+		}
+		if strings.TrimSpace(c.EmailReplyTo) == "" {
+			return fmt.Errorf("PULSE_EMAIL_REPLY_TO is required when CP_REQUIRE_EMAIL_PROVIDER=true")
 		}
 	}
 	if strings.TrimSpace(c.StripeAPIKey) != "" && c.PublicCloudSignupEnabled && strings.TrimSpace(c.TrialSignupPriceID) == "" {

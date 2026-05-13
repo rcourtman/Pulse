@@ -80,7 +80,7 @@ func Run(ctx context.Context, version string) error {
 	// Initialize email sender
 	var emailSender email.Sender
 	if cfg.ResendAPIKey != "" {
-		emailSender = email.NewResendSender(cfg.ResendAPIKey)
+		emailSender = email.NewResendSender(cfg.ResendAPIKey, cfg.EmailReplyTo)
 		log.Info().Msg("Email sender configured (Resend)")
 	} else if cfg.RequireEmailProvider {
 		return fmt.Errorf("email provider required but RESEND_API_KEY is not configured")
