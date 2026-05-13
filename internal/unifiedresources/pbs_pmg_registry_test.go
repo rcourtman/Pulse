@@ -28,7 +28,22 @@ func TestIngestSnapshotIncludesPBSAndPMGInstances(t *testing.T) {
 					Total:  100,
 					Used:   96,
 				}},
-				BackupJobs:       []models.PBSBackupJob{{ID: "job-1"}},
+				BackupJobs: []models.PBSBackupJob{{ID: "job-1"}},
+				JobHealthEvidence: []models.PBSJobHealthEvidence{{
+					ID:             "sync-remote-a",
+					Family:         "sync",
+					Store:          "fast",
+					LastRunState:   "OK",
+					LastRunUPID:    "UPID:sync:1",
+					LastRunEndtime: now.Add(-time.Hour).Unix(),
+					Confidence:     "direct-task-match",
+					Freshness: models.PBSJobHealthFreshness{
+						ObservedAt:     now,
+						LastRunEndTime: now.Add(-time.Hour),
+						State:          "observed",
+					},
+					Posture: "healthy",
+				}},
 				ConnectionHealth: "online",
 				LastSeen:         now,
 			},
@@ -105,6 +120,12 @@ func TestIngestSnapshotIncludesPBSAndPMGInstances(t *testing.T) {
 	}
 	if pbsResource.PBS == nil || pbsResource.PBS.DatastoreCount != 1 {
 		t.Fatalf("expected PBS payload with datastore count, got %+v", pbsResource.PBS)
+	}
+	if pbsResource.PBS.JobHealthEvidenceCount != 1 || len(pbsResource.PBS.JobHealthEvidence) != 1 {
+		t.Fatalf("expected PBS job health evidence ledger, got %+v", pbsResource.PBS)
+	}
+	if got := pbsResource.PBS.JobHealthEvidence[0]; got.Confidence != "direct-task-match" || got.LastRunState != "OK" {
+		t.Fatalf("expected direct PBS job evidence with raw fields, got %+v", got)
 	}
 	if pbsResource.Status != StatusWarning {
 		t.Fatalf("expected PBS instance warning status from rolled-up datastore risk, got %q", pbsResource.Status)

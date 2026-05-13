@@ -929,6 +929,404 @@ type BackupSnapshot struct {
 	Verification interface{}   `json:"verification,omitempty"` // Can be string or object
 }
 
+// JobHealthOptions selects which PBS job families should be collected.
+type JobHealthOptions struct {
+	MonitorBackups     bool
+	MonitorSyncJobs    bool
+	MonitorVerifyJobs  bool
+	MonitorPruneJobs   bool
+	MonitorGarbageJobs bool
+}
+
+// JobHealthEvidence is the source-level PBS job ledger fact collected from
+// config and task-history endpoints.
+type JobHealthEvidence struct {
+	ID             string `json:"id"`
+	Family         string `json:"family"`
+	Store          string `json:"store,omitempty"`
+	Remote         string `json:"remote,omitempty"`
+	Namespace      string `json:"namespace,omitempty"`
+	Schedule       string `json:"schedule,omitempty"`
+	Comment        string `json:"comment,omitempty"`
+	Enabled        bool   `json:"enabled"`
+	LastRunState   string `json:"last-run-state,omitempty"`
+	LastRunUPID    string `json:"last-run-upid,omitempty"`
+	LastRunEndtime int64  `json:"last-run-endtime,omitempty"`
+	NextRun        int64  `json:"next-run,omitempty"`
+	UPID           string `json:"upid,omitempty"`
+	WorkerType     string `json:"worker-type,omitempty"`
+	WorkerID       string `json:"worker-id,omitempty"`
+	TaskStatus     string `json:"task-status,omitempty"`
+	TaskStartTime  int64  `json:"task-starttime,omitempty"`
+	TaskEndTime    int64  `json:"task-endtime,omitempty"`
+	Confidence     string `json:"confidence"`
+	Error          string `json:"error,omitempty"`
+}
+
+// GetJobHealthEvidence collects PBS job health facts from job configuration
+// and recent task history. Permission failures are represented as
+// partial-permission evidence instead of failing the whole ledger.
+func (c *Client) GetJobHealthEvidence(ctx context.Context, datastores []string, opts JobHealthOptions) ([]JobHealthEvidence, error) {
+	taskHistory, tasksErr := c.listTaskHistory(ctx, 200)
+	taskByUPID := make(map[string]JobHealthEvidence, len(taskHistory))
+	for _, task := range taskHistory {
+		if task.UPID != "" {
+			taskByUPID[task.UPID] = task
+		}
+	}
+
+	evidence := make([]JobHealthEvidence, 0)
+	matchedTasks := make(map[string]struct{})
+	collectConfigs := func(family string, enabled bool, path string) {
+		if !enabled {
+			return
+		}
+		configs, err := c.listJobConfigMaps(ctx, path)
+		if err != nil {
+			if isPBSNotFoundError(err) {
+				return
+			}
+			evidence = append(evidence, partialPermissionJobEvidence(family, path, err))
+			return
+		}
+		for _, cfg := range configs {
+			fact := jobEvidenceFromConfigMap(family, cfg)
+			if fact.ID == "" {
+				fact.ID = fallbackJobEvidenceID(fact)
+			}
+			fact.Enabled = !boolJobField(cfg, "disable", "disabled")
+			fact.Confidence = "config-only"
+			if fact.LastRunState != "" || fact.LastRunUPID != "" || fact.LastRunEndtime > 0 {
+				fact.Confidence = "direct-config-last-run"
+			}
+			if fact.LastRunUPID != "" {
+				if task, ok := taskByUPID[fact.LastRunUPID]; ok {
+					mergeTaskEvidence(&fact, task)
+					fact.Confidence = "direct-task-match"
+					matchedTasks[task.UPID] = struct{}{}
+				}
+			}
+			evidence = append(evidence, fact)
+		}
+	}
+
+	collectConfigs("sync", opts.MonitorSyncJobs, "/config/sync")
+	collectConfigs("verify", opts.MonitorVerifyJobs, "/config/verify")
+	collectConfigs("prune", opts.MonitorPruneJobs, "/config/prune")
+
+	if opts.MonitorGarbageJobs {
+		for _, datastore := range datastores {
+			datastore = strings.TrimSpace(datastore)
+			if datastore == "" {
+				continue
+			}
+			path := fmt.Sprintf("/admin/datastore/%s/gc", url.PathEscape(datastore))
+			cfg, err := c.getJobConfigMap(ctx, path)
+			if err != nil {
+				if isPBSNotFoundError(err) {
+					continue
+				}
+				evidence = append(evidence, partialPermissionJobEvidence("garbage", path, err))
+				continue
+			}
+			fact := jobEvidenceFromConfigMap("garbage", cfg)
+			fact.Store = firstNonEmptyString(fact.Store, datastore)
+			if fact.ID == "" {
+				fact.ID = "garbage:" + datastore
+			}
+			fact.Enabled = !boolJobField(cfg, "disable", "disabled")
+			fact.Confidence = "config-only"
+			if fact.LastRunState != "" || fact.LastRunUPID != "" || fact.LastRunEndtime > 0 {
+				fact.Confidence = "direct-config-last-run"
+			}
+			if fact.LastRunUPID != "" {
+				if task, ok := taskByUPID[fact.LastRunUPID]; ok {
+					mergeTaskEvidence(&fact, task)
+					fact.Confidence = "direct-task-match"
+					matchedTasks[task.UPID] = struct{}{}
+				}
+			}
+			evidence = append(evidence, fact)
+		}
+	}
+
+	if tasksErr != nil {
+		for _, family := range []string{"backup", "sync", "verify", "prune", "garbage"} {
+			if !jobFamilyEnabled(family, opts) {
+				continue
+			}
+			partial := partialPermissionJobEvidence(family, "/nodes/localhost/tasks", tasksErr)
+			partial.ID = family + ":task-history-partial"
+			evidence = append(evidence, partial)
+		}
+	}
+	for _, task := range taskHistory {
+		if task.UPID == "" {
+			continue
+		}
+		if _, ok := matchedTasks[task.UPID]; ok {
+			continue
+		}
+		family := familyFromPBSTask(task.WorkerType, task.WorkerID)
+		if !jobFamilyEnabled(family, opts) {
+			continue
+		}
+		task.Family = family
+		task.ID = fallbackJobEvidenceID(task)
+		task.Enabled = true
+		task.Confidence = "task-history-only"
+		evidence = append(evidence, task)
+	}
+
+	return evidence, nil
+}
+
+func (c *Client) listJobConfigMaps(ctx context.Context, path string) ([]map[string]interface{}, error) {
+	resp, err := c.get(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []map[string]interface{} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result.Data, nil
+}
+
+func (c *Client) getJobConfigMap(ctx context.Context, path string) (map[string]interface{}, error) {
+	resp, err := c.get(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data map[string]interface{} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	if result.Data == nil {
+		result.Data = map[string]interface{}{}
+	}
+	return result.Data, nil
+}
+
+func (c *Client) listTaskHistory(ctx context.Context, limit int) ([]JobHealthEvidence, error) {
+	params := url.Values{}
+	if limit > 0 {
+		params.Set("limit", fmt.Sprintf("%d", limit))
+	}
+	path := "/nodes/localhost/tasks"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+
+	resp, err := c.get(ctx, path)
+	if err != nil {
+		if isPBSNotFoundError(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []map[string]interface{} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	tasks := make([]JobHealthEvidence, 0, len(result.Data))
+	for _, raw := range result.Data {
+		task := JobHealthEvidence{
+			UPID:          stringJobField(raw, "upid"),
+			WorkerType:    stringJobField(raw, "worker-type", "worker_type"),
+			WorkerID:      stringJobField(raw, "worker-id", "worker_id"),
+			TaskStatus:    stringJobField(raw, "status"),
+			TaskStartTime: int64JobField(raw, "starttime", "start-time", "start_time"),
+			TaskEndTime:   int64JobField(raw, "endtime", "end-time", "end_time"),
+			Store:         stringJobField(raw, "store", "datastore"),
+		}
+		if task.UPID == "" && task.WorkerType == "" && task.WorkerID == "" {
+			continue
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, nil
+}
+
+func jobEvidenceFromConfigMap(family string, raw map[string]interface{}) JobHealthEvidence {
+	return JobHealthEvidence{
+		ID:             stringJobField(raw, "id", "job-id", "job_id", "name"),
+		Family:         family,
+		Store:          stringJobField(raw, "store", "datastore", "remote-store", "remote_store"),
+		Remote:         stringJobField(raw, "remote", "remote-store", "remote_store"),
+		Namespace:      stringJobField(raw, "ns", "namespace"),
+		Schedule:       stringJobField(raw, "schedule"),
+		Comment:        stringJobField(raw, "comment"),
+		LastRunState:   stringJobField(raw, "last-run-state", "last_run_state"),
+		LastRunUPID:    stringJobField(raw, "last-run-upid", "last_run_upid"),
+		LastRunEndtime: int64JobField(raw, "last-run-endtime", "last_run_endtime"),
+		NextRun:        int64JobField(raw, "next-run", "next_run"),
+	}
+}
+
+func mergeTaskEvidence(fact *JobHealthEvidence, task JobHealthEvidence) {
+	fact.UPID = firstNonEmptyString(fact.UPID, task.UPID)
+	fact.WorkerType = firstNonEmptyString(fact.WorkerType, task.WorkerType)
+	fact.WorkerID = firstNonEmptyString(fact.WorkerID, task.WorkerID)
+	fact.TaskStatus = firstNonEmptyString(fact.TaskStatus, task.TaskStatus)
+	if fact.TaskStartTime == 0 {
+		fact.TaskStartTime = task.TaskStartTime
+	}
+	if fact.TaskEndTime == 0 {
+		fact.TaskEndTime = task.TaskEndTime
+	}
+}
+
+func partialPermissionJobEvidence(family, path string, err error) JobHealthEvidence {
+	confidence := "partial-permission"
+	if !isPBSPermissionError(err) {
+		confidence = "partial-error"
+	}
+	return JobHealthEvidence{
+		ID:         family + ":partial",
+		Family:     family,
+		Enabled:    true,
+		Confidence: confidence,
+		Error:      fmt.Sprintf("%s: %v", path, err),
+	}
+}
+
+func fallbackJobEvidenceID(e JobHealthEvidence) string {
+	for _, value := range []string{e.ID, e.WorkerID, e.LastRunUPID, e.UPID, e.Store} {
+		if strings.TrimSpace(value) != "" {
+			return e.Family + ":" + strings.TrimSpace(value)
+		}
+	}
+	return e.Family + ":unknown"
+}
+
+func jobFamilyEnabled(family string, opts JobHealthOptions) bool {
+	switch family {
+	case "backup":
+		return opts.MonitorBackups
+	case "sync":
+		return opts.MonitorSyncJobs
+	case "verify":
+		return opts.MonitorVerifyJobs
+	case "prune":
+		return opts.MonitorPruneJobs
+	case "garbage":
+		return opts.MonitorGarbageJobs
+	default:
+		return false
+	}
+}
+
+func familyFromPBSTask(workerType, workerID string) string {
+	combined := strings.ToLower(strings.TrimSpace(workerType + " " + workerID))
+	combined = strings.ReplaceAll(combined, "_", "-")
+	switch {
+	case strings.Contains(combined, "sync"):
+		return "sync"
+	case strings.Contains(combined, "verif"):
+		return "verify"
+	case strings.Contains(combined, "prune"):
+		return "prune"
+	case strings.Contains(combined, "garbage") || strings.Contains(combined, "gc"):
+		return "garbage"
+	case strings.Contains(combined, "backup"):
+		return "backup"
+	default:
+		return ""
+	}
+}
+
+func stringJobField(raw map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		value, ok := raw[key]
+		if !ok || value == nil {
+			continue
+		}
+		switch typed := value.(type) {
+		case string:
+			if strings.TrimSpace(typed) != "" {
+				return strings.TrimSpace(typed)
+			}
+		case fmt.Stringer:
+			if strings.TrimSpace(typed.String()) != "" {
+				return strings.TrimSpace(typed.String())
+			}
+		}
+	}
+	return ""
+}
+
+func int64JobField(raw map[string]interface{}, keys ...string) int64 {
+	for _, key := range keys {
+		value, ok := raw[key]
+		if !ok || value == nil {
+			continue
+		}
+		switch typed := value.(type) {
+		case float64:
+			return int64(typed)
+		case int64:
+			return typed
+		case int:
+			return int64(typed)
+		case json.Number:
+			n, _ := typed.Int64()
+			return n
+		}
+	}
+	return 0
+}
+
+func boolJobField(raw map[string]interface{}, keys ...string) bool {
+	for _, key := range keys {
+		value, ok := raw[key]
+		if !ok || value == nil {
+			continue
+		}
+		if typed, ok := value.(bool); ok {
+			return typed
+		}
+	}
+	return false
+}
+
+func isPBSPermissionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "403") || strings.Contains(msg, "401") || strings.Contains(msg, "permission") || strings.Contains(msg, "authentication")
+}
+
+func isPBSNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "404")
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
 // ListNamespaces lists namespaces for a datastore
 func (c *Client) ListNamespaces(ctx context.Context, datastore string, parentNamespace string, maxDepth int) ([]Namespace, error) {
 	path := fmt.Sprintf("/admin/datastore/%s/namespace", datastore)

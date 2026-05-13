@@ -612,6 +612,7 @@ func clonePBSInstance(src PBSInstance) PBSInstance {
 	dest.VerifyJobs = append([]PBSVerifyJob(nil), src.VerifyJobs...)
 	dest.PruneJobs = append([]PBSPruneJob(nil), src.PruneJobs...)
 	dest.GarbageJobs = append([]PBSGarbageJob(nil), src.GarbageJobs...)
+	dest.JobHealthEvidence = append([]PBSJobHealthEvidence(nil), src.JobHealthEvidence...)
 	return dest.NormalizeCollections()
 }
 

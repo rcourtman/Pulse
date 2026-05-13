@@ -1246,6 +1246,8 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 				PruneJobs:                []models.PBSPruneJob{{ID: "prune-1", Store: "fast", Status: "ok"}},
 				GarbageJobCount:          7,
 				GarbageJobs:              []models.PBSGarbageJob{{ID: "gc-1", Store: "fast", Status: "ok", RemovedBytes: 1234}},
+				JobHealthEvidenceCount:   1,
+				JobHealthEvidence:        []models.PBSJobHealthEvidence{{ID: "sync-1", Family: "sync", LastRunState: "OK", Confidence: "direct-task-match"}},
 				ConnectionHealth:         "online",
 			},
 			Metrics: &ResourceMetrics{
@@ -1288,6 +1290,12 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 		}
 		if jobs := v.GarbageJobs(); len(jobs) != 1 || jobs[0].ID != "gc-1" {
 			t.Fatalf("expected garbage jobs payload, got %+v", jobs)
+		}
+		if v.JobHealthEvidenceCount() != 1 {
+			t.Fatalf("expected job health evidence count 1, got %d", v.JobHealthEvidenceCount())
+		}
+		if evidence := v.JobHealthEvidence(); len(evidence) != 1 || evidence[0].ID != "sync-1" || evidence[0].LastRunState != "OK" {
+			t.Fatalf("expected job health evidence payload, got %+v", evidence)
 		}
 		if v.ProtectedWorkloadCount() != 2 || v.AffectedDatastoreCount() != 1 {
 			t.Fatalf("expected protected workload / affected datastore counts to match, got workloads=%d datastores=%d",

@@ -74,6 +74,95 @@ func pbsDatastoreStatus(ds pbs.Datastore) string {
 	return "available"
 }
 
+func pbsJobHealthEvidenceFromFacts(facts []pbs.JobHealthEvidence, observedAt time.Time) []models.PBSJobHealthEvidence {
+	if len(facts) == 0 {
+		return []models.PBSJobHealthEvidence{}
+	}
+	out := make([]models.PBSJobHealthEvidence, 0, len(facts))
+	for _, fact := range facts {
+		evidence := models.PBSJobHealthEvidence{
+			ID:             fact.ID,
+			Family:         fact.Family,
+			Store:          fact.Store,
+			Remote:         fact.Remote,
+			Namespace:      fact.Namespace,
+			Schedule:       fact.Schedule,
+			Comment:        fact.Comment,
+			Enabled:        fact.Enabled,
+			LastRunState:   fact.LastRunState,
+			LastRunUPID:    fact.LastRunUPID,
+			LastRunEndtime: fact.LastRunEndtime,
+			NextRun:        fact.NextRun,
+			UPID:           fact.UPID,
+			WorkerType:     fact.WorkerType,
+			WorkerID:       fact.WorkerID,
+			TaskStatus:     fact.TaskStatus,
+			TaskStartTime:  fact.TaskStartTime,
+			TaskEndTime:    fact.TaskEndTime,
+			Confidence:     fact.Confidence,
+			Error:          fact.Error,
+		}
+		evidence.Freshness = pbsJobHealthFreshness(fact, observedAt)
+		evidence.Posture, evidence.PostureReason = pbsJobHealthPosture(fact, evidence.Freshness)
+		out = append(out, evidence)
+	}
+	return out
+}
+
+func pbsJobHealthFreshness(fact pbs.JobHealthEvidence, observedAt time.Time) models.PBSJobHealthFreshness {
+	freshness := models.PBSJobHealthFreshness{
+		ObservedAt: observedAt.UTC(),
+		State:      "unknown",
+	}
+	if fact.LastRunEndtime > 0 {
+		freshness.LastRunEndTime = time.Unix(fact.LastRunEndtime, 0).UTC()
+	} else if fact.TaskEndTime > 0 {
+		freshness.LastRunEndTime = time.Unix(fact.TaskEndTime, 0).UTC()
+	}
+	if fact.NextRun > 0 {
+		freshness.NextRun = time.Unix(fact.NextRun, 0).UTC()
+	}
+	if !freshness.LastRunEndTime.IsZero() {
+		freshness.AgeSeconds = int64(observedAt.Sub(freshness.LastRunEndTime).Seconds())
+		if freshness.AgeSeconds < 0 {
+			freshness.AgeSeconds = 0
+		}
+		freshness.State = "observed"
+	}
+	if !freshness.NextRun.IsZero() {
+		if observedAt.After(freshness.NextRun) && (freshness.LastRunEndTime.IsZero() || freshness.LastRunEndTime.Before(freshness.NextRun)) {
+			freshness.State = "overdue"
+		} else if freshness.State == "unknown" {
+			freshness.State = "scheduled"
+		}
+	}
+	return freshness
+}
+
+func pbsJobHealthPosture(fact pbs.JobHealthEvidence, freshness models.PBSJobHealthFreshness) (string, string) {
+	status := strings.ToLower(strings.TrimSpace(firstNonEmptyString(fact.TaskStatus, fact.LastRunState)))
+	if fact.Error != "" {
+		return "unknown", strings.TrimSpace(fact.Confidence)
+	}
+	if freshness.State == "overdue" {
+		return "warning", "job-overdue"
+	}
+	switch {
+	case status == "":
+		return "unknown", "no-run-observed"
+	case strings.Contains(status, "ok") || strings.Contains(status, "success"):
+		return "healthy", "last-run-success"
+	case strings.Contains(status, "running"):
+		return "healthy", "running"
+	case strings.Contains(status, "warn"):
+		return "warning", "last-run-warning"
+	case strings.Contains(status, "fail") || strings.Contains(status, "error"):
+		return "critical", "last-run-failed"
+	default:
+		return "unknown", "last-run-state-" + strings.ReplaceAll(status, " ", "-")
+	}
+}
+
 // pollPBSInstance polls a single PBS instance
 func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, client *pbs.Client) {
 	defer recoverFromPanic(fmt.Sprintf("pollPBSInstance-%s", instanceName))
@@ -329,6 +418,26 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				pbsInst.Datastores = append(pbsInst.Datastores, modelDS)
 			}
 		}
+	}
+
+	if instanceCfg.MonitorBackups || instanceCfg.MonitorSyncJobs || instanceCfg.MonitorVerifyJobs || instanceCfg.MonitorPruneJobs || instanceCfg.MonitorGarbageJobs {
+		datastoreNames := make([]string, 0, len(pbsInst.Datastores))
+		for _, ds := range pbsInst.Datastores {
+			datastoreNames = append(datastoreNames, ds.Name)
+		}
+		jobFacts, err := client.GetJobHealthEvidence(ctx, datastoreNames, pbs.JobHealthOptions{
+			MonitorBackups:     instanceCfg.MonitorBackups,
+			MonitorSyncJobs:    instanceCfg.MonitorSyncJobs,
+			MonitorVerifyJobs:  instanceCfg.MonitorVerifyJobs,
+			MonitorPruneJobs:   instanceCfg.MonitorPruneJobs,
+			MonitorGarbageJobs: instanceCfg.MonitorGarbageJobs,
+		})
+		if err != nil {
+			log.Warn().Err(err).
+				Str("instance", instanceName).
+				Msg("Failed to collect PBS job health evidence")
+		}
+		pbsInst.JobHealthEvidence = pbsJobHealthEvidenceFromFacts(jobFacts, time.Now())
 	}
 
 	// Update state and run alerts

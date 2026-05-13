@@ -45,6 +45,96 @@ func TestNewClient_TokenAuth_SetsAuthorizationHeader(t *testing.T) {
 	}
 }
 
+func TestClient_GetJobHealthEvidence_MergesConfigAndTaskFacts(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/nodes/localhost/tasks":
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{
+				{
+					"upid":        "UPID:sync:1",
+					"worker-type": "syncjob",
+					"worker-id":   "sync-remote-a",
+					"status":      "OK",
+					"starttime":   1700000000,
+					"endtime":     1700000060,
+				},
+				{
+					"upid":        "UPID:backup:1",
+					"worker-type": "backup",
+					"worker-id":   "vm/100",
+					"status":      "OK",
+					"endtime":     1700000100,
+				},
+			}})
+		case "/api2/json/config/sync":
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{
+				"id":               "sync-remote-a",
+				"store":            "fast",
+				"remote":           "remote-a",
+				"schedule":         "hourly",
+				"last-run-state":   "OK",
+				"last-run-upid":    "UPID:sync:1",
+				"last-run-endtime": 1700000060,
+				"next-run":         1700003600,
+			}}})
+		case "/api2/json/config/verify":
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{
+				"id":             "verify-fast",
+				"store":          "fast",
+				"last-run-state": "OK",
+			}}})
+		case "/api2/json/config/prune":
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte("permission denied"))
+		case "/api2/json/admin/datastore/fast/gc":
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+				"schedule":         "daily",
+				"last-run-state":   "OK",
+				"last-run-endtime": 1700000200,
+			}})
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{Host: server.URL, TokenName: "root@pam!token", TokenValue: "secret"})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	evidence, err := client.GetJobHealthEvidence(context.Background(), []string{"fast"}, JobHealthOptions{
+		MonitorBackups:     true,
+		MonitorSyncJobs:    true,
+		MonitorVerifyJobs:  true,
+		MonitorPruneJobs:   true,
+		MonitorGarbageJobs: true,
+	})
+	if err != nil {
+		t.Fatalf("GetJobHealthEvidence: %v", err)
+	}
+
+	byID := make(map[string]JobHealthEvidence)
+	for _, item := range evidence {
+		byID[item.ID] = item
+	}
+	if got := byID["sync-remote-a"]; got.Confidence != "direct-task-match" || got.UPID != "UPID:sync:1" || got.LastRunState != "OK" || got.NextRun != 1700003600 {
+		t.Fatalf("expected direct sync evidence with raw last-run fields, got %+v", got)
+	}
+	if got := byID["verify-fast"]; got.Confidence != "direct-config-last-run" || got.LastRunState != "OK" {
+		t.Fatalf("expected config last-run verify evidence, got %+v", got)
+	}
+	if got := byID["prune:partial"]; got.Confidence != "partial-permission" || got.Error == "" {
+		t.Fatalf("expected partial permission prune evidence, got %+v", got)
+	}
+	if got := byID["backup:vm/100"]; got.Confidence != "task-history-only" || got.TaskStatus != "OK" {
+		t.Fatalf("expected backup task-history evidence, got %+v", got)
+	}
+	if got := byID["garbage:fast"]; got.Confidence != "direct-config-last-run" || got.Store != "fast" {
+		t.Fatalf("expected garbage config evidence, got %+v", got)
+	}
+}
+
 func TestNewClient_PasswordAuth_FallsBackToFormOnUnsupportedMediaType(t *testing.T) {
 	var calls int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

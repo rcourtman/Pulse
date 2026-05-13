@@ -236,6 +236,42 @@ func TestMonitor_PollPBSInstance_DatastoreDetails(t *testing.T) {
 	}
 }
 
+func TestPBSJobHealthEvidenceKeepsFreshnessSeparateFromConfidence(t *testing.T) {
+	observedAt := time.Unix(1700007200, 0).UTC()
+	facts := []pbs.JobHealthEvidence{
+		{
+			ID:             "sync-remote-a",
+			Family:         "sync",
+			Store:          "fast",
+			LastRunState:   "OK",
+			LastRunUPID:    "UPID:sync:1",
+			LastRunEndtime: 1700000000,
+			NextRun:        1700003600,
+			UPID:           "UPID:sync:1",
+			TaskStatus:     "OK",
+			Confidence:     "direct-task-match",
+		},
+	}
+
+	evidence := pbsJobHealthEvidenceFromFacts(facts, observedAt)
+	if len(evidence) != 1 {
+		t.Fatalf("expected 1 evidence item, got %d", len(evidence))
+	}
+	got := evidence[0]
+	if got.Confidence != "direct-task-match" {
+		t.Fatalf("confidence = %q, want direct-task-match", got.Confidence)
+	}
+	if got.Freshness.State != "overdue" {
+		t.Fatalf("freshness state = %q, want overdue", got.Freshness.State)
+	}
+	if got.Posture != "warning" || got.PostureReason != "job-overdue" {
+		t.Fatalf("posture = %q/%q, want warning/job-overdue", got.Posture, got.PostureReason)
+	}
+	if got.LastRunState != "OK" || got.LastRunUPID != "UPID:sync:1" || got.LastRunEndtime != 1700000000 || got.NextRun != 1700003600 {
+		t.Fatalf("raw PBS last-run fields were not preserved: %+v", got)
+	}
+}
+
 // TestPBSAndPMGPollSkipDisabledInstances asserts that the PBS and PMG poll
 // entry points short-circuit when their resolved instance config carries
 // `Disabled: true`. This is a source-level guardrail for the discovery

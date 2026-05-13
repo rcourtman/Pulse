@@ -2511,6 +2511,20 @@ func (v PBSInstanceView) GarbageJobs() []models.PBSGarbageJob {
 	return append([]models.PBSGarbageJob(nil), v.r.PBS.GarbageJobs...)
 }
 
+func (v PBSInstanceView) JobHealthEvidenceCount() int {
+	if v.r == nil || v.r.PBS == nil {
+		return 0
+	}
+	return v.r.PBS.JobHealthEvidenceCount
+}
+
+func (v PBSInstanceView) JobHealthEvidence() []models.PBSJobHealthEvidence {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return append([]models.PBSJobHealthEvidence(nil), v.r.PBS.JobHealthEvidence...)
+}
+
 func (v PBSInstanceView) ConnectionHealth() string {
 	if v.r == nil || v.r.PBS == nil {
 		return ""

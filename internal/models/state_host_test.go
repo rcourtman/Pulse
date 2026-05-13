@@ -471,6 +471,46 @@ func TestUpdatePBSInstance(t *testing.T) {
 	}
 }
 
+func TestPBSInstanceJobHealthEvidenceNormalizeAndClone(t *testing.T) {
+	state := NewState()
+	observedAt := time.Unix(1700000000, 0).UTC()
+	state.UpdatePBSInstance(PBSInstance{
+		ID:   "pbs-1",
+		Name: "pbs-main",
+		JobHealthEvidence: []PBSJobHealthEvidence{{
+			ID:             "sync-1",
+			Family:         "sync",
+			Store:          "fast",
+			LastRunState:   "OK",
+			LastRunUPID:    "UPID:sync:1",
+			LastRunEndtime: 1699999900,
+			NextRun:        1700003600,
+			Confidence:     "direct-task-match",
+			Freshness: PBSJobHealthFreshness{
+				ObservedAt: observedAt,
+				State:      "observed",
+			},
+			Posture: "healthy",
+		}},
+	})
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.PBSInstances) != 1 || len(snapshot.PBSInstances[0].JobHealthEvidence) != 1 {
+		t.Fatalf("expected cloned PBS job health evidence, got %+v", snapshot.PBSInstances)
+	}
+	snapshot.PBSInstances[0].JobHealthEvidence[0].LastRunState = "changed"
+
+	fresh := state.GetSnapshot()
+	if got := fresh.PBSInstances[0].JobHealthEvidence[0].LastRunState; got != "OK" {
+		t.Fatalf("state clone leaked mutation, got last-run-state %q", got)
+	}
+
+	normalized := (PBSInstance{}).NormalizeCollections()
+	if normalized.JobHealthEvidence == nil {
+		t.Fatal("JobHealthEvidence should normalize to an initialized empty slice")
+	}
+}
+
 func TestUpdatePMGInstances(t *testing.T) {
 	state := NewState()
 

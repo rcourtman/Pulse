@@ -2630,6 +2630,23 @@ func TestResourceListIncludesPBSProtectedWorkloadRollup(t *testing.T) {
 						Used:   96,
 					},
 				},
+				JobHealthEvidence: []models.PBSJobHealthEvidence{{
+					ID:             "sync-remote-a",
+					Family:         "sync",
+					Store:          "backup-store",
+					LastRunState:   "OK",
+					LastRunUPID:    "UPID:sync:1",
+					LastRunEndtime: now.Add(-time.Hour).Unix(),
+					NextRun:        now.Add(time.Hour).Unix(),
+					Confidence:     "direct-task-match",
+					Freshness: models.PBSJobHealthFreshness{
+						ObservedAt:     now,
+						LastRunEndTime: now.Add(-time.Hour),
+						NextRun:        now.Add(time.Hour),
+						State:          "observed",
+					},
+					Posture: "healthy",
+				}},
 			},
 		},
 		PBSBackups: []models.PBSBackup{
@@ -2723,6 +2740,12 @@ func TestResourceListIncludesPBSProtectedWorkloadRollup(t *testing.T) {
 	}
 	if got := pbs.PBS.PostureSummary; got != "Affects 1 backup datastore: backup-store. Puts backups for 2 protected workloads at risk: media01, app01" {
 		t.Fatalf("postureSummary = %q", got)
+	}
+	if pbs.PBS.JobHealthEvidenceCount != 1 || len(pbs.PBS.JobHealthEvidence) != 1 {
+		t.Fatalf("expected PBS job health evidence in API payload, got %+v", pbs.PBS)
+	}
+	if got := pbs.PBS.JobHealthEvidence[0]; got.Confidence != "direct-task-match" || got.LastRunState != "OK" || got.LastRunUPID != "UPID:sync:1" {
+		t.Fatalf("expected API payload to preserve PBS job evidence, got %+v", got)
 	}
 }
 

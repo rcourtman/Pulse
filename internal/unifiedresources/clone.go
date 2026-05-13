@@ -229,6 +229,7 @@ func clonePBSData(in *PBSData) *PBSData {
 	out.VerifyJobs = append([]models.PBSVerifyJob(nil), in.VerifyJobs...)
 	out.PruneJobs = append([]models.PBSPruneJob(nil), in.PruneJobs...)
 	out.GarbageJobs = append([]models.PBSGarbageJob(nil), in.GarbageJobs...)
+	out.JobHealthEvidence = append([]models.PBSJobHealthEvidence(nil), in.JobHealthEvidence...)
 	return &out
 }
 

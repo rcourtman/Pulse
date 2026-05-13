@@ -1292,25 +1292,26 @@ type PhysicalDisk struct {
 
 // PBSInstance represents a Proxmox Backup Server instance
 type PBSInstance struct {
-	ID               string          `json:"id"`
-	Name             string          `json:"name"`
-	Host             string          `json:"host"`
-	GuestURL         string          `json:"guestURL,omitempty"` // Optional guest-accessible URL (for navigation)
-	Status           string          `json:"status"`
-	Version          string          `json:"version"`
-	CPU              float64         `json:"cpu"`         // CPU usage percentage
-	Memory           float64         `json:"memory"`      // Memory usage percentage
-	MemoryUsed       int64           `json:"memoryUsed"`  // Memory used in bytes
-	MemoryTotal      int64           `json:"memoryTotal"` // Total memory in bytes
-	Uptime           int64           `json:"uptime"`      // Uptime in seconds
-	Datastores       []PBSDatastore  `json:"datastores"`
-	BackupJobs       []PBSBackupJob  `json:"backupJobs"`
-	SyncJobs         []PBSSyncJob    `json:"syncJobs"`
-	VerifyJobs       []PBSVerifyJob  `json:"verifyJobs"`
-	PruneJobs        []PBSPruneJob   `json:"pruneJobs"`
-	GarbageJobs      []PBSGarbageJob `json:"garbageJobs"`
-	ConnectionHealth string          `json:"connectionHealth"`
-	LastSeen         time.Time       `json:"lastSeen"`
+	ID                string                 `json:"id"`
+	Name              string                 `json:"name"`
+	Host              string                 `json:"host"`
+	GuestURL          string                 `json:"guestURL,omitempty"` // Optional guest-accessible URL (for navigation)
+	Status            string                 `json:"status"`
+	Version           string                 `json:"version"`
+	CPU               float64                `json:"cpu"`         // CPU usage percentage
+	Memory            float64                `json:"memory"`      // Memory usage percentage
+	MemoryUsed        int64                  `json:"memoryUsed"`  // Memory used in bytes
+	MemoryTotal       int64                  `json:"memoryTotal"` // Total memory in bytes
+	Uptime            int64                  `json:"uptime"`      // Uptime in seconds
+	Datastores        []PBSDatastore         `json:"datastores"`
+	BackupJobs        []PBSBackupJob         `json:"backupJobs"`
+	SyncJobs          []PBSSyncJob           `json:"syncJobs"`
+	VerifyJobs        []PBSVerifyJob         `json:"verifyJobs"`
+	PruneJobs         []PBSPruneJob          `json:"pruneJobs"`
+	GarbageJobs       []PBSGarbageJob        `json:"garbageJobs"`
+	JobHealthEvidence []PBSJobHealthEvidence `json:"jobHealthEvidence"`
+	ConnectionHealth  string                 `json:"connectionHealth"`
+	LastSeen          time.Time              `json:"lastSeen"`
 }
 
 func (i PBSInstance) NormalizeCollections() PBSInstance {
@@ -1334,6 +1335,9 @@ func (i PBSInstance) NormalizeCollections() PBSInstance {
 	}
 	if i.GarbageJobs == nil {
 		i.GarbageJobs = []PBSGarbageJob{}
+	}
+	if i.JobHealthEvidence == nil {
+		i.JobHealthEvidence = []PBSJobHealthEvidence{}
 	}
 	return i
 }
@@ -1442,6 +1446,43 @@ type PBSGarbageJob struct {
 	NextRun      time.Time `json:"nextRun,omitempty"`
 	RemovedBytes int64     `json:"removedBytes,omitempty"`
 	Error        string    `json:"error,omitempty"`
+}
+
+// PBSJobHealthEvidence is the shared PBS job-health ledger shape for backup,
+// sync, verify, prune, and garbage-collection job families.
+type PBSJobHealthEvidence struct {
+	ID             string                `json:"id"`
+	Family         string                `json:"family"`
+	Store          string                `json:"store,omitempty"`
+	Remote         string                `json:"remote,omitempty"`
+	Namespace      string                `json:"namespace,omitempty"`
+	Schedule       string                `json:"schedule,omitempty"`
+	Comment        string                `json:"comment,omitempty"`
+	Enabled        bool                  `json:"enabled"`
+	LastRunState   string                `json:"last-run-state,omitempty"`
+	LastRunUPID    string                `json:"last-run-upid,omitempty"`
+	LastRunEndtime int64                 `json:"last-run-endtime,omitempty"`
+	NextRun        int64                 `json:"next-run,omitempty"`
+	UPID           string                `json:"upid,omitempty"`
+	WorkerType     string                `json:"worker-type,omitempty"`
+	WorkerID       string                `json:"worker-id,omitempty"`
+	TaskStatus     string                `json:"task-status,omitempty"`
+	TaskStartTime  int64                 `json:"task-starttime,omitempty"`
+	TaskEndTime    int64                 `json:"task-endtime,omitempty"`
+	Confidence     string                `json:"confidence"`
+	Freshness      PBSJobHealthFreshness `json:"freshness"`
+	Posture        string                `json:"posture,omitempty"`
+	PostureReason  string                `json:"postureReason,omitempty"`
+	Error          string                `json:"error,omitempty"`
+}
+
+// PBSJobHealthFreshness captures timing separately from evidence confidence.
+type PBSJobHealthFreshness struct {
+	ObservedAt     time.Time `json:"observedAt"`
+	LastRunEndTime time.Time `json:"lastRunEndTime,omitempty"`
+	NextRun        time.Time `json:"nextRun,omitempty"`
+	AgeSeconds     int64     `json:"ageSeconds,omitempty"`
+	State          string    `json:"state,omitempty"`
 }
 
 // PMGInstance represents a Proxmox Mail Gateway connection
