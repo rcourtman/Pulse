@@ -1,6 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { ensureAuthenticated } from './helpers';
+const PRO_RUNTIME_IDENTITY = {
+  build: 'pro',
+  label: 'Pulse Pro runtime',
+  download_url: 'https://pulserelay.pro/download.html',
+};
 
 const INACTIVE_ENTITLEMENTS = {
   capabilities: [],
@@ -36,6 +40,8 @@ const ACTIVE_ENTITLEMENTS = {
   valid: true,
   is_lifetime: false,
   days_remaining: 30,
+  max_history_days: 90,
+  runtime: PRO_RUNTIME_IDENTITY,
 };
 
 const INACTIVE_RUNTIME_CAPABILITIES = {
@@ -50,6 +56,7 @@ const ACTIVE_RUNTIME_CAPABILITIES = {
   limits: ACTIVE_ENTITLEMENTS.limits,
   hosted_mode: false,
   max_history_days: 90,
+  runtime: PRO_RUNTIME_IDENTITY,
 };
 
 const INACTIVE_COMMERCIAL_POSTURE = {
@@ -72,10 +79,89 @@ const ACTIVE_COMMERCIAL_POSTURE = {
   has_migration_gap: false,
 };
 
+type ManualActivationRequestCounts = {
+  inactive: {
+    runtimeCapabilities: number;
+    entitlements: number;
+    commercialPosture: number;
+  };
+  active: {
+    runtimeCapabilities: number;
+    entitlements: number;
+    commercialPosture: number;
+  };
+  activate: number;
+};
+
+async function stubAuthenticatedShell(page: Page) {
+  await page.route('**/api/security/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        hasAuthentication: true,
+        hideLocalLogin: false,
+        ssoProviders: [],
+        sessionCapabilities: {},
+        settingsCapabilities: {
+          apiAccessRead: true,
+          apiAccessWrite: true,
+          authenticationRead: true,
+          authenticationWrite: true,
+          singleSignOnRead: true,
+          singleSignOnWrite: true,
+          roles: true,
+          users: true,
+          auditLog: true,
+          auditWebhooksRead: true,
+          auditWebhooksWrite: true,
+          relayRead: true,
+          relayWrite: true,
+          billingAdmin: true,
+        },
+      }),
+    });
+  });
+
+  await page.route('**/api/state', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true }),
+    });
+  });
+
+  await page.route('**/api/system/settings', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        theme: 'system',
+        fullWidthMode: false,
+      }),
+    });
+  });
+}
+
 async function stubManualActivationEndpoints(page: Page) {
   let activated = false;
+  const requestCounts: ManualActivationRequestCounts = {
+    inactive: {
+      runtimeCapabilities: 0,
+      entitlements: 0,
+      commercialPosture: 0,
+    },
+    active: {
+      runtimeCapabilities: 0,
+      entitlements: 0,
+      commercialPosture: 0,
+    },
+    activate: 0,
+  };
 
   await page.route('**/api/license/runtime-capabilities', async (route) => {
+    const stateKey = activated ? 'active' : 'inactive';
+    requestCounts[stateKey].runtimeCapabilities += 1;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -84,6 +170,8 @@ async function stubManualActivationEndpoints(page: Page) {
   });
 
   await page.route('**/api/license/entitlements', async (route) => {
+    const stateKey = activated ? 'active' : 'inactive';
+    requestCounts[stateKey].entitlements += 1;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -92,6 +180,8 @@ async function stubManualActivationEndpoints(page: Page) {
   });
 
   await page.route('**/api/license/commercial-posture', async (route) => {
+    const stateKey = activated ? 'active' : 'inactive';
+    requestCounts[stateKey].commercialPosture += 1;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -100,6 +190,7 @@ async function stubManualActivationEndpoints(page: Page) {
   });
 
   await page.route('**/api/license/activate', async (route) => {
+    requestCounts.activate += 1;
     activated = true;
     await route.fulfill({
       status: 200,
@@ -110,6 +201,8 @@ async function stubManualActivationEndpoints(page: Page) {
       }),
     });
   });
+
+  return requestCounts;
 }
 
 test.describe('Self-hosted manual activation success', () => {
@@ -118,8 +211,8 @@ test.describe('Self-hosted manual activation success', () => {
   }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only plans coverage');
 
-    await stubManualActivationEndpoints(page);
-    await ensureAuthenticated(page);
+    await stubAuthenticatedShell(page);
+    const requestCounts = await stubManualActivationEndpoints(page);
     await page.goto('/settings/system/billing/plan', { waitUntil: 'domcontentloaded' });
 
     const communityPlanCard = page
@@ -132,7 +225,7 @@ test.describe('Self-hosted manual activation success', () => {
     await expect(communityPlanCard.getByText('Expired', { exact: true })).toHaveCount(0);
     await expect(
       communityPlanCard.getByText(
-        'Community is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts.',
+        'Community is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), update alerts, and SSO.',
       ),
     ).toBeVisible();
     await expect(page.getByText('Optional extras')).toHaveCount(0);
@@ -160,6 +253,10 @@ test.describe('Self-hosted manual activation success', () => {
     await expect(activationSummary.getByText('Available now on this instance')).toBeVisible();
     await expect(activationSummary.getByText('Safe Remediation Workflows')).toBeVisible();
     await expect(activationSummary.getByText('Alert Root-Cause Analysis')).toBeVisible();
+    await expect.poll(() => requestCounts.activate).toBe(1);
+    await expect.poll(() => requestCounts.active.entitlements).toBeGreaterThan(0);
+    await expect.poll(() => requestCounts.active.runtimeCapabilities).toBeGreaterThan(0);
+    await expect.poll(() => requestCounts.active.commercialPosture).toBeGreaterThan(0);
 
     await expect(page.getByText('Current plan: Pulse Pro')).toBeVisible();
     const currentPlanCard = page

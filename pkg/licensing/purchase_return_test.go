@@ -40,6 +40,9 @@ func TestSignAndVerifyPurchaseReturnToken(t *testing.T) {
 	if claims.InstanceHost != "pulse.example.com" {
 		t.Fatalf("claims.InstanceHost=%q, want %q", claims.InstanceHost, "pulse.example.com")
 	}
+	if claims.ReturnURL != "https://pulse.example.com/auth/license-purchase-activate" {
+		t.Fatalf("claims.ReturnURL=%q, want activation bridge URL only", claims.ReturnURL)
+	}
 }
 
 func TestVerifyPurchaseReturnToken_HostMismatch(t *testing.T) {

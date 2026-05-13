@@ -888,6 +888,32 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByRole('link', { name: 'Review plan' })).not.toBeInTheDocument();
   });
 
+  it('does not treat checkout return parameters as entitlement truth', async () => {
+    useLocationMock.mockReturnValue({
+      search: `?purchase=${SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED}&intent=${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT}`,
+      pathname: '/settings/system/billing/plan',
+      hash: '',
+    });
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
+    });
+
+    expect(screen.queryByText('Pulse Pro is now active')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Checkout completed and this instance is now running Pulse Pro/i),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Current plan: Community')).toBeInTheDocument();
+    expect(screen.queryByText('Safe Remediation Workflows')).not.toBeInTheDocument();
+    expect(screen.queryByText('Available now on this instance')).not.toBeInTheDocument();
+    expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_PLAN_HREF, {
+      replace: true,
+      scroll: false,
+    });
+  });
+
   it('opens recovery by default when the billing route requests the recovery detail', async () => {
     useLocationMock.mockReturnValue({
       search: '?details=recovery',

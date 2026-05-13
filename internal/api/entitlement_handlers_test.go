@@ -453,6 +453,12 @@ func TestEntitlementHandler_SelfHostedPaidEvaluatorStateIsUncapped(t *testing.T)
 	if payload.PlanVersion != "pro" {
 		t.Fatalf("plan_version=%q, want %q", payload.PlanVersion, "pro")
 	}
+	if payload.SubscriptionState != string(entitlements.SubStateActive) {
+		t.Fatalf("subscription_state=%q, want %q", payload.SubscriptionState, entitlements.SubStateActive)
+	}
+	if payload.Tier != string(license.TierPro) {
+		t.Fatalf("tier=%q, want %q", payload.Tier, license.TierPro)
+	}
 	for _, limit := range payload.Limits {
 		if limit.Key == "max_monitored_systems" || limit.Key == "max_guests" {
 			t.Fatalf("expected self-hosted paid evaluator payload to omit volume caps, got %+v", payload.Limits)
@@ -503,6 +509,12 @@ func TestEntitlementHandler_GrandfatheredRecurringEvaluatorStateIsUncapped(t *te
 
 	if payload.PlanVersion != "v5_pro_monthly_grandfathered" {
 		t.Fatalf("plan_version=%q, want %q", payload.PlanVersion, "v5_pro_monthly_grandfathered")
+	}
+	if payload.SubscriptionState != string(entitlements.SubStateActive) {
+		t.Fatalf("subscription_state=%q, want %q", payload.SubscriptionState, entitlements.SubStateActive)
+	}
+	if payload.Tier != string(license.TierPro) {
+		t.Fatalf("tier=%q, want %q", payload.Tier, license.TierPro)
 	}
 	for _, limit := range payload.Limits {
 		if limit.Key == "max_monitored_systems" || limit.Key == "max_guests" {

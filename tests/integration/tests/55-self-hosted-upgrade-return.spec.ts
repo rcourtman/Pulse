@@ -27,6 +27,12 @@ const PURCHASE_RETURN_TOKEN = "prt_signed_checkout_return";
 const CHECKOUT_SESSION_ID = "cs_upgrade_return";
 const MONITORED_SYSTEM_FEATURE = "self_hosted_plan";
 
+const PRO_RUNTIME_IDENTITY = {
+  build: "pro",
+  label: "Pulse Pro runtime",
+  download_url: "https://pulserelay.pro/download.html",
+};
+
 const MONITORED_SYSTEM_ENTITLEMENTS = {
   capabilities: [],
   limits: [],
@@ -86,6 +92,8 @@ const ACTIVATED_PLAN_ENTITLEMENTS = {
   valid: true,
   is_lifetime: false,
   days_remaining: 30,
+  max_history_days: 90,
+  runtime: PRO_RUNTIME_IDENTITY,
 };
 
 const ACTIVATED_PLAN_RUNTIME_CAPABILITIES = {
@@ -93,6 +101,7 @@ const ACTIVATED_PLAN_RUNTIME_CAPABILITIES = {
   limits: ACTIVATED_PLAN_ENTITLEMENTS.limits,
   hosted_mode: false,
   max_history_days: 90,
+  runtime: PRO_RUNTIME_IDENTITY,
 };
 
 const ACTIVATED_PLAN_COMMERCIAL_POSTURE = {
@@ -133,6 +142,19 @@ const MONITORED_SYSTEM_LEDGER = {
   ],
   total: 16,
   limit: 0,
+};
+
+type BillingFixtureRequests = {
+  inactive: {
+    runtimeCapabilities: number;
+    commercialPosture: number;
+    entitlements: number;
+  };
+  activated: {
+    runtimeCapabilities: number;
+    commercialPosture: number;
+    entitlements: number;
+  };
 };
 
 function fulfillJSON(route: Route, payload: unknown, status = 200) {
@@ -350,6 +372,18 @@ async function configureBillingFixtures(
   } = {},
 ) {
   const activationState = options.activationState ?? { current: false };
+  const requestCounts: BillingFixtureRequests = {
+    inactive: {
+      runtimeCapabilities: 0,
+      commercialPosture: 0,
+      entitlements: 0,
+    },
+    activated: {
+      runtimeCapabilities: 0,
+      commercialPosture: 0,
+      entitlements: 0,
+    },
+  };
 
   await context.route("**/api/security/status", async (route) => {
     await fulfillJSON(route, {
@@ -372,6 +406,8 @@ async function configureBillingFixtures(
   });
 
   await context.route("**/api/license/runtime-capabilities", async (route) => {
+    const stateKey = activationState.current ? "activated" : "inactive";
+    requestCounts[stateKey].runtimeCapabilities += 1;
     await fulfillJSON(
       route,
       activationState.current
@@ -381,6 +417,8 @@ async function configureBillingFixtures(
   });
 
   await context.route("**/api/license/commercial-posture", async (route) => {
+    const stateKey = activationState.current ? "activated" : "inactive";
+    requestCounts[stateKey].commercialPosture += 1;
     await fulfillJSON(
       route,
       activationState.current
@@ -390,6 +428,8 @@ async function configureBillingFixtures(
   });
 
   await context.route("**/api/license/entitlements", async (route) => {
+    const stateKey = activationState.current ? "activated" : "inactive";
+    requestCounts[stateKey].entitlements += 1;
     await fulfillJSON(
       route,
       activationState.current ? ACTIVATED_PLAN_ENTITLEMENTS : MONITORED_SYSTEM_ENTITLEMENTS,
@@ -405,6 +445,8 @@ async function configureBillingFixtures(
       await fulfillJSON(route, payload);
     },
   );
+
+  return requestCounts;
 }
 
 async function openMonitoredSystemUpgradeArrival(page: Page) {
@@ -498,6 +540,43 @@ test.describe("Self-hosted upgrade return flow", () => {
     await expect(page.getByRole("link", { name: "Review plan" })).toHaveCount(0);
   });
 
+  test("keeps checkout return as UX-only until server entitlements refresh paid state", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only billing continuity",
+    );
+
+    const context = page.context();
+    const activationState = { current: false };
+    const requestCounts = await configureBillingFixtures(context, page, { activationState });
+
+    await configurePurchaseStartRoute(context);
+    await configurePortalRedirectRoute(context, {
+      body: "Checkout complete. Returning to Plans.",
+      redirectUrl: buildPurchaseReturnUrl(),
+    });
+    await configurePurchaseReturnRoute(context, {
+      completionTitle: "Plan activated",
+      finalRedirectUrl: ACTIVATED_BILLING_URL,
+    });
+
+    await openMonitoredSystemUpgradeArrival(page);
+    await page.getByRole("link", { name: "Compare plans" }).click();
+    await page.goto(buildPortalHandoffUrl(), { waitUntil: "domcontentloaded" });
+
+    await expect(page).toHaveURL(FINAL_BILLING_URL);
+    await expect(page.getByText("Pulse Pro is now active", { exact: true })).toHaveCount(0);
+    await expect(
+      page.getByText("Checkout completed and this instance is now running Pulse Pro."),
+    ).toHaveCount(0);
+    await expect(page.getByText("Current plan: Community")).toBeVisible();
+    await expect(page.getByText("Safe Remediation Workflows")).toHaveCount(0);
+    await expect.poll(() => requestCounts.inactive.entitlements).toBeGreaterThan(0);
+    expect(requestCounts.activated.entitlements).toBe(0);
+  });
+
   test("returns cancelled checkout directly to the owned billing plan route", async ({
     page,
   }, testInfo) => {
@@ -523,7 +602,7 @@ test.describe("Self-hosted upgrade return flow", () => {
 
     await page.goto(buildPortalHandoffUrl(), { waitUntil: "domcontentloaded" });
 
-    await expect(page).toHaveURL(CANCELLED_BILLING_URL);
+    await expect(page).toHaveURL(FINAL_RESTARTABLE_BILLING_URL);
     await expect(page.getByText("Checkout cancelled", { exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Compare plans" })).toHaveAttribute(
       "href",

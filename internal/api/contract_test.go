@@ -7302,6 +7302,18 @@ func TestContract_SelfHostedPurchaseHandoffJSONSnapshot(t *testing.T) {
 	if returnToken == "" {
 		t.Fatal("expected signed purchase_return_token in success_url")
 	}
+	for _, entitlementField := range []string{
+		"entitlements",
+		"runtime",
+		"commercial_posture",
+		"subscription_state",
+		"tier",
+		"plan_version",
+	} {
+		if got := activationURL.Query().Get(entitlementField); got != "" {
+			t.Fatalf("success_url query %s=%q, want omitted checkout UX metadata only", entitlementField, got)
+		}
+	}
 	signingKey, err := handler.purchaseReturnSigningKey()
 	if err != nil {
 		t.Fatalf("purchaseReturnSigningKey: %v", err)

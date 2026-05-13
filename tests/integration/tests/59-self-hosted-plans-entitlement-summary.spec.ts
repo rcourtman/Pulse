@@ -1,7 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { ensureAuthenticated } from './helpers';
-
 const PRO_RUNTIME_IDENTITY = {
   build: 'pro',
   label: 'Pulse Pro runtime',
@@ -112,6 +110,56 @@ const PRO_PLAN_COMMUNITY_RUNTIME_CAPABILITIES = {
   ],
 };
 
+async function stubAuthenticatedShell(page: Page) {
+  await page.route('**/api/security/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        hasAuthentication: true,
+        hideLocalLogin: false,
+        ssoProviders: [],
+        sessionCapabilities: {},
+        settingsCapabilities: {
+          apiAccessRead: true,
+          apiAccessWrite: true,
+          authenticationRead: true,
+          authenticationWrite: true,
+          singleSignOnRead: true,
+          singleSignOnWrite: true,
+          roles: true,
+          users: true,
+          auditLog: true,
+          auditWebhooksRead: true,
+          auditWebhooksWrite: true,
+          relayRead: true,
+          relayWrite: true,
+          billingAdmin: true,
+        },
+      }),
+    });
+  });
+
+  await page.route('**/api/state', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true }),
+    });
+  });
+
+  await page.route('**/api/system/settings', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        theme: 'system',
+        fullWidthMode: false,
+      }),
+    });
+  });
+}
+
 async function stubSelfHostedPlanEndpoints(
   page: Page,
   payloads: {
@@ -120,6 +168,8 @@ async function stubSelfHostedPlanEndpoints(
     runtimeCapabilities?: Record<string, unknown>;
   } = {},
 ) {
+  await stubAuthenticatedShell(page);
+
   const runtimeCapabilities = payloads.runtimeCapabilities ?? PRO_PLAN_RUNTIME_CAPABILITIES;
   const entitlements = payloads.entitlements ?? PRO_PLAN_ENTITLEMENTS;
   const commercialPosture = payloads.commercialPosture ?? PRO_PLAN_COMMERCIAL_POSTURE;
@@ -156,7 +206,6 @@ test.describe('Self-hosted plans entitlement summary', () => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only plans coverage');
 
     await stubSelfHostedPlanEndpoints(page);
-    await ensureAuthenticated(page);
     await page.goto('/settings/system/billing/plan', { waitUntil: 'domcontentloaded' });
 
     await expect(
@@ -226,7 +275,6 @@ test.describe('Self-hosted plans entitlement summary', () => {
       entitlements: unknownRuntimeEntitlements,
       runtimeCapabilities: unknownRuntimeCapabilities,
     });
-    await ensureAuthenticated(page);
     await page.goto('/settings/system/billing/plan', { waitUntil: 'domcontentloaded' });
 
     const currentPlanCard = page
@@ -258,7 +306,6 @@ test.describe('Self-hosted plans entitlement summary', () => {
       },
       runtimeCapabilities: PRO_PLAN_COMMUNITY_RUNTIME_CAPABILITIES,
     });
-    await ensureAuthenticated(page);
     await page.goto('/settings/system/billing/plan', {
       waitUntil: 'domcontentloaded',
     });
@@ -293,7 +340,6 @@ test.describe('Self-hosted plans entitlement summary', () => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only settings coverage');
 
     await stubSelfHostedPlanEndpoints(page);
-    await ensureAuthenticated(page);
     await page.goto('/settings/system/billing/plan', { waitUntil: 'domcontentloaded' });
 
     const settingsNav = page.locator('[aria-label="Settings navigation"]');
