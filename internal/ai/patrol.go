@@ -457,6 +457,12 @@ type PatrolService struct {
 
 	// Unified resource provider — reads physical disks, Ceph, etc. from canonical model
 	unifiedResourceProvider UnifiedResourceProvider
+
+	// Finding-storm throttler — clusters multi-symptom emissions on the
+	// same resource so a noisy host surfaces as one storm finding rather
+	// than several concurrent per-symptom rows. Owned for the service
+	// lifetime; in-memory only, no goroutine.
+	stormThrottler *findingStormThrottler
 	// ReadState provides typed read-only views over resource state (VMs, nodes, hosts, etc.).
 	// This is injected separately from stateProvider since stateProvider also contains
 	// non-resource telemetry (alerts, backups, connection health) that isn't modeled as resources yet.
@@ -656,7 +662,7 @@ type PatrolStreamEvent struct {
 
 // NewPatrolService creates a new patrol service
 func NewPatrolService(aiService *Service, stateProvider StateProvider) *PatrolService {
-	return &PatrolService{
+	p := &PatrolService{
 		aiService:     aiService,
 		stateProvider: stateProvider,
 		config:        DefaultPatrolConfig(),
@@ -672,4 +678,12 @@ func NewPatrolService(aiService *Service, stateProvider StateProvider) *PatrolSe
 		streamPhase:       "idle",
 		adHocTrigger:      make(chan *alerts.Alert, 10), // Buffer triggers
 	}
+	// Wire the finding-storm throttler into the freshly-constructed
+	// FindingsStore so every patrol emission flows through the
+	// observer from first run. Constructor-internal wire-up keeps the
+	// throttler intrinsic to the service and avoids a deployment-time
+	// router seam.
+	p.stormThrottler = newFindingStormThrottler()
+	p.findings.SetStormThrottler(p.stormThrottler)
+	return p
 }
