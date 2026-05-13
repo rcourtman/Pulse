@@ -116,8 +116,9 @@ describe('settingsNavigation integration scaffold', () => {
     expect(getSettingsNavItem('system-billing')?.hideFromSidebar).toBe(true);
   });
 
-  it('keeps data handling visible as a non-commercial trust surface', () => {
+  it('keeps resource privacy route-backed but out of the normal sidebar', () => {
     expect(getSettingsNavItem('security-data-handling')?.hideWhenCommercialHidden).not.toBe(true);
+    expect(getSettingsNavItem('security-data-handling')?.hideFromSidebar).toBe(true);
     expect(
       shouldHideSettingsNavItem('security-data-handling', {
         hasFeature: hasFeatures([]),

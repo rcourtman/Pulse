@@ -3842,7 +3842,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Policy-aware data governance now has a first-class governed floor: resource sensitivity, handling-boundary, and redaction posture are visible in Data Handling, non-local AI provider requests use the shared resource-policy sanitizer at the final model boundary, and privacy copy now reflects the runtime behavior. Broader enterprise DLP, provider-retention posture, and non-resource prompt-secret detection remain a named post-RC hardening track.",
+        "summary": "Policy-aware data governance now has a first-class governed floor: resource sensitivity, handling-boundary, and redaction posture remain available through the route-backed Resource Privacy/Data Handling surface without occupying the normal Settings sidebar as an empty read-only destination, non-local AI provider requests use the shared resource-policy sanitizer at the final model boundary, and privacy copy reflects the runtime behavior. Broader enterprise DLP, provider-retention posture, and non-resource prompt-secret detection remain a named post-RC hardening track.",
         "tracking": [
           {
             "kind": "lane-followup",

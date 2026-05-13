@@ -85,9 +85,9 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     description: 'View your security posture at a glance and monitor authentication status.',
   },
   'security-data-handling': {
-    title: 'Data Handling',
+    title: 'Resource Privacy',
     description:
-      'Review resource classifications, handling boundaries, and redaction coverage.',
+      'See which monitored resource details can be summarized, must stay local, or are redacted.',
   },
   'security-auth': {
     title: 'Authentication',

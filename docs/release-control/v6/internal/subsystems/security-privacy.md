@@ -138,7 +138,7 @@ controls as normal product settings.
    `pkg/tlsutil/fingerprint.go` together so startup auth ingestion, live
    auth-env reloads, hosted entitlement refresh origins, and
    pinned-fingerprint TLS clients keep one fail-closed security floor.
-9. Change operator-facing data-handling posture through `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` and `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` together so resource classification, handling-boundary, and redaction copy stays governed as a trust surface.
+9. Change operator-facing Resource Privacy/Data Handling posture through `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` and `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` together so resource classification, handling-boundary, redaction copy, and the route-backed/hidden-sidebar presentation stay governed as a trust surface.
 
 ## Forbidden Paths
 
@@ -159,8 +159,8 @@ controls as normal product settings.
    hosted entitlement refresh origin handling, or pinned-certificate transport
    behavior changes. Hosted commercial URL overrides must remain absolute
    HTTP(S) URLs, with plain HTTP limited to loopback development origins.
-8. Keep the Data Handling settings surface neutral and non-commercial: it may show resource policy posture, local-only counts, and redaction coverage, but it must not advertise trials, upgrades, paid plans, or monitoring limits.
-9. Keep operator-facing Data Handling posture aligned with runtime AI/context enforcement: `local-only` resource details must not be sent to external model prompts, and sensitive free-form alert, tool-result, investigation, handoff context, and any retained legacy managed-model compatibility text must use the shared resource-policy redaction helper before leaving the local trust boundary. Assistant handoffs may surface canonical policy handling guidance and current resource-state summaries for product-originated resources, but that guidance and state are model-only context and must not become disclosure authority. Product-originated Assistant handoff text must also be policy-cleaned before prompt injection, including operator briefings and finding/action context, so raw governed resource identity cannot leak through local-model briefing prose while non-local transport still receives the final provider-bound sanitizer. All provider-bound AI requests to non-local models must use the shared resource-policy sanitizer immediately before transport so later agentic turns cannot bypass the advertised handling posture.
+8. Keep the Resource Privacy/Data Handling settings surface neutral and non-commercial: it may show resource policy posture, local-only counts, and redaction coverage, but it must not advertise trials, upgrades, paid plans, or monitoring limits, and it must remain route-backed rather than promoted in the normal Settings sidebar while it is informational only.
+9. Keep operator-facing Resource Privacy/Data Handling posture aligned with runtime AI/context enforcement: `local-only` resource details must not be sent to external model prompts, and sensitive free-form alert, tool-result, investigation, handoff context, and any retained legacy managed-model compatibility text must use the shared resource-policy redaction helper before leaving the local trust boundary. Assistant handoffs may surface canonical policy handling guidance and current resource-state summaries for product-originated resources, but that guidance and state are model-only context and must not become disclosure authority. Product-originated Assistant handoff text must also be policy-cleaned before prompt injection, including operator briefings and finding/action context, so raw governed resource identity cannot leak through local-model briefing prose while non-local transport still receives the final provider-bound sanitizer. All provider-bound AI requests to non-local models must use the shared resource-policy sanitizer immediately before transport so later agentic turns cannot bypass the advertised handling posture.
 10. Keep the canonical and frontend-served privacy disclosures aligned with
     the actual AI transport boundary: self-managed installs must describe local
     providers as staying on the operator network, non-local providers as direct
@@ -207,11 +207,13 @@ operator access. `frontend-modern/src/components/Settings/GeneralSettingsPanel.t
 and `frontend-modern/src/components/Settings/apiTokenManagerModel.ts` must use
 monitoring/workspace wording for tours and read-only token presets instead of
 reviving Dashboard-specific labels after the Dashboard route has been retired.
-The Data Handling settings surface extends that trust boundary to resource
-policy posture. It may expose the canonical sensitivity, handling-boundary,
-and redaction counts that Pulse already applies to resources, but it must stay
-informational and non-commercial so free/self-hosted operators are not shown
-paywall, trial, upgrade, or monitoring-limit prompts inside a privacy surface.
+The Resource Privacy/Data Handling settings surface extends that trust boundary
+to resource policy posture. It may expose the canonical sensitivity,
+handling-boundary, and redaction counts that Pulse already applies to
+resources, but it must stay informational, route-backed, hidden from the
+normal Settings sidebar, and non-commercial so free/self-hosted operators are
+not shown paywall, trial, upgrade, monitoring-limit prompts, or an empty
+read-only destination inside a privacy surface.
 That posture is now enforced at the AI provider boundary too: non-local model
 requests must be sanitized from the same resource-policy metadata that powers
 the Data Handling surface. Assistant finding handoffs may hydrate policy

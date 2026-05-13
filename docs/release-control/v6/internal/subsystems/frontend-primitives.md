@@ -387,10 +387,12 @@ prompt explain the same operator-facing priority.
    support diagnostics and logs without being shown a Pro-locked reporting tab,
    while paid instances keep the canonical `/settings/support/reporting` route
    and panel.
-   Data Handling is a trust surface, not a commercial surface. The Settings
-   shell must keep it under the Security group, route it through the canonical
-   registry/header/navigation model, and avoid trial, upgrade, paid-plan, or
-   monitoring-limit copy when commercial presentation is hidden.
+   Resource Privacy/Data Handling is a route-backed trust surface, not a
+   commercial surface or default settings destination. The Settings shell must
+   keep it governed by the Security registry/header/navigation model without
+   advertising it in the normal sidebar while it remains informational only,
+   and it must avoid trial, upgrade, paid-plan, or monitoring-limit copy when
+   commercial presentation is hidden.
    General settings runtime cards that present source-platform actions must
    consume `frontend-modern/src/utils/systemSettingsPresentation.ts` and the
    shared source-platform vocabulary rather than card-local product names.

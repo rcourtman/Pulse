@@ -170,6 +170,20 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('keeps resource privacy route-backed instead of sidebar-promoted', () => {
+    expect(settingsNavCatalogSource).toMatch(
+      /id: 'security-data-handling',[\s\S]*label: 'Resource Privacy',[\s\S]*hideFromSidebar: true/,
+    );
+    expect(settingsHeaderMetaSource).toContain("title: 'Resource Privacy'");
+    expect(settingsHeaderMetaSource).toContain(
+      'See which monitored resource details can be summarized, must stay local, or are redacted.',
+    );
+    expect(dataHandlingPanelSource).toContain('title="Resource Data Policy"');
+    expect(dataHandlingPanelSource).toContain('Read-only resource privacy posture');
+    expect(dataHandlingPanelSource).toContain('<PolicyScopeSummary />');
+    expect(dataHandlingPanelSource).toContain('<EmptyPolicyPostureState />');
+  });
+
   it('keeps default self-hosted commercial copy opt-in from shared settings primitives', () => {
     expect(aiSettingsDialogsSource).not.toContain('Open hosted handoff');
     expect(aiSettingsDialogsSource).not.toContain(
@@ -241,7 +255,7 @@ describe('settings architecture guardrails', () => {
     // The amber soft-warning tone is the operator's signal that the
     // provider accepted the request but the model did not call the tool.
     expect(aiModelSelectionSectionSource).toContain('model_tool_support_unverified');
-    expect(aiModelSelectionSectionSource).not.toContain('fetch(\'/api/ai/patrol/preflight');
+    expect(aiModelSelectionSectionSource).not.toContain("fetch('/api/ai/patrol/preflight");
   });
 
   it('hydrates the Patrol preflight panel from the cached settings snapshot', () => {
@@ -256,16 +270,18 @@ describe('settings architecture guardrails', () => {
     expect(aiModelSelectionSectionSource).toContain('last verified');
   });
 
-  it('passes the form\'s pending patrolModel to runPatrolPreflight so Verify Patrol tests the unsaved selection', () => {
+  it("passes the form's pending patrolModel to runPatrolPreflight so Verify Patrol tests the unsaved selection", () => {
     // Without this, clicking Verify Patrol after changing the model
     // dropdown silently tested the previously-saved model and the
     // operator would believe their pending selection was verified.
     expect(aiSettingsStateSource).toContain('form.patrolModel');
     expect(aiSettingsStateSource).toContain('pendingModel');
-    expect(aiSettingsStateSource).toContain('runPatrolPreflight(pendingModel ? { model: pendingModel } : {})');
+    expect(aiSettingsStateSource).toContain(
+      'runPatrolPreflight(pendingModel ? { model: pendingModel } : {})',
+    );
   });
 
-  it('flags the inline preflight panel as stale when the cached result is for a different model than the form\'s current selection', () => {
+  it("flags the inline preflight panel as stale when the cached result is for a different model than the form's current selection", () => {
     // Cache may hold a green result for the previously-saved model
     // while the operator has changed the dropdown. Show a warning-tone
     // panel with copy that names both models so the green badge
@@ -274,7 +290,9 @@ describe('settings architecture guardrails', () => {
     expect(aiModelSelectionSectionSource).toContain('pendingFormModel');
     expect(aiModelSelectionSectionSource).toContain('cachedResultModel');
     expect(aiModelSelectionSectionSource).toContain('Verified result is for');
-    expect(aiModelSelectionSectionSource).toContain('Click Verify Patrol to test the pending selection');
+    expect(aiModelSelectionSectionSource).toContain(
+      'Click Verify Patrol to test the pending selection',
+    );
   });
 
   it('keeps contextual settings feature gates free of retired commercial telemetry wrappers', () => {

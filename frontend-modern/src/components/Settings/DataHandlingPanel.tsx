@@ -2,12 +2,14 @@ import { For, Show, createMemo, type Component } from 'solid-js';
 import AlertTriangle from 'lucide-solid/icons/alert-triangle';
 import Cloud from 'lucide-solid/icons/cloud';
 import EyeOff from 'lucide-solid/icons/eye-off';
+import Info from 'lucide-solid/icons/info';
 import Lock from 'lucide-solid/icons/lock';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import ShieldCheck from 'lucide-solid/icons/shield-check';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import Button from '@/components/shared/Button';
 import SettingsPanel from '@/components/shared/SettingsPanel';
+import { settingsTabPath } from './settingsNavigationModel';
 import {
   buildDataHandlingPanelModel,
   type DataHandlingPostureItem,
@@ -31,12 +33,82 @@ const badgeClassByTone: Record<DataHandlingPostureItem['tone'], string> = {
 
 const formatCount = (value: number): string => new Intl.NumberFormat().format(value);
 
+const policyScopeItems = [
+  {
+    label: 'Resource classification',
+    description:
+      'Groups monitored resources by sensitivity so restricted infrastructure is not treated like routine inventory.',
+  },
+  {
+    label: 'AI context boundary',
+    description:
+      'Shows which resource details can be summarized externally, should prefer local handling, or must stay local.',
+  },
+  {
+    label: 'Identifier redaction',
+    description:
+      'Counts hostnames, IP addresses, platform IDs, aliases, and paths marked for removal from guarded views.',
+  },
+] as const;
+
 const errorMessageFor = (error: unknown): string => {
   if (error instanceof Error && error.message.trim()) {
     return error.message;
   }
   return 'Unable to load resource policy posture.';
 };
+
+const PolicyScopeSummary: Component = () => (
+  <section class="rounded-md border border-sky-200 bg-sky-50 px-4 py-4 dark:border-sky-900 dark:bg-sky-950/40">
+    <div class="flex items-start gap-3">
+      <Info class="mt-0.5 h-4 w-4 shrink-0 text-sky-700 dark:text-sky-300" aria-hidden="true" />
+      <div class="min-w-0">
+        <h3 class="text-sm font-semibold text-base-content">Read-only resource privacy posture</h3>
+        <p class="mt-1 text-sm text-muted">
+          Pulse derives this from the unified resource registry. It does not configure retention,
+          backups, credentials, or billing data.
+        </p>
+      </div>
+    </div>
+    <div class="mt-4 grid gap-3 lg:grid-cols-3">
+      <For each={policyScopeItems}>
+        {(item) => (
+          <div class="rounded-md border border-border bg-surface px-3 py-3">
+            <p class="text-xs font-semibold uppercase tracking-wide text-base-content">
+              {item.label}
+            </p>
+            <p class="mt-1 text-sm text-muted">{item.description}</p>
+          </div>
+        )}
+      </For>
+    </div>
+  </section>
+);
+
+const EmptyPolicyPostureState: Component = () => (
+  <section class="rounded-md border border-border bg-surface-alt px-4 py-5">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div class="max-w-3xl">
+        <p class="text-sm font-semibold text-base-content">No monitored resources to classify</p>
+        <p class="mt-2 text-sm text-muted">
+          Pulse has not received canonical resource data for this scope yet. Once infrastructure
+          discovery has resources, this page will show which resource details stay local, which can
+          be summarized, and which identifiers are redacted.
+        </p>
+        <p class="mt-2 text-sm text-muted">
+          This is expected on a fresh instance, before discovery finishes, or when the selected
+          organization does not have visible monitored resources.
+        </p>
+      </div>
+      <a
+        href={settingsTabPath('infrastructure-systems')}
+        class="inline-flex w-fit items-center justify-center rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+      >
+        Open Infrastructure
+      </a>
+    </div>
+  </section>
+);
 
 const PostureMeter: Component<{ item: DataHandlingPostureItem }> = (props) => (
   <div class="rounded-md border border-border bg-surface-alt px-4 py-3">
@@ -73,7 +145,8 @@ export const DataHandlingPanel: Component = () => {
 
   return (
     <SettingsPanel
-      title="Data Handling"
+      title="Resource Data Policy"
+      description="Review the current privacy boundary for monitored resource data."
       bodyClass="space-y-5"
       action={
         <Button
@@ -119,55 +192,49 @@ export const DataHandlingPanel: Component = () => {
           </div>
         }
       >
-        <div class="grid gap-3 md:grid-cols-3">
-          <div class="rounded-md border border-border bg-surface-alt p-4">
-            <div class="flex items-center gap-2 text-sm font-semibold text-base-content">
-              <ShieldCheck class="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
-              Governed Resources
-            </div>
-            <p class="mt-3 text-3xl font-semibold text-base-content">
-              {formatCount(model().totalResources)}
-            </p>
-            <p class="mt-1 text-xs text-muted">Resources carrying policy metadata.</p>
-          </div>
-          <div class="rounded-md border border-border bg-surface-alt p-4">
-            <div class="flex items-center gap-2 text-sm font-semibold text-base-content">
-              <Lock class="h-4 w-4 text-teal-600 dark:text-teal-300" />
-              Local-Only
-            </div>
-            <p class="mt-3 text-3xl font-semibold text-base-content">
-              {formatCount(model().localOnlyResources)}
-            </p>
-            <p class="mt-1 text-xs text-muted">Resources kept inside this Pulse instance.</p>
-          </div>
-          <div class="rounded-md border border-border bg-surface-alt p-4">
-            <div class="flex items-center gap-2 text-sm font-semibold text-base-content">
-              <EyeOff class="h-4 w-4 text-muted" />
-              Redaction Hints
-            </div>
-            <p class="mt-3 text-3xl font-semibold text-base-content">
-              {formatCount(model().redactionHintCount)}
-            </p>
-            <p class="mt-1 text-xs text-muted">Field-level protections applied by policy.</p>
-          </div>
-        </div>
+        <PolicyScopeSummary />
 
-        <Show
-          when={model().hasResources}
-          fallback={
-            <div class="rounded-md border border-border bg-surface-alt px-4 py-5">
-              <p class="text-sm font-semibold text-base-content">No governed resources yet</p>
-              <p class="mt-1 text-sm text-muted">
-                Resource policy posture will appear after Pulse has canonical resource data.
+        <Show when={model().hasResources} fallback={<EmptyPolicyPostureState />}>
+          <div class="grid gap-3 md:grid-cols-3">
+            <div class="rounded-md border border-border bg-surface-alt p-4">
+              <div class="flex items-center gap-2 text-sm font-semibold text-base-content">
+                <ShieldCheck class="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
+                Governed Resources
+              </div>
+              <p class="mt-3 text-3xl font-semibold text-base-content">
+                {formatCount(model().totalResources)}
               </p>
+              <p class="mt-1 text-xs text-muted">Resources carrying policy metadata.</p>
             </div>
-          }
-        >
+            <div class="rounded-md border border-border bg-surface-alt p-4">
+              <div class="flex items-center gap-2 text-sm font-semibold text-base-content">
+                <Lock class="h-4 w-4 text-teal-600 dark:text-teal-300" />
+                Local-Only
+              </div>
+              <p class="mt-3 text-3xl font-semibold text-base-content">
+                {formatCount(model().localOnlyResources)}
+              </p>
+              <p class="mt-1 text-xs text-muted">Resources kept inside this Pulse instance.</p>
+            </div>
+            <div class="rounded-md border border-border bg-surface-alt p-4">
+              <div class="flex items-center gap-2 text-sm font-semibold text-base-content">
+                <EyeOff class="h-4 w-4 text-muted" />
+                Redaction Hints
+              </div>
+              <p class="mt-3 text-3xl font-semibold text-base-content">
+                {formatCount(model().redactionHintCount)}
+              </p>
+              <p class="mt-1 text-xs text-muted">Field-level protections applied by policy.</p>
+            </div>
+          </div>
+
           <div class="grid gap-4 xl:grid-cols-2">
             <section class="space-y-3">
               <div>
                 <h3 class="text-sm font-semibold text-base-content">Sensitivity</h3>
-                <p class="mt-1 text-xs text-muted">Classification applied to monitored resources.</p>
+                <p class="mt-1 text-xs text-muted">
+                  Classification applied to monitored resources.
+                </p>
               </div>
               <div class="space-y-2">
                 <For each={model().sensitivityItems}>{(item) => <PostureMeter item={item} />}</For>

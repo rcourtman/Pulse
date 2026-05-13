@@ -178,9 +178,10 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
       },
       {
         id: 'security-data-handling',
-        label: 'Data Handling',
+        label: 'Resource Privacy',
         icon: FileText,
         iconProps: { strokeWidth: 2 },
+        hideFromSidebar: true,
       },
       {
         id: 'api',
