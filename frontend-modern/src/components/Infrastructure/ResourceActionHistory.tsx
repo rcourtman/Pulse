@@ -5,8 +5,10 @@ import { formatRelativeTime } from '@/utils/format';
 import {
   formatActionApprovalPolicyLabel,
   formatActionCapabilityLabel,
+  getActionAuditRecordStatePresentation,
+  getActionAuditResultPresentation,
   getActionAuditVerification,
-  getActionAuditStatePresentation,
+  getActionAuditVerificationOutcomePresentation,
   shouldRenderActionAuditVerification,
 } from '@/utils/actionAuditPresentation';
 
@@ -19,9 +21,10 @@ interface ResourceActionHistoryProps {
 }
 
 const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
-  const state = () => getActionAuditStatePresentation(props.audit.state);
+  const state = () => getActionAuditRecordStatePresentation(props.audit);
   const preflight = () => props.audit.plan?.preflight;
-  const result = () => props.audit.result;
+  const resultPresentation = () => getActionAuditResultPresentation(props.audit);
+  const verificationOutcome = () => getActionAuditVerificationOutcomePresentation(props.audit);
   const verification = () => getActionAuditVerification(props.audit);
 
   return (
@@ -80,15 +83,47 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
             </ul>
           </div>
         </Show>
-        <Show when={result()}>
-          <div class="rounded border border-border bg-surface px-2 py-1 text-[10px]">
-            <div class="font-medium text-base-content">
-              {result()?.success ? 'Result' : 'Failure'}
-            </div>
-            <Show when={result()?.output || result()?.errorMessage}>
-              <div class="mt-0.5 text-muted">{result()?.output || result()?.errorMessage}</div>
-            </Show>
-          </div>
+        <Show when={resultPresentation()}>
+          {(() => {
+            const presentation = resultPresentation()!;
+            return (
+              <div class={`rounded border px-2 py-1 text-[10px] ${presentation.className}`}>
+                <div class="font-medium">{presentation.label}</div>
+                <Show when={presentation.kind === 'refusal'}>
+                  <div class="mt-0.5 font-medium">Refused before dispatch</div>
+                </Show>
+                <Show when={presentation.reasonLabel}>
+                  <div class="mt-0.5 font-medium">{presentation.reasonLabel}</div>
+                </Show>
+                <Show when={presentation.detail}>
+                  <div class="mt-0.5 opacity-80">{presentation.detail}</div>
+                </Show>
+                <Show when={presentation.recordedDetail}>
+                  <div class="mt-0.5 opacity-80">
+                    <span class="font-medium">Recorded detail: </span>
+                    {presentation.recordedDetail}
+                  </div>
+                </Show>
+              </div>
+            );
+          })()}
+        </Show>
+        <Show when={verificationOutcome()}>
+          {(() => {
+            const outcome = verificationOutcome()!;
+            return (
+              <div class={`rounded border px-2 py-1 text-[10px] ${outcome.className}`}>
+                <div class="font-medium">{outcome.label}</div>
+                <div class="mt-0.5 opacity-80">{outcome.detail}</div>
+                <Show when={outcome.evidenceSummary}>
+                  <div class="mt-0.5 opacity-80">
+                    <span class="font-medium">Evidence: </span>
+                    {outcome.evidenceSummary}
+                  </div>
+                </Show>
+              </div>
+            );
+          })()}
         </Show>
         <Show when={shouldRenderActionAuditVerification(props.audit)}>
           {(() => {

@@ -158,6 +158,53 @@ describe('ActionAuditAPI', () => {
     expect(response.audits[0].result?.verification).toEqual({ ran: false, success: false });
   });
 
+  it('round-trips verification outcome evidence and refused execution results', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      audits: [
+        {
+          id: 'action-refused',
+          createdAt: '2026-04-29T12:00:00Z',
+          updatedAt: '2026-04-29T12:00:30Z',
+          state: 'failed',
+          request: {
+            requestId: 'req-refused',
+            resourceId: 'vm:42',
+            capabilityName: 'restart_service',
+            reason: 'restart workload after backup',
+            requestedBy: 'pulse_patrol',
+          },
+          plan: {
+            actionId: 'action-refused',
+            requestId: 'req-refused',
+            allowed: true,
+            requiresApproval: true,
+            approvalPolicy: 'admin',
+            rollbackAvailable: false,
+          },
+          result: {
+            success: false,
+            errorMessage: 'resource_remediation_locked: operator lock is active',
+          },
+          verificationOutcome: {
+            status: 'unverified',
+            evidenceSummary: 'No dispatch occurred, so no verification probe ran.',
+          },
+        },
+      ],
+      count: 1,
+    } as any);
+
+    const response = await ActionAuditAPI.listActionAudits({ resourceId: 'vm:42' });
+    expect(response.audits[0].result?.errorMessage).toBe(
+      'resource_remediation_locked: operator lock is active',
+    );
+    expect(response.audits[0].verificationOutcome).toEqual({
+      status: 'unverified',
+      evidenceSummary: 'No dispatch occurred, so no verification probe ran.',
+    });
+    expect(response.audits[0].verification).toBeUndefined();
+  });
+
   it('treats gated action audit endpoints as unavailable instead of throwing', async () => {
     apiFetchJSONMock.mockRejectedValueOnce(
       Object.assign(new Error('Payment Required'), { status: 402 }),

@@ -104,6 +104,72 @@ const filteredFacetBundle = {
   },
 };
 
+const actionAuditBundle = {
+  available: true,
+  count: 2,
+  resourceId: RESOURCE_ID,
+  audits: [
+    {
+      id: 'vmware-action-verified',
+      createdAt: '2026-03-30T18:10:00Z',
+      updatedAt: '2026-03-30T18:12:00Z',
+      state: 'completed',
+      request: {
+        requestId: 'vmware-req-verified',
+        resourceId: RESOURCE_ID,
+        capabilityName: 'enter_maintenance_mode',
+        reason: 'Place host in maintenance after alarm review',
+        requestedBy: 'pulse_patrol',
+      },
+      plan: {
+        actionId: 'vmware-action-verified',
+        requestId: 'vmware-req-verified',
+        allowed: true,
+        requiresApproval: true,
+        approvalPolicy: 'admin',
+        rollbackAvailable: true,
+      },
+      result: {
+        success: true,
+        output: 'Maintenance mode requested',
+      },
+      verificationOutcome: {
+        status: 'verified',
+        evidenceSummary: 'vCenter reported the host entering maintenance mode.',
+      },
+    },
+    {
+      id: 'vmware-action-refused',
+      createdAt: '2026-03-30T18:13:00Z',
+      updatedAt: '2026-03-30T18:13:15Z',
+      state: 'failed',
+      request: {
+        requestId: 'vmware-req-refused',
+        resourceId: RESOURCE_ID,
+        capabilityName: 'restart_host_agent',
+        reason: 'Patrol proposed remediation while the host was locked',
+        requestedBy: 'pulse_patrol',
+      },
+      plan: {
+        actionId: 'vmware-action-refused',
+        requestId: 'vmware-req-refused',
+        allowed: true,
+        requiresApproval: true,
+        approvalPolicy: 'admin',
+        rollbackAvailable: false,
+      },
+      result: {
+        success: false,
+        errorMessage: 'resource_remediation_locked: operator lock is active',
+      },
+      verificationOutcome: {
+        status: 'unverified',
+        evidenceSummary: 'No dispatch occurred, so no verification probe ran.',
+      },
+    },
+  ],
+};
+
 test.describe('VMware resource history drawer', () => {
   test.setTimeout(180_000);
 
@@ -111,6 +177,7 @@ test.describe('VMware resource history drawer', () => {
     page,
   }) => {
     const facetRequestUrls: string[] = [];
+    const actionAuditRequestUrls: string[] = [];
     let unexpectedVmwareApiCall: string | null = null;
 
     await page.route('**/api/vmware/**', async (route) => {
@@ -192,6 +259,21 @@ test.describe('VMware resource history drawer', () => {
       }
 
       await route.continue();
+    });
+
+    await page.route('**/api/audit/actions**', async (route) => {
+      const requestUrl = new URL(route.request().url());
+      actionAuditRequestUrls.push(requestUrl.toString());
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          requestUrl.searchParams.get('resourceId') === RESOURCE_ID
+            ? actionAuditBundle
+            : { available: true, count: 0, audits: [] },
+        ),
+      });
     });
 
     await page.route('**/api/ai/intelligence**', async (route) => {
@@ -277,6 +359,24 @@ test.describe('VMware resource history drawer', () => {
     await expect(historySection.getByText('Activity', { exact: true })).toBeVisible();
     await expect(historySection.getByText('VMware adapter', { exact: true })).toBeVisible();
 
+    const actionHistorySection = page.getByTestId('resource-action-history-section');
+    await expect(actionHistorySection).toBeVisible();
+    await expect(actionHistorySection.getByText('Actions 2')).toBeVisible();
+    await expect(actionHistorySection.getByText('Verification confirmed')).toBeVisible();
+    await expect(
+      actionHistorySection.getByText('vCenter reported the host entering maintenance mode.'),
+    ).toBeVisible();
+    await expect(actionHistorySection.getByText('Refused', { exact: true })).toBeVisible();
+    await expect(actionHistorySection.getByText('Execution refused')).toBeVisible();
+    await expect(actionHistorySection.getByText('Resource remediation locked')).toBeVisible();
+    await expect(
+      actionHistorySection.getByText(
+        'Pulse refused the action before dispatch because this resource is locked against automatic remediation.',
+      ),
+    ).toBeVisible();
+    await expect(actionHistorySection.getByText('Verification not confirmed')).toBeVisible();
+    await expect(actionHistorySection.getByText('resource_remediation_locked:')).toHaveCount(0);
+
     await historySection.getByRole('button', { name: 'Filter history' }).click();
     await historySection.getByLabel('Change kind').selectOption({ label: 'Activity' });
     await historySection.getByLabel('Source adapter').selectOption({ label: 'VMware adapter' });
@@ -303,6 +403,18 @@ test.describe('VMware resource history drawer', () => {
       .toBe(true);
 
     expect(unexpectedVmwareApiCall).toBeNull();
+    await expect
+      .poll(() =>
+        actionAuditRequestUrls.some((url) => {
+          const parsed = new URL(url);
+          return (
+            parsed.pathname === '/api/audit/actions' &&
+            parsed.searchParams.get('resourceId') === RESOURCE_ID &&
+            parsed.searchParams.get('limit') === '5'
+          );
+        }),
+      )
+      .toBe(true);
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
   });

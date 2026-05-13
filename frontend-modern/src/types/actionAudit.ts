@@ -76,6 +76,12 @@ export interface ActionAuditExecutionResult {
 
 export type ActionVerificationStatus = 'unknown' | 'verified' | 'unverified' | 'failed' | string;
 
+export type ActionAuditRefusalPrefix =
+  | 'plan_drift:'
+  | 'action_plan_expired:'
+  | 'action_dry_run_only:'
+  | 'resource_remediation_locked:';
+
 export interface ActionVerificationOutcome {
   status: ActionVerificationStatus;
   evidenceSummary?: string;

@@ -1016,6 +1016,12 @@ the canonical monitored-system blocked payload.
    When `ran=false` (no derivable check, or feature disabled for the
    action class) nothing must be rendered, matching the no-fabrication
    rule.
+   The action audit `verificationOutcome` field carries the bounded
+   operator-facing verification status and evidence summary. Frontend
+   consumers must map `verified`, `unverified`, `failed`, and `unknown`
+   through shared action-audit presentation helpers, preserving
+   `evidenceSummary` as audit evidence while avoiding route-local
+   wording or raw status-token-first copy.
    The patrol-status response (`PatrolStatusResponse`) carries an
    optional `trust` block of type `ai.FindingsTrustSummary` that
    surfaces the trust-metrics snapshot for the Patrol page. The block
@@ -1414,7 +1420,8 @@ detail stays behind `/api/approvals/{id}`, the event is a
 doorbell),
 `action.completed` when an action audit reaches a terminal state —
 Completed, runtime-Failed, or refused-before-dispatch (refusals
-carry the stable error-token prefix `plan_drift:` or
+carry stable error-token prefixes such as `plan_drift:`,
+`action_plan_expired:`, `action_dry_run_only:`, or
 `resource_remediation_locked:` verbatim on `errorMessage` so agents
 branch on the prefix rather than parsing human text; successful
 dispatches carry a `verification` block — the agent-stable
@@ -1476,8 +1483,9 @@ package. API-owned execution installs `ResourceHandlers` on the
 same `PublishActionCompletedRecord` projector so direct
 `/api/actions/{id}/execute` completions and stale-plan refusals
 emit the identical payload shape. `action.completed` payloads preserve the canonical
-refusal-token prefixes (`plan_drift:`, `resource_remediation_locked:`)
-on `errorMessage` verbatim so agents branch on the stable code
+refusal-token prefixes (`plan_drift:`, `action_plan_expired:`,
+`action_dry_run_only:`, `resource_remediation_locked:`) on
+`errorMessage` verbatim so agents branch on the stable code
 without parsing human messages.
 
 `/api/agent/capabilities` is the discovery document for Pulse's

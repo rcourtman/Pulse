@@ -1,11 +1,37 @@
 import type {
+  ActionAuditRefusalPrefix,
   ActionAuditRecord,
   ActionAuditState,
+  ActionVerificationOutcome,
   ActionVerificationResult,
 } from '@/types/actionAudit';
 
 export interface ActionAuditStatePresentation {
   label: string;
+  className: string;
+}
+
+export interface ActionAuditRefusalPresentation {
+  prefix: ActionAuditRefusalPrefix;
+  label: string;
+  detail: string;
+  recordedDetail?: string;
+  className: string;
+}
+
+export interface ActionAuditResultPresentation {
+  kind: 'success' | 'failure' | 'refusal';
+  label: string;
+  reasonLabel?: string;
+  detail?: string;
+  recordedDetail?: string;
+  className: string;
+}
+
+export interface ActionAuditVerificationOutcomePresentation {
+  label: string;
+  detail: string;
+  evidenceSummary?: string;
   className: string;
 }
 
@@ -46,6 +72,80 @@ const ACTION_STATE_PRESENTATION: Record<ActionAuditState, ActionAuditStatePresen
   },
 };
 
+const REFUSED_ACTION_STATE_PRESENTATION: ActionAuditStatePresentation = {
+  label: 'Refused',
+  className:
+    'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-900 dark:text-rose-200 dark:border-rose-700',
+};
+
+const ACTION_REFUSAL_PRESENTATION: Record<
+  ActionAuditRefusalPrefix,
+  Omit<ActionAuditRefusalPresentation, 'prefix' | 'recordedDetail'>
+> = {
+  'plan_drift:': {
+    label: 'Plan changed',
+    detail:
+      'Pulse refused the action before dispatch because the approved plan no longer matched the current resource or policy state.',
+    className:
+      'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300',
+  },
+  'action_plan_expired:': {
+    label: 'Approval expired',
+    detail:
+      'Pulse refused the action before dispatch because the approved execution window had expired.',
+    className:
+      'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
+  },
+  'action_dry_run_only:': {
+    label: 'Dry-run only',
+    detail:
+      'Pulse refused to dispatch this action because the plan is limited to dry-run evidence.',
+    className:
+      'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
+  },
+  'resource_remediation_locked:': {
+    label: 'Resource remediation locked',
+    detail:
+      'Pulse refused the action before dispatch because this resource is locked against automatic remediation.',
+    className:
+      'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300',
+  },
+};
+
+const ACTION_REFUSAL_PREFIXES = Object.keys(
+  ACTION_REFUSAL_PRESENTATION,
+) as ActionAuditRefusalPrefix[];
+
+const VERIFICATION_OUTCOME_PRESENTATION: Record<
+  'unknown' | 'verified' | 'unverified' | 'failed',
+  Omit<ActionAuditVerificationOutcomePresentation, 'evidenceSummary'>
+> = {
+  unknown: {
+    label: 'Verification unknown',
+    detail: 'Pulse does not have conclusive verification evidence for this action.',
+    className: 'border-border bg-surface text-base-content',
+  },
+  verified: {
+    label: 'Verification confirmed',
+    detail: 'Pulse confirmed the intended state after execution.',
+    className:
+      'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300',
+  },
+  unverified: {
+    label: 'Verification not confirmed',
+    detail:
+      'Pulse did not receive verification evidence that confirmed the intended state.',
+    className:
+      'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
+  },
+  failed: {
+    label: 'Verification failed',
+    detail: 'Pulse could not complete the verification check after execution.',
+    className:
+      'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300',
+  },
+};
+
 export const getActionAuditStatePresentation = (
   state: ActionAuditState | string | undefined,
 ): ActionAuditStatePresentation =>
@@ -79,6 +179,99 @@ export const formatActionApprovalPolicyLabel = (policy: string | undefined): str
     default:
       return formatActionCapabilityLabel(policy || 'Policy');
   }
+};
+
+const getActionAuditResultMessage = (
+  result: Pick<NonNullable<ActionAuditRecord['result']>, 'errorMessage' | 'output'> | undefined,
+): string => (result?.errorMessage || result?.output || '').trim();
+
+export const getActionAuditRefusalPresentation = (
+  audit: Pick<ActionAuditRecord, 'result'>,
+): ActionAuditRefusalPresentation | undefined => {
+  if (!audit.result || audit.result.success) return undefined;
+
+  const message = getActionAuditResultMessage(audit.result);
+  const normalizedMessage = message.toLowerCase();
+  const prefix = ACTION_REFUSAL_PREFIXES.find((candidate) =>
+    normalizedMessage.startsWith(candidate),
+  );
+  if (!prefix) return undefined;
+
+  const recordedDetail = message.slice(prefix.length).trim();
+  const presentation = ACTION_REFUSAL_PRESENTATION[prefix];
+  return {
+    prefix,
+    ...presentation,
+    recordedDetail: recordedDetail || undefined,
+  };
+};
+
+export const getActionAuditRecordStatePresentation = (
+  audit: Pick<ActionAuditRecord, 'state' | 'result'>,
+): ActionAuditStatePresentation => {
+  if (audit.state === 'failed' && getActionAuditRefusalPresentation(audit)) {
+    return REFUSED_ACTION_STATE_PRESENTATION;
+  }
+  return getActionAuditStatePresentation(audit.state);
+};
+
+export const getActionAuditResultPresentation = (
+  audit: Pick<ActionAuditRecord, 'result'>,
+): ActionAuditResultPresentation | undefined => {
+  const result = audit.result;
+  if (!result) return undefined;
+
+  const refusal = getActionAuditRefusalPresentation(audit);
+  if (refusal) {
+    return {
+      kind: 'refusal',
+      label: 'Execution refused',
+      reasonLabel: refusal.label,
+      detail: refusal.detail,
+      recordedDetail: refusal.recordedDetail,
+      className: refusal.className,
+    };
+  }
+
+  if (result.success) {
+    return {
+      kind: 'success',
+      label: 'Result',
+      detail: result.output?.trim() || undefined,
+      className: 'border-border bg-surface text-base-content',
+    };
+  }
+
+  return {
+    kind: 'failure',
+    label: 'Execution failed',
+    detail: getActionAuditResultMessage(result) || undefined,
+    className:
+      'border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300',
+  };
+};
+
+export const getActionAuditVerificationOutcomePresentation = (
+  audit: Pick<ActionAuditRecord, 'verificationOutcome'>,
+): ActionAuditVerificationOutcomePresentation | undefined => {
+  const outcome: ActionVerificationOutcome | undefined = audit.verificationOutcome;
+  const status = (outcome?.status || '').trim().toLowerCase();
+  if (!status) return undefined;
+
+  const presentation =
+    VERIFICATION_OUTCOME_PRESENTATION[
+      status as keyof typeof VERIFICATION_OUTCOME_PRESENTATION
+    ] ?? {
+      label: 'Verification outcome recorded',
+      detail: 'Pulse recorded a bounded verification status that this client does not classify.',
+      className: 'border-border bg-surface text-base-content',
+    };
+
+  const evidenceSummary = outcome?.evidenceSummary?.trim();
+  return {
+    ...presentation,
+    evidenceSummary: evidenceSummary || undefined,
+  };
 };
 
 export const getActionAuditVerification = (

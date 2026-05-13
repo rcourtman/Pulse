@@ -192,7 +192,11 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerHistoryStateSource).toContain('resourceFacetRelationships');
     expect(resourceDetailDrawerDerivedStateSource).toContain('options.resourceRelationships?.()');
     expect(resourceDetailDrawerDerivedStateSource).toContain('resource.relationships ?? []');
-    expect(resourceActionHistorySource).toContain('getActionAuditStatePresentation');
+    expect(resourceActionHistorySource).toContain('getActionAuditRecordStatePresentation');
+    expect(resourceActionHistorySource).toContain('getActionAuditResultPresentation');
+    expect(resourceActionHistorySource).toContain(
+      'getActionAuditVerificationOutcomePresentation',
+    );
     expect(resourceActionHistorySource).toContain('formatActionApprovalPolicyLabel');
     // The audit history must surface the broker's read-after-write
     // verification outcome alongside the dispatch result, not silently
@@ -203,6 +207,8 @@ describe('ResourceDetailDrawer change history section', () => {
     );
     expect(resourceActionHistorySource).toContain('Verified');
     expect(resourceActionHistorySource).toContain('Verification failed');
+    expect(actionAuditPresentationSource).toContain('resource_remediation_locked:');
+    expect(actionAuditPresentationSource).toContain('Verification confirmed');
     expect(actionAuditApiSource).toContain('/api/audit/actions');
     expect(actionAuditApiSource).toContain('ACTION_AUDIT_UNAVAILABLE_STATUSES');
     expect(actionAuditPresentationSource).toContain('pending_approval');
@@ -746,7 +752,7 @@ describe('ResourceDetailDrawer change history section', () => {
   it('surfaces resource-scoped action history from the canonical action audit API', async () => {
     actionAuditMock.listActionAudits.mockResolvedValueOnce({
       available: true,
-      count: 1,
+      count: 2,
       resourceId: 'vm:action-42',
       audits: [
         {
@@ -790,6 +796,39 @@ describe('ResourceDetailDrawer change history section', () => {
             success: true,
             ranAt: '2026-04-29T12:05:20Z',
           },
+          verificationOutcome: {
+            status: 'verified',
+            evidenceSummary: 'Readback reported nginx active.',
+          },
+        },
+        {
+          id: 'action-refused',
+          createdAt: '2026-04-29T12:10:00Z',
+          updatedAt: '2026-04-29T12:10:30Z',
+          state: 'failed',
+          request: {
+            requestId: 'req-refused',
+            resourceId: 'vm:action-42',
+            capabilityName: 'lock_remediation',
+            reason: 'Patrol proposed remediation while remediation was locked',
+            requestedBy: 'pulse_patrol',
+          },
+          plan: {
+            actionId: 'action-refused',
+            requestId: 'req-refused',
+            allowed: true,
+            requiresApproval: true,
+            approvalPolicy: 'mfa',
+            rollbackAvailable: false,
+          },
+          result: {
+            success: false,
+            errorMessage: 'resource_remediation_locked: operator lock is active',
+          },
+          verificationOutcome: {
+            status: 'unverified',
+            evidenceSummary: 'No dispatch occurred, so no verification probe ran.',
+          },
         },
       ],
     });
@@ -813,14 +852,15 @@ describe('ResourceDetailDrawer change history section', () => {
       />
     ));
 
-    const actionHistory = within(await screen.findByTestId('resource-action-history-section'));
+    const actionHistoryNode = await screen.findByTestId('resource-action-history-section');
+    const actionHistory = within(actionHistoryNode);
 
     expect(actionAuditMock.listActionAudits).toHaveBeenCalledWith({
       resourceId: 'vm:action-42',
       limit: 5,
     });
     expect(actionHistory.getByText('Action history')).toBeInTheDocument();
-    expect(actionHistory.getByText('Actions 1')).toBeInTheDocument();
+    expect(actionHistory.getByText('Actions 2')).toBeInTheDocument();
     expect(actionHistory.getByText('Actions loaded')).toBeInTheDocument();
     expect(actionHistory.getByText('Restart Service')).toBeInTheDocument();
     expect(actionHistory.getByText('Completed')).toBeInTheDocument();
@@ -831,9 +871,32 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(actionHistory.getByText('Restart nginx')).toBeInTheDocument();
     expect(actionHistory.getByText('Approval scoped to this resource.')).toBeInTheDocument();
     expect(actionHistory.getByText('nginx restarted')).toBeInTheDocument();
+    expect(actionHistory.getByText('Verification confirmed')).toBeInTheDocument();
+    expect(actionHistory.getByText('Readback reported nginx active.')).toBeInTheDocument();
     expect(actionHistory.getByText('Verified')).toBeInTheDocument();
     expect(actionHistory.getByText("systemctl is-active 'nginx'")).toBeInTheDocument();
     expect(actionHistory.getByText('active')).toBeInTheDocument();
+    expect(actionHistory.getByText('Refused')).toBeInTheDocument();
+    expect(actionHistory.getByText('Execution refused')).toBeInTheDocument();
+    expect(actionHistory.getByText('Refused before dispatch')).toBeInTheDocument();
+    expect(actionHistory.getByText('Resource remediation locked')).toBeInTheDocument();
+    expect(
+      actionHistory.getByText(
+        'Pulse refused the action before dispatch because this resource is locked against automatic remediation.',
+      ),
+    ).toBeInTheDocument();
+    expect(actionHistory.getByText('Recorded detail:')).toBeInTheDocument();
+    expect(actionHistory.getByText('operator lock is active')).toBeInTheDocument();
+    expect(actionHistory.getByText('Verification not confirmed')).toBeInTheDocument();
+    expect(
+      actionHistory.getByText(
+        'Pulse did not receive verification evidence that confirmed the intended state.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      actionHistory.getByText('No dispatch occurred, so no verification probe ran.'),
+    ).toBeInTheDocument();
+    expect(actionHistoryNode.textContent).not.toContain('resource_remediation_locked:');
   });
 
   it('keeps service details summary-first until the service-local reveal is opened', () => {

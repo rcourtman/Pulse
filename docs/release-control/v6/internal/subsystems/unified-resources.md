@@ -585,6 +585,17 @@ AI-only summary payloads, or page-local heuristics.
     nothing is rendered —
     operators must not see fabricated "verified" claims for actions
     where Pulse cannot read back.
+24. Keep resource action-history refusal and verification-outcome
+    presentation shared. Refused action results may preserve stable
+    backend prefixes for agent branching (`plan_drift:`,
+    `action_plan_expired:`, `action_dry_run_only:`, and
+    `resource_remediation_locked:`), but the drawer must render
+    operator-safe labels and details through
+    `frontend-modern/src/utils/actionAuditPresentation.ts` rather than
+    prefix-first result copy or route-local parsing. The same helper owns
+    `verificationOutcome.status` presentation for `verified`,
+    `unverified`, `failed`, and `unknown` so resource history, future
+    action audit consumers, and tests share one bounded vocabulary.
 
 ## Current State
 
