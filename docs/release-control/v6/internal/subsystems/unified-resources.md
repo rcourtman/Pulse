@@ -252,6 +252,13 @@ AI-only summary payloads, or page-local heuristics.
    `state.resources` must share `ContractResourceType`, canonical display
    names, and canonical cluster labels instead of publishing separate REST and
    broadcast aliases for the same machine.
+   Fleet command posture that reaches resource-facing rows must remain a
+   projection of `/api/connections` `fleet.commandPolicy`: desired server
+   policy, applied agent truth, enforcement, and reason stay separate. Unified
+   resource consumers may show compact remote-control status, but they must not
+   treat top-level `remoteControl` as applied agent runtime truth, and they
+   must preserve desired/applied drift or no-report attention when enriching
+   resource rows.
    `internal/unifiedresources/top_level_systems.go`
    Explicit linked-host correlation is canonical here: when Kubernetes node
    ingest has a resolved backing host agent, the registry must merge that node

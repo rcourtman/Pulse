@@ -98,6 +98,13 @@ controls as normal product settings.
     must fail closed with the standard license-required response unless the
     active entitlement includes the paid `relay` feature.
 15. `internal/api/system_settings.go` shared with `api-contracts`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
+    Remote command authorization is also a trust boundary: security-facing
+    copy and controls must distinguish desired command policy from applied
+    agent runtime truth. `/api/connections` `fleet.commandPolicy` is the
+    source for desired, applied, enforcement, and reason; top-level
+    `remoteControl` or `commandsEnabled` must not be used to imply that a
+    desired server state is already enforced on the agent when the applied
+    report is missing or divergent.
 16. `internal/cloudcp/auth/magiclink.go` shared with `cloud-paid`: control-plane magic-link HMAC handling is both a Pulse Cloud account-access boundary and a security/privacy token-secrecy boundary.
 17. `internal/cloudcp/auth/magiclink_store.go` shared with `cloud-paid`: control-plane magic-link persistence is both a Pulse Cloud account-access boundary and a security/privacy storage-hardening boundary.
 

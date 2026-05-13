@@ -2801,6 +2801,18 @@ credential validity/rotation facts, and command-policy enforcement state used
 by Settings and CLI consumers. Frontend settings surfaces may format those
 facts, but must not infer a second fleet state from row labels, error-message
 text, or provider-local table heuristics.
+The `fleet.commandPolicy` object is the canonical desired/applied convergence
+contract for remote command enablement. It must carry the desired server
+policy, the applied agent-reported truth when available, the effective
+enforcement state, and a bounded reason explaining convergence, drift, missing
+report data, denial, or unsupported capability. Desired disabled with applied
+enabled, and desired enabled with applied disabled, are both drift or
+enforcement-attention states, not in-sync states. When no current agent report
+exists, the applied side remains pending or unknown with an explicit no-report
+reason, and the row must not be considered converged. Top-level
+`remoteControl` may stay as compact presentation compatibility, but it must
+not overstate desired server policy as applied agent runtime truth or collapse
+desired/applied disagreement into one enabled/disabled fact.
 That same shared infrastructure-settings boundary also owns install-profile
 semantics surfaced by
 `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`:

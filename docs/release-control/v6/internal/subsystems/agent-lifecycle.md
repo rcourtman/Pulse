@@ -543,6 +543,14 @@ profile and assignment columns, but embedded table framing must route through
    come from the explicit nested `fleet` objects on `/api/connections`; Settings
    surfaces may rank or compact those signals, but they must not reconstruct
    them from table copy, status badge labels, or provider-local error strings.
+   The lifecycle-owned command-policy projection must preserve desired server
+   policy and applied agent report truth as separate facts. Desired disabled
+   with applied enabled, and desired enabled with applied disabled, are both
+   attention states for lifecycle surfaces, never in-sync shorthand. If the
+   agent has not reported current command capability or applied policy,
+   lifecycle surfaces must leave the applied side pending or unknown with an
+   explicit reason and must not treat `remoteControl` or `commandsEnabled` as
+   proof that the server desired state is live on the agent.
    Standalone host rows must still be recognizable at a glance, but that
    identity belongs in the existing row cells rather than new diagnostics
    columns: the landing table reuses the `System` and `Endpoint` cells for a
@@ -1933,6 +1941,13 @@ reporting remains the next contract gap: until the runtime report carries a
 comparable applied config fingerprint, `/api/connections` must surface desired
 config metadata as pending or unknown and must not claim rollout convergence
 from host report fields such as `commandsEnabled` or `diskExclude`.
+Command policy follows the same lifecycle truth boundary: the server desired
+command setting is not applied runtime truth until a current agent report
+confirms it. `/api/connections` must expose desired command policy, applied
+agent truth, effective enforcement, and bounded reason separately so lifecycle
+surfaces can show desired-disabled/applied-enabled and
+desired-enabled/applied-disabled as drift or attention, and no-report cases as
+pending or unknown rather than in-sync.
 That same canonical /api/auto-register path must also complete the live
 post-registration contract after persistence: it must trigger discovery refresh
 and emit the canonical `node_auto_registered` WebSocket payload instead of
