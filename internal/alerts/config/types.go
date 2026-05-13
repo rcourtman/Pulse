@@ -213,53 +213,54 @@ type GuestLookup struct {
 
 // AlertConfig represents the complete alert configuration
 type AlertConfig struct {
-	Enabled                        bool                       `json:"enabled"`
-	ActivationState                ActivationState            `json:"activationState,omitempty"`
-	ObservationWindowHours         int                        `json:"observationWindowHours,omitempty"`
-	ActivationTime                 *time.Time                 `json:"activationTime,omitempty"`
-	GuestDefaults                  ThresholdConfig            `json:"guestDefaults"`
-	NodeDefaults                   ThresholdConfig            `json:"nodeDefaults"`
-	AgentDefaults                  ThresholdConfig            `json:"agentDefaults"`
-	StorageDefault                 HysteresisThreshold        `json:"storageDefault"`
-	DockerDefaults                 DockerThresholdConfig      `json:"dockerDefaults"`
-	DockerIgnoredContainerPrefixes []string                   `json:"dockerIgnoredContainerPrefixes,omitempty"`
-	IgnoredGuestPrefixes           []string                   `json:"ignoredGuestPrefixes,omitempty"`
-	GuestTagWhitelist              []string                   `json:"guestTagWhitelist,omitempty"`
-	GuestTagBlacklist              []string                   `json:"guestTagBlacklist,omitempty"`
-	PMGDefaults                    PMGThresholdConfig         `json:"pmgDefaults"`
-	PBSDefaults                    ThresholdConfig            `json:"pbsDefaults"`
-	SnapshotDefaults               SnapshotAlertConfig        `json:"snapshotDefaults"`
-	BackupDefaults                 BackupAlertConfig          `json:"backupDefaults"`
-	Overrides                      map[string]ThresholdConfig `json:"overrides"` // keyed by resource ID
-	CustomRules                    []CustomAlertRule          `json:"customRules,omitempty"`
-	Schedule                       ScheduleConfig             `json:"schedule"`
-	DisableAllNodes                bool                       `json:"disableAllNodes"`              // Disable all alerts for Proxmox nodes
-	DisableAllGuests               bool                       `json:"disableAllGuests"`             // Disable all alerts for VMs/containers
-	DisableAllAgents               bool                       `json:"disableAllAgents"`             // Disable all alerts for Pulse agents
-	DisableAllStorage              bool                       `json:"disableAllStorage"`            // Disable all alerts for storage
-	DisableAllPBS                  bool                       `json:"disableAllPBS"`                // Disable all alerts for PBS servers
-	DisableAllPMG                  bool                       `json:"disableAllPMG"`                // Disable all alerts for PMG instances
-	DisableAllDockerHosts          bool                       `json:"disableAllDockerHosts"`        // Disable all alerts for Docker hosts
-	DisableAllDockerContainers     bool                       `json:"disableAllDockerContainers"`   // Disable all alerts for Docker containers
-	DisableAllDockerServices       bool                       `json:"disableAllDockerServices"`     // Disable all alerts for Docker services
-	DisableAllNodesOffline         bool                       `json:"disableAllNodesOffline"`       // Disable node offline/connectivity alerts globally
-	DisableAllGuestsOffline        bool                       `json:"disableAllGuestsOffline"`      // Disable guest powered-off alerts globally
-	DisableAllAgentsOffline        bool                       `json:"disableAllAgentsOffline"`      // Disable agent offline alerts globally
-	DisableAllPBSOffline           bool                       `json:"disableAllPBSOffline"`         // Disable PBS offline alerts globally
-	DisableAllPMGOffline           bool                       `json:"disableAllPMGOffline"`         // Disable PMG offline alerts globally
-	DisableAllDockerHostsOffline   bool                       `json:"disableAllDockerHostsOffline"` // Disable Docker host offline alerts globally
-	MinimumDelta                   float64                    `json:"minimumDelta"`                 // Minimum % change to trigger new alert
-	SuppressionWindow              int                        `json:"suppressionWindow"`            // Minutes to suppress duplicate alerts
-	HysteresisMargin               float64                    `json:"hysteresisMargin"`             // Default margin for legacy thresholds
-	TimeThresholds                 map[string]int             `json:"timeThresholds"`               // Per-type delays: guest, node, agent, storage, pbs
-	MetricTimeThresholds           map[string]map[string]int  `json:"metricTimeThresholds"`         // Optional per-metric delays keyed by resource type
-	MaxAlertAgeDays                int                        `json:"maxAlertAgeDays"`              // Maximum age for alerts before auto-cleanup (0 = disabled)
-	MaxAcknowledgedAgeDays         int                        `json:"maxAcknowledgedAgeDays"`       // Maximum age for acknowledged alerts (0 = disabled)
-	AutoAcknowledgeAfterHours      int                        `json:"autoAcknowledgeAfterHours"`    // Auto-acknowledge alerts after X hours (0 = disabled)
-	FlappingEnabled                bool                       `json:"flappingEnabled"`              // Enable flapping detection
-	FlappingWindowSeconds          int                        `json:"flappingWindowSeconds"`        // Time window for counting state changes
-	FlappingThreshold              int                        `json:"flappingThreshold"`            // Number of state changes to trigger flapping
-	FlappingCooldownMinutes        int                        `json:"flappingCooldownMinutes"`      // Cooldown period after flapping detected
+	Enabled                        bool                           `json:"enabled"`
+	ActivationState                ActivationState                `json:"activationState,omitempty"`
+	ObservationWindowHours         int                            `json:"observationWindowHours,omitempty"`
+	ActivationTime                 *time.Time                     `json:"activationTime,omitempty"`
+	GuestDefaults                  ThresholdConfig                `json:"guestDefaults"`
+	NodeDefaults                   ThresholdConfig                `json:"nodeDefaults"`
+	AgentDefaults                  ThresholdConfig                `json:"agentDefaults"`
+	StorageDefault                 HysteresisThreshold            `json:"storageDefault"`
+	DiskFillByType                 map[string]HysteresisThreshold `json:"diskFillByType,omitempty"`
+	DockerDefaults                 DockerThresholdConfig          `json:"dockerDefaults"`
+	DockerIgnoredContainerPrefixes []string                       `json:"dockerIgnoredContainerPrefixes,omitempty"`
+	IgnoredGuestPrefixes           []string                       `json:"ignoredGuestPrefixes,omitempty"`
+	GuestTagWhitelist              []string                       `json:"guestTagWhitelist,omitempty"`
+	GuestTagBlacklist              []string                       `json:"guestTagBlacklist,omitempty"`
+	PMGDefaults                    PMGThresholdConfig             `json:"pmgDefaults"`
+	PBSDefaults                    ThresholdConfig                `json:"pbsDefaults"`
+	SnapshotDefaults               SnapshotAlertConfig            `json:"snapshotDefaults"`
+	BackupDefaults                 BackupAlertConfig              `json:"backupDefaults"`
+	Overrides                      map[string]ThresholdConfig     `json:"overrides"` // keyed by resource ID
+	CustomRules                    []CustomAlertRule              `json:"customRules,omitempty"`
+	Schedule                       ScheduleConfig                 `json:"schedule"`
+	DisableAllNodes                bool                           `json:"disableAllNodes"`              // Disable all alerts for Proxmox nodes
+	DisableAllGuests               bool                           `json:"disableAllGuests"`             // Disable all alerts for VMs/containers
+	DisableAllAgents               bool                           `json:"disableAllAgents"`             // Disable all alerts for Pulse agents
+	DisableAllStorage              bool                           `json:"disableAllStorage"`            // Disable all alerts for storage
+	DisableAllPBS                  bool                           `json:"disableAllPBS"`                // Disable all alerts for PBS servers
+	DisableAllPMG                  bool                           `json:"disableAllPMG"`                // Disable all alerts for PMG instances
+	DisableAllDockerHosts          bool                           `json:"disableAllDockerHosts"`        // Disable all alerts for Docker hosts
+	DisableAllDockerContainers     bool                           `json:"disableAllDockerContainers"`   // Disable all alerts for Docker containers
+	DisableAllDockerServices       bool                           `json:"disableAllDockerServices"`     // Disable all alerts for Docker services
+	DisableAllNodesOffline         bool                           `json:"disableAllNodesOffline"`       // Disable node offline/connectivity alerts globally
+	DisableAllGuestsOffline        bool                           `json:"disableAllGuestsOffline"`      // Disable guest powered-off alerts globally
+	DisableAllAgentsOffline        bool                           `json:"disableAllAgentsOffline"`      // Disable agent offline alerts globally
+	DisableAllPBSOffline           bool                           `json:"disableAllPBSOffline"`         // Disable PBS offline alerts globally
+	DisableAllPMGOffline           bool                           `json:"disableAllPMGOffline"`         // Disable PMG offline alerts globally
+	DisableAllDockerHostsOffline   bool                           `json:"disableAllDockerHostsOffline"` // Disable Docker host offline alerts globally
+	MinimumDelta                   float64                        `json:"minimumDelta"`                 // Minimum % change to trigger new alert
+	SuppressionWindow              int                            `json:"suppressionWindow"`            // Minutes to suppress duplicate alerts
+	HysteresisMargin               float64                        `json:"hysteresisMargin"`             // Default margin for legacy thresholds
+	TimeThresholds                 map[string]int                 `json:"timeThresholds"`               // Per-type delays: guest, node, agent, storage, pbs
+	MetricTimeThresholds           map[string]map[string]int      `json:"metricTimeThresholds"`         // Optional per-metric delays keyed by resource type
+	MaxAlertAgeDays                int                            `json:"maxAlertAgeDays"`              // Maximum age for alerts before auto-cleanup (0 = disabled)
+	MaxAcknowledgedAgeDays         int                            `json:"maxAcknowledgedAgeDays"`       // Maximum age for acknowledged alerts (0 = disabled)
+	AutoAcknowledgeAfterHours      int                            `json:"autoAcknowledgeAfterHours"`    // Auto-acknowledge alerts after X hours (0 = disabled)
+	FlappingEnabled                bool                           `json:"flappingEnabled"`              // Enable flapping detection
+	FlappingWindowSeconds          int                            `json:"flappingWindowSeconds"`        // Time window for counting state changes
+	FlappingThreshold              int                            `json:"flappingThreshold"`            // Number of state changes to trigger flapping
+	FlappingCooldownMinutes        int                            `json:"flappingCooldownMinutes"`      // Cooldown period after flapping detected
 }
 
 // UnmarshalJSON accepts canonical v6 alert config keys.
