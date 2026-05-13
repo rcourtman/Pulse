@@ -423,6 +423,21 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		}
 	}
 
+	// Run PDM alert bridge on every patrol cycle if a source is configured.
+	// Nil source guard mirrors the MVP no-op behavior; the real HTTP client
+	// is wired in a follow-on. Direct FindingsStore.Add bypasses push.
+	if p.pdmAlertBridge != nil && p.pdmAlertBridge.source != nil {
+		pdmEmit, pdmResolve := p.pdmAlertBridge.Observe(ctx, time.Now())
+		for _, f := range pdmEmit {
+			if !p.findings.Add(f) {
+				log.Debug().Str("finding_id", f.ID).Msg("AI Patrol: PDM alert finding already in store")
+			}
+		}
+		for _, s := range pdmResolve {
+			p.findings.ResolveWithReason(s.DedupKey, s.Reason)
+		}
+	}
+
 	// Determine if we can run LLM analysis (requires AI service + circuit breaker not open)
 	aiServiceEnabled := p.aiService != nil && p.aiService.IsEnabled()
 	canRunLLM := aiServiceEnabled && llmAllowed

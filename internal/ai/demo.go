@@ -159,6 +159,23 @@ func (p *PatrolService) InjectDemoFindings() {
 			TimesRaised: 2,
 			Source:      updateSafetySource,
 		},
+		{
+			ID:           "demo-pdm-alert-node-offline",
+			Key:          PDMAlertFindingPrefix + ":datacenter-a/node/pve-edge-01",
+			Severity:     FindingSeverityWarning,
+			Category:     FindingCategoryReliability,
+			Title:        "PDM: node \"pve-edge-01\" is offline",
+			Description:  "Proxmox Datacenter Manager reports node \"pve-edge-01\" in remote \"datacenter-a\" is offline.",
+			ResourceID:   "datacenter-a/node/pve-edge-01",
+			ResourceName: "pve-edge-01",
+			ResourceType: "node",
+			Node:         "datacenter-a",
+			Evidence:     "status=offline remote=datacenter-a",
+			DetectedAt:   now.Add(-8 * time.Minute),
+			LastSeenAt:   now.Add(-2 * time.Minute),
+			TimesRaised:  1,
+			Source:       pdmAlertSourceLabel,
+		},
 	}
 
 	// Add findings to the store
