@@ -8,6 +8,7 @@ import type {
   Node,
   PBSBackupJob,
   PBSGarbageJob,
+  PBSJobHealthEvidence,
   PBSPruneJob,
   PBSSyncJob,
   PBSVerifyJob,
@@ -71,11 +72,13 @@ export type PBSPlatformData = {
   verifyJobCount?: number;
   pruneJobCount?: number;
   garbageJobCount?: number;
+  jobHealthEvidenceCount?: number;
   backupJobs?: PBSBackupJob[];
   syncJobs?: PBSSyncJob[];
   verifyJobs?: PBSVerifyJob[];
   pruneJobs?: PBSPruneJob[];
   garbageJobs?: PBSGarbageJob[];
+  jobHealthEvidence?: PBSJobHealthEvidence[];
   connectionHealth?: string;
 };
 

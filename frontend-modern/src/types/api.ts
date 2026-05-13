@@ -697,6 +697,7 @@ export interface PBSInstance {
   verifyJobs: PBSVerifyJob[];
   pruneJobs: PBSPruneJob[];
   garbageJobs: PBSGarbageJob[];
+  jobHealthEvidence?: PBSJobHealthEvidence[];
   connectionHealth: string;
   lastSeen: string;
 }
@@ -871,6 +872,42 @@ export interface PBSGarbageJob {
   nextRun: string;
   removedBytes: number;
   error: string;
+}
+
+export interface PBSJobHealthFreshness {
+  observedAt: string;
+  lastRunEndTime?: string;
+  nextRun?: string;
+  ageSeconds?: number;
+  state?: string;
+}
+
+export interface PBSJobHealthEvidence {
+  id: string;
+  family: string;
+  store?: string;
+  remote?: string;
+  namespace?: string;
+  schedule?: string;
+  comment?: string;
+  enabled?: boolean;
+  'last-run-state'?: string;
+  'last-run-upid'?: string;
+  'last-run-endtime'?: number;
+  'next-run'?: number;
+  upid?: string;
+  'worker-type'?: string;
+  'worker-id'?: string;
+  'task-status'?: string;
+  'task-starttime'?: number;
+  'task-endtime'?: number;
+  confidence: string;
+  evidenceSource?: string;
+  evidenceScope?: string;
+  freshness?: PBSJobHealthFreshness;
+  posture?: string;
+  postureReason?: string;
+  error?: string;
 }
 
 export interface Memory {

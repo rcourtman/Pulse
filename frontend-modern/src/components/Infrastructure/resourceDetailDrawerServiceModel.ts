@@ -1,12 +1,9 @@
-import type {
-  DockerPlatformData,
-  PBSPlatformData,
-  PMGPlatformData,
-} from './resourceDetailMappers';
+import type { DockerPlatformData, PBSPlatformData, PMGPlatformData } from './resourceDetailMappers';
 import { formatInteger } from './resourceDetailMappers';
 import type {
   PBSBackupJob,
   PBSGarbageJob,
+  PBSJobHealthEvidence,
   PBSPruneJob,
   PBSSyncJob,
   PBSVerifyJob,
@@ -18,9 +15,7 @@ export type ResourceDetailValueBreakdownEntry = {
   warn?: boolean;
 };
 
-const filterVisibleBreakdown = <T extends ResourceDetailValueBreakdownEntry>(
-  entries: T[],
-): T[] => {
+const filterVisibleBreakdown = <T extends ResourceDetailValueBreakdownEntry>(entries: T[]): T[] => {
   const nonZero = entries.filter((entry) => entry.value > 0);
   return nonZero.length > 0 ? nonZero : entries;
 };
@@ -37,11 +32,7 @@ const normalizeDelimitedLabel = (value: string): string =>
     .join(' ');
 
 const normalizePbsTaskStatus = (status?: string): string =>
-  (status || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ');
+  (status || '').trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
 
 const PBS_ACTIVE_STATUS_TOKENS = [
   'running',
@@ -70,9 +61,7 @@ const PBS_INACTIVE_STATUS_TOKENS = [
 ] as const;
 
 const hasStatusToken = (status: string, token: string): boolean =>
-  new RegExp(`(?:^|\\b)${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:$|\\b)`, 'i').test(
-    status,
-  );
+  new RegExp(`(?:^|\\b)${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:$|\\b)`, 'i').test(status);
 
 const isPbsTaskStatusActive = (status?: string): boolean => {
   const normalized = normalizePbsTaskStatus(status);
@@ -130,14 +119,36 @@ export type PbsActivitySummary = {
   activeTaskCount: number;
 };
 
+export type PbsJobHealthEvidenceBadgeTone = 'neutral' | 'info' | 'warning' | 'danger' | 'success';
+
+export type PbsJobHealthEvidenceBadge = {
+  label: string;
+  tone: PbsJobHealthEvidenceBadgeTone;
+};
+
+export type PbsJobHealthEvidenceEntry = {
+  id: string;
+  label: string;
+  sourceLabel: string;
+  context: string | null;
+  stateLabel: string | null;
+  freshnessLabel: string | null;
+  postureLabel: string | null;
+  postureReason: string | null;
+  error: string | null;
+  badges: PbsJobHealthEvidenceBadge[];
+};
+
+export type PbsJobHealthEvidenceModel = {
+  evidenceCount: number;
+  visibleCount: number;
+  countLabel: string | null;
+  entries: PbsJobHealthEvidenceEntry[];
+};
+
 const buildPbsActiveTaskEntry = (
   taskType: string,
-  job:
-    | PBSBackupJob
-    | PBSSyncJob
-    | PBSVerifyJob
-    | PBSPruneJob
-    | PBSGarbageJob,
+  job: PBSBackupJob | PBSSyncJob | PBSVerifyJob | PBSPruneJob | PBSGarbageJob,
   context: string | null,
 ): PbsActiveTaskEntry | null => {
   if (!isPbsTaskStatusActive(job.status)) {
@@ -211,28 +222,21 @@ export const buildPbsActiveTasks = (pbs: PBSPlatformData | undefined): PbsActive
   }
 
   for (const job of pbs.garbageJobs ?? []) {
-    const entry = buildPbsActiveTaskEntry(
-      'Garbage Collection',
-      job,
-      joinPbsTaskContext(job.store),
-    );
+    const entry = buildPbsActiveTaskEntry('Garbage Collection', job, joinPbsTaskContext(job.store));
     if (entry) tasks.push(entry);
   }
 
   return tasks;
 };
 
-export const getPbsActivitySummary = (
-  pbs: PBSPlatformData | undefined,
-): PbsActivitySummary => {
+export const getPbsActivitySummary = (pbs: PBSPlatformData | undefined): PbsActivitySummary => {
   const totalJobs = getPbsJobTotal(pbs);
   const activeTaskCount = buildPbsActiveTasks(pbs).length;
 
   if (activeTaskCount > 0) {
     return {
       label: `${formatInteger(activeTaskCount)} active`,
-      detail:
-        totalJobs > activeTaskCount ? `${formatInteger(totalJobs)} total` : null,
+      detail: totalJobs > activeTaskCount ? `${formatInteger(totalJobs)} total` : null,
       activeTaskCount,
     };
   }
@@ -241,6 +245,141 @@ export const getPbsActivitySummary = (
     label: totalJobs > 0 ? `${formatInteger(totalJobs)} jobs` : null,
     detail: null,
     activeTaskCount: 0,
+  };
+};
+
+const normalizeEvidenceToken = (value?: string): string =>
+  (value || '').trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+
+const formatPbsEvidenceFamily = (family?: string): string => {
+  const normalized = normalizeEvidenceToken(family);
+  if (normalized === 'backup') return 'Backup';
+  if (normalized === 'sync') return 'Sync';
+  if (normalized === 'verify') return 'Verify';
+  if (normalized === 'prune') return 'Prune';
+  if (normalized === 'garbage') return 'Garbage collection';
+  return normalized ? normalizeDelimitedLabel(normalized) : 'Job';
+};
+
+const formatPbsEvidenceSource = (evidence: PBSJobHealthEvidence): string => {
+  const source = normalizeEvidenceToken(evidence.evidenceSource);
+  const scope = normalizeEvidenceToken(evidence.evidenceScope);
+  const family = normalizeEvidenceToken(evidence.family);
+
+  if (family === 'backup' && (source.includes('task history') || scope.includes('task history'))) {
+    return 'Observed backup task history';
+  }
+  if (source.includes('task history') || scope.includes('task history')) {
+    return 'Observed task history';
+  }
+  if (scope === 'configured job' || source.includes('job config')) {
+    return 'Configured PBS job';
+  }
+  if (scope === 'partial read' || source.includes('partial read')) {
+    return 'Partial PBS read';
+  }
+  return source ? normalizeDelimitedLabel(source) : 'PBS evidence';
+};
+
+const formatUnixSeconds = (value?: number): string | null => {
+  if (!Number.isFinite(value)) return null;
+  return new Date((value ?? 0) * 1000).toISOString().replace('.000Z', 'Z');
+};
+
+const formatIsoTime = (value?: string): string | null => {
+  if (!value?.trim()) return null;
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return value.trim();
+  return new Date(parsed).toISOString().replace('.000Z', 'Z');
+};
+
+const firstNonEmpty = (...values: Array<string | null | undefined>): string | null => {
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+};
+
+const getPbsEvidenceStateLabel = (evidence: PBSJobHealthEvidence): string | null =>
+  firstNonEmpty(
+    evidence['last-run-state'],
+    evidence['task-status'],
+    evidence.freshness?.state,
+    evidence.posture,
+  );
+
+const buildPbsEvidenceBadges = (evidence: PBSJobHealthEvidence): PbsJobHealthEvidenceBadge[] => {
+  const confidence = normalizeEvidenceToken(evidence.confidence);
+  const scope = normalizeEvidenceToken(evidence.evidenceScope);
+  const source = normalizeEvidenceToken(evidence.evidenceSource);
+  const error = normalizeEvidenceToken(evidence.error);
+  const badges: PbsJobHealthEvidenceBadge[] = [];
+
+  if (scope === 'partial read' || source.includes('partial read')) {
+    badges.push({ label: 'Partial read', tone: 'warning' });
+  }
+  if (confidence.includes('permission') || error.includes('permission')) {
+    badges.push({ label: 'Permission gap', tone: 'danger' });
+  }
+  if (confidence.includes('truncated') || error.includes('truncated')) {
+    badges.push({ label: 'Task history truncated', tone: 'warning' });
+  }
+  if (confidence && badges.length === 0) {
+    badges.push({ label: normalizeDelimitedLabel(confidence), tone: 'info' });
+  }
+  if (normalizeEvidenceToken(evidence.posture) === 'healthy') {
+    badges.push({ label: 'Healthy', tone: 'success' });
+  }
+
+  return badges;
+};
+
+const buildPbsEvidenceContext = (evidence: PBSJobHealthEvidence): string | null =>
+  joinPbsTaskContext(
+    evidence.store,
+    evidence.remote ? `Remote ${evidence.remote}` : null,
+    evidence.namespace ? `Namespace ${evidence.namespace}` : null,
+    evidence['worker-id'] ? `Worker ${evidence['worker-id']}` : null,
+  );
+
+const buildPbsEvidenceFreshnessLabel = (evidence: PBSJobHealthEvidence): string | null => {
+  const freshness = evidence.freshness;
+  const observed = formatIsoTime(freshness?.observedAt);
+  const lastRun =
+    formatIsoTime(freshness?.lastRunEndTime) ?? formatUnixSeconds(evidence['last-run-endtime']);
+  const taskEnd = formatUnixSeconds(evidence['task-endtime']);
+  const nextRun = formatIsoTime(freshness?.nextRun) ?? formatUnixSeconds(evidence['next-run']);
+
+  if (lastRun) return `Last run ${lastRun}`;
+  if (taskEnd) return `Task ended ${taskEnd}`;
+  if (nextRun) return `Next run ${nextRun}`;
+  if (observed) return `Observed ${observed}`;
+  return null;
+};
+
+export const buildPbsJobHealthEvidenceModel = (
+  pbs: PBSPlatformData | undefined,
+): PbsJobHealthEvidenceModel => {
+  const evidence = pbs?.jobHealthEvidence ?? [];
+  const evidenceCount = Math.max(pbs?.jobHealthEvidenceCount ?? 0, evidence.length);
+
+  return {
+    evidenceCount,
+    visibleCount: evidence.length,
+    countLabel: evidenceCount > 0 ? formatCount(evidenceCount, 'evidence record') : null,
+    entries: evidence.map((entry) => ({
+      id: entry.id,
+      label: buildPbsTaskLabel(formatPbsEvidenceFamily(entry.family), entry.id),
+      sourceLabel: formatPbsEvidenceSource(entry),
+      context: buildPbsEvidenceContext(entry),
+      stateLabel: getPbsEvidenceStateLabel(entry),
+      freshnessLabel: buildPbsEvidenceFreshnessLabel(entry),
+      postureLabel: firstNonEmpty(entry.posture),
+      postureReason: firstNonEmpty(entry.postureReason),
+      error: firstNonEmpty(entry.error),
+      badges: buildPbsEvidenceBadges(entry),
+    })),
   };
 };
 

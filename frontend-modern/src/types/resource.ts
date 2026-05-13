@@ -15,6 +15,7 @@ import type {
   Memory,
   PBSBackupJob,
   PBSGarbageJob,
+  PBSJobHealthEvidence,
   PBSPruneJob,
   PBSSyncJob,
   PBSVerifyJob,
@@ -337,11 +338,13 @@ export interface ResourcePBSMeta {
   verifyJobCount?: number;
   pruneJobCount?: number;
   garbageJobCount?: number;
+  jobHealthEvidenceCount?: number;
   backupJobs?: PBSBackupJob[];
   syncJobs?: PBSSyncJob[];
   verifyJobs?: PBSVerifyJob[];
   pruneJobs?: PBSPruneJob[];
   garbageJobs?: PBSGarbageJob[];
+  jobHealthEvidence?: PBSJobHealthEvidence[];
   connectionHealth?: string;
   affectedDatastoreCount?: number;
   affectedDatastores?: string[];

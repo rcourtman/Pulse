@@ -48,6 +48,7 @@ import {
   RESOURCE_SAFE_SUMMARY_LABEL,
 } from '@/utils/resourceAnalysisPresentation';
 import { formatInteger } from './resourceDetailMappers';
+import { buildPbsJobHealthEvidenceModel } from './resourceDetailDrawerServiceModel';
 import { ResourceDetailDrawerSupportDisclosure as SupportDisclosure } from './ResourceDetailDrawerSupportDisclosure';
 import type { UseResourceDetailDrawerStateResult } from './useResourceDetailDrawerState';
 
@@ -67,6 +68,21 @@ const vmwareRowToneClass = (tone?: 'default' | 'accent' | 'warning'): string => 
       return 'text-amber-700 dark:text-amber-300';
     default:
       return 'text-base-content';
+  }
+};
+
+const pbsEvidenceBadgeClass = (tone: string): string => {
+  switch (tone) {
+    case 'danger':
+      return 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-700 dark:bg-rose-950/40 dark:text-rose-300';
+    case 'warning':
+      return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300';
+    case 'success':
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300';
+    case 'info':
+      return 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-300';
+    default:
+      return 'border-border bg-surface-hover text-muted';
   }
 };
 
@@ -102,6 +118,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
 ) => {
   const { resource, drawer } = props;
   const showPlatformId = shouldShowResourcePlatformId(resource);
+  const pbsJobHealthEvidence = () => buildPbsJobHealthEvidenceModel(drawer.pbsData());
 
   return (
     <div class="space-y-3">
@@ -1081,6 +1098,103 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                           <span class="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
                                             {task.statusLabel}
                                           </span>
+                                        </div>
+                                      )}
+                                    </For>
+                                  </div>
+                                </div>
+                              </Show>
+                              <Show when={pbsJobHealthEvidence().evidenceCount > 0}>
+                                <div
+                                  data-testid="pbs-job-health-evidence"
+                                  class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700"
+                                >
+                                  <div class="flex flex-wrap items-center justify-between gap-2">
+                                    <span class="text-[10px] font-medium uppercase tracking-wide text-muted">
+                                      Job health evidence
+                                    </span>
+                                    <span class="text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">
+                                      {pbsJobHealthEvidence().countLabel}
+                                    </span>
+                                  </div>
+                                  <div class="mt-2 space-y-2 border-t border-indigo-200 pt-2 dark:border-indigo-700">
+                                    <For each={pbsJobHealthEvidence().entries}>
+                                      {(entry) => (
+                                        <div class="min-w-0 rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
+                                          <div class="flex flex-wrap items-start justify-between gap-2">
+                                            <div class="min-w-0">
+                                              <div
+                                                class="truncate font-medium text-base-content"
+                                                title={entry.label}
+                                              >
+                                                {entry.label}
+                                              </div>
+                                              <div
+                                                class="truncate text-muted"
+                                                title={entry.sourceLabel}
+                                              >
+                                                {entry.sourceLabel}
+                                              </div>
+                                            </div>
+                                            <div class="flex max-w-full flex-wrap justify-end gap-1">
+                                              <For each={entry.badges}>
+                                                {(badge) => (
+                                                  <span
+                                                    class={`shrink-0 rounded-full border px-2 py-0.5 font-medium ${pbsEvidenceBadgeClass(
+                                                      badge.tone,
+                                                    )}`}
+                                                  >
+                                                    {badge.label}
+                                                  </span>
+                                                )}
+                                              </For>
+                                            </div>
+                                          </div>
+                                          <div class="mt-1 grid gap-1 text-muted sm:grid-cols-2">
+                                            <Show when={entry.context}>
+                                              <span
+                                                class="truncate"
+                                                title={entry.context ?? undefined}
+                                              >
+                                                {entry.context}
+                                              </span>
+                                            </Show>
+                                            <Show when={entry.stateLabel}>
+                                              <span
+                                                class="truncate"
+                                                title={entry.stateLabel ?? undefined}
+                                              >
+                                                State:{' '}
+                                                <span class="font-medium text-base-content">
+                                                  {entry.stateLabel}
+                                                </span>
+                                              </span>
+                                            </Show>
+                                            <Show when={entry.freshnessLabel}>
+                                              <span
+                                                class="truncate"
+                                                title={entry.freshnessLabel ?? undefined}
+                                              >
+                                                {entry.freshnessLabel}
+                                              </span>
+                                            </Show>
+                                            <Show when={entry.postureReason}>
+                                              <span
+                                                class="truncate text-amber-700 dark:text-amber-300"
+                                                title={entry.postureReason ?? undefined}
+                                              >
+                                                {entry.postureReason}
+                                              </span>
+                                            </Show>
+                                            <Show when={entry.error}>
+                                              <span
+                                                class="truncate text-rose-700 dark:text-rose-300"
+                                                title={entry.error ?? undefined}
+                                              >
+                                                {entry.error}
+                                              </span>
+                                            </Show>
+                                          </div>
                                         </div>
                                       )}
                                     </For>

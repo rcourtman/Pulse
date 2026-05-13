@@ -857,6 +857,40 @@ describe('ResourceDetailDrawer change history section', () => {
           connectionHealth: 'online',
           datastoreCount: 2,
           backupJobCount: 3,
+          jobHealthEvidenceCount: 2,
+          jobHealthEvidence: [
+            {
+              id: 'backup:task-history:fast:vm/100',
+              family: 'backup',
+              store: 'fast',
+              confidence: 'direct-task-match',
+              evidenceSource: 'pbs-task-history',
+              evidenceScope: 'task-history',
+              'last-run-state': 'OK',
+              'last-run-upid': 'UPID:backup:1',
+              'last-run-endtime': 1776717000,
+              freshness: {
+                observedAt: '2026-04-20T21:30:00Z',
+                state: 'observed',
+              },
+              posture: 'healthy',
+            },
+            {
+              id: 'prune:partial',
+              family: 'prune',
+              store: 'archive',
+              confidence: 'partial-permission',
+              evidenceSource: 'pbs-partial-read',
+              evidenceScope: 'partial-read',
+              freshness: {
+                observedAt: '2026-04-20T21:30:00Z',
+                state: 'partial',
+              },
+              posture: 'unknown',
+              postureReason: 'PBS token cannot read prune job configuration.',
+              error: 'permission denied',
+            },
+          ],
         },
       },
     });
@@ -883,9 +917,17 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.queryByText('Backup summary')).toBeNull();
     expect(screen.queryByText('Job breakdown')).toBeNull();
     expect(screen.queryByText('Types')).toBeNull();
+    expect(screen.queryByText('Job health evidence')).toBeNull();
     expect(screen.queryByText('Show job detail')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Show jobs' }));
     expect(screen.getByText('Types')).toBeInTheDocument();
+    const evidence = within(screen.getByTestId('pbs-job-health-evidence'));
+    expect(evidence.getByText('2 evidence records')).toBeInTheDocument();
+    expect(evidence.getByText('Observed backup task history')).toBeInTheDocument();
+    expect(evidence.getByText('Partial PBS read')).toBeInTheDocument();
+    expect(evidence.getByText('Partial read')).toBeInTheDocument();
+    expect(evidence.getByText('Permission gap')).toBeInTheDocument();
+    expect(evidence.queryByText(/scheduled backup/i)).toBeNull();
   });
 
   it('keeps PMG node count out of the primary mail-flow metric grid', () => {

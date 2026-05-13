@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildPbsActiveTasks,
+  buildPbsJobHealthEvidenceModel,
   getPbsActivitySummary,
   buildPbsVisibleJobBreakdown,
   buildPmgVisibleMailBreakdown,
@@ -119,6 +120,112 @@ describe('resourceDetailDrawerServiceModel', () => {
         pmg: undefined,
       }),
     ).toBe('2 datastores · 2 active tasks');
+  });
+
+  it('builds PBS job health evidence presentation from observed resource evidence', () => {
+    const pbs = {
+      jobHealthEvidenceCount: 3,
+      jobHealthEvidence: [
+        {
+          id: 'backup:task-history:fast:vm/100',
+          family: 'backup',
+          store: 'fast',
+          confidence: 'direct-task-match',
+          evidenceSource: 'pbs-task-history',
+          evidenceScope: 'task-history',
+          'last-run-state': 'OK',
+          'last-run-upid': 'UPID:backup:1',
+          'last-run-endtime': 1776717000,
+          freshness: {
+            observedAt: '2026-04-20T21:30:00Z',
+            state: 'observed',
+          },
+          posture: 'healthy',
+        },
+        {
+          id: 'prune:partial',
+          family: 'prune',
+          store: 'archive',
+          confidence: 'partial-permission',
+          evidenceSource: 'pbs-partial-read',
+          evidenceScope: 'partial-read',
+          freshness: {
+            observedAt: '2026-04-20T21:30:00Z',
+            state: 'partial',
+          },
+          posture: 'unknown',
+          postureReason: 'PBS token cannot read prune job configuration.',
+          error: 'permission denied',
+        },
+        {
+          id: 'verify:task-history:fast:truncated',
+          family: 'verify',
+          store: 'fast',
+          confidence: 'bounded-task-history-truncated',
+          evidenceSource: 'pbs-task-history',
+          evidenceScope: 'partial-read',
+          freshness: {
+            observedAt: '2026-04-20T21:30:00Z',
+            state: 'partial',
+          },
+          posture: 'unknown',
+          error: 'bounded task history query was truncated',
+        },
+      ],
+    };
+
+    expect(buildPbsJobHealthEvidenceModel(pbs)).toEqual({
+      evidenceCount: 3,
+      visibleCount: 3,
+      countLabel: '3 evidence records',
+      entries: [
+        {
+          id: 'backup:task-history:fast:vm/100',
+          label: 'Backup backup:task-history:fast:vm/100',
+          sourceLabel: 'Observed backup task history',
+          context: 'fast',
+          stateLabel: 'OK',
+          freshnessLabel: 'Last run 2026-04-20T20:30:00Z',
+          postureLabel: 'healthy',
+          postureReason: null,
+          error: null,
+          badges: [
+            { label: 'Direct Task Match', tone: 'info' },
+            { label: 'Healthy', tone: 'success' },
+          ],
+        },
+        {
+          id: 'prune:partial',
+          label: 'Prune prune:partial',
+          sourceLabel: 'Partial PBS read',
+          context: 'archive',
+          stateLabel: 'partial',
+          freshnessLabel: 'Observed 2026-04-20T21:30:00Z',
+          postureLabel: 'unknown',
+          postureReason: 'PBS token cannot read prune job configuration.',
+          error: 'permission denied',
+          badges: [
+            { label: 'Partial read', tone: 'warning' },
+            { label: 'Permission gap', tone: 'danger' },
+          ],
+        },
+        {
+          id: 'verify:task-history:fast:truncated',
+          label: 'Verify verify:task-history:fast:truncated',
+          sourceLabel: 'Observed task history',
+          context: 'fast',
+          stateLabel: 'partial',
+          freshnessLabel: 'Observed 2026-04-20T21:30:00Z',
+          postureLabel: 'unknown',
+          postureReason: null,
+          error: 'bounded task history query was truncated',
+          badges: [
+            { label: 'Partial read', tone: 'warning' },
+            { label: 'Task history truncated', tone: 'warning' },
+          ],
+        },
+      ],
+    });
   });
 
   it('keeps PMG backlog and breakdown visibility canonical', () => {
