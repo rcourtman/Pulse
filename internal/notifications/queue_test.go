@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -631,33 +632,60 @@ func TestCancelByAlertIdentifiers_MultipleAlertsPartialMatch(t *testing.T) {
 		Type:        "webhook",
 		Status:      QueueStatusPending,
 		MaxAttempts: 3,
-		Config:      []byte(`{}`),
+		Config:      []byte(`{"url":"https://hooks.example.test"}`),
 		NextRetryAt: &futureRetry,
 		Alerts: []*alerts.Alert{
 			{ID: "alert-1"},
 			{ID: "alert-2"},
+			{ID: "alert-3"},
 		},
 	}
 	if err := nq.Enqueue(notif); err != nil {
 		t.Fatalf("Failed to enqueue: %v", err)
 	}
 
-	// Cancel with only one matching alert ID - should still cancel the notification
-	err = nq.CancelByAlertIdentifiers([]string{"alert-1"})
+	err = nq.CancelByAlertIdentifiers([]string{"alert-1", "alert-3"})
 	if err != nil {
 		t.Errorf("CancelByAlertIdentifiers returned error: %v", err)
 	}
 
-	// Verify the notification is cancelled (any matching alert should cancel)
 	stats, err := nq.GetQueueStats()
 	if err != nil {
 		t.Fatalf("GetQueueStats failed: %v", err)
 	}
-	if stats["pending"] != 0 {
-		t.Errorf("Expected 0 pending notifications after partial match cancel, got %d", stats["pending"])
+	if stats["pending"] != 1 {
+		t.Errorf("Expected 1 pending notification after partial match rewrite, got %d", stats["pending"])
 	}
-	if stats["cancelled"] != 1 {
-		t.Errorf("Expected 1 cancelled notification, got %d (stats: %v)", stats["cancelled"], stats)
+	if stats["cancelled"] != 0 {
+		t.Errorf("Expected 0 cancelled notifications after partial match rewrite, got %d (stats: %v)", stats["cancelled"], stats)
+	}
+
+	var notifType string
+	var alertsJSON string
+	var configJSON string
+	var nextRetryAt sql.NullInt64
+	if err := nq.db.QueryRow(
+		`SELECT type, alerts, config, next_retry_at FROM notification_queue WHERE id = ?`,
+		notif.ID,
+	).Scan(&notifType, &alertsJSON, &configJSON, &nextRetryAt); err != nil {
+		t.Fatalf("Failed to query rewritten notification row: %v", err)
+	}
+	if notifType != notif.Type {
+		t.Fatalf("type = %q, want %q", notifType, notif.Type)
+	}
+	if configJSON != string(notif.Config) {
+		t.Fatalf("config = %q, want %q", configJSON, string(notif.Config))
+	}
+	if !nextRetryAt.Valid || nextRetryAt.Int64 != futureRetry.Unix() {
+		t.Fatalf("next_retry_at = %+v, want %d", nextRetryAt, futureRetry.Unix())
+	}
+
+	var remaining []*alerts.Alert
+	if err := json.Unmarshal([]byte(alertsJSON), &remaining); err != nil {
+		t.Fatalf("failed to unmarshal rewritten alerts: %v", err)
+	}
+	if len(remaining) != 1 || remaining[0].ID != "alert-2" {
+		t.Fatalf("remaining alerts = %#v, want only alert-2", remaining)
 	}
 }
 
