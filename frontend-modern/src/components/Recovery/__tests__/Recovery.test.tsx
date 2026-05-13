@@ -1650,7 +1650,7 @@ describe('Recovery', () => {
       );
     });
 
-    const timelineButtons = await screen.findAllByRole('button', { name: /recovery points/i });
+    const timelineButtons = await screen.findAllByRole('button', { name: /recovery point/i });
     fireEvent.click(timelineButtons[0]);
 
     const selectedDay = '2026-02-13';

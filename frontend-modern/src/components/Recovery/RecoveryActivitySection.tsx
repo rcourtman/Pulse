@@ -16,9 +16,14 @@ import {
 import {
   getRecoveryTimelineAxisLabelClass,
   getRecoveryTimelineAxisTicks,
+  getRecoveryTimelineChartGapPx,
+  getRecoveryTimelineChartMinWidthPx,
   RECOVERY_TIMELINE_LEGEND_ITEM_CLASS,
 } from '@/utils/recoveryTimelineChartPresentation';
-import { getRecoveryTimelineColumnButtonClass } from '@/utils/recoveryTimelinePresentation';
+import {
+  getRecoveryTimelineColumnAriaLabel,
+  getRecoveryTimelineColumnButtonClass,
+} from '@/utils/recoveryTimelinePresentation';
 
 interface RecoveryRollupSummary {
   total: number;
@@ -69,7 +74,21 @@ interface RecoveryActivitySectionProps {
 }
 
 function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JSX.Element {
-  const timelineAxisTicks = () => getRecoveryTimelineAxisTicks(props.timeline().points.length);
+  const timelineAxisTicks = () =>
+    getRecoveryTimelineAxisTicks(
+      props.timeline().points.length,
+      props.isMobile,
+      props.timeline().labelEvery,
+    );
+  const chartMinWidthStyle = () => {
+    const minWidth = getRecoveryTimelineChartMinWidthPx(
+      props.isMobile,
+      props.chartRangeDays(),
+      props.timeline().points.length,
+    );
+    return minWidth > 0 ? `${minWidth}px` : '100%';
+  };
+  const chartGapStyle = () => `${getRecoveryTimelineChartGapPx(props.chartRangeDays())}px`;
   const formatActivityAverage = (value: number): string => {
     if (!Number.isFinite(value) || value <= 0) return '0/day';
     if (value >= 10) return `${Math.round(value)}/day`;
@@ -293,129 +312,141 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
                 </For>
               </div>
 
-              <div class="relative h-20">
-                <div
-                  data-testid="recovery-activity-bars"
-                  class="absolute inset-x-0 bottom-4 top-0 flex items-stretch gap-[3px]"
-                >
-                  <For each={props.timeline().points}>
-                    {(point) => {
-                      const total = point.total;
-                      const heightPct =
-                        props.timeline().axisMax > 0
-                          ? (total / props.timeline().axisMax) * 100
-                          : 0;
-                      const columnHeight = Math.max(0, Math.min(100, heightPct));
-                      const snapshotHeight = total > 0 ? (point.snapshot / total) * 100 : 0;
-                      const localHeight = total > 0 ? (point.local / total) * 100 : 0;
-                      const remoteHeight = total > 0 ? (point.remote / total) * 100 : 0;
-                      const isSelected = props.selectedDateKey() === point.key;
+              <div
+                data-testid="recovery-activity-chart-scroll"
+                class="overflow-x-auto overscroll-x-contain pb-1"
+              >
+                <div class="relative h-20" style={{ 'min-width': chartMinWidthStyle() }}>
+                  <div
+                    data-testid="recovery-activity-bars"
+                    class="absolute inset-x-0 bottom-4 top-0 flex items-stretch"
+                    style={{ gap: chartGapStyle() }}
+                  >
+                    <For each={props.timeline().points}>
+                      {(point) => {
+                        const total = point.total;
+                        const heightPct =
+                          props.timeline().axisMax > 0
+                            ? (total / props.timeline().axisMax) * 100
+                            : 0;
+                        const columnHeight = Math.max(0, Math.min(100, heightPct));
+                        const snapshotHeight = total > 0 ? (point.snapshot / total) * 100 : 0;
+                        const localHeight = total > 0 ? (point.local / total) * 100 : 0;
+                        const remoteHeight = total > 0 ? (point.remote / total) * 100 : 0;
+                        const isSelected = props.selectedDateKey() === point.key;
+                        const dateLabel = getRecoveryPrettyDateLabel(point.key);
 
-                      return (
-                        <div class="flex-1 self-stretch">
-                          <button
-                            type="button"
-                            class={`h-full w-full rounded-sm ${getRecoveryTimelineColumnButtonClass(isSelected)}`}
-                            aria-label={`${getRecoveryPrettyDateLabel(point.key)}: ${total} recovery points`}
-                            onClick={() => props.toggleSelectedDate(point.key)}
-                            onMouseEnter={(event) => {
-                              const rect = event.currentTarget.getBoundingClientRect();
-                              const breakdown: string[] = [];
-                              if (point.snapshot > 0) {
-                                breakdown.push(
-                                  `${getRecoveryArtifactModePresentation('snapshot').aggregateLabel}: ${point.snapshot}`,
-                                );
-                              }
-                              if (point.local > 0) {
-                                breakdown.push(
-                                  `${getRecoveryArtifactModePresentation('local').aggregateLabel}: ${point.local}`,
-                                );
-                              }
-                              if (point.remote > 0) {
-                                breakdown.push(
-                                  `${getRecoveryArtifactModePresentation('remote').aggregateLabel}: ${point.remote}`,
-                                );
-                              }
-                              const tooltipText =
-                                point.total > 0
-                                  ? `${getRecoveryPrettyDateLabel(point.key)}\nAvailable: ${point.total} recovery point${point.total > 1 ? 's' : ''}\n${breakdown.join(' • ')}`
-                                  : `${getRecoveryPrettyDateLabel(point.key)}\nNo recovery points available`;
-                              showTooltip(tooltipText, rect.left + rect.width / 2, rect.top, {
-                                align: 'center',
-                                direction: 'up',
-                              });
-                            }}
-                            onMouseLeave={() => hideTooltip()}
-                            onFocus={(event) => {
-                              const rect = event.currentTarget.getBoundingClientRect();
-                              const tooltipText = `${getRecoveryPrettyDateLabel(point.key)}\nAvailable: ${point.total} recovery point${point.total > 1 ? 's' : ''}`;
-                              showTooltip(tooltipText, rect.left + rect.width / 2, rect.top, {
-                                align: 'center',
-                                direction: 'up',
-                              });
-                            }}
-                            onBlur={() => hideTooltip()}
+                        return (
+                          <div class="min-w-[3px] flex-1 self-stretch">
+                            <button
+                              type="button"
+                              class={`h-full w-full ${getRecoveryTimelineColumnButtonClass(isSelected)}`}
+                              aria-label={getRecoveryTimelineColumnAriaLabel(
+                                dateLabel,
+                                total,
+                                isSelected,
+                              )}
+                              aria-pressed={isSelected ? 'true' : 'false'}
+                              onClick={() => props.toggleSelectedDate(point.key)}
+                              onMouseEnter={(event) => {
+                                const rect = event.currentTarget.getBoundingClientRect();
+                                const breakdown: string[] = [];
+                                if (point.snapshot > 0) {
+                                  breakdown.push(
+                                    `${getRecoveryArtifactModePresentation('snapshot').aggregateLabel}: ${point.snapshot}`,
+                                  );
+                                }
+                                if (point.local > 0) {
+                                  breakdown.push(
+                                    `${getRecoveryArtifactModePresentation('local').aggregateLabel}: ${point.local}`,
+                                  );
+                                }
+                                if (point.remote > 0) {
+                                  breakdown.push(
+                                    `${getRecoveryArtifactModePresentation('remote').aggregateLabel}: ${point.remote}`,
+                                  );
+                                }
+                                const tooltipText =
+                                  point.total > 0
+                                    ? `${dateLabel}\nAvailable: ${point.total} recovery point${point.total > 1 ? 's' : ''}\n${breakdown.join(' • ')}`
+                                    : `${dateLabel}\nNo recovery points available`;
+                                showTooltip(tooltipText, rect.left + rect.width / 2, rect.top, {
+                                  align: 'center',
+                                  direction: 'up',
+                                });
+                              }}
+                              onMouseLeave={() => hideTooltip()}
+                              onFocus={(event) => {
+                                const rect = event.currentTarget.getBoundingClientRect();
+                                const tooltipText = `${dateLabel}\nAvailable: ${point.total} recovery point${point.total > 1 ? 's' : ''}`;
+                                showTooltip(tooltipText, rect.left + rect.width / 2, rect.top, {
+                                  align: 'center',
+                                  direction: 'up',
+                                });
+                              }}
+                              onBlur={() => hideTooltip()}
+                            >
+                              <div class="relative h-full w-full overflow-hidden rounded-sm">
+                                <Show when={total > 0}>
+                                  <div
+                                    class="absolute inset-x-0 bottom-0"
+                                    style={{ height: `${columnHeight}%` }}
+                                  >
+                                    <Show when={remoteHeight > 0}>
+                                      <div
+                                        class={`w-full ${getRecoveryArtifactModePresentation('remote').segmentClassName}`}
+                                        style={{ height: `${remoteHeight}%` }}
+                                      />
+                                    </Show>
+                                    <Show when={localHeight > 0}>
+                                      <div
+                                        class={`w-full ${getRecoveryArtifactModePresentation('local').segmentClassName}`}
+                                        style={{ height: `${localHeight}%` }}
+                                      />
+                                    </Show>
+                                    <Show when={snapshotHeight > 0}>
+                                      <div
+                                        class={`w-full ${getRecoveryArtifactModePresentation('snapshot').segmentClassName}`}
+                                        style={{ height: `${snapshotHeight}%` }}
+                                      />
+                                    </Show>
+                                  </div>
+                                </Show>
+                              </div>
+                            </button>
+                          </div>
+                        );
+                      }}
+                    </For>
+                  </div>
+
+                  <div class="pointer-events-none absolute inset-x-0 bottom-0 h-4">
+                    <For each={timelineAxisTicks()}>
+                      {(tick) => {
+                        const point = props.timeline().points[tick.index];
+                        const isSelected = props.selectedDateKey() === point.key;
+                        const alignmentClass =
+                          tick.align === 'start'
+                            ? 'left-0 text-left'
+                            : tick.align === 'end'
+                              ? 'left-full -translate-x-full text-right'
+                              : '-translate-x-1/2 text-center';
+
+                        return (
+                          <span
+                            class={`absolute bottom-0 whitespace-nowrap text-[9px] ${
+                              isSelected
+                                ? getRecoveryTimelineAxisLabelClass(true)
+                                : getRecoveryTimelineAxisLabelClass(false)
+                            } ${alignmentClass}`}
+                            style={{ left: `${tick.positionPct}%` }}
                           >
-                            <div class="relative h-full w-full">
-                              <Show when={total > 0}>
-                                <div
-                                  class="absolute inset-x-0 bottom-0"
-                                  style={{ height: `${columnHeight}%` }}
-                                >
-                                  <Show when={remoteHeight > 0}>
-                                    <div
-                                      class={`w-full ${getRecoveryArtifactModePresentation('remote').segmentClassName}`}
-                                      style={{ height: `${remoteHeight}%` }}
-                                    />
-                                  </Show>
-                                  <Show when={localHeight > 0}>
-                                    <div
-                                      class={`w-full ${getRecoveryArtifactModePresentation('local').segmentClassName}`}
-                                      style={{ height: `${localHeight}%` }}
-                                    />
-                                  </Show>
-                                  <Show when={snapshotHeight > 0}>
-                                    <div
-                                      class={`w-full ${getRecoveryArtifactModePresentation('snapshot').segmentClassName}`}
-                                      style={{ height: `${snapshotHeight}%` }}
-                                    />
-                                  </Show>
-                                </div>
-                              </Show>
-                            </div>
-                          </button>
-                        </div>
-                      );
-                    }}
-                  </For>
-                </div>
-
-                <div class="pointer-events-none absolute inset-x-0 bottom-0 h-4">
-                  <For each={timelineAxisTicks()}>
-                    {(tick) => {
-                      const point = props.timeline().points[tick.index];
-                      const isSelected = props.selectedDateKey() === point.key;
-                      const alignmentClass =
-                        tick.align === 'start'
-                          ? 'left-0 text-left'
-                          : tick.align === 'end'
-                            ? 'left-full -translate-x-full text-right'
-                            : '-translate-x-1/2 text-center';
-
-                      return (
-                        <span
-                          class={`absolute bottom-0 whitespace-nowrap text-[9px] ${
-                            isSelected
-                              ? getRecoveryTimelineAxisLabelClass(true)
-                              : getRecoveryTimelineAxisLabelClass(false)
-                          } ${alignmentClass}`}
-                          style={{ left: `${tick.positionPct}%` }}
-                        >
-                          {getRecoveryCompactAxisLabel(point.key, props.chartRangeDays())}
-                        </span>
-                      );
-                    }}
-                  </For>
+                            {getRecoveryCompactAxisLabel(point.key, props.chartRangeDays())}
+                          </span>
+                        );
+                      }}
+                    </For>
+                  </div>
                 </div>
               </div>
             </div>

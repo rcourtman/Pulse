@@ -389,7 +389,7 @@ const Recovery: Component = () => {
     }));
     const maxValue = points.reduce((maximum, point) => Math.max(maximum, point.total), 0);
     const axisMax = getRecoveryNiceAxisMax(maxValue);
-    const labelEvery = getRecoveryTimelineLabelEvery(points.length);
+    const labelEvery = getRecoveryTimelineLabelEvery(points.length, isMobile());
     return { points, axisMax, labelEvery };
   });
 

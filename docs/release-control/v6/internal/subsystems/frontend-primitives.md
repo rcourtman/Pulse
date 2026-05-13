@@ -445,7 +445,19 @@ prompt explain the same operator-facing priority.
    summary-bearing pages must use `ChartVisibilityToggleButton` so the
    affordance exposes one `Show charts` / `Hide charts` pressed-state contract
    instead of rebuilding a one-option segmented control or an in-summary
-   collapse chevron page by page. Compact, stable, mutually-exclusive filters
+   collapse chevron page by page. Feature state hooks under
+   `frontend-modern/src/features/` own route-backed query state, selected item
+   state, and data-window selection for their product surfaces; shared
+   primitives and reusable presentation helpers may own viewport-safe chrome,
+   focus treatment, pressed-state affordances, and accessible label builders
+   for repeated controls. Recovery timeline columns follow that split:
+   storage/recovery owns the range, selected day, chart/table transport
+   windows, and bucket data, while the shared frontend boundary owns the
+   reusable button focus/selected styling and ARIA wording so columns expose
+   singular/plural recovery-point labels plus selected state consistently.
+   Frontend primitives must not fetch recovery data, infer recovery date
+   ranges, or carry a parallel selected-day store just to render timeline
+   columns. Compact, stable, mutually-exclusive filters
    with two to five options should use `LabeledFilterToggleGroup` as a
    responsive control: toggle buttons at wide desktop widths and the native
    select fallback below that. Dynamic, user/environment-sized, or six-plus

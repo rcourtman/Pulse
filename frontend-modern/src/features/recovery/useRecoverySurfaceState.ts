@@ -2,7 +2,7 @@ import { createEffect, createMemo, createSignal, onCleanup, untrack } from 'soli
 import { useLocation, useNavigate } from '@solidjs/router';
 
 import { useStorageRecoveryResources } from '@/hooks/useUnifiedResources';
-import { useRecoveryRollups } from '@/hooks/useRecoveryRollups';
+import { useRecoveryRollups, type RecoveryRollupsQuery } from '@/hooks/useRecoveryRollups';
 import { useRecoveryPoints } from '@/hooks/useRecoveryPoints';
 import { useRecoveryPointsFacets } from '@/hooks/useRecoveryPointsFacets';
 import { useRecoveryPointsSeries } from '@/hooks/useRecoveryPointsSeries';
@@ -170,26 +170,40 @@ export function useRecoverySurfaceState() {
     return chartWindow();
   });
 
-  const recoveryRollups = useRecoveryRollups(() => {
+  const buildRecoveryTransportQuery = (
+    window: { from: string; to: string },
+    includeRollupId = true,
+  ): RecoveryRollupsQuery => {
     const rid = rollupId().trim();
-    const window = chartWindow();
+    const mode = modeFilter();
+    const outcome = historyOutcomeFilter();
+    const scope: 'workload' | null = scopeFilter() === 'workload' ? 'workload' : null;
     const vf = verificationFilter();
     return {
-      rollupId: rid || null,
+      rollupId: includeRollupId && rid ? rid : null,
       platform: platformFilter() === 'all' ? null : platformFilter(),
       itemType: itemTypeFilter() === 'all' ? null : itemTypeFilter(),
-      mode: modeFilter() === 'all' ? null : modeFilter(),
-      outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
+      mode: mode === 'all' ? null : mode,
+      outcome: outcome === 'all' ? null : outcome,
       q: queryFilter().trim() || null,
       cluster: clusterFilter() === 'all' ? null : clusterFilter(),
       node: nodeFilter() === 'all' ? null : nodeFilter(),
       namespace: namespaceFilter() === 'all' ? null : namespaceFilter(),
-      scope: scopeFilter() === 'workload' ? 'workload' : null,
+      scope,
       verification: vf === 'all' ? null : vf,
       from: window.from,
       to: window.to,
     };
-  });
+  };
+
+  const chartTransportQuery = createMemo(() => buildRecoveryTransportQuery(chartWindow()));
+  const tableTransportQuery = createMemo(() => buildRecoveryTransportQuery(tableWindow()));
+  const recoverySeriesTransportQuery = createMemo(() => ({
+    ...chartTransportQuery(),
+    tzOffsetMinutes: tzOffsetMinutes(),
+  }));
+
+  const recoveryRollups = useRecoveryRollups(() => chartTransportQuery());
 
   const rollups = createMemo<ProtectionRollup[]>(() => recoveryRollups.rollups() || []);
   const selectedRollup = createMemo<ProtectionRollup | null>(() => {
@@ -200,22 +214,7 @@ export function useRecoverySurfaceState() {
 
   const recoveryHistoryItemCatalog = useRecoveryRollups(() => {
     if (!rollupId().trim()) return null;
-    const window = chartWindow();
-    const vf = verificationFilter();
-    return {
-      platform: platformFilter() === 'all' ? null : platformFilter(),
-      itemType: itemTypeFilter() === 'all' ? null : itemTypeFilter(),
-      mode: modeFilter() === 'all' ? null : modeFilter(),
-      outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
-      q: queryFilter().trim() || null,
-      cluster: clusterFilter() === 'all' ? null : clusterFilter(),
-      node: nodeFilter() === 'all' ? null : nodeFilter(),
-      namespace: namespaceFilter() === 'all' ? null : namespaceFilter(),
-      scope: scopeFilter() === 'workload' ? 'workload' : null,
-      verification: vf === 'all' ? null : vf,
-      from: window.from,
-      to: window.to,
-    };
+    return buildRecoveryTransportQuery(chartWindow(), false);
   });
 
   const selectableRollups = createMemo<ProtectionRollup[]>(() => {
@@ -308,70 +307,16 @@ export function useRecoverySurfaceState() {
   });
 
   const recoveryPoints = useRecoveryPoints(() => {
-    const rid = rollupId().trim();
-    const window = tableWindow();
-    const vf = verificationFilter();
     return {
+      ...tableTransportQuery(),
       page: currentPage(),
       limit: 200,
-      rollupId: rid || null,
-      platform: platformFilter() === 'all' ? null : platformFilter(),
-      itemType: itemTypeFilter() === 'all' ? null : itemTypeFilter(),
-      cluster: clusterFilter() === 'all' ? null : clusterFilter(),
-      mode: modeFilter() === 'all' ? null : modeFilter(),
-      outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
-      q: queryFilter().trim() || null,
-      node: nodeFilter() === 'all' ? null : nodeFilter(),
-      namespace: namespaceFilter() === 'all' ? null : namespaceFilter(),
-      scope: scopeFilter() === 'workload' ? 'workload' : null,
-      verification: vf === 'all' ? null : vf,
-      from: window.from,
-      to: window.to,
     };
   });
 
-  const recoveryFacets = useRecoveryPointsFacets(() => {
-    const rid = rollupId().trim();
-    const window = tableWindow();
-    const vf = verificationFilter();
-    return {
-      rollupId: rid || null,
-      platform: platformFilter() === 'all' ? null : platformFilter(),
-      itemType: itemTypeFilter() === 'all' ? null : itemTypeFilter(),
-      cluster: clusterFilter() === 'all' ? null : clusterFilter(),
-      mode: modeFilter() === 'all' ? null : modeFilter(),
-      outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
-      q: queryFilter().trim() || null,
-      scope: scopeFilter() === 'workload' ? 'workload' : null,
-      node: nodeFilter() === 'all' ? null : nodeFilter(),
-      namespace: namespaceFilter() === 'all' ? null : namespaceFilter(),
-      verification: vf === 'all' ? null : vf,
-      from: window.from,
-      to: window.to,
-    };
-  });
+  const recoveryFacets = useRecoveryPointsFacets(() => tableTransportQuery());
 
-  const recoverySeries = useRecoveryPointsSeries(() => {
-    const rid = rollupId().trim();
-    const window = chartWindow();
-    const vf = verificationFilter();
-    return {
-      rollupId: rid || null,
-      platform: platformFilter() === 'all' ? null : platformFilter(),
-      itemType: itemTypeFilter() === 'all' ? null : itemTypeFilter(),
-      cluster: clusterFilter() === 'all' ? null : clusterFilter(),
-      mode: modeFilter() === 'all' ? null : modeFilter(),
-      outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
-      q: queryFilter().trim() || null,
-      node: nodeFilter() === 'all' ? null : nodeFilter(),
-      namespace: namespaceFilter() === 'all' ? null : namespaceFilter(),
-      scope: scopeFilter() === 'workload' ? 'workload' : null,
-      verification: vf === 'all' ? null : vf,
-      from: window.from,
-      to: window.to,
-      tzOffsetMinutes: tzOffsetMinutes(),
-    };
-  });
+  const recoverySeries = useRecoveryPointsSeries(() => recoverySeriesTransportQuery());
 
   createEffect(() => {
     const currentPath = `${location.pathname}${location.search || ''}`;

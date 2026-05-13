@@ -4,6 +4,67 @@ import { ensureAuthenticated } from "./helpers";
 
 const DESKTOP_VIEWPORT = { width: 1280, height: 900 };
 const RECOVERY_SUBJECT_LABEL = "Archive VM For Production Ledger Services";
+const RECOVERY_DAY_MS = 24 * 60 * 60 * 1000;
+
+const recoveryUtcDateKey = (date: Date): string => {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const recoveryTransportDay = (date: Date, tzOffsetMinutes: number): number => {
+  const shifted = new Date(date.getTime() + tzOffsetMinutes * 60 * 1000);
+  return Date.UTC(
+    shifted.getUTCFullYear(),
+    shifted.getUTCMonth(),
+    shifted.getUTCDate(),
+  );
+};
+
+const buildRecoverySeries = (url: string) => {
+  const requestUrl = new URL(url);
+  const from = requestUrl.searchParams.get("from");
+  const to = requestUrl.searchParams.get("to");
+  if (!from || !to) return mockRecoveryData.series;
+
+  const fromDate = new Date(from);
+  const toDate = new Date(to);
+  const parsedTzOffset = Number.parseInt(
+    requestUrl.searchParams.get("tzOffsetMinutes") || "0",
+    10,
+  );
+  const tzOffsetMinutes = Number.isFinite(parsedTzOffset)
+    ? parsedTzOffset
+    : 0;
+  const fromDay = recoveryTransportDay(fromDate, tzOffsetMinutes);
+  const toDay = recoveryTransportDay(toDate, tzOffsetMinutes);
+  const daySpan = Math.floor((toDay - fromDay) / RECOVERY_DAY_MS) + 1;
+  if (!Number.isFinite(daySpan) || daySpan < 1) return mockRecoveryData.series;
+
+  const bucketCount = Math.min(daySpan, 365);
+
+  return {
+    data: Array.from({ length: bucketCount }, (_, index) => {
+      const pointDate = new Date(fromDay + index * RECOVERY_DAY_MS);
+      const day = recoveryUtcDateKey(pointDate);
+      const remote =
+        index === 0 ||
+        index === bucketCount - 1 ||
+        (bucketCount > 30 && index % 29 === 0) ||
+        (bucketCount > 14 && index > bucketCount - 8)
+          ? 1
+          : 0;
+      return {
+        day,
+        total: remote,
+        snapshot: 0,
+        local: 0,
+        remote,
+      };
+    }),
+  };
+};
 
 const mockRecoveryData = {
   rollups: {
@@ -117,7 +178,7 @@ async function mockRecoveryEndpoints(page: Page): Promise<void> {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(mockRecoveryData.series),
+      body: JSON.stringify(buildRecoverySeries(route.request().url())),
     });
   });
 }
@@ -197,5 +258,112 @@ test.describe("Recovery desktop layout guards", () => {
       outcomeRight,
       `Recovery outcome header should stay inside the visible desktop wrapper (wrapperRight=${wrapperRight}, outcomeRight=${outcomeRight})`,
     ).toBeLessThanOrEqual(wrapperRight + 1);
+  });
+
+  test("long-range activity timeline stays readable and keeps selected day in the route", async ({
+    page,
+  }, testInfo) => {
+    const seriesRequests: string[] = [];
+
+    if (!testInfo.project.name.startsWith("mobile-")) {
+      await page.setViewportSize(DESKTOP_VIEWPORT);
+    }
+    await ensureAuthenticated(page);
+    await mockRecoveryEndpoints(page);
+    await page.route("**/api/recovery/series*", async (route) => {
+      seriesRequests.push(route.request().url());
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(buildRecoverySeries(route.request().url())),
+      });
+    });
+
+    await page.goto("/recovery?view=events&range=365&node=pve-archive-01", {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(page.getByTestId("recovery-page")).toBeVisible();
+
+    const chartScroll = page.getByTestId("recovery-activity-chart-scroll");
+    const bars = page.getByTestId("recovery-activity-bars");
+    await expect(chartScroll).toBeVisible();
+    await expect(bars).toBeVisible();
+
+    const chartMetrics = await chartScroll.evaluate((element) => {
+      const scroller = element as HTMLElement;
+      const labels = Array.from(
+        scroller.querySelectorAll(".pointer-events-none span"),
+      ).map((label) => {
+        const rect = (label as HTMLElement).getBoundingClientRect();
+        return { left: rect.left, right: rect.right, text: label.textContent };
+      });
+      const overlaps = labels.some((label, index) => {
+        const next = labels[index + 1];
+        return next ? label.right > next.left + 1 : false;
+      });
+      return {
+        clientWidth: scroller.clientWidth,
+        scrollWidth: scroller.scrollWidth,
+        labelCount: labels.length,
+        overlaps,
+        firstLabel: labels[0]?.text || "",
+        lastLabel: labels.at(-1)?.text || "",
+      };
+    });
+
+    expect(chartMetrics.scrollWidth).toBeGreaterThan(chartMetrics.clientWidth);
+    expect(chartMetrics.labelCount).toBeGreaterThan(0);
+    expect(chartMetrics.labelCount).toBeLessThanOrEqual(16);
+    expect(chartMetrics.overlaps).toBe(false);
+    expect(chartMetrics.firstLabel).toBeTruthy();
+    expect(chartMetrics.lastLabel).toBeTruthy();
+
+    await expect.poll(() => seriesRequests.length).toBeGreaterThan(0);
+    expect(
+      seriesRequests.some(
+        (url) =>
+          url.includes("/api/recovery/series") &&
+          url.includes("node=pve-archive-01") &&
+          url.includes("tzOffsetMinutes="),
+      ),
+    ).toBe(true);
+
+    const firstTimelineButton = bars.getByRole("button").first();
+    await firstTimelineButton.click();
+    await expect(page).toHaveURL(/\/recovery\?.*day=\d{4}-\d{2}-\d{2}/);
+
+    await page.goto("/recovery?view=events&range=7&node=pve-archive-01", {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(page.getByTestId("recovery-page")).toBeVisible();
+    await expect.poll(() => chartScroll.locator("button").count()).toBe(7);
+
+    const shortRangeMetrics = await chartScroll.evaluate((element) => {
+      const scroller = element as HTMLElement;
+      const labels = Array.from(
+        scroller.querySelectorAll(".pointer-events-none span"),
+      ).map((label) => {
+        const rect = (label as HTMLElement).getBoundingClientRect();
+        return { left: rect.left, right: rect.right, text: label.textContent };
+      });
+      const overlaps = labels.some((label, index) => {
+        const next = labels[index + 1];
+        return next ? label.right > next.left + 1 : false;
+      });
+      return {
+        clientWidth: scroller.clientWidth,
+        scrollWidth: scroller.scrollWidth,
+        labelCount: labels.length,
+        buttonCount: scroller.querySelectorAll("button").length,
+        overlaps,
+      };
+    });
+
+    expect(shortRangeMetrics.scrollWidth).toBeLessThanOrEqual(
+      shortRangeMetrics.clientWidth + 1,
+    );
+    expect(shortRangeMetrics.buttonCount).toBe(7);
+    expect(shortRangeMetrics.labelCount).toBe(7);
+    expect(shortRangeMetrics.overlaps).toBe(false);
   });
 });

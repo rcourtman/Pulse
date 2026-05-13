@@ -167,6 +167,21 @@ bypass the API fail-closed execution gate.
    compatibility path, but event views and event drill-ins must drop
    protected-inventory-only state so hidden filters cannot make valid history
    look empty.
+   Recovery activity timeline state is also storage/recovery-owned. The
+   route-backed range, selected day, and viewport-derived mobile cadence must
+   stay in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`
+   and the Recovery page owner, with one shared transport-query builder feeding
+   the chart window to rollups/series and the table window to points/facets.
+   The series query may append timezone offset for bucket alignment, but
+   presentation components must not rebuild a second query contract or conflate
+   the chart and table windows. The activity chart must preserve readable
+   bucket density across the governed 7, 30, 90, and 365 day ranges: seven-day
+   timelines fit the available viewport without forced horizontal overflow,
+   thirty-day timelines may widen on mobile only, and longer ranges scroll in a
+   bounded chart viewport with sparser labels so first, last, and selected-day
+   context remain visible without overlapping labels. Selecting a timeline
+   column remains route-backed and must not become component-local ephemeral
+   state.
 3. Add or change storage page UX through `frontend-modern/src/pages/Storage.tsx`, `frontend-modern/src/pages/Ceph.tsx`, `frontend-modern/src/components/Storage/`, `frontend-modern/src/features/storageBackups/`, and the shared storage-source contract in `frontend-modern/src/utils/storageSources.ts`
    The retired dashboard route must not reintroduce storage or recovery
    widgets as compatibility panels. Storage capacity, storage health,
@@ -438,7 +453,7 @@ bypass the API fail-closed execution gate.
     entitlement refresh targeting: when storage- or recovery-adjacent hosted
     routes execute under a tenant org without org-local billing state, the
     refresh path must repair the instance-level `default` lease and evaluator
-    instead of rewriting the empty tenant org, so AI-assisted recovery and
+    instead of rewriting the empty tenant org, so AI-guided recovery and
     hosted diagnostics do not collapse into false free-tier behavior.
 19. Preserve shipped local security-doc guidance in shared `internal/api/` config/setup helpers so storage- and recovery-adjacent transport surfaces do not reintroduce GitHub `main` security links when the running build already serves its own local security documentation route.
 20. Keep shared `internal/api/` Patrol transport and alert-trigger edits feature-isolated: Patrol-specific recency fields, callback fan-out, or alert-bridge wiring changes must not leak into recovery queries, storage links, or recovery-adjacent install/setup flows unless this contract changes in the same slice.
@@ -2885,7 +2900,7 @@ provider-route truth stays on the shared API/security boundary, where OIDC,
 SAML, and multi-provider SSO are Community-tier authentication capabilities.
 That same shared `internal/api/` boundary also owns hosted AI bootstrap
 continuity. Storage- and recovery-adjacent hosted flows may surface Patrol-
-backed investigation or AI-assisted recovery guidance before an operator has
+backed investigation or AI-guided recovery guidance before an operator has
 ever opened AI Settings, but the shared hosted runtime helper must return the
 same unconfigured provider-setup state as self-hosted unless an explicit AI
 config exists. Adjacent recovery surfaces must not invent their own hosted AI
@@ -2894,7 +2909,7 @@ That same hosted entitlement continuity also depends on the shared refresh path
 repairing the correct billing owner. When recovery-adjacent hosted requests run
 under a tenant org without org-local billing state, `internal/api/` must
 refresh, persist, and re-evaluate the instance-level `default` lease instead of
-rewriting the empty tenant org. Otherwise AI-assisted recovery can degrade to a
+rewriting the empty tenant org. Otherwise AI-guided recovery can degrade to a
 false free-tier state even though the hosted machine still has a valid refresh
 token and signed entitlement lease.
 That same shared persistence path must also clear historical hosted quickstart
