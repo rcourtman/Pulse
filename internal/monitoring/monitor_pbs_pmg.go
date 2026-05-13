@@ -100,6 +100,8 @@ func pbsJobHealthEvidenceFromFacts(facts []pbs.JobHealthEvidence, observedAt tim
 			TaskStartTime:  fact.TaskStartTime,
 			TaskEndTime:    fact.TaskEndTime,
 			Confidence:     fact.Confidence,
+			EvidenceSource: fact.EvidenceSource,
+			EvidenceScope:  fact.EvidenceScope,
 			Error:          fact.Error,
 		}
 		evidence.Freshness = pbsJobHealthFreshness(fact, observedAt)

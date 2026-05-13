@@ -2612,7 +2612,7 @@ func TestResourceListIncludesPBSPrimaryIncidentRollup(t *testing.T) {
 	}
 }
 
-func TestResourceListIncludesPBSProtectedWorkloadRollup(t *testing.T) {
+func TestPBSResourceListIncludesProtectedWorkloadRollup(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{
 		PBSInstances: []models.PBSInstance{
@@ -2639,6 +2639,8 @@ func TestResourceListIncludesPBSProtectedWorkloadRollup(t *testing.T) {
 					LastRunEndtime: now.Add(-time.Hour).Unix(),
 					NextRun:        now.Add(time.Hour).Unix(),
 					Confidence:     "direct-task-match",
+					EvidenceSource: "pbs-job-config",
+					EvidenceScope:  "configured-job",
 					Freshness: models.PBSJobHealthFreshness{
 						ObservedAt:     now,
 						LastRunEndTime: now.Add(-time.Hour),
@@ -2744,7 +2746,7 @@ func TestResourceListIncludesPBSProtectedWorkloadRollup(t *testing.T) {
 	if pbs.PBS.JobHealthEvidenceCount != 1 || len(pbs.PBS.JobHealthEvidence) != 1 {
 		t.Fatalf("expected PBS job health evidence in API payload, got %+v", pbs.PBS)
 	}
-	if got := pbs.PBS.JobHealthEvidence[0]; got.Confidence != "direct-task-match" || got.LastRunState != "OK" || got.LastRunUPID != "UPID:sync:1" {
+	if got := pbs.PBS.JobHealthEvidence[0]; got.Confidence != "direct-task-match" || got.EvidenceSource != "pbs-job-config" || got.EvidenceScope != "configured-job" || got.LastRunState != "OK" || got.LastRunUPID != "UPID:sync:1" {
 		t.Fatalf("expected API payload to preserve PBS job evidence, got %+v", got)
 	}
 }

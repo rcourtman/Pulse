@@ -250,6 +250,8 @@ func TestPBSJobHealthEvidenceKeepsFreshnessSeparateFromConfidence(t *testing.T) 
 			UPID:           "UPID:sync:1",
 			TaskStatus:     "OK",
 			Confidence:     "direct-task-match",
+			EvidenceSource: pbs.JobEvidenceSourcePBSJobConfig,
+			EvidenceScope:  pbs.JobEvidenceScopeConfiguredJob,
 		},
 	}
 
@@ -261,6 +263,9 @@ func TestPBSJobHealthEvidenceKeepsFreshnessSeparateFromConfidence(t *testing.T) 
 	if got.Confidence != "direct-task-match" {
 		t.Fatalf("confidence = %q, want direct-task-match", got.Confidence)
 	}
+	if got.EvidenceSource != pbs.JobEvidenceSourcePBSJobConfig || got.EvidenceScope != pbs.JobEvidenceScopeConfiguredJob {
+		t.Fatalf("evidence source/scope = %q/%q, want configured PBS job", got.EvidenceSource, got.EvidenceScope)
+	}
 	if got.Freshness.State != "overdue" {
 		t.Fatalf("freshness state = %q, want overdue", got.Freshness.State)
 	}
@@ -269,6 +274,41 @@ func TestPBSJobHealthEvidenceKeepsFreshnessSeparateFromConfidence(t *testing.T) 
 	}
 	if got.LastRunState != "OK" || got.LastRunUPID != "UPID:sync:1" || got.LastRunEndtime != 1700000000 || got.NextRun != 1700003600 {
 		t.Fatalf("raw PBS last-run fields were not preserved: %+v", got)
+	}
+}
+
+func TestPBSJobHealthEvidenceLabelsBackupTasksAsObservedOnly(t *testing.T) {
+	observedAt := time.Unix(1700007200, 0).UTC()
+	facts := []pbs.JobHealthEvidence{
+		{
+			ID:             "backup:vm/100",
+			Family:         "backup",
+			Store:          "fast",
+			UPID:           "UPID:backup:1",
+			WorkerType:     "backup",
+			WorkerID:       "vm/100",
+			TaskStatus:     "OK",
+			TaskStartTime:  1700000000,
+			TaskEndTime:    1700000060,
+			Confidence:     pbs.JobEvidenceConfidenceObservedBackupTask,
+			EvidenceSource: pbs.JobEvidenceSourcePBSTaskHistory,
+			EvidenceScope:  pbs.JobEvidenceScopeObservedTask,
+		},
+	}
+
+	evidence := pbsJobHealthEvidenceFromFacts(facts, observedAt)
+	if len(evidence) != 1 {
+		t.Fatalf("expected 1 evidence item, got %d", len(evidence))
+	}
+	got := evidence[0]
+	if got.Family != "backup" || got.Confidence != pbs.JobEvidenceConfidenceObservedBackupTask {
+		t.Fatalf("expected observed backup task evidence, got %+v", got)
+	}
+	if got.EvidenceSource != pbs.JobEvidenceSourcePBSTaskHistory || got.EvidenceScope != pbs.JobEvidenceScopeObservedTask {
+		t.Fatalf("evidence source/scope = %q/%q, want PBS task-history observed-task", got.EvidenceSource, got.EvidenceScope)
+	}
+	if got.Schedule != "" || got.NextRun != 0 || !got.Freshness.NextRun.IsZero() || got.Freshness.State == "scheduled" {
+		t.Fatalf("backup task evidence must not become scheduled backup compliance: %+v", got)
 	}
 }
 

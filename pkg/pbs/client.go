@@ -938,8 +938,36 @@ type JobHealthOptions struct {
 	MonitorGarbageJobs bool
 }
 
+const (
+	JobEvidenceSourcePBSJobConfig   = "pbs-job-config"
+	JobEvidenceSourcePBSTaskHistory = "pbs-task-history"
+	JobEvidenceSourcePBSPartialRead = "pbs-partial-read"
+
+	JobEvidenceScopeConfiguredJob = "configured-job"
+	JobEvidenceScopeObservedTask  = "observed-task"
+	JobEvidenceScopePartialRead   = "partial-read"
+
+	JobEvidenceConfidenceConfigOnly         = "config-only"
+	JobEvidenceConfidenceConfigLastRun      = "direct-config-last-run"
+	JobEvidenceConfidenceDirectTaskMatch    = "direct-task-match"
+	JobEvidenceConfidenceTaskHistoryOnly    = "task-history-only"
+	JobEvidenceConfidenceObservedBackupTask = "observed-backup-task"
+	JobEvidenceConfidencePartialPermission  = "partial-permission"
+	JobEvidenceConfidencePartialError       = "partial-error"
+	JobEvidenceConfidenceHistoryTruncated   = "bounded-task-history-truncated"
+)
+
+var (
+	pbsTaskHistoryLookback  = 35 * 24 * time.Hour
+	pbsTaskHistoryPageLimit = 200
+	pbsTaskHistoryMaxPages  = 3
+)
+
 // JobHealthEvidence is the source-level PBS job ledger fact collected from
-// config and task-history endpoints.
+// config and task-history endpoints. PBS does not expose canonical scheduled
+// backup-job configuration; backup-family entries from this collector are
+// observed task evidence only. Scheduled backup compliance must come from a
+// future PVE /cluster/backup source, not from PBS task history.
 type JobHealthEvidence struct {
 	ID             string `json:"id"`
 	Family         string `json:"family"`
@@ -960,14 +988,16 @@ type JobHealthEvidence struct {
 	TaskStartTime  int64  `json:"task-starttime,omitempty"`
 	TaskEndTime    int64  `json:"task-endtime,omitempty"`
 	Confidence     string `json:"confidence"`
+	EvidenceSource string `json:"evidenceSource,omitempty"`
+	EvidenceScope  string `json:"evidenceScope,omitempty"`
 	Error          string `json:"error,omitempty"`
 }
 
 // GetJobHealthEvidence collects PBS job health facts from job configuration
-// and recent task history. Permission failures are represented as
+// and bounded task history. Permission failures are represented as
 // partial-permission evidence instead of failing the whole ledger.
 func (c *Client) GetJobHealthEvidence(ctx context.Context, datastores []string, opts JobHealthOptions) ([]JobHealthEvidence, error) {
-	taskHistory, tasksErr := c.listTaskHistory(ctx, 200)
+	taskHistory, taskPartials, tasksErr := c.listTaskHistory(ctx, datastores, opts)
 	taskByUPID := make(map[string]JobHealthEvidence, len(taskHistory))
 	for _, task := range taskHistory {
 		if task.UPID != "" {
@@ -995,14 +1025,16 @@ func (c *Client) GetJobHealthEvidence(ctx context.Context, datastores []string, 
 				fact.ID = fallbackJobEvidenceID(fact)
 			}
 			fact.Enabled = !boolJobField(cfg, "disable", "disabled")
-			fact.Confidence = "config-only"
+			fact.EvidenceSource = JobEvidenceSourcePBSJobConfig
+			fact.EvidenceScope = JobEvidenceScopeConfiguredJob
+			fact.Confidence = JobEvidenceConfidenceConfigOnly
 			if fact.LastRunState != "" || fact.LastRunUPID != "" || fact.LastRunEndtime > 0 {
-				fact.Confidence = "direct-config-last-run"
+				fact.Confidence = JobEvidenceConfidenceConfigLastRun
 			}
 			if fact.LastRunUPID != "" {
 				if task, ok := taskByUPID[fact.LastRunUPID]; ok {
 					mergeTaskEvidence(&fact, task)
-					fact.Confidence = "direct-task-match"
+					fact.Confidence = JobEvidenceConfidenceDirectTaskMatch
 					matchedTasks[task.UPID] = struct{}{}
 				}
 			}
@@ -1035,14 +1067,16 @@ func (c *Client) GetJobHealthEvidence(ctx context.Context, datastores []string, 
 				fact.ID = "garbage:" + datastore
 			}
 			fact.Enabled = !boolJobField(cfg, "disable", "disabled")
-			fact.Confidence = "config-only"
+			fact.EvidenceSource = JobEvidenceSourcePBSJobConfig
+			fact.EvidenceScope = JobEvidenceScopeConfiguredJob
+			fact.Confidence = JobEvidenceConfidenceConfigOnly
 			if fact.LastRunState != "" || fact.LastRunUPID != "" || fact.LastRunEndtime > 0 {
-				fact.Confidence = "direct-config-last-run"
+				fact.Confidence = JobEvidenceConfidenceConfigLastRun
 			}
 			if fact.LastRunUPID != "" {
 				if task, ok := taskByUPID[fact.LastRunUPID]; ok {
 					mergeTaskEvidence(&fact, task)
-					fact.Confidence = "direct-task-match"
+					fact.Confidence = JobEvidenceConfidenceDirectTaskMatch
 					matchedTasks[task.UPID] = struct{}{}
 				}
 			}
@@ -1060,6 +1094,7 @@ func (c *Client) GetJobHealthEvidence(ctx context.Context, datastores []string, 
 			evidence = append(evidence, partial)
 		}
 	}
+	evidence = append(evidence, taskPartials...)
 	for _, task := range taskHistory {
 		if task.UPID == "" {
 			continue
@@ -1074,7 +1109,12 @@ func (c *Client) GetJobHealthEvidence(ctx context.Context, datastores []string, 
 		task.Family = family
 		task.ID = fallbackJobEvidenceID(task)
 		task.Enabled = true
-		task.Confidence = "task-history-only"
+		task.EvidenceSource = JobEvidenceSourcePBSTaskHistory
+		task.EvidenceScope = JobEvidenceScopeObservedTask
+		task.Confidence = JobEvidenceConfidenceTaskHistoryOnly
+		if family == "backup" {
+			task.Confidence = JobEvidenceConfidenceObservedBackupTask
+		}
 		evidence = append(evidence, task)
 	}
 
@@ -1116,10 +1156,173 @@ func (c *Client) getJobConfigMap(ctx context.Context, path string) (map[string]i
 	return result.Data, nil
 }
 
-func (c *Client) listTaskHistory(ctx context.Context, limit int) ([]JobHealthEvidence, error) {
+type taskHistoryQuery struct {
+	Family        string
+	TypeFilter    string
+	Store         string
+	StatusFilters []string
+	Since         int64
+	Until         int64
+}
+
+func (c *Client) listTaskHistory(ctx context.Context, datastores []string, opts JobHealthOptions) ([]JobHealthEvidence, []JobHealthEvidence, error) {
+	now := time.Now()
+	until := now.Unix()
+	since := now.Add(-pbsTaskHistoryLookback).Unix()
+	queries := buildTaskHistoryQueries(datastores, opts, since, until)
+	if len(queries) == 0 {
+		return nil, nil, nil
+	}
+
+	tasks := make([]JobHealthEvidence, 0)
+	partials := make([]JobHealthEvidence, 0)
+	seenTasks := make(map[string]struct{})
+	for _, query := range queries {
+		queryTasks, truncated, err := c.listTaskHistoryQuery(ctx, query)
+		if err != nil {
+			if isPBSNotFoundError(err) {
+				continue
+			}
+			partials = append(partials, partialTaskHistoryEvidence(query.Family, query, err))
+			continue
+		}
+		for _, task := range queryTasks {
+			key := taskHistoryDedupKey(task)
+			if _, ok := seenTasks[key]; ok {
+				continue
+			}
+			seenTasks[key] = struct{}{}
+			tasks = append(tasks, task)
+		}
+		if truncated {
+			partials = append(partials, truncatedTaskHistoryEvidence(query.Family, query))
+			for _, statusQuery := range truncatedStatusTaskHistoryQueries(query) {
+				statusTasks, statusTruncated, err := c.listTaskHistoryQuery(ctx, statusQuery)
+				if err != nil {
+					partials = append(partials, partialTaskHistoryEvidence(statusQuery.Family, statusQuery, err))
+					continue
+				}
+				for _, task := range statusTasks {
+					key := taskHistoryDedupKey(task)
+					if _, ok := seenTasks[key]; ok {
+						continue
+					}
+					seenTasks[key] = struct{}{}
+					tasks = append(tasks, task)
+				}
+				if statusTruncated {
+					partials = append(partials, truncatedTaskHistoryEvidence(statusQuery.Family, statusQuery))
+				}
+			}
+		}
+	}
+
+	return tasks, partials, nil
+}
+
+func buildTaskHistoryQueries(datastores []string, opts JobHealthOptions, since, until int64) []taskHistoryQuery {
+	queries := make([]taskHistoryQuery, 0)
+	add := func(family, typeFilter, store string) {
+		queries = append(queries, taskHistoryQuery{
+			Family:     family,
+			TypeFilter: typeFilter,
+			Store:      store,
+			Since:      since,
+			Until:      until,
+		})
+	}
+
+	if opts.MonitorBackups {
+		stores := uniqueNonEmptyStrings(datastores)
+		if len(stores) == 0 {
+			add("backup", "backup", "")
+		} else {
+			for _, store := range stores {
+				add("backup", "backup", store)
+			}
+		}
+	}
+	if opts.MonitorSyncJobs {
+		add("sync", "sync", "")
+	}
+	if opts.MonitorVerifyJobs {
+		add("verify", "verif", "")
+	}
+	if opts.MonitorPruneJobs {
+		add("prune", "prune", "")
+	}
+	if opts.MonitorGarbageJobs {
+		add("garbage", "garbage", "")
+	}
+	return queries
+}
+
+func truncatedStatusTaskHistoryQueries(query taskHistoryQuery) []taskHistoryQuery {
+	if len(query.StatusFilters) > 0 {
+		return nil
+	}
+	out := make([]taskHistoryQuery, 0, 2)
+	for _, status := range []string{"error", "warning"} {
+		next := query
+		next.StatusFilters = []string{status}
+		out = append(out, next)
+	}
+	return out
+}
+
+func (c *Client) listTaskHistoryQuery(ctx context.Context, query taskHistoryQuery) ([]JobHealthEvidence, bool, error) {
+	limit := pbsTaskHistoryPageLimit
+	if limit <= 0 {
+		limit = 200
+	}
+	maxPages := pbsTaskHistoryMaxPages
+	if maxPages <= 0 {
+		maxPages = 1
+	}
+
+	all := make([]JobHealthEvidence, 0, limit)
+	for page := 0; page < maxPages; page++ {
+		pageTasks, err := c.listTaskHistoryPage(ctx, query, page*limit, limit)
+		if err != nil {
+			return all, false, err
+		}
+		all = append(all, pageTasks...)
+		if len(pageTasks) < limit {
+			return all, false, nil
+		}
+		if page == maxPages-1 {
+			return all, true, nil
+		}
+	}
+	return all, false, nil
+}
+
+func (c *Client) listTaskHistoryPage(ctx context.Context, query taskHistoryQuery, start, limit int) ([]JobHealthEvidence, error) {
 	params := url.Values{}
 	if limit > 0 {
 		params.Set("limit", fmt.Sprintf("%d", limit))
+	}
+	if start > 0 {
+		params.Set("start", fmt.Sprintf("%d", start))
+	}
+	if query.Since > 0 {
+		params.Set("since", fmt.Sprintf("%d", query.Since))
+	}
+	if query.Until > 0 {
+		params.Set("until", fmt.Sprintf("%d", query.Until))
+	}
+	if strings.TrimSpace(query.TypeFilter) != "" {
+		params.Set("typefilter", strings.TrimSpace(query.TypeFilter))
+	}
+	if strings.TrimSpace(query.Store) != "" {
+		params.Set("store", strings.TrimSpace(query.Store))
+	}
+	for _, status := range query.StatusFilters {
+		status = strings.TrimSpace(status)
+		if status == "" {
+			continue
+		}
+		params.Add("statusfilter", status)
 	}
 	path := "/nodes/localhost/tasks"
 	if len(params) > 0 {
@@ -1145,13 +1348,15 @@ func (c *Client) listTaskHistory(ctx context.Context, limit int) ([]JobHealthEvi
 	tasks := make([]JobHealthEvidence, 0, len(result.Data))
 	for _, raw := range result.Data {
 		task := JobHealthEvidence{
-			UPID:          stringJobField(raw, "upid"),
-			WorkerType:    stringJobField(raw, "worker-type", "worker_type"),
-			WorkerID:      stringJobField(raw, "worker-id", "worker_id"),
-			TaskStatus:    stringJobField(raw, "status"),
-			TaskStartTime: int64JobField(raw, "starttime", "start-time", "start_time"),
-			TaskEndTime:   int64JobField(raw, "endtime", "end-time", "end_time"),
-			Store:         stringJobField(raw, "store", "datastore"),
+			UPID:           stringJobField(raw, "upid"),
+			WorkerType:     stringJobField(raw, "worker-type", "worker_type", "type"),
+			WorkerID:       stringJobField(raw, "worker-id", "worker_id", "id"),
+			TaskStatus:     stringJobField(raw, "status"),
+			TaskStartTime:  int64JobField(raw, "starttime", "start-time", "start_time"),
+			TaskEndTime:    int64JobField(raw, "endtime", "end-time", "end_time"),
+			Store:          stringJobField(raw, "store", "datastore"),
+			EvidenceSource: JobEvidenceSourcePBSTaskHistory,
+			EvidenceScope:  JobEvidenceScopeObservedTask,
 		}
 		if task.UPID == "" && task.WorkerType == "" && task.WorkerID == "" {
 			continue
@@ -1159,6 +1364,18 @@ func (c *Client) listTaskHistory(ctx context.Context, limit int) ([]JobHealthEvi
 		tasks = append(tasks, task)
 	}
 	return tasks, nil
+}
+
+func taskHistoryDedupKey(task JobHealthEvidence) string {
+	if strings.TrimSpace(task.UPID) != "" {
+		return strings.TrimSpace(task.UPID)
+	}
+	return strings.Join([]string{
+		task.WorkerType,
+		task.WorkerID,
+		fmt.Sprintf("%d", task.TaskStartTime),
+		fmt.Sprintf("%d", task.TaskEndTime),
+	}, "\x00")
 }
 
 func jobEvidenceFromConfigMap(family string, raw map[string]interface{}) JobHealthEvidence {
@@ -1191,17 +1408,77 @@ func mergeTaskEvidence(fact *JobHealthEvidence, task JobHealthEvidence) {
 }
 
 func partialPermissionJobEvidence(family, path string, err error) JobHealthEvidence {
-	confidence := "partial-permission"
+	confidence := JobEvidenceConfidencePartialPermission
 	if !isPBSPermissionError(err) {
-		confidence = "partial-error"
+		confidence = JobEvidenceConfidencePartialError
 	}
 	return JobHealthEvidence{
-		ID:         family + ":partial",
-		Family:     family,
-		Enabled:    true,
-		Confidence: confidence,
-		Error:      fmt.Sprintf("%s: %v", path, err),
+		ID:             family + ":partial",
+		Family:         family,
+		Enabled:        true,
+		Confidence:     confidence,
+		EvidenceSource: JobEvidenceSourcePBSPartialRead,
+		EvidenceScope:  JobEvidenceScopePartialRead,
+		Error:          fmt.Sprintf("%s: %v", path, err),
 	}
+}
+
+func partialTaskHistoryEvidence(family string, query taskHistoryQuery, err error) JobHealthEvidence {
+	partial := partialPermissionJobEvidence(family, taskHistoryQueryPath(query), err)
+	partial.ID = family + ":task-history-partial"
+	partial.EvidenceSource = JobEvidenceSourcePBSTaskHistory
+	return partial
+}
+
+func truncatedTaskHistoryEvidence(family string, query taskHistoryQuery) JobHealthEvidence {
+	return JobHealthEvidence{
+		ID:             taskHistoryPartialID(family, query, "truncated"),
+		Family:         family,
+		Store:          query.Store,
+		Enabled:        true,
+		Confidence:     JobEvidenceConfidenceHistoryTruncated,
+		EvidenceSource: JobEvidenceSourcePBSTaskHistory,
+		EvidenceScope:  JobEvidenceScopePartialRead,
+		Error:          fmt.Sprintf("%s reached bounded page cap (%d pages x %d limit)", taskHistoryQueryPath(query), pbsTaskHistoryMaxPages, pbsTaskHistoryPageLimit),
+	}
+}
+
+func taskHistoryPartialID(family string, query taskHistoryQuery, suffix string) string {
+	parts := []string{family, "task-history"}
+	if strings.TrimSpace(query.Store) != "" {
+		parts = append(parts, strings.TrimSpace(query.Store))
+	}
+	if len(query.StatusFilters) > 0 {
+		parts = append(parts, strings.Join(query.StatusFilters, "-"))
+	}
+	parts = append(parts, suffix)
+	return strings.Join(parts, ":")
+}
+
+func taskHistoryQueryPath(query taskHistoryQuery) string {
+	params := url.Values{}
+	if query.Since > 0 {
+		params.Set("since", fmt.Sprintf("%d", query.Since))
+	}
+	if query.Until > 0 {
+		params.Set("until", fmt.Sprintf("%d", query.Until))
+	}
+	if strings.TrimSpace(query.TypeFilter) != "" {
+		params.Set("typefilter", strings.TrimSpace(query.TypeFilter))
+	}
+	if strings.TrimSpace(query.Store) != "" {
+		params.Set("store", strings.TrimSpace(query.Store))
+	}
+	for _, status := range query.StatusFilters {
+		status = strings.TrimSpace(status)
+		if status != "" {
+			params.Add("statusfilter", status)
+		}
+	}
+	if len(params) == 0 {
+		return "/nodes/localhost/tasks"
+	}
+	return "/nodes/localhost/tasks?" + params.Encode()
 }
 
 func fallbackJobEvidenceID(e JobHealthEvidence) string {
@@ -1325,6 +1602,24 @@ func firstNonEmptyString(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func uniqueNonEmptyStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		key := strings.ToLower(value)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }
 
 // ListNamespaces lists namespaces for a datastore

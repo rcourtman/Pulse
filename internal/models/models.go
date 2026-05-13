@@ -1449,7 +1449,9 @@ type PBSGarbageJob struct {
 }
 
 // PBSJobHealthEvidence is the shared PBS job-health ledger shape for backup,
-// sync, verify, prune, and garbage-collection job families.
+// sync, verify, prune, and garbage-collection job families. PBS backup-family
+// evidence is observed task-history evidence only; configured scheduled backup
+// compliance belongs to a future PVE /cluster/backup source.
 type PBSJobHealthEvidence struct {
 	ID             string                `json:"id"`
 	Family         string                `json:"family"`
@@ -1470,6 +1472,8 @@ type PBSJobHealthEvidence struct {
 	TaskStartTime  int64                 `json:"task-starttime,omitempty"`
 	TaskEndTime    int64                 `json:"task-endtime,omitempty"`
 	Confidence     string                `json:"confidence"`
+	EvidenceSource string                `json:"evidenceSource,omitempty"`
+	EvidenceScope  string                `json:"evidenceScope,omitempty"`
 	Freshness      PBSJobHealthFreshness `json:"freshness"`
 	Posture        string                `json:"posture,omitempty"`
 	PostureReason  string                `json:"postureReason,omitempty"`

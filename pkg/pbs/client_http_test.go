@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -118,20 +119,122 @@ func TestClient_GetJobHealthEvidence_MergesConfigAndTaskFacts(t *testing.T) {
 	for _, item := range evidence {
 		byID[item.ID] = item
 	}
-	if got := byID["sync-remote-a"]; got.Confidence != "direct-task-match" || got.UPID != "UPID:sync:1" || got.LastRunState != "OK" || got.NextRun != 1700003600 {
+	if got := byID["sync-remote-a"]; got.Confidence != "direct-task-match" || got.EvidenceSource != JobEvidenceSourcePBSJobConfig || got.EvidenceScope != JobEvidenceScopeConfiguredJob || got.UPID != "UPID:sync:1" || got.LastRunState != "OK" || got.NextRun != 1700003600 {
 		t.Fatalf("expected direct sync evidence with raw last-run fields, got %+v", got)
 	}
 	if got := byID["verify-fast"]; got.Confidence != "direct-config-last-run" || got.LastRunState != "OK" {
 		t.Fatalf("expected config last-run verify evidence, got %+v", got)
 	}
-	if got := byID["prune:partial"]; got.Confidence != "partial-permission" || got.Error == "" {
+	if got := byID["prune:partial"]; got.Confidence != "partial-permission" || got.EvidenceScope != JobEvidenceScopePartialRead || got.Error == "" {
 		t.Fatalf("expected partial permission prune evidence, got %+v", got)
 	}
-	if got := byID["backup:vm/100"]; got.Confidence != "task-history-only" || got.TaskStatus != "OK" {
-		t.Fatalf("expected backup task-history evidence, got %+v", got)
+	if got := byID["backup:vm/100"]; got.Confidence != JobEvidenceConfidenceObservedBackupTask || got.EvidenceSource != JobEvidenceSourcePBSTaskHistory || got.EvidenceScope != JobEvidenceScopeObservedTask || got.Schedule != "" || got.NextRun != 0 || got.TaskStatus != "OK" {
+		t.Fatalf("expected observed backup task evidence without scheduled compliance, got %+v", got)
 	}
 	if got := byID["garbage:fast"]; got.Confidence != "direct-config-last-run" || got.Store != "fast" {
 		t.Fatalf("expected garbage config evidence, got %+v", got)
+	}
+}
+
+func TestClient_GetJobHealthEvidence_UsesBoundedFilteredTaskHistory(t *testing.T) {
+	oldLimit := pbsTaskHistoryPageLimit
+	oldPages := pbsTaskHistoryMaxPages
+	oldLookback := pbsTaskHistoryLookback
+	pbsTaskHistoryPageLimit = 2
+	pbsTaskHistoryMaxPages = 2
+	pbsTaskHistoryLookback = time.Hour
+	t.Cleanup(func() {
+		pbsTaskHistoryPageLimit = oldLimit
+		pbsTaskHistoryMaxPages = oldPages
+		pbsTaskHistoryLookback = oldLookback
+	})
+
+	var queries []url.Values
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/nodes/localhost/tasks" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		q := r.URL.Query()
+		queries = append(queries, q)
+		if q.Get("typefilter") != "backup" {
+			t.Fatalf("typefilter = %q, want backup", q.Get("typefilter"))
+		}
+		if q.Get("store") != "fast" {
+			t.Fatalf("store = %q, want fast", q.Get("store"))
+		}
+		if q.Get("since") == "" || q.Get("until") == "" {
+			t.Fatalf("expected bounded since/until filters, got %s", r.URL.RawQuery)
+		}
+		if q.Get("limit") != "2" {
+			t.Fatalf("limit = %q, want 2", q.Get("limit"))
+		}
+
+		statusFilters := q["statusfilter"]
+		if slices.Contains(statusFilters, "error") {
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{
+				"upid":      "UPID:backup:error",
+				"type":      "backup",
+				"id":        "vm/failed",
+				"status":    "error",
+				"starttime": 1700000400,
+				"endtime":   1700000500,
+			}}})
+			return
+		}
+		if slices.Contains(statusFilters, "warning") {
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{}})
+			return
+		}
+
+		switch q.Get("start") {
+		case "":
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{
+				{"upid": "UPID:backup:1", "type": "backup", "id": "vm/100", "status": "OK", "starttime": 1700000000, "endtime": 1700000100},
+				{"upid": "UPID:backup:2", "type": "backup", "id": "vm/101", "status": "OK", "starttime": 1700000200, "endtime": 1700000300},
+			}})
+		case "2":
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{
+				{"upid": "UPID:backup:3", "type": "backup", "id": "vm/102", "status": "OK", "starttime": 1700000400, "endtime": 1700000500},
+				{"upid": "UPID:backup:4", "type": "backup", "id": "vm/103", "status": "OK", "starttime": 1700000600, "endtime": 1700000700},
+			}})
+		default:
+			t.Fatalf("unexpected start=%q", q.Get("start"))
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{Host: server.URL, TokenName: "root@pam!token", TokenValue: "secret"})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	evidence, err := client.GetJobHealthEvidence(context.Background(), []string{"fast"}, JobHealthOptions{MonitorBackups: true})
+	if err != nil {
+		t.Fatalf("GetJobHealthEvidence: %v", err)
+	}
+
+	byID := make(map[string]JobHealthEvidence)
+	for _, item := range evidence {
+		byID[item.ID] = item
+	}
+	if got := byID["backup:vm/failed"]; got.Confidence != JobEvidenceConfidenceObservedBackupTask || got.TaskStatus != "error" {
+		t.Fatalf("expected error statusfilter task to be preserved as observed backup evidence, got %+v", got)
+	}
+	if got := byID["backup:task-history:fast:truncated"]; got.Confidence != JobEvidenceConfidenceHistoryTruncated || got.EvidenceScope != JobEvidenceScopePartialRead || got.Error == "" {
+		t.Fatalf("expected visible truncation evidence, got %+v", got)
+	}
+
+	var sawSecondPage, sawErrorStatusFilter bool
+	for _, q := range queries {
+		if q.Get("start") == "2" {
+			sawSecondPage = true
+		}
+		if slices.Contains(q["statusfilter"], "error") {
+			sawErrorStatusFilter = true
+		}
+	}
+	if !sawSecondPage || !sawErrorStatusFilter {
+		t.Fatalf("expected pagination and statusfilter fallback queries, got %#v", queries)
 	}
 }
 

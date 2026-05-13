@@ -37,6 +37,8 @@ func TestIngestSnapshotIncludesPBSAndPMGInstances(t *testing.T) {
 					LastRunUPID:    "UPID:sync:1",
 					LastRunEndtime: now.Add(-time.Hour).Unix(),
 					Confidence:     "direct-task-match",
+					EvidenceSource: "pbs-job-config",
+					EvidenceScope:  "configured-job",
 					Freshness: models.PBSJobHealthFreshness{
 						ObservedAt:     now,
 						LastRunEndTime: now.Add(-time.Hour),
@@ -124,7 +126,7 @@ func TestIngestSnapshotIncludesPBSAndPMGInstances(t *testing.T) {
 	if pbsResource.PBS.JobHealthEvidenceCount != 1 || len(pbsResource.PBS.JobHealthEvidence) != 1 {
 		t.Fatalf("expected PBS job health evidence ledger, got %+v", pbsResource.PBS)
 	}
-	if got := pbsResource.PBS.JobHealthEvidence[0]; got.Confidence != "direct-task-match" || got.LastRunState != "OK" {
+	if got := pbsResource.PBS.JobHealthEvidence[0]; got.Confidence != "direct-task-match" || got.EvidenceSource != "pbs-job-config" || got.EvidenceScope != "configured-job" || got.LastRunState != "OK" {
 		t.Fatalf("expected direct PBS job evidence with raw fields, got %+v", got)
 	}
 	if pbsResource.Status != StatusWarning {

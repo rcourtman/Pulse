@@ -961,3 +961,11 @@ does not reinitialize the global logger while pollers, websocket writers, or
 tests are still emitting logs. Runtime context access in the monitor-owned
 pollers must likewise route through the monitor's synchronized accessor instead
 of reading mutable shared fields directly from concurrent goroutines.
+That same monitoring-owned PBS job-health boundary must keep backup task
+evidence honest. PBS does not expose a canonical scheduled backup-job
+configuration API, so PBS-side backup-family entries may only be labeled as
+observed task-history evidence. Scheduled backup compliance for PVE workloads
+belongs to a future PVE `/cluster/backup` source. PBS task-history reads must
+therefore use a bounded filtered lookback over `/nodes/localhost/tasks` and
+surface truncation or permission gaps explicitly instead of treating one recent
+unfiltered sample as configured backup-job proof.

@@ -486,6 +486,8 @@ func TestPBSInstanceJobHealthEvidenceNormalizeAndClone(t *testing.T) {
 			LastRunEndtime: 1699999900,
 			NextRun:        1700003600,
 			Confidence:     "direct-task-match",
+			EvidenceSource: "pbs-job-config",
+			EvidenceScope:  "configured-job",
 			Freshness: PBSJobHealthFreshness{
 				ObservedAt: observedAt,
 				State:      "observed",
@@ -503,6 +505,9 @@ func TestPBSInstanceJobHealthEvidenceNormalizeAndClone(t *testing.T) {
 	fresh := state.GetSnapshot()
 	if got := fresh.PBSInstances[0].JobHealthEvidence[0].LastRunState; got != "OK" {
 		t.Fatalf("state clone leaked mutation, got last-run-state %q", got)
+	}
+	if got := fresh.PBSInstances[0].JobHealthEvidence[0]; got.EvidenceSource != "pbs-job-config" || got.EvidenceScope != "configured-job" {
+		t.Fatalf("state clone did not preserve evidence source/scope: %+v", got)
 	}
 
 	normalized := (PBSInstance{}).NormalizeCollections()
