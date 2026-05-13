@@ -1,6 +1,10 @@
 package alerts
 
-import "testing"
+import (
+	"testing"
+
+	alertconfig "github.com/rcourtman/pulse-go-rewrite/internal/alerts/config"
+)
 
 func TestNormalizeSnapshotDefaults(t *testing.T) {
 	tests := []struct {
@@ -187,5 +191,113 @@ func TestBackupIgnoreVMID(t *testing.T) {
 				t.Fatalf("backupIgnoreVMID(%q, %v) = %v, want %v", tc.vmID, tc.ignoreList, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestNormalizeDiskFillByType(t *testing.T) {
+	t.Run("nil map seeds nvme/sata/hdd defaults", func(t *testing.T) {
+		cfg := &AlertConfig{}
+		alertconfig.NormalizeDiskFillByType(cfg)
+
+		if cfg.DiskFillByType == nil {
+			t.Fatal("expected DiskFillByType to be seeded, got nil")
+		}
+		nvme, ok := cfg.DiskFillByType["nvme"]
+		if !ok {
+			t.Fatal("nvme key not seeded")
+		}
+		if nvme.Trigger != 92 || nvme.Clear != 87 {
+			t.Fatalf("nvme = %+v, want {Trigger:92 Clear:87}", nvme)
+		}
+		sata, ok := cfg.DiskFillByType["sata"]
+		if !ok {
+			t.Fatal("sata key not seeded")
+		}
+		if sata.Trigger != 90 || sata.Clear != 85 {
+			t.Fatalf("sata = %+v, want {Trigger:90 Clear:85}", sata)
+		}
+		hdd, ok := cfg.DiskFillByType["hdd"]
+		if !ok {
+			t.Fatal("hdd key not seeded")
+		}
+		if hdd.Trigger != 85 || hdd.Clear != 80 {
+			t.Fatalf("hdd = %+v, want {Trigger:85 Clear:80}", hdd)
+		}
+	})
+
+	t.Run("operator customized values survive", func(t *testing.T) {
+		cfg := &AlertConfig{
+			DiskFillByType: map[string]HysteresisThreshold{
+				"nvme": {Trigger: 95, Clear: 90},
+			},
+		}
+		alertconfig.NormalizeDiskFillByType(cfg)
+
+		nvme := cfg.DiskFillByType["nvme"]
+		if nvme.Trigger != 95 || nvme.Clear != 90 {
+			t.Fatalf("nvme = %+v, want operator value {Trigger:95 Clear:90}", nvme)
+		}
+		// Missing keys still seeded.
+		if sata, ok := cfg.DiskFillByType["sata"]; !ok || sata.Trigger != 90 || sata.Clear != 85 {
+			t.Fatalf("sata = %+v ok=%v, want default {Trigger:90 Clear:85}", sata, ok)
+		}
+		if hdd, ok := cfg.DiskFillByType["hdd"]; !ok || hdd.Trigger != 85 || hdd.Clear != 80 {
+			t.Fatalf("hdd = %+v ok=%v, want default {Trigger:85 Clear:80}", hdd, ok)
+		}
+	})
+
+	t.Run("negative trigger resets to default", func(t *testing.T) {
+		cfg := &AlertConfig{
+			DiskFillByType: map[string]HysteresisThreshold{
+				"nvme": {Trigger: -1, Clear: 10},
+				"sata": {Trigger: 88, Clear: -5},
+			},
+		}
+		alertconfig.NormalizeDiskFillByType(cfg)
+
+		nvme := cfg.DiskFillByType["nvme"]
+		if nvme.Trigger != 92 || nvme.Clear != 87 {
+			t.Fatalf("nvme = %+v, want default reset {Trigger:92 Clear:87}", nvme)
+		}
+		sata := cfg.DiskFillByType["sata"]
+		if sata.Trigger != 90 || sata.Clear != 85 {
+			t.Fatalf("sata = %+v, want default reset {Trigger:90 Clear:85}", sata)
+		}
+	})
+
+	t.Run("mixed case keys lowercase to canonical", func(t *testing.T) {
+		cfg := &AlertConfig{
+			DiskFillByType: map[string]HysteresisThreshold{
+				"NVMe": {Trigger: 93, Clear: 88},
+			},
+		}
+		alertconfig.NormalizeDiskFillByType(cfg)
+
+		if _, exists := cfg.DiskFillByType["NVMe"]; exists {
+			t.Fatalf("expected mixed-case key NVMe to be removed, map=%+v", cfg.DiskFillByType)
+		}
+		nvme, ok := cfg.DiskFillByType["nvme"]
+		if !ok {
+			t.Fatalf("expected lowercase nvme key, map=%+v", cfg.DiskFillByType)
+		}
+		if nvme.Trigger != 93 || nvme.Clear != 88 {
+			t.Fatalf("nvme = %+v, want preserved operator value {Trigger:93 Clear:88}", nvme)
+		}
+	})
+}
+
+func TestDefaultAlertConfigSeedsDiskFillByType(t *testing.T) {
+	cfg := defaultAlertConfig()
+	if cfg.DiskFillByType == nil {
+		t.Fatal("expected defaultAlertConfig to seed DiskFillByType, got nil")
+	}
+	if nvme, ok := cfg.DiskFillByType["nvme"]; !ok || nvme.Trigger != 92 || nvme.Clear != 87 {
+		t.Fatalf("nvme = %+v ok=%v, want {Trigger:92 Clear:87}", nvme, ok)
+	}
+	if sata, ok := cfg.DiskFillByType["sata"]; !ok || sata.Trigger != 90 || sata.Clear != 85 {
+		t.Fatalf("sata = %+v ok=%v, want {Trigger:90 Clear:85}", sata, ok)
+	}
+	if hdd, ok := cfg.DiskFillByType["hdd"]; !ok || hdd.Trigger != 85 || hdd.Clear != 80 {
+		t.Fatalf("hdd = %+v ok=%v, want {Trigger:85 Clear:80}", hdd, ok)
 	}
 }

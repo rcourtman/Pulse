@@ -76,7 +76,12 @@ func defaultAlertConfig() AlertConfig {
 			CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
 			Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
 		},
-		StorageDefault:    HysteresisThreshold{Trigger: 85, Clear: 80},
+		StorageDefault: HysteresisThreshold{Trigger: 85, Clear: 80},
+		DiskFillByType: map[string]HysteresisThreshold{
+			"nvme": {Trigger: 92, Clear: 87},
+			"sata": {Trigger: 90, Clear: 85},
+			"hdd":  {Trigger: 85, Clear: 80},
+		},
 		MinimumDelta:      2.0, // 2% minimum change
 		SuppressionWindow: 5,   // 5 minutes
 		HysteresisMargin:  5.0, // 5% default margin

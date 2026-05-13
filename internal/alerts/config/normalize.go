@@ -282,6 +282,61 @@ func NormalizeAgentDefaults(config *AlertConfig) {
 		}
 	}
 	EnsureValidHysteresis(config.AgentDefaults.DiskTemperature, "agent.diskTemperature")
+
+	NormalizeDiskFillByType(config)
+}
+
+// diskFillByTypeDefaults returns the canonical per-type fill-% defaults.
+// Keys are lowercase hardware type strings.
+func diskFillByTypeDefaults() map[string]HysteresisThreshold {
+	return map[string]HysteresisThreshold{
+		"nvme": {Trigger: 92, Clear: 87},
+		"sata": {Trigger: 90, Clear: 85},
+		"hdd":  {Trigger: 85, Clear: 80},
+	}
+}
+
+// NormalizeDiskFillByType ensures AlertConfig.DiskFillByType is seeded with
+// lowercase nvme/sata/hdd defaults when nil, lowercases any existing keys,
+// and resets non-positive trigger or clear values to the default for that
+// key. Operator-customized positive values are preserved.
+func NormalizeDiskFillByType(config *AlertConfig) {
+	defaults := diskFillByTypeDefaults()
+	if config.DiskFillByType == nil {
+		copyMap := make(map[string]HysteresisThreshold, len(defaults))
+		for k, v := range defaults {
+			copyMap[k] = v
+		}
+		config.DiskFillByType = copyMap
+		return
+	}
+
+	// Lowercase any non-lowercase keys, moving values into the canonical position.
+	for key, value := range config.DiskFillByType {
+		lower := strings.ToLower(strings.TrimSpace(key))
+		if lower == key {
+			continue
+		}
+		delete(config.DiskFillByType, key)
+		if lower == "" {
+			continue
+		}
+		if _, exists := config.DiskFillByType[lower]; !exists {
+			config.DiskFillByType[lower] = value
+		}
+	}
+
+	// Ensure all canonical keys are present and have positive trigger/clear values.
+	for key, defaultVal := range defaults {
+		current, ok := config.DiskFillByType[key]
+		if !ok {
+			config.DiskFillByType[key] = defaultVal
+			continue
+		}
+		if current.Trigger <= 0 || current.Clear <= 0 {
+			config.DiskFillByType[key] = defaultVal
+		}
+	}
 }
 
 func NormalizeGeneralSettings(config *AlertConfig) {
