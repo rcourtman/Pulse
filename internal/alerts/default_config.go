@@ -82,6 +82,11 @@ func defaultAlertConfig() AlertConfig {
 			"sata": {Trigger: 90, Clear: 85},
 			"hdd":  {Trigger: 85, Clear: 80},
 		},
+		DiskTempByType: map[string]HysteresisThreshold{
+			"nvme": {Trigger: 70, Clear: 65},
+			"sas":  {Trigger: 65, Clear: 60},
+			"sata": {Trigger: 55, Clear: 50},
+		},
 		MinimumDelta:      2.0, // 2% minimum change
 		SuppressionWindow: 5,   // 5 minutes
 		HysteresisMargin:  5.0, // 5% default margin

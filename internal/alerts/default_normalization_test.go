@@ -395,3 +395,22 @@ func TestNormalizeDiskTempByType(t *testing.T) {
 		}
 	})
 }
+
+func TestDefaultAlertConfigSeedsDiskTempByType(t *testing.T) {
+	cfg := defaultAlertConfig()
+	if cfg.DiskTempByType == nil {
+		t.Fatal("expected defaultAlertConfig to seed DiskTempByType, got nil")
+	}
+	if nvme, ok := cfg.DiskTempByType["nvme"]; !ok || nvme.Trigger != 70 || nvme.Clear != 65 {
+		t.Fatalf("nvme = %+v ok=%v, want {Trigger:70 Clear:65}", nvme, ok)
+	}
+	if sas, ok := cfg.DiskTempByType["sas"]; !ok || sas.Trigger != 65 || sas.Clear != 60 {
+		t.Fatalf("sas = %+v ok=%v, want {Trigger:65 Clear:60}", sas, ok)
+	}
+	if sata, ok := cfg.DiskTempByType["sata"]; !ok || sata.Trigger != 55 || sata.Clear != 50 {
+		t.Fatalf("sata = %+v ok=%v, want {Trigger:55 Clear:50}", sata, ok)
+	}
+	if _, ok := cfg.DiskTempByType["hdd"]; ok {
+		t.Fatalf("hdd key should not be seeded for SMART temperature, map=%+v", cfg.DiskTempByType)
+	}
+}
