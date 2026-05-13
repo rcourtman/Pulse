@@ -1107,7 +1107,33 @@ func scanActionAuditRecord(scanner actionAuditScanner) (ActionAuditRecord, error
 	record.Request.RequestID = requestID
 	record.Request.ResourceID = CanonicalResourceID(record.Request.ResourceID)
 	_ = actionID
-	return record, nil
+	return normalizeActionAuditRecordFromStore(record), nil
+}
+
+func normalizeActionAuditRecordFromStore(record ActionAuditRecord) ActionAuditRecord {
+	normalized, err := NormalizeActionAuditRecord(record)
+	if err == nil {
+		return normalized
+	}
+
+	if record.Result != nil {
+		result := *record.Result
+		result.Output = strings.TrimSpace(result.Output)
+		result.ErrorMessage = strings.TrimSpace(result.ErrorMessage)
+		result.Verification = NormalizeActionVerificationResult(result.Verification)
+		record.Result = &result
+	}
+	record.Verification = NormalizeActionVerificationResult(record.Verification)
+	if record.Verification == nil && record.Result != nil {
+		record.Verification = cloneActionVerificationResult(record.Result.Verification)
+	}
+	if record.Verification != nil && record.Result != nil {
+		result := *record.Result
+		result.Verification = cloneActionVerificationResult(record.Verification)
+		record.Result = &result
+	}
+	record.VerificationOutcome = NormalizeVerificationOutcome(record.VerificationOutcome)
+	return record
 }
 
 func (s *SQLiteResourceStore) GetActionAudit(actionID string) (ActionAuditRecord, bool, error) {

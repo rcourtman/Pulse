@@ -515,9 +515,9 @@ func projectAgentResourceActions(
 		if audit.Result != nil {
 			summary.Success = audit.Result.Success
 			summary.ErrorMessage = audit.Result.ErrorMessage
-			if v := projectAgentResourceVerification(audit.Result.Verification); v != nil {
-				summary.Verification = v
-			}
+		}
+		if v := projectAgentResourceVerification(unified.CanonicalActionVerification(audit)); v != nil {
+			summary.Verification = v
 		}
 		out = append(out, summary)
 	}

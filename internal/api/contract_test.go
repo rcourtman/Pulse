@@ -13874,7 +13874,8 @@ func TestContract_ActionCompletedPayloadCarriesVerification(t *testing.T) {
 
 // TestContract_RouterBridgesVerificationOntoActionCompleted pins
 // that the router-side bridge actually carries the verification
-// projection from record.Result.Verification onto the SSE payload.
+// projection from the canonical top-level verification helper onto
+// the SSE payload.
 // The payload field exists is one half of the contract; this is the
 // other half — that the bridge populates it when the underlying
 // audit has a verification result.
@@ -13884,8 +13885,8 @@ func TestContract_RouterBridgesVerificationOntoActionCompleted(t *testing.T) {
 		t.Fatalf("read router.go: %v", err)
 	}
 	src := string(source)
-	if !strings.Contains(src, "if v := projectAgentResourceVerification(record.Result.Verification); v != nil {") {
-		t.Error("router.go must project record.Result.Verification onto the action.completed payload via projectAgentResourceVerification — drift here means verification reaches the audit store but never the SSE stream")
+	if !strings.Contains(src, "if v := projectAgentResourceVerification(unifiedresources.CanonicalActionVerification(record)); v != nil {") {
+		t.Error("router.go must project canonical action verification onto the action.completed payload via projectAgentResourceVerification — drift here means verification reaches the audit store but never the SSE stream")
 	}
 	if !strings.Contains(src, "payload.Verification = v") {
 		t.Error("router.go must assign the projected verification onto payload.Verification")
@@ -13910,6 +13911,9 @@ func TestContract_AgentResourceActionSummaryCarriesVerification(t *testing.T) {
 	}
 	if !strings.Contains(src, "func projectAgentResourceVerification(v *unified.ActionVerificationResult)") {
 		t.Error("projectAgentResourceVerification must exist as the shared helper — both the SSE bridge and the bundle's projector route through it so the wire shape cannot drift between surfaces")
+	}
+	if !strings.Contains(src, "projectAgentResourceVerification(unified.CanonicalActionVerification(audit))") {
+		t.Error("AgentResourceActionSummary must project canonical action verification, not only legacy result.verification")
 	}
 }
 

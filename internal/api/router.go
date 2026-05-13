@@ -2999,9 +2999,9 @@ func projectAgentActionCompletedPayload(record unifiedresources.ActionAuditRecor
 	if record.Result != nil {
 		payload.Success = record.Result.Success
 		payload.ErrorMessage = record.Result.ErrorMessage
-		if v := projectAgentResourceVerification(record.Result.Verification); v != nil {
-			payload.Verification = v
-		}
+	}
+	if v := projectAgentResourceVerification(unifiedresources.CanonicalActionVerification(record)); v != nil {
+		payload.Verification = v
 	}
 	return payload, true
 }

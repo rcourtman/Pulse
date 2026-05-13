@@ -646,6 +646,64 @@ func TestAgentEventBroadcaster_PublishActionCompletedRoundTripsVerification(t *t
 	}
 }
 
+func TestProjectAgentActionCompletedPayloadUsesCanonicalVerification(t *testing.T) {
+	ranAt := time.Now().UTC()
+	payload, ok := projectAgentActionCompletedPayload(unifiedresources.ActionAuditRecord{
+		ID:        "action-router-canonical-verification",
+		UpdatedAt: ranAt,
+		State:     unifiedresources.ActionStateCompleted,
+		Request: unifiedresources.ActionRequest{
+			ResourceID:     "vm:router-canonical",
+			CapabilityName: "restart_service",
+			RequestedBy:    "agent:ops",
+		},
+		Result: &unifiedresources.ExecutionResult{Success: true},
+		Verification: &unifiedresources.ActionVerificationResult{
+			Ran:     true,
+			Success: true,
+			Command: "systemctl is-active nginx",
+			RanAt:   ranAt,
+		},
+	})
+	if !ok {
+		t.Fatal("expected terminal action to project")
+	}
+	if payload.Verification == nil || payload.Verification.Command != "systemctl is-active nginx" {
+		t.Fatalf("top-level canonical verification did not project onto router payload: %+v", payload.Verification)
+	}
+
+	payload, ok = projectAgentActionCompletedPayload(unifiedresources.ActionAuditRecord{
+		ID:        "action-router-unrun-verification",
+		UpdatedAt: ranAt,
+		State:     unifiedresources.ActionStateCompleted,
+		Request: unifiedresources.ActionRequest{
+			ResourceID:     "vm:router-unrun",
+			CapabilityName: "restart_service",
+			RequestedBy:    "agent:ops",
+		},
+		Result: &unifiedresources.ExecutionResult{
+			Success: true,
+			Verification: &unifiedresources.ActionVerificationResult{
+				Ran:     false,
+				Success: true,
+				Command: "should not leak",
+				Output:  "sensitive output",
+				Note:    "sensitive note",
+				RanAt:   ranAt,
+			},
+		},
+	})
+	if !ok {
+		t.Fatal("expected terminal action to project")
+	}
+	if payload.Verification == nil || payload.Verification.Ran {
+		t.Fatalf("expected sanitized ran=false verification, got %+v", payload.Verification)
+	}
+	if payload.Verification.Command != "" || payload.Verification.Note != "" || !payload.Verification.RanAt.IsZero() || payload.Verification.Success {
+		t.Fatalf("router payload leaked ran=false verification details: %+v", payload.Verification)
+	}
+}
+
 func TestAgentEventBroadcaster_PublishActionCompletedAbsentVerificationOmitsField(t *testing.T) {
 	// Refused-before-dispatch failures have no verification result
 	// (verification only runs after a successful execute). The

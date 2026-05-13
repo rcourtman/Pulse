@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -424,6 +425,37 @@ func newTestStore(t *testing.T) *SQLiteResourceStore {
 	}
 	t.Cleanup(func() { store.Close() })
 	return store
+}
+
+func insertRawActionAuditForTest(t *testing.T, store *SQLiteResourceStore, record ActionAuditRecord) {
+	t.Helper()
+	requestJSON, err := json.Marshal(record.Request)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	planJSON, err := json.Marshal(record.Plan)
+	if err != nil {
+		t.Fatalf("marshal plan: %v", err)
+	}
+	approvalsJSON, err := json.Marshal(record.Approvals)
+	if err != nil {
+		t.Fatalf("marshal approvals: %v", err)
+	}
+	resultJSON, err := json.Marshal(record.Result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	verificationOutcomeJSON, err := json.Marshal(record.VerificationOutcome)
+	if err != nil {
+		t.Fatalf("marshal verification outcome: %v", err)
+	}
+	_, err = store.db.Exec(`
+		INSERT INTO action_audits (id, action_id, canonical_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json, verification_outcome_json)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, record.ID, record.ID, CanonicalResourceID(record.Request.ResourceID), record.Request.RequestID, record.CreatedAt, record.UpdatedAt, string(record.State), string(requestJSON), string(planJSON), string(approvalsJSON), string(resultJSON), string(verificationOutcomeJSON))
+	if err != nil {
+		t.Fatalf("insert raw action audit: %v", err)
+	}
 }
 
 func TestRecordChange_RoundTrip(t *testing.T) {
@@ -1288,8 +1320,112 @@ func TestActionAuditRecord_RoundTrip(t *testing.T) {
 	if verification == nil || !verification.Ran || verification.Command != result.Verification.Command {
 		t.Fatalf("canonical verification round-trip failed: %+v", verification)
 	}
+	if got.Verification == nil || got.Verification.Command != verification.Command {
+		t.Fatalf("top-level verification was not restored from sqlite row: top-level=%+v canonical=%+v", got.Verification, verification)
+	}
 	if got.Result.Verification == nil || got.Result.Verification.Command != verification.Command {
 		t.Fatalf("result verification did not stay aligned with canonical verification: result=%+v canonical=%+v", got.Result.Verification, verification)
+	}
+}
+
+func TestActionAuditRecord_RoundTripLegacyResultVerificationCanonicalizesSQLiteRead(t *testing.T) {
+	store := newTestStore(t)
+	now := time.Date(2026, 3, 18, 14, 0, 0, 0, time.UTC)
+
+	insertRawActionAuditForTest(t, store, ActionAuditRecord{
+		ID:        "action-legacy-verification",
+		CreatedAt: now,
+		UpdatedAt: now.Add(time.Minute),
+		State:     ActionStateCompleted,
+		Request: ActionRequest{
+			RequestID:      "req-legacy-verification",
+			ResourceID:     "vm:legacy-verification",
+			CapabilityName: "restart",
+			RequestedBy:    "agent:test",
+		},
+		Plan: ActionPlan{
+			ActionID:  "action-legacy-verification",
+			RequestID: "req-legacy-verification",
+			Allowed:   true,
+		},
+		Result: &ExecutionResult{
+			Success: true,
+			Verification: &ActionVerificationResult{
+				Ran:     true,
+				Success: true,
+				Command: "systemctl is-active nginx",
+				Output:  "active",
+				RanAt:   now.Add(30 * time.Second),
+			},
+		},
+	})
+
+	got, ok, err := store.GetActionAudit("action-legacy-verification")
+	if err != nil {
+		t.Fatalf("GetActionAudit: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected raw legacy action audit row")
+	}
+	if got.Verification == nil || got.Verification.Command != "systemctl is-active nginx" {
+		t.Fatalf("legacy result.verification was not restored onto top-level verification: %+v", got.Verification)
+	}
+	if got.Result == nil || got.Result.Verification == nil || got.Result.Verification.Command != got.Verification.Command {
+		t.Fatalf("legacy result verification was not kept aligned: result=%+v canonical=%+v", got.Result, got.Verification)
+	}
+}
+
+func TestActionAuditRecord_RoundTripMalformedUnrunVerificationScrubsSQLiteRead(t *testing.T) {
+	store := newTestStore(t)
+	now := time.Date(2026, 3, 18, 14, 30, 0, 0, time.UTC)
+
+	insertRawActionAuditForTest(t, store, ActionAuditRecord{
+		ID:        "action-malformed-unrun-verification",
+		CreatedAt: now,
+		UpdatedAt: now.Add(time.Minute),
+		State:     ActionStateCompleted,
+		Request: ActionRequest{
+			RequestID:      "req-malformed-unrun-verification",
+			ResourceID:     "vm:malformed-unrun-verification",
+			CapabilityName: "restart",
+		},
+		Plan: ActionPlan{
+			ActionID:  "action-malformed-unrun-verification",
+			RequestID: "req-malformed-unrun-verification",
+			Allowed:   true,
+		},
+		Result: &ExecutionResult{
+			Success: true,
+			Verification: &ActionVerificationResult{
+				Ran:     false,
+				Success: true,
+				Command: "should not leak",
+				Output:  "sensitive output",
+				Note:    "sensitive note",
+				RanAt:   now.Add(30 * time.Second),
+			},
+		},
+	})
+
+	results, err := store.GetActionAudits("vm:malformed-unrun-verification", now.Add(-time.Hour), 10)
+	if err != nil {
+		t.Fatalf("GetActionAudits: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 raw malformed action audit row, got %d", len(results))
+	}
+	got := results[0]
+	if got.Verification == nil || got.Verification.Ran {
+		t.Fatalf("expected sanitized ran=false verification, got %+v", got.Verification)
+	}
+	if got.Verification.Command != "" || got.Verification.Output != "" || got.Verification.Note != "" || !got.Verification.RanAt.IsZero() || got.Verification.Success {
+		t.Fatalf("top-level ran=false verification leaked details: %+v", got.Verification)
+	}
+	if got.Result == nil || got.Result.Verification == nil {
+		t.Fatalf("expected result verification to remain present and aligned: %+v", got.Result)
+	}
+	if got.Result.Verification.Command != "" || got.Result.Verification.Output != "" || got.Result.Verification.Note != "" || !got.Result.Verification.RanAt.IsZero() || got.Result.Verification.Success {
+		t.Fatalf("result ran=false verification leaked details: %+v", got.Result.Verification)
 	}
 }
 

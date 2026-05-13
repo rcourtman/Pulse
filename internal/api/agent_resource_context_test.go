@@ -469,6 +469,64 @@ func TestHandleAgentResourceContext_RedactsCommandsForMonitoringReadTokens(t *te
 	}
 }
 
+func TestProjectAgentResourceActionsUsesCanonicalVerification(t *testing.T) {
+	ranAt := time.Now().UTC()
+	summaries := projectAgentResourceActions([]unified.ActionAuditRecord{
+		{
+			ID:        "action-resource-canonical-verification",
+			CreatedAt: ranAt.Add(-time.Minute),
+			UpdatedAt: ranAt,
+			State:     unified.ActionStateCompleted,
+			Request: unified.ActionRequest{
+				ResourceID:     "vm:resource-canonical",
+				CapabilityName: "restart_service",
+				RequestedBy:    "agent:ops",
+			},
+			Result: &unified.ExecutionResult{Success: true},
+			Verification: &unified.ActionVerificationResult{
+				Ran:     true,
+				Success: true,
+				Command: "systemctl is-active nginx",
+				RanAt:   ranAt,
+			},
+		},
+		{
+			ID:        "action-resource-unrun-verification",
+			CreatedAt: ranAt.Add(-2 * time.Minute),
+			UpdatedAt: ranAt.Add(-time.Minute),
+			State:     unified.ActionStateCompleted,
+			Request: unified.ActionRequest{
+				ResourceID:     "vm:resource-unrun",
+				CapabilityName: "restart_service",
+				RequestedBy:    "agent:ops",
+			},
+			Result: &unified.ExecutionResult{
+				Success: true,
+				Verification: &unified.ActionVerificationResult{
+					Ran:     false,
+					Success: true,
+					Command: "should not leak",
+					Output:  "sensitive output",
+					Note:    "sensitive note",
+					RanAt:   ranAt,
+				},
+			},
+		},
+	})
+	if len(summaries) != 2 {
+		t.Fatalf("summaries len = %d, want 2", len(summaries))
+	}
+	if summaries[0].Verification == nil || summaries[0].Verification.Command != "systemctl is-active nginx" {
+		t.Fatalf("top-level canonical verification did not project onto resource summary: %+v", summaries[0].Verification)
+	}
+	if summaries[1].Verification == nil || summaries[1].Verification.Ran {
+		t.Fatalf("expected sanitized ran=false verification, got %+v", summaries[1].Verification)
+	}
+	if summaries[1].Verification.Command != "" || summaries[1].Verification.Note != "" || !summaries[1].Verification.RanAt.IsZero() || summaries[1].Verification.Success {
+		t.Fatalf("resource summary leaked ran=false verification details: %+v", summaries[1].Verification)
+	}
+}
+
 func TestHandleAgentResourceContext_PendingApprovalsEmptyArrayWhenNone(t *testing.T) {
 	// Absent or empty must surface as an empty array, not as a
 	// missing field — agents iterate without nil-checking. This
