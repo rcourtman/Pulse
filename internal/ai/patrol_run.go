@@ -412,7 +412,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 	// Run update-safety watcher on every patrol cycle regardless of LLM availability.
 	// Direct FindingsStore.Add bypasses push-notification (MVP: not an emergency).
 	if cfg.AnalyzeDocker && p.updateSafetyWatcher != nil {
-		updateEmit, updateResolve := p.updateSafetyWatcher.Observe(state.DockerHosts, time.Now())
+		updateEmit, updateResolve := p.updateSafetyWatcher.Observe(patrolUpdateSafetyDockerHosts(state), time.Now())
 		for _, f := range updateEmit {
 			if !p.findings.Add(f) {
 				log.Debug().Str("finding_id", f.ID).Msg("AI Patrol: update-safety finding already in store")
@@ -1198,6 +1198,50 @@ func scopePatrolDockerHost(d models.DockerHost, matcher patrolScopeMatcher) (mod
 	}
 
 	return models.DockerHost{}, nil, false
+}
+
+func patrolUpdateSafetyDockerHosts(s patrolRuntimeState) []models.DockerHost {
+	rs := s.readState
+	if rs == nil {
+		derived := s.withDerivedProviders()
+		rs = derived.readState
+	}
+	if rs == nil {
+		return nil
+	}
+
+	hostViews := rs.DockerHosts()
+	hosts := make([]models.DockerHost, 0, len(hostViews))
+	for _, hostView := range hostViews {
+		if hostView == nil {
+			continue
+		}
+
+		hostID := strings.TrimSpace(hostView.HostSourceID())
+		if hostID == "" {
+			hostID = strings.TrimSpace(hostView.ID())
+		}
+		name := strings.TrimSpace(hostView.Name())
+		displayName := strings.TrimSpace(hostView.DisplayName())
+		if displayName == "" {
+			displayName = name
+		}
+		hostname := strings.TrimSpace(hostView.Hostname())
+		if hostname == "" {
+			hostname = name
+		}
+
+		hosts = append(hosts, models.DockerHost{
+			ID:                hostID,
+			AgentID:           strings.TrimSpace(hostView.AgentID()),
+			Hostname:          hostname,
+			DisplayName:       displayName,
+			CustomDisplayName: strings.TrimSpace(hostView.CustomDisplayName()),
+			Status:            string(hostView.Status()),
+			Containers:        hostView.Containers(),
+		})
+	}
+	return hosts
 }
 
 func collectPatrolScopedDockerHosts(hosts []models.DockerHost, matcher patrolScopeMatcher) ([]models.DockerHost, []string) {

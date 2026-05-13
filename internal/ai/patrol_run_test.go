@@ -700,6 +700,58 @@ func TestPatrolRuntimeResourceHelpers_PrepareCanonicalInventory(t *testing.T) {
 	}
 }
 
+func TestPatrolUpdateSafetyDockerHosts_UsesReadStateDockerHosts(t *testing.T) {
+	readStateForDigest := func(digest string) unifiedresources.ReadState {
+		registry := unifiedresources.NewRegistry(nil)
+		registry.IngestSnapshot(models.StateSnapshot{
+			DockerHosts: []models.DockerHost{
+				{
+					ID:       "canonical-host",
+					Hostname: "canonical.local",
+					Containers: []models.DockerContainer{
+						{ID: "app-1", Name: "web", ImageDigest: digest},
+					},
+				},
+			},
+		})
+		return registry
+	}
+
+	legacyUnchangedHost := []models.DockerHost{
+		{
+			ID:       "legacy-host",
+			Hostname: "legacy.local",
+			Containers: []models.DockerContainer{
+				{ID: "legacy-app", Name: "legacy-web", ImageDigest: "sha256:aaa"},
+			},
+		},
+	}
+
+	watcher := newUpdateSafetyWatcher()
+	state := patrolRuntimeState{
+		readState:   readStateForDigest("sha256:aaa"),
+		DockerHosts: legacyUnchangedHost,
+	}
+	if emit, resolve := watcher.Observe(patrolUpdateSafetyDockerHosts(state), time.Unix(1, 0)); len(emit) != 0 || len(resolve) != 0 {
+		t.Fatalf("expected first read-state observation to establish baseline, got emit=%d resolve=%d", len(emit), len(resolve))
+	}
+
+	state.readState = readStateForDigest("sha256:bbb")
+	emit, resolve := watcher.Observe(patrolUpdateSafetyDockerHosts(state), time.Unix(2, 0))
+	if len(resolve) != 0 {
+		t.Fatalf("expected no resolve on digest change, got %d", len(resolve))
+	}
+	if len(emit) != 1 {
+		t.Fatalf("expected read-state digest change to emit one finding, got %d", len(emit))
+	}
+	if emit[0].Key != UpdateSafetyFindingPrefix+":canonical-host/app-1" {
+		t.Fatalf("expected canonical read-state host/container key, got %q", emit[0].Key)
+	}
+	if emit[0].Node != "canonical.local" {
+		t.Fatalf("expected canonical read-state host name, got %q", emit[0].Node)
+	}
+}
+
 func TestPatrolRuntimeState_WithDerivedProviders_UsesResourceInventoryOnly(t *testing.T) {
 	state := patrolRuntimeState{
 		Nodes: []models.Node{

@@ -147,6 +147,11 @@ runtime cost control, and shared AI transport surfaces.
    browser state owner and `internal/api/ai_handlers.go` must clear stale
    full-mode unlock state while clamping autonomy back to `monitor`, so paid
    remediation permission cannot survive through a free runtime save.
+   Patrol update-safety observation is part of the same read-state runtime
+   boundary: Docker host/container snapshots used to detect image-digest
+   divergence must be sourced from canonical `ReadState.DockerHosts()` views,
+   with model-shaped data limited to the watcher adapter input rather than
+   direct `StateSnapshot.DockerHosts` reads in the Patrol run loop.
 4. Keep discovery scheduling authoritative through `internal/config/ai.go`: `discovery_enabled` and `discovery_interval_hours` must govern both lightweight infrastructure discovery and deep service-discovery background loops
 5. Preserve auditability for outbound model-bound context exports and keep the export record aligned with the prompt boundary that actually reaches the provider
    External provider-bound unified-resource context must enforce the same
