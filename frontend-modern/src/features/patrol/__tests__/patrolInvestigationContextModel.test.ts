@@ -166,6 +166,51 @@ describe('patrolInvestigationContextModel', () => {
     expect(handoff.context.handoffContext).not.toContain('online to online');
   });
 
+  it('includes bounded related-resource context in assessment handoff evidence', () => {
+    const longRelatedResource =
+      'storage-pool-with-a-very-long-description-that-keeps-going-beyond-the-handoff-limit-for-operators';
+    const handoff = buildPatrolAssessmentAssistantHandoff({
+      assessment: {
+        title: 'Issues detected',
+      },
+      supportingEvidence: {
+        recentChanges: [
+          {
+            id: 'change-related',
+            observedAt: '2026-05-06T12:08:00Z',
+            resourceId: 'vm-100',
+            kind: 'metric_anomaly',
+            sourceType: 'heuristic',
+            sourceAdapter: 'proxmox_adapter',
+            confidence: 'high',
+            reason: 'CPU pressure increased after storage activity',
+            relatedResources: [
+              'backup-job',
+              'cache-node',
+              longRelatedResource,
+              'db-primary',
+              'db-replica',
+            ],
+          },
+        ],
+      },
+      activeFindings: [],
+    });
+
+    const relatedEvidence = handoff.context.briefing?.evidence?.find((line) =>
+      line.includes('related resources'),
+    );
+
+    expect(relatedEvidence).toContain('related resources backup-job');
+    expect(relatedEvidence).toContain('and 1 more');
+    expect(relatedEvidence).not.toContain(longRelatedResource);
+    expect(relatedEvidence).not.toContain('db-replica');
+    expect(handoff.context.handoffContext).toContain('related resources backup-job');
+    expect(handoff.context.handoffContext).toContain('and 1 more');
+    expect(handoff.context.handoffContext).not.toContain(longRelatedResource);
+    expect(handoff.context.handoffContext).not.toContain('db-replica');
+  });
+
   it('builds a model-only Assistant handoff for the current Patrol assessment', () => {
     const handoff = buildPatrolAssessmentAssistantHandoff({
       assessment: {
@@ -325,6 +370,10 @@ describe('patrolInvestigationContextModel', () => {
     );
     expect(handoff.context.handoffContext).toContain(
       'Recent Change 1: Metric anomaly: CPU spike after backup job',
+    );
+    expect(handoff.context.handoffContext).toContain('related resources backup-job');
+    expect(handoff.context.briefing?.evidence).toEqual(
+      expect.arrayContaining([expect.stringContaining('related resources backup-job')]),
     );
     expect(handoff.context.handoffContext).toContain(
       'Recent Change 2: Command executed: execution event recorded',

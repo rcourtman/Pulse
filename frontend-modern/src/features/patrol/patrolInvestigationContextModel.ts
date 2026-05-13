@@ -354,6 +354,8 @@ const MAX_ASSESSMENT_RESOURCES = 8;
 const MAX_ASSESSMENT_HANDOFF_ACTIONS = 4;
 const MAX_PATROL_RUN_HANDOFF_RESOURCES = 8;
 const MAX_PATROL_BRIEFING_SUGGESTED_PROMPTS = 3;
+const MAX_ASSESSMENT_RELATED_RESOURCE_LABELS = 4;
+const MAX_ASSESSMENT_RELATED_RESOURCE_LABEL_LENGTH = 80;
 const SAME_STATE_CHANGED_FIELD_LABELS: Record<string, string> = {
   'docker.command': 'Docker command',
   'docker.updateStatus': 'Docker image status',
@@ -2065,6 +2067,7 @@ function formatAssessmentRecentChangeEvidence(change: ResourceChange): string | 
   return [
     summary,
     resource ? `resource ${resource}` : undefined,
+    formatAssessmentRecentChangeRelatedResources(change),
     observedAt ? `observed ${observedAt}` : undefined,
   ]
     .filter(isNonEmptyString)
@@ -2085,10 +2088,6 @@ function formatAssessmentCorrelationEvidence(correlation: ResourceCorrelation): 
 }
 
 function formatAssessmentRecentChangeContextLine(change: ResourceChange, index: number): string {
-  const relatedResources = (change.relatedResources ?? [])
-    .map(normalizeText)
-    .filter(isNonEmptyString)
-    .slice(0, 4);
   const parts = [
     formatAssessmentRecentChangeSummary(change),
     normalizeText(change.id) ? `change ${normalizeText(change.id)}` : undefined,
@@ -2105,10 +2104,41 @@ function formatAssessmentRecentChangeContextLine(change: ResourceChange, index: 
       ? `${formatIdentifierLabel(change.confidence)?.toLowerCase()} confidence`
       : undefined,
     normalizeText(change.actor) ? `actor ${truncateContextText(change.actor, 80)}` : undefined,
-    relatedResources.length > 0 ? `related ${relatedResources.join(', ')}` : undefined,
+    formatAssessmentRecentChangeRelatedResources(change),
   ].filter(isNonEmptyString);
 
   return `Recent Change ${index}: ${parts.join('; ')}`;
+}
+
+function formatAssessmentRecentChangeRelatedResources(
+  change: ResourceChange,
+): string | undefined {
+  const labels: string[] = [];
+  for (const relatedResource of change.relatedResources ?? []) {
+    const label = truncateContextText(
+      relatedResource,
+      MAX_ASSESSMENT_RELATED_RESOURCE_LABEL_LENGTH,
+    );
+    if (label && !labels.includes(label)) {
+      labels.push(label);
+    }
+  }
+  if (labels.length === 0) return undefined;
+
+  const visibleLabels = labels.slice(0, MAX_ASSESSMENT_RELATED_RESOURCE_LABELS);
+  const omittedCount = labels.length - visibleLabels.length;
+  return `related resources ${formatAssessmentRelatedResourceList(visibleLabels, omittedCount)}`;
+}
+
+function formatAssessmentRelatedResourceList(labels: string[], omittedCount: number): string {
+  if (labels.length === 1) {
+    return omittedCount > 0 ? `${labels[0]}, and ${omittedCount} more` : labels[0];
+  }
+  if (labels.length === 2 && omittedCount === 0) {
+    return `${labels[0]} and ${labels[1]}`;
+  }
+  const visibleList = labels.join(', ');
+  return omittedCount > 0 ? `${visibleList}, and ${omittedCount} more` : visibleList;
 }
 
 function formatAssessmentCorrelationContextLine(
