@@ -39,6 +39,7 @@ func buildAggregatorInputs(ctx context.Context, cfg *config.Config, persistence 
 
 	if monitor != nil {
 		inputs.hosts = monitor.HostsSnapshot()
+		inputs.agentDesiredConfigs = connectionAgentDesiredConfigFingerprints(monitor, inputs.hosts)
 		inputs.instanceHealth = instanceHealthByKey(monitor.SchedulerHealth())
 		inputs.availabilityStatuses = monitor.AvailabilityStatusSnapshot()
 	} else {

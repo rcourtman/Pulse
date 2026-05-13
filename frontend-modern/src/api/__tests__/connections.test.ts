@@ -194,6 +194,60 @@ describe('ConnectionsAPI', () => {
     });
   });
 
+  it('list() preserves pending agent config drift without an applied fingerprint', async () => {
+    const connections: Connection[] = [
+      {
+        id: 'agent:mini-pc',
+        type: 'agent',
+        name: 'mini-pc',
+        address: 'mini-pc',
+        state: 'active',
+        stateReason: '',
+        enabled: true,
+        surfaces: ['host'],
+        scope: { host: true },
+        lastSeen: '2026-04-22T20:00:00Z',
+        lastError: null,
+        source: 'agent',
+        fleet: {
+          enrollmentState: 'enrolled',
+          livenessState: 'active',
+          versionDrift: 'current',
+          adapterHealth: 'healthy',
+          configRollout: 'reported',
+          credentialStatus: 'verified',
+          updateStatus: 'current',
+          remoteControl: 'enabled',
+          configDrift: {
+            status: 'pending',
+            desired: { version: 'host-agent-config/v1', hash: 'sha256:desired' },
+            reason: 'Pulse has not received a comparable applied agent configuration fingerprint yet',
+          },
+          rollout: {
+            status: 'pending',
+            stage: 'pending',
+            reason: 'waiting for the agent to report an applied configuration fingerprint',
+          },
+        },
+        capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+      },
+    ];
+    mockedApiFetchJSON.mockResolvedValueOnce({ connections });
+
+    const result = await ConnectionsAPI.list();
+
+    expect(result.connections[0]?.fleet?.configDrift).toEqual({
+      status: 'pending',
+      desired: { version: 'host-agent-config/v1', hash: 'sha256:desired' },
+      reason: 'Pulse has not received a comparable applied agent configuration fingerprint yet',
+    });
+    expect(result.connections[0]?.fleet?.rollout).toEqual({
+      status: 'pending',
+      stage: 'pending',
+      reason: 'waiting for the agent to report an applied configuration fingerprint',
+    });
+  });
+
   it('list() preserves agent identity metadata on agent-backed connections', async () => {
     const connections: Connection[] = [
       {

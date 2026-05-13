@@ -1927,8 +1927,10 @@ config `signature` backward-compatible with installed agents by signing the
 legacy canonical payload shape only; newer clients validate `desiredConfig` by
 recomputing it from the signed command decision and signed settings payload,
 restricted to the agent-applied settings key schema. Broader applied-state
-reporting and connections-ledger rollout presentation remain outside this
-backend foundation.
+reporting remains the next contract gap: until the runtime report carries a
+comparable applied config fingerprint, `/api/connections` must surface desired
+config metadata as pending or unknown and must not claim rollout convergence
+from host report fields such as `commandsEnabled` or `diskExclude`.
 That same canonical /api/auto-register path must also complete the live
 post-registration contract after persistence: it must trigger discovery refresh
 and emit the canonical `node_auto_registered` WebSocket payload instead of

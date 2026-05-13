@@ -868,6 +868,13 @@ the canonical monitored-system blocked payload.
     kernel, architecture, and command capability, so settings surfaces can
     render recognizable standalone-host identity without a second inventory
     fetch or frontend-local host reconciliation rules.
+    Agent config drift on that same payload must source desired fingerprints
+    from `Monitor.GetHostAgentConfig(...).DesiredConfig` or the same
+    `remoteconfig.BuildDesiredConfigMetadata` path. The aggregator must not
+    manufacture convergence by assigning desired and applied to the same local
+    report-field fingerprint; when host state lacks a trustworthy applied
+    config fingerprint, `configDrift` stays pending or unknown and rollout
+    stays non-current.
     Appliance-specific Pulse Agent compatibility is an additive host-profile
     fact on that same identity payload. For Unraid and similar host profiles,
     `agentIdentity.platform` remains the canonical runtime platform such as

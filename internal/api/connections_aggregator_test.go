@@ -8,9 +8,12 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
 )
 
 func ptrTime(t time.Time) *time.Time { return &t }
+
+func ptrBool(v bool) *bool { return &v }
 
 func healthEntry(lastSuccess *time.Time, errMessage, errCategory string, breakerState string) monitoring.InstanceHealth {
 	ps := monitoring.InstancePollStatus{LastSuccess: lastSuccess}
@@ -24,6 +27,18 @@ func healthEntry(lastSuccess *time.Time, errMessage, errCategory string, breaker
 	return monitoring.InstanceHealth{
 		PollStatus: ps,
 		Breaker:    monitoring.InstanceBreaker{State: breakerState},
+	}
+}
+
+func desiredAgentConfigFingerprint(t *testing.T, commandsEnabled *bool, settings map[string]interface{}) ConnectionFleetConfigFingerprint {
+	t.Helper()
+	metadata, err := remoteconfig.BuildDesiredConfigMetadata(commandsEnabled, settings)
+	if err != nil {
+		t.Fatalf("BuildDesiredConfigMetadata: %v", err)
+	}
+	return ConnectionFleetConfigFingerprint{
+		Version: metadata.Version,
+		Hash:    metadata.Hash,
 	}
 }
 
@@ -360,6 +375,7 @@ func TestBuildConnections_AgentVersionUpdateAvailability(t *testing.T) {
 
 func TestBuildConnections_AgentFleetGovernance(t *testing.T) {
 	now := time.Now()
+	currentDesired := desiredAgentConfigFingerprint(t, ptrBool(true), nil)
 	in := aggregatorInputs{
 		hosts: []models.Host{
 			{
@@ -379,6 +395,9 @@ func TestBuildConnections_AgentFleetGovernance(t *testing.T) {
 				ID:       "pending",
 				Hostname: "pending",
 			},
+		},
+		agentDesiredConfigs: map[string]ConnectionFleetConfigFingerprint{
+			"current": currentDesired,
 		},
 		expectedAgentVersion: "6.0.2",
 		now:                  now,
@@ -402,14 +421,14 @@ func TestBuildConnections_AgentFleetGovernance(t *testing.T) {
 		t.Fatalf("current agent fleet governance = %+v", current)
 	}
 	if current.ConfigDrift == nil ||
-		current.ConfigDrift.Status != fleetConfigDriftCurrent ||
+		current.ConfigDrift.Status != fleetStatePending ||
 		current.ConfigDrift.Desired == nil ||
-		current.ConfigDrift.Applied == nil ||
+		current.ConfigDrift.Applied != nil ||
 		current.ConfigDrift.Desired.Version != connectionAgentConfigFingerprintVersion ||
-		current.ConfigDrift.Desired.Hash != current.ConfigDrift.Applied.Hash {
+		current.ConfigDrift.Desired.Hash != currentDesired.Hash {
 		t.Fatalf("current agent config drift = %+v", current.ConfigDrift)
 	}
-	if current.Rollout == nil || current.Rollout.Status != fleetStateCurrent || current.Rollout.Stage != fleetRolloutStageApplied {
+	if current.Rollout == nil || current.Rollout.Status != fleetStatePending || current.Rollout.Stage != fleetRolloutStagePending {
 		t.Fatalf("current agent rollout = %+v", current.Rollout)
 	}
 	if current.CommandPolicy == nil ||
@@ -446,6 +465,89 @@ func TestBuildConnections_AgentFleetGovernance(t *testing.T) {
 		pending.CommandPolicy.Applied != fleetStateUnknown ||
 		pending.CommandPolicy.Enforcement != fleetStatePending {
 		t.Fatalf("pending agent command policy = %+v", pending.CommandPolicy)
+	}
+}
+
+func TestBuildConnections_AgentConfigDriftUsesCanonicalDesiredMetadataWithoutSelfComparing(t *testing.T) {
+	now := time.Now()
+	desired := desiredAgentConfigFingerprint(t, ptrBool(true), map[string]interface{}{
+		"interval": "10s",
+	})
+	in := aggregatorInputs{
+		hosts: []models.Host{
+			{
+				ID:              "agent-1",
+				Hostname:        "agent-1",
+				LastSeen:        now,
+				CommandsEnabled: false,
+				DiskExclude:     []string{"/dev/loop*"},
+			},
+		},
+		agentDesiredConfigs: map[string]ConnectionFleetConfigFingerprint{
+			"agent-1": desired,
+		},
+		now: now,
+	}
+
+	got := buildConnections(in)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 connection, got %d", len(got))
+	}
+	drift := got[0].Fleet.ConfigDrift
+	if drift == nil {
+		t.Fatal("expected agent config drift metadata")
+	}
+	if drift.Status != fleetStatePending {
+		t.Fatalf("config drift status = %q, want pending", drift.Status)
+	}
+	if drift.Desired == nil || *drift.Desired != desired {
+		t.Fatalf("desired config drift fingerprint = %+v, want %+v", drift.Desired, desired)
+	}
+	if drift.Applied != nil {
+		t.Fatalf("applied config fingerprint should be absent until agent reports a comparable fingerprint, got %+v", drift.Applied)
+	}
+
+	selfCompared := connectionConfigFingerprint(connectionAgentConfigFingerprintVersion, map[string]any{
+		"commandsEnabled": false,
+		"diskExclude":     []string{"/dev/loop*"},
+	})
+	if selfCompared == nil {
+		t.Fatal("expected local self-comparison fingerprint to be derivable")
+	}
+	if drift.Desired.Hash == selfCompared.Hash {
+		t.Fatalf("desired config hash reused report-field fingerprint %q", drift.Desired.Hash)
+	}
+	if got[0].Fleet.Rollout == nil || got[0].Fleet.Rollout.Status == fleetStateCurrent {
+		t.Fatalf("rollout should not claim current without an applied config comparison, got %+v", got[0].Fleet.Rollout)
+	}
+}
+
+func TestConnectionFleetAgentConfigDriftComparesAppliedFingerprintsWhenAvailable(t *testing.T) {
+	now := time.Now()
+	conn := Connection{
+		Type:     ConnectionTypeAgent,
+		State:    ConnectionStateActive,
+		Enabled:  true,
+		LastSeen: &now,
+	}
+	desired := &ConnectionFleetConfigFingerprint{Version: connectionAgentConfigFingerprintVersion, Hash: "sha256:desired"}
+	applied := &ConnectionFleetConfigFingerprint{Version: connectionAgentConfigFingerprintVersion, Hash: "sha256:applied"}
+
+	drifted := connectionFleetAgentConfigDriftForFingerprints(conn, desired, applied)
+	if drifted.Status != fleetConfigDriftDrifted ||
+		drifted.Desired != desired ||
+		drifted.Applied != applied ||
+		drifted.LastObservedAt == nil {
+		t.Fatalf("drifted config comparison = %+v", drifted)
+	}
+
+	matchingApplied := &ConnectionFleetConfigFingerprint{Version: desired.Version, Hash: desired.Hash}
+	current := connectionFleetAgentConfigDriftForFingerprints(conn, desired, matchingApplied)
+	if current.Status != fleetConfigDriftCurrent ||
+		current.Desired != desired ||
+		current.Applied != matchingApplied ||
+		current.LastObservedAt == nil {
+		t.Fatalf("current config comparison = %+v", current)
 	}
 }
 

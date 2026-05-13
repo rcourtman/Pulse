@@ -94,6 +94,7 @@ type aggregatorInputs struct {
 	availabilityTargets  []config.AvailabilityTarget
 	availabilityStatuses map[string]monitoring.AvailabilityProbeStatus
 	hosts                []models.Host
+	agentDesiredConfigs  map[string]ConnectionFleetConfigFingerprint
 	instanceHealth       map[string]monitoring.InstanceHealth
 	expectedAgentVersion string
 	now                  time.Time
@@ -131,7 +132,8 @@ func buildConnections(in aggregatorInputs) []Connection {
 		out = append(out, buildAvailabilityConnection(target, in.availabilityStatuses[target.ID], now))
 	}
 	for _, host := range in.hosts {
-		out = append(out, buildAgentConnection(host, in.expectedAgentVersion, now))
+		desiredConfig := connectionAgentConfigFingerprintForHost(in.agentDesiredConfigs, host.ID)
+		out = append(out, buildAgentConnection(host, in.expectedAgentVersion, now, desiredConfig))
 	}
 
 	sort.Slice(out, func(i, j int) bool {
@@ -341,7 +343,7 @@ func buildAvailabilityConnection(target config.AvailabilityTarget, status monito
 // buildAgentConnection derives a connection row from an agent Host record.
 // Agents have no pause toggle and no scope — reports are all-or-nothing —
 // so capability flags are off.
-func buildAgentConnection(host models.Host, expectedAgentVersion string, now time.Time) Connection {
+func buildAgentConnection(host models.Host, expectedAgentVersion string, now time.Time, desiredConfig *ConnectionFleetConfigFingerprint) Connection {
 	name := host.DisplayName
 	if strings.TrimSpace(name) == "" {
 		name = host.Hostname
@@ -399,7 +401,7 @@ func buildAgentConnection(host models.Host, expectedAgentVersion string, now tim
 		AgentUpdateAvailable: updateAvailable,
 		Capabilities:         ConnectionCapabilities{SupportsPause: false, SupportsScope: false, SupportsTest: false},
 	}, now)
-	conn.Fleet.ConfigDrift = connectionFleetAgentConfigDrift(conn, host)
+	conn.Fleet.ConfigDrift = connectionFleetAgentConfigDrift(conn, desiredConfig)
 	conn.Fleet.CredentialHealth = connectionFleetAgentCredentialHealth(conn, host, now)
 	conn.Fleet.CommandPolicy = connectionFleetAgentCommandPolicy(conn, host)
 	conn.Fleet.Rollout = connectionFleetRollout(conn)
@@ -548,7 +550,11 @@ func connectionFleetConfigDrift(conn Connection) *ConnectionFleetConfigDrift {
 	}
 }
 
-func connectionFleetAgentConfigDrift(conn Connection, host models.Host) *ConnectionFleetConfigDrift {
+func connectionFleetAgentConfigDrift(conn Connection, desired *ConnectionFleetConfigFingerprint) *ConnectionFleetConfigDrift {
+	return connectionFleetAgentConfigDriftForFingerprints(conn, desired, nil)
+}
+
+func connectionFleetAgentConfigDriftForFingerprints(conn Connection, desired, applied *ConnectionFleetConfigFingerprint) *ConnectionFleetConfigDrift {
 	if !conn.Enabled || conn.State == ConnectionStatePaused {
 		return &ConnectionFleetConfigDrift{
 			Status: fleetStatePaused,
@@ -556,30 +562,41 @@ func connectionFleetAgentConfigDrift(conn Connection, host models.Host) *Connect
 		}
 	}
 
+	if desired == nil {
+		return &ConnectionFleetConfigDrift{
+			Status: fleetStateUnknown,
+			Reason: "Pulse has not resolved canonical desired agent configuration metadata",
+		}
+	}
+
 	if conn.LastSeen == nil {
 		return &ConnectionFleetConfigDrift{
-			Status: fleetStateUnknown,
-			Reason: "Pulse has not received an applied agent configuration report yet",
+			Status:  fleetStateUnknown,
+			Desired: desired,
+			Reason:  "Pulse has not received an agent report to compare against desired configuration",
 		}
 	}
 
-	applied := connectionConfigFingerprint(connectionAgentConfigFingerprintVersion, map[string]any{
-		"commandsEnabled": host.CommandsEnabled,
-		"diskExclude":     host.DiskExclude,
-	})
 	if applied == nil {
 		return &ConnectionFleetConfigDrift{
-			Status: fleetStateUnknown,
-			Reason: "applied agent configuration fingerprint could not be derived",
+			Status:  fleetStatePending,
+			Desired: desired,
+			Reason:  "Pulse has not received a comparable applied agent configuration fingerprint yet",
 		}
 	}
 
+	status := fleetConfigDriftCurrent
+	reason := "reported applied agent configuration matches the desired fleet policy"
+	if desired.Version != applied.Version || desired.Hash != applied.Hash {
+		status = fleetConfigDriftDrifted
+		reason = "desired agent configuration fingerprint differs from the reported applied fingerprint"
+	}
 	return &ConnectionFleetConfigDrift{
-		Status:         fleetConfigDriftCurrent,
-		Desired:        applied,
+		Status:         status,
+		Desired:        desired,
 		Applied:        applied,
 		LastObservedAt: conn.LastSeen,
-		Reason:         "reported agent configuration matches the active fleet policy snapshot",
+		Reason:         reason,
 	}
 }
 
@@ -617,11 +634,26 @@ func connectionFleetRollout(conn Connection) *ConnectionFleetRolloutState {
 			Reason: "waiting for the agent to report applied configuration",
 		}
 	}
-	if conn.Fleet.ConfigDrift != nil && conn.Fleet.ConfigDrift.Status == fleetConfigDriftDrifted {
-		return &ConnectionFleetRolloutState{
-			Status: fleetStatePending,
-			Stage:  fleetRolloutStagePending,
-			Reason: "desired configuration has not converged on the reported runtime",
+	if conn.Type == ConnectionTypeAgent && conn.Fleet.ConfigDrift != nil {
+		switch conn.Fleet.ConfigDrift.Status {
+		case fleetConfigDriftDrifted:
+			return &ConnectionFleetRolloutState{
+				Status: fleetStatePending,
+				Stage:  fleetRolloutStagePending,
+				Reason: "desired configuration has not converged on the reported runtime",
+			}
+		case fleetStatePending:
+			return &ConnectionFleetRolloutState{
+				Status: fleetStatePending,
+				Stage:  fleetRolloutStagePending,
+				Reason: "waiting for the agent to report an applied configuration fingerprint",
+			}
+		case fleetStateUnknown:
+			return &ConnectionFleetRolloutState{
+				Status: fleetStateUnknown,
+				Stage:  fleetRolloutStagePending,
+				Reason: "rollout state cannot be confirmed without comparable desired and applied agent config fingerprints",
+			}
 		}
 	}
 	stage := fleetRolloutStageLocal
@@ -752,6 +784,54 @@ func connectionConfigFingerprint(version string, payload any) *ConnectionFleetCo
 	return &ConnectionFleetConfigFingerprint{
 		Version: version,
 		Hash:    "sha256:" + hex.EncodeToString(sum[:]),
+	}
+}
+
+func connectionAgentDesiredConfigFingerprints(monitor *monitoring.Monitor, hosts []models.Host) map[string]ConnectionFleetConfigFingerprint {
+	if monitor == nil || len(hosts) == 0 {
+		return nil
+	}
+
+	fingerprints := make(map[string]ConnectionFleetConfigFingerprint, len(hosts))
+	for _, host := range hosts {
+		hostID := strings.TrimSpace(host.ID)
+		if hostID == "" {
+			continue
+		}
+		cfg := monitor.GetHostAgentConfig(hostID)
+		if cfg.DesiredConfig == nil {
+			continue
+		}
+		if fp := connectionConfigFingerprintFromMetadata(cfg.DesiredConfig.Version, cfg.DesiredConfig.Hash); fp != nil {
+			fingerprints[hostID] = *fp
+		}
+	}
+	if len(fingerprints) == 0 {
+		return nil
+	}
+	return fingerprints
+}
+
+func connectionAgentConfigFingerprintForHost(fingerprints map[string]ConnectionFleetConfigFingerprint, hostID string) *ConnectionFleetConfigFingerprint {
+	if len(fingerprints) == 0 {
+		return nil
+	}
+	fp, ok := fingerprints[strings.TrimSpace(hostID)]
+	if !ok {
+		return nil
+	}
+	return connectionConfigFingerprintFromMetadata(fp.Version, fp.Hash)
+}
+
+func connectionConfigFingerprintFromMetadata(version, hash string) *ConnectionFleetConfigFingerprint {
+	version = strings.TrimSpace(version)
+	hash = strings.TrimSpace(hash)
+	if version == "" || hash == "" {
+		return nil
+	}
+	return &ConnectionFleetConfigFingerprint{
+		Version: version,
+		Hash:    hash,
 	}
 }
 
