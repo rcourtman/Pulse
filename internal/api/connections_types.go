@@ -63,6 +63,48 @@ type ConnectionFleetGovernance struct {
 	CredentialStatus string `json:"credentialStatus"`
 	UpdateStatus     string `json:"updateStatus"`
 	RemoteControl    string `json:"remoteControl"`
+
+	ConfigDrift      *ConnectionFleetConfigDrift      `json:"configDrift,omitempty"`
+	Rollout          *ConnectionFleetRolloutState     `json:"rollout,omitempty"`
+	CredentialHealth *ConnectionFleetCredentialHealth `json:"credentialHealth,omitempty"`
+	CommandPolicy    *ConnectionFleetCommandPolicy    `json:"commandPolicy,omitempty"`
+}
+
+type ConnectionFleetConfigFingerprint struct {
+	Version string `json:"version"`
+	Hash    string `json:"hash"`
+}
+
+type ConnectionFleetConfigDrift struct {
+	Status         string                            `json:"status"`
+	Desired        *ConnectionFleetConfigFingerprint `json:"desired,omitempty"`
+	Applied        *ConnectionFleetConfigFingerprint `json:"applied,omitempty"`
+	LastObservedAt *time.Time                        `json:"lastObservedAt,omitempty"`
+	Reason         string                            `json:"reason,omitempty"`
+}
+
+type ConnectionFleetRolloutState struct {
+	Status string `json:"status"`
+	Stage  string `json:"stage,omitempty"`
+	Reason string `json:"reason,omitempty"`
+}
+
+type ConnectionFleetCredentialHealth struct {
+	Status         string     `json:"status"`
+	Kind           string     `json:"kind,omitempty"`
+	Rotation       string     `json:"rotation,omitempty"`
+	LastVerifiedAt *time.Time `json:"lastVerifiedAt,omitempty"`
+	LastFailedAt   *time.Time `json:"lastFailedAt,omitempty"`
+	LastUsedAt     *time.Time `json:"lastUsedAt,omitempty"`
+	ExpiresAt      *time.Time `json:"expiresAt,omitempty"`
+}
+
+type ConnectionFleetCommandPolicy struct {
+	Status      string `json:"status"`
+	Desired     string `json:"desired,omitempty"`
+	Applied     string `json:"applied,omitempty"`
+	Enforcement string `json:"enforcement,omitempty"`
+	Reason      string `json:"reason,omitempty"`
 }
 
 // ConnectionError is the runtime error shape surfaced on a connection row.

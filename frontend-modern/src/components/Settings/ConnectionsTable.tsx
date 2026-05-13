@@ -9,7 +9,7 @@ import {
   TableRow,
 } from '@/components/shared/Table';
 import type { Connection } from '@/api/connections';
-import type { InfrastructureSystemRow } from './connectionsTableModel';
+import { fleetSignalClassName, type InfrastructureSystemRow } from './connectionsTableModel';
 import type { ConnectionRowActions } from './useConnectionRowActions';
 import { getInfrastructureEmptyStateSummary } from '@/utils/infrastructureOnboardingPresentation';
 
@@ -34,7 +34,7 @@ interface ConnectionsTableProps {
 }
 
 const actionColumnClass =
-  'w-[26%] px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap 2xl:w-[18%]';
+  'w-[12%] px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap 2xl:w-[14%]';
 
 const inlineButtonClass =
   'inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
@@ -48,7 +48,7 @@ const removeConfirmClass =
 export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
   const hasActions = () => Boolean(props.actions) || Boolean(props.onEdit);
 
-  const colSpan = () => (hasActions() ? 5 : 4);
+  const colSpan = () => (hasActions() ? 6 : 5);
 
   return (
     <Card padding="none" tone="card" class="rounded-md">
@@ -109,16 +109,19 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
         <Table class="w-full table-fixed divide-y divide-border text-sm !whitespace-normal">
           <TableHeader class="bg-surface-alt">
             <TableRow>
-              <TableHead class="w-[26%] py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap 2xl:w-[18%]">
+              <TableHead class="w-[22%] py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap 2xl:w-[18%]">
                 System
               </TableHead>
-              <TableHead class="w-[34%] px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap 2xl:w-[32%]">
+              <TableHead class="w-[26%] px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap 2xl:w-[22%]">
                 Coverage
+              </TableHead>
+              <TableHead class="w-[26%] px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap 2xl:w-[24%]">
+                Posture
               </TableHead>
               <TableHead class="w-[14%] px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap 2xl:w-[12%]">
                 Status
               </TableHead>
-              <TableHead class="hidden w-[12%] px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap 2xl:table-cell">
+              <TableHead class="hidden w-[10%] px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap 2xl:table-cell">
                 Last activity
               </TableHead>
               <Show when={hasActions()}>
@@ -162,6 +165,18 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
                             {(label) => (
                               <span class="inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-medium text-base-content whitespace-nowrap">
                                 {label}
+                              </span>
+                            )}
+                          </For>
+                        </div>
+                      </TableCell>
+
+                      <TableCell class="px-3 py-3 align-top">
+                        <div class="flex flex-wrap gap-1.5">
+                          <For each={row.fleetHighlights}>
+                            {(signal) => (
+                              <span class={fleetSignalClassName(signal.tone)} title={signal.detail}>
+                                {signal.label}
                               </span>
                             )}
                           </For>

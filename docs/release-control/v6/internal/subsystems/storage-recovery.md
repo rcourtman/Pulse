@@ -580,8 +580,10 @@ bypass the API fail-closed execution gate.
    `/api/connections` payload also owns any agent-version/update facts and
    fleet-governance posture carried alongside those grouped rows; adjacent
    storage or recovery surfaces may reuse that signal for operator context,
-   but must not fork their own version-comparison semantics, credential-state
-   classifier, or another agent lifecycle vocabulary.
+   but must not fork their own version-comparison semantics, desired/applied
+   config-drift classifier, rollout-state classifier, credential-health
+   classifier, command-policy vocabulary, or another agent lifecycle
+   vocabulary.
 22. Keep backend-native platform actions on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app control for Assistant, storage and recovery may consume the refreshed recovery points afterward, but they must not grow a parallel recovery-local action transport or action-specific payload shape.
 23. Keep backend-native platform diagnostics on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app log reads for Assistant, storage and recovery may use those diagnostics during investigation, but they must not grow a parallel recovery-local log transport or diagnostic payload shape.
 24. Keep backend-native platform configuration reads on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app config for Assistant, storage and recovery may use that runtime shape during investigation, but they must not grow a parallel recovery-local config transport or provider-shaped configuration payload.

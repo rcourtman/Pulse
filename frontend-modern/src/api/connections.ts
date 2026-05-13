@@ -39,6 +39,71 @@ export type ConnectionFleetUpdateStatus =
   | 'unknown'
   | 'update-available';
 export type ConnectionFleetRemoteControl = 'disabled' | 'enabled' | 'not-applicable';
+export type ConnectionFleetConfigDriftStatus =
+  | 'current'
+  | 'drifted'
+  | 'not-applicable'
+  | 'paused'
+  | 'pending'
+  | 'unknown';
+export type ConnectionFleetRolloutStatus =
+  | 'blocked'
+  | 'current'
+  | 'not-applicable'
+  | 'paused'
+  | 'pending'
+  | 'unknown';
+export type ConnectionFleetCredentialHealthStatus =
+  | 'expired'
+  | 'expiring'
+  | 'invalid'
+  | 'not-applicable'
+  | 'paused'
+  | 'unknown'
+  | 'verified';
+export type ConnectionFleetCommandPolicyStatus =
+  | 'blocked'
+  | 'disabled'
+  | 'enabled'
+  | 'not-applicable'
+  | 'unknown';
+
+export interface ConnectionFleetConfigFingerprint {
+  version: string;
+  hash: string;
+}
+
+export interface ConnectionFleetConfigDrift {
+  status: ConnectionFleetConfigDriftStatus;
+  desired?: ConnectionFleetConfigFingerprint;
+  applied?: ConnectionFleetConfigFingerprint;
+  lastObservedAt?: string | null;
+  reason?: string;
+}
+
+export interface ConnectionFleetRolloutState {
+  status: ConnectionFleetRolloutStatus;
+  stage?: string;
+  reason?: string;
+}
+
+export interface ConnectionFleetCredentialHealth {
+  status: ConnectionFleetCredentialHealthStatus;
+  kind?: string;
+  rotation?: string;
+  lastVerifiedAt?: string | null;
+  lastFailedAt?: string | null;
+  lastUsedAt?: string | null;
+  expiresAt?: string | null;
+}
+
+export interface ConnectionFleetCommandPolicy {
+  status: ConnectionFleetCommandPolicyStatus;
+  desired?: string;
+  applied?: string;
+  enforcement?: string;
+  reason?: string;
+}
 
 export interface ConnectionCapabilities {
   supportsPause: boolean;
@@ -60,6 +125,10 @@ export interface ConnectionFleetGovernance {
   credentialStatus: ConnectionFleetCredentialStatus;
   updateStatus: ConnectionFleetUpdateStatus;
   remoteControl: ConnectionFleetRemoteControl;
+  configDrift?: ConnectionFleetConfigDrift;
+  rollout?: ConnectionFleetRolloutState;
+  credentialHealth?: ConnectionFleetCredentialHealth;
+  commandPolicy?: ConnectionFleetCommandPolicy;
 }
 
 export interface ConnectionAgentIdentity {

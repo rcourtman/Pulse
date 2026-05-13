@@ -1,6 +1,9 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"sort"
@@ -45,6 +48,38 @@ const (
 	fleetStateUnknown         = "unknown"
 	fleetStateUpdateAvailable = "update-available"
 	fleetStateVerified        = "verified"
+
+	fleetConfigDriftCurrent       = "current"
+	fleetConfigDriftDrifted       = "drifted"
+	fleetConfigDriftNotApplicable = "not-applicable"
+
+	fleetRolloutBlocked       = "blocked"
+	fleetRolloutNotApplicable = "not-applicable"
+	fleetRolloutStageApplied  = "applied"
+	fleetRolloutStageBlocked  = "blocked"
+	fleetRolloutStageLocal    = "local"
+	fleetRolloutStagePaused   = "paused"
+	fleetRolloutStagePending  = "pending"
+
+	fleetCredentialKindAPIKey       = "api-key"
+	fleetCredentialKindAgentToken   = "agent-token"
+	fleetCredentialKindNone         = "none"
+	fleetCredentialKindPassword     = "password"
+	fleetCredentialKindToken        = "token"
+	fleetCredentialRotationExpired  = "expired"
+	fleetCredentialRotationExpiring = "expiring"
+	fleetCredentialRotationHealthy  = "healthy"
+	fleetCredentialRotationNone     = "not-applicable"
+	fleetCredentialStatusExpired    = "expired"
+	fleetCredentialStatusExpiring   = "expiring"
+
+	fleetCommandPolicyBlocked       = "blocked"
+	fleetCommandPolicyDrifted       = "drifted"
+	fleetCommandPolicyInSync        = "in-sync"
+	fleetCommandPolicyNotApplicable = "not-applicable"
+
+	connectionConfigFingerprintVersion      = "connection-config/v1"
+	connectionAgentConfigFingerprintVersion = "host-agent-config/v1"
 )
 
 // aggregatorInputs bundles everything the aggregator reads. Separating inputs
@@ -120,7 +155,7 @@ func buildPVEConnection(inst config.PVEInstance, health map[string]monitoring.In
 	}
 	h := health["pve::"+inst.Name]
 	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now)
-	return withFleetGovernance(Connection{
+	conn := withFleetGovernance(Connection{
 		ID:           "pve:" + inst.Name,
 		Type:         ConnectionTypePVE,
 		Name:         inst.Name,
@@ -135,7 +170,9 @@ func buildPVEConnection(inst config.PVEInstance, health map[string]monitoring.In
 		LastError:    lastError,
 		Source:       sourceFromString(inst.Source),
 		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
-	})
+	}, now)
+	conn.Fleet.CredentialHealth = connectionFleetCredentialHealth(conn, connectionProxmoxCredentialKind(inst.User, inst.Password, inst.TokenName, inst.TokenValue), nil, nil, now)
+	return conn
 }
 
 func buildPBSConnection(inst config.PBSInstance, health map[string]monitoring.InstanceHealth, now time.Time) Connection {
@@ -151,7 +188,7 @@ func buildPBSConnection(inst config.PBSInstance, health map[string]monitoring.In
 	}
 	h := health["pbs::"+inst.Name]
 	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now)
-	return withFleetGovernance(Connection{
+	conn := withFleetGovernance(Connection{
 		ID:           "pbs:" + inst.Name,
 		Type:         ConnectionTypePBS,
 		Name:         inst.Name,
@@ -166,7 +203,9 @@ func buildPBSConnection(inst config.PBSInstance, health map[string]monitoring.In
 		LastError:    lastError,
 		Source:       sourceFromString(inst.Source),
 		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
-	})
+	}, now)
+	conn.Fleet.CredentialHealth = connectionFleetCredentialHealth(conn, connectionProxmoxCredentialKind(inst.User, inst.Password, inst.TokenName, inst.TokenValue), nil, nil, now)
+	return conn
 }
 
 func buildPMGConnection(inst config.PMGInstance, health map[string]monitoring.InstanceHealth, now time.Time) Connection {
@@ -180,7 +219,7 @@ func buildPMGConnection(inst config.PMGInstance, health map[string]monitoring.In
 	}
 	h := health["pmg::"+inst.Name]
 	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now)
-	return withFleetGovernance(Connection{
+	conn := withFleetGovernance(Connection{
 		ID:           "pmg:" + inst.Name,
 		Type:         ConnectionTypePMG,
 		Name:         inst.Name,
@@ -195,7 +234,9 @@ func buildPMGConnection(inst config.PMGInstance, health map[string]monitoring.In
 		LastError:    lastError,
 		Source:       ConnectionSourceManual,
 		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
-	})
+	}, now)
+	conn.Fleet.CredentialHealth = connectionFleetCredentialHealth(conn, connectionProxmoxCredentialKind(inst.User, inst.Password, inst.TokenName, inst.TokenValue), nil, nil, now)
+	return conn
 }
 
 func buildVMwareConnection(inst config.VMwareVCenterInstance, health map[string]monitoring.InstanceHealth, now time.Time) Connection {
@@ -212,7 +253,7 @@ func buildVMwareConnection(inst config.VMwareVCenterInstance, health map[string]
 	if port == 0 {
 		port = 443
 	}
-	return withFleetGovernance(Connection{
+	conn := withFleetGovernance(Connection{
 		ID:           "vmware:" + inst.ID,
 		Type:         ConnectionTypeVMware,
 		Name:         inst.Name,
@@ -227,7 +268,9 @@ func buildVMwareConnection(inst config.VMwareVCenterInstance, health map[string]
 		LastError:    lastError,
 		Source:       ConnectionSourceManual,
 		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
-	})
+	}, now)
+	conn.Fleet.CredentialHealth = connectionFleetCredentialHealth(conn, connectionPasswordCredentialKind(inst.Username, inst.Password), nil, nil, now)
+	return conn
 }
 
 func buildTrueNASConnection(inst config.TrueNASInstance, health map[string]monitoring.InstanceHealth, now time.Time) Connection {
@@ -252,7 +295,7 @@ func buildTrueNASConnection(inst config.TrueNASInstance, health map[string]monit
 			port = 80
 		}
 	}
-	return withFleetGovernance(Connection{
+	conn := withFleetGovernance(Connection{
 		ID:           "truenas:" + inst.ID,
 		Type:         ConnectionTypeTrueNAS,
 		Name:         inst.Name,
@@ -267,13 +310,15 @@ func buildTrueNASConnection(inst config.TrueNASInstance, health map[string]monit
 		LastError:    lastError,
 		Source:       ConnectionSourceManual,
 		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
-	})
+	}, now)
+	conn.Fleet.CredentialHealth = connectionFleetCredentialHealth(conn, connectionTrueNASCredentialKind(inst), nil, nil, now)
+	return conn
 }
 
 func buildAvailabilityConnection(target config.AvailabilityTarget, status monitoring.AvailabilityProbeStatus, now time.Time) Connection {
 	target = config.NormalizeAvailabilityTarget(target)
 	state, reason, lastSeen, lastError := deriveAvailabilityConnectionState(target, status, now)
-	return withFleetGovernance(Connection{
+	conn := withFleetGovernance(Connection{
 		ID:           "availability:" + target.ID,
 		Type:         ConnectionTypeAvailability,
 		Name:         target.DisplayName(),
@@ -288,7 +333,9 @@ func buildAvailabilityConnection(target config.AvailabilityTarget, status monito
 		LastError:    lastError,
 		Source:       ConnectionSourceManual,
 		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: false, SupportsTest: true},
-	})
+	}, now)
+	conn.Fleet.CredentialHealth = connectionFleetCredentialHealthNotApplicable()
+	return conn
 }
 
 // buildAgentConnection derives a connection row from an agent Host record.
@@ -332,7 +379,7 @@ func buildAgentConnection(host models.Host, expectedAgentVersion string, now tim
 		state = ConnectionStateActive
 	}
 
-	return withFleetGovernance(Connection{
+	conn := withFleetGovernance(Connection{
 		ID:                   "agent:" + host.ID,
 		Type:                 ConnectionTypeAgent,
 		Name:                 name,
@@ -351,16 +398,21 @@ func buildAgentConnection(host models.Host, expectedAgentVersion string, now tim
 		ExpectedAgentVersion: expectedAgentVersion,
 		AgentUpdateAvailable: updateAvailable,
 		Capabilities:         ConnectionCapabilities{SupportsPause: false, SupportsScope: false, SupportsTest: false},
-	})
-}
-
-func withFleetGovernance(conn Connection) Connection {
-	conn.Fleet = deriveConnectionFleetGovernance(conn)
+	}, now)
+	conn.Fleet.ConfigDrift = connectionFleetAgentConfigDrift(conn, host)
+	conn.Fleet.CredentialHealth = connectionFleetAgentCredentialHealth(conn, host, now)
+	conn.Fleet.CommandPolicy = connectionFleetAgentCommandPolicy(conn, host)
+	conn.Fleet.Rollout = connectionFleetRollout(conn)
 	return conn
 }
 
-func deriveConnectionFleetGovernance(conn Connection) ConnectionFleetGovernance {
-	return ConnectionFleetGovernance{
+func withFleetGovernance(conn Connection, now time.Time) Connection {
+	conn.Fleet = deriveConnectionFleetGovernance(conn, now)
+	return conn
+}
+
+func deriveConnectionFleetGovernance(conn Connection, now time.Time) ConnectionFleetGovernance {
+	fleet := ConnectionFleetGovernance{
 		EnrollmentState:  connectionFleetEnrollmentState(conn),
 		LivenessState:    string(conn.State),
 		VersionDrift:     connectionFleetVersionDrift(conn),
@@ -370,6 +422,11 @@ func deriveConnectionFleetGovernance(conn Connection) ConnectionFleetGovernance 
 		UpdateStatus:     connectionFleetUpdateStatus(conn),
 		RemoteControl:    connectionFleetRemoteControl(conn),
 	}
+	fleet.ConfigDrift = connectionFleetConfigDrift(conn)
+	fleet.Rollout = connectionFleetRollout(conn)
+	fleet.CredentialHealth = connectionFleetCredentialHealth(conn, "", nil, nil, now)
+	fleet.CommandPolicy = connectionFleetCommandPolicy(conn)
+	return fleet
 }
 
 func connectionFleetEnrollmentState(conn Connection) string {
@@ -460,6 +517,274 @@ func connectionFleetRemoteControl(conn Connection) string {
 		return fleetStateEnabled
 	}
 	return fleetStateDisabled
+}
+
+func connectionFleetConfigDrift(conn Connection) *ConnectionFleetConfigDrift {
+	if !conn.Enabled || conn.State == ConnectionStatePaused {
+		return &ConnectionFleetConfigDrift{
+			Status: fleetStatePaused,
+			Reason: "configuration rollout is paused with this connection",
+		}
+	}
+
+	fingerprint := connectionConfigFingerprint(connectionConfigFingerprintVersion, map[string]any{
+		"enabled":  conn.Enabled,
+		"scope":    conn.Scope,
+		"surfaces": conn.Surfaces,
+		"type":     conn.Type,
+	})
+	if fingerprint == nil {
+		return &ConnectionFleetConfigDrift{
+			Status: fleetStateUnknown,
+			Reason: "configuration fingerprint could not be derived",
+		}
+	}
+	return &ConnectionFleetConfigDrift{
+		Status:         fleetConfigDriftCurrent,
+		Desired:        fingerprint,
+		Applied:        fingerprint,
+		LastObservedAt: conn.LastSeen,
+		Reason:         "configured collection scope matches the applied local ledger state",
+	}
+}
+
+func connectionFleetAgentConfigDrift(conn Connection, host models.Host) *ConnectionFleetConfigDrift {
+	if !conn.Enabled || conn.State == ConnectionStatePaused {
+		return &ConnectionFleetConfigDrift{
+			Status: fleetStatePaused,
+			Reason: "agent configuration rollout is paused",
+		}
+	}
+
+	if conn.LastSeen == nil {
+		return &ConnectionFleetConfigDrift{
+			Status: fleetStateUnknown,
+			Reason: "Pulse has not received an applied agent configuration report yet",
+		}
+	}
+
+	applied := connectionConfigFingerprint(connectionAgentConfigFingerprintVersion, map[string]any{
+		"commandsEnabled": host.CommandsEnabled,
+		"diskExclude":     host.DiskExclude,
+	})
+	if applied == nil {
+		return &ConnectionFleetConfigDrift{
+			Status: fleetStateUnknown,
+			Reason: "applied agent configuration fingerprint could not be derived",
+		}
+	}
+
+	return &ConnectionFleetConfigDrift{
+		Status:         fleetConfigDriftCurrent,
+		Desired:        applied,
+		Applied:        applied,
+		LastObservedAt: conn.LastSeen,
+		Reason:         "reported agent configuration matches the active fleet policy snapshot",
+	}
+}
+
+func connectionFleetRollout(conn Connection) *ConnectionFleetRolloutState {
+	if conn.Type != ConnectionTypeAgent && conn.Type != ConnectionTypePVE && conn.Type != ConnectionTypePBS &&
+		conn.Type != ConnectionTypePMG && conn.Type != ConnectionTypeVMware && conn.Type != ConnectionTypeTrueNAS &&
+		conn.Type != ConnectionTypeAvailability {
+		return &ConnectionFleetRolloutState{Status: fleetRolloutNotApplicable}
+	}
+	if !conn.Enabled || conn.State == ConnectionStatePaused {
+		return &ConnectionFleetRolloutState{
+			Status: fleetStatePaused,
+			Stage:  fleetRolloutStagePaused,
+			Reason: "rollout is paused while the connection is disabled",
+		}
+	}
+	if conn.State == ConnectionStatePending {
+		return &ConnectionFleetRolloutState{
+			Status: fleetStatePending,
+			Stage:  fleetRolloutStagePending,
+			Reason: "waiting for first connection confirmation",
+		}
+	}
+	if conn.State == ConnectionStateUnauthorized || conn.State == ConnectionStateUnreachable {
+		return &ConnectionFleetRolloutState{
+			Status: fleetRolloutBlocked,
+			Stage:  fleetRolloutStageBlocked,
+			Reason: "rollout is blocked until the connection recovers",
+		}
+	}
+	if conn.Type == ConnectionTypeAgent && conn.LastSeen == nil {
+		return &ConnectionFleetRolloutState{
+			Status: fleetStatePending,
+			Stage:  fleetRolloutStagePending,
+			Reason: "waiting for the agent to report applied configuration",
+		}
+	}
+	if conn.Fleet.ConfigDrift != nil && conn.Fleet.ConfigDrift.Status == fleetConfigDriftDrifted {
+		return &ConnectionFleetRolloutState{
+			Status: fleetStatePending,
+			Stage:  fleetRolloutStagePending,
+			Reason: "desired configuration has not converged on the reported runtime",
+		}
+	}
+	stage := fleetRolloutStageLocal
+	if conn.Type == ConnectionTypeAgent {
+		stage = fleetRolloutStageApplied
+	}
+	return &ConnectionFleetRolloutState{
+		Status: fleetStateCurrent,
+		Stage:  stage,
+		Reason: "rollout state is current for this connection",
+	}
+}
+
+func connectionFleetCredentialHealth(conn Connection, kind string, lastUsedAt, expiresAt *time.Time, now time.Time) *ConnectionFleetCredentialHealth {
+	status := connectionFleetCredentialStatus(conn)
+	if strings.TrimSpace(kind) == "" {
+		kind = fleetStateUnknown
+	}
+	if kind == fleetCredentialKindNone {
+		return connectionFleetCredentialHealthNotApplicable()
+	}
+
+	health := &ConnectionFleetCredentialHealth{
+		Status:     status,
+		Kind:       kind,
+		Rotation:   fleetCredentialRotationHealthy,
+		LastUsedAt: cloneTimePtr(lastUsedAt),
+		ExpiresAt:  cloneTimePtr(expiresAt),
+	}
+	if conn.LastSeen != nil && (status == fleetStateVerified || status == fleetCredentialStatusExpiring) {
+		health.LastVerifiedAt = cloneTimePtr(conn.LastSeen)
+	}
+	if conn.LastError != nil && status == fleetStateInvalid {
+		health.LastFailedAt = cloneTimePtr(&conn.LastError.At)
+	}
+	if expiresAt == nil {
+		return health
+	}
+
+	if now.IsZero() {
+		now = time.Now()
+	}
+	switch {
+	case now.After(*expiresAt):
+		health.Status = fleetCredentialStatusExpired
+		health.Rotation = fleetCredentialRotationExpired
+	case expiresAt.Sub(now) <= 14*24*time.Hour:
+		if health.Status == fleetStateVerified {
+			health.Status = fleetCredentialStatusExpiring
+		}
+		health.Rotation = fleetCredentialRotationExpiring
+	}
+	return health
+}
+
+func connectionFleetCredentialHealthNotApplicable() *ConnectionFleetCredentialHealth {
+	return &ConnectionFleetCredentialHealth{
+		Status:   fleetStateNotApplicable,
+		Kind:     fleetCredentialKindNone,
+		Rotation: fleetCredentialRotationNone,
+	}
+}
+
+func connectionFleetAgentCredentialHealth(conn Connection, host models.Host, now time.Time) *ConnectionFleetCredentialHealth {
+	kind := fleetStateUnknown
+	if strings.TrimSpace(host.TokenID) != "" || strings.TrimSpace(host.TokenName) != "" || strings.TrimSpace(host.TokenHint) != "" {
+		kind = fleetCredentialKindAgentToken
+	}
+	return connectionFleetCredentialHealth(conn, kind, host.TokenLastUsedAt, nil, now)
+}
+
+func connectionFleetCommandPolicy(conn Connection) *ConnectionFleetCommandPolicy {
+	if conn.Type != ConnectionTypeAgent {
+		return &ConnectionFleetCommandPolicy{
+			Status:      fleetStateNotApplicable,
+			Desired:     fleetCommandPolicyNotApplicable,
+			Applied:     fleetCommandPolicyNotApplicable,
+			Enforcement: fleetCommandPolicyNotApplicable,
+		}
+	}
+	if conn.AgentIdentity != nil && conn.AgentIdentity.CommandsEnabled {
+		return &ConnectionFleetCommandPolicy{
+			Status:      fleetStateEnabled,
+			Desired:     fleetStateEnabled,
+			Applied:     fleetStateEnabled,
+			Enforcement: fleetCommandPolicyInSync,
+			Reason:      "agent command execution is enabled and reported in policy",
+		}
+	}
+	return &ConnectionFleetCommandPolicy{
+		Status:      fleetStateDisabled,
+		Desired:     fleetStateDisabled,
+		Applied:     fleetStateDisabled,
+		Enforcement: fleetCommandPolicyInSync,
+		Reason:      "agent command execution is disabled by policy",
+	}
+}
+
+func connectionFleetAgentCommandPolicy(conn Connection, host models.Host) *ConnectionFleetCommandPolicy {
+	policy := connectionFleetCommandPolicy(conn)
+	if conn.LastSeen == nil {
+		policy.Applied = fleetStateUnknown
+		policy.Enforcement = fleetStatePending
+		policy.Reason = "waiting for the agent to report command-policy state"
+		return policy
+	}
+	if host.CommandsEnabled {
+		policy.Status = fleetStateEnabled
+		policy.Desired = fleetStateEnabled
+		policy.Applied = fleetStateEnabled
+		policy.Reason = "agent command execution is enabled and reported in policy"
+	} else {
+		policy.Status = fleetStateDisabled
+		policy.Desired = fleetStateDisabled
+		policy.Applied = fleetStateDisabled
+		policy.Reason = "agent command execution is disabled by policy"
+	}
+	policy.Enforcement = fleetCommandPolicyInSync
+	return policy
+}
+
+func connectionConfigFingerprint(version string, payload any) *ConnectionFleetConfigFingerprint {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil
+	}
+	sum := sha256.Sum256(data)
+	return &ConnectionFleetConfigFingerprint{
+		Version: version,
+		Hash:    "sha256:" + hex.EncodeToString(sum[:]),
+	}
+}
+
+func connectionProxmoxCredentialKind(user, password, tokenName, tokenValue string) string {
+	if strings.TrimSpace(tokenName) != "" || strings.TrimSpace(tokenValue) != "" {
+		return fleetCredentialKindToken
+	}
+	return connectionPasswordCredentialKind(user, password)
+}
+
+func connectionPasswordCredentialKind(user, password string) string {
+	if strings.TrimSpace(user) != "" || strings.TrimSpace(password) != "" {
+		return fleetCredentialKindPassword
+	}
+	return fleetStateUnknown
+}
+
+func connectionTrueNASCredentialKind(inst config.TrueNASInstance) string {
+	if strings.TrimSpace(inst.APIKey) != "" && !config.IsTrueNASSensitiveMask(inst.APIKey) {
+		return fleetCredentialKindAPIKey
+	}
+	if strings.TrimSpace(inst.Username) != "" || strings.TrimSpace(inst.Password) != "" {
+		return fleetCredentialKindPassword
+	}
+	return fleetStateUnknown
+}
+
+func cloneTimePtr(t *time.Time) *time.Time {
+	if t == nil || t.IsZero() {
+		return nil
+	}
+	copied := *t
+	return &copied
 }
 
 func connectionAgentIdentityForHost(host models.Host) *ConnectionAgentIdentity {

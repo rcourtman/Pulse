@@ -158,8 +158,8 @@ checks, merge tenants, or become the source of truth for telemetry freshness.
     navigate to canonical destinations, but must not import or call local
     `upgradeMetrics`, `conversionEvents`, or infrastructure onboarding metrics
     wrappers.
-    Agentless availability targets share this same settings/API boundary as
-    platform-connection-managed infrastructure, not host-install lifecycle.
+    Agentless availability targets and structured `/api/connections` fleet posture share this same settings/API boundary as
+    platform-managed infrastructure, not host-install lifecycle or prose-derived row labels.
     `internal/api/availability_handlers.go` owns CRUD and test payloads for
     `/api/availability-targets`, while
     `frontend-modern/src/api/availabilityTargets.ts` and
@@ -2780,9 +2780,13 @@ That same `/api/connections` row contract now also owns the fleet-governance
 projection consumed by the infrastructure workspace. `Connection.fleet` is the
 canonical machine-readable source for enrollment state, liveness, version
 drift, adapter health, config rollout, credential status, update posture, and
-remote-control posture; frontend settings surfaces may format those facts, but
-must not infer a second fleet state from row labels, error-message text, or
-provider-local table heuristics.
+remote-control posture. Its nested `configDrift`, `rollout`,
+`credentialHealth`, and `commandPolicy` objects carry the explicit
+desired-versus-applied config fingerprints, staged rollout state, richer
+credential validity/rotation facts, and command-policy enforcement state used
+by Settings and CLI consumers. Frontend settings surfaces may format those
+facts, but must not infer a second fleet state from row labels, error-message
+text, or provider-local table heuristics.
 That same shared infrastructure-settings boundary also owns install-profile
 semantics surfaced by
 `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`:

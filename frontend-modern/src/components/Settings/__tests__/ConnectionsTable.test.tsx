@@ -147,6 +147,41 @@ describe('ConnectionsTable', () => {
     expect(screen.getByText('certificate expired')).toBeInTheDocument();
   });
 
+  it('renders compact fleet posture chips for operator attention states', () => {
+    render(() => (
+      <ConnectionsTable
+        rows={() => [
+          row({
+            fleetHighlights: [
+              {
+                key: 'config-drift',
+                label: 'Config drift',
+                detail: 'Desired and applied fingerprints differ.',
+                tone: 'warning',
+              },
+              {
+                key: 'command-policy',
+                label: 'Remote control disabled',
+                detail: 'Commands are disabled by policy.',
+                tone: 'info',
+              },
+            ],
+          }),
+        ]}
+      />
+    ));
+
+    expect(screen.getByText('Posture')).toBeInTheDocument();
+    expect(screen.getByText('Config drift')).toHaveAttribute(
+      'title',
+      'Desired and applied fingerprints differ.',
+    );
+    expect(screen.getByText('Remote control disabled')).toHaveAttribute(
+      'title',
+      'Commands are disabled by policy.',
+    );
+  });
+
   it('renders Edit / Pause / Remove buttons when actions and onEdit are provided', () => {
     const onEdit = vi.fn();
     const actions = makeActions();

@@ -2,12 +2,13 @@ import type { Connection, ConnectionAgentIdentity } from '@/api/connections';
 import type { ConnectionType } from '@/api/connections';
 import type {
   ConnectionFleetAdapterHealth,
-  ConnectionFleetConfigRollout,
-  ConnectionFleetCredentialStatus,
+  ConnectionFleetCommandPolicy,
+  ConnectionFleetConfigDrift,
+  ConnectionFleetCredentialHealth,
   ConnectionFleetEnrollmentState,
   ConnectionFleetGovernance,
   ConnectionFleetLivenessState,
-  ConnectionFleetRemoteControl,
+  ConnectionFleetRolloutState,
   ConnectionFleetUpdateStatus,
   ConnectionFleetVersionDrift,
 } from '@/api/connections';
@@ -239,9 +240,13 @@ export type FleetGovernanceSignalKey =
   | 'version'
   | 'adapter'
   | 'config'
+  | 'config-drift'
   | 'credentials'
+  | 'rollout'
+  | 'credential-health'
   | 'updates'
-  | 'remote-control';
+  | 'remote-control'
+  | 'command-policy';
 
 export type FleetGovernanceSignalTone = 'ok' | 'info' | 'warning' | 'critical' | 'muted';
 
@@ -265,6 +270,69 @@ const DEFAULT_FLEET_GOVERNANCE: ConnectionFleetGovernance = {
 
 export const fleetGovernanceForConnection = (connection: Connection): ConnectionFleetGovernance =>
   connection.fleet ?? DEFAULT_FLEET_GOVERNANCE;
+
+const configDriftFromFleet = (fleet: ConnectionFleetGovernance): ConnectionFleetConfigDrift => {
+  if (fleet.configDrift) return fleet.configDrift;
+
+  switch (fleet.configRollout) {
+    case 'configured':
+    case 'reported':
+      return { status: 'current', reason: 'Configuration is current.' };
+    case 'paused':
+      return { status: 'paused', reason: 'Configuration rollout is paused.' };
+    case 'unknown':
+      return { status: 'unknown', reason: 'Configuration drift state is unknown.' };
+  }
+};
+
+const rolloutFromFleet = (fleet: ConnectionFleetGovernance): ConnectionFleetRolloutState => {
+  if (fleet.rollout) return fleet.rollout;
+
+  switch (fleet.configRollout) {
+    case 'configured':
+    case 'reported':
+      return { status: 'current', stage: 'applied' };
+    case 'paused':
+      return { status: 'paused', stage: 'paused' };
+    case 'unknown':
+      return { status: 'unknown' };
+  }
+};
+
+const credentialHealthFromFleet = (
+  fleet: ConnectionFleetGovernance,
+): ConnectionFleetCredentialHealth => {
+  if (fleet.credentialHealth) return fleet.credentialHealth;
+
+  switch (fleet.credentialStatus) {
+    case 'verified':
+      return { status: 'verified' };
+    case 'invalid':
+      return { status: 'invalid' };
+    case 'paused':
+      return { status: 'paused' };
+    case 'unknown':
+      return { status: 'unknown' };
+  }
+};
+
+const commandPolicyFromFleet = (fleet: ConnectionFleetGovernance): ConnectionFleetCommandPolicy => {
+  if (fleet.commandPolicy) return fleet.commandPolicy;
+
+  switch (fleet.remoteControl) {
+    case 'enabled':
+      return { status: 'enabled', desired: 'enabled', applied: 'enabled', enforcement: 'in-sync' };
+    case 'disabled':
+      return {
+        status: 'disabled',
+        desired: 'disabled',
+        applied: 'disabled',
+        enforcement: 'in-sync',
+      };
+    case 'not-applicable':
+      return { status: 'not-applicable', enforcement: 'not-applicable' };
+  }
+};
 
 const fleetSignalClassNameByTone: Record<FleetGovernanceSignalTone, string> = {
   ok: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200',
@@ -438,68 +506,152 @@ const adapterSignal = (state: ConnectionFleetAdapterHealth): FleetGovernanceSign
   }
 };
 
-const configSignal = (state: ConnectionFleetConfigRollout): FleetGovernanceSignal => {
-  switch (state) {
-    case 'configured':
+const configDriftSignal = (state: ConnectionFleetConfigDrift): FleetGovernanceSignal => {
+  switch (state.status) {
+    case 'current':
       return {
-        key: 'config',
-        label: 'Config set',
-        detail: 'This source has configured collection scope.',
+        key: 'config-drift',
+        label: 'Config current',
+        detail: state.reason || 'Desired and applied configuration fingerprints match.',
         tone: 'ok',
       };
-    case 'reported':
+    case 'drifted':
       return {
-        key: 'config',
-        label: 'Config reported',
-        detail: 'This agent is reporting its applied runtime configuration.',
-        tone: 'ok',
+        key: 'config-drift',
+        label: 'Config drift',
+        detail: state.reason || 'Desired and applied configuration fingerprints do not match.',
+        tone: 'warning',
+      };
+    case 'pending':
+      return {
+        key: 'config-drift',
+        label: 'Config pending',
+        detail: state.reason || 'Pulse is waiting for applied configuration confirmation.',
+        tone: 'warning',
       };
     case 'paused':
       return {
-        key: 'config',
+        key: 'config-drift',
         label: 'Config paused',
-        detail: 'Config changes are not active while this source is paused.',
+        detail: state.reason || 'Configuration rollout is paused for this source.',
         tone: 'muted',
       };
     case 'unknown':
       return {
-        key: 'config',
+        key: 'config-drift',
         label: 'Config unknown',
-        detail: 'Pulse has not received enough runtime configuration state yet.',
+        detail: state.reason || 'Pulse does not yet have enough config fingerprint data.',
         tone: 'warning',
+      };
+    case 'not-applicable':
+      return {
+        key: 'config-drift',
+        label: 'No config drift',
+        detail: state.reason || 'This source is not governed by desired/applied config rollout.',
+        tone: 'muted',
       };
   }
 };
 
-const credentialSignal = (state: ConnectionFleetCredentialStatus): FleetGovernanceSignal => {
-  switch (state) {
+const rolloutSignal = (state: ConnectionFleetRolloutState): FleetGovernanceSignal => {
+  switch (state.status) {
+    case 'current':
+      return {
+        key: 'rollout',
+        label: 'Rollout current',
+        detail: state.reason || 'The rollout state is current.',
+        tone: 'ok',
+      };
+    case 'pending':
+      return {
+        key: 'rollout',
+        label: 'Rollout pending',
+        detail: state.reason || 'The staged rollout is waiting for confirmation.',
+        tone: 'warning',
+      };
+    case 'paused':
+      return {
+        key: 'rollout',
+        label: 'Rollout paused',
+        detail: state.reason || 'The staged rollout is paused.',
+        tone: 'warning',
+      };
+    case 'blocked':
+      return {
+        key: 'rollout',
+        label: 'Rollout blocked',
+        detail: state.reason || 'The rollout is blocked by the current connection state.',
+        tone: 'critical',
+      };
+    case 'unknown':
+      return {
+        key: 'rollout',
+        label: 'Rollout unknown',
+        detail: state.reason || 'Pulse has not classified staged rollout state yet.',
+        tone: 'warning',
+      };
+    case 'not-applicable':
+      return {
+        key: 'rollout',
+        label: 'No rollout',
+        detail: state.reason || 'This source does not use staged rollout control.',
+        tone: 'muted',
+      };
+  }
+};
+
+const credentialHealthSignal = (
+  state: ConnectionFleetCredentialHealth,
+): FleetGovernanceSignal => {
+  switch (state.status) {
     case 'verified':
       return {
-        key: 'credentials',
+        key: 'credential-health',
         label: 'Credentials verified',
         detail: 'The current credential path is accepted.',
         tone: 'ok',
       };
     case 'invalid':
       return {
-        key: 'credentials',
+        key: 'credential-health',
         label: 'Credentials invalid',
         detail: 'The current credential path is rejected by the source.',
         tone: 'critical',
       };
+    case 'expired':
+      return {
+        key: 'credential-health',
+        label: 'Credentials expired',
+        detail: 'The credential has passed its configured expiration.',
+        tone: 'critical',
+      };
+    case 'expiring':
+      return {
+        key: 'credential-health',
+        label: 'Credentials expiring',
+        detail: 'The credential is approaching its configured expiration.',
+        tone: 'warning',
+      };
     case 'paused':
       return {
-        key: 'credentials',
+        key: 'credential-health',
         label: 'Credentials paused',
         detail: 'Credential checks are paused with this source.',
         tone: 'muted',
       };
     case 'unknown':
       return {
-        key: 'credentials',
+        key: 'credential-health',
         label: 'Credentials unknown',
         detail: 'Pulse has not verified this credential path yet.',
         tone: 'warning',
+      };
+    case 'not-applicable':
+      return {
+        key: 'credential-health',
+        label: 'No credentials',
+        detail: 'This source does not use a stored credential path.',
+        tone: 'muted',
       };
   }
 };
@@ -537,27 +689,41 @@ const updateSignal = (state: ConnectionFleetUpdateStatus): FleetGovernanceSignal
   }
 };
 
-const remoteControlSignal = (state: ConnectionFleetRemoteControl): FleetGovernanceSignal => {
-  switch (state) {
+const commandPolicySignal = (state: ConnectionFleetCommandPolicy): FleetGovernanceSignal => {
+  switch (state.status) {
     case 'enabled':
       return {
-        key: 'remote-control',
+        key: 'command-policy',
         label: 'Remote control enabled',
-        detail: 'Pulse command execution is enabled for this agent.',
+        detail: state.reason || 'Pulse command execution is enabled for this agent.',
         tone: 'info',
       };
     case 'disabled':
       return {
-        key: 'remote-control',
-        label: 'Remote control off',
-        detail: 'Pulse command execution is disabled for this agent.',
-        tone: 'muted',
+        key: 'command-policy',
+        label: 'Remote control disabled',
+        detail: state.reason || 'Pulse command execution is disabled for this agent.',
+        tone: 'info',
+      };
+    case 'blocked':
+      return {
+        key: 'command-policy',
+        label: 'Remote control blocked',
+        detail: state.reason || 'Pulse command execution is blocked by policy.',
+        tone: 'critical',
+      };
+    case 'unknown':
+      return {
+        key: 'command-policy',
+        label: 'Remote control unknown',
+        detail: state.reason || 'Pulse has not confirmed command-policy state yet.',
+        tone: 'warning',
       };
     case 'not-applicable':
       return {
-        key: 'remote-control',
+        key: 'command-policy',
         label: 'No remote control',
-        detail: 'This source does not use Pulse Agent command execution.',
+        detail: state.reason || 'This source does not use Pulse Agent command execution.',
         tone: 'muted',
       };
   }
@@ -570,12 +736,13 @@ export const fleetGovernanceSignalsForConnection = (
   return [
     enrollmentSignal(fleet.enrollmentState, connection),
     livenessSignal(fleet.livenessState),
+    credentialHealthSignal(credentialHealthFromFleet(fleet)),
+    configDriftSignal(configDriftFromFleet(fleet)),
+    rolloutSignal(rolloutFromFleet(fleet)),
     versionSignal(fleet.versionDrift),
-    adapterSignal(fleet.adapterHealth),
-    configSignal(fleet.configRollout),
-    credentialSignal(fleet.credentialStatus),
     updateSignal(fleet.updateStatus),
-    remoteControlSignal(fleet.remoteControl),
+    adapterSignal(fleet.adapterHealth),
+    commandPolicySignal(commandPolicyFromFleet(fleet)),
   ];
 };
 

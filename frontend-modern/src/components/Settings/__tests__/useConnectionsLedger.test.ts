@@ -71,6 +71,164 @@ describe('useConnectionsLedger', () => {
     ]);
   });
 
+  it('prioritizes explicit rollout drift, credential, and command-policy posture', async () => {
+    const connections: Connection[] = [
+      {
+        id: 'agent:drifted',
+        type: 'agent',
+        name: 'drifted',
+        address: 'drifted',
+        state: 'active',
+        stateReason: '',
+        enabled: true,
+        surfaces: ['host'],
+        scope: { host: true },
+        lastSeen: '2026-04-23T12:00:00Z',
+        lastError: null,
+        source: 'agent',
+        fleet: {
+          enrollmentState: 'enrolled',
+          livenessState: 'active',
+          versionDrift: 'behind',
+          adapterHealth: 'healthy',
+          configRollout: 'reported',
+          credentialStatus: 'verified',
+          updateStatus: 'update-available',
+          remoteControl: 'disabled',
+          configDrift: {
+            status: 'drifted',
+            desired: { version: 'host-agent-config/v1', hash: 'sha256:desired' },
+            applied: { version: 'host-agent-config/v1', hash: 'sha256:applied' },
+          },
+          rollout: { status: 'pending', stage: 'canary' },
+          credentialHealth: { status: 'verified', kind: 'agent-token' },
+          commandPolicy: {
+            status: 'disabled',
+            desired: 'disabled',
+            applied: 'disabled',
+            enforcement: 'in-sync',
+          },
+        },
+        capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+      },
+      {
+        id: 'pve:invalid',
+        type: 'pve',
+        name: 'invalid',
+        address: 'https://invalid:8006',
+        state: 'unauthorized',
+        stateReason: '403 forbidden',
+        enabled: true,
+        surfaces: ['vms'],
+        scope: { vms: true },
+        lastSeen: '2026-04-23T12:00:00Z',
+        lastError: { message: '403 forbidden', at: '2026-04-23T12:00:00Z' },
+        source: 'manual',
+        fleet: {
+          enrollmentState: 'configured',
+          livenessState: 'unauthorized',
+          versionDrift: 'not-applicable',
+          adapterHealth: 'blocked',
+          configRollout: 'configured',
+          credentialStatus: 'invalid',
+          updateStatus: 'not-applicable',
+          remoteControl: 'not-applicable',
+          configDrift: { status: 'current' },
+          rollout: { status: 'blocked' },
+          credentialHealth: { status: 'invalid', kind: 'token' },
+          commandPolicy: { status: 'not-applicable' },
+        },
+        capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+      },
+      {
+        id: 'pve:paused',
+        type: 'pve',
+        name: 'paused',
+        address: 'https://paused:8006',
+        state: 'paused',
+        stateReason: 'paused by user',
+        enabled: false,
+        surfaces: ['vms'],
+        scope: { vms: true },
+        lastSeen: null,
+        lastError: null,
+        source: 'manual',
+        fleet: {
+          enrollmentState: 'paused',
+          livenessState: 'paused',
+          versionDrift: 'not-applicable',
+          adapterHealth: 'paused',
+          configRollout: 'paused',
+          credentialStatus: 'paused',
+          updateStatus: 'not-applicable',
+          remoteControl: 'not-applicable',
+          configDrift: { status: 'paused' },
+          rollout: { status: 'paused' },
+          credentialHealth: { status: 'paused' },
+          commandPolicy: { status: 'not-applicable' },
+        },
+        capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+      },
+      {
+        id: 'agent:remote-disabled',
+        type: 'agent',
+        name: 'remote-disabled',
+        address: 'remote-disabled',
+        state: 'active',
+        stateReason: '',
+        enabled: true,
+        surfaces: ['host'],
+        scope: { host: true },
+        lastSeen: '2026-04-23T12:00:00Z',
+        lastError: null,
+        source: 'agent',
+        fleet: {
+          enrollmentState: 'enrolled',
+          livenessState: 'active',
+          versionDrift: 'current',
+          adapterHealth: 'healthy',
+          configRollout: 'reported',
+          credentialStatus: 'verified',
+          updateStatus: 'current',
+          remoteControl: 'disabled',
+          configDrift: { status: 'current' },
+          rollout: { status: 'current' },
+          credentialHealth: { status: 'verified', kind: 'agent-token' },
+          commandPolicy: {
+            status: 'disabled',
+            desired: 'disabled',
+            applied: 'disabled',
+            enforcement: 'in-sync',
+          },
+        },
+        capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+      },
+    ];
+    vi.spyOn(ConnectionsAPI, 'list').mockResolvedValue({ connections, systems: [] });
+
+    const { result } = renderHook(() => useConnectionsLedger());
+
+    await waitFor(() => expect(result.rows()).toHaveLength(4));
+    const byID = new Map(result.rows().map((row) => [row.id, row]));
+
+    expect(byID.get('agent:drifted')?.fleetHighlights.map((signal) => signal.label)).toEqual([
+      'Config drift',
+      'Rollout pending',
+      'Version behind',
+    ]);
+    expect(byID.get('pve:invalid')?.fleetHighlights.map((signal) => signal.label)).toEqual([
+      'Unauthorized',
+      'Credentials invalid',
+      'Rollout blocked',
+    ]);
+    expect(byID.get('pve:paused')?.fleetHighlights.map((signal) => signal.label)).toEqual([
+      'Rollout paused',
+    ]);
+    expect(
+      byID.get('agent:remote-disabled')?.fleetHighlights.map((signal) => signal.label),
+    ).toEqual(['Remote control disabled']);
+  });
+
   it('renders a Proxmox cluster row from the canonical system metadata', async () => {
     const connections: Connection[] = [
       {

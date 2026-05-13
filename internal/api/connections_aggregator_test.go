@@ -401,12 +401,31 @@ func TestBuildConnections_AgentFleetGovernance(t *testing.T) {
 		current.RemoteControl != fleetStateEnabled {
 		t.Fatalf("current agent fleet governance = %+v", current)
 	}
+	if current.ConfigDrift == nil ||
+		current.ConfigDrift.Status != fleetConfigDriftCurrent ||
+		current.ConfigDrift.Desired == nil ||
+		current.ConfigDrift.Applied == nil ||
+		current.ConfigDrift.Desired.Version != connectionAgentConfigFingerprintVersion ||
+		current.ConfigDrift.Desired.Hash != current.ConfigDrift.Applied.Hash {
+		t.Fatalf("current agent config drift = %+v", current.ConfigDrift)
+	}
+	if current.Rollout == nil || current.Rollout.Status != fleetStateCurrent || current.Rollout.Stage != fleetRolloutStageApplied {
+		t.Fatalf("current agent rollout = %+v", current.Rollout)
+	}
+	if current.CommandPolicy == nil ||
+		current.CommandPolicy.Status != fleetStateEnabled ||
+		current.CommandPolicy.Enforcement != fleetCommandPolicyInSync {
+		t.Fatalf("current agent command policy = %+v", current.CommandPolicy)
+	}
 
 	outdated := byID["agent:outdated"].Fleet
 	if outdated.VersionDrift != fleetStateBehind ||
 		outdated.UpdateStatus != fleetStateUpdateAvailable ||
 		outdated.RemoteControl != fleetStateDisabled {
 		t.Fatalf("outdated agent fleet governance = %+v", outdated)
+	}
+	if outdated.CommandPolicy == nil || outdated.CommandPolicy.Status != fleetStateDisabled {
+		t.Fatalf("outdated agent command policy = %+v", outdated.CommandPolicy)
 	}
 
 	pending := byID["agent:pending"].Fleet
@@ -416,6 +435,17 @@ func TestBuildConnections_AgentFleetGovernance(t *testing.T) {
 		pending.ConfigRollout != fleetStateUnknown ||
 		pending.CredentialStatus != fleetStateUnknown {
 		t.Fatalf("pending agent fleet governance = %+v", pending)
+	}
+	if pending.ConfigDrift == nil || pending.ConfigDrift.Status != fleetStateUnknown {
+		t.Fatalf("pending agent config drift = %+v", pending.ConfigDrift)
+	}
+	if pending.Rollout == nil || pending.Rollout.Status != fleetStatePending {
+		t.Fatalf("pending agent rollout = %+v", pending.Rollout)
+	}
+	if pending.CommandPolicy == nil ||
+		pending.CommandPolicy.Applied != fleetStateUnknown ||
+		pending.CommandPolicy.Enforcement != fleetStatePending {
+		t.Fatalf("pending agent command policy = %+v", pending.CommandPolicy)
 	}
 }
 
@@ -452,12 +482,33 @@ func TestBuildConnections_PlatformFleetGovernance(t *testing.T) {
 		healthy.RemoteControl != fleetStateNotApplicable {
 		t.Fatalf("healthy platform fleet governance = %+v", healthy)
 	}
+	if healthy.ConfigDrift == nil ||
+		healthy.ConfigDrift.Status != fleetConfigDriftCurrent ||
+		healthy.ConfigDrift.Desired == nil ||
+		healthy.ConfigDrift.Applied == nil ||
+		healthy.ConfigDrift.Desired.Hash != healthy.ConfigDrift.Applied.Hash {
+		t.Fatalf("healthy platform config drift = %+v", healthy.ConfigDrift)
+	}
+	if healthy.Rollout == nil || healthy.Rollout.Status != fleetStateCurrent {
+		t.Fatalf("healthy platform rollout = %+v", healthy.Rollout)
+	}
+	if healthy.CredentialHealth == nil || healthy.CredentialHealth.Status != fleetStateVerified {
+		t.Fatalf("healthy platform credential health = %+v", healthy.CredentialHealth)
+	}
 
 	badToken := byID["pve:bad-token"].Fleet
 	if badToken.AdapterHealth != fleetStateBlocked ||
 		badToken.CredentialStatus != fleetStateInvalid ||
 		badToken.LivenessState != string(ConnectionStateUnauthorized) {
 		t.Fatalf("bad token fleet governance = %+v", badToken)
+	}
+	if badToken.CredentialHealth == nil ||
+		badToken.CredentialHealth.Status != fleetStateInvalid ||
+		badToken.CredentialHealth.LastFailedAt == nil {
+		t.Fatalf("bad token credential health = %+v", badToken.CredentialHealth)
+	}
+	if badToken.Rollout == nil || badToken.Rollout.Status != fleetRolloutBlocked {
+		t.Fatalf("bad token rollout = %+v", badToken.Rollout)
 	}
 
 	paused := byID["pve:paused"].Fleet
@@ -466,6 +517,12 @@ func TestBuildConnections_PlatformFleetGovernance(t *testing.T) {
 		paused.ConfigRollout != fleetStatePaused ||
 		paused.CredentialStatus != fleetStatePaused {
 		t.Fatalf("paused platform fleet governance = %+v", paused)
+	}
+	if paused.ConfigDrift == nil || paused.ConfigDrift.Status != fleetStatePaused {
+		t.Fatalf("paused config drift = %+v", paused.ConfigDrift)
+	}
+	if paused.Rollout == nil || paused.Rollout.Status != fleetStatePaused {
+		t.Fatalf("paused rollout = %+v", paused.Rollout)
 	}
 }
 

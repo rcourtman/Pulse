@@ -538,8 +538,11 @@ profile and assignment columns, but embedded table framing must route through
    `connectionsTableModel.ts`, `useConnectionsLedger.ts`, and
    `InfrastructureSourceManager.tsx` may format enrollment, liveness, version
    drift, adapter health, config rollout, credential status, update posture,
-   and remote-control posture, but they must not reconstruct those facts from
-   table copy, status badge labels, or provider-local error strings.
+   and remote-control posture. Desired-versus-applied config drift, staged
+   rollout, credential health/rotation, and command-policy enforcement must
+   come from the explicit nested `fleet` objects on `/api/connections`; Settings
+   surfaces may rank or compact those signals, but they must not reconstruct
+   them from table copy, status badge labels, or provider-local error strings.
    Standalone host rows must still be recognizable at a glance, but that
    identity belongs in the existing row cells rather than new diagnostics
    columns: the landing table reuses the `System` and `Endpoint` cells for a

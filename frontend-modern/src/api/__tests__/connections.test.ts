@@ -128,6 +128,29 @@ describe('ConnectionsAPI', () => {
           credentialStatus: 'verified',
           updateStatus: 'update-available',
           remoteControl: 'enabled',
+          configDrift: {
+            status: 'drifted',
+            desired: { version: 'host-agent-config/v1', hash: 'sha256:desired' },
+            applied: { version: 'host-agent-config/v1', hash: 'sha256:applied' },
+            reason: 'desired fingerprint differs from applied runtime',
+          },
+          rollout: {
+            status: 'pending',
+            stage: 'canary',
+            reason: 'waiting for the agent to apply staged config',
+          },
+          credentialHealth: {
+            status: 'verified',
+            kind: 'agent-token',
+            rotation: 'healthy',
+            lastVerifiedAt: '2026-04-22T20:00:00Z',
+          },
+          commandPolicy: {
+            status: 'enabled',
+            desired: 'enabled',
+            applied: 'enabled',
+            enforcement: 'in-sync',
+          },
         },
         capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
       },
@@ -145,6 +168,29 @@ describe('ConnectionsAPI', () => {
       credentialStatus: 'verified',
       updateStatus: 'update-available',
       remoteControl: 'enabled',
+      configDrift: {
+        status: 'drifted',
+        desired: { version: 'host-agent-config/v1', hash: 'sha256:desired' },
+        applied: { version: 'host-agent-config/v1', hash: 'sha256:applied' },
+        reason: 'desired fingerprint differs from applied runtime',
+      },
+      rollout: {
+        status: 'pending',
+        stage: 'canary',
+        reason: 'waiting for the agent to apply staged config',
+      },
+      credentialHealth: {
+        status: 'verified',
+        kind: 'agent-token',
+        rotation: 'healthy',
+        lastVerifiedAt: '2026-04-22T20:00:00Z',
+      },
+      commandPolicy: {
+        status: 'enabled',
+        desired: 'enabled',
+        applied: 'enabled',
+        enforcement: 'in-sync',
+      },
     });
   });
 
