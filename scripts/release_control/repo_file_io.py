@@ -12,13 +12,37 @@ from typing import Any, Iterable
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REPO_ROOT = REPO_ROOT
+LOCAL_GIT_ENV_VARS = (
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CONFIG",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_IMPLICIT_WORK_TREE",
+    "GIT_GRAFT_FILE",
+    "GIT_INDEX_FILE",
+    "GIT_NO_REPLACE_OBJECTS",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_PREFIX",
+    "GIT_SHALLOW_FILE",
+    "GIT_COMMON_DIR",
+)
 
 
-def git_env(repo_root: Path | None = None) -> dict[str, str]:
+def strip_local_git_env(env: dict[str, str]) -> dict[str, str]:
+    for name in LOCAL_GIT_ENV_VARS:
+        env.pop(name, None)
+    return env
+
+
+def git_env(repo_root: Path | None = None, *, local_repo_root: Path | None = None) -> dict[str, str]:
     env = os.environ.copy()
     root = repo_root or REPO_ROOT
-    if root != DEFAULT_REPO_ROOT:
-        env.pop("GIT_INDEX_FILE", None)
+    local_root = local_repo_root or DEFAULT_REPO_ROOT
+    if root.resolve() != local_root.resolve():
+        strip_local_git_env(env)
     return env
 
 

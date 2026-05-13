@@ -72,6 +72,74 @@ class RegistryAuditTest(unittest.TestCase):
             self.assertIn("internal/staged.go", files)
             self.assertNotIn("pulse:internal/staged.go", files)
 
+    def test_tracked_workspace_files_scrubs_hook_env_for_sibling_repos(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir) / "workspace"
+            repo_root = workspace / "repos" / "pulse"
+            mobile_repo = workspace / "repos" / "pulse-mobile"
+            repo_root.mkdir(parents=True)
+            mobile_repo.mkdir(parents=True)
+
+            self.git(repo_root, "init")
+            (repo_root / "internal").mkdir()
+            (repo_root / "internal" / "local.go").write_text("package internal\n", encoding="utf-8")
+            self.git(repo_root, "add", "internal/local.go")
+            self.git(
+                repo_root,
+                "-c",
+                "user.name=Pulse Test",
+                "-c",
+                "user.email=pulse-test@example.invalid",
+                "commit",
+                "-m",
+                "initial",
+            )
+
+            self.git(mobile_repo, "init")
+            (mobile_repo / "src" / "relay" / "__tests__").mkdir(parents=True)
+            (mobile_repo / "src" / "relay" / "client.ts").write_text("export {}\n", encoding="utf-8")
+            (mobile_repo / "src" / "relay" / "__tests__" / "channel.test.ts").write_text(
+                "export {}\n",
+                encoding="utf-8",
+            )
+            self.git(mobile_repo, "add", "src/relay/client.ts", "src/relay/__tests__/channel.test.ts")
+            self.git(
+                mobile_repo,
+                "-c",
+                "user.name=Pulse Test",
+                "-c",
+                "user.email=pulse-test@example.invalid",
+                "commit",
+                "-m",
+                "initial",
+            )
+
+            hook_env = {
+                "GIT_DIR": str(repo_root / ".git"),
+                "GIT_WORK_TREE": str(repo_root),
+                "GIT_INDEX_FILE": str(repo_root / ".git" / "index"),
+                "GIT_COMMON_DIR": str(repo_root / ".git"),
+            }
+            contracts_dir = repo_root / "docs" / "release-control" / "v6" / "internal" / "subsystems"
+            contracts_dir.mkdir(parents=True)
+
+            with patch("registry_audit.REPO_ROOT", repo_root), patch(
+                "registry_audit.DEFAULT_CONTROL_PLANE",
+                {
+                    **registry_audit.DEFAULT_CONTROL_PLANE,
+                    "subsystems_dir_path": str(contracts_dir),
+                },
+            ), patch.dict(os.environ, hook_env, clear=False):
+                files = tracked_workspace_files(
+                    active_repos=["pulse", "pulse-mobile"],
+                    local_repo="pulse",
+                )
+
+            self.assertIn("internal/local.go", files)
+            self.assertIn("pulse-mobile:src/relay/client.ts", files)
+            self.assertIn("pulse-mobile:src/relay/__tests__/channel.test.ts", files)
+            self.assertNotIn("pulse-mobile:internal/local.go", files)
+
     def test_audit_registry_payload_accepts_valid_minimal_registry(self) -> None:
         payload = {
             "version": 13,

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 import re
 import subprocess
@@ -20,7 +19,7 @@ from canonical_completion_guard import (
     subsystem_matches_path,
 )
 from control_plane import DEFAULT_CONTROL_PLANE
-from repo_file_io import canonical_repo_id, canonical_workspace_repos_root, load_repo_json
+from repo_file_io import canonical_repo_id, canonical_workspace_repos_root, git_env, load_repo_json
 from status_audit import load_status_payload
 
 
@@ -73,16 +72,13 @@ def tracked_workspace_files(*, active_repos: list[str], local_repo: str) -> set[
         repo_root = REPO_ROOT if repo_id == local_repo else repos_root / repo_id
         if not repo_root.exists():
             continue
-        env = os.environ.copy()
-        if repo_root != REPO_ROOT:
-            env.pop("GIT_INDEX_FILE", None)
         result = subprocess.run(
             ["git", "ls-files", "-z"],
             cwd=repo_root,
             check=True,
             capture_output=True,
             text=False,
-            env=env,
+            env=git_env(repo_root, local_repo_root=REPO_ROOT),
         )
         for entry in result.stdout.split(b"\x00"):
             if not entry:

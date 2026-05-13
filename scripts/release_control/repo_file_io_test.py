@@ -10,6 +10,7 @@ from repo_file_io import (
     canonical_repo_id,
     canonical_repo_root,
     canonical_workspace_repos_root,
+    git_env,
     load_repo_json,
     missing_staged_repo_paths,
     read_repo_text,
@@ -78,6 +79,37 @@ class RepoFileIoTest(unittest.TestCase):
 
             with patch("repo_file_io.REPO_ROOT", repo_root):
                 self.assertEqual(missing_staged_repo_paths([staged_rel, missing_rel]), [missing_rel])
+
+    def test_git_env_preserves_local_hook_env_and_scrubs_other_repos(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir) / "workspace"
+            local_repo = workspace / "repos" / "pulse"
+            sibling_repo = workspace / "repos" / "pulse-mobile"
+            local_repo.mkdir(parents=True)
+            sibling_repo.mkdir(parents=True)
+
+            leaked_env = {
+                "PATH": os.environ.get("PATH", ""),
+                "GIT_DIR": str(local_repo / ".git"),
+                "GIT_WORK_TREE": str(local_repo),
+                "GIT_INDEX_FILE": str(local_repo / ".git" / "index"),
+                "GIT_COMMON_DIR": str(local_repo / ".git"),
+                "GIT_PREFIX": "docs/",
+            }
+
+            with patch.dict(os.environ, leaked_env, clear=True):
+                local_env = git_env(local_repo, local_repo_root=local_repo)
+                sibling_env = git_env(sibling_repo, local_repo_root=local_repo)
+
+            self.assertEqual(local_env["GIT_DIR"], leaked_env["GIT_DIR"])
+            self.assertEqual(local_env["GIT_WORK_TREE"], leaked_env["GIT_WORK_TREE"])
+            self.assertEqual(local_env["GIT_INDEX_FILE"], leaked_env["GIT_INDEX_FILE"])
+            self.assertEqual(sibling_env["PATH"], leaked_env["PATH"])
+            self.assertNotIn("GIT_DIR", sibling_env)
+            self.assertNotIn("GIT_WORK_TREE", sibling_env)
+            self.assertNotIn("GIT_INDEX_FILE", sibling_env)
+            self.assertNotIn("GIT_COMMON_DIR", sibling_env)
+            self.assertNotIn("GIT_PREFIX", sibling_env)
 
     def test_canonical_repo_identity_uses_git_common_dir_for_linked_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
