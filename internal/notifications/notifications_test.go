@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -3084,6 +3085,105 @@ func TestProcessQueuedNotification_QuietHoursReplayUsesQueueRetryTime(t *testing
 	}
 	if len(pending) != 1 || pending[0].ID == "" {
 		t.Fatalf("expected quiet-hours replay notification to become pending, got %#v", pending)
+	}
+}
+
+func TestEnqueueNotificationJobs_MixedQuietHoursGroupKeepsImmediateAlertsReady(t *testing.T) {
+	queue, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create queue: %v", err)
+	}
+	defer func() { _ = queue.Stop() }()
+
+	replayAt := time.Now().Add(time.Hour).UTC()
+	immediate := &alerts.Alert{
+		ID:           "immediate-critical",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelCritical,
+		ResourceName: "node-1",
+		Message:      "critical alert should send now",
+		StartTime:    time.Now().Add(-time.Minute),
+	}
+	deferred := &alerts.Alert{
+		ID:           "quiet-hours-warning",
+		Type:         "memory",
+		Level:        alerts.AlertLevelWarning,
+		ResourceName: "node-2",
+		Message:      "warning alert should wait",
+		StartTime:    time.Now().Add(-time.Minute),
+		Metadata: map[string]interface{}{
+			alerts.MetadataQuietHoursSuppressed:        true,
+			alerts.MetadataQuietHoursSuppressionReason: "non-critical",
+			alerts.MetadataQuietHoursReplayAt:          replayAt.Format(time.RFC3339),
+		},
+	}
+	jobs := buildNotificationDeliveryJobs(
+		EmailConfig{Enabled: true, SMTPHost: "smtp.example.com", SMTPPort: 587, From: "alerts@example.com", To: []string{"ops@example.com"}},
+		nil,
+		AppriseConfig{},
+		[]*alerts.Alert{immediate, deferred},
+		eventAlert,
+		time.Time{},
+	)
+
+	nm := &NotificationManager{}
+	if failed := nm.enqueueNotificationJobs(queue, jobs); failed {
+		t.Fatal("did not expect mixed quiet-hours enqueue to fall back")
+	}
+
+	pending, err := queue.GetPending(10)
+	if err != nil {
+		t.Fatalf("GetPending failed: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("expected one immediately pending notification, got %d", len(pending))
+	}
+	if pending[0].NextRetryAt != nil {
+		t.Fatalf("immediate notification next retry = %v, want nil", pending[0].NextRetryAt)
+	}
+	if len(pending[0].Alerts) != 1 || pending[0].Alerts[0].ID != immediate.ID {
+		t.Fatalf("pending alerts = %#v, want only %q", pending[0].Alerts, immediate.ID)
+	}
+
+	rows, err := queue.db.Query(`SELECT alerts, next_retry_at FROM notification_queue WHERE type = ? ORDER BY next_retry_at IS NOT NULL, next_retry_at`, "email")
+	if err != nil {
+		t.Fatalf("failed to read queued notifications: %v", err)
+	}
+	defer rows.Close()
+
+	type queuedRow struct {
+		alerts      []*alerts.Alert
+		nextRetryAt sql.NullInt64
+	}
+	var queued []queuedRow
+	for rows.Next() {
+		var row queuedRow
+		var alertsJSON string
+		if err := rows.Scan(&alertsJSON, &row.nextRetryAt); err != nil {
+			t.Fatalf("failed to scan queued notification: %v", err)
+		}
+		if err := json.Unmarshal([]byte(alertsJSON), &row.alerts); err != nil {
+			t.Fatalf("failed to unmarshal queued alerts: %v", err)
+		}
+		queued = append(queued, row)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate queued notifications: %v", err)
+	}
+	if len(queued) != 2 {
+		t.Fatalf("queued rows = %d, want 2", len(queued))
+	}
+	if queued[0].nextRetryAt.Valid {
+		t.Fatalf("immediate row next_retry_at = %d, want NULL", queued[0].nextRetryAt.Int64)
+	}
+	if len(queued[0].alerts) != 1 || queued[0].alerts[0].ID != immediate.ID {
+		t.Fatalf("immediate row alerts = %#v, want only %q", queued[0].alerts, immediate.ID)
+	}
+	if !queued[1].nextRetryAt.Valid || queued[1].nextRetryAt.Int64 != replayAt.Unix() {
+		t.Fatalf("deferred row next_retry_at = %#v, want %d", queued[1].nextRetryAt, replayAt.Unix())
+	}
+	if len(queued[1].alerts) != 1 || queued[1].alerts[0].ID != deferred.ID {
+		t.Fatalf("deferred row alerts = %#v, want only %q", queued[1].alerts, deferred.ID)
 	}
 }
 

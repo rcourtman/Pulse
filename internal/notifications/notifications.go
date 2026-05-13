@@ -73,6 +73,11 @@ type notificationDeliveryJob struct {
 	AppriseConfig *AppriseConfig
 }
 
+type notificationQueueBucket struct {
+	job         notificationDeliveryJob
+	nextRetryAt *time.Time
+}
+
 // createSecureWebhookClient creates an HTTP client with security controls
 func (n *NotificationManager) createSecureWebhookClient(timeout time.Duration) *http.Client {
 	return n.createSecureWebhookClientWithTLS(timeout, false)
@@ -342,35 +347,50 @@ func annotateResolvedMetadata(alert *alerts.Alert, resolvedAt time.Time) {
 	alert.Metadata[metadataResolvedAt] = resolvedAt.Format(time.RFC3339)
 }
 
+func quietHoursReplayAtForAlert(alert *alerts.Alert, now time.Time) *time.Time {
+	if alert == nil || alert.Metadata == nil {
+		return nil
+	}
+	raw, ok := alert.Metadata[alerts.MetadataQuietHoursReplayAt]
+	if !ok {
+		return nil
+	}
+
+	var parsed time.Time
+	switch value := raw.(type) {
+	case string:
+		ts, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
+		if err != nil {
+			return nil
+		}
+		parsed = ts
+	case time.Time:
+		parsed = value
+	case float64:
+		if value <= 0 {
+			return nil
+		}
+		parsed = time.Unix(int64(value), 0)
+	default:
+		return nil
+	}
+
+	if !parsed.After(now) {
+		return nil
+	}
+	parsed = parsed.UTC()
+	return &parsed
+}
+
 func quietHoursReplayAtForAlerts(alertList []*alerts.Alert, now time.Time) *time.Time {
 	var replayAt time.Time
 	for _, alert := range alertList {
-		if alert == nil || alert.Metadata == nil {
+		alertReplayAt := quietHoursReplayAtForAlert(alert, now)
+		if alertReplayAt == nil {
 			continue
 		}
-		raw, ok := alert.Metadata[alerts.MetadataQuietHoursReplayAt]
-		if !ok {
-			continue
-		}
-
-		var parsed time.Time
-		switch value := raw.(type) {
-		case string:
-			ts, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
-			if err != nil {
-				continue
-			}
-			parsed = ts
-		case time.Time:
-			parsed = value
-		case float64:
-			if value <= 0 {
-				continue
-			}
-			parsed = time.Unix(int64(value), 0)
-		}
-		if parsed.After(now) && (replayAt.IsZero() || parsed.After(replayAt)) {
-			replayAt = parsed
+		if replayAt.IsZero() || alertReplayAt.After(replayAt) {
+			replayAt = *alertReplayAt
 		}
 	}
 
@@ -379,6 +399,39 @@ func quietHoursReplayAtForAlerts(alertList []*alerts.Alert, now time.Time) *time
 	}
 	replayAt = replayAt.UTC()
 	return &replayAt
+}
+
+func notificationQueueBucketsForJob(job notificationDeliveryJob, now time.Time) []notificationQueueBucket {
+	if len(job.Alerts) == 0 {
+		return []notificationQueueBucket{{job: job}}
+	}
+
+	buckets := make([]notificationQueueBucket, 0, len(job.Alerts))
+	bucketIndexes := make(map[string]int, len(job.Alerts))
+	for _, alert := range job.Alerts {
+		nextRetryAt := quietHoursReplayAtForAlert(alert, now)
+		key := "immediate"
+		if nextRetryAt != nil {
+			key = nextRetryAt.Format(time.RFC3339Nano)
+		}
+
+		index, exists := bucketIndexes[key]
+		if !exists {
+			bucketJob := job
+			bucketJob.Alerts = nil
+			bucket := notificationQueueBucket{job: bucketJob}
+			if nextRetryAt != nil {
+				replayAt := *nextRetryAt
+				bucket.nextRetryAt = &replayAt
+			}
+			index = len(buckets)
+			bucketIndexes[key] = index
+			buckets = append(buckets, bucket)
+		}
+		buckets[index].job.Alerts = append(buckets[index].job.Alerts, alert)
+	}
+
+	return buckets
 }
 
 // NormalizeAppriseConfig cleans and normalizes Apprise configuration values.
@@ -1182,31 +1235,33 @@ func (n *NotificationManager) enqueueNotificationJobs(queue *NotificationQueue, 
 			continue
 		}
 
-		notif := &QueuedNotification{
-			Type:        queueTypeForNotificationDeliveryJob(job),
-			Alerts:      job.Alerts,
-			Config:      configJSON,
-			MaxAttempts: 3,
-			NextRetryAt: quietHoursReplayAtForAlerts(job.Alerts, time.Now()),
-		}
-		if err := queue.Enqueue(notif); err != nil {
-			anyFailed = true
-			n.logNotificationJobError(job, err, "failed to enqueue notification - falling back to direct send")
-			n.dispatchNotificationJobAsync(job, "failed to send notification after queue enqueue failure")
-			continue
-		}
+		for _, bucket := range notificationQueueBucketsForJob(job, time.Now()) {
+			notif := &QueuedNotification{
+				Type:        queueTypeForNotificationDeliveryJob(bucket.job),
+				Alerts:      bucket.job.Alerts,
+				Config:      configJSON,
+				MaxAttempts: 3,
+				NextRetryAt: bucket.nextRetryAt,
+			}
+			if err := queue.Enqueue(notif); err != nil {
+				anyFailed = true
+				n.logNotificationJobError(bucket.job, err, "failed to enqueue notification - falling back to direct send")
+				n.dispatchNotificationJobAsync(bucket.job, "failed to send notification after queue enqueue failure")
+				continue
+			}
 
-		logger := log.Debug().
-			Str("type", job.Type).
-			Str("event", string(job.Event)).
-			Int("alertCount", len(job.Alerts))
-		if notif.NextRetryAt != nil {
-			logger = logger.Time("nextRetryAt", *notif.NextRetryAt)
+			logger := log.Debug().
+				Str("type", bucket.job.Type).
+				Str("event", string(bucket.job.Event)).
+				Int("alertCount", len(bucket.job.Alerts))
+			if notif.NextRetryAt != nil {
+				logger = logger.Time("nextRetryAt", *notif.NextRetryAt)
+			}
+			if bucket.job.WebhookConfig != nil {
+				logger = logger.Str("webhookName", bucket.job.WebhookConfig.Name)
+			}
+			logger.Msg("enqueued notification delivery job")
 		}
-		if job.WebhookConfig != nil {
-			logger = logger.Str("webhookName", job.WebhookConfig.Name)
-		}
-		logger.Msg("enqueued notification delivery job")
 	}
 
 	if anyFailed && len(jobs) > 0 && jobs[0].Event == eventResolved {
