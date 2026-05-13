@@ -218,6 +218,7 @@ func TestDatastore_Fields(t *testing.T) {
 		Used:                500000000000,
 		Avail:               500000000000,
 		DeduplicationFactor: 1.5,
+		Status:              "available",
 		GCStatus:            "ok",
 		Error:               "",
 	}
@@ -236,6 +237,9 @@ func TestDatastore_Fields(t *testing.T) {
 	}
 	if ds.DeduplicationFactor != 1.5 {
 		t.Errorf("DeduplicationFactor = %f, want 1.5", ds.DeduplicationFactor)
+	}
+	if ds.Status != "available" {
+		t.Errorf("Status = %q, want available", ds.Status)
 	}
 }
 

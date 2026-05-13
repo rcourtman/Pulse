@@ -470,9 +470,10 @@ func TestClient_GetDatastores_Full(t *testing.T) {
 		if r.URL.Path == "/api2/json/admin/datastore/store1/status" {
 			json.NewEncoder(w).Encode(map[string]any{
 				"data": map[string]any{
-					"total": 1000.0,
-					"used":  200.0,
-					"avail": 800.0,
+					"total":  1000.0,
+					"used":   200.0,
+					"avail":  800.0,
+					"status": "read_only",
 				},
 			})
 			return
@@ -521,6 +522,9 @@ func TestClient_GetDatastores_Full(t *testing.T) {
 	}
 	if dss[0].DeduplicationFactor != 2.5 {
 		t.Errorf("Expected store1 dedup 2.5, got %f", dss[0].DeduplicationFactor)
+	}
+	if dss[0].Status != "read_only" {
+		t.Errorf("Expected store1 status read_only, got %q", dss[0].Status)
 	}
 
 	// Check store2 (GC dedup: 300/100 = 3.0)
@@ -786,6 +790,12 @@ func TestClient_GetDatastores_PartialErrors(t *testing.T) {
 	}
 	if !strings.Contains(dss[1].Error, "get status") {
 		t.Errorf("Expected get status error for store2, got field: %v", dss[1].Error)
+	}
+	if dss[0].Status != "unavailable" {
+		t.Errorf("Expected unavailable status for store1, got %q", dss[0].Status)
+	}
+	if dss[1].Status != "unavailable" {
+		t.Errorf("Expected unavailable status for store2, got %q", dss[1].Status)
 	}
 }
 

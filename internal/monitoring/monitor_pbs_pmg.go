@@ -63,6 +63,17 @@ func matchesDatastoreExclude(datastoreName string, excludePatterns []string) boo
 	return false
 }
 
+func pbsDatastoreStatus(ds pbs.Datastore) string {
+	status := strings.TrimSpace(ds.Status)
+	if status != "" {
+		return status
+	}
+	if strings.TrimSpace(ds.Error) != "" {
+		return "unavailable"
+	}
+	return "available"
+}
+
 // pollPBSInstance polls a single PBS instance
 func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, client *pbs.Client) {
 	defer recoverFromPanic(fmt.Sprintf("pollPBSInstance-%s", instanceName))
@@ -274,7 +285,8 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 					Used:                used,
 					Free:                avail,
 					Usage:               safePercentage(float64(used), float64(total)),
-					Status:              "available",
+					Status:              pbsDatastoreStatus(ds),
+					Error:               ds.Error,
 					DeduplicationFactor: ds.DeduplicationFactor,
 				}
 

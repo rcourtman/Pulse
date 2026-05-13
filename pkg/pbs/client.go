@@ -578,6 +578,7 @@ type Datastore struct {
 	UsedSpace  int64 `json:"used-space,omitempty"`
 	AvailSpace int64 `json:"avail-space,omitempty"`
 	// Status fields
+	Status              string  `json:"status,omitempty"`
 	GCStatus            string  `json:"gc-status,omitempty"`
 	DeduplicationFactor float64 `json:"deduplication_factor,omitempty"`
 	Error               string  `json:"error,omitempty"`
@@ -747,8 +748,9 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 			log.Error().Str("store", ds.Store).Err(err).Msg("Failed to get datastore status")
 			// Create entry with no size info if status fails
 			datastores = append(datastores, Datastore{
-				Store: ds.Store,
-				Error: fmt.Sprintf("Failed to get status: %v", err),
+				Store:  ds.Store,
+				Status: "unavailable",
+				Error:  fmt.Sprintf("Failed to get status: %v", err),
 			})
 			continue
 		}
@@ -758,8 +760,9 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 		if err != nil {
 			log.Error().Str("store", ds.Store).Err(err).Msg("Failed to read datastore status response")
 			datastores = append(datastores, Datastore{
-				Store: ds.Store,
-				Error: fmt.Sprintf("Failed to read status: %v", err),
+				Store:  ds.Store,
+				Status: "unavailable",
+				Error:  fmt.Sprintf("Failed to read status: %v", err),
 			})
 			continue
 		}
@@ -775,8 +778,9 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 				Err(err).
 				Msg("Failed to parse datastore status")
 			datastores = append(datastores, Datastore{
-				Store: ds.Store,
-				Error: fmt.Sprintf("Failed to parse status: %v", err),
+				Store:  ds.Store,
+				Status: "unavailable",
+				Error:  fmt.Sprintf("Failed to parse status: %v", err),
 			})
 			continue
 		}
@@ -796,6 +800,12 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 		} else if df, ok := statusResult.Data["deduplication_factor"].(float64); ok {
 			dedupFactor = df
 		}
+
+		status := "available"
+		if rawStatus, ok := statusResult.Data["status"].(string); ok && strings.TrimSpace(rawStatus) != "" {
+			status = strings.TrimSpace(rawStatus)
+		}
+		gcStatus, _ := statusResult.Data["gc-status"].(string)
 
 		// If still no dedup factor, try gc-status endpoint
 		if dedupFactor == 0 {
@@ -837,6 +847,8 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 			TotalSpace:          int64(totalSpace),
 			UsedSpace:           int64(usedSpace),
 			AvailSpace:          int64(availSpace),
+			Status:              status,
+			GCStatus:            strings.TrimSpace(gcStatus),
 			DeduplicationFactor: dedupFactor,
 		}
 

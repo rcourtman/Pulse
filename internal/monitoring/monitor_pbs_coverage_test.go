@@ -102,6 +102,7 @@ func TestMonitor_PollPBSInstance_DatastoreDetails(t *testing.T) {
 				"data": []map[string]interface{}{
 					{"store": "ds1", "comment": "comment1"}, // GetDatastores list returns small subset of fields
 					{"store": "ds2", "comment": "comment2"},
+					{"store": "ds-error", "comment": "status failure"},
 				},
 			})
 			return
@@ -113,7 +114,10 @@ func TestMonitor_PollPBSInstance_DatastoreDetails(t *testing.T) {
 			if strings.Contains(r.URL.Path, "ds1") {
 				data = map[string]interface{}{"total": 100.0, "used": 50.0, "avail": 50.0}
 			} else if strings.Contains(r.URL.Path, "ds2") {
-				data = map[string]interface{}{"total-space": 200.0, "used-space": 100.0, "avail-space": 100.0, "deduplication-factor": 1.5}
+				data = map[string]interface{}{"total-space": 200.0, "used-space": 100.0, "avail-space": 100.0, "deduplication-factor": 1.5, "status": "read_only"}
+			} else if strings.Contains(r.URL.Path, "ds-error") {
+				http.Error(w, "datastore unavailable", http.StatusInternalServerError)
+				return
 			}
 			json.NewEncoder(w).Encode(map[string]interface{}{"data": data})
 			return
@@ -190,28 +194,45 @@ func TestMonitor_PollPBSInstance_DatastoreDetails(t *testing.T) {
 		t.Fatal("Instance not found")
 	}
 
-	if len(inst.Datastores) != 2 {
-		t.Errorf("Expected 2 datastores, got %d", len(inst.Datastores))
+	if len(inst.Datastores) != 3 {
+		t.Errorf("Expected 3 datastores, got %d", len(inst.Datastores))
 	}
 
-	// Check DS2 size calculation
+	// Check DS2 size calculation and status propagation.
 	var ds2 *models.PBSDatastore
+	var dsError *models.PBSDatastore
 	for _, ds := range inst.Datastores {
 		if ds.Name == "ds2" {
 			copy := ds
 			ds2 = &copy
-			break
+		}
+		if ds.Name == "ds-error" {
+			copy := ds
+			dsError = &copy
 		}
 	}
 	if ds2 != nil {
 		if ds2.Total != 200 {
 			t.Errorf("Expected DS2 total 200, got %d", ds2.Total)
 		}
+		if ds2.Status != "read_only" {
+			t.Errorf("Expected DS2 status read_only, got %q", ds2.Status)
+		}
 		if len(ds2.Namespaces) != 4 {
 			t.Errorf("Expected 4 namespaces for DS2, got %d", len(ds2.Namespaces))
 		}
 	} else {
 		t.Error("DS2 not found")
+	}
+	if dsError == nil {
+		t.Error("ds-error not found")
+	} else {
+		if dsError.Status != "unavailable" {
+			t.Errorf("Expected ds-error status unavailable, got %q", dsError.Status)
+		}
+		if !strings.Contains(dsError.Error, "Failed to get status") {
+			t.Errorf("Expected ds-error to preserve status error, got %q", dsError.Error)
+		}
 	}
 }
 
