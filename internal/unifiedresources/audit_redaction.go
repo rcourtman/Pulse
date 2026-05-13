@@ -2,6 +2,13 @@ package unifiedresources
 
 import (
 	"regexp"
+	"strings"
+)
+
+const (
+	auditVerificationCommandRedacted = "[redacted-verification-command]"
+	auditVerificationOutputRedacted  = "[redacted-verification-output]"
+	auditVerificationNoteRedacted    = "[redacted-verification-note]"
 )
 
 // auditSecretRedactors scrubs well-known credential shapes from audit-log
@@ -65,23 +72,32 @@ func RedactAuditText(s string) string {
 	return s
 }
 
+func redactActionAuditDetailText(s string, replacement string) string {
+	if strings.TrimSpace(RedactAuditText(s)) == "" {
+		return ""
+	}
+	return replacement
+}
+
 func redactActionVerificationResult(result *ActionVerificationResult) *ActionVerificationResult {
 	redacted := NormalizeActionVerificationResult(result)
 	if redacted == nil {
 		return nil
 	}
-	redacted.Command = RedactAuditText(redacted.Command)
-	redacted.Output = RedactAuditText(redacted.Output)
-	redacted.Note = RedactAuditText(redacted.Note)
+	redacted.Command = redactActionAuditDetailText(redacted.Command, auditVerificationCommandRedacted)
+	redacted.Output = redactActionAuditDetailText(redacted.Output, auditVerificationOutputRedacted)
+	redacted.Note = redactActionAuditDetailText(redacted.Note, auditVerificationNoteRedacted)
 	return redacted
 }
 
 // RedactAuditRecord returns a copy of the input ActionAuditRecord with
 // known secret shapes scrubbed from the operator-authored reason, the
-// params map's string values, execution output, and verification command
-// fields. The canonical Plan, Approvals, and identity fields are left
-// alone — they are produced by Pulse, not by operators or external
-// command output.
+// params map's string values, execution output, and error text. Verification
+// command/output/note details are policy-hidden as stable markers because
+// they can expose sensitive execution context even when no recognizable
+// secret pattern is present. The canonical Plan, Approvals, and identity
+// fields are left alone — they are produced by Pulse, not by operators or
+// external command output.
 func RedactAuditRecord(record ActionAuditRecord) ActionAuditRecord {
 	record.Request.Reason = RedactAuditText(record.Request.Reason)
 	if len(record.Request.Params) > 0 {

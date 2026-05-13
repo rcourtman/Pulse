@@ -156,29 +156,91 @@ func TestRedactAuditRecord_ScrubsRequestAndResultStringFields(t *testing.T) {
 	if redacted.Verification == nil {
 		t.Fatal("expected top-level verification to remain present")
 	}
-	if strings.Contains(redacted.Verification.Command, "top-command-secret") || !strings.Contains(redacted.Verification.Command, "systemctl status nginx") {
+	if redacted.Verification.Command != auditVerificationCommandRedacted {
 		t.Fatalf("top-level verification command redaction failed: %s", redacted.Verification.Command)
 	}
-	if strings.Contains(redacted.Verification.Output, "top-output-secret") || !strings.Contains(redacted.Verification.Output, "ActiveState=active") {
+	if redacted.Verification.Output != auditVerificationOutputRedacted {
 		t.Fatalf("top-level verification output redaction failed: %s", redacted.Verification.Output)
 	}
-	if strings.Contains(redacted.Verification.Note, "top-note-secret") || !strings.Contains(redacted.Verification.Note, "verified active") {
+	if redacted.Verification.Note != auditVerificationNoteRedacted {
 		t.Fatalf("top-level verification note redaction failed: %s", redacted.Verification.Note)
 	}
 	if redacted.Result.Verification == nil {
 		t.Fatal("expected result verification to remain present")
 	}
-	if strings.Contains(redacted.Result.Verification.Command, "nested-command-secret") || !strings.Contains(redacted.Result.Verification.Command, "curl -H") {
+	if redacted.Result.Verification.Command != auditVerificationCommandRedacted {
 		t.Fatalf("nested verification command redaction failed: %s", redacted.Result.Verification.Command)
 	}
-	if strings.Contains(redacted.Result.Verification.Output, "nested-output-secret") || !strings.Contains(redacted.Result.Verification.Output, "state") {
+	if redacted.Result.Verification.Output != auditVerificationOutputRedacted {
 		t.Fatalf("nested verification output redaction failed: %s", redacted.Result.Verification.Output)
 	}
-	if strings.Contains(redacted.Result.Verification.Note, "nested-note-secret") || !strings.Contains(redacted.Result.Verification.Note, "nested check") {
+	if redacted.Result.Verification.Note != auditVerificationNoteRedacted {
 		t.Fatalf("nested verification note redaction failed: %s", redacted.Result.Verification.Note)
 	}
 	if strings.Contains(redacted.VerificationOutcome.EvidenceSummary, "evidence-secret") {
 		t.Fatalf("verification evidence summary still contains API key: %s", redacted.VerificationOutcome.EvidenceSummary)
+	}
+}
+
+func TestRedactAuditRecord_RedactsVerificationDetailsButPreservesStatusSemantics(t *testing.T) {
+	ranAt := time.Date(2026, 5, 6, 12, 30, 0, 0, time.UTC)
+	record := ActionAuditRecord{
+		ID:        "act-detail-redaction",
+		CreatedAt: ranAt.Add(-time.Minute),
+		UpdatedAt: ranAt,
+		State:     ActionStateCompleted,
+		Request: ActionRequest{
+			RequestID:      "req-detail-redaction",
+			ResourceID:     "vm-detail-redaction",
+			CapabilityName: "restart",
+			Reason:         "restart for maintenance",
+			RequestedBy:    "operator@example.com",
+		},
+		Plan: ActionPlan{
+			ActionID:  "act-detail-redaction",
+			RequestID: "req-detail-redaction",
+			Allowed:   true,
+			Message:   "preflight passed",
+		},
+		Result: &ExecutionResult{
+			Success: true,
+			Verification: &ActionVerificationResult{
+				Ran:     true,
+				Command: "systemctl is-active customer-service",
+				Output:  "active since 2026-05-06 with internal unit metadata",
+				Success: true,
+				RanAt:   ranAt,
+				Note:    "read-back matched expected active state after restart",
+			},
+		},
+		VerificationOutcome: VerificationOutcome{
+			Status:          VerificationVerified,
+			EvidenceSummary: "service active after restart",
+		},
+	}
+
+	redacted := RedactAuditRecord(record)
+	verification := CanonicalActionVerification(redacted)
+	if verification == nil {
+		t.Fatal("expected verification to remain present")
+	}
+	if !verification.Ran || !verification.Success || !verification.RanAt.Equal(ranAt) {
+		t.Fatalf("verification status semantics were not preserved: %#v", verification)
+	}
+	if verification.Command != auditVerificationCommandRedacted {
+		t.Fatalf("verification command retained raw detail: %q", verification.Command)
+	}
+	if verification.Output != auditVerificationOutputRedacted {
+		t.Fatalf("verification output retained raw detail: %q", verification.Output)
+	}
+	if verification.Note != auditVerificationNoteRedacted {
+		t.Fatalf("verification note retained raw detail: %q", verification.Note)
+	}
+	if redacted.State != ActionStateCompleted || redacted.Result == nil || !redacted.Result.Success {
+		t.Fatalf("action completion semantics were not preserved: state=%q result=%#v", redacted.State, redacted.Result)
+	}
+	if redacted.Plan.Message != "preflight passed" || redacted.VerificationOutcome.Status != VerificationVerified || redacted.VerificationOutcome.EvidenceSummary != "service active after restart" {
+		t.Fatalf("allowed summary/status fields were not preserved: plan=%#v outcome=%#v", redacted.Plan, redacted.VerificationOutcome)
 	}
 }
 

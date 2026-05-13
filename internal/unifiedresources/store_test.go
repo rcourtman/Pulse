@@ -1324,13 +1324,13 @@ func TestActionAuditRecord_RoundTrip(t *testing.T) {
 	if verification == nil || !verification.Ran {
 		t.Fatalf("canonical verification round-trip failed: %+v", verification)
 	}
-	if strings.Contains(verification.Command, "verify-command-secret") || !strings.Contains(verification.Command, "systemctl is-active 'nginx'") {
+	if verification.Command != auditVerificationCommandRedacted {
 		t.Fatalf("canonical verification command redaction failed: %+v", verification)
 	}
-	if strings.Contains(verification.Output, "verify-output-secret") || !strings.Contains(verification.Output, "active") {
+	if verification.Output != auditVerificationOutputRedacted {
 		t.Fatalf("canonical verification output redaction failed: %+v", verification)
 	}
-	if strings.Contains(verification.Note, "verify-note-secret") || !strings.Contains(verification.Note, "verified via") {
+	if verification.Note != auditVerificationNoteRedacted {
 		t.Fatalf("canonical verification note redaction failed: %+v", verification)
 	}
 	if got.Verification == nil || got.Verification.Command != verification.Command {
