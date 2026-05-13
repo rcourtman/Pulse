@@ -1,8 +1,11 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConnectionsTable } from '../ConnectionsTable';
-import type { InfrastructureSystemRow } from '../connectionsTableModel';
-import { connectionAgentIdentitySummary } from '../connectionsTableModel';
+import {
+  CONNECTIONS_TABLE_INITIAL_VISIBLE_ROWS,
+  connectionAgentIdentitySummary,
+  type InfrastructureSystemRow,
+} from '../connectionsTableModel';
 import type { Connection, ConnectionAgentIdentity } from '@/api/connections';
 import type { ConnectionRowActions } from '../useConnectionRowActions';
 
@@ -165,6 +168,18 @@ describe('ConnectionsTable', () => {
                 detail: 'Commands are disabled by policy.',
                 tone: 'info',
               },
+              {
+                key: 'config-drift',
+                label: 'Config pending',
+                detail: 'Waiting for applied configuration confirmation.',
+                tone: 'warning',
+              },
+              {
+                key: 'config-drift',
+                label: 'Config unknown',
+                detail: 'No desired/applied config fingerprint has been reported yet.',
+                tone: 'warning',
+              },
             ],
           }),
         ]}
@@ -180,6 +195,49 @@ describe('ConnectionsTable', () => {
       'title',
       'Commands are disabled by policy.',
     );
+    expect(screen.getByText('Config pending')).toHaveAttribute(
+      'title',
+      'Waiting for applied configuration confirmation.',
+    );
+    expect(screen.getByText('Config unknown')).toHaveAttribute(
+      'title',
+      'No desired/applied config fingerprint has been reported yet.',
+    );
+  });
+
+  it('keeps large row sets bounded behind an explicit show-more path', () => {
+    const rows = Array.from({ length: CONNECTIONS_TABLE_INITIAL_VISIBLE_ROWS + 5 }, (_, index) =>
+      row({
+        id: `system-${index}`,
+        name: `system-${index}`,
+        host: undefined,
+        connection: connectionFixture({
+          id: `system-${index}`,
+          name: `system-${index}`,
+        }),
+      }),
+    );
+
+    render(() => <ConnectionsTable rows={() => rows} />);
+
+    expect(screen.getByText('system-0')).toBeInTheDocument();
+    expect(
+      screen.getByText(`system-${CONNECTIONS_TABLE_INITIAL_VISIBLE_ROWS - 1}`),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(`system-${CONNECTIONS_TABLE_INITIAL_VISIBLE_ROWS}`)).toBeNull();
+    expect(
+      screen.getAllByText(
+        `Showing ${CONNECTIONS_TABLE_INITIAL_VISIBLE_ROWS} of ${rows.length} monitored systems. 5 more systems available.`,
+      ),
+    ).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show remaining 5 monitored systems.' }));
+
+    expect(
+      screen.getByText(`system-${CONNECTIONS_TABLE_INITIAL_VISIBLE_ROWS}`),
+    ).toBeInTheDocument();
+    expect(screen.getByText(`Showing all ${rows.length} monitored systems.`)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Show remaining/i })).toBeNull();
   });
 
   it('renders Edit / Pause / Remove buttons when actions and onEdit are provided', () => {

@@ -71,6 +71,61 @@ describe('useConnectionsLedger', () => {
     ]);
   });
 
+  it('reuses large stable row models across equivalent ledger refreshes', async () => {
+    const connections: Connection[] = Array.from({ length: 120 }, (_, index) => ({
+      id: `agent:stable-${index}`,
+      type: 'agent',
+      name: `stable-${index}`,
+      address: `stable-${index}`,
+      state: 'active',
+      stateReason: '',
+      enabled: true,
+      surfaces: ['host'],
+      scope: { host: true },
+      lastSeen: null,
+      lastError: null,
+      source: 'agent',
+      fleet: {
+        enrollmentState: 'enrolled',
+        livenessState: 'active',
+        versionDrift: 'current',
+        adapterHealth: 'healthy',
+        configRollout: 'reported',
+        credentialStatus: 'verified',
+        updateStatus: 'current',
+        remoteControl: 'disabled',
+        configDrift: { status: 'current' },
+        rollout: { status: 'current' },
+        credentialHealth: { status: 'verified', kind: 'agent-token' },
+        commandPolicy: { status: 'disabled' },
+      },
+      capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+    }));
+    const listSpy = vi.spyOn(ConnectionsAPI, 'list').mockImplementation(async () => ({
+      connections: connections.map((connection) => ({
+        ...connection,
+        scope: { ...(connection.scope ?? {}) },
+        fleet: connection.fleet ? { ...connection.fleet } : undefined,
+        capabilities: { ...connection.capabilities },
+      })),
+      systems: [],
+    }));
+
+    const { result } = renderHook(() => useConnectionsLedger());
+
+    await waitFor(() => expect(result.rows()).toHaveLength(120));
+    const firstRows = result.rows();
+
+    result.reload();
+
+    await waitFor(() => expect(listSpy).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.loading()).toBe(false));
+    expect(result.rows()).toHaveLength(120);
+    expect(result.rows()[0]).toBe(firstRows[0]);
+    expect(result.rows()[75]).toBe(firstRows[75]);
+    expect(result.rows()[119]).toBe(firstRows[119]);
+  });
+
   it('prioritizes explicit rollout drift, credential, and command-policy posture', async () => {
     const connections: Connection[] = [
       {
@@ -203,12 +258,70 @@ describe('useConnectionsLedger', () => {
         },
         capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
       },
+      {
+        id: 'agent:config-pending',
+        type: 'agent',
+        name: 'config-pending',
+        address: 'config-pending',
+        state: 'active',
+        stateReason: '',
+        enabled: true,
+        surfaces: ['host'],
+        scope: { host: true },
+        lastSeen: '2026-04-23T12:00:00Z',
+        lastError: null,
+        source: 'agent',
+        fleet: {
+          enrollmentState: 'enrolled',
+          livenessState: 'active',
+          versionDrift: 'current',
+          adapterHealth: 'healthy',
+          configRollout: 'reported',
+          credentialStatus: 'verified',
+          updateStatus: 'current',
+          remoteControl: 'enabled',
+          configDrift: { status: 'pending' },
+          rollout: { status: 'current' },
+          credentialHealth: { status: 'verified', kind: 'agent-token' },
+          commandPolicy: { status: 'enabled' },
+        },
+        capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+      },
+      {
+        id: 'agent:config-unknown',
+        type: 'agent',
+        name: 'config-unknown',
+        address: 'config-unknown',
+        state: 'active',
+        stateReason: '',
+        enabled: true,
+        surfaces: ['host'],
+        scope: { host: true },
+        lastSeen: '2026-04-23T12:00:00Z',
+        lastError: null,
+        source: 'agent',
+        fleet: {
+          enrollmentState: 'enrolled',
+          livenessState: 'active',
+          versionDrift: 'current',
+          adapterHealth: 'healthy',
+          configRollout: 'reported',
+          credentialStatus: 'verified',
+          updateStatus: 'current',
+          remoteControl: 'enabled',
+          configDrift: { status: 'unknown' },
+          rollout: { status: 'current' },
+          credentialHealth: { status: 'verified', kind: 'agent-token' },
+          commandPolicy: { status: 'enabled' },
+        },
+        capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+      },
     ];
     vi.spyOn(ConnectionsAPI, 'list').mockResolvedValue({ connections, systems: [] });
 
     const { result } = renderHook(() => useConnectionsLedger());
 
-    await waitFor(() => expect(result.rows()).toHaveLength(4));
+    await waitFor(() => expect(result.rows()).toHaveLength(6));
     const byID = new Map(result.rows().map((row) => [row.id, row]));
 
     expect(byID.get('agent:drifted')?.fleetHighlights.map((signal) => signal.label)).toEqual([
@@ -227,6 +340,12 @@ describe('useConnectionsLedger', () => {
     expect(
       byID.get('agent:remote-disabled')?.fleetHighlights.map((signal) => signal.label),
     ).toEqual(['Remote control disabled']);
+    expect(byID.get('agent:config-pending')?.fleetHighlights.map((signal) => signal.label)).toEqual(
+      ['Config pending', 'Remote control enabled'],
+    );
+    expect(byID.get('agent:config-unknown')?.fleetHighlights.map((signal) => signal.label)).toEqual(
+      ['Config unknown', 'Remote control enabled'],
+    );
   });
 
   it('renders a Proxmox cluster row from the canonical system metadata', async () => {

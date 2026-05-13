@@ -175,6 +175,78 @@ interface ClusterRollup {
   lastSeen?: string;
 }
 
+interface CachedInfrastructureSystemRow {
+  signature: string;
+  row: InfrastructureSystemRow;
+}
+
+const stableRecordEntries = (record?: Record<string, boolean> | null): [string, boolean][] =>
+  Object.entries(record ?? {}).sort(([left], [right]) => left.localeCompare(right));
+
+const connectionRowSignature = (connection: Connection): string =>
+  JSON.stringify({
+    id: connection.id,
+    type: connection.type,
+    name: connection.name,
+    address: connection.address,
+    state: connection.state,
+    stateReason: connection.stateReason,
+    enabled: connection.enabled,
+    surfaces: connection.surfaces,
+    scope: stableRecordEntries(connection.scope),
+    lastSeen: connection.lastSeen,
+    lastActivityText: connectionLastActivityText(connection),
+    lastError: connection.lastError,
+    source: connection.source,
+    capabilities: connection.capabilities,
+    agentVersion: connection.agentVersion,
+    expectedAgentVersion: connection.expectedAgentVersion,
+    agentUpdateAvailable: connection.agentUpdateAvailable,
+    agentIdentity: connection.agentIdentity,
+    hostAliases: connection.hostAliases,
+    fleet: connection.fleet,
+  });
+
+const connectionRowSignatureForID = (
+  connectionsByID: Map<string, Connection>,
+  id?: string | null,
+): string | null => {
+  if (!id) return null;
+  const connection = connectionsByID.get(id);
+  return connection ? connectionRowSignature(connection) : null;
+};
+
+const systemRowSignature = (
+  system: ConnectionSystem,
+  connectionsByID: Map<string, Connection>,
+): string =>
+  JSON.stringify({
+    id: system.id,
+    type: system.type,
+    clusterName: system.clusterName,
+    components: system.components,
+    members: (system.members ?? []).map((member) => ({
+      id: member.id,
+      name: member.name,
+      endpoint: member.endpoint,
+      hostAliases: member.hostAliases,
+      state: member.state,
+      lastSeen: member.lastSeen,
+      lastActivityText: lastActivityTextFromLastSeen(member.lastSeen),
+      primary: member.primary,
+      agentConnectionId: member.agentConnectionId,
+      agentConnectionSignature: connectionRowSignatureForID(
+        connectionsByID,
+        member.agentConnectionId,
+      ),
+    })),
+    componentConnections: system.components.map((component) => ({
+      connectionId: component.connectionId,
+      signature: connectionRowSignatureForID(connectionsByID, component.connectionId),
+    })),
+    primaryConnectionSignature: connectionRowSignatureForID(connectionsByID, system.id),
+  });
+
 const memberSubtitleFor = (member: ConnectionSystemMember): string =>
   member.primary ? 'Primary node' : 'Cluster member';
 
@@ -361,6 +433,36 @@ interface ConnectionsLedgerSnapshot {
 }
 
 export const useConnectionsLedger = (): ConnectionsLedger => {
+  const rowCache = new Map<string, CachedInfrastructureSystemRow>();
+
+  const cacheRow = (
+    activeKeys: Set<string>,
+    key: string,
+    signature: string,
+    buildRow: () => InfrastructureSystemRow | null,
+  ): InfrastructureSystemRow | null => {
+    activeKeys.add(key);
+    const cached = rowCache.get(key);
+    if (cached?.signature === signature) {
+      return cached.row;
+    }
+    const row = buildRow();
+    if (!row) {
+      rowCache.delete(key);
+      return null;
+    }
+    rowCache.set(key, { signature, row });
+    return row;
+  };
+
+  const pruneRowCache = (activeKeys: Set<string>) => {
+    for (const key of rowCache.keys()) {
+      if (!activeKeys.has(key)) {
+        rowCache.delete(key);
+      }
+    }
+  };
+
   const [resource, { refetch }] = createResource<ConnectionsLedgerSnapshot>(
     async () => {
       const response = await ConnectionsAPI.list();
@@ -389,19 +491,41 @@ export const useConnectionsLedger = (): ConnectionsLedger => {
   const rows = createMemo<InfrastructureSystemRow[]>(() => {
     const allConnections = connections();
     const systems = snapshot().systems ?? [];
+    const activeCacheKeys = new Set<string>();
+    const standaloneRows = () =>
+      allConnections
+        .map((connection) =>
+          cacheRow(
+            activeCacheKeys,
+            `connection:${connection.id}`,
+            connectionRowSignature(connection),
+            () => connectionToRow(connection),
+          ),
+        )
+        .filter((row): row is InfrastructureSystemRow => Boolean(row));
+
     if (systems.length === 0) {
-      return allConnections.map(connectionToRow);
+      const rows = standaloneRows();
+      pruneRowCache(activeCacheKeys);
+      return rows;
     }
 
     const byID = new Map(allConnections.map((connection) => [connection.id, connection]));
     const groupedRows = systems
-      .map((system) => systemToRow(system, byID))
+      .map((system) =>
+        cacheRow(activeCacheKeys, `system:${system.id}`, systemRowSignature(system, byID), () =>
+          systemToRow(system, byID),
+        ),
+      )
       .filter((row): row is InfrastructureSystemRow => Boolean(row));
 
     if (groupedRows.length === 0) {
-      return allConnections.map(connectionToRow);
+      const rows = standaloneRows();
+      pruneRowCache(activeCacheKeys);
+      return rows;
     }
 
+    pruneRowCache(activeCacheKeys);
     return groupedRows;
   });
   const findById = (id: string) => connections().find((conn) => conn.id === id);

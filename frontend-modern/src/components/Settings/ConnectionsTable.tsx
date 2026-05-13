@@ -1,4 +1,12 @@
-import { Component, For, Show, type Accessor } from 'solid-js';
+import {
+  Component,
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Show,
+  type Accessor,
+} from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import {
   Table,
@@ -9,7 +17,13 @@ import {
   TableRow,
 } from '@/components/shared/Table';
 import type { Connection } from '@/api/connections';
-import { fleetSignalClassName, type InfrastructureSystemRow } from './connectionsTableModel';
+import {
+  CONNECTIONS_TABLE_INITIAL_VISIBLE_ROWS,
+  connectionsTableVisibilityState,
+  fleetSignalClassName,
+  type InfrastructureSystemRow,
+  visibleConnectionsTableRows,
+} from './connectionsTableModel';
 import type { ConnectionRowActions } from './useConnectionRowActions';
 import { getInfrastructureEmptyStateSummary } from '@/utils/infrastructureOnboardingPresentation';
 
@@ -46,9 +60,32 @@ const removeConfirmClass =
   'inline-flex items-center rounded-md bg-rose-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60';
 
 export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
+  const [visibleLimit, setVisibleLimit] = createSignal(CONNECTIONS_TABLE_INITIAL_VISIBLE_ROWS);
   const hasActions = () => Boolean(props.actions) || Boolean(props.onEdit);
 
   const colSpan = () => (hasActions() ? 6 : 5);
+  const rows = createMemo(() => props.rows());
+  const visibility = createMemo(() =>
+    connectionsTableVisibilityState(rows().length, visibleLimit()),
+  );
+  const visibleRows = createMemo(() =>
+    visibleConnectionsTableRows(rows(), visibility().visibleLimit),
+  );
+  const shouldShowVisibilityStatus = () =>
+    visibility().totalRows > CONNECTIONS_TABLE_INITIAL_VISIBLE_ROWS;
+  const showMoreRows = () => {
+    setVisibleLimit(visibility().nextVisibleLimit);
+  };
+
+  createEffect(() => {
+    const totalRows = rows().length;
+    setVisibleLimit((current) => {
+      if (totalRows <= CONNECTIONS_TABLE_INITIAL_VISIBLE_ROWS) {
+        return CONNECTIONS_TABLE_INITIAL_VISIBLE_ROWS;
+      }
+      return Math.min(Math.max(current, CONNECTIONS_TABLE_INITIAL_VISIBLE_ROWS), totalRows);
+    });
+  });
 
   return (
     <Card padding="none" tone="card" class="rounded-md">
@@ -79,7 +116,7 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
       </div>
 
       <Show
-        when={props.rows().length > 0}
+        when={rows().length > 0}
         fallback={
           <div class="space-y-3 px-4 py-10 text-center">
             <div class="text-base font-semibold text-base-content">
@@ -106,7 +143,21 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
           </div>
         }
       >
-        <Table class="w-full table-fixed divide-y divide-border text-sm !whitespace-normal">
+        <Show when={shouldShowVisibilityStatus()}>
+          <div
+            id="connections-table-visibility-status"
+            class="border-b border-border px-4 py-2 text-xs text-muted"
+            aria-live="polite"
+          >
+            {visibility().statusText}
+          </div>
+        </Show>
+        <Table
+          aria-describedby={
+            shouldShowVisibilityStatus() ? 'connections-table-visibility-status' : undefined
+          }
+          class="w-full table-fixed divide-y divide-border text-sm !whitespace-normal"
+        >
           <TableHeader class="bg-surface-alt">
             <TableRow>
               <TableHead class="w-[22%] py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap 2xl:w-[18%]">
@@ -130,7 +181,7 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
             </TableRow>
           </TableHeader>
           <TableBody class="divide-y divide-border bg-surface">
-            <For each={props.rows()}>
+            <For each={visibleRows()}>
               {(row) => {
                 const pauseLabel = () => (row.enabled ? 'Pause' : 'Resume');
                 const isPauseBusy = () => props.actions?.pendingAction(row.id) === 'pause';
@@ -331,6 +382,19 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
             </For>
           </TableBody>
         </Table>
+        <Show when={visibility().isBounded}>
+          <div class="flex flex-col gap-2 border-t border-border px-4 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
+            <span>{visibility().statusText}</span>
+            <button
+              type="button"
+              onClick={showMoreRows}
+              aria-label={visibility().showMoreAriaLabel}
+              class={inlineButtonClass}
+            >
+              {visibility().showMoreLabel}
+            </button>
+          </div>
+        </Show>
       </Show>
     </Card>
   );
