@@ -20,7 +20,7 @@ from canonical_completion_guard import (
     subsystem_matches_path,
 )
 from control_plane import DEFAULT_CONTROL_PLANE
-from repo_file_io import load_repo_json
+from repo_file_io import canonical_repo_id, canonical_workspace_repos_root, load_repo_json
 from status_audit import load_status_payload
 
 
@@ -62,12 +62,13 @@ def sorted_casefold(values: list[str]) -> list[str]:
 
 
 def tracked_repo_files() -> set[str]:
-    return tracked_workspace_files(active_repos=[REPO_ROOT.name], local_repo=REPO_ROOT.name)
+    local_repo = canonical_repo_id(REPO_ROOT)
+    return tracked_workspace_files(active_repos=[local_repo], local_repo=local_repo)
 
 
 def tracked_workspace_files(*, active_repos: list[str], local_repo: str) -> set[str]:
     files: set[str] = set()
-    repos_root = REPO_ROOT.parent
+    repos_root = canonical_workspace_repos_root(REPO_ROOT)
     for repo_id in active_repos:
         repo_root = REPO_ROOT if repo_id == local_repo else repos_root / repo_id
         if not repo_root.exists():
@@ -633,7 +634,8 @@ def main(argv: list[str] | None = None) -> int:
         repo_id
         for repo_id in scope.get("active_repos", [])
         if isinstance(repo_id, str) and repo_id.strip()
-    ] or [REPO_ROOT.name]
+    ] or [canonical_repo_id(REPO_ROOT)]
+    local_repo = canonical_repo_id(REPO_ROOT)
     lane_ids = {
         lane.get("id")
         for lane in status_payload.get("lanes", [])
@@ -641,7 +643,7 @@ def main(argv: list[str] | None = None) -> int:
     }
     report = audit_registry_payload(
         load_registry_payload(staged=args.staged),
-        tracked_files=tracked_workspace_files(active_repos=active_repos, local_repo=REPO_ROOT.name),
+        tracked_files=tracked_workspace_files(active_repos=active_repos, local_repo=local_repo),
         status_lane_ids=lane_ids,
         schema_contract=registry_schema_contract(staged=args.staged),
     )

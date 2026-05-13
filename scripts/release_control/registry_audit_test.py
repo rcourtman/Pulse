@@ -1,13 +1,76 @@
+import os
+import subprocess
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
-from registry_audit import audit_registry_payload, parse_args
+import registry_audit
+from repo_file_io import canonical_repo_id
+from registry_audit import audit_registry_payload, parse_args, tracked_workspace_files
 
 
 class RegistryAuditTest(unittest.TestCase):
+    def git(self, repo_root: Path, *args: str) -> subprocess.CompletedProcess:
+        env = os.environ.copy()
+        env.pop("GIT_INDEX_FILE", None)
+        return subprocess.run(
+            ["git", *args],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
     def test_parse_args_accepts_staged_flag(self) -> None:
         args = parse_args(["--check", "--staged"])
         self.assertTrue(args.check)
         self.assertTrue(args.staged)
+
+    def test_tracked_workspace_files_uses_linked_worktree_as_canonical_local_repo(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir) / "workspace"
+            repo_root = workspace / "repos" / "pulse"
+            linked_worktree = workspace / ".worktrees" / "pulse-first-session-onboarding-parity"
+            repo_root.mkdir(parents=True)
+            linked_worktree.parent.mkdir(parents=True)
+
+            self.git(repo_root, "init")
+            (repo_root / "internal").mkdir()
+            (repo_root / "internal" / "existing.go").write_text("package internal\n", encoding="utf-8")
+            self.git(repo_root, "add", "internal/existing.go")
+            self.git(
+                repo_root,
+                "-c",
+                "user.name=Pulse Test",
+                "-c",
+                "user.email=pulse-test@example.invalid",
+                "commit",
+                "-m",
+                "initial",
+            )
+            self.git(repo_root, "worktree", "add", "--detach", str(linked_worktree), "HEAD")
+
+            (linked_worktree / "internal" / "staged.go").write_text("package internal\n", encoding="utf-8")
+            self.git(linked_worktree, "add", "internal/staged.go")
+            contracts_dir = linked_worktree / "docs" / "release-control" / "v6" / "internal" / "subsystems"
+            contracts_dir.mkdir(parents=True)
+
+            with patch("registry_audit.REPO_ROOT", linked_worktree), patch(
+                "registry_audit.DEFAULT_CONTROL_PLANE",
+                {
+                    **registry_audit.DEFAULT_CONTROL_PLANE,
+                    "subsystems_dir_path": str(contracts_dir),
+                },
+            ):
+                files = tracked_workspace_files(
+                    active_repos=["pulse"],
+                    local_repo=canonical_repo_id(linked_worktree),
+                )
+
+            self.assertIn("internal/staged.go", files)
+            self.assertNotIn("pulse:internal/staged.go", files)
 
     def test_audit_registry_payload_accepts_valid_minimal_registry(self) -> None:
         payload = {

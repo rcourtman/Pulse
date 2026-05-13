@@ -6,7 +6,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from repo_file_io import load_repo_json, missing_staged_repo_paths, read_repo_text
+from repo_file_io import (
+    canonical_repo_id,
+    canonical_repo_root,
+    canonical_workspace_repos_root,
+    load_repo_json,
+    missing_staged_repo_paths,
+    read_repo_text,
+)
 
 
 class RepoFileIoTest(unittest.TestCase):
@@ -71,6 +78,33 @@ class RepoFileIoTest(unittest.TestCase):
 
             with patch("repo_file_io.REPO_ROOT", repo_root):
                 self.assertEqual(missing_staged_repo_paths([staged_rel, missing_rel]), [missing_rel])
+
+    def test_canonical_repo_identity_uses_git_common_dir_for_linked_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir) / "workspace"
+            repo_root = workspace / "repos" / "pulse"
+            linked_worktree = workspace / ".worktrees" / "pulse-first-session-onboarding-parity"
+            repo_root.mkdir(parents=True)
+            linked_worktree.parent.mkdir(parents=True)
+
+            self.git(repo_root, "init")
+            (repo_root / "README.md").write_text("pulse\n", encoding="utf-8")
+            self.git(repo_root, "add", "README.md")
+            self.git(
+                repo_root,
+                "-c",
+                "user.name=Pulse Test",
+                "-c",
+                "user.email=pulse-test@example.invalid",
+                "commit",
+                "-m",
+                "initial",
+            )
+            self.git(repo_root, "worktree", "add", "--detach", str(linked_worktree), "HEAD")
+
+            self.assertEqual(canonical_repo_root(linked_worktree), repo_root.resolve())
+            self.assertEqual(canonical_repo_id(linked_worktree), "pulse")
+            self.assertEqual(canonical_workspace_repos_root(linked_worktree), (workspace / "repos").resolve())
 
 
 if __name__ == "__main__":

@@ -14,11 +14,43 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REPO_ROOT = REPO_ROOT
 
 
-def git_env() -> dict[str, str]:
+def git_env(repo_root: Path | None = None) -> dict[str, str]:
     env = os.environ.copy()
-    if REPO_ROOT != DEFAULT_REPO_ROOT:
+    root = repo_root or REPO_ROOT
+    if root != DEFAULT_REPO_ROOT:
         env.pop("GIT_INDEX_FILE", None)
     return env
+
+
+def git_common_dir(repo_root: Path | None = None) -> Path:
+    root = (repo_root or REPO_ROOT).resolve()
+    result = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=git_env(root),
+    )
+    common_dir = Path(result.stdout.strip())
+    if not common_dir.is_absolute():
+        common_dir = root / common_dir
+    return common_dir.resolve()
+
+
+def canonical_repo_root(repo_root: Path | None = None) -> Path:
+    common_dir = git_common_dir(repo_root)
+    if common_dir.name == ".git":
+        return common_dir.parent.resolve()
+    return (repo_root or REPO_ROOT).resolve()
+
+
+def canonical_repo_id(repo_root: Path | None = None) -> str:
+    return canonical_repo_root(repo_root).name
+
+
+def canonical_workspace_repos_root(repo_root: Path | None = None) -> Path:
+    return canonical_repo_root(repo_root).parent
 
 
 def repo_relative_path(path: str | Path) -> str:
