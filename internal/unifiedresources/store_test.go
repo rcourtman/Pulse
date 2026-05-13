@@ -1236,13 +1236,14 @@ func TestActionAuditRecord_RoundTrip(t *testing.T) {
 	approvedAt := now.Add(2 * time.Minute)
 	result := &ExecutionResult{
 		Success: true,
-		Output:  "completed",
+		Output:  "completed token=result-output-secret",
 		Verification: &ActionVerificationResult{
 			Ran:     true,
-			Command: "systemctl is-active 'nginx'",
-			Output:  "active",
+			Command: "systemctl is-active 'nginx' token=verify-command-secret",
+			Output:  "active token=verify-output-secret",
 			Success: true,
 			RanAt:   now.Add(4 * time.Minute),
+			Note:    "verified via password=verify-note-secret",
 		},
 	}
 
@@ -1313,18 +1314,33 @@ func TestActionAuditRecord_RoundTrip(t *testing.T) {
 	if len(got.Approvals) != 1 || got.Approvals[0].Actor != record.Approvals[0].Actor || got.Approvals[0].Outcome != record.Approvals[0].Outcome {
 		t.Fatalf("approvals round-trip failed: %+v", got.Approvals)
 	}
-	if got.Result == nil || !got.Result.Success || got.Result.Output != result.Output {
+	if got.Result == nil || !got.Result.Success {
 		t.Fatalf("result round-trip failed: %+v", got.Result)
 	}
+	if strings.Contains(got.Result.Output, "result-output-secret") || !strings.Contains(got.Result.Output, "completed") {
+		t.Fatalf("result output redaction failed: %+v", got.Result)
+	}
 	verification := CanonicalActionVerification(got)
-	if verification == nil || !verification.Ran || verification.Command != result.Verification.Command {
+	if verification == nil || !verification.Ran {
 		t.Fatalf("canonical verification round-trip failed: %+v", verification)
+	}
+	if strings.Contains(verification.Command, "verify-command-secret") || !strings.Contains(verification.Command, "systemctl is-active 'nginx'") {
+		t.Fatalf("canonical verification command redaction failed: %+v", verification)
+	}
+	if strings.Contains(verification.Output, "verify-output-secret") || !strings.Contains(verification.Output, "active") {
+		t.Fatalf("canonical verification output redaction failed: %+v", verification)
+	}
+	if strings.Contains(verification.Note, "verify-note-secret") || !strings.Contains(verification.Note, "verified via") {
+		t.Fatalf("canonical verification note redaction failed: %+v", verification)
 	}
 	if got.Verification == nil || got.Verification.Command != verification.Command {
 		t.Fatalf("top-level verification was not restored from sqlite row: top-level=%+v canonical=%+v", got.Verification, verification)
 	}
 	if got.Result.Verification == nil || got.Result.Verification.Command != verification.Command {
 		t.Fatalf("result verification did not stay aligned with canonical verification: result=%+v canonical=%+v", got.Result.Verification, verification)
+	}
+	if got.Result.Verification.Note != verification.Note {
+		t.Fatalf("result verification note did not stay aligned with canonical verification: result=%+v canonical=%+v", got.Result.Verification, verification)
 	}
 }
 

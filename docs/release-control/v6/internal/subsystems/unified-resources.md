@@ -48,6 +48,7 @@ cross-source deduplication.
 24. `internal/unifiedresources/relationships.go`
 25. `internal/unifiedresources/privacy.go`
 26. `internal/unifiedresources/actions.go`
+27. `internal/unifiedresources/audit_redaction.go`
 27. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`
 28. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`
 29. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`
@@ -517,6 +518,12 @@ AI-only summary payloads, or page-local heuristics.
     intentionally narrower than the patrol-failure redactor: arbitrary
     URLs are preserved so operators can reference runbooks, ticket
     links, and GitHub issues in audit reasons.
+    Verification command output is part of the same persistence
+    boundary: `ActionVerificationResult.Command`, `Output`, and `Note`
+    must be redacted both on top-level `ActionAuditRecord.Verification`
+    and nested `ExecutionResult.Verification`, while `Ran=false`
+    normalization remains responsible for clearing verification details
+    rather than persisting redaction markers for unrun checks.
 21. Keep post-execution verification outcome on the canonical execution
     result. `ExecutionResult.Verification` carries
     `ActionVerificationResult` with `Ran`, `Command`, `Output`,

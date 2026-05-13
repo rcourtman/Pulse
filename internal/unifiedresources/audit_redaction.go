@@ -65,11 +65,23 @@ func RedactAuditText(s string) string {
 	return s
 }
 
+func redactActionVerificationResult(result *ActionVerificationResult) *ActionVerificationResult {
+	redacted := NormalizeActionVerificationResult(result)
+	if redacted == nil {
+		return nil
+	}
+	redacted.Command = RedactAuditText(redacted.Command)
+	redacted.Output = RedactAuditText(redacted.Output)
+	redacted.Note = RedactAuditText(redacted.Note)
+	return redacted
+}
+
 // RedactAuditRecord returns a copy of the input ActionAuditRecord with
 // known secret shapes scrubbed from the operator-authored reason, the
-// params map's string values, and the execution result's output. The
-// canonical Plan, Approvals, and identity fields are left alone — they
-// are produced by Pulse, not by operators or external command output.
+// params map's string values, execution output, and verification command
+// fields. The canonical Plan, Approvals, and identity fields are left
+// alone — they are produced by Pulse, not by operators or external
+// command output.
 func RedactAuditRecord(record ActionAuditRecord) ActionAuditRecord {
 	record.Request.Reason = RedactAuditText(record.Request.Reason)
 	if len(record.Request.Params) > 0 {
@@ -87,8 +99,10 @@ func RedactAuditRecord(record ActionAuditRecord) ActionAuditRecord {
 		redacted := *record.Result
 		redacted.Output = RedactAuditText(redacted.Output)
 		redacted.ErrorMessage = RedactAuditText(redacted.ErrorMessage)
+		redacted.Verification = redactActionVerificationResult(redacted.Verification)
 		record.Result = &redacted
 	}
+	record.Verification = redactActionVerificationResult(record.Verification)
 	record.VerificationOutcome.EvidenceSummary = RedactAuditText(record.VerificationOutcome.EvidenceSummary)
 	return record
 }

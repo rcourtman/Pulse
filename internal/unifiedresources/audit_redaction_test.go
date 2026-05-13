@@ -113,6 +113,18 @@ func TestRedactAuditRecord_ScrubsRequestAndResultStringFields(t *testing.T) {
 			RequestID: "req-1",
 			PlanHash:  "deadbeef",
 		},
+		Verification: &ActionVerificationResult{
+			Ran:     true,
+			Command: "systemctl status nginx token=top-command-secret",
+			Output:  "ActiveState=active token=top-output-secret",
+			Success: true,
+			RanAt:   now.Add(time.Minute),
+			Note:    "verified active with password=top-note-secret",
+		},
+		VerificationOutcome: VerificationOutcome{
+			Status:          VerificationVerified,
+			EvidenceSummary: "observed active after api_key=evidence-secret",
+		},
 		Result: actionResultStub(),
 	}
 	redacted := RedactAuditRecord(record)
@@ -138,14 +150,96 @@ func TestRedactAuditRecord_ScrubsRequestAndResultStringFields(t *testing.T) {
 	if strings.Contains(redacted.Result.Output, "hunter2") {
 		t.Fatalf("Result.Output still contains password: %s", redacted.Result.Output)
 	}
+	if strings.Contains(redacted.Result.ErrorMessage, "leakedkey") {
+		t.Fatalf("Result.ErrorMessage still contains API key: %s", redacted.Result.ErrorMessage)
+	}
+	if redacted.Verification == nil {
+		t.Fatal("expected top-level verification to remain present")
+	}
+	if strings.Contains(redacted.Verification.Command, "top-command-secret") || !strings.Contains(redacted.Verification.Command, "systemctl status nginx") {
+		t.Fatalf("top-level verification command redaction failed: %s", redacted.Verification.Command)
+	}
+	if strings.Contains(redacted.Verification.Output, "top-output-secret") || !strings.Contains(redacted.Verification.Output, "ActiveState=active") {
+		t.Fatalf("top-level verification output redaction failed: %s", redacted.Verification.Output)
+	}
+	if strings.Contains(redacted.Verification.Note, "top-note-secret") || !strings.Contains(redacted.Verification.Note, "verified active") {
+		t.Fatalf("top-level verification note redaction failed: %s", redacted.Verification.Note)
+	}
+	if redacted.Result.Verification == nil {
+		t.Fatal("expected result verification to remain present")
+	}
+	if strings.Contains(redacted.Result.Verification.Command, "nested-command-secret") || !strings.Contains(redacted.Result.Verification.Command, "curl -H") {
+		t.Fatalf("nested verification command redaction failed: %s", redacted.Result.Verification.Command)
+	}
+	if strings.Contains(redacted.Result.Verification.Output, "nested-output-secret") || !strings.Contains(redacted.Result.Verification.Output, "state") {
+		t.Fatalf("nested verification output redaction failed: %s", redacted.Result.Verification.Output)
+	}
+	if strings.Contains(redacted.Result.Verification.Note, "nested-note-secret") || !strings.Contains(redacted.Result.Verification.Note, "nested check") {
+		t.Fatalf("nested verification note redaction failed: %s", redacted.Result.Verification.Note)
+	}
+	if strings.Contains(redacted.VerificationOutcome.EvidenceSummary, "evidence-secret") {
+		t.Fatalf("verification evidence summary still contains API key: %s", redacted.VerificationOutcome.EvidenceSummary)
+	}
+}
+
+func TestRedactAuditRecord_PreservesUnrunVerificationNormalization(t *testing.T) {
+	now := time.Now().UTC()
+	record := ActionAuditRecord{
+		ID:        "act-unrun",
+		CreatedAt: now,
+		UpdatedAt: now,
+		State:     ActionStateFailed,
+		Verification: &ActionVerificationResult{
+			Ran:     false,
+			Command: "should not persist token=top-command-secret",
+			Output:  "should not persist token=top-output-secret",
+			Success: true,
+			RanAt:   now,
+			Note:    "should not persist password=top-note-secret",
+		},
+		Result: &ExecutionResult{
+			Success: false,
+			Verification: &ActionVerificationResult{
+				Ran:     false,
+				Command: "should not persist token=nested-command-secret",
+				Output:  "should not persist token=nested-output-secret",
+				Success: true,
+				RanAt:   now,
+				Note:    "should not persist password=nested-note-secret",
+			},
+		},
+	}
+
+	redacted := RedactAuditRecord(record)
+	if redacted.Verification == nil || redacted.Verification.Ran {
+		t.Fatalf("expected normalized top-level ran=false verification, got %#v", redacted.Verification)
+	}
+	if redacted.Verification.Command != "" || redacted.Verification.Output != "" || redacted.Verification.Note != "" || redacted.Verification.Success || !redacted.Verification.RanAt.IsZero() {
+		t.Fatalf("top-level ran=false verification retained details: %#v", redacted.Verification)
+	}
+	if redacted.Result == nil || redacted.Result.Verification == nil || redacted.Result.Verification.Ran {
+		t.Fatalf("expected normalized nested ran=false verification, got %#v", redacted.Result)
+	}
+	if redacted.Result.Verification.Command != "" || redacted.Result.Verification.Output != "" || redacted.Result.Verification.Note != "" || redacted.Result.Verification.Success || !redacted.Result.Verification.RanAt.IsZero() {
+		t.Fatalf("nested ran=false verification retained details: %#v", redacted.Result.Verification)
+	}
 }
 
 // actionResultStub builds a result fixture with secret-shaped output and
-// error message for the audit-record redaction test.
+// verification details for the audit-record redaction test.
 func actionResultStub() *ExecutionResult {
+	now := time.Now().UTC()
 	return &ExecutionResult{
 		Success:      false,
 		Output:       "ran: PASSWORD=hunter2 service start && exit 1",
 		ErrorMessage: "auth failed: api_key=leakedkey not accepted",
+		Verification: &ActionVerificationResult{
+			Ran:     true,
+			Command: "curl -H 'Authorization: Bearer nested-command-secret' https://api.example.com/status",
+			Output:  `payload {"token":"nested-output-secret","state":"active"}`,
+			Success: true,
+			RanAt:   now,
+			Note:    "nested check completed with api_key=nested-note-secret",
+		},
 	}
 }
