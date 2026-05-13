@@ -96,6 +96,11 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 			http.Error(w, "Invalid JSON", http.StatusBadRequest)
 			return
 		}
+		previous, previousFound, err := store.GetResourceOperatorState(resourceID)
+		if err != nil {
+			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+			return
+		}
 		// canonical_id from URL wins over body to prevent scope confusion
 		// (operator wrote vm:101 in the URL but vm:102 in the body).
 		state := unified.ResourceOperatorState{
@@ -128,10 +133,33 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 			return
 		}
+		if err := recordMaintenanceWindowLifecycleChange(store, previous, previousFound, persisted, true, persisted.SetAt, persisted.SetBy); err != nil {
+			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+			return
+		}
 		writeJSON(w, http.StatusOK, toResourceOperatorStateAPI(persisted))
 
 	case http.MethodDelete:
+		previous, previousFound, err := store.GetResourceOperatorState(resourceID)
+		if err != nil {
+			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+			return
+		}
+		observedAt := time.Now().UTC()
+		actor := getUserID(r)
 		if err := store.ClearResourceOperatorState(resourceID); err != nil {
+			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+			return
+		}
+		if err := recordMaintenanceWindowLifecycleChange(
+			store,
+			previous,
+			previousFound,
+			unified.ResourceOperatorState{CanonicalID: resourceID},
+			false,
+			observedAt,
+			actor,
+		); err != nil {
 			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 			return
 		}
@@ -153,4 +181,20 @@ func extractOperatorStateResourceID(path string) string {
 	trimmed = strings.TrimSuffix(trimmed, "/operator-state")
 	trimmed = strings.TrimSuffix(trimmed, "/")
 	return unified.CanonicalResourceID(trimmed)
+}
+
+func recordMaintenanceWindowLifecycleChange(
+	store unified.ResourceStore,
+	previous unified.ResourceOperatorState,
+	previousFound bool,
+	current unified.ResourceOperatorState,
+	currentFound bool,
+	observedAt time.Time,
+	actor string,
+) error {
+	change, ok := unified.BuildMaintenanceWindowLifecycleChange(previous, previousFound, current, currentFound, observedAt, actor)
+	if !ok {
+		return nil
+	}
+	return store.RecordChange(change)
 }

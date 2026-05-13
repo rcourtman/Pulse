@@ -174,6 +174,81 @@ func TestNormalizeResourceOperatorState_TrimsAndLowersCriticality(t *testing.T) 
 	}
 }
 
+func TestResourceOperatorState_BuildMaintenanceWindowLifecycleChange(t *testing.T) {
+	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
+	start := now.Add(time.Hour)
+	end := now.Add(2 * time.Hour)
+	updatedEnd := now.Add(3 * time.Hour)
+
+	current := ResourceOperatorState{
+		CanonicalID:        "vm:101",
+		MaintenanceStartAt: &start,
+		MaintenanceEndAt:   &end,
+		MaintenanceReason:  "kernel patch",
+		SetAt:              now,
+		SetBy:              "operator:richard",
+	}
+
+	scheduled, ok := BuildMaintenanceWindowLifecycleChange(ResourceOperatorState{}, false, current, true, time.Time{}, "")
+	if !ok {
+		t.Fatal("expected a lifecycle change when a maintenance window is scheduled")
+	}
+	if scheduled.Kind != ChangeActivity {
+		t.Fatalf("kind = %q want activity", scheduled.Kind)
+	}
+	if scheduled.SourceType != SourceUserAction {
+		t.Fatalf("source type = %q want user_action", scheduled.SourceType)
+	}
+	if scheduled.SourceAdapter != resourceOperatorStateSourceAdapter {
+		t.Fatalf("source adapter = %q want operator_state", scheduled.SourceAdapter)
+	}
+	if scheduled.Actor != "operator:richard" {
+		t.Fatalf("actor = %q want operator:richard", scheduled.Actor)
+	}
+	if scheduled.Reason != "Maintenance window scheduled" {
+		t.Fatalf("reason = %q want scheduled", scheduled.Reason)
+	}
+	if scheduled.From != "no maintenance window" || !strings.Contains(scheduled.To, "kernel patch") {
+		t.Fatalf("unexpected from/to: %q -> %q", scheduled.From, scheduled.To)
+	}
+	if scheduled.Metadata["activityType"] != MaintenanceWindowLifecycleEventScheduled {
+		t.Fatalf("activityType = %#v want scheduled", scheduled.Metadata["activityType"])
+	}
+	if scheduled.Metadata["maintenanceStartAt"] != start.Format(time.RFC3339) {
+		t.Fatalf("maintenanceStartAt metadata = %#v", scheduled.Metadata["maintenanceStartAt"])
+	}
+
+	unchanged, ok := BuildMaintenanceWindowLifecycleChange(current, true, current, true, now, "")
+	if ok || unchanged.ID != "" {
+		t.Fatalf("unchanged maintenance window should not produce a change: %+v", unchanged)
+	}
+
+	updated := current
+	updated.MaintenanceEndAt = &updatedEnd
+	updated.SetAt = now.Add(time.Minute)
+	changed, ok := BuildMaintenanceWindowLifecycleChange(current, true, updated, true, time.Time{}, "")
+	if !ok {
+		t.Fatal("expected a lifecycle change when the maintenance window end changes")
+	}
+	if changed.Metadata["activityType"] != MaintenanceWindowLifecycleEventUpdated {
+		t.Fatalf("activityType = %#v want updated", changed.Metadata["activityType"])
+	}
+	if changed.Metadata["previousMaintenanceEndAt"] != end.Format(time.RFC3339) {
+		t.Fatalf("previous end metadata = %#v", changed.Metadata["previousMaintenanceEndAt"])
+	}
+
+	cleared, ok := BuildMaintenanceWindowLifecycleChange(updated, true, ResourceOperatorState{CanonicalID: "vm:101"}, false, now.Add(2*time.Minute), "operator:richard")
+	if !ok {
+		t.Fatal("expected a lifecycle change when the maintenance window is cleared")
+	}
+	if cleared.Metadata["activityType"] != MaintenanceWindowLifecycleEventCleared {
+		t.Fatalf("activityType = %#v want cleared", cleared.Metadata["activityType"])
+	}
+	if cleared.To != "no maintenance window" {
+		t.Fatalf("cleared to = %q want no maintenance window", cleared.To)
+	}
+}
+
 func TestMemoryStore_ResourceOperatorState_SetGetClearRoundTrip(t *testing.T) {
 	store := NewMemoryStore()
 

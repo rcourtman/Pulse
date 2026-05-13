@@ -45,6 +45,58 @@ func TestSQLiteRecordLoopReport_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestLoopReport_RecordMaintenanceVerificationResourceChange(t *testing.T) {
+	dataDir := t.TempDir()
+	store, err := NewSQLiteResourceStore(dataDir, "default")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	defer store.Close()
+
+	windowStart := time.Date(2026, 5, 12, 11, 0, 0, 0, time.UTC)
+	windowEnd := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
+	report := newLoopReport("mv-vm_101-20260512T120000Z", "vm:101", windowEnd, LoopReportStatusNeedsReview)
+	report.WindowStartedAt = &windowStart
+	report.LinkedAlertIDs = []string{"alert-1"}
+	report.Evidence.ActiveWarningAlerts = 1
+	if err := store.RecordLoopReport(report); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+
+	changes, err := store.GetRecentChanges("vm:101", windowEnd.Add(-time.Minute), 0)
+	if err != nil {
+		t.Fatalf("recent changes: %v", err)
+	}
+	if len(changes) != 1 {
+		t.Fatalf("expected one resource change for the loop report, got %d", len(changes))
+	}
+	change := changes[0]
+	if change.Kind != ChangeActivity {
+		t.Fatalf("change kind = %q want activity", change.Kind)
+	}
+	if change.SourceType != SourceHeuristic {
+		t.Fatalf("source type = %q want heuristic", change.SourceType)
+	}
+	if change.SourceAdapter != maintenanceVerificationSourceAdapter {
+		t.Fatalf("source adapter = %q want maintenance_sentinel", change.SourceAdapter)
+	}
+	if change.To != string(LoopReportStatusNeedsReview) {
+		t.Fatalf("change to = %q want needs_review", change.To)
+	}
+	if change.OccurredAt == nil || !change.OccurredAt.Equal(windowEnd) {
+		t.Fatalf("occurredAt = %v want %v", change.OccurredAt, windowEnd)
+	}
+	if change.Metadata["activityType"] != MaintenanceVerificationActivityReported {
+		t.Fatalf("activityType = %#v want maintenance verification reported", change.Metadata["activityType"])
+	}
+	if change.Metadata["reportId"] != report.ID {
+		t.Fatalf("reportId = %#v want %q", change.Metadata["reportId"], report.ID)
+	}
+	if change.Metadata["linkedAlertCount"] != float64(1) {
+		t.Fatalf("linkedAlertCount = %#v want 1", change.Metadata["linkedAlertCount"])
+	}
+}
+
 func TestSQLiteRecordLoopReport_AllowsRerunForSameWindow(t *testing.T) {
 	dataDir := t.TempDir()
 	store, err := NewSQLiteResourceStore(dataDir, "default")

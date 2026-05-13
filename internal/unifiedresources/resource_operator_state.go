@@ -175,3 +175,172 @@ func NormalizeResourceOperatorState(state ResourceOperatorState) ResourceOperato
 	state.Criticality = ResourceCriticality(strings.ToLower(strings.TrimSpace(string(state.Criticality))))
 	return state
 }
+
+const (
+	MaintenanceWindowLifecycleEventScheduled = "maintenance_window_scheduled"
+	MaintenanceWindowLifecycleEventUpdated   = "maintenance_window_updated"
+	MaintenanceWindowLifecycleEventCleared   = "maintenance_window_cleared"
+
+	resourceOperatorStateSourceAdapter ChangeSourceAdapter = "operator_state"
+)
+
+type maintenanceWindowLifecycleSnapshot struct {
+	start  time.Time
+	end    time.Time
+	reason string
+}
+
+// BuildMaintenanceWindowLifecycleChange returns the canonical resource
+// timeline record for a maintenance-window lifecycle transition. It is
+// intentionally scoped to the maintenance window fields; other
+// operator-state flags have their own product meaning and must not be
+// folded into this lifecycle evidence.
+func BuildMaintenanceWindowLifecycleChange(previous ResourceOperatorState, previousFound bool, current ResourceOperatorState, currentFound bool, observedAt time.Time, actor string) (ResourceChange, bool) {
+	if !previousFound {
+		previous = ResourceOperatorState{}
+	}
+	if !currentFound {
+		current = ResourceOperatorState{CanonicalID: previous.CanonicalID}
+	}
+	canonicalID := CanonicalResourceID(current.CanonicalID)
+	if canonicalID == "" {
+		canonicalID = CanonicalResourceID(previous.CanonicalID)
+	}
+	if canonicalID == "" {
+		return ResourceChange{}, false
+	}
+
+	before, beforeOK := maintenanceWindowSnapshot(previous)
+	after, afterOK := maintenanceWindowSnapshot(current)
+
+	event := ""
+	switch {
+	case !beforeOK && afterOK:
+		event = MaintenanceWindowLifecycleEventScheduled
+	case beforeOK && afterOK && !before.equal(after):
+		event = MaintenanceWindowLifecycleEventUpdated
+	case beforeOK && !afterOK:
+		event = MaintenanceWindowLifecycleEventCleared
+	default:
+		return ResourceChange{}, false
+	}
+
+	if observedAt.IsZero() {
+		observedAt = maintenanceWindowObservedAt(previous, previousFound, current, currentFound)
+	} else {
+		observedAt = observedAt.UTC()
+	}
+	actor = strings.TrimSpace(actor)
+	if actor == "" && currentFound {
+		actor = strings.TrimSpace(current.SetBy)
+	}
+	if actor == "" && previousFound {
+		actor = strings.TrimSpace(previous.SetBy)
+	}
+
+	metadata := map[string]any{
+		"activityType":        event,
+		"operatorStateChange": "maintenance_window_lifecycle",
+	}
+	if beforeOK {
+		metadata["previousMaintenanceStartAt"] = before.start.UTC().Format(time.RFC3339)
+		metadata["previousMaintenanceEndAt"] = before.end.UTC().Format(time.RFC3339)
+		if before.reason != "" {
+			metadata["previousMaintenanceReason"] = before.reason
+		}
+	}
+	if afterOK {
+		metadata["maintenanceStartAt"] = after.start.UTC().Format(time.RFC3339)
+		metadata["maintenanceEndAt"] = after.end.UTC().Format(time.RFC3339)
+		if after.reason != "" {
+			metadata["maintenanceReason"] = after.reason
+		}
+	}
+
+	return ResourceChange{
+		ID:            resourceChangeID("resource-operator-state", canonicalID, event, observedAt),
+		ObservedAt:    observedAt,
+		ResourceID:    canonicalID,
+		Kind:          ChangeActivity,
+		From:          maintenanceWindowSummary(before, beforeOK),
+		To:            maintenanceWindowSummary(after, afterOK),
+		SourceType:    SourceUserAction,
+		SourceAdapter: resourceOperatorStateSourceAdapter,
+		Confidence:    ConfidenceHigh,
+		Actor:         actor,
+		Reason:        maintenanceWindowLifecycleReason(event),
+		Metadata:      metadata,
+	}, true
+}
+
+func maintenanceWindowSnapshot(state ResourceOperatorState) (maintenanceWindowLifecycleSnapshot, bool) {
+	if state.MaintenanceStartAt == nil || state.MaintenanceEndAt == nil {
+		return maintenanceWindowLifecycleSnapshot{}, false
+	}
+	return maintenanceWindowLifecycleSnapshot{
+		start:  state.MaintenanceStartAt.UTC(),
+		end:    state.MaintenanceEndAt.UTC(),
+		reason: strings.TrimSpace(state.MaintenanceReason),
+	}, true
+}
+
+func (s maintenanceWindowLifecycleSnapshot) equal(other maintenanceWindowLifecycleSnapshot) bool {
+	return s.start.Equal(other.start) && s.end.Equal(other.end) && s.reason == other.reason
+}
+
+func maintenanceWindowObservedAt(previous ResourceOperatorState, previousFound bool, current ResourceOperatorState, currentFound bool) time.Time {
+	if currentFound && !current.SetAt.IsZero() {
+		return current.SetAt.UTC()
+	}
+	if previousFound && !previous.SetAt.IsZero() {
+		return previous.SetAt.UTC()
+	}
+	return time.Now().UTC()
+}
+
+func maintenanceWindowSummary(window maintenanceWindowLifecycleSnapshot, ok bool) string {
+	if !ok {
+		return "no maintenance window"
+	}
+	summary := window.start.UTC().Format(time.RFC3339) + " to " + window.end.UTC().Format(time.RFC3339)
+	if window.reason != "" {
+		summary += " (" + window.reason + ")"
+	}
+	return summary
+}
+
+func maintenanceWindowLifecycleReason(event string) string {
+	switch event {
+	case MaintenanceWindowLifecycleEventScheduled:
+		return "Maintenance window scheduled"
+	case MaintenanceWindowLifecycleEventUpdated:
+		return "Maintenance window updated"
+	case MaintenanceWindowLifecycleEventCleared:
+		return "Maintenance window cleared"
+	default:
+		return "Maintenance window lifecycle changed"
+	}
+}
+
+func resourceChangeID(prefix, canonicalID, event string, observedAt time.Time) string {
+	if observedAt.IsZero() {
+		observedAt = time.Now().UTC()
+	}
+	return fmt.Sprintf("%s:%s:%s:%d", prefix, sanitizeResourceChangeIDComponent(canonicalID), sanitizeResourceChangeIDComponent(event), observedAt.UTC().UnixNano())
+}
+
+func sanitizeResourceChangeIDComponent(value string) string {
+	var b strings.Builder
+	b.Grow(len(value))
+	for _, r := range value {
+		switch {
+		case (r >= 'a' && r <= 'z'), (r >= 'A' && r <= 'Z'), (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+		case r == '-' || r == '_' || r == '.':
+			b.WriteRune(r)
+		default:
+			b.WriteRune('_')
+		}
+	}
+	return b.String()
+}

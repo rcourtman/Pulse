@@ -21,6 +21,12 @@ const (
 	LoopReportTypeMaintenanceVerification LoopReportType = "maintenance_verification"
 )
 
+const (
+	MaintenanceVerificationActivityReported = "maintenance_verification_reported"
+
+	maintenanceVerificationSourceAdapter ChangeSourceAdapter = "maintenance_sentinel"
+)
+
 // LoopReportStatus reports the verification outcome.
 //
 //   - healthy             — all deterministic checks passed.
@@ -38,10 +44,10 @@ const (
 type LoopReportStatus string
 
 const (
-	LoopReportStatusPending             LoopReportStatus = "pending"
-	LoopReportStatusHealthy             LoopReportStatus = "healthy"
-	LoopReportStatusNeedsReview         LoopReportStatus = "needs_review"
-	LoopReportStatusFailedVerification  LoopReportStatus = "failed_verification"
+	LoopReportStatusPending            LoopReportStatus = "pending"
+	LoopReportStatusHealthy            LoopReportStatus = "healthy"
+	LoopReportStatusNeedsReview        LoopReportStatus = "needs_review"
+	LoopReportStatusFailedVerification LoopReportStatus = "failed_verification"
 )
 
 // LoopReportUserOutcome records the operator's review verdict after
@@ -286,4 +292,73 @@ func trimAndDedupeStrings(in []string) []string {
 		return nil
 	}
 	return out
+}
+
+// BuildLoopReportResourceChange projects an immutable loop report into the
+// canonical resource timeline. The report remains the source-of-truth record;
+// this change is the discoverable timeline evidence that lets existing
+// change consumers explain why the resource's post-maintenance state changed.
+func BuildLoopReportResourceChange(report LoopReport) (ResourceChange, bool) {
+	report = NormalizeLoopReport(report)
+	if report.ID == "" || report.Scope == "" || report.Type != LoopReportTypeMaintenanceVerification {
+		return ResourceChange{}, false
+	}
+	observedAt := report.CompletedAt
+	if observedAt.IsZero() {
+		observedAt = report.StartedAt
+	}
+	if observedAt.IsZero() {
+		observedAt = time.Now().UTC()
+	}
+	observedAt = observedAt.UTC()
+
+	var occurredAt *time.Time
+	if report.WindowEndedAt != nil {
+		t := report.WindowEndedAt.UTC()
+		occurredAt = &t
+	}
+
+	metadata := map[string]any{
+		"activityType": MaintenanceVerificationActivityReported,
+		"reportId":     report.ID,
+		"reportType":   string(report.Type),
+		"status":       string(report.Status),
+		"trigger":      report.Trigger,
+	}
+	if report.WindowStartedAt != nil {
+		metadata["windowStartedAt"] = report.WindowStartedAt.UTC().Format(time.RFC3339)
+	}
+	if report.WindowEndedAt != nil {
+		metadata["windowEndedAt"] = report.WindowEndedAt.UTC().Format(time.RFC3339)
+	}
+	if report.Recommendation != "" {
+		metadata["recommendation"] = report.Recommendation
+	}
+	if len(report.LinkedAlertIDs) > 0 {
+		metadata["linkedAlertCount"] = len(report.LinkedAlertIDs)
+	}
+	if len(report.LinkedFindingIDs) > 0 {
+		metadata["linkedFindingCount"] = len(report.LinkedFindingIDs)
+	}
+	if len(report.LinkedActionIDs) > 0 {
+		metadata["linkedActionCount"] = len(report.LinkedActionIDs)
+	}
+	if report.Evidence.OperatorStateSummary != "" {
+		metadata["operatorStateSummary"] = report.Evidence.OperatorStateSummary
+	}
+
+	return ResourceChange{
+		ID:            resourceChangeID("loop-report", report.Scope, report.ID, observedAt),
+		ObservedAt:    observedAt,
+		OccurredAt:    occurredAt,
+		ResourceID:    report.Scope,
+		Kind:          ChangeActivity,
+		From:          report.Trigger,
+		To:            string(report.Status),
+		SourceType:    SourceHeuristic,
+		SourceAdapter: maintenanceVerificationSourceAdapter,
+		Confidence:    ConfidenceHigh,
+		Reason:        "Maintenance verification reported " + string(report.Status),
+		Metadata:      metadata,
+	}, true
 }

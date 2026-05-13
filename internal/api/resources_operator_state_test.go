@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // newOperatorStateHandlers spins up a ResourceHandlers wired against a
@@ -105,6 +106,75 @@ func TestHandleResourceOperatorState_PutPersistsAndGetReturns200(t *testing.T) {
 	}
 	if got.MaintenanceStartAt == nil || !got.MaintenanceStartAt.Equal(start) {
 		t.Errorf("maintenance start must round-trip; got %v", got.MaintenanceStartAt)
+	}
+}
+
+func TestHandleResourceOperatorState_RecordsMaintenanceWindowLifecycleChanges(t *testing.T) {
+	h := newOperatorStateHandlers(t)
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("get store: %v", err)
+	}
+
+	start := time.Date(2026, 5, 9, 12, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 5, 9, 14, 0, 0, 0, time.UTC)
+	body, _ := json.Marshal(map[string]any{
+		"maintenanceStartAt": start.Format(time.RFC3339),
+		"maintenanceEndAt":   end.Format(time.RFC3339),
+		"maintenanceReason":  "storage controller patch",
+	})
+
+	putRec := httptest.NewRecorder()
+	putReq := httptest.NewRequest(http.MethodPut, "/api/resources/vm:101/operator-state", bytes.NewReader(body))
+	h.HandleResourceOperatorState(putRec, putReq)
+	if putRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 on PUT; got %d body=%s", putRec.Code, putRec.Body.String())
+	}
+
+	changes, err := store.GetRecentChangesFiltered("vm:101", time.Time{}, 0, unified.ResourceChangeFilters{
+		SourceTypes: []unified.ChangeSourceType{unified.SourceUserAction},
+	})
+	if err != nil {
+		t.Fatalf("recent changes after PUT: %v", err)
+	}
+	if len(changes) != 1 {
+		t.Fatalf("expected one maintenance lifecycle change after PUT, got %d", len(changes))
+	}
+	if changes[0].Metadata["activityType"] != unified.MaintenanceWindowLifecycleEventScheduled {
+		t.Fatalf("activityType = %#v want scheduled", changes[0].Metadata["activityType"])
+	}
+	if changes[0].Reason != "Maintenance window scheduled" {
+		t.Fatalf("reason = %q want scheduled", changes[0].Reason)
+	}
+
+	delRec := httptest.NewRecorder()
+	delReq := httptest.NewRequest(http.MethodDelete, "/api/resources/vm:101/operator-state", nil)
+	h.HandleResourceOperatorState(delRec, delReq)
+	if delRec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 on DELETE; got %d body=%s", delRec.Code, delRec.Body.String())
+	}
+
+	changes, err = store.GetRecentChangesFiltered("vm:101", time.Time{}, 0, unified.ResourceChangeFilters{
+		SourceTypes: []unified.ChangeSourceType{unified.SourceUserAction},
+	})
+	if err != nil {
+		t.Fatalf("recent changes after DELETE: %v", err)
+	}
+	if len(changes) != 2 {
+		t.Fatalf("expected scheduled + cleared changes, got %d", len(changes))
+	}
+	var cleared *unified.ResourceChange
+	for i := range changes {
+		if changes[i].Metadata["activityType"] == unified.MaintenanceWindowLifecycleEventCleared {
+			cleared = &changes[i]
+			break
+		}
+	}
+	if cleared == nil {
+		t.Fatalf("expected cleared lifecycle change, got %+v", changes)
+	}
+	if cleared.To != "no maintenance window" {
+		t.Fatalf("delete change to = %q want no maintenance window", cleared.To)
 	}
 }
 

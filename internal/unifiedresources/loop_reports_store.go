@@ -137,8 +137,6 @@ func (s *SQLiteResourceStore) RecordLoopReport(report LoopReport) error {
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	_, err = s.db.Exec(`
 		INSERT INTO loop_reports (
 			id, report_type, scope, trigger, goal, status, started_at, completed_at,
@@ -168,8 +166,14 @@ func (s *SQLiteResourceStore) RecordLoopReport(report LoopReport) error {
 		report.ReviewedBy,
 		report.ReviewNote,
 	)
+	s.mu.Unlock()
 	if err != nil {
 		return fmt.Errorf("insert loop report: %w", err)
+	}
+	if change, ok := BuildLoopReportResourceChange(report); ok {
+		if err := s.RecordChange(change); err != nil {
+			return fmt.Errorf("record loop report resource change: %w", err)
+		}
 	}
 	return nil
 }
@@ -316,18 +320,18 @@ type loopReportScanner interface {
 
 func scanLoopReportRow(scanner loopReportScanner) (LoopReport, error) {
 	var (
-		r                       LoopReport
-		typ, status, outcome    string
-		windowStart, windowEnd  sql.NullTime
-		reviewedAt              sql.NullTime
-		evidenceJSON            string
-		findingIDsJSON          string
-		alertIDsJSON            string
-		actionIDsJSON           string
-		linkedPatrolRunID       string
-		recommendation, goal    string
-		reviewedBy, reviewNote  string
-		trigger                 string
+		r                      LoopReport
+		typ, status, outcome   string
+		windowStart, windowEnd sql.NullTime
+		reviewedAt             sql.NullTime
+		evidenceJSON           string
+		findingIDsJSON         string
+		alertIDsJSON           string
+		actionIDsJSON          string
+		linkedPatrolRunID      string
+		recommendation, goal   string
+		reviewedBy, reviewNote string
+		trigger                string
 	)
 	if err := scanner.Scan(
 		&r.ID,
@@ -410,14 +414,20 @@ func (m *MemoryStore) RecordLoopReport(report LoopReport) error {
 		return err
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	if m.loopReports == nil {
 		m.loopReports = make(map[string]LoopReport)
 	}
 	if _, exists := m.loopReports[report.ID]; exists {
+		m.mu.Unlock()
 		return fmt.Errorf("%w: id %q already exists", ErrLoopReportInvalid, report.ID)
 	}
 	m.loopReports[report.ID] = report
+	m.mu.Unlock()
+	if change, ok := BuildLoopReportResourceChange(report); ok {
+		if err := m.RecordChange(change); err != nil {
+			return fmt.Errorf("record loop report resource change: %w", err)
+		}
+	}
 	return nil
 }
 

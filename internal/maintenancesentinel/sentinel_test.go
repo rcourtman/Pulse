@@ -55,6 +55,48 @@ func TestSentinelTickOnceWritesReportAndDedupes(t *testing.T) {
 	}
 }
 
+func TestMaintenanceSentinelTickOnceWritesTimelineEvidence(t *testing.T) {
+	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
+	windowStart := now.Add(-time.Hour)
+	windowEnd := now.Add(-15 * time.Minute)
+
+	store := unified.NewMemoryStore()
+	if err := store.SetResourceOperatorState(unified.ResourceOperatorState{
+		CanonicalID:        "vm:101",
+		MaintenanceStartAt: &windowStart,
+		MaintenanceEndAt:   &windowEnd,
+		SetAt:              windowStart,
+		SetBy:              "operator",
+	}); err != nil {
+		t.Fatalf("seed operator state: %v", err)
+	}
+
+	providers := Providers{
+		Stores: func(orgID string) (unified.ResourceStore, error) { return store, nil },
+		Now:    func() time.Time { return now },
+	}
+	sentinel, err := New(Config{OrgID: "default", Tick: time.Minute}, providers)
+	if err != nil {
+		t.Fatalf("new sentinel: %v", err)
+	}
+
+	sentinel.tickOnce(context.Background())
+
+	changes, err := store.GetRecentChanges("vm:101", windowStart, 0)
+	if err != nil {
+		t.Fatalf("recent changes: %v", err)
+	}
+	if len(changes) != 1 {
+		t.Fatalf("expected one timeline change from the verification report, got %d", len(changes))
+	}
+	if changes[0].SourceAdapter != unified.ChangeSourceAdapter("maintenance_sentinel") {
+		t.Fatalf("source adapter = %q want maintenance_sentinel", changes[0].SourceAdapter)
+	}
+	if changes[0].Metadata["activityType"] != unified.MaintenanceVerificationActivityReported {
+		t.Fatalf("activityType = %#v want maintenance verification reported", changes[0].Metadata["activityType"])
+	}
+}
+
 func TestSentinelSkipsAncientWindows(t *testing.T) {
 	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
 	windowStart := now.Add(-30 * 24 * time.Hour)
