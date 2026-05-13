@@ -6,14 +6,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 import registry_audit
-from repo_file_io import canonical_repo_id
+from repo_file_io import canonical_repo_id, strip_local_git_env
 from registry_audit import audit_registry_payload, parse_args, tracked_workspace_files
 
 
 class RegistryAuditTest(unittest.TestCase):
     def git(self, repo_root: Path, *args: str) -> subprocess.CompletedProcess:
         env = os.environ.copy()
-        env.pop("GIT_INDEX_FILE", None)
+        strip_local_git_env(env)
         return subprocess.run(
             ["git", *args],
             cwd=repo_root,
@@ -22,6 +22,20 @@ class RegistryAuditTest(unittest.TestCase):
             text=True,
             env=env,
         )
+
+    def git_stdout(self, repo_root: Path, *args: str) -> str:
+        return self.git(repo_root, *args).stdout.strip()
+
+    def hook_env_for_worktree(self, worktree_root: Path) -> dict[str, str]:
+        git_dir = self.git_stdout(worktree_root, "rev-parse", "--path-format=absolute", "--git-dir")
+        common_dir = self.git_stdout(worktree_root, "rev-parse", "--path-format=absolute", "--git-common-dir")
+        work_tree = self.git_stdout(worktree_root, "rev-parse", "--show-toplevel")
+        return {
+            "GIT_DIR": git_dir,
+            "GIT_WORK_TREE": work_tree,
+            "GIT_INDEX_FILE": str(Path(git_dir) / "index"),
+            "GIT_COMMON_DIR": common_dir,
+        }
 
     def test_parse_args_accepts_staged_flag(self) -> None:
         args = parse_args(["--check", "--staged"])
@@ -71,6 +85,78 @@ class RegistryAuditTest(unittest.TestCase):
 
             self.assertIn("internal/staged.go", files)
             self.assertNotIn("pulse:internal/staged.go", files)
+
+    def test_tracked_workspace_files_fixture_isolated_from_linked_worktree_hook_env(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_root = Path(tmpdir)
+            caller_workspace = tmp_root / "caller" / "workspace"
+            caller_repo = caller_workspace / "repos" / "pulse"
+            caller_worktree = caller_workspace / ".worktrees" / "pulse-first-session-onboarding-parity"
+            caller_repo.mkdir(parents=True)
+            caller_worktree.parent.mkdir(parents=True)
+
+            self.git(caller_repo, "init")
+            (caller_repo / "README.md").write_text("caller\n", encoding="utf-8")
+            self.git(caller_repo, "add", "README.md")
+            self.git(
+                caller_repo,
+                "-c",
+                "user.name=Pulse Test",
+                "-c",
+                "user.email=pulse-test@example.invalid",
+                "commit",
+                "-m",
+                "initial",
+            )
+            self.git(caller_repo, "worktree", "add", "--detach", str(caller_worktree), "HEAD")
+
+            hook_env = self.hook_env_for_worktree(caller_worktree)
+            caller_head_count_before = self.git_stdout(caller_worktree, "rev-list", "--count", "HEAD")
+
+            fixture_workspace = tmp_root / "fixture" / "workspace"
+            repo_root = fixture_workspace / "repos" / "pulse"
+            linked_worktree = fixture_workspace / ".worktrees" / "pulse-first-session-onboarding-parity"
+            repo_root.mkdir(parents=True)
+            linked_worktree.parent.mkdir(parents=True)
+
+            with patch.dict(os.environ, hook_env, clear=False):
+                self.git(repo_root, "init")
+                (repo_root / "internal").mkdir()
+                (repo_root / "internal" / "existing.go").write_text("package internal\n", encoding="utf-8")
+                self.git(repo_root, "add", "internal/existing.go")
+                self.git(
+                    repo_root,
+                    "-c",
+                    "user.name=Pulse Test",
+                    "-c",
+                    "user.email=pulse-test@example.invalid",
+                    "commit",
+                    "-m",
+                    "initial",
+                )
+                self.git(repo_root, "worktree", "add", "--detach", str(linked_worktree), "HEAD")
+
+                (linked_worktree / "internal" / "staged.go").write_text("package internal\n", encoding="utf-8")
+                self.git(linked_worktree, "add", "internal/staged.go")
+                contracts_dir = linked_worktree / "docs" / "release-control" / "v6" / "internal" / "subsystems"
+                contracts_dir.mkdir(parents=True)
+
+                with patch("registry_audit.REPO_ROOT", linked_worktree), patch(
+                    "registry_audit.DEFAULT_CONTROL_PLANE",
+                    {
+                        **registry_audit.DEFAULT_CONTROL_PLANE,
+                        "subsystems_dir_path": str(contracts_dir),
+                    },
+                ):
+                    files = tracked_workspace_files(
+                        active_repos=["pulse"],
+                        local_repo=canonical_repo_id(linked_worktree),
+                    )
+
+            self.assertIn("internal/staged.go", files)
+            self.assertEqual(caller_head_count_before, self.git_stdout(caller_worktree, "rev-list", "--count", "HEAD"))
+            self.assertEqual("", self.git_stdout(caller_worktree, "status", "--porcelain=v1"))
+            self.assertFalse((caller_worktree / "internal").exists())
 
     def test_tracked_workspace_files_scrubs_hook_env_for_sibling_repos(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

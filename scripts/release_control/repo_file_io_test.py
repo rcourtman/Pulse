@@ -14,13 +14,14 @@ from repo_file_io import (
     load_repo_json,
     missing_staged_repo_paths,
     read_repo_text,
+    strip_local_git_env,
 )
 
 
 class RepoFileIoTest(unittest.TestCase):
     def git(self, repo_root: Path, *args: str) -> subprocess.CompletedProcess:
         env = os.environ.copy()
-        env.pop("GIT_INDEX_FILE", None)
+        strip_local_git_env(env)
         return subprocess.run(
             ["git", *args],
             cwd=repo_root,
@@ -84,8 +85,10 @@ class RepoFileIoTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             workspace = Path(tmpdir) / "workspace"
             local_repo = workspace / "repos" / "pulse"
+            other_local_repo = workspace / ".worktrees" / "pulse-first-session-onboarding-parity"
             sibling_repo = workspace / "repos" / "pulse-mobile"
             local_repo.mkdir(parents=True)
+            other_local_repo.mkdir(parents=True)
             sibling_repo.mkdir(parents=True)
 
             leaked_env = {
@@ -100,6 +103,7 @@ class RepoFileIoTest(unittest.TestCase):
             with patch.dict(os.environ, leaked_env, clear=True):
                 local_env = git_env(local_repo, local_repo_root=local_repo)
                 sibling_env = git_env(sibling_repo, local_repo_root=local_repo)
+                mismatched_local_env = git_env(other_local_repo, local_repo_root=other_local_repo)
 
             self.assertEqual(local_env["GIT_DIR"], leaked_env["GIT_DIR"])
             self.assertEqual(local_env["GIT_WORK_TREE"], leaked_env["GIT_WORK_TREE"])
@@ -110,6 +114,12 @@ class RepoFileIoTest(unittest.TestCase):
             self.assertNotIn("GIT_INDEX_FILE", sibling_env)
             self.assertNotIn("GIT_COMMON_DIR", sibling_env)
             self.assertNotIn("GIT_PREFIX", sibling_env)
+            self.assertEqual(mismatched_local_env["PATH"], leaked_env["PATH"])
+            self.assertNotIn("GIT_DIR", mismatched_local_env)
+            self.assertNotIn("GIT_WORK_TREE", mismatched_local_env)
+            self.assertNotIn("GIT_INDEX_FILE", mismatched_local_env)
+            self.assertNotIn("GIT_COMMON_DIR", mismatched_local_env)
+            self.assertNotIn("GIT_PREFIX", mismatched_local_env)
 
     def test_canonical_repo_identity_uses_git_common_dir_for_linked_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

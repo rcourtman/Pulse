@@ -37,11 +37,21 @@ def strip_local_git_env(env: dict[str, str]) -> dict[str, str]:
     return env
 
 
+def git_env_targets_repo(env: dict[str, str], repo_root: Path) -> bool:
+    work_tree = env.get("GIT_WORK_TREE")
+    if not work_tree:
+        return True
+    try:
+        return Path(work_tree).resolve() == repo_root.resolve()
+    except OSError:
+        return False
+
+
 def git_env(repo_root: Path | None = None, *, local_repo_root: Path | None = None) -> dict[str, str]:
     env = os.environ.copy()
     root = repo_root or REPO_ROOT
     local_root = local_repo_root or DEFAULT_REPO_ROOT
-    if root.resolve() != local_root.resolve():
+    if root.resolve() != local_root.resolve() or not git_env_targets_repo(env, local_root):
         strip_local_git_env(env)
     return env
 
