@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
@@ -40,7 +41,6 @@ type SignedConfigPayload struct {
 	ExpiresAt       time.Time
 	CommandsEnabled *bool
 	Settings        map[string]interface{}
-	DesiredConfig   *DesiredConfigMetadata
 }
 
 // DecodeEd25519PrivateKey decodes a base64-encoded Ed25519 private key or seed.
@@ -151,10 +151,6 @@ func canonicalConfigPayload(payload SignedConfigPayload) ([]byte, error) {
 		ExpiresAt       string          `json:"expiresAt"`
 		CommandsEnabled *bool           `json:"commandsEnabled,omitempty"`
 		Settings        json.RawMessage `json:"settings,omitempty"`
-		DesiredConfig   *struct {
-			Version string `json:"version"`
-			Hash    string `json:"hash"`
-		} `json:"desiredConfig,omitempty"`
 	}
 
 	var settings json.RawMessage
@@ -166,30 +162,12 @@ func canonicalConfigPayload(payload SignedConfigPayload) ([]byte, error) {
 		settings = data
 	}
 
-	var desiredConfig *struct {
-		Version string `json:"version"`
-		Hash    string `json:"hash"`
-	}
-	if payload.DesiredConfig != nil {
-		normalized := normalizeDesiredConfigMetadata(*payload.DesiredConfig)
-		if normalized.Version != "" || normalized.Hash != "" {
-			desiredConfig = &struct {
-				Version string `json:"version"`
-				Hash    string `json:"hash"`
-			}{
-				Version: normalized.Version,
-				Hash:    normalized.Hash,
-			}
-		}
-	}
-
 	canonical := canonicalPayload{
 		AgentID:         strings.TrimSpace(payload.AgentID),
 		IssuedAt:        payload.IssuedAt.UTC().Format(time.RFC3339Nano),
 		ExpiresAt:       payload.ExpiresAt.UTC().Format(time.RFC3339Nano),
 		CommandsEnabled: payload.CommandsEnabled,
 		Settings:        settings,
-		DesiredConfig:   desiredConfig,
 	}
 
 	data, err := json.Marshal(canonical)
@@ -207,8 +185,9 @@ func canonicalDesiredConfigPayload(commandsEnabled *bool, settings map[string]in
 	}
 
 	var rawSettings json.RawMessage
-	if len(settings) > 0 {
-		data, err := marshalSortedMap(settings)
+	appliedSettings := desiredConfigAppliedSettings(settings)
+	if len(appliedSettings) > 0 {
+		data, err := marshalSortedMap(appliedSettings)
 		if err != nil {
 			return nil, fmt.Errorf("marshal canonical settings: %w", err)
 		}
@@ -226,6 +205,32 @@ func canonicalDesiredConfigPayload(commandsEnabled *bool, settings map[string]in
 		return nil, fmt.Errorf("marshal canonical desired config payload: %w", err)
 	}
 	return data, nil
+}
+
+func desiredConfigAppliedSettings(settings map[string]interface{}) map[string]interface{} {
+	if len(settings) == 0 {
+		return nil
+	}
+
+	allowed := desiredConfigAppliedSettingKeys()
+	filtered := make(map[string]interface{}, len(settings))
+	for key, value := range settings {
+		if _, ok := allowed[key]; ok {
+			filtered[key] = value
+		}
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+	return filtered
+}
+
+func desiredConfigAppliedSettingKeys() map[string]struct{} {
+	allowed := make(map[string]struct{}, len(models.ValidConfigKeys))
+	for _, def := range models.ValidConfigKeys {
+		allowed[def.Key] = struct{}{}
+	}
+	return allowed
 }
 
 func normalizeDesiredConfigMetadata(metadata DesiredConfigMetadata) DesiredConfigMetadata {

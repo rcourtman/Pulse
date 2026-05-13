@@ -1919,9 +1919,13 @@ proofs.
 The remote-config side of that same Unified Agent boundary now also carries a
 backend-owned desired-config fingerprint. `Monitor.GetHostAgentConfig` must
 compute the metadata after profile settings and command enablement decisions
-have been merged, and `/api/agents/agent/{id}/config` may sign that metadata
-with the rest of the config payload. Broader applied-state reporting and
-connections-ledger rollout presentation remain outside this backend foundation.
+have been merged. `/api/agents/agent/{id}/config` must keep the existing
+config `signature` backward-compatible with installed agents by signing the
+legacy canonical payload shape only; newer clients validate `desiredConfig` by
+recomputing it from the signed command decision and signed settings payload,
+restricted to the agent-applied settings key schema. Broader applied-state
+reporting and connections-ledger rollout presentation remain outside this
+backend foundation.
 That same canonical /api/auto-register path must also complete the live
 post-registration contract after persistence: it must trigger discovery refresh
 and emit the canonical `node_auto_registered` WebSocket payload instead of

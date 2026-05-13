@@ -39,7 +39,6 @@ func TestClientFetchWithSignature(t *testing.T) {
 		ExpiresAt:       expiresAt,
 		CommandsEnabled: &commands,
 		Settings:        settings,
-		DesiredConfig:   &desired,
 	}
 	signature, err := SignConfigPayload(payload, priv)
 	if err != nil {
@@ -80,6 +79,56 @@ func TestClientFetchWithSignature(t *testing.T) {
 	}
 	if gotSettings["interval"] != "1m" {
 		t.Fatalf("unexpected settings: %#v", gotSettings)
+	}
+}
+
+func TestClientFetchRejectsTamperedDesiredConfigWithLegacySignature(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	t.Setenv("PULSE_AGENT_CONFIG_PUBLIC_KEYS", base64.StdEncoding.EncodeToString(pub))
+
+	issuedAt := time.Now().UTC()
+	expiresAt := issuedAt.Add(5 * time.Minute)
+	commands := true
+	settings := map[string]interface{}{"interval": "1m"}
+	payload := SignedConfigPayload{
+		AgentID:         "agent-1",
+		IssuedAt:        issuedAt,
+		ExpiresAt:       expiresAt,
+		CommandsEnabled: &commands,
+		Settings:        settings,
+	}
+	signature, err := SignConfigPayload(payload, priv)
+	if err != nil {
+		t.Fatalf("SignConfigPayload: %v", err)
+	}
+
+	tampered := DesiredConfigMetadata{Version: desiredConfigFingerprintVersion, Hash: "sha256:0000"}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := Response{
+			Success: true,
+			AgentID: "agent-1",
+		}
+		resp.Config.CommandsEnabled = &commands
+		resp.Config.Settings = settings
+		resp.Config.DesiredConfig = &tampered
+		resp.Config.IssuedAt = issuedAt
+		resp.Config.ExpiresAt = expiresAt
+		resp.Config.Signature = signature
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer ts.Close()
+
+	client := New(Config{
+		PulseURL: ts.URL,
+		APIToken: "token-123",
+		AgentID:  "agent-1",
+	})
+
+	if _, _, err := client.Fetch(context.Background()); err == nil || !strings.Contains(err.Error(), "desired config fingerprint mismatch") {
+		t.Fatalf("expected desired metadata tamper error, got %v", err)
 	}
 }
 

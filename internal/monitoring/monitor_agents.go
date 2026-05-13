@@ -385,7 +385,7 @@ func (m *Monitor) GetHostAgentConfig(hostID string) HostAgentConfig {
 		if profileID != "" {
 			for _, p := range profiles {
 				if p.ID == profileID {
-					cfg.Settings = p.Config
+					cfg.Settings = p.MergedConfig(profiles)
 					break
 				}
 			}

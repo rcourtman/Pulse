@@ -1166,7 +1166,11 @@ Removes an agent from state.
 Returns the server-side config payload for an agent (used by remote config and debugging). Requires `agent:config:read`.
 The `config` object includes the merged desired settings, command enablement
 decision, and desired-config metadata. When signing is configured, the
-signature covers that metadata with the rest of the config payload:
+signature remains backward-compatible with legacy agents: it covers
+`agentId`, `commandsEnabled`, `settings`, `issuedAt`, and `expiresAt`.
+`desiredConfig` is computed from the signed command decision plus the
+agent-applied settings keys and returned as tamper-evident metadata for newer
+clients to recompute and compare.
 
 ```json
 {

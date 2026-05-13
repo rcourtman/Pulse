@@ -409,7 +409,6 @@ func (h *UnifiedAgentHandlers) signAgentConfig(agentID string, cfg monitoring.Ho
 		ExpiresAt:       expiresAt,
 		CommandsEnabled: cfg.CommandsEnabled,
 		Settings:        cfg.Settings,
-		DesiredConfig:   cfg.DesiredConfig,
 	}
 
 	signature, err := remoteconfig.SignConfigPayload(payload, key)

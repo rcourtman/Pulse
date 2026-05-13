@@ -126,6 +126,68 @@ func TestGetHostAgentConfig_FingerprintIncludesCommandDecision(t *testing.T) {
 	}
 }
 
+func TestGetHostAgentConfig_UsesMergedProfileConfigForFingerprint(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "monitor_profiles_merged_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	persistence := config.NewConfigPersistence(tmpDir)
+	parent := models.AgentProfile{
+		ID:   "parent-profile",
+		Name: "Parent Profile",
+		Config: map[string]interface{}{
+			"enable_docker": true,
+			"log_level":     "warn",
+		},
+	}
+	child := models.AgentProfile{
+		ID:       "child-profile",
+		Name:     "Child Profile",
+		ParentID: "parent-profile",
+		Config: map[string]interface{}{
+			"interval":  "45s",
+			"log_level": "debug",
+		},
+	}
+	if err := persistence.SaveAgentProfiles([]models.AgentProfile{parent, child}); err != nil {
+		t.Fatalf("Failed to save profiles: %v", err)
+	}
+	if err := persistence.SaveAgentProfileAssignments([]models.AgentProfileAssignment{{
+		AgentID:   "agent-child",
+		ProfileID: "child-profile",
+	}}); err != nil {
+		t.Fatalf("Failed to save assignments: %v", err)
+	}
+
+	m := &Monitor{
+		persistence: persistence,
+		config:      &config.Config{},
+	}
+
+	cfg := m.GetHostAgentConfig("agent-child")
+	if cfg.Settings["enable_docker"] != true {
+		t.Fatalf("expected inherited enable_docker=true, got %v", cfg.Settings["enable_docker"])
+	}
+	if cfg.Settings["interval"] != "45s" {
+		t.Fatalf("expected child interval override, got %v", cfg.Settings["interval"])
+	}
+	if cfg.Settings["log_level"] != "debug" {
+		t.Fatalf("expected child log_level override, got %v", cfg.Settings["log_level"])
+	}
+	assertDesiredConfigMetadata(t, cfg)
+
+	childOnly := HostAgentConfig{CommandsEnabled: cfg.CommandsEnabled, Settings: child.Config}
+	childOnlyExpected, err := remoteconfig.BuildDesiredConfigMetadata(childOnly.CommandsEnabled, childOnly.Settings)
+	if err != nil {
+		t.Fatalf("BuildDesiredConfigMetadata child only: %v", err)
+	}
+	if cfg.DesiredConfig.Hash == childOnlyExpected.Hash {
+		t.Fatalf("expected inherited settings to affect desired config hash")
+	}
+}
+
 func assertDesiredConfigMetadata(t *testing.T, cfg HostAgentConfig) {
 	t.Helper()
 

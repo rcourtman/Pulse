@@ -394,7 +394,6 @@ func TestUnifiedAgentHandlers_HandleConfigSignsDesiredMetadata(t *testing.T) {
 		ExpiresAt:       *resp.Config.ExpiresAt,
 		CommandsEnabled: resp.Config.CommandsEnabled,
 		Settings:        resp.Config.Settings,
-		DesiredConfig:   resp.Config.DesiredConfig,
 	}
 	if err := remoteconfig.VerifyConfigPayloadSignature(payload, resp.Config.Signature); err != nil {
 		t.Fatalf("VerifyConfigPayloadSignature: %v", err)

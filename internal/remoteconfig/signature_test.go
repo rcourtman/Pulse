@@ -41,18 +41,14 @@ func TestVerifyConfigPayloadSignature_WithEnvKey(t *testing.T) {
 func TestBuildDesiredConfigMetadataStableAndSensitiveToDecisions(t *testing.T) {
 	commandsEnabled := true
 	firstSettings := map[string]interface{}{
-		"b": 2,
-		"a": map[string]interface{}{
-			"d": "x",
-			"c": []interface{}{"y", float64(3)},
-		},
+		"interval":      "45s",
+		"enable_docker": true,
+		"log_level":     "debug",
 	}
 	secondSettings := map[string]interface{}{
-		"a": map[string]interface{}{
-			"c": []interface{}{"y", float64(3)},
-			"d": "x",
-		},
-		"b": 2,
+		"log_level":     "debug",
+		"enable_docker": true,
+		"interval":      "45s",
 	}
 
 	first, err := BuildDesiredConfigMetadata(&commandsEnabled, firstSettings)
@@ -81,6 +77,41 @@ func TestBuildDesiredConfigMetadataStableAndSensitiveToDecisions(t *testing.T) {
 	if withDifferentCommandDecision.Hash == first.Hash {
 		t.Fatalf("expected command decision to affect desired config fingerprint")
 	}
+
+	withDifferentSettings, err := BuildDesiredConfigMetadata(&commandsEnabled, map[string]interface{}{
+		"interval":      "30s",
+		"enable_docker": true,
+		"log_level":     "debug",
+	})
+	if err != nil {
+		t.Fatalf("BuildDesiredConfigMetadata changed settings: %v", err)
+	}
+	if withDifferentSettings.Hash == first.Hash {
+		t.Fatalf("expected applied settings to affect desired config fingerprint")
+	}
+}
+
+func TestBuildDesiredConfigMetadataIgnoresUnknownUnappliedSettings(t *testing.T) {
+	commandsEnabled := true
+	settings := map[string]interface{}{
+		"interval":    "1m",
+		"token_value": "secret-like-value",
+	}
+	withoutUnknown := map[string]interface{}{
+		"interval": "1m",
+	}
+
+	got, err := BuildDesiredConfigMetadata(&commandsEnabled, settings)
+	if err != nil {
+		t.Fatalf("BuildDesiredConfigMetadata with unknown: %v", err)
+	}
+	want, err := BuildDesiredConfigMetadata(&commandsEnabled, withoutUnknown)
+	if err != nil {
+		t.Fatalf("BuildDesiredConfigMetadata without unknown: %v", err)
+	}
+	if got != want {
+		t.Fatalf("expected unknown unapplied settings to be excluded from desired metadata, got %#v want %#v", got, want)
+	}
 }
 
 func TestValidateDesiredConfigMetadata(t *testing.T) {
@@ -102,7 +133,7 @@ func TestValidateDesiredConfigMetadata(t *testing.T) {
 	}
 }
 
-func TestVerifyConfigPayloadSignatureCoversDesiredConfigMetadata(t *testing.T) {
+func TestConfigSignatureUsesLegacyPayloadShape(t *testing.T) {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
@@ -111,17 +142,23 @@ func TestVerifyConfigPayloadSignatureCoversDesiredConfigMetadata(t *testing.T) {
 
 	commandsEnabled := true
 	settings := map[string]interface{}{"interval": "1m"}
-	metadata, err := BuildDesiredConfigMetadata(&commandsEnabled, settings)
-	if err != nil {
-		t.Fatalf("BuildDesiredConfigMetadata: %v", err)
-	}
+	issuedAt := time.Date(2026, 5, 13, 17, 0, 0, 0, time.UTC)
+	expiresAt := issuedAt.Add(15 * time.Minute)
 	payload := SignedConfigPayload{
 		AgentID:         "host-1",
-		IssuedAt:        time.Now().UTC(),
-		ExpiresAt:       time.Now().UTC().Add(time.Minute),
+		IssuedAt:        issuedAt,
+		ExpiresAt:       expiresAt,
 		CommandsEnabled: &commandsEnabled,
 		Settings:        settings,
-		DesiredConfig:   &metadata,
+	}
+
+	canonical, err := canonicalConfigPayload(payload)
+	if err != nil {
+		t.Fatalf("canonicalConfigPayload: %v", err)
+	}
+	expectedCanonical := `{"agentId":"host-1","issuedAt":"2026-05-13T17:00:00Z","expiresAt":"2026-05-13T17:15:00Z","commandsEnabled":true,"settings":{"interval":"1m"}}`
+	if string(canonical) != expectedCanonical {
+		t.Fatalf("canonical payload = %s, want %s", string(canonical), expectedCanonical)
 	}
 
 	sig, err := SignConfigPayload(payload, priv)
@@ -130,13 +167,6 @@ func TestVerifyConfigPayloadSignatureCoversDesiredConfigMetadata(t *testing.T) {
 	}
 	if err := VerifyConfigPayloadSignature(payload, sig); err != nil {
 		t.Fatalf("VerifyConfigPayloadSignature: %v", err)
-	}
-
-	tampered := metadata
-	tampered.Hash = "sha256:0000"
-	payload.DesiredConfig = &tampered
-	if err := VerifyConfigPayloadSignature(payload, sig); err == nil {
-		t.Fatalf("expected signature verification to fail after desired metadata tamper")
 	}
 }
 

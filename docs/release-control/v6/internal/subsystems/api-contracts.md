@@ -3951,9 +3951,13 @@ preserve or re-emit `host-agent:*` aliases.
 `GET /api/agents/agent/{id}/config` now also owns desired-config metadata in
 the backend API contract. The response `config.desiredConfig` carries a
 non-secret versioned hash computed after profile settings and command
-enablement decisions have been merged, and config signatures cover that
-metadata together with `commandsEnabled`, `settings`, `issuedAt`, and
-`expiresAt`.
+enablement decisions have been merged. The existing `signature` field stays
+backward-compatible with installed agents and covers the legacy canonical
+payload shape: `agentId`, `commandsEnabled`, `settings`, `issuedAt`, and
+`expiresAt`. New clients validate `desiredConfig` by recomputing it from the
+signed command decision and the signed settings payload, restricted to the
+agent-applied settings key schema, rather than treating `desiredConfig` itself
+as a direct member of that signature payload.
 Agent profile delete and unassign clients must now also route canonical `204`
 success handling through shared allowed-status helpers in
 `frontend-modern/src/api/responseUtils.ts` instead of open-coding local

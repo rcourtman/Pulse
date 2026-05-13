@@ -236,7 +236,6 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 			ExpiresAt:       configResp.Config.ExpiresAt,
 			CommandsEnabled: configResp.Config.CommandsEnabled,
 			Settings:        configResp.Config.Settings,
-			DesiredConfig:   configResp.Config.DesiredConfig,
 		}
 		if err := VerifyConfigPayloadSignature(payload, configResp.Config.Signature); err != nil {
 			logger.Warn().
