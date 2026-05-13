@@ -5,7 +5,9 @@ import { formatRelativeTime } from '@/utils/format';
 import {
   formatActionApprovalPolicyLabel,
   formatActionCapabilityLabel,
+  getActionAuditVerification,
   getActionAuditStatePresentation,
+  shouldRenderActionAuditVerification,
 } from '@/utils/actionAuditPresentation';
 
 interface ResourceActionHistoryProps {
@@ -20,6 +22,7 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
   const state = () => getActionAuditStatePresentation(props.audit.state);
   const preflight = () => props.audit.plan?.preflight;
   const result = () => props.audit.result;
+  const verification = () => getActionAuditVerification(props.audit);
 
   return (
     <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
@@ -87,17 +90,15 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
             </Show>
           </div>
         </Show>
-        <Show when={result()?.verification?.ran}>
+        <Show when={shouldRenderActionAuditVerification(props.audit)}>
           {(() => {
-            const v = result()!.verification!;
+            const v = verification()!;
             const toneClass = v.success
               ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
               : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300';
             return (
               <div class={`rounded border px-2 py-1 text-[10px] ${toneClass}`}>
-                <div class="font-medium">
-                  {v.success ? 'Verified' : 'Verification failed'}
-                </div>
+                <div class="font-medium">{v.success ? 'Verified' : 'Verification failed'}</div>
                 <Show when={v.command}>
                   <div class="mt-0.5 font-mono text-[10px] opacity-80">{v.command}</div>
                 </Show>

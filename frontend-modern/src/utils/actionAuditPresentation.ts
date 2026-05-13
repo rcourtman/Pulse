@@ -1,4 +1,8 @@
-import type { ActionAuditState } from '@/types/actionAudit';
+import type {
+  ActionAuditRecord,
+  ActionAuditState,
+  ActionVerificationResult,
+} from '@/types/actionAudit';
 
 export interface ActionAuditStatePresentation {
   label: string;
@@ -76,3 +80,11 @@ export const formatActionApprovalPolicyLabel = (policy: string | undefined): str
       return formatActionCapabilityLabel(policy || 'Policy');
   }
 };
+
+export const getActionAuditVerification = (
+  audit: Pick<ActionAuditRecord, 'verification' | 'result'>,
+): ActionVerificationResult | undefined => audit.verification ?? audit.result?.verification;
+
+export const shouldRenderActionAuditVerification = (
+  audit: Pick<ActionAuditRecord, 'verification' | 'result'>,
+): boolean => getActionAuditVerification(audit)?.ran === true;

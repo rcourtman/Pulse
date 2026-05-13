@@ -1433,9 +1433,15 @@ func TestSetOnActionCompleted_RecordCarriesVerificationResult(t *testing.T) {
 		if received.Result.Verification == nil {
 			t.Fatal("callback record must carry a Verification block for service-restart actions — drift here breaks the certainty loop on action.completed")
 		}
+		if received.Verification == nil {
+			t.Fatal("callback record must carry the canonical top-level Verification block")
+		}
 		v := received.Result.Verification
 		if !v.Ran {
 			t.Error("Verification.Ran must be true after the broker dispatched the probe")
+		}
+		if received.Verification.Command != v.Command {
+			t.Errorf("canonical Verification.Command = %q, want %q", received.Verification.Command, v.Command)
 		}
 		if !v.Success {
 			t.Errorf("Verification.Success: probe returned exit 0, expected Success=true; got %+v", v)

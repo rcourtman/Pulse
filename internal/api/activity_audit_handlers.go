@@ -520,6 +520,7 @@ func (h *AuditHandlers) HandleListUnifiedActionAudits(w http.ResponseWriter, r *
 		writeErrorResponse(w, http.StatusInternalServerError, "query_failed", "Failed to query action audits", nil)
 		return
 	}
+	audits = normalizeUnifiedActionAuditResponse(audits)
 
 	response := map[string]any{
 		"audits": audits,
@@ -531,6 +532,27 @@ func (h *AuditHandlers) HandleListUnifiedActionAudits(w http.ResponseWriter, r *
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+func normalizeUnifiedActionAuditResponse(audits []unifiedresources.ActionAuditRecord) []unifiedresources.ActionAuditRecord {
+	if len(audits) == 0 {
+		return audits
+	}
+	normalized := make([]unifiedresources.ActionAuditRecord, 0, len(audits))
+	for _, audit := range audits {
+		canonical, err := unifiedresources.NormalizeActionAuditRecord(audit)
+		if err != nil {
+			canonical = audit
+			canonical.Verification = unifiedresources.CanonicalActionVerification(audit)
+			if canonical.Result != nil && canonical.Verification != nil && canonical.Result.Verification == nil {
+				result := *canonical.Result
+				result.Verification = canonical.Verification
+				canonical.Result = &result
+			}
+		}
+		normalized = append(normalized, canonical)
+	}
+	return normalized
 }
 
 // HandleListUnifiedActionLifecycleEvents handles GET /api/audit/actions/{id}/events.

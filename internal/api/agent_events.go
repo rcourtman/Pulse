@@ -372,9 +372,9 @@ func (b *AgentEventBroadcaster) PublishActionCompletedRecord(record unifiedresou
 	if record.Result != nil {
 		payload.Success = record.Result.Success
 		payload.ErrorMessage = record.Result.ErrorMessage
-		if v := projectAgentResourceVerification(record.Result.Verification); v != nil {
-			payload.Verification = v
-		}
+	}
+	if v := projectAgentResourceVerification(unifiedresources.CanonicalActionVerification(record)); v != nil {
+		payload.Verification = v
 	}
 	b.PublishActionCompleted(payload)
 }

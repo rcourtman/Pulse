@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestAgentEventBroadcaster_SubscribeReceivesPublishedEvents(t *testing.T) {
@@ -609,6 +610,39 @@ func TestAgentEventBroadcaster_PublishActionCompletedRoundTripsVerification(t *t
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for action.completed event")
+	}
+
+	recordBroadcaster := NewAgentEventBroadcaster()
+	recordEvents, recordUnsub := recordBroadcaster.Subscribe()
+	defer recordUnsub()
+	recordBroadcaster.PublishActionCompletedRecord(unifiedresources.ActionAuditRecord{
+		ID:        "action-verify-record",
+		UpdatedAt: ranAt,
+		State:     unifiedresources.ActionStateCompleted,
+		Request: unifiedresources.ActionRequest{
+			ResourceID:     "container:web-1",
+			CapabilityName: "restart_service",
+			RequestedBy:    "agent:ops",
+		},
+		Result: &unifiedresources.ExecutionResult{Success: true},
+		Verification: &unifiedresources.ActionVerificationResult{
+			Ran:     true,
+			Success: true,
+			Command: "systemctl is-active 'nginx'",
+			RanAt:   ranAt,
+		},
+	})
+	select {
+	case event := <-recordEvents:
+		payload, ok := event.Payload.(AgentEventActionCompletedPayload)
+		if !ok {
+			t.Fatalf("record payload type: got %T", event.Payload)
+		}
+		if payload.Verification == nil || payload.Verification.Command != "systemctl is-active 'nginx'" {
+			t.Fatalf("record canonical verification did not project onto action.completed: %+v", payload.Verification)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for record-backed action.completed event")
 	}
 }
 

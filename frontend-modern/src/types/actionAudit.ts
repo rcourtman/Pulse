@@ -74,6 +74,13 @@ export interface ActionAuditExecutionResult {
   verification?: ActionVerificationResult;
 }
 
+export type ActionVerificationStatus = 'unknown' | 'verified' | 'unverified' | 'failed' | string;
+
+export interface ActionVerificationOutcome {
+  status: ActionVerificationStatus;
+  evidenceSummary?: string;
+}
+
 export interface ActionAuditRecord {
   id: string;
   createdAt: string;
@@ -83,6 +90,8 @@ export interface ActionAuditRecord {
   plan: ActionAuditPlan;
   approvals?: ActionAuditApprovalRecord[];
   result?: ActionAuditExecutionResult;
+  verification?: ActionVerificationResult;
+  verificationOutcome?: ActionVerificationOutcome;
 }
 
 export interface ActionAuditListResponse {

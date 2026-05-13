@@ -424,7 +424,7 @@ func TestServer_StreamSSEOnceTranslatesEventsToNotifications(t *testing.T) {
 		"event: heartbeat",
 		"",
 		"event: action.completed",
-		"data: {\"actionId\":\"x1\",\"success\":true}",
+		"data: {\"actionId\":\"x1\",\"success\":true,\"verification\":{\"ran\":true,\"success\":true,\"commandRedacted\":true}}",
 		"",
 	}, "\n") + "\n"
 
@@ -455,6 +455,9 @@ func TestServer_StreamSSEOnceTranslatesEventsToNotifications(t *testing.T) {
 	}
 	if !strings.Contains(body, `"method":"notifications/action.completed"`) {
 		t.Errorf("missing action.completed notification; got %s", body)
+	}
+	if !strings.Contains(body, `"verification":{"ran":true,"success":true,"commandRedacted":true}`) {
+		t.Errorf("action.completed verification must round-trip through MCP notification params; got %s", body)
 	}
 	if strings.Contains(body, "stream.connected") {
 		t.Errorf("stream.connected must be filtered out as transport plumbing; got %s", body)

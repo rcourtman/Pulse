@@ -53,7 +53,9 @@ const normalizeActionAuditListResponse = (
   raw: RawActionAuditListResponse | null | undefined,
   fallbackResourceId?: string,
 ): ActionAuditListResponse => {
-  const audits = objectArrayFieldOrEmpty<ActionAuditRecord>(raw, 'audits');
+  const audits = objectArrayFieldOrEmpty<ActionAuditRecord>(raw, 'audits').map(
+    normalizeActionAuditRecord,
+  );
   const count = Number.isFinite(raw?.count) ? Number(raw?.count) : audits.length;
   const resourceId =
     typeof raw?.resourceId === 'string' && raw.resourceId.trim()
@@ -65,6 +67,22 @@ const normalizeActionAuditListResponse = (
     count,
     resourceId,
     available: true,
+  };
+};
+
+const normalizeActionAuditRecord = (audit: ActionAuditRecord): ActionAuditRecord => {
+  const verification = audit.verification ?? audit.result?.verification;
+  if (!verification) return audit;
+
+  return {
+    ...audit,
+    verification,
+    result: audit.result
+      ? {
+          ...audit.result,
+          verification: audit.result.verification ?? verification,
+        }
+      : audit.result,
   };
 };
 

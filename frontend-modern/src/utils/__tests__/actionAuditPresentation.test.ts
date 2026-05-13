@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   formatActionApprovalPolicyLabel,
   formatActionCapabilityLabel,
+  getActionAuditVerification,
   getActionAuditStatePresentation,
+  shouldRenderActionAuditVerification,
 } from '@/utils/actionAuditPresentation';
 
 describe('actionAuditPresentation', () => {
@@ -23,5 +25,44 @@ describe('actionAuditPresentation', () => {
     expect(formatActionApprovalPolicyLabel('admin')).toBe('Admin approval');
     expect(formatActionApprovalPolicyLabel('dry_run_only')).toBe('Dry run only');
     expect(formatActionApprovalPolicyLabel('mfa')).toBe('MFA approval');
+  });
+
+  it('uses the canonical top-level verification field for rendering decisions', () => {
+    expect(
+      getActionAuditVerification({
+        verification: {
+          ran: true,
+          success: true,
+          command: "systemctl is-active 'nginx'",
+        },
+      }),
+    ).toMatchObject({ ran: true, command: "systemctl is-active 'nginx'" });
+    expect(
+      getActionAuditVerification({
+        result: {
+          success: true,
+          verification: {
+            ran: false,
+            success: false,
+          },
+        },
+      }),
+    ).toEqual({ ran: false, success: false });
+    expect(
+      shouldRenderActionAuditVerification({
+        verification: {
+          ran: true,
+          success: true,
+        },
+      }),
+    ).toBe(true);
+    expect(
+      shouldRenderActionAuditVerification({
+        verification: {
+          ran: false,
+          success: false,
+        },
+      }),
+    ).toBe(false);
   });
 });

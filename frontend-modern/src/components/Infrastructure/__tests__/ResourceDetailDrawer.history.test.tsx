@@ -198,7 +198,9 @@ describe('ResourceDetailDrawer change history section', () => {
     // verification outcome alongside the dispatch result, not silently
     // drop it. Pin the wiring so future refactors cannot regress to an
     // output-only render.
-    expect(resourceActionHistorySource).toContain('result()?.verification?.ran');
+    expect(resourceActionHistorySource).toContain(
+      'shouldRenderActionAuditVerification(props.audit)',
+    );
     expect(resourceActionHistorySource).toContain('Verified');
     expect(resourceActionHistorySource).toContain('Verification failed');
     expect(actionAuditApiSource).toContain('/api/audit/actions');
@@ -781,6 +783,13 @@ describe('ResourceDetailDrawer change history section', () => {
             success: true,
             output: 'nginx restarted',
           },
+          verification: {
+            ran: true,
+            command: "systemctl is-active 'nginx'",
+            output: 'active',
+            success: true,
+            ranAt: '2026-04-29T12:05:20Z',
+          },
         },
       ],
     });
@@ -822,6 +831,9 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(actionHistory.getByText('Restart nginx')).toBeInTheDocument();
     expect(actionHistory.getByText('Approval scoped to this resource.')).toBeInTheDocument();
     expect(actionHistory.getByText('nginx restarted')).toBeInTheDocument();
+    expect(actionHistory.getByText('Verified')).toBeInTheDocument();
+    expect(actionHistory.getByText("systemctl is-active 'nginx'")).toBeInTheDocument();
+    expect(actionHistory.getByText('active')).toBeInTheDocument();
   });
 
   it('keeps service details summary-first until the service-local reveal is opened', () => {

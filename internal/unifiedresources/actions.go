@@ -171,17 +171,64 @@ func NormalizeVerificationOutcome(outcome VerificationOutcome) VerificationOutco
 	return outcome
 }
 
+// NormalizeActionVerificationResult applies the canonical verification field
+// hygiene used by stored audit records and every action-audit projection.
+func NormalizeActionVerificationResult(result *ActionVerificationResult) *ActionVerificationResult {
+	if result == nil {
+		return nil
+	}
+	normalized := *result
+	normalized.Command = strings.TrimSpace(normalized.Command)
+	normalized.Output = strings.TrimSpace(normalized.Output)
+	normalized.Note = strings.TrimSpace(normalized.Note)
+	if normalized.RanAt.IsZero() {
+		normalized.RanAt = time.Time{}
+	} else {
+		normalized.RanAt = normalized.RanAt.UTC()
+	}
+	if !normalized.Ran {
+		normalized.Command = ""
+		normalized.Output = ""
+		normalized.Success = false
+		normalized.RanAt = time.Time{}
+		normalized.Note = ""
+	}
+	return &normalized
+}
+
+func cloneActionVerificationResult(result *ActionVerificationResult) *ActionVerificationResult {
+	if result == nil {
+		return nil
+	}
+	clone := *result
+	return &clone
+}
+
+// CanonicalActionVerification returns the top-level verification projection for
+// an audit record, falling back to legacy result.verification records while
+// older persisted rows are still being read.
+func CanonicalActionVerification(record ActionAuditRecord) *ActionVerificationResult {
+	if result := NormalizeActionVerificationResult(record.Verification); result != nil {
+		return result
+	}
+	if record.Result == nil {
+		return nil
+	}
+	return NormalizeActionVerificationResult(record.Result.Verification)
+}
+
 // ActionAuditRecord tracks the full end-to-end lifecycle of a tool invocation.
 type ActionAuditRecord struct {
-	ID                  string                 `json:"id"`
-	CreatedAt           time.Time              `json:"createdAt"`
-	UpdatedAt           time.Time              `json:"updatedAt"`
-	State               ActionState            `json:"state"`
-	Request             ActionRequest          `json:"request"`
-	Plan                ActionPlan             `json:"plan"`
-	Approvals           []ActionApprovalRecord `json:"approvals,omitempty"`
-	Result              *ExecutionResult       `json:"result,omitempty"`
-	VerificationOutcome VerificationOutcome    `json:"verificationOutcome"`
+	ID                  string                    `json:"id"`
+	CreatedAt           time.Time                 `json:"createdAt"`
+	UpdatedAt           time.Time                 `json:"updatedAt"`
+	State               ActionState               `json:"state"`
+	Request             ActionRequest             `json:"request"`
+	Plan                ActionPlan                `json:"plan"`
+	Approvals           []ActionApprovalRecord    `json:"approvals,omitempty"`
+	Result              *ExecutionResult          `json:"result,omitempty"`
+	Verification        *ActionVerificationResult `json:"verification,omitempty"`
+	VerificationOutcome VerificationOutcome       `json:"verificationOutcome"`
 }
 
 // ActionLifecycleEvent represents an append-only state transition in an action's life.
@@ -555,6 +602,21 @@ func NormalizeActionAuditRecord(record ActionAuditRecord) (ActionAuditRecord, er
 		}
 	}
 	record.Plan.Preflight = NormalizeActionPreflight(record.Plan.Preflight, record.Request, record.Plan)
+
+	if record.Result != nil {
+		result := *record.Result
+		result.Output = strings.TrimSpace(result.Output)
+		result.ErrorMessage = strings.TrimSpace(result.ErrorMessage)
+		result.Verification = NormalizeActionVerificationResult(result.Verification)
+		record.Result = &result
+	}
+	record.Verification = NormalizeActionVerificationResult(record.Verification)
+	if record.Verification == nil && record.Result != nil {
+		record.Verification = cloneActionVerificationResult(record.Result.Verification)
+	}
+	if record.Verification != nil && record.Result != nil {
+		record.Result.Verification = cloneActionVerificationResult(record.Verification)
+	}
 	record.VerificationOutcome = NormalizeVerificationOutcome(record.VerificationOutcome)
 
 	for i := range record.Approvals {

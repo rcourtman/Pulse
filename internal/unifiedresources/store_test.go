@@ -1202,7 +1202,17 @@ func TestActionAuditRecord_RoundTrip(t *testing.T) {
 	now := time.Date(2026, 3, 18, 13, 0, 0, 0, time.UTC)
 	expires := now.Add(15 * time.Minute)
 	approvedAt := now.Add(2 * time.Minute)
-	result := &ExecutionResult{Success: true, Output: "completed"}
+	result := &ExecutionResult{
+		Success: true,
+		Output:  "completed",
+		Verification: &ActionVerificationResult{
+			Ran:     true,
+			Command: "systemctl is-active 'nginx'",
+			Output:  "active",
+			Success: true,
+			RanAt:   now.Add(4 * time.Minute),
+		},
+	}
 
 	record := ActionAuditRecord{
 		ID:        "action-1",
@@ -1273,6 +1283,13 @@ func TestActionAuditRecord_RoundTrip(t *testing.T) {
 	}
 	if got.Result == nil || !got.Result.Success || got.Result.Output != result.Output {
 		t.Fatalf("result round-trip failed: %+v", got.Result)
+	}
+	verification := CanonicalActionVerification(got)
+	if verification == nil || !verification.Ran || verification.Command != result.Verification.Command {
+		t.Fatalf("canonical verification round-trip failed: %+v", verification)
+	}
+	if got.Result.Verification == nil || got.Result.Verification.Command != verification.Command {
+		t.Fatalf("result verification did not stay aligned with canonical verification: result=%+v canonical=%+v", got.Result.Verification, verification)
 	}
 }
 

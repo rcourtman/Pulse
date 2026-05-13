@@ -51,6 +51,48 @@ func TestNormalizeActionAuditRecordPopulatesGovernedPlanPreflight(t *testing.T) 
 	if len(record.Plan.Preflight.SafetyChecks) == 0 || len(record.Plan.Preflight.VerificationSteps) == 0 {
 		t.Fatalf("preflight should carry safety and verification checks: %#v", record.Plan.Preflight)
 	}
+
+	withLegacyVerification := record
+	withLegacyVerification.Result = &ExecutionResult{
+		Success: true,
+		Verification: &ActionVerificationResult{
+			Ran:     true,
+			Command: " systemctl is-active 'nginx' ",
+			Output:  " active\n",
+			Success: true,
+			RanAt:   now.Add(time.Minute),
+		},
+	}
+	withLegacyVerification, err = NormalizeActionAuditRecord(withLegacyVerification)
+	if err != nil {
+		t.Fatalf("NormalizeActionAuditRecord(legacy verification) error = %v", err)
+	}
+	if withLegacyVerification.Verification == nil || withLegacyVerification.Verification.Command != "systemctl is-active 'nginx'" || withLegacyVerification.Verification.Output != "active" {
+		t.Fatalf("canonical verification not populated from result verification: %#v", withLegacyVerification.Verification)
+	}
+	if withLegacyVerification.Result.Verification == nil || withLegacyVerification.Result.Verification.Command != withLegacyVerification.Verification.Command {
+		t.Fatalf("legacy verification not kept aligned: result=%#v canonical=%#v", withLegacyVerification.Result.Verification, withLegacyVerification.Verification)
+	}
+
+	withUnrunVerification := record
+	withUnrunVerification.Verification = &ActionVerificationResult{
+		Ran:     false,
+		Command: "should not persist",
+		Output:  "sensitive",
+		Success: true,
+		RanAt:   now.Add(time.Minute),
+		Note:    "details",
+	}
+	withUnrunVerification, err = NormalizeActionAuditRecord(withUnrunVerification)
+	if err != nil {
+		t.Fatalf("NormalizeActionAuditRecord(unrun verification) error = %v", err)
+	}
+	if withUnrunVerification.Verification == nil || withUnrunVerification.Verification.Ran {
+		t.Fatalf("expected canonical ran=false verification, got %#v", withUnrunVerification.Verification)
+	}
+	if withUnrunVerification.Verification.Command != "" || withUnrunVerification.Verification.Output != "" || withUnrunVerification.Verification.Note != "" || !withUnrunVerification.Verification.RanAt.IsZero() {
+		t.Fatalf("ran=false verification must not retain details: %#v", withUnrunVerification.Verification)
+	}
 }
 
 func TestNormalizeActionAuditRecordRejectsUngovernedRecords(t *testing.T) {
@@ -365,12 +407,25 @@ func TestCompleteActionExecutionRecordsResult(t *testing.T) {
 		},
 	}
 
-	updated, event, err := CompleteActionExecution(record, &ExecutionResult{Success: true, Output: "done"}, "operator@example.com", now)
+	updated, event, err := CompleteActionExecution(record, &ExecutionResult{
+		Success: true,
+		Output:  "done",
+		Verification: &ActionVerificationResult{
+			Ran:     true,
+			Command: "systemctl is-active 'nginx'",
+			Output:  "active",
+			Success: true,
+			RanAt:   now,
+		},
+	}, "operator@example.com", now)
 	if err != nil {
 		t.Fatalf("CompleteActionExecution: %v", err)
 	}
 	if updated.State != ActionStateCompleted || updated.Result == nil || updated.Result.Output != "done" {
 		t.Fatalf("completed action = %#v", updated)
+	}
+	if updated.Verification == nil || !updated.Verification.Ran || updated.Verification.Command != "systemctl is-active 'nginx'" {
+		t.Fatalf("completed action verification = %#v", updated.Verification)
 	}
 	if event.State != ActionStateCompleted || event.Message != "Action execution completed." {
 		t.Fatalf("completed event = %#v", event)
