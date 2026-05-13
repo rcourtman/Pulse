@@ -675,6 +675,10 @@ func TestHandleExecuteActionRejectsDryRunOnlyPlan(t *testing.T) {
 	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
 	executor := &stubActionExecutor{result: &unified.ExecutionResult{Success: true, Output: "should not run"}}
 	h.SetActionExecutor(executor)
+	published := make(chan unified.ActionAuditRecord, 1)
+	h.SetActionCompletedPublisher(func(record unified.ActionAuditRecord) {
+		published <- record
+	})
 
 	store, err := h.getStore("default")
 	if err != nil {
@@ -727,15 +731,114 @@ func TestHandleExecuteActionRejectsDryRunOnlyPlan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetActionAudit: %v", err)
 	}
-	if !ok || got.State != unified.ActionStatePlanned || got.Result != nil {
-		t.Fatalf("dry-run-only audit changed = %#v, ok=%v", got, ok)
+	if !ok || got.State != unified.ActionStateFailed || got.Result == nil || got.Result.Success || !strings.HasPrefix(got.Result.ErrorMessage, "action_dry_run_only:") {
+		t.Fatalf("dry-run-only audit = %#v, ok=%v", got, ok)
+	}
+	select {
+	case eventRecord := <-published:
+		if eventRecord.ID != "act_dry_run_only" || eventRecord.State != unified.ActionStateFailed {
+			t.Fatalf("published dry-run-only completion = %#v", eventRecord)
+		}
+	default:
+		t.Fatal("expected dry-run-only refusal to publish a terminal action completion event")
 	}
 	events, err := store.GetActionLifecycleEvents("act_dry_run_only", time.Time{}, 10)
 	if err != nil {
 		t.Fatalf("GetActionLifecycleEvents: %v", err)
 	}
-	if len(events) != 0 {
-		t.Fatalf("dry-run-only execution must not append lifecycle events: %#v", events)
+	if len(events) != 1 || events[0].State != unified.ActionStateFailed || !strings.HasPrefix(events[0].Message, "action_dry_run_only:") {
+		t.Fatalf("expected one failed dry-run-only lifecycle event, got %#v", events)
+	}
+}
+
+func TestHandleExecuteActionRejectsExpiredPlanAsFailedAudit(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	executor := &stubActionExecutor{result: &unified.ExecutionResult{Success: true, Output: "should not run"}}
+	h.SetActionExecutor(executor)
+	published := make(chan unified.ActionAuditRecord, 1)
+	h.SetActionCompletedPublisher(func(record unified.ActionAuditRecord) {
+		published <- record
+	})
+
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("get store: %v", err)
+	}
+	record := unified.ActionAuditRecord{
+		ID:        "act_expired",
+		CreatedAt: now.Add(-10 * time.Minute),
+		UpdatedAt: now.Add(-6 * time.Minute),
+		State:     unified.ActionStateApproved,
+		Request: unified.ActionRequest{
+			RequestID:      "req-expired",
+			ResourceID:     "vm:42",
+			CapabilityName: "restart",
+			Reason:         "Recover after confirmed outage",
+			RequestedBy:    "agent:oncall-helper",
+		},
+		Plan: unified.ActionPlan{
+			ActionID:         "act_expired",
+			RequestID:        "req-expired",
+			Allowed:          true,
+			RequiresApproval: true,
+			ApprovalPolicy:   unified.ApprovalAdmin,
+			PlannedAt:        now.Add(-10 * time.Minute),
+			ExpiresAt:        now.Add(-5 * time.Minute),
+			ResourceVersion:  "resource:sha256:test",
+			PolicyVersion:    "policy:sha256:test",
+			PlanHash:         "sha256:test",
+		},
+		Approvals: []unified.ActionApprovalRecord{
+			{
+				Actor:     "operator@example.com",
+				Method:    unified.MethodAPI,
+				Timestamp: now.Add(-6 * time.Minute),
+				Outcome:   unified.OutcomeApproved,
+				Reason:    "approved before expiry",
+			},
+		},
+	}
+	if err := store.RecordActionAudit(record); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+
+	executeRec := httptest.NewRecorder()
+	executeReq := httptest.NewRequest(http.MethodPost, "/api/actions/act_expired/execute", bytes.NewBufferString(`{}`))
+	executeReq.SetPathValue("id", "act_expired")
+	executeReq = executeReq.WithContext(auth.WithUser(executeReq.Context(), "operator@example.com"))
+	h.HandleExecuteAction(executeRec, executeReq)
+	if executeRec.Code != http.StatusConflict {
+		t.Fatalf("execute status = %d, body=%s", executeRec.Code, executeRec.Body.String())
+	}
+	if !strings.Contains(executeRec.Body.String(), `"error":"action_plan_expired"`) {
+		t.Fatalf("execute body = %s", executeRec.Body.String())
+	}
+	if executor.calls != 0 {
+		t.Fatalf("expired plan should not call executor, calls=%d received=%#v", executor.calls, executor.received)
+	}
+
+	got, ok, err := store.GetActionAudit("act_expired")
+	if err != nil {
+		t.Fatalf("GetActionAudit: %v", err)
+	}
+	if !ok || got.State != unified.ActionStateFailed || got.Result == nil || got.Result.Success || !strings.HasPrefix(got.Result.ErrorMessage, "action_plan_expired:") {
+		t.Fatalf("expired-plan audit = %#v, ok=%v", got, ok)
+	}
+	select {
+	case eventRecord := <-published:
+		if eventRecord.ID != "act_expired" || eventRecord.State != unified.ActionStateFailed {
+			t.Fatalf("published expired-plan completion = %#v", eventRecord)
+		}
+	default:
+		t.Fatal("expected expired-plan refusal to publish a terminal action completion event")
+	}
+	events, err := store.GetActionLifecycleEvents("act_expired", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionLifecycleEvents: %v", err)
+	}
+	if len(events) != 1 || events[0].State != unified.ActionStateFailed || !strings.HasPrefix(events[0].Message, "action_plan_expired:") {
+		t.Fatalf("expected one failed expired-plan lifecycle event, got %#v", events)
 	}
 }
 

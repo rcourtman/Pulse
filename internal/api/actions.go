@@ -348,6 +348,14 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 	actor := actionDecisionActor(h, r)
 	now := time.Now().UTC()
 	if err := unified.ValidateActionExecutionStart(record, now); err != nil {
+		if unified.IsPermanentActionExecutionRefusal(err) {
+			if failed, persistErr := recordRefusedActionExecution(store, record, actor, now, err); persistErr == nil {
+				h.publishActionCompleted(failed)
+			} else {
+				writeJSONError(w, http.StatusInternalServerError, "action_execution_persist_failed", sanitizeErrorForClient(persistErr, "Failed to persist refused action execution"))
+				return
+			}
+		}
 		writeActionExecutionApplyError(w, err)
 		return
 	}
@@ -447,56 +455,20 @@ func (h *ResourceHandlers) validateActionPlanFresh(orgID string, record unified.
 }
 
 func recordRefusedActionExecution(store unified.ResourceStore, record unified.ActionAuditRecord, actor string, now time.Time, reason error) (unified.ActionAuditRecord, error) {
-	if now.IsZero() {
-		now = time.Now().UTC()
-	} else {
-		now = now.UTC()
-	}
-	actor = strings.TrimSpace(actor)
-	if actor == "" {
-		actor = "api:authenticated"
-	}
-	record.State = unified.ActionStateFailed
-	record.UpdatedAt = now
-	record.Result = &unified.ExecutionResult{
-		Success:      false,
-		ErrorMessage: refusedActionExecutionMessage(reason),
-	}
-	normalized, err := unified.NormalizeActionAuditRecord(record)
+	failed, event, err := unified.RefuseActionExecution(record, reason, actor, now)
 	if err != nil {
 		return unified.ActionAuditRecord{}, err
 	}
 	if store == nil {
 		return unified.ActionAuditRecord{}, errors.New("action audit store unavailable")
 	}
-	if err := store.RecordActionAudit(normalized); err != nil {
-		return unified.ActionAuditRecord{}, err
-	}
-	event, err := unified.NormalizeActionLifecycleEvent(unified.ActionLifecycleEvent{
-		ActionID:  normalized.ID,
-		Timestamp: now,
-		State:     unified.ActionStateFailed,
-		Actor:     actor,
-		Message:   normalized.Result.ErrorMessage,
-	})
-	if err != nil {
+	if err := store.RecordActionAudit(failed); err != nil {
 		return unified.ActionAuditRecord{}, err
 	}
 	if err := store.RecordActionLifecycleEvent(event); err != nil {
 		return unified.ActionAuditRecord{}, err
 	}
-	return normalized, nil
-}
-
-func refusedActionExecutionMessage(reason error) string {
-	if errors.Is(reason, unified.ErrActionPlanDrift) {
-		return "plan_drift: action plan no longer matches the current resource contract; re-plan before executing"
-	}
-	message := strings.TrimSpace(fmt.Sprint(reason))
-	if message == "" {
-		message = "action execution refused before dispatch"
-	}
-	return message
+	return failed, nil
 }
 
 func (h *ResourceHandlers) publishActionCompleted(record unified.ActionAuditRecord) {

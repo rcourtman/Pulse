@@ -12508,15 +12508,15 @@ func TestContract_ActionDryRunOnlyExecutionErrorJSONSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetActionAudit: %v", err)
 	}
-	if !ok || gotAudit.State != unifiedresources.ActionStatePlanned || gotAudit.Result != nil {
+	if !ok || gotAudit.State != unifiedresources.ActionStateFailed || gotAudit.Result == nil || gotAudit.Result.Success || !strings.HasPrefix(gotAudit.Result.ErrorMessage, "action_dry_run_only:") {
 		t.Fatalf("dry-run audit mutated: ok=%v state=%q result=%#v", ok, gotAudit.State, gotAudit.Result)
 	}
 	events, err := store.GetActionLifecycleEvents("act_dry_run_contract", time.Time{}, 10)
 	if err != nil {
 		t.Fatalf("GetActionLifecycleEvents: %v", err)
 	}
-	if len(events) != 0 {
-		t.Fatalf("dry-run execution should not append lifecycle events, got %d", len(events))
+	if len(events) != 1 || events[0].State != unifiedresources.ActionStateFailed || !strings.HasPrefix(events[0].Message, "action_dry_run_only:") {
+		t.Fatalf("dry-run execution should append one failed lifecycle event, got %#v", events)
 	}
 }
 
@@ -12527,9 +12527,11 @@ func TestContract_APIActionExecutionRevalidatesPlanFreshness(t *testing.T) {
 	}
 	src := string(source)
 	for _, snippet := range []string{
+		"if unified.IsPermanentActionExecutionRefusal(err)",
 		"if err := h.validateActionPlanFresh(orgID, record); err != nil",
 		"errors.Is(err, unified.ErrActionPlanDrift)",
 		"recordRefusedActionExecution(store, record, actor, now, err)",
+		"unified.RefuseActionExecution(record, reason, actor, now)",
 		"writeJSONError(w, http.StatusConflict, \"action_plan_drift\"",
 	} {
 		if !strings.Contains(src, snippet) {
@@ -12539,6 +12541,25 @@ func TestContract_APIActionExecutionRevalidatesPlanFreshness(t *testing.T) {
 	if strings.Index(src, "if err := h.validateActionPlanFresh(orgID, record); err != nil") >
 		strings.Index(src, "started, startEvent, err := unified.BeginActionExecution(record, actor, now)") {
 		t.Fatal("HandleExecuteAction must validate plan freshness before entering executing state or calling the executor")
+	}
+}
+
+func TestContract_ExecuteActionCapabilityDeclaresPlanExpired(t *testing.T) {
+	source, err := os.ReadFile("agent_capabilities.go")
+	if err != nil {
+		t.Fatalf("read agent_capabilities.go: %v", err)
+	}
+	src := string(source)
+	start := strings.Index(src, `Name:             "execute_action"`)
+	if start < 0 {
+		t.Fatal("agent capabilities manifest must declare execute_action")
+	}
+	block := src[start:]
+	if end := strings.Index(block, "\n\t\t},"); end >= 0 {
+		block = block[:end]
+	}
+	if !strings.Contains(block, `"action_plan_expired"`) {
+		t.Error("execute_action manifest must declare action_plan_expired so agents can branch on permanent expired-plan refusals")
 	}
 }
 

@@ -222,6 +222,7 @@ var (
 	ErrActionExecutionFinal      = errors.New("action execution is already final")
 	ErrActionPlanExpired         = errors.New("action plan expired")
 	ErrActionDryRunOnly          = errors.New("action plan is dry-run only")
+	ErrActionExecutionRefusal    = errors.New("action execution refusal is not a permanent terminal refusal")
 	ErrInvalidApprovalOutcome    = errors.New("invalid approval outcome")
 )
 
@@ -375,6 +376,69 @@ func CompleteActionExecution(record ActionAuditRecord, result *ExecutionResult, 
 	return normalized, normalizedEvent, nil
 }
 
+// RefuseActionExecution records a permanent pre-dispatch refusal as the same
+// terminal failed audit shape used by runtime execution failures.
+func RefuseActionExecution(record ActionAuditRecord, reason error, actor string, now time.Time) (ActionAuditRecord, ActionLifecycleEvent, error) {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	} else {
+		now = now.UTC()
+	}
+	message, ok := permanentActionExecutionRefusalMessage(reason)
+	if !ok {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, fmt.Errorf("%w: %v", ErrActionExecutionRefusal, reason)
+	}
+	actor = strings.TrimSpace(actor)
+	if actor == "" {
+		actor = "api:authenticated"
+	}
+
+	record.State = ActionStateFailed
+	record.UpdatedAt = now
+	record.Result = &ExecutionResult{
+		Success:      false,
+		ErrorMessage: message,
+	}
+	normalized, err := NormalizeActionAuditRecord(record)
+	if err != nil {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, err
+	}
+	event := ActionLifecycleEvent{
+		ActionID:  normalized.ID,
+		Timestamp: now,
+		State:     ActionStateFailed,
+		Actor:     actor,
+		Message:   normalized.Result.ErrorMessage,
+	}
+	normalizedEvent, err := NormalizeActionLifecycleEvent(event)
+	if err != nil {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, err
+	}
+	return normalized, normalizedEvent, nil
+}
+
+// IsPermanentActionExecutionRefusal reports whether err represents a
+// non-dispatchable execution attempt that should terminally fail the audit.
+func IsPermanentActionExecutionRefusal(err error) bool {
+	_, ok := permanentActionExecutionRefusalMessage(err)
+	return ok
+}
+
+func permanentActionExecutionRefusalMessage(reason error) (string, bool) {
+	switch {
+	case errors.Is(reason, ErrActionPlanDrift):
+		return "plan_drift: action plan no longer matches the current resource contract; re-plan before executing", true
+	case errors.Is(reason, ErrActionPlanExpired):
+		return "action_plan_expired: action plan has expired; re-plan before executing", true
+	case errors.Is(reason, ErrActionDryRunOnly):
+		return "action_dry_run_only: action plan is dry-run only and cannot be executed", true
+	case errors.Is(reason, ErrResourceRemediationLocked):
+		return "resource_remediation_locked: resource is operator-locked against automated remediation", true
+	default:
+		return "", false
+	}
+}
+
 // ValidateActionExecutionStart checks whether the current persisted state may
 // enter execution without mutating the record.
 func ValidateActionExecutionStart(record ActionAuditRecord, now time.Time) error {
@@ -382,6 +446,12 @@ func ValidateActionExecutionStart(record ActionAuditRecord, now time.Time) error
 		now = time.Now().UTC()
 	} else {
 		now = now.UTC()
+	}
+	switch record.State {
+	case ActionStateExecuting:
+		return ErrActionAlreadyExecuting
+	case ActionStateCompleted, ActionStateFailed:
+		return ErrActionExecutionFinal
 	}
 	if !record.Plan.ExpiresAt.IsZero() && !now.Before(record.Plan.ExpiresAt) {
 		return ErrActionPlanExpired
@@ -399,10 +469,6 @@ func ValidateActionExecutionStart(record ActionAuditRecord, now time.Time) error
 		return ErrActionNotApproved
 	case ActionStatePending, ActionStateRejected:
 		return ErrActionNotApproved
-	case ActionStateExecuting:
-		return ErrActionAlreadyExecuting
-	case ActionStateCompleted, ActionStateFailed:
-		return ErrActionExecutionFinal
 	default:
 		return fmt.Errorf("unsupported action state %q", record.State)
 	}

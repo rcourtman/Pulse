@@ -257,6 +257,12 @@ func TestBeginActionExecutionRejectsUnsafeStates(t *testing.T) {
 	if _, _, err := BeginActionExecution(completed, "operator@example.com", now); !errors.Is(err, ErrActionExecutionFinal) {
 		t.Fatalf("completed error = %v, want %v", err, ErrActionExecutionFinal)
 	}
+	failedExpired := base
+	failedExpired.State = ActionStateFailed
+	failedExpired.Plan.ExpiresAt = now.Add(-time.Second)
+	if _, _, err := BeginActionExecution(failedExpired, "operator@example.com", now); !errors.Is(err, ErrActionExecutionFinal) {
+		t.Fatalf("failed expired error = %v, want %v", err, ErrActionExecutionFinal)
+	}
 	expired := base
 	expired.State = ActionStateApproved
 	expired.Plan.ExpiresAt = now.Add(-time.Second)
@@ -269,6 +275,65 @@ func TestBeginActionExecutionRejectsUnsafeStates(t *testing.T) {
 	dryRunOnly.Plan.ApprovalPolicy = ApprovalDryRun
 	if _, _, err := BeginActionExecution(dryRunOnly, "operator@example.com", now); !errors.Is(err, ErrActionDryRunOnly) {
 		t.Fatalf("dry-run-only error = %v, want %v", err, ErrActionDryRunOnly)
+	}
+}
+
+func TestRefuseActionExecutionRecordsPermanentRefusal(t *testing.T) {
+	now := time.Date(2026, 5, 4, 13, 0, 0, 0, time.UTC)
+	record := ActionAuditRecord{
+		ID:        "act_refused",
+		CreatedAt: now.Add(-time.Minute),
+		UpdatedAt: now.Add(-30 * time.Second),
+		State:     ActionStateApproved,
+		Request: ActionRequest{
+			RequestID:      "req-refused",
+			ResourceID:     "vm:42",
+			CapabilityName: "restart",
+			Reason:         "recover service",
+			RequestedBy:    "agent:oncall-helper",
+		},
+		Plan: ActionPlan{
+			ActionID:         "act_refused",
+			RequestID:        "req-refused",
+			Allowed:          true,
+			RequiresApproval: true,
+			ApprovalPolicy:   ApprovalAdmin,
+			PlannedAt:        now.Add(-time.Minute),
+			ExpiresAt:        now.Add(time.Minute),
+			ResourceVersion:  "resource:sha256:test",
+			PolicyVersion:    "policy:sha256:test",
+			PlanHash:         "sha256:test",
+		},
+	}
+
+	for _, tc := range []struct {
+		name       string
+		reason     error
+		wantPrefix string
+	}{
+		{name: "plan drift", reason: ErrActionPlanDrift, wantPrefix: "plan_drift:"},
+		{name: "expired", reason: ErrActionPlanExpired, wantPrefix: "action_plan_expired:"},
+		{name: "dry run only", reason: ErrActionDryRunOnly, wantPrefix: "action_dry_run_only:"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			updated, event, err := RefuseActionExecution(record, tc.reason, " operator@example.com ", now)
+			if err != nil {
+				t.Fatalf("RefuseActionExecution: %v", err)
+			}
+			if updated.State != ActionStateFailed || updated.Result == nil || updated.Result.Success {
+				t.Fatalf("updated action = %#v, want failed result", updated)
+			}
+			if !strings.HasPrefix(updated.Result.ErrorMessage, tc.wantPrefix) {
+				t.Fatalf("ErrorMessage = %q, want prefix %q", updated.Result.ErrorMessage, tc.wantPrefix)
+			}
+			if event.ActionID != updated.ID || event.State != ActionStateFailed || event.Actor != "operator@example.com" || event.Message != updated.Result.ErrorMessage {
+				t.Fatalf("lifecycle event = %#v, updated result = %#v", event, updated.Result)
+			}
+		})
+	}
+
+	if _, _, err := RefuseActionExecution(record, errors.New("transient executor unavailable"), "", now); !errors.Is(err, ErrActionExecutionRefusal) {
+		t.Fatalf("unexpected refusal error = %v, want %v", err, ErrActionExecutionRefusal)
 	}
 }
 
