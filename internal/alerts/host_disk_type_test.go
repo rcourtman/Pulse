@@ -1,7 +1,9 @@
 package alerts
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
@@ -40,6 +42,66 @@ func configureDiskTypeHostManager(t *testing.T) *Manager {
 
 	m.ClearActiveAlerts()
 	return m
+}
+
+func configureDiskTempTypeHostManager(t *testing.T) *Manager {
+	t.Helper()
+
+	m := newTestManager(t)
+	cfg := AlertConfig{
+		Enabled:         true,
+		ActivationState: ActivationActive,
+		AgentDefaults: ThresholdConfig{
+			DiskTemperature: &HysteresisThreshold{Trigger: 55, Clear: 50},
+		},
+		DiskTempByType: map[string]HysteresisThreshold{
+			"nvme": {Trigger: 70, Clear: 65},
+			"sas":  {Trigger: 65, Clear: 60},
+			"sata": {Trigger: 55, Clear: 50},
+		},
+		Overrides:         map[string]ThresholdConfig{},
+		TimeThresholds:    map[string]int{},
+		SuppressionWindow: 0,
+		MinimumDelta:      0,
+	}
+	m.UpdateConfig(cfg)
+
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.config.MetricTimeThresholds = nil
+	m.config.SuppressionWindow = 0
+	m.config.MinimumDelta = 0
+	m.mu.Unlock()
+
+	m.ClearActiveAlerts()
+	return m
+}
+
+func hostWithSMARTDiskTemp(id, diskType string, temperature int) models.Host {
+	return models.Host{
+		ID:          id,
+		DisplayName: id,
+		Hostname:    id,
+		Status:      "online",
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{
+				{
+					Device:      "/dev/" + id,
+					Model:       "test-disk",
+					Type:        diskType,
+					Temperature: temperature,
+				},
+			},
+		},
+		IntervalSeconds: 30,
+		LastSeen:        time.Now(),
+	}
+}
+
+func hostDiskTempAlertID(host models.Host) string {
+	disk := host.Sensors.SMART[0]
+	resourceID := fmt.Sprintf("%s/disk_temp:%s", hostResourceID(host.ID), sanitizeHostComponent(disk.Device))
+	return canonicalMetricStateID(resourceID, "diskTemperature")
 }
 
 func TestHostDiskFillUsesPerTypeThresholdForNVMe(t *testing.T) {
@@ -166,4 +228,89 @@ func TestStorageTypeBranchNotRegressed(t *testing.T) {
 	})
 
 	assertAlertPresent(t, m, canonicalMetricStateID("storage-1", "usage"))
+}
+
+func TestHostDiskTempUsesNVMeThreshold(t *testing.T) {
+	m := configureDiskTempTypeHostManager(t)
+
+	hostBelow := hostWithSMARTDiskTemp("host-temp-nvme", "nvme", 62)
+	m.CheckHost(hostBelow)
+
+	trackingKey := hostDiskTempAlertID(hostBelow)
+	if _, exists := testLookupActiveAlert(t, m, trackingKey); exists {
+		t.Fatalf("expected no alert for nvme disk at 62C (nvme trigger 70), got active: %v", alertKeys(m))
+	}
+	m.mu.RLock()
+	if _, pending := m.pendingAlerts[trackingKey]; pending {
+		m.mu.RUnlock()
+		t.Fatalf("expected no pending alert for nvme disk at 62C, but pendingAlerts has %q", trackingKey)
+	}
+	m.mu.RUnlock()
+
+	hostAbove := hostWithSMARTDiskTemp("host-temp-nvme", "nvme", 71)
+	m.CheckHost(hostAbove)
+
+	if _, exists := testLookupActiveAlert(t, m, trackingKey); !exists {
+		t.Fatalf("expected alert for nvme disk at 71C (nvme trigger 70), active: %v", alertKeys(m))
+	}
+}
+
+func TestHostDiskTempUsesSASThreshold(t *testing.T) {
+	m := configureDiskTempTypeHostManager(t)
+
+	hostBelow := hostWithSMARTDiskTemp("host-temp-sas", "sas", 64)
+	m.CheckHost(hostBelow)
+
+	trackingKey := hostDiskTempAlertID(hostBelow)
+	if _, exists := testLookupActiveAlert(t, m, trackingKey); exists {
+		t.Fatalf("expected no alert for sas disk at 64C (sas trigger 65), got active: %v", alertKeys(m))
+	}
+
+	hostAbove := hostWithSMARTDiskTemp("host-temp-sas", "sas", 66)
+	m.CheckHost(hostAbove)
+
+	if _, exists := testLookupActiveAlert(t, m, trackingKey); !exists {
+		t.Fatalf("expected alert for sas disk at 66C (sas trigger 65), active: %v", alertKeys(m))
+	}
+}
+
+func TestHostDiskTempUsesSATAThreshold(t *testing.T) {
+	m := configureDiskTempTypeHostManager(t)
+
+	hostBelow := hostWithSMARTDiskTemp("host-temp-sata", "sata", 54)
+	m.CheckHost(hostBelow)
+
+	trackingKey := hostDiskTempAlertID(hostBelow)
+	if _, exists := testLookupActiveAlert(t, m, trackingKey); exists {
+		t.Fatalf("expected no alert for sata disk at 54C (sata trigger 55), got active: %v", alertKeys(m))
+	}
+
+	hostAbove := hostWithSMARTDiskTemp("host-temp-sata", "sata", 56)
+	m.CheckHost(hostAbove)
+
+	if _, exists := testLookupActiveAlert(t, m, trackingKey); !exists {
+		t.Fatalf("expected alert for sata disk at 56C (sata trigger 55), active: %v", alertKeys(m))
+	}
+}
+
+func TestHostDiskTempPerTypeThresholdDoesNotOverrideDisabledGlobalDefault(t *testing.T) {
+	m := configureDiskTempTypeHostManager(t)
+
+	m.mu.Lock()
+	m.config.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 0, Clear: 0}
+	m.mu.Unlock()
+
+	host := hostWithSMARTDiskTemp("host-temp-disabled-nvme", "nvme", 71)
+	m.CheckHost(host)
+
+	trackingKey := hostDiskTempAlertID(host)
+	if _, exists := testLookupActiveAlert(t, m, trackingKey); exists {
+		t.Fatalf("expected no alert when global agent disk temperature threshold is disabled, active: %v", alertKeys(m))
+	}
+	m.mu.RLock()
+	if _, pending := m.pendingAlerts[trackingKey]; pending {
+		m.mu.RUnlock()
+		t.Fatalf("expected no pending alert when global agent disk temperature threshold is disabled, but pendingAlerts has %q", trackingKey)
+	}
+	m.mu.RUnlock()
 }

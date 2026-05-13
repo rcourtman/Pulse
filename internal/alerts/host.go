@@ -304,6 +304,16 @@ func (m *Manager) CheckHost(host models.Host) {
 		if len(host.Sensors.SMART) > 0 {
 			for _, disk := range host.Sensors.SMART {
 				if disk.Temperature > 0 && !disk.Standby {
+					effectiveTempThreshold := thresholds.DiskTemperature
+					if diskType := strings.ToLower(strings.TrimSpace(disk.Type)); diskType != "" {
+						m.mu.RLock()
+						if th, ok := m.config.DiskTempByType[diskType]; ok {
+							t := th
+							effectiveTempThreshold = &t
+						}
+						m.mu.RUnlock()
+					}
+
 					// Use specific resource ID for the disk: hostID/disk-temp:device
 					tempResourceID := fmt.Sprintf("%s/disk_temp:%s", hostResourceID(host.ID), sanitizeHostComponent(disk.Device))
 					tempResourceName := fmt.Sprintf("%s (%s Temp)", host.DisplayName, disk.Device)
@@ -313,7 +323,8 @@ func (m *Manager) CheckHost(host models.Host) {
 					diskTempMetadata["device"] = disk.Device
 					diskTempMetadata["temperature"] = disk.Temperature
 					diskTempMetadata["model"] = disk.Model
-					spec, err := buildCanonicalMetricSpec(tempResourceID, tempResourceName, unifiedresources.ResourceType("agent-disk"), "diskTemperature", thresholds.DiskTemperature)
+					diskTempMetadata["diskType"] = disk.Type
+					spec, err := buildCanonicalMetricSpec(tempResourceID, tempResourceName, unifiedresources.ResourceType("agent-disk"), "diskTemperature", effectiveTempThreshold)
 					if err != nil {
 						log.Warn().
 							Err(err).
@@ -324,7 +335,7 @@ func (m *Manager) CheckHost(host models.Host) {
 						continue
 					}
 
-					m.checkMetricWithCanonicalSpec(spec, tempResourceName, nodeName, disk.Device, "agent", float64(disk.Temperature), thresholds.DiskTemperature, &metricOptions{Metadata: diskTempMetadata})
+					m.checkMetricWithCanonicalSpec(spec, tempResourceName, nodeName, disk.Device, "agent", float64(disk.Temperature), effectiveTempThreshold, &metricOptions{Metadata: diskTempMetadata})
 				}
 			}
 		}
