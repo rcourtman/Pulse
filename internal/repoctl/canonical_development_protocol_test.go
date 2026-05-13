@@ -156,10 +156,83 @@ func repoRootForEvidence(t *testing.T, repo string) string {
 	if err != nil {
 		t.Fatalf("failed to resolve pulse repo root: %v", err)
 	}
+	commonDir, err := gitCommonDir(currentRoot)
+	if err != nil {
+		return repoRootForEvidenceFromGitLayout(repo, currentRoot, "")
+	}
+	return repoRootForEvidenceFromGitLayout(repo, currentRoot, commonDir)
+}
+
+func gitCommonDir(repoRoot string) (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--path-format=absolute", "--git-common-dir")
+	cmd.Dir = repoRoot
+	data, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	commonDir := strings.TrimSpace(string(data))
+	if commonDir == "" {
+		return "", nil
+	}
+	if !filepath.IsAbs(commonDir) {
+		commonDir = filepath.Join(repoRoot, commonDir)
+	}
+	return filepath.Clean(commonDir), nil
+}
+
+func repoRootForEvidenceFromGitLayout(repo string, currentRoot string, commonDir string) string {
+	currentRoot = filepath.Clean(currentRoot)
 	if repo == "pulse" {
 		return currentRoot
 	}
-	return filepath.Join(filepath.Dir(currentRoot), repo)
+	pulseRoot := canonicalPulseRootFromGitCommonDir(currentRoot, commonDir)
+	return filepath.Join(filepath.Dir(pulseRoot), repo)
+}
+
+func canonicalPulseRootFromGitCommonDir(currentRoot string, commonDir string) string {
+	if commonDir == "" {
+		return filepath.Clean(currentRoot)
+	}
+	commonDir = filepath.Clean(commonDir)
+	if filepath.Base(commonDir) != ".git" {
+		return filepath.Clean(currentRoot)
+	}
+	return filepath.Dir(commonDir)
+}
+
+func TestRepoRootForEvidenceDerivesCanonicalSiblingRootFromLinkedWorktree(t *testing.T) {
+	workspace := filepath.Join(string(filepath.Separator), "Volumes", "Development", "pulse")
+	currentRoot := filepath.Join(workspace, ".worktrees", "pulse-precommit-worktree-compatibility-sweep")
+	commonDir := filepath.Join(workspace, "repos", "pulse", ".git")
+
+	got := repoRootForEvidenceFromGitLayout("pulse-pro", currentRoot, commonDir)
+	want := filepath.Join(workspace, "repos", "pulse-pro")
+	if got != want {
+		t.Fatalf("pulse-pro evidence root = %q, want %q", got, want)
+	}
+	if strings.Contains(got, string(filepath.Separator)+".worktrees"+string(filepath.Separator)) {
+		t.Fatalf("sibling evidence root must not be derived under .worktrees: %q", got)
+	}
+}
+
+func TestRepoRootForEvidenceKeepsPulseEvidenceOnCurrentWorktree(t *testing.T) {
+	workspace := filepath.Join(string(filepath.Separator), "Volumes", "Development", "pulse")
+	currentRoot := filepath.Join(workspace, ".worktrees", "pulse-precommit-worktree-compatibility-sweep")
+	commonDir := filepath.Join(workspace, "repos", "pulse", ".git")
+
+	got := repoRootForEvidenceFromGitLayout("pulse", currentRoot, commonDir)
+	if got != currentRoot {
+		t.Fatalf("pulse evidence root = %q, want current worktree %q", got, currentRoot)
+	}
+}
+
+func TestRepoRootForEvidenceHonorsEnvOverride(t *testing.T) {
+	overrideRoot := filepath.Join(t.TempDir(), "custom-pulse-pro")
+	t.Setenv("PULSE_REPO_ROOT_PULSE_PRO", overrideRoot)
+
+	if got := repoRootForEvidence(t, "pulse-pro"); got != overrideRoot {
+		t.Fatalf("pulse-pro evidence root = %q, want override %q", got, overrideRoot)
+	}
 }
 
 func shouldSkipCrossRepoEvidenceExistenceCheck(repo string) bool {
