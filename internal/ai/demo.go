@@ -142,6 +142,23 @@ func (p *PatrolService) InjectDemoFindings() {
 			TimesRaised: 3,
 			Source:      "patrol",
 		},
+		{
+			ID:           "demo-update-safety-warning",
+			Key:          UpdateSafetyFindingPrefix + ":docker-host-1/homeassistant",
+			Severity:     FindingSeverityWarning,
+			Category:     FindingCategoryReliability,
+			Title:        "Container \"homeassistant\" image updated",
+			Description:  "Image digest changed. Container homeassistant was updated to a new image and has restarted 2 times in the verification window.",
+			ResourceID:   "docker-host-1/homeassistant",
+			ResourceName: "homeassistant",
+			ResourceType: "app-container",
+			Node:         "docker-host-1",
+			Evidence:     "prior_digest=sha256:abc123def456 new_digest=sha256:789xyz012uvw restart_count=2",
+			DetectedAt:  now.Add(-3 * time.Minute),
+			LastSeenAt:  now.Add(-1 * time.Minute),
+			TimesRaised: 2,
+			Source:      updateSafetySource,
+		},
 	}
 
 	// Add findings to the store

@@ -32,8 +32,8 @@ func TestPatrolService_InjectDemoFindings(t *testing.T) {
 	service.InjectDemoFindings()
 
 	findings := service.findings.GetAll(nil)
-	if len(findings) != 5 {
-		t.Fatalf("expected 5 demo findings, got %d", len(findings))
+	if len(findings) != 6 {
+		t.Fatalf("expected 6 demo findings, got %d", len(findings))
 	}
 	if service.runHistoryStore.Count() != 13 {
 		t.Fatalf("expected 13 demo run history entries, got %d", service.runHistoryStore.Count())

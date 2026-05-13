@@ -462,7 +462,8 @@ type PatrolService struct {
 	// same resource so a noisy host surfaces as one storm finding rather
 	// than several concurrent per-symptom rows. Owned for the service
 	// lifetime; in-memory only, no goroutine.
-	stormThrottler *findingStormThrottler
+	stormThrottler      *findingStormThrottler
+	updateSafetyWatcher *UpdateSafetyWatcher
 	// ReadState provides typed read-only views over resource state (VMs, nodes, hosts, etc.).
 	// This is injected separately from stateProvider since stateProvider also contains
 	// non-resource telemetry (alerts, backups, connection health) that isn't modeled as resources yet.
@@ -685,5 +686,6 @@ func NewPatrolService(aiService *Service, stateProvider StateProvider) *PatrolSe
 	// router seam.
 	p.stormThrottler = newFindingStormThrottler()
 	p.findings.SetStormThrottler(p.stormThrottler)
+	p.updateSafetyWatcher = newUpdateSafetyWatcher()
 	return p
 }

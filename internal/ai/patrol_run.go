@@ -409,6 +409,20 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		runStats.trueNASChecked +
 		runStats.kubernetesChecked
 
+	// Run update-safety watcher on every patrol cycle regardless of LLM availability.
+	// Direct FindingsStore.Add bypasses push-notification (MVP: not an emergency).
+	if cfg.AnalyzeDocker && p.updateSafetyWatcher != nil {
+		updateEmit, updateResolve := p.updateSafetyWatcher.Observe(state.DockerHosts, time.Now())
+		for _, f := range updateEmit {
+			if !p.findings.Add(f) {
+				log.Debug().Str("finding_id", f.ID).Msg("AI Patrol: update-safety finding already in store")
+			}
+		}
+		for _, s := range updateResolve {
+			p.findings.ResolveWithReason(s.DedupKey, s.Reason)
+		}
+	}
+
 	// Determine if we can run LLM analysis (requires AI service + circuit breaker not open)
 	aiServiceEnabled := p.aiService != nil && p.aiService.IsEnabled()
 	canRunLLM := aiServiceEnabled && llmAllowed
