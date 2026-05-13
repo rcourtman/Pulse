@@ -731,6 +731,11 @@ type FindingsStore struct {
 	// resource is in a maintenance window. Nil-safe; an unset provider
 	// disables operator-state-driven suppression.
 	resourceOperatorStateProvider ResourceOperatorStateProvider
+	// Optional finding-storm throttler — when set, the store invokes it
+	// from Add's new-finding branch so a single noisy resource's burst
+	// of multi-symptom findings is summarised by one storm finding.
+	// Nil-safe; an unset throttler disables storm summarisation.
+	stormThrottler *findingStormThrottler
 }
 
 // ResourceOperatorStateMaintenanceWindow describes the maintenance
@@ -807,6 +812,16 @@ func (s *FindingsStore) SetResourceOperatorStateProvider(p ResourceOperatorState
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.resourceOperatorStateProvider = p
+}
+
+// SetStormThrottler installs the finding-storm throttler. The store
+// consults it from Add's new-finding branch with the store mutex held;
+// the throttler must not call back into the store. Pass nil to disable
+// storm summarisation (the default).
+func (s *FindingsStore) SetStormThrottler(t *findingStormThrottler) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.stormThrottler = t
 }
 
 // OperatorStateProjectionFor exposes the operator-state projection for
@@ -1576,12 +1591,27 @@ func (s *FindingsStore) Add(f *Finding) bool {
 	if f.IsActive() {
 		s.activeCounts[f.Severity]++
 	}
+	// Storm throttler hook: still inside the new-finding branch with
+	// s.mu held so the observer reads a consistent index. The observer
+	// owns its own internal mutex and must not call back into the
+	// store; its return is dispatched after s.mu is released below.
+	var pendingStormFinding *Finding
+	if t := s.stormThrottler; t != nil {
+		pendingStormFinding = t.observeLocked(f, time.Now())
+	}
 	severity := f.Severity
 	s.mu.Unlock()
 	s.scheduleSave()
 	// Bypass debounce for warning+ findings to avoid data loss on crash
 	if severity == FindingSeverityWarning || severity == FindingSeverityCritical {
 		_ = s.ForceSave()
+	}
+	if pendingStormFinding != nil {
+		if pendingStormFinding.ResolvedAt != nil {
+			s.ResolveWithReason(pendingStormFinding.ID, stormResolveReason)
+		} else {
+			s.Add(pendingStormFinding)
+		}
 	}
 
 	return true
