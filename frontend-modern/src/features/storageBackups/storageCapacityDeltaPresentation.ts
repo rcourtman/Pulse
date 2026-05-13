@@ -8,11 +8,16 @@ export interface StorageCapacityDeltaPresentation {
   toneClass: string;
 }
 
+export interface StorageCapacityDeltaAnalysis {
+  deltaBytes: number;
+  durationMs: number;
+  startTimestamp: number;
+  endTimestamp: number;
+}
+
 function normalizeMetricPoints(points: MetricPoint[]): MetricPoint[] {
   return points
-    .filter(
-      (point) => Number.isFinite(point.timestamp) && Number.isFinite(point.value),
-    )
+    .filter((point) => Number.isFinite(point.timestamp) && Number.isFinite(point.value))
     .sort((left, right) => left.timestamp - right.timestamp);
 }
 
@@ -23,26 +28,44 @@ function averageMetricValues(points: MetricPoint[]): number {
   return points.reduce((sum, point) => sum + point.value, 0) / points.length;
 }
 
-export function computeStorageCapacityDelta(points: MetricPoint[]): number | null {
+function averageMetricTimestamps(points: MetricPoint[]): number {
+  if (points.length === 0) {
+    return 0;
+  }
+  return points.reduce((sum, point) => sum + point.timestamp, 0) / points.length;
+}
+
+export function computeStorageCapacityDeltaAnalysis(
+  points: MetricPoint[],
+): StorageCapacityDeltaAnalysis | null {
   const normalized = normalizeMetricPoints(points);
   if (normalized.length < 2) {
     return null;
   }
 
   const sampleWindowSize =
-    normalized.length >= 4
-      ? Math.max(2, Math.floor(normalized.length * 0.25))
-      : 1;
-  const startAverage = averageMetricValues(normalized.slice(0, sampleWindowSize));
-  const endAverage = averageMetricValues(normalized.slice(normalized.length - sampleWindowSize));
+    normalized.length >= 4 ? Math.max(2, Math.floor(normalized.length * 0.25)) : 1;
+  const startWindow = normalized.slice(0, sampleWindowSize);
+  const endWindow = normalized.slice(normalized.length - sampleWindowSize);
+  const startAverage = averageMetricValues(startWindow);
+  const endAverage = averageMetricValues(endWindow);
+  const startTimestamp = averageMetricTimestamps(startWindow);
+  const endTimestamp = averageMetricTimestamps(endWindow);
+  const durationMs = endTimestamp - startTimestamp;
   const delta = endAverage - startAverage;
-  if (!Number.isFinite(delta)) {
+  if (!Number.isFinite(delta) || !Number.isFinite(durationMs) || durationMs <= 0) {
     return null;
   }
-  if (Math.abs(delta) < 1) {
-    return 0;
-  }
-  return delta;
+  return {
+    deltaBytes: Math.abs(delta) < 1 ? 0 : delta,
+    durationMs,
+    startTimestamp,
+    endTimestamp,
+  };
+}
+
+export function computeStorageCapacityDelta(points: MetricPoint[]): number | null {
+  return computeStorageCapacityDeltaAnalysis(points)?.deltaBytes ?? null;
 }
 
 export function formatStorageCapacityDelta(deltaBytes: number | null): string {

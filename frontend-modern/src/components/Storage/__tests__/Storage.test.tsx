@@ -432,6 +432,7 @@ describe('Storage', () => {
   });
 
   it('renders per-pool growth from the shared storage summary history contract', async () => {
+    const gib = 1024 * 1024 * 1024;
     const storageSummarySpy = vi.spyOn(ChartsAPI, 'getStorageSummaryCharts').mockResolvedValue({
       pools: {
         'pool:alpha': {
@@ -441,12 +442,12 @@ describe('Storage', () => {
             { timestamp: Date.now(), value: 44 },
           ],
           used: [
-            { timestamp: Date.now() - 86_400_000, value: 100 * 1024 * 1024 * 1024 },
-            { timestamp: Date.now(), value: 140 * 1024 * 1024 * 1024 },
+            { timestamp: Date.now() - 86_400_000, value: 100 * gib },
+            { timestamp: Date.now(), value: 140 * gib },
           ],
           avail: [
-            { timestamp: Date.now() - 86_400_000, value: 150 * 1024 * 1024 * 1024 },
-            { timestamp: Date.now(), value: 110 * 1024 * 1024 * 1024 },
+            { timestamp: Date.now() - 86_400_000, value: 150 * gib },
+            { timestamp: Date.now(), value: 110 * gib },
           ],
         },
         'pool:beta': {
@@ -456,12 +457,12 @@ describe('Storage', () => {
             { timestamp: Date.now(), value: 68 },
           ],
           used: [
-            { timestamp: Date.now() - 86_400_000, value: 220 * 1024 * 1024 * 1024 },
-            { timestamp: Date.now(), value: 200 * 1024 * 1024 * 1024 },
+            { timestamp: Date.now() - 86_400_000, value: 220 * gib },
+            { timestamp: Date.now(), value: 200 * gib },
           ],
           avail: [
-            { timestamp: Date.now() - 86_400_000, value: 80 * 1024 * 1024 * 1024 },
-            { timestamp: Date.now(), value: 100 * 1024 * 1024 * 1024 },
+            { timestamp: Date.now() - 86_400_000, value: 80 * gib },
+            { timestamp: Date.now(), value: 100 * gib },
           ],
         },
       },
@@ -473,12 +474,20 @@ describe('Storage', () => {
 
     hookResources = [
       buildStorageResource('storage-display-alpha', 'Alpha-Store', 'pve1', {
+        total: 250 * gib,
+        used: 140 * gib,
+        free: 110 * gib,
+        current: 56,
         metricsTarget: {
           resourceType: 'storage',
           resourceId: 'pool:alpha',
         },
       }),
       buildStorageResource('storage-display-beta', 'Beta-Store', 'pve2', {
+        total: 300 * gib,
+        used: 200 * gib,
+        free: 100 * gib,
+        current: 67,
         metricsTarget: {
           resourceType: 'storage',
           resourceId: 'pool:beta',
@@ -489,8 +498,20 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     expect(await screen.findByText('Growth (24h)')).toBeInTheDocument();
-    expect(await screen.findByText(/\+40(?:\.0)? GB/)).toBeInTheDocument();
-    expect(screen.getByText(/-20(?:\.0)? GB/)).toBeInTheDocument();
+    const storageContentSurface = screen.getByTestId('storage-content-surface');
+    expect(await within(storageContentSurface).findByText(/\+40(?:\.0)? GB/)).toBeInTheDocument();
+    expect(within(storageContentSurface).getByText(/-20(?:\.0)? GB/)).toBeInTheDocument();
+    expect(screen.getByTestId('storage-growth-planner')).toHaveTextContent(
+      '24h runway from storage history',
+    );
+    expect(screen.getByTestId('storage-growth-planner')).toHaveTextContent('1/2 growing');
+    expect(screen.getByTestId('storage-growth-planner')).toHaveTextContent('3 days');
+
+    fireEvent.click(screen.getByTestId('storage-growth-planner-pool-pool:alpha'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Collapse Alpha-Store' })).toBeInTheDocument();
+    });
     expect(storageSummarySpy).toHaveBeenCalledWith('24h', undefined, { nodeId: undefined });
 
     storageSummarySpy.mockRestore();
@@ -561,7 +582,7 @@ describe('Storage', () => {
     expect(stickyWrapper?.className).toContain('lg:sticky');
     expect(stickyWrapper?.className).toContain('top-0');
 
-    const alphaRow = screen.getByText('Alpha-Store').closest('tr')!;
+    const alphaRow = document.querySelector('tr[data-summary-series-id="pool:alpha"]')!;
     expect(alphaRow).toHaveAttribute('data-summary-series-id', 'pool:alpha');
     expect(alphaRow).toHaveAttribute('data-summary-row-active', 'false');
 
@@ -1369,7 +1390,9 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     await screen.findByTestId('storage-summary');
-    const alphaRow = screen.getByText('Alpha-Store').closest('tr') as HTMLTableRowElement;
+    const alphaRow = document.querySelector(
+      'tr[data-summary-series-id="pool:alpha"]',
+    ) as HTMLTableRowElement;
     expect(alphaRow).toBeTruthy();
 
     alphaRow.getBoundingClientRect = vi.fn(() => ({
