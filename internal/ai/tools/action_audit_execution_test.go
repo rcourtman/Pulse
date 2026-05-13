@@ -961,6 +961,182 @@ func TestExecuteCommandWithDeniedApprovalDoesNotDispatch(t *testing.T) {
 	}
 }
 
+func TestExecuteCommandWithAuditRefusesApprovedDryRunOnlyAndExpiredPlans(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		suffix     string
+		configure  func(*approval.ApprovalRequest)
+		wantErr    error
+		wantPrefix string
+	}{
+		{
+			name:   "dry run only",
+			suffix: "dryrun",
+			configure: func(req *approval.ApprovalRequest) {
+				req.Plan.ApprovalPolicy = unifiedresources.ApprovalDryRun
+			},
+			wantErr:    unifiedresources.ErrActionDryRunOnly,
+			wantPrefix: "action_dry_run_only:",
+		},
+		{
+			name:   "expired",
+			suffix: "expired",
+			configure: func(req *approval.ApprovalRequest) {
+				req.Plan.ExpiresAt = time.Now().UTC().Add(-time.Minute)
+			},
+			wantErr:    unifiedresources.ErrActionPlanExpired,
+			wantPrefix: "action_plan_expired:",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			actionStore := unifiedresources.NewMemoryStore()
+			approvalStore, err := approval.NewStore(approval.StoreConfig{
+				DataDir:            t.TempDir(),
+				DisablePersistence: true,
+			})
+			if err != nil {
+				t.Fatalf("NewStore: %v", err)
+			}
+			previousApprovalStore := approval.GetStore()
+			approval.SetStore(approvalStore)
+			t.Cleanup(func() { approval.SetStore(previousApprovalStore) })
+
+			now := time.Now().UTC()
+			actionID := "act-" + tc.suffix + "-command"
+			approvalID := "approval-" + tc.suffix + "-command"
+			targetID := "agent-" + tc.suffix
+			command := "systemctl restart workload"
+			reason := "restart workload service"
+			approvedHash := approvalPlanHash(
+				actionID,
+				approvalID,
+				"pulse_control",
+				targetID,
+				command,
+				"agent",
+				targetID,
+				reason,
+			)
+			plan := unifiedresources.ActionPlan{
+				ActionID:         actionID,
+				RequestID:        approvalID,
+				Allowed:          true,
+				RequiresApproval: true,
+				ApprovalPolicy:   unifiedresources.ApprovalAdmin,
+				PlannedAt:        now,
+				ExpiresAt:        now.Add(5 * time.Minute),
+				ResourceVersion:  "resource:sha256:test",
+				PolicyVersion:    "policy:sha256:test",
+				PlanHash:         approvedHash,
+			}
+			req := &approval.ApprovalRequest{
+				ID:         approvalID,
+				Command:    command,
+				TargetType: "agent",
+				TargetID:   targetID,
+				TargetName: targetID,
+				Context:    reason,
+				Plan:       &plan,
+			}
+			if err := approvalStore.CreateApproval(req); err != nil {
+				t.Fatalf("CreateApproval: %v", err)
+			}
+			approved, err := approvalStore.Approve(approvalID, "operator@example.com")
+			if err != nil {
+				t.Fatalf("Approve: %v", err)
+			}
+			tc.configure(approved)
+
+			agentServer := &mockAgentServer{}
+			executor := NewPulseToolExecutor(ExecutorConfig{
+				AgentServer:      agentServer,
+				ActionAuditStore: actionStore,
+			})
+			executor.recordPendingApprovalAction(approved)
+
+			completed := make(chan unifiedresources.ActionAuditRecord, 1)
+			executor.SetOnActionCompleted(func(record unifiedresources.ActionAuditRecord) {
+				completed <- record
+			})
+
+			result, err := executor.executeCommandWithAudit(
+				context.Background(),
+				"pulse_control",
+				targetID,
+				approvalID,
+				true,
+				targetID,
+				agentexec.ExecuteCommandPayload{
+					Command:    command,
+					TargetType: "agent",
+					TargetID:   targetID,
+				},
+				"pulse_control",
+				reason,
+			)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("executeCommandWithAudit error = %v, want %v", err, tc.wantErr)
+			}
+			if result != nil {
+				t.Fatalf("expected nil command result on refusal, got %#v", result)
+			}
+			agentServer.AssertNotCalled(t, "ExecuteCommand", mock.Anything, mock.Anything, mock.Anything)
+
+			audit, ok, err := actionStore.GetActionAudit(actionID)
+			if err != nil {
+				t.Fatalf("GetActionAudit: %v", err)
+			}
+			if !ok {
+				t.Fatalf("expected refused action audit %q", actionID)
+			}
+			if audit.State != unifiedresources.ActionStateFailed {
+				t.Fatalf("audit state = %q, want %q", audit.State, unifiedresources.ActionStateFailed)
+			}
+			if audit.Result == nil || audit.Result.Success {
+				t.Fatalf("expected Result.Success=false, got %#v", audit.Result)
+			}
+			if !strings.HasPrefix(audit.Result.ErrorMessage, tc.wantPrefix) {
+				t.Fatalf("ErrorMessage = %q, want prefix %q", audit.Result.ErrorMessage, tc.wantPrefix)
+			}
+			if len(audit.Approvals) != 1 || audit.Approvals[0].Outcome != unifiedresources.OutcomeApproved {
+				t.Fatalf("expected approved audit record to be preserved, got %#v", audit.Approvals)
+			}
+
+			events, err := actionStore.GetActionLifecycleEvents(actionID, time.Time{}, 10)
+			if err != nil {
+				t.Fatalf("GetActionLifecycleEvents: %v", err)
+			}
+			seenFailed := false
+			for _, event := range events {
+				if event.State == unifiedresources.ActionStateExecuting || event.State == unifiedresources.ActionStateCompleted {
+					t.Fatalf("refusal must not create dispatch lifecycle event: %#v", event)
+				}
+				if event.State == unifiedresources.ActionStateFailed {
+					seenFailed = true
+					if !strings.HasPrefix(event.Message, tc.wantPrefix) {
+						t.Fatalf("failed lifecycle message = %q, want prefix %q", event.Message, tc.wantPrefix)
+					}
+				}
+			}
+			if !seenFailed {
+				t.Fatalf("missing failed refusal lifecycle event in %#v", events)
+			}
+
+			select {
+			case received := <-completed:
+				if received.State != unifiedresources.ActionStateFailed {
+					t.Fatalf("callback state = %q, want %q", received.State, unifiedresources.ActionStateFailed)
+				}
+				if received.Result == nil || !strings.HasPrefix(received.Result.ErrorMessage, tc.wantPrefix) {
+					t.Fatalf("callback result = %#v, want prefix %q", received.Result, tc.wantPrefix)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("terminal refusal callback did not fire within 2s")
+			}
+		})
+	}
+}
+
 // TestExecuteCommandWithAuditRefusesWhenResourceIsRemediationLocked covers
 // the operator-set NeverAutoRemediate safety. When the operator has flagged
 // the target resource as never-auto-remediate (via the

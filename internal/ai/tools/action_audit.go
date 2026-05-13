@@ -360,8 +360,12 @@ func (e *PulseToolExecutor) recordActionExecutionStart(record unifiedresources.A
 	}
 	if planFromApproval {
 		var err error
+		approvalRecord := record
 		record, err = e.ensureApprovalDecisionBeforeExecution(record, approvalID, actor, now)
 		if err != nil {
+			if unifiedresources.IsPermanentActionExecutionRefusal(err) {
+				return e.recordActionExecutionRefusal(actionExecutionRefusalRecord(record, approvalRecord), err, actor, now)
+			}
 			return record, err
 		}
 	} else if e != nil && e.actionAuditStore != nil {
@@ -397,6 +401,9 @@ func (e *PulseToolExecutor) recordActionExecutionStart(record unifiedresources.A
 			Str("action_id", record.ID).
 			Str("state", string(record.State)).
 			Msg("failed to normalize action execution start")
+		if unifiedresources.IsPermanentActionExecutionRefusal(err) {
+			return e.recordActionExecutionRefusal(record, err, actor, now)
+		}
 		return record, err
 	}
 	if strings.TrimSpace(message) != "" {
@@ -414,6 +421,45 @@ func (e *PulseToolExecutor) recordActionExecutionStart(record unifiedresources.A
 		return record, err
 	}
 	return started, nil
+}
+
+func (e *PulseToolExecutor) recordActionExecutionRefusal(record unifiedresources.ActionAuditRecord, reason error, actor string, now time.Time) (unifiedresources.ActionAuditRecord, error) {
+	failed, event, err := unifiedresources.RefuseActionExecution(record, reason, actor, now)
+	if err != nil {
+		return record, err
+	}
+	if e == nil || e.actionAuditStore == nil {
+		e.publishActionCompleted(failed)
+		return failed, reason
+	}
+	if err := e.actionAuditStore.RecordActionAudit(failed); err != nil {
+		log.Warn().
+			Err(err).
+			Str("action_id", failed.ID).
+			Str("state", string(failed.State)).
+			Msg("failed to persist action execution refusal")
+		return record, err
+	}
+	if err := e.actionAuditStore.RecordActionLifecycleEvent(event); err != nil {
+		log.Warn().
+			Err(err).
+			Str("action_id", failed.ID).
+			Str("state", string(failed.State)).
+			Msg("failed to persist action execution refusal lifecycle event")
+		return record, err
+	}
+	e.publishActionCompleted(failed)
+	return failed, reason
+}
+
+func actionExecutionRefusalRecord(record, fallback unifiedresources.ActionAuditRecord) unifiedresources.ActionAuditRecord {
+	if len(record.Approvals) == 0 && len(fallback.Approvals) > 0 {
+		record.Approvals = append([]unifiedresources.ActionApprovalRecord(nil), fallback.Approvals...)
+	}
+	if record.Request.Params == nil && len(fallback.Request.Params) > 0 {
+		record.Request.Params = cloneActionParams(fallback.Request.Params)
+	}
+	return record
 }
 
 func (e *PulseToolExecutor) ensureApprovalDecisionBeforeExecution(record unifiedresources.ActionAuditRecord, approvalID, actor string, now time.Time) (unifiedresources.ActionAuditRecord, error) {
