@@ -176,6 +176,31 @@ func NormalizeResourceOperatorState(state ResourceOperatorState) ResourceOperato
 	return state
 }
 
+type resourceOperatorStateLifecycleStore interface {
+	SetResourceOperatorStateWithMaintenanceLifecycle(state ResourceOperatorState) (ResourceOperatorState, error)
+	ClearResourceOperatorStateWithMaintenanceLifecycle(canonicalID string, observedAt time.Time, actor string) error
+}
+
+// SetResourceOperatorStateWithMaintenanceLifecycle persists operator state and
+// any derived maintenance-window timeline change through one store-owned write.
+func SetResourceOperatorStateWithMaintenanceLifecycle(store ResourceStore, state ResourceOperatorState) (ResourceOperatorState, error) {
+	lifecycleStore, ok := store.(resourceOperatorStateLifecycleStore)
+	if !ok {
+		return ResourceOperatorState{}, errors.New("resource operator state maintenance lifecycle projection requires atomic store support")
+	}
+	return lifecycleStore.SetResourceOperatorStateWithMaintenanceLifecycle(state)
+}
+
+// ClearResourceOperatorStateWithMaintenanceLifecycle clears operator state and
+// any derived maintenance-window timeline change through one store-owned write.
+func ClearResourceOperatorStateWithMaintenanceLifecycle(store ResourceStore, canonicalID string, observedAt time.Time, actor string) error {
+	lifecycleStore, ok := store.(resourceOperatorStateLifecycleStore)
+	if !ok {
+		return errors.New("resource operator state maintenance lifecycle projection requires atomic store support")
+	}
+	return lifecycleStore.ClearResourceOperatorStateWithMaintenanceLifecycle(canonicalID, observedAt, actor)
+}
+
 const (
 	MaintenanceWindowLifecycleEventScheduled = "maintenance_window_scheduled"
 	MaintenanceWindowLifecycleEventUpdated   = "maintenance_window_updated"

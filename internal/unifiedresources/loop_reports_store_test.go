@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -94,6 +95,35 @@ func TestLoopReport_RecordMaintenanceVerificationResourceChange(t *testing.T) {
 	}
 	if change.Metadata["linkedAlertCount"] != float64(1) {
 		t.Fatalf("linkedAlertCount = %#v want 1", change.Metadata["linkedAlertCount"])
+	}
+}
+
+func TestSQLiteRecordLoopReport_RollsBackWhenTimelineProjectionFails(t *testing.T) {
+	dataDir := t.TempDir()
+	store, err := NewSQLiteResourceStore(dataDir, "default")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	defer store.Close()
+
+	if _, err := store.db.Exec(`DROP TABLE resource_changes`); err != nil {
+		t.Fatalf("drop resource_changes: %v", err)
+	}
+
+	windowEnd := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
+	report := newLoopReport("mv-rollback", "vm:101", windowEnd, LoopReportStatusHealthy)
+	err = store.RecordLoopReport(report)
+	if err == nil {
+		t.Fatal("expected timeline projection failure")
+	}
+	if !strings.Contains(err.Error(), "record loop report resource change") {
+		t.Fatalf("error = %v, want resource change failure", err)
+	}
+
+	if _, found, err := store.GetLoopReport(report.ID); err != nil {
+		t.Fatalf("get loop report after rollback: %v", err)
+	} else if found {
+		t.Fatal("loop report source row persisted despite projection failure")
 	}
 }
 

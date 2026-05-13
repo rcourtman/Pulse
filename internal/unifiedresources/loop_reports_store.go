@@ -137,7 +137,20 @@ func (s *SQLiteResourceStore) RecordLoopReport(report LoopReport) error {
 	}
 
 	s.mu.Lock()
-	_, err = s.db.Exec(`
+	defer s.mu.Unlock()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin loop report transaction: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	_, err = tx.Exec(`
 		INSERT INTO loop_reports (
 			id, report_type, scope, trigger, goal, status, started_at, completed_at,
 			window_started_at, window_ended_at, evidence_json,
@@ -166,15 +179,18 @@ func (s *SQLiteResourceStore) RecordLoopReport(report LoopReport) error {
 		report.ReviewedBy,
 		report.ReviewNote,
 	)
-	s.mu.Unlock()
 	if err != nil {
 		return fmt.Errorf("insert loop report: %w", err)
 	}
 	if change, ok := BuildLoopReportResourceChange(report); ok {
-		if err := s.RecordChange(change); err != nil {
+		if err := recordChangeSQL(tx, change, s.resourceChangesHasTimestamp); err != nil {
 			return fmt.Errorf("record loop report resource change: %w", err)
 		}
 	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit loop report transaction: %w", err)
+	}
+	committed = true
 	return nil
 }
 
@@ -422,12 +438,13 @@ func (m *MemoryStore) RecordLoopReport(report LoopReport) error {
 		return fmt.Errorf("%w: id %q already exists", ErrLoopReportInvalid, report.ID)
 	}
 	m.loopReports[report.ID] = report
-	m.mu.Unlock()
 	if change, ok := BuildLoopReportResourceChange(report); ok {
-		if err := m.RecordChange(change); err != nil {
+		if err := m.recordChangeLocked(change); err != nil {
+			m.mu.Unlock()
 			return fmt.Errorf("record loop report resource change: %w", err)
 		}
 	}
+	m.mu.Unlock()
 	return nil
 }
 

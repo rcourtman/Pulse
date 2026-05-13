@@ -2,9 +2,11 @@ package api
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -17,8 +19,27 @@ import (
 // existing resources_test.go fixtures.
 func newOperatorStateHandlers(t *testing.T) *ResourceHandlers {
 	t.Helper()
-	cfg := &config.Config{DataPath: t.TempDir()}
-	return NewResourceHandlers(cfg)
+	h, _ := newOperatorStateHandlersWithDataDir(t)
+	return h
+}
+
+func newOperatorStateHandlersWithDataDir(t *testing.T) (*ResourceHandlers, string) {
+	t.Helper()
+	dataDir := t.TempDir()
+	cfg := &config.Config{DataPath: dataDir}
+	return NewResourceHandlers(cfg), dataDir
+}
+
+func dropOperatorStateTimelineTable(t *testing.T, dataDir string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", filepath.Join(dataDir, "resources", "unified_resources.db"))
+	if err != nil {
+		t.Fatalf("open resource db for failure injection: %v", err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`DROP TABLE resource_changes`); err != nil {
+		t.Fatalf("drop resource_changes for failure injection: %v", err)
+	}
 }
 
 func TestHandleResourceOperatorState_GetReturns404WhenUnset(t *testing.T) {
@@ -109,7 +130,7 @@ func TestHandleResourceOperatorState_PutPersistsAndGetReturns200(t *testing.T) {
 	}
 }
 
-func TestHandleResourceOperatorState_RecordsMaintenanceWindowLifecycleChanges(t *testing.T) {
+func TestResourceOperatorState_RecordsMaintenanceWindowLifecycleChanges(t *testing.T) {
 	h := newOperatorStateHandlers(t)
 	store, err := h.getStore("default")
 	if err != nil {
@@ -175,6 +196,81 @@ func TestHandleResourceOperatorState_RecordsMaintenanceWindowLifecycleChanges(t 
 	}
 	if cleared.To != "no maintenance window" {
 		t.Fatalf("delete change to = %q want no maintenance window", cleared.To)
+	}
+}
+
+func TestResourceOperatorState_PutRollsBackWhenTimelineProjectionFails(t *testing.T) {
+	h, dataDir := newOperatorStateHandlersWithDataDir(t)
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("get store: %v", err)
+	}
+	dropOperatorStateTimelineTable(t, dataDir)
+
+	start := time.Date(2026, 5, 9, 12, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 5, 9, 14, 0, 0, 0, time.UTC)
+	body, _ := json.Marshal(map[string]any{
+		"maintenanceStartAt": start.Format(time.RFC3339),
+		"maintenanceEndAt":   end.Format(time.RFC3339),
+		"maintenanceReason":  "storage controller patch",
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/resources/vm:101/operator-state", bytes.NewReader(body))
+	h.HandleResourceOperatorState(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on timeline projection failure; got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if _, found, err := store.GetResourceOperatorState("vm:101"); err != nil {
+		t.Fatalf("get operator state after rollback: %v", err)
+	} else if found {
+		t.Fatal("operator state source row persisted despite projection failure")
+	}
+}
+
+func TestResourceOperatorState_DeleteRollsBackWhenTimelineProjectionFails(t *testing.T) {
+	h, dataDir := newOperatorStateHandlersWithDataDir(t)
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("get store: %v", err)
+	}
+
+	start := time.Date(2026, 5, 9, 12, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 5, 9, 14, 0, 0, 0, time.UTC)
+	seed := unified.ResourceOperatorState{
+		CanonicalID:          "vm:101",
+		MaintenanceStartAt:   &start,
+		MaintenanceEndAt:     &end,
+		MaintenanceReason:    "storage controller patch",
+		IntentionallyOffline: true,
+		SetAt:                start.Add(-time.Hour),
+		SetBy:                "operator",
+	}
+	if err := store.SetResourceOperatorState(seed); err != nil {
+		t.Fatalf("seed operator state: %v", err)
+	}
+	dropOperatorStateTimelineTable(t, dataDir)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodDelete, "/api/resources/vm:101/operator-state", nil)
+	h.HandleResourceOperatorState(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on timeline projection failure; got %d body=%s", rec.Code, rec.Body.String())
+	}
+	got, found, err := store.GetResourceOperatorState("vm:101")
+	if err != nil {
+		t.Fatalf("get operator state after rollback: %v", err)
+	}
+	if !found {
+		t.Fatal("operator state source row was deleted despite projection failure")
+	}
+	if got.MaintenanceStartAt == nil || !got.MaintenanceStartAt.Equal(start) {
+		t.Fatalf("maintenance start after rollback = %v want %v", got.MaintenanceStartAt, start)
+	}
+	if got.MaintenanceEndAt == nil || !got.MaintenanceEndAt.Equal(end) {
+		t.Fatalf("maintenance end after rollback = %v want %v", got.MaintenanceEndAt, end)
 	}
 }
 

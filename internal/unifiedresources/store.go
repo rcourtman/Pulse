@@ -727,12 +727,16 @@ func (s *SQLiteResourceStore) RecordChange(change ResourceChange) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	return recordChangeSQL(s.db, change, s.resourceChangesHasTimestamp)
+}
+
+func recordChangeSQL(execer sqlExecutor, change ResourceChange, includeTimestamp bool) error {
 	relJSON, _ := json.Marshal(change.RelatedResources)
 	metaJSON, _ := json.Marshal(change.Metadata)
 
 	columns := []string{"id", "canonical_id", "observed_at"}
 	values := []any{change.ID, CanonicalResourceID(change.ResourceID), change.ObservedAt}
-	if s.resourceChangesHasTimestamp {
+	if includeTimestamp {
 		columns = append(columns, "timestamp")
 		values = append(values, change.ObservedAt)
 	}
@@ -768,7 +772,7 @@ func (s *SQLiteResourceStore) RecordChange(change ResourceChange) error {
 		placeholders[i] = "?"
 	}
 
-	_, err := s.db.Exec(
+	_, err := execer.Exec(
 		`INSERT INTO resource_changes (`+strings.Join(columns, ", ")+`) VALUES (`+strings.Join(placeholders, ", ")+`) ON CONFLICT(id) DO NOTHING`,
 		values...,
 	)
@@ -1480,16 +1484,38 @@ func (s *SQLiteResourceStore) GetExportAudits(since time.Time, limit int) ([]Exp
 // signal is meaningful for the API GET path which returns 404 vs
 // returning the default no-state record.
 func (s *SQLiteResourceStore) GetResourceOperatorState(canonicalID string) (ResourceOperatorState, bool, error) {
+	return getResourceOperatorStateSQL(s.db, canonicalID)
+}
+
+type resourceOperatorStateQueryRower interface {
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+type resourceOperatorStateScanner interface {
+	Scan(dest ...any) error
+}
+
+func getResourceOperatorStateSQL(queryer resourceOperatorStateQueryRower, canonicalID string) (ResourceOperatorState, bool, error) {
 	canonicalID = strings.TrimSpace(canonicalID)
 	if canonicalID == "" {
 		return ResourceOperatorState{}, false, nil
 	}
-	row := s.db.QueryRow(`
+	row := queryer.QueryRow(`
 		SELECT canonical_id, intentionally_offline, never_auto_remediate,
 		       maintenance_start_at, maintenance_end_at, maintenance_reason,
 		       criticality, note, set_at, set_by
 		FROM resource_operator_state WHERE canonical_id = ?`, canonicalID)
+	state, err := scanResourceOperatorState(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ResourceOperatorState{}, false, nil
+		}
+		return ResourceOperatorState{}, false, fmt.Errorf("query resource operator state: %w", err)
+	}
+	return state, true, nil
+}
 
+func scanResourceOperatorState(scanner resourceOperatorStateScanner) (ResourceOperatorState, error) {
 	var state ResourceOperatorState
 	var (
 		intentional    int
@@ -1500,7 +1526,7 @@ func (s *SQLiteResourceStore) GetResourceOperatorState(canonicalID string) (Reso
 		note           sql.NullString
 		setBy          sql.NullString
 	)
-	if err := row.Scan(
+	if err := scanner.Scan(
 		&state.CanonicalID,
 		&intentional,
 		&neverRemediate,
@@ -1512,10 +1538,7 @@ func (s *SQLiteResourceStore) GetResourceOperatorState(canonicalID string) (Reso
 		&state.SetAt,
 		&setBy,
 	); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ResourceOperatorState{}, false, nil
-		}
-		return ResourceOperatorState{}, false, fmt.Errorf("query resource operator state: %w", err)
+		return ResourceOperatorState{}, err
 	}
 	state.IntentionallyOffline = intentional != 0
 	state.NeverAutoRemediate = neverRemediate != 0
@@ -1539,7 +1562,7 @@ func (s *SQLiteResourceStore) GetResourceOperatorState(canonicalID string) (Reso
 	if setBy.Valid {
 		state.SetBy = setBy.String
 	}
-	return state, true, nil
+	return state, nil
 }
 
 // SetResourceOperatorState upserts the state row. Validates and
@@ -1552,6 +1575,14 @@ func (s *SQLiteResourceStore) SetResourceOperatorState(state ResourceOperatorSta
 	if err := ValidateResourceOperatorState(state); err != nil {
 		return err
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return setResourceOperatorStateSQL(s.db, state)
+}
+
+func setResourceOperatorStateSQL(execer sqlExecutor, state ResourceOperatorState) error {
 	intentional := 0
 	if state.IntentionallyOffline {
 		intentional = 1
@@ -1591,7 +1622,7 @@ func (s *SQLiteResourceStore) SetResourceOperatorState(state ResourceOperatorSta
 		setBy.String = state.SetBy
 		setBy.Valid = true
 	}
-	_, err := s.db.Exec(`
+	_, err := execer.Exec(`
 		INSERT INTO resource_operator_state (
 			canonical_id, intentionally_offline, never_auto_remediate,
 			maintenance_start_at, maintenance_end_at, maintenance_reason,
@@ -1624,6 +1655,48 @@ func (s *SQLiteResourceStore) SetResourceOperatorState(state ResourceOperatorSta
 	return nil
 }
 
+// SetResourceOperatorStateWithMaintenanceLifecycle persists the operator-state
+// source row and the derived maintenance-window timeline projection in a single
+// SQLite transaction.
+func (s *SQLiteResourceStore) SetResourceOperatorStateWithMaintenanceLifecycle(state ResourceOperatorState) (ResourceOperatorState, error) {
+	state = NormalizeResourceOperatorState(state)
+	if err := ValidateResourceOperatorState(state); err != nil {
+		return ResourceOperatorState{}, err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return ResourceOperatorState{}, fmt.Errorf("begin resource operator state transaction: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	previous, previousFound, err := getResourceOperatorStateSQL(tx, state.CanonicalID)
+	if err != nil {
+		return ResourceOperatorState{}, err
+	}
+	if err := setResourceOperatorStateSQL(tx, state); err != nil {
+		return ResourceOperatorState{}, err
+	}
+	if change, ok := BuildMaintenanceWindowLifecycleChange(previous, previousFound, state, true, state.SetAt, state.SetBy); ok {
+		if err := recordChangeSQL(tx, change, s.resourceChangesHasTimestamp); err != nil {
+			return ResourceOperatorState{}, fmt.Errorf("record maintenance window lifecycle change: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return ResourceOperatorState{}, fmt.Errorf("commit resource operator state transaction: %w", err)
+	}
+	committed = true
+	return state, nil
+}
+
 // ClearResourceOperatorState removes the row for the given canonical
 // ID. Idempotent — returns nil whether or not a row existed.
 func (s *SQLiteResourceStore) ClearResourceOperatorState(canonicalID string) error {
@@ -1631,10 +1704,61 @@ func (s *SQLiteResourceStore) ClearResourceOperatorState(canonicalID string) err
 	if canonicalID == "" {
 		return nil
 	}
-	_, err := s.db.Exec(`DELETE FROM resource_operator_state WHERE canonical_id = ?`, canonicalID)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return clearResourceOperatorStateSQL(s.db, canonicalID)
+}
+
+func clearResourceOperatorStateSQL(execer sqlExecutor, canonicalID string) error {
+	_, err := execer.Exec(`DELETE FROM resource_operator_state WHERE canonical_id = ?`, canonicalID)
 	if err != nil {
 		return fmt.Errorf("delete resource operator state: %w", err)
 	}
+	return nil
+}
+
+// ClearResourceOperatorStateWithMaintenanceLifecycle deletes the operator-state
+// source row and the derived maintenance-window timeline projection in a single
+// SQLite transaction.
+func (s *SQLiteResourceStore) ClearResourceOperatorStateWithMaintenanceLifecycle(canonicalID string, observedAt time.Time, actor string) error {
+	canonicalID = strings.TrimSpace(canonicalID)
+	if canonicalID == "" {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin resource operator state clear transaction: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	previous, previousFound, err := getResourceOperatorStateSQL(tx, canonicalID)
+	if err != nil {
+		return err
+	}
+	if err := clearResourceOperatorStateSQL(tx, canonicalID); err != nil {
+		return err
+	}
+	current := ResourceOperatorState{CanonicalID: canonicalID}
+	if change, ok := BuildMaintenanceWindowLifecycleChange(previous, previousFound, current, false, observedAt, actor); ok {
+		if err := recordChangeSQL(tx, change, s.resourceChangesHasTimestamp); err != nil {
+			return fmt.Errorf("record maintenance window lifecycle change: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit resource operator state clear transaction: %w", err)
+	}
+	committed = true
 	return nil
 }
 
@@ -1700,6 +1824,11 @@ func (m *MemoryStore) Close() error {
 func (m *MemoryStore) RecordChange(change ResourceChange) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	return m.recordChangeLocked(change)
+}
+
+func (m *MemoryStore) recordChangeLocked(change ResourceChange) error {
 	for _, existing := range m.changes {
 		if existing.ID == change.ID && change.ID != "" {
 			return nil
@@ -2173,6 +2302,28 @@ func (m *MemoryStore) SetResourceOperatorState(state ResourceOperatorState) erro
 	return nil
 }
 
+// SetResourceOperatorStateWithMaintenanceLifecycle updates the in-memory
+// source row and derived timeline projection under one lock.
+func (m *MemoryStore) SetResourceOperatorStateWithMaintenanceLifecycle(state ResourceOperatorState) (ResourceOperatorState, error) {
+	state = NormalizeResourceOperatorState(state)
+	if err := ValidateResourceOperatorState(state); err != nil {
+		return ResourceOperatorState{}, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.resourceOperatorState == nil {
+		m.resourceOperatorState = make(map[string]ResourceOperatorState)
+	}
+	previous, previousFound := m.resourceOperatorState[state.CanonicalID]
+	m.resourceOperatorState[state.CanonicalID] = state
+	if change, ok := BuildMaintenanceWindowLifecycleChange(previous, previousFound, state, true, state.SetAt, state.SetBy); ok {
+		if err := m.recordChangeLocked(change); err != nil {
+			return ResourceOperatorState{}, fmt.Errorf("record maintenance window lifecycle change: %w", err)
+		}
+	}
+	return state, nil
+}
+
 // ClearResourceOperatorState removes any operator-set state for the
 // given canonical ID. Returns nil whether or not an entry was present —
 // the operation is idempotent so the API surface can issue
@@ -2185,6 +2336,26 @@ func (m *MemoryStore) ClearResourceOperatorState(canonicalID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.resourceOperatorState, canonicalID)
+	return nil
+}
+
+// ClearResourceOperatorStateWithMaintenanceLifecycle clears the in-memory
+// source row and derived timeline projection under one lock.
+func (m *MemoryStore) ClearResourceOperatorStateWithMaintenanceLifecycle(canonicalID string, observedAt time.Time, actor string) error {
+	canonicalID = strings.TrimSpace(canonicalID)
+	if canonicalID == "" {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	previous, previousFound := m.resourceOperatorState[canonicalID]
+	delete(m.resourceOperatorState, canonicalID)
+	current := ResourceOperatorState{CanonicalID: canonicalID}
+	if change, ok := BuildMaintenanceWindowLifecycleChange(previous, previousFound, current, false, observedAt, actor); ok {
+		if err := m.recordChangeLocked(change); err != nil {
+			return fmt.Errorf("record maintenance window lifecycle change: %w", err)
+		}
+	}
 	return nil
 }
 
