@@ -371,6 +371,18 @@ func (m *Manager) CheckHost(host models.Host) {
 				effectiveDiskThreshold = ensureHysteresisThreshold(diskOverride.Disk)
 			}
 		}
+		// Per-type override: consult DiskFillByType if hardware type is inferable
+		// from the device path and no disk-specific override applied above.
+		if effectiveDiskThreshold == nil && thresholds.Disk != nil && thresholds.Disk.Trigger > 0 {
+			if hwType := inferDiskHardwareType(disk.Device); hwType != "" {
+				m.mu.RLock()
+				if th, ok := m.config.DiskFillByType[hwType]; ok {
+					t := th
+					effectiveDiskThreshold = &t
+				}
+				m.mu.RUnlock()
+			}
+		}
 		// Fall back to host-level threshold
 		if effectiveDiskThreshold == nil {
 			effectiveDiskThreshold = thresholds.Disk
