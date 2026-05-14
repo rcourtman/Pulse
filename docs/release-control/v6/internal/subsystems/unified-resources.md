@@ -327,6 +327,11 @@ AI-only summary payloads, or page-local heuristics.
    REST revalidation after the first-paint settle window so the page can paint
    from live state immediately without forcing a second resource-shape
    transition while summary and table surfaces are still mounting.
+   Org-scope and enabled-state transitions in
+   `frontend-modern/src/hooks/useUnifiedResources.ts` must invalidate older
+   in-flight REST refreshes before publishing the new scoped cache entry, so a
+   stale request cannot set active-scope errors, clear the active request guard,
+   or replace the currently mounted Infrastructure/Workloads resource snapshot.
    Canonical cluster membership in that shared path must come only from
    explicit cluster identity such as Kubernetes context or platform cluster
    labels; standalone resource names must never be repurposed as synthetic

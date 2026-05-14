@@ -1121,13 +1121,16 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     const requestVersion = scopeVersion;
     const entryForRequest = cacheEntry;
     const request = (async () => {
+      const isCurrentRequest = () =>
+        requestVersion === scopeVersion && entryForRequest === cacheEntry && enabled();
+
       try {
         const fetched = await fetchUnifiedResourcesShared(
           entryForRequest,
           query,
           shouldForceNetwork,
         );
-        if (requestVersion !== scopeVersion || entryForRequest !== cacheEntry) {
+        if (!isCurrentRequest()) {
           return resources as unknown as Resource[];
         }
         batch(() => {
@@ -1136,13 +1139,15 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
         });
         return fetched;
       } catch (err) {
-        if (!background) {
+        if (!background && isCurrentRequest()) {
           setError(err);
         }
         throw err;
       } finally {
-        inFlightRefetch = null;
-        if (shouldShowLoading) {
+        if (inFlightRefetch === request) {
+          inFlightRefetch = null;
+        }
+        if (shouldShowLoading && isCurrentRequest()) {
           setLoading(false);
         }
       }
@@ -1247,6 +1252,8 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     orgScope();
 
     if (!enabled()) {
+      scopeVersion += 1;
+      inFlightRefetch = null;
       clearInitialHydrationTimeout();
       clearCanonicalRevalidationTimeout();
       clearRefreshTimeout();
@@ -1389,21 +1396,24 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     }
 
     scopeVersion += 1;
-    blockedWsHydrationToken = supportsCanonicalWsHydration
-      ? String(wsStore.state.lastUpdate ?? '')
-      : null;
-    setOrgScope(nextOrgScope);
-    cacheEntry = seedUnifiedResourcesCacheFromAllResources(
-      getUnifiedResourcesCacheEntry(resolveScopedCacheKey()),
+    const nextCacheEntry = seedUnifiedResourcesCacheFromAllResources(
+      getUnifiedResourcesCacheEntry(
+        buildScopedUnifiedResourcesCacheKey(cacheKey, nextOrgScope),
+      ),
       cacheKey,
       query,
       nextOrgScope,
     );
+    blockedWsHydrationToken = supportsCanonicalWsHydration
+      ? String(wsStore.state.lastUpdate ?? '')
+      : null;
+    cacheEntry = nextCacheEntry;
     inFlightRefetch = null;
     wsInitialized = false;
     lastWsUpdateToken = '';
     clearInitialHydrationTimeout();
     clearCanonicalRevalidationTimeout();
+    setOrgScope(nextOrgScope);
 
     const scopedResources = cacheEntry.resources;
     const scopedPolicyPosture = cacheEntry.policyPosture;

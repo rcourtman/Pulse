@@ -119,6 +119,22 @@ const waitForValue = async <T>(readValue: () => T, expected: T) => {
   throw new Error(`Timed out waiting for expected value: ${String(expected)}`);
 };
 
+const deferred = <T>() => {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+};
+
+const resourceResponse = (data: unknown[]) => ({
+  ok: true,
+  status: 200,
+  json: async () => ({ data }),
+});
+
 describe('useUnifiedResources', () => {
   let apiFetchMock: ReturnType<typeof vi.fn>;
   let setWsState: SetStoreFunction<TestWsState>;
@@ -1720,6 +1736,55 @@ describe('useUnifiedResources', () => {
 
     expect(apiFetchMock).toHaveBeenCalledTimes(2);
     expect(result!.resources()[0]?.id).toBe('node-1');
+
+    dispose();
+  });
+
+  it('ignores stale refetch errors and keeps the active scope request guard', async () => {
+    const staleDefaultRequest = deferred<ReturnType<typeof resourceResponse>>();
+    const activeTenantRequest = deferred<ReturnType<typeof resourceResponse>>();
+    apiFetchMock
+      .mockImplementationOnce(() => staleDefaultRequest.promise)
+      .mockImplementationOnce(() => activeTenantRequest.promise);
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(result!.loading()).toBe(true);
+
+    eventBus.emit('org_switched', 'tenant-b');
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+
+    staleDefaultRequest.reject(new Error('stale default-scope refresh failed'));
+    await flushAsync();
+
+    expect(result!.error()).toBeUndefined();
+    expect(result!.loading()).toBe(true);
+
+    void result!.refetch().catch(() => undefined);
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+
+    activeTenantRequest.resolve(
+      resourceResponse([
+        {
+          ...v2Resource,
+          id: 'tenant-node',
+          name: 'tenant-node',
+        },
+      ]),
+    );
+    await waitForValue(() => result!.resources()[0]?.id, 'tenant-node');
+
+    expect(result!.error()).toBeUndefined();
+    expect(result!.loading()).toBe(false);
 
     dispose();
   });

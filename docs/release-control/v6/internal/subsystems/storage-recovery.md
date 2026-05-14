@@ -375,6 +375,10 @@ bypass the API fail-closed execution gate.
    connected-system continuity only with delayed canonical REST revalidation;
    storage and recovery routes must continue to require canonical REST first
    unless their own contract is updated with equivalent shape-stability proof.
+   The shared `useUnifiedResources()` scope lifecycle is also a stability
+   boundary for storage/recovery consumers: org-scope or enabled-state changes
+   must invalidate stale in-flight REST refreshes before their errors or
+   request-guard cleanup can leak into the active resource snapshot.
    Shared chart transports in `internal/api/router.go` must follow the same
    rule in mock mode: `/api/storage-charts` and adjacent infrastructure chart
    payloads must read through `GetUnifiedReadStateOrSnapshot()` so storage and
