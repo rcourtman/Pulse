@@ -3726,8 +3726,9 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateS
 		}
 	}
 	unifiedView := m.currentUnifiedStateView()
+	metricsTargetResolver := broadcastMetricsTargetResolver(unifiedView.readState)
 	broadcastResources := coalesceBroadcastResources(unifiedView.resources)
-	frontendState.Resources = convertResourcesForBroadcast(broadcastResources)
+	frontendState.Resources = convertResourcesForBroadcast(broadcastResources, metricsTargetResolver)
 	frontendState.ConnectedInfrastructure = buildConnectedInfrastructure(broadcastResources, snapshot)
 	if !unifiedView.freshness.IsZero() {
 		frontendState.LastUpdate = unifiedView.freshness.UnixMilli()
@@ -4898,7 +4899,13 @@ func (m *Monitor) getUnifiedResourcesForBroadcast() []unifiedresources.Resource 
 // getResourcesForBroadcast retrieves all resources from the store and converts
 // them to frontend format.
 func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
-	return convertResourcesForBroadcast(m.getUnifiedResourcesForBroadcast())
+	m.mu.RLock()
+	store := m.resourceStore
+	m.mu.RUnlock()
+	return convertResourcesForBroadcast(
+		m.getUnifiedResourcesForBroadcast(),
+		broadcastMetricsTargetResolver(store),
+	)
 }
 
 func coalesceBroadcastResources(resources []unifiedresources.Resource) []unifiedresources.Resource {
@@ -5215,10 +5222,17 @@ func betterBroadcastStatus(left, right unifiedresources.ResourceStatus) unifiedr
 }
 
 // convertResourcesForBroadcast converts unified resources into the frontend payload shape.
-func convertResourcesForBroadcast(allResources []unifiedresources.Resource) []models.ResourceFrontend {
+func convertResourcesForBroadcast(
+	allResources []unifiedresources.Resource,
+	metricsTargetResolvers ...MetricsTargetResourceStore,
+) []models.ResourceFrontend {
 	if len(allResources) == 0 {
 		return []models.ResourceFrontend{}
 	}
+	allResources = attachBroadcastMetricsTargets(
+		allResources,
+		firstBroadcastMetricsTargetResolver(metricsTargetResolvers),
+	)
 	allResources = coalesceBroadcastResources(allResources)
 	type broadcastResource struct {
 		input      models.ResourceConvertInput
@@ -5252,6 +5266,62 @@ func convertResourcesForBroadcast(allResources []unifiedresources.Resource) []mo
 		result[i] = models.ConvertResourceToFrontend(resource.input)
 	}
 	return result
+}
+
+func broadcastMetricsTargetResolver(source interface{}) MetricsTargetResourceStore {
+	resolver, ok := source.(MetricsTargetResourceStore)
+	if !ok {
+		return nil
+	}
+	return resolver
+}
+
+func firstBroadcastMetricsTargetResolver(
+	resolvers []MetricsTargetResourceStore,
+) MetricsTargetResourceStore {
+	for _, resolver := range resolvers {
+		if resolver != nil {
+			return resolver
+		}
+	}
+	return nil
+}
+
+func attachBroadcastMetricsTargets(
+	resources []unifiedresources.Resource,
+	resolver MetricsTargetResourceStore,
+) []unifiedresources.Resource {
+	if len(resources) == 0 || resolver == nil {
+		return resources
+	}
+
+	out := make([]unifiedresources.Resource, len(resources))
+	for i, resource := range resources {
+		if resource.MetricsTarget == nil {
+			resource.MetricsTarget = validBroadcastMetricsTarget(
+				resolver.MetricsTargetForResource(resource.ID),
+			)
+		}
+		out[i] = resource
+	}
+	return out
+}
+
+func validBroadcastMetricsTarget(
+	target *unifiedresources.MetricsTarget,
+) *unifiedresources.MetricsTarget {
+	if target == nil {
+		return nil
+	}
+	resourceType := strings.TrimSpace(target.ResourceType)
+	resourceID := strings.TrimSpace(target.ResourceID)
+	if resourceType == "" || resourceID == "" {
+		return nil
+	}
+	return &unifiedresources.MetricsTarget{
+		ResourceType: resourceType,
+		ResourceID:   resourceID,
+	}
 }
 
 func monitorResourceToConvertInput(resource unifiedresources.Resource) models.ResourceConvertInput {

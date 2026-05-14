@@ -152,6 +152,86 @@ func TestConvertResourcesForBroadcastCoalescesSplitHostResources(t *testing.T) {
 	}
 }
 
+func TestConvertResourcesForBroadcastAttachesResolvedStorageMetricsTarget(t *testing.T) {
+	now := time.Date(2026, 5, 14, 10, 45, 0, 0, time.UTC)
+	agentID := "de6d3fee-2595-6c2b-6b08-43db6b0ab427"
+	storageID := "storage-2642e9fca16b2f87"
+	parentID := agentID
+	total := int64(24_000_000_000_000)
+	used := int64(16_900_000_000_000)
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestResources([]unifiedresources.Resource{
+		{
+			ID:       agentID,
+			Type:     unifiedresources.ResourceTypeAgent,
+			Name:     "Tower",
+			Status:   unifiedresources.StatusOnline,
+			LastSeen: now,
+			Sources:  []unifiedresources.DataSource{unifiedresources.SourceAgent},
+			Agent: &unifiedresources.AgentData{
+				AgentID:  agentID,
+				Hostname: "Tower",
+			},
+		},
+		{
+			ID:       storageID,
+			Type:     unifiedresources.ResourceTypeStorage,
+			Name:     "Tower Array",
+			Status:   unifiedresources.StatusWarning,
+			LastSeen: now,
+			Sources:  []unifiedresources.DataSource{unifiedresources.SourceAgent},
+			ParentID: &parentID,
+			Metrics: &unifiedresources.ResourceMetrics{
+				Disk: &unifiedresources.MetricValue{
+					Used:    &used,
+					Total:   &total,
+					Percent: 70.4,
+					Unit:    "bytes",
+					Source:  unifiedresources.SourceAgent,
+				},
+			},
+			Storage: &unifiedresources.StorageMeta{
+				Type:     "unraid-array",
+				Platform: "unraid",
+				Topology: "array",
+			},
+		},
+	})
+	adapter := unifiedresources.NewMonitorAdapter(registry)
+
+	frontend := convertResourcesForBroadcast(adapter.GetAll(), adapter)
+
+	var storagePayload struct {
+		ID            string `json:"id"`
+		MetricsTarget struct {
+			ResourceType string `json:"resourceType"`
+			ResourceID   string `json:"resourceId"`
+		} `json:"metricsTarget"`
+	}
+	for _, resource := range frontend {
+		if resource.ID != storageID {
+			continue
+		}
+		encoded, err := json.Marshal(resource)
+		if err != nil {
+			t.Fatalf("marshal storage frontend resource: %v", err)
+		}
+		if err := json.Unmarshal(encoded, &storagePayload); err != nil {
+			t.Fatalf("unmarshal storage frontend resource: %v", err)
+		}
+		break
+	}
+
+	if storagePayload.ID != storageID {
+		t.Fatalf("expected storage resource %q in frontend payload, got %q", storageID, storagePayload.ID)
+	}
+	if storagePayload.MetricsTarget.ResourceType != "storage" ||
+		storagePayload.MetricsTarget.ResourceID != agentID+"/storage:unraid-array" {
+		t.Fatalf("metrics target = %+v", storagePayload.MetricsTarget)
+	}
+}
+
 func hasFrontendResourceName(resources []models.ResourceFrontend, name string) bool {
 	for _, resource := range resources {
 		if resource.Name == name {

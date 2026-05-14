@@ -222,10 +222,12 @@ func TestBroadcastResourceProjectionCoalescesSplitHostIdentities(t *testing.T) {
 	source := string(data)
 
 	for _, snippet := range []string{
+		"metricsTargetResolver := broadcastMetricsTargetResolver(unifiedView.readState)",
 		"broadcastResources := coalesceBroadcastResources(unifiedView.resources)",
-		"frontendState.Resources = convertResourcesForBroadcast(broadcastResources)",
+		"frontendState.Resources = convertResourcesForBroadcast(broadcastResources, metricsTargetResolver)",
 		"frontendState.ConnectedInfrastructure = buildConnectedInfrastructure(broadcastResources, snapshot)",
 		"func coalesceBroadcastResources(resources []unifiedresources.Resource) []unifiedresources.Resource {",
+		"func attachBroadcastMetricsTargets(",
 		"func shouldMergeBroadcastHostResources(left, right unifiedresources.Resource) bool {",
 		"broadcastHasSource(sources, unifiedresources.SourceAgent) && broadcastHasRuntimePlatformSource(sources)",
 	} {

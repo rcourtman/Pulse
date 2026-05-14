@@ -196,7 +196,13 @@ carry the canonical `Resource.Sources` array onto `ResourceFrontend` and
 source/facet instead of treating the `storage` resource type as Proxmox by
 default. Appliance presentation details such as Unraid array identity may remain
 inside storage metadata, but agent-backed storage must stay canonical
-`platformType=agent`.
+`platformType=agent`. That same broadcast resource contract owns resolved
+metrics targets. Monitoring must enrich broadcast/state `ResourceFrontend`
+payloads from the active metrics-target read-state before serialization so
+`/api/state` and websocket consumers use the same canonical metrics history IDs
+as `/api/resources`; storage resources must not fall back to generated
+`Resource.ID` values when the unified resource registry can resolve a
+source-owned `storage` target.
 Unraid ingest must preserve the agent's native disk topology fields through the
 monitoring model and read-state projection. `internal/monitoring/monitor_agents.go`
 and `internal/monitoring/monitor.go` must carry model, transport, filesystem,
