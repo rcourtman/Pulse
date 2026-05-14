@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { aiChatStore } from '@/stores/aiChat';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
+import type { PatrolRunRecord } from '@/api/patrol';
 import { PatrolIntelligenceSummary } from '../PatrolIntelligenceSummary';
 import type { PatrolIntelligenceState } from '../usePatrolIntelligenceState';
 
@@ -182,21 +183,16 @@ describe('PatrolIntelligenceSummary', () => {
         },
       }),
       manualRunRequested: () => false,
-      patrolRunHistory: {
-        value: () => [
-          {
-            id: 'run-scoped-1',
-            started_at: '2026-05-06T12:00:00Z',
-            completed_at: '2026-05-06T12:01:00Z',
-            type: 'scoped',
-            status: 'error',
-            resources_checked: 0,
-            new_findings: 0,
-            error_count: 1,
-            finding_ids: [],
-          },
-        ],
-      },
+      patrolRunHistory: makePatrolRunHistory([
+        makePatrolRunRecord({
+          id: 'run-scoped-1',
+          started_at: '2026-05-06T12:00:00Z',
+          completed_at: '2026-05-06T12:01:00Z',
+          type: 'scoped',
+          status: 'error',
+          error_count: 1,
+        }),
+      ]),
       patrolStream: {
         phase: () => 'Running',
         currentTool: () => '',
@@ -364,21 +360,17 @@ function createPatrolState(): PatrolIntelligenceState {
       '2 recent changes · 2 correlations · 4 policy-covered resources',
     handleRunPatrol: vi.fn(),
     manualRunRequested: () => false,
-    patrolRunHistory: {
-      value: () => [
-        {
-          id: 'run-1',
-          started_at: '2026-05-06T12:00:00Z',
-          completed_at: '2026-05-06T12:10:00Z',
-          type: 'full',
-          status: 'issues_found',
-          resources_checked: 12,
-          new_findings: 1,
-          error_count: 0,
-          finding_ids: ['finding-1'],
-        },
-      ],
-    },
+    patrolRunHistory: makePatrolRunHistory([
+      makePatrolRunRecord({
+        id: 'run-1',
+        started_at: '2026-05-06T12:00:00Z',
+        completed_at: '2026-05-06T12:10:00Z',
+        status: 'issues_found',
+        resources_checked: 12,
+        new_findings: 1,
+        finding_ids: ['finding-1'],
+      }),
+    ]),
     patrolStatus: () => ({
       last_patrol_at: '2026-05-06T12:10:00Z',
       last_activity_at: '2026-05-06T12:10:00Z',
@@ -433,4 +425,48 @@ function createPatrolState(): PatrolIntelligenceState {
     }),
     triggerPatrolDisabledReason: () => '',
   } as unknown as PatrolIntelligenceState;
+}
+
+function makePatrolRunRecord(overrides: Partial<PatrolRunRecord>): PatrolRunRecord {
+  return {
+    id: 'run-1',
+    started_at: '2026-05-06T12:00:00Z',
+    completed_at: '2026-05-06T12:10:00Z',
+    duration_ms: 600000,
+    type: 'full',
+    resources_checked: 0,
+    nodes_checked: 0,
+    guests_checked: 0,
+    docker_checked: 0,
+    storage_checked: 0,
+    hosts_checked: 0,
+    truenas_checked: 0,
+    pbs_checked: 0,
+    pmg_checked: 0,
+    kubernetes_checked: 0,
+    new_findings: 0,
+    existing_findings: 0,
+    rejected_findings: 0,
+    resolved_findings: 0,
+    auto_fix_count: 0,
+    findings_summary: '',
+    finding_ids: [],
+    error_count: 0,
+    status: 'healthy',
+    triage_flags: 0,
+    tool_call_count: 0,
+    ...overrides,
+  };
+}
+
+function makePatrolRunHistory(
+  runs: PatrolRunRecord[],
+): PatrolIntelligenceState['patrolRunHistory'] {
+  return {
+    error: () => null,
+    loading: () => false,
+    refetch: vi.fn(async () => runs),
+    resolvedOnce: () => true,
+    value: () => runs,
+  };
 }
