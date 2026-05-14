@@ -1175,7 +1175,7 @@ describe('AIIntelligence entitlement gating', () => {
     });
 
     expect(screen.queryByText('No issues found')).not.toBeInTheDocument();
-    expect(screen.getByTestId('patrol-recommended-next-step')).toHaveTextContent(
+    expect(screen.getByTestId('patrol-summary-details')).toHaveTextContent(
       'Run a full Patrol sweep before treating this assessment as an all-clear; recent evidence is incomplete or limited to targeted activity.',
     );
     expect(screen.queryByText(/Last patrol/i)).not.toBeInTheDocument();
@@ -1336,11 +1336,6 @@ describe('AIIntelligence entitlement gating', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Patrol runtime issue')).toBeInTheDocument();
-      expect(
-        screen.getByText(
-          'Patrol has an active runtime issue: Provider billing or quota issue. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
-        ),
-      ).toBeInTheDocument();
     });
 
     // "Runtime issues" and "Latest activity" both live in the collapsible
@@ -1348,6 +1343,11 @@ describe('AIIntelligence entitlement gating', () => {
     fireEvent.click(screen.getByTestId('patrol-summary-details-toggle'));
 
     await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Patrol has an active runtime issue: Provider billing or quota issue. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
+        ),
+      ).toBeInTheDocument();
       expect(screen.getByText('Runtime issues')).toBeInTheDocument();
       expect(screen.getByText('Latest activity')).toBeInTheDocument();
     });
@@ -1469,12 +1469,11 @@ describe('AIIntelligence entitlement gating', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/verified 58 resources/i)).toBeInTheDocument();
-      expect(
-        screen.getByText(
-          'Patrol surfaced 1 active warning finding in your infrastructure. Review the active findings for more detail.',
-        ),
-      ).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByTestId('patrol-summary-details-toggle'));
+    expect(screen.getByTestId('patrol-summary-details')).toHaveTextContent(
+      'Patrol surfaced 1 active warning finding in your infrastructure. Review the active findings for more detail.',
+    );
 
     expect(
       screen.queryByText(

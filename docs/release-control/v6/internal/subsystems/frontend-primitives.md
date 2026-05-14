@@ -242,8 +242,9 @@ their governed presentation helpers and render them inside the shared neutral
 Pulse surface language rather than introducing page-local verdict bands or
 nested cards. Patrol's primary recommended next step follows this boundary:
 the Patrol helper owns the decision text, while the section component only
-renders a compact inline accent and one bounded action inside the existing
-assessment shell. Feature-owned recommendation actions may use the shared
+renders the compact default next-step title and one bounded action inside the
+existing assessment shell, with detail copy deferred to the section's details
+expansion. Feature-owned recommendation actions may use the shared
 button/link shape, but they must not create a second full-width action band or
 nest another card inside the primary Pulse surface. If the same assessment
 opens Assistant, the Patrol-to-Assistant handoff must carry that exact
@@ -1677,6 +1678,9 @@ The same hierarchy also applies inside the Patrol summary shell: once the
 primary assessment strip states Patrol's current risk and verification basis,
 supporting metrics under that strip must stay metric-oriented and must not
 repeat assessment or verification labels as a second compact verdict row.
+The collapsed Patrol assessment strip itself must remain a compact readout
+rather than a headline-plus-paragraph block; explanatory assessment and
+recommendation copy belongs behind the summary details expansion.
 That same summary shell should also keep the shared Pulse surface neutral:
 severity belongs in compact accents, inline readouts, and badges rather than
 turning the whole assessment into a tinted warning banner, nested card, or

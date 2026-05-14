@@ -55,7 +55,7 @@ describe('PatrolIntelligenceSummary', () => {
     expect(screen.getByTestId('patrol-recommended-next-step').textContent).toContain(
       'Review the pending Patrol approval',
     );
-    expect(screen.getByTestId('patrol-recommended-next-step').textContent).toContain(
+    expect(screen.getByTestId('patrol-summary-details').textContent).toContain(
       'risk, dry-run posture, and expiry',
     );
 

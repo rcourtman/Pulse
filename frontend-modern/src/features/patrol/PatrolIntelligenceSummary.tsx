@@ -173,6 +173,34 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       pendingApprovalCount: aiIntelligenceStore.patrolPendingApprovals.length,
     }),
   );
+  const compactRiskSummary = createMemo(() => {
+    const stats = summaryStats();
+    const parts: string[] = [];
+    const hasRuntimeIssues =
+      metricState().secondaryLabel === 'Runtime issues' && metricState().secondaryValue > 0;
+
+    if (stats.criticalFindings > 0) {
+      parts.push(`${stats.criticalFindings} critical`);
+    }
+
+    if (stats.warningFindings > 0 && !hasRuntimeIssues) {
+      parts.push(`${stats.warningFindings} warning`);
+    }
+
+    if (hasRuntimeIssues) {
+      parts.push(
+        `${metricState().secondaryValue} runtime ${
+          metricState().secondaryValue === 1 ? 'issue' : 'issues'
+        }`,
+      );
+    }
+
+    if (parts.length === 0 && stats.totalActive > 0) {
+      parts.push(`${stats.totalActive} active`);
+    }
+
+    return parts.join(' · ');
+  });
   const recommendedNextStepAction = createMemo(() => recommendedNextStep().action);
   const recommendedNextStepActionDisabled = createMemo(() => {
     const action = recommendedNextStepAction();
@@ -382,85 +410,80 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       <Show when={!showRuntimeSummary() && !showLoadingSummary()}>
         <Show when={state.intelligenceSummary()}>
           {(summary) => (
-            <section class="border-y border-border-subtle py-3">
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div class="min-w-0 flex-1">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <span
-                      class={`h-2 w-2 rounded-full ${getPatrolAssessmentDotClass(assessment().tone)}`}
-                      aria-hidden="true"
-                    />
-                    <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+            <section class="border-y border-border-subtle py-2">
+              <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                <div class="min-w-0 space-y-1">
+                  <div class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
+                    <span class="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
                       {assessment().eyebrow}
-                    </p>
-                  </div>
-
-                  <h2 class="mt-2 text-base font-semibold text-base-content">
-                    {assessment().title}
-                  </h2>
-                  <p class="mt-1 max-w-4xl text-sm leading-6 text-muted">
-                    {assessment().description}
-                  </p>
-
-                  <div
-                    data-testid="patrol-recommended-next-step"
-                    class={`mt-3 flex flex-col gap-2 border-l-2 pl-3 sm:flex-row sm:items-center ${getPatrolRecommendedNextStepAccentClass(recommendedNextStep().tone)}`}
-                  >
-                    <p class="min-w-0 flex-1 text-sm leading-6 text-muted">
-                      <span class="font-semibold text-base-content">Next:</span>{' '}
-                      <span class="font-semibold text-base-content">
-                        {recommendedNextStep().title}
-                      </span>
-                      <span> - {recommendedNextStep().description}</span>
-                    </p>
-                    <Show when={recommendedNextStepAction()}>
-                      {(action) => (
-                        <Show
-                          when={action().href}
-                          fallback={
-                            <button
-                              type="button"
-                              data-testid="patrol-recommended-next-step-action"
-                              disabled={recommendedNextStepActionDisabled()}
-                              title={
-                                action().kind === 'run_patrol'
-                                  ? state.triggerPatrolDisabledReason()
-                                  : undefined
-                              }
-                              class="inline-flex shrink-0 items-center gap-1.5 rounded border border-border-subtle bg-transparent px-2.5 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover disabled:text-muted"
-                              onClick={() => handleRecommendedNextStepAction(action())}
-                            >
-                              {renderRecommendedNextStepActionIcon(
-                                action(),
-                                state.isTriggeringPatrol() ||
-                                  state.manualRunRequested() ||
-                                  state.patrolStream.isStreaming(),
-                              )}
-                              <span>{recommendedNextStepActionLabel()}</span>
-                            </button>
-                          }
-                        >
-                          {(href) => (
-                            <a
-                              href={href()}
-                              data-testid="patrol-recommended-next-step-action"
-                              class="inline-flex shrink-0 items-center gap-1.5 rounded border border-border-subtle bg-transparent px-2.5 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover"
-                            >
-                              {renderRecommendedNextStepActionIcon(action(), false)}
-                              <span>{action().label}</span>
-                            </a>
-                          )}
-                        </Show>
+                    </span>
+                    <span class="font-semibold text-base-content">
+                      {scoreChipLabel()} {summary().overall_health.grade} ·{' '}
+                      {Math.round(summary().overall_health.score)}/100
+                    </span>
+                    <span class="font-semibold text-base-content">{assessment().title}</span>
+                    <Show when={compactRiskSummary()}>
+                      {(riskSummary) => (
+                        <>
+                          <span class="text-muted" aria-hidden="true">
+                            ·
+                          </span>
+                          <span class="text-muted">{riskSummary()}</span>
+                        </>
                       )}
                     </Show>
                   </div>
+
+                  <div
+                    data-testid="patrol-recommended-next-step"
+                    class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted"
+                  >
+                    <span class="font-medium text-base-content">Next:</span>
+                    <span class="font-medium text-base-content">{recommendedNextStep().title}</span>
+                  </div>
                 </div>
 
-                <div class="flex shrink-0 flex-wrap items-center gap-3 sm:justify-end">
-                  <p class="text-sm font-semibold text-base-content">
-                    {scoreChipLabel()} {summary().overall_health.grade} ·{' '}
-                    {Math.round(summary().overall_health.score)}/100
-                  </p>
+                <div class="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
+                  <Show when={recommendedNextStepAction()}>
+                    {(action) => (
+                      <Show
+                        when={action().href}
+                        fallback={
+                          <button
+                            type="button"
+                            data-testid="patrol-recommended-next-step-action"
+                            disabled={recommendedNextStepActionDisabled()}
+                            title={
+                              action().kind === 'run_patrol'
+                                ? state.triggerPatrolDisabledReason()
+                                : undefined
+                            }
+                            class="inline-flex shrink-0 items-center gap-1.5 rounded border border-border-subtle bg-transparent px-2.5 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover disabled:text-muted"
+                            onClick={() => handleRecommendedNextStepAction(action())}
+                          >
+                            {renderRecommendedNextStepActionIcon(
+                              action(),
+                              state.isTriggeringPatrol() ||
+                                state.manualRunRequested() ||
+                                state.patrolStream.isStreaming(),
+                            )}
+                            <span>{recommendedNextStepActionLabel()}</span>
+                          </button>
+                        }
+                      >
+                        {(href) => (
+                          <a
+                            href={href()}
+                            data-testid="patrol-recommended-next-step-action"
+                            class="inline-flex shrink-0 items-center gap-1.5 rounded border border-border-subtle bg-transparent px-2.5 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover"
+                          >
+                            {renderRecommendedNextStepActionIcon(action(), false)}
+                            <span>{action().label}</span>
+                          </a>
+                        )}
+                      </Show>
+                    )}
+                  </Show>
                   <button
                     type="button"
                     data-testid="patrol-summary-details-toggle"
@@ -481,8 +504,29 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
               </div>
 
               <Show when={state.summaryDetailsExpanded()}>
-                <div id="patrol-summary-details" class="mt-4 border-t border-border-subtle pt-4">
-                  <div class="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+                <div
+                  id="patrol-summary-details"
+                  data-testid="patrol-summary-details"
+                  class="mt-3 border-t border-border-subtle pt-3"
+                >
+                  <div class="grid gap-4 lg:grid-cols-3">
+                    <div>
+                      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+                        Assessment
+                      </p>
+                      <p class="mt-1 text-sm font-medium text-base-content">{assessment().title}</p>
+                      <p class="mt-1 text-sm text-muted">{assessment().description}</p>
+                      <div class="mt-3">
+                        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+                          Recommended next step
+                        </p>
+                        <p class="mt-1 text-sm font-medium text-base-content">
+                          {recommendedNextStep().title}
+                        </p>
+                        <p class="mt-1 text-sm text-muted">{recommendedNextStep().description}</p>
+                      </div>
+                    </div>
+
                     <div>
                       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
                         Verification
@@ -628,36 +672,6 @@ function buildPatrolAssessmentApprovalProposedFixBriefing(approval: ApprovalRequ
     targetHost: approval.targetName,
     commandCount: approval.command ? 1 : 0,
   });
-}
-
-function getPatrolRecommendedNextStepAccentClass(
-  tone: ReturnType<typeof getPatrolRecommendedNextStepPresentation>['tone'],
-) {
-  switch (tone) {
-    case 'success':
-      return 'border-emerald-400 dark:border-emerald-500';
-    case 'warning':
-      return 'border-amber-400 dark:border-amber-500';
-    case 'error':
-      return 'border-red-400 dark:border-red-500';
-    default:
-      return 'border-blue-400 dark:border-blue-500';
-  }
-}
-
-function getPatrolAssessmentDotClass(
-  tone: ReturnType<typeof getPatrolAssessmentPresentation>['tone'],
-) {
-  switch (tone) {
-    case 'success':
-      return 'bg-emerald-500';
-    case 'warning':
-      return 'bg-amber-500';
-    case 'error':
-      return 'bg-red-500';
-    default:
-      return 'bg-blue-500';
-  }
 }
 
 function renderRecommendedNextStepActionIcon(

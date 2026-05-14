@@ -409,11 +409,13 @@ Patrol-specific presentation helpers.
    frame Assistant as explanation and next-step review rather than execution or
    automatic retry authority.
 9. Keep the normal Patrol assessment summary plain and operator-first rather
-   than a hero-style or decorative card surface. The default collapsed state
-   should show the Patrol assessment, score, concise current-risk copy, one
-   recommended next step, and one route-owned action. Verification detail,
-   supporting metrics, and whole-assessment Assistant discussion belong behind
-   the details expansion unless Assistant itself is the recommended action.
+   than a hero-style or decorative card surface. The default collapsed state is
+   a compact readout, not a headline block: show the Patrol assessment label,
+   score, concise current-risk copy, one recommended next-step title, and one
+   route-owned action. Assessment explanation, recommendation detail,
+   verification detail, supporting metrics, and whole-assessment Assistant
+   discussion belong behind the details expansion unless Assistant itself is
+   the recommended action.
 
 ## Current State
 
