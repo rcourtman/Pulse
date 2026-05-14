@@ -171,6 +171,27 @@ func TestBroadcastResourceProjectionPreservesCanonicalHealthContext(t *testing.T
 	}
 }
 
+func TestBroadcastResourceProjectionCoalescesSplitHostIdentities(t *testing.T) {
+	data, err := os.ReadFile("monitor.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor.go: %v", err)
+	}
+	source := string(data)
+
+	for _, snippet := range []string{
+		"broadcastResources := coalesceBroadcastResources(unifiedView.resources)",
+		"frontendState.Resources = convertResourcesForBroadcast(broadcastResources)",
+		"frontendState.ConnectedInfrastructure = buildConnectedInfrastructure(broadcastResources, snapshot)",
+		"func coalesceBroadcastResources(resources []unifiedresources.Resource) []unifiedresources.Resource {",
+		"func shouldMergeBroadcastHostResources(left, right unifiedresources.Resource) bool {",
+		"broadcastHasSource(sources, unifiedresources.SourceAgent) && broadcastHasRuntimePlatformSource(sources)",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestMetricsStoreRuntimeOverridesStayOnMonitorBoundary(t *testing.T) {
 	data, err := os.ReadFile("monitor.go")
 	if err != nil {

@@ -16,6 +16,7 @@ export type EventType =
 // Event data types
 export interface NodeAutoRegisteredData {
   type: string;
+  source?: string;
   host: string;
   name: string;
   tokenId: string;

@@ -789,6 +789,7 @@ func buildAutoRegisterEventData(req *AutoRegisterRequest, host string, actualNam
 
 	return map[string]interface{}{
 		"type":      req.Type,
+		"source":    req.Source,
 		"host":      host,
 		"name":      eventName,
 		"nodeId":    eventName,

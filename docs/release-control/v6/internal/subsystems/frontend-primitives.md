@@ -1740,7 +1740,14 @@ The infrastructure feature state owner may opt into websocket-first unified
 resource hydration only when it also schedules canonical REST revalidation
 after the first-paint settle window; shared route composition must not re-route
 the table through a blocking resource fetch just to confirm infrastructure that
-the realtime store has already reported.
+the realtime store has already reported. Authenticated cold starts must render
+from retained realtime or unified-resource state without falling back to
+first-run/welcome posture or replaying stale setup success notifications, and
+background revalidation may update rows in place but may not blank the page.
+Realtime resource adapters must defensively coalesce split host identities by
+the same source-bridge rule as the API boundary so a transient backend rebuild
+cannot surface duplicate infrastructure rows while the next canonical REST
+snapshot is settling.
 Infrastructure summary and detail surfaces now also use the shared normalized
 identity lookup helper from `frontend-modern/src/utils/resourceIdentity.ts`
 so dotted hostnames and alias variants stay consistent between the shared

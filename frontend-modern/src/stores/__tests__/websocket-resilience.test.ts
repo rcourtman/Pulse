@@ -192,6 +192,7 @@ describe('websocket store resilience', () => {
         timestamp: '2026-05-14T08:00:00.000Z',
         data: {
           type: 'pve',
+          source: 'script',
           host: 'https://minipc:8006',
           name: 'minipc',
           nodeId: 'minipc',
@@ -225,6 +226,62 @@ describe('websocket store resilience', () => {
           timestamp: '2026-05-14T07:50:00.000Z',
           data: {
             type: 'pve',
+            host: 'https://minipc:8006',
+            name: 'minipc',
+            nodeId: 'minipc',
+            tokenId: 'pulse-monitor@pve!pulse-minipc',
+            hasToken: true,
+          },
+        }),
+      } as MessageEvent);
+
+      expect(notificationMocks.success).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('suppresses auto-registration notifications that predate the websocket session', async () => {
+    const { dispose } = await createStoreHarness();
+    try {
+      vi.advanceTimersByTime(1);
+      expect(currentInstance).not.toBeNull();
+
+      currentInstance!.onmessage?.({
+        data: JSON.stringify({
+          type: 'node_auto_registered',
+          timestamp: '2026-05-14T07:59:30.000Z',
+          data: {
+            type: 'pve',
+            source: 'script',
+            host: 'https://minipc:8006',
+            name: 'minipc',
+            nodeId: 'minipc',
+            tokenId: 'pulse-monitor@pve!pulse-minipc',
+            hasToken: true,
+          },
+        }),
+      } as MessageEvent);
+
+      expect(notificationMocks.success).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('suppresses background agent auto-registration success notifications', async () => {
+    const { dispose } = await createStoreHarness();
+    try {
+      vi.advanceTimersByTime(1);
+      expect(currentInstance).not.toBeNull();
+
+      currentInstance!.onmessage?.({
+        data: JSON.stringify({
+          type: 'node_auto_registered',
+          timestamp: '2026-05-14T08:00:00.000Z',
+          data: {
+            type: 'pve',
+            source: 'agent',
             host: 'https://minipc:8006',
             name: 'minipc',
             nodeId: 'minipc',

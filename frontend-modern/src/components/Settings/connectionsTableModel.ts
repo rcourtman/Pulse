@@ -843,7 +843,12 @@ export const fleetGovernanceSignalsForConnection = (
 export const visibleFleetGovernanceSignals = (
   signals: readonly FleetGovernanceSignal[],
 ): FleetGovernanceSignal[] => {
-  const visibleSignals = signals.filter((signal) => !isPassiveAgentConfigConfirmationSignal(signal));
+  const hasPassiveAgentConfigConfirmation = signals.some(isPassiveAgentConfigConfirmationSignal);
+  const visibleSignals = signals.filter(
+    (signal) =>
+      !isPassiveAgentConfigConfirmationSignal(signal) &&
+      !isPassiveAgentRolloutConfirmationFallbackSignal(signal, hasPassiveAgentConfigConfirmation),
+  );
   const attention = visibleSignals.filter(
     (signal) => signal.tone === 'critical' || signal.tone === 'warning',
   );
@@ -871,6 +876,22 @@ const isPassiveAgentConfigConfirmationSignal = (signal: FleetGovernanceSignal): 
     detail.includes('comparable applied agent config fingerprint') ||
     detail.includes('comparable applied agent configuration fingerprint') ||
     detail.includes('agent to report an applied configuration fingerprint')
+  );
+};
+
+const isPassiveAgentRolloutConfirmationFallbackSignal = (
+  signal: FleetGovernanceSignal,
+  hasPassiveAgentConfigConfirmation: boolean,
+): boolean => {
+  if (!hasPassiveAgentConfigConfirmation) return false;
+  if (signal.tone !== 'warning' || signal.key !== 'rollout') return false;
+
+  const detail = signal.detail.toLowerCase();
+  return (
+    detail.includes('staged rollout is waiting for confirmation') ||
+    detail.includes(
+      'rollout state cannot be confirmed without comparable desired and applied agent config fingerprints',
+    )
   );
 };
 

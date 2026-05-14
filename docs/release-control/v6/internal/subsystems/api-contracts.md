@@ -258,6 +258,9 @@ checks, merge tenants, or become the source of truth for telemetry freshness.
     `node_auto_registered`, but successful idempotent matches or credential
     refreshes for an already configured node must use a non-toast config-change
     event such as `nodes_changed` instead of re-announcing first registration.
+    The event payload must carry the canonical `source` field so browser
+    consumers can distinguish script-initiated operator handoffs from
+    background agent lifecycle churn.
     That same shared setup contract also owns teardown symmetry for script-managed Proxmox nodes: `/api/auto-unregister` must accept the canonical `type`, normalized `host`, explicit `serverName`, optional canonical `tokenId`, request-body `authToken`, and `source:"script"` payload, and it must answer the same canonical success envelope on both real removals and idempotent no-op reruns so browser/runtime callers do not invent a second uninstall vocabulary.
     That same setup-script payload contract owns the Proxmox permission shape
     for generated scripts, runtime-side host-agent setup, and installer
@@ -521,6 +524,11 @@ the canonical monitored-system blocked payload.
    instead of rebuilding capability or topology context from the list response.
 7. Route unified-resource list ordering through `internal/api/resources.go`, `internal/api/contract_test.go`, and the owned unified-resource registry helpers together; list payloads must stay deterministic for equal-name resources by carrying one canonical `name -> type -> id` tie-break across cold seed, REST pagination, and websocket-backed refreshes instead of inheriting map order or page-local re-sorts
    That same shared API contract also owns the external resource `type`, canonical display name, and cluster identity published through `/api/resources` and `/api/state`; the websocket/state hydrate path must not emit legacy aliases or raw store labels once the unified resource contract has normalized them.
+   Realtime `/api/state` and websocket `resources` snapshots must also collapse
+   transient split host identities before broadcast: a Proxmox-node row and a
+   host-agent row for the same machine must leave the API boundary as one
+   hybrid `agent` resource with merged source facets, not as duplicate rows
+   that disappear only after REST reconciliation.
 8. Route unified-agent installer and binary download headers through `internal/api/unified_agent.go` and `internal/api/contract_test.go` together; published release downloads must keep the canonical `X-Checksum-Sha256` plus `X-Signature-Ed25519` contract for updater clients and the base64-encoded `X-Signature-SSHSIG` contract for installer clients whether the asset is served locally or proxied from the matching GitHub release, instead of leaving callers to infer trust from source location alone.
 9. Route canonical AI intelligence summary and resource-intelligence reads through `frontend-modern/src/api/ai.ts`, `frontend-modern/src/stores/aiIntelligence.ts`, `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts`, `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx`, the Patrol-owned section files under `frontend-modern/src/features/patrol/`, `frontend-modern/src/pages/AIIntelligence.tsx`, `internal/api/ai_handlers.go`, and `internal/api/contract_test.go` together so the summary card, store normalization owner, runtime hook, feature shell, section owners, route shell, and backend payload stay aligned on one governed surface, including the canonical recent-changes slice
    while keeping the learning counters backend-only coverage, so the summary page keeps Patrol health and findings primary and renders timeline, correlation, and policy-posture data as secondary investigation context rather than as a separate headline product metric

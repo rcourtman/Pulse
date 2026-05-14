@@ -209,6 +209,11 @@ cross-source deduplication.
    provider facets from generic agent telemetry: flat agent disk payloads stay
    under the agent source and do not become Proxmox facets without explicit
    Proxmox source, node, or workload-shape evidence.
+   Realtime resource adapters must also apply the canonical host source-bridge
+   rule to incoming websocket snapshots: agent plus platform/API evidence for
+   the same host coalesces into one hybrid infrastructure resource, while
+   same-name agent-only records remain separate until stronger identity or
+   platform evidence exists.
 
 Resource detail mappers now reuse the shared
 `frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor

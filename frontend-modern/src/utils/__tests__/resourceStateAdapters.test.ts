@@ -348,6 +348,126 @@ describe('resourceStateAdapters nodeFromResource', () => {
     });
   });
 
+  it('coalesces split realtime Proxmox and agent host records before rendering', () => {
+    const proxmoxOnly = {
+      id: 'agent-proxmox-delly',
+      type: 'agent',
+      name: 'delly',
+      displayName: 'delly',
+      platformId: 'delly',
+      platformType: 'proxmox-pve',
+      sourceType: 'api',
+      sources: ['proxmox'],
+      status: 'online',
+      lastSeen: Date.now() - 1_000,
+      canonicalIdentity: {
+        displayName: 'delly',
+        hostname: 'delly',
+        platformId: 'delly',
+        primaryId: 'node:homelab-delly',
+      },
+      proxmox: {
+        nodeName: 'delly',
+        clusterName: 'homelab',
+        pveVersion: '9.1.9',
+      },
+      platformData: {
+        sources: ['proxmox'],
+        proxmox: {
+          nodeName: 'delly',
+          clusterName: 'homelab',
+          pveVersion: '9.1.9',
+        },
+      },
+    } as Resource;
+    const agentOnly = {
+      id: 'agent-runtime-delly',
+      type: 'agent',
+      name: 'delly',
+      displayName: 'delly',
+      platformId: 'delly',
+      platformType: 'agent',
+      sourceType: 'agent',
+      sources: ['agent'],
+      status: 'online',
+      lastSeen: Date.now(),
+      canonicalIdentity: {
+        displayName: 'delly',
+        hostname: 'delly',
+        platformId: 'delly',
+        primaryId: 'agent:delly-runtime',
+      },
+      agent: {
+        hostname: 'delly',
+        osName: 'Debian GNU/Linux',
+        osVersion: '13',
+      },
+      platformData: {
+        sources: ['agent'],
+        agent: {
+          hostname: 'delly',
+          osName: 'Debian GNU/Linux',
+          osVersion: '13',
+        },
+      },
+    } as Resource;
+
+    for (const incoming of [
+      [proxmoxOnly, agentOnly],
+      [agentOnly, proxmoxOnly],
+    ]) {
+      const [resource] = mergeCanonicalResourceSnapshot(incoming, []);
+
+      expect(mergeCanonicalResourceSnapshot(incoming, [])).toHaveLength(1);
+      expect(resource.id).toBe('agent-runtime-delly');
+      expect(resource.platformType).toBe('proxmox-pve');
+      expect(resource.sourceType).toBe('hybrid');
+      expect(new Set(resource.sources ?? [])).toEqual(new Set(['agent', 'proxmox']));
+      expect(resource.proxmox).toMatchObject({ nodeName: 'delly', clusterName: 'homelab' });
+      expect(resource.agent).toMatchObject({ hostname: 'delly', osName: 'Debian GNU/Linux' });
+      expect((resource.platformData as Record<string, unknown>).proxmox).toMatchObject({
+        nodeName: 'delly',
+      });
+      expect((resource.platformData as Record<string, unknown>).agent).toMatchObject({
+        hostname: 'delly',
+      });
+    }
+  });
+
+  it('does not coalesce same-name agent-only records without a platform source bridge', () => {
+    const resources = mergeCanonicalResourceSnapshot(
+      [
+        {
+          id: 'agent-runtime-1',
+          type: 'agent',
+          name: 'shared-hostname',
+          displayName: 'shared-hostname',
+          platformId: 'shared-hostname',
+          platformType: 'agent',
+          sourceType: 'agent',
+          sources: ['agent'],
+          status: 'online',
+          lastSeen: Date.now(),
+        } as Resource,
+        {
+          id: 'agent-runtime-2',
+          type: 'agent',
+          name: 'shared-hostname',
+          displayName: 'shared-hostname',
+          platformId: 'shared-hostname',
+          platformType: 'agent',
+          sourceType: 'agent',
+          sources: ['agent'],
+          status: 'online',
+          lastSeen: Date.now(),
+        } as Resource,
+      ],
+      [],
+    );
+
+    expect(resources.map((resource) => resource.id)).toEqual(['agent-runtime-1', 'agent-runtime-2']);
+  });
+
   it('uses authoritative top-level sources for realtime storage platform canonicalization', () => {
     const [resource] = mergeCanonicalResourceSnapshot(
       [

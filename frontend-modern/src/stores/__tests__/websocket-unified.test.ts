@@ -144,6 +144,79 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
+  it('coalesces split host identities from realtime resource snapshots', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+
+      emitMessage({
+        type: 'initialState',
+        data: {
+          connectedInfrastructure: [],
+          resources: [
+            {
+              id: 'agent-proxmox-delly',
+              type: 'agent',
+              name: 'delly',
+              displayName: 'delly',
+              platformId: 'delly',
+              platformType: 'proxmox-pve',
+              sourceType: 'api',
+              sources: ['proxmox'],
+              status: 'online',
+              lastSeen: Date.now() - 1000,
+              proxmox: {
+                nodeName: 'delly',
+                clusterName: 'homelab',
+              },
+              platformData: {
+                sources: ['proxmox'],
+                proxmox: {
+                  nodeName: 'delly',
+                  clusterName: 'homelab',
+                },
+              },
+            },
+            {
+              id: 'agent-runtime-delly',
+              type: 'agent',
+              name: 'delly',
+              displayName: 'delly',
+              platformId: 'delly',
+              platformType: 'agent',
+              sourceType: 'agent',
+              sources: ['agent'],
+              status: 'online',
+              lastSeen: Date.now(),
+              agent: {
+                hostname: 'delly',
+                osName: 'Debian GNU/Linux',
+              },
+              platformData: {
+                sources: ['agent'],
+                agent: {
+                  hostname: 'delly',
+                  osName: 'Debian GNU/Linux',
+                },
+              },
+            },
+          ],
+          lastUpdate: 1739059200000,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+
+      expect(store.state.resources).toHaveLength(1);
+      expect(store.state.resources[0]?.id).toBe('agent-runtime-delly');
+      expect(store.state.resources[0]?.sourceType).toBe('hybrid');
+      expect(store.state.resources[0]?.proxmox).toMatchObject({ clusterName: 'homelab' });
+      expect(store.state.resources[0]?.agent).toMatchObject({ osName: 'Debian GNU/Linux' });
+    } finally {
+      dispose();
+    }
+  });
+
   it('incremental update adds to resources without creating legacy fields', async () => {
     const { store, dispose } = await createStoreHarness();
     try {

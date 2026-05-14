@@ -86,6 +86,11 @@ truth for live infrastructure data.
    Failed endpoint probes are observed runtime state for that target; they
    must publish provider health and incidents without dead-lettering the
    scheduler task itself.
+13. Add or change broadcast resource projection through
+   `internal/monitoring/monitor.go` and monitoring guardrails together.
+   `/api/state` and websocket broadcasts must coalesce transient split host
+   resources before serialization so a single Proxmox node with a reporting
+   host agent remains one hybrid top-level system across rebuild ticks.
 
 ## Forbidden Paths
 

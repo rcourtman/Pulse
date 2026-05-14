@@ -708,6 +708,7 @@ func TestHandleCanonicalAutoRegisterReturnsCanonicalStoredNodeIdentity(t *testin
 func TestBuildAutoRegisterEventDataUsesCanonicalAutoRegisterTokenIdentity(t *testing.T) {
 	req := &AutoRegisterRequest{
 		Type:       "pbs",
+		Source:     "agent",
 		ServerName: "backup-node",
 	}
 
@@ -721,6 +722,9 @@ func TestBuildAutoRegisterEventDataUsesCanonicalAutoRegisterTokenIdentity(t *tes
 	}
 	if got := event["tokenId"]; got != "pulse-monitor@pbs!pulse-backup" {
 		t.Fatalf("tokenId = %#v, want canonical token id", got)
+	}
+	if got := event["source"]; got != "agent" {
+		t.Fatalf("source = %#v, want canonical registration source", got)
 	}
 }
 

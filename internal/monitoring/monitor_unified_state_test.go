@@ -84,6 +84,74 @@ func hasUnifiedResourceName(resources []unifiedresources.Resource, name string) 
 	return false
 }
 
+func TestConvertResourcesForBroadcastCoalescesSplitHostResources(t *testing.T) {
+	now := time.Date(2026, 5, 14, 10, 30, 0, 0, time.UTC)
+	resources := []unifiedresources.Resource{
+		{
+			ID:       "agent-proxmox-delly",
+			Type:     unifiedresources.ResourceTypeAgent,
+			Name:     "delly",
+			Status:   unifiedresources.StatusOnline,
+			LastSeen: now.Add(-1 * time.Second),
+			Sources:  []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"delly"}},
+			Proxmox: &unifiedresources.ProxmoxData{
+				NodeName:    "delly",
+				ClusterName: "homelab",
+				PVEVersion:  "9.1.9",
+			},
+		},
+		{
+			ID:       "agent-runtime-delly",
+			Type:     unifiedresources.ResourceTypeAgent,
+			Name:     "delly",
+			Status:   unifiedresources.StatusOnline,
+			LastSeen: now,
+			Sources:  []unifiedresources.DataSource{unifiedresources.SourceAgent},
+			Identity: unifiedresources.ResourceIdentity{
+				MachineID: "agent-machine-delly",
+				Hostnames: []string{
+					"delly",
+				},
+			},
+			Agent: &unifiedresources.AgentData{
+				AgentID:  "agent-machine-delly",
+				Hostname: "delly",
+				OSName:   "Proxmox VE",
+			},
+		},
+	}
+
+	frontend := convertResourcesForBroadcast(resources)
+	if len(frontend) != 1 {
+		t.Fatalf("expected split host resources to coalesce into 1 frontend resource, got %d: %#v", len(frontend), frontend)
+	}
+
+	resource := frontend[0]
+	if resource.ID != "agent-runtime-delly" {
+		t.Fatalf("expected agent-backed resource ID, got %q", resource.ID)
+	}
+	if resource.SourceType != "hybrid" {
+		t.Fatalf("expected hybrid source type, got %q", resource.SourceType)
+	}
+	if resource.PlatformType != "proxmox-pve" {
+		t.Fatalf("expected proxmox-pve platform type, got %q", resource.PlatformType)
+	}
+	sourceSet := make(map[string]bool, len(resource.Sources))
+	for _, source := range resource.Sources {
+		sourceSet[source] = true
+	}
+	if !sourceSet["agent"] || !sourceSet["proxmox"] {
+		t.Fatalf("expected agent and proxmox sources, got %#v", resource.Sources)
+	}
+	if len(resource.Proxmox) == 0 {
+		t.Fatal("expected merged Proxmox facet")
+	}
+	if len(resource.Agent) == 0 {
+		t.Fatal("expected merged agent facet")
+	}
+}
+
 func hasFrontendResourceName(resources []models.ResourceFrontend, name string) bool {
 	for _, resource := range resources {
 		if resource.Name == name {

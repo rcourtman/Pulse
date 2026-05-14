@@ -68,6 +68,12 @@ const getCanonicalPlatformId = (resource: Resource): string | undefined => {
     : undefined;
 };
 
+const normalizeResourceIdentityToken = (value: string | undefined): string | undefined => {
+  if (!value) return undefined;
+  const normalized = value.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : undefined;
+};
+
 export const resourcePlatformData = (resource: Resource): Record<string, unknown> | undefined =>
   asRecord(resource.platformData);
 
@@ -463,6 +469,119 @@ const getCanonicalSourceList = (
     : deriveLegacySourceList(resource, platformData);
 };
 
+const sourceListContainsRuntimePlatform = (sources: string[] | undefined): boolean =>
+  sourceListHas(
+    sources,
+    'proxmox-pve',
+    'docker',
+    'kubernetes',
+    'vmware-vsphere',
+    'truenas',
+  );
+
+const getHostResourceMergeKey = (resource: Resource): string | undefined => {
+  if (resource.type !== 'agent') return undefined;
+  const platform = asRecord(resource.platformData);
+  const canonical = resource.canonicalIdentity;
+  const candidates = [
+    canonical?.platformId,
+    canonical?.hostname,
+    resource.platformId,
+    asString(asRecord(resource.agent)?.hostname),
+    asString(asRecord(platform?.agent)?.hostname),
+    asString(asRecord(resource.proxmox)?.nodeName),
+    asString(asRecord(platform?.proxmox)?.nodeName),
+    getPreferredResourceHostname(resource),
+    getPreferredInfrastructureDisplayName(resource),
+    resource.displayName,
+    resource.name,
+  ];
+  const hostKey = candidates.map(normalizeResourceIdentityToken).find(Boolean);
+  return hostKey ? `agent:${hostKey}` : undefined;
+};
+
+const shouldMergeRealtimeHostResources = (incoming: Resource, existing: Resource): boolean => {
+  if (incoming.type !== 'agent' || existing.type !== 'agent') return false;
+  const incomingSources = getCanonicalSourceList(incoming, incoming.platformData);
+  const existingSources = getCanonicalSourceList(existing, existing.platformData);
+  const unionSources = mergeStringArrays(incomingSources, existingSources);
+  return sourceListHas(unionSources, 'agent') && sourceListContainsRuntimePlatform(unionSources);
+};
+
+const preferHostResourcePrimary = (candidate: Resource, other: Resource): boolean => {
+  const candidateSources = getCanonicalSourceList(candidate, candidate.platformData);
+  const otherSources = getCanonicalSourceList(other, other.platformData);
+  if (sourceListHas(candidateSources, 'agent') && !sourceListHas(otherSources, 'agent')) {
+    return true;
+  }
+  if (!sourceListHas(candidateSources, 'agent') && sourceListHas(otherSources, 'agent')) {
+    return false;
+  }
+  return candidate.lastSeen >= other.lastSeen;
+};
+
+const withMergedSnapshotSources = (
+  resource: Resource,
+  sources: string[] | undefined,
+): Resource => {
+  if (!sources || sources.length === 0) return resource;
+  const platform = asRecord(resource.platformData);
+  return canonicalizeRealtimeResource({
+    ...resource,
+    sources,
+    platformData: {
+      ...(platform ?? {}),
+      sources,
+    },
+  });
+};
+
+const mergeRealtimeHostResources = (incoming: Resource, existing: Resource): Resource => {
+  const unionSources = mergeStringArrays(
+    getCanonicalSourceList(incoming, incoming.platformData),
+    getCanonicalSourceList(existing, existing.platformData),
+  );
+  const primary = preferHostResourcePrimary(incoming, existing) ? incoming : existing;
+  const secondary = primary === incoming ? existing : incoming;
+  return canonicalizeRealtimeResource(
+    mergeCanonicalResource(
+      withMergedSnapshotSources(primary, unionSources),
+      withMergedSnapshotSources(secondary, unionSources),
+    ),
+  );
+};
+
+const coalesceRealtimeResourceSnapshot = (resources: Resource[]): Resource[] => {
+  const coalesced: Resource[] = [];
+  const indexByHostKey = new Map<string, number>();
+
+  for (const rawResource of resources) {
+    const resource = canonicalizeRealtimeResource(rawResource);
+    const hostKey = getHostResourceMergeKey(resource);
+    if (!hostKey) {
+      coalesced.push(resource);
+      continue;
+    }
+
+    const existingIndex = indexByHostKey.get(hostKey);
+    if (existingIndex === undefined) {
+      indexByHostKey.set(hostKey, coalesced.length);
+      coalesced.push(resource);
+      continue;
+    }
+
+    const existing = coalesced[existingIndex];
+    if (!shouldMergeRealtimeHostResources(resource, existing)) {
+      coalesced.push(resource);
+      continue;
+    }
+
+    coalesced[existingIndex] = mergeRealtimeHostResources(resource, existing);
+  }
+
+  return coalesced;
+};
+
 const hasAvailabilityFacet = (
   resource: Resource,
   platformData?: Resource['platformData'],
@@ -619,9 +738,10 @@ export const mergeCanonicalResourceSnapshot = (
   if (incoming.length === 0) {
     return [];
   }
+  const coalescedIncoming = coalesceRealtimeResourceSnapshot(incoming);
   const existingById = new Map(existing.map((resource) => [resource.id, resource] as const));
-  return incoming.map((resource) =>
-    mergeCanonicalResource(canonicalizeRealtimeResource(resource), existingById.get(resource.id)),
+  return coalescedIncoming.map((resource) =>
+    mergeCanonicalResource(resource, existingById.get(resource.id)),
   );
 };
 

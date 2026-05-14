@@ -9587,6 +9587,7 @@ func TestContract_AutoUnregisterNoopResponseJSONSnapshot(t *testing.T) {
 func TestContract_AutoRegisterWebSocketEventJSONSnapshot(t *testing.T) {
 	payload := map[string]any{
 		"type":      "pve",
+		"source":    "script",
 		"host":      "https://pve.local:8006",
 		"name":      "pve-node-1",
 		"nodeId":    "pve-node-1",
@@ -9608,6 +9609,7 @@ func TestContract_AutoRegisterWebSocketEventJSONSnapshot(t *testing.T) {
 		"name":"pve-node-1",
 		"nodeId":"pve-node-1",
 		"nodeName":"pve-node-1",
+		"source":"script",
 		"status":"connected",
 		"tokenId":"pulse-monitor@pve!pulse-homelab",
 		"type":"pve",
@@ -9620,6 +9622,7 @@ func TestContract_AutoRegisterWebSocketEventJSONSnapshot(t *testing.T) {
 func TestContract_CanonicalAutoRegisterEventJSONSnapshot(t *testing.T) {
 	payload := map[string]any{
 		"type":      "pbs",
+		"source":    "agent",
 		"host":      "https://pbs.local:8007",
 		"name":      "backup-node (2)",
 		"nodeId":    "backup-node (2)",
@@ -9641,6 +9644,7 @@ func TestContract_CanonicalAutoRegisterEventJSONSnapshot(t *testing.T) {
 		"name":"backup-node (2)",
 		"nodeId":"backup-node (2)",
 		"nodeName":"backup-node (2)",
+		"source":"agent",
 		"status":"connected",
 		"tokenId":"pulse-monitor@pbs!pulse-backup",
 		"type":"pbs",

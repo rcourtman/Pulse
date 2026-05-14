@@ -3717,8 +3717,9 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateS
 		}
 	}
 	unifiedView := m.currentUnifiedStateView()
-	frontendState.Resources = convertResourcesForBroadcast(unifiedView.resources)
-	frontendState.ConnectedInfrastructure = buildConnectedInfrastructure(unifiedView.resources, snapshot)
+	broadcastResources := coalesceBroadcastResources(unifiedView.resources)
+	frontendState.Resources = convertResourcesForBroadcast(broadcastResources)
+	frontendState.ConnectedInfrastructure = buildConnectedInfrastructure(broadcastResources, snapshot)
 	if !unifiedView.freshness.IsZero() {
 		frontendState.LastUpdate = unifiedView.freshness.UnixMilli()
 	}
@@ -4891,11 +4892,325 @@ func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
 	return convertResourcesForBroadcast(m.getUnifiedResourcesForBroadcast())
 }
 
+func coalesceBroadcastResources(resources []unifiedresources.Resource) []unifiedresources.Resource {
+	if len(resources) == 0 {
+		return resources
+	}
+
+	coalesced := make([]unifiedresources.Resource, 0, len(resources))
+	indexByHostKey := make(map[string]int, len(resources))
+	for _, resource := range resources {
+		resource.Type = unifiedresources.CanonicalResourceType(resource.Type)
+		hostKey := broadcastHostMergeKey(resource)
+		if hostKey == "" {
+			coalesced = append(coalesced, resource)
+			continue
+		}
+
+		existingIndex, ok := indexByHostKey[hostKey]
+		if !ok {
+			indexByHostKey[hostKey] = len(coalesced)
+			coalesced = append(coalesced, resource)
+			continue
+		}
+
+		existing := coalesced[existingIndex]
+		if !shouldMergeBroadcastHostResources(existing, resource) {
+			coalesced = append(coalesced, resource)
+			continue
+		}
+		coalesced[existingIndex] = mergeBroadcastHostResources(existing, resource)
+	}
+
+	return coalesced
+}
+
+func broadcastHostMergeKey(resource unifiedresources.Resource) string {
+	if unifiedresources.CanonicalResourceType(resource.Type) != unifiedresources.ResourceTypeAgent {
+		return ""
+	}
+
+	candidates := []string{}
+	if resource.Canonical != nil {
+		candidates = append(candidates, resource.Canonical.PlatformID, resource.Canonical.Hostname)
+	}
+	candidates = append(candidates, resource.Identity.Hostnames...)
+	if resource.Agent != nil {
+		candidates = append(candidates, resource.Agent.Hostname)
+	}
+	if resource.Proxmox != nil {
+		candidates = append(candidates, resource.Proxmox.NodeName)
+	}
+	candidates = append(candidates, resource.Name)
+
+	for _, candidate := range candidates {
+		normalized := unifiedresources.NormalizeHostname(candidate)
+		if normalized != "" {
+			return "agent:" + normalized
+		}
+	}
+	return ""
+}
+
+func shouldMergeBroadcastHostResources(left, right unifiedresources.Resource) bool {
+	if unifiedresources.CanonicalResourceType(left.Type) != unifiedresources.ResourceTypeAgent ||
+		unifiedresources.CanonicalResourceType(right.Type) != unifiedresources.ResourceTypeAgent {
+		return false
+	}
+	sources := mergeBroadcastSources(broadcastResourceSources(left), broadcastResourceSources(right))
+	return broadcastHasSource(sources, unifiedresources.SourceAgent) && broadcastHasRuntimePlatformSource(sources)
+}
+
+func broadcastResourceSources(resource unifiedresources.Resource) []unifiedresources.DataSource {
+	sources := append([]unifiedresources.DataSource(nil), resource.Sources...)
+	for source := range resource.SourceStatus {
+		sources = append(sources, source)
+	}
+	if resource.Agent != nil {
+		sources = append(sources, unifiedresources.SourceAgent)
+	}
+	if resource.Proxmox != nil {
+		sources = append(sources, unifiedresources.SourceProxmox)
+	}
+	if resource.Docker != nil {
+		sources = append(sources, unifiedresources.SourceDocker)
+	}
+	if resource.Kubernetes != nil {
+		sources = append(sources, unifiedresources.SourceK8s)
+	}
+	if resource.VMware != nil {
+		sources = append(sources, unifiedresources.SourceVMware)
+	}
+	if resource.TrueNAS != nil {
+		sources = append(sources, unifiedresources.SourceTrueNAS)
+	}
+	return mergeBroadcastSources(nil, sources)
+}
+
+func broadcastHasRuntimePlatformSource(sources []unifiedresources.DataSource) bool {
+	for _, source := range []unifiedresources.DataSource{
+		unifiedresources.SourceProxmox,
+		unifiedresources.SourceDocker,
+		unifiedresources.SourceK8s,
+		unifiedresources.SourceVMware,
+		unifiedresources.SourceTrueNAS,
+	} {
+		if broadcastHasSource(sources, source) {
+			return true
+		}
+	}
+	return false
+}
+
+func broadcastHasSource(sources []unifiedresources.DataSource, target unifiedresources.DataSource) bool {
+	for _, source := range sources {
+		if source == target {
+			return true
+		}
+	}
+	return false
+}
+
+func mergeBroadcastSources(left, right []unifiedresources.DataSource) []unifiedresources.DataSource {
+	merged := make([]unifiedresources.DataSource, 0, len(left)+len(right))
+	seen := make(map[unifiedresources.DataSource]struct{}, len(left)+len(right))
+	for _, source := range append(append([]unifiedresources.DataSource(nil), left...), right...) {
+		if strings.TrimSpace(string(source)) == "" {
+			continue
+		}
+		if _, ok := seen[source]; ok {
+			continue
+		}
+		seen[source] = struct{}{}
+		merged = append(merged, source)
+	}
+	return merged
+}
+
+func mergeBroadcastHostResources(left, right unifiedresources.Resource) unifiedresources.Resource {
+	primary, secondary := left, right
+	if preferBroadcastHostPrimary(right, left) {
+		primary, secondary = right, left
+	}
+
+	merged := primary
+	merged.Sources = mergeBroadcastSources(broadcastResourceSources(primary), broadcastResourceSources(secondary))
+	merged.SourceStatus = mergeBroadcastSourceStatus(primary.SourceStatus, secondary.SourceStatus, merged.Sources, primary.LastSeen, secondary.LastSeen)
+	merged.Identity = mergeBroadcastIdentity(primary.Identity, secondary.Identity)
+
+	if merged.Agent == nil {
+		merged.Agent = secondary.Agent
+	}
+	if merged.Proxmox == nil {
+		merged.Proxmox = secondary.Proxmox
+	}
+	if merged.Docker == nil {
+		merged.Docker = secondary.Docker
+	}
+	if merged.Kubernetes == nil {
+		merged.Kubernetes = secondary.Kubernetes
+	}
+	if merged.VMware == nil {
+		merged.VMware = secondary.VMware
+	}
+	if merged.TrueNAS == nil {
+		merged.TrueNAS = secondary.TrueNAS
+	}
+	if merged.Storage == nil {
+		merged.Storage = secondary.Storage
+	}
+	if merged.Metrics == nil {
+		merged.Metrics = secondary.Metrics
+	} else if secondary.Metrics != nil {
+		merged.Metrics = mergeBroadcastMetrics(merged.Metrics, secondary.Metrics)
+	}
+	if merged.DiscoveryTarget == nil {
+		merged.DiscoveryTarget = secondary.DiscoveryTarget
+	}
+	if merged.MetricsTarget == nil {
+		merged.MetricsTarget = secondary.MetricsTarget
+	}
+	if merged.Canonical == nil {
+		merged.Canonical = secondary.Canonical
+	}
+	merged.Tags = uniqueBroadcastStrings(append(append([]string(nil), secondary.Tags...), primary.Tags...))
+	merged.Incidents = append(append([]unifiedresources.ResourceIncident(nil), secondary.Incidents...), primary.Incidents...)
+	if secondary.LastSeen.After(merged.LastSeen) {
+		merged.LastSeen = secondary.LastSeen
+	}
+	if secondary.UpdatedAt.After(merged.UpdatedAt) {
+		merged.UpdatedAt = secondary.UpdatedAt
+	}
+	merged.Status = betterBroadcastStatus(merged.Status, secondary.Status)
+	return merged
+}
+
+func preferBroadcastHostPrimary(candidate, other unifiedresources.Resource) bool {
+	candidateHasAgent := broadcastHasSource(broadcastResourceSources(candidate), unifiedresources.SourceAgent)
+	otherHasAgent := broadcastHasSource(broadcastResourceSources(other), unifiedresources.SourceAgent)
+	if candidateHasAgent != otherHasAgent {
+		return candidateHasAgent
+	}
+	if candidate.LastSeen.Equal(other.LastSeen) {
+		return strings.TrimSpace(candidate.ID) < strings.TrimSpace(other.ID)
+	}
+	return candidate.LastSeen.After(other.LastSeen)
+}
+
+func mergeBroadcastSourceStatus(
+	left, right map[unifiedresources.DataSource]unifiedresources.SourceStatus,
+	sources []unifiedresources.DataSource,
+	leftLastSeen time.Time,
+	rightLastSeen time.Time,
+) map[unifiedresources.DataSource]unifiedresources.SourceStatus {
+	merged := make(map[unifiedresources.DataSource]unifiedresources.SourceStatus, len(sources))
+	for source, status := range right {
+		merged[source] = status
+	}
+	for source, status := range left {
+		merged[source] = status
+	}
+	for _, source := range sources {
+		if _, ok := merged[source]; ok {
+			continue
+		}
+		lastSeen := leftLastSeen
+		if rightLastSeen.After(lastSeen) {
+			lastSeen = rightLastSeen
+		}
+		merged[source] = unifiedresources.SourceStatus{Status: "online", LastSeen: lastSeen}
+	}
+	return merged
+}
+
+func mergeBroadcastIdentity(left, right unifiedresources.ResourceIdentity) unifiedresources.ResourceIdentity {
+	merged := left
+	if merged.MachineID == "" {
+		merged.MachineID = right.MachineID
+	}
+	if merged.DMIUUID == "" {
+		merged.DMIUUID = right.DMIUUID
+	}
+	if merged.ClusterName == "" {
+		merged.ClusterName = right.ClusterName
+	}
+	merged.Hostnames = uniqueBroadcastStrings(append(append([]string(nil), left.Hostnames...), right.Hostnames...))
+	merged.IPAddresses = uniqueBroadcastStrings(append(append([]string(nil), left.IPAddresses...), right.IPAddresses...))
+	merged.MACAddresses = uniqueBroadcastStrings(append(append([]string(nil), left.MACAddresses...), right.MACAddresses...))
+	return merged
+}
+
+func uniqueBroadcastStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	unique := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		unique = append(unique, trimmed)
+	}
+	return unique
+}
+
+func mergeBroadcastMetrics(left, right *unifiedresources.ResourceMetrics) *unifiedresources.ResourceMetrics {
+	if left == nil {
+		return right
+	}
+	if right == nil {
+		return left
+	}
+	merged := *left
+	if merged.CPU == nil {
+		merged.CPU = right.CPU
+	}
+	if merged.Memory == nil {
+		merged.Memory = right.Memory
+	}
+	if merged.Disk == nil {
+		merged.Disk = right.Disk
+	}
+	if merged.NetIn == nil {
+		merged.NetIn = right.NetIn
+	}
+	if merged.NetOut == nil {
+		merged.NetOut = right.NetOut
+	}
+	if merged.DiskRead == nil {
+		merged.DiskRead = right.DiskRead
+	}
+	if merged.DiskWrite == nil {
+		merged.DiskWrite = right.DiskWrite
+	}
+	return &merged
+}
+
+func betterBroadcastStatus(left, right unifiedresources.ResourceStatus) unifiedresources.ResourceStatus {
+	rank := map[unifiedresources.ResourceStatus]int{
+		unifiedresources.StatusOnline:  4,
+		unifiedresources.StatusWarning: 3,
+		unifiedresources.StatusUnknown: 2,
+		unifiedresources.StatusOffline: 1,
+	}
+	if rank[right] > rank[left] {
+		return right
+	}
+	return left
+}
+
 // convertResourcesForBroadcast converts unified resources into the frontend payload shape.
 func convertResourcesForBroadcast(allResources []unifiedresources.Resource) []models.ResourceFrontend {
 	if len(allResources) == 0 {
 		return []models.ResourceFrontend{}
 	}
+	allResources = coalesceBroadcastResources(allResources)
 	type broadcastResource struct {
 		input      models.ResourceConvertInput
 		sortKey    string

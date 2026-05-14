@@ -24,10 +24,12 @@ const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 8 * 1024 * 1024; // 8 MiB
 const AUTO_REGISTER_NOTIFICATION_FRESH_MS = 2 * 60 * 1000;
 const AUTO_REGISTER_NOTIFICATION_FUTURE_SKEW_MS = 30 * 1000;
 const AUTO_REGISTER_NOTIFICATION_DEDUPE_MS = 10 * 60 * 1000;
+const AUTO_REGISTER_NOTIFICATION_SESSION_GRACE_MS = 5 * 1000;
 
 type TimestampedWSMessage = WSMessage & { timestamp?: number | string };
 type AutoRegisterNotificationPayload = {
   type?: string;
+  source?: string;
   host?: string;
   name?: string;
   nodeId?: string;
@@ -74,9 +76,21 @@ const shouldShowAutoRegisterNotification = (
   message: TimestampedWSMessage,
   node: AutoRegisterNotificationPayload,
   now = Date.now(),
+  connectionOpenedAtMs = 0,
 ): boolean => {
+  const source = node.source?.trim().toLowerCase();
+  if (source && source !== 'script') {
+    return false;
+  }
+
   const eventTimestampMs = resolveMessageTimestampMs(message);
   if (eventTimestampMs === null) {
+    return false;
+  }
+  if (
+    connectionOpenedAtMs > 0 &&
+    eventTimestampMs < connectionOpenedAtMs - AUTO_REGISTER_NOTIFICATION_SESSION_GRACE_MS
+  ) {
     return false;
   }
   if (
@@ -232,6 +246,7 @@ export function createWebSocketStore(url: string) {
   let reconnectAttempt = 0;
   let isReconnecting = false;
   let isDisposed = false;
+  let currentConnectionOpenedAtMs = 0;
   const maxReconnectDelay = POLLING_INTERVALS.RECONNECT_MAX;
   const initialReconnectDelay = POLLING_INTERVALS.RECONNECT_BASE;
   const heartbeatIntervalMs = 30000; // Send heartbeat every 30 seconds
@@ -362,6 +377,7 @@ export function createWebSocketStore(url: string) {
       reconnectAttempt = 0; // Reset reconnect attempts on successful connection
       isReconnecting = false;
       lastServerActivityAt = Date.now();
+      currentConnectionOpenedAtMs = lastServerActivityAt;
 
       // Start heartbeat to keep connection alive
       clearHeartbeatTimer();
@@ -563,7 +579,14 @@ export function createWebSocketStore(url: string) {
           const nodeName = node.name || node.host;
           const nodeType = node.type === 'pve' ? 'Proxmox VE' : 'Proxmox Backup Server';
 
-          if (shouldShowAutoRegisterNotification(message, node)) {
+          if (
+            shouldShowAutoRegisterNotification(
+              message,
+              node,
+              Date.now(),
+              currentConnectionOpenedAtMs,
+            )
+          ) {
             notificationStore.success(
               `${nodeType} node "${nodeName}" was successfully auto-registered and is now being monitored!`,
               8000,
@@ -835,9 +858,7 @@ export function createWebSocketStore(url: string) {
           // clear the pending flag after a generous timeout so we eventually resync with reality.
           const pendingTimeout = window.setTimeout(() => {
             if (pendingAckChanges.has(alertIdentifier)) {
-              logger.warn(
-                `Clearing stale pending ack change for alert ${alertIdentifier}`,
-              );
+              logger.warn(`Clearing stale pending ack change for alert ${alertIdentifier}`);
               clearPendingAck(alertIdentifier);
               notificationStore.error(
                 'Server did not confirm the alert acknowledgment in time. Re-syncing from latest data.',

@@ -254,6 +254,9 @@ describe('ConnectionsTable', () => {
     );
     expect(screen.queryByText('Config pending')).toBeNull();
     expect(screen.queryByText('Rollout pending')).toBeNull();
+    expect(
+      screen.queryByText(/applied agent configuration fingerprint/i),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps large row sets bounded behind an explicit show-more path', () => {

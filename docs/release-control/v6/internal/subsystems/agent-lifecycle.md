@@ -280,7 +280,11 @@ profile and assignment columns, but embedded table framing must route through
    timestamped lifecycle event rather than durable infrastructure state:
    fresh first-time events may show one success toast, but replayed, stale, or
    duplicate events must refresh configuration silently so an old registration
-   cannot present as a newly connected node.
+   cannot present as a newly connected node. The event payload must preserve
+   the canonical registration `source`; script-initiated first-time
+   registrations are the only source that may display the operator-facing
+   success toast, while background agent registrations must update the ledger
+   without claiming the operator just added that node.
    Shared `internal/api/` session and auth changes consumed by lifecycle
    routes must preserve durable principal IDs as the authorization key. Agent
    lifecycle surfaces may display contact email when supplied by the shared

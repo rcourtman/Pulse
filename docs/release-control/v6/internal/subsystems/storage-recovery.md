@@ -429,7 +429,9 @@ bypass the API fail-closed execution gate.
     `node_auto_registered` WebSocket event, while idempotent existing-node
     refreshes must stay on non-toast configuration-change events so adjacent
     storage/recovery transport does not infer a second protected-system
-    admission from a credential refresh.
+    admission from a credential refresh. The event data must preserve the
+    canonical registration `source` so script-created and agent-created
+    lifecycle events remain distinguishable without re-reading setup state.
     That same adjacent transport boundary must also preserve disabled
     provider-connection admission truth. Storage- and recovery-adjacent setup
     surfaces may reflect zero-delta or removal-only monitored-system previews

@@ -38,7 +38,8 @@ describe('visibleFleetGovernanceSignals', () => {
           remoteControl: 'disabled',
           configDrift: {
             status: 'pending',
-            reason: 'Pulse has not received a comparable applied agent configuration fingerprint yet',
+            reason:
+              'Pulse has not received a comparable applied agent configuration fingerprint yet',
           },
           rollout: {
             status: 'pending',
@@ -144,6 +145,42 @@ describe('visibleFleetGovernanceSignals', () => {
         label: 'Fleet OK',
         tone: 'ok',
       },
+    ]);
+  });
+
+  it('hides rollout fallback copy when a passive config confirmation marks the handshake', () => {
+    const rawSignals = fleetGovernanceSignalsForConnection(
+      connectionFixture({
+        fleet: {
+          enrollmentState: 'enrolled',
+          livenessState: 'active',
+          versionDrift: 'current',
+          adapterHealth: 'healthy',
+          configRollout: 'reported',
+          credentialStatus: 'verified',
+          updateStatus: 'current',
+          remoteControl: 'disabled',
+          configDrift: {
+            status: 'pending',
+            reason:
+              'Pulse has not received a comparable applied agent configuration fingerprint yet',
+          },
+          rollout: {
+            status: 'pending',
+          },
+          credentialHealth: { status: 'verified', kind: 'agent-token' },
+          commandPolicy: {
+            status: 'disabled',
+            desired: 'unknown',
+            applied: 'disabled',
+            enforcement: 'not-applicable',
+          },
+        },
+      }),
+    );
+
+    expect(visibleFleetGovernanceSignals(rawSignals).map((signal) => signal.label)).toEqual([
+      'Remote control disabled',
     ]);
   });
 });

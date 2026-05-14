@@ -1110,6 +1110,7 @@ export type WSMessage =
       type: 'node_auto_registered';
       data: {
         type: string;
+        source?: string;
         host: string;
         name: string;
         tokenId: string;
