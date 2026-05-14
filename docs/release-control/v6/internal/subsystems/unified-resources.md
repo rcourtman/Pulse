@@ -220,6 +220,10 @@ cross-source deduplication.
    parent evidence, and both snapshot ingest and already-unified registry seed
    paths must attach them to the same merged host resource before REST,
    websocket, Workloads, or Infrastructure consumers render the estate.
+   This derivation must tolerate node source IDs that retain a previous cluster
+   alias while the current Proxmox metadata exposes a renamed instance or
+   cluster label; current node metadata is the fallback source of truth when
+   source-key lookup misses.
 
 Resource detail mappers now reuse the shared
 `frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor

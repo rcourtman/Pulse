@@ -54,6 +54,50 @@ func TestUnifiedResourceSnapshotIncludesPlatformFixtures(t *testing.T) {
 	}
 }
 
+func TestUnifiedResourceSnapshotParentsDemoProxmoxWorkloads(t *testing.T) {
+	previous := IsMockEnabled()
+	SetEnabled(true)
+	t.Cleanup(func() { SetEnabled(previous) })
+
+	resources, _ := UnifiedResourceSnapshot()
+	agentsByID := make(map[string]unifiedresources.Resource)
+	for _, resource := range resources {
+		if resource.Type == unifiedresources.ResourceTypeAgent {
+			agentsByID[resource.ID] = resource
+		}
+	}
+
+	proxmoxWorkloadCount := 0
+	for _, resource := range resources {
+		if resource.Type != unifiedresources.ResourceTypeVM && resource.Type != unifiedresources.ResourceTypeSystemContainer {
+			continue
+		}
+		if !slices.Contains(resource.Sources, unifiedresources.SourceProxmox) {
+			continue
+		}
+		proxmoxWorkloadCount++
+		if resource.ParentID == nil || *resource.ParentID == "" {
+			t.Fatalf("expected mock Proxmox workload %q (%s) to have a parent", resource.Name, resource.ID)
+		}
+		parent, ok := agentsByID[*resource.ParentID]
+		if !ok {
+			t.Fatalf("expected mock Proxmox workload %q parent %q to resolve to an agent", resource.Name, *resource.ParentID)
+		}
+		if resource.Proxmox != nil && parent.Proxmox != nil && resource.Proxmox.NodeName != parent.Proxmox.NodeName {
+			t.Fatalf(
+				"expected mock Proxmox workload %q parent node %q, got %q",
+				resource.Name,
+				resource.Proxmox.NodeName,
+				parent.Proxmox.NodeName,
+			)
+		}
+	}
+
+	if proxmoxWorkloadCount == 0 {
+		t.Fatal("expected mock unified resources to include Proxmox workloads")
+	}
+}
+
 func TestSupplementalRecordsNormalizesVMwareAlias(t *testing.T) {
 	records := SupplementalRecords(unifiedresources.DataSource("vmware-vsphere"))
 	if len(records) == 0 {

@@ -12,9 +12,11 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 type resourceStateProvider struct {
@@ -71,6 +73,10 @@ func (m mockSupplementalRecordsProvider) SnapshotOwnedSources() []unified.DataSo
 	out := make([]unified.DataSource, len(m.ownedSources))
 	copy(out, m.ownedSources)
 	return out
+}
+
+func (m mockSupplementalRecordsProvider) SupplementalRecords(*monitoring.Monitor, string) []unified.IngestRecord {
+	return m.GetCurrentRecords()
 }
 
 func TestResourceListRejectsLegacyHostTypeFilter(t *testing.T) {
@@ -552,6 +558,183 @@ func TestResourceListCollapsesClusterAndStandaloneNodeViewsByEndpoint(t *testing
 	}
 	if resource.Proxmox == nil || resource.Proxmox.ClusterName != "homelab" {
 		t.Fatalf("expected proxmox cluster homelab, got %+v", resource.Proxmox)
+	}
+}
+
+func TestResourceListDerivesProxmoxWorkloadParentFromUnifiedSeed(t *testing.T) {
+	now := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			{
+				ID:       "agent-delly",
+				Type:     unified.ResourceTypeAgent,
+				Name:     "delly",
+				Status:   unified.StatusOnline,
+				LastSeen: now,
+				Sources:  []unified.DataSource{unified.SourceProxmox, unified.SourceAgent},
+				Identity: unified.ResourceIdentity{
+					MachineID: "machine-delly",
+					Hostnames: []string{"delly"},
+				},
+				Proxmox: &unified.ProxmoxData{
+					SourceID:    "homelab-delly",
+					NodeName:    "delly",
+					ClusterName: "homelab",
+					Instance:    "delly",
+				},
+				Agent: &unified.AgentData{
+					AgentID:  "agent-source-delly",
+					Hostname: "delly",
+				},
+			},
+			{
+				ID:       "system-container-cloudflared",
+				Type:     unified.ResourceTypeSystemContainer,
+				Name:     "cloudflared",
+				Status:   unified.StatusOnline,
+				LastSeen: now,
+				Sources:  []unified.DataSource{unified.SourceProxmox},
+				Identity: unified.ResourceIdentity{Hostnames: []string{"cloudflared"}},
+				Proxmox: &unified.ProxmoxData{
+					SourceID:    "delly:delly:104",
+					NodeName:    "delly",
+					ClusterName: "homelab",
+					Instance:    "delly",
+					VMID:        104,
+				},
+			},
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=system-container&q=cloudflared&page=1&limit=20", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 cloudflared resource, got %d: %#v", len(resp.Data), resp.Data)
+	}
+	resource := resp.Data[0]
+	if resource.ParentID == nil || *resource.ParentID != "agent-delly" {
+		t.Fatalf("expected cloudflared parent agent-delly, got %+v", resource.ParentID)
+	}
+	if resource.ParentName != "delly" {
+		t.Fatalf("expected cloudflared parentName delly, got %q", resource.ParentName)
+	}
+	if resource.Proxmox == nil || resource.Proxmox.NodeName != "delly" || resource.Proxmox.ClusterName != "homelab" {
+		t.Fatalf("expected cloudflared Proxmox node metadata, got %+v", resource.Proxmox)
+	}
+}
+
+func TestStateEndpointDerivesProxmoxWorkloadParentFromSupplementalRecords(t *testing.T) {
+	now := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
+	hashedPassword, err := authpkg.HashPassword("password")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	dataPath := t.TempDir()
+	InitSessionStore(dataPath)
+	InitCSRFStore(dataPath)
+	cfg := &config.Config{
+		DataPath: dataPath,
+		AuthUser: "admin",
+		AuthPass: hashedPassword,
+	}
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	t.Cleanup(func() { monitor.Stop() })
+
+	monitor.SetResourceStore(unified.NewMonitorAdapter(nil))
+	monitor.SetSupplementalRecordsProvider(unified.SourceProxmox, mockSupplementalRecordsProvider{
+		records: []unified.IngestRecord{
+			{
+				SourceID: "homelab-delly",
+				Resource: unified.Resource{
+					Type:     unified.ResourceTypeAgent,
+					Name:     "delly",
+					Status:   unified.StatusOnline,
+					LastSeen: now,
+					Proxmox: &unified.ProxmoxData{
+						SourceID:    "homelab-delly",
+						NodeName:    "delly",
+						ClusterName: "homelab",
+						Instance:    "delly",
+					},
+				},
+				Identity: unified.ResourceIdentity{
+					MachineID: "machine-delly",
+					Hostnames: []string{"delly"},
+				},
+			},
+			{
+				SourceID: "delly:delly:104",
+				Resource: unified.Resource{
+					Type:     unified.ResourceTypeSystemContainer,
+					Name:     "cloudflared",
+					Status:   unified.StatusOnline,
+					LastSeen: now,
+					Proxmox: &unified.ProxmoxData{
+						SourceID:    "delly:delly:104",
+						NodeName:    "delly",
+						ClusterName: "homelab",
+						Instance:    "delly",
+						VMID:        104,
+					},
+				},
+				Identity: unified.ResourceIdentity{Hostnames: []string{"cloudflared"}},
+			},
+		},
+	})
+
+	router := &Router{config: cfg, monitor: monitor}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/state", nil)
+	req.SetBasicAuth("admin", "password")
+	router.handleState(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("/api/state status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var state models.StateFrontend
+	if err := json.NewDecoder(rec.Body).Decode(&state); err != nil {
+		t.Fatalf("decode /api/state: %v", err)
+	}
+
+	dellyCount := 0
+	dellyID := ""
+	cloudflaredParentID := ""
+	for _, resource := range state.Resources {
+		switch {
+		case resource.Type == string(unified.ResourceTypeAgent) && resource.Name == "delly":
+			dellyCount++
+			dellyID = resource.ID
+		case resource.Type == string(unified.ResourceTypeSystemContainer) && resource.Name == "cloudflared":
+			cloudflaredParentID = resource.ParentID
+		}
+	}
+
+	if dellyCount != 1 {
+		t.Fatalf("expected exactly one delly resource in /api/state, got %d: %#v", dellyCount, state.Resources)
+	}
+	if dellyID == "" {
+		t.Fatalf("expected delly resource id in /api/state: %#v", state.Resources)
+	}
+	if cloudflaredParentID != dellyID {
+		t.Fatalf("expected cloudflared parent %q, got %q: %#v", dellyID, cloudflaredParentID, state.Resources)
 	}
 }
 

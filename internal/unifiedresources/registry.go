@@ -1852,7 +1852,7 @@ func (rr *ResourceRegistry) proxmoxNodeParentIDLocked(instance, clusterName, nod
 		}
 		return parentID
 	}
-	return ""
+	return rr.proxmoxNodeParentIDFromResourcesLocked(instance, clusterName, nodeName, excludeID)
 }
 
 func proxmoxNodeParentSourceIDCandidates(instance, clusterName, nodeName string) []string {
@@ -1880,6 +1880,69 @@ func proxmoxNodeParentSourceIDCandidates(instance, clusterName, nodeName string)
 		out = append(out, candidate)
 	}
 	return out
+}
+
+func (rr *ResourceRegistry) proxmoxNodeParentIDFromResourcesLocked(instance, clusterName, nodeName, excludeID string) string {
+	nodeName = strings.TrimSpace(nodeName)
+	if nodeName == "" {
+		return ""
+	}
+
+	excludeID = CanonicalResourceID(strings.TrimSpace(excludeID))
+	bestID := ""
+	bestScore := -1
+	for id, resource := range rr.resources {
+		if resource == nil {
+			continue
+		}
+		candidateID := CanonicalResourceID(strings.TrimSpace(id))
+		if candidateID == "" || candidateID == excludeID {
+			continue
+		}
+		if CanonicalResourceType(resource.Type) != ResourceTypeAgent || resource.Proxmox == nil {
+			continue
+		}
+		if !strings.EqualFold(strings.TrimSpace(resource.Proxmox.NodeName), nodeName) {
+			continue
+		}
+		score := proxmoxNodeParentScopeScore(instance, clusterName, resource.Proxmox)
+		if score < 0 {
+			continue
+		}
+		if score > bestScore || (score == bestScore && (bestID == "" || candidateID < bestID)) {
+			bestID = candidateID
+			bestScore = score
+		}
+	}
+	return bestID
+}
+
+func proxmoxNodeParentScopeScore(instance, clusterName string, parent *ProxmoxData) int {
+	if parent == nil {
+		return -1
+	}
+
+	childInstance := strings.TrimSpace(instance)
+	childCluster := strings.TrimSpace(clusterName)
+	parentInstance := strings.TrimSpace(parent.Instance)
+	parentCluster := strings.TrimSpace(parent.ClusterName)
+
+	switch {
+	case childInstance != "" && parentInstance != "" && strings.EqualFold(childInstance, parentInstance):
+		return 40
+	case childCluster != "" && parentCluster != "" && strings.EqualFold(childCluster, parentCluster):
+		return 35
+	case childInstance != "" && parentCluster != "" && strings.EqualFold(childInstance, parentCluster):
+		return 30
+	case childCluster != "" && parentInstance != "" && strings.EqualFold(childCluster, parentInstance):
+		return 30
+	case childInstance == "" && childCluster == "":
+		return 10
+	case parentInstance == "" && parentCluster == "":
+		return 5
+	default:
+		return -1
+	}
 }
 
 func (rr *ResourceRegistry) buildChildCounts() {

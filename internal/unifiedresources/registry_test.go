@@ -1432,6 +1432,81 @@ func TestResourceRegistry_IngestSnapshotParentsClusterNamedProxmoxGuestsToMerged
 	}
 }
 
+func TestResourceRegistry_IngestSnapshotDerivesProxmoxWorkloadParentWhenNodeSourceIDUsesPreviousClusterAlias(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{
+			{
+				ID:              "mock-cluster-pve1",
+				Name:            "pve1",
+				DisplayName:     "West Production A",
+				Instance:        "Core Fabric",
+				ClusterName:     "Core Fabric",
+				IsClusterMember: true,
+				Status:          "online",
+				LastSeen:        now,
+			},
+		},
+		VMs: []models.VM{
+			{
+				ID:       "Core Fabric:pve1:100",
+				VMID:     100,
+				Name:     "checkout-web-01",
+				Node:     "pve1",
+				Instance: "Core Fabric",
+				Status:   "running",
+				LastSeen: now,
+			},
+		},
+		Containers: []models.Container{
+			{
+				ID:       "Core Fabric:pve1:104",
+				VMID:     104,
+				Name:     "auth-service-01",
+				Node:     "pve1",
+				Instance: "Core Fabric",
+				Status:   "running",
+				LastSeen: now,
+			},
+		},
+	})
+
+	agents := rr.ListByType(ResourceTypeAgent)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 Proxmox parent resource, got %d", len(agents))
+	}
+	parentID := agents[0].ID
+
+	vms := rr.ListByType(ResourceTypeVM)
+	if len(vms) != 1 {
+		t.Fatalf("expected 1 vm, got %d", len(vms))
+	}
+	if vms[0].ParentID == nil || *vms[0].ParentID != parentID {
+		t.Fatalf("expected vm parent %q from node metadata fallback, got %+v", parentID, vms[0].ParentID)
+	}
+	if vms[0].ParentName != "West Production A" {
+		t.Fatalf("expected vm parent name West Production A, got %q", vms[0].ParentName)
+	}
+
+	containers := rr.ListByType(ResourceTypeSystemContainer)
+	if len(containers) != 1 {
+		t.Fatalf("expected 1 container, got %d", len(containers))
+	}
+	if containers[0].ParentID == nil || *containers[0].ParentID != parentID {
+		t.Fatalf("expected container parent %q from node metadata fallback, got %+v", parentID, containers[0].ParentID)
+	}
+
+	parent, ok := rr.Get(parentID)
+	if !ok {
+		t.Fatalf("expected parent %q", parentID)
+	}
+	if parent.ChildCount != 2 {
+		t.Fatalf("expected parent child count 2, got %d", parent.ChildCount)
+	}
+}
+
 func TestResourceRegistry_IngestSnapshotUnifiesHostLinkedProxmoxNodeViewsAcrossEndpointForms(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
