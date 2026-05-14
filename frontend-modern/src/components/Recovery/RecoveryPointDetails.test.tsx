@@ -1,4 +1,4 @@
-import { render, screen, within } from '@solidjs/testing-library';
+import { render, screen } from '@solidjs/testing-library';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Resource } from '@/types/resource';
@@ -88,7 +88,9 @@ describe('RecoveryPointDetails', () => {
 
     expect(screen.getByText('Platform Details')).toBeInTheDocument();
     expect(screen.queryByText('PBS Details')).not.toBeInTheDocument();
-    expect(screen.getByText('Platform-specific recovery metadata, verification state, and target health.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Provider metadata and target health for this recovery point.'),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Restore action path')).not.toBeInTheDocument();
     expect(screen.getByText('Restore readiness')).toBeInTheDocument();
     expect(screen.getByText('Verified candidate')).toBeInTheDocument();
@@ -96,34 +98,30 @@ describe('RecoveryPointDetails', () => {
     expect(screen.getByText('PBS catalog verification')).toBeInTheDocument();
     expect(screen.getAllByText('High confidence').length).toBeGreaterThan(0);
     expect(screen.getByText('Target Health')).toBeInTheDocument();
-    expect(screen.getByText('Verification')).toBeInTheDocument();
+    expect(screen.queryByText('UPID:')).not.toBeInTheDocument();
+    expect(screen.getByText('Recovery metadata')).toBeInTheDocument();
     expect(screen.getByText('Item Type')).toBeInTheDocument();
     expect(screen.getByText('Cluster / Site')).toBeInTheDocument();
     expect(screen.getByText('Host / Agent')).toBeInTheDocument();
     expect(screen.getByText('Namespace / Group')).toBeInTheDocument();
-    expect(screen.getByText('Point Type')).toBeInTheDocument();
-    expect(screen.getByText('Method')).toBeInTheDocument();
     expect(screen.getAllByText('Outcome').length).toBeGreaterThan(0);
     expect(screen.getByText('VM')).toBeInTheDocument();
     expect(screen.getByText('Lab Cluster')).toBeInTheDocument();
     expect(screen.getByText('pve-01')).toBeInTheDocument();
-    expect(screen.getAllByText('Finance').length).toBeGreaterThan(0);
-    expect(screen.getByText('Backup')).toBeInTheDocument();
-    expect(screen.getByText('Remote Copy')).toBeInTheDocument();
+    expect(screen.getByText('Finance')).toBeInTheDocument();
+    expect(screen.getByText('Backup / Remote Copy')).toBeInTheDocument();
     expect(screen.getAllByText('Success').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Verified').length).toBeGreaterThan(0);
-    expect(screen.getByText('Target Ref')).toBeInTheDocument();
+    expect(screen.queryByText('Target Ref')).not.toBeInTheDocument();
+    expect(screen.queryByText('Item Ref')).not.toBeInTheDocument();
     expect(screen.getByText('VMID')).toBeInTheDocument();
     expect(screen.getByText('Datastore')).toBeInTheDocument();
-    expect(screen.getByText('Namespace')).toBeInTheDocument();
+    expect(screen.queryByText('Namespace')).not.toBeInTheDocument();
     expect(screen.queryByText('details.vmid')).not.toBeInTheDocument();
 
-    const platformCard = screen.getByText('Platform').parentElement?.parentElement;
-    expect(platformCard).not.toBeNull();
-    expect(within(platformCard as HTMLDivElement).getByText('PBS')).toBeInTheDocument();
+    expect(screen.getAllByText('PBS').length).toBeGreaterThan(0);
   });
 
-  it('surfaces next restore actions when a successful point has not been verified', () => {
+  it('surfaces restore readiness when a successful point has not been verified', () => {
     render(() => (
       <RecoveryPointDetails
         point={{
@@ -147,7 +145,7 @@ describe('RecoveryPointDetails', () => {
     expect(screen.getByText('Available candidate')).toBeInTheDocument();
     expect(screen.getByText('Verification provenance')).toBeInTheDocument();
     expect(screen.getAllByText('Needs verification').length).toBeGreaterThan(0);
-    expect(screen.getByText('No verification timestamp recorded')).toBeInTheDocument();
+    expect(screen.queryByText('No verification timestamp recorded')).not.toBeInTheDocument();
   });
 
   it('uses canonical platform labels without forcing provider detail panels for other platforms', () => {
@@ -180,9 +178,7 @@ describe('RecoveryPointDetails', () => {
     expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
     expect(screen.queryByText('Repository Ref')).not.toBeInTheDocument();
 
-    const platformCard = screen.getByText('Platform').parentElement?.parentElement;
-    expect(platformCard).not.toBeNull();
-    expect(within(platformCard as HTMLDivElement).getByText('TrueNAS')).toBeInTheDocument();
+    expect(screen.getAllByText('TrueNAS').length).toBeGreaterThan(0);
   });
 
   it('uses platform-aware PVE wording and suppresses meaningless task details', () => {

@@ -986,8 +986,8 @@ describe('Recovery', () => {
       within(detailsPanel as HTMLTableCellElement).getByText('Namespace / Group'),
     ).toBeInTheDocument();
     expect(
-      within(detailsPanel as HTMLTableCellElement).getByText('Target Ref'),
-    ).toBeInTheDocument();
+      within(detailsPanel as HTMLTableCellElement).queryByText('Target Ref'),
+    ).not.toBeInTheDocument();
     expect(
       within(detailsPanel as HTMLTableCellElement).getByText('Lab Cluster'),
     ).toBeInTheDocument();

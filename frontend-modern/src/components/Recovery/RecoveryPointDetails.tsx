@@ -5,7 +5,10 @@ import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges
 import type { PBSDatastore } from '@/types/api';
 import type { RecoveryExternalRef, RecoveryPoint } from '@/types/recovery';
 import { formatAbsoluteTime, formatBytes, formatUptime } from '@/utils/format';
-import { getRecoveryItemTypeLabel, getRecoveryPointItemTypeKey } from '@/utils/recoveryItemTypePresentation';
+import {
+  getRecoveryItemTypeLabel,
+  getRecoveryPointItemTypeKey,
+} from '@/utils/recoveryItemTypePresentation';
 import { getRecoveryPointLocationEntries } from '@/utils/recoveryLocationPresentation';
 import {
   getRecoveryOutcomeTextClass,
@@ -18,10 +21,7 @@ import {
   getRecoveryPointRepositoryLabel,
 } from '@/utils/recoveryRecordPresentation';
 import { pbsInstanceFromResource } from '@/utils/resourceStateAdapters';
-import {
-  getSourcePlatformLabel,
-  normalizeSourcePlatformQueryValue,
-} from '@/utils/sourcePlatforms';
+import { getSourcePlatformLabel, normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { getRecoveryPointPlatform } from '@/utils/recoveryPlatformModel';
 
 interface RecoveryPointDetailsProps {
@@ -98,12 +98,21 @@ interface ProtectionChainStageSummary {
   detail: string;
 }
 
+interface RecoveryDetailPair {
+  k: string;
+  v: string;
+  valueClass?: string;
+}
+
 const normalizeDetailText = (value: unknown): string => {
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   return '';
 };
+
+const normalizeComparableText = (value: string): string =>
+  value.trim().replace(/\s+/g, ' ').toLowerCase();
 
 const getPointTimestampMs = (p: RecoveryPoint): number => {
   const raw = p.completedAt || p.startedAt || '';
@@ -112,8 +121,12 @@ const getPointTimestampMs = (p: RecoveryPoint): number => {
 };
 
 const getPointChainStage = (p: RecoveryPoint): RecoveryChainStage | null => {
-  const mode = String(p.mode || '').trim().toLowerCase();
-  const kind = String(p.kind || '').trim().toLowerCase();
+  const mode = String(p.mode || '')
+    .trim()
+    .toLowerCase();
+  const kind = String(p.kind || '')
+    .trim()
+    .toLowerCase();
   if (mode === 'remote') return 'remote';
   if (mode === 'local') return 'local';
   if (mode === 'snapshot' || kind === 'snapshot') return 'snapshot';
@@ -209,12 +222,7 @@ const formatChainPointDetail = (p: RecoveryPoint): string => {
   const target = getTargetSummaryLabel(p);
   const verification =
     p.verified === true ? 'Verified' : p.verified === false ? 'Verification failed' : '';
-  return [
-    target,
-    platform,
-    timestamp > 0 ? formatAbsoluteTime(timestamp) : '',
-    verification,
-  ]
+  return [target, platform, timestamp > 0 ? formatAbsoluteTime(timestamp) : '', verification]
     .filter(Boolean)
     .join(' · ');
 };
@@ -242,7 +250,10 @@ const getVerificationMethodLabel = (p: RecoveryPoint): string => {
   if (explicit) return explicit;
 
   const platform = normalizeSourcePlatformQueryValue(getRecoveryPointPlatform(p));
-  if (platform === 'proxmox-pbs' && (detailString(p, 'verificationState') || detailString(p, 'verificationUpid'))) {
+  if (
+    platform === 'proxmox-pbs' &&
+    (detailString(p, 'verificationState') || detailString(p, 'verificationUpid'))
+  ) {
     return 'PBS catalog verification';
   }
   if (detailString(p, 'verification')) return 'Backup metadata verification flag';
@@ -356,17 +367,6 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     },
   );
 
-  const hasPlatformDetails = createMemo(
-    () =>
-      isPbsPlatform() &&
-      (pbsComment().length > 0 ||
-        pbsOwner().length > 0 ||
-        point().immutable === true ||
-        pbsFiles().length > 0 ||
-        point().verified != null ||
-        matchedDatastore() != null),
-  );
-
   const startedMs = createMemo(() => {
     const startedAt = point().startedAt;
     return startedAt ? Date.parse(startedAt) : 0;
@@ -389,6 +389,28 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     if (refLabel !== 'n/a') return refLabel;
     return point().itemResourceId || point().id;
   });
+  const pbsDisplayComment = createMemo(() => {
+    const comment = pbsComment();
+    if (!comment) return '';
+    const duplicateCandidates = [
+      itemLabel(),
+      typeof point().display?.detailsSummary === 'string' ? point().display?.detailsSummary : '',
+    ];
+    const normalizedComment = normalizeComparableText(comment);
+    const isDuplicate = duplicateCandidates.some(
+      (candidate) => candidate && normalizeComparableText(candidate) === normalizedComment,
+    );
+    return isDuplicate ? '' : comment;
+  });
+  const hasPlatformDetails = createMemo(
+    () =>
+      isPbsPlatform() &&
+      (pbsDisplayComment().length > 0 ||
+        pbsOwner().length > 0 ||
+        point().immutable === true ||
+        pbsFiles().length > 0 ||
+        matchedDatastore() != null),
+  );
   const targetLabel = createMemo(() => getTargetSummaryLabel(point()));
   const normalizedOutcome = createMemo(() => normalizeRecoveryOutcome(point().outcome));
   const outcomeLabel = createMemo(() => getRecoveryPointOutcomeLabel(point().outcome));
@@ -508,38 +530,42 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
       };
     });
   });
-  const hasProtectionChain = createMemo(() =>
-    protectionChain().some((stage) => stage.point !== null),
+  const visibleProtectionChain = createMemo(() =>
+    protectionChain().filter((stage) => stage.point !== null),
   );
+  const hasProtectionChain = createMemo(() => visibleProtectionChain().length > 1);
   const verificationTimestamp = createMemo(() => getVerificationTimestampMs(point()));
   const verificationConfidence = createMemo(() =>
     getVerificationConfidence(point(), normalizedOutcome()),
   );
-  const verificationProvenancePairs = createMemo(() => [
-    {
-      k: 'Verifier',
-      v: getVerificationMethodLabel(point()),
-      valueClass: 'text-base-content',
-    },
-    {
-      k: 'Checked',
-      v:
-        verificationTimestamp() > 0
-          ? formatAbsoluteTime(verificationTimestamp())
-          : 'No verification timestamp recorded',
-      valueClass: 'text-base-content',
-    },
-    {
+  const verificationProvenancePairs = createMemo(() => {
+    const pairs: RecoveryDetailPair[] = [
+      {
+        k: 'Verifier',
+        v: getVerificationMethodLabel(point()),
+        valueClass: 'text-base-content',
+      },
+    ];
+
+    if (verificationTimestamp() > 0 || point().verified != null) {
+      pairs.push({
+        k: 'Checked',
+        v:
+          verificationTimestamp() > 0
+            ? formatAbsoluteTime(verificationTimestamp())
+            : 'No verification timestamp recorded',
+        valueClass: 'text-base-content',
+      });
+    }
+
+    pairs.push({
       k: 'Evidence',
       v: getVerificationEvidenceLabel(point()),
       valueClass: 'text-base-content',
-    },
-    {
-      k: 'Confidence',
-      v: verificationConfidence().label,
-      valueClass: verificationConfidence().className,
-    },
-  ]);
+    });
+
+    return pairs;
+  });
   const operatorSummaryPairs = createMemo(() => [
     {
       k: 'Outcome',
@@ -567,41 +593,39 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     },
   ]);
 
-  const summaryPairs = createMemo(() => {
+  const metadataPairs = createMemo(() => {
     const p = point();
-    const pairs: { k: string; v: string }[] = [];
+    const pairs: RecoveryDetailPair[] = [];
+    const seen = new Set<string>();
+    const addPair = (k: string, v: string, valueClass = 'text-base-content') => {
+      const trimmedValue = v.trim();
+      if (!trimmedValue || trimmedValue === 'n/a') return;
+      const key = `${k}:${normalizeComparableText(trimmedValue)}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      pairs.push({ k, v: trimmedValue, valueClass });
+    };
     const itemType = getRecoveryItemTypeLabel(getRecoveryPointItemTypeKey(p));
+    const locationEntries = getRecoveryPointLocationEntries(p);
+    const placementValues = new Set(
+      locationEntries.map((entry) => normalizeComparableText(entry.value)),
+    );
 
-    pairs.push({ k: 'ID', v: p.id });
-    if (itemType && itemType !== 'Unknown') pairs.push({ k: 'Item Type', v: itemType });
-    pairs.push({ k: 'Platform', v: platformLabel() || 'n/a' });
-    for (const entry of getRecoveryPointLocationEntries(p)) {
-      pairs.push({ k: entry.label, v: entry.value });
+    if (itemType && itemType !== 'Unknown') addPair('Item Type', itemType);
+    for (const entry of locationEntries) {
+      addPair(entry.label, entry.value);
     }
-    pairs.push({ k: 'Point Type', v: getRecoveryPointKindLabel(p.kind) });
-    pairs.push({ k: 'Method', v: getRecoveryPointModeLabel(p.mode) });
-    pairs.push({ k: 'Outcome', v: getRecoveryPointOutcomeLabel(p.outcome) });
-    pairs.push({ k: 'Duration', v: formatDurationFromISO(p.startedAt, p.completedAt) });
-    pairs.push({
-      k: 'Size',
-      v: typeof sizeBytes() === 'number' ? formatBytes(sizeBytes()!) : 'n/a',
-    });
-
-    if (p.verified != null) pairs.push({ k: 'Verified', v: p.verified ? 'Verified' : 'Not Verified' });
-    if (p.encrypted != null) pairs.push({ k: 'Encrypted', v: p.encrypted ? 'Encrypted' : 'Not Encrypted' });
-    if (p.itemResourceId) pairs.push({ k: 'Item Resource', v: p.itemResourceId });
-    if (p.repositoryResourceId) pairs.push({ k: 'Target Resource', v: p.repositoryResourceId });
-    if (p.itemRef || p.subjectRef) pairs.push({ k: 'Item Ref', v: labelForRef(p.itemRef || p.subjectRef) });
-    if (p.repositoryRef) pairs.push({ k: 'Target Ref', v: labelForRef(p.repositoryRef) });
+    if (typeof sizeBytes() === 'number') addPair('Size', formatBytes(sizeBytes()!));
+    if (p.encrypted != null) addPair('Encryption', p.encrypted ? 'Encrypted' : 'Not encrypted');
+    if (p.immutable === true) addPair('Retention', 'Immutable');
+    if (startedMs() > 0) addPair('Started', formatAbsoluteTime(startedMs()));
+    if (completedMs() > 0) addPair('Completed', formatAbsoluteTime(completedMs()));
 
     const commonDetailKeys = [
-      'instance',
       'vmid',
-      'node',
       'snapshotName',
       'volid',
       'datastore',
-      'namespace',
       'storage',
       'taskName',
       'phase',
@@ -617,7 +641,8 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
       const displayValue = normalizeDetailText(v);
       if (!displayValue) continue;
       if (k === 'vmid' && displayValue === '0') continue;
-      pairs.push({ k: COMMON_DETAIL_LABELS[k] || k, v: displayValue });
+      if (placementValues.has(normalizeComparableText(displayValue))) continue;
+      addPair(COMMON_DETAIL_LABELS[k] || k, displayValue);
     }
 
     return pairs;
@@ -668,9 +693,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
             <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
               Recovery Point Summary
             </div>
-            <div class="mt-1 text-sm font-medium text-base-content break-words">
-              {itemLabel()}
-            </div>
+            <div class="mt-1 text-sm font-medium text-base-content break-words">{itemLabel()}</div>
           </div>
           <Show when={platformBadge()}>
             {(badge) => (
@@ -687,9 +710,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
                 <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
                   {pair.k}
                 </div>
-                <div class={`mt-0.5 text-[13px] font-semibold ${pair.valueClass}`}>
-                  {pair.v}
-                </div>
+                <div class={`mt-0.5 text-[13px] font-semibold ${pair.valueClass}`}>{pair.v}</div>
                 <div class="mt-1 text-[11px] leading-4 text-muted break-words">{pair.detail}</div>
               </div>
             )}
@@ -711,16 +732,13 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
                 </div>
               </div>
             </div>
-            <div class="mt-2 grid gap-2 md:grid-cols-3">
-              <For each={protectionChain()}>
+            <div class="mt-2 grid gap-2 md:grid-cols-2">
+              <For each={visibleProtectionChain()}>
                 {(stage) => (
                   <div class="rounded border border-border bg-surface-alt/45 px-2.5 py-2">
                     <div class="flex items-center justify-between gap-2">
                       <span class="font-medium text-base-content">{stage.label}</span>
-                      <Show
-                        when={stage.outcome}
-                        fallback={<span class="text-[10px] text-muted">Missing</span>}
-                      >
+                      <Show when={stage.outcome}>
                         {(outcome) => (
                           <span
                             class={`text-[10px] font-medium ${getRecoveryOutcomeTextClass(
@@ -743,18 +761,29 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
         </Show>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-        <For each={summaryPairs()}>
-          {(pair) => (
-            <div class="rounded border border-border bg-surface px-3 py-2 text-xs">
-              <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                {pair.k}
-              </div>
-              <div class="mt-0.5 font-mono text-[11px] text-base-content break-all">{pair.v}</div>
-            </div>
-          )}
-        </For>
-      </div>
+      <Show when={metadataPairs().length > 0}>
+        <div class="rounded border border-border bg-surface p-3">
+          <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
+            Recovery metadata
+          </div>
+          <div class="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+            <For each={metadataPairs()}>
+              {(pair) => (
+                <div class="rounded border border-border bg-surface-alt/45 px-3 py-2 text-xs">
+                  <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                    {pair.k}
+                  </div>
+                  <div
+                    class={`mt-0.5 font-mono text-[11px] break-all ${pair.valueClass || 'text-base-content'}`}
+                  >
+                    {pair.v}
+                  </div>
+                </div>
+              )}
+            </For>
+          </div>
+        </div>
+      </Show>
 
       <div class="rounded border border-border bg-surface p-3">
         <div class="flex flex-wrap items-start justify-between gap-3">
@@ -770,7 +799,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
             {verificationConfidence().label}
           </span>
         </div>
-        <div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           <For each={verificationProvenancePairs()}>
             {(pair) => (
               <div class="rounded border border-border bg-surface-alt/45 px-3 py-2 text-xs">
@@ -786,21 +815,6 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
         </div>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-muted">
-        <div class="rounded border border-border bg-surface px-3 py-2">
-          <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Started</div>
-          <div class="mt-0.5 font-mono text-[11px] text-base-content">
-            {startedMs() > 0 ? formatAbsoluteTime(startedMs()) : 'n/a'}
-          </div>
-        </div>
-        <div class="rounded border border-border bg-surface px-3 py-2">
-          <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Completed</div>
-          <div class="mt-0.5 font-mono text-[11px] text-base-content">
-            {completedMs() > 0 ? formatAbsoluteTime(completedMs()) : 'n/a'}
-          </div>
-        </div>
-      </div>
-
       <Show when={hasPlatformDetails()}>
         <div class="rounded border border-border bg-surface p-3">
           <div class="flex flex-wrap items-start justify-between gap-3">
@@ -809,7 +823,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
                 Platform Details
               </div>
               <div class="mt-1 text-xs text-muted">
-                Platform-specific recovery metadata, verification state, and target health.
+                Provider metadata and target health for this recovery point.
               </div>
             </div>
             <Show when={platformBadge()}>
@@ -821,9 +835,9 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
             </Show>
           </div>
           <div class="mt-2 space-y-2">
-            <Show when={pbsComment()}>
+            <Show when={pbsDisplayComment()}>
               <div class="rounded border border-emerald-100 border-l-4 border-l-emerald-400 bg-emerald-50 px-3 py-2 text-xs italic leading-relaxed text-emerald-900 dark:border-emerald-900 dark:border-l-emerald-500 dark:bg-emerald-950/30 dark:text-emerald-100">
-                {pbsComment()}
+                {pbsDisplayComment()}
               </div>
             </Show>
 
@@ -857,51 +871,6 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
                   </svg>
                   Protected
                 </span>
-              </div>
-            </Show>
-
-            <Show when={isPbsPlatform() && point().verified != null}>
-              <div class="rounded border border-border bg-surface px-3 py-2 text-xs">
-                <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                  Verification
-                </div>
-                <div class="mt-0.5 flex items-center gap-2">
-                  {point().verified ? (
-                    <span class="inline-flex items-center gap-1 text-green-600 dark:text-green-400">
-                      <svg
-                        class="h-3.5 w-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2.5"
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                      Verified
-                    </span>
-                  ) : (
-                    <span class="text-amber-600 dark:text-amber-400">Failed</span>
-                  )}
-                  <Show when={typeof point().details?.verificationState === 'string'}>
-                    <span class="font-mono text-[11px] text-muted">
-                      ({String(point().details?.verificationState)})
-                    </span>
-                  </Show>
-                </div>
-                <Show
-                  when={
-                    typeof point().details?.verificationUpid === 'string' &&
-                    String(point().details?.verificationUpid || '').length > 0
-                  }
-                >
-                  <div class="mt-1 font-mono text-[10px] text-slate-400 break-all">
-                    UPID: {String(point().details?.verificationUpid)}
-                  </div>
-                </Show>
               </div>
             </Show>
 

@@ -1982,13 +1982,17 @@ restore execution contract. The drawer must not present a freestanding restore
 runbook or next-action path that reads as an approved restore workflow; target
 confirmation and isolated test-restore planning belong in a future governed
 action or restore flow, not in the evidence drawer. Chain context must be
-derived from the current recovery result set so mixed PVE/PBS/TrueNAS history
-can explain adjacent local snapshot, local copy, and remote copy stages without
-requiring all stages to land in the same day group.
+derived from the current recovery result set only when at least two concrete
+stages are visible, so mixed PVE/PBS/TrueNAS history can explain adjacent local
+snapshot, local copy, and remote copy stages without filling the drawer with
+missing-only cards. Raw transport IDs, provider refs, and provider task IDs
+belong behind `Technical details`; the primary drawer should keep human
+metadata, verification provenance, target health, and collapsed file lists
+without repeating the same verification fact in provider-specific sections.
 Provider-specific metadata must not recast the event drawer itself as if PBS
-were the native recovery model. Operator-facing detail labels in that drawer
-should prefer neutral target wording such as `Target Ref`, `Target Resource`,
-and `Target Health`.
+were the native recovery model. When target-specific technical labels are
+surfaced, they should prefer neutral wording such as `Target Ref`, `Target
+Resource`, and `Target Health`.
 Those transport hooks are direct governed runtime surfaces, not just page
 implementation detail: `frontend-modern/src/hooks/useRecoveryPoints.ts`,
 `frontend-modern/src/hooks/useRecoveryPointsFacets.ts`,
