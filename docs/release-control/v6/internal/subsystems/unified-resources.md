@@ -289,6 +289,10 @@ AI-only summary payloads, or page-local heuristics.
    from websocket `state.resources` instead of layering confirmatory
    route-local REST refetch loops over already-owned resource
    updates.
+   Browser WebSocket liveness tracking is part of that same store boundary:
+   valid inbound server messages, including heartbeat `ping`/`pong` traffic,
+   must refresh the browser-side activity timestamp so quiet periods between
+   resource snapshots do not cause avoidable reconnect churn.
    That shared store/adapter/hook path must also preserve canonical row shape
    across transport boundaries: thinner realtime `state.resources` payloads
    must merge into the existing canonical resource snapshot instead of

@@ -143,6 +143,25 @@ describe('websocket store resilience', () => {
     }
   });
 
+  it('keeps the websocket open when server activity arrives before heartbeat timeout', async () => {
+    const { dispose } = await createStoreHarness();
+    try {
+      vi.advanceTimersByTime(1); // run onopen tick
+      expect(currentInstance).not.toBeNull();
+
+      vi.advanceTimersByTime(89_000);
+      currentInstance!.onmessage?.({
+        data: JSON.stringify({ type: 'pong', data: { timestamp: Date.now() } }),
+      } as MessageEvent);
+      vi.advanceTimersByTime(2_000);
+
+      expect(currentInstance!.close).not.toHaveBeenCalledWith(4000, 'Heartbeat timeout');
+      expect(currentInstance!.close).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
   it('manual reconnect avoids duplicate reconnect scheduling', async () => {
     const { store, dispose } = await createStoreHarness();
     try {

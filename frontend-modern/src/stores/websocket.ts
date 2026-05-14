@@ -411,6 +411,7 @@ export function createWebSocketStore(url: string) {
         logger.error('Failed to parse WebSocket message', parseError);
         return;
       }
+      lastServerActivityAt = Date.now();
 
       try {
         const message = data as TimestampedWSMessage;
