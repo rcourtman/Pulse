@@ -1,7 +1,6 @@
 import { Component, Show } from 'solid-js';
 import StorageCephSection from '@/components/Storage/StorageCephSection';
 import StorageContentCard from '@/components/Storage/StorageContentCard';
-import StorageGrowthPlanner from '@/components/Storage/StorageGrowthPlanner';
 import StoragePageBanners from '@/components/Storage/StoragePageBanners';
 import StoragePageControls from '@/components/Storage/StoragePageControls';
 import StoragePageSummary from '@/components/Storage/StoragePageSummary';
@@ -20,7 +19,6 @@ const Storage: Component = () => {
     setStorageSummaryCollapsed,
     storageGrowthBySeriesId,
     storageGrowthColumnLabel,
-    storageGrowthPlanner,
     storageSummaryData,
     storageSummaryLoaded,
     storageSummaryFetchFailed,
@@ -74,7 +72,6 @@ const Storage: Component = () => {
     hoveredStorageResourceId,
     isLoadingPools,
     focusedStorageResourceId,
-    focusStorageGrowthPool,
     jumpToActiveStorageRow,
     selectedDiskId,
     setChartHoverSync,
@@ -128,14 +125,6 @@ const Storage: Component = () => {
                 setView('disks');
                 setStorageFilterStatus('attention');
               }}
-            />
-            <StorageGrowthPlanner
-              planner={storageGrowthPlanner()}
-              loaded={storageSummaryLoaded()}
-              fetchFailed={storageSummaryFetchFailed()}
-              activeSeriesId={activeSummaryStorageResourceId()}
-              onFocusPool={focusStorageGrowthPool}
-              onHoverPool={setHoveredStorageResourceId}
             />
           </div>
         </StickySummarySection>

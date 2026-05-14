@@ -6,7 +6,6 @@ import {
   type SummaryTimeRange,
 } from '@/components/shared/summaryTimeRange';
 import { buildStorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
-import { buildStorageGrowthPlannerPresentation } from '@/features/storageBackups/storageGrowthPlannerPresentation';
 import {
   resolvePhysicalDiskMetricResourceId,
   resolveStorageRecordMetricResourceId,
@@ -193,13 +192,6 @@ export const useStoragePageModel = () => {
     }
     return growth;
   });
-  const storageGrowthPlanner = createMemo(() =>
-    buildStorageGrowthPlannerPresentation({
-      records: filteredRecords(),
-      pools: storageSummaryCharts.data()?.pools,
-      rangeLabel: storageGrowthRangeLabel(),
-    }),
-  );
   const hoveredStorageResourceId = createMemo(() => {
     const hoveredId = hoveredStorageRowId();
     if (!hoveredId) return null;
@@ -226,13 +218,6 @@ export const useStoragePageModel = () => {
       }
     }
     return keys;
-  });
-  const storageRecordIdByMetricSeriesId = createMemo(() => {
-    const ids = new Map<string, string>();
-    for (const record of records()) {
-      ids.set(resolveStorageRecordMetricResourceId(record), record.id);
-    }
-    return ids;
   });
   const physicalDiskSeriesIds = createMemo(() => {
     const ids = new Set<string>();
@@ -457,21 +442,6 @@ export const useStoragePageModel = () => {
     },
   });
 
-  const focusStorageGrowthPool = (seriesId: string) => {
-    const recordId = storageRecordIdByMetricSeriesId().get(seriesId);
-    if (!recordId) {
-      return;
-    }
-    if (view() !== 'pools') {
-      setView('pools');
-    }
-    const groupKey = storageGroupKeyByMetricSeriesId().get(seriesId);
-    if (groupKey && !expandedGroups().has(groupKey)) {
-      toggleGroup(groupKey);
-    }
-    setExpandedPoolId(recordId);
-  };
-
   onCleanup(() => {
     routeStateNavigate.cleanup();
   });
@@ -489,7 +459,6 @@ export const useStoragePageModel = () => {
     setStorageSummaryCollapsed,
     storageGrowthBySeriesId,
     storageGrowthColumnLabel,
-    storageGrowthPlanner,
     storageSummaryData: storageSummaryCharts.data,
     storageSummaryLoaded: storageSummaryCharts.loaded,
     storageSummaryFetchFailed: storageSummaryCharts.fetchFailed,
@@ -540,7 +509,6 @@ export const useStoragePageModel = () => {
     hoveredStorageResourceId,
     isLoadingPools,
     jumpToActiveStorageRow: summaryInteraction.jumpToActiveRow,
-    focusStorageGrowthPool,
     focusedSummaryStorageGroupScope: focusedStorageGroupScope,
     focusedSummaryStorageGroupId: selectedStorageGroupId,
     hoveredSummaryStorageGroupScope: hoveredStorageGroupScope,

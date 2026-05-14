@@ -501,17 +501,6 @@ describe('Storage', () => {
     const storageContentSurface = screen.getByTestId('storage-content-surface');
     expect(await within(storageContentSurface).findByText(/\+40(?:\.0)? GB/)).toBeInTheDocument();
     expect(within(storageContentSurface).getByText(/-20(?:\.0)? GB/)).toBeInTheDocument();
-    expect(screen.getByTestId('storage-growth-planner')).toHaveTextContent(
-      '24h runway from storage history',
-    );
-    expect(screen.getByTestId('storage-growth-planner')).toHaveTextContent('1/2 growing');
-    expect(screen.getByTestId('storage-growth-planner')).toHaveTextContent('3 days');
-
-    fireEvent.click(screen.getByTestId('storage-growth-planner-pool-pool:alpha'));
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Collapse Alpha-Store' })).toBeInTheDocument();
-    });
     expect(storageSummarySpy).toHaveBeenCalledWith('24h', undefined, { nodeId: undefined });
 
     storageSummarySpy.mockRestore();

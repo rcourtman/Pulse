@@ -205,6 +205,11 @@ bypass the API fail-closed execution gate.
    breakpoint, it must use the frontend-primitives-owned
    `StickySummarySection` desktop-sticky mode so the wrapped 2x2 chart grid
    scrolls with the page instead of pinning most of a narrow viewport.
+   Storage must not reintroduce a sticky, frontend-only growth planner or
+   runway card derived directly from rolling summary chart deltas. Capacity
+   pressure planning may return as a governed storage/recovery model only when
+   the signal is stable, backend-owned, and action-oriented enough not to churn
+   the primary monitoring surface during ordinary refreshes.
    Ceph table shells on the storage route share the same frontend-primitives
    table contract: `frontend-modern/src/pages/Ceph.tsx` may own Ceph-specific
    columns and rows, but horizontal overflow and scrollbar hiding must route
