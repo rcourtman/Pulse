@@ -33,6 +33,7 @@ import infrastructureOperationsModelSource from '../infrastructureOperationsMode
 import infrastructureSourceManagerSource from '../InfrastructureSourceManager.tsx?raw';
 import infrastructureSourcePickerSource from '../InfrastructureSourcePicker.tsx?raw';
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
+import useConnectionsLedgerSource from '../useConnectionsLedger.ts?raw';
 import agentProfileSettingsSource from '../agentProfileSettings.ts?raw';
 import connectionsTableSource from '../ConnectionsTable.tsx?raw';
 import monitoredSystemImpactPreviewSource from '../MonitoredSystemImpactPreview.tsx?raw';
@@ -591,6 +592,9 @@ describe('settings architecture guardrails', () => {
     expect(settingsHeaderMetaSource).toContain(
       "description: 'Configure the public URL, CORS, embedding, and webhook network boundaries.'",
     );
+    expect(useConnectionsLedgerSource).toContain('createNonSuspendingQuery');
+    expect(useConnectionsLedgerSource).toContain('pollMs: POLL_INTERVAL_MS');
+    expect(useConnectionsLedgerSource).not.toContain('createResource');
   });
 
   it('keeps the detect-first editor and inline credential bodies on the shared editor model', () => {

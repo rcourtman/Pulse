@@ -29,7 +29,9 @@ type DeployCluster = {
 };
 
 export function useInfrastructurePageState() {
-  const { resources, loading, error, refetch } = useUnifiedResources();
+  const { resources, loading, error, refetch } = useUnifiedResources({
+    initialHydration: 'prefer-ws-then-rest',
+  });
   const kioskMode = useKioskMode();
   const { isMobile } = useBreakpoint();
 

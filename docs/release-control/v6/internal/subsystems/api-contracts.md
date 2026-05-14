@@ -350,6 +350,13 @@ the canonical monitored-system blocked payload.
 1. Add or change payload fields through handler + contract tests together
 2. Update frontend API types in lockstep with backend contract changes.
    Websocket-backed API consumers such as `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` and `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` may read runtime context only through `frontend-modern/src/contexts/appRuntime.ts`; they must not import `frontend-modern/src/App.tsx`, because payload ownership remains in the API contract rather than the root shell.
+2a. Route settings infrastructure connected-system ledgers through
+    `/api/connections` and `frontend-modern/src/components/Settings/useConnectionsLedger.ts`
+    together. The frontend ledger may retain the last fulfilled connection
+    snapshot while polling or manual reload is in flight, but that retention is
+    only a fetch lifecycle rule; it must not synthesize rows, downgrade backend
+    fleet state, or replace the shared connection projection with page-local
+    placeholders.
 3. Add dedicated contract tests for new stable payloads
 3a. Route diagnostics payload fields and user-facing diagnostics copy through
     `internal/api/diagnostics.go`,

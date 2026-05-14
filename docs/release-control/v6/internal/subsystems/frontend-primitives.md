@@ -639,6 +639,10 @@ prompt explain the same operator-facing priority.
    backend-authored cluster members, the table primitive must render those
    nodes as child composition beneath the cluster row rather than flattening
    them back into peer top-level systems or hiding them entirely.
+   The same table shell must keep fulfilled rows visible across polling and
+   manual reloads by using a retained-value query boundary, not app-level
+   Suspense or a blank loading replacement, so configured infrastructure does
+   not disappear while the next `/api/connections` request is in flight.
    The systems table and setup summary must count the same visible posture
    highlights they render, not hidden raw fleet signals. Passive attached-agent
    config or rollout handshakes whose only cause is a missing comparable
@@ -1732,6 +1736,11 @@ owns infrastructure route/deep-link synchronization. Future feature
 surfaces under `frontend-modern/src/features/` should follow that same pattern
 instead of letting page files accumulate route sync, filter, and modal
 orchestration inline.
+The infrastructure feature state owner may opt into websocket-first unified
+resource hydration only when it also schedules canonical REST revalidation
+after the first-paint settle window; shared route composition must not re-route
+the table through a blocking resource fetch just to confirm infrastructure that
+the realtime store has already reported.
 Infrastructure summary and detail surfaces now also use the shared normalized
 identity lookup helper from `frontend-modern/src/utils/resourceIdentity.ts`
 so dotted hostnames and alias variants stay consistent between the shared

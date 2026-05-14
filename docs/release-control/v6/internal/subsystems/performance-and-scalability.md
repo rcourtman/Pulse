@@ -683,6 +683,13 @@ REST fetch. Route-owned trend loading must also key off stable target identity
 and selected range only; reconciled resource snapshots that do not change the
 effective target set must not trigger duplicate infrastructure or storage chart
 requests.
+Infrastructure route first paint belongs to that same freshness discipline:
+when websocket `state.resources` already carries the connected-system snapshot,
+the route must keep that model visible immediately and revalidate richer REST
+details only after the first-paint settle window instead of making the operator
+wait on a blocking resource fetch before Pulse admits what is connected, or
+forcing a second resource-shape transition while the summary/table shell is
+still mounting.
 That same protected metrics-store boundary now also owns selected-series batch
 queries. Compact route consumers that request only CPU/memory or only storage
 `used`/`avail` capacity must keep that metric-type filter all the way through

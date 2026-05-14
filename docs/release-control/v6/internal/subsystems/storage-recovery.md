@@ -370,6 +370,11 @@ bypass the API fail-closed execution gate.
    recovery consumers must also wait for the first canonical REST snapshot
    instead of painting thinner websocket transport rows first and then
    rehydrating into a richer canonical shape a moment later.
+   Websocket-first unified-resource hydration is an explicit consumer opt-in,
+   not the storage/recovery default. Infrastructure may use that opt-in for
+   connected-system continuity only with delayed canonical REST revalidation;
+   storage and recovery routes must continue to require canonical REST first
+   unless their own contract is updated with equivalent shape-stability proof.
    Shared chart transports in `internal/api/router.go` must follow the same
    rule in mock mode: `/api/storage-charts` and adjacent infrastructure chart
    payloads must read through `GetUnifiedReadStateOrSnapshot()` so storage and

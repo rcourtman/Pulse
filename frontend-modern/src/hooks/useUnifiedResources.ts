@@ -46,6 +46,8 @@ const UNIFIED_RESOURCES_CACHE_MAX_AGE_MS = 15_000;
 const UNIFIED_RESOURCES_WS_DEBOUNCE_MS = 800;
 const UNIFIED_RESOURCES_WS_MIN_REFETCH_INTERVAL_MS = 2_500;
 const UNIFIED_RESOURCES_WS_INITIAL_HYDRATION_WAIT_MS = 1_200;
+const UNIFIED_RESOURCES_WS_CANONICAL_REVALIDATE_DELAY_MS =
+  UNIFIED_RESOURCES_CACHE_MAX_AGE_MS + 250;
 
 type APIMetricValue = {
   value?: number;
@@ -1029,10 +1031,12 @@ export const getCachedUnifiedResources = (options?: {
   return getUnifiedResourcesCacheEntry(scopedCacheKey).resources;
 };
 
+type UnifiedResourcesInitialHydration = 'immediate' | 'prefer-ws' | 'prefer-ws-then-rest';
+
 type UseUnifiedResourcesOptions = {
   query?: string;
   cacheKey?: string;
-  initialHydration?: 'immediate' | 'prefer-ws';
+  initialHydration?: UnifiedResourcesInitialHydration;
   enabled?: Accessor<boolean>;
 };
 
@@ -1044,7 +1048,10 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const typeFilter = parseUnifiedResourcesTypeFilter(query);
   const supportsCanonicalWsHydration = query === '' || typeFilter !== null;
   const prefersWsInitialHydration =
-    initialHydration === 'prefer-ws' && supportsCanonicalWsHydration;
+    (initialHydration === 'prefer-ws' || initialHydration === 'prefer-ws-then-rest') &&
+    supportsCanonicalWsHydration;
+  const revalidatesRestAfterWsInitialHydration =
+    initialHydration === 'prefer-ws-then-rest' && supportsCanonicalWsHydration;
   const [orgScope, setOrgScope] = createSignal(normalizeOrgScope(getOrgID()));
   const resolveScopedCacheKey = () => buildScopedUnifiedResourcesCacheKey(cacheKey, orgScope());
   let cacheEntry = seedUnifiedResourcesCacheFromAllResources(
@@ -1066,6 +1073,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const wsStore = getGlobalWebSocketStore();
   let refreshHandle: ReturnType<typeof setTimeout> | undefined;
   let initialHydrationHandle: ReturnType<typeof setTimeout> | undefined;
+  let canonicalRevalidationHandle: ReturnType<typeof setTimeout> | undefined;
   let inFlightRefetch: Promise<Resource[]> | null = null;
   let wsInitialized = false;
   let lastWsUpdateToken = '';
@@ -1087,6 +1095,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const runRefetch = async (options?: {
     force?: boolean;
     source?: 'initial' | 'ws' | 'manual';
+    background?: boolean;
   }) => {
     if (!enabled()) {
       return resources as unknown as Resource[];
@@ -1097,13 +1106,14 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
 
     const force = options?.force === true;
     const source = options?.source ?? 'manual';
+    const background = options?.background === true;
 
     if (!force && source === 'ws' && shouldThrottleWsRefetch(cacheEntry)) {
       return resources as unknown as Resource[];
     }
 
     const shouldForceNetwork = force || source === 'ws';
-    const shouldShowLoading = force || !cacheEntry.hasSnapshot;
+    const shouldShowLoading = !background && (force || !cacheEntry.hasSnapshot);
     if (shouldShowLoading) {
       setLoading(true);
     }
@@ -1126,7 +1136,9 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
         });
         return fetched;
       } catch (err) {
-        setError(err);
+        if (!background) {
+          setError(err);
+        }
         throw err;
       } finally {
         inFlightRefetch = null;
@@ -1168,11 +1180,18 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     }
   };
 
+  const clearCanonicalRevalidationTimeout = () => {
+    if (canonicalRevalidationHandle !== undefined) {
+      clearTimeout(canonicalRevalidationHandle);
+      canonicalRevalidationHandle = undefined;
+    }
+  };
+
   const shouldPreferWsInitialHydration = () =>
-    prefersWsInitialHydration &&
-    !cacheEntry.hasSnapshot &&
-    !wsStore.initialDataReceived() &&
-    (!Array.isArray(wsStore.state.resources) || wsStore.state.resources.length === 0);
+    prefersWsInitialHydration && !cacheEntry.hasSnapshot;
+
+  const hasWsInitialHydrationSnapshot = () =>
+    wsStore.connected() && wsStore.initialDataReceived() && Array.isArray(wsStore.state.resources);
 
   const scheduleInitialHydrationFallback = () => {
     if (initialHydrationHandle !== undefined) {
@@ -1207,11 +1226,29 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     }, delay);
   };
 
+  const scheduleCanonicalRevalidation = () => {
+    if (canonicalRevalidationHandle !== undefined) {
+      return;
+    }
+    // Let websocket-first routes finish their initial summary/table mount
+    // before asking REST to enrich the thinner realtime snapshot.
+    canonicalRevalidationHandle = setTimeout(() => {
+      canonicalRevalidationHandle = undefined;
+      if (!enabled()) {
+        return;
+      }
+      void runRefetch({ source: 'initial', background: true }).catch((err) => {
+        logger.debug('[useUnifiedResources] Background canonical revalidation failed', err);
+      });
+    }, UNIFIED_RESOURCES_WS_CANONICAL_REVALIDATE_DELAY_MS);
+  };
+
   createEffect(() => {
     orgScope();
 
     if (!enabled()) {
       clearInitialHydrationTimeout();
+      clearCanonicalRevalidationTimeout();
       clearRefreshTimeout();
       setLoading(false);
       return;
@@ -1223,7 +1260,9 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     }
 
     if (shouldPreferWsInitialHydration()) {
-      scheduleInitialHydrationFallback();
+      if (!hasWsInitialHydrationSnapshot()) {
+        scheduleInitialHydrationFallback();
+      }
       return;
     }
 
@@ -1258,11 +1297,13 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
 
     const wsResources = Array.isArray(wsStore.state.resources) ? wsStore.state.resources : [];
     // For normal page loads, keep the first paint on the canonical REST contract.
-    // Only `prefer-ws` consumers are allowed to render directly from the thinner
-    // realtime transport before a canonical snapshot exists.
+    // Only explicit websocket-first consumers are allowed to render directly
+    // from the thinner realtime transport before a canonical snapshot exists.
     if (!cacheEntry.hasSnapshot && !prefersWsInitialHydration) {
       return;
     }
+    const shouldRevalidateCanonicalSnapshot =
+      revalidatesRestAfterWsInitialHydration && !cacheEntry.hasSnapshot;
     const allResourcesEntry = getUnifiedResourcesCacheEntry(
       buildScopedUnifiedResourcesCacheKey(ALL_RESOURCES_CACHE_KEY, currentOrgScope),
     );
@@ -1296,6 +1337,10 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       setError(undefined);
       setLoading(false);
     });
+
+    if (shouldRevalidateCanonicalSnapshot) {
+      scheduleCanonicalRevalidation();
+    }
   });
 
   createEffect(() => {
@@ -1305,6 +1350,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       wsInitialized = false;
       lastWsUpdateToken = '';
       clearInitialHydrationTimeout();
+      clearCanonicalRevalidationTimeout();
       clearRefreshTimeout();
       return;
     }
@@ -1357,6 +1403,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     wsInitialized = false;
     lastWsUpdateToken = '';
     clearInitialHydrationTimeout();
+    clearCanonicalRevalidationTimeout();
 
     const scopedResources = cacheEntry.resources;
     const scopedPolicyPosture = cacheEntry.policyPosture;
@@ -1379,6 +1426,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   onCleanup(() => {
     unsubscribeOrgSwitch();
     clearInitialHydrationTimeout();
+    clearCanonicalRevalidationTimeout();
     clearRefreshTimeout();
   });
 

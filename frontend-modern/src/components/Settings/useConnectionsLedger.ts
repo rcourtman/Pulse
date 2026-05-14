@@ -1,4 +1,5 @@
-import { createEffect, createMemo, createResource, onCleanup } from 'solid-js';
+import { createMemo } from 'solid-js';
+import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { formatConnectionErrorMessage } from '@/utils/connectionErrorPresentation';
 import {
   ConnectionsAPI,
@@ -24,6 +25,7 @@ import {
 export { surfaceLabel };
 
 const POLL_INTERVAL_MS = 15000;
+const CONNECTIONS_LEDGER_QUERY_KEY = 'settings-infrastructure-connections';
 
 export const CONNECTION_TYPE_LABELS: Record<ConnectionType, string> = {
   pve: 'Proxmox VE',
@@ -443,6 +445,11 @@ interface ConnectionsLedgerSnapshot {
   systems: ConnectionSystem[];
 }
 
+const EMPTY_CONNECTIONS_LEDGER_SNAPSHOT: ConnectionsLedgerSnapshot = {
+  connections: [],
+  systems: [],
+};
+
 export const useConnectionsLedger = (): ConnectionsLedger => {
   const rowCache = new Map<string, CachedInfrastructureSystemRow>();
 
@@ -474,30 +481,21 @@ export const useConnectionsLedger = (): ConnectionsLedger => {
     }
   };
 
-  const [resource, { refetch }] = createResource<ConnectionsLedgerSnapshot>(
-    async () => {
+  const ledgerSnapshot = createNonSuspendingQuery<ConnectionsLedgerSnapshot, string>({
+    source: () => CONNECTIONS_LEDGER_QUERY_KEY,
+    fetcher: async () => {
       const response = await ConnectionsAPI.list();
       return {
         connections: response.connections ?? [],
         systems: response.systems ?? [],
       };
     },
-    {
-      initialValue: {
-        connections: [],
-        systems: [],
-      },
-    },
-  );
-
-  createEffect(() => {
-    const handle = window.setInterval(() => {
-      void refetch();
-    }, POLL_INTERVAL_MS);
-    onCleanup(() => window.clearInterval(handle));
+    initialValue: EMPTY_CONNECTIONS_LEDGER_SNAPSHOT,
+    cacheKey: (key) => key,
+    pollMs: POLL_INTERVAL_MS,
   });
 
-  const snapshot = () => resource() ?? { connections: [], systems: [] };
+  const snapshot = () => ledgerSnapshot.value() ?? EMPTY_CONNECTIONS_LEDGER_SNAPSHOT;
   const connections = () => snapshot().connections ?? [];
   const rows = createMemo<InfrastructureSystemRow[]>(() => {
     const allConnections = connections();
@@ -546,9 +544,9 @@ export const useConnectionsLedger = (): ConnectionsLedger => {
     rows,
     findById,
     reload: () => {
-      void refetch();
+      void ledgerSnapshot.refetch();
     },
-    loading: () => resource.loading,
-    error: () => resource.error,
+    loading: ledgerSnapshot.loading,
+    error: ledgerSnapshot.error,
   };
 };

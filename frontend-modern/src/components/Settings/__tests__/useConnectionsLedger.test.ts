@@ -1,11 +1,24 @@
 import { renderHook, waitFor } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConnectionsAPI, type Connection, type ConnectionSystem } from '@/api/connections';
+import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { useConnectionsLedger } from '../useConnectionsLedger';
+import useConnectionsLedgerSource from '../useConnectionsLedger.ts?raw';
 
 describe('useConnectionsLedger', () => {
+  beforeEach(() => {
+    resetCreateNonSuspendingQueryCacheForTest();
+  });
+
   afterEach(() => {
+    resetCreateNonSuspendingQueryCacheForTest();
     vi.restoreAllMocks();
+  });
+
+  it('keeps connection-ledger refreshes out of app-level Suspense', () => {
+    expect(useConnectionsLedgerSource).toContain('createNonSuspendingQuery');
+    expect(useConnectionsLedgerSource).toContain('pollMs: POLL_INTERVAL_MS');
+    expect(useConnectionsLedgerSource).not.toContain('createResource');
   });
 
   it('renders standalone agent rows with compact host identity and endpoint context', async () => {
@@ -124,6 +137,58 @@ describe('useConnectionsLedger', () => {
     expect(result.rows()[0]).toBe(firstRows[0]);
     expect(result.rows()[75]).toBe(firstRows[75]);
     expect(result.rows()[119]).toBe(firstRows[119]);
+  });
+
+  it('retains the fulfilled ledger while a reload is in flight', async () => {
+    const firstConnection: Connection = {
+      id: 'agent:tower',
+      type: 'agent',
+      name: 'Tower',
+      address: 'Tower',
+      state: 'active',
+      stateReason: '',
+      enabled: true,
+      surfaces: ['host'],
+      scope: { host: true },
+      lastSeen: '2026-04-23T12:00:00Z',
+      lastError: null,
+      source: 'agent',
+      capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+    };
+    const nextConnection: Connection = {
+      ...firstConnection,
+      id: 'agent:pi',
+      name: 'pi',
+      address: 'pi',
+    };
+    let resolveReload:
+      | ((value: { connections: Connection[]; systems: ConnectionSystem[] }) => void)
+      | undefined;
+    vi.spyOn(ConnectionsAPI, 'list')
+      .mockResolvedValueOnce({ connections: [firstConnection], systems: [] })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveReload = resolve;
+          }),
+      );
+
+    const { result } = renderHook(() => useConnectionsLedger());
+
+    await waitFor(() => expect(result.rows()).toHaveLength(1));
+    const firstRows = result.rows();
+    expect(firstRows[0]?.name).toBe('Tower');
+
+    result.reload();
+
+    await waitFor(() => expect(result.loading()).toBe(true));
+    expect(result.rows()).toBe(firstRows);
+    expect(result.rows()[0]?.name).toBe('Tower');
+
+    resolveReload?.({ connections: [nextConnection], systems: [] });
+
+    await waitFor(() => expect(result.loading()).toBe(false));
+    await waitFor(() => expect(result.rows()[0]?.name).toBe('pi'));
   });
 
   it('prioritizes explicit rollout drift, credential, and command-policy posture', async () => {

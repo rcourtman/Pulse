@@ -556,6 +556,11 @@ profile and assignment columns, but embedded table framing must route through
    come from the explicit nested `fleet` objects on `/api/connections`; Settings
    surfaces may rank or compact those signals, but they must not reconstruct
    them from table copy, status badge labels, or provider-local error strings.
+   The connections ledger is a retained-value settings query: polling or manual
+   reloads must preserve the last fulfilled connected-systems rows while the
+   next `/api/connections` request is in flight, and must not route the
+   Infrastructure settings table through app-level Suspense or a blank loading
+   replacement.
    The lifecycle-owned command-policy projection must preserve desired server
    policy and applied agent report truth as separate facts. Desired disabled
    with applied enabled, and desired enabled with applied disabled, are both

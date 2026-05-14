@@ -305,8 +305,13 @@ AI-only summary payloads, or page-local heuristics.
    refreshes. For default
    `initialHydration: 'immediate'` consumers, that same path must not paint the
    thinner websocket transport before the first canonical REST snapshot exists;
-   only explicit `prefer-ws` consumers may render directly from the realtime
-   transport before canonical hydrate completes.
+   only explicit websocket-first consumers may render directly from the realtime
+   transport before canonical hydrate completes. Operator surfaces that must
+   preserve already-known infrastructure continuity after login, such as the
+   Infrastructure page, must use websocket-first hydration with stale-cache
+   REST revalidation after the first-paint settle window so the page can paint
+   from live state immediately without forcing a second resource-shape
+   transition while summary and table surfaces are still mounting.
    Canonical cluster membership in that shared path must come only from
    explicit cluster identity such as Kubernetes context or platform cluster
    labels; standalone resource names must never be repurposed as synthetic

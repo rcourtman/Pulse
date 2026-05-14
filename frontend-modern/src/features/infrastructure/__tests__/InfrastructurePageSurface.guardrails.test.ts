@@ -21,6 +21,7 @@ describe('InfrastructurePageSurface guardrails', () => {
 
     expect(infrastructurePageStateSource).toContain('useInfrastructurePageRouteState');
     expect(infrastructurePageStateSource).toContain('buildInfrastructurePageFilterDerivation');
+    expect(infrastructurePageStateSource).toContain("initialHydration: 'prefer-ws-then-rest'");
     expect(infrastructurePageStateSource).not.toContain('useLocation(');
     expect(infrastructurePageStateSource).not.toContain('useNavigate(');
     expect(infrastructurePageStateSource).not.toContain('parseInfrastructureLinkSearch(');

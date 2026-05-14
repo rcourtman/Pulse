@@ -337,6 +337,67 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('uses an already-available websocket snapshot before the fallback REST timer for prefer-ws screens', async () => {
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: '',
+        cacheKey: 'all-resources',
+        initialHydration: 'prefer-ws',
+      });
+    });
+
+    await waitForResourceCount(() => result!.resources().length);
+    expect(result!.resources()[0]?.id).toBe(wsResource.id);
+    expect(result!.loading()).toBe(false);
+    expect(apiFetchMock).not.toHaveBeenCalled();
+
+    dispose();
+  });
+
+  it('paints from websocket before revalidating prefer-ws-then-rest screens in the background', async () => {
+    let resolveFetch:
+      | ((value: { ok: true; json: () => Promise<{ data: Array<typeof v2Resource> }> }) => void)
+      | undefined;
+    apiFetchMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        initialHydration: 'prefer-ws-then-rest',
+      });
+    });
+
+    await waitForResourceCount(() => result!.resources().length);
+    await flushAsync();
+    expect(result!.resources()[0]?.id).toBe(wsResource.id);
+    expect(result!.loading()).toBe(false);
+    expect(apiFetchMock).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(15_250);
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+
+    resolveFetch?.({
+      ok: true,
+      json: async () => ({ data: [{ ...v2Resource, name: 'node-rest' }] }),
+    });
+
+    await waitForValue(() => result!.resources()[0]?.displayName, 'node-rest');
+    expect(result!.loading()).toBe(false);
+
+    dispose();
+  });
+
   it('waits for the first canonical REST snapshot before painting immediate hydration screens', async () => {
     let resolveFetch:
       | ((value: { ok: true; json: () => Promise<{ data: Array<typeof v2Resource> }> }) => void)
