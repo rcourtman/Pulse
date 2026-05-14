@@ -1,7 +1,11 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it } from 'vitest';
 import { InfrastructureSourceManager } from '../InfrastructureSourceManager';
-import type { FleetGovernanceSignal, InfrastructureSystemRow } from '../connectionsTableModel';
+import type {
+  FleetGovernanceSignal,
+  InfrastructureSystemMemberRow,
+  InfrastructureSystemRow,
+} from '../connectionsTableModel';
 import type { Connection } from '@/api/connections';
 
 const connectionFixture = (overrides: Partial<Connection> = {}): Connection => ({
@@ -60,6 +64,24 @@ const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSy
     ...overrides,
   };
 };
+
+const member = (
+  overrides: Partial<InfrastructureSystemMemberRow> = {},
+): InfrastructureSystemMemberRow => ({
+  id: overrides.id ?? 'member-1',
+  name: overrides.name ?? 'member-1',
+  subtitle: overrides.subtitle ?? 'Cluster member',
+  source: overrides.source ?? 'agent',
+  host: overrides.host ?? 'https://member-1:8006',
+  coverageLabels: overrides.coverageLabels ?? ['Host telemetry'],
+  statusLabel: overrides.statusLabel ?? 'Active',
+  statusClassName: overrides.statusClassName ?? 'bg-green-100 text-green-800',
+  lastActivityText: overrides.lastActivityText ?? '5s ago',
+  fleetSignals: overrides.fleetSignals ?? [],
+  fleetHighlights: overrides.fleetHighlights ?? [],
+  primary: overrides.primary ?? false,
+  agentConnection: overrides.agentConnection,
+});
 
 describe('InfrastructureSourceManager setup summary', () => {
   afterEach(() => cleanup());
@@ -159,5 +181,57 @@ describe('InfrastructureSourceManager setup summary', () => {
     expect(screen.getByText('Needs attention').nextElementSibling?.textContent).toBe('0 systems');
     expect(screen.queryByText('Config pending')).toBeNull();
     expect(screen.queryByText('Rollout pending')).toBeNull();
+  });
+
+  it('still counts actionable member posture when the cluster parent is healthy', () => {
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => [
+          row({
+            id: 'pve:homelab',
+            ownerType: 'pve',
+            name: 'homelab',
+            source: 'both',
+            isCluster: true,
+            fleetSignals: [signal({ key: 'liveness', label: 'Live', tone: 'ok' })],
+            fleetHighlights: [signal({ key: 'liveness', label: 'Fleet OK', tone: 'ok' })],
+            members: [
+              member({
+                id: 'node-delly',
+                name: 'delly',
+                fleetSignals: [
+                  signal({
+                    key: 'config-drift',
+                    label: 'Config drift',
+                    detail: 'Desired and applied fingerprints differ.',
+                    tone: 'warning',
+                  }),
+                ],
+                fleetHighlights: [
+                  signal({
+                    key: 'config-drift',
+                    label: 'Config drift',
+                    detail: 'Desired and applied fingerprints differ.',
+                    tone: 'warning',
+                  }),
+                ],
+                primary: true,
+              }),
+            ],
+          }),
+        ]}
+        discoveredNodes={() => []}
+        discoveryEnabled
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly
+      />
+    ));
+
+    expect(screen.getByText('Needs attention').nextElementSibling?.textContent).toBe('1 system');
+    expect(screen.getByText('Fleet OK')).toBeInTheDocument();
+    expect(screen.getByText('Config drift')).toHaveAttribute(
+      'title',
+      'Desired and applied fingerprints differ.',
+    );
   });
 });
