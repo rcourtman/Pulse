@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, onCleanup } from 'solid-js';
+import { createEffect, createMemo, onCleanup } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { ConnectionsAPI, type ConnectionsListResponse } from '@/api/connections';
 import type { VM, Container, Node } from '@/types/api';
@@ -6,6 +6,7 @@ import type { WorkloadGuest } from '@/types/workloads';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
+import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { useWorkloads } from '@/hooks/useWorkloads';
 import { useKioskMode } from '@/hooks/useKioskMode';
@@ -67,14 +68,12 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     enabled: workloadsEnabled,
   });
   const connectionsResourceKey = createMemo(() => (workloadsEnabled() ? 'enabled' : null));
-  const [connectionsSnapshot, { refetch: refetchConnectionsSnapshot }] =
-    createResource<ConnectionsListResponse, string | null>(
-      connectionsResourceKey,
-      async () => ConnectionsAPI.list(),
-      {
-        initialValue: EMPTY_CONNECTIONS_RESPONSE,
-      },
-    );
+  const connectionsSnapshot = createNonSuspendingQuery<ConnectionsListResponse, string>({
+    source: connectionsResourceKey,
+    fetcher: () => ConnectionsAPI.list(),
+    initialValue: EMPTY_CONNECTIONS_RESPONSE,
+    cacheKey: (key) => `workloads-connections:${key}`,
+  });
 
   const dedupeGuests = (guests: WorkloadGuest[]): WorkloadGuest[] => {
     const seen = new Set<string>();
@@ -176,7 +175,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     getWorkloadsDisconnectedState(reconnecting()),
   );
   const workloadInventoryIssues = createMemo(() =>
-    buildWorkloadInventorySourceIssues(connectionsSnapshot()?.connections ?? []),
+    buildWorkloadInventorySourceIssues(connectionsSnapshot.value().connections ?? []),
   );
   const hasWorkloadsData = createMemo(() => allGuests().length > 0);
   const hasInfrastructureSources = createMemo(() =>
@@ -202,7 +201,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   const reconnectSurface = () => {
     if (workloadsEnabled()) {
       void workloads.refetch();
-      void refetchConnectionsSnapshot();
+      void connectionsSnapshot.refetch({ background: true });
     }
     reconnect();
   };
@@ -210,7 +209,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   createEffect(() => {
     if (!workloadsEnabled()) return;
     const handle = window.setInterval(() => {
-      void refetchConnectionsSnapshot();
+      void connectionsSnapshot.refetch({ background: true });
     }, WORKLOADS_CONNECTIONS_POLL_INTERVAL_MS);
     onCleanup(() => window.clearInterval(handle));
   });

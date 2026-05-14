@@ -1,6 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot } from 'solid-js';
 
+const notificationMocks = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+  warning: vi.fn(),
+}));
+
+vi.mock('@/stores/notifications', () => ({
+  notificationStore: notificationMocks,
+}));
+
 interface MockWebSocketInstance {
   url: string;
   readyState: number;
@@ -68,6 +79,8 @@ describe('websocket store resilience', () => {
     autoOpenSockets = true;
     currentInstance = null;
     instances.length = 0;
+    vi.setSystemTime(new Date('2026-05-14T08:00:00.000Z'));
+    notificationMocks.success.mockClear();
     installWebSocketMock();
   });
 
@@ -144,6 +157,65 @@ describe('websocket store resilience', () => {
       previous!.onclose?.({ code: 1000, reason: 'Reconnecting' } as CloseEvent);
       vi.advanceTimersByTime(60000);
       expect(instances).toHaveLength(2);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('shows auto-registration success once for a fresh event and suppresses replayed copies', async () => {
+    const { dispose } = await createStoreHarness();
+    try {
+      vi.advanceTimersByTime(1);
+      expect(currentInstance).not.toBeNull();
+
+      const event = {
+        type: 'node_auto_registered',
+        timestamp: '2026-05-14T08:00:00.000Z',
+        data: {
+          type: 'pve',
+          host: 'https://minipc:8006',
+          name: 'minipc',
+          nodeId: 'minipc',
+          tokenId: 'pulse-monitor@pve!pulse-minipc',
+          hasToken: true,
+        },
+      };
+
+      currentInstance!.onmessage?.({ data: JSON.stringify(event) } as MessageEvent);
+      currentInstance!.onmessage?.({ data: JSON.stringify(event) } as MessageEvent);
+
+      expect(notificationMocks.success).toHaveBeenCalledTimes(1);
+      expect(notificationMocks.success).toHaveBeenCalledWith(
+        'Proxmox VE node "minipc" was successfully auto-registered and is now being monitored!',
+        8000,
+      );
+    } finally {
+      dispose();
+    }
+  });
+
+  it('suppresses stale auto-registration success notifications', async () => {
+    const { dispose } = await createStoreHarness();
+    try {
+      vi.advanceTimersByTime(1);
+      expect(currentInstance).not.toBeNull();
+
+      currentInstance!.onmessage?.({
+        data: JSON.stringify({
+          type: 'node_auto_registered',
+          timestamp: '2026-05-14T07:50:00.000Z',
+          data: {
+            type: 'pve',
+            host: 'https://minipc:8006',
+            name: 'minipc',
+            nodeId: 'minipc',
+            tokenId: 'pulse-monitor@pve!pulse-minipc',
+            hasToken: true,
+          },
+        }),
+      } as MessageEvent);
+
+      expect(notificationMocks.success).not.toHaveBeenCalled();
     } finally {
       dispose();
     }

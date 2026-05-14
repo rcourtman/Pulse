@@ -85,6 +85,9 @@ let wsConnected = true;
 let wsInitialDataReceived = true;
 let wsReconnecting = false;
 let setWsConnectedSignal: ((next: boolean) => void) | null = null;
+const connectionsApiMocks = vi.hoisted(() => ({
+  list: vi.fn(),
+}));
 
 const pushMockWorkloads = (next: Array<Record<string, unknown>>) => {
   mockWorkloads = next;
@@ -176,7 +179,7 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
 
 vi.mock('@/api/connections', () => ({
   ConnectionsAPI: {
-    list: vi.fn().mockResolvedValue({ connections: [], systems: [] }),
+    list: connectionsApiMocks.list,
   },
 }));
 
@@ -351,6 +354,8 @@ describe('Workloads performance contract', () => {
     setMockWorkloadsSignal = null;
     setWsConnectedSignal = null;
     workloadsRefetchMock.mockReset();
+    connectionsApiMocks.list.mockReset();
+    connectionsApiMocks.list.mockResolvedValue({ connections: [], systems: [] });
     guestRowMountCount = 0;
     guestRowUnmountCount = 0;
     wsConnected = true;
@@ -411,6 +416,23 @@ describe('Workloads performance contract', () => {
 
       expect(document.body).not.toHaveTextContent('Connection lost');
       expect(document.body).not.toHaveTextContent('Attempting to reconnect…');
+    });
+
+    it('keeps workload rows visible while connection inventory refresh is still pending', async () => {
+      mockLocationSearch = '?type=all';
+      mockWorkloads = [makeGuest(1, { name: 'refresh-stable-workload' })];
+      connectionsApiMocks.list.mockImplementationOnce(() => new Promise(() => undefined));
+
+      render(() => <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-testid="guest-row-refresh-stable-workload"]'),
+        ).toBeInTheDocument();
+      });
+
+      expect(document.body).not.toHaveTextContent('Loading view...');
+      expect(document.body).not.toHaveTextContent('Loading...');
     });
 
     it('does not label an empty workload resource list as missing infrastructure when sources exist', async () => {
@@ -664,6 +686,9 @@ describe('Workloads performance contract', () => {
       expect(workloadsStateSource).toContain('useWorkloadsDerivedState');
       expect(workloadsStateSource).toContain('useWorkloadRouteState');
       expect(workloadsStateSource).toContain('buildWorkloadInventorySourceIssues');
+      expect(workloadsStateSource).toContain('createNonSuspendingQuery<ConnectionsListResponse');
+      expect(workloadsStateSource).toContain('connectionsSnapshot.refetch({ background: true })');
+      expect(workloadsStateSource).not.toContain('createResource<ConnectionsListResponse');
       expect(workloadsStateCardsSource).toContain('workloadInventoryIssues');
       expect(workloadInventorySourceIssuesSource).toContain('WORKLOAD_CAPABLE_TYPES');
       expect(workloadInventorySourceIssuesSource).toContain('formatConnectionErrorMessage');

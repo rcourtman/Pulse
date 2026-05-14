@@ -214,6 +214,11 @@ regression protection.
    Workloads source-health messaging must derive from the canonical
    `/api/connections` ledger through
    `frontend-modern/src/components/Workloads/workloadInventorySourceIssues.ts`.
+   Connection-ledger refreshes on the Workloads page are steady-state health
+   probes, not route-loading authority: after the Workloads shell has mounted,
+   those refreshes must retain the last rendered table state and must not trip
+   the app-level Suspense fallback or blank the table while the next
+   `/api/connections` request is in flight.
    The Workloads page may show a bounded partial-inventory banner when a
    configured workload-capable source is unauthorized, unreachable, stale,
    pending, or paused, but it must not fabricate VM/container rows from host

@@ -276,6 +276,11 @@ profile and assignment columns, but embedded table framing must route through
    nodes may emit `node_auto_registered`, while matched existing nodes that
    rotate or refresh credentials must emit a non-toast configuration refresh
    such as `nodes_changed`.
+   Browser consumers must treat `node_auto_registered` as a real-time,
+   timestamped lifecycle event rather than durable infrastructure state:
+   fresh first-time events may show one success toast, but replayed, stale, or
+   duplicate events must refresh configuration silently so an old registration
+   cannot present as a newly connected node.
    Shared `internal/api/` session and auth changes consumed by lifecycle
    routes must preserve durable principal IDs as the authorization key. Agent
    lifecycle surfaces may display contact email when supplied by the shared

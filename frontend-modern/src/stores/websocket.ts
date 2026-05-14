@@ -21,11 +21,88 @@ import {
 import { mergeCanonicalResourceSnapshot } from '@/utils/resourceStateAdapters';
 
 const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 8 * 1024 * 1024; // 8 MiB
+const AUTO_REGISTER_NOTIFICATION_FRESH_MS = 2 * 60 * 1000;
+const AUTO_REGISTER_NOTIFICATION_FUTURE_SKEW_MS = 30 * 1000;
+const AUTO_REGISTER_NOTIFICATION_DEDUPE_MS = 10 * 60 * 1000;
+
+type TimestampedWSMessage = WSMessage & { timestamp?: number | string };
+type AutoRegisterNotificationPayload = {
+  type?: string;
+  host?: string;
+  name?: string;
+  nodeId?: string;
+  nodeName?: string;
+  timestamp?: number | string;
+};
+
+const shownAutoRegisterNotifications = new Map<string, number>();
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+
+const parseTimestampMs = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value < 1_000_000_000_000 ? value * 1000 : value;
+  }
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return null;
+  }
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    return numeric < 1_000_000_000_000 ? numeric * 1000 : numeric;
+  }
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const resolveMessageTimestampMs = (message: TimestampedWSMessage): number | null => {
+  const envelopeTimestamp = parseTimestampMs(message.timestamp);
+  if (envelopeTimestamp !== null) {
+    return envelopeTimestamp;
+  }
+  return parseTimestampMs(asRecord((message as { data?: unknown }).data)?.timestamp);
+};
+
+const buildAutoRegisterNotificationKey = (node: AutoRegisterNotificationPayload): string => {
+  const nodeIdentity = node.nodeId || node.nodeName || node.name || node.host || 'unknown';
+  return [node.type || 'unknown', nodeIdentity, node.host || ''].join('|');
+};
+
+const shouldShowAutoRegisterNotification = (
+  message: TimestampedWSMessage,
+  node: AutoRegisterNotificationPayload,
+  now = Date.now(),
+): boolean => {
+  const eventTimestampMs = resolveMessageTimestampMs(message);
+  if (eventTimestampMs === null) {
+    return false;
+  }
+  if (
+    eventTimestampMs < now - AUTO_REGISTER_NOTIFICATION_FRESH_MS ||
+    eventTimestampMs > now + AUTO_REGISTER_NOTIFICATION_FUTURE_SKEW_MS
+  ) {
+    return false;
+  }
+
+  for (const [key, shownAt] of shownAutoRegisterNotifications) {
+    if (now - shownAt > AUTO_REGISTER_NOTIFICATION_DEDUPE_MS) {
+      shownAutoRegisterNotifications.delete(key);
+    }
+  }
+
+  const key = buildAutoRegisterNotificationKey(node);
+  const previousShownAt = shownAutoRegisterNotifications.get(key);
+  if (
+    typeof previousShownAt === 'number' &&
+    now - previousShownAt <= AUTO_REGISTER_NOTIFICATION_DEDUPE_MS
+  ) {
+    return false;
+  }
+  shownAutoRegisterNotifications.set(key, now);
+  return true;
+};
 
 // Type-safe WebSocket store
 export function createWebSocketStore(url: string) {
@@ -336,7 +413,7 @@ export function createWebSocketStore(url: string) {
       }
 
       try {
-        const message: WSMessage = data;
+        const message = data as TimestampedWSMessage;
 
         if (
           message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE ||
@@ -481,22 +558,25 @@ export function createWebSocketStore(url: string) {
           setUpdateProgress(message.data);
           logger.info('Update progress:', message.data);
         } else if (message.type === 'node_auto_registered') {
-          // Node was successfully auto-registered
-          // Received node_auto_registered message
           const node = message.data;
           const nodeName = node.name || node.host;
           const nodeType = node.type === 'pve' ? 'Proxmox VE' : 'Proxmox Backup Server';
 
-          notificationStore.success(
-            `${nodeType} node "${nodeName}" was successfully auto-registered and is now being monitored!`,
-            8000,
-          );
-          logger.info('Node auto-registered:', node);
+          if (shouldShowAutoRegisterNotification(message, node)) {
+            notificationStore.success(
+              `${nodeType} node "${nodeName}" was successfully auto-registered and is now being monitored!`,
+              8000,
+            );
+            eventBus.emit('node_auto_registered', node);
+            logger.info('Node auto-registered:', node);
+          } else {
+            logger.debug('Suppressed stale or duplicate node auto-registration notification', {
+              nodeName,
+              nodeType: node.type,
+              timestamp: message.timestamp,
+            });
+          }
 
-          // Emit event to trigger UI updates
-          eventBus.emit('node_auto_registered', node);
-
-          // Trigger a refresh of nodes
           eventBus.emit('refresh_nodes');
         } else if (message.type === 'node_deleted' || message.type === 'nodes_changed') {
           // Nodes configuration has changed, refresh the list
