@@ -82,7 +82,6 @@ const labelForRef = (ref: RecoveryExternalRef | null | undefined): string => {
 };
 
 type RecoveryChainStage = 'snapshot' | 'local' | 'remote';
-type RestoreActionTone = 'success' | 'warning' | 'danger' | 'info';
 
 const CHAIN_STAGES: Array<{ id: RecoveryChainStage; label: string }> = [
   { id: 'snapshot', label: 'Local snapshot' },
@@ -97,18 +96,6 @@ interface ProtectionChainStageSummary {
   outcome: ReturnType<typeof normalizeRecoveryOutcome> | null;
   outcomeLabel: string;
   detail: string;
-}
-
-interface RestoreActionStep {
-  label: string;
-  detail: string;
-}
-
-interface RestoreActionPath {
-  label: string;
-  detail: string;
-  tone: RestoreActionTone;
-  steps: RestoreActionStep[];
 }
 
 const normalizeDetailText = (value: unknown): string => {
@@ -295,146 +282,6 @@ const getVerificationConfidence = (
   };
 };
 
-const getRestoreActionPath = (
-  p: RecoveryPoint,
-  targetLabel: string,
-  platformLabel: string,
-  chain: ProtectionChainStageSummary[],
-  failureDetail: string,
-): RestoreActionPath => {
-  const outcome = normalizeRecoveryOutcome(p.outcome);
-  const presentStages = chain.filter((stage) => stage.point !== null);
-  const chainDetail =
-    presentStages.length > 1
-      ? `${presentStages.map((stage) => stage.label).join(', ')} present in current results.`
-      : presentStages.length === 1
-        ? `${presentStages[0].label} present in current results.`
-        : 'No adjacent chain stages are visible in the current results.';
-
-  if (outcome === 'failed') {
-    return {
-      label: 'Investigate source task',
-      detail: 'This event did not produce a usable recovery point.',
-      tone: 'danger',
-      steps: [
-        {
-          label: 'Open source task evidence',
-          detail: failureDetail || 'Inspect the source platform task or job log for the failing step.',
-        },
-        {
-          label: 'Re-run protection before restore planning',
-          detail: 'Use a newer successful point or complete a fresh protection run before relying on this item.',
-        },
-      ],
-    };
-  }
-
-  if (outcome === 'running') {
-    return {
-      label: 'Wait for completion',
-      detail: 'The event is still collecting recovery metadata.',
-      tone: 'info',
-      steps: [
-        {
-          label: 'Keep this point out of restore plans',
-          detail: 'Use the completed event row once the platform reports a terminal outcome.',
-        },
-        {
-          label: 'Check chain coverage after completion',
-          detail: chainDetail,
-        },
-      ],
-    };
-  }
-
-  if (p.verified === false) {
-    return {
-      label: 'Do not restore from this point yet',
-      detail: 'Verification failed, so the artifact should be treated as suspect.',
-      tone: 'warning',
-      steps: [
-        {
-          label: 'Rerun platform verification',
-          detail: 'Verify the artifact from the source platform before promoting it to a restore candidate.',
-        },
-        {
-          label: 'Prefer an older verified point',
-          detail: 'Use a known-good point if restore pressure is high.',
-        },
-      ],
-    };
-  }
-
-  if (p.verified === true) {
-    return {
-      label: 'Ready for restore planning',
-      detail: 'The recovery point is verified; restore still needs an operator-approved target and isolation decision.',
-      tone: 'success',
-      steps: [
-        {
-          label: 'Confirm target and retention',
-          detail: `${targetLabel} · ${chainDetail}`,
-        },
-        {
-          label: 'Plan an isolated test restore',
-          detail: 'Restore to an alternate location first when replacing production would be destructive.',
-        },
-        {
-          label: 'Execute from the source platform',
-          detail: `Use ${platformLabel || 'the source platform'} with this point's item and target identifiers.`,
-        },
-      ],
-    };
-  }
-
-  if (outcome === 'success' || outcome === 'warning') {
-    return {
-      label: 'Verify before restore use',
-      detail: 'The event completed, but no successful verification result is recorded.',
-      tone: 'warning',
-      steps: [
-        {
-          label: 'Run artifact verification',
-          detail: 'Use the platform verifier or a non-destructive test restore before treating this as a restore candidate.',
-        },
-        {
-          label: 'Confirm target and chain',
-          detail: `${targetLabel} · ${chainDetail}`,
-        },
-      ],
-    };
-  }
-
-  return {
-    label: 'Review before restore planning',
-    detail: 'The event outcome is not enough to trust this point automatically.',
-    tone: 'warning',
-    steps: [
-      {
-        label: 'Inspect platform details',
-        detail: 'Check the source platform state, target location, and any technical metadata before restore use.',
-      },
-      {
-        label: 'Prefer a verified point',
-        detail: 'Use a verified successful point where one exists for the same item.',
-      },
-    ],
-  };
-};
-
-const getRestoreActionToneClass = (tone: RestoreActionTone): string => {
-  switch (tone) {
-    case 'success':
-      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200';
-    case 'danger':
-      return 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200';
-    case 'info':
-      return 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-200';
-    default:
-      return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200';
-  }
-};
-
 const computeDatastoreUsagePercent = (datastore: PBSDatastore): number => {
   if (Number.isFinite(datastore.total) && datastore.total > 0 && Number.isFinite(datastore.used)) {
     const calculated = (datastore.used / datastore.total) * 100;
@@ -550,41 +397,41 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     if (outcome === 'failed') {
       return {
         label: 'Not restorable',
-        detail: 'This event did not produce a usable recovery point.',
+        detail: 'No usable recovery point was produced.',
         className: 'text-rose-600 dark:text-rose-400',
       };
     }
     if (outcome === 'running') {
       return {
         label: 'In progress',
-        detail: 'Recovery metadata is still being collected.',
+        detail: 'Recovery metadata is still running.',
         className: 'text-blue-600 dark:text-blue-400',
       };
     }
     if (point().verified === true) {
       return {
         label: 'Verified candidate',
-        detail: 'Verification completed for this recovery point.',
+        detail: 'Verification completed for this point.',
         className: 'text-emerald-600 dark:text-emerald-400',
       };
     }
     if (point().verified === false) {
       return {
         label: 'Verification failed',
-        detail: 'Treat this artifact as suspect until verification is rerun.',
+        detail: 'Use another point until verification passes.',
         className: 'text-amber-600 dark:text-amber-400',
       };
     }
     if (outcome === 'success') {
       return {
         label: 'Available candidate',
-        detail: 'The event succeeded, but no verification result was recorded.',
+        detail: 'Succeeded; verification is not recorded.',
         className: 'text-emerald-600 dark:text-emerald-400',
       };
     }
     return {
       label: 'Review required',
-      detail: 'The event needs an operator review before restore use.',
+      detail: 'Review the evidence before restore use.',
       className: 'text-amber-600 dark:text-amber-400',
     };
   });
@@ -693,15 +540,6 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
       valueClass: verificationConfidence().className,
     },
   ]);
-  const restoreActionPath = createMemo(() =>
-    getRestoreActionPath(
-      point(),
-      targetLabel(),
-      platformLabel(),
-      protectionChain(),
-      failureDetail(),
-    ),
-  );
   const operatorSummaryPairs = createMemo(() => [
     {
       k: 'Outcome',
@@ -903,29 +741,6 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
             </div>
           </div>
         </Show>
-        <div
-          class={`mt-3 rounded border px-3 py-2 text-xs ${getRestoreActionToneClass(
-            restoreActionPath().tone,
-          )}`}
-        >
-          <div class="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <div class="font-semibold">Restore action path</div>
-              <div class="mt-0.5 text-[13px] font-semibold">{restoreActionPath().label}</div>
-              <div class="mt-1 text-[11px] leading-4">{restoreActionPath().detail}</div>
-            </div>
-          </div>
-          <div class="mt-2 grid gap-2 md:grid-cols-2">
-            <For each={restoreActionPath().steps}>
-              {(step) => (
-                <div class="rounded border border-current/15 bg-surface/70 px-2.5 py-2">
-                  <div class="font-medium">{step.label}</div>
-                  <div class="mt-1 text-[11px] leading-4">{step.detail}</div>
-                </div>
-              )}
-            </For>
-          </div>
-        </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-2">

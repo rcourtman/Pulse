@@ -960,6 +960,20 @@ describe('Recovery', () => {
     expect(await screen.findByText('Recovery Point Details')).toBeInTheDocument();
     const detailsPanel = screen.getByText('Recovery Point Details').closest('td');
     expect(detailsPanel).not.toBeNull();
+    expect(
+      within(detailsPanel as HTMLTableCellElement).queryByText('Restore action path'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(detailsPanel as HTMLTableCellElement).getByText('Restore readiness'),
+    ).toBeInTheDocument();
+    expect(
+      within(detailsPanel as HTMLTableCellElement).getByText('Available candidate'),
+    ).toBeInTheDocument();
+    expect(
+      within(detailsPanel as HTMLTableCellElement).getByText(
+        'Succeeded; verification is not recorded.',
+      ),
+    ).toBeInTheDocument();
     expect(within(detailsPanel as HTMLTableCellElement).getByText('Item Type')).toBeInTheDocument();
     expect(within(detailsPanel as HTMLTableCellElement).getByText('VM')).toBeInTheDocument();
     expect(

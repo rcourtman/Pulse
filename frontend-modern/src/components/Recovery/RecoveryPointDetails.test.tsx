@@ -89,8 +89,9 @@ describe('RecoveryPointDetails', () => {
     expect(screen.getByText('Platform Details')).toBeInTheDocument();
     expect(screen.queryByText('PBS Details')).not.toBeInTheDocument();
     expect(screen.getByText('Platform-specific recovery metadata, verification state, and target health.')).toBeInTheDocument();
-    expect(screen.getByText('Restore action path')).toBeInTheDocument();
-    expect(screen.getByText('Ready for restore planning')).toBeInTheDocument();
+    expect(screen.queryByText('Restore action path')).not.toBeInTheDocument();
+    expect(screen.getByText('Restore readiness')).toBeInTheDocument();
+    expect(screen.getByText('Verified candidate')).toBeInTheDocument();
     expect(screen.getByText('Verification provenance')).toBeInTheDocument();
     expect(screen.getByText('PBS catalog verification')).toBeInTheDocument();
     expect(screen.getAllByText('High confidence').length).toBeGreaterThan(0);
@@ -141,10 +142,9 @@ describe('RecoveryPointDetails', () => {
       />
     ));
 
-    expect(screen.getByText('Restore action path')).toBeInTheDocument();
-    expect(screen.getByText('Verify before restore use')).toBeInTheDocument();
-    expect(screen.getByText('Run artifact verification')).toBeInTheDocument();
-    expect(screen.getByText('Confirm target and chain')).toBeInTheDocument();
+    expect(screen.queryByText('Restore action path')).not.toBeInTheDocument();
+    expect(screen.getByText('Restore readiness')).toBeInTheDocument();
+    expect(screen.getByText('Available candidate')).toBeInTheDocument();
     expect(screen.getByText('Verification provenance')).toBeInTheDocument();
     expect(screen.getAllByText('Needs verification').length).toBeGreaterThan(0);
     expect(screen.getByText('No verification timestamp recorded')).toBeInTheDocument();
@@ -254,8 +254,8 @@ describe('RecoveryPointDetails', () => {
     expect(
       screen.getAllByText(/Inspect the platform task log for the failing step/i).length,
     ).toBeGreaterThan(0);
-    expect(screen.getByText('Investigate source task')).toBeInTheDocument();
-    expect(screen.getByText('Open source task evidence')).toBeInTheDocument();
+    expect(screen.getByText('Not restorable')).toBeInTheDocument();
+    expect(screen.queryByText('Investigate source task')).not.toBeInTheDocument();
     expect(screen.queryByText('VMID')).not.toBeInTheDocument();
     expect(screen.queryByText('0')).not.toBeInTheDocument();
   });

@@ -1976,14 +1976,15 @@ inside a provider-neutral detail shell through
 datastore and verification enrichments remain available without presenting the
 details drawer as a PBS-only surface.
 The point-details drawer also owns restore-safe operator guidance. It may
-surface a next action path, verification provenance, and chain coverage for the
+surface restore readiness, verification provenance, and chain coverage for the
 selected point, but it must stay read-side until the backend exposes a governed
-restore execution contract; UI copy should guide verification, target
-confirmation, and isolated test-restore planning without inventing local
-restore buttons or implying an unsafe action has been approved. Chain context
-must be derived from the current recovery result set so mixed PVE/PBS/TrueNAS
-history can explain adjacent local snapshot, local copy, and remote copy
-stages without requiring all stages to land in the same day group.
+restore execution contract. The drawer must not present a freestanding restore
+runbook or next-action path that reads as an approved restore workflow; target
+confirmation and isolated test-restore planning belong in a future governed
+action or restore flow, not in the evidence drawer. Chain context must be
+derived from the current recovery result set so mixed PVE/PBS/TrueNAS history
+can explain adjacent local snapshot, local copy, and remote copy stages without
+requiring all stages to land in the same day group.
 Provider-specific metadata must not recast the event drawer itself as if PBS
 were the native recovery model. Operator-facing detail labels in that drawer
 should prefer neutral target wording such as `Target Ref`, `Target Resource`,
