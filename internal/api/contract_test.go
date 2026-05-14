@@ -13192,6 +13192,40 @@ func TestContract_AgentConnectionPayloadIncludesVersionFields(t *testing.T) {
 	assertJSONSnapshot(t, body, want)
 }
 
+func TestContract_AgentDefaultDesiredConfigDoesNotCreateRolloutAttention(t *testing.T) {
+	now := time.Date(2026, 5, 14, 10, 30, 0, 0, time.UTC)
+	connections := buildConnections(aggregatorInputs{
+		hosts: []models.Host{
+			{
+				ID:              "host-1",
+				Hostname:        "host-1",
+				ReportIP:        "192.0.2.42",
+				LastSeen:        now.Add(-10 * time.Second),
+				AgentVersion:    "6.0.0",
+				Platform:        "linux",
+				CommandsEnabled: false,
+				TokenID:         "token-1",
+			},
+		},
+		agentDesiredConfigs: map[string]connectionAgentDesiredConfig{
+			"host-1": {},
+		},
+		expectedAgentVersion: "6.0.0",
+		now:                  now,
+	})
+	if len(connections) != 1 {
+		t.Fatalf("expected one agent connection, got %d", len(connections))
+	}
+
+	body, err := json.Marshal(connections[0])
+	if err != nil {
+		t.Fatalf("marshal agent Connection: %v", err)
+	}
+
+	want := `{"id":"agent:host-1","type":"agent","name":"host-1","address":"host-1","hostAliases":["host-1","192.0.2.42"],"state":"active","enabled":true,"surfaces":["host"],"scope":{"host":true},"lastSeen":"2026-05-14T10:29:50Z","source":"agent","agentIdentity":{"hostname":"host-1","platform":"linux","reportIp":"192.0.2.42"},"agentVersion":"6.0.0","expectedAgentVersion":"6.0.0","fleet":{"enrollmentState":"enrolled","livenessState":"active","versionDrift":"current","adapterHealth":"healthy","configRollout":"reported","credentialStatus":"verified","updateStatus":"current","remoteControl":"disabled","configDrift":{"status":"not-applicable","lastObservedAt":"2026-05-14T10:29:50Z","reason":"no managed agent configuration override is assigned"},"rollout":{"status":"current","stage":"applied","reason":"no managed agent configuration rollout is assigned"},"credentialHealth":{"status":"verified","kind":"agent-token","rotation":"healthy","lastVerifiedAt":"2026-05-14T10:29:50Z"},"commandPolicy":{"status":"disabled","desired":"unknown","applied":"disabled","enforcement":"not-applicable","reason":"no desired command-policy override is configured; reporting the agent-applied state"}},"capabilities":{"supportsPause":false,"supportsScope":false,"supportsTest":false}}`
+	assertJSONSnapshot(t, body, want)
+}
+
 func TestContract_ConnectionsListIncludesAgentHostsFromUnifiedReadState(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
 	monitor, err := monitoring.New(cfg)

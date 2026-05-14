@@ -898,11 +898,18 @@ the canonical monitored-system blocked payload.
     fetch or frontend-local host reconciliation rules.
     Agent config drift on that same payload must source desired fingerprints
     from `Monitor.GetHostAgentConfig(...).DesiredConfig` or the same
-    `remoteconfig.BuildDesiredConfigMetadata` path. The aggregator must not
-    manufacture convergence by assigning desired and applied to the same local
-    report-field fingerprint; when host state lacks a trustworthy applied
-    config fingerprint, `configDrift` stays pending or unknown and rollout
-    stays non-current.
+    `remoteconfig.BuildDesiredConfigMetadata` path. Desired config metadata is
+    actionable only when the server has assigned a managed desired value, such
+    as an explicit command-execution policy or an agent-applied settings key.
+    The empty default host-agent config may still carry signed metadata for
+    validation, but `/api/connections` must not turn that passive default into
+    an operator-visible pending rollout. Agent rows without a managed config
+    override expose `configDrift.status: not-applicable` and a current applied
+    rollout with a bounded no-rollout reason. When a managed desired
+    fingerprint exists, the aggregator must not manufacture convergence by
+    assigning desired and applied to the same local report-field fingerprint;
+    if host state lacks a trustworthy applied config fingerprint,
+    `configDrift` stays pending or unknown and rollout stays non-current.
     Appliance-specific Pulse Agent compatibility is an additive host-profile
     fact on that same identity payload. For Unraid and similar host profiles,
     `agentIdentity.platform` remains the canonical runtime platform such as
@@ -2837,6 +2844,13 @@ credential validity/rotation facts, and command-policy enforcement state used
 by Settings and CLI consumers. Frontend settings surfaces may format those
 facts, but must not infer a second fleet state from row labels, error-message
 text, or provider-local table heuristics.
+Unmanaged host-agent defaults are not a fleet rollout. When the backend
+resolved only the default signed config with no managed command policy or
+agent-applied setting, `fleet.configDrift` must remain `not-applicable` and
+`fleet.rollout` must remain `current`/`applied`; Settings may show deeper
+diagnostics, but must not count that passive state as source setup attention.
+Only a real managed desired config fingerprint can create pending rollout
+attention when an applied fingerprint is absent or mismatched.
 The `fleet.commandPolicy` object is the canonical desired/applied convergence
 contract for remote command enablement. It must carry the desired server
 policy, the applied agent-reported truth when available, the effective

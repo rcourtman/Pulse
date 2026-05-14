@@ -64,6 +64,46 @@ describe('visibleFleetGovernanceSignals', () => {
     ]);
   });
 
+  it('does not turn default unmanaged agent config into setup attention', () => {
+    const rawSignals = fleetGovernanceSignalsForConnection(
+      connectionFixture({
+        fleet: {
+          enrollmentState: 'enrolled',
+          livenessState: 'active',
+          versionDrift: 'current',
+          adapterHealth: 'healthy',
+          configRollout: 'reported',
+          credentialStatus: 'verified',
+          updateStatus: 'current',
+          remoteControl: 'disabled',
+          configDrift: {
+            status: 'not-applicable',
+            reason: 'no managed agent configuration override is assigned',
+          },
+          rollout: {
+            status: 'current',
+            stage: 'applied',
+            reason: 'no managed agent configuration rollout is assigned',
+          },
+          credentialHealth: { status: 'verified', kind: 'agent-token' },
+          commandPolicy: {
+            status: 'disabled',
+            desired: 'unknown',
+            applied: 'disabled',
+            enforcement: 'not-applicable',
+          },
+        },
+      }),
+    );
+
+    expect(rawSignals.map((signal) => signal.label)).toEqual(
+      expect.arrayContaining(['No config drift', 'Rollout current', 'Remote control disabled']),
+    );
+    expect(visibleFleetGovernanceSignals(rawSignals).map((signal) => signal.label)).toEqual([
+      'Remote control disabled',
+    ]);
+  });
+
   it('keeps actionable config and rollout warnings visible', () => {
     const rawSignals = fleetGovernanceSignalsForConnection(
       connectionFixture({

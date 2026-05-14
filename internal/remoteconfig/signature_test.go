@@ -114,6 +114,41 @@ func TestBuildDesiredConfigMetadataIgnoresUnknownUnappliedSettings(t *testing.T)
 	}
 }
 
+func TestHasAppliedDesiredConfig(t *testing.T) {
+	commandsEnabled := false
+	tests := []struct {
+		name            string
+		commandsEnabled *bool
+		settings        map[string]interface{}
+		want            bool
+	}{
+		{name: "empty default", want: false},
+		{
+			name:     "unknown unapplied settings only",
+			settings: map[string]interface{}{"token_value": "redacted"},
+			want:     false,
+		},
+		{
+			name:     "applied profile setting",
+			settings: map[string]interface{}{"interval": "1m"},
+			want:     true,
+		},
+		{
+			name:            "command override",
+			commandsEnabled: &commandsEnabled,
+			want:            true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HasAppliedDesiredConfig(tt.commandsEnabled, tt.settings); got != tt.want {
+				t.Fatalf("HasAppliedDesiredConfig() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestValidateDesiredConfigMetadata(t *testing.T) {
 	commandsEnabled := true
 	settings := map[string]interface{}{"interval": "1m"}

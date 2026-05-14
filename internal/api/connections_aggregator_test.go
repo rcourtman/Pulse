@@ -489,6 +489,42 @@ func TestBuildConnections_AgentFleetGovernance(t *testing.T) {
 	}
 }
 
+func TestBuildConnections_AgentWithoutManagedDesiredConfigDoesNotReportRolloutPending(t *testing.T) {
+	now := time.Now()
+	in := aggregatorInputs{
+		hosts: []models.Host{
+			{
+				ID:              "default-agent",
+				Hostname:        "default-agent",
+				LastSeen:        now,
+				CommandsEnabled: false,
+			},
+		},
+		agentDesiredConfigs: map[string]connectionAgentDesiredConfig{
+			"default-agent": {},
+		},
+		now: now,
+	}
+
+	got := buildConnections(in)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 connection, got %d", len(got))
+	}
+
+	fleet := got[0].Fleet
+	if fleet.ConfigDrift == nil ||
+		fleet.ConfigDrift.Status != fleetConfigDriftNotApplicable ||
+		fleet.ConfigDrift.Desired != nil ||
+		fleet.ConfigDrift.Applied != nil {
+		t.Fatalf("default agent config drift = %+v", fleet.ConfigDrift)
+	}
+	if fleet.Rollout == nil ||
+		fleet.Rollout.Status != fleetStateCurrent ||
+		fleet.Rollout.Stage != fleetRolloutStageApplied {
+		t.Fatalf("default agent rollout = %+v", fleet.Rollout)
+	}
+}
+
 func TestBuildConnections_AgentCommandPolicyDesiredAppliedConvergence(t *testing.T) {
 	now := time.Now()
 	desiredDisabled := desiredAgentConfig(t, ptrBool(false), nil)
@@ -615,6 +651,40 @@ func TestBuildConnections_AgentConfigDriftUsesCanonicalDesiredMetadataWithoutSel
 	}
 	if got[0].Fleet.Rollout == nil || got[0].Fleet.Rollout.Status == fleetStateCurrent {
 		t.Fatalf("rollout should not claim current without an applied config comparison, got %+v", got[0].Fleet.Rollout)
+	}
+}
+
+func TestConnectionAgentDesiredConfigFingerprintsSkipsEmptyDefaultConfig(t *testing.T) {
+	monitor, err := monitoring.New(&config.Config{DataPath: t.TempDir()})
+	if err != nil {
+		t.Fatalf("monitoring.New: %v", err)
+	}
+	t.Cleanup(func() { monitor.Stop() })
+
+	hostID := "default-agent"
+	got := connectionAgentDesiredConfigFingerprints(monitor, []models.Host{{ID: hostID}})
+	desired, ok := got[hostID]
+	if !ok {
+		t.Fatalf("expected resolved desired config entry for %q, got %+v", hostID, got)
+	}
+	if desired.Fingerprint != nil {
+		t.Fatalf("empty default config should not create rollout fingerprint, got %+v", desired.Fingerprint)
+	}
+	if desired.CommandsEnabled != nil {
+		t.Fatalf("empty default config should not set command override, got %+v", desired.CommandsEnabled)
+	}
+
+	commandsEnabled := true
+	if err := monitor.UpdateHostAgentConfig(hostID, &commandsEnabled); err != nil {
+		t.Fatalf("UpdateHostAgentConfig: %v", err)
+	}
+	got = connectionAgentDesiredConfigFingerprints(monitor, []models.Host{{ID: hostID}})
+	desired = got[hostID]
+	if desired.Fingerprint == nil {
+		t.Fatalf("managed command override should create desired config fingerprint")
+	}
+	if desired.CommandsEnabled == nil || !*desired.CommandsEnabled {
+		t.Fatalf("managed command override = %+v, want true", desired.CommandsEnabled)
 	}
 }
 

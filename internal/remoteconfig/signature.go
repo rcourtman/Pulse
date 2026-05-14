@@ -94,6 +94,17 @@ func BuildDesiredConfigMetadata(commandsEnabled *bool, settings map[string]inter
 	}, nil
 }
 
+// HasAppliedDesiredConfig reports whether the desired config contains any
+// server-managed value an agent is expected to apply. The empty default config
+// still has a stable fingerprint for signing/validation, but it must not be
+// treated as an actionable rollout.
+func HasAppliedDesiredConfig(commandsEnabled *bool, settings map[string]interface{}) bool {
+	if commandsEnabled != nil {
+		return true
+	}
+	return len(desiredConfigAppliedSettings(settings)) > 0
+}
+
 // ValidateDesiredConfigMetadata verifies that metadata matches the desired config payload.
 func ValidateDesiredConfigMetadata(metadata DesiredConfigMetadata, commandsEnabled *bool, settings map[string]interface{}) error {
 	metadata = normalizeDesiredConfigMetadata(metadata)

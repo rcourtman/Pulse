@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
+	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
 	pulseutils "github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
@@ -406,11 +407,7 @@ func buildAgentConnection(host models.Host, expectedAgentVersion string, now tim
 		AgentUpdateAvailable: updateAvailable,
 		Capabilities:         ConnectionCapabilities{SupportsPause: false, SupportsScope: false, SupportsTest: false},
 	}, now)
-	var desiredFingerprint *ConnectionFleetConfigFingerprint
-	if desiredConfig != nil {
-		desiredFingerprint = desiredConfig.Fingerprint
-	}
-	conn.Fleet.ConfigDrift = connectionFleetAgentConfigDrift(conn, desiredFingerprint)
+	conn.Fleet.ConfigDrift = connectionFleetAgentConfigDrift(conn, desiredConfig)
 	conn.Fleet.CredentialHealth = connectionFleetAgentCredentialHealth(conn, host, now)
 	conn.Fleet.CommandPolicy = connectionFleetAgentCommandPolicy(conn, host, desiredConfig)
 	conn.Fleet.Rollout = connectionFleetRollout(conn)
@@ -562,8 +559,21 @@ func connectionFleetConfigDrift(conn Connection) *ConnectionFleetConfigDrift {
 	}
 }
 
-func connectionFleetAgentConfigDrift(conn Connection, desired *ConnectionFleetConfigFingerprint) *ConnectionFleetConfigDrift {
-	return connectionFleetAgentConfigDriftForFingerprints(conn, desired, nil)
+func connectionFleetAgentConfigDrift(conn Connection, desiredConfig *connectionAgentDesiredConfig) *ConnectionFleetConfigDrift {
+	if desiredConfig == nil {
+		return &ConnectionFleetConfigDrift{
+			Status: fleetStateUnknown,
+			Reason: "Pulse has not resolved canonical desired agent configuration metadata",
+		}
+	}
+	if desiredConfig.Fingerprint == nil {
+		return &ConnectionFleetConfigDrift{
+			Status:         fleetConfigDriftNotApplicable,
+			LastObservedAt: conn.LastSeen,
+			Reason:         "no managed agent configuration override is assigned",
+		}
+	}
+	return connectionFleetAgentConfigDriftForFingerprints(conn, desiredConfig.Fingerprint, nil)
 }
 
 func connectionFleetAgentConfigDriftForFingerprints(conn Connection, desired, applied *ConnectionFleetConfigFingerprint) *ConnectionFleetConfigDrift {
@@ -665,6 +675,12 @@ func connectionFleetRollout(conn Connection) *ConnectionFleetRolloutState {
 				Status: fleetStateUnknown,
 				Stage:  fleetRolloutStagePending,
 				Reason: "rollout state cannot be confirmed without comparable desired and applied agent config fingerprints",
+			}
+		case fleetConfigDriftNotApplicable:
+			return &ConnectionFleetRolloutState{
+				Status: fleetStateCurrent,
+				Stage:  fleetRolloutStageApplied,
+				Reason: "no managed agent configuration rollout is assigned",
 			}
 		}
 	}
@@ -849,7 +865,7 @@ func connectionAgentDesiredConfigFingerprints(monitor *monitoring.Monitor, hosts
 		desired := connectionAgentDesiredConfig{
 			CommandsEnabled: cloneBoolPtr(cfg.CommandsEnabled),
 		}
-		if cfg.DesiredConfig != nil {
+		if cfg.DesiredConfig != nil && remoteconfig.HasAppliedDesiredConfig(cfg.CommandsEnabled, cfg.Settings) {
 			if fp := connectionConfigFingerprintFromMetadata(cfg.DesiredConfig.Version, cfg.DesiredConfig.Hash); fp != nil {
 				desired.Fingerprint = fp
 			}

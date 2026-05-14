@@ -251,6 +251,9 @@ Passive agent config or rollout handshakes whose only cause is a missing
 comparable applied agent configuration fingerprint are not operator-actionable
 setup attention and must not be counted as a visible infrastructure problem
 unless a row or member still renders them as an actionable highlight.
+The API-owned distinction is important: an unmanaged default agent config is
+not a rollout at all, while a managed desired config that lacks an applied
+fingerprint is rollout attention until the agent report proves convergence.
 Configured-node settings tables follow the same boundary:
 `frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx` may own node,
 credential, capability, status, and action cells, but table scroll framing must
@@ -1964,10 +1967,14 @@ config `signature` backward-compatible with installed agents by signing the
 legacy canonical payload shape only; newer clients validate `desiredConfig` by
 recomputing it from the signed command decision and signed settings payload,
 restricted to the agent-applied settings key schema. Broader applied-state
-reporting remains the next contract gap: until the runtime report carries a
-comparable applied config fingerprint, `/api/connections` must surface desired
-config metadata as pending or unknown and must not claim rollout convergence
-from host report fields such as `commandsEnabled` or `diskExclude`.
+reporting remains the next contract gap for managed config: until the runtime
+report carries a comparable applied config fingerprint for an assigned managed
+desired config, `/api/connections` must surface that desired config metadata as
+pending or unknown and must not claim rollout convergence from host report
+fields such as `commandsEnabled` or `diskExclude`. The empty default desired
+config is different: it may be signed and served for compatibility, but without
+a managed command decision or agent-applied setting it is not a rollout and
+must project as `configDrift: not-applicable` with a current applied rollout.
 Command policy follows the same lifecycle truth boundary: the server desired
 command setting is not applied runtime truth until a current agent report
 confirms it. `/api/connections` must expose desired command policy, applied

@@ -4740,6 +4740,21 @@
           "repo": "pulse",
           "path": "internal/monitoring/monitor_unified_state_test.go",
           "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/remoteconfig/signature.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/remoteconfig/signature_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/75-settings-infrastructure-fleet-status-coherence.spec.ts",
+          "kind": "file"
         }
       ]
     },

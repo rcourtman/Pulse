@@ -601,7 +601,11 @@ bypass the API fail-closed execution gate.
    vocabulary. If `/api/connections` reports agent config drift as pending or
    unknown because no trustworthy applied fingerprint exists, storage and
    recovery must preserve that uncertainty instead of translating it into a
-   storage-local current/drifted verdict.
+   storage-local current/drifted verdict. If `/api/connections` reports
+   `configDrift: not-applicable` with a current applied rollout because no
+   managed host-agent config override is assigned, storage and recovery must
+   preserve that no-rollout state instead of translating it into a pending
+   storage/recovery problem.
    When `/api/connections` attaches an exact-match host agent to a blocked
    Proxmox API source without fresh node inventory, storage and recovery must
    treat that as one represented source with host telemetry, not as a second
