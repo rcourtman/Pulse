@@ -40,6 +40,8 @@ SCRIPT_MTIME=$(stat -c %Y "${SCRIPT_PATH}" 2>/dev/null || stat -f %m "${SCRIPT_P
 
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/hot-dev-auth.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/hot-dev-runtime.sh"
 
 # --- Helper Functions ---
 
@@ -244,6 +246,7 @@ HOT_DEV_BUILD_LOCK="${HOT_DEV_BUILD_LOCK_FILE:-${ROOT_DIR}/tmp/hot-dev.build.loc
 HOT_DEV_WATCHER_STARTUP_GRACE_SECONDS="${HOT_DEV_WATCHER_STARTUP_GRACE_SECONDS:-5}"
 EMBEDDED_FRONTEND_DIR="${ROOT_DIR}/internal/api/frontend-modern"
 EMBEDDED_FRONTEND_DIST_DIR="${EMBEDDED_FRONTEND_DIR}/dist"
+BACKEND_DEBUG_LOG="${PULSE_BACKEND_LOG_FILE:-/tmp/pulse-debug.log}"
 
 # --- Startup Checks ---
 
@@ -280,7 +283,8 @@ kill_port "${PULSE_DEV_API_PORT}"
 kill_port "${EXTRA_CLEANUP_PORT}"
 
 # Truncate debug log
-:> /tmp/pulse-debug.log
+mkdir -p "$(dirname "${BACKEND_DEBUG_LOG}")"
+:> "${BACKEND_DEBUG_LOG}"
 
 sleep 2
 
@@ -445,25 +449,31 @@ if [[ ${PRO_BUILD_SUCCESS:-false} == "true" ]]; then
     log_info "Pro audit logging enabled (SQLite storage in ${PULSE_AUDIT_DIR})"
 fi
 
-LOG_LEVEL="${LOG_LEVEL:-debug}" \
-FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
-PORT="${PULSE_DEV_API_PORT:-7655}" \
-PULSE_DATA_DIR="${PULSE_DATA_DIR:-}" \
-PULSE_ENCRYPTION_KEY="${PULSE_ENCRYPTION_KEY:-}" \
-ALLOW_ADMIN_BYPASS="${ALLOW_ADMIN_BYPASS:-1}" \
-PULSE_DEV="${PULSE_DEV:-true}" \
-PULSE_AUTH_USER="${PULSE_AUTH_USER:-}" \
-PULSE_AUTH_PASS="${PULSE_AUTH_PASS:-}" \
-ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
-LOG_FILE="/tmp/pulse-debug.log" \
-LOG_MAX_SIZE="50" \
-./pulse > /dev/null 2>&1 &
-BACKEND_PID=$!
+STARTED_BACKEND_PID=""
+start_backend_process() {
+    LOG_LEVEL="${LOG_LEVEL:-debug}" \
+    FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
+    PORT="${PULSE_DEV_API_PORT:-7655}" \
+    PULSE_DATA_DIR="${PULSE_DATA_DIR:-}" \
+    PULSE_ENCRYPTION_KEY="${PULSE_ENCRYPTION_KEY:-}" \
+    ALLOW_ADMIN_BYPASS="${ALLOW_ADMIN_BYPASS:-1}" \
+    PULSE_DEV="${PULSE_DEV:-true}" \
+    PULSE_AUTH_USER="${PULSE_AUTH_USER:-}" \
+    PULSE_AUTH_PASS="${PULSE_AUTH_PASS:-}" \
+    ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
+    LOG_FILE="${BACKEND_DEBUG_LOG}" \
+    LOG_MAX_SIZE="50" \
+    ./pulse </dev/null >> "${BACKEND_DEBUG_LOG}" 2>&1 &
+    STARTED_BACKEND_PID=$!
+}
+
+start_backend_process
+BACKEND_PID="${STARTED_BACKEND_PID}"
 
 sleep 2
 
 if ! kill -0 "${BACKEND_PID}" 2>/dev/null; then
-    log_error "Backend failed to start!"
+    log_error "Backend failed to start! Check ${BACKEND_DEBUG_LOG}"
     exit 1
 fi
 
@@ -484,24 +494,12 @@ log_info "Starting backend health monitor..."
 
     while true; do
         sleep 5
-        PULSE_COUNT=$(pgrep -f "^\./pulse$" 2>/dev/null | wc -l | tr -d ' ')
+        PULSE_COUNT="$(hot_dev_pulse_process_count)"
 
         if [[ "$PULSE_COUNT" -eq 0 ]]; then
             log_warn "⚠️  Pulse died unexpectedly, restarting..."
-            LOG_LEVEL="${LOG_LEVEL:-debug}" \
-            FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
-            PORT="${PULSE_DEV_API_PORT:-7655}" \
-            PULSE_DATA_DIR="${PULSE_DATA_DIR:-}" \
-            PULSE_ENCRYPTION_KEY="${PULSE_ENCRYPTION_KEY:-}" \
-            ALLOW_ADMIN_BYPASS="${ALLOW_ADMIN_BYPASS:-1}" \
-            PULSE_DEV="${PULSE_DEV:-true}" \
-            PULSE_AUTH_USER="${PULSE_AUTH_USER:-}" \
-            PULSE_AUTH_PASS="${PULSE_AUTH_PASS:-}" \
-            ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
-            LOG_FILE="/tmp/pulse-debug.log" \
-            LOG_MAX_SIZE="50" \
-            ./pulse </dev/null > /dev/null 2>&1 &
-            NEW_PID=$!
+            start_backend_process
+            NEW_PID="${STARTED_BACKEND_PID}"
             sleep 2
             if kill -0 "$NEW_PID" 2>/dev/null; then
                 log_info "✓ Backend auto-restarted (PID: $NEW_PID)"
@@ -513,20 +511,8 @@ log_info "Starting backend health monitor..."
             log_error "⚠️  Multiple Pulse processes detected ($PULSE_COUNT), killing all and restarting..."
             pkill -9 -f "^\./pulse$" 2>/dev/null || true
             sleep 2
-            LOG_LEVEL="${LOG_LEVEL:-debug}" \
-            FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
-            PORT="${PULSE_DEV_API_PORT:-7655}" \
-            PULSE_DATA_DIR="${PULSE_DATA_DIR:-}" \
-            PULSE_ENCRYPTION_KEY="${PULSE_ENCRYPTION_KEY:-}" \
-            ALLOW_ADMIN_BYPASS="${ALLOW_ADMIN_BYPASS:-1}" \
-            PULSE_DEV="${PULSE_DEV:-true}" \
-            PULSE_AUTH_USER="${PULSE_AUTH_USER:-}" \
-            PULSE_AUTH_PASS="${PULSE_AUTH_PASS:-}" \
-            ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
-            LOG_FILE="/tmp/pulse-debug.log" \
-            LOG_MAX_SIZE="50" \
-            ./pulse </dev/null > /dev/null 2>&1 &
-            NEW_PID=$!
+            start_backend_process
+            NEW_PID="${STARTED_BACKEND_PID}"
             sleep 2
             if kill -0 "$NEW_PID" 2>/dev/null; then
                 log_info "✓ Backend restarted after killing duplicates (PID: $NEW_PID)"
@@ -541,20 +527,8 @@ log_info "Starting backend health monitor..."
                 log_error "⚠️  Killing unresponsive Pulse and restarting..."
                 pkill -9 -f "^\./pulse$" 2>/dev/null || true
                 sleep 2
-                LOG_LEVEL="${LOG_LEVEL:-debug}" \
-                FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
-                PORT="${PULSE_DEV_API_PORT:-7655}" \
-                PULSE_DATA_DIR="${PULSE_DATA_DIR:-}" \
-                PULSE_ENCRYPTION_KEY="${PULSE_ENCRYPTION_KEY:-}" \
-                ALLOW_ADMIN_BYPASS="${ALLOW_ADMIN_BYPASS:-1}" \
-                PULSE_DEV="${PULSE_DEV:-true}" \
-                PULSE_AUTH_USER="${PULSE_AUTH_USER:-}" \
-                PULSE_AUTH_PASS="${PULSE_AUTH_PASS:-}" \
-                ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
-                LOG_FILE="/tmp/pulse-debug.log" \
-                LOG_MAX_SIZE="50" \
-                ./pulse </dev/null > /dev/null 2>&1 &
-                NEW_PID=$!
+                start_backend_process
+                NEW_PID="${STARTED_BACKEND_PID}"
                 sleep 2
                 if kill -0 "$NEW_PID" 2>/dev/null; then
                     log_info "✓ Backend restarted after unresponsive state (PID: $NEW_PID)"
@@ -704,31 +678,19 @@ log_info "Starting backend file watcher..."
 
         # Close inherited stdin (</dev/null) to prevent pipe fd leaks when
         # this function is called from inside a piped while-read loop.
-        LOG_LEVEL="${LOG_LEVEL:-debug}" \
-        FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
-        PORT="${PULSE_DEV_API_PORT:-7655}" \
-        PULSE_DATA_DIR="${PULSE_DATA_DIR:-}" \
-        PULSE_ENCRYPTION_KEY="${PULSE_ENCRYPTION_KEY:-}" \
-        ALLOW_ADMIN_BYPASS="${ALLOW_ADMIN_BYPASS:-1}" \
-        PULSE_DEV="${PULSE_DEV:-true}" \
-        PULSE_AUTH_USER="${PULSE_AUTH_USER:-}" \
-        PULSE_AUTH_PASS="${PULSE_AUTH_PASS:-}" \
-        ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
-        LOG_FILE="/tmp/pulse-debug.log" \
-        LOG_MAX_SIZE="50" \
-        ./pulse </dev/null > /dev/null 2>&1 &
-        NEW_PID=$!
+        start_backend_process
+        NEW_PID="${STARTED_BACKEND_PID}"
         sleep 1
 
         # Verify exactly one process is running
-        PULSE_COUNT=$(pgrep -f "^\./pulse$" 2>/dev/null | wc -l | tr -d ' ')
+        PULSE_COUNT="$(hot_dev_pulse_process_count)"
         if [[ "$PULSE_COUNT" -eq 1 ]] && kill -0 "$NEW_PID" 2>/dev/null; then
             log_info "✓ Backend restarted (PID: $NEW_PID)"
         elif [[ "$PULSE_COUNT" -gt 1 ]]; then
             log_error "✗ Multiple processes after restart ($PULSE_COUNT) - killing all"
             pkill -9 -f "^\./pulse$" 2>/dev/null || true
         else
-            log_error "✗ Backend failed to start! Check /tmp/pulse-debug.log"
+            log_error "✗ Backend failed to start! Check ${BACKEND_DEBUG_LOG}"
         fi
     }
 

@@ -2716,6 +2716,7 @@
         "scripts/install-docker.sh",
         "scripts/install.ps1",
         "scripts/install.sh",
+        "scripts/lib/hot-dev-runtime.sh",
         "scripts/pulse-auto-update.sh",
         "scripts/release_asset_common.sh",
         "scripts/release_control/internal/record_rc_to_ga_rehearsal.py",
@@ -2971,6 +2972,7 @@
               "scripts/dev-launchd-wrapper.sh",
               "scripts/hot-dev-bg.sh",
               "scripts/hot-dev.sh",
+              "scripts/lib/hot-dev-runtime.sh",
               "scripts/toggle-mock.sh",
               "tests/integration/playwright.config.ts",
               "tests/integration/QUICK_START.md",
@@ -2984,6 +2986,7 @@
             "exact_files": [
               "scripts/release_control/ssh_host_key_policy_test.py",
               "scripts/tests/test-hot-dev-bg.sh",
+              "scripts/tests/test-hot-dev-runtime.sh",
               "scripts/tests/test-toggle-mock.sh",
               "tests/integration/tests/16-dev-runtime-recovery.spec.ts"
             ]
