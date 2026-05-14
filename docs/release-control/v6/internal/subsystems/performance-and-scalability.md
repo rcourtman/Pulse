@@ -35,6 +35,7 @@ regression protection.
 10. `frontend-modern/src/components/Workloads/WorkloadPanel.tsx`
 11. `frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx`
 12. `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
+13. `frontend-modern/src/hooks/useWorkloads.ts`
 13. `frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts`
 14. `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`
 15. `frontend-modern/src/components/Workloads/useWorkloadGuestMetadataState.ts`
@@ -219,6 +220,12 @@ regression protection.
    those refreshes must retain the last rendered table state and must not trip
    the app-level Suspense fallback or blank the table while the next
    `/api/connections` request is in flight.
+   The same rule applies to Workloads inventory refreshes from
+   `frontend-modern/src/hooks/useWorkloads.ts`: transient `/api/resources`
+   failures or in-flight polls must keep the last fulfilled workload snapshot
+   mounted, report errors out of band, and must not rely on Solid
+   `createResource` in a way that can bubble into the route-level Suspense
+   fallback or the setup/welcome shell.
    The Workloads page may show a bounded partial-inventory banner when a
    configured workload-capable source is unauthorized, unreachable, stale,
    pending, or paused, but it must not fabricate VM/container rows from host

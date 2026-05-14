@@ -3325,6 +3325,16 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/hooks/__tests__/useWorkloads.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/hooks/useWorkloads.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/http_metrics.go",
           "kind": "file"
         },
@@ -3336,6 +3346,11 @@
         {
           "repo": "pulse",
           "path": "tests/integration/tests/02-navigation-perf.spec.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/74-infrastructure-workloads-resource-coherence.spec.ts",
           "kind": "file"
         }
       ]

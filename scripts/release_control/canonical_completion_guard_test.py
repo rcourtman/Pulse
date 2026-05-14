@@ -3069,6 +3069,7 @@ index 1111111..2222222 100644
                         "frontend-modern/src/components/Workloads/__tests__/workloadSelectors.test.ts",
                         "frontend-modern/src/components/Workloads/__tests__/workloadTopology.test.ts",
                         "frontend-modern/src/components/Workloads/__tests__/workloadUrlSyncModel.test.ts",
+                        "frontend-modern/src/hooks/__tests__/useWorkloads.test.ts",
                         "frontend-modern/src/pages/__tests__/Workloads.helpers.test.ts",
                         "frontend-modern/src/utils/__tests__/thresholdSliderPresentation.test.ts",
                         "frontend-modern/src/utils/__tests__/workloadsSummaryCache.test.ts",

@@ -92,6 +92,16 @@ function buildProxmoxNodeFilterValue(resource: APIResource): string {
   return `${instance}-${node}`;
 }
 
+function isWorkloadsResourcesRequest(requestUrl: URL): boolean {
+  if (requestUrl.pathname !== "/api/resources") return false;
+  const typeParam = requestUrl.searchParams.get("type") ?? "";
+  return (
+    typeParam.includes("vm") &&
+    typeParam.includes("system-container") &&
+    typeParam.includes("app-container")
+  );
+}
+
 async function assertSurfaceDoesNotBlank(
   page: Page,
   testId: string,
@@ -281,5 +291,62 @@ test.describe.serial("Infrastructure and workloads resource coherence", () => {
 
     await assertSurfaceDoesNotBlank(page, "workloads-table-surface", 5_000);
     await expect(workloadRows).toHaveCount(1);
+  });
+
+  test("keeps Workloads mounted with the last good inventory when resource refresh fails", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop runtime proof",
+    );
+
+    await ensureAuthenticated(page);
+    await ensureMockModeEnabled(page);
+
+    let workloadResourceRequests = 0;
+    await page.route("**/api/resources**", async (route) => {
+      const requestUrl = new URL(route.request().url());
+      if (!isWorkloadsResourcesRequest(requestUrl)) {
+        await route.continue();
+        return;
+      }
+
+      workloadResourceRequests += 1;
+      if (workloadResourceRequests === 1) {
+        await route.continue();
+        return;
+      }
+
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: "simulated transient workload inventory gap",
+        }),
+      });
+    });
+
+    await page.goto("/workloads", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("workloads-table-surface")).toBeVisible();
+
+    const firstWorkloadRow = page.locator("tr[data-guest-id]").first();
+    await expect(firstWorkloadRow).toBeVisible();
+    const firstGuestId = await firstWorkloadRow.getAttribute("data-guest-id");
+    expect(firstGuestId, "Expected first workload row to expose a stable guest id").toBeTruthy();
+
+    await expect
+      .poll(() => workloadResourceRequests, {
+        message: "Expected the Workloads resource poll to retry after the first render",
+        timeout: 8_000,
+      })
+      .toBeGreaterThanOrEqual(2);
+
+    await assertSurfaceDoesNotBlank(page, "workloads-table-surface", 2_000);
+    await expect(
+      page.locator(`tr[data-guest-id="${cssAttrValue(firstGuestId ?? "")}"]`),
+    ).toHaveCount(1);
+    await expect(page.getByText("Loading view...")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Welcome to Pulse" })).toHaveCount(0);
   });
 });

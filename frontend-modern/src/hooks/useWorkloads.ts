@@ -1,6 +1,4 @@
 import {
-  createMemo,
-  createResource,
   onCleanup,
   createEffect,
   createSignal,
@@ -569,17 +567,17 @@ export function useWorkloads(enabled: Accessor<boolean> = () => true) {
   const [orgScope, setOrgScope] = createSignal(normalizeOrgScope(getOrgID()));
   const resolveActiveOrgScope = () => orgScope();
   const resolveActiveCacheEntry = () => getWorkloadsCacheEntry(resolveActiveOrgScope());
-  const source = createMemo(() => (enabled() ? resolveActiveOrgScope() : null));
-  const [workloads, { mutate: resourceMutate }] = createResource(
-    source,
-    async (activeScope) => fetchWorkloadsShared(getWorkloadsCacheEntry(activeScope)),
-    {
-      initialValue: resolveActiveCacheEntry().workloads,
-    },
+  const [workloads, setWorkloads] = createSignal<WorkloadGuest[]>(
+    resolveActiveCacheEntry().workloads,
   );
+  const [loading, setLoading] = createSignal(
+    enabled() && !hasFreshWorkloadsCache(resolveActiveCacheEntry()),
+  );
+  const [error, setError] = createSignal<unknown>(undefined);
+  let requestVersion = 0;
 
   const mutate = (value: WorkloadGuest[] | ((prev: WorkloadGuest[]) => WorkloadGuest[])) =>
-    resourceMutate((previous) => {
+    setWorkloads((previous) => {
       const current = previous ?? [];
       const next = typeof value === 'function' ? value(current) : value;
       const normalized = next ?? [];
@@ -594,42 +592,85 @@ export function useWorkloads(enabled: Accessor<boolean> = () => true) {
 
   const applyWorkloads = (next: WorkloadGuest[], targetOrgScope = resolveActiveOrgScope()) => {
     const cacheEntry = getWorkloadsCacheEntry(targetOrgScope);
-    resourceMutate((previous) => {
-      const current = previous ?? [];
-      if (areWorkloadsEqual(current, next)) {
-        setWorkloadsCache(cacheEntry, current);
-        return current;
+    const current = targetOrgScope === resolveActiveOrgScope() ? workloads() : cacheEntry.workloads;
+    if (areWorkloadsEqual(current, next)) {
+      setWorkloadsCache(cacheEntry, current);
+      if (targetOrgScope === resolveActiveOrgScope()) {
+        setWorkloads(() => current);
       }
-      setWorkloadsCache(cacheEntry, next);
-      return next;
-    });
+      return current;
+    }
+    setWorkloadsCache(cacheEntry, next);
+    if (targetOrgScope === resolveActiveOrgScope()) {
+      setWorkloads(() => next);
+    }
+    return next;
+  };
+
+  const loadWorkloads = async (
+    scope: string,
+    options: { force?: boolean; showLoading?: boolean } = {},
+  ) => {
+    const version = ++requestVersion;
+    const cacheEntry = getWorkloadsCacheEntry(scope);
+    const shouldShowLoading =
+      options.showLoading === true && enabled() && scope === resolveActiveOrgScope();
+    if (shouldShowLoading) {
+      setLoading(true);
+    }
+
+    try {
+      const data = await fetchWorkloadsShared(cacheEntry, options.force === true);
+      if (version !== requestVersion || scope !== resolveActiveOrgScope() || !enabled()) {
+        return data;
+      }
+      applyWorkloads(data, scope);
+      setError(undefined);
+      return data;
+    } catch (err) {
+      if (version === requestVersion && scope === resolveActiveOrgScope() && enabled()) {
+        setError(err);
+      }
+      throw err;
+    } finally {
+      if (version === requestVersion && scope === resolveActiveOrgScope() && shouldShowLoading) {
+        setLoading(false);
+      }
+    }
   };
 
   const refetch = async () => {
     const scope = resolveActiveOrgScope();
-    const data = await fetchWorkloadsShared(getWorkloadsCacheEntry(scope), true);
-    if (scope === resolveActiveOrgScope()) {
-      applyWorkloads(data, scope);
-    }
-    return data;
+    const cacheEntry = getWorkloadsCacheEntry(scope);
+    return loadWorkloads(scope, { force: true, showLoading: cacheEntry.workloads.length === 0 });
   };
 
-  if (!hasFreshWorkloadsCache(resolveActiveCacheEntry())) {
+  createEffect(() => {
+    const isEnabled = enabled();
     const scope = resolveActiveOrgScope();
-    void fetchWorkloadsShared(getWorkloadsCacheEntry(scope))
-      .then((data) => {
-        if (scope !== resolveActiveOrgScope()) {
-          return;
-        }
-        applyWorkloads(data, scope);
-      })
-      .catch(() => undefined);
-  }
+    const cacheEntry = getWorkloadsCacheEntry(scope);
+    if (!isEnabled) {
+      requestVersion += 1;
+      setLoading(false);
+      return;
+    }
+    if (cacheEntry.workloads !== workloads()) {
+      setWorkloads(() => cacheEntry.workloads);
+    }
+    if (hasFreshWorkloadsCache(cacheEntry)) {
+      setLoading(false);
+      setError(undefined);
+      return;
+    }
+    void loadWorkloads(scope, {
+      showLoading: cacheEntry.workloads.length === 0,
+    }).catch(() => undefined);
+  });
 
   // Poll for fresh metrics while enabled.
-  // Use mutate() instead of refetch() so the resource never enters a loading
-  // state during polls. refetch() sets loading=true which triggers the app-level
-  // <Suspense> boundary, briefly unmounting the entire page every poll cycle.
+  // Apply the result directly to retained signal state so polling never trips
+  // the app-level <Suspense> boundary or replaces the last good table with an
+  // empty loading surface.
   createEffect(() => {
     if (!enabled()) return;
     const scope = resolveActiveOrgScope();
@@ -640,6 +681,7 @@ export function useWorkloads(enabled: Accessor<boolean> = () => true) {
           return;
         }
         applyWorkloads(data, scope);
+        setError(undefined);
       } catch {
         // Silently ignore poll errors; keep showing last data
       }
@@ -654,17 +696,17 @@ export function useWorkloads(enabled: Accessor<boolean> = () => true) {
     }
 
     const nextCacheEntry = getWorkloadsCacheEntry(nextOrgScope);
-    resourceMutate(nextCacheEntry.workloads);
+    requestVersion += 1;
+    setWorkloads(() => nextCacheEntry.workloads);
+    setError(undefined);
+    setLoading(enabled() && nextCacheEntry.workloads.length === 0);
     setOrgScope(nextOrgScope);
 
     if (!hasFreshWorkloadsCache(nextCacheEntry)) {
-      void fetchWorkloadsShared(nextCacheEntry, true)
-        .then((nextWorkloads) => {
-          if (resolveActiveOrgScope() !== nextOrgScope) {
-            return;
-          }
-          applyWorkloads(nextWorkloads, nextOrgScope);
-        })
+      void loadWorkloads(nextOrgScope, {
+        force: true,
+        showLoading: nextCacheEntry.workloads.length === 0,
+      })
         .catch(() => undefined);
     }
   });
@@ -674,8 +716,8 @@ export function useWorkloads(enabled: Accessor<boolean> = () => true) {
     workloads,
     refetch,
     mutate,
-    loading: () => workloads.loading,
-    error: () => workloads.error,
+    loading,
+    error,
   };
 }
 

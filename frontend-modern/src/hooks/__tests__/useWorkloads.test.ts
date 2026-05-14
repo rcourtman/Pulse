@@ -110,6 +110,11 @@ describe('useWorkloads', () => {
     disposeSecond();
   });
 
+  it('keeps workload refreshes out of app-level Suspense', () => {
+    expect(useWorkloadsSource).not.toContain('createResource');
+    expect(useWorkloadsSource).toContain('createSignal<WorkloadGuest[]>');
+  });
+
   it('handles empty responses without mutating into undefined state', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       data: [],
@@ -127,6 +132,86 @@ describe('useWorkloads', () => {
     await flushAsync();
     expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
     expect(result!.workloads()).toEqual([]);
+
+    dispose();
+  });
+
+  it('retains the fulfilled workload snapshot when a forced refresh fails', async () => {
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled);
+    });
+
+    await flushAsync();
+    await waitForWorkloadCount(() => result!.workloads().length);
+    const initialWorkloads = result!.workloads();
+
+    apiFetchJSONMock.mockRejectedValueOnce(new Error('temporary backend gap'));
+    await expect(result!.refetch()).rejects.toThrow('temporary backend gap');
+
+    expect(result!.workloads()).toBe(initialWorkloads);
+    expect(result!.workloads()).toHaveLength(1);
+    expect(result!.loading()).toBe(false);
+    expect(result!.error()).toBeInstanceOf(Error);
+
+    dispose();
+  });
+
+  it('clears a transient refresh error after a later poll succeeds', async () => {
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled);
+    });
+
+    await flushAsync();
+    await waitForWorkloadCount(() => result!.workloads().length);
+
+    apiFetchJSONMock.mockRejectedValueOnce(new Error('temporary backend gap'));
+    await expect(result!.refetch()).rejects.toThrow('temporary backend gap');
+    expect(result!.error()).toBeInstanceOf(Error);
+
+    await advanceAndFlush(5_000);
+    expect(result!.workloads()).toHaveLength(1);
+    expect(result!.error()).toBeUndefined();
+
+    dispose();
+  });
+
+  it('does not apply in-flight workload results after the hook is disabled', async () => {
+    const pendingFetch = deferred<unknown>();
+    apiFetchJSONMock.mockImplementationOnce(() => pendingFetch.promise as Promise<any>);
+
+    let dispose = () => {};
+    let setEnabled: ((enabled: boolean) => boolean) | undefined;
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled, updateEnabled] = createSignal(true);
+      setEnabled = updateEnabled;
+      result = useWorkloads(enabled);
+    });
+
+    await flushAsync();
+    expect(result!.loading()).toBe(true);
+
+    setEnabled!(false);
+    await flushAsync();
+    expect(result!.loading()).toBe(false);
+
+    pendingFetch.resolve({
+      data: [sampleResource],
+      meta: { totalPages: 1 },
+    });
+    await flushAsync();
+
+    expect(result!.workloads()).toEqual([]);
+    expect(result!.error()).toBeUndefined();
 
     dispose();
   });
