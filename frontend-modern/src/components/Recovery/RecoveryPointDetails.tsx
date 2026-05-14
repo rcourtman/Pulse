@@ -57,6 +57,11 @@ const COMMON_DETAIL_LABELS: Record<string, string> = {
   veleroName: 'Velero Backup',
 };
 
+const getRecoveryPointNumericIdLabel = (p: RecoveryPoint): string => {
+  const itemTypeKey = getRecoveryPointItemTypeKey(p);
+  return itemTypeKey === 'system-container' ? 'CTID' : 'VMID';
+};
+
 const formatDurationFromISO = (
   startedAt: string | null | undefined,
   completedAt: string | null | undefined,
@@ -240,6 +245,33 @@ const getVerificationEvidenceLabel = (p: RecoveryPoint): string => {
   if (p.verified === true) return 'Verified flag recorded by recovery ingest';
   if (p.verified === false) return 'Failed verification flag recorded by recovery ingest';
   return 'No verification evidence recorded';
+};
+
+const hasVerificationEvidence = (p: RecoveryPoint): boolean => {
+  const directEvidenceKeys = [
+    'verificationState',
+    'verificationStatus',
+    'verification',
+    'verificationResult',
+    'verifyResult',
+    'verificationUpid',
+    'verificationTaskId',
+  ];
+  return directEvidenceKeys.some((key) => detailString(p, key)) || p.verified != null;
+};
+
+const hasVerificationMethod = (p: RecoveryPoint): boolean => {
+  const explicitMethodKeys = ['verificationMethod', 'verificationSource', 'verifier'];
+  if (explicitMethodKeys.some((key) => detailString(p, key))) return true;
+
+  const platform = normalizeSourcePlatformQueryValue(getRecoveryPointPlatform(p));
+  if (
+    platform === 'proxmox-pbs' &&
+    (detailString(p, 'verificationState') || detailString(p, 'verificationUpid'))
+  ) {
+    return true;
+  }
+  return Boolean(detailString(p, 'verification') || p.verified != null);
 };
 
 const getVerificationMethodLabel = (p: RecoveryPoint): string => {
@@ -538,6 +570,12 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
   const verificationConfidence = createMemo(() =>
     getVerificationConfidence(point(), normalizedOutcome()),
   );
+  const hasVerificationProvenance = createMemo(
+    () =>
+      verificationTimestamp() > 0 ||
+      hasVerificationMethod(point()) ||
+      hasVerificationEvidence(point()),
+  );
   const verificationProvenancePairs = createMemo(() => {
     const pairs: RecoveryDetailPair[] = [
       {
@@ -547,13 +585,10 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
       },
     ];
 
-    if (verificationTimestamp() > 0 || point().verified != null) {
+    if (verificationTimestamp() > 0) {
       pairs.push({
         k: 'Checked',
-        v:
-          verificationTimestamp() > 0
-            ? formatAbsoluteTime(verificationTimestamp())
-            : 'No verification timestamp recorded',
+        v: formatAbsoluteTime(verificationTimestamp()),
         valueClass: 'text-base-content',
       });
     }
@@ -607,12 +642,20 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     };
     const itemType = getRecoveryItemTypeLabel(getRecoveryPointItemTypeKey(p));
     const locationEntries = getRecoveryPointLocationEntries(p);
+    const visibleLocationEntries: typeof locationEntries = [];
+    const locationValues = new Set<string>();
+    for (const entry of locationEntries) {
+      const normalizedValue = normalizeComparableText(entry.value);
+      if (entry.key === 'namespace' && locationValues.has(normalizedValue)) continue;
+      visibleLocationEntries.push(entry);
+      locationValues.add(normalizedValue);
+    }
     const placementValues = new Set(
-      locationEntries.map((entry) => normalizeComparableText(entry.value)),
+      visibleLocationEntries.map((entry) => normalizeComparableText(entry.value)),
     );
 
     if (itemType && itemType !== 'Unknown') addPair('Item Type', itemType);
-    for (const entry of locationEntries) {
+    for (const entry of visibleLocationEntries) {
       addPair(entry.label, entry.value);
     }
     if (typeof sizeBytes() === 'number') addPair('Size', formatBytes(sizeBytes()!));
@@ -642,7 +685,10 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
       if (!displayValue) continue;
       if (k === 'vmid' && displayValue === '0') continue;
       if (placementValues.has(normalizeComparableText(displayValue))) continue;
-      addPair(COMMON_DETAIL_LABELS[k] || k, displayValue);
+      addPair(
+        k === 'vmid' ? getRecoveryPointNumericIdLabel(p) : COMMON_DETAIL_LABELS[k] || k,
+        displayValue,
+      );
     }
 
     return pairs;
@@ -675,18 +721,6 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
 
   return (
     <div class="space-y-3">
-      <div class="flex justify-end">
-        <button
-          type="button"
-          onClick={() => void copyJSON()}
-          class="rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-base-content hover:bg-surface-hover"
-        >
-          <Show when={copied()} fallback="Copy JSON">
-            Copied
-          </Show>
-        </button>
-      </div>
-
       <div class="rounded-md border border-border bg-surface-alt/40 p-3">
         <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -785,35 +819,37 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
         </div>
       </Show>
 
-      <div class="rounded border border-border bg-surface p-3">
-        <div class="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
-              Verification provenance
-            </div>
-            <div class="mt-1 text-xs text-muted">
-              Recorded verification evidence for this recovery point.
-            </div>
-          </div>
-          <span class={`text-xs font-semibold ${verificationConfidence().className}`}>
-            {verificationConfidence().label}
-          </span>
-        </div>
-        <div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <For each={verificationProvenancePairs()}>
-            {(pair) => (
-              <div class="rounded border border-border bg-surface-alt/45 px-3 py-2 text-xs">
-                <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                  {pair.k}
-                </div>
-                <div class={`mt-0.5 text-[11px] leading-4 break-words ${pair.valueClass}`}>
-                  {pair.v}
-                </div>
+      <Show when={hasVerificationProvenance()}>
+        <div class="rounded border border-border bg-surface p-3">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                Verification provenance
               </div>
-            )}
-          </For>
+              <div class="mt-1 text-xs text-muted">
+                Recorded verification evidence for this recovery point.
+              </div>
+            </div>
+            <span class={`text-xs font-semibold ${verificationConfidence().className}`}>
+              {verificationConfidence().label}
+            </span>
+          </div>
+          <div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <For each={verificationProvenancePairs()}>
+              {(pair) => (
+                <div class="rounded border border-border bg-surface-alt/45 px-3 py-2 text-xs">
+                  <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                    {pair.k}
+                  </div>
+                  <div class={`mt-0.5 text-[11px] leading-4 break-words ${pair.valueClass}`}>
+                    {pair.v}
+                  </div>
+                </div>
+              )}
+            </For>
+          </div>
         </div>
-      </div>
+      </Show>
 
       <Show when={hasPlatformDetails()}>
         <div class="rounded border border-border bg-surface p-3">
@@ -981,6 +1017,17 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
           Technical details
         </summary>
         <div class="border-t border-border px-3 py-2">
+          <div class="mb-2 flex justify-end">
+            <button
+              type="button"
+              onClick={() => void copyJSON()}
+              class="rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium normal-case tracking-normal text-base-content hover:bg-surface-hover"
+            >
+              <Show when={copied()} fallback="Copy JSON">
+                Copied
+              </Show>
+            </button>
+          </div>
           <pre class="overflow-auto text-[11px] leading-relaxed text-base-content font-mono">
             {prettyJSON()}
           </pre>

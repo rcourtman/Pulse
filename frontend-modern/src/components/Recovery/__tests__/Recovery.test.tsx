@@ -974,6 +974,9 @@ describe('Recovery', () => {
         'Succeeded; verification is not recorded.',
       ),
     ).toBeInTheDocument();
+    expect(
+      within(detailsPanel as HTMLTableCellElement).queryByText('Verification provenance'),
+    ).not.toBeInTheDocument();
     expect(within(detailsPanel as HTMLTableCellElement).getByText('Item Type')).toBeInTheDocument();
     expect(within(detailsPanel as HTMLTableCellElement).getByText('VM')).toBeInTheDocument();
     expect(

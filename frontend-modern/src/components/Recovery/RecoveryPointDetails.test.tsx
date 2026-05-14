@@ -143,9 +143,49 @@ describe('RecoveryPointDetails', () => {
     expect(screen.queryByText('Restore action path')).not.toBeInTheDocument();
     expect(screen.getByText('Restore readiness')).toBeInTheDocument();
     expect(screen.getByText('Available candidate')).toBeInTheDocument();
-    expect(screen.getByText('Verification provenance')).toBeInTheDocument();
-    expect(screen.getAllByText('Needs verification').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Verification provenance')).not.toBeInTheDocument();
+    expect(screen.queryByText('Needs verification')).not.toBeInTheDocument();
     expect(screen.queryByText('No verification timestamp recorded')).not.toBeInTheDocument();
+  });
+
+  it('keeps PBS container identifiers and empty verification details operator-safe', () => {
+    render(() => (
+      <RecoveryPointDetails
+        point={{
+          id: 'point-pbs-container',
+          platform: 'proxmox-pbs',
+          kind: 'backup',
+          mode: 'remote',
+          outcome: 'success',
+          completedAt: '2026-03-10T10:00:00Z',
+          verified: true,
+          display: {
+            clusterLabel: 'delly',
+            nodeHostLabel: 'minipc',
+            namespaceLabel: 'minipc',
+            itemType: 'lxc',
+          },
+          repositoryRef: {
+            type: 'pbs-datastore',
+            namespace: 'minipc',
+            name: 'main',
+          },
+          details: {
+            verificationState: 'ok',
+            vmid: '113',
+            datastore: 'main',
+          },
+        }}
+      />
+    ));
+
+    expect(screen.getByText('Verification provenance')).toBeInTheDocument();
+    expect(screen.getByText('PBS catalog verification')).toBeInTheDocument();
+    expect(screen.getByText('State: ok')).toBeInTheDocument();
+    expect(screen.queryByText('No verification timestamp recorded')).not.toBeInTheDocument();
+    expect(screen.getByText('CTID')).toBeInTheDocument();
+    expect(screen.queryByText('VMID')).not.toBeInTheDocument();
+    expect(screen.queryByText('Namespace / Group')).not.toBeInTheDocument();
   });
 
   it('uses canonical platform labels without forcing provider detail panels for other platforms', () => {
@@ -252,6 +292,7 @@ describe('RecoveryPointDetails', () => {
     ).toBeGreaterThan(0);
     expect(screen.getByText('Not restorable')).toBeInTheDocument();
     expect(screen.queryByText('Investigate source task')).not.toBeInTheDocument();
+    expect(screen.queryByText('Verification provenance')).not.toBeInTheDocument();
     expect(screen.queryByText('VMID')).not.toBeInTheDocument();
     expect(screen.queryByText('0')).not.toBeInTheDocument();
   });

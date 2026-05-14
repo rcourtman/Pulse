@@ -1985,10 +1985,14 @@ action or restore flow, not in the evidence drawer. Chain context must be
 derived from the current recovery result set only when at least two concrete
 stages are visible, so mixed PVE/PBS/TrueNAS history can explain adjacent local
 snapshot, local copy, and remote copy stages without filling the drawer with
-missing-only cards. Raw transport IDs, provider refs, and provider task IDs
-belong behind `Technical details`; the primary drawer should keep human
-metadata, verification provenance, target health, and collapsed file lists
-without repeating the same verification fact in provider-specific sections.
+missing-only cards. Raw transport IDs, provider refs, provider task IDs, and
+raw JSON copy actions belong behind `Technical details`; the primary drawer
+should keep human metadata, recorded verification provenance, target health,
+and collapsed file lists without repeating the same verification fact in
+provider-specific sections or rendering empty verifier/evidence placeholders
+when no verification record exists. Container recovery points should present
+container ids with operator vocabulary such as `CTID`, and duplicated placement
+values should not be repeated under lower-priority location labels.
 Provider-specific metadata must not recast the event drawer itself as if PBS
 were the native recovery model. When target-specific technical labels are
 surfaced, they should prefer neutral wording such as `Target Ref`, `Target
