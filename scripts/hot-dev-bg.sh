@@ -431,6 +431,7 @@ start_hot_dev_child() {
   PULSE_DEV_API_PORT="${PULSE_DEV_API_PORT}" \
   PULSE_DEV_API_URL="${PULSE_DEV_API_URL}" \
   PULSE_DEV_WS_URL="${PULSE_DEV_WS_URL}" \
+  HOT_DEV_SKIP_NPM_CLEANUP=true \
   ROOT_DIR="${ROOT_DIR}" \
   python3 - <<'PY' &
 import os

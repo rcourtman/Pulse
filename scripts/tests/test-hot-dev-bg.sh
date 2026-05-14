@@ -720,6 +720,7 @@ test_hot_dev_bg_script_advertises_managed_entrypoint() {
   assert_contains "hot-dev-bg routes log guidance to managed wrapper" "${output}" "Check logs with: npm run dev:logs"
   assert_contains "hot-dev-bg routes verify guidance to managed wrapper" "${output}" "Rerun with: npm run dev:verify"
   assert_contains "hot-dev-bg routes launchd supervision guidance to managed wrapper" "${output}" "Rerun with: npm run dev"
+  assert_contains "hot-dev-bg managed child skips npm wrapper cleanup" "${output}" "HOT_DEV_SKIP_NPM_CLEANUP=true"
 }
 
 test_hot_dev_bg_usage_prefers_managed_wrappers() {

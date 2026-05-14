@@ -258,6 +258,47 @@ kill_port() {
     lsof -i :"${port}" 2>/dev/null | awk 'NR>1 {print $2}' | xargs -r kill -9 2>/dev/null || true
 }
 
+process_parent_id() {
+    local pid=$1
+    ps -o ppid= -p "${pid}" 2>/dev/null | tr -d '[:space:]'
+}
+
+is_current_shell_descendant_of() {
+    local target_pid=$1
+    local current_pid=$$
+    local parent_pid
+
+    [[ -n "${target_pid}" ]] || return 1
+
+    while [[ -n "${current_pid}" && "${current_pid}" != "1" ]]; do
+        parent_pid="$(process_parent_id "${current_pid}")"
+        [[ -n "${parent_pid}" && "${parent_pid}" != "${current_pid}" ]] || break
+        if [[ "${parent_pid}" == "${target_pid}" ]]; then
+            return 0
+        fi
+        current_pid="${parent_pid}"
+    done
+
+    return 1
+}
+
+kill_stale_npm_dev_wrappers() {
+    local pid
+
+    if [[ "${HOT_DEV_SKIP_NPM_CLEANUP:-false}" == "true" ]]; then
+        return 0
+    fi
+
+    while IFS= read -r pid; do
+        [[ -n "${pid}" ]] || continue
+        [[ "${pid}" != "$$" ]] || continue
+        if is_current_shell_descendant_of "${pid}"; then
+            continue
+        fi
+        kill "${pid}" 2>/dev/null || true
+    done < <(pgrep -f "npm run dev" 2>/dev/null || true)
+}
+
 log_info "Cleaning up existing processes..."
 
 # OS-Specific Cleanup
@@ -271,7 +312,7 @@ fi
 pkill -f "backend-watch.sh" 2>/dev/null || true
 # Only kill vite/npm processes that look like ours (simple check)
 pkill -f "vite" 2>/dev/null || true
-pkill -f "npm run dev" 2>/dev/null || true
+kill_stale_npm_dev_wrappers
 
 pkill -x "pulse" 2>/dev/null || true
 sleep 1

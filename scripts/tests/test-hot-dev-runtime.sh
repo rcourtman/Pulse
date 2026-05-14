@@ -127,11 +127,21 @@ test_hot_dev_keeps_backend_launch_errors_in_debug_log() {
   assert_contains "backend LOG_FILE follows debug log override" "${output}" "LOG_FILE=\"\${BACKEND_DEBUG_LOG}\""
 }
 
+test_hot_dev_avoids_self_killing_npm_wrapper() {
+  local output
+  output="$(sed -n '1,330p' "${HOT_DEV}")"
+
+  assert_contains "hot-dev routes npm cleanup through a guarded helper" "${output}" "kill_stale_npm_dev_wrappers"
+  assert_contains "hot-dev supports managed skip for npm cleanup" "${output}" "HOT_DEV_SKIP_NPM_CLEANUP"
+  assert_not_contains "hot-dev no longer broad-kills npm dev wrappers" "${output}" 'pkill -f "npm run dev"'
+}
+
 source "${HOT_DEV_RUNTIME_LIB}"
 test_pulse_process_count_handles_zero_matches_under_pipefail
 test_pulse_process_count_counts_matching_processes
 test_hot_dev_uses_resilient_backend_process_count
 test_hot_dev_keeps_backend_launch_errors_in_debug_log
+test_hot_dev_avoids_self_killing_npm_wrapper
 
 if (( failures > 0 )); then
   echo "FAIL: ${failures} hot-dev runtime assertions failed" >&2

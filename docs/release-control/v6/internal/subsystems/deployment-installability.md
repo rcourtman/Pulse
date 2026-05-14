@@ -63,46 +63,47 @@ server-side update execution surfaces.
 38. `scripts/hot-dev-bg.sh`
 39. `scripts/hot-dev.sh`
 40. `scripts/lib/hot-dev-runtime.sh`
-40. `scripts/install-container-agent.sh`
-41. `install.sh`
-42. `scripts/install.ps1`
-43. `scripts/install.sh`
-44. `scripts/install-mcp.sh`
-45. `scripts/install-mcp.ps1`
-46. `cmd/pulse-mcp/`
-47. `scripts/pulse-auto-update.sh`
-48. `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`
-49. `scripts/release_control/record_rc_to_ga_rehearsal.py`
-50. `scripts/release_control/release_promotion_policy_support.py`
-51. `scripts/release_control/resolve_release_promotion.py`
-52. `scripts/release_ldflags.sh`
-53. `scripts/run_cloud_public_signup_smoke.sh`
-54. `scripts/run_demo_public_browser_smoke.sh`
-55. `scripts/demo_public_browser_smoke.cjs`
-56. `scripts/run_hosted_staging_smoke.sh`
-57. `scripts/trigger-release-dry-run.sh`
-58. `scripts/trigger-release.sh`
-59. `scripts/toggle-mock.sh`
-60. `deploy/helm/pulse/`
-61. `tests/integration/playwright.config.ts`
-62. `tests/integration/QUICK_START.md`
-63. `tests/integration/README.md`
-64. `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`
-65. `tests/integration/scripts/hosted-mobile-token-runtime.mjs`
-66. `tests/integration/scripts/hosted-tenant-approval-store.mjs`
-67. `tests/integration/scripts/hosted-tenant-runtime.mjs`
-68. `tests/integration/scripts/hosted-tenant-runtime-restart.mjs`
-69. `tests/integration/scripts/managed-dev-runtime.mjs`
-70. `tests/integration/scripts/relay-mobile-token-helper.go`
-71. `tests/integration/tests/helpers.ts`
-72. `tests/integration/tests/runtime-defaults.ts`
-73. `docker-compose.yml`
-74. `scripts/install-docker.sh`
-75. `scripts/validate-published-release.sh`
-76. `scripts/validate-release.sh`
-77. `scripts/release_asset_common.sh`
-78. `scripts/backfill-release-assets.sh`
-79. `.github/workflows/backfill-release-assets.yml`
+41. `scripts/lib/hot-dev-auth.sh`
+42. `scripts/install-container-agent.sh`
+43. `install.sh`
+44. `scripts/install.ps1`
+45. `scripts/install.sh`
+46. `scripts/install-mcp.sh`
+47. `scripts/install-mcp.ps1`
+48. `cmd/pulse-mcp/`
+49. `scripts/pulse-auto-update.sh`
+50. `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`
+51. `scripts/release_control/record_rc_to_ga_rehearsal.py`
+52. `scripts/release_control/release_promotion_policy_support.py`
+53. `scripts/release_control/resolve_release_promotion.py`
+54. `scripts/release_ldflags.sh`
+55. `scripts/run_cloud_public_signup_smoke.sh`
+56. `scripts/run_demo_public_browser_smoke.sh`
+57. `scripts/demo_public_browser_smoke.cjs`
+58. `scripts/run_hosted_staging_smoke.sh`
+59. `scripts/trigger-release-dry-run.sh`
+60. `scripts/trigger-release.sh`
+61. `scripts/toggle-mock.sh`
+62. `deploy/helm/pulse/`
+63. `tests/integration/playwright.config.ts`
+64. `tests/integration/QUICK_START.md`
+65. `tests/integration/README.md`
+66. `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`
+67. `tests/integration/scripts/hosted-mobile-token-runtime.mjs`
+68. `tests/integration/scripts/hosted-tenant-approval-store.mjs`
+69. `tests/integration/scripts/hosted-tenant-runtime.mjs`
+70. `tests/integration/scripts/hosted-tenant-runtime-restart.mjs`
+71. `tests/integration/scripts/managed-dev-runtime.mjs`
+72. `tests/integration/scripts/relay-mobile-token-helper.go`
+73. `tests/integration/tests/helpers.ts`
+74. `tests/integration/tests/runtime-defaults.ts`
+75. `docker-compose.yml`
+76. `scripts/install-docker.sh`
+77. `scripts/validate-published-release.sh`
+78. `scripts/validate-release.sh`
+79. `scripts/release_asset_common.sh`
+80. `scripts/backfill-release-assets.sh`
+81. `.github/workflows/backfill-release-assets.yml`
 
 ## Shared Boundaries
 
@@ -170,7 +171,7 @@ server-side update execution surfaces.
    enrollment runtime tokens while keeping deploy binding metadata limited to
    deploy facts such as cluster, job, target, source agent, and expected node.
 4. Add or change server update transport through `internal/api/updates.go` and `frontend-modern/src/api/updates.ts`
-5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, canonical developer entry wrappers, dependency manifest floors, frontend build chunking, or dev-runtime helper control surfaces through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `scripts/lib/hot-dev-runtime.sh`, `scripts/dev-deploy-agent.sh`, `Makefile`, `package.json`, `package-lock.json`, `frontend-modern/package.json`, `frontend-modern/package-lock.json`, `frontend-modern/vite.config.ts`, `go.mod`, `go.sum`, `scripts/dev-check.sh`, `scripts/toggle-mock.sh`, `scripts/clean-mock-alerts.sh`, `scripts/dev-launchd-setup.sh`, `scripts/dev-launchd-wrapper.sh`, `scripts/run_demo_public_browser_smoke.sh`, `scripts/demo_public_browser_smoke.cjs`, `scripts/com.pulse.hot-dev.plist.template`, `tests/integration/scripts/managed-dev-runtime.mjs`, `tests/integration/playwright.config.ts`, `tests/integration/tests/helpers.ts`, `tests/integration/tests/runtime-defaults.ts`, `tests/integration/README.md`, and `tests/integration/QUICK_START.md`
+5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, canonical developer entry wrappers, deterministic dev auth seeding, dependency manifest floors, frontend build chunking, or dev-runtime helper control surfaces through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `scripts/lib/hot-dev-runtime.sh`, `scripts/lib/hot-dev-auth.sh`, `scripts/dev-deploy-agent.sh`, `Makefile`, `package.json`, `package-lock.json`, `frontend-modern/package.json`, `frontend-modern/package-lock.json`, `frontend-modern/vite.config.ts`, `go.mod`, `go.sum`, `scripts/dev-check.sh`, `scripts/toggle-mock.sh`, `scripts/clean-mock-alerts.sh`, `scripts/dev-launchd-setup.sh`, `scripts/dev-launchd-wrapper.sh`, `scripts/run_demo_public_browser_smoke.sh`, `scripts/demo_public_browser_smoke.cjs`, `scripts/com.pulse.hot-dev.plist.template`, `tests/integration/scripts/managed-dev-runtime.mjs`, `tests/integration/playwright.config.ts`, `tests/integration/tests/helpers.ts`, `tests/integration/tests/runtime-defaults.ts`, `tests/integration/README.md`, and `tests/integration/QUICK_START.md`
 6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, the canonical version file, prerelease feedback intake prompts, artifact publication lineage enforcement, release note or changelog packet composition, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `scripts/trigger-release.sh`, and `scripts/trigger-release-dry-run.sh`
    That release-promotion boundary also owns prerelease note packet lineage:
    shipped RC notes must remain historically accurate, the top-level

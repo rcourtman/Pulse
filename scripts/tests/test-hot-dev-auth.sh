@@ -104,10 +104,39 @@ EOF
   assert_contains "sync preserves mock settings" "${output}" "PULSE_MOCK_MODE=false"
 }
 
+test_sync_auth_env_file_handles_managed_only_env_under_errexit() {
+  local state_dir runtime_env output
+  state_dir="$(make_temp_dir)"
+  runtime_env="${state_dir}/.env"
+
+  cat > "${runtime_env}" <<'EOF'
+# Managed by hot-dev.sh for deterministic dev auth
+PULSE_AUTH_USER='admin'
+PULSE_AUTH_PASS='stale-pass'
+EOF
+
+  output="$(
+    HOT_DEV_AUTH_LIB="${HOT_DEV_AUTH_LIB}" \
+    RUNTIME_ENV_PATH="${runtime_env}" \
+    bash -lc '
+      set -euo pipefail
+      source "${HOT_DEV_AUTH_LIB}"
+      hot_dev_sync_auth_env_file "${RUNTIME_ENV_PATH}" "admin" "${HOT_DEV_DEFAULT_AUTH_HASH}"
+      printf "survived=yes\n"
+      cat "${RUNTIME_ENV_PATH}"
+    '
+  )"
+
+  assert_contains "managed-only env does not trip errexit" "${output}" "survived=yes"
+  assert_contains "managed-only sync keeps auth user" "${output}" "PULSE_AUTH_USER='admin'"
+  assert_contains "managed-only sync rewrites auth password hash" "${output}" "PULSE_AUTH_PASS='${HOT_DEV_DEFAULT_AUTH_HASH}'"
+}
+
 source "${HOT_DEV_AUTH_LIB}"
 test_default_auth_contract
 test_custom_auth_banner_contract
 test_sync_auth_env_file_preserves_non_auth_settings
+test_sync_auth_env_file_handles_managed_only_env_under_errexit
 
 if (( failures > 0 )); then
   echo "FAIL: ${failures} hot-dev auth assertions failed" >&2

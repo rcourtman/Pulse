@@ -56,7 +56,7 @@ hot_dev_sync_auth_env_file() {
         printf "PULSE_AUTH_PASS='%s'\n" "$(hot_dev_single_quote "${auth_pass}")"
 
         if [[ -f "${runtime_env}" ]]; then
-            grep -v -E '^(# Managed by hot-dev\.sh for deterministic dev auth|PULSE_AUTH_USER=|PULSE_AUTH_PASS=)' "${runtime_env}"
+            grep -v -E '^(# Managed by hot-dev\.sh for deterministic dev auth|PULSE_AUTH_USER=|PULSE_AUTH_PASS=)' "${runtime_env}" || true
         fi
     } > "${tmp_file}"
 
