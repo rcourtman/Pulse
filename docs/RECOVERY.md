@@ -4,10 +4,10 @@ Pulse v6 includes a **provider-neutral recovery view** that aggregates backup, s
 
 ## Overview
 
-Recovery answers two questions:
+Recovery is event-first and answers two questions:
 
-1. **"What is protected?"** → The **Protected Items** table shows a rollup per subject with its latest backup/snapshot status.
-2. **"What happened?"** → The **Events** table shows individual recovery points (artifacts) with timestamps, outcomes, and sizes.
+1. **"What happened?"** → The **Recovery events** table shows individual recovery points (artifacts) with timestamps, outcomes, and sizes.
+2. **"What is covered?"** -> The **Protection coverage** action opens a rollup review for healthy, stale, failed, warning, running, unknown, and never-succeeded items.
 
 ## Supported Providers
 
@@ -49,19 +49,7 @@ A rollup groups recovery points for a subject to show:
 
 ## Navigating Recovery
 
-### Protected Items Tab
-
-Shows one row per protected subject (or per subject + method when multiple backup methods exist). Key columns:
-
-| Column | Description |
-|---|---|
-| Subject | The protected resource (VM name, dataset path, etc.) |
-| Method | Backup method (PBS backup, local dump, ZFS snapshot, replication) |
-| Last Point | Most recent recovery point timestamp |
-| Outcome | Success / Warning / Failed |
-| Source | Which provider created this point (pve, pbs, truenas, k8s) |
-
-### Events Tab
+### Recovery Events
 
 Shows individual recovery points. Key columns:
 
@@ -74,21 +62,33 @@ Shows individual recovery points. Key columns:
 | Size | Size of the artifact (when available) |
 | Verified | Whether the backup has been verified (tri-state) |
 
+### Protection Coverage
+
+Available from the Recovery header action and compatibility routes when posture or freshness needs review. It shows one row per protected item (or per item + method when multiple backup methods exist). Key columns:
+
+| Column | Description |
+|---|---|
+| Item | The protected resource (VM name, dataset path, etc.) |
+| Item Type | Canonical resource category |
+| Platform | Which provider created the latest point (PVE, PBS, TrueNAS, Kubernetes) |
+| Latest Point | Most recent successful recovery point timestamp |
+| Status | Healthy, stale, failed, warning, running, unknown, or never succeeded |
+
 ### Filtering
 
-Both tabs support:
+Both workspaces support:
 
-- **Source filter** — show only points from a specific provider
+- **Platform filter** — show only points from a specific platform
 - **Outcome filter** — show only failed, successful, or running points
 - **Time range** — filter to a specific time window
-- **Search** — full-text search across subjects and details
+- **Search** — full-text search across items and details
 
 ## API Reference
 
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/recovery/points` | List individual recovery points |
-| `GET` | `/api/recovery/rollups` | List subject rollups (protected items) |
+| `GET` | `/api/recovery/rollups` | List subject rollups (protection coverage) |
 | `GET` | `/api/recovery/series` | Time-series data for recovery charts |
 | `GET` | `/api/recovery/facets` | Available filter facets (providers, kinds, outcomes) |
 

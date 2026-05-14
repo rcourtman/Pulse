@@ -16,19 +16,46 @@ import type {
 import { parseRecoveryDateKey } from '@/utils/recoveryDatePresentation';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { ROUTE_STATE_REPLACE_OPTIONS } from '@/utils/routeStateNavigation';
+import {
+  getRecoveryPointItemTypeKey,
+  getRecoveryRollupItemTypeKey,
+} from '@/utils/recoveryItemTypePresentation';
+import {
+  getRecoveryPointPlatform,
+  getRecoveryRollupPlatforms,
+} from '@/utils/recoveryPlatformModel';
 
 let mockLocationSearch = '';
 let mockLocationPath = '/recovery';
 const navigateSpy = vi.hoisted(() => vi.fn());
+const mockLocationVersion = vi.hoisted(() => ({
+  read: undefined as undefined | (() => number),
+  bump: undefined as undefined | (() => void),
+}));
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
 const wsState = vi.hoisted(() => ({ resources: [] as any[] }));
 
 vi.mock('@solidjs/router', async () => {
   const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
+  const solid = await vi.importActual<typeof import('solid-js')>('solid-js');
+  if (!mockLocationVersion.read || !mockLocationVersion.bump) {
+    const [version, setVersion] = solid.createSignal(0);
+    mockLocationVersion.read = version;
+    mockLocationVersion.bump = () => setVersion((current) => current + 1);
+  }
   return {
     ...actual,
-    useLocation: () => ({ pathname: mockLocationPath, search: mockLocationSearch }),
+    useLocation: () => ({
+      get pathname() {
+        mockLocationVersion.read?.();
+        return mockLocationPath;
+      },
+      get search() {
+        mockLocationVersion.read?.();
+        return mockLocationSearch;
+      },
+    }),
     useNavigate: () => navigateSpy,
   };
 });
@@ -62,6 +89,7 @@ const pointsByRollupId: Record<string, Array<RecoveryPoint | RecoveryPointTransp
       kind: 'backup',
       mode: 'local',
       outcome: 'success',
+      itemResourceId: 'vm-123',
       completedAt: '2026-02-14T10:00:00.000Z',
       sizeBytes: 1234,
       cluster: 'lab-cluster',
@@ -72,6 +100,7 @@ const pointsByRollupId: Record<string, Array<RecoveryPoint | RecoveryPointTransp
         name: 'fast-store',
       },
       display: {
+        itemLabel: 'VM 123',
         itemType: 'vm',
         subjectType: 'proxmox-vm',
         clusterLabel: 'Lab Cluster',
@@ -90,7 +119,7 @@ const pointsByRollupId: Record<string, Array<RecoveryPoint | RecoveryPointTransp
       outcome: 'failed',
       completedAt: '2026-02-13T09:00:00.000Z',
       sizeBytes: 0,
-      display: { itemType: 'dataset', subjectType: 'truenas-dataset' },
+      display: { itemLabel: 'tank/apps', itemType: 'dataset', subjectType: 'truenas-dataset' },
     },
   ],
 };
@@ -99,6 +128,105 @@ let facetsPayload: any;
 type RecoveryPointsResponse = {
   data: any[];
   meta: { page: number; limit: number; total: number; totalPages: number };
+};
+
+const requestParam = (url: URL, key: string) => String(url.searchParams.get(key) || '').trim();
+
+const matchesTextQuery = (haystackParts: unknown[], query: string): boolean => {
+  if (!query) return true;
+  return haystackParts
+    .flatMap((part) => {
+      if (part && typeof part === 'object') return Object.values(part as Record<string, unknown>);
+      return [part];
+    })
+    .filter((part) => part !== null && part !== undefined)
+    .join(' ')
+    .toLowerCase()
+    .includes(query.toLowerCase());
+};
+
+const filterRollupsForRequest = (url: URL) => {
+  const platform = requestParam(url, 'platform');
+  const itemType = requestParam(url, 'itemType');
+  const query = requestParam(url, 'q');
+
+  return rollupsPayload.filter((rollup) => {
+    if (
+      platform &&
+      !getRecoveryRollupPlatforms(rollup).some((entry) => String(entry || '').trim() === platform)
+    ) {
+      return false;
+    }
+    if (itemType && getRecoveryRollupItemTypeKey(rollup) !== itemType) return false;
+    return matchesTextQuery(
+      [
+        rollup.rollupId,
+        rollup.itemResourceId,
+        rollup.itemRef,
+        rollup.subjectRef,
+        rollup.display,
+        getRecoveryRollupPlatforms(rollup).join(' '),
+        rollup.lastOutcome,
+      ],
+      query,
+    );
+  });
+};
+
+const filterPointsForRequest = (url: URL) => {
+  const rollupId = requestParam(url, 'rollupId');
+  const platform = requestParam(url, 'platform');
+  const itemType = requestParam(url, 'itemType');
+  const query = requestParam(url, 'q');
+  const cluster = requestParam(url, 'cluster');
+  const node = requestParam(url, 'node');
+  const namespace = requestParam(url, 'namespace');
+  const mode = requestParam(url, 'mode');
+  const outcome = requestParam(url, 'outcome');
+  const data = rollupId ? pointsByRollupId[rollupId] || [] : Object.values(pointsByRollupId).flat();
+
+  return data.filter((point) => {
+    if (platform && getRecoveryPointPlatform(point) !== platform) return false;
+    if (itemType && getRecoveryPointItemTypeKey(point) !== itemType) return false;
+    if (mode && String(point.mode || '').trim() !== mode) return false;
+    if (outcome && String(point.outcome || '').trim() !== outcome) return false;
+    if (cluster && String(point.display?.clusterLabel || point.cluster || '').trim() !== cluster) {
+      return false;
+    }
+    if (
+      node &&
+      String(
+        point.display?.nodeHostLabel || point.display?.nodeAgentLabel || point.node || '',
+      ).trim() !== node
+    ) {
+      return false;
+    }
+    if (
+      namespace &&
+      String(point.display?.namespaceLabel || point.namespace || '').trim() !== namespace
+    ) {
+      return false;
+    }
+    return matchesTextQuery(
+      [
+        point.id,
+        point.itemResourceId,
+        point.itemRef,
+        point.subjectRef,
+        point.display,
+        point.platform,
+        (point as any).provider,
+        point.kind,
+        point.mode,
+        point.outcome,
+        point.cluster,
+        point.node,
+        point.namespace,
+        point.repositoryRef,
+      ],
+      query,
+    );
+  });
 };
 
 vi.mock('@/utils/apiClient', () => ({
@@ -127,6 +255,12 @@ describe('Recovery', () => {
     resetCreateNonSuspendingQueryCacheForTest();
     localStorage.clear();
     navigateSpy.mockReset();
+    navigateSpy.mockImplementation((path: string) => {
+      const next = new URL(String(path || '/recovery'), 'http://localhost');
+      mockLocationPath = next.pathname;
+      mockLocationSearch = next.search;
+      mockLocationVersion.bump?.();
+    });
     apiFetchMock.mockClear();
     mockLocationSearch = '';
     mockLocationPath = '/recovery';
@@ -172,14 +306,14 @@ describe('Recovery', () => {
     apiFetchMock.mockImplementation(async (url: string) => {
       const u = new URL(url, 'http://localhost');
       if (u.pathname === '/api/recovery/rollups') {
+        const data = filterRollupsForRequest(u);
         return {
-          data: rollupsPayload,
-          meta: { page: 1, limit: 500, total: rollupsPayload.length, totalPages: 1 },
+          data,
+          meta: { page: 1, limit: 500, total: data.length, totalPages: 1 },
         };
       }
       if (u.pathname === '/api/recovery/points') {
-        const rid = u.searchParams.get('rollupId') || '';
-        const data = pointsByRollupId[rid] || [];
+        const data = filterPointsForRequest(u);
         return {
           data,
           meta: { page: 1, limit: 500, total: data.length, totalPages: 1 },
@@ -257,6 +391,8 @@ describe('Recovery', () => {
   it('renders protected rollups and resolves unified resource names', async () => {
     render(() => <Recovery />);
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
+
     expect(await screen.findByText('VM 123')).toBeInTheDocument();
     expect(screen.getByText('tank/apps')).toBeInTheDocument();
   });
@@ -267,63 +403,102 @@ describe('Recovery', () => {
     expect(screen.getByTestId('recovery-page').className).toContain('gap-2');
     expect(screen.getByTestId('recovery-page').className).not.toContain('gap-3');
     const recoveryPage = screen.getByTestId('recovery-page');
-    const summaryPanel = await screen.findByTestId('recovery-summary');
-    expect(summaryPanel).toBeInTheDocument();
-    expect(screen.getByText('Posture')).toBeInTheDocument();
-    const workspaceTablist = await screen.findByRole('tablist', { name: /recovery data view/i });
-    expect(
-      within(workspaceTablist).getByRole('tab', { name: 'Protected items' }),
-    ).toBeInTheDocument();
-    expect(
-      within(workspaceTablist).getByRole('tab', { name: 'Recovery events' }),
-    ).toBeInTheDocument();
-    expect(
-      within(workspaceTablist).queryByRole('tab', { name: /protected items \d/i }),
-    ).not.toBeInTheDocument();
-    expect(
-      within(workspaceTablist).queryByRole('tab', { name: /recovery events \d/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('recovery-summary')).not.toBeInTheDocument();
+    expect(screen.queryByText('Posture')).not.toBeInTheDocument();
+    expect(screen.queryByText('Freshness')).not.toBeInTheDocument();
     expect(screen.queryByText('Focused drill-in')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: /recovery data view/i })).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Protection coverage' })).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('table')).toHaveLength(1);
+    });
+    const historyTable = screen.getAllByRole('table')[0];
+    const historyControls = screen.getByRole('group', { name: /recovery events controls/i });
+    const activityBars = screen.getByTestId('recovery-activity-bars');
+    expect(recoveryPage).toContainElement(historyControls);
+    expect(recoveryPage).toContainElement(historyTable);
+    const activityHeading = screen.getByText('Recovery Activity');
+    expect(activityBars.parentElement?.className).toContain('h-[136px] sm:h-[150px]');
+    expect(
+      screen.queryByText('Daily recovery points across the selected history window.'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Range$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\/ day/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Lowest active day')).not.toBeInTheDocument();
+    expect(screen.queryByText('Below normal')).not.toBeInTheDocument();
+    expect(recoveryPage).toContainElement(activityHeading);
+    expect(
+      activityHeading.compareDocumentPosition(historyControls) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    expect(
+      historyControls.compareDocumentPosition(historyTable) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    expect(activityHeading.closest('.rounded-md')).not.toBeNull();
+    expect(historyControls.closest('.rounded-md')).not.toBeNull();
+    expect(historyTable.closest('.rounded-md')).not.toBeNull();
+    expect(activityHeading.closest('.rounded-md')).not.toBe(historyControls.closest('.rounded-md'));
+    expect(historyControls.closest('.rounded-md')).not.toBe(historyTable.closest('.rounded-md'));
+    const historySearch = within(historyControls).getByPlaceholderText(
+      'Search recovery history or enter a date...',
+    );
+    expect(historySearch).toBeInTheDocument();
+    expect(historySearch.closest('div.relative')?.className).toContain('w-full');
+    expect(screen.getByText(/Showing 1 - 2 of 2 recovery points/i)).toBeInTheDocument();
+    expect(within(historyControls).queryByText(/day group/i)).not.toBeInTheDocument();
+    expect(within(historyControls).getByRole('button', { name: 'Filter' })).toBeInTheDocument();
+    const rangeControls = screen.getByRole('group', { name: 'Recovery activity range' });
+    expect(within(rangeControls).getByRole('button', { name: '7d' })).toBeInTheDocument();
+    expect(within(rangeControls).getByRole('button', { name: '30d' })).toBeInTheDocument();
+    expect(within(rangeControls).getByRole('button', { name: '90d' })).toBeInTheDocument();
+    expect(within(rangeControls).getByRole('button', { name: '365d' })).toBeInTheDocument();
+    expect(within(historyControls).queryByRole('button', { name: '7d' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '7d' })).toHaveLength(1);
+    expect(within(historyTable).getByText('Item Type')).toBeInTheDocument();
+    expect(within(historyTable).getByText('Item')).toBeInTheDocument();
+    expect(within(historyTable).getByText('Platform')).toBeInTheDocument();
+    expect(within(historyTable).queryByText('ITEM TYPE')).not.toBeInTheDocument();
+    expect(within(historyTable).queryByText('PLATFORM')).not.toBeInTheDocument();
+    expect(within(historyTable).getByText('Target')).toBeInTheDocument();
+    expect(within(historyTable).queryByText('Details')).not.toBeInTheDocument();
+    const historyRow = within(historyTable).getByLabelText('Healthy').closest('tr');
+    expect(historyRow).not.toBeNull();
+    expect(within(historyRow!).getByLabelText('Healthy')).toBeInTheDocument();
+    expect(within(historyRow!).getByText('VMID 123')).toBeInTheDocument();
+    expect(within(historyRow!).getByText('VMID 123').parentElement?.className).toContain(
+      'items-baseline',
+    );
+    expect(within(historyRow!).getByText('VM').className).toContain('bg-');
+    expect(within(historyRow!).getByText('VM').className).toContain('rounded');
+    expect(within(historyRow!).getByText('VM').className).toContain('px-1 py-0.5');
+    expect(within(historyRow!).getByText('Local Copy').className).not.toContain('rounded');
+    expect(within(historyRow!).getByText('Success').className).not.toContain('rounded');
+    expect(activityHeading).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Protection coverage' }));
+
     await screen.findByText('VM 123');
-    const inventoryControls = screen.getByRole('group', { name: /protected items controls/i });
+    const inventoryControls = screen.getByRole('group', { name: /protection coverage controls/i });
     const protectedSearch = within(inventoryControls).getByPlaceholderText(
-      'Search protected items...',
+      'Search protection coverage...',
     );
     expect(protectedSearch).toBeInTheDocument();
     expect(protectedSearch.closest('div.relative')?.className).toContain('w-full');
     expect(within(inventoryControls).queryByText(/^\d+ stale$/i)).not.toBeInTheDocument();
     expect(within(inventoryControls).queryByText(/^\d+ never succeeded$/i)).not.toBeInTheDocument();
-    expect(
-      within(workspaceTablist).getByRole('tab', { name: 'Protected items' }).className,
-    ).toContain('border-b-2');
-    expect(
-      within(workspaceTablist).getByRole('tab', { name: 'Protected items' }).className,
-    ).not.toContain('rounded-md');
     expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
     expect(screen.queryByText('Needs Attention')).not.toBeInTheDocument();
-    expect(screen.getByText(/^2 protected items$/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^2 protected resources$/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Showing 2 coverage items')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Prev' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
-      'aria-selected',
-      'false',
-    );
     await waitFor(() => {
       expect(screen.getAllByRole('table')).toHaveLength(1);
     });
     const inventoryTable = screen.getAllByRole('table')[0];
     const inventoryBody = inventoryTable.querySelector('tbody');
-    expect(recoveryPage).toContainElement(summaryPanel);
-    expect(recoveryPage).toContainElement(workspaceTablist);
     expect(recoveryPage).toContainElement(inventoryControls);
     expect(recoveryPage).toContainElement(inventoryTable);
-    expect(
-      summaryPanel.compareDocumentPosition(workspaceTablist) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).not.toBe(0);
-    expect(
-      workspaceTablist.compareDocumentPosition(inventoryControls) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).not.toBe(0);
     expect(
       inventoryControls.compareDocumentPosition(inventoryTable) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
@@ -364,109 +539,65 @@ describe('Recovery', () => {
     fireEvent.click(await screen.findByText('VM 123'));
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      );
-    });
-    expect(screen.getByRole('tab', { name: /protected items/i })).toHaveAttribute(
-      'aria-selected',
-      'false',
-    );
-    expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
-    await waitFor(() => {
       expect(screen.getAllByRole('table')).toHaveLength(1);
     });
-    const historyTable = screen.getAllByRole('table')[0];
-    const historyControls = screen.getByRole('group', { name: /recovery events controls/i });
-    const historyTablist = screen.getByRole('tablist', { name: /recovery data view/i });
-    const activityBars = screen.getByTestId('recovery-activity-bars');
-    expect(recoveryPage).toContainElement(historyTablist);
-    expect(recoveryPage).toContainElement(historyControls);
-    expect(recoveryPage).toContainElement(historyTable);
-    expect(
-      historyTablist.compareDocumentPosition(historyControls) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).not.toBe(0);
-    const activityHeading = screen.getByText('Recovery Activity');
-    expect(activityBars.parentElement?.className).toContain('h-20');
-    expect(
-      screen.queryByText('Daily recovery points across the selected history window.'),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText(/^Range$/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/\/ day/i)).not.toBeInTheDocument();
-    expect(recoveryPage).toContainElement(activityHeading);
-    expect(
-      activityHeading.compareDocumentPosition(historyControls) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).not.toBe(0);
-    expect(
-      historyControls.compareDocumentPosition(historyTable) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).not.toBe(0);
-    expect(activityHeading.closest('.rounded-md')).not.toBeNull();
-    expect(historyControls.closest('.rounded-md')).not.toBeNull();
-    expect(historyTable.closest('.rounded-md')).not.toBeNull();
-    expect(activityHeading.closest('.rounded-md')).not.toBe(historyControls.closest('.rounded-md'));
-    expect(historyControls.closest('.rounded-md')).not.toBe(historyTable.closest('.rounded-md'));
-    const historySearch = within(historyControls).getByPlaceholderText(
-      'Search recovery history...',
-    );
-    expect(historySearch).toBeInTheDocument();
-    expect(historySearch.closest('div.relative')?.className).toContain('w-full');
-    expect(
-      within(historyTablist).getByRole('tab', { name: 'Protected items' }),
-    ).toBeInTheDocument();
-    expect(
-      within(historyTablist).getByRole('tab', { name: 'Recovery events' }),
-    ).toBeInTheDocument();
-    // Inventory section migrated to FilterBar: filters live behind the
-    // "+ Filter" menu rather than as labelled selects, so the legacy
-    // min-width inspections no longer apply. (The events view is active by
-    // this point in the test, so the inventory section is unmounted; chip
-    // / menu coverage lives in the dedicated FilterBar tests below.)
-    expect(screen.getAllByText(/^1 event$/i)).toHaveLength(1);
-    expect(within(historyControls).queryByText(/day group/i)).not.toBeInTheDocument();
-    // Events FilterBar: "+ Filter" trigger surfaces Item Type / Platform /
-    // Status / etc. as menu items rather than persistent labelled selects.
-    expect(within(historyControls).getByRole('button', { name: 'Filter' })).toBeInTheDocument();
-    const recoverySummaryPanel = screen.getByTestId('recovery-summary');
-    expect(within(recoverySummaryPanel).getByRole('button', { name: '7d' })).toBeInTheDocument();
-    expect(within(recoverySummaryPanel).getByRole('button', { name: '30d' })).toBeInTheDocument();
-    expect(within(recoverySummaryPanel).getByRole('button', { name: '90d' })).toBeInTheDocument();
-    expect(within(recoverySummaryPanel).getByRole('button', { name: '365d' })).toBeInTheDocument();
-    expect(within(historyControls).queryByRole('button', { name: '7d' })).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: '7d' })).toHaveLength(1);
-    expect(within(historyTable).getByText('Item Type')).toBeInTheDocument();
-    expect(within(historyTable).getByText('Item')).toBeInTheDocument();
-    expect(within(historyTable).getByText('Platform')).toBeInTheDocument();
-    expect(within(historyTable).queryByText('ITEM TYPE')).not.toBeInTheDocument();
-    expect(within(historyTable).queryByText('PLATFORM')).not.toBeInTheDocument();
-    expect(within(historyTable).getByText('Target')).toBeInTheDocument();
-    expect(within(historyTable).queryByText('Details')).not.toBeInTheDocument();
-    const historyRow = within(historyTable).getByLabelText('Healthy').closest('tr');
-    expect(historyRow).not.toBeNull();
-    expect(within(historyRow!).getByLabelText('Healthy')).toBeInTheDocument();
-    expect(within(historyRow!).getByText('VMID 123')).toBeInTheDocument();
-    expect(within(historyRow!).getByText('VMID 123').parentElement?.className).toContain(
-      'items-baseline',
-    );
-    expect(within(historyRow!).getByText('VM').className).toContain('bg-');
-    expect(within(historyRow!).getByText('VM').className).toContain('rounded');
-    expect(within(historyRow!).getByText('VM').className).toContain('px-1 py-0.5');
-    expect(within(historyRow!).getByText('Local Copy').className).not.toContain('rounded');
-    expect(within(historyRow!).getByText('Success').className).not.toContain('rounded');
-    expect(activityHeading).toBeInTheDocument();
+    await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
+    expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
+    const focusedHistoryTable = screen.getAllByRole('table')[0];
+    const focusedHistoryControls = screen.getByRole('group', { name: /recovery events controls/i });
+    expect(within(focusedHistoryTable).getAllByText(/^1 event$/i)).toHaveLength(1);
+    expect(within(focusedHistoryControls).getByText('VM 123')).toBeInTheDocument();
+    expect(within(focusedHistoryTable).getByText('VMID 123')).toBeInTheDocument();
   });
 
-  it('persists the selected recovery workspace view in the route when explicitly changed', async () => {
+  it('persists the secondary protection coverage view in the route when explicitly opened', async () => {
     render(() => <Recovery />);
 
-    fireEvent.click(await screen.findByRole('tab', { name: /recovery events/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?view=events',
+        '/recovery?view=inventory',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
+  });
+
+  it('offers a reciprocal page-header return from protection coverage to recovery events', async () => {
+    render(() => <Recovery />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?view=inventory',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
+    });
+    mockLocationSearch = '?view=inventory';
+    mockLocationVersion.bump?.();
+
+    expect(
+      await screen.findByRole('button', { name: 'Back to recovery events' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('group', { name: /recovery events controls/i }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to recovery events' }));
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery', ROUTE_STATE_REPLACE_OPTIONS);
+    });
+    mockLocationSearch = '';
+    mockLocationVersion.bump?.();
+
+    expect(
+      await screen.findByRole('group', { name: /recovery events controls/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('group', { name: /protection coverage controls/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('restores the explicit recovery workspace view from the route', async () => {
@@ -474,16 +605,12 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      );
-    });
-    expect(screen.getByRole('tab', { name: /protected items/i })).toHaveAttribute(
-      'aria-selected',
-      'false',
-    );
+    expect(
+      await screen.findByRole('group', { name: /recovery events controls/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('group', { name: /protection coverage controls/i }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
   });
 
@@ -492,16 +619,12 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      );
-    });
-    expect(screen.getByRole('tab', { name: /protected items/i })).toHaveAttribute(
-      'aria-selected',
-      'false',
-    );
+    expect(
+      await screen.findByRole('group', { name: /recovery events controls/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('group', { name: /protection coverage controls/i }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
   });
 
@@ -530,6 +653,7 @@ describe('Recovery', () => {
     try {
       render(() => <Recovery />);
 
+      fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
       const item = await screen.findByText('Archive VM');
       fireEvent.click(item);
 
@@ -550,18 +674,18 @@ describe('Recovery', () => {
     }
   });
 
-  it('surfaces item-first recovery coverage in the unified summary', async () => {
+  it('does not render decorative recovery summary cards on the event-first surface', async () => {
     render(() => <Recovery />);
 
-    const summary = await screen.findByTestId('recovery-summary');
-    expect(await within(summary).findByText('Coverage')).toBeInTheDocument();
-    expect(await within(summary).findByText(/\d+ protected items/i)).toBeInTheDocument();
-    expect(within(summary).queryByText(/\d+ attention/i)).not.toBeInTheDocument();
-    expect(within(summary).getByText(/^attention$/i)).toBeInTheDocument();
-    expect(within(summary).queryByText('Primary Item')).not.toBeInTheDocument();
-    expect(within(summary).getByText(/^types$/i)).toBeInTheDocument();
-    expect(within(summary).getAllByText(/platforms/i).length).toBeGreaterThan(0);
-    expect(within(summary).queryByText('Primary Platform')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('recovery-summary')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Coverage$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\d+ protected resources/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^attention$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Primary Item')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^types$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Primary Platform')).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Protection coverage' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Recovery activity range' })).toBeInTheDocument();
   });
 
   it('normalizes legacy provider-shaped recovery payloads before rendering', async () => {
@@ -588,17 +712,11 @@ describe('Recovery', () => {
     try {
       render(() => <Recovery />);
 
+      fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
       expect(await screen.findByText('tank/legacy')).toBeInTheDocument();
       expect(screen.getAllByText('TrueNAS').length).toBeGreaterThan(0);
 
       fireEvent.click(screen.getByText('tank/legacy'));
-
-      await waitFor(() => {
-        expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
-          'aria-selected',
-          'true',
-        );
-      });
       // The legacy `providers: ['truenas']` payload should normalize into the
       // canonical "TrueNAS" platform label on whichever surface renders it
       // (events table badge, "+ Filter > Platform" menu, or active chip).
@@ -629,6 +747,7 @@ describe('Recovery', () => {
     try {
       render(() => <Recovery />);
 
+      fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
       const staleRow = (await screen.findByText('Stale VM')).closest('tr');
       expect(staleRow).not.toBeNull();
       expect(within(staleRow!).getByLabelText('Stale')).toBeInTheDocument();
@@ -648,17 +767,12 @@ describe('Recovery', () => {
     try {
       render(() => <Recovery />);
 
+      fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
       expect(await screen.findByText('VM 123')).toBeInTheDocument();
       const inventoryTable = (await screen.findAllByRole('table'))[0];
       expect(within(inventoryTable).getAllByText('VM').length).toBeGreaterThan(0);
 
       fireEvent.click(screen.getByText('VM 123'));
-      await waitFor(() => {
-        expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
-          'aria-selected',
-          'true',
-        );
-      });
 
       const tables = await screen.findAllByRole('table');
       const historyTable = tables[tables.length - 1];
@@ -687,6 +801,7 @@ describe('Recovery', () => {
     try {
       render(() => <Recovery />);
 
+      fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
       expect(await screen.findByText('Healthy Production')).toBeInTheDocument();
       const inventoryTable = (await screen.findAllByRole('table'))[0];
       expect(within(inventoryTable).getAllByText('K8s Cluster').length).toBeGreaterThan(0);
@@ -698,9 +813,7 @@ describe('Recovery', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
       fireEvent.click(await screen.findByRole('menuitem', { name: 'Item Type' }));
       const itemTypeMenu = await screen.findByRole('menu');
-      expect(
-        within(itemTypeMenu).getByRole('button', { name: 'K8s Cluster' }),
-      ).toBeInTheDocument();
+      expect(within(itemTypeMenu).getByRole('button', { name: 'K8s Cluster' })).toBeInTheDocument();
       expect(
         within(itemTypeMenu).queryByRole('button', { name: 'Cluster' }),
       ).not.toBeInTheDocument();
@@ -743,15 +856,7 @@ describe('Recovery', () => {
     try {
       render(() => <Recovery />);
 
-      const item = await screen.findByText('default/data');
-      fireEvent.click(item);
-
-      await waitFor(() => {
-        expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
-          'aria-selected',
-          'true',
-        );
-      });
+      await screen.findByText('default/data');
       const tables = await screen.findAllByRole('table');
       const historyTable = tables[tables.length - 1];
       expect(within(historyTable).getByText('default/data')).toBeInTheDocument();
@@ -785,10 +890,9 @@ describe('Recovery', () => {
   });
 
   it('keeps recovery history width aligned with canonical column specs', async () => {
-    render(() => <Recovery />);
+    mockLocationSearch = '?rollupId=res%3Avm-123';
 
-    const item = await screen.findByText('VM 123');
-    fireEvent.click(item);
+    render(() => <Recovery />);
 
     await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
     const tables = await screen.findAllByRole('table');
@@ -797,9 +901,10 @@ describe('Recovery', () => {
     expect(historyTable).toHaveStyle({ 'min-width': '980px', 'table-layout': 'fixed' });
   });
 
-  it('keeps the protected inventory table CSP-safe on the default recovery route', async () => {
+  it('keeps the protection coverage table CSP-safe when coverage is opened', async () => {
     render(() => <Recovery />);
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
     const protectedInventoryTable = await screen.findByRole('table');
     expect(protectedInventoryTable).not.toHaveAttribute('style');
     expect(protectedInventoryTable.className).toContain('table-fixed');
@@ -807,6 +912,7 @@ describe('Recovery', () => {
   });
 
   it('keeps canonical item and platform columns visible when legacy hidden-column ids exist', async () => {
+    mockLocationSearch = '?rollupId=res%3Avm-123';
     facetsPayload.clusters = ['lab-cluster'];
     localStorage.setItem(
       STORAGE_KEYS.RECOVERY_HIDDEN_COLUMNS,
@@ -815,7 +921,6 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    fireEvent.click(await screen.findByText('VM 123'));
     await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
 
     const tables = await screen.findAllByRole('table');
@@ -830,6 +935,7 @@ describe('Recovery', () => {
   it('focuses history when a rollup is clicked', async () => {
     render(() => <Recovery />);
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
     const item = await screen.findByText('VM 123');
     fireEvent.click(item);
 
@@ -909,9 +1015,9 @@ describe('Recovery', () => {
     ];
 
     try {
+      mockLocationSearch = '?rollupId=res%3Avm-123';
       render(() => <Recovery />);
 
-      fireEvent.click(await screen.findByText('VM 123'));
       await screen.findByText(/Showing 1 - 2 of 2 recovery points/i);
       fireEvent.click(screen.getByText('10:00'));
 
@@ -941,9 +1047,9 @@ describe('Recovery', () => {
     });
 
     try {
+      mockLocationSearch = '?rollupId=res%3Avm-123';
       render(() => <Recovery />);
 
-      fireEvent.click(await screen.findByText('VM 123'));
       await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
 
       const tables = await screen.findAllByRole('table');
@@ -969,10 +1075,10 @@ describe('Recovery', () => {
     facetsPayload.clusters = ['lab-cluster'];
     facetsPayload.nodesAgents = ['pve-01'];
     facetsPayload.namespaces = ['finance'];
+    mockLocationSearch = '?rollupId=res%3Avm-123';
 
     render(() => <Recovery />);
 
-    fireEvent.click(await screen.findByText('VM 123'));
     await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
 
     fireEvent.click(screen.getByRole('button', { name: /columns/i }));
@@ -992,6 +1098,7 @@ describe('Recovery', () => {
   it('filters protected rollups by platform', async () => {
     render(() => <Recovery />);
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
     expect(await screen.findByText('VM 123')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
@@ -1001,7 +1108,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?platform=truenas',
+        '/recovery?view=inventory&platform=truenas',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
       expect(screen.queryByText('VM 123')).not.toBeInTheDocument();
@@ -1034,17 +1141,16 @@ describe('Recovery', () => {
 
     // FilterBar renders active filters as chips. Route-owned platform and
     // node values become removable chips in the events bar.
-    expect(
-      await screen.findByRole('button', { name: /^Platform: TrueNAS/ }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /^Platform: TrueNAS/ })).toBeInTheDocument();
     expect(
       await screen.findByRole('button', { name: /^Host \/ Agent: tower/ }),
     ).toBeInTheDocument();
   });
 
-  it('uses the shared reset action for protected item filters', async () => {
+  it('uses the shared reset action for protection coverage filters', async () => {
     render(() => <Recovery />);
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
     expect(await screen.findByText('VM 123')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
 
@@ -1057,18 +1163,17 @@ describe('Recovery', () => {
     fireEvent.click(clearAllButton);
 
     await waitFor(() => {
-      expect(
-        screen.queryByRole('button', { name: /^Platform: TrueNAS/ }),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Platform: TrueNAS/ })).not.toBeInTheDocument();
       expect(screen.getByText('VM 123')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
     });
   });
 
   it('treats the focused rollup as part of the recovery events filter surface', async () => {
+    mockLocationSearch = '?rollupId=res%3Avm-123';
+
     render(() => <Recovery />);
 
-    fireEvent.click(await screen.findByText('VM 123'));
     await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
 
     const controls = await screen.findByRole('group', { name: /recovery events controls/i });
@@ -1079,14 +1184,46 @@ describe('Recovery', () => {
     fireEvent.click(within(controls).getByRole('button', { name: 'Clear all' }));
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?view=events',
-        ROUTE_STATE_REPLACE_OPTIONS,
-      );
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery', ROUTE_STATE_REPLACE_OPTIONS);
       expect(screen.getByTestId('recovery-history-item-filter-trigger')).toHaveTextContent(
         'Any item',
       );
       expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('treats chart day selection as a shared recovery events filter', async () => {
+    render(() => <Recovery />);
+
+    const bars = await screen.findByTestId('recovery-activity-bars');
+    fireEvent.click(within(bars).getByRole('button', { name: /Feb 14: 1 recovery point/ }));
+
+    const controls = await screen.findByRole('group', { name: /recovery events controls/i });
+    expect(
+      await within(controls).findByRole('button', {
+        name: /^Day: Feb 14, 2026 - 1 recovery point/,
+      }),
+    ).toBeInTheDocument();
+    expect(within(controls).getByRole('button', { name: 'Remove Day filter' })).toBeInTheDocument();
+    expect(screen.getByText(/Showing 1 - 1 of 1 recovery points/i)).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?day=2026-02-14',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
+    });
+
+    fireEvent.click(within(controls).getByRole('button', { name: 'Clear all' }));
+
+    await waitFor(() => {
+      expect(
+        within(controls).queryByRole('button', {
+          name: /^Day: Feb 14, 2026 - 1 recovery point/,
+        }),
+      ).not.toBeInTheDocument();
+      expect(within(bars).queryByRole('button', { pressed: true })).not.toBeInTheDocument();
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery', ROUTE_STATE_REPLACE_OPTIONS);
     });
   });
 
@@ -1100,7 +1237,9 @@ describe('Recovery', () => {
     // events controls group; the item filter trigger is also grouped here.
     expect(within(controls).getByRole('button', { name: 'Filter' })).toBeInTheDocument();
     expect(within(controls).getByRole('button', { name: /columns/i })).toBeInTheDocument();
-    expect(within(controls).getByTestId('recovery-history-item-filter-trigger')).toBeInTheDocument();
+    expect(
+      within(controls).getByTestId('recovery-history-item-filter-trigger'),
+    ).toBeInTheDocument();
     // Recovery events opted into shared saved views — the bookmark menu
     // sits next to "+ Filter" and persists named filter combos under the
     // canonical localStorage key.
@@ -1110,15 +1249,6 @@ describe('Recovery', () => {
   it('lets operators create and clear the item filter from the recovery events controls', async () => {
     render(() => <Recovery />);
 
-    fireEvent.click(screen.getByRole('tab', { name: /recovery events/i }));
-
-    await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?view=events',
-        ROUTE_STATE_REPLACE_OPTIONS,
-      );
-    });
-
     const controls = await screen.findByRole('group', { name: /recovery events controls/i });
     const itemFilterTrigger = within(controls).getByTestId('recovery-history-item-filter-trigger');
     expect(itemFilterTrigger).toHaveTextContent('Any item');
@@ -1126,7 +1256,7 @@ describe('Recovery', () => {
     fireEvent.click(itemFilterTrigger);
     expect(await screen.findByTestId('recovery-history-item-filter-panel')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('recovery-history-item-filter-option-ext:truenas-1'));
+    fireEvent.click(await screen.findByTestId('recovery-history-item-filter-option-ext:truenas-1'));
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
@@ -1143,10 +1273,7 @@ describe('Recovery', () => {
     fireEvent.click(await screen.findByTestId('recovery-history-item-filter-clear'));
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?view=events',
-        ROUTE_STATE_REPLACE_OPTIONS,
-      );
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery', ROUTE_STATE_REPLACE_OPTIONS);
       expect(screen.getByTestId('recovery-history-item-filter-trigger')).toHaveTextContent(
         'Any item',
       );
@@ -1156,20 +1283,16 @@ describe('Recovery', () => {
   it('keeps recovery filter surfaces on canonical platform vocabulary', async () => {
     render(() => <Recovery />);
 
-    // Inventory FilterBar surfaces "Platform" via the "+ Filter" menu rather
+    // Events FilterBar surfaces "Platform" via the "+ Filter" menu rather
     // than as a labelled select, so assert the menu vocabulary instead.
     fireEvent.click(await screen.findByRole('button', { name: 'Filter' }));
-    expect(
-      await screen.findByRole('menuitem', { name: 'Platform' }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('menuitem', { name: 'Platform' })).toBeInTheDocument();
     expect(screen.queryByText('All Providers')).not.toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'Escape' });
 
-    fireEvent.click(screen.getByRole('tab', { name: /Recovery events/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Filter' }));
-    expect(
-      await screen.findByRole('menuitem', { name: 'Platform' }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('menuitem', { name: 'Platform' })).toBeInTheDocument();
     expect(screen.queryByText('All Providers')).not.toBeInTheDocument();
   });
 
@@ -1210,14 +1333,18 @@ describe('Recovery', () => {
     });
   });
 
-  it('uses one canonical free-text query across protected items and history transport', async () => {
+  it('uses one canonical free-text query across protection coverage and history transport', async () => {
     render(() => <Recovery />);
 
-    const protectedSearch = await screen.findByPlaceholderText('Search protected items...');
+    fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
+    const protectedSearch = await screen.findByPlaceholderText('Search protection coverage...');
     fireEvent.input(protectedSearch, { target: { value: 'tank' } });
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?q=tank', ROUTE_STATE_REPLACE_OPTIONS);
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?view=inventory&q=tank',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
     });
 
     await waitFor(() => {
@@ -1243,9 +1370,49 @@ describe('Recovery', () => {
     });
   });
 
+  it('promotes clear day text in recovery search to the shared Day filter', async () => {
+    render(() => <Recovery />);
+
+    const historyControls = await screen.findByRole('group', {
+      name: /recovery events controls/i,
+    });
+    const historySearch = within(historyControls).getByPlaceholderText(
+      'Search recovery history or enter a date...',
+    );
+
+    fireEvent.input(historySearch, { target: { value: 'Feb 14' } });
+
+    await waitFor(() => {
+      expect(
+        within(historyControls).getByText('Feb 14, 2026 - 1 recovery point'),
+      ).toBeInTheDocument();
+      expect(historySearch).toHaveValue('');
+      expect(navigateSpy).toHaveBeenCalledWith(
+        expect.stringContaining('day=2026-02-14'),
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
+    });
+
+    const selectedStart = parseRecoveryDateKey('2026-02-14');
+    selectedStart.setHours(0, 0, 0, 0);
+    const selectedEnd = new Date(selectedStart);
+    selectedEnd.setHours(23, 59, 59, 999);
+
+    await waitFor(() => {
+      const pointUrls = apiFetchMock.mock.calls
+        .map((call) => String(call[0] || ''))
+        .filter((url) => url.includes('/api/recovery/points'));
+      const latestPointsUrl = pointUrls[pointUrls.length - 1];
+      expect(latestPointsUrl).toContain(`from=${encodeURIComponent(selectedStart.toISOString())}`);
+      expect(latestPointsUrl).toContain(`to=${encodeURIComponent(selectedEnd.toISOString())}`);
+      expect(latestPointsUrl).not.toContain('q=Feb');
+    });
+  });
+
   it('uses canonical protection state filtering for protected inventory', async () => {
     render(() => <Recovery />);
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Filter' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Protection state' }));
     const stateMenu = await screen.findByRole('menu');
@@ -1253,7 +1420,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?state=never-succeeded',
+        '/recovery?view=inventory&state=never-succeeded',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -1321,7 +1488,8 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    expect(await screen.findByText('Showing 26 protected items')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
+    expect(await screen.findByText('Showing 26 coverage items')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Prev' })).not.toBeInTheDocument();
   });
@@ -1333,7 +1501,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?state=stale',
+        '/recovery?view=inventory&state=stale',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -1352,7 +1520,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?view=events&range=90&status=failed',
+        '/recovery?range=90&status=failed',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -1361,10 +1529,7 @@ describe('Recovery', () => {
     fireEvent.click(within(controls).getByRole('button', { name: 'Clear all' }));
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?view=events',
-        ROUTE_STATE_REPLACE_OPTIONS,
-      );
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery', ROUTE_STATE_REPLACE_OPTIONS);
     });
   });
 
@@ -1412,7 +1577,6 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    fireEvent.click(await screen.findByRole('tab', { name: /recovery events/i }));
     fireEvent.click(await screen.findByRole('button', { name: /^filter$/i }));
 
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Cluster / Site' }));
@@ -1421,7 +1585,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?view=events&cluster=dev-cluster',
+        '/recovery?cluster=dev-cluster',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -1495,7 +1659,6 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    fireEvent.click(await screen.findByRole('tab', { name: /recovery events/i }));
     fireEvent.click(await screen.findByRole('button', { name: /^filter$/i }));
 
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Host / Agent' }));
@@ -1509,7 +1672,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?view=events&namespace=tenant-a&node=node-agent-1',
+        '/recovery?namespace=tenant-a&node=node-agent-1',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -1607,10 +1770,6 @@ describe('Recovery', () => {
       ).toBe(true);
     });
 
-    expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
     expect(screen.getByText(/Showing 1 - 1 of 1 recovery points/i)).toBeInTheDocument();
 
     if (!delayedPointsReady) {
@@ -1640,15 +1799,6 @@ describe('Recovery', () => {
       .map((call) => String(call[0] || ''))
       .filter((url) => url.includes('/api/recovery/points'));
     const initialPointsUrl = initialPointUrls[initialPointUrls.length - 1];
-
-    fireEvent.click(await screen.findByRole('tab', { name: /recovery events/i }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      );
-    });
 
     const timelineButtons = await screen.findAllByRole('button', { name: /recovery point/i });
     fireEvent.click(timelineButtons[0]);
@@ -1691,12 +1841,9 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      );
-    });
+    expect(
+      await screen.findByRole('group', { name: /recovery events controls/i }),
+    ).toBeInTheDocument();
 
     const selectedStart = parseRecoveryDateKey('2026-02-13');
     selectedStart.setHours(0, 0, 0, 0);
@@ -1718,12 +1865,9 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      );
-    });
+    expect(
+      await screen.findByRole('group', { name: /recovery events controls/i }),
+    ).toBeInTheDocument();
 
     const selectedStart = parseRecoveryDateKey('2026-02-13');
     selectedStart.setHours(0, 0, 0, 0);
@@ -1759,22 +1903,10 @@ describe('Recovery', () => {
   it('persists the selected timeline range in the recovery URL', async () => {
     render(() => <Recovery />);
 
-    fireEvent.click(await screen.findByRole('tab', { name: /recovery events/i }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      );
-    });
-
     fireEvent.click(await screen.findByRole('button', { name: '7d' }));
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?view=events&range=7',
-        ROUTE_STATE_REPLACE_OPTIONS,
-      );
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?range=7', ROUTE_STATE_REPLACE_OPTIONS);
     });
   });
 
@@ -1783,7 +1915,7 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    await screen.findByRole('tab', { name: /protected items/i });
+    await screen.findByRole('group', { name: /recovery events controls/i });
 
     const end = new Date();
     end.setHours(23, 59, 59, 999);
@@ -1808,16 +1940,13 @@ describe('Recovery', () => {
   });
 
   it('renders sparse 365d timeline ticks instead of one label slot per day', async () => {
-    mockLocationSearch = '?view=events&range=365';
+    mockLocationSearch = '?range=365';
 
     const { container } = render(() => <Recovery />);
 
-    await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      );
-    });
+    expect(
+      await screen.findByRole('group', { name: /recovery events controls/i }),
+    ).toBeInTheDocument();
 
     const labels = await waitFor(() => {
       const labelsRow = container

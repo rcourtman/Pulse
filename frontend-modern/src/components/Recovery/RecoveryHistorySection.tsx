@@ -3,6 +3,7 @@ import type { Accessor, Component } from 'solid-js';
 
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
+import type { FilterSelectOption } from '@/components/shared/FilterBar';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
@@ -61,6 +62,9 @@ interface RecoveryHistorySectionProps {
   clusterFilter: Accessor<string>;
   clusterOptions: Accessor<string[]>;
   currentPage: Accessor<number>;
+  dayFilterKey: Accessor<string | null>;
+  dayFilterLabel: Accessor<string>;
+  dayFilterOptions: Accessor<FilterSelectOption[]>;
   groupedByDay: Accessor<RecoveryPointGroup[]>;
   hasActiveArtifactFilters: Accessor<boolean>;
   hasFocusedRollup: Accessor<boolean>;
@@ -98,6 +102,7 @@ interface RecoveryHistorySectionProps {
   setQueryFilter: (value: string) => void;
   setRollupId: (value: string) => void;
   setScopeFilter: (value: 'all' | 'workload') => void;
+  setDayFilter: (value: string | null) => void;
   setVerificationFilter: (value: VerificationFilter) => void;
   showClusterFilter: Accessor<boolean>;
   showNamespaceFilter: Accessor<boolean>;
@@ -110,20 +115,22 @@ interface RecoveryHistorySectionProps {
 }
 
 export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (props) => {
-  const { clearSelectedPoint, selectedPoint, toggleSelectedPoint } = useRecoveryHistorySectionState({
-    clusterFilter: props.clusterFilter,
-    currentPage: props.currentPage,
-    hasFocusedRollup: props.hasFocusedRollup,
-    historyOutcomeFilter: props.historyOutcomeFilter,
-    itemTypeFilter: props.itemTypeFilter,
-    modeFilter: props.modeFilter,
-    namespaceFilter: props.namespaceFilter,
-    nodeFilter: props.nodeFilter,
-    platformFilter: props.platformFilter,
-    queryFilter: props.queryFilter,
-    scopeFilter: props.scopeFilter,
-    verificationFilter: props.verificationFilter,
-  });
+  const { clearSelectedPoint, selectedPoint, toggleSelectedPoint } = useRecoveryHistorySectionState(
+    {
+      clusterFilter: props.clusterFilter,
+      currentPage: props.currentPage,
+      hasFocusedRollup: props.hasFocusedRollup,
+      historyOutcomeFilter: props.historyOutcomeFilter,
+      itemTypeFilter: props.itemTypeFilter,
+      modeFilter: props.modeFilter,
+      namespaceFilter: props.namespaceFilter,
+      nodeFilter: props.nodeFilter,
+      platformFilter: props.platformFilter,
+      queryFilter: props.queryFilter,
+      scopeFilter: props.scopeFilter,
+      verificationFilter: props.verificationFilter,
+    },
+  );
 
   const isMobileAccessor = createMemo(() => props.isMobile);
 
@@ -166,9 +173,26 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
     props.setNamespaceFilter(value);
     props.setCurrentPage(1);
   };
+  const selectedDayFilterValue = () => props.dayFilterKey() ?? 'all';
+  const setDay = (value: string) => {
+    props.setDayFilter(value === 'all' ? null : value);
+  };
 
   const buildFilters = (): FilterDef[] => {
     const filters: FilterDef[] = [
+      {
+        id: 'day',
+        label: 'Day',
+        group: 'scope',
+        value: selectedDayFilterValue,
+        setValue: setDay,
+        defaultValue: 'all',
+        options: props.dayFilterOptions,
+        formatChipValue: (value, options) =>
+          options.find((option) => option.value === value)?.label ||
+          props.dayFilterLabel() ||
+          value,
+      },
       {
         id: 'item-type',
         label: getRecoveryArtifactColumnLabel('type', 'Item Type'),
@@ -395,6 +419,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
         <RecoveryHistoryTable
           clearSelectedPoint={clearSelectedPoint}
           currentPage={props.currentPage}
+          dayFilterKey={props.dayFilterKey}
           groupedByDay={props.groupedByDay}
           hasActiveArtifactFilters={props.hasActiveArtifactFilters}
           isMobile={props.isMobile}

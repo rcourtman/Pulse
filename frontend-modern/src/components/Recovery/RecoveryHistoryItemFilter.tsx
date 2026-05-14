@@ -178,7 +178,7 @@ export const RecoveryHistoryItemFilter: Component<RecoveryHistoryItemFilterProps
                 close();
               }
             }}
-            placeholder="Search protected items..."
+            placeholder="Search covered items..."
             inputClass="py-2 text-sm"
             clearOnFocusedEscape={false}
           />
@@ -188,7 +188,7 @@ export const RecoveryHistoryItemFilter: Component<RecoveryHistoryItemFilterProps
               when={filteredOptions().length > 0}
               fallback={
                 <div class="rounded-md border border-dashed border-border px-3 py-4 text-sm text-muted">
-                  No matching protected items.
+                  No matching covered items.
                 </div>
               }
             >

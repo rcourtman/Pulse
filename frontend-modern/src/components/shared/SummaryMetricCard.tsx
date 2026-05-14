@@ -1,6 +1,7 @@
 import { Show, type JSX } from 'solid-js';
 import { Card } from './Card';
 import { SparklineSkeleton } from './SparklineSkeleton';
+import { SUMMARY_CHART_SLOT_CLASS, SUMMARY_CHART_SLOT_COMPACT_CLASS } from './summaryChartLayout';
 import type { SummaryCardInteractionState } from './summaryCardInteraction';
 
 export interface SummaryMetricCardProps {
@@ -31,7 +32,7 @@ export function SummaryMetricCard(props: SummaryMetricCardProps) {
   const bodyLayout = () => props.bodyLayout ?? 'chart';
   const interactionState = () => props.interactionState ?? 'default';
   const chartSlotClass = () =>
-    isCompact() ? 'h-[108px] sm:h-[120px]' : 'h-[136px] sm:h-[150px]';
+    isCompact() ? SUMMARY_CHART_SLOT_COMPACT_CLASS : SUMMARY_CHART_SLOT_CLASS;
   const interactionClass = () => {
     switch (interactionState()) {
       case 'active':
@@ -48,10 +49,7 @@ export function SummaryMetricCard(props: SummaryMetricCardProps) {
       data-summary-card-state={interactionState()}
       class={`h-full rounded-md transition-all duration-150 ease-out ${interactionClass()}`.trim()}
     >
-      <Card
-        padding="sm"
-        class={`h-full ${isCompact() ? '!p-1.5 sm:!p-2' : ''}`.trim()}
-      >
+      <Card padding="sm" class={`h-full ${isCompact() ? '!p-1.5 sm:!p-2' : ''}`.trim()}>
         <div class="flex flex-col h-full">
           <div
             class={`flex min-w-0 items-center gap-2 ${isCompact() ? 'mb-1 min-h-[20px]' : 'mb-1.5 min-h-[24px]'}`.trim()}

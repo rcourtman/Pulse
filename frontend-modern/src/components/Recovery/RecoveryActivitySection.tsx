@@ -1,13 +1,16 @@
-import { For, Show, createMemo } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import type { Accessor, Component, JSX } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
-import { hideTooltip, showTooltip } from '@/components/shared/Tooltip';
+import {
+  SUMMARY_CHART_PLOT_AREA_CLASS,
+  SUMMARY_CHART_SLOT_CLASS,
+} from '@/components/shared/summaryChartLayout';
+import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import {
   getRecoveryActivityEmptyState,
   getRecoveryActivityLoadingState,
 } from '@/utils/recoveryEmptyStatePresentation';
-import { getRecoveryFilterChipPresentation } from '@/utils/recoveryFilterChipPresentation';
 import { getRecoveryArtifactModePresentation } from '@/utils/recoveryArtifactModePresentation';
 import {
   getRecoveryPrettyDateLabel,
@@ -21,8 +24,13 @@ import {
   RECOVERY_TIMELINE_LEGEND_ITEM_CLASS,
 } from '@/utils/recoveryTimelineChartPresentation';
 import {
+  getRecoveryTimelineBarMarkerClass,
+  getRecoveryTimelineDayFilterStateLabel,
   getRecoveryTimelineColumnAriaLabel,
   getRecoveryTimelineColumnButtonClass,
+  getRecoveryTimelineEmptyMarkerClass,
+  getRecoveryTimelinePointTotalLabel,
+  getRecoveryTimelineTooltipRows,
 } from '@/utils/recoveryTimelinePresentation';
 
 interface RecoveryRollupSummary {
@@ -52,28 +60,29 @@ interface TimelineModel {
   labelEvery: number;
 }
 
+interface ActivityTooltipState {
+  dateLabel: string;
+  point: TimelinePoint;
+  x: number;
+  y: number;
+}
+
+const RECOVERY_ACTIVITY_RANGE_DAYS = [7, 30, 90, 365] as const;
+
 interface RecoveryActivitySectionProps {
   activitySummary: Accessor<ActivitySummary>;
-  activeClusterLabel: Accessor<string>;
-  activeItemTypeLabel: Accessor<string>;
-  activeNamespaceLabel: Accessor<string>;
-  activeNodeLabel: Accessor<string>;
   chartRangeDays: Accessor<7 | 30 | 90 | 365>;
-  clearClusterFilter: () => void;
-  clearItemTypeFilter: () => void;
-  clearNamespaceFilter: () => void;
-  clearNodeFilter: () => void;
-  clearSelectedDate: () => void;
   isMobile: boolean;
   loading: Accessor<boolean>;
   overallRollupsSummary: Accessor<RecoveryRollupSummary>;
-  selectedDateKey: Accessor<string | null>;
-  selectedDateLabel: Accessor<string>;
-  toggleSelectedDate: (key: string) => void;
+  onRangeChange: (days: (typeof RECOVERY_ACTIVITY_RANGE_DAYS)[number]) => void;
+  dayFilterKey: Accessor<string | null>;
+  toggleDayFilter: (key: string) => void;
   timeline: Accessor<TimelineModel>;
 }
 
 function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JSX.Element {
+  const [activityTooltip, setActivityTooltip] = createSignal<ActivityTooltipState | null>(null);
   const timelineAxisTicks = () =>
     getRecoveryTimelineAxisTicks(
       props.timeline().points.length,
@@ -89,59 +98,27 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
     return minWidth > 0 ? `${minWidth}px` : '100%';
   };
   const chartGapStyle = () => `${getRecoveryTimelineChartGapPx(props.chartRangeDays())}px`;
+  const filteredTimelinePoint = createMemo(() => {
+    const selected = props.dayFilterKey();
+    if (!selected) return null;
+    return props.timeline().points.find((point) => point.key === selected) ?? null;
+  });
+  const timelineHasDayFilter = () => filteredTimelinePoint() !== null;
+  const showActivityTooltip = (target: HTMLElement, point: TimelinePoint, dateLabel: string) => {
+    const rect = target.getBoundingClientRect();
+    setActivityTooltip({
+      dateLabel,
+      point,
+      x: rect.left + rect.width / 2,
+      y: rect.top,
+    });
+  };
+  const hideActivityTooltip = () => setActivityTooltip(null);
   const formatActivityAverage = (value: number): string => {
     if (!Number.isFinite(value) || value <= 0) return '0/day';
     if (value >= 10) return `${Math.round(value)}/day`;
     return `${Number(value.toFixed(1))}/day`;
   };
-  const selectedTimelinePoint = createMemo(() => {
-    const selected = props.selectedDateKey();
-    if (!selected) return null;
-    return props.timeline().points.find((point) => point.key === selected) || null;
-  });
-  const lowestActivePoint = createMemo(() => {
-    const active = props.timeline().points.filter((point) => point.total > 0);
-    if (active.length === 0) return null;
-    return active.reduce((lowest, point) => (point.total < lowest.total ? point : lowest), active[0]);
-  });
-  const activitySignal = createMemo(() => {
-    const selected = selectedTimelinePoint();
-    const average = props.activitySummary().averagePerDay;
-    if (selected) {
-      if (average > 0 && selected.total < average * 0.5) {
-        return {
-          tone: 'amber',
-          label: 'Below normal',
-          detail: `${selected.total} points vs ${formatActivityAverage(average)} average`,
-        };
-      }
-      return {
-        tone: 'base',
-        label: 'Selected day',
-        detail: `${selected.total} points`,
-      };
-    }
-
-    const lowest = lowestActivePoint();
-    if (lowest && average > 0 && lowest.total < average * 0.5) {
-      return {
-        tone: 'amber',
-        label: 'Lowest active day',
-        detail: `${getRecoveryPrettyDateLabel(lowest.key)}: ${lowest.total} points`,
-      };
-    }
-
-    return {
-      tone: 'base',
-      label: 'Average volume',
-      detail: formatActivityAverage(average),
-    };
-  });
-  const signalClass = () =>
-    activitySignal().tone === 'amber'
-      ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
-      : 'border-border bg-surface-alt text-muted';
-
   return (
     <>
       <div class="mb-2 flex flex-col gap-1.5">
@@ -161,131 +138,57 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
             </Show>
           </div>
           <div class="flex flex-wrap items-center gap-2 text-[11px]">
+            <div
+              role="group"
+              aria-label="Recovery activity range"
+              class="inline-flex shrink-0 rounded border border-border bg-surface p-0.5"
+            >
+              <For each={RECOVERY_ACTIVITY_RANGE_DAYS}>
+                {(days) => {
+                  const selected = () => props.chartRangeDays() === days;
+                  return (
+                    <button
+                      type="button"
+                      class={`rounded px-2 py-1 font-medium transition-colors ${
+                        selected()
+                          ? 'bg-surface-hover text-base-content'
+                          : 'text-muted hover:bg-surface-hover hover:text-base-content'
+                      }`}
+                      aria-pressed={selected() ? 'true' : 'false'}
+                      onClick={() => props.onRangeChange(days)}
+                    >
+                      {days}d
+                    </button>
+                  );
+                }}
+              </For>
+            </div>
             <span class="rounded-md border border-border bg-surface-alt px-2 py-1 text-muted">
               Avg {formatActivityAverage(props.activitySummary().averagePerDay)}
-            </span>
-            <span class={`rounded-md border px-2 py-1 ${signalClass()}`}>
-              <span class="font-medium">{activitySignal().label}</span>
-              <span class="ml-1"> {activitySignal().detail}</span>
             </span>
           </div>
         </div>
       </div>
 
-      <Show
-        when={
-          props.selectedDateKey() ||
-          props.activeItemTypeLabel() ||
-          props.activeClusterLabel() ||
-          props.activeNodeLabel() ||
-          props.activeNamespaceLabel()
-        }
-      >
-        <div class="mb-1 flex flex-wrap items-center gap-1.5">
-          <Show when={props.selectedDateKey()}>
-            {(() => {
-              const chip = getRecoveryFilterChipPresentation('day');
-              return (
-                <div class={chip.className}>
-                  <span class="font-medium uppercase tracking-wide">{chip.label}</span>
-                  <span class="truncate font-mono text-[10px]" title={props.selectedDateLabel()}>
-                    {props.selectedDateLabel()}
-                  </span>
-                  <button type="button" onClick={props.clearSelectedDate} class={chip.clearButtonClass}>
-                    Clear
-                  </button>
-                </div>
-              );
-            })()}
-          </Show>
-          <Show when={props.activeClusterLabel()}>
-            {(() => {
-              const chip = getRecoveryFilterChipPresentation('cluster');
-              return (
-                <div class={chip.className}>
-                  <span class="font-medium uppercase tracking-wide">{chip.label}</span>
-                  <span class="truncate font-mono text-[10px]" title={props.activeClusterLabel()}>
-                    {props.activeClusterLabel()}
-                  </span>
-                  <button type="button" onClick={props.clearClusterFilter} class={chip.clearButtonClass}>
-                    Clear
-                  </button>
-                </div>
-              );
-            })()}
-          </Show>
-          <Show when={props.activeItemTypeLabel()}>
-            {(() => {
-              const chip = getRecoveryFilterChipPresentation('item-type');
-              return (
-                <div class={chip.className}>
-                  <span class="font-medium uppercase tracking-wide">{chip.label}</span>
-                  <span class="truncate font-mono text-[10px]" title={props.activeItemTypeLabel()}>
-                    {props.activeItemTypeLabel()}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={props.clearItemTypeFilter}
-                    class={chip.clearButtonClass}
-                  >
-                    Clear
-                  </button>
-                </div>
-              );
-            })()}
-          </Show>
-          <Show when={props.activeNodeLabel()}>
-            {(() => {
-              const chip = getRecoveryFilterChipPresentation('node');
-              return (
-                <div class={chip.className}>
-                  <span class="font-medium uppercase tracking-wide">{chip.label}</span>
-                  <span class="truncate font-mono text-[10px]" title={props.activeNodeLabel()}>
-                    {props.activeNodeLabel()}
-                  </span>
-                  <button type="button" onClick={props.clearNodeFilter} class={chip.clearButtonClass}>
-                    Clear
-                  </button>
-                </div>
-              );
-            })()}
-          </Show>
-          <Show when={props.activeNamespaceLabel()}>
-            {(() => {
-              const chip = getRecoveryFilterChipPresentation('namespace');
-              return (
-                <div data-testid="active-namespace-chip" class={chip.className}>
-                  <span class="font-medium uppercase tracking-wide">{chip.label}</span>
-                  <span class="truncate font-mono text-[10px]" title={props.activeNamespaceLabel()}>
-                    {props.activeNamespaceLabel()}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={props.clearNamespaceFilter}
-                    class={chip.clearButtonClass}
-                  >
-                    Clear
-                  </button>
-                </div>
-              );
-            })()}
-          </Show>
-        </div>
-      </Show>
-
       <div class="rounded-lg border border-border-subtle bg-surface-alt/25 px-2 py-1.5">
         <div class="mb-1 flex flex-wrap items-center justify-end gap-1.5 text-[9px] text-muted">
           <div class="flex flex-wrap items-center gap-1.5 text-[9px] text-muted">
             <div class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
-              <span class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('snapshot').segmentClassName}`} />
+              <span
+                class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('snapshot').segmentClassName}`}
+              />
               {getRecoveryArtifactModePresentation('snapshot').aggregateLabel}
             </div>
             <div class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
-              <span class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('local').segmentClassName}`} />
+              <span
+                class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('local').segmentClassName}`}
+              />
               {getRecoveryArtifactModePresentation('local').aggregateLabel}
             </div>
             <div class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
-              <span class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('remote').segmentClassName}`} />
+              <span
+                class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('remote').segmentClassName}`}
+              />
               {getRecoveryArtifactModePresentation('remote').aggregateLabel}
             </div>
           </div>
@@ -303,7 +206,9 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
         >
           <div class="relative">
             <div class="grid grid-cols-[auto_minmax(0,1fr)] gap-2.5">
-              <div class="flex h-16 flex-col justify-between text-[10px] text-muted">
+              <div
+                class={`flex ${SUMMARY_CHART_PLOT_AREA_CLASS} flex-col justify-between text-[10px] text-muted`}
+              >
                 <For each={[0, 1, 2]}>
                   {(step) => {
                     const value = Math.round((props.timeline().axisMax * (2 - step)) / 2);
@@ -316,7 +221,10 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
                 data-testid="recovery-activity-chart-scroll"
                 class="overflow-x-auto overscroll-x-contain pb-1"
               >
-                <div class="relative h-20" style={{ 'min-width': chartMinWidthStyle() }}>
+                <div
+                  class={`relative ${SUMMARY_CHART_SLOT_CLASS}`}
+                  style={{ 'min-width': chartMinWidthStyle() }}
+                >
                   <div
                     data-testid="recovery-activity-bars"
                     class="absolute inset-x-0 bottom-4 top-0 flex items-stretch"
@@ -333,63 +241,53 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
                         const snapshotHeight = total > 0 ? (point.snapshot / total) * 100 : 0;
                         const localHeight = total > 0 ? (point.local / total) * 100 : 0;
                         const remoteHeight = total > 0 ? (point.remote / total) * 100 : 0;
-                        const isSelected = props.selectedDateKey() === point.key;
+                        const isSelected = () => props.dayFilterKey() === point.key;
                         const dateLabel = getRecoveryPrettyDateLabel(point.key);
 
                         return (
                           <div class="min-w-[3px] flex-1 self-stretch">
                             <button
                               type="button"
-                              class={`h-full w-full ${getRecoveryTimelineColumnButtonClass(isSelected)}`}
+                              data-recovery-activity-bar={point.key}
+                              class={`h-full w-full ${getRecoveryTimelineColumnButtonClass(
+                                isSelected(),
+                                timelineHasDayFilter(),
+                              )}`}
                               aria-label={getRecoveryTimelineColumnAriaLabel(
                                 dateLabel,
                                 total,
-                                isSelected,
+                                isSelected(),
                               )}
-                              aria-pressed={isSelected ? 'true' : 'false'}
-                              onClick={() => props.toggleSelectedDate(point.key)}
+                              aria-pressed={isSelected() ? 'true' : 'false'}
+                              onClick={() => props.toggleDayFilter(point.key)}
                               onMouseEnter={(event) => {
-                                const rect = event.currentTarget.getBoundingClientRect();
-                                const breakdown: string[] = [];
-                                if (point.snapshot > 0) {
-                                  breakdown.push(
-                                    `${getRecoveryArtifactModePresentation('snapshot').aggregateLabel}: ${point.snapshot}`,
-                                  );
-                                }
-                                if (point.local > 0) {
-                                  breakdown.push(
-                                    `${getRecoveryArtifactModePresentation('local').aggregateLabel}: ${point.local}`,
-                                  );
-                                }
-                                if (point.remote > 0) {
-                                  breakdown.push(
-                                    `${getRecoveryArtifactModePresentation('remote').aggregateLabel}: ${point.remote}`,
-                                  );
-                                }
-                                const tooltipText =
-                                  point.total > 0
-                                    ? `${dateLabel}\nAvailable: ${point.total} recovery point${point.total > 1 ? 's' : ''}\n${breakdown.join(' • ')}`
-                                    : `${dateLabel}\nNo recovery points available`;
-                                showTooltip(tooltipText, rect.left + rect.width / 2, rect.top, {
-                                  align: 'center',
-                                  direction: 'up',
-                                });
+                                showActivityTooltip(event.currentTarget, point, dateLabel);
                               }}
-                              onMouseLeave={() => hideTooltip()}
+                              onMouseLeave={hideActivityTooltip}
                               onFocus={(event) => {
-                                const rect = event.currentTarget.getBoundingClientRect();
-                                const tooltipText = `${dateLabel}\nAvailable: ${point.total} recovery point${point.total > 1 ? 's' : ''}`;
-                                showTooltip(tooltipText, rect.left + rect.width / 2, rect.top, {
-                                  align: 'center',
-                                  direction: 'up',
-                                });
+                                showActivityTooltip(event.currentTarget, point, dateLabel);
                               }}
-                              onBlur={() => hideTooltip()}
+                              onBlur={hideActivityTooltip}
                             >
                               <div class="relative h-full w-full overflow-hidden rounded-sm">
-                                <Show when={total > 0}>
+                                <Show
+                                  when={total > 0}
+                                  fallback={
+                                    <div
+                                      data-testid="recovery-activity-empty-marker"
+                                      class={getRecoveryTimelineEmptyMarkerClass(
+                                        isSelected(),
+                                        timelineHasDayFilter(),
+                                      )}
+                                    />
+                                  }
+                                >
                                   <div
-                                    class="absolute inset-x-0 bottom-0"
+                                    data-testid="recovery-activity-bar-stack"
+                                    class={getRecoveryTimelineBarMarkerClass(
+                                      isSelected(),
+                                      timelineHasDayFilter(),
+                                    )}
                                     style={{ height: `${columnHeight}%` }}
                                   >
                                     <Show when={remoteHeight > 0}>
@@ -424,7 +322,7 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
                     <For each={timelineAxisTicks()}>
                       {(tick) => {
                         const point = props.timeline().points[tick.index];
-                        const isSelected = props.selectedDateKey() === point.key;
+                        const isSelected = () => props.dayFilterKey() === point.key;
                         const alignmentClass =
                           tick.align === 'start'
                             ? 'left-0 text-left'
@@ -435,7 +333,7 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
                         return (
                           <span
                             class={`absolute bottom-0 whitespace-nowrap text-[9px] ${
-                              isSelected
+                              isSelected()
                                 ? getRecoveryTimelineAxisLabelClass(true)
                                 : getRecoveryTimelineAxisLabelClass(false)
                             } ${alignmentClass}`}
@@ -450,6 +348,56 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
                 </div>
               </div>
             </div>
+
+            <TooltipPortal
+              when={activityTooltip() !== null}
+              x={activityTooltip()?.x ?? 0}
+              y={activityTooltip()?.y ?? 0}
+              align="center"
+              direction="up"
+              maxWidth={260}
+            >
+              <Show when={activityTooltip()}>
+                {(tooltip) => (
+                  <div data-testid="recovery-activity-tooltip" class="min-w-[210px]">
+                    <div class="flex items-start justify-between gap-3 border-b border-border pb-1">
+                      <div class="min-w-0">
+                        <div class="truncate text-[11px] font-semibold text-base-content">
+                          {tooltip().dateLabel}
+                        </div>
+                        <div class="mt-0.5 text-[10px] text-muted">
+                          {getRecoveryTimelinePointTotalLabel(tooltip().point.total)}
+                        </div>
+                      </div>
+                      <div class="shrink-0 rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[9px] font-medium text-muted">
+                        {getRecoveryTimelineDayFilterStateLabel(
+                          props.dayFilterKey() === tooltip().point.key,
+                          timelineHasDayFilter(),
+                        )}
+                      </div>
+                    </div>
+
+                    <ul class="mt-1.5 space-y-1">
+                      <For each={getRecoveryTimelineTooltipRows(tooltip().point)}>
+                        {(row) => (
+                          <li
+                            class={`flex items-center justify-between gap-4 ${
+                              row.muted ? 'text-muted/70' : 'text-base-content'
+                            }`}
+                          >
+                            <span class="flex min-w-0 items-center gap-1.5">
+                              <span class={`h-2 w-2 shrink-0 rounded-sm ${row.segmentClassName}`} />
+                              <span class="truncate">{row.label}</span>
+                            </span>
+                            <span class="shrink-0 font-mono tabular-nums">{row.value}</span>
+                          </li>
+                        )}
+                      </For>
+                    </ul>
+                  </div>
+                )}
+              </Show>
+            </TooltipPortal>
           </div>
         </Show>
       </div>

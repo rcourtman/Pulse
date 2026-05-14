@@ -4,11 +4,10 @@ import type { Component } from 'solid-js';
 import { RecoveryActivitySection } from '@/components/Recovery/RecoveryActivitySection';
 import { RecoveryHistorySection } from '@/components/Recovery/RecoveryHistorySection';
 import { RecoveryProtectedInventorySection } from '@/components/Recovery/RecoveryProtectedInventorySection';
-import { RecoverySummary } from '@/components/Recovery/RecoverySummary';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { Subtabs } from '@/components/shared/Subtabs';
 import { TableCard } from '@/components/shared/TableCard';
+import type { FilterSelectOption } from '@/components/shared/FilterBar';
 import { useRecoverySurfaceState } from '@/features/recovery/useRecoverySurfaceState';
 import type { ProtectedStateFilter } from '@/features/recovery/useRecoverySurfaceState';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -18,10 +17,12 @@ import { useKioskMode } from '@/hooks/useKioskMode';
 import type { ProtectionRollup, RecoveryOutcome, RecoveryPoint } from '@/types/recovery';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
+  getRecoveryFilterDateLabel,
   getRecoveryFullDateLabel,
   getRecoveryNiceAxisMax,
   parseRecoveryDateKey,
   recoveryDateKeyFromTimestamp,
+  resolveRecoveryDateSearchKey,
 } from '@/utils/recoveryDatePresentation';
 import { getRecoveryPointsFailureState } from '@/utils/recoveryEmptyStatePresentation';
 import { normalizeRecoveryOutcome as normalizeOutcome } from '@/utils/recoveryOutcomePresentation';
@@ -30,10 +31,7 @@ import {
   getRecoveryPointTimestampMs,
   getRecoveryRollupItemLabel,
 } from '@/utils/recoveryRecordPresentation';
-import {
-  getRecoveryRollupItemTypeKey,
-  getRecoveryItemTypePresentation,
-} from '@/utils/recoveryItemTypePresentation';
+import { getRecoveryRollupItemTypeKey } from '@/utils/recoveryItemTypePresentation';
 import {
   getRecoveryArtifactColumnLabel,
   getRecoveryGroupNoTimestampLabel,
@@ -42,6 +40,7 @@ import {
   STALE_ISSUE_THRESHOLD_MS,
 } from '@/utils/recoveryTablePresentation';
 import { getRecoveryTimelineLabelEvery } from '@/utils/recoveryTimelineChartPresentation';
+import { getRecoveryTimelineDayFilterLabel } from '@/utils/recoveryTimelinePresentation';
 import { getRecoveryRollupPlatforms } from '@/utils/recoveryPlatformModel';
 import { createVisibleCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
 
@@ -50,8 +49,7 @@ const LEGACY_RECOVERY_COLUMN_ID_ALIASES = {
   subject: 'item',
   source: 'platform',
 } as const;
-type RecoveryWorkspaceView = 'inventory' | 'events';
-type RecoverySummaryRange = '7d' | '30d' | '90d' | '365d';
+type RecoveryActivityRangeDays = 7 | 30 | 90 | 365;
 
 const Recovery: Component = () => {
   const kioskMode = useKioskMode();
@@ -403,37 +401,69 @@ const Recovery: Component = () => {
 
   const selectedDateLabel = createMemo(() => {
     const key = selectedDateKey();
-    if (!key) return '';
-    const [year, month, day] = key.split('-').map((value) => Number.parseInt(value, 10));
-    if (!year || !month || !day) return key;
-    return new Date(year, month - 1, day).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
+    return key ? getRecoveryFilterDateLabel(key) : '';
   });
 
-  const activeClusterLabel = createMemo(() => (clusterFilter() === 'all' ? '' : clusterFilter()));
-  const activeNodeLabel = createMemo(() => (nodeFilter() === 'all' ? '' : nodeFilter()));
-  const activeNamespaceLabel = createMemo(() =>
-    namespaceFilter() === 'all' ? '' : namespaceFilter(),
-  );
-  const activeItemTypeLabel = createMemo(() => {
-    if (itemTypeFilter() === 'all') return '';
-    return getRecoveryItemTypePresentation(itemTypeFilter())?.label || itemTypeFilter();
+  const dayFilterOptions = createMemo<FilterSelectOption[]>(() => {
+    const options = timeline().points.map((point) => ({
+      value: point.key,
+      label: getRecoveryTimelineDayFilterLabel(getRecoveryFilterDateLabel(point.key), point.total),
+      count: point.total,
+    }));
+
+    const selected = selectedDateKey();
+    if (selected && !options.some((option) => option.value === selected)) {
+      options.push({
+        value: selected,
+        label: getRecoveryTimelineDayFilterLabel(selectedDateLabel() || selected, 0),
+        count: 0,
+      });
+    }
+
+    return [{ value: 'all', label: 'Any day' }, ...options];
   });
-  const summaryRange = createMemo<RecoverySummaryRange>(() => {
-    const range = chartRangeDays();
-    if (range === 7) return '7d';
-    if (range === 90) return '90d';
-    if (range === 365) return '365d';
-    return '30d';
-  });
-  const setSummaryRange = (range: RecoverySummaryRange) => {
-    const nextRange = range === '7d' ? 7 : range === '90d' ? 90 : range === '365d' ? 365 : 30;
-    setChartRangeDays(nextRange);
+  const setActivityRange = (range: RecoveryActivityRangeDays) => {
+    setChartRangeDays(range);
     setSelectedDateKey(null);
     setCurrentPage(1);
+  };
+
+  const setDayFilter = (key: string | null) => {
+    batch(() => {
+      setWorkspaceView('events');
+      setSelectedDateKey(key);
+      setCurrentPage(1);
+    });
+  };
+
+  const toggleDayFilter = (key: string) => {
+    setDayFilter(selectedDateKey() === key ? null : key);
+  };
+
+  const setHistorySearchFilter = (value: string) => {
+    const dayKey = resolveRecoveryDateSearchKey(
+      value,
+      timeline().points.map((point) => point.key),
+    );
+
+    if (dayKey) {
+      // Let the controlled search value observe the typed text before it is promoted to a filter.
+      setQueryFilter(value);
+      queueMicrotask(() => {
+        batch(() => {
+          setWorkspaceView('events');
+          setSelectedDateKey(dayKey);
+          setQueryFilter('');
+          setCurrentPage(1);
+        });
+      });
+      return;
+    }
+
+    batch(() => {
+      setQueryFilter(value);
+      setCurrentPage(1);
+    });
   };
 
   const hasActiveArtifactFilters = createMemo(
@@ -496,6 +526,25 @@ const Recovery: Component = () => {
     });
   };
 
+  const openEventsView = () => {
+    batch(() => {
+      setWorkspaceView('events');
+      setProtectedStateFilter('all');
+      setCurrentPage(1);
+    });
+  };
+
+  const openCoverageView = (state: ProtectedStateFilter = 'all') => {
+    batch(() => {
+      setWorkspaceView('inventory');
+      setRollupId('');
+      setSelectedDateKey(null);
+      setHistoryOutcomeFilter('all');
+      setProtectedStateFilter(state);
+      setCurrentPage(1);
+    });
+  };
+
   const handleSelectRollup = (nextRollupId: string) => {
     batch(() => {
       setWorkspaceView('events');
@@ -506,133 +555,49 @@ const Recovery: Component = () => {
     });
   };
 
-  const handleWorkspaceViewChange = (value: string) => {
-    const nextView = value as RecoveryWorkspaceView;
-    batch(() => {
-      setWorkspaceView(nextView);
-      setCurrentPage(1);
-      if (nextView === 'inventory') {
-        setRollupId('');
-        setSelectedDateKey(null);
-      } else {
-        setProtectedStateFilter('all');
-      }
-    });
-  };
-
-  const workspaceControls = () => (
-    <Subtabs
-      value={workspaceView()}
-      onChange={handleWorkspaceViewChange}
-      ariaLabel="Recovery data view"
-      class="px-4 sm:px-5"
-      tabs={[
-        {
-          value: 'inventory',
-          label: 'Protected items',
-        },
-        {
-          value: 'events',
-          label: 'Recovery events',
-        },
-      ]}
-    />
-  );
-
   const eventsActivity = () => (
     <RecoveryActivitySection
       activitySummary={activitySummary}
-      activeClusterLabel={activeClusterLabel}
-      activeItemTypeLabel={activeItemTypeLabel}
-      activeNamespaceLabel={activeNamespaceLabel}
-      activeNodeLabel={activeNodeLabel}
       chartRangeDays={chartRangeDays}
-      clearClusterFilter={() => {
-        setClusterFilter('all');
-        setCurrentPage(1);
-      }}
-      clearItemTypeFilter={() => {
-        setItemTypeFilter('all');
-        setCurrentPage(1);
-      }}
-      clearNamespaceFilter={() => {
-        setNamespaceFilter('all');
-        setCurrentPage(1);
-      }}
-      clearNodeFilter={() => {
-        setNodeFilter('all');
-        setCurrentPage(1);
-      }}
-      clearSelectedDate={() => {
-        setSelectedDateKey(null);
-        setCurrentPage(1);
-      }}
       isMobile={isMobile()}
       loading={recoverySeriesLoading}
+      onRangeChange={setActivityRange}
       overallRollupsSummary={overallRollupsSummary}
-      selectedDateKey={selectedDateKey}
-      selectedDateLabel={selectedDateLabel}
+      dayFilterKey={selectedDateKey}
       timeline={timeline}
-      toggleSelectedDate={(key) => {
-        batch(() => {
-          setWorkspaceView('events');
-          setSelectedDateKey((previous) => (previous === key ? null : key));
-          setCurrentPage(1);
-        });
-      }}
+      toggleDayFilter={toggleDayFilter}
     />
   );
+
+  const headerActionClass =
+    'inline-flex items-center rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover';
 
   return (
     <div data-testid="recovery-page" class="flex flex-col gap-2">
       <PageHeader
         title="Recovery"
-        description="Review protected inventory, recent recovery activity, and restore posture across platforms."
+        description="Review recovery activity, restore posture, and backup history across platforms."
+        actions={
+          <>
+            <Show when={workspaceView() === 'events'}>
+              <button
+                type="button"
+                class={headerActionClass}
+                onClick={() => {
+                  openCoverageView('all');
+                }}
+              >
+                Protection coverage
+              </button>
+            </Show>
+            <Show when={workspaceView() === 'inventory'}>
+              <button type="button" class={headerActionClass} onClick={openEventsView}>
+                Back to recovery events
+              </button>
+            </Show>
+          </>
+        }
       />
-
-      <RecoverySummary
-        loaded={recoveryRollupsLoaded}
-        rollups={rollups}
-        series={() => recoverySeries.series() || []}
-        seriesLoaded={recoverySeriesLoaded}
-        seriesFailed={() => Boolean(recoverySeries.response.error)}
-        summary={overallRollupsSummary}
-        timeRange={summaryRange}
-        onTimeRangeChange={setSummaryRange}
-        onOpenEvents={() => {
-          batch(() => {
-            setWorkspaceView('events');
-            setProtectedStateFilter('all');
-            setCurrentPage(1);
-          });
-        }}
-        onShowAttention={() => {
-          batch(() => {
-            setWorkspaceView('inventory');
-            setRollupId('');
-            setSelectedDateKey(null);
-            setHistoryOutcomeFilter('all');
-            if ((overallRollupsSummary().counts.failed || 0) > 0) {
-              setProtectedStateFilter('failed');
-            } else {
-              setProtectedStateFilter('stale');
-            }
-            setCurrentPage(1);
-          });
-        }}
-        onShowStale={() => {
-          batch(() => {
-            setWorkspaceView('inventory');
-            setRollupId('');
-            setSelectedDateKey(null);
-            setHistoryOutcomeFilter('all');
-            setProtectedStateFilter('stale');
-            setCurrentPage(1);
-          });
-        }}
-      />
-
-      {workspaceControls()}
 
       <div class="flex flex-col gap-2">
         {(() => {
@@ -645,6 +610,7 @@ const Recovery: Component = () => {
                   kioskMode={kioskMode()}
                   loading={recoveryRollupsLoading}
                   error={() => recoveryRollups.rollups.error}
+                  onOpenEvents={openEventsView}
                   onSelectRollup={handleSelectRollup}
                   protectedStateFilter={protectedStateFilter}
                   itemTypeFilter={itemTypeFilter}
@@ -690,6 +656,9 @@ const Recovery: Component = () => {
                     clusterFilter={clusterFilter}
                     clusterOptions={clusterOptions}
                     currentPage={currentPage}
+                    dayFilterKey={selectedDateKey}
+                    dayFilterLabel={selectedDateLabel}
+                    dayFilterOptions={dayFilterOptions}
                     groupedByDay={groupedByDay}
                     hasActiveArtifactFilters={hasActiveArtifactFilters}
                     hasFocusedRollup={() => rollupId().trim().length > 0}
@@ -724,9 +693,10 @@ const Recovery: Component = () => {
                     setNamespaceFilter={setNamespaceFilter}
                     setNodeFilter={setNodeFilter}
                     setPlatformFilter={setPlatformFilter}
-                    setQueryFilter={setQueryFilter}
+                    setQueryFilter={setHistorySearchFilter}
                     setRollupId={setRollupId}
                     setScopeFilter={setScopeFilter}
+                    setDayFilter={setDayFilter}
                     setVerificationFilter={setVerificationFilter}
                     showClusterFilter={showClusterFilter}
                     showNamespaceFilter={showNamespaceFilter}

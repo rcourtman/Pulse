@@ -76,6 +76,7 @@ export interface RecoveryPointsModel {
 
 interface RecoveryHistoryTableProps {
   currentPage: Accessor<number>;
+  dayFilterKey: Accessor<string | null>;
   groupedByDay: Accessor<RecoveryPointGroup[]>;
   hasActiveArtifactFilters: Accessor<boolean>;
   isMobile: boolean;
@@ -93,40 +94,55 @@ interface RecoveryHistoryTableProps {
   clearSelectedPoint: () => void;
 }
 
-export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props) => (
-  <Show
-    when={props.groupedByDay().length > 0}
-    fallback={
-      <div class="p-6">
-        <Show
-          when={props.recoveryPoints.response.loading}
-          fallback={
-            <EmptyState
-              {...getRecoveryHistoryEmptyState()}
-              actions={
-                <Show when={props.hasActiveArtifactFilters()}>
-                  <button
-                    type="button"
-                    onClick={props.resetAllArtifactFilters}
-                    class={getRecoveryEmptyStateActionClass()}
-                  >
-                    Clear filters
-                  </button>
-                </Show>
-              }
-            />
-          }
-        >
-          <div class="text-sm text-muted">{getRecoveryPointsLoadingState().text}</div>
-        </Show>
-      </div>
-    }
-  >
-    <Table
-      class="w-full border-collapse whitespace-nowrap"
-      style={{ 'min-width': props.tableMinWidth(), 'table-layout': 'fixed' }}
+export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props) => {
+  const visiblePointCount = () =>
+    props.groupedByDay().reduce((total, group) => total + group.items.length, 0);
+  const useVisibleFooterCount = () => Boolean(props.dayFilterKey());
+  const footerTotal = () =>
+    useVisibleFooterCount() ? visiblePointCount() : props.recoveryPoints.meta().total || 0;
+  const footerPage = () => (useVisibleFooterCount() ? 1 : props.recoveryPoints.meta().page);
+  const footerLimit = () =>
+    useVisibleFooterCount()
+      ? Math.max(visiblePointCount(), 1)
+      : props.recoveryPoints.meta().limit || 1;
+  const footerStart = () =>
+    footerTotal() > 0 ? (footerPage() - 1) * footerLimit() + 1 : 0;
+  const footerEnd = () => Math.min(footerPage() * footerLimit(), footerTotal());
+
+  return (
+    <Show
+      when={props.groupedByDay().length > 0}
+      fallback={
+        <div class="p-6">
+          <Show
+            when={props.recoveryPoints.response.loading}
+            fallback={
+              <EmptyState
+                {...getRecoveryHistoryEmptyState()}
+                actions={
+                  <Show when={props.hasActiveArtifactFilters()}>
+                    <button
+                      type="button"
+                      onClick={props.resetAllArtifactFilters}
+                      class={getRecoveryEmptyStateActionClass()}
+                    >
+                      Clear filters
+                    </button>
+                  </Show>
+                }
+              />
+            }
+          >
+            <div class="text-sm text-muted">{getRecoveryPointsLoadingState().text}</div>
+          </Show>
+        </div>
+      }
     >
-      <TableHeader>
+      <Table
+        class="w-full border-collapse whitespace-nowrap"
+        style={{ 'min-width': props.tableMinWidth(), 'table-layout': 'fixed' }}
+      >
+        <TableHeader>
         <TableRow class="bg-surface-alt text-muted border-b border-border">
           <For each={props.mobileVisibleArtifactColumns()}>
             {(column) => (
@@ -476,48 +492,40 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
           )}
         </For>
       </TableBody>
-    </Table>
+      </Table>
 
-    <div class="flex items-center justify-between gap-2 px-3 py-1.5 text-[11px] text-muted border-t border-border">
-      <div>
-        <Show
-          when={(props.recoveryPoints.meta().total || 0) > 0}
-          fallback={<span>Showing 0 of 0 recovery points</span>}
-        >
+      <div class="flex items-center justify-between gap-2 px-3 py-1.5 text-[11px] text-muted border-t border-border">
+        <div>
+          <Show when={footerTotal() > 0} fallback={<span>Showing 0 of 0 recovery points</span>}>
+            <span>
+              Showing {footerStart()} - {footerEnd()} of {footerTotal()} recovery points
+            </span>
+          </Show>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={props.currentPage() <= 1}
+            onClick={() => props.setCurrentPage(Math.max(1, props.currentPage() - 1))}
+            class="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content disabled:opacity-50"
+          >
+            Prev
+          </button>
           <span>
-            Showing {(props.recoveryPoints.meta().page - 1) * props.recoveryPoints.meta().limit + 1}{' '}
-            -{' '}
-            {Math.min(
-              props.recoveryPoints.meta().page * props.recoveryPoints.meta().limit,
-              props.recoveryPoints.meta().total,
-            )}{' '}
-            of {props.recoveryPoints.meta().total} recovery points
+            Page {props.currentPage()} / {props.totalPages()}
           </span>
-        </Show>
+          <button
+            type="button"
+            disabled={props.currentPage() >= props.totalPages()}
+            onClick={() =>
+              props.setCurrentPage(Math.min(props.totalPages(), props.currentPage() + 1))
+            }
+            class="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
       </div>
-      <div class="flex items-center gap-2">
-        <button
-          type="button"
-          disabled={props.currentPage() <= 1}
-          onClick={() => props.setCurrentPage(Math.max(1, props.currentPage() - 1))}
-          class="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content disabled:opacity-50"
-        >
-          Prev
-        </button>
-        <span>
-          Page {props.currentPage()} / {props.totalPages()}
-        </span>
-        <button
-          type="button"
-          disabled={props.currentPage() >= props.totalPages()}
-          onClick={() =>
-            props.setCurrentPage(Math.min(props.totalPages(), props.currentPage() + 1))
-          }
-          class="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content disabled:opacity-50"
-        >
-          Next
-        </button>
-      </div>
-    </div>
-  </Show>
-);
+    </Show>
+  );
+};

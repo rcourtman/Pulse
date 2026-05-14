@@ -84,9 +84,7 @@ const normalizeRecoveryItemTypeSelection = (value: string | null | undefined): s
   return normalized || 'all';
 };
 
-const normalizeProtectedStateFilter = (
-  value: string | null | undefined,
-): ProtectedStateFilter => {
+const normalizeProtectedStateFilter = (value: string | null | undefined): ProtectedStateFilter => {
   const normalized = normalizeRecoveryRouteValue(value).toLowerCase();
   if (normalized === 'success') return 'healthy';
   if (
@@ -126,7 +124,7 @@ export function useRecoverySurfaceState() {
   const storageRecoveryResources = useStorageRecoveryResources();
 
   const [rollupId, setRollupId] = createSignal('');
-  const [workspaceView, setWorkspaceView] = createSignal<RecoveryWorkspaceView>('inventory');
+  const [workspaceView, setWorkspaceView] = createSignal<RecoveryWorkspaceView>('events');
   const [queryFilter, setQueryFilter] = createSignal('');
   const [platformFilter, setPlatformFilter] = createSignal('all');
   const [itemTypeFilter, setItemTypeFilter] = createSignal('all');
@@ -139,8 +137,7 @@ export function useRecoverySurfaceState() {
   const [scopeFilter, setScopeFilter] = createSignal<'all' | 'workload'>('all');
   const [nodeFilter, setNodeFilter] = createSignal('all');
   const [namespaceFilter, setNamespaceFilter] = createSignal('all');
-  const [protectedStateFilter, setProtectedStateFilter] =
-    createSignal<ProtectedStateFilter>('all');
+  const [protectedStateFilter, setProtectedStateFilter] = createSignal<ProtectedStateFilter>('all');
   const [chartRangeDays, setChartRangeDays] = createSignal<7 | 30 | 90 | 365>(30);
   const [selectedDateKey, setSelectedDateKey] = createSignal<string | null>(null);
   const [currentPage, setCurrentPage] = createSignal(1);
@@ -332,12 +329,14 @@ export function useRecoverySurfaceState() {
     const nextCluster = normalizeRecoveryRouteSelection(parsed.cluster || 'all') || 'all';
     const normalizedDay = normalizeRecoveryRouteValue(parsed.day);
     const nextDay = isRecoveryDateKey(normalizedDay) ? normalizedDay : '';
-    const derivedDefaultView: RecoveryWorkspaceView =
-      nextRollup || nextDay ? 'events' : 'inventory';
+    const legacyStaleState = normalizeRecoveryBooleanFlag(parsed.stale) ? 'stale' : '';
+    const hasInventoryState = Boolean(
+      normalizeRecoveryRouteValue(parsed.state) || legacyStaleState,
+    );
+    const derivedDefaultView: RecoveryWorkspaceView = hasInventoryState ? 'inventory' : 'events';
     const resolvedView = (nextView || derivedDefaultView) as RecoveryWorkspaceView;
     const visibleRollup = resolvedView === 'events' ? nextRollup : '';
     const visibleDay = resolvedView === 'events' ? nextDay : '';
-    const legacyStaleState = normalizeRecoveryBooleanFlag(parsed.stale) ? 'stale' : '';
     const nextMode = normalizeRecoveryModeQueryValue(parsed.mode);
     const rawScope = normalizeRecoveryRouteValue(parsed.scope).toLowerCase();
     const nextScope: 'all' | 'workload' = rawScope === 'workload' ? 'workload' : 'all';
@@ -416,7 +415,7 @@ export function useRecoverySurfaceState() {
 
   createEffect(() => {
     const rid = rollupId().trim();
-    const defaultView: RecoveryWorkspaceView = rid || selectedDateKey() ? 'events' : 'inventory';
+    const defaultView: RecoveryWorkspaceView = 'events';
     const status = historyOutcomeFilter() !== 'all' ? historyOutcomeFilter() : null;
     const verification = verificationFilter() !== 'all' ? verificationFilter() : null;
     const currentPath = `${location.pathname}${location.search || ''}`;

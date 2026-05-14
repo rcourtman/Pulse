@@ -720,7 +720,7 @@ prompt explain the same operator-facing priority.
    system badge names a platform with its version, source/method context may
    still add collection labels such as Pulse Agent, but it must not repeat the
    same platform again as an unversioned source badge.
-9. Keep top-of-page summary interaction on shared primitives. Infrastructure, workloads, and storage summary cards must route sticky-shell behavior through `frontend-modern/src/components/shared/StickySummarySection.tsx` and route row-hover or focused-series rendering through shared chart primitives such as `frontend-modern/src/components/shared/InteractiveSparkline.tsx` and `frontend-modern/src/components/shared/DensityMap.tsx`, rather than page-local sticky wrappers or metric-card-specific hover logic. When a page keeps summary charts visible below the desktop breakpoint, it must use the shared `stickyDesktopOnly` mode instead of adding page-local media queries, so wrapped two-column summaries scroll as normal content and only become sticky once the large-screen layout is active. The shared summary-card contract must also own stable summary-card geometry for chart-backed cards so row hover, focus, synchronized readouts, or idle header metadata cannot ratchet the sticky summary taller across rerenders.
+9. Keep top-of-page summary interaction on shared primitives. Infrastructure, workloads, and storage summary cards must route sticky-shell behavior through `frontend-modern/src/components/shared/StickySummarySection.tsx` and route row-hover or focused-series rendering through shared chart primitives such as `frontend-modern/src/components/shared/InteractiveSparkline.tsx` and `frontend-modern/src/components/shared/DensityMap.tsx`, rather than page-local sticky wrappers or metric-card-specific hover logic. When a page keeps summary charts visible below the desktop breakpoint, it must use the shared `stickyDesktopOnly` mode instead of adding page-local media queries, so wrapped two-column summaries scroll as normal content and only become sticky once the large-screen layout is active. The shared summary-card contract must also own stable summary-card geometry for chart-backed cards so row hover, focus, synchronized readouts, or idle header metadata cannot ratchet the sticky summary taller across rerenders. Shared chart slot geometry belongs in `frontend-modern/src/components/shared/summaryChartLayout.ts` so `SummaryMetricCard` and governed non-summary chart sections can consume the same normal and compact chart heights instead of re-declaring page-local `h-*` sizing.
    Storage's top-of-page summary scope is limited to the stable chart grid and
    shared row/group focus affordances. A rolling-history capacity planner must
    not be bolted onto the sticky summary shell as an extra frontend primitive;
@@ -2033,16 +2033,17 @@ through the shared `searchLeading` slot instead of recreating a second local
 header strip above the control bar.
 
 Pages that filter a list-of-resources surface (Infrastructure, Workloads,
-Storage, Recovery Protected items, Recovery events) compose the chip-based
+Storage, Recovery Protection coverage, Recovery events) compose the chip-based
 `frontend-modern/src/components/shared/FilterBar/FilterBar.tsx` shell instead
 of `PageControls`. Each page declares a `FilterDef[]` catalog (label, options,
 value, defaultValue, group); `FilterBar` renders chips for active filters and
 exposes the rest behind a "+ Filter" menu, with type-ahead at both the menu
 and chip popovers (`AddFilterMenu` and `FilterChip`). View options
 (grouping segmented control, charts toggle, columns picker, sort key) sit in
-the `viewOptionsTrailing` slot and are not chips. Subtabs that switch the
-rendered dataset (Recovery's Protected items vs Recovery events, Storage's
-Pools vs Physical Disks) sit above the bar; they are navigation, not filters.
+the `viewOptionsTrailing` slot and are not chips. Recovery is event-first and
+does not use equal workspace subtabs for protected rollups versus event
+history; Storage subtabs (Pools / Physical Disks) sit above the bar as
+navigation, not filters.
 Pages that have not yet migrated (the alert-history filter card,
 Kubernetes deployments drawer) keep using `PageControls` and
 `LabeledFilterSelect`, but new resource-list filter surfaces should reach for

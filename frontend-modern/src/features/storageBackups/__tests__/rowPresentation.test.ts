@@ -43,7 +43,7 @@ describe('storage row presentation', () => {
   });
 
   it('keeps no-parity protection factual instead of rendering it as reduced-health state', () => {
-    const record = {
+    const record: StorageRecord = {
       ...baseRecord(),
       health: 'healthy',
       protectionLabel: 'No parity',

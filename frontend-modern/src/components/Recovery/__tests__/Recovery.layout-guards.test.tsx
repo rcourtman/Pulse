@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let mockRecoverySurfaceState: any;
@@ -42,7 +42,7 @@ import Recovery from '@/components/Recovery/Recovery';
 
 describe('Recovery layout guards', () => {
   beforeEach(() => {
-    const [workspaceView, setWorkspaceView] = createSignal<'inventory' | 'events'>('inventory');
+    const [workspaceView, setWorkspaceView] = createSignal<'inventory' | 'events'>('events');
     mockRecoverySurfaceState = {
       activitySummary: () => ({ totalPoints: 2, activeDays: 2, averagePerDay: 1 }),
       activeAdvancedFilterCount: () => 0,
@@ -142,16 +142,13 @@ describe('Recovery layout guards', () => {
   it('mounts the activity chart only in the recovery events workspace and keeps it there when events fail', () => {
     render(() => <Recovery />);
 
-    expect(screen.getByTestId('protected-inventory')).toBeInTheDocument();
-    expect(screen.queryByTestId('activity-chart')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: /recovery events/i }));
     expect(screen.getByTestId('activity-chart')).toBeInTheDocument();
     expect(screen.queryByTestId('protected-inventory')).not.toBeInTheDocument();
     expect(screen.queryByTestId('history-section')).not.toBeInTheDocument();
     expect(screen.getByText('Failed to load recovery points')).toBeInTheDocument();
   });
 
-  it('keeps the summary shell mounted while recovery data is still on its first load', () => {
+  it('keeps the event workspace mounted without a decorative summary shell while data hydrates', () => {
     mockRecoverySurfaceState.recoveryRollups = {
       rollups: Object.assign(() => [], { loading: false }),
       resolvedOnce: () => false,
@@ -171,7 +168,7 @@ describe('Recovery layout guards', () => {
 
     render(() => <Recovery />);
 
-    expect(screen.getByTestId('recovery-summary')).toBeInTheDocument();
-    expect(screen.getByTestId('protected-inventory')).toBeInTheDocument();
+    expect(screen.queryByTestId('recovery-summary')).not.toBeInTheDocument();
+    expect(screen.getByTestId('activity-chart')).toBeInTheDocument();
   });
 });

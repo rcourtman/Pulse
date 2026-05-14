@@ -1,19 +1,19 @@
 export function getRecoveryProtectedItemsEmptyState() {
   return {
-    title: 'No protected items yet',
-    description: 'Pulse hasn’t observed any protected items for this org yet.',
+    title: 'No protection coverage yet',
+    description: 'Pulse has not observed recovery coverage for this org yet.',
   } as const;
 }
 
 export function getRecoveryProtectedItemsLoadingState() {
   return {
-    text: 'Loading protected items...',
+    text: 'Loading protection coverage...',
   } as const;
 }
 
 export function getRecoveryProtectedItemsFailureState() {
   return {
-    title: 'Failed to load protected items',
+    title: 'Failed to load protection coverage',
   } as const;
 }
 

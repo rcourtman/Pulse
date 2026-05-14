@@ -1120,7 +1120,8 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
 
     const requestVersion = scopeVersion;
     const entryForRequest = cacheEntry;
-    const request = (async () => {
+    let request!: Promise<Resource[]>;
+    request = (async () => {
       const isCurrentRequest = () =>
         requestVersion === scopeVersion && entryForRequest === cacheEntry && enabled();
 

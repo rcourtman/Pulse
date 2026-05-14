@@ -36,27 +36,31 @@ state.
 7. `frontend-modern/src/components/Recovery/RecoveryActivitySection.tsx`
 8. `frontend-modern/src/components/Recovery/RecoveryHistorySection.tsx`
 9. `frontend-modern/src/components/Recovery/RecoveryHistoryTable.tsx`
-10. `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`
-11. `frontend-modern/src/components/Recovery/useRecoveryHistorySectionState.ts`
-12. `frontend-modern/src/pages/Storage.tsx`
-13. `frontend-modern/src/pages/Ceph.tsx`
-14. `frontend-modern/src/components/Storage/Storage.tsx`
-15. `frontend-modern/src/features/storageBackups/storageModelCore.ts`
-16. `frontend-modern/src/utils/storageSources.ts`
-17. `frontend-modern/src/hooks/useRecoveryPoints.ts`
-18. `frontend-modern/src/hooks/useRecoveryRollups.ts`
-19. `frontend-modern/src/hooks/useRecoveryPointsFacets.ts`
-20. `frontend-modern/src/hooks/useRecoveryPointsSeries.ts`
-21. `frontend-modern/src/pages/Recovery.tsx`
-22. `frontend-modern/src/routing/resourceLinks.ts`
-23. `frontend-modern/src/types/recovery.ts`
-24. `frontend-modern/src/utils/recoveryTablePresentation.ts`
-25. `frontend-modern/src/utils/recoveryItemTypePresentation.ts`
-26. `frontend-modern/src/utils/textPresentation.ts`
-27. `frontend-modern/src/components/Storage/StorageSummary.tsx`
-28. `frontend-modern/src/utils/storageSummaryCache.ts`
-29. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
-30. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
+10. `frontend-modern/src/components/Recovery/RecoveryHistoryItemFilter.tsx`
+11. `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`
+12. `frontend-modern/src/components/Recovery/useRecoveryHistorySectionState.ts`
+13. `frontend-modern/src/pages/Storage.tsx`
+14. `frontend-modern/src/pages/Ceph.tsx`
+15. `frontend-modern/src/components/Storage/Storage.tsx`
+16. `frontend-modern/src/features/storageBackups/storageModelCore.ts`
+17. `frontend-modern/src/utils/storageSources.ts`
+18. `frontend-modern/src/hooks/useRecoveryPoints.ts`
+19. `frontend-modern/src/hooks/useRecoveryRollups.ts`
+20. `frontend-modern/src/hooks/useRecoveryPointsFacets.ts`
+21. `frontend-modern/src/hooks/useRecoveryPointsSeries.ts`
+22. `frontend-modern/src/pages/Recovery.tsx`
+23. `frontend-modern/src/routing/resourceLinks.ts`
+24. `frontend-modern/src/types/recovery.ts`
+25. `frontend-modern/src/utils/recoveryDatePresentation.ts`
+26. `frontend-modern/src/utils/recoveryEmptyStatePresentation.ts`
+27. `frontend-modern/src/utils/recoveryTablePresentation.ts`
+28. `frontend-modern/src/utils/recoveryTimelinePresentation.ts`
+29. `frontend-modern/src/utils/recoveryItemTypePresentation.ts`
+30. `frontend-modern/src/utils/textPresentation.ts`
+31. `frontend-modern/src/components/Storage/StorageSummary.tsx`
+32. `frontend-modern/src/utils/storageSummaryCache.ts`
+33. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
+34. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
 
 ## Shared Boundaries
 
@@ -149,6 +153,11 @@ bypass the API fail-closed execution gate.
    `"recovery-events"`) so operators can save and recall named filter combos
    through the shared `SavedViewsMenu`. The same pattern applies to Storage
    (`savedViewsKey="storage"`).
+   Recovery must not restore the retired top-level RecoverySummary metric card
+   strip. Aggregate recovery counts, success/failure mix, and selected-day
+   context belong inside the Recovery activity and event-history surfaces that
+   already own the chart and table filters, rather than as a separate summary
+   helper that competes with the event-first page hierarchy.
    Recovery event filters now compose the shared chip-based `FilterBar`
    (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a
    `FilterDef[]` catalog. The legacy "advanced filter popover" retired: scope,
@@ -189,6 +198,9 @@ bypass the API fail-closed execution gate.
    shared chart slot height and matching plot-area height so it keeps visual
    parity with the Workloads, Storage, and Infrastructure summary charts
    without copying page-local chart sizing.
+   A selected timeline day is an active event-history filter: table totals,
+   footer ranges, empty states, and search/date matching must describe the
+   visible filtered recovery points, not the unfiltered API page metadata.
 3. Add or change storage page UX through `frontend-modern/src/pages/Storage.tsx`, `frontend-modern/src/pages/Ceph.tsx`, `frontend-modern/src/components/Storage/`, `frontend-modern/src/features/storageBackups/`, and the shared storage-source contract in `frontend-modern/src/utils/storageSources.ts`
    The retired dashboard route must not reintroduce storage or recovery
    widgets as compatibility panels. Storage capacity, storage health,

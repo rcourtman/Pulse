@@ -75,6 +75,7 @@ interface RecoveryProtectedInventorySectionProps {
   itemTypeOptions: Accessor<string[]>;
   isMobile: boolean;
   kioskMode: boolean;
+  onOpenEvents?: () => void;
   onSelectRollup: (rollupId: string) => void;
   protectedStateFilter: Accessor<ProtectedStateFilter>;
   platformFilter: Accessor<string>;
@@ -117,22 +118,21 @@ const getProtectionInsight = (
 
   if (inventoryStatus === 'never-succeeded') {
     return attemptMs > 0
-      ? `No successful point recorded after ${formatRelativeTime(attemptMs)}; open events to inspect attempts`
-      : 'No successful point recorded yet; open events to confirm the first attempt';
+      ? `No successful point recorded after ${formatRelativeTime(attemptMs)}`
+      : 'No successful point recorded yet';
   }
 
   if (inventoryStatus === 'stale') {
     if (successMs > 0 && Number.isFinite(successMs)) {
       const ageDays = Math.max(1, Math.floor((nowMs - successMs) / (24 * 60 * 60 * 1000)));
-      return `Last success is ${ageDays} days old; open events to inspect the latest point`;
+      return `Last success is ${ageDays} days old`;
     }
-    return `No successful point within ${STALE_THRESHOLD_DAYS} days; open events to inspect attempts`;
+    return `No successful point within ${STALE_THRESHOLD_DAYS} days`;
   }
 
-  if (inventoryStatus === 'failed') return 'Latest protection event failed; open event details';
-  if (inventoryStatus === 'warning') return 'Latest event completed with warnings; review details';
-  if (inventoryStatus === 'running')
-    return 'Protection event in progress; check events for completion';
+  if (inventoryStatus === 'failed') return 'Latest protection event failed';
+  if (inventoryStatus === 'warning') return 'Latest event completed with warnings';
+  if (inventoryStatus === 'running') return 'Protection event in progress';
   return '';
 };
 
@@ -243,83 +243,85 @@ export const RecoveryProtectedInventorySection: Component<
     <div class="flex flex-col gap-2">
       <Show when={!props.kioskMode}>
         <FilterBar
-            role="group"
-            ariaLabel="Protected items controls"
-            isMobile={isMobileAccessor}
-            savedViewsKey="recovery-protected"
-            search={{
-              value: props.queryFilter,
-              setValue: props.setQueryFilter,
-              placeholder: getRecoveryProtectedSearchPlaceholder(),
-              historyKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
-              emptyMessage: getRecoverySearchHistoryEmptyMessage(),
-              clearOnEscape: true,
-            }}
-            filters={
-              [
-                {
-                  id: 'item-type',
-                  label: getRecoveryArtifactColumnLabel('type', 'Item Type'),
-                  group: 'properties',
-                  value: props.itemTypeFilter,
-                  setValue: (value: string) =>
-                    props.setItemTypeFilter(
-                      normalizeRecoveryItemTypeQueryValue(value) || 'all',
-                    ),
-                  defaultValue: 'all',
-                  options: () =>
-                    props.itemTypeOptions().map((itemType) => ({
-                      value: itemType,
-                      label:
-                        itemType === 'all'
-                          ? getRecoveryAllItemTypesLabel()
-                          : getRecoveryItemTypePresentation(itemType)?.label || itemType,
-                    })),
+          role="group"
+          ariaLabel="Protection coverage controls"
+          isMobile={isMobileAccessor}
+          savedViewsKey="recovery-protected"
+          search={{
+            value: props.queryFilter,
+            setValue: props.setQueryFilter,
+            placeholder: getRecoveryProtectedSearchPlaceholder(),
+            historyKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
+            emptyMessage: getRecoverySearchHistoryEmptyMessage(),
+            clearOnEscape: true,
+          }}
+          filters={
+            [
+              {
+                id: 'item-type',
+                label: getRecoveryArtifactColumnLabel('type', 'Item Type'),
+                group: 'properties',
+                value: props.itemTypeFilter,
+                setValue: (value: string) =>
+                  props.setItemTypeFilter(normalizeRecoveryItemTypeQueryValue(value) || 'all'),
+                defaultValue: 'all',
+                options: () =>
+                  props.itemTypeOptions().map((itemType) => ({
+                    value: itemType,
+                    label:
+                      itemType === 'all'
+                        ? getRecoveryAllItemTypesLabel()
+                        : getRecoveryItemTypePresentation(itemType)?.label || itemType,
+                  })),
+              },
+              {
+                id: 'platform',
+                label: 'Platform',
+                group: 'scope',
+                value: props.platformFilter,
+                setValue: (value: string) =>
+                  props.setPlatformFilter(normalizeSourcePlatformQueryValue(value)),
+                defaultValue: 'all',
+                options: () =>
+                  props.platformOptions().map((platform) => ({
+                    value: platform,
+                    label:
+                      platform === 'all'
+                        ? getRecoveryAllPlatformsLabel()
+                        : getSourcePlatformLabel(platform),
+                  })),
+              },
+              {
+                id: 'protected-state',
+                label: 'Protection state',
+                group: 'status',
+                value: props.protectedStateFilter,
+                setValue: (value: string) => {
+                  const normalized = normalizeProtectedStateFilter(value);
+                  props.setProtectedStateFilter(normalized);
+                  props.setVerificationFilter('all');
                 },
-                {
-                  id: 'platform',
-                  label: 'Platform',
-                  group: 'scope',
-                  value: props.platformFilter,
-                  setValue: (value: string) =>
-                    props.setPlatformFilter(normalizeSourcePlatformQueryValue(value)),
-                  defaultValue: 'all',
-                  options: () =>
-                    props.platformOptions().map((platform) => ({
-                      value: platform,
-                      label:
-                        platform === 'all'
-                          ? getRecoveryAllPlatformsLabel()
-                          : getSourcePlatformLabel(platform),
-                    })),
-                },
-                {
-                  id: 'protected-state',
-                  label: 'Protection state',
-                  group: 'status',
-                  value: props.protectedStateFilter,
-                  setValue: (value: string) => {
-                    const normalized = normalizeProtectedStateFilter(value);
-                    props.setProtectedStateFilter(normalized);
-                    props.setVerificationFilter('all');
-                  },
-                  defaultValue: 'all',
-                  options: () =>
-                    availableProtectionStates.map((state) => ({
-                      value: state,
-                      label:
-                        state === 'all'
-                          ? 'Any state'
-                          : getRecoveryRollupInventoryStatusLabel(state),
-                    })),
-                },
-              ] as FilterDef[]
-            }
-          />
+                defaultValue: 'all',
+                options: () =>
+                  availableProtectionStates.map((state) => ({
+                    value: state,
+                    label:
+                      state === 'all' ? 'Any state' : getRecoveryRollupInventoryStatusLabel(state),
+                  })),
+              },
+            ] as FilterDef[]
+          }
+        />
       </Show>
 
       <TableCard>
-        <TableCardHeader title="Protected items" />
+        <TableCardHeader
+          title="Protection coverage"
+          showClearAction={Boolean(props.onOpenEvents)}
+          clearLabel="Recovery events"
+          clearAriaLabel="Return to recovery events"
+          onClear={props.onOpenEvents}
+        />
         <Show when={props.loading() && props.filteredRollups().length === 0}>
           <div
             data-testid="recovery-protected-loading"
@@ -502,7 +504,11 @@ export const RecoveryProtectedInventorySection: Component<
                       <TableCell class="hidden md:table-cell whitespace-nowrap px-3 py-1.5">
                         <Show
                           when={itemTypePresentation}
-                          fallback={<span class="text-muted" aria-hidden="true">—</span>}
+                          fallback={
+                            <span class="text-muted" aria-hidden="true">
+                              —
+                            </span>
+                          }
                         >
                           <span class={itemTypePresentation?.tableBadgeClasses}>
                             {itemTypePresentation?.label}
@@ -575,9 +581,9 @@ export const RecoveryProtectedInventorySection: Component<
             <div>
               <Show
                 when={sortedRollups().length > 0}
-                fallback={<span>Showing 0 of 0 protected items</span>}
+                fallback={<span>Showing 0 of 0 coverage items</span>}
               >
-                <span>Showing {sortedRollups().length} protected items</span>
+                <span>Showing {sortedRollups().length} coverage items</span>
               </Show>
             </div>
           </div>

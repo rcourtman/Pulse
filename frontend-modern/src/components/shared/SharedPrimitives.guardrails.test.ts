@@ -86,6 +86,7 @@ import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx
 import selectionCardGroupModelSource from '@/components/shared/selectionCardGroupModel.ts?raw';
 import summaryMetricCardSource from '@/components/shared/SummaryMetricCard.tsx?raw';
 import summaryPanelSource from '@/components/shared/SummaryPanel.tsx?raw';
+import summaryChartLayoutSource from '@/components/shared/summaryChartLayout.ts?raw';
 import summarySynchronizedReadoutSource from '@/components/shared/SummarySynchronizedReadout.tsx?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
 import tlsVerificationWarningBannerSource from '@/components/shared/TlsVerificationWarningBanner.tsx?raw';
@@ -1348,8 +1349,16 @@ describe('shared primitive guardrails', () => {
     expect(summaryMetricCardSource).toContain(
       "isCompact() ? 'mb-1 min-h-[20px]' : 'mb-1.5 min-h-[24px]'",
     );
-    expect(summaryMetricCardSource).toContain(
-      "isCompact() ? 'h-[108px] sm:h-[120px]' : 'h-[136px] sm:h-[150px]'",
+    expect(summaryMetricCardSource).toContain('SUMMARY_CHART_SLOT_COMPACT_CLASS');
+    expect(summaryMetricCardSource).toContain('SUMMARY_CHART_SLOT_CLASS');
+    expect(summaryChartLayoutSource).toContain(
+      "export const SUMMARY_CHART_SLOT_CLASS = 'h-[136px] sm:h-[150px]'",
+    );
+    expect(summaryChartLayoutSource).toContain(
+      "export const SUMMARY_CHART_SLOT_COMPACT_CLASS = 'h-[108px] sm:h-[120px]'",
+    );
+    expect(summaryChartLayoutSource).toContain(
+      "export const SUMMARY_CHART_PLOT_AREA_CLASS = 'h-[120px] sm:h-[134px]'",
     );
     expect(summaryMetricCardSource).toContain('!p-1.5 sm:!p-2');
     expect(summaryMetricCardSource).not.toContain('Recovery Posture');
@@ -1545,13 +1554,13 @@ describe('shared primitive guardrails', () => {
     expect(recoveryProtectedInventorySectionSource).toContain("id: 'protected-state'");
     expect(recoveryProtectedInventorySectionSource).toContain('role="group"');
     expect(recoveryProtectedInventorySectionSource).toContain(
-      'ariaLabel="Protected items controls"',
+      'ariaLabel="Protection coverage controls"',
     );
     expect(recoveryProtectedInventorySectionSource).not.toContain('PageControls');
     expect(recoveryProtectedInventorySectionSource).not.toContain('LabeledFilterSelect');
     expect(recoveryProtectedInventorySectionSource).not.toContain('protectedFiltersOpen');
 
-    // Recovery events sub-tab — every advanced filter folds into the catalog
+    // Recovery events surface — every advanced filter folds into the catalog
     // (scope, method, verification, cluster, node, namespace) so the
     // dedicated "Filter" popover panel and FilterToolbarPanel-based advanced
     // panel are no longer rendered.

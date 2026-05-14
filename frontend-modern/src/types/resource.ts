@@ -52,7 +52,7 @@ export type ResourceType =
 
 // Platform types - which system the resource comes from
 export const PLATFORM_TYPES = GENERATED_PLATFORM_TYPE_KEYS;
-export type PlatformType = GeneratedPlatformType | 'availability' | 'generic';
+export type PlatformType = GeneratedPlatformType | 'availability' | 'generic' | 'unraid';
 
 // Source types - how data is collected
 export type SourceType =

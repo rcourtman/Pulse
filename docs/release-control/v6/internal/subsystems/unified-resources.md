@@ -155,6 +155,13 @@ cross-source deduplication.
    executor adapters to make stale-approval decisions.
 2. Add typed accessors and views in `internal/unifiedresources/views.go`
 3. Add source ingestion/adaptation in the adapter layer only
+   Frontend resource platform contracts in
+   `frontend-modern/src/types/resource.ts` must include platform ids that the
+   canonical source/platform adapters can emit. Agent-native storage sources
+   such as Unraid are first-class platform ids for typing, filtering, tests,
+   and storage/recovery presentation; consumers must not hide them behind
+   Proxmox-only or generic agent-only frontend unions when unified resources
+   has already published explicit platform evidence.
    Infrastructure table platform presentation extends through
    `frontend-modern/src/utils/resourceBadgePresentation.ts`,
    `frontend-modern/src/components/Infrastructure/resourceBadges.ts`, and the

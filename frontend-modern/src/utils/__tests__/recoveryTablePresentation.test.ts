@@ -42,16 +42,20 @@ describe('recoveryTablePresentation', () => {
     expect(RECOVERY_ADVANCED_FILTER_LABEL_CLASS).toContain('text-muted');
     expect(RECOVERY_ADVANCED_FILTER_FIELD_CLASS).toContain('focus:border-blue-500');
     expect(RECOVERY_GROUP_NO_TIMESTAMP_LABEL).toBe('No Timestamp');
-    expect(RECOVERY_PROTECTED_SEARCH_PLACEHOLDER).toBe('Search protected items...');
-    expect(RECOVERY_HISTORY_SEARCH_PLACEHOLDER).toBe('Search recovery history...');
+    expect(RECOVERY_PROTECTED_SEARCH_PLACEHOLDER).toBe('Search protection coverage...');
+    expect(RECOVERY_HISTORY_SEARCH_PLACEHOLDER).toBe(
+      'Search recovery history or enter a date...',
+    );
     expect(RECOVERY_SEARCH_HISTORY_EMPTY_MESSAGE).toBe('Recent searches appear here.');
     expect(RECOVERY_ALL_HISTORY_LABEL).toBe('All history');
     expect(RECOVERY_ALL_ITEM_TYPES_LABEL).toBe('All item types');
     expect(RECOVERY_ALL_PLATFORMS_LABEL).toBe('All platforms');
     expect(RECOVERY_ANY_ITEM_LABEL).toBe('Any item');
     expect(getRecoveryGroupNoTimestampLabel()).toBe('No Timestamp');
-    expect(getRecoveryProtectedSearchPlaceholder()).toBe('Search protected items...');
-    expect(getRecoveryHistorySearchPlaceholder()).toBe('Search recovery history...');
+    expect(getRecoveryProtectedSearchPlaceholder()).toBe('Search protection coverage...');
+    expect(getRecoveryHistorySearchPlaceholder()).toBe(
+      'Search recovery history or enter a date...',
+    );
     expect(getRecoverySearchHistoryEmptyMessage()).toBe('Recent searches appear here.');
     expect(getRecoveryAllHistoryLabel()).toBe('All history');
     expect(getRecoveryAllItemTypesLabel()).toBe('All item types');

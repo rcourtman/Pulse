@@ -25,8 +25,8 @@ export const RECOVERY_ADVANCED_FILTER_LABEL_CLASS = 'text-[11px] font-medium tex
 export const RECOVERY_ADVANCED_FILTER_FIELD_CLASS =
   'min-h-[2.25rem] w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content outline-none focus:border-blue-500';
 export const RECOVERY_GROUP_NO_TIMESTAMP_LABEL = 'No Timestamp';
-export const RECOVERY_PROTECTED_SEARCH_PLACEHOLDER = 'Search protected items...';
-export const RECOVERY_HISTORY_SEARCH_PLACEHOLDER = 'Search recovery history...';
+export const RECOVERY_PROTECTED_SEARCH_PLACEHOLDER = 'Search protection coverage...';
+export const RECOVERY_HISTORY_SEARCH_PLACEHOLDER = 'Search recovery history or enter a date...';
 export const RECOVERY_SEARCH_HISTORY_EMPTY_MESSAGE = 'Recent searches appear here.';
 export const RECOVERY_ALL_HISTORY_LABEL = getAllFilterOptionLabel('history');
 export const RECOVERY_ALL_ITEM_TYPES_LABEL = getAllFilterOptionLabel('item types');

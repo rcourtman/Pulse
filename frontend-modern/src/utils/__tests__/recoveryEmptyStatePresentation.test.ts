@@ -11,16 +11,16 @@ import {
 } from '@/utils/recoveryEmptyStatePresentation';
 
 describe('recoveryEmptyStatePresentation', () => {
-  it('returns the protected-items empty state copy', () => {
+  it('returns the protection coverage empty state copy', () => {
     expect(getRecoveryProtectedItemsEmptyState()).toEqual({
-      title: 'No protected items yet',
-      description: 'Pulse hasn’t observed any protected items for this org yet.',
+      title: 'No protection coverage yet',
+      description: 'Pulse has not observed recovery coverage for this org yet.',
     });
   });
 
   it('returns the recovery loading-state copy', () => {
     expect(getRecoveryProtectedItemsLoadingState()).toEqual({
-      text: 'Loading protected items...',
+      text: 'Loading protection coverage...',
     });
     expect(getRecoveryActivityLoadingState()).toEqual({
       text: 'Loading recovery activity...',
@@ -32,7 +32,7 @@ describe('recoveryEmptyStatePresentation', () => {
 
   it('returns the recovery failure-state copy', () => {
     expect(getRecoveryProtectedItemsFailureState()).toEqual({
-      title: 'Failed to load protected items',
+      title: 'Failed to load protection coverage',
     });
     expect(getRecoveryPointsFailureState()).toEqual({
       title: 'Failed to load recovery points',
