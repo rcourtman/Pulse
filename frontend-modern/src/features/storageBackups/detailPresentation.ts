@@ -11,7 +11,8 @@ export const STORAGE_DETAIL_INLINE_LABEL_CLASS =
 export const STORAGE_DETAIL_BADGE_CLASS =
   'text-[10px] font-normal text-slate-400 bg-surface-alt px-1.5 py-0.5 rounded';
 
-export const STORAGE_DETAIL_META_ROW_CLASS = 'flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]';
+export const STORAGE_DETAIL_META_ROW_CLASS =
+  'flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]';
 
 export const STORAGE_DETAIL_MONO_CHIP_CLASS =
   'text-muted font-mono bg-surface-alt px-1.5 py-0.5 rounded border border-border';
@@ -47,9 +48,11 @@ export const STORAGE_DETAIL_KEY_VALUE_ROW_CLASS = 'flex justify-between';
 export const STORAGE_DETAIL_KEY_CLASS = 'text-muted';
 export const STORAGE_DETAIL_VALUE_CLASS = 'text-base-content font-medium';
 
-export const STORAGE_DETAIL_LINKED_DISK_ROW_CLASS = 'flex items-center gap-2 text-[11px] py-0.5';
-export const STORAGE_DETAIL_LINKED_DISK_PATH_CLASS = 'font-mono text-muted w-16 truncate';
-export const STORAGE_DETAIL_LINKED_DISK_MODEL_CLASS = 'text-base-content truncate flex-1';
+export const STORAGE_DETAIL_LINKED_DISK_ROW_CLASS =
+  'flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] py-0.5';
+export const STORAGE_DETAIL_LINKED_DISK_PATH_CLASS = 'font-mono text-muted min-w-[4rem] truncate';
+export const STORAGE_DETAIL_LINKED_DISK_MODEL_CLASS =
+  'text-base-content min-w-[8rem] flex-1 truncate';
 export const STORAGE_DETAIL_SPACED_STACK_CLASS = 'space-y-3';
 export const STORAGE_DETAIL_FULL_WIDTH_ROW_CLASS = 'col-span-2';
 export const STORAGE_DETAIL_MUTED_TEXT_CLASS = 'text-muted';

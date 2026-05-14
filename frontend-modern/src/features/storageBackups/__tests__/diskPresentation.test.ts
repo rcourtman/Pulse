@@ -27,7 +27,9 @@ import {
   getPhysicalDiskRoleFilterValue,
   getPhysicalDiskSourceKey,
   getPhysicalDiskSourceBadgePresentation,
+  hasUnraidPhysicalDiskFaultSignal,
   hasPhysicalDiskSmartWarning,
+  isUnraidPhysicalDisk,
   matchesPhysicalDiskSearch,
   normalizePhysicalDiskFacetFilter,
   type PhysicalDiskPresentationData,
@@ -208,6 +210,65 @@ describe('diskPresentation', () => {
       title: 'No disks need attention',
       filterMessages: ['from PVE', 'with role Cache Pool', 'in tank'],
       showRequirements: false,
+    });
+  });
+
+  it('keeps Unraid disks with missing SMART data out of attention unless Unraid reports a fault', () => {
+    const spunDownUnraidDisk = makeDiskData({
+      health: 'UNKNOWN',
+      storageRole: 'data',
+      storageGroup: 'unraid-array',
+      storageState: 'online',
+      spunDown: true,
+      temperature: 0,
+    });
+    const spunDownResource = {
+      status: 'offline',
+      platformType: 'agent',
+      physicalDisk: {
+        health: 'UNKNOWN',
+        storageRole: 'data',
+        storageGroup: 'unraid-array',
+        storageState: 'online',
+        spunDown: true,
+      },
+    } as unknown as Resource;
+
+    expect(isUnraidPhysicalDisk(spunDownUnraidDisk)).toBe(true);
+    expect(hasUnraidPhysicalDiskFaultSignal(spunDownUnraidDisk)).toBe(false);
+    expect(getPhysicalDiskHealthStatus(spunDownUnraidDisk)).toMatchObject({
+      label: 'Online',
+      summary: 'No active disk-health issues.',
+    });
+    expect(getPhysicalDiskNormalizedHealth(spunDownResource, spunDownUnraidDisk)).toBe('healthy');
+
+    const diskWithUnraidErrors = makeDiskData({
+      health: 'UNKNOWN',
+      riskLevel: 'warning',
+      riskReasons: ['Unraid disk disk2 reports 3 error(s)'],
+      storageRole: 'data',
+      storageGroup: 'unraid-array',
+      storageState: 'online',
+      errorCount: 3,
+    });
+    expect(hasUnraidPhysicalDiskFaultSignal(diskWithUnraidErrors)).toBe(true);
+    expect(getPhysicalDiskHealthStatus(diskWithUnraidErrors)).toMatchObject({
+      label: 'Needs Attention',
+      summary: 'Unraid disk disk2 reports 3 error(s)',
+    });
+
+    const missingUnraidDisk = makeDiskData({
+      health: 'FAILED',
+      storageRole: 'data',
+      storageGroup: 'unraid-array',
+      storageState: 'missing',
+      riskLevel: 'critical',
+      riskReasons: ['Unraid disk disk3 is MISSING'],
+    });
+    expect(hasUnraidPhysicalDiskFaultSignal(missingUnraidDisk)).toBe(true);
+    expect(getPhysicalDiskHealthStatus(missingUnraidDisk)).toMatchObject({
+      label: 'Replace Now',
+      summary: 'Unraid disk disk3 is MISSING',
     });
   });
 

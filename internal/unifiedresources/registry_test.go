@@ -1755,6 +1755,107 @@ func TestResourceRegistry_IngestSnapshotPropagatesUnraidDiskRole(t *testing.T) {
 	}
 }
 
+func TestResourceRegistry_IngestSnapshotCreatesUnraidDisksWithoutSMART(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:       "host-tower",
+				Hostname: "tower",
+				Status:   "online",
+				LastSeen: now,
+				Disks: []models.Disk{
+					{Mountpoint: "/mnt/user", Total: 10_000, Used: 7_000, Free: 3_000, Usage: 70},
+				},
+				Unraid: &models.HostUnraidStorage{
+					ArrayStarted: true,
+					ArrayState:   "STARTED",
+					Disks: []models.HostUnraidDisk{
+						{
+							Name:        "disk1",
+							Device:      "/dev/sdb",
+							Role:        "data",
+							Status:      "online",
+							Model:       "WDC WD60EFRX",
+							Serial:      "DATA-1",
+							Filesystem:  "xfs",
+							Transport:   "sata",
+							SizeBytes:   6_000_000_000_000,
+							UsedBytes:   4_000,
+							FreeBytes:   2_000,
+							Temperature: 31,
+							SpunDown:    true,
+							ReadCount:   11,
+							WriteCount:  12,
+							ErrorCount:  16,
+						},
+						{
+							Name:       "cachepool",
+							Device:     "/dev/sdc",
+							Role:       "cache",
+							Status:     "online",
+							Model:      "SSD 2000GB",
+							Serial:     "CACHE-1",
+							Filesystem: "btrfs",
+							Transport:  "sata",
+							SizeBytes:  2_000_000_000_000,
+							UsedBytes:  200,
+							FreeBytes:  800,
+						},
+					},
+				},
+			},
+		},
+	})
+
+	disks := rr.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != 2 {
+		t.Fatalf("expected 2 Unraid physical disks, got %d: %+v", len(disks), disks)
+	}
+	bySerial := map[string]Resource{}
+	for _, disk := range disks {
+		if disk.PhysicalDisk != nil {
+			bySerial[disk.PhysicalDisk.Serial] = disk
+		}
+	}
+	data := bySerial["DATA-1"]
+	if data.PhysicalDisk == nil || data.PhysicalDisk.StorageRole != "data" || data.PhysicalDisk.StorageGroup != "unraid-array" {
+		t.Fatalf("expected data disk to belong to unraid array, got %+v", data.PhysicalDisk)
+	}
+	if data.PhysicalDisk.SizeBytes != 6_000_000_000_000 || data.PhysicalDisk.Temperature != 31 {
+		t.Fatalf("expected Unraid size/temp on data disk, got %+v", data.PhysicalDisk)
+	}
+	if !data.PhysicalDisk.SpunDown || data.PhysicalDisk.ReadCount != 11 || data.PhysicalDisk.WriteCount != 12 || data.PhysicalDisk.ErrorCount != 16 {
+		t.Fatalf("expected Unraid disk counters on data disk, got %+v", data.PhysicalDisk)
+	}
+	cache := bySerial["CACHE-1"]
+	if cache.PhysicalDisk == nil || cache.PhysicalDisk.StorageRole != "cache" || cache.PhysicalDisk.StorageGroup != "cachepool" {
+		t.Fatalf("expected cache disk to belong to cachepool, got %+v", cache.PhysicalDisk)
+	}
+
+	storage := rr.ListByType(ResourceTypeStorage)
+	var sawArray, sawCache bool
+	for _, resource := range storage {
+		if resource.Storage == nil {
+			continue
+		}
+		switch resource.Storage.Type {
+		case "unraid-array":
+			sawArray = true
+		case "unraid-cache-pool":
+			sawCache = true
+			if resource.Name != "cachepool" || resource.Metrics == nil || resource.Metrics.Disk == nil || resource.Metrics.Disk.Percent != 20 {
+				t.Fatalf("unexpected cache storage resource: %+v", resource)
+			}
+		}
+	}
+	if !sawArray || !sawCache {
+		t.Fatalf("expected array and cache storage resources, got %+v", storage)
+	}
+}
+
 func TestResourceRegistry_IngestSnapshotCreatesUnraidStorageResource(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
@@ -1844,6 +1945,54 @@ func TestResourceRegistry_IngestSnapshotParentsUnraidArrayDisksUnderStorage(t *t
 	}
 	if disks[0].ParentID == nil || *disks[0].ParentID != storage[0].ID {
 		t.Fatalf("expected unraid disk parent to be storage resource %q, got %+v", storage[0].ID, disks[0].ParentID)
+	}
+	if storage[0].ChildCount != 1 {
+		t.Fatalf("expected storage child count 1, got %d", storage[0].ChildCount)
+	}
+}
+
+func TestResourceRegistry_IngestSnapshotParentsInferredUnraidArrayDisksUnderStorage(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:        "host-tower",
+				Hostname:  "tower",
+				Status:    "online",
+				LastSeen:  now,
+				MachineID: "machine-tower",
+				Unraid: &models.HostUnraidStorage{
+					ArrayStarted: true,
+					Disks: []models.HostUnraidDisk{
+						{Name: "md1p1", Device: "/dev/sde", Status: "online", Slot: 1},
+					},
+				},
+				Sensors: models.HostSensorSummary{
+					SMART: []models.HostDiskSMART{
+						{
+							Device: "sde [sat]",
+							Model:  "Array Disk",
+							Type:   "sata",
+							Health: "UNKNOWN",
+						},
+					},
+				},
+			},
+		},
+	})
+
+	storage := rr.ListByType(ResourceTypeStorage)
+	disks := rr.ListByType(ResourceTypePhysicalDisk)
+	if len(storage) != 1 || len(disks) != 1 {
+		t.Fatalf("expected 1 storage and 1 disk resource, got storage=%d disk=%d", len(storage), len(disks))
+	}
+	if disks[0].ParentID == nil || *disks[0].ParentID != storage[0].ID {
+		t.Fatalf("expected inferred unraid disk parent to be storage resource %q, got %+v", storage[0].ID, disks[0].ParentID)
+	}
+	if disks[0].PhysicalDisk == nil || disks[0].PhysicalDisk.StorageRole != "data" || disks[0].PhysicalDisk.StorageGroup != "unraid-array" {
+		t.Fatalf("expected inferred unraid data disk metadata, got %+v", disks[0].PhysicalDisk)
 	}
 	if storage[0].ChildCount != 1 {
 		t.Fatalf("expected storage child count 1, got %d", storage[0].ChildCount)

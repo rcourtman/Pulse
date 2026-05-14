@@ -144,7 +144,6 @@ import infrastructurePageShellSource from '@/pages/Infrastructure.tsx?raw';
 import operationsPageRouteSource from '@/pages/Operations.tsx?raw';
 import discoveryTargetSource from '@/utils/discoveryTarget.ts?raw';
 import infrastructureEmptyStatePresentationSource from '@/utils/infrastructureEmptyStatePresentation.ts?raw';
-import recoverySummarySource from '@/components/Recovery/RecoverySummary.tsx?raw';
 import recoveryComponentSource from '@/components/Recovery/Recovery.tsx?raw';
 import recoveryActivitySectionSource from '@/components/Recovery/RecoveryActivitySection.tsx?raw';
 import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
@@ -161,7 +160,6 @@ import recoveryDatePresentationSource from '@/utils/recoveryDatePresentation.ts?
 import recoveryRecordPresentationSource from '@/utils/recoveryRecordPresentation.ts?raw';
 import recoveryEmptyStatePresentationSource from '@/utils/recoveryEmptyStatePresentation.ts?raw';
 import recoveryStatusPresentationSource from '@/utils/recoveryStatusPresentation.ts?raw';
-import recoverySummaryPresentationSource from '@/utils/recoverySummaryPresentation.ts?raw';
 import recoveryTablePresentationSource from '@/utils/recoveryTablePresentation.ts?raw';
 import recoveryTimelineChartPresentationSource from '@/utils/recoveryTimelineChartPresentation.ts?raw';
 import recoveryTimelinePresentationSource from '@/utils/recoveryTimelinePresentation.ts?raw';
@@ -1053,16 +1051,17 @@ describe('frontend resource type boundaries', () => {
     expect(emptyStatePresentationSource).toContain('export function getEmptyStatePresentation');
     expect(discoveryTargetSource).toContain('canonicalizeFrontendResourceType');
     expect(recoveryOutcomePresentationSource).toContain('import type { RecoveryOutcome }');
-    expect(recoverySummarySource).toContain('buildRecoveryPostureSummary');
-    expect(recoverySummarySource).toContain('RECOVERY_SUMMARY_TIME_RANGES');
-    expect(recoverySummarySource).toContain('buildRecoveryFreshnessBuckets');
-    expect(recoverySummarySource).not.toContain(
+    expect(recoveryComponentSource).not.toContain('RecoverySummary');
+    expect(recoveryComponentSource).not.toContain('recovery-summary');
+    expect(recoveryActivitySectionSource).toContain('RECOVERY_ACTIVITY_RANGE_DAYS');
+    expect(recoveryActivitySectionSource).toContain('Recovery activity range');
+    expect(recoverySource).not.toContain(
       "const RECOVERY_TIME_RANGES: readonly string[] = ['7d', '30d', '90d']",
     );
-    expect(recoverySummarySource).not.toContain(
+    expect(recoverySource).not.toContain(
       'const RECOVERY_TIME_RANGE_LABELS: Record<string, string>',
     );
-    expect(recoverySummarySource).not.toContain('const FRESHNESS_LABELS:');
+    expect(recoverySource).not.toContain('const FRESHNESS_LABELS:');
     expect(recoverySource).toContain('getRecoveryArtifactModePresentation');
     expect(recoverySource).not.toContain('const MODE_LABELS: Record<ArtifactMode, string>');
     expect(recoverySource).not.toContain('const MODE_BADGE_CLASS: Record<ArtifactMode, string>');
@@ -1070,7 +1069,7 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySource).not.toContain(
       "const ISSUE_RAIL_CLASS: Record<Exclude<IssueTone, 'none'>, string>",
     );
-    expect(recoverySummarySource).not.toContain('const normalizeOutcome =');
+    expect(recoverySource).not.toContain('const normalizeOutcome =');
     expect(recoveryArtifactModePresentationSource).toContain(
       'export function getRecoveryArtifactModePresentation',
     );
@@ -1119,11 +1118,12 @@ describe('frontend resource type boundaries', () => {
     expect(recoveryComponentSource.indexOf('{eventsActivity()}')).toBeGreaterThan(
       recoveryComponentSource.indexOf("<Show when={workspaceView() === 'events'}>"),
     );
-    expect(recoverySource).toContain('getRecoveryFilterChipPresentation');
+    expect(recoverySource).not.toContain('getRecoveryFilterChipPresentation');
     expect(recoverySource).not.toContain('const titleize =');
-    expect(recoverySummarySource).toContain('<SummaryPanel');
-    expect(recoverySummarySource).toContain('timeRange={props.timeRange()}');
-    expect(recoverySummarySource).not.toContain('segmentedButtonClass(');
+    expect(recoverySource).not.toContain('<SummaryPanel');
+    expect(recoverySource).not.toContain('SummaryMetricCard');
+    expect(recoveryActivitySectionSource).toContain('onRangeChange');
+    expect(recoveryActivitySectionSource).not.toContain('segmentedButtonClass(');
     expect(recoverySource).not.toContain('border-blue-200 bg-blue-50 px-2 py-0.5');
     expect(recoverySource).not.toContain('border-cyan-200 bg-cyan-50 px-2 py-0.5');
     expect(recoverySource).not.toContain('border-emerald-200 bg-emerald-50 px-2 py-0.5');
@@ -1165,7 +1165,9 @@ describe('frontend resource type boundaries', () => {
     expect(recoveryActivitySectionSource).toContain('getRecoveryTimelineAxisLabelClass');
     expect(recoverySource).toContain('getRecoveryTimelineLabelEvery');
     expect(recoverySource).toContain('getRecoveryGroupNoTimestampLabel');
-    expect(recoveryProtectedInventorySectionSource).toContain('getRecoveryProtectedSearchPlaceholder');
+    expect(recoveryProtectedInventorySectionSource).toContain(
+      'getRecoveryProtectedSearchPlaceholder',
+    );
     expect(recoveryHistorySectionSource).toContain('getRecoveryHistorySearchPlaceholder');
     expect(recoverySource).toContain('getRecoverySearchHistoryEmptyMessage');
     expect(recoverySource).not.toContain('Search protected items...');
@@ -1255,6 +1257,7 @@ describe('frontend resource type boundaries', () => {
     expect(recoveryDatePresentationSource).toContain('export function parseRecoveryDateKey');
     expect(recoveryDatePresentationSource).toContain('export function getRecoveryPrettyDateLabel');
     expect(recoveryDatePresentationSource).toContain('export function getRecoveryFullDateLabel');
+    expect(recoveryDatePresentationSource).toContain('export function getRecoveryFilterDateLabel');
     expect(recoveryDatePresentationSource).toContain('export function getRecoveryCompactAxisLabel');
     expect(recoveryDatePresentationSource).toContain('export function formatRecoveryTimeOnly');
     expect(recoveryDatePresentationSource).toContain('export function getRecoveryNiceAxisMax');
@@ -1364,18 +1367,10 @@ describe('frontend resource type boundaries', () => {
     expect(recoveryTimelinePresentationSource).toContain(
       'export function getRecoveryTimelineColumnButtonClass',
     );
-    expect(recoverySummaryPresentationSource).toContain(
-      'export const RECOVERY_SUMMARY_TIME_RANGES',
-    );
-    expect(recoverySummaryPresentationSource).toContain('export const RECOVERY_FRESHNESS_BUCKETS');
-    expect(recoverySummaryPresentationSource).toContain(
-      'export function getRecoveryAttentionChipClass',
-    );
-    expect(recoverySummaryPresentationSource).toContain(
-      'export function getRecoveryAttentionDotClass',
-    );
-    expect(recoverySummarySource).not.toContain('function getAttentionChipClass(');
-    expect(recoverySummarySource).not.toContain('function getAttentionDotClass(');
+    expect(recoverySource).not.toContain('RECOVERY_SUMMARY_TIME_RANGES');
+    expect(recoverySource).not.toContain('RECOVERY_FRESHNESS_BUCKETS');
+    expect(recoverySource).not.toContain('function getAttentionChipClass(');
+    expect(recoverySource).not.toContain('function getAttentionDotClass(');
     expect(systemSettingsPresentationSource).toContain('export const PVE_POLLING_PRESETS');
     expect(systemSettingsPresentationSource).toContain('export const BACKUP_INTERVAL_OPTIONS');
     expect(systemSettingsPresentationSource).toContain(
@@ -1736,7 +1731,7 @@ describe('frontend resource type boundaries', () => {
     expect(useDiskLiveMetricModelSource).toContain('getDiskLiveMetricFormattedValue');
     expect(useDiskLiveMetricModelSource).toContain('getDiskLiveMetricTextClass');
     expect(storagePoolRowSource).toContain('getStoragePoolProtectionTextClass');
-    expect(storagePoolRowSource).toContain('getStoragePoolIssueTextClass');
+    expect(storagePoolRowSource).toContain('stateToneClass');
     expect(storagePoolRowSource).toContain('buildStoragePoolRowModel');
     expect(storagePoolRowSource).toContain('STORAGE_POOL_ROW_CLASS');
     expect(storagePoolRowSource).not.toContain('getSourcePlatformBadge');
@@ -1753,6 +1748,9 @@ describe('frontend resource type boundaries', () => {
     expect(storagePoolRowPresentationSource).toContain('getCompactStoragePoolIssueLabel');
     expect(storagePoolRowPresentationSource).toContain('getCompactStoragePoolIssueSummary');
     expect(storagePoolRowPresentationSource).toContain('getCompactStoragePoolProtectionTitle');
+    expect(storagePoolRowPresentationSource).toContain('getStoragePoolStateLabel');
+    expect(storagePoolRowPresentationSource).toContain('getStoragePoolStateTitle');
+    expect(storagePoolRowPresentationSource).toContain('getStoragePoolStateTextClass');
     expect(storagePoolRowSource).not.toContain('const protectionTextClass =');
     expect(storagePoolRowSource).not.toContain('const issueTextClass =');
     expect(storagePoolRowSource).not.toContain('const compactProtection = createMemo(() => {');
@@ -1805,6 +1803,9 @@ describe('frontend resource type boundaries', () => {
       'export function getStoragePoolProtectionTextClass',
     );
     expect(storageRowPresentationSource).toContain('export function getStoragePoolIssueTextClass');
+    expect(storageRowPresentationSource).toContain('export function getStoragePoolStateLabel');
+    expect(storageRowPresentationSource).toContain('export function getStoragePoolStateTitle');
+    expect(storageRowPresentationSource).toContain('export function getStoragePoolStateTextClass');
     expect(storageRowPresentationSource).toContain(
       'export function getCompactStoragePoolProtectionLabel',
     );

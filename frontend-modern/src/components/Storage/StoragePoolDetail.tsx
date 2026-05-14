@@ -48,11 +48,18 @@ interface StoragePoolDetailProps {
 }
 
 export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
-  const { chartRange, setChartRange, chartTarget, configRows, zfsSummary, linkedDisks } =
-    useStoragePoolDetailModel({
-      record: () => props.record,
-      physicalDisks: () => props.physicalDisks,
-    });
+  const {
+    chartRange,
+    setChartRange,
+    chartTarget,
+    configRows,
+    topologyRows,
+    zfsSummary,
+    linkedDisks,
+  } = useStoragePoolDetailModel({
+    record: () => props.record,
+    physicalDisks: () => props.physicalDisks,
+  });
   const rangeOptions = createMemo(() =>
     getUnlockedHistoryRangeOptions(STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS, maxHistoryDays()),
   );
@@ -106,6 +113,17 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
 
           {/* Right: Configuration & details */}
           <div class={STORAGE_DETAIL_SPACED_STACK_CLASS}>
+            <Show when={topologyRows().length > 0}>
+              <div class={STORAGE_DETAIL_CARD_CLASS}>
+                <h4 class={STORAGE_DETAIL_SECTION_TITLE_SPACED_CLASS}>Topology</h4>
+                <div class={STORAGE_DETAIL_CONFIG_GRID_CLASS}>
+                  <For each={topologyRows()}>
+                    {(row) => <StorageDetailKeyValueRow label={row.label} value={row.value} />}
+                  </For>
+                </div>
+              </div>
+            </Show>
+
             {/* Config card */}
             <div class={STORAGE_DETAIL_CARD_CLASS}>
               <h4 class={STORAGE_DETAIL_SECTION_TITLE_SPACED_CLASS}>Configuration</h4>
@@ -154,6 +172,28 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                           class={`flex-shrink-0 ${getLinkedDiskHealthDotClass(disk.hasIssue)}`}
                         />
                         <span class={STORAGE_DETAIL_LINKED_DISK_MODEL_CLASS}>{disk.model}</span>
+                        <Show when={disk.role}>
+                          <span class="flex-shrink-0 rounded bg-surface-alt px-1.5 py-0.5 text-[10px] uppercase text-muted">
+                            {disk.role}
+                          </span>
+                        </Show>
+                        <Show when={disk.sizeLabel}>
+                          <span class="flex-shrink-0 font-mono text-muted">{disk.sizeLabel}</span>
+                        </Show>
+                        <Show when={disk.state}>
+                          <span class="flex-shrink-0 text-muted">{disk.state}</span>
+                        </Show>
+                        <Show when={disk.ioLabel}>
+                          <span class="flex-shrink-0 font-mono text-muted">{disk.ioLabel}</span>
+                        </Show>
+                        <Show when={disk.spunDown}>
+                          <span class="flex-shrink-0 text-muted">spun down</span>
+                        </Show>
+                        <Show when={disk.errorCount > 0}>
+                          <span class="flex-shrink-0 font-semibold text-amber-700 dark:text-amber-300">
+                            {disk.errorCount.toLocaleString()} errors
+                          </span>
+                        </Show>
                         <Show when={disk.temperature > 0}>
                           <span
                             class={`font-medium ${getLinkedDiskTemperatureTextClass(

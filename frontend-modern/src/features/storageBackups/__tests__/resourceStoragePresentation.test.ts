@@ -206,13 +206,11 @@ describe('resourceStoragePresentation', () => {
 
     expect(getResourceStorageProtectionLabel(resource)).toBe('Parity check');
     expect(getResourceStorageProtectionSummary(resource)).toBe('Unraid array is running check');
-    expect(getResourceStorageIssueLabel(resource)).toBe('No parity protection');
-    expect(getResourceStorageIssueSummary(resource)).toBe(
-      'Unraid array is running without parity protection',
-    );
+    expect(getResourceStorageIssueLabel(resource)).toBe('Healthy');
+    expect(getResourceStorageIssueSummary(resource)).toBe('');
   });
 
-  it('marks an Unraid array without parity as Unprotected when no rebuild is running', () => {
+  it('marks an Unraid array without parity as a factual protection state', () => {
     const resource = makeResource({
       type: 'storage',
       name: 'Tower Array',
@@ -237,8 +235,8 @@ describe('resourceStoragePresentation', () => {
       },
     });
 
-    expect(getResourceStorageProtectionLabel(resource)).toBe('Unprotected');
-    expect(getResourceStorageIssueLabel(resource)).toBe('No parity protection');
+    expect(getResourceStorageProtectionLabel(resource)).toBe('No parity');
+    expect(getResourceStorageIssueLabel(resource)).toBe('Healthy');
   });
 
   it('appends sync progress to Unraid parity-rebuild labels when known', () => {

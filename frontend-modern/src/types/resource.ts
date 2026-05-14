@@ -377,6 +377,10 @@ export interface ResourcePhysicalDiskMeta {
   storageRole?: string;
   storageGroup?: string;
   storageState?: string;
+  spunDown?: boolean;
+  readCount?: number;
+  writeCount?: number;
+  errorCount?: number;
   smart?: {
     powerOnHours?: number;
     powerCycles?: number;
@@ -408,9 +412,18 @@ export interface ResourceAgentUnraidDisk {
   role?: string;
   status?: string;
   rawStatus?: string;
+  model?: string;
   serial?: string;
   filesystem?: string;
+  transport?: string;
   sizeBytes?: number;
+  usedBytes?: number;
+  freeBytes?: number;
+  temperature?: number;
+  spunDown?: boolean;
+  readCount?: number;
+  writeCount?: number;
+  errorCount?: number;
   slot?: number;
 }
 

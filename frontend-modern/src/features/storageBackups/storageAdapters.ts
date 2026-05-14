@@ -1,9 +1,5 @@
 import type { Resource } from '@/types/resource';
-import type {
-  StorageRecord,
-  StorageAdapter,
-  StorageAdapterContext,
-} from './models';
+import type { StorageRecord, StorageAdapter, StorageAdapterContext } from './models';
 import {
   getCanonicalStoragePlatformKey,
   getResourceStorageActionSummary,
@@ -14,6 +10,8 @@ import {
   getResourceStorageProtectionLabel,
   getResourceStorageProtectionSummary,
   getResourceStorageTopologyLabel,
+  hasUnraidStorageAttentionIssue,
+  isUnraidStorageResource,
 } from './resourceStoragePresentation';
 import {
   getStorageCapabilitiesForResource,
@@ -49,9 +47,7 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
     storageMeta?.topology ||
     (platformData.topology as string | undefined) ||
     resource.storage?.topology;
-  const storageType =
-    storageTypeHint ||
-    (resourceType === 'pbs' ? 'pbs' : resourceType);
+  const storageType = storageTypeHint || (resourceType === 'pbs' ? 'pbs' : resourceType);
   const shared =
     typeof storageMeta?.shared === 'boolean'
       ? storageMeta.shared
@@ -122,6 +118,18 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
   const actionSummary = getResourceStorageActionSummary(resource);
   const protectionLabel = getResourceStorageProtectionLabel(resource);
   const protectionSummary = getResourceStorageProtectionSummary(resource);
+  const isUnraid = isUnraidStorageResource(resource);
+  const normalizedHealth = normalizeStorageResourceHealth(
+    resource.status,
+    resource.tags,
+    resource.incidentSeverity,
+  );
+  const health =
+    normalizedHealth === 'warning' && isUnraid && !hasUnraidStorageAttentionIssue(resource)
+      ? 'healthy'
+      : normalizedHealth;
+  const statusLabel =
+    isUnraid && storageMeta?.arrayState ? storageMeta.arrayState : resource.status;
   const topologyLabel = getResourceStorageTopologyLabel(
     resource,
     storageType,
@@ -132,11 +140,12 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
   return {
     id: resource.id,
     name: resource.name,
-    category: storageMeta?.isCeph || storageMeta?.isZfs
+    category:
+      storageMeta?.isCeph || storageMeta?.isZfs
         ? 'pool'
         : getStorageCategoryFromType(storageType, classificationContext),
-    health: normalizeStorageResourceHealth(resource.status, resource.tags, resource.incidentSeverity),
-    statusLabel: resource.status,
+    health,
+    statusLabel,
     hostLabel,
     platformLabel,
     platformKey: canonicalPlatform,
@@ -160,7 +169,11 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
       scope: isBackupRepository ? 'cluster' : isDatastore ? (shared ? 'cluster' : 'host') : 'node',
     },
     capacity: buildStorageCapacity(totalBytes, usedBytes, freeBytes, usagePercent),
-    capabilities: getStorageCapabilitiesForResource(storageType, storageMeta, classificationContext),
+    capabilities: getStorageCapabilitiesForResource(
+      storageType,
+      storageMeta,
+      classificationContext,
+    ),
     source: buildStorageSource(canonicalPlatform, adapterId),
     observedAt:
       typeof resource.lastSeen === 'number' && Number.isFinite(resource.lastSeen)
@@ -173,7 +186,7 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
     },
     details: {
       type: storageType,
-      status: resource.status,
+      status: statusLabel,
       parentId: resource.parentId,
       parentName: resource.parentName,
       node: proxmoxNode || (platformData.node as string | undefined) || storageNodes[0],
@@ -196,9 +209,18 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
       content,
       contentTypes: storageMeta?.contentTypes,
       shared,
+      path: storageMeta?.path,
+      protection: storageMeta?.protection,
       isCeph: storageMeta?.isCeph,
       isZfs: storageMeta?.isZfs,
       zfsPool: platformData.zfsPool,
+      arrayState: storageMeta?.arrayState,
+      syncAction: storageMeta?.syncAction,
+      syncProgress: storageMeta?.syncProgress,
+      numProtected: storageMeta?.numProtected,
+      numDisabled: storageMeta?.numDisabled,
+      numInvalid: storageMeta?.numInvalid,
+      numMissing: storageMeta?.numMissing,
     },
   };
 };

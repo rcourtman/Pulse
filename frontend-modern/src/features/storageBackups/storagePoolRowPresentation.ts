@@ -13,6 +13,9 @@ import {
   getCompactStoragePoolIssueSummary,
   getCompactStoragePoolProtectionLabel,
   getCompactStoragePoolProtectionTitle,
+  getStoragePoolStateLabel,
+  getStoragePoolStateTextClass,
+  getStoragePoolStateTitle,
 } from './rowPresentation';
 
 export interface StoragePoolRowModel {
@@ -26,6 +29,9 @@ export interface StoragePoolRowModel {
   topologyLabel: string;
   compactProtection: string;
   compactProtectionTitle: string;
+  stateLabel: string;
+  stateTitle: string;
+  stateToneClass: string;
   capacityDeltaLabel: string;
   capacityDeltaTitle: string;
   capacityDeltaToneClass: string;
@@ -86,6 +92,9 @@ export const buildStoragePoolRowModel = (
     topologyLabel: getStorageRecordTopologyLabel(record),
     compactProtection: getCompactStoragePoolProtectionLabel(record),
     compactProtectionTitle: getCompactStoragePoolProtectionTitle(record),
+    stateLabel: getStoragePoolStateLabel(record),
+    stateTitle: getStoragePoolStateTitle(record),
+    stateToneClass: getStoragePoolStateTextClass(record),
     capacityDeltaLabel: capacityDelta?.label ?? '—',
     capacityDeltaTitle: capacityDelta?.title ?? 'No used-capacity change history available.',
     capacityDeltaToneClass: capacityDelta?.toneClass ?? STORAGE_POOL_ROW_PLACEHOLDER_CLASS,

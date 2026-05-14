@@ -268,6 +268,46 @@ describe('storageAdapters', () => {
     expect(records[0].details?.isZfs).toBe(true);
   });
 
+  it('keeps Unraid no-parity as protection metadata instead of degraded storage health', () => {
+    const records = buildStorageRecords({
+      state: baseState(),
+      resources: [
+        makeResourceStorage({
+          id: 'tower-array',
+          name: 'Tower Array',
+          platformId: 'tower',
+          platformType: 'unraid',
+          status: 'degraded',
+          incidentSeverity: 'warning',
+          storage: {
+            type: 'unraid-array',
+            platform: 'unraid',
+            topology: 'array',
+            protection: 'none',
+            protectionReduced: true,
+            protectionSummary: 'Unraid array is running without parity protection',
+            arrayState: 'STARTED',
+            risk: {
+              level: 'warning',
+              reasons: [
+                {
+                  code: 'unraid_no_parity',
+                  severity: 'warning',
+                  summary: 'Unraid array is running without parity protection',
+                },
+              ],
+            },
+          },
+        } as Partial<Resource>),
+      ],
+    });
+
+    expect(records[0].health).toBe('healthy');
+    expect(records[0].issueLabel).toBe('Healthy');
+    expect(records[0].protectionLabel).toBe('No parity');
+    expect(records[0].details?.status).toBe('STARTED');
+  });
+
   it('maps a TrueNAS dataset with mounted state and zfs metadata', () => {
     const truenasDataset = {
       ...makeResourceStorage({

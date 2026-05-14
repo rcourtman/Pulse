@@ -6,7 +6,6 @@ from subsystem_lookup import lookup_paths, parse_args, render_pretty
 
 
 RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
-    "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
     "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
     "frontend-modern/src/pages/__tests__/Recovery.test.tsx",
     "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
@@ -1026,27 +1025,14 @@ class SubsystemLookupTest(unittest.TestCase):
             RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
         )
 
-    def test_lookup_paths_assigns_recovery_summary_presentation_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/utils/recoverySummaryPresentation.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
+    def test_lookup_paths_reports_retired_recovery_summary_presentation_as_unowned(self) -> None:
+        path = "frontend-modern/src/utils/recoverySummaryPresentation.ts"
+        result = lookup_paths([path])
+        self.assertEqual(result["unowned_runtime_files"], [path])
+        self.assertEqual(result["impacted_subsystems"], [])
         file_entry = result["files"][0]
         self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
-        )
+        self.assertEqual(file_entry["matches"], [])
 
     def test_lookup_paths_assigns_recovery_record_presentation_to_storage_recovery(self) -> None:
         result = lookup_paths(["frontend-modern/src/utils/recoveryRecordPresentation.ts"])

@@ -3394,15 +3394,24 @@ func hostUnraidFromReadStateView(unraid *unifiedresources.HostUnraidMeta) *model
 		out.Disks = make([]models.HostUnraidDisk, 0, len(unraid.Disks))
 		for _, disk := range unraid.Disks {
 			out.Disks = append(out.Disks, models.HostUnraidDisk{
-				Name:       disk.Name,
-				Device:     disk.Device,
-				Role:       disk.Role,
-				Status:     disk.Status,
-				RawStatus:  disk.RawStatus,
-				Serial:     disk.Serial,
-				Filesystem: disk.Filesystem,
-				SizeBytes:  disk.SizeBytes,
-				Slot:       disk.Slot,
+				Name:        disk.Name,
+				Device:      disk.Device,
+				Role:        disk.Role,
+				Status:      disk.Status,
+				RawStatus:   disk.RawStatus,
+				Model:       disk.Model,
+				Serial:      disk.Serial,
+				Filesystem:  disk.Filesystem,
+				Transport:   disk.Transport,
+				SizeBytes:   disk.SizeBytes,
+				UsedBytes:   disk.UsedBytes,
+				FreeBytes:   disk.FreeBytes,
+				Temperature: disk.Temperature,
+				SpunDown:    disk.SpunDown,
+				ReadCount:   disk.ReadCount,
+				WriteCount:  disk.WriteCount,
+				ErrorCount:  disk.ErrorCount,
+				Slot:        disk.Slot,
 			})
 		}
 	}

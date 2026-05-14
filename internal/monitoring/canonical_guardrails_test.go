@@ -171,6 +171,49 @@ func TestBroadcastResourceProjectionPreservesCanonicalHealthContext(t *testing.T
 	}
 }
 
+func TestHostUnraidReadStateProjectionPreservesNativeDiskFields(t *testing.T) {
+	projected := hostUnraidFromReadStateView(&unifiedresources.HostUnraidMeta{
+		ArrayStarted: true,
+		ArrayState:   "STARTED",
+		Disks: []unifiedresources.HostUnraidDiskMeta{
+			{
+				Name:        "disk1",
+				Device:      "/dev/sdc",
+				Role:        "data",
+				Status:      "online",
+				RawStatus:   "DISK_OK",
+				Model:       "WDC WD60EFRX",
+				Serial:      "SERIAL-DATA",
+				Filesystem:  "xfs",
+				Transport:   "sata",
+				SizeBytes:   6_000_000_000_000,
+				UsedBytes:   4_000,
+				FreeBytes:   2_000,
+				Temperature: 31,
+				SpunDown:    true,
+				ReadCount:   11,
+				WriteCount:  12,
+				ErrorCount:  16,
+				Slot:        1,
+			},
+		},
+	})
+
+	if projected == nil || len(projected.Disks) != 1 {
+		t.Fatalf("expected projected Unraid disk metadata, got %+v", projected)
+	}
+	disk := projected.Disks[0]
+	if disk.Model != "WDC WD60EFRX" || disk.Transport != "sata" || disk.SizeBytes != 6_000_000_000_000 {
+		t.Fatalf("expected native metadata to survive read-state projection, got %+v", disk)
+	}
+	if disk.UsedBytes != 4_000 || disk.FreeBytes != 2_000 || disk.Temperature != 31 || !disk.SpunDown {
+		t.Fatalf("expected native capacity and state fields to survive projection, got %+v", disk)
+	}
+	if disk.ReadCount != 11 || disk.WriteCount != 12 || disk.ErrorCount != 16 {
+		t.Fatalf("expected native counters to survive projection, got %+v", disk)
+	}
+}
+
 func TestBroadcastResourceProjectionCoalescesSplitHostIdentities(t *testing.T) {
 	data, err := os.ReadFile("monitor.go")
 	if err != nil {

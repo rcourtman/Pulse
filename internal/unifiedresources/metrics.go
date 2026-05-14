@@ -43,15 +43,27 @@ func metricsFromUnraidStorage(host models.Host) *ResourceMetrics {
 	metrics := &ResourceMetrics{}
 	total, used, _, percent := unraidStorageCapacity(host)
 	if total > 0 {
-		metrics.Disk = &MetricValue{
-			Used:    &used,
-			Total:   &total,
-			Percent: percent,
-			Unit:    "bytes",
-			Source:  SourceAgent,
-		}
+		metrics.Disk = unraidDiskMetric(total, used, percent)
 	}
 	return metrics
+}
+
+func metricsFromUnraidDiskCapacity(total, used int64, percent float64) *ResourceMetrics {
+	metrics := &ResourceMetrics{}
+	if total > 0 {
+		metrics.Disk = unraidDiskMetric(total, used, percent)
+	}
+	return metrics
+}
+
+func unraidDiskMetric(total, used int64, percent float64) *MetricValue {
+	return &MetricValue{
+		Used:    &used,
+		Total:   &total,
+		Percent: percent,
+		Unit:    "bytes",
+		Source:  SourceAgent,
+	}
 }
 
 func metricsFromDockerHost(host models.DockerHost) *ResourceMetrics {

@@ -19,8 +19,8 @@ describe('storage group presentation', () => {
     expect(STORAGE_GROUP_ROW_HEALTH_WRAP_CLASS).toContain('ml-auto');
     expect(STORAGE_GROUP_ROW_CHEVRON_BASE_CLASS).toContain('transition-transform');
     expect(STORAGE_GROUP_ROW_HEALTH_DOT_CLASS).toBe('w-2 h-2 rounded-full');
-    expect(getStorageGroupPoolCountLabel(1)).toBe('1 pool');
-    expect(getStorageGroupPoolCountLabel(2)).toBe('2 pools');
+    expect(getStorageGroupPoolCountLabel(1)).toBe('1 storage item');
+    expect(getStorageGroupPoolCountLabel(2)).toBe('2 storage items');
   });
 
   it('formats usage with the shared percent formatter', () => {
@@ -83,7 +83,7 @@ describe('storage group presentation', () => {
       label: 'tower',
       showUsage: true,
       usagePercentLabel: '40%',
-      poolCountLabel: '2 pools',
+      poolCountLabel: '2 storage items',
     });
     expect(getStorageGroupChevronClass(true)).toContain('rotate-90');
   });

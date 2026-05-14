@@ -48,7 +48,7 @@ const STORAGE_GROUP_HEALTH_ORDER: NormalizedHealth[] = [
 ];
 
 export const getStorageGroupPoolCountLabel = (count: number): string =>
-  `${count} ${count === 1 ? 'pool' : 'pools'}`;
+  `${count} ${count === 1 ? 'storage item' : 'storage items'}`;
 
 export const getStorageGroupUsagePercentLabel = (usagePercent: number): string =>
   formatPercent(usagePercent);

@@ -49,7 +49,7 @@ describe('StorageGroupRow', () => {
 
     expect(screen.getByText('tower')).toBeInTheDocument();
     expect(screen.getByText('tower').closest('tr')).toHaveClass('grouped-table-row');
-    expect(screen.getByText('2 pools')).toBeInTheDocument();
+    expect(screen.getByText('2 storage items')).toBeInTheDocument();
     expect(screen.getByText('40%')).toBeInTheDocument();
     expect(container.querySelector('.bg-green-500')).toBeInTheDocument();
     expect(container.querySelector('.bg-yellow-500')).toBeInTheDocument();
@@ -64,7 +64,7 @@ describe('StorageGroupRow', () => {
     const onHoverChange = vi.fn();
     const scope = {
       id: 'storage:node:tower',
-      label: 'tower (2 pools)',
+      label: 'tower (2 storage items)',
       seriesIds: ['pool-1', 'pool-2'],
     };
 

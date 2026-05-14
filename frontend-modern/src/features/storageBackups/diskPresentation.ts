@@ -48,6 +48,11 @@ export interface PhysicalDiskPresentationData {
   wearout: number;
   storageRole?: string;
   storageGroup?: string;
+  storageState?: string;
+  spunDown?: boolean;
+  readCount?: number;
+  writeCount?: number;
+  errorCount?: number;
   type: string;
   temperature: number;
   rpm: number;
@@ -148,6 +153,52 @@ const titleize = (value: string | undefined | null): string =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
+const UNRAID_PHYSICAL_DISK_ROLES = new Set(['data', 'parity', 'cache']);
+const UNRAID_PHYSICAL_DISK_FAULT_STATES = new Set([
+  'disabled',
+  'invalid',
+  'missing',
+  'wrong',
+  'error',
+  'failed',
+  'faulted',
+]);
+const PHYSICAL_DISK_BAD_HEALTH_STATES = new Set([
+  'BAD',
+  'CRITICAL',
+  'ERROR',
+  'FAILED',
+  'FAIL',
+  'FAULTED',
+  'UNHEALTHY',
+]);
+
+const normalizePhysicalDiskState = (value: string | undefined | null): string =>
+  (value || '').trim().toLowerCase();
+
+const normalizePhysicalDiskHealth = (value: string | undefined | null): string =>
+  (value || '').trim().toUpperCase();
+
+export function isUnraidPhysicalDisk(disk: PhysicalDiskPresentationData): boolean {
+  const storageGroup = normalizePhysicalDiskState(disk.storageGroup);
+  const storageRole = normalizePhysicalDiskState(disk.storageRole);
+  return (
+    storageGroup === 'unraid-array' ||
+    (Boolean(disk.storageState?.trim()) && UNRAID_PHYSICAL_DISK_ROLES.has(storageRole))
+  );
+}
+
+export function hasUnraidPhysicalDiskFaultSignal(
+  disk: PhysicalDiskPresentationData,
+): boolean {
+  if (!isUnraidPhysicalDisk(disk)) return false;
+  if ((disk.errorCount || 0) > 0) return true;
+  if (UNRAID_PHYSICAL_DISK_FAULT_STATES.has(normalizePhysicalDiskState(disk.storageState))) {
+    return true;
+  }
+  return PHYSICAL_DISK_BAD_HEALTH_STATES.has(normalizePhysicalDiskHealth(disk.health));
+}
+
 const slugifyPhysicalDiskFacetValue = (value: string): string =>
   value
     .trim()
@@ -247,6 +298,11 @@ export function extractPhysicalDiskPresentationData(
     used: pd.used || '',
     storageRole: pd.storageRole,
     storageGroup: pd.storageGroup,
+    storageState: pd.storageState,
+    spunDown: pd.spunDown,
+    readCount: pd.readCount,
+    writeCount: pd.writeCount,
+    errorCount: pd.errorCount,
     riskLevel: pd.risk?.level,
     riskReasons,
     smartAttributes: pd.smart
@@ -424,7 +480,7 @@ export function hasPhysicalDiskSmartWarning(disk: PhysicalDiskPresentationData):
 export function getPhysicalDiskHealthStatus(
   disk: PhysicalDiskPresentationData,
 ): DiskHealthStatusPresentation {
-  const normalizedHealth = (disk.health || '').trim().toUpperCase();
+  const normalizedHealth = normalizePhysicalDiskHealth(disk.health);
   const criticalRisk = (disk.riskLevel || '').trim().toLowerCase() === 'critical';
   const warningRisk = (disk.riskLevel || '').trim().toLowerCase() === 'warning';
   const smartWarning = hasPhysicalDiskSmartWarning(disk);
@@ -448,6 +504,14 @@ export function getPhysicalDiskHealthStatus(
     };
   }
 
+  if (isUnraidPhysicalDisk(disk) && !hasUnraidPhysicalDiskFaultSignal(disk)) {
+    return {
+      label: normalizePhysicalDiskState(disk.storageState) === 'online' ? 'Online' : 'Unknown',
+      summary: 'No active disk-health issues.',
+      tone: 'text-base-content',
+    };
+  }
+
   return {
     label: normalizedHealth === 'PASSED' || normalizedHealth === 'GOOD' ? 'Healthy' : 'Unknown',
     summary:
@@ -462,8 +526,9 @@ export function getPhysicalDiskNormalizedHealth(
   resource: Resource,
   disk: PhysicalDiskPresentationData,
 ): NormalizedHealth {
-  if (resource.status === 'offline') return 'offline';
   const status = getPhysicalDiskHealthStatus(disk).label;
+  if (status === 'Online') return 'healthy';
+  if (resource.status === 'offline') return 'offline';
   if (status === 'Replace Now') return 'critical';
   if (status === 'Needs Attention') return 'warning';
   if (status === 'Healthy') return 'healthy';

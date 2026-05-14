@@ -14,6 +14,7 @@ import (
 )
 
 const hostAgentUnraidVersionPath = "/etc/unraid-version"
+const hostAgentUnraidDisksINIPath = "/var/local/emhttp/disks.ini"
 
 var commonUnraidMdcmdPaths = []string{
 	"/usr/local/sbin/mdcmd",
@@ -51,7 +52,14 @@ func CollectUnraidStorage(ctx context.Context, collector SystemCollector) (*agen
 		return nil, fmt.Errorf("run mdcmd status: %w", err)
 	}
 
-	return parseUnraidStatusOutput(output)
+	storage, err := parseUnraidStatusOutput(output)
+	if err != nil {
+		return nil, err
+	}
+	if data, readErr := collector.ReadFile(hostAgentUnraidDisksINIPath); readErr == nil {
+		storage = mergeUnraidDiskINI(storage, parseUnraidDisksINI(string(data)))
+	}
+	return storage, nil
 }
 
 func resolveUnraidMdcmdBinary(collector SystemCollector) (string, error) {
@@ -101,7 +109,7 @@ func parseUnraidStatusOutput(output string) (*agentshost.UnraidStorage, error) {
 			RawStatus:  strings.TrimSpace(firstNonEmpty(fields[fmt.Sprintf("rdevStatus.%d", idx)], fields[fmt.Sprintf("diskState.%d", idx)])),
 			Serial:     strings.TrimSpace(firstNonEmpty(fields[fmt.Sprintf("rdevSerial.%d", idx)], fields[fmt.Sprintf("diskSerial.%d", idx)], fields[fmt.Sprintf("rdevId.%d", idx)], fields[fmt.Sprintf("diskId.%d", idx)])),
 			Filesystem: strings.TrimSpace(firstNonEmpty(fields[fmt.Sprintf("diskFsType.%d", idx)], fields[fmt.Sprintf("fsType.%d", idx)])),
-			SizeBytes:  parseFirstInt64(fields[fmt.Sprintf("diskSize.%d", idx)], fields[fmt.Sprintf("rdevSize.%d", idx)]),
+			SizeBytes:  parseUnraidKiBAsBytes(firstNonEmpty(fields[fmt.Sprintf("diskSize.%d", idx)], fields[fmt.Sprintf("rdevSize.%d", idx)])),
 			Slot:       idx,
 		}
 		disk.Role = inferUnraidDiskRole(disk.Name, idx)
@@ -142,6 +150,180 @@ func parseUnraidKeyValueOutput(output string) map[string]string {
 		fields[key] = value
 	}
 	return fields
+}
+
+type unraidINISection struct {
+	name   string
+	fields map[string]string
+}
+
+func parseUnraidDisksINI(input string) []agentshost.UnraidDisk {
+	sections := parseUnraidINISections(input)
+	disks := make([]agentshost.UnraidDisk, 0, len(sections))
+	for _, section := range sections {
+		if section.name == "" {
+			continue
+		}
+		fields := section.fields
+		idx := parseUnraidIntField(fields, "idx")
+		name := firstNonEmpty(fields["name"], section.name)
+		role := normalizeUnraidDiskRole(firstNonEmpty(fields["type"], inferUnraidDiskRole(name, idx)))
+		device := normalizeBlockDevice(fields["device"])
+		rawStatus := strings.TrimSpace(fields["status"])
+		disk := agentshost.UnraidDisk{
+			Name:        strings.TrimSpace(name),
+			Device:      device,
+			Role:        role,
+			Status:      normalizeUnraidDiskStatus(rawStatus, device),
+			RawStatus:   rawStatus,
+			Filesystem:  strings.TrimSpace(fields["fsType"]),
+			Transport:   normalizeUnraidTransport(fields["transport"], fields["rotational"]),
+			SizeBytes:   parseUnraidSizeBytes(fields),
+			UsedBytes:   parseUnraidKiBAsBytes(fields["fsUsed"]),
+			FreeBytes:   parseUnraidKiBAsBytes(fields["fsFree"]),
+			Temperature: parseUnraidTemperature(fields["temp"]),
+			SpunDown:    parseUnraidBool(fields["spundown"]),
+			ReadCount:   parseFirstInt64(fields["numReads"]),
+			WriteCount:  parseFirstInt64(fields["numWrites"]),
+			ErrorCount:  parseFirstInt64(fields["numErrors"]),
+			Slot:        idx,
+		}
+		disk.Model, disk.Serial = parseUnraidDiskIdentity(firstNonEmpty(fields["id"], fields["idSb"]))
+		if disk.Serial == "" {
+			disk.Serial = strings.TrimSpace(firstNonEmpty(fields["id"], fields["idSb"]))
+		}
+		if isUnraidEmptySlot(disk) {
+			continue
+		}
+		if disk.Name == "" {
+			disk.Name = defaultUnraidDiskName(disk.Role, idx)
+		}
+		if disk.Name == "" && disk.Device == "" && disk.RawStatus == "" && disk.Serial == "" && disk.SizeBytes == 0 {
+			continue
+		}
+		disks = append(disks, disk)
+	}
+	return disks
+}
+
+func parseUnraidINISections(input string) []unraidINISection {
+	lines := strings.Split(input, "\n")
+	sections := make([]unraidINISection, 0)
+	var current *unraidINISection
+	for _, rawLine := range lines {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, ";") || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			name := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(line, "["), "]"))
+			name = strings.Trim(name, `"`)
+			sections = append(sections, unraidINISection{name: name, fields: make(map[string]string)})
+			current = &sections[len(sections)-1]
+			continue
+		}
+		if current == nil || !strings.Contains(line, "=") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if unquoted, err := strconv.Unquote(value); err == nil {
+			value = unquoted
+		}
+		if key != "" {
+			current.fields[key] = value
+		}
+	}
+	return sections
+}
+
+func mergeUnraidDiskINI(storage *agentshost.UnraidStorage, iniDisks []agentshost.UnraidDisk) *agentshost.UnraidStorage {
+	if storage == nil {
+		storage = &agentshost.UnraidStorage{}
+	}
+	if len(iniDisks) == 0 {
+		return storage
+	}
+
+	merged := make([]agentshost.UnraidDisk, 0, len(storage.Disks)+len(iniDisks))
+	bySlot := make(map[int]int, len(storage.Disks))
+	for _, disk := range storage.Disks {
+		bySlot[disk.Slot] = len(merged)
+		merged = append(merged, disk)
+	}
+
+	for _, disk := range iniDisks {
+		if pos, ok := bySlot[disk.Slot]; ok {
+			merged[pos] = mergeUnraidDisk(merged[pos], disk)
+			continue
+		}
+		bySlot[disk.Slot] = len(merged)
+		merged = append(merged, disk)
+	}
+
+	sort.SliceStable(merged, func(i, j int) bool {
+		return merged[i].Slot < merged[j].Slot
+	})
+	storage.Disks = merged
+	return storage
+}
+
+func mergeUnraidDisk(base, incoming agentshost.UnraidDisk) agentshost.UnraidDisk {
+	out := base
+	if strings.TrimSpace(incoming.Name) != "" {
+		out.Name = strings.TrimSpace(incoming.Name)
+	}
+	if strings.TrimSpace(incoming.Device) != "" {
+		out.Device = strings.TrimSpace(incoming.Device)
+	}
+	if strings.TrimSpace(incoming.Role) != "" {
+		out.Role = strings.TrimSpace(incoming.Role)
+	}
+	if strings.TrimSpace(incoming.Status) != "" {
+		out.Status = strings.TrimSpace(incoming.Status)
+	}
+	if strings.TrimSpace(incoming.RawStatus) != "" {
+		out.RawStatus = strings.TrimSpace(incoming.RawStatus)
+	}
+	if strings.TrimSpace(incoming.Model) != "" {
+		out.Model = strings.TrimSpace(incoming.Model)
+	}
+	if strings.TrimSpace(incoming.Serial) != "" {
+		out.Serial = strings.TrimSpace(incoming.Serial)
+	}
+	if strings.TrimSpace(incoming.Filesystem) != "" {
+		out.Filesystem = strings.TrimSpace(incoming.Filesystem)
+	}
+	if strings.TrimSpace(incoming.Transport) != "" {
+		out.Transport = strings.TrimSpace(incoming.Transport)
+	}
+	if incoming.SizeBytes > 0 {
+		out.SizeBytes = incoming.SizeBytes
+	}
+	if incoming.UsedBytes > 0 {
+		out.UsedBytes = incoming.UsedBytes
+	}
+	if incoming.FreeBytes > 0 {
+		out.FreeBytes = incoming.FreeBytes
+	}
+	if incoming.Temperature > 0 {
+		out.Temperature = incoming.Temperature
+	}
+	out.SpunDown = incoming.SpunDown
+	if incoming.ReadCount > 0 {
+		out.ReadCount = incoming.ReadCount
+	}
+	if incoming.WriteCount > 0 {
+		out.WriteCount = incoming.WriteCount
+	}
+	if incoming.ErrorCount > 0 {
+		out.ErrorCount = incoming.ErrorCount
+	}
+	if incoming.Slot > 0 || out.Slot == 0 {
+		out.Slot = incoming.Slot
+	}
+	return out
 }
 
 func collectUnraidIndexes(fields map[string]string) []int {
@@ -204,8 +386,26 @@ func inferUnraidDiskRole(name string, idx int) string {
 		return "flash"
 	case idx == 0:
 		return "parity"
+	case idx == 29:
+		return "parity"
+	case idx > 0 && idx < 29:
+		return "data"
+	case idx >= 30:
+		return "cache"
 	default:
 		return ""
+	}
+}
+
+func normalizeUnraidDiskRole(role string) string {
+	role = strings.ToLower(strings.TrimSpace(role))
+	switch role {
+	case "parity", "data", "cache", "flash":
+		return role
+	case "array":
+		return "data"
+	default:
+		return role
 	}
 }
 
@@ -324,6 +524,72 @@ func parseFirstInt64(values ...string) int64 {
 		}
 	}
 	return 0
+}
+
+func parseUnraidKiBAsBytes(value string) int64 {
+	parsed := parseFirstInt64(value)
+	if parsed <= 0 {
+		return 0
+	}
+	return parsed * 1024
+}
+
+func parseUnraidSizeBytes(fields map[string]string) int64 {
+	sectors := parseFirstInt64(fields["sectors"])
+	sectorSize := parseFirstInt64(fields["sector_size"])
+	if sectors > 0 && sectorSize > 0 {
+		return sectors * sectorSize
+	}
+	return parseUnraidKiBAsBytes(firstNonEmpty(fields["size"], fields["sizeSb"]))
+}
+
+func parseUnraidTemperature(value string) int {
+	value = strings.TrimSpace(value)
+	if value == "" || value == "*" || strings.EqualFold(value, "na") {
+		return 0
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 0 {
+		return 0
+	}
+	return parsed
+}
+
+func parseUnraidBool(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeUnraidTransport(transport string, rotational string) string {
+	transport = strings.ToLower(strings.TrimSpace(transport))
+	switch transport {
+	case "ata":
+		return "sata"
+	case "nvme", "sata", "sas", "usb":
+		return transport
+	}
+	if strings.TrimSpace(rotational) == "0" {
+		return "ssd"
+	}
+	return transport
+}
+
+func parseUnraidDiskIdentity(id string) (string, string) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "", ""
+	}
+	idx := strings.LastIndex(id, "_")
+	if idx <= 0 || idx >= len(id)-1 {
+		return strings.ReplaceAll(id, "_", " "), ""
+	}
+	model := strings.ReplaceAll(strings.TrimSpace(id[:idx]), "_", " ")
+	serial := strings.TrimSpace(id[idx+1:])
+	return model, serial
 }
 
 func parseFloatField(fields map[string]string, key string) (float64, bool) {

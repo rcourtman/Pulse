@@ -22,8 +22,19 @@ export type StoragePoolDetailLinkedDisk = {
   id: string;
   devPath: string;
   model: string;
+  role: string;
+  state: string;
+  sizeLabel: string;
   temperature: number;
   hasIssue: boolean;
+  spunDown: boolean;
+  errorCount: number;
+  ioLabel: string;
+};
+
+export type StoragePoolDetailTopologyRow = {
+  label: string;
+  value: string;
 };
 
 export type StoragePoolDetailChartTarget = {
@@ -85,7 +96,15 @@ export function buildStoragePoolDetailConfigRows(
     { label: 'Node', value: getStorageRecordNodeLabel(record) },
     { label: 'Type', value: getStorageRecordType(record) },
     { label: 'Status', value: getStorageRecordStatus(record) },
-    { label: 'Shared', value: getStorageRecordShared(record) === null ? '-' : getStorageRecordShared(record) ? 'Yes' : 'No' },
+    {
+      label: 'Shared',
+      value:
+        getStorageRecordShared(record) === null
+          ? '-'
+          : getStorageRecordShared(record)
+            ? 'Yes'
+            : 'No',
+    },
     { label: 'Used', value: totalBytes > 0 ? formatBytes(usedBytes) : 'n/a' },
     { label: 'Free', value: totalBytes > 0 ? formatBytes(freeBytes) : 'n/a' },
     { label: 'Total', value: totalBytes > 0 ? formatBytes(totalBytes) : 'n/a' },
@@ -99,7 +118,90 @@ export function buildStoragePoolDetailConfigRows(
   return rows;
 }
 
-export function buildStoragePoolDetailZfsSummary(record: StorageRecord): StoragePoolDetailZfsSummary | null {
+const getRecordDetails = (record: StorageRecord): Record<string, unknown> =>
+  (record.details || {}) as Record<string, unknown>;
+
+const readRecordDetailString = (record: StorageRecord, key: string): string => {
+  const value = getRecordDetails(record)[key];
+  return typeof value === 'string' ? value.trim() : '';
+};
+
+const readRecordDetailNumber = (record: StorageRecord, key: string): number => {
+  const value = getRecordDetails(record)[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+};
+
+const isUnraidStorageRecord = (record: StorageRecord): boolean => {
+  const platform = readRecordDetailString(record, 'platform').toLowerCase();
+  const type = getStorageRecordType(record).toLowerCase();
+  return record.source.platform === 'unraid' || platform === 'unraid' || type.startsWith('unraid-');
+};
+
+const getUnraidStorageGroup = (record: StorageRecord): string => {
+  if (!isUnraidStorageRecord(record)) return '';
+  const type = getStorageRecordType(record).toLowerCase();
+  const topology = readRecordDetailString(record, 'topology').toLowerCase();
+  if (type === 'unraid-array' || topology === 'array') return 'unraid-array';
+  if (type === 'unraid-cache-pool') return record.name.trim();
+  return '';
+};
+
+const pluralize = (count: number, singular: string, plural = `${singular}s`): string =>
+  `${count} ${count === 1 ? singular : plural}`;
+
+const titleizeStorageState = (value: string): string =>
+  value
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+
+export function buildStoragePoolDetailTopologyRows(
+  record: StorageRecord,
+  linkedDisks: StoragePoolDetailLinkedDisk[],
+): StoragePoolDetailTopologyRow[] {
+  if (!isUnraidStorageRecord(record)) return [];
+
+  const type = getStorageRecordType(record).toLowerCase();
+  const arrayState = readRecordDetailString(record, 'arrayState');
+  const syncAction = readRecordDetailString(record, 'syncAction');
+  const syncProgress = readRecordDetailNumber(record, 'syncProgress');
+  const parityDisks = linkedDisks.filter((disk) => disk.role.toLowerCase() === 'parity').length;
+  const dataDisks = linkedDisks.filter((disk) => disk.role.toLowerCase() === 'data').length;
+  const cacheDisks = linkedDisks.filter((disk) => disk.role.toLowerCase() === 'cache').length;
+  const errorCount = linkedDisks.reduce((sum, disk) => sum + disk.errorCount, 0);
+  const spunDownCount = linkedDisks.filter((disk) => disk.spunDown).length;
+
+  const rows: StoragePoolDetailTopologyRow[] = [];
+  rows.push({ label: 'Kind', value: type === 'unraid-cache-pool' ? 'Cache pool' : 'Array' });
+  if (arrayState) rows.push({ label: 'State', value: titleizeStorageState(arrayState) });
+  if (type === 'unraid-array') {
+    rows.push({
+      label: 'Parity',
+      value: parityDisks > 0 ? pluralize(parityDisks, 'disk') : 'None configured',
+    });
+    rows.push({ label: 'Data disks', value: pluralize(dataDisks, 'disk') });
+  } else {
+    rows.push({ label: 'Devices', value: pluralize(cacheDisks || linkedDisks.length, 'disk') });
+  }
+  if (spunDownCount > 0) {
+    rows.push({ label: 'Spun down', value: pluralize(spunDownCount, 'disk') });
+  }
+  if (errorCount > 0) {
+    rows.push({ label: 'Disk errors', value: errorCount.toLocaleString() });
+  }
+  if (syncAction) {
+    rows.push({
+      label: 'Sync',
+      value: syncProgress > 0 ? `${syncAction} (${Math.round(syncProgress)}%)` : syncAction,
+    });
+  }
+  return rows;
+}
+
+export function buildStoragePoolDetailZfsSummary(
+  record: StorageRecord,
+): StoragePoolDetailZfsSummary | null {
   const pool = getStorageRecordZfsPool(record);
   if (!pool) return null;
 
@@ -114,36 +216,87 @@ export function buildStoragePoolDetailZfsSummary(record: StorageRecord): Storage
   };
 }
 
-const readDiskDevPath = (disk: Resource): string => {
-  const physicalDisk = (disk.platformData as Record<string, unknown>)?.physicalDisk as
-    | Record<string, unknown>
+const readPhysicalDisk = (disk: Resource): NonNullable<Resource['physicalDisk']> => {
+  const platformData = (disk.platformData || {}) as Record<string, unknown>;
+  const platformDisk = platformData.physicalDisk as
+    | NonNullable<Resource['physicalDisk']>
     | undefined;
-  return typeof physicalDisk?.devPath === 'string' ? physicalDisk.devPath : '';
+  return (disk.physicalDisk || platformDisk || {}) as NonNullable<Resource['physicalDisk']>;
+};
+
+const readDiskDevPath = (disk: Resource): string => {
+  const physicalDisk = readPhysicalDisk(disk);
+  return typeof physicalDisk.devPath === 'string' ? physicalDisk.devPath : '';
 };
 
 const readDiskModel = (disk: Resource): string => {
-  const physicalDisk = (disk.platformData as Record<string, unknown>)?.physicalDisk as
-    | Record<string, unknown>
-    | undefined;
-  return typeof physicalDisk?.model === 'string' && physicalDisk.model.trim()
+  const physicalDisk = readPhysicalDisk(disk);
+  return typeof physicalDisk.model === 'string' && physicalDisk.model.trim()
     ? physicalDisk.model
     : 'Unknown';
 };
 
 const readDiskTemperature = (disk: Resource): number => {
-  const physicalDisk = (disk.platformData as Record<string, unknown>)?.physicalDisk as
-    | Record<string, unknown>
-    | undefined;
-  return typeof physicalDisk?.temperature === 'number' ? physicalDisk.temperature : 0;
+  const physicalDisk = readPhysicalDisk(disk);
+  return typeof physicalDisk.temperature === 'number' ? physicalDisk.temperature : 0;
 };
 
 const readDiskHasIssue = (disk: Resource): boolean => {
-  const physicalDisk = (disk.platformData as Record<string, unknown>)?.physicalDisk as
-    | Record<string, unknown>
-    | undefined;
-  const smart = physicalDisk?.smart as Record<string, unknown> | undefined;
+  const physicalDisk = readPhysicalDisk(disk);
+  const smart = physicalDisk.smart as Record<string, unknown> | undefined;
   const reallocated = smart?.reallocatedSectors;
-  return typeof reallocated === 'number' && reallocated > 0;
+  const errorCount = typeof physicalDisk.errorCount === 'number' ? physicalDisk.errorCount : 0;
+  return errorCount > 0 || (typeof reallocated === 'number' && reallocated > 0);
+};
+
+const readDiskStorageGroup = (disk: Resource): string => {
+  const physicalDisk = readPhysicalDisk(disk);
+  return typeof physicalDisk.storageGroup === 'string' ? physicalDisk.storageGroup.trim() : '';
+};
+
+const readDiskRole = (disk: Resource): string => {
+  const physicalDisk = readPhysicalDisk(disk);
+  return typeof physicalDisk.storageRole === 'string' ? physicalDisk.storageRole.trim() : '';
+};
+
+const readDiskState = (disk: Resource): string => {
+  const physicalDisk = readPhysicalDisk(disk);
+  return typeof physicalDisk.storageState === 'string' ? physicalDisk.storageState.trim() : '';
+};
+
+const readDiskSizeLabel = (disk: Resource): string => {
+  const physicalDisk = readPhysicalDisk(disk);
+  return typeof physicalDisk.sizeBytes === 'number' && physicalDisk.sizeBytes > 0
+    ? formatBytes(physicalDisk.sizeBytes)
+    : '';
+};
+
+const readDiskSpunDown = (disk: Resource): boolean => readPhysicalDisk(disk).spunDown === true;
+
+const readDiskErrorCount = (disk: Resource): number => {
+  const count = readPhysicalDisk(disk).errorCount;
+  return typeof count === 'number' && Number.isFinite(count) ? count : 0;
+};
+
+const readDiskIOLabel = (disk: Resource): string => {
+  const physicalDisk = readPhysicalDisk(disk);
+  const readCount = typeof physicalDisk.readCount === 'number' ? physicalDisk.readCount : 0;
+  const writeCount = typeof physicalDisk.writeCount === 'number' ? physicalDisk.writeCount : 0;
+  if (readCount <= 0 && writeCount <= 0) return '';
+  return `R ${readCount.toLocaleString()} / W ${writeCount.toLocaleString()}`;
+};
+
+const diskRoleRank = (role: string): number => {
+  switch (role.toLowerCase()) {
+    case 'parity':
+      return 0;
+    case 'data':
+      return 1;
+    case 'cache':
+      return 2;
+    default:
+      return 3;
+  }
 };
 
 export function getStoragePoolLinkedDisks(
@@ -151,18 +304,37 @@ export function getStoragePoolLinkedDisks(
   physicalDisks: Resource[],
 ): StoragePoolDetailLinkedDisk[] {
   const pool = getStorageRecordZfsPool(record);
-  if (!pool?.devices?.length) return [];
+  const unraidStorageGroup = getUnraidStorageGroup(record).toLowerCase();
+  const directParentIds = new Set(
+    [record.id, record.refs?.resourceId].filter((value): value is string => Boolean(value)),
+  );
 
   return physicalDisks
     .filter((disk) => {
       const devPath = readDiskDevPath(disk);
-      return devPath && pool.devices.some((device) => devPath.endsWith(device.name));
+      const group = readDiskStorageGroup(disk).toLowerCase();
+      if (directParentIds.has(disk.parentId || '')) return true;
+      if (pool?.devices?.length && devPath) {
+        return pool.devices.some((device) => devPath.endsWith(device.name));
+      }
+      return Boolean(unraidStorageGroup && group === unraidStorageGroup);
     })
     .map((disk) => ({
       id: disk.id,
       devPath: readDiskDevPath(disk) || disk.name,
       model: readDiskModel(disk),
+      role: readDiskRole(disk),
+      state: readDiskState(disk),
+      sizeLabel: readDiskSizeLabel(disk),
       temperature: readDiskTemperature(disk),
       hasIssue: readDiskHasIssue(disk),
-    }));
+      spunDown: readDiskSpunDown(disk),
+      errorCount: readDiskErrorCount(disk),
+      ioLabel: readDiskIOLabel(disk),
+    }))
+    .sort((left, right) => {
+      const roleDelta = diskRoleRank(left.role) - diskRoleRank(right.role);
+      if (roleDelta !== 0) return roleDelta;
+      return left.devPath.localeCompare(right.devPath);
+    });
 }

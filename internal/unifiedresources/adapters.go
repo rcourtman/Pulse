@@ -3,6 +3,7 @@ package unifiedresources
 import (
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -240,16 +241,26 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	if host.Unraid != nil {
 		disks := make([]HostUnraidDiskMeta, len(host.Unraid.Disks))
 		for i, disk := range host.Unraid.Disks {
+			sizeBytes := unraidDiskSizeBytes(host, disk)
 			disks[i] = HostUnraidDiskMeta{
-				Name:       disk.Name,
-				Device:     disk.Device,
-				Role:       disk.Role,
-				Status:     disk.Status,
-				RawStatus:  disk.RawStatus,
-				Serial:     disk.Serial,
-				Filesystem: disk.Filesystem,
-				SizeBytes:  disk.SizeBytes,
-				Slot:       disk.Slot,
+				Name:        disk.Name,
+				Device:      disk.Device,
+				Role:        disk.Role,
+				Status:      disk.Status,
+				RawStatus:   disk.RawStatus,
+				Model:       disk.Model,
+				Serial:      disk.Serial,
+				Filesystem:  disk.Filesystem,
+				Transport:   disk.Transport,
+				SizeBytes:   sizeBytes,
+				UsedBytes:   disk.UsedBytes,
+				FreeBytes:   disk.FreeBytes,
+				Temperature: disk.Temperature,
+				SpunDown:    disk.SpunDown,
+				ReadCount:   disk.ReadCount,
+				WriteCount:  disk.WriteCount,
+				ErrorCount:  disk.ErrorCount,
+				Slot:        disk.Slot,
 			}
 		}
 		assessment := storagehealth.AssessUnraidStorage(*host.Unraid)
@@ -500,6 +511,92 @@ func resourceFromHostUnraidStorage(host models.Host) (Resource, ResourceIdentity
 	return resource, identity
 }
 
+func resourceFromHostUnraidCacheStorage(host models.Host, disk models.HostUnraidDisk) (Resource, ResourceIdentity) {
+	name := unraidCachePoolName(disk)
+	if name == "" {
+		name = "cache"
+	}
+	total, used, _, percent := unraidDiskCapacityForHost(host, disk)
+	resource := Resource{
+		Type:       ResourceTypeStorage,
+		Technology: "unraid",
+		Name:       name,
+		Status:     statusFromString(firstNonEmpty(disk.Status, host.Status)),
+		LastSeen:   host.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Metrics:    metricsFromUnraidDiskCapacity(total, used, percent),
+		Storage: &StorageMeta{
+			Type:         "unraid-cache-pool",
+			Content:      "files",
+			ContentTypes: []string{"files"},
+			Shared:       false,
+			Enabled:      true,
+			Active:       strings.EqualFold(strings.TrimSpace(disk.Status), "online"),
+			IsCeph:       false,
+			IsZFS:        strings.EqualFold(strings.TrimSpace(disk.Filesystem), "zfs"),
+			Platform:     "unraid",
+			Topology:     "pool",
+			Protection:   "none",
+			Path:         "/mnt/" + name,
+		},
+		Tags: uniqueStrings([]string{
+			"unraid",
+			"storage",
+			"cache",
+			strings.TrimSpace(disk.Filesystem),
+		}),
+	}
+	identity := ResourceIdentity{
+		MachineID: hostUnraidCacheStorageIdentity(host, disk),
+		Hostnames: uniqueStrings([]string{
+			host.Hostname,
+			host.Hostname + ":unraid-cache:" + name,
+		}),
+	}
+	return resource, identity
+}
+
+func resourceFromHostUnraidPhysicalDisk(host models.Host, disk models.HostUnraidDisk) (Resource, ResourceIdentity) {
+	model := strings.TrimSpace(disk.Model)
+	name := firstNonEmpty(model, disk.Name, disk.Device, host.Hostname)
+	health := unraidPhysicalDiskHealth(disk)
+	assessment := assessUnraidPhysicalDisk(disk)
+	sizeBytes := unraidDiskSizeBytes(host, disk)
+	resource := Resource{
+		Type:      ResourceTypePhysicalDisk,
+		Name:      name,
+		Status:    physicalDiskStatus(model, health, assessment),
+		LastSeen:  host.LastSeen,
+		UpdatedAt: time.Now().UTC(),
+		PhysicalDisk: &PhysicalDiskMeta{
+			DevPath:      strings.TrimSpace(disk.Device),
+			Model:        model,
+			Serial:       strings.TrimSpace(disk.Serial),
+			DiskType:     unraidDiskDiskType(disk),
+			SizeBytes:    sizeBytes,
+			Health:       health,
+			Wearout:      -1,
+			Temperature:  disk.Temperature,
+			Used:         unraidDiskMountPath(disk),
+			StorageRole:  unraidDiskRole(&disk),
+			StorageGroup: unraidDiskGroup(&disk),
+			StorageState: strings.TrimSpace(disk.Status),
+			SpunDown:     disk.SpunDown,
+			ReadCount:    disk.ReadCount,
+			WriteCount:   disk.WriteCount,
+			ErrorCount:   disk.ErrorCount,
+			Risk:         physicalDiskRiskFromAssessment(assessment),
+		},
+	}
+	identity := ResourceIdentity{
+		Hostnames: uniqueStrings([]string{host.Hostname}),
+	}
+	if serial := strings.TrimSpace(disk.Serial); serial != "" {
+		identity.MachineID = serial
+	}
+	return resource, identity
+}
+
 func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Resource, ResourceIdentity) {
 	name := strings.TrimSpace(disk.Model)
 	if name == "" {
@@ -510,9 +607,9 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 	}
 
 	var matchedDisk *models.Disk
-	normalizedDevice := strings.TrimSpace(strings.TrimPrefix(disk.Device, "/dev/"))
+	normalizedDevice := strings.ToLower(normalizePhysicalDiskDeviceToken(disk.Device))
 	for i := range host.Disks {
-		hostDevice := strings.TrimSpace(strings.TrimPrefix(host.Disks[i].Device, "/dev/"))
+		hostDevice := strings.ToLower(normalizePhysicalDiskDeviceToken(host.Disks[i].Device))
 		if normalizedDevice == "" || hostDevice == "" {
 			continue
 		}
@@ -529,7 +626,35 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 		used = strings.TrimSpace(matchedDisk.Mountpoint)
 	}
 	unraidDisk := matchUnraidDisk(host.Unraid, disk)
+	model := strings.TrimSpace(disk.Model)
+	serial := strings.TrimSpace(disk.Serial)
+	diskType := strings.TrimSpace(disk.Type)
+	temperature := disk.Temperature
+	health := strings.TrimSpace(disk.Health)
+	if unraidDisk != nil {
+		if model == "" {
+			model = strings.TrimSpace(unraidDisk.Model)
+		}
+		if serial == "" {
+			serial = strings.TrimSpace(unraidDisk.Serial)
+		}
+		if diskType == "" {
+			diskType = unraidDiskDiskType(*unraidDisk)
+		}
+		if sizeBytes <= 0 {
+			sizeBytes = unraidDiskSizeBytes(host, *unraidDisk)
+		}
+		if temperature <= 0 {
+			temperature = unraidDisk.Temperature
+		}
+		if health == "" || strings.EqualFold(health, "UNKNOWN") {
+			health = unraidPhysicalDiskHealth(*unraidDisk)
+		}
+	}
 	assessment := storagehealth.AssessHostSMARTDisk(disk)
+	if unraidDisk != nil {
+		assessment = storagehealth.SummarizeAssessments(assessment, assessUnraidPhysicalDisk(*unraidDisk))
+	}
 
 	storageGroup := unraidDiskGroup(unraidDisk)
 	if storageGroup == "" {
@@ -538,24 +663,28 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 
 	resource := Resource{
 		Type:      ResourceTypePhysicalDisk,
-		Name:      name,
-		Status:    physicalDiskStatus(disk.Model, disk.Health, assessment),
+		Name:      firstNonEmpty(model, name),
+		Status:    physicalDiskStatus(model, health, assessment),
 		LastSeen:  host.LastSeen,
 		UpdatedAt: time.Now().UTC(),
 		PhysicalDisk: &PhysicalDiskMeta{
 			DevPath:      strings.TrimSpace(disk.Device),
-			Model:        strings.TrimSpace(disk.Model),
-			Serial:       strings.TrimSpace(disk.Serial),
+			Model:        model,
+			Serial:       serial,
 			WWN:          strings.TrimSpace(disk.WWN),
-			DiskType:     strings.TrimSpace(disk.Type),
+			DiskType:     diskType,
 			SizeBytes:    sizeBytes,
-			Health:       strings.TrimSpace(disk.Health),
+			Health:       health,
 			Wearout:      -1,
-			Temperature:  disk.Temperature,
+			Temperature:  temperature,
 			Used:         used,
 			StorageRole:  unraidDiskRole(unraidDisk),
 			StorageGroup: storageGroup,
 			StorageState: unraidDiskState(unraidDisk),
+			SpunDown:     unraidDisk != nil && unraidDisk.SpunDown,
+			ReadCount:    unraidDiskCounter(unraidDisk, "read"),
+			WriteCount:   unraidDiskCounter(unraidDisk, "write"),
+			ErrorCount:   unraidDiskCounter(unraidDisk, "error"),
 			SMART:        convertSMARTAttributes(disk.Attributes),
 			Risk:         physicalDiskRiskFromAssessment(assessment),
 		},
@@ -564,8 +693,8 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 	identity := ResourceIdentity{
 		Hostnames: uniqueStrings([]string{host.Hostname}),
 	}
-	if disk.Serial != "" {
-		identity.MachineID = strings.TrimSpace(disk.Serial)
+	if serial != "" {
+		identity.MachineID = serial
 	} else if disk.WWN != "" {
 		identity.MachineID = strings.TrimSpace(disk.WWN)
 	}
@@ -591,6 +720,33 @@ func hostUnraidStorageSourceID(host models.Host) string {
 	return hostID + "/storage:unraid-array"
 }
 
+func hostUnraidCacheStorageIdentity(host models.Host, disk models.HostUnraidDisk) string {
+	pool := unraidCachePoolName(disk)
+	if pool == "" {
+		return ""
+	}
+	if machineID := strings.TrimSpace(host.MachineID); machineID != "" {
+		return machineID + "/storage/unraid-cache/" + pool
+	}
+	if hostname := strings.TrimSpace(host.Hostname); hostname != "" {
+		return hostname + "/storage/unraid-cache/" + pool
+	}
+	return ""
+}
+
+func hostUnraidCacheStorageSourceID(host models.Host, disk models.HostUnraidDisk) string {
+	hostID := strings.TrimSpace(host.ID)
+	pool := unraidCachePoolName(disk)
+	if hostID == "" || pool == "" {
+		return ""
+	}
+	return hostID + "/storage:unraid-cache:" + pool
+}
+
+func unraidCachePoolName(disk models.HostUnraidDisk) string {
+	return strings.TrimSpace(firstNonEmpty(disk.Name, strings.TrimPrefix(disk.Device, "/dev/")))
+}
+
 func unraidStoragePath(host models.Host) string {
 	for _, disk := range host.Disks {
 		mount := strings.TrimSpace(disk.Mountpoint)
@@ -600,6 +756,21 @@ func unraidStoragePath(host models.Host) string {
 		}
 	}
 	return "/mnt/user"
+}
+
+func unraidDiskMountPath(disk models.HostUnraidDisk) string {
+	name := strings.TrimSpace(disk.Name)
+	switch unraidDiskRole(&disk) {
+	case "data":
+		if name != "" {
+			return "/mnt/" + name
+		}
+	case "cache":
+		if name != "" {
+			return "/mnt/" + name
+		}
+	}
+	return ""
 }
 
 func unraidStorageCapacity(host models.Host) (int64, int64, int64, float64) {
@@ -622,7 +793,14 @@ func unraidStorageCapacity(host models.Host) (int64, int64, int64, float64) {
 	var used int64
 	var free int64
 	for _, disk := range host.Unraid.Disks {
-		if strings.TrimSpace(disk.Role) != "data" {
+		if unraidDiskRole(&disk) != "data" {
+			continue
+		}
+		diskTotal, diskUsed, diskFree, _ := unraidDiskCapacityForHost(host, disk)
+		if diskTotal > 0 {
+			total += diskTotal
+			used += diskUsed
+			free += diskFree
 			continue
 		}
 		device := strings.TrimSpace(strings.TrimPrefix(strings.ToLower(disk.Device), "/dev/"))
@@ -638,19 +816,127 @@ func unraidStorageCapacity(host models.Host) (int64, int64, int64, float64) {
 	return total, used, free, (float64(used) / float64(total)) * 100
 }
 
+func unraidDiskCapacity(disk models.HostUnraidDisk) (int64, int64, int64, float64) {
+	used := disk.UsedBytes
+	free := disk.FreeBytes
+	total := used + free
+	if total <= 0 {
+		total = disk.SizeBytes
+	}
+	percent := float64(0)
+	if total > 0 && used > 0 {
+		percent = (float64(used) / float64(total)) * 100
+	}
+	return total, used, free, percent
+}
+
+func unraidDiskCapacityForHost(host models.Host, disk models.HostUnraidDisk) (int64, int64, int64, float64) {
+	total, used, free, percent := unraidDiskCapacity(disk)
+	if used <= 0 && free <= 0 {
+		total = unraidDiskSizeBytes(host, disk)
+	}
+	if total > 0 && used > 0 {
+		percent = (float64(used) / float64(total)) * 100
+	}
+	return total, used, free, percent
+}
+
+func unraidDiskSizeBytes(host models.Host, disk models.HostUnraidDisk) int64 {
+	size := disk.SizeBytes
+	if size <= 0 {
+		return 0
+	}
+	if !shouldScaleLegacyUnraidKiBSize(host, disk, size) {
+		return size
+	}
+	if size > maxInt64()/1024 {
+		return size
+	}
+	return size * 1024
+}
+
+func shouldScaleLegacyUnraidKiBSize(host models.Host, disk models.HostUnraidDisk, size int64) bool {
+	const maxPlausibleLegacyKiBValue = int64(100_000_000_000)
+	if size <= 0 || size >= maxPlausibleLegacyKiBValue {
+		return false
+	}
+
+	if total := disk.UsedBytes + disk.FreeBytes; legacyKiBMatchesTotal(total, size) {
+		return true
+	}
+
+	role := unraidDiskRole(&disk)
+	switch role {
+	case "data", "parity":
+		arrayTotal := unraidArrayMountTotal(host)
+		if arrayTotal <= 0 || host.Unraid == nil {
+			return false
+		}
+		var rawDataTotal int64
+		for _, candidate := range host.Unraid.Disks {
+			if unraidDiskRole(&candidate) != "data" || candidate.SizeBytes <= 0 {
+				continue
+			}
+			rawDataTotal += candidate.SizeBytes
+		}
+		return legacyKiBMatchesTotal(arrayTotal, rawDataTotal)
+	case "cache":
+		return legacyKiBMatchesTotal(unraidDiskMountTotal(host, disk), size)
+	default:
+		return false
+	}
+}
+
+func legacyKiBMatchesTotal(total int64, rawKiB int64) bool {
+	if total <= 0 || rawKiB <= 0 || rawKiB > maxInt64()/1024 {
+		return false
+	}
+	scaled := rawKiB * 1024
+	lower := scaled - scaled/20
+	upper := scaled + scaled/20
+	return total >= lower && total <= upper
+}
+
+func unraidArrayMountTotal(host models.Host) int64 {
+	for _, disk := range host.Disks {
+		mount := strings.TrimSpace(disk.Mountpoint)
+		if (mount == "/mnt/user" || mount == "/mnt/user0") && disk.Total > 0 {
+			return disk.Total
+		}
+	}
+	return 0
+}
+
+func unraidDiskMountTotal(host models.Host, disk models.HostUnraidDisk) int64 {
+	mountPath := unraidDiskMountPath(disk)
+	if mountPath == "" {
+		return 0
+	}
+	for _, mounted := range host.Disks {
+		if strings.TrimSpace(mounted.Mountpoint) == mountPath && mounted.Total > 0 {
+			return mounted.Total
+		}
+	}
+	return 0
+}
+
+func maxInt64() int64 {
+	return int64(^uint64(0) >> 1)
+}
+
 func matchUnraidDisk(unraid *models.HostUnraidStorage, disk models.HostDiskSMART) *models.HostUnraidDisk {
 	if unraid == nil || len(unraid.Disks) == 0 {
 		return nil
 	}
 
-	normalizedDevice := strings.TrimSpace(strings.TrimPrefix(strings.ToLower(disk.Device), "/dev/"))
+	normalizedDevice := strings.ToLower(normalizePhysicalDiskDeviceToken(disk.Device))
 	normalizedSerial := strings.TrimSpace(strings.ToLower(disk.Serial))
 	for i := range unraid.Disks {
 		candidate := &unraid.Disks[i]
 		if normalizedSerial != "" && strings.EqualFold(strings.TrimSpace(candidate.Serial), normalizedSerial) {
 			return candidate
 		}
-		candidateDevice := strings.TrimSpace(strings.TrimPrefix(strings.ToLower(candidate.Device), "/dev/"))
+		candidateDevice := strings.ToLower(normalizePhysicalDiskDeviceToken(candidate.Device))
 		if normalizedDevice != "" && candidateDevice != "" && candidateDevice == normalizedDevice {
 			return candidate
 		}
@@ -662,19 +948,33 @@ func unraidDiskRole(disk *models.HostUnraidDisk) string {
 	if disk == nil {
 		return ""
 	}
-	return strings.TrimSpace(disk.Role)
+	role := strings.ToLower(strings.TrimSpace(disk.Role))
+	if role != "" {
+		return role
+	}
+	name := strings.ToLower(strings.TrimSpace(disk.Name))
+	switch {
+	case strings.HasPrefix(name, "parity"):
+		return "parity"
+	case strings.HasPrefix(name, "cache"):
+		return "cache"
+	case strings.HasPrefix(name, "disk"), strings.HasPrefix(name, "md"), disk.Slot > 0:
+		return "data"
+	default:
+		return ""
+	}
 }
 
 func unraidDiskGroup(disk *models.HostUnraidDisk) string {
 	if disk == nil {
 		return ""
 	}
-	role := strings.TrimSpace(disk.Role)
+	role := unraidDiskRole(disk)
 	switch role {
 	case "parity", "data":
 		return "unraid-array"
 	case "cache":
-		return "unraid-cache"
+		return unraidCachePoolName(*disk)
 	default:
 		return ""
 	}
@@ -685,6 +985,91 @@ func unraidDiskState(disk *models.HostUnraidDisk) string {
 		return ""
 	}
 	return strings.TrimSpace(disk.Status)
+}
+
+func unraidDiskCounter(disk *models.HostUnraidDisk, counter string) int64 {
+	if disk == nil {
+		return 0
+	}
+	switch counter {
+	case "read":
+		return disk.ReadCount
+	case "write":
+		return disk.WriteCount
+	case "error":
+		return disk.ErrorCount
+	default:
+		return 0
+	}
+}
+
+func unraidDiskDiskType(disk models.HostUnraidDisk) string {
+	transport := strings.ToLower(strings.TrimSpace(disk.Transport))
+	switch transport {
+	case "ata":
+		return "sata"
+	case "nvme", "sata", "sas", "ssd", "hdd", "usb":
+		return transport
+	default:
+		return transport
+	}
+}
+
+func unraidPhysicalDiskHealth(disk models.HostUnraidDisk) string {
+	switch strings.ToLower(strings.TrimSpace(disk.Status)) {
+	case "online":
+		return "PASSED"
+	case "disabled", "invalid", "missing", "wrong", "error":
+		return "FAILED"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func assessUnraidPhysicalDisk(disk models.HostUnraidDisk) storagehealth.Assessment {
+	assessment := storagehealth.AssessSample(storagehealth.Sample{
+		Model:       disk.Model,
+		Health:      unraidPhysicalDiskHealth(disk),
+		Temperature: disk.Temperature,
+		Wearout:     -1,
+	})
+	addReason := func(code string, severity storagehealth.RiskLevel, summary string) {
+		if strings.TrimSpace(summary) == "" {
+			return
+		}
+		assessment.Reasons = append(assessment.Reasons, storagehealth.Reason{
+			Code:     code,
+			Severity: severity,
+			Summary:  summary,
+		})
+		if incidentSeverityRank(severity) > incidentSeverityRank(assessment.Level) {
+			assessment.Level = severity
+		}
+	}
+	label := firstNonEmpty(disk.Name, disk.Device, disk.Serial, "disk")
+	status := strings.ToUpper(strings.TrimSpace(disk.Status))
+	switch strings.ToLower(strings.TrimSpace(disk.Status)) {
+	case "", "online":
+	default:
+		addReason("unraid_disk_state", storagehealth.RiskCritical, "Unraid disk "+label+" is "+status)
+	}
+	if disk.ErrorCount > 0 {
+		addReason("unraid_disk_errors", storagehealth.RiskWarning, "Unraid disk "+label+" reports "+int64Label(disk.ErrorCount)+" error(s)")
+	}
+	return assessment
+}
+
+func int64Label(value int64) string {
+	return strconv.FormatInt(value, 10)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity) {

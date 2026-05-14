@@ -8,6 +8,8 @@ import {
   getCompactStoragePoolProtectionTitle,
   getStoragePoolIssueTextClass,
   getStoragePoolProtectionTextClass,
+  getStoragePoolStateLabel,
+  getStoragePoolStateTextClass,
 } from '@/features/storageBackups/rowPresentation';
 
 const baseRecord = (): StorageRecord =>
@@ -40,6 +42,19 @@ describe('storage row presentation', () => {
     expect(getStoragePoolProtectionTextClass(record)).toBe('text-red-700 dark:text-red-300');
   });
 
+  it('keeps no-parity protection factual instead of rendering it as reduced-health state', () => {
+    const record = {
+      ...baseRecord(),
+      health: 'healthy',
+      protectionLabel: 'No parity',
+      protectionReduced: true,
+      details: { arrayState: 'STARTED' },
+    };
+    expect(getStoragePoolProtectionTextClass(record)).toBe('text-base-content');
+    expect(getStoragePoolStateLabel(record)).toBe('Started');
+    expect(getStoragePoolStateTextClass(record)).toBe('text-base-content');
+  });
+
   it('returns warning issue tone for warning storage rows', () => {
     const record = { ...baseRecord(), incidentSeverity: 'warning' };
     expect(getStoragePoolIssueTextClass(record)).toBe('text-amber-700 dark:text-amber-300');
@@ -60,7 +75,7 @@ describe('storage row presentation', () => {
       ...baseRecord(),
       issueLabel: 'Protection Reduced',
       issueSummary: 'Parity lost on array',
-      protectionLabel: 'Unprotected',
+      protectionLabel: 'No parity',
       protectionSummary: 'Parity lost on array',
       protectionReduced: true,
       incidentSeverity: 'critical',

@@ -495,12 +495,24 @@ func TestResourceFromHostSMARTDiskCarriesUnraidRole(t *testing.T) {
 		Unraid: &models.HostUnraidStorage{
 			ArrayStarted: true,
 			Disks: []models.HostUnraidDisk{
-				{Name: "parity", Device: "/dev/sdb", Role: "parity", Status: "online", Serial: "PARITY-1"},
+				{
+					Name:       "parity",
+					Device:     "/dev/sdb",
+					Role:       "parity",
+					Status:     "online",
+					Model:      "Seagate",
+					Serial:     "PARITY-1",
+					SizeBytes:  6_000_000_000_000,
+					SpunDown:   true,
+					ReadCount:  11,
+					WriteCount: 12,
+					ErrorCount: 16,
+				},
 			},
 		},
 		Sensors: models.HostSensorSummary{
 			SMART: []models.HostDiskSMART{
-				{Device: "/dev/sdb", Serial: "PARITY-1", Model: "Seagate"},
+				{Device: "sdb [sat]", Serial: "PARITY-1"},
 			},
 		},
 	}
@@ -514,5 +526,105 @@ func TestResourceFromHostSMARTDiskCarriesUnraidRole(t *testing.T) {
 	}
 	if resource.PhysicalDisk.StorageGroup != "unraid-array" {
 		t.Fatalf("storageGroup = %q, want unraid-array", resource.PhysicalDisk.StorageGroup)
+	}
+	if resource.PhysicalDisk.SizeBytes != 6_000_000_000_000 {
+		t.Fatalf("sizeBytes = %d, want unraid disk size", resource.PhysicalDisk.SizeBytes)
+	}
+	if resource.PhysicalDisk.Health != "PASSED" {
+		t.Fatalf("health = %q, want PASSED from Unraid online state", resource.PhysicalDisk.Health)
+	}
+	if !resource.PhysicalDisk.SpunDown || resource.PhysicalDisk.ReadCount != 11 || resource.PhysicalDisk.WriteCount != 12 || resource.PhysicalDisk.ErrorCount != 16 {
+		t.Fatalf("expected native Unraid disk counters, got %+v", resource.PhysicalDisk)
+	}
+}
+
+func TestResourceFromHostSMARTDiskInfersUnraidArrayRole(t *testing.T) {
+	host := models.Host{
+		ID:       "tower-host",
+		Hostname: "tower",
+		LastSeen: time.Now().UTC(),
+		Unraid: &models.HostUnraidStorage{
+			ArrayStarted: true,
+			Disks: []models.HostUnraidDisk{
+				{
+					Name:      "md1p1",
+					Device:    "/dev/sde",
+					Status:    "online",
+					SizeBytes: 6_000_000_000_000,
+					Slot:      1,
+				},
+			},
+		},
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{
+				{Device: "sde [sat]", Health: "UNKNOWN"},
+			},
+		},
+	}
+
+	resource, _ := resourceFromHostSMARTDisk(host, host.Sensors.SMART[0])
+	if resource.PhysicalDisk == nil {
+		t.Fatal("expected physical disk metadata")
+	}
+	if resource.PhysicalDisk.StorageRole != "data" {
+		t.Fatalf("storageRole = %q, want data", resource.PhysicalDisk.StorageRole)
+	}
+	if resource.PhysicalDisk.StorageGroup != "unraid-array" {
+		t.Fatalf("storageGroup = %q, want unraid-array", resource.PhysicalDisk.StorageGroup)
+	}
+	if resource.PhysicalDisk.SizeBytes != 6_000_000_000_000 {
+		t.Fatalf("sizeBytes = %d, want unraid disk size", resource.PhysicalDisk.SizeBytes)
+	}
+	if resource.PhysicalDisk.Health != "PASSED" {
+		t.Fatalf("health = %q, want PASSED from Unraid online state", resource.PhysicalDisk.Health)
+	}
+}
+
+func TestResourceFromHostSMARTDiskNormalizesLegacyUnraidKiBSize(t *testing.T) {
+	const legacyDiskKiB = int64(5_860_522_532)
+	const normalizedDiskBytes = legacyDiskKiB * 1024
+	host := models.Host{
+		ID:       "tower-host",
+		Hostname: "tower",
+		LastSeen: time.Now().UTC(),
+		Disks: []models.Disk{
+			{
+				Mountpoint: "/mnt/user",
+				Total:      normalizedDiskBytes * 4,
+				Used:       normalizedDiskBytes * 3,
+				Free:       normalizedDiskBytes,
+				Usage:      75,
+			},
+		},
+		Unraid: &models.HostUnraidStorage{
+			ArrayStarted: true,
+			Disks: []models.HostUnraidDisk{
+				{Name: "md1p1", Device: "/dev/sde", Status: "online", SizeBytes: legacyDiskKiB, Slot: 1},
+				{Name: "md2p1", Device: "/dev/sdd", Status: "online", SizeBytes: legacyDiskKiB, Slot: 2},
+				{Name: "md3p1", Device: "/dev/sdb", Status: "online", SizeBytes: legacyDiskKiB, Slot: 3},
+				{Name: "md4p1", Device: "/dev/sdc", Status: "online", SizeBytes: legacyDiskKiB, Slot: 4},
+			},
+		},
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{
+				{Device: "sde [sat]", Health: "UNKNOWN"},
+			},
+		},
+	}
+
+	resource, _ := resourceFromHostSMARTDisk(host, host.Sensors.SMART[0])
+	if resource.PhysicalDisk == nil {
+		t.Fatal("expected physical disk metadata")
+	}
+	if resource.PhysicalDisk.SizeBytes != normalizedDiskBytes {
+		t.Fatalf("sizeBytes = %d, want normalized Unraid bytes %d", resource.PhysicalDisk.SizeBytes, normalizedDiskBytes)
+	}
+
+	agentResource, _ := resourceFromHost(host)
+	if agentResource.Agent == nil || agentResource.Agent.Unraid == nil || len(agentResource.Agent.Unraid.Disks) == 0 {
+		t.Fatalf("expected agent Unraid metadata, got %+v", agentResource.Agent)
+	}
+	if got := agentResource.Agent.Unraid.Disks[0].SizeBytes; got != normalizedDiskBytes {
+		t.Fatalf("agent Unraid disk sizeBytes = %d, want %d", got, normalizedDiskBytes)
 	}
 }

@@ -71,6 +71,22 @@ func TestBuildMetricsTarget_UsesCanonicalAgentTypeForInfrastructureFamilies(t *t
 	}
 }
 
+func TestMetricsFromUnraidDiskCapacityUsesNativeCapacityFields(t *testing.T) {
+	metrics := metricsFromUnraidDiskCapacity(1_000, 650, 65)
+	if metrics == nil || metrics.Disk == nil {
+		t.Fatal("expected disk metrics from native Unraid capacity")
+	}
+	if metrics.Disk.Total == nil || *metrics.Disk.Total != 1_000 {
+		t.Fatalf("disk total = %#v, want 1000", metrics.Disk.Total)
+	}
+	if metrics.Disk.Used == nil || *metrics.Disk.Used != 650 {
+		t.Fatalf("disk used = %#v, want 650", metrics.Disk.Used)
+	}
+	if metrics.Disk.Percent != 65 || metrics.Disk.Source != SourceAgent {
+		t.Fatalf("unexpected disk metric projection: %+v", metrics.Disk)
+	}
+}
+
 func TestBuildMetricsTarget_CanonicalizesSourceIDWhitespace(t *testing.T) {
 	tests := []struct {
 		name          string

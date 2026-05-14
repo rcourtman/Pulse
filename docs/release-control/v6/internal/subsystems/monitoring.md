@@ -197,6 +197,14 @@ source/facet instead of treating the `storage` resource type as Proxmox by
 default. Appliance presentation details such as Unraid array identity may remain
 inside storage metadata, but agent-backed storage must stay canonical
 `platformType=agent`.
+Unraid ingest must preserve the agent's native disk topology fields through the
+monitoring model and read-state projection. `internal/monitoring/monitor_agents.go`
+and `internal/monitoring/monitor.go` must carry model, transport, filesystem,
+native capacity, used/free bytes, temperature, spin state, and read/write/error
+counters without requiring a parallel SMART row. Monitoring may normalize legacy
+statuses and filter empty slots, but it must not collapse assigned Unraid
+array/cache members back to generic host disks or discard native fields before
+unified resources builds storage and physical-disk resources.
 VMware vSphere now also has a locked phase-1 ingestion boundary under this
 lane. The admitted direction is vCenter-only in phase 1, and monitoring must
 stay API-first through the

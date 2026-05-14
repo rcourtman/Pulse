@@ -24,7 +24,7 @@ const STORAGE_POOL_TABLE_HEADER_CLASS =
   'overflow-hidden text-ellipsis whitespace-nowrap px-1 sm:px-1.5 lg:px-2 py-0.5 text-left text-[10px] sm:text-[11px] lg:text-xs font-medium uppercase tracking-wider';
 
 export const STORAGE_VIEW_OPTIONS: readonly StorageViewOption[] = [
-  { value: 'pools', label: 'Pools' },
+  { value: 'pools', label: 'Storage' },
   { value: 'disks', label: 'Physical Disks' },
 ];
 
@@ -38,8 +38,8 @@ export const getStoragePoolTableColumns = (
     colClassName: 'w-[34%] sm:w-[26%] md:w-[23%] xl:w-[18%]',
   },
   {
-    label: 'Primary Issue',
-    compactLabel: 'Issue',
+    label: 'State',
+    compactLabel: 'State',
     className: `${STORAGE_POOL_TABLE_HEADER_CLASS} w-[24%] sm:w-[20%] md:w-[17%] xl:w-[14%]`,
     colClassName: 'w-[24%] sm:w-[20%] md:w-[17%] xl:w-[14%]',
   },
@@ -143,7 +143,7 @@ export const getStoragePageBannerActionLabel = (kind: StoragePageBannerKind): st
 };
 
 export const getStorageTableHeading = (view: 'pools' | 'disks'): string =>
-  view === 'pools' ? 'Storage Pools' : 'Physical Disks';
+  view === 'pools' ? 'Storage' : 'Physical Disks';
 
 export const getStorageLoadingMessage = (): string => 'Loading storage resources...';
 

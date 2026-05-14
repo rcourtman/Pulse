@@ -8,6 +8,15 @@ export type ResourceStorageMeta = {
   content?: string;
   contentTypes?: string[];
   shared?: boolean;
+  path?: string;
+  protection?: string;
+  arrayState?: string;
+  syncAction?: string;
+  syncProgress?: number;
+  numProtected?: number;
+  numDisabled?: number;
+  numInvalid?: number;
+  numMissing?: number;
   isCeph?: boolean;
   isZfs?: boolean;
 };
@@ -45,6 +54,15 @@ const normalizeStorageMeta = (value: unknown): ResourceStorageMeta | null => {
     content: typeof candidate.content === 'string' ? candidate.content : undefined,
     contentTypes,
     shared: typeof candidate.shared === 'boolean' ? candidate.shared : undefined,
+    path: typeof candidate.path === 'string' ? candidate.path : undefined,
+    protection: typeof candidate.protection === 'string' ? candidate.protection : undefined,
+    arrayState: typeof candidate.arrayState === 'string' ? candidate.arrayState : undefined,
+    syncAction: typeof candidate.syncAction === 'string' ? candidate.syncAction : undefined,
+    syncProgress: typeof candidate.syncProgress === 'number' ? candidate.syncProgress : undefined,
+    numProtected: typeof candidate.numProtected === 'number' ? candidate.numProtected : undefined,
+    numDisabled: typeof candidate.numDisabled === 'number' ? candidate.numDisabled : undefined,
+    numInvalid: typeof candidate.numInvalid === 'number' ? candidate.numInvalid : undefined,
+    numMissing: typeof candidate.numMissing === 'number' ? candidate.numMissing : undefined,
     isCeph: typeof candidate.isCeph === 'boolean' ? candidate.isCeph : undefined,
     isZfs: typeof candidate.isZfs === 'boolean' ? candidate.isZfs : undefined,
   };

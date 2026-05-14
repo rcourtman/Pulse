@@ -213,6 +213,15 @@ placeholders rather than failed disks. Assigned disks may use `diskId`/`rdevId`
 as the serial fallback when Unraid does not expose a separate serial field, so
 monitoring receives stable disk identity without inventing host-profile or
 platform state from optional storage probe success.
+That Unraid runtime path must also prefer native appliance topology over
+generic block-device inference. The Unified Agent should best-effort merge
+`/var/local/emhttp/disks.ini` into the `mdcmd status` view and carry disk
+device, model, transport, filesystem, size, used/free capacity, temperature,
+spin state, read/write counters, and error counters in the report contract.
+Failure to read the native file must degrade to the existing mdcmd view without
+blocking host reporting, but successful native collection is the canonical
+source for Unraid array/cache membership; SMART rows are supplemental hardware
+telemetry, not the owner of Unraid storage topology.
 First-class platform hosts that also run the Pulse Agent must keep the same
 operator-facing system identity split: a Proxmox VE node may report a Debian
 runtime platform underneath, but the host-agent OS identity and infrastructure

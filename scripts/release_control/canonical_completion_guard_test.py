@@ -147,7 +147,6 @@ def first_matching_policy_id(rule: dict, rel: str) -> str:
 
 
 RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
-    "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
     "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
     "frontend-modern/src/pages/__tests__/Recovery.test.tsx",
     "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
@@ -1407,36 +1406,11 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
-    def test_recovery_summary_presentation_change_requires_storage_recovery_contract(self):
+    def test_retired_recovery_summary_presentation_stays_unowned(self):
         required = infer_impacted_subsystems(
             ["frontend-modern/src/utils/recoverySummaryPresentation.ts"]
         )
-        self.assertEqual(set(required), {"storage-recovery"})
-
-        recovery = required["storage-recovery"]
-        self.assertEqual(
-            recovery["contract"],
-            "docs/release-control/v6/internal/subsystems/storage-recovery.md",
-        )
-        self.assertEqual(
-            recovery["touched_runtime_files"],
-            ["frontend-modern/src/utils/recoverySummaryPresentation.ts"],
-        )
-        self.assertEqual(
-            recovery["verification_requirements"],
-            [
-                {
-                    "id": "recovery-product-surface",
-                    "label": "recovery product surface proof",
-                    "touched_runtime_files": [
-                        "frontend-modern/src/utils/recoverySummaryPresentation.ts"
-                    ],
-                    "allow_same_subsystem_tests": False,
-                    "test_prefixes": [],
-                    "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
-                }
-            ],
-        )
+        self.assertEqual(required, {})
 
     def test_recovery_record_presentation_change_requires_storage_recovery_contract(self):
         required = infer_impacted_subsystems(

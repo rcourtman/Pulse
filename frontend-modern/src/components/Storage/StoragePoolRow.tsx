@@ -1,9 +1,6 @@
 import { Component, Show, createMemo } from 'solid-js';
 import type { StorageRecord } from '@/features/storageBackups/models';
-import {
-  getStoragePoolIssueTextClass,
-  getStoragePoolProtectionTextClass,
-} from '@/features/storageBackups/rowPresentation';
+import { getStoragePoolProtectionTextClass } from '@/features/storageBackups/rowPresentation';
 import {
   buildStoragePoolRowModel,
   STORAGE_POOL_ROW_GROWTH_CELL_CLASS,
@@ -101,14 +98,14 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
 
         <td class={STORAGE_POOL_ROW_ISSUE_CELL_CLASS}>
           <Show
-            when={row().compactIssue !== '—'}
+            when={row().stateLabel !== '—'}
             fallback={<span class={STORAGE_POOL_ROW_PLACEHOLDER_CLASS}>—</span>}
           >
             <span
-              class={`${STORAGE_POOL_ROW_ISSUE_TEXT_CLASS} ${getStoragePoolIssueTextClass(props.record)}`}
-              title={row().compactIssueSummary || row().compactIssue}
+              class={`${STORAGE_POOL_ROW_ISSUE_TEXT_CLASS} ${row().stateToneClass}`}
+              title={row().stateTitle || row().stateLabel}
             >
-              {row().compactIssue}
+              {row().stateLabel}
             </span>
           </Show>
         </td>
@@ -171,7 +168,6 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
             {row().capacityDeltaLabel}
           </span>
         </td>
-
       </tr>
       <Show when={props.expanded}>
         <StoragePoolDetail

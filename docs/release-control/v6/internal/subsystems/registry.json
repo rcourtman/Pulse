@@ -4865,7 +4865,6 @@
         "frontend-modern/src/utils/recoveryOutcomePresentation.ts",
         "frontend-modern/src/utils/recoveryRecordPresentation.ts",
         "frontend-modern/src/utils/recoveryStatusPresentation.ts",
-        "frontend-modern/src/utils/recoverySummaryPresentation.ts",
         "frontend-modern/src/utils/recoveryTablePresentation.ts",
         "frontend-modern/src/utils/recoveryTimelineChartPresentation.ts",
         "frontend-modern/src/utils/recoveryTimelinePresentation.ts"
@@ -4875,7 +4874,6 @@
         "test_prefixes": [],
         "exact_files": [
           "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-          "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
           "frontend-modern/src/components/Storage/code_standards.test.ts",
           "frontend-modern/src/pages/__tests__/Recovery.test.tsx",
           "internal/recovery/recovery_test.go"
@@ -4925,7 +4923,6 @@
               "frontend-modern/src/utils/recoveryOutcomePresentation.ts",
               "frontend-modern/src/utils/recoveryRecordPresentation.ts",
               "frontend-modern/src/utils/recoveryStatusPresentation.ts",
-              "frontend-modern/src/utils/recoverySummaryPresentation.ts",
               "frontend-modern/src/utils/recoveryTablePresentation.ts",
               "frontend-modern/src/utils/recoveryTimelineChartPresentation.ts",
               "frontend-modern/src/utils/recoveryTimelinePresentation.ts"
@@ -4934,7 +4931,6 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-              "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
               "frontend-modern/src/pages/__tests__/Recovery.test.tsx",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "tests/integration/tests/17-recovery-layout.spec.ts"

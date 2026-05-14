@@ -21,12 +21,23 @@ func PreferredPhysicalDiskMetricID(serial, wwn, fallback string) string {
 }
 
 func HostSMARTDiskSourceID(host models.Host, disk models.HostDiskSMART) string {
-	device := strings.TrimSpace(strings.TrimPrefix(disk.Device, "/dev/"))
+	device := normalizePhysicalDiskDeviceToken(disk.Device)
 	fallback := ""
 	if device != "" {
 		fallback = fmt.Sprintf("%s:%s", strings.TrimSpace(host.ID), device)
 	}
 	return PreferredPhysicalDiskMetricID(disk.Serial, disk.WWN, fallback)
+}
+
+func HostUnraidDiskSourceID(host models.Host, disk models.HostUnraidDisk) string {
+	device := normalizePhysicalDiskDeviceToken(disk.Device)
+	fallback := ""
+	if device != "" {
+		fallback = fmt.Sprintf("%s:%s", strings.TrimSpace(host.ID), device)
+	} else if strings.TrimSpace(disk.Name) != "" {
+		fallback = fmt.Sprintf("%s:unraid-slot:%s", strings.TrimSpace(host.ID), strings.TrimSpace(disk.Name))
+	}
+	return PreferredPhysicalDiskMetricID(disk.Serial, "", fallback)
 }
 
 func PhysicalDiskMetricID(disk models.PhysicalDisk) string {
@@ -47,4 +58,12 @@ func PhysicalDiskMetaMetricID(disk *PhysicalDiskMeta, fallback string) string {
 		return strings.TrimSpace(fallback)
 	}
 	return PreferredPhysicalDiskMetricID(disk.Serial, disk.WWN, fallback)
+}
+
+func normalizePhysicalDiskDeviceToken(device string) string {
+	device = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(device), "/dev/"))
+	if fields := strings.Fields(device); len(fields) > 0 {
+		device = fields[0]
+	}
+	return strings.TrimSpace(device)
 }

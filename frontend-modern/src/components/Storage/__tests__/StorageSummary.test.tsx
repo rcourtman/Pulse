@@ -33,11 +33,13 @@ vi.mock('@/components/shared/InteractiveSparkline', () => ({
     activeSeriesDisplay?: string;
     hoverSourceKey?: string;
     hoverSync?: { seriesId: string } | null;
-    onHoverSyncChange?: (value: {
-      sourceKey: string;
-      seriesId: string;
-      timestamp: number;
-    } | null) => void;
+    onHoverSyncChange?: (
+      value: {
+        sourceKey: string;
+        seriesId: string;
+        timestamp: number;
+      } | null,
+    ) => void;
   }) => {
     const series = props.series ?? [];
     const triggerHover = () => {
@@ -207,7 +209,7 @@ describe('StorageSummary', () => {
     const poolIds = ['pool:alpha', 'pool:beta', 'pool:gamma'];
     const hoveredGroupScope: SummarySeriesGroupScope = {
       id: 'storage:node:pve1',
-      label: 'pve1 (2 pools)',
+      label: 'pve1 (2 storage items)',
       seriesIds: poolIds.slice(0, 2),
     };
     const data = buildSummaryData({
@@ -257,5 +259,4 @@ describe('StorageSummary', () => {
       }
     });
   });
-
 });

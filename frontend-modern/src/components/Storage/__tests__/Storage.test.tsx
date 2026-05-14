@@ -603,7 +603,7 @@ describe('Storage', () => {
     });
 
     const poolUsageChart = screen
-      .getByText('Pool Usage')
+      .getByText('Storage Usage')
       .closest('[data-summary-card-state]')
       ?.querySelector('svg');
     expect(poolUsageChart).not.toBeNull();
@@ -691,7 +691,7 @@ describe('Storage', () => {
     expect(screen.getByRole('columnheader', { name: 'Type' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Host' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Usage' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Primary Issue' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'State' })).toBeInTheDocument();
     expect(screen.getAllByText('PVE').length).toBeGreaterThan(0);
     expect(screen.getAllByText('pve1').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Protection Reduced').length).toBeGreaterThan(0);
@@ -760,7 +760,7 @@ describe('Storage', () => {
     expect((screen.getByLabelText('Sort by') as HTMLSelectElement).value).toBe('usage');
 
     // Grouping controls are only shown on the Pools view.
-    fireEvent.click(screen.getByRole('tab', { name: 'Pools' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Storage' }));
     expect(queryStorageChip('Group by')).toHaveTextContent('Group by:By status');
     expect(queryStorageChip('Source')).toHaveTextContent('Source:PVE');
     expect(queryStorageChip('Status')).toHaveTextContent('Status:Warning');
@@ -1226,7 +1226,7 @@ describe('Storage', () => {
       ).toBe(false);
       expect(
         screen
-          .getByText('Pool Usage')
+          .getByText('Storage Usage')
           .closest('[data-summary-card-state]')
           ?.getAttribute('data-summary-card-state'),
       ).toBe('active');
@@ -1815,7 +1815,7 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     expect(screen.getAllByRole('tablist', { name: 'Storage view' })[0]).toBeInTheDocument();
-    expect(screen.getAllByRole('tab', { name: 'Pools' })[0]).toHaveAttribute(
+    expect(screen.getAllByRole('tab', { name: 'Storage' })[0]).toHaveAttribute(
       'aria-selected',
       'true',
     );

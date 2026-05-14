@@ -76,7 +76,7 @@ describe('storagePagePresentation', () => {
     expect(STORAGE_POOLS_TABLE_CLASS).toBe('w-full table-fixed text-xs');
     expect(STORAGE_POOLS_HEADER_ROW_CLASS).toContain('bg-surface-alt');
     expect(STORAGE_POOLS_BODY_CLASS).toBe('divide-y divide-border');
-    expect(getStorageTableHeading('pools')).toBe('Storage Pools');
+    expect(getStorageTableHeading('pools')).toBe('Storage');
     expect(getStorageTableHeading('disks')).toBe('Physical Disks');
     expect(getStorageLoadingMessage()).toBe('Loading storage resources...');
     expect(getStorageEmptyStateMessage()).toBe('No storage records match the current filters.');
@@ -84,12 +84,12 @@ describe('storagePagePresentation', () => {
 
   it('exports canonical storage view and table column contracts', () => {
     expect(STORAGE_VIEW_OPTIONS).toEqual([
-      { value: 'pools', label: 'Pools' },
+      { value: 'pools', label: 'Storage' },
       { value: 'disks', label: 'Physical Disks' },
     ]);
     expect(getStoragePoolTableColumns('Growth (24h)').map((column) => column.label)).toEqual([
       'Storage',
-      'Primary Issue',
+      'State',
       'Source',
       'Type',
       'Host',
@@ -98,7 +98,7 @@ describe('storagePagePresentation', () => {
       'Growth (24h)',
     ]);
     expect(getStoragePoolTableColumns('Growth (24h)').map((column) => column.compactLabel)).toEqual(
-      ['Storage', 'Issue', 'Src', 'Type', 'Host', 'Prot', 'Used', '24h'],
+      ['Storage', 'State', 'Src', 'Type', 'Host', 'Prot', 'Used', '24h'],
     );
     expect(getStoragePoolTableColumns('Growth (24h)')[0].colClassName).toContain('xl:w-[18%]');
     expect(getStoragePoolTableColumns('Growth (24h)')[3].className).toContain(

@@ -1805,15 +1805,24 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 				continue
 			}
 			disks = append(disks, models.HostUnraidDisk{
-				Name:       strings.TrimSpace(disk.Name),
-				Device:     device,
-				Role:       strings.TrimSpace(disk.Role),
-				Status:     status,
-				RawStatus:  rawStatus,
-				Serial:     strings.TrimSpace(disk.Serial),
-				Filesystem: strings.TrimSpace(disk.Filesystem),
-				SizeBytes:  disk.SizeBytes,
-				Slot:       disk.Slot,
+				Name:        strings.TrimSpace(disk.Name),
+				Device:      device,
+				Role:        strings.TrimSpace(disk.Role),
+				Status:      status,
+				RawStatus:   rawStatus,
+				Model:       strings.TrimSpace(disk.Model),
+				Serial:      strings.TrimSpace(disk.Serial),
+				Filesystem:  strings.TrimSpace(disk.Filesystem),
+				Transport:   strings.TrimSpace(disk.Transport),
+				SizeBytes:   disk.SizeBytes,
+				UsedBytes:   disk.UsedBytes,
+				FreeBytes:   disk.FreeBytes,
+				Temperature: disk.Temperature,
+				SpunDown:    disk.SpunDown,
+				ReadCount:   disk.ReadCount,
+				WriteCount:  disk.WriteCount,
+				ErrorCount:  disk.ErrorCount,
+				Slot:        disk.Slot,
 			})
 		}
 		unraidData = &models.HostUnraidStorage{

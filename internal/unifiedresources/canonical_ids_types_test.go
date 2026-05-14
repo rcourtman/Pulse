@@ -1,6 +1,10 @@
 package unifiedresources
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+)
 
 func TestCanonicalResourceTypeDoesNotAliasHost(t *testing.T) {
 	if got := CanonicalResourceType(ResourceType("host")); got != ResourceType("host") {
@@ -195,6 +199,45 @@ func TestPhysicalDiskTemperatureAggregateDefaultsToNil(t *testing.T) {
 	}
 	if meta.TemperatureAggregate.WindowDays != 7 || meta.TemperatureAggregate.MaxCelsius != 38.0 {
 		t.Fatalf("unexpected temperature aggregate assignment: %+v", meta.TemperatureAggregate)
+	}
+}
+
+func TestHostUnraidDiskSourceIDNormalizesDeviceAndPrefersSerial(t *testing.T) {
+	host := models.Host{ID: "host-tower"}
+
+	tests := []struct {
+		name string
+		disk models.HostUnraidDisk
+		want string
+	}{
+		{
+			name: "plain dev path",
+			disk: models.HostUnraidDisk{Device: "/dev/sdd"},
+			want: "host-tower:sdd",
+		},
+		{
+			name: "smartctl transport suffix",
+			disk: models.HostUnraidDisk{Device: "sdf [sat]"},
+			want: "host-tower:sdf",
+		},
+		{
+			name: "serial wins",
+			disk: models.HostUnraidDisk{Device: "/dev/sdg", Serial: "SERIAL-DATA"},
+			want: "SERIAL-DATA",
+		},
+		{
+			name: "slot fallback",
+			disk: models.HostUnraidDisk{Name: "disk1"},
+			want: "host-tower:unraid-slot:disk1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HostUnraidDiskSourceID(host, tt.disk); got != tt.want {
+				t.Fatalf("HostUnraidDiskSourceID(%+v) = %q, want %q", tt.disk, got, tt.want)
+			}
+		})
 	}
 }
 

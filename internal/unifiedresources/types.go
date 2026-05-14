@@ -357,6 +357,10 @@ type PhysicalDiskMeta struct {
 	StorageRole          string                    `json:"storageRole,omitempty"`
 	StorageGroup         string                    `json:"storageGroup,omitempty"`
 	StorageState         string                    `json:"storageState,omitempty"`
+	SpunDown             bool                      `json:"spunDown,omitempty"`
+	ReadCount            int64                     `json:"readCount,omitempty"`
+	WriteCount           int64                     `json:"writeCount,omitempty"`
+	ErrorCount           int64                     `json:"errorCount,omitempty"`
 	SMART                *SMARTMeta                `json:"smart,omitempty"`
 	Risk                 *PhysicalDiskRisk         `json:"risk,omitempty"`
 }
@@ -487,15 +491,24 @@ type HostRAIDMeta struct {
 
 // HostUnraidDiskMeta describes a disk's role and state inside an Unraid array.
 type HostUnraidDiskMeta struct {
-	Name       string `json:"name"`
-	Device     string `json:"device,omitempty"`
-	Role       string `json:"role,omitempty"`
-	Status     string `json:"status,omitempty"`
-	RawStatus  string `json:"rawStatus,omitempty"`
-	Serial     string `json:"serial,omitempty"`
-	Filesystem string `json:"filesystem,omitempty"`
-	SizeBytes  int64  `json:"sizeBytes,omitempty"`
-	Slot       int    `json:"slot,omitempty"`
+	Name        string `json:"name"`
+	Device      string `json:"device,omitempty"`
+	Role        string `json:"role,omitempty"`
+	Status      string `json:"status,omitempty"`
+	RawStatus   string `json:"rawStatus,omitempty"`
+	Model       string `json:"model,omitempty"`
+	Serial      string `json:"serial,omitempty"`
+	Filesystem  string `json:"filesystem,omitempty"`
+	Transport   string `json:"transport,omitempty"`
+	SizeBytes   int64  `json:"sizeBytes,omitempty"`
+	UsedBytes   int64  `json:"usedBytes,omitempty"`
+	FreeBytes   int64  `json:"freeBytes,omitempty"`
+	Temperature int    `json:"temperature,omitempty"`
+	SpunDown    bool   `json:"spunDown,omitempty"`
+	ReadCount   int64  `json:"readCount,omitempty"`
+	WriteCount  int64  `json:"writeCount,omitempty"`
+	ErrorCount  int64  `json:"errorCount,omitempty"`
+	Slot        int    `json:"slot,omitempty"`
 }
 
 // HostUnraidMeta describes Unraid array topology from a host agent.

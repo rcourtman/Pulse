@@ -231,7 +231,26 @@ func TestBuildReport(t *testing.T) {
 				SyncAction:   "check",
 				Disks: []agentshost.UnraidDisk{
 					{Name: "parity", Role: "parity", Status: "online"},
-					{Name: "disk1", Role: "data", Status: "online"},
+					{
+						Name:        "disk1",
+						Device:      "/dev/sdc",
+						Role:        "data",
+						Status:      "online",
+						RawStatus:   "DISK_OK",
+						Model:       "WDC WD60EFRX",
+						Serial:      "DATA-1",
+						Filesystem:  "xfs",
+						Transport:   "sata",
+						SizeBytes:   6_000_000_000_000,
+						UsedBytes:   4_000,
+						FreeBytes:   2_000,
+						Temperature: 31,
+						SpunDown:    true,
+						ReadCount:   11,
+						WriteCount:  12,
+						ErrorCount:  1,
+						Slot:        1,
+					},
 				},
 			}, nil
 		}
@@ -250,6 +269,16 @@ func TestBuildReport(t *testing.T) {
 		}
 		if len(report.Unraid.Disks) != 2 {
 			t.Fatalf("expected 2 Unraid disks, got %d", len(report.Unraid.Disks))
+		}
+		disk := report.Unraid.Disks[1]
+		if disk.Model != "WDC WD60EFRX" || disk.Transport != "sata" || disk.SizeBytes != 6_000_000_000_000 {
+			t.Fatalf("expected enriched Unraid disk metadata, got %+v", disk)
+		}
+		if disk.UsedBytes != 4_000 || disk.FreeBytes != 2_000 || disk.Temperature != 31 || !disk.SpunDown {
+			t.Fatalf("expected native Unraid capacity and state fields, got %+v", disk)
+		}
+		if disk.ReadCount != 11 || disk.WriteCount != 12 || disk.ErrorCount != 1 {
+			t.Fatalf("expected native Unraid counters, got %+v", disk)
 		}
 		mc.unraidStorageFn = nil
 	})

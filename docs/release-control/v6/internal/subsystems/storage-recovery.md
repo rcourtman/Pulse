@@ -34,31 +34,29 @@ state.
 5. `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`
 6. `frontend-modern/src/components/Recovery/RecoveryProtectedInventorySection.tsx`
 7. `frontend-modern/src/components/Recovery/RecoveryActivitySection.tsx`
-8. `frontend-modern/src/components/Recovery/RecoverySummary.tsx`
-9. `frontend-modern/src/components/Recovery/RecoveryHistorySection.tsx`
-10. `frontend-modern/src/components/Recovery/RecoveryHistoryTable.tsx`
-11. `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`
-12. `frontend-modern/src/components/Recovery/useRecoveryHistorySectionState.ts`
-13. `frontend-modern/src/pages/Storage.tsx`
-14. `frontend-modern/src/pages/Ceph.tsx`
-15. `frontend-modern/src/components/Storage/Storage.tsx`
-16. `frontend-modern/src/features/storageBackups/storageModelCore.ts`
-17. `frontend-modern/src/utils/storageSources.ts`
-18. `frontend-modern/src/hooks/useRecoveryPoints.ts`
-19. `frontend-modern/src/hooks/useRecoveryRollups.ts`
-20. `frontend-modern/src/hooks/useRecoveryPointsFacets.ts`
-21. `frontend-modern/src/hooks/useRecoveryPointsSeries.ts`
-22. `frontend-modern/src/pages/Recovery.tsx`
-23. `frontend-modern/src/routing/resourceLinks.ts`
-24. `frontend-modern/src/types/recovery.ts`
-25. `frontend-modern/src/utils/recoverySummaryPresentation.ts`
-26. `frontend-modern/src/utils/recoveryTablePresentation.ts`
-27. `frontend-modern/src/utils/recoveryItemTypePresentation.ts`
-28. `frontend-modern/src/utils/textPresentation.ts`
-29. `frontend-modern/src/components/Storage/StorageSummary.tsx`
-30. `frontend-modern/src/utils/storageSummaryCache.ts`
-31. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
-32. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
+8. `frontend-modern/src/components/Recovery/RecoveryHistorySection.tsx`
+9. `frontend-modern/src/components/Recovery/RecoveryHistoryTable.tsx`
+10. `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`
+11. `frontend-modern/src/components/Recovery/useRecoveryHistorySectionState.ts`
+12. `frontend-modern/src/pages/Storage.tsx`
+13. `frontend-modern/src/pages/Ceph.tsx`
+14. `frontend-modern/src/components/Storage/Storage.tsx`
+15. `frontend-modern/src/features/storageBackups/storageModelCore.ts`
+16. `frontend-modern/src/utils/storageSources.ts`
+17. `frontend-modern/src/hooks/useRecoveryPoints.ts`
+18. `frontend-modern/src/hooks/useRecoveryRollups.ts`
+19. `frontend-modern/src/hooks/useRecoveryPointsFacets.ts`
+20. `frontend-modern/src/hooks/useRecoveryPointsSeries.ts`
+21. `frontend-modern/src/pages/Recovery.tsx`
+22. `frontend-modern/src/routing/resourceLinks.ts`
+23. `frontend-modern/src/types/recovery.ts`
+24. `frontend-modern/src/utils/recoveryTablePresentation.ts`
+25. `frontend-modern/src/utils/recoveryItemTypePresentation.ts`
+26. `frontend-modern/src/utils/textPresentation.ts`
+27. `frontend-modern/src/components/Storage/StorageSummary.tsx`
+28. `frontend-modern/src/utils/storageSummaryCache.ts`
+29. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
+30. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
 
 ## Shared Boundaries
 
@@ -140,11 +138,17 @@ bypass the API fail-closed execution gate.
    `overflow-x-auto` div around the shared table. Storage pools and physical
    disks inherit the surrounding `StorageContentCard` frame and must not add
    a nested `Card` or second scroll wrapper.
-   Recovery's Protected items and Recovery events sub-tabs each opt into
+   Recovery is event-first: the default `/recovery` surface is the recovery
+   events history, and protected-item rollups are a secondary Protection
+   coverage review reached from the explicit header action or
+   `view=inventory` compatibility links. Recovery must not present
+   protected rollups and recovery events as equal default sub-tabs because
+   workload backup posture already belongs on Workloads, while Recovery owns
+   concrete backup/snapshot/replication evidence. Both surfaces still opt into
    shared saved views (`savedViewsKey="recovery-protected"` and
-   `"recovery-events"`) so operators can save and recall named filter
-   combos through the shared `SavedViewsMenu`. The same pattern applies to
-   Storage (`savedViewsKey="storage"`).
+   `"recovery-events"`) so operators can save and recall named filter combos
+   through the shared `SavedViewsMenu`. The same pattern applies to Storage
+   (`savedViewsKey="storage"`).
    Recovery event filters now compose the shared chip-based `FilterBar`
    (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a
    `FilterDef[]` catalog. The legacy "advanced filter popover" retired: scope,
@@ -160,7 +164,7 @@ bypass the API fail-closed execution gate.
    route-backed event filter state and query semantics in its recovery owner
    rather than introducing a page-local presentation state path.
    Recovery inventory protection posture and recovery-event outcome filtering
-   must stay separate in that owner: protected inventory uses the route-backed
+   must stay separate in that owner: protection coverage uses the route-backed
    `state` query for health, stale, failed, warning, running, unknown, and
    never-succeeded states, while recovery events use `status` for event
    outcomes. Legacy `stale=1` input may hydrate the inventory `state=stale`
@@ -181,7 +185,10 @@ bypass the API fail-closed execution gate.
    bounded chart viewport with sparser labels so first, last, and selected-day
    context remain visible without overlapping labels. Selecting a timeline
    column remains route-backed and must not become component-local ephemeral
-   state.
+   state. The Recovery activity bar chart must use the frontend-primitives
+   shared chart slot height and matching plot-area height so it keeps visual
+   parity with the Workloads, Storage, and Infrastructure summary charts
+   without copying page-local chart sizing.
 3. Add or change storage page UX through `frontend-modern/src/pages/Storage.tsx`, `frontend-modern/src/pages/Ceph.tsx`, `frontend-modern/src/components/Storage/`, `frontend-modern/src/features/storageBackups/`, and the shared storage-source contract in `frontend-modern/src/utils/storageSources.ts`
    The retired dashboard route must not reintroduce storage or recovery
    widgets as compatibility panels. Storage capacity, storage health,
@@ -220,12 +227,18 @@ bypass the API fail-closed execution gate.
    must pass resolved thresholds from the alerts activation boundary into the
    shared metric-color helper instead of carrying storage-local usage color
    bands.
-   Storage primary-issue presentation must stay incident/risk-owned. Composite
+   Storage presentation is topology-first and factual. The Storage page should
+   show each platform's main storage shape in recognizable platform terms
+   (arrays, cache pools, pools, datastores, repositories, and physical media)
+   with capacity and health facts attached to that shape; it must not collapse
+   non-Proxmox platforms into Proxmox-shaped pool rows or turn factual topology
+   into prescriptive remediation copy.
+   Storage state presentation must stay incident/risk-owned. Composite
    posture summaries from unified resources may include dependency or protected
    workload impact, so `frontend-modern/src/features/storageBackups/` must not
    use `storage.postureSummary` or `pbs.postureSummary` as primary issue copy
    for healthy resources. Dependency impact belongs to impact summaries and
-   detail context, while `Primary Issue` must derive from explicit incidents,
+   detail context, while visible state must derive from explicit incidents,
    storage risk summaries, or storage-risk reasons.
    Unraid storage posture follows that same rule even when it reaches
    infrastructure through the agent facet instead of the dedicated Storage
@@ -234,6 +247,13 @@ bypass the API fail-closed execution gate.
    storage-risk fields. Storage/recovery-adjacent consumers may render those
    summaries, but they must not infer Unraid array health from generic
    frontend status labels or from empty no-present slots.
+   Unraid storage presentation must also consume the canonical Unraid
+   topology published by unified resources. Array disks, cache/pool storage,
+   native used/free capacity, device model/transport, temperature, spin state,
+   and error counters belong in `storage`, `physical_disk`, and `agent.unraid`
+   payloads before they reach Storage. The Storage page must not attempt to
+   reconstruct Unraid pools from generic SMART-only rows or treat missing SMART
+   scans on spun-down disks as missing storage topology.
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
    Shared API-token transport helpers may be consumed by storage/recovery-
    adjacent flows, but `owner_user_id` remains server-authored token identity
@@ -816,12 +836,12 @@ bypass the API fail-closed execution gate.
     11b. Letting adjacent storage-link additions in shared `frontend-modern/src/routing/resourceLinks.ts` perturb recovery route semantics; expanding canonical `/storage` deep links for unified resources must not reuse recovery-owned query names or alter the owned `/recovery` parse/build contract while those surfaces continue sharing the same route-helper module
 12. Letting protected-inventory protection posture overload recovery-event outcome filtering; the protected inventory protection-state control must drive the route-backed `state` field and local rollup posture filtering, while the recovery events `status` field remains the canonical outcome filter for points, series, and facets transport filters
 13. Letting visible protected-item filters fall out of shared recovery links; protected inventory state such as stale, failed, warning, running, unknown, healthy, and never-succeeded must restore from the canonical recovery URL and rewrite to the owned `state=<value>` route form, with legacy `stale=1` accepted only as compatibility input
-14. Reintroducing stacked full-width recovery tables as the primary desktop layout; the governed recovery surface must expose one primary data region at a time with explicit protected-items versus recovery-events view switching so Pulse stays inventory-first for Proxmox operators without collapsing the page back into a single-platform backup screen
-15. Letting the primary recovery workspace tabs drift out of canonical route state; when operators explicitly switch between protected items and recovery events, the shared recovery link builder and page model must preserve that selection in route state unless the active `rollupId` or `day` context already implies the default workspace
+14. Reintroducing stacked full-width recovery tables as the primary desktop layout; the governed recovery surface must expose one primary data region at a time with recovery events as the default workspace and protection coverage as an explicit secondary review so Pulse does not collapse back into a single-platform backup screen
+15. Letting secondary recovery workspace state drift out of canonical route state; explicit `view=inventory` protection-coverage links must round-trip, while default recovery-events state should serialize without a redundant `view=events` query unless compatibility input is being normalized
 16. Treating a selected protected-item rollup as row-click-only or header-only state instead of a canonical history filter; when a protected-item row focuses recovery history, the governed recovery events controls must surface that focus inside the shared filter surface through the same user-creatable item filter control, count it with the rest of the active filters, and let the same filter reset path clear it
-17. Letting recovery-event focus leak as hidden state on the protected inventory surface; switching back to protected items must clear event-only `rollupId` and `day` context, and protected-item drill-ins must open recovery events without preserving an invisible day filter that can make valid history look empty.
+17. Letting recovery-event focus leak as hidden state on the protection coverage surface; opening coverage must clear event-only `rollupId` and `day` context, and coverage drill-ins must open recovery events without preserving an invisible day filter that can make valid history look empty.
 18. Letting the recovery details panel lead with transport-shaped payloads; operator-facing details must summarize outcome, artifact, target, restore readiness, and readable metadata labels first, while raw JSON and provider-specific keys stay behind an explicitly technical disclosure.
-19. Letting recovery posture summaries become passive counters only; summary-card actions may focus events, stale inventory, or attention inventory, but those actions must route through the canonical recovery workspace and route-state owner instead of mutating local-only filter state.
+19. Letting protection coverage navigation bypass the canonical recovery workspace and route-state owner; coverage actions may focus stale inventory, attention inventory, or all protected items, but they must not mutate local-only filter state or revive passive posture-counter cards as the navigation owner.
 20. Letting storage or recovery surfaces invoke retired self-hosted trial acquisition; `POST /api/license/trial/start` and `/auth/trial-activate` must stay closed on the ordinary self-hosted router, and storage/recovery-adjacent billing or support handoffs must not treat trial activation as recovery identity, restore proof, or backup transport state.
 
 ## Completion Obligations
@@ -1121,9 +1141,9 @@ afterward, instead of being misattributed to Pulse's auto-detection.
 
 `StorageSummary.tsx`, `StoragePageSummary.tsx`, and `useStoragePageSummary.ts`
 now surface `poolsDegraded` and `disksFailing` health indicators alongside
-pool/disk counts. `RecoverySummary.tsx` gains an aggregate health-state summary
-row. These additions project from existing websocket pool/disk state; they must
-not introduce new API polling or widen the storage-fetch boundary.
+pool/disk counts. These additions project from existing websocket pool/disk
+state; they must not introduce new API polling or widen the storage-fetch
+boundary.
 Agentless availability endpoints are adjacent infrastructure context only, not
 storage or recovery inventory. Storage/recovery consumers may receive
 `network-endpoint` resources through shared unified-resource snapshots, but
@@ -1510,18 +1530,17 @@ canonical route parsing, filter/query state, transport hook inputs, and URL
 synchronization, while `frontend-modern/src/components/Recovery/Recovery.tsx`
 is the composition root for the operator-facing recovery surface and the split
 section owners under `frontend-modern/src/components/Recovery/` hold the
-protected inventory, activity, and history presentation layers. The history
+protection coverage, activity, and history presentation layers. The history
 surface is further split so `RecoveryHistorySection.tsx` owns the toolbar and
 controller boundary, `useRecoveryHistorySectionState.ts` owns local section UI
 state, and `RecoveryHistoryTable.tsx` owns the row/detail renderer.
 That composition root now also owns one primary recovery workspace rather than
-stacking protected-inventory and event-history tables on the same desktop page.
-The governed default remains inventory-first so Proxmox-oriented operators land
-on the familiar protected-items view, but drill-in actions such as selecting a
-subject or a timeline day must switch the primary workspace to recovery events
-instead of leaving two competing table surfaces visible at once.
+stacking protection-coverage and event-history tables on the same desktop page.
+The governed default is event-first so operators land on concrete
+backup/snapshot/replication history, while the header action and compatibility
+`view=inventory` links open the secondary protection coverage review.
 That same operator-facing workspace must lead with current protection status
-rather than only the latest backup outcome. Protected items should surface
+rather than only the latest backup outcome. Protection coverage should surface
 stale, never-succeeded, failed, warning, and running rollups as the primary
 monitoring status so an item with an old successful point does not scan as
 healthy when it still needs operator attention.
@@ -1547,11 +1566,11 @@ compatibility input that rewrites back to canonical `platform` route state.
 Shared recovery link builders should therefore accept canonical `platform`
 inputs only; legacy `provider` belongs at parse-time compatibility boundaries,
 not in new caller-facing recovery route helpers.
-Cross-surface recovery drill-in links must also declare the correct primary
-workspace instead of relying on the inventory-first page default. When a
-platform service surface such as PBS links into recovery activity, that shared
-entry point should land on canonical `view=events` and describe the destination
-as recovery events rather than reverting to PBS-backup wording.
+Cross-surface recovery drill-in links must also target the correct primary
+workspace without relying on legacy inventory-first defaults. When a platform
+service surface such as PBS links into recovery activity, that shared entry
+point should land on the default recovery events workspace and describe the
+destination as recovery events rather than reverting to PBS-backup wording.
 That same recovery contract should keep response payloads canonical as well:
 recovery points and protected rollups should expose `platform` and
 `platforms` as the primary transport fields, while any legacy
@@ -1660,12 +1679,10 @@ and `Encrypted` instead of leaking raw transport values like `backup`,
 That primary workspace selection now also lives in canonical recovery route
 state through `frontend-modern/src/routing/resourceLinks.ts` and
 `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`, so copied
-links and browser restores reopen the same protected-items versus
-recovery-events workspace an operator explicitly chose instead of silently
-falling back to page-local UI state. Focused recovery routes with an active
-`rollupId` or `day` remain recovery-events-first by default, but the explicit
-workspace selection must still serialize through the owned recovery URL model
-whenever an operator overrides that implied default.
+links and browser restores reopen explicit protection-coverage state instead
+of silently falling back to page-local UI state. Focused recovery routes with
+an active `rollupId` or `day` remain recovery-events-first by default, and
+default event routes should omit redundant `view=events` query state.
 That same shared route-helper contract now also has to preserve exact storage
 and recovery handoffs for unified resources discovered outside the storage or
 recovery pages. When alerts, Patrol, or infrastructure drawers route a
@@ -1861,48 +1878,35 @@ fetch contract before consulting websocket churn so the storage surface does
 not present healthy REST-backed data as down or stale.
 Meanwhile,
 `frontend-modern/src/components/Recovery/` and the recovery hooks define the
-timeline, protected-item, and recovery-summary UX.
-That governed page frame now starts with the shared `RecoverySummary.tsx`
-overview card so operators land on a provider-neutral recovery posture model
-before they drill into either protected-item inventory or recovery events.
-The summary remains additive to the inventory-first workflow rather than a
-replacement for it: Proxmox-heavy operators still land on protected items by
-default, but the first visible framing now reflects the whole multi-platform
-recovery system instead of a single backup table metaphor.
+event timeline, protection-coverage review, and recovery-history UX. The
+governed page frame is event-first: operators land directly on concrete
+backup/snapshot/replication history, with `RecoveryActivitySection.tsx` acting
+as compact orientation for the visible event table. The former decorative
+recovery summary-card strip is retired because workloads already owns the
+object-level "has a backup" scan, while Recovery owns concrete recovery events
+and an explicit secondary protection-coverage review.
 That top recovery frame must rely on solid elevated operator panels and border
 hierarchy rather than decorative gradients so the page reads like a monitoring
-workspace instead of a marketing-style dashboard shell.
-That same framing must stay compact enough to keep the primary workspace in the
-first scroll window. `RecoverySummary.tsx` and the workspace shell in
-`Recovery.tsx` should compress posture, coverage, and mode framing into concise
-operator panels instead of stacking multiple dashboard-like slabs that push the
-main inventory or event table too far down the page.
-That same summary shell should read as one dominant posture surface with a
-supporting rail, not as several equal-weight dashboard cards. The governed
-recovery summary should keep the left side focused on posture, attention, and
-freshness, while the right side carries compact coverage and recent-history
-reference detail instead of competing headline widgets.
-That recovery summary rail is intentionally not part of the interactive
-page/group/entity summary contract used by workloads, infrastructure, and
-storage. `frontend-modern/src/components/Recovery/RecoverySummary.tsx` may
-reuse shared summary-card framing, but it must remain a static posture surface:
-no synchronized chart hover, no row-driven group scope, and no implicit
-adoption of `summaryCardInteraction.ts` without a separate governed product
-decision that proves recovery actually wants that interaction model.
-That same workspace shell should stay a compact control strip rather than a
-second summary card: the protected-items versus recovery-events switcher belongs
-close to the active table surface, and it should not restate table counts that
-are already carried by the selected tab labels or the summary frame above.
-That same summary contract now also includes platform- and item-coverage
-framing through `frontend-modern/src/utils/recoverySummaryPresentation.ts`, so
-the first visible recovery overview explicitly shows which protected item
-types Pulse is covering before it shows supporting platform mix, with
-primary-item and primary-platform readouts kept as distinct governed summary
-fields instead of one ambiguous "primary" label. The summary may still surface
-platform breadth and cross-platform protected items, but the recovery page
-must read item-first so the unified recovery model is not visually anchored to
-one platform family.
-That same item-first rule also applies to the protected inventory table:
+workspace instead of a marketing-style dashboard shell. The page must stay
+compact enough to keep the activity chart and primary event table in the first
+scroll window instead of stacking dashboard-like slabs above the work surface.
+Protection coverage remains a secondary review, opened through the explicit
+header action or canonical compatibility route state when the operator needs to
+audit stale, failed, warning, running, unknown, or never-succeeded items. It
+must expose a reciprocal page-header action back to Recovery events, so opening
+coverage never leaves the operator dependent on the global Recovery nav item or
+small table chrome to return to the primary page. It must not return as an
+equal-weight subtab or a top-level posture-card action strip without a separate
+governed product decision.
+Recovery is also intentionally outside the interactive page/group/entity
+summary-card contract used by workloads, infrastructure, and storage. The
+recovery route must not adopt `summaryCardInteraction.ts`, synchronized card
+hover, row-driven summary scope, or shared `SummaryPanel` card framing simply
+because adjacent monitoring pages use those primitives. Recovery may still show
+coverage breadth and platform context inside the Protection coverage table and
+event filters, but the page must read item-first so the unified recovery model
+is not visually anchored to one platform family.
+That same item-first rule also applies to the protection coverage table:
 `RecoveryProtectedInventorySection.tsx` must surface protected item type as a
 first-class column in the main inventory grid rather than leaving platform as
 the only structural classifier beside the item label. Platform badges remain
@@ -2003,10 +2007,6 @@ That same direct proof rule also applies to the shared recovery status helper:
 `frontend-modern/src/utils/recoveryStatusPresentation.ts` must stay on the
 explicit `recovery-product-surface` proof path instead of inheriting coverage
 only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery summary helper:
-`frontend-modern/src/utils/recoverySummaryPresentation.ts` must stay on the
-explicit `recovery-product-surface` proof path instead of inheriting coverage
-only through pages or higher-level recovery components.
 The default protected-inventory recovery route must also keep its primary
 table shell on class-driven sizing (`table-fixed` plus owned width classes)
 instead of inline `table-layout` / `min-width` styles, so the public recovery
@@ -2058,142 +2058,58 @@ on the explicit `recovery-product-surface` proof path instead of inheriting
 coverage only through pages or higher-level recovery components.
 
 Those recovery transport surfaces now also share one normalized filter
-contract: protected-item rollups, point history, facets, and chart series must
+contract: protection rollups, point history, facets, and chart series must
 all honor the same canonical `platform`, canonical `itemType`, cluster, node, namespace,
 workload-scope, verification, and route-backed free-text `q` filter so the
-protected-items list cannot drift from the timeline and facet state under the
+protection coverage list cannot drift from the timeline and facet state under the
 same active recovery view. That same recovery filter contract now depends on
 the canonical recovery index carrying a normalized `itemType` instead of
 forcing each UI surface to re-derive protected item classes from raw
 provider-native `subjectType` values.
 That same recovery product surface keeps the primary workspace visually ahead
-of secondary analytics: once the summary frame ends,
-`frontend-modern/src/components/Recovery/Recovery.tsx` must lead directly into
-the route-backed recovery workspace, with protected-items defaulting straight
-to the primary inventory table and recovery-events owning both the activity
-timeline and the event table together. The activity timeline remains required
-even when point-history loading fails, but it belongs to the events workspace
-rather than hanging below the inventory workspace as a competing page-level
-peer.
-That same recovery product surface must also stay stylistically aligned with
-established Pulse monitoring surfaces once shared primitives already exist.
-`frontend-modern/src/components/Recovery/RecoverySummary.tsx` should compose
-the shared `SummaryPanel` and `SummaryMetricCard` primitives the way
-infrastructure and workloads do, and recovery item-type labels should render
-through canonical workload/resource badge classes instead of adding
-recovery-only wrapper chrome around VM, container, or other resource badges.
-That same summary frame should stay compact and scan-first, not turn into a
-recovery-specific mini report. Recovery summary cards should prefer concise
-counts, bars, and badge-backed coverage cues over tall explanatory copy blocks
-so the protected-item table takes over the page at roughly the same visual
-density as the infrastructure and workloads monitoring surfaces.
-That same summary rule also applies to the panel header: the top-line summary
-count strip should stay terse and avoid repeating the full posture telemetry
-already rendered inside the cards, so the header acts as orientation rather
-than a second miniature dashboard row.
-That same header rule should default to the protected-item total only rather
-than carrying separate attention, healthy, or running counters; those signals
-belong in the cards themselves.
-That same summary layout should also stay on the shared monitoring rhythm:
-recovery should use the standard four-card `SummaryPanel` grid without letting
-one oversized posture card dominate the full strip, so operators can scan
-posture, freshness, footprint, and recent history at the same glance depth
-they get on infrastructure and workloads.
-That same summary rule also applies within individual cards: recovery posture,
-freshness, attention, footprint, and history cards should favor compact rows
-and metric lists over stacked prose callouts so the summary strip reads like
-Pulse monitoring telemetry rather than a page-local narrative panel.
-That same orientation-first rule also applies at the page-shell boundary:
-recovery should hand straight from the summary strip into the active workspace
-card without an extra page-local spacer band that makes the shell feel softer
-than storage or workloads.
-That same storage-style page rhythm also applies to the workspace tabs:
-`Protected items` / `Recovery events` should live as a standalone subtab row
-above the active section, not inside the data card itself.
-That same card-level scan rule should prefer one dominant metric per card with
-short supporting readouts, the same quick-scan rhythm operators already get on
-infrastructure and workloads, instead of nested sub-cards that turn recovery
-summary into a denser bespoke dashboard than the rest of Pulse.
-That same summary-card rule should also avoid inset mini-panels inside the
-cards themselves. Recovery summary cards should prefer direct metric rows,
-lists, and badge-backed counts over "cards inside cards", which make the strip
-feel heavier than the equivalent infrastructure and workloads telemetry.
-That same compact-summary rule should also avoid repeating the same attention,
-stale, and footprint telemetry in multiple stacked readouts inside one card.
-Recovery summary cards should keep one dominant metric with one short support
-band so the strip scans at the same speed as infrastructure and workloads
-instead of behaving like a recovery-only executive summary.
-That same card-headline rule should keep the helper label terse too. Recovery
-headline captions should prefer short monitoring terms like `attention`,
-`healthy`, `running`, `types`, or `points` over sentence-like helper copy that
-makes the strip feel more bespoke than storage or workloads.
-That support band should stay genuinely short, ideally one compact support line
-and only occasionally two, so the operator can scan the summary as orientation
-instead of reading each card like a dense checklist.
-When a second support line does not materially change triage, recovery should
-prefer a single support line over filling the card just because there is room.
-Those support rows should also stay signal-driven. Recovery summary cards
-should omit zero-value or low-value support rows like `Primary Item` or `Peak
-Day` when they do not materially improve operator triage, so the top strip
-stays closer to the fast-scan rhythm used by the infrastructure and workloads
-surfaces.
-That same summary-scan rule should also trim derivative rows that restate the
-headline instead of adding a new operator question. `Freshness` should not add
-an extra `<24h` row under a `fresh in 24h` headline, `Coverage` should not
-spend a row repeating a primary-platform label when platform count already
-frames the footprint, and `Activity` should stay on a short activity readout
-rather than carrying a four-line micro report.
-That same summary-card rule should also avoid inline distribution bars or
-dashboard-style subvisualizations inside the cards when the same signal can be
-expressed as short metric rows. Recovery summary cards should stay on the
-shared monitoring-card rhythm of one dominant metric plus compact supporting
-rows rather than reviving bespoke visual telemetry that makes the strip read
-heavier than the rest of Pulse.
-That same scan rule should also keep the summary header to orientation rather
-than another status rail. The header should carry total protected items only;
-the `Posture` card owns the attention-versus-healthy composition so the strip
-does not repeat the same posture cue both above and inside the cards.
-That same differentiation rule applies across cards too. `Posture` and
-`Freshness` should not lead with the same stale/attention headline; the
-freshness card should emphasize recent successful coverage such as fresh-in-24h
-reach, while posture owns the attention-state headline.
-That same page-level ownership applies to the recovery time window. Recovery
-should use the shared summary-panel range control as the canonical time-range
-selector, the same way infrastructure and workloads do, instead of hiding a
-separate range selector inside the activity strip and making operators manage
-two competing range affordances for one page.
-That same density rule should route through the shared summary primitives
-instead of feature-local spacing overrides. Recovery may select the shared
-default `SummaryPanel` / `SummaryMetricCard` density mode, and it should not
-reintroduce one-off padding hacks or right-side duplicate KPI blocks inside
-`RecoverySummary.tsx`.
-That same shared summary-card contract must also keep recovery on the
-auto-sized card path while chart-backed monitoring summaries use the explicit
-chart slot, so recovery cards stay compact and the shared hover geometry fix
-does not reintroduce recovery-only whitespace or summary-height drift.
-That same one-headline rule applies to the footprint and activity cards too.
-`Coverage` should lead with one dominant item-type count and route platform
-count through the shared card-header secondary label path instead of another
-body row, and `Activity` should route latest-activity context through that same
-secondary-label path instead of adding recovery-only support text under the
-metric.
-That same summary-header rule also applies to posture and freshness. Recovery
-should prefer shared card-header secondary labels such as healthy-count or
-stale-count context instead of stacking extra recovery-only support rows under
-those headline metrics.
-That same scan-first rule applies to the workspace strip. Recovery should not
-show tab labels and then repeat the same workspace count as standalone text in
-the same strip; the workspace tabs should carry their own counts, while the
-remaining strip cues focus on issues or drill-in context.
-That same inventory surface should also follow the established monitoring-table
-scan pattern in its first column. Protected-item rows should lead with a clear
+of secondary analytics: `frontend-modern/src/components/Recovery/Recovery.tsx`
+must lead directly into the route-backed recovery events workspace, with
+recovery events owning both the activity timeline and the event table together.
+Protection coverage opens only through the explicit header action or
+compatibility route state. The activity timeline remains required even when
+point-history loading fails, but it belongs to the events workspace rather than
+hanging beside coverage as a competing page-level peer.
+That same recovery product surface must not reintroduce a four-card posture,
+freshness, coverage, or activity strip as decorative orientation. Workloads is
+the better object-level place to scan whether a resource has backup coverage;
+Recovery should reserve its first viewport for concrete recovery history and
+only expose coverage rollups when the operator asks for the secondary review.
+That same page-level ownership applies to the recovery time window. The
+canonical range selector now lives inside `RecoveryActivitySection.tsx` because
+it controls the event timeline and the event query window, not a page-level KPI
+strip. Range changes must clear selected-day focus and return the events table
+to page one through the route-state owner so the chart and table remain aligned.
+That same activity-section contract should stay compact and scan-first:
+recovery-point volume, active-day count, stale count, and average rate may
+appear as concise inline readouts beside the chart controls, but not as separate
+top-level metric cards or nested mini-panels. The activity strip must also avoid
+interpreted anomaly callouts such as "lowest active day" unless the recovery
+model has canonical schedule expectations that make the signal actionable.
+Item-type labels should continue to render through canonical workload/resource
+badge classes in the event and coverage tables instead of adding recovery-only
+wrapper chrome around VM, container, or other resource badges.
+That same event-first shell rule should hand straight from the activity section
+into the active events workspace without an extra page-local spacer band,
+default tab row, or duplicate status strip that makes the surface softer than
+storage or workloads.
+That same scan-first rule applies to the secondary coverage surface. Recovery
+should not show equal workspace tab labels and then repeat the same workspace
+count as standalone text; protection coverage cues should focus on issues,
+drill-in context, and active filters.
+That same coverage surface should also follow the established monitoring-table
+scan pattern in its first column. Coverage rows should lead with a clear
 status cue, the primary item name, and compact badge-backed item/platform
 context instead of relying on recovery-only rails or plain-text metadata lines
 that make the table read like a report instead of an operational grid.
-That same triage rule applies to the default inventory sort. The protected
-items workspace should open with attention-state rollups first instead of
-defaulting to newest-successful backups, so operators land on failed,
-never-succeeded, stale, warning, and running items before the healthy catalog.
+That same triage rule applies to the coverage sort. Protection coverage should
+open with attention-state rollups first instead of defaulting to
+newest-successful backups, so operators land on failed, never-succeeded, stale,
+warning, and running items before the healthy catalog.
 That same row contract should avoid duplicating context that already has a
 dedicated column. When `Item Type` and `Platform` columns are visible, the
 primary item cell should not restate those same badges on desktop; duplicate
@@ -2209,21 +2125,22 @@ recovery points. When the persisted subject label is just a raw
 `pve-task:*`/`UPID:*` identifier or `vmid=0`, the canonical recovery index
 should derive a readable task label and `task` item type from point details so
 recovery tables scan by operator meaning instead of transport IDs.
-That same inventory surface should stay on the flat monitoring-table pattern
-already used elsewhere in Pulse. Protected items should surface posture through
+That same coverage surface should stay on the flat monitoring-table pattern
+already used elsewhere in Pulse. Protection coverage should surface posture through
 row-level status cues, outcome pills, and filters rather than inserting extra
 `Needs Attention` / `Healthy Coverage` section rows that add height and turn
-the primary table into a recovery-only grouped report.
-That same protected-items table should also avoid recovery-local pagination
+the table into a recovery-only grouped report.
+That same protection-coverage table should also avoid recovery-local pagination
 chrome. The workspace already holds the filtered rollups client-side, so it
-should read as one continuous monitoring table with a simple protected-item
+should read as one continuous monitoring table with a simple coverage-item
 count instead of introducing `Prev` / `Next` buttons and page counters that do
 not match the canonical Pulse scan pattern.
-That same table-shell contract must avoid duplicate framing once the view tabs
-already establish the active workspace. `RecoveryProtectedInventorySection.tsx`
-should keep page/count/sort orientation inside a slim table-shell status row
-and let the filter strip lead directly into the grid instead of reintroducing a
-second large inventory header card above the same table.
+That same table-shell contract must avoid duplicate framing once the summary
+action has established the secondary coverage workspace.
+`RecoveryProtectedInventorySection.tsx` should keep page/count/sort
+orientation inside a slim table-shell status row and let the filter strip lead
+directly into the grid instead of reintroducing a second large inventory header
+card above the same table.
 That same shell rule should also avoid low-signal bookkeeping above the grid.
 The protected-items status row should surface the active workspace, protected
 item count, and issue cues, but page-number and sort-direction bookkeeping
@@ -2240,27 +2157,19 @@ use the standard shared header/body dividers and avoid both local suppression
 of those separators and local duplicate row or header borders that make the
 lines read heavier than other monitoring tables.
 That same workspace-shell rule should also avoid a dedicated recovery-only
-status strip above the control bar. Recovery should use the same handoff shape
-as storage: a standalone shared `Subtabs.tsx` row, then any workspace-specific
-context like activity, then a shared controls card, then a data card. Recovery
-should not collapse controls and content back into one fused workspace slab or
-bury the switcher inside the filter row.
-That same strip should not repeat page-level counts or posture cues once the
-summary already owns those signals. The recovery workspace tabs should stay on
-plain canonical labels like `Protected items` and `Recovery events` rather than
-embedding per-view totals in the tab text, and the protected-items control row
-should stay focused on navigation, drill-in context, and active filters instead
-of echoing page-wide posture pills above the same table.
-That same workspace handoff should stay on shared primitive styling too. When
-recovery renders its workspace tabs, the switcher should use the same canonical
-shared `Subtabs.tsx` shell, list, and button class pattern already used by
-storage and other established Pulse tab surfaces instead of inventing a
+status strip above the control bar. Recovery should use an event-first handoff:
+activity context, a shared controls card, then a data card. Protection coverage
+may use its own shared controls card and table when explicitly opened, but
+Recovery should not collapse controls and content back into one fused workspace
+slab or bury secondary workspace navigation inside the filter row.
+That same strip should not repeat page-level counts or posture cues as a
+replacement for the retired summary strip. Protection coverage controls should
+stay focused on drill-in context and active filters instead of echoing page-wide
+posture pills above the same table.
+That same workspace handoff should stay on shared primitive styling too.
+Recovery events and protection coverage should keep using shared `FilterBar`,
+`TableCard`, and `TableCardHeader` primitives instead of inventing a
 recovery-only variant or recovery-only class stack.
-That same workspace rule also means the protected-items versus recovery-events
-switcher should live in its own standalone row above the active workspace,
-ahead of activity, controls, and data, so the page hands off from summary into
-the active recovery surface the same way storage does rather than fusing the
-entire workspace into one recovery-only card.
 That same canonical-row rule also means the subtabs row should stand on its own
 full-width shell instead of sharing a flex line with recovery-only chips or
 adjacent badges that break the storage-style border and spacing treatment.
@@ -2272,11 +2181,10 @@ recovery-local grid overrides or width hacks. Protected-items controls should
 also use the same shared `Reset all` page-controls action pattern as storage
 and workloads when visible filters are active, instead of forcing operators to
 clear each inventory filter manually.
-That same handoff should keep recovery on the standard Pulse summary density.
-`RecoverySummary.tsx` should use the shared default `SummaryPanel` /
-`SummaryMetricCard` rhythm that infrastructure and workloads use, instead of
-opting into a recovery-only compact density that makes the top strip harder to
-scan than the rest of the monitoring product.
+That same handoff should keep Recovery out of shared summary-card density
+tuning unless a new governed product decision reintroduces a first-viewport
+summary owner. The current route should spend its top-level density budget on
+the activity section, compact controls, and one primary data card.
 That same shell rule applies to the recovery-events workspace.
 `RecoveryHistorySection.tsx` should use the same slim status-row-plus-filter-row
 pattern as the protected inventory surface, not a separate large titled header

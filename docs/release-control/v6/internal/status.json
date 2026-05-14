@@ -5788,7 +5788,21 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "codex-storage-native-topology-lane-l15",
+      "agent_id": "codex-storage-native-topology",
+      "summary": "Make Storage show platform-native storage topology clearly",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-05-14T15:57:59Z",
+      "heartbeat_at": "2026-05-14T15:57:59Z",
+      "expires_at": "2026-05-14T17:57:59Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L15"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

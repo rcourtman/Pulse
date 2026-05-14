@@ -801,7 +801,26 @@ func TestApplyHostReportStoresUnraidTopology(t *testing.T) {
 			SyncProgress: 55,
 			Disks: []agentshost.UnraidDisk{
 				{Name: "parity", Device: "/dev/sdb", Role: "parity", Status: "online", RawStatus: "DISK_OK", Serial: "SERIAL-PARITY"},
-				{Name: "disk1", Device: "/dev/sdc", Role: "data", Status: "online", RawStatus: "DISK_OK", Serial: "SERIAL-DATA"},
+				{
+					Name:        "disk1",
+					Device:      "/dev/sdc",
+					Role:        "data",
+					Status:      "online",
+					RawStatus:   "DISK_OK",
+					Model:       "WDC WD60EFRX",
+					Serial:      "SERIAL-DATA",
+					Filesystem:  "xfs",
+					Transport:   "sata",
+					SizeBytes:   6_000_000_000_000,
+					UsedBytes:   4_000,
+					FreeBytes:   2_000,
+					Temperature: 31,
+					SpunDown:    true,
+					ReadCount:   11,
+					WriteCount:  12,
+					ErrorCount:  16,
+					Slot:        1,
+				},
 			},
 		},
 		Timestamp: time.Now().UTC(),
@@ -820,6 +839,16 @@ func TestApplyHostReportStoresUnraidTopology(t *testing.T) {
 	}
 	if len(host.Unraid.Disks) != 2 || host.Unraid.Disks[0].Role != "parity" {
 		t.Fatalf("unexpected unraid disks %+v", host.Unraid.Disks)
+	}
+	disk := host.Unraid.Disks[1]
+	if disk.Model != "WDC WD60EFRX" || disk.Transport != "sata" || disk.SizeBytes != 6_000_000_000_000 {
+		t.Fatalf("expected enriched unraid disk metadata, got %+v", disk)
+	}
+	if disk.UsedBytes != 4_000 || disk.FreeBytes != 2_000 || disk.Temperature != 31 || !disk.SpunDown {
+		t.Fatalf("expected native unraid capacity and state fields, got %+v", disk)
+	}
+	if disk.ReadCount != 11 || disk.WriteCount != 12 || disk.ErrorCount != 16 {
+		t.Fatalf("expected native unraid counters, got %+v", disk)
 	}
 }
 

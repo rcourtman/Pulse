@@ -1,9 +1,32 @@
 import type { StorageRecord } from './models';
-import { getStorageRecordIssueSummary, getStorageRecordZfsPool } from './recordPresentation';
+import {
+  getStorageRecordIssueSummary,
+  getStorageRecordStatus,
+  getStorageRecordZfsPool,
+} from './recordPresentation';
+
+const titleize = (value: string): string =>
+  value
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+
+const getRecordDetails = (record: StorageRecord): Record<string, unknown> =>
+  (record.details || {}) as Record<string, unknown>;
+
+const getRecordStringDetail = (record: StorageRecord, key: string): string => {
+  const value = getRecordDetails(record)[key];
+  return typeof value === 'string' ? value.trim() : '';
+};
 
 export function getStoragePoolProtectionTextClass(record: StorageRecord): string {
+  const label = getCompactStoragePoolProtectionLabel(record).trim().toLowerCase();
   if (record.rebuildInProgress) {
     return 'text-blue-700 dark:text-blue-300';
+  }
+  if (label === 'no parity') {
+    return 'text-base-content';
   }
   if (record.protectionReduced || record.incidentCategory === 'recoverability') {
     return 'text-red-700 dark:text-red-300';
@@ -22,6 +45,23 @@ export function getStoragePoolIssueTextClass(record: StorageRecord): string {
   return 'text-base-content';
 }
 
+export function getStoragePoolStateTextClass(record: StorageRecord): string {
+  const normalized = getStoragePoolStateLabel(record).trim().toLowerCase();
+  if (
+    normalized === 'critical' ||
+    normalized === 'faulted' ||
+    normalized === 'failed' ||
+    normalized === 'offline' ||
+    normalized === 'unavailable'
+  ) {
+    return 'text-red-700 dark:text-red-300';
+  }
+  if (normalized === 'warning' || normalized === 'warn' || normalized === 'degraded') {
+    return 'text-amber-700 dark:text-amber-300';
+  }
+  return 'text-base-content';
+}
+
 export function getCompactStoragePoolProtectionLabel(record: StorageRecord): string {
   const label = (record.protectionLabel || '').trim();
   if (record.rebuildInProgress || record.protectionReduced) {
@@ -31,6 +71,29 @@ export function getCompactStoragePoolProtectionLabel(record: StorageRecord): str
     return label;
   }
   return '—';
+}
+
+export function getStoragePoolStateLabel(record: StorageRecord): string {
+  const arrayState = getRecordStringDetail(record, 'arrayState');
+  if (arrayState) {
+    return titleize(arrayState);
+  }
+  const pool = getStorageRecordZfsPool(record);
+  if (pool?.state) {
+    return pool.state === 'ONLINE' ? 'Online' : pool.state;
+  }
+  const status = getStorageRecordStatus(record);
+  return status ? titleize(status) : '—';
+}
+
+export function getStoragePoolStateTitle(record: StorageRecord): string {
+  const label = getStoragePoolStateLabel(record);
+  const summary =
+    getCompactStoragePoolIssueSummary(record).trim() || getStorageRecordIssueSummary(record).trim();
+  if (summary && summary.toLowerCase() !== 'healthy' && label.toLowerCase() !== 'started') {
+    return summary;
+  }
+  return label === '—' ? '' : label;
 }
 
 export function getCompactStoragePoolProtectionTitle(record: StorageRecord): string {
@@ -74,7 +137,10 @@ export function getCompactStoragePoolIssueLabel(record: StorageRecord): string {
     return pool.state;
   }
   const normalizedStatus = (record.statusLabel || '').trim().toLowerCase();
-  if (normalizedStatus && !['online', 'available', 'running', 'healthy'].includes(normalizedStatus)) {
+  if (
+    normalizedStatus &&
+    !['online', 'available', 'running', 'healthy'].includes(normalizedStatus)
+  ) {
     return record.statusLabel || 'Issue';
   }
   return '—';

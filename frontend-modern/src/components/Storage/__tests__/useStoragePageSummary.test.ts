@@ -89,4 +89,83 @@ describe('useStoragePageSummary', () => {
     expect(result.poolsDegraded()).toBe(0);
     expect(result.disksFailing()).toBe(0);
   });
+
+  it('does not count Unraid disks with only missing SMART data as needing attention', () => {
+    const [filteredRecords] = createSignal<StorageRecord[]>([makeRecord('tower-array', 'healthy')]);
+    const [selectedNodeId] = createSignal('tower');
+    const [search] = createSignal('');
+    const [sourceFilter] = createSignal('all');
+    const [healthFilter] = createSignal('all' as const);
+    const [diskRoleFilter] = createSignal('all');
+    const [diskGroupFilter] = createSignal('all');
+    const [nodeOptions] = createSignal([{ id: 'tower', label: 'Tower' }]);
+    const [physicalDisks] = createSignal<Resource[]>([
+      {
+        id: 'tower-disk-spundown',
+        type: 'physical_disk',
+        name: 'disk1',
+        status: 'offline',
+        platformType: 'agent',
+        parentId: 'tower-array',
+        identity: { hostname: 'Tower' },
+        canonicalIdentity: { hostname: 'Tower' },
+        physicalDisk: {
+          devPath: '/dev/sdb',
+          model: 'WDC WD60EFRX',
+          health: 'UNKNOWN',
+          storageRole: 'data',
+          storageGroup: 'unraid-array',
+          storageState: 'online',
+          spunDown: true,
+          temperature: 0,
+        },
+      },
+      {
+        id: 'tower-disk-errors',
+        type: 'physical_disk',
+        name: 'disk2',
+        status: 'warning',
+        platformType: 'agent',
+        parentId: 'tower-array',
+        identity: { hostname: 'Tower' },
+        canonicalIdentity: { hostname: 'Tower' },
+        physicalDisk: {
+          devPath: '/dev/sdc',
+          model: 'WDC WD60EFRX',
+          health: 'UNKNOWN',
+          storageRole: 'data',
+          storageGroup: 'unraid-array',
+          storageState: 'online',
+          errorCount: 4,
+          risk: {
+            level: 'warning',
+            reasons: [
+              {
+                code: 'unraid_disk_errors',
+                severity: 'warning',
+                summary: 'Unraid disk disk2 reports 4 error(s)',
+              },
+            ],
+          },
+        },
+      },
+    ] as Resource[]);
+
+    const { result } = renderHook(() =>
+      useStoragePageSummary({
+        filteredRecords,
+        search,
+        sourceFilter,
+        healthFilter,
+        diskRoleFilter,
+        diskGroupFilter,
+        selectedNodeId,
+        nodeOptions,
+        physicalDisks,
+      }),
+    );
+
+    expect(result.diskCount()).toBe(2);
+    expect(result.disksFailing()).toBe(1);
+  });
 });

@@ -204,6 +204,15 @@ cross-source deduplication.
    no-parity posture, but those labels must derive from canonical incident or
    storage-risk summaries already present on the resource rather than local
    platform heuristics or generic status-only wording.
+   Agent-backed Unraid topology belongs in the canonical adapter layer, not in
+   storage-page inference. Assigned Unraid array members must produce physical
+   disk resources even when SMART telemetry is absent, Unraid cache/pool members
+   must produce agent-backed storage resources with native capacity metrics, and
+   SMART rows may enrich or merge with those resources only through normalized
+   device or serial identity. Generic SMART status must not overwrite stronger
+   Unraid health/risk, and physical-disk metric IDs must prefer stable serials
+   while normalizing device tokens such as `/dev/sdd` and `sdd [sat]` to the
+   same fallback identity.
    Frontend canonicalization must treat top-level source facets as source
    evidence when `platformData.sources` is absent, but it must not invent
    provider facets from generic agent telemetry: flat agent disk payloads stay

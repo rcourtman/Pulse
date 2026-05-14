@@ -11,6 +11,8 @@ import {
   getMemoryPercent,
   getDiskPercent,
   type ResourceChangeKind,
+  type ResourceAgentUnraidDisk,
+  type ResourcePhysicalDiskMeta,
   type ResourceProxmoxMeta,
   type ResourceVMwareMeta,
   type Resource,
@@ -125,6 +127,55 @@ describe('Resource Type Guards', () => {
 });
 
 describe('Resource Helper Functions', () => {
+  describe('ResourceAgentUnraidDisk', () => {
+    it('accepts native Unraid disk metadata in the resource contract', () => {
+      const disk: ResourceAgentUnraidDisk = {
+        name: 'disk1',
+        device: '/dev/sdc',
+        role: 'data',
+        status: 'online',
+        rawStatus: 'DISK_OK',
+        model: 'WDC WD60EFRX',
+        serial: 'SERIAL-DATA',
+        filesystem: 'xfs',
+        transport: 'sata',
+        sizeBytes: 6_000_000_000_000,
+        usedBytes: 4_000,
+        freeBytes: 2_000,
+        temperature: 31,
+        spunDown: true,
+        readCount: 11,
+        writeCount: 12,
+        errorCount: 16,
+        slot: 1,
+      };
+
+      expect(disk.model).toBe('WDC WD60EFRX');
+      expect(disk.usedBytes).toBe(4_000);
+      expect(disk.errorCount).toBe(16);
+    });
+  });
+
+  describe('ResourcePhysicalDiskMeta', () => {
+    it('accepts native UnRAID media state on physical disks', () => {
+      const disk: ResourcePhysicalDiskMeta = {
+        devPath: '/dev/sdc',
+        model: 'WDC WD60EFRX',
+        storageRole: 'data',
+        storageGroup: 'unraid-array',
+        storageState: 'online',
+        spunDown: true,
+        readCount: 11,
+        writeCount: 12,
+        errorCount: 16,
+      };
+
+      expect(disk.storageGroup).toBe('unraid-array');
+      expect(disk.spunDown).toBe(true);
+      expect(disk.errorCount).toBe(16);
+    });
+  });
+
   describe('ResourceProxmoxMeta', () => {
     it('accepts Proxmox pool membership in the canonical resource contract', () => {
       const proxmox: ResourceProxmoxMeta = {

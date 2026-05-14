@@ -88,7 +88,7 @@ const Storage: Component = () => {
     <div ref={setClearSurfaceRootRef} class="space-y-4" data-testid="storage-page">
       <PageHeader
         title="Storage"
-        description="Review capacity, node health, pools, and storage pressure across connected clusters and devices."
+        description="Review capacity, topology, protection, and physical media across connected storage platforms."
       />
 
       <Show when={!storageSummaryCollapsed()}>

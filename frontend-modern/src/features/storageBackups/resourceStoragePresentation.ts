@@ -40,10 +40,7 @@ const collectRiskReasons = (resource: Resource): StorageRiskReasonLike[] => {
   return out;
 };
 
-const findRiskReason = (
-  resource: Resource,
-  codes: string[],
-): StorageRiskReasonLike | undefined => {
+const findRiskReason = (resource: Resource, codes: string[]): StorageRiskReasonLike | undefined => {
   const wanted = new Set(codes.map((code) => code.toLowerCase()));
   for (const reason of collectRiskReasons(resource)) {
     const code = (reason.code || '').toLowerCase();
@@ -52,7 +49,7 @@ const findRiskReason = (
   return undefined;
 };
 
-const isUnraidStorageResource = (resource: Resource): boolean => {
+export const isUnraidStorageResource = (resource: Resource): boolean => {
   const storage = resource.storage;
   if (!storage) return false;
   if (storage.arrayState || storage.syncAction) return true;
@@ -62,10 +59,7 @@ const isUnraidStorageResource = (resource: Resource): boolean => {
   return false;
 };
 
-const unraidShortSyncLabel = (
-  syncAction: string | undefined,
-  syncProgress?: number,
-): string => {
+const unraidShortSyncLabel = (syncAction: string | undefined, syncProgress?: number): string => {
   const action = (syncAction || '').trim().toLowerCase();
   let base: string;
   switch (action) {
@@ -104,13 +98,25 @@ const getUnraidShortProtectionLabel = (resource: Resource): string => {
   }
   if (storage.protectionReduced) {
     if ((storage.protection || '').trim().toLowerCase() === 'none') {
-      return 'Unprotected';
+      return 'No parity';
     }
-    if (findRiskReason(resource, ['unraid_no_parity'])) return 'Unprotected';
+    if (findRiskReason(resource, ['unraid_no_parity'])) return 'No parity';
     if (findRiskReason(resource, ['unraid_parity_unavailable'])) return 'Parity unavailable';
     return 'Protection reduced';
   }
   return '';
+};
+
+export const hasUnraidStorageAttentionIssue = (resource: Resource): boolean => {
+  if (!isUnraidStorageResource(resource)) return false;
+  return Boolean(
+    findRiskReason(resource, [
+      'unraid_parity_unavailable',
+      'unraid_invalid_disks',
+      'unraid_disabled_disks',
+      'unraid_missing_disks',
+    ]),
+  );
 };
 
 const getUnraidShortIssueLabel = (resource: Resource): string => {
@@ -121,17 +127,10 @@ const getUnraidShortIssueLabel = (resource: Resource): string => {
     switch (code) {
       case 'unraid_parity_unavailable':
         return 'Parity unavailable';
-      case 'unraid_no_parity':
-        return 'No parity protection';
       case 'unraid_invalid_disks':
       case 'unraid_disabled_disks':
       case 'unraid_missing_disks':
         return trimSummary(reason.summary).replace(/^Unraid array reports\s+/i, '') || 'Disk issue';
-      case 'unraid_sync_active':
-        return unraidShortSyncLabel(
-          resource.storage?.syncAction,
-          resource.storage?.syncProgress,
-        );
     }
   }
   return '';
@@ -251,11 +250,11 @@ export const getResourceStorageTopologyLabel = (
 };
 
 export const getResourceStorageIssueLabel = (resource: Resource): string => {
-  if (resource.incidentLabel?.trim()) return resource.incidentLabel.trim();
   if (isUnraidStorageResource(resource)) {
     const unraidLabel = getUnraidShortIssueLabel(resource);
-    if (unraidLabel) return unraidLabel;
+    return unraidLabel || 'Healthy';
   }
+  if (resource.incidentLabel?.trim()) return resource.incidentLabel.trim();
   const riskIssue = getResourceStorageRiskIssue(resource);
   if (riskIssue) return riskIssue;
   const postureIssue = getCompositePostureIssue(resource);
@@ -264,6 +263,9 @@ export const getResourceStorageIssueLabel = (resource: Resource): string => {
 };
 
 export const getResourceStorageIssueSummary = (resource: Resource): string => {
+  if (isUnraidStorageResource(resource) && !hasUnraidStorageAttentionIssue(resource)) {
+    return '';
+  }
   if (resource.incidentSummary?.trim()) return resource.incidentSummary.trim();
   const riskIssue = getResourceStorageRiskIssue(resource);
   if (riskIssue) return riskIssue;
@@ -284,6 +286,9 @@ export const getResourceStorageImpactSummary = (resource: Resource): string => {
 };
 
 export const getResourceStorageActionSummary = (resource: Resource): string => {
+  if (isUnraidStorageResource(resource) && !hasUnraidStorageAttentionIssue(resource)) {
+    return 'Monitor';
+  }
   if (resource.incidentAction?.trim()) return resource.incidentAction.trim();
   if (resource.storage?.rebuildInProgress) {
     return resource.storage.rebuildSummary || 'Monitor rebuild progress';

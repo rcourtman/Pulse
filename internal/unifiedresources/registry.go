@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 )
 
@@ -140,6 +141,9 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 	}
 	for _, host := range snapshot.Hosts {
 		rr.ingestHostUnraidStorage(host)
+	}
+	for _, host := range snapshot.Hosts {
+		rr.ingestHostUnraidPhysicalDisks(host)
 	}
 	for _, host := range snapshot.Hosts {
 		rr.ingestHostSMARTDisks(host)
@@ -406,7 +410,7 @@ func (rr *ResourceRegistry) seedSourceIDForResourceLocked(resource *Resource, so
 			}
 			fallback := ""
 			if parentSourceID := rr.seedParentSourceIDLocked(resource, SourceAgent); parentSourceID != "" {
-				device := strings.TrimSpace(strings.TrimPrefix(resource.PhysicalDisk.DevPath, "/dev/"))
+				device := normalizePhysicalDiskDeviceToken(resource.PhysicalDisk.DevPath)
 				if device != "" {
 					fallback = fmt.Sprintf("%s:%s", parentSourceID, device)
 				}
@@ -816,6 +820,70 @@ func (rr *ResourceRegistry) ingestHostUnraidStorage(host models.Host) {
 		resource.ParentID = &parentID
 	}
 	rr.ingest(SourceAgent, hostUnraidStorageSourceID(host), resource, identity)
+
+	for _, disk := range host.Unraid.Disks {
+		if unraidDiskRole(&disk) != "cache" {
+			continue
+		}
+		resource, identity := resourceFromHostUnraidCacheStorage(host, disk)
+		if parentID != "" {
+			resource.ParentID = &parentID
+		}
+		if sourceID := hostUnraidCacheStorageSourceID(host, disk); sourceID != "" {
+			rr.ingest(SourceAgent, sourceID, resource, identity)
+		}
+	}
+}
+
+func (rr *ResourceRegistry) ingestHostUnraidPhysicalDisks(host models.Host) {
+	if host.Unraid == nil || len(host.Unraid.Disks) == 0 {
+		return
+	}
+
+	hostParentID := rr.sourceResourceID(SourceAgent, host.ID)
+	unraidStorageID := rr.sourceResourceID(SourceAgent, hostUnraidStorageSourceID(host))
+	cacheStorageIDs := make(map[string]string)
+	for _, disk := range host.Unraid.Disks {
+		if unraidDiskRole(&disk) != "cache" {
+			continue
+		}
+		sourceID := hostUnraidCacheStorageSourceID(host, disk)
+		if sourceID == "" {
+			continue
+		}
+		if resourceID := rr.sourceResourceID(SourceAgent, sourceID); resourceID != "" {
+			cacheStorageIDs[unraidCachePoolName(disk)] = resourceID
+		}
+	}
+
+	for _, disk := range host.Unraid.Disks {
+		if strings.TrimSpace(disk.Device) == "" {
+			continue
+		}
+		resource, identity := resourceFromHostUnraidPhysicalDisk(host, disk)
+		if resource.PhysicalDisk == nil {
+			continue
+		}
+		parentID := hostParentID
+		switch unraidDiskGroup(&disk) {
+		case "unraid-array":
+			if unraidStorageID != "" {
+				parentID = unraidStorageID
+			}
+		default:
+			if cacheID := cacheStorageIDs[unraidCachePoolName(disk)]; cacheID != "" {
+				parentID = cacheID
+			}
+		}
+		if parentID != "" {
+			resource.ParentID = &parentID
+		}
+		sourceID := HostUnraidDiskSourceID(host, disk)
+		if sourceID == "" {
+			continue
+		}
+		rr.ingest(SourceAgent, sourceID, resource, identity)
+	}
 }
 
 func (rr *ResourceRegistry) ingestHostSMARTDisks(host models.Host) {
@@ -834,8 +902,17 @@ func (rr *ResourceRegistry) ingestHostSMARTDisks(host models.Host) {
 			continue
 		}
 		parentID := hostParentID
-		if matched := matchUnraidDisk(host.Unraid, disk); matched != nil && unraidDiskGroup(matched) == "unraid-array" && unraidStorageID != "" {
-			parentID = unraidStorageID
+		if matched := matchUnraidDisk(host.Unraid, disk); matched != nil {
+			switch unraidDiskGroup(matched) {
+			case "unraid-array":
+				if unraidStorageID != "" {
+					parentID = unraidStorageID
+				}
+			default:
+				if cacheID := rr.sourceResourceID(SourceAgent, hostUnraidCacheStorageSourceID(host, *matched)); cacheID != "" {
+					parentID = cacheID
+				}
+			}
 		}
 		if parentID != "" {
 			resource.ParentID = &parentID
@@ -1466,7 +1543,7 @@ func mergePhysicalDiskData(existing *PhysicalDiskMeta, incoming *PhysicalDiskMet
 	if incoming.SizeBytes > 0 {
 		merged.SizeBytes = incoming.SizeBytes
 	}
-	if incoming.Health != "" {
+	if shouldReplacePhysicalDiskHealth(merged.Health, incoming.Health) {
 		merged.Health = incoming.Health
 	}
 	if incoming.Wearout >= 0 && (merged.Wearout < 0 || incoming.SMART != nil || merged.SMART == nil) {
@@ -1493,13 +1570,82 @@ func mergePhysicalDiskData(existing *PhysicalDiskMeta, incoming *PhysicalDiskMet
 	if incoming.StorageState != "" {
 		merged.StorageState = incoming.StorageState
 	}
+	if incoming.SpunDown {
+		merged.SpunDown = true
+	}
+	if incoming.ReadCount > 0 {
+		merged.ReadCount = incoming.ReadCount
+	}
+	if incoming.WriteCount > 0 {
+		merged.WriteCount = incoming.WriteCount
+	}
+	if incoming.ErrorCount > 0 {
+		merged.ErrorCount = incoming.ErrorCount
+	}
 	if incoming.SMART != nil {
 		smart := *incoming.SMART
 		merged.SMART = &smart
 	}
-	merged.Risk = physicalDiskRiskFromAssessment(physicalDiskAssessmentFromMeta(&merged))
+	merged.Risk = mergePhysicalDiskRisk(
+		physicalDiskRiskFromAssessment(physicalDiskAssessmentFromMeta(&merged)),
+		existing.Risk,
+		incoming.Risk,
+	)
 
 	return &merged
+}
+
+func shouldReplacePhysicalDiskHealth(existing, incoming string) bool {
+	incoming = strings.ToUpper(strings.TrimSpace(incoming))
+	if incoming == "" {
+		return false
+	}
+	existing = strings.ToUpper(strings.TrimSpace(existing))
+	switch incoming {
+	case "UNKNOWN":
+		return existing == ""
+	case "FAILED":
+		return true
+	case "PASSED", "OK":
+		return existing == "" || existing == "UNKNOWN" || existing == "PASSED" || existing == "OK"
+	default:
+		return true
+	}
+}
+
+func mergePhysicalDiskRisk(base *PhysicalDiskRisk, risks ...*PhysicalDiskRisk) *PhysicalDiskRisk {
+	var merged *PhysicalDiskRisk
+	appendRisk := func(risk *PhysicalDiskRisk) {
+		if risk == nil {
+			return
+		}
+		if merged == nil {
+			merged = &PhysicalDiskRisk{Level: risk.Level}
+		}
+		if incidentSeverityRank(risk.Level) > incidentSeverityRank(merged.Level) {
+			merged.Level = risk.Level
+		}
+		seen := make(map[string]struct{}, len(merged.Reasons))
+		for _, reason := range merged.Reasons {
+			seen[reason.Code+"\x00"+reason.Summary] = struct{}{}
+		}
+		for _, reason := range risk.Reasons {
+			key := reason.Code + "\x00" + reason.Summary
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			merged.Reasons = append(merged.Reasons, reason)
+		}
+	}
+	appendRisk(base)
+	for _, risk := range risks {
+		appendRisk(risk)
+	}
+	if merged == nil || (merged.Level == storagehealth.RiskHealthy && len(merged.Reasons) == 0) {
+		return nil
+	}
+	return merged
 }
 
 func mergeVMwareData(existing *VMwareData, incoming *VMwareData) *VMwareData {

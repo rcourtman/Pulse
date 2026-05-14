@@ -4,6 +4,7 @@ import type { Resource } from '@/types/resource';
 import {
   STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS,
   buildStoragePoolDetailConfigRows,
+  buildStoragePoolDetailTopologyRows,
   buildStoragePoolDetailZfsSummary,
   getStoragePoolLinkedDisks,
   getZfsErrorSummary,
@@ -57,6 +58,10 @@ const buildDisk = (): Resource =>
       physicalDisk: {
         devPath: '/dev/sda',
         model: 'Disk A',
+        storageRole: 'data',
+        storageGroup: 'tank',
+        storageState: 'online',
+        sizeBytes: 1_000,
         temperature: 44,
         smart: { reallocatedSectors: 1 },
       },
@@ -115,9 +120,102 @@ describe('storagePoolDetailPresentation', () => {
         id: 'disk-1',
         devPath: '/dev/sda',
         model: 'Disk A',
+        role: 'data',
+        state: 'online',
+        sizeLabel: '1000 B',
         temperature: 44,
         hasIssue: true,
+        spunDown: false,
+        errorCount: 0,
+        ioLabel: '',
       },
     ]);
+  });
+
+  it('links UnRAID array disks by storage group and summarizes native topology facts', () => {
+    const record = buildRecord({
+      name: 'Tower Array',
+      source: {
+        platform: 'unraid',
+        family: 'onprem',
+        origin: 'resource',
+        adapterId: 'resource-storage',
+      },
+      details: {
+        type: 'unraid-array',
+        platform: 'unraid',
+        topology: 'array',
+        arrayState: 'STARTED',
+      },
+    });
+    const disks = [
+      {
+        id: 'parity',
+        type: 'physical_disk',
+        name: 'Parity',
+        displayName: 'Parity',
+        platformId: 'tower',
+        platformType: 'unraid',
+        sourceType: 'agent',
+        status: 'online',
+        lastSeen: Date.now(),
+        physicalDisk: {
+          devPath: '/dev/sdb',
+          model: 'Parity Disk',
+          storageRole: 'parity',
+          storageGroup: 'unraid-array',
+          storageState: 'online',
+          sizeBytes: 6_000,
+          temperature: 31,
+        },
+      },
+      {
+        id: 'disk1',
+        type: 'physical_disk',
+        name: 'Disk 1',
+        displayName: 'Disk 1',
+        platformId: 'tower',
+        platformType: 'unraid',
+        sourceType: 'agent',
+        status: 'online',
+        lastSeen: Date.now(),
+        physicalDisk: {
+          devPath: '/dev/sdc',
+          model: 'Data Disk',
+          storageRole: 'data',
+          storageGroup: 'unraid-array',
+          storageState: 'online',
+          sizeBytes: 6_000,
+          temperature: 32,
+          spunDown: true,
+          readCount: 10,
+          writeCount: 20,
+          errorCount: 16,
+        },
+      },
+    ] as Resource[];
+
+    const linkedDisks = getStoragePoolLinkedDisks(record, disks);
+
+    expect(linkedDisks.map((disk) => disk.role)).toEqual(['parity', 'data']);
+    expect(linkedDisks[1]).toEqual(
+      expect.objectContaining({
+        devPath: '/dev/sdc',
+        sizeLabel: '5.86 KB',
+        spunDown: true,
+        errorCount: 16,
+        ioLabel: 'R 10 / W 20',
+      }),
+    );
+    expect(buildStoragePoolDetailTopologyRows(record, linkedDisks)).toEqual(
+      expect.arrayContaining([
+        { label: 'Kind', value: 'Array' },
+        { label: 'State', value: 'Started' },
+        { label: 'Parity', value: '1 disk' },
+        { label: 'Data disks', value: '1 disk' },
+        { label: 'Spun down', value: '1 disk' },
+        { label: 'Disk errors', value: '16' },
+      ]),
+    );
   });
 });

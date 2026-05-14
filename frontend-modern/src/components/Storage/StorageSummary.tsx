@@ -11,11 +11,7 @@ import { SummaryPanel } from '@/components/shared/SummaryPanel';
 import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
 import { SummarySynchronizedReadout } from '@/components/shared/SummarySynchronizedReadout';
 import { buildInteractiveSparklineSynchronizedReadout } from '@/components/shared/interactiveSparklineModel';
-import {
-  type MetricPoint,
-  type TimeRange,
-  type StorageSummaryChartsResponse,
-} from '@/api/charts';
+import { type MetricPoint, type TimeRange, type StorageSummaryChartsResponse } from '@/api/charts';
 import {
   SUMMARY_TIME_RANGE_LABEL,
   type SummaryTimeRange,
@@ -125,10 +121,10 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
       }));
   });
   const interactiveSummarySeries = createMemo<InteractiveSparklineSeries[]>(() => [
-      ...allPoolUsageSeries(),
-      ...allPoolUsedSeries(),
-      ...allPoolAvailSeries(),
-      ...allDiskTempSeries(),
+    ...allPoolUsageSeries(),
+    ...allPoolUsedSeries(),
+    ...allPoolAvailSeries(),
+    ...allDiskTempSeries(),
   ]);
   const summaryFocus = useSummaryContextualFocusState({
     chartHoveredSeriesId: () => chartHoverSync()?.seriesId ?? null,
@@ -214,6 +210,12 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
   const formatTemp = (value: number) => `${value.toFixed(0)}°C`;
 
   const showComponent = () => props.poolCount > 0 || props.diskCount > 0;
+  const storageItemCountLabel = () =>
+    `${props.poolCount} storage ${props.poolCount === 1 ? 'item' : 'items'}`;
+  const storageAttentionLabel = () => {
+    const count = props.poolsDegraded ?? 0;
+    return `${count} ${count === 1 ? 'needs' : 'need'} attention`;
+  };
   const getFocusedSeriesName = (series: InteractiveSparklineSeries[]): string | null =>
     summaryFocus.getActiveSeriesName(series);
   const focusedLabel = (series: InteractiveSparklineSeries[]) => {
@@ -270,15 +272,13 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
           testId="storage-summary"
           headerLeft={
             <>
-              <span class="font-medium text-base-content">
-                {props.poolCount} {props.poolCount === 1 ? 'pool' : 'pools'}
-              </span>
+              <span class="font-medium text-base-content">{storageItemCountLabel()}</span>
               <Show
                 when={(props.poolsDegraded ?? 0) > 0 || (props.disksFailing ?? 0) > 0}
                 fallback={
                   <>
                     <Show when={props.poolCount > 0 || props.diskCount > 0}>
-                      <span class="text-emerald-600 dark:text-emerald-400">all healthy</span>
+                      <span class="text-emerald-600 dark:text-emerald-400">all online</span>
                     </Show>
                     <Show when={props.diskCount > 0}>
                       <span class="text-muted">
@@ -293,17 +293,17 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
                     when={props.onScopeToDegradedPools}
                     fallback={
                       <span class="text-amber-600 dark:text-amber-400">
-                        {props.poolsDegraded} degraded
+                        {storageAttentionLabel()}
                       </span>
                     }
                   >
                     <button
                       type="button"
                       onClick={() => props.onScopeToDegradedPools?.()}
-                      title="Show degraded pools"
+                      title="Show storage needing attention"
                       class="text-amber-600 hover:text-amber-700 hover:underline focus:underline focus:outline-none dark:text-amber-400 dark:hover:text-amber-300"
                     >
-                      {props.poolsDegraded} degraded
+                      {storageAttentionLabel()}
                     </button>
                   </Show>
                 </Show>
@@ -312,7 +312,8 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
                     when={props.onScopeToFailingDisks}
                     fallback={
                       <span class="text-amber-600 dark:text-amber-400">
-                        {props.disksFailing} {props.disksFailing === 1 ? 'disk failing' : 'disks failing'}
+                        {props.disksFailing}{' '}
+                        {props.disksFailing === 1 ? 'disk failing' : 'disks failing'}
                       </span>
                     }
                   >
@@ -322,7 +323,8 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
                       title="Show physical disks"
                       class="text-amber-600 hover:text-amber-700 hover:underline focus:underline focus:outline-none dark:text-amber-400 dark:hover:text-amber-300"
                     >
-                      {props.disksFailing} {props.disksFailing === 1 ? 'disk failing' : 'disks failing'}
+                      {props.disksFailing}{' '}
+                      {props.disksFailing === 1 ? 'disk failing' : 'disks failing'}
                     </button>
                   </Show>
                 </Show>
@@ -336,7 +338,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
           onTimeRangeChange={props.onTimeRangeChange}
         >
           <SummaryMetricCard
-            label="Pool Usage"
+            label="Storage Usage"
             secondaryLabel={focusedLabel(poolUsageSeries())}
             headerValue={renderSyncedReadout(poolUsageSyncedReadout())}
             loaded={props.loaded}

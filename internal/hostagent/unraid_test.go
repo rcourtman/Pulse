@@ -55,6 +55,9 @@ rdevStatus.2=DISK_DSBL
 	if got := storage.Disks[1]; got.Role != "data" || got.Serial != "SER123" || got.Filesystem != "xfs" {
 		t.Fatalf("unexpected data disk: %+v", got)
 	}
+	if got := storage.Disks[1].SizeBytes; got != 12000*1024 {
+		t.Fatalf("data disk size = %d, want %d", got, int64(12000*1024))
+	}
 	if got := storage.Disks[2]; got.Status != "disabled" {
 		t.Fatalf("disabled disk status = %q, want disabled", got.Status)
 	}
@@ -103,8 +106,72 @@ rdevId.29=
 	if len(storage.Disks) != 1 {
 		t.Fatalf("disk count = %d, want only assigned disks: %+v", len(storage.Disks), storage.Disks)
 	}
-	if got := storage.Disks[0]; got.Name != "md1p1" || got.Status != "online" || got.Serial != "WDC_DATA" {
+	if got := storage.Disks[0]; got.Name != "md1p1" || got.Role != "data" || got.Status != "online" || got.Serial != "WDC_DATA" {
 		t.Fatalf("unexpected assigned disk: %+v", got)
+	}
+}
+
+func TestParseUnraidDisksINIAddsNativeTopologyFields(t *testing.T) {
+	input := `
+["disk1"]
+idx="1"
+name="disk1"
+device="sde"
+id="WDC_WD60EFRX-68L0BN1_WD-WX11D65CUC39"
+size="5860522532"
+sectors="11721045168"
+sector_size="512"
+transport="ata"
+rotational="1"
+spundown="0"
+status="DISK_OK"
+temp="25"
+numReads="494251710"
+numWrites="344072698"
+numErrors="0"
+type="Data"
+fsType="luks:xfs"
+fsSize="5858433572"
+fsFree="1459693324"
+fsUsed="4398740248"
+["cachepool"]
+idx="30"
+name="cachepool"
+device="sdf"
+id="SSD_2000GB_AA202305222000G68551"
+size="1953514552"
+sectors="3907029168"
+sector_size="512"
+transport="ata"
+rotational="0"
+spundown="1"
+status="DISK_OK"
+temp="*"
+numErrors="2"
+type="Cache"
+fsType="btrfs"
+fsFree="1783019588"
+fsUsed="166957852"
+`
+
+	disks := parseUnraidDisksINI(input)
+	if len(disks) != 2 {
+		t.Fatalf("disk count = %d, want 2: %+v", len(disks), disks)
+	}
+	if got := disks[0]; got.Name != "disk1" || got.Role != "data" || got.Device != "/dev/sde" || got.Transport != "sata" {
+		t.Fatalf("unexpected disk1 identity: %+v", got)
+	}
+	if got := disks[0]; got.Model != "WDC WD60EFRX-68L0BN1" || got.Serial != "WD-WX11D65CUC39" {
+		t.Fatalf("unexpected disk1 model/serial: %+v", got)
+	}
+	if got := disks[0].SizeBytes; got != 11721045168*512 {
+		t.Fatalf("disk1 size = %d, want %d", got, int64(11721045168*512))
+	}
+	if got := disks[0].UsedBytes; got != 4398740248*1024 {
+		t.Fatalf("disk1 used = %d, want %d", got, int64(4398740248*1024))
+	}
+	if got := disks[1]; got.Name != "cachepool" || got.Role != "cache" || !got.SpunDown || got.Temperature != 0 || got.ErrorCount != 2 {
+		t.Fatalf("unexpected cachepool fields: %+v", got)
 	}
 }
 

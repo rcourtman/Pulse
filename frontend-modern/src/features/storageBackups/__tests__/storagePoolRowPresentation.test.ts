@@ -61,6 +61,8 @@ describe('storage pool row presentation', () => {
     expect(model.platformToneClass).toContain('bg-indigo-100');
     expect(model.hostLabel).toBe('pbs01');
     expect(model.topologyLabel).toBe('Datastore');
+    expect(model.stateLabel).toBe('Degraded');
+    expect(model.stateToneClass).toContain('text-amber');
     expect(model.compactProtection).toBe('Protection Reduced');
     expect(model.capacityDeltaLabel).toBe('+40.00 GB');
     expect(model.capacityDeltaToneClass).toContain('text-amber-600');

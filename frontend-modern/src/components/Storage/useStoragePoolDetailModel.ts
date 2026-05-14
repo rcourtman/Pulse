@@ -3,6 +3,7 @@ import type { HistoryTimeRange } from '@/api/charts';
 import type { StorageRecord } from '@/features/storageBackups/models';
 import {
   buildStoragePoolDetailConfigRows,
+  buildStoragePoolDetailTopologyRows,
   buildStoragePoolDetailZfsSummary,
   getStoragePoolLinkedDisks,
   resolveStoragePoolDetailChartTarget,
@@ -23,12 +24,16 @@ export const useStoragePoolDetailModel = (options: UseStoragePoolDetailModelOpti
   const linkedDisks = createMemo(() =>
     getStoragePoolLinkedDisks(options.record(), options.physicalDisks()),
   );
+  const topologyRows = createMemo(() =>
+    buildStoragePoolDetailTopologyRows(options.record(), linkedDisks()),
+  );
 
   return {
     chartRange,
     setChartRange,
     chartTarget,
     configRows,
+    topologyRows,
     zfsSummary,
     linkedDisks,
   };
