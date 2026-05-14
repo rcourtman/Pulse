@@ -1222,8 +1222,11 @@ describe('shared primitive guardrails', () => {
   it('keeps progress bars CSP-safe in the shared primitive owner', () => {
     expect(progressBarSource).toContain('data-progress-fill');
     expect(progressBarSource).toContain('foreignObject');
+    expect(progressBarSource).toContain('progress-fill-frame');
     expect(progressBarSource).not.toContain('style={{');
     expect(progressBarSource).not.toContain('style={');
+    expect(frontendIndexCssSource).toContain('.progress-fill-frame');
+    expect(frontendIndexCssSource).toContain('@media (prefers-reduced-motion: reduce)');
   });
 
   it('keeps search field on shell, runtime, and model owners', () => {

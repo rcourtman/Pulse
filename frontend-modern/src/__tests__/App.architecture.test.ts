@@ -144,6 +144,9 @@ describe('App architecture', () => {
     expect(appStylesSource).toContain('--color-grouped-table-row-bg');
     expect(appStylesSource).toContain('--color-grouped-table-row-bg: rgba(226, 232, 240, 0.72);');
     expect(appStylesSource).toContain('--color-grouped-table-row-bg: rgba(51, 65, 85, 0.58);');
+    expect(appStylesSource).toContain('.progress-fill-frame');
+    expect(appStylesSource).toContain('.metric-fill-geometry');
+    expect(appStylesSource).toContain('@media (prefers-reduced-motion: reduce)');
     expect(appStylesSource).not.toContain('--color-grouped-table-row-bg: theme(');
     expect(appStylesSource).not.toContain('@keyframes pulse-brand-wordmark');
     expect(appStylesSource).not.toContain('text-shadow');

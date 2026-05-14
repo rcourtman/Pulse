@@ -288,6 +288,13 @@ prompt explain the same operator-facing priority.
    alert threshold tables, and Infrastructure Settings source-manager tables;
    feature owners may own group content and behavior, but not duplicate the
    subgroup band styling.
+   Shared progress and metric-fill motion belongs to the frontend primitive
+   CSS contract in `frontend-modern/src/index.css`. Generic progress bars must
+   keep the CSP-safe `ProgressBar` / `foreignObject` shape and use the shared
+   `.progress-fill-frame` and `.progress-fill` classes for width and color
+   transitions instead of inline styles or page-local animation wrappers. The
+   same global CSS owner must provide the `prefers-reduced-motion` disable path
+   for these fills so feature surfaces inherit one accessibility policy.
    Shared primitives must not reintroduce app-shell monitored-system capacity
    banners. Monitored-system grouping and ledger presentation belongs in the
    owned settings surfaces, while commercial plan explanation belongs in

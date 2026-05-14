@@ -11,7 +11,10 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
     String(Math.max(0, Math.min(leftPercent + widthPercent, 100)));
 
   return (
-    <div ref={state.setContainerRef} class="metric-text w-full h-4 flex items-center justify-center">
+    <div
+      ref={state.setContainerRef}
+      class="metric-text w-full h-4 flex items-center justify-center"
+    >
       <div
         class="relative w-full h-full overflow-hidden bg-surface-hover rounded"
         onMouseEnter={state.handleMouseEnter}
@@ -28,6 +31,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
               <>
                 <rect
                   data-stacked-memory-segment="true"
+                  class="metric-fill-geometry"
                   x={String(Math.max(0, Math.min(segment.leftPercent, 100)))}
                   y="0"
                   width={String(Math.max(0, segment.widthPercent))}
@@ -37,6 +41,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                 />
                 <Show when={idx() < presentation().segments.length - 1}>
                   <line
+                    class="metric-fill-divider"
                     x1={segmentEdge(segment.leftPercent, segment.widthPercent)}
                     x2={segmentEdge(segment.leftPercent, segment.widthPercent)}
                     y1="0"
@@ -51,6 +56,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
           <Show when={presentation().showSwapBar}>
             <rect
               data-stacked-memory-swap="true"
+              class="metric-fill-geometry"
               x="0"
               y="82"
               width={swapBarWidth()}

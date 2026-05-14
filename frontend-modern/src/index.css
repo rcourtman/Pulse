@@ -300,9 +300,41 @@
   }
 
   /* Progress bars */
+  .progress-fill-frame {
+    transition: width 320ms cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: width;
+  }
+
   .progress-fill {
     @apply h-full;
-    transition: width 300ms ease-out;
+    transition:
+      width 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      background-color 180ms ease-out;
+  }
+
+  .metric-fill-geometry {
+    transition:
+      x 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      width 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      fill 180ms ease-out;
+    will-change: x, width, fill;
+  }
+
+  .metric-fill-divider {
+    transition:
+      x1 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      x2 320ms cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: x1, x2;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .progress-fill-frame,
+    .progress-fill,
+    .metric-fill-geometry,
+    .metric-fill-divider {
+      transition: none;
+      will-change: auto;
+    }
   }
 
   /* Custom scrollbar - subtle styling */

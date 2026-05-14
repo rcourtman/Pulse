@@ -36,6 +36,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                     <>
                       <rect
                         data-stacked-disk-fill="segment"
+                        class="metric-fill-geometry"
                         x={String(
                           presentation()
                             .segments.slice(0, idx())
@@ -49,6 +50,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                       />
                       <Show when={idx() < presentation().segments.length - 1}>
                         <line
+                          class="metric-fill-divider"
                           x1={String(
                             presentation()
                               .segments.slice(0, idx() + 1)
@@ -81,6 +83,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
               >
                 <rect
                   data-stacked-disk-fill="single"
+                  class="metric-fill-geometry"
                   x="0"
                   y="0"
                   width={clampPercent(presentation().barPercent)}
@@ -96,7 +99,10 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
               <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
                 <span>{presentation().displayLabel}</span>
                 <Show when={presentation().showMaxLabel}>
-                  <span class="text-[8px] font-normal text-muted" title={presentation().maxLabelFull}>
+                  <span
+                    class="text-[8px] font-normal text-muted"
+                    title={presentation().maxLabelFull}
+                  >
                     {' '}
                     {presentation().maxLabelShort}
                   </span>
@@ -130,7 +136,11 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
           </div>
         }
       >
-        <div class="w-full" onMouseEnter={state.handleMouseEnter} onMouseLeave={state.handleMouseLeave}>
+        <div
+          class="w-full"
+          onMouseEnter={state.handleMouseEnter}
+          onMouseLeave={state.handleMouseLeave}
+        >
           <div class="flex items-stretch gap-1">
             <For each={presentation().miniDisks}>
               {(disk) => (
@@ -147,6 +157,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                     >
                       <rect
                         data-stacked-disk-fill="mini"
+                        class="metric-fill-geometry"
                         x="0"
                         y="0"
                         width={clampPercent(disk.percent)}
@@ -164,11 +175,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
       </Show>
 
       {/* Tooltip for disk breakdown */}
-      <TooltipPortal
-        when={state.tooltipVisible()}
-        x={state.tip.pos().x}
-        y={state.tip.pos().y}
-      >
+      <TooltipPortal when={state.tooltipVisible()} x={state.tip.pos().x} y={state.tip.pos().y}>
         <div class="min-w-[140px]">
           <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
             {presentation().tooltipTitle}
@@ -199,6 +206,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                   >
                     <rect
                       data-stacked-disk-fill="tooltip"
+                      class="metric-fill-geometry"
                       x="0"
                       y="0"
                       width={parsePercent(item.percent)}

@@ -262,6 +262,13 @@ regression protection.
     override resolution belongs to the alerts-owned activation store and
     `frontend-modern/src/utils/metricThresholds.ts`, while the hot-path bar
     models remain presentation-only consumers.
+    Metric-fill motion for these hot-path bars must stay CSS-owned and
+    transform-free for layout stability: `StackedDiskBar`, `StackedMemoryBar`,
+    and `EnhancedCPUBar` may attach the shared `.metric-fill-geometry` and
+    `.metric-fill-divider` classes to existing SVG geometry, but they must not
+    add per-row timers, animation signals, measurement loops, or page-local
+    motion state. The global frontend primitive CSS owns the easing,
+    color/geometry transition timing, and `prefers-reduced-motion` fallback.
 23. Extend grouped workload row windowing, reveal-index clamping, overscan math, and per-group visible-slice derivation through `frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts`, and extend viewport event wiring through `frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts` rather than rebuilding scroll handlers, mounted-row budgets, viewport listeners, or group-slice math inside `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`
 24. Extend Workloads shell rendering through `frontend-modern/src/components/Workloads/WorkloadsStateCards.tsx`, `frontend-modern/src/components/Workloads/WorkloadsTable.tsx`, and `frontend-modern/src/components/Workloads/WorkloadsStatsStrip.tsx` rather than accreting loading cards, workload table markup, or stats-strip presentation back into `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
 25. Extend workload table shell ownership through `frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx` and `frontend-modern/src/components/Workloads/WorkloadPanel.tsx` rather than rebuilding sortable header markup, grouped node rows, row expansion, or guest-drawer rendering inside `frontend-modern/src/components/Workloads/WorkloadsTable.tsx`

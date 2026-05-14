@@ -27,6 +27,7 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
         >
           <rect
             data-enhanced-cpu-fill="true"
+            class="metric-fill-geometry"
             x="0"
             y="0"
             width={barPercent()}

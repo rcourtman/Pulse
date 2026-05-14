@@ -30,7 +30,14 @@ export const ProgressBar: Component<ProgressBarProps> = (props) => {
         preserveAspectRatio="none"
         aria-hidden="true"
       >
-        <foreignObject data-progress-fill="true" x="0" y="0" width={width()} height="100">
+        <foreignObject
+          data-progress-fill="true"
+          class="progress-fill-frame"
+          x="0"
+          y="0"
+          width={width()}
+          height="100"
+        >
           <div class={`progress-fill h-full w-full ${props.fillClass ?? ''}`} />
         </foreignObject>
       </svg>

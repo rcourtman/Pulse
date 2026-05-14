@@ -931,6 +931,8 @@ describe('Workloads performance contract', () => {
 
     it('keeps stacked disk bar runtime and derivations in canonical owners', () => {
       expect(stackedDiskBarSource).toContain('useStackedDiskBarState');
+      expect(stackedDiskBarSource).toContain('metric-fill-geometry');
+      expect(stackedDiskBarSource).toContain('metric-fill-divider');
       expect(stackedDiskBarSource).not.toContain('style={{');
       expect(stackedDiskBarSource).not.toContain('style={');
       expect(stackedDiskBarSource).not.toContain('const [containerWidth, setContainerWidth] =');
@@ -947,6 +949,8 @@ describe('Workloads performance contract', () => {
 
     it('keeps stacked memory bar runtime and derivations in canonical owners', () => {
       expect(stackedMemoryBarSource).toContain('useStackedMemoryBarState');
+      expect(stackedMemoryBarSource).toContain('metric-fill-geometry');
+      expect(stackedMemoryBarSource).toContain('metric-fill-divider');
       expect(stackedMemoryBarSource).not.toContain('style={{');
       expect(stackedMemoryBarSource).not.toContain('style={');
       expect(stackedMemoryBarSource).not.toContain('const [containerWidth, setContainerWidth] =');
@@ -974,6 +978,7 @@ describe('Workloads performance contract', () => {
 
     it('keeps enhanced CPU bar runtime and derivations in canonical owners', () => {
       expect(enhancedCpuBarSource).toContain('useEnhancedCPUBarState');
+      expect(enhancedCpuBarSource).toContain('metric-fill-geometry');
       expect(enhancedCpuBarSource).not.toContain('style={{');
       expect(enhancedCpuBarSource).not.toContain('style={');
       expect(enhancedCpuBarSource).not.toContain('const tip = useTooltip()');
