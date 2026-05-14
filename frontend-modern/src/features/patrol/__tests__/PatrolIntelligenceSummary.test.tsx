@@ -46,7 +46,10 @@ describe('PatrolIntelligenceSummary', () => {
       },
     ]);
 
-    const patrolState = createPatrolState();
+    const patrolState = {
+      ...createPatrolState(),
+      summaryDetailsExpanded: () => true,
+    };
     render(() => <PatrolIntelligenceSummary state={patrolState} />);
 
     expect(screen.getByTestId('patrol-recommended-next-step').textContent).toContain(
@@ -207,6 +210,7 @@ describe('PatrolIntelligenceSummary', () => {
         errorMessage: () => '',
       },
       runtimeState: () => 'running',
+      summaryDetailsExpanded: () => true,
       summaryStats: () => ({
         criticalFindings: 0,
         warningFindings: 0,

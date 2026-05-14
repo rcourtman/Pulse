@@ -1,9 +1,7 @@
 import { createMemo, For, Show } from 'solid-js';
 import ActivityIcon from 'lucide-solid/icons/activity';
-import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
-import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import ChevronDownIcon from 'lucide-solid/icons/chevron-down';
 import ChevronUpIcon from 'lucide-solid/icons/chevron-up';
 import MessageSquareIcon from 'lucide-solid/icons/message-square';
@@ -117,9 +115,6 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       runs: state.patrolRunHistory.value() ?? [],
     }),
   );
-  const assessmentShellPresentation = createMemo(() =>
-    getPatrolAssessmentShellPresentation(assessment().tone),
-  );
   const activeFindingsSummaryPresentation = createMemo(() =>
     getPatrolSummaryPresentation(metricState().primarySeverity, metricState().primaryValue > 0),
   );
@@ -216,7 +211,6 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
   );
   const visibleMetrics = createMemo(() => {
     const metrics: Array<{
-      icon: typeof ActivityIcon;
       key: string;
       label: string;
       presentation: ReturnType<typeof getPatrolSummaryPresentation>;
@@ -225,12 +219,6 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
 
     if (metricState().primaryValue > 0) {
       metrics.push({
-        icon:
-          summaryStats().criticalFindings > 0
-            ? ShieldAlertIcon
-            : summaryStats().totalActive > 0
-              ? AlertTriangleIcon
-              : ActivityIcon,
         key: 'primary',
         label: metricState().primaryLabel,
         presentation: activeFindingsSummaryPresentation(),
@@ -244,7 +232,6 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
         metricState().secondaryValue !== metricState().primaryValue)
     ) {
       metrics.push({
-        icon: AlertCircleIcon,
         key: 'secondary',
         label: metricState().secondaryLabel,
         presentation: warningSummaryPresentation(),
@@ -254,7 +241,6 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
 
     if (metricState().fixedValue > 0 && hasAttentionMetrics()) {
       metrics.push({
-        icon: CheckCircleIcon,
         key: 'fixed',
         label: metricState().fixedLabel,
         presentation: fixedSummaryPresentation(),
@@ -346,20 +332,6 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
     }
   };
 
-  const renderAssessmentIcon = () => {
-    const iconClass = `w-5 h-5 ${assessmentShellPresentation().iconClass}`;
-    switch (assessment().tone) {
-      case 'success':
-        return <CheckCircleIcon class={iconClass} />;
-      case 'error':
-        return <ShieldAlertIcon class={iconClass} />;
-      case 'warning':
-        return <AlertTriangleIcon class={iconClass} />;
-      default:
-        return <AlertCircleIcon class={iconClass} />;
-    }
-  };
-
   return (
     <>
       <Show when={showLoadingSummary()}>
@@ -410,27 +382,92 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       <Show when={!showRuntimeSummary() && !showLoadingSummary()}>
         <Show when={state.intelligenceSummary()}>
           {(summary) => (
-            <section class="overflow-hidden rounded-md border border-border bg-surface shadow-sm">
-              <div
-                class={`flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-4 py-3 ${assessmentShellPresentation().headerClass}`}
-              >
-                <span
-                  class={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${assessmentShellPresentation().badgeClass}`}
-                >
-                  {assessment().eyebrow}
-                </span>
-                <div class="flex items-center gap-2">
-                  <span class="inline-flex items-center rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold text-base-content shadow-sm">
+            <section class="border-y border-border-subtle py-3">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span
+                      class={`h-2 w-2 rounded-full ${getPatrolAssessmentDotClass(assessment().tone)}`}
+                      aria-hidden="true"
+                    />
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                      {assessment().eyebrow}
+                    </p>
+                  </div>
+
+                  <h2 class="mt-2 text-base font-semibold text-base-content">
+                    {assessment().title}
+                  </h2>
+                  <p class="mt-1 max-w-4xl text-sm leading-6 text-muted">
+                    {assessment().description}
+                  </p>
+
+                  <div
+                    data-testid="patrol-recommended-next-step"
+                    class={`mt-3 flex flex-col gap-2 border-l-2 pl-3 sm:flex-row sm:items-center ${getPatrolRecommendedNextStepAccentClass(recommendedNextStep().tone)}`}
+                  >
+                    <p class="min-w-0 flex-1 text-sm leading-6 text-muted">
+                      <span class="font-semibold text-base-content">Next:</span>{' '}
+                      <span class="font-semibold text-base-content">
+                        {recommendedNextStep().title}
+                      </span>
+                      <span> - {recommendedNextStep().description}</span>
+                    </p>
+                    <Show when={recommendedNextStepAction()}>
+                      {(action) => (
+                        <Show
+                          when={action().href}
+                          fallback={
+                            <button
+                              type="button"
+                              data-testid="patrol-recommended-next-step-action"
+                              disabled={recommendedNextStepActionDisabled()}
+                              title={
+                                action().kind === 'run_patrol'
+                                  ? state.triggerPatrolDisabledReason()
+                                  : undefined
+                              }
+                              class="inline-flex shrink-0 items-center gap-1.5 rounded border border-border-subtle bg-transparent px-2.5 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover disabled:text-muted"
+                              onClick={() => handleRecommendedNextStepAction(action())}
+                            >
+                              {renderRecommendedNextStepActionIcon(
+                                action(),
+                                state.isTriggeringPatrol() ||
+                                  state.manualRunRequested() ||
+                                  state.patrolStream.isStreaming(),
+                              )}
+                              <span>{recommendedNextStepActionLabel()}</span>
+                            </button>
+                          }
+                        >
+                          {(href) => (
+                            <a
+                              href={href()}
+                              data-testid="patrol-recommended-next-step-action"
+                              class="inline-flex shrink-0 items-center gap-1.5 rounded border border-border-subtle bg-transparent px-2.5 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover"
+                            >
+                              {renderRecommendedNextStepActionIcon(action(), false)}
+                              <span>{action().label}</span>
+                            </a>
+                          )}
+                        </Show>
+                      )}
+                    </Show>
+                  </div>
+                </div>
+
+                <div class="flex shrink-0 flex-wrap items-center gap-3 sm:justify-end">
+                  <p class="text-sm font-semibold text-base-content">
                     {scoreChipLabel()} {summary().overall_health.grade} ·{' '}
                     {Math.round(summary().overall_health.score)}/100
-                  </span>
+                  </p>
                   <button
                     type="button"
                     data-testid="patrol-summary-details-toggle"
                     aria-expanded={state.summaryDetailsExpanded()}
                     aria-controls="patrol-summary-details"
                     onClick={() => state.setSummaryDetailsExpanded((value) => !value)}
-                    class="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-medium text-muted shadow-sm transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    class="inline-flex items-center gap-1 text-xs font-medium text-muted transition-colors hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
                     <Show
                       when={state.summaryDetailsExpanded()}
@@ -443,101 +480,10 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                 </div>
               </div>
 
-              <div class="px-4 py-4 sm:px-5 sm:py-5">
-                <div class="flex items-start gap-3">
-                  <div
-                    class={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md border ${assessmentShellPresentation().iconContainerClass}`}
-                  >
-                    {renderAssessmentIcon()}
-                  </div>
-
-                  <div class="min-w-0 flex-1">
-                    <h2 class="text-lg font-semibold tracking-tight text-base-content">
-                      {assessment().title}
-                    </h2>
-                    <p class="mt-1.5 max-w-3xl text-sm leading-6 text-muted">
-                      {assessment().description}
-                    </p>
-                    <div
-                      data-testid="patrol-recommended-next-step"
-                      class={`mt-4 border-l-2 pl-3 ${getPatrolRecommendedNextStepAccentClass(recommendedNextStep().tone)}`}
-                    >
-                      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-                        Recommended next step
-                      </p>
-                      <p class="mt-1 text-sm font-semibold text-base-content">
-                        {recommendedNextStep().title}
-                      </p>
-                      <p class="mt-1 max-w-3xl text-sm leading-6 text-muted">
-                        {recommendedNextStep().description}
-                      </p>
-                      <Show when={recommendedNextStepAction()}>
-                        {(action) => (
-                          <div class="mt-3">
-                            <Show
-                              when={action().href}
-                              fallback={
-                                <button
-                                  type="button"
-                                  data-testid="patrol-recommended-next-step-action"
-                                  disabled={recommendedNextStepActionDisabled()}
-                                  title={
-                                    action().kind === 'run_patrol'
-                                      ? state.triggerPatrolDisabledReason()
-                                      : undefined
-                                  }
-                                  class="inline-flex items-center gap-1.5 rounded-md border border-blue-600 bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:border-border disabled:bg-surface-alt disabled:text-muted"
-                                  onClick={() => handleRecommendedNextStepAction(action())}
-                                >
-                                  {renderRecommendedNextStepActionIcon(
-                                    action(),
-                                    state.isTriggeringPatrol() ||
-                                      state.manualRunRequested() ||
-                                      state.patrolStream.isStreaming(),
-                                  )}
-                                  <span>{recommendedNextStepActionLabel()}</span>
-                                </button>
-                              }
-                            >
-                              {(href) => (
-                                <a
-                                  href={href()}
-                                  data-testid="patrol-recommended-next-step-action"
-                                  class="inline-flex items-center gap-1.5 rounded-md border border-blue-600 bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
-                                >
-                                  {renderRecommendedNextStepActionIcon(action(), false)}
-                                  <span>{action().label}</span>
-                                </a>
-                              )}
-                            </Show>
-                          </div>
-                        )}
-                      </Show>
-                    </div>
-                    <div class="mt-4 flex flex-wrap items-center gap-2">
-                      <Show when={showAssessmentAssistantButton()}>
-                        <button
-                          type="button"
-                          data-testid="patrol-assessment-assistant-button"
-                          class="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-base-content shadow-sm transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                          title="Discuss current Patrol assessment"
-                          onClick={handleDiscussAssessment}
-                        >
-                          <MessageSquareIcon class="h-4 w-4" aria-hidden="true" />
-                          <span>Discuss with Assistant</span>
-                        </button>
-                      </Show>
-                    </div>
-                  </div>
-                </div>
-
-                <Show when={state.summaryDetailsExpanded()}>
-                <div
-                  id="patrol-summary-details"
-                  class="mt-5 overflow-hidden rounded-md border border-border-subtle bg-surface-alt/60"
-                >
-                  <div class="grid divide-y divide-border-subtle lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:divide-x lg:divide-y-0">
-                    <div class="p-3">
+              <Show when={state.summaryDetailsExpanded()}>
+                <div id="patrol-summary-details" class="mt-4 border-t border-border-subtle pt-4">
+                  <div class="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+                    <div>
                       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
                         Verification
                       </p>
@@ -562,7 +508,7 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                       </Show>
                     </div>
 
-                    <div class="p-3">
+                    <div>
                       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
                         Latest activity
                       </p>
@@ -622,9 +568,23 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                       </Show>
                     </div>
                   </div>
+
+                  <Show when={showAssessmentAssistantButton()}>
+                    <div class="mt-4">
+                      <button
+                        type="button"
+                        data-testid="patrol-assessment-assistant-button"
+                        class="inline-flex items-center gap-1.5 rounded border border-border-subtle bg-transparent px-2.5 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                        title="Discuss current Patrol assessment"
+                        onClick={handleDiscussAssessment}
+                      >
+                        <MessageSquareIcon class="h-4 w-4" aria-hidden="true" />
+                        <span>Discuss with Assistant</span>
+                      </button>
+                    </div>
+                  </Show>
                 </div>
-                </Show>
-              </div>
+              </Show>
             </section>
           )}
         </Show>
@@ -638,26 +598,16 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
           state.summaryDetailsExpanded()
         }
       >
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
           <For each={visibleMetrics()}>
             {(metric) => {
-              const Icon = metric.icon;
               return (
-                <div class="rounded-md border border-border-subtle bg-surface p-3">
-                  <div class="flex items-center gap-2">
-                    <div
-                      class={`rounded-md border p-1.5 ${metric.presentation.iconContainerClass}`}
-                    >
-                      <Icon class={`h-4 w-4 ${metric.presentation.iconClass}`} />
-                    </div>
-                    <div>
-                      <p class="text-xs text-muted">{metric.label}</p>
-                      <p class={`text-lg font-bold ${metric.presentation.valueClass}`}>
-                        {metric.value}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                <p>
+                  <span class="text-muted">{metric.label}</span>{' '}
+                  <span class={`font-semibold ${metric.presentation.valueClass}`}>
+                    {metric.value}
+                  </span>
+                </p>
               );
             }}
           </For>
@@ -692,6 +642,21 @@ function getPatrolRecommendedNextStepAccentClass(
       return 'border-red-400 dark:border-red-500';
     default:
       return 'border-blue-400 dark:border-blue-500';
+  }
+}
+
+function getPatrolAssessmentDotClass(
+  tone: ReturnType<typeof getPatrolAssessmentPresentation>['tone'],
+) {
+  switch (tone) {
+    case 'success':
+      return 'bg-emerald-500';
+    case 'warning':
+      return 'bg-amber-500';
+    case 'error':
+      return 'bg-red-500';
+    default:
+      return 'bg-blue-500';
   }
 }
 

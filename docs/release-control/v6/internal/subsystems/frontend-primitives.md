@@ -1674,20 +1674,20 @@ must not render a green healthy empty state from `0 active findings` alone
 when the owning Patrol runtime or overall-health summary is degraded, blocked,
 or not fully verified.
 The same hierarchy also applies inside the Patrol summary shell: once the
-primary summary card states Patrol's assessment and verification basis,
-supporting metric strips under that card must stay metric-oriented and must
-not repeat assessment or verification labels as a second compact verdict row.
-That same summary shell should also keep the shared page-card base neutral:
-severity belongs in compact header accents, icon chips, and badges rather
-than turning the entire full-width summary into a tinted warning banner that
-breaks the surrounding Pulse surface language.
+primary assessment strip states Patrol's current risk and verification basis,
+supporting metrics under that strip must stay metric-oriented and must not
+repeat assessment or verification labels as a second compact verdict row.
+That same summary shell should also keep the shared Pulse surface neutral:
+severity belongs in compact accents, inline readouts, and badges rather than
+turning the whole assessment into a tinted warning banner, nested card, or
+hero-style block that breaks the surrounding operator workflow.
 That same summary-shell rule also applies to timing metadata: if the header,
 verification card, or findings footer already presents the governed Patrol
 activity timestamp, the summary chip row must not add another recency badge
 that competes with those owned timing surfaces.
 The same ownership split applies to supporting counts: if the Patrol summary
 surface renders the metric strip for active findings, warnings, criticals, and
-fixes, the primary summary card should not repeat those same counts in badge
+fixes, the primary assessment strip should not repeat those same counts in badge
 form beside the assessment and verification copy.
 That same ownership rule applies to empty-state timing metadata. When the
 Patrol page header already carries schedule and recency context, the findings

@@ -1156,7 +1156,7 @@ describe('AIIntelligence entitlement gating', () => {
 
     await waitFor(() => {
       expect(screen.getAllByText('Coverage incomplete').length).toBeGreaterThan(0);
-      expect(screen.getByText('Recommended next step')).toBeInTheDocument();
+      expect(screen.getByText('Next:')).toBeInTheDocument();
       expect(screen.getByText('Verify full coverage')).toBeInTheDocument();
       expect(screen.getByTestId('patrol-recommended-next-step-action')).toHaveTextContent(
         'Run Patrol',
@@ -1175,11 +1175,9 @@ describe('AIIntelligence entitlement gating', () => {
     });
 
     expect(screen.queryByText('No issues found')).not.toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'Run a full Patrol sweep before treating this assessment as an all-clear; recent evidence is incomplete or limited to targeted activity.',
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId('patrol-recommended-next-step')).toHaveTextContent(
+      'Run a full Patrol sweep before treating this assessment as an all-clear; recent evidence is incomplete or limited to targeted activity.',
+    );
     expect(screen.queryByText(/Last patrol/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Last:/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Partial verification')).not.toBeInTheDocument();
@@ -1361,7 +1359,9 @@ describe('AIIntelligence entitlement gating', () => {
     );
     const assessmentShell = screen.getByText('Patrol assessment').closest('section');
     expect(assessmentShell).not.toBeNull();
-    expect(assessmentShell!.className).toContain('bg-surface');
+    expect(assessmentShell!.className).toContain('border-y');
+    expect(assessmentShell!.className).not.toContain('rounded-md');
+    expect(assessmentShell!.className).not.toContain('shadow-sm');
     expect(assessmentShell!.className).not.toContain('bg-amber-50');
     expect(screen.queryByText('Infrastructure findings')).not.toBeInTheDocument();
     expect(screen.queryByText('Warnings')).not.toBeInTheDocument();
