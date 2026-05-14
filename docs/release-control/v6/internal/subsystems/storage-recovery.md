@@ -1992,11 +1992,12 @@ and collapsed file lists without repeating the same verification fact in
 provider-specific sections or rendering empty verifier/evidence placeholders
 when no verification record exists. Container recovery points should present
 container ids with operator vocabulary such as `CTID`, and duplicated placement
-values should not be repeated under lower-priority location labels.
+or target values should not be repeated under lower-priority metadata labels.
 Provider-specific metadata must not recast the event drawer itself as if PBS
-were the native recovery model. When target-specific technical labels are
-surfaced, they should prefer neutral wording such as `Target Ref`, `Target
-Resource`, and `Target Health`.
+were the native recovery model. Provider-owned repository data should sit under
+target-oriented wording such as `Target Details`, `Repository owner`, and
+`Target Health`; when target-specific technical labels are surfaced, they
+should prefer neutral wording such as `Target Ref` and `Target Resource`.
 Those transport hooks are direct governed runtime surfaces, not just page
 implementation detail: `frontend-modern/src/hooks/useRecoveryPoints.ts`,
 `frontend-modern/src/hooks/useRecoveryPointsFacets.ts`,

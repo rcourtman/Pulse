@@ -653,6 +653,12 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     const placementValues = new Set(
       visibleLocationEntries.map((entry) => normalizeComparableText(entry.value)),
     );
+    const targetDatastoreValues = [
+      typeof p.repositoryRef?.name === 'string' ? p.repositoryRef.name.trim() : '',
+      matchedDatastore()?.datastore.name || '',
+    ]
+      .filter(Boolean)
+      .map(normalizeComparableText);
 
     if (itemType && itemType !== 'Unknown') addPair('Item Type', itemType);
     for (const entry of visibleLocationEntries) {
@@ -684,6 +690,12 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
       const displayValue = normalizeDetailText(v);
       if (!displayValue) continue;
       if (k === 'vmid' && displayValue === '0') continue;
+      if (
+        k === 'datastore' &&
+        targetDatastoreValues.includes(normalizeComparableText(displayValue))
+      ) {
+        continue;
+      }
       if (placementValues.has(normalizeComparableText(displayValue))) continue;
       addPair(
         k === 'vmid' ? getRecoveryPointNumericIdLabel(p) : COMMON_DETAIL_LABELS[k] || k,
@@ -856,10 +868,10 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                Platform Details
+                Target Details
               </div>
               <div class="mt-1 text-xs text-muted">
-                Provider metadata and target health for this recovery point.
+                Repository owner, target capacity, and file inventory for this recovery point.
               </div>
             </div>
             <Show when={platformBadge()}>
@@ -880,7 +892,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
             <Show when={pbsOwner()}>
               <div class="rounded border border-border bg-surface px-3 py-2 text-xs">
                 <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                  Owner
+                  Repository owner
                 </div>
                 <div class="mt-0.5 font-mono text-[11px] text-base-content break-all">
                   {pbsOwner()}

@@ -977,6 +977,9 @@ describe('Recovery', () => {
     expect(
       within(detailsPanel as HTMLTableCellElement).queryByText('Verification provenance'),
     ).not.toBeInTheDocument();
+    expect(
+      within(detailsPanel as HTMLTableCellElement).queryByText('Target Details'),
+    ).not.toBeInTheDocument();
     expect(within(detailsPanel as HTMLTableCellElement).getByText('Item Type')).toBeInTheDocument();
     expect(within(detailsPanel as HTMLTableCellElement).getByText('VM')).toBeInTheDocument();
     expect(

@@ -86,10 +86,13 @@ describe('RecoveryPointDetails', () => {
       />
     ));
 
-    expect(screen.getByText('Platform Details')).toBeInTheDocument();
+    expect(screen.getByText('Target Details')).toBeInTheDocument();
+    expect(screen.queryByText('Platform Details')).not.toBeInTheDocument();
     expect(screen.queryByText('PBS Details')).not.toBeInTheDocument();
     expect(
-      screen.getByText('Provider metadata and target health for this recovery point.'),
+      screen.getByText(
+        'Repository owner, target capacity, and file inventory for this recovery point.',
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Restore action path')).not.toBeInTheDocument();
     expect(screen.getByText('Restore readiness')).toBeInTheDocument();
@@ -114,7 +117,7 @@ describe('RecoveryPointDetails', () => {
     expect(screen.queryByText('Target Ref')).not.toBeInTheDocument();
     expect(screen.queryByText('Item Ref')).not.toBeInTheDocument();
     expect(screen.getByText('VMID')).toBeInTheDocument();
-    expect(screen.getByText('Datastore')).toBeInTheDocument();
+    expect(screen.getByText('Datastore: fast-store')).toBeInTheDocument();
     expect(screen.queryByText('Namespace')).not.toBeInTheDocument();
     expect(screen.queryByText('details.vmid')).not.toBeInTheDocument();
 
@@ -209,6 +212,7 @@ describe('RecoveryPointDetails', () => {
       />
     ));
 
+    expect(screen.queryByText('Target Details')).not.toBeInTheDocument();
     expect(screen.queryByText('Platform Details')).not.toBeInTheDocument();
     expect(screen.queryByText('PBS Details')).not.toBeInTheDocument();
     expect(screen.getByText('Item Type')).toBeInTheDocument();
