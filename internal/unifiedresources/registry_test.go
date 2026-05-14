@@ -344,6 +344,71 @@ func TestResourceRegistry_IngestResourcesRebuildsSourceMappingsForMetricsTargets
 	}
 }
 
+func TestResourceRegistry_IngestResourcesDerivesClusterWorkloadParentFromSeededProxmoxNode(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
+
+	rr.IngestResources([]Resource{
+		{
+			ID:       "agent-delly",
+			Type:     ResourceTypeAgent,
+			Name:     "delly",
+			Status:   StatusOnline,
+			LastSeen: now,
+			Sources:  []DataSource{SourceProxmox, SourceAgent},
+			Identity: ResourceIdentity{
+				MachineID: "machine-delly",
+				Hostnames: []string{"delly"},
+			},
+			Proxmox: &ProxmoxData{
+				SourceID:    "homelab-delly",
+				NodeName:    "delly",
+				ClusterName: "homelab",
+				Instance:    "delly",
+			},
+			Agent: &AgentData{
+				AgentID:  "agent-source-delly",
+				Hostname: "delly",
+			},
+		},
+		{
+			ID:       "system-container-cloudflared",
+			Type:     ResourceTypeSystemContainer,
+			Name:     "cloudflared",
+			Status:   StatusOnline,
+			LastSeen: now,
+			Sources:  []DataSource{SourceProxmox},
+			Identity: ResourceIdentity{Hostnames: []string{"cloudflared"}},
+			Proxmox: &ProxmoxData{
+				SourceID:    "delly:delly:104",
+				NodeName:    "delly",
+				ClusterName: "homelab",
+				Instance:    "delly",
+				VMID:        104,
+			},
+		},
+	})
+
+	child, ok := rr.Get("system-container-cloudflared")
+	if !ok {
+		t.Fatal("expected cloudflared resource")
+	}
+	if child.ParentID == nil || *child.ParentID != "agent-delly" {
+		t.Fatalf("expected cloudflared parent agent-delly, got %+v", child.ParentID)
+	}
+	if child.ParentName != "delly" {
+		t.Fatalf("expected cloudflared parent name delly, got %q", child.ParentName)
+	}
+
+	parent, ok := rr.Get("agent-delly")
+	if !ok {
+		t.Fatal("expected delly parent resource")
+	}
+	if parent.ChildCount != 1 {
+		t.Fatalf("expected delly child count 1, got %d", parent.ChildCount)
+	}
+}
+
 func TestStorageRiskSemanticsPrefersUnraidParitySummaryOverGenericDiskCounts(t *testing.T) {
 	risk := &StorageRisk{
 		Reasons: []StorageRiskReason{
@@ -1274,6 +1339,96 @@ func TestResourceRegistry_IngestSnapshotUnifiesHostLinkedProxmoxNodeViewsByHostI
 	targets := rr.SourceTargets(resource.ID)
 	if len(targets) != 3 {
 		t.Fatalf("expected 3 source targets (2 proxmox + 1 agent), got %d", len(targets))
+	}
+}
+
+func TestResourceRegistry_IngestSnapshotParentsClusterNamedProxmoxGuestsToMergedNode(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{
+			{
+				ID:              "homelab-delly",
+				Name:            "delly",
+				Instance:        "delly",
+				ClusterName:     "homelab",
+				IsClusterMember: true,
+				Host:            "https://10.0.0.9:8006",
+				LinkedAgentID:   "host-1",
+				Status:          "online",
+				LastSeen:        now,
+			},
+		},
+		Hosts: []models.Host{
+			{
+				ID:           "host-1",
+				Hostname:     "delly.local",
+				MachineID:    "machine-delly",
+				ReportIP:     "10.0.0.9",
+				Status:       "online",
+				LastSeen:     now,
+				LinkedNodeID: "homelab-delly",
+				NetworkInterfaces: []models.HostNetworkInterface{
+					{Name: "eth0", MAC: "00:11:22:33:44:66", Addresses: []string{"10.0.0.9/24"}},
+				},
+			},
+		},
+		VMs: []models.VM{
+			{
+				ID:       "delly:delly:100",
+				VMID:     100,
+				Name:     "docker-vm",
+				Node:     "delly",
+				Instance: "delly",
+				Status:   "running",
+				LastSeen: now,
+			},
+		},
+		Containers: []models.Container{
+			{
+				ID:       "delly:delly:104",
+				VMID:     104,
+				Name:     "cloudflared",
+				Node:     "delly",
+				Instance: "delly",
+				Status:   "running",
+				LastSeen: now,
+			},
+		},
+	})
+
+	agents := rr.ListByType(ResourceTypeAgent)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 merged delly resource, got %d", len(agents))
+	}
+	parentID := agents[0].ID
+
+	vms := rr.ListByType(ResourceTypeVM)
+	if len(vms) != 1 {
+		t.Fatalf("expected 1 vm, got %d", len(vms))
+	}
+	if vms[0].ParentID == nil || *vms[0].ParentID != parentID {
+		t.Fatalf("expected vm parent %q, got %+v", parentID, vms[0].ParentID)
+	}
+	if vms[0].ParentName == "" {
+		t.Fatal("expected vm parent name to be derived")
+	}
+
+	containers := rr.ListByType(ResourceTypeSystemContainer)
+	if len(containers) != 1 {
+		t.Fatalf("expected 1 container, got %d", len(containers))
+	}
+	if containers[0].ParentID == nil || *containers[0].ParentID != parentID {
+		t.Fatalf("expected container parent %q, got %+v", parentID, containers[0].ParentID)
+	}
+
+	parent, ok := rr.Get(parentID)
+	if !ok {
+		t.Fatalf("expected parent %q", parentID)
+	}
+	if parent.ChildCount != 2 {
+		t.Fatalf("expected parent child count 2, got %d", parent.ChildCount)
 	}
 }
 

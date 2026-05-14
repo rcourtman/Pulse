@@ -214,6 +214,12 @@ cross-source deduplication.
    the same host coalesces into one hybrid infrastructure resource, while
    same-name agent-only records remain separate until stronger identity or
    platform evidence exists.
+   Proxmox child resources must derive their canonical parent from the owning
+   node identity across all supported source-key shapes. Guests, storage pools,
+   and physical disks may arrive with instance-node, cluster-node, or bare-node
+   parent evidence, and both snapshot ingest and already-unified registry seed
+   paths must attach them to the same merged host resource before REST,
+   websocket, Workloads, or Infrastructure consumers render the estate.
 
 Resource detail mappers now reuse the shared
 `frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor

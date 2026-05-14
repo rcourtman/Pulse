@@ -876,11 +876,11 @@ func (rr *ResourceRegistry) ingestPMGInstance(instance models.PMGInstance) {
 func (rr *ResourceRegistry) ingestVM(vm models.VM, clusterByInstance map[string]string) {
 	resource, identity := resourceFromVM(vm)
 	sourceID := proxmoxVMSourceID(vm)
-	parentSourceID := proxmoxNodeSourceID(vm.Instance, vm.Node)
-	if parentID, ok := rr.bySource[SourceProxmox][parentSourceID]; ok {
+	clusterName := clusterByInstance[vm.Instance]
+	if parentID := rr.proxmoxNodeParentID(vm.Instance, clusterName, vm.Node, ""); parentID != "" {
 		resource.ParentID = &parentID
 	}
-	if clusterName := clusterByInstance[vm.Instance]; clusterName != "" && resource.Proxmox != nil {
+	if clusterName != "" && resource.Proxmox != nil {
 		resource.Proxmox.ClusterName = clusterName
 	}
 	rr.ingest(SourceProxmox, sourceID, resource, identity)
@@ -889,11 +889,11 @@ func (rr *ResourceRegistry) ingestVM(vm models.VM, clusterByInstance map[string]
 func (rr *ResourceRegistry) ingestContainer(ct models.Container, clusterByInstance map[string]string) {
 	resource, identity := resourceFromContainer(ct)
 	sourceID := proxmoxContainerSourceID(ct)
-	parentSourceID := proxmoxNodeSourceID(ct.Instance, ct.Node)
-	if parentID, ok := rr.bySource[SourceProxmox][parentSourceID]; ok {
+	clusterName := clusterByInstance[ct.Instance]
+	if parentID := rr.proxmoxNodeParentID(ct.Instance, clusterName, ct.Node, ""); parentID != "" {
 		resource.ParentID = &parentID
 	}
-	if clusterName := clusterByInstance[ct.Instance]; clusterName != "" && resource.Proxmox != nil {
+	if clusterName != "" && resource.Proxmox != nil {
 		resource.Proxmox.ClusterName = clusterName
 	}
 	rr.ingest(SourceProxmox, sourceID, resource, identity)
@@ -1768,17 +1768,15 @@ func (rr *ResourceRegistry) resolveCanonicalParentID(resource *Resource) *string
 	}
 
 	if resource.parentBySource == nil {
-		if resource.ParentID == nil {
-			return nil
+		if resource.ParentID != nil {
+			canonicalParentID := CanonicalResourceID(strings.TrimSpace(*resource.ParentID))
+			if canonicalParentID != "" {
+				if _, ok := rr.resources[canonicalParentID]; ok {
+					return &canonicalParentID
+				}
+			}
 		}
-		canonicalParentID := CanonicalResourceID(strings.TrimSpace(*resource.ParentID))
-		if canonicalParentID == "" {
-			return nil
-		}
-		if _, ok := rr.resources[canonicalParentID]; !ok {
-			return nil
-		}
-		return &canonicalParentID
+		return rr.resolveDerivedParentIDLocked(resource)
 	}
 
 	bestPriority := -1
@@ -1798,9 +1796,90 @@ func (rr *ResourceRegistry) resolveCanonicalParentID(resource *Resource) *string
 		}
 	}
 	if bestParentID == "" {
-		return nil
+		return rr.resolveDerivedParentIDLocked(resource)
 	}
 	return &bestParentID
+}
+
+func (rr *ResourceRegistry) resolveDerivedParentIDLocked(resource *Resource) *string {
+	if resource == nil || resource.Proxmox == nil {
+		return nil
+	}
+	switch CanonicalResourceType(resource.Type) {
+	case ResourceTypeVM, ResourceTypeSystemContainer, ResourceTypeStorage, ResourceTypePhysicalDisk:
+	default:
+		return nil
+	}
+
+	parentID := rr.proxmoxNodeParentIDLocked(
+		resource.Proxmox.Instance,
+		resource.Proxmox.ClusterName,
+		resource.Proxmox.NodeName,
+		resource.ID,
+	)
+	if parentID == "" {
+		return nil
+	}
+	return &parentID
+}
+
+func (rr *ResourceRegistry) proxmoxNodeParentID(instance, clusterName, nodeName, excludeID string) string {
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+	return rr.proxmoxNodeParentIDLocked(instance, clusterName, nodeName, excludeID)
+}
+
+func (rr *ResourceRegistry) proxmoxNodeParentIDLocked(instance, clusterName, nodeName, excludeID string) string {
+	nodeName = strings.TrimSpace(nodeName)
+	if nodeName == "" {
+		return ""
+	}
+
+	mapping := rr.bySource[SourceProxmox]
+	if len(mapping) == 0 {
+		return ""
+	}
+
+	excludeID = CanonicalResourceID(strings.TrimSpace(excludeID))
+	for _, sourceID := range proxmoxNodeParentSourceIDCandidates(instance, clusterName, nodeName) {
+		parentID := CanonicalResourceID(mapping[normalizeSourceID(sourceID)])
+		if parentID == "" || parentID == excludeID {
+			continue
+		}
+		parent := rr.resources[parentID]
+		if parent == nil || CanonicalResourceType(parent.Type) != ResourceTypeAgent {
+			continue
+		}
+		return parentID
+	}
+	return ""
+}
+
+func proxmoxNodeParentSourceIDCandidates(instance, clusterName, nodeName string) []string {
+	nodeName = strings.TrimSpace(nodeName)
+	if nodeName == "" {
+		return nil
+	}
+
+	candidates := []string{
+		proxmoxNodeSourceID(strings.TrimSpace(instance), nodeName),
+		proxmoxNodeSourceID(strings.TrimSpace(clusterName), nodeName),
+		nodeName,
+	}
+	out := make([]string, 0, len(candidates))
+	seen := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		candidate = normalizeSourceID(candidate)
+		if candidate == "" {
+			continue
+		}
+		if _, ok := seen[candidate]; ok {
+			continue
+		}
+		seen[candidate] = struct{}{}
+		out = append(out, candidate)
+	}
+	return out
 }
 
 func (rr *ResourceRegistry) buildChildCounts() {
