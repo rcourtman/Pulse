@@ -1990,7 +1990,9 @@ raw JSON copy actions belong behind `Technical details`; the primary drawer
 should keep human metadata, recorded verification provenance, target health,
 and collapsed file lists without repeating the same verification fact in
 provider-specific sections or rendering empty verifier/evidence placeholders
-when no verification record exists. Container recovery points should present
+when no verification record exists. Verification provenance should translate
+provider states such as PBS catalog `ok` into operator language instead of
+surfacing raw transport status tokens. Container recovery points should present
 container ids with operator vocabulary such as `CTID`, and duplicated placement
 or target values should not be repeated under lower-priority metadata labels.
 Provider-specific metadata must not recast the event drawer itself as if PBS

@@ -100,6 +100,8 @@ describe('RecoveryPointDetails', () => {
     expect(screen.getByText('Verification provenance')).toBeInTheDocument();
     expect(screen.getByText('PBS catalog verification')).toBeInTheDocument();
     expect(screen.getAllByText('High confidence').length).toBeGreaterThan(0);
+    expect(screen.getByText('Catalog check passed')).toBeInTheDocument();
+    expect(screen.queryByText('State: ok')).not.toBeInTheDocument();
     expect(screen.getByText('Target Health')).toBeInTheDocument();
     expect(screen.queryByText('UPID:')).not.toBeInTheDocument();
     expect(screen.getByText('Recovery metadata')).toBeInTheDocument();
@@ -184,7 +186,8 @@ describe('RecoveryPointDetails', () => {
 
     expect(screen.getByText('Verification provenance')).toBeInTheDocument();
     expect(screen.getByText('PBS catalog verification')).toBeInTheDocument();
-    expect(screen.getByText('State: ok')).toBeInTheDocument();
+    expect(screen.getByText('Catalog check passed')).toBeInTheDocument();
+    expect(screen.queryByText('State: ok')).not.toBeInTheDocument();
     expect(screen.queryByText('No verification timestamp recorded')).not.toBeInTheDocument();
     expect(screen.getByText('CTID')).toBeInTheDocument();
     expect(screen.queryByText('VMID')).not.toBeInTheDocument();

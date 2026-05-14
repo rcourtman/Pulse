@@ -232,9 +232,25 @@ const formatChainPointDetail = (p: RecoveryPoint): string => {
     .join(' · ');
 };
 
+const formatVerificationStateEvidence = (p: RecoveryPoint, state: string): string => {
+  const normalizedState = state.trim().toLowerCase();
+  const platform = normalizeSourcePlatformQueryValue(getRecoveryPointPlatform(p));
+  const isPbs = platform === 'proxmox-pbs';
+  if (['ok', 'passed', 'pass', 'success', 'successful', 'verified'].includes(normalizedState)) {
+    return isPbs ? 'Catalog check passed' : 'Verification passed';
+  }
+  if (['failed', 'fail', 'error', 'errored'].includes(normalizedState)) {
+    return isPbs ? 'Catalog check failed' : 'Verification failed';
+  }
+  if (['running', 'pending', 'started', 'in-progress', 'in_progress'].includes(normalizedState)) {
+    return isPbs ? 'Catalog check in progress' : 'Verification in progress';
+  }
+  return `Verification state: ${state}`;
+};
+
 const getVerificationEvidenceLabel = (p: RecoveryPoint): string => {
   const state = detailString(p, 'verificationState') || detailString(p, 'verificationStatus');
-  if (state) return `State: ${state}`;
+  if (state) return formatVerificationStateEvidence(p, state);
   const rawVerification =
     detailString(p, 'verification') ||
     detailString(p, 'verificationResult') ||

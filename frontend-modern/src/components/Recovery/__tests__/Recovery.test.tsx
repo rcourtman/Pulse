@@ -1021,6 +1021,9 @@ describe('Recovery', () => {
         outcome: 'success',
         verified: true,
         completedAt: '2026-02-13T09:30:00.000Z',
+        details: {
+          verificationState: 'ok',
+        },
         repositoryRef: {
           type: 'pbs-datastore',
           namespace: 'pbs-main',
@@ -1053,6 +1056,17 @@ describe('Recovery', () => {
       expect(
         within(detailsCell as HTMLTableCellElement).getByText(/fast-store · PBS/i),
       ).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('09:30'));
+      const remoteDetailsPanel = await screen.findByText('Recovery Point Details');
+      const remoteDetailsCell = remoteDetailsPanel.closest('td');
+      expect(remoteDetailsCell).not.toBeNull();
+      expect(
+        within(remoteDetailsCell as HTMLTableCellElement).getByText('Catalog check passed'),
+      ).toBeInTheDocument();
+      expect(
+        within(remoteDetailsCell as HTMLTableCellElement).queryByText('State: ok'),
+      ).not.toBeInTheDocument();
     } finally {
       pointsByRollupId['res:vm-123'] = originalPoints;
     }
