@@ -40,6 +40,7 @@ export interface StackedMemoryBarPresentation {
   anomalyDescription?: string;
   anomalyRatio: string;
   displayLabel: string;
+  displayPercentValue: number;
   displaySublabel: string;
   segments: StackedMemorySegment[];
   showSublabel: boolean;
@@ -196,6 +197,7 @@ export function buildStackedMemoryBarPresentation(
     anomalyDescription: props.anomaly?.description,
     anomalyRatio: formatAnomalyRatio(props.anomaly) ?? '',
     displayLabel,
+    displayPercentValue: utilizationPercent,
     displaySublabel,
     segments: getSegments(props, utilizationPercent),
     showSublabel,

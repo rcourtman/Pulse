@@ -54,6 +54,7 @@ export interface StackedDiskBarPresentation {
   barPercent: number;
   containerClass: string;
   displayLabel: string;
+  displayPercentValue: number;
   displaySublabel: string;
   hasDisks: boolean;
   hasMultipleDisks: boolean;
@@ -242,6 +243,7 @@ export function buildStackedDiskBarPresentation(
         ? 'metric-text w-full'
         : 'metric-text w-full h-4 flex items-center justify-center',
     displayLabel,
+    displayPercentValue: overallPercent,
     displaySublabel,
     hasDisks,
     hasMultipleDisks,

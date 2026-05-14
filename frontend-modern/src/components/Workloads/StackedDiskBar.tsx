@@ -1,5 +1,7 @@
 import { Show, For } from 'solid-js';
+import { AnimatedNumber } from '@/components/shared/AnimatedNumber';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
+import { formatPercent } from '@/utils/format';
 import { type StackedDiskBarProps } from './stackedDiskBarModel';
 import { useStackedDiskBarState } from './useStackedDiskBarState';
 
@@ -97,7 +99,12 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
             {/* Label overlay */}
             <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none min-w-0 overflow-hidden">
               <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
-                <span>{presentation().displayLabel}</span>
+                <span>
+                  <AnimatedNumber
+                    value={presentation().displayPercentValue}
+                    format={formatPercent}
+                  />
+                </span>
                 <Show when={presentation().showMaxLabel}>
                   <span
                     class="text-[8px] font-normal text-muted"

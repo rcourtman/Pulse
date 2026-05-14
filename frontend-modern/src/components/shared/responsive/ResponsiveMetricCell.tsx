@@ -1,4 +1,5 @@
 import { Component, Show, createMemo, JSX } from 'solid-js';
+import { AnimatedNumber } from '@/components/shared/AnimatedNumber';
 import { MetricBar } from '@/components/Workloads/MetricBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { formatPercent } from '@/utils/format';
@@ -129,7 +130,9 @@ export const ResponsiveMetricCell: Component<ResponsiveMetricCellProps> = (props
           <div
             class={`md:hidden text-xs text-center ${colorClass()} whitespace-nowrap overflow-hidden text-ellipsis`}
           >
-            {displayLabel()}
+            <Show when={!props.label} fallback={displayLabel()}>
+              <AnimatedNumber value={props.value} format={formatPercent} />
+            </Show>
           </div>
         </Show>
 
@@ -138,6 +141,7 @@ export const ResponsiveMetricCell: Component<ResponsiveMetricCellProps> = (props
           <MetricBar
             value={props.value}
             label={displayLabel()}
+            animatedLabelValue={props.label ? undefined : props.value}
             sublabel={resolvedSublabel()}
             showLabel={showLabel()}
             type={props.type}
@@ -165,7 +169,11 @@ export const MetricText: Component<{
   const colorClass = createMemo(() => metricTextClass(props.value, props.type, props.thresholds));
 
   return (
-    <span class={`text-xs text-center ${colorClass()} ${props.class || ''}`}>{displayLabel()}</span>
+    <span class={`text-xs text-center ${colorClass()} ${props.class || ''}`}>
+      <Show when={!props.label} fallback={displayLabel()}>
+        <AnimatedNumber value={props.value} format={formatPercent} />
+      </Show>
+    </span>
   );
 };
 
@@ -198,13 +206,18 @@ export const DualMetricCell: Component<{
   );
 
   const defaultMobileContent = (
-    <div class={`text-xs text-center ${colorClass()}`}>{displayLabel()}</div>
+    <div class={`text-xs text-center ${colorClass()}`}>
+      <Show when={!props.label} fallback={displayLabel()}>
+        <AnimatedNumber value={props.value} format={formatPercent} />
+      </Show>
+    </div>
   );
 
   const defaultDesktopContent = (
     <MetricBar
       value={props.value}
       label={displayLabel()}
+      animatedLabelValue={props.label ? undefined : props.value}
       sublabel={props.sublabel}
       type={props.type}
       resourceId={props.resourceId}

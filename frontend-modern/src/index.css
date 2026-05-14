@@ -327,6 +327,10 @@
     will-change: x1, x2;
   }
 
+  .animated-number {
+    font-variant-numeric: tabular-nums;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .progress-fill-frame,
     .progress-fill,

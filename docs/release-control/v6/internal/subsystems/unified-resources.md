@@ -429,6 +429,10 @@ AI-only summary payloads, or page-local heuristics.
     card can resolve that same resource id locally, it should surface the
     synchronized value through the shared summary-card readout instead of
     spawning a second chart tooltip.
+    Infrastructure summary numeric readouts that reflect canonical resource
+    counts or capacity must use the shared `AnimatedNumber` primitive rather
+    than page-local counter state, so readout motion stays presentation-only and
+    canonical unified-resource identity and scope stay unchanged.
 12. Keep infrastructure chart hover non-destructive to the unified-resource
     table. If the hovered resource row is already visible in
     `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`,

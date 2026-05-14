@@ -933,6 +933,8 @@ describe('Workloads performance contract', () => {
       expect(stackedDiskBarSource).toContain('useStackedDiskBarState');
       expect(stackedDiskBarSource).toContain('metric-fill-geometry');
       expect(stackedDiskBarSource).toContain('metric-fill-divider');
+      expect(stackedDiskBarSource).toContain('AnimatedNumber');
+      expect(stackedDiskBarModelSource).toContain('displayPercentValue');
       expect(stackedDiskBarSource).not.toContain('style={{');
       expect(stackedDiskBarSource).not.toContain('style={');
       expect(stackedDiskBarSource).not.toContain('const [containerWidth, setContainerWidth] =');
@@ -951,6 +953,8 @@ describe('Workloads performance contract', () => {
       expect(stackedMemoryBarSource).toContain('useStackedMemoryBarState');
       expect(stackedMemoryBarSource).toContain('metric-fill-geometry');
       expect(stackedMemoryBarSource).toContain('metric-fill-divider');
+      expect(stackedMemoryBarSource).toContain('AnimatedNumber');
+      expect(stackedMemoryBarModelSource).toContain('displayPercentValue');
       expect(stackedMemoryBarSource).not.toContain('style={{');
       expect(stackedMemoryBarSource).not.toContain('style={');
       expect(stackedMemoryBarSource).not.toContain('const [containerWidth, setContainerWidth] =');
@@ -967,6 +971,7 @@ describe('Workloads performance contract', () => {
 
     it('keeps metric bar runtime and derivations in canonical owners', () => {
       expect(metricBarSource).toContain('useMetricBarState');
+      expect(metricBarSource).toContain('AnimatedNumber');
       expect(metricBarSource).not.toContain('const [containerWidth, setContainerWidth] =');
       expect(metricBarSource).not.toContain('const progressColorClass = createMemo(() => {');
       expect(metricBarSource).not.toContain('const showSublabel = createMemo(() => {');
@@ -979,6 +984,7 @@ describe('Workloads performance contract', () => {
     it('keeps enhanced CPU bar runtime and derivations in canonical owners', () => {
       expect(enhancedCpuBarSource).toContain('useEnhancedCPUBarState');
       expect(enhancedCpuBarSource).toContain('metric-fill-geometry');
+      expect(enhancedCpuBarSource).toContain('AnimatedNumber');
       expect(enhancedCpuBarSource).not.toContain('style={{');
       expect(enhancedCpuBarSource).not.toContain('style={');
       expect(enhancedCpuBarSource).not.toContain('const tip = useTooltip()');

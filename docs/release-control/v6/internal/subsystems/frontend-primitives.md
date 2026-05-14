@@ -295,6 +295,11 @@ prompt explain the same operator-facing priority.
    transitions instead of inline styles or page-local animation wrappers. The
    same global CSS owner must provide the `prefers-reduced-motion` disable path
    for these fills so feature surfaces inherit one accessibility policy.
+   Numeric readout motion belongs to
+   `frontend-modern/src/components/shared/AnimatedNumber.tsx` and its
+   `useAnimatedNumberState` owner. Feature surfaces may opt metric labels and
+   compact counters into that primitive, but must not create local counter
+   timers, page-specific easing, or independent reduced-motion policy.
    Shared primitives must not reintroduce app-shell monitored-system capacity
    banners. Monitored-system grouping and ledger presentation belongs in the
    owned settings surfaces, while commercial plan explanation belongs in

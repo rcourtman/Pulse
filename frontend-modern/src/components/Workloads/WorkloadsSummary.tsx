@@ -3,6 +3,7 @@ import {
   InteractiveSparkline,
   type InteractiveSparklineSeries,
 } from '@/components/shared/InteractiveSparkline';
+import { AnimatedNumber } from '@/components/shared/AnimatedNumber';
 import {
   useSummaryContextualFocusState,
   type SummaryChartHoverSync,
@@ -664,7 +665,9 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
       class="overflow-hidden"
       headerLeft={
         <>
-          <span class="font-medium text-base-content">{guestCounts().total} workloads</span>
+          <span class="font-medium text-base-content">
+            <AnimatedNumber value={guestCounts().total} /> workloads
+          </span>
           <Show
             when={guestCounts().stopped > 0 || guestCounts().alerting > 0}
             fallback={
@@ -675,11 +678,13 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           >
             <Show when={guestCounts().alerting > 0}>
               <span class="text-amber-600 dark:text-amber-400">
-                {guestCounts().alerting} alerting
+                <AnimatedNumber value={guestCounts().alerting} /> alerting
               </span>
             </Show>
             <Show when={guestCounts().stopped > 0}>
-              <span class="text-muted">{guestCounts().stopped} stopped</span>
+              <span class="text-muted">
+                <AnimatedNumber value={guestCounts().stopped} /> stopped
+              </span>
             </Show>
           </Show>
           <Show when={props.showJumpToActiveRow && props.onJumpToActiveRow}>

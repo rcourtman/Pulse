@@ -5,6 +5,8 @@ import type { MetricDisplayThresholds, MetricType } from '@/utils/metricThreshol
 export interface MetricBarProps {
   value: number;
   label: string;
+  animatedLabelValue?: number;
+  animatedLabelFormat?: (value: number) => string;
   sublabel?: string;
   showLabel?: boolean;
   type?: 'cpu' | 'memory' | 'disk' | 'generic';

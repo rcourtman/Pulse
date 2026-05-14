@@ -1,6 +1,7 @@
 import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import { AnimatedNumber } from '@/components/shared/AnimatedNumber';
 import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import { DensityMap } from '@/components/shared/DensityMap';
 import { SummaryJumpToRowButton } from '@/components/shared/SummaryJumpToRowButton';
@@ -10,6 +11,7 @@ import { SummarySynchronizedReadout } from '@/components/shared/SummarySynchroni
 import { buildDensityMapSynchronizedReadout } from '@/components/shared/densityMapModel';
 import { buildInteractiveSparklineSynchronizedReadout } from '@/components/shared/interactiveSparklineModel';
 import { formatThroughputRate } from '@/utils/throughputPresentation';
+import { formatPercent } from '@/utils/format';
 import type { InfrastructureSummaryProps } from './infrastructureSummaryModel';
 import { useInfrastructureSummaryState } from './useInfrastructureSummaryState';
 
@@ -73,7 +75,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     if (!state.focusedResourceName() && state.avgDiskCapacity() !== null) {
       return (
         <span class="text-[10px] text-muted shrink-0">
-          Capacity: {state.avgDiskCapacity()}%
+          Capacity: <AnimatedNumber value={state.avgDiskCapacity() ?? 0} format={formatPercent} />
         </span>
       );
     }
@@ -88,7 +90,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
           headerLeft={
             <>
               <span class="font-medium text-base-content">
-                {state.resourceCounts().total}{' '}
+                <AnimatedNumber value={state.resourceCounts().total} />{' '}
                 {state.resourceCounts().total === 1 ? 'system' : 'systems'}
               </span>
               <Show
@@ -105,17 +107,17 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
               >
                 <Show when={state.resourceCounts().offline > 0}>
                   <span class="text-red-600 dark:text-red-400">
-                    {state.resourceCounts().offline} offline
+                    <AnimatedNumber value={state.resourceCounts().offline} /> offline
                   </span>
                 </Show>
                 <Show when={state.resourceCounts().degraded > 0}>
                   <span class="text-amber-600 dark:text-amber-400">
-                    {state.resourceCounts().degraded} degraded
+                    <AnimatedNumber value={state.resourceCounts().degraded} /> degraded
                   </span>
                 </Show>
                 <Show when={state.resourceCounts().alerting > 0}>
                   <span class="text-amber-600 dark:text-amber-400">
-                    {state.resourceCounts().alerting} alerting
+                    <AnimatedNumber value={state.resourceCounts().alerting} /> alerting
                   </span>
                 </Show>
               </Show>
@@ -222,7 +224,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                     </svg>
                   </div>
                   <div class="text-xl sm:text-2xl font-bold text-base-content">
-                    {state.workloadStats().running}
+                    <AnimatedNumber value={state.workloadStats().running} />
                     <span class="text-sm font-normal text-muted ml-1">running</span>
                   </div>
                   <Show
@@ -231,7 +233,9 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                   >
                     <div class="text-[10px] text-muted mt-1">
                       <Show when={state.workloadStats().vms > 0}>
-                        <span>{state.workloadStats().vms} VMs</span>
+                        <span>
+                          <AnimatedNumber value={state.workloadStats().vms} /> VMs
+                        </span>
                       </Show>
                       <Show
                         when={state.workloadStats().vms > 0 && state.workloadStats().containers > 0}
@@ -239,12 +243,14 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                         <span class="mx-0.5">&middot;</span>
                       </Show>
                       <Show when={state.workloadStats().containers > 0}>
-                        <span>{state.workloadStats().containers} containers</span>
+                        <span>
+                          <AnimatedNumber value={state.workloadStats().containers} /> containers
+                        </span>
                       </Show>
                     </div>
                     <Show when={state.workloadStats().stopped > 0}>
                       <div class="text-[10px] text-muted">
-                        {state.workloadStats().stopped} stopped
+                        <AnimatedNumber value={state.workloadStats().stopped} /> stopped
                       </div>
                     </Show>
                   </Show>

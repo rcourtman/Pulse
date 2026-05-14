@@ -1,5 +1,6 @@
 import { Show } from 'solid-js';
 
+import { AnimatedNumber } from '@/components/shared/AnimatedNumber';
 import type { WorkloadsState } from './useWorkloadsState';
 
 type WorkloadsStatsStripProps = Pick<
@@ -14,19 +15,19 @@ export function WorkloadsStatsStrip(props: WorkloadsStatsStripProps) {
         <div class="flex items-center gap-2 p-2 bg-surface-alt border border-border rounded">
           <span class="flex items-center gap-1 text-xs text-muted">
             <span class="h-2 w-2 bg-green-500 rounded-full"></span>
-            {props.totalStats().running} running
+            <AnimatedNumber value={props.totalStats().running} /> running
           </span>
           <Show when={props.totalStats().degraded > 0}>
             <span class="text-slate-400">|</span>
             <span class="flex items-center gap-1 text-xs text-muted">
               <span class="h-2 w-2 bg-orange-500 rounded-full"></span>
-              {props.totalStats().degraded} degraded
+              <AnimatedNumber value={props.totalStats().degraded} /> degraded
             </span>
           </Show>
           <span class="text-slate-400">|</span>
           <span class="flex items-center gap-1 text-xs text-muted">
             <span class="h-2 w-2 bg-red-500 rounded-full"></span>
-            {props.totalStats().stopped} stopped
+            <AnimatedNumber value={props.totalStats().stopped} /> stopped
           </span>
         </div>
       </div>

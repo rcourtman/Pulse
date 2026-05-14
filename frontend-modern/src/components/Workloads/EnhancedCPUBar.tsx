@@ -1,5 +1,7 @@
 import { Show } from 'solid-js';
+import { AnimatedNumber } from '@/components/shared/AnimatedNumber';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
+import { formatPercent } from '@/utils/format';
 import { type EnhancedCPUBarProps } from './enhancedCpuBarModel';
 import { useEnhancedCPUBarState } from './useEnhancedCPUBarState';
 
@@ -38,7 +40,7 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
         </svg>
 
         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none pointer-events-none">
-          {presentation().displayUsage}
+          <AnimatedNumber value={props.usage} format={formatPercent} />
           <Show when={props.cores}>
             <span class="hidden sm:inline font-normal text-muted ml-1">({props.cores})</span>
           </Show>
@@ -64,7 +66,7 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
           <div class="flex justify-between gap-3 py-0.5">
             <span class="text-slate-400">Usage</span>
             <span class={`font-medium ${presentation().tooltipUsageClass}`}>
-              {presentation().displayUsage}
+              <AnimatedNumber value={props.usage} format={formatPercent} />
             </span>
           </div>
 

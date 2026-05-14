@@ -70,6 +70,9 @@ import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?ra
 import tableCardSource from '@/components/shared/TableCard.tsx?raw';
 import groupedTableModeSegmentedControlSource from '@/components/shared/GroupedTableModeSegmentedControl.tsx?raw';
 import groupedTableRowPresentationSource from '@/components/shared/groupedTableRowPresentation.ts?raw';
+import animatedNumberSource from '@/components/shared/AnimatedNumber.tsx?raw';
+import animatedNumberModelSource from '@/components/shared/animatedNumberModel.ts?raw';
+import animatedNumberStateSource from '@/components/shared/useAnimatedNumberState.ts?raw';
 import workloadsFilterSource from '@/components/Workloads/WorkloadsFilter.tsx?raw';
 import infrastructurePageSurfaceSource from '@/features/infrastructure/InfrastructurePageSurface.tsx?raw';
 import infrastructureSourceManagerSource from '@/components/Settings/InfrastructureSourceManager.tsx?raw';
@@ -1229,6 +1232,22 @@ describe('shared primitive guardrails', () => {
     expect(frontendIndexCssSource).toContain('@media (prefers-reduced-motion: reduce)');
   });
 
+  it('keeps animated numeric readouts on the shared reduced-motion primitive', () => {
+    expect(animatedNumberSource).toContain('useAnimatedNumberState');
+    expect(animatedNumberSource).toContain('data-animated-number');
+    expect(animatedNumberSource).not.toContain('requestAnimationFrame');
+    expect(animatedNumberSource).not.toContain('createSignal');
+    expect(animatedNumberStateSource).toContain('window.requestAnimationFrame');
+    expect(animatedNumberStateSource).toContain('window.cancelAnimationFrame');
+    expect(animatedNumberStateSource).toContain('REDUCED_MOTION_QUERY');
+    expect(animatedNumberStateSource).toContain('activeFrameEntries');
+    expect(animatedNumberModelSource).toContain('DEFAULT_ANIMATED_NUMBER_DURATION_MS');
+    expect(animatedNumberModelSource).toContain('prefers-reduced-motion');
+    expect(animatedNumberModelSource).toContain('easeAnimatedNumberProgress');
+    expect(frontendIndexCssSource).toContain('.animated-number');
+    expect(frontendIndexCssSource).toContain('font-variant-numeric: tabular-nums');
+  });
+
   it('keeps search field on shell, runtime, and model owners', () => {
     expect(searchFieldSource).toContain('useSearchFieldState');
     expect(searchFieldSource).not.toContain('let inputEl: HTMLInputElement');
@@ -1418,12 +1437,12 @@ describe('shared primitive guardrails', () => {
     expect(filterCatalogSource).toContain(
       'export const isFilterSet = (filter: FilterDef): boolean =>',
     );
-    expect(filterCatalogSource).toContain('export const clearFilter = (filter: FilterDef): void =>');
-    expect(filterCatalogSource).toContain("filter.value() !== filter.defaultValue");
-
-    expect(filterBarSource).toContain(
-      "import { Card } from '@/components/shared/Card';",
+    expect(filterCatalogSource).toContain(
+      'export const clearFilter = (filter: FilterDef): void =>',
     );
+    expect(filterCatalogSource).toContain('filter.value() !== filter.defaultValue');
+
+    expect(filterBarSource).toContain("import { Card } from '@/components/shared/Card';");
     expect(filterBarSource).toContain(
       "import { SearchInput } from '@/components/shared/SearchInput';",
     );
@@ -1434,13 +1453,13 @@ describe('shared primitive guardrails', () => {
     expect(filterBarSource).toContain("import { FilterChip } from './FilterChip';");
     expect(filterBarSource).toContain('props.filters.filter(isFilterSet)');
     expect(filterBarSource).toContain('activeCount() > 0');
-    expect(filterBarSource).not.toContain("import { PageControls }");
+    expect(filterBarSource).not.toContain('import { PageControls }');
     expect(filterBarSource).not.toContain('LabeledFilterSelect');
     expect(filterBarSource).not.toContain('LabeledFilterToggleGroup');
     expect(filterBarSource).not.toContain('filterControlsVariant');
 
-    expect(filterChipSource).toContain("clearFilter,");
-    expect(filterChipSource).toContain("formatFilterChipValue,");
+    expect(filterChipSource).toContain('clearFilter,');
+    expect(filterChipSource).toContain('formatFilterChipValue,');
     expect(filterChipSource).toContain("from './filterCatalog';");
     expect(filterChipSource).toContain('aria-haspopup="listbox"');
     expect(filterChipSource).toContain('aria-label={`Remove ${props.filter.label} filter`}');
@@ -1459,7 +1478,7 @@ describe('shared primitive guardrails', () => {
     expect(filterChipSource).toContain('commitActive');
     expect(filterChipSource).toContain('queueMicrotask(() => searchInputRef?.focus())');
 
-    expect(addFilterMenuSource).toContain("isFilterSet,");
+    expect(addFilterMenuSource).toContain('isFilterSet,');
     expect(addFilterMenuSource).toContain('type FilterDef,');
     expect(addFilterMenuSource).toContain("from './filterCatalog';");
     expect(addFilterMenuSource).toContain('availableFilters');
@@ -1470,7 +1489,9 @@ describe('shared primitive guardrails', () => {
     // Type-ahead: a search input narrows the visible filter (or value) list
     // and Enter commits the active item, so power users can pick a filter
     // with one click + a few keystrokes instead of three clicks.
-    expect(addFilterMenuSource).toContain("aria-label={activeFilter() ? 'Search values' : 'Search filters'}");
+    expect(addFilterMenuSource).toContain(
+      "aria-label={activeFilter() ? 'Search values' : 'Search filters'}",
+    );
     expect(addFilterMenuSource).toContain('filteredGroupedAvailable');
     expect(addFilterMenuSource).toContain('flatVisibleFilters');
     expect(addFilterMenuSource).toContain('filteredOptions');
@@ -1484,7 +1505,9 @@ describe('shared primitive guardrails', () => {
     // Saved views: per-page named filter combos persist to
     // localStorage under `pulse:filterbar:saved-views:<key>`. The hook owns
     // storage IO + URL navigation; the menu owns the dropdown chrome.
-    expect(useSavedViewsSource).toContain("import { useLocation, useNavigate } from '@solidjs/router';");
+    expect(useSavedViewsSource).toContain(
+      "import { useLocation, useNavigate } from '@solidjs/router';",
+    );
     expect(useSavedViewsSource).toContain("'pulse:filterbar:saved-views:'");
     expect(useSavedViewsSource).toContain('export interface SavedView');
     expect(useSavedViewsSource).toContain('saveCurrent');
@@ -1536,9 +1559,7 @@ describe('shared primitive guardrails', () => {
       "import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';",
     );
     expect(recoveryHistorySectionSource).toContain('<FilterBar');
-    expect(recoveryHistorySectionSource).toContain(
-      'ariaLabel="Recovery events controls"',
-    );
+    expect(recoveryHistorySectionSource).toContain('ariaLabel="Recovery events controls"');
     expect(recoveryHistorySectionSource).toContain("id: 'item-type'");
     expect(recoveryHistorySectionSource).toContain("id: 'platform'");
     expect(recoveryHistorySectionSource).toContain("id: 'outcome'");
@@ -1552,9 +1573,7 @@ describe('shared primitive guardrails', () => {
     expect(recoveryHistorySectionSource).toContain('<RecoveryHistoryItemFilter');
     expect(recoveryHistorySectionSource).toContain('<ColumnPicker');
     expect(recoveryHistorySectionSource).toContain('onClearAll={');
-    expect(recoveryHistorySectionSource).toContain(
-      'showClearAll={props.hasActiveArtifactFilters}',
-    );
+    expect(recoveryHistorySectionSource).toContain('showClearAll={props.hasActiveArtifactFilters}');
     expect(recoveryHistorySectionSource).not.toContain('PageControls');
     expect(recoveryHistorySectionSource).not.toContain('FilterActionButton');
     expect(recoveryHistorySectionSource).not.toContain('FilterToolbarPanel');
@@ -1609,9 +1628,7 @@ describe('shared primitive guardrails', () => {
     // render the legacy PageControls primitive, the StorageControls /
     // StorageFilter intermediates, or any LabeledFilterSelect /
     // FilterSegmentedControl forks.
-    expect(storagePageControlsSource).not.toContain(
-      "from '@/components/shared/PageControls'",
-    );
+    expect(storagePageControlsSource).not.toContain("from '@/components/shared/PageControls'");
     expect(storagePageControlsSource).not.toContain('<PageControls');
     expect(storagePageControlsSource).not.toContain('<StorageControls');
     expect(storagePageControlsSource).not.toContain('<StorageFilter');
@@ -1626,7 +1643,7 @@ describe('shared primitive guardrails', () => {
     expect(storagePageControlsSource).not.toContain("from './StorageControls'");
     expect(storagePageControlsSource).not.toContain('useStoragePageControlsModel');
     expect(storagePageControlsSource).not.toContain('useStorageControlsModel');
-    expect(storagePageControlsSource).toContain("type StorageStatusFilterValue,");
+    expect(storagePageControlsSource).toContain('type StorageStatusFilterValue,');
     expect(storagePageControlsSource).toContain(
       "import type { StorageGroupKey, StorageSortKey } from './useStorageModel';",
     );
