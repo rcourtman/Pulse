@@ -98,7 +98,7 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
                 <FormSelect
                   id="ai-workload-discovery-scan-interval"
                   label="Scan Interval"
-                  value={state.form.discoveryIntervalHours}
+                  value={String(state.form.discoveryIntervalHours)}
                   onChange={(e) =>
                     state.setForm('discoveryIntervalHours', parseInt(e.currentTarget.value, 10))
                   }
@@ -108,12 +108,12 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
                   labelClass="text-xs font-medium text-muted w-32 flex-shrink-0"
                   selectBaseClass="flex-1 px-2 py-1 text-sm border border-border rounded bg-surface"
                 >
-                  <option value={0}>Manual only</option>
-                  <option value={6}>Every 6 hours</option>
-                  <option value={12}>Every 12 hours</option>
-                  <option value={24}>Every 24 hours</option>
-                  <option value={48}>Every 2 days</option>
-                  <option value={168}>Every 7 days</option>
+                  <option value="0">Manual only</option>
+                  <option value="6">Every 6 hours</option>
+                  <option value="12">Every 12 hours</option>
+                  <option value="24">Every 24 hours</option>
+                  <option value="48">Every 2 days</option>
+                  <option value="168">Every 7 days</option>
                 </FormSelect>
                 <p class="text-[10px] text-muted ml-32 pl-3">
                   {state.form.discoveryIntervalHours === 0
@@ -249,9 +249,7 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
           selectBaseClass="flex-1 min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded bg-surface"
         >
           <option value="read_only">Read-only - Pulse Assistant can observe only</option>
-          <option value="controlled">
-            Controlled - Pulse Assistant asks before actions
-          </option>
+          <option value="controlled">Controlled - Pulse Assistant asks before actions</option>
           <Show when={showAutonomousControlOption()}>
             <option value="autonomous">
               Autonomous - Pulse Assistant can run eligible actions

@@ -923,12 +923,8 @@ export const useAISettingsState = () => {
         payload.protected_guests = newProtected;
       }
 
-      if (form.discoveryEnabled !== (settings()?.discovery_enabled ?? false)) {
-        payload.discovery_enabled = form.discoveryEnabled;
-      }
-      if (form.discoveryIntervalHours !== (settings()?.discovery_interval_hours ?? 0)) {
-        payload.discovery_interval_hours = form.discoveryIntervalHours;
-      }
+      payload.discovery_enabled = form.discoveryEnabled;
+      payload.discovery_interval_hours = form.discoveryIntervalHours;
 
       const updated = await AIAPI.updateSettings(payload);
       setSettings(updated);

@@ -2794,9 +2794,9 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.DiscoveryIntervalHours = *req.DiscoveryIntervalHours
 	}
 
-	// Auto-default discovery interval to 24h when enabled with no interval set.
-	// Without this, enabling discovery with interval=0 silently stays in manual-only mode.
-	if settings.DiscoveryEnabled && settings.DiscoveryIntervalHours == 0 {
+	// Auto-default discovery interval only when enabling without an explicit interval.
+	// A provided interval of 0 is the canonical manual-only setting and must persist.
+	if req.DiscoveryEnabled != nil && *req.DiscoveryEnabled && req.DiscoveryIntervalHours == nil && settings.DiscoveryIntervalHours == 0 {
 		settings.DiscoveryIntervalHours = 24
 	}
 

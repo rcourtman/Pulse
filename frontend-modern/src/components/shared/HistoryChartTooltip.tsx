@@ -15,9 +15,10 @@ interface HistoryChartTooltipProps {
 export const HistoryChartTooltip: Component<HistoryChartTooltipProps> = (props) => {
   return (
     <svg
-      class="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+      class="pointer-events-none absolute left-0 top-0 overflow-visible"
+      width={props.chartWidth}
+      height={props.chartHeight}
       viewBox={`0 0 ${props.chartWidth} ${props.chartHeight}`}
-      preserveAspectRatio="none"
       aria-hidden="true"
     >
       <Show when={props.hoveredPoint}>

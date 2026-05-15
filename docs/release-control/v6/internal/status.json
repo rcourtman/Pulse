@@ -2971,16 +2971,16 @@
         {
           "id": "assistant-backend-handoff-policy-boundary-tests",
           "run": [
-        "go",
-        "test",
-        "./internal/ai",
-        "./internal/ai/chat",
-        "./internal/api",
-        "-run",
-        "TestBuildPatrolRunAssistantHandoffUsesBackendSafeRunContext|TestFSM|TestService_ExecuteStream_InteractiveChatLetsModelChooseTools|TestHandleChat_|TestContract_AIHandler",
-        "-count=1"
-      ]
-    },
+            "go",
+            "test",
+            "./internal/ai",
+            "./internal/ai/chat",
+            "./internal/api",
+            "-run",
+            "TestBuildPatrolRunAssistantHandoffUsesBackendSafeRunContext|TestFSM|TestService_ExecuteStream_InteractiveChatLetsModelChooseTools|TestHandleChat_|TestContract_AIHandler",
+            "-count=1"
+          ]
+        },
         {
           "id": "assistant-chat-model-owned-routing-tests",
           "run": [
@@ -6446,7 +6446,21 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "codex-lane-l6",
+      "agent_id": "codex",
+      "summary": "Fix workload discovery settings persistence and per-guest manual discovery control",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-05-15T21:36:03Z",
+      "heartbeat_at": "2026-05-15T21:36:03Z",
+      "expires_at": "2026-05-15T23:36:03Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L6"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

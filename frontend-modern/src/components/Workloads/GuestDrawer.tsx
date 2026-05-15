@@ -143,6 +143,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
               agentId={discoveryAgentId()}
               resourceId={discoveryResourceId()}
               hostname={props.guest.name}
+              showManualRunAction
             />
           </Suspense>
         </div>

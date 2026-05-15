@@ -417,6 +417,55 @@ describe('AISettings load failure error state', () => {
   });
 });
 
+describe('AISettings workload discovery persistence', () => {
+  beforeEach(() => {
+    resetAllMocks();
+    setupDefaultMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('saves workload discovery enablement and scan interval as an explicit pair', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      discovery_enabled: true,
+      discovery_interval_hours: 24,
+    });
+    updateSettingsMock.mockImplementation(async (payload: Record<string, unknown>) => ({
+      ...baseSettings(),
+      discovery_enabled: payload.discovery_enabled as boolean,
+      discovery_interval_hours: payload.discovery_interval_hours as number,
+    }));
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Workload Discovery 24h/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Workload Discovery 24h/i }));
+    const intervalSelect = screen.getByLabelText('Scan Interval');
+    expect(intervalSelect).toHaveValue('24');
+
+    fireEvent.change(intervalSelect, {
+      target: { value: '6' },
+    });
+    expect(intervalSelect).toHaveValue('6');
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(updateSettingsMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          discovery_enabled: true,
+          discovery_interval_hours: 6,
+        }),
+      );
+    });
+  });
+});
+
 describe('AISettings OpenRouter flow', () => {
   beforeEach(() => {
     resetAllMocks();

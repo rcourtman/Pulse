@@ -885,7 +885,11 @@ AI runtime.
     Runtime controls inside `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`
     must likewise describe discovery as workload discovery that supplies
     concrete service context to Pulse Assistant and Patrol, not as a generic
-    AI context feature. Assistant-only controls inside the shared shell, such
+    AI context feature. `frontend-modern/src/components/Settings/useAISettingsState.ts`
+    must save workload discovery enablement and interval as one explicit
+    settings pair so selecting "Every 6 hours" or "Manual only" round-trips
+    through `/api/settings/ai` without depending on stale read-side diffing.
+    Assistant-only controls inside the shared shell, such
     as execution permissions and session maintenance, must stay explicitly
     labeled as Pulse Assistant controls, while Patrol schedule and autonomy
     continue to live on Patrol-owned surfaces rather than drifting back into

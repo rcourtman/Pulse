@@ -65,6 +65,76 @@ func TestAISettingsHandler_PatrolInterval_SpecificCheck(t *testing.T) {
 	}
 }
 
+func TestAISettingsHandler_DiscoveryIntervalPersistsExplicitSettings(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		intervalHours int
+	}{
+		{name: "six hour automatic scan", intervalHours: 6},
+		{name: "manual only", intervalHours: 0},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tmp := t.TempDir()
+			cfg := &config.Config{DataPath: tmp}
+			persistence := config.NewConfigPersistence(tmp)
+			handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+			body, _ := json.Marshal(AISettingsUpdateRequest{
+				DiscoveryEnabled:       ptr(true),
+				DiscoveryIntervalHours: ptr(tt.intervalHours),
+			})
+			req := newLoopbackRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
+			rec := httptest.NewRecorder()
+			handler.HandleUpdateAISettings(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("PUT status = %d, body=%s", rec.Code, rec.Body.String())
+			}
+
+			var updateResp AISettingsResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &updateResp); err != nil {
+				t.Fatalf("decode update: %v", err)
+			}
+			if !updateResp.DiscoveryEnabled {
+				t.Fatalf("expected DiscoveryEnabled=true in update response")
+			}
+			if updateResp.DiscoveryIntervalHours != tt.intervalHours {
+				t.Fatalf("expected update DiscoveryIntervalHours=%d, got %d", tt.intervalHours, updateResp.DiscoveryIntervalHours)
+			}
+
+			saved, err := persistence.LoadAIConfig()
+			if err != nil {
+				t.Fatalf("load saved AI config: %v", err)
+			}
+			if saved.DiscoveryIntervalHours != tt.intervalHours {
+				t.Fatalf("expected persisted DiscoveryIntervalHours=%d, got %d", tt.intervalHours, saved.DiscoveryIntervalHours)
+			}
+
+			getReq := newLoopbackRequest(http.MethodGet, "/api/settings/ai", nil)
+			getRec := httptest.NewRecorder()
+			handler.HandleGetAISettings(getRec, getReq)
+			if getRec.Code != http.StatusOK {
+				t.Fatalf("GET status = %d, body=%s", getRec.Code, getRec.Body.String())
+			}
+
+			var getResp AISettingsResponse
+			if err := json.Unmarshal(getRec.Body.Bytes(), &getResp); err != nil {
+				t.Fatalf("decode get: %v", err)
+			}
+			if getResp.DiscoveryIntervalHours != tt.intervalHours {
+				t.Fatalf("expected GET DiscoveryIntervalHours=%d, got %d", tt.intervalHours, getResp.DiscoveryIntervalHours)
+			}
+		})
+	}
+}
+
 func TestAISettingsHandler_PatrolEnabled_ResponseReflectsToggleImmediately(t *testing.T) {
 	t.Parallel()
 

@@ -38,11 +38,13 @@ vi.mock('../Discovery/DiscoveryTab', () => ({
     agentId?: string;
     resourceId: string;
     hostname: string;
+    showManualRunAction?: boolean;
   }) => (
     <div data-testid="discovery-tab">
       <span data-testid="disc-resource-type">{props.resourceType}</span>
       <span data-testid="disc-agent-id">{props.agentId}</span>
       <span data-testid="disc-resource-id">{props.resourceId}</span>
+      <span data-testid="disc-manual-run-action">{String(props.showManualRunAction)}</span>
     </div>
   ),
 }));
@@ -671,6 +673,7 @@ describe('GuestDrawer', () => {
       expect(screen.getByTestId('disc-resource-type').textContent).toBe('vm');
       expect(screen.getByTestId('disc-agent-id').textContent).toBe('pve1');
       expect(screen.getByTestId('disc-resource-id').textContent).toBe('101');
+      expect(screen.getByTestId('disc-manual-run-action').textContent).toBe('true');
     });
 
     it('passes correct resourceType and agentId for app-container', () => {

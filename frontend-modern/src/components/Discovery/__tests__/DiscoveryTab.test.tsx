@@ -1,5 +1,6 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ResourceDiscovery } from '@/types/discovery';
 
 vi.mock('@/api/discovery', () => {
   const never = new Promise<null>(() => undefined);
@@ -30,6 +31,55 @@ describe('DiscoveryTab', () => {
     ));
 
     expect(await screen.findByRole('button', { name: 'Run Discovery Now' })).toBeInTheDocument();
+  });
+
+  it('shows a drawer run action and triggers discovery for the current resource', async () => {
+    const discovered: ResourceDiscovery = {
+      id: 'discovery-1',
+      resource_type: 'agent',
+      resource_id: 'agent-1',
+      target_id: 'agent-1',
+      agent_id: 'agent-1',
+      hostname: 'pve1',
+      service_type: 'database',
+      service_name: 'postgresql',
+      service_version: '16.1',
+      category: 'database',
+      cli_access: 'psql',
+      facts: [],
+      config_paths: [],
+      data_paths: [],
+      log_paths: [],
+      ports: [],
+      user_notes: '',
+      user_secrets: {},
+      confidence: 0.72,
+      ai_reasoning: '',
+      discovered_at: '2026-04-15T00:00:00Z',
+      updated_at: '2026-04-15T00:00:00Z',
+      scan_duration: 12,
+    };
+    vi.mocked(discoveryApi.getDiscovery).mockResolvedValue(discovered);
+    vi.mocked(discoveryApi.triggerDiscovery).mockResolvedValue(discovered);
+
+    render(() => (
+      <DiscoveryTab
+        resourceType="agent"
+        agentId="agent-1"
+        resourceId="agent-1"
+        hostname="pve1"
+        showManualRunAction
+      />
+    ));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Run Discovery' }));
+
+    await waitFor(() => {
+      expect(discoveryApi.triggerDiscovery).toHaveBeenCalledWith('agent', 'agent-1', 'agent-1', {
+        force: true,
+        hostname: 'pve1',
+      });
+    });
   });
 
   it('uses canonical settings copy for disabled command guidance', async () => {

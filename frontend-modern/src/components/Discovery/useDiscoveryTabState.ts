@@ -77,6 +77,7 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
 
     return agents.length === 1;
   });
+  const canTriggerDiscovery = createMemo(() => Boolean(targetAgentId()));
 
   const [discovery, { refetch, mutate }] = createResource(discoverySourceKey, async () => {
     const agentId = targetAgentId();
@@ -247,7 +248,9 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
       (current.log_paths && current.log_paths.length > 0);
     const hasCliAccess = Boolean(current.cli_access);
 
-    return Boolean(hasServiceName || hasConfidence || hasPorts || hasFacts || hasPaths || hasCliAccess);
+    return Boolean(
+      hasServiceName || hasConfidence || hasPorts || hasFacts || hasPaths || hasCliAccess,
+    );
   });
 
   const validDiscovery = createMemo(() =>
@@ -256,6 +259,7 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
 
   return {
     connectedAgents,
+    canTriggerDiscovery,
     discovery,
     discoveryInfo,
     editingNotes,

@@ -960,7 +960,10 @@ app-container routing and Docker-only actions. `frontend-modern/src/hooks/useWor
 canonical app-container navigation path while keeping Docker runtime action
 identifiers explicit. Discovery affordances on the Workloads drawer must follow
 the canonical `discoveryTarget` contract, not generic app-container host
-fallbacks. TrueNAS app-containers may reuse runtime metadata such as image and
+fallbacks. Guest-drawer manual discovery run controls must route through the
+shared `DiscoveryTab` manual-run action and the canonical target identifiers
+instead of adding Workloads-local discovery trigger state. TrueNAS
+app-containers may reuse runtime metadata such as image and
 runtime strings, but they must not inherit Docker-only update affordances or
 agent-only Discovery tabs on the Workloads row path unless the unified
 resource contract explicitly supplies discovery ownership.

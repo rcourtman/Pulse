@@ -1362,6 +1362,12 @@ the canonical monitored-system blocked payload.
     backend contract must keep provider test routes bound to the selected
     provider's configured model instead of whichever other provider currently
     owns the default `model` field.
+    Discovery scheduling is part of that same AI settings payload contract:
+    settings saves from `frontend-modern/src/components/Settings/useAISettingsState.ts`
+    must send `discovery_enabled` and `discovery_interval_hours` together as
+    explicit form truth, and the backend must persist a provided
+    `discovery_interval_hours: 0` as manual-only rather than replacing it with
+    the automatic-scan default.
 25. Keep shared AI runtime reads centralized on that same governed contract:
     `frontend-modern/src/stores/aiRuntimeState.ts` is the canonical frontend
     read owner for `/api/settings/ai` and `/api/ai/models`. AI-owned consumers

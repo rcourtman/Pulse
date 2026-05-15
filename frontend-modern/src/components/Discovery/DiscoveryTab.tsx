@@ -29,6 +29,8 @@ interface DiscoveryTabProps {
   hostname: string;
   /** Whether commands are enabled for this agent (from agent config) */
   commandsEnabled?: boolean;
+  /** Show the primary run action at the top of embedded drawer contexts. */
+  showManualRunAction?: boolean;
 }
 
 const toSentence = (text?: string): string => {
@@ -40,6 +42,7 @@ const toSentence = (text?: string): string => {
 
 export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
   const {
+    canTriggerDiscovery,
     connectedAgents,
     discovery,
     discoveryInfo,
@@ -90,13 +93,25 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
   const confidenceInfo = createMemo(() => {
     const current = discovery();
-    if (discovery.loading || !current || current.confidence === undefined || current.confidence === null) {
+    if (
+      discovery.loading ||
+      !current ||
+      current.confidence === undefined ||
+      current.confidence === null
+    ) {
       return null;
     }
     return getConfidenceLevel(current.confidence);
   });
   const commandSettingsTarget = getDiscoveryCommandSettingsTarget();
   const apiAccessSettingsTarget = getDiscoveryApiAccessSettingsTarget();
+  const showManualRunAction = () => props.showManualRunAction === true;
+  const manualRunSummary = createMemo(() => {
+    if (discovery.loading) return 'Checking saved discovery state';
+    const updatedAt = discovery()?.updated_at;
+    if (updatedAt) return `Last run: ${formatDiscoveryAge(updatedAt)}`;
+    return 'No saved discovery run for this resource';
+  });
 
   // `whitespace-normal` on the wrapper neutralises the `.table-fixed td/th`
   // global rule (white-space: nowrap) that bleeds into expanded-row content
@@ -139,6 +154,43 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
         </div>
       </Show>
 
+      <Show when={showManualRunAction()}>
+        <div class="rounded border border-border bg-surface p-3 shadow-sm">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div class="text-xs font-medium text-base-content">Discovery run</div>
+              <p class="mt-0.5 text-xs text-muted">{manualRunSummary()}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleTriggerDiscovery(true)}
+              disabled={isScanning() || !canTriggerDiscovery()}
+              class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Show
+                when={isScanning()}
+                fallback={
+                  <>
+                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                    Run Discovery
+                  </>
+                }
+              >
+                <span class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-500 border-t-transparent" />
+                Scanning...
+              </Show>
+            </button>
+          </div>
+        </div>
+      </Show>
+
       {/* "What Discovery Does" explanation - shown when no discovery exists yet */}
       <Show when={!discovery() && !isScanning() && !showLoadingSpinner() && showExplanation()}>
         <div class="rounded border border-amber-200 bg-amber-50 p-3 shadow-sm dark:border-amber-800 dark:bg-amber-900">
@@ -159,9 +211,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
               </svg>
               <div class="text-xs text-amber-800 dark:text-amber-200">
                 <p class="font-medium mb-1">What Discovery Does</p>
-                <p class="text-amber-700 dark:text-amber-300">
-                  {DISCOVERY_ANALYSIS_EXPLANATION}
-                </p>
+                <p class="text-amber-700 dark:text-amber-300">{DISCOVERY_ANALYSIS_EXPLANATION}</p>
               </div>
             </div>
             <button
@@ -493,22 +543,24 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             </Show>
           </Show>
 
-          <button
-            onClick={() => handleTriggerDiscovery(true)}
-            disabled={isScanning()}
-            class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {isScanning() ? (
-              <span class="flex items-center">
-                <span class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2"></span>
-                Scanning...
-              </span>
-            ) : discovery.loading ? (
-              'Run Discovery Now'
-            ) : (
-              'Run Discovery'
-            )}
-          </button>
+          <Show when={!showManualRunAction()}>
+            <button
+              onClick={() => handleTriggerDiscovery(true)}
+              disabled={isScanning()}
+              class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isScanning() ? (
+                <span class="flex items-center">
+                  <span class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2"></span>
+                  Scanning...
+                </span>
+              ) : discovery.loading ? (
+                'Run Discovery Now'
+              ) : (
+                'Run Discovery'
+              )}
+            </button>
+          </Show>
         </div>
       </Show>
 
@@ -539,20 +591,22 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
               </p>
             </Show>
           </div>
-          <button
-            onClick={() => handleTriggerDiscovery(true)}
-            disabled={isScanning()}
-            class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {isScanning() ? (
-              <span class="flex items-center justify-center">
-                <span class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2"></span>
-                Scanning...
-              </span>
-            ) : (
-              'Re-scan Discovery'
-            )}
-          </button>
+          <Show when={!showManualRunAction()}>
+            <button
+              onClick={() => handleTriggerDiscovery(true)}
+              disabled={isScanning()}
+              class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isScanning() ? (
+                <span class="flex items-center justify-center">
+                  <span class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2"></span>
+                  Scanning...
+                </span>
+              ) : (
+                'Re-scan Discovery'
+              )}
+            </button>
+          </Show>
         </div>
       </Show>
 
@@ -746,9 +800,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                   <Show
                     when={d().user_notes}
                     fallback={
-                      <p class="text-xs text-muted italic">
-                        {getDiscoveryNotesEmptyState().text}
-                      </p>
+                      <p class="text-xs text-muted italic">{getDiscoveryNotesEmptyState().text}</p>
                     }
                   >
                     <p class="text-xs text-muted whitespace-pre-wrap">{d().user_notes}</p>
@@ -836,40 +888,44 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             </Show>
 
             {/* Footer with Update button */}
-            <div class="flex items-center justify-between pt-2 border-t border-border">
+            <div
+              class={`flex items-center pt-2 border-t border-border ${showManualRunAction() ? 'justify-start' : 'justify-between'}`}
+            >
               <span class="text-xs text-muted">
                 Last updated: {formatDiscoveryAge(d().updated_at)}
               </span>
-              <button
-                onClick={() => handleTriggerDiscovery(true)}
-                disabled={isScanning()}
-                class="px-3 py-1.5 bg-surface-hover text-base-content text-xs rounded hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
-              >
-                <Show
-                  when={isScanning()}
-                  fallback={
-                    <>
-                      <svg
-                        class="w-3.5 h-3.5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                        />
-                      </svg>
-                      Update Discovery
-                    </>
-                  }
+              <Show when={!showManualRunAction()}>
+                <button
+                  onClick={() => handleTriggerDiscovery(true)}
+                  disabled={isScanning()}
+                  class="px-3 py-1.5 bg-surface-hover text-base-content text-xs rounded hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
                 >
-                  <span class="animate-spin h-3.5 w-3.5 border-2 border-slate-500 border-t-transparent rounded-full"></span>
-                  Scanning...
-                </Show>
-              </button>
+                  <Show
+                    when={isScanning()}
+                    fallback={
+                      <>
+                        <svg
+                          class="w-3.5 h-3.5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                          />
+                        </svg>
+                        Update Discovery
+                      </>
+                    }
+                  >
+                    <span class="animate-spin h-3.5 w-3.5 border-2 border-slate-500 border-t-transparent rounded-full"></span>
+                    Scanning...
+                  </Show>
+                </button>
+              </Show>
             </div>
           </div>
         )}

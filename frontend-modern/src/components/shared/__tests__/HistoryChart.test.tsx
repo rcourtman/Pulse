@@ -102,8 +102,12 @@ describe('HistoryChart', () => {
     expect(historyChartTooltipSource).toContain('formatHistoryChartTooltipValue');
     expect(historyChartTooltipSource).toContain('getHistoryChartTooltipLayout');
     expect(historyChartTooltipSource).toContain('foreignObject');
+    expect(historyChartTooltipSource).toContain('width={props.chartWidth}');
+    expect(historyChartTooltipSource).toContain('height={props.chartHeight}');
     expect(historyChartTooltipSource).toContain('new Date(point().timestamp).toLocaleString()');
     expect(historyChartTooltipSource).not.toContain('<Portal>');
+    expect(historyChartTooltipSource).not.toContain('absolute inset-0 h-full w-full');
+    expect(historyChartTooltipSource).not.toContain('preserveAspectRatio="none"');
     expect(historyChartTooltipSource).not.toContain('style={');
     expect(historyChartTooltipSource).not.toContain('ChartsAPI.getMetricsHistory');
   });

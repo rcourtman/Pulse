@@ -154,7 +154,7 @@ runtime cost control, and shared AI transport surfaces.
    divergence must be sourced from canonical `ReadState.DockerHosts()` views,
    with model-shaped data limited to the watcher adapter input rather than
    direct `StateSnapshot.DockerHosts` reads in the Patrol run loop.
-4. Keep discovery scheduling authoritative through `internal/config/ai.go`: `discovery_enabled` and `discovery_interval_hours` must govern both lightweight infrastructure discovery and deep service-discovery background loops
+4. Keep discovery scheduling authoritative through `internal/config/ai.go`: `discovery_enabled` and `discovery_interval_hours` must govern both lightweight infrastructure discovery and deep service-discovery background loops. `internal/api/ai_handlers.go` must preserve an explicitly supplied `discovery_interval_hours: 0` as the manual-only setting and may only apply the 24-hour default when discovery is enabled without an explicit interval payload.
 5. Preserve auditability for outbound model-bound context exports and keep the export record aligned with the prompt boundary that actually reaches the provider
    External provider-bound unified-resource context must enforce the same
    data-handling policy the export audit records: `local-only` resources are
