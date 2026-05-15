@@ -44,13 +44,13 @@ export function getAISettingsWorkloadDiscoveryHelpContent() {
   return {
     title: 'What is workload discovery?',
     description:
-      'Workload discovery scans your VMs, containers, and container runtimes to identify running services, versions, and access details. Pulse Assistant uses that context for concrete troubleshooting guidance, and Patrol uses it to verify the right workloads continuously.',
+      'Workload discovery scans your VMs, containers, and container runtimes to identify running services, versions, and access details. Pulse stores that context so Assistant can use it in chat and Patrol can use it during verification.',
   } as const;
 }
 
 export function getAISettingsWorkloadDiscoverySummary() {
   return {
-    text: 'Workload discovery gives Pulse Assistant and Patrol concrete service context, so chat responses and verification findings can reference real services and commands instead of generic advice.',
+    text: 'Workload discovery stores concrete service context for Assistant chat and Patrol verification, so responses and findings can reference real services and commands instead of generic advice.',
   } as const;
 }
 

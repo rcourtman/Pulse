@@ -122,26 +122,29 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
                     : 'Workload discovery will automatically re-scan resources at this interval'}
                 </p>
               </div>
-              <div class="flex items-center justify-between gap-3 rounded border border-border bg-surface-alt px-3 py-2">
-                <p class="text-[10px] text-muted">
-                  Runs the new, changed, and stale workload sweep used by the schedule.
-                </p>
-                <button
-                  type="button"
-                  class="inline-flex min-h-10 sm:min-h-9 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-base-content hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={() => void state.handleRunDiscoveryRefresh()}
-                  disabled={state.saving() || state.discoveryRunRunning()}
-                >
-                  <Show
-                    when={state.discoveryRunRunning()}
-                    fallback={<RefreshCwIcon class="h-3.5 w-3.5" />}
-                  >
-                    <RefreshCwIcon class="h-3.5 w-3.5 animate-spin" />
-                  </Show>
-                  {state.discoveryRunRunning() ? 'Running...' : 'Run discovery now'}
-                </button>
-              </div>
             </Show>
+
+            <div class="flex flex-col gap-2 rounded border border-border bg-surface-alt px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+              <p class="text-[10px] text-muted sm:flex-1">
+                {state.form.discoveryEnabled
+                  ? 'Runs the new, changed, and stale workload sweep used by the schedule.'
+                  : 'Runs a one-time workload discovery refresh without changing the schedule.'}
+              </p>
+              <button
+                type="button"
+                class="inline-flex min-h-10 items-center gap-1.5 self-start rounded-md border border-border px-3 py-1.5 text-xs font-medium text-base-content hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9 sm:self-auto sm:flex-shrink-0"
+                onClick={() => void state.handleRunDiscoveryRefresh()}
+                disabled={state.saving() || state.discoveryRunRunning()}
+              >
+                <Show
+                  when={state.discoveryRunRunning()}
+                  fallback={<RefreshCwIcon class="h-3.5 w-3.5" />}
+                >
+                  <RefreshCwIcon class="h-3.5 w-3.5 animate-spin" />
+                </Show>
+                {state.discoveryRunRunning() ? 'Running...' : 'Run discovery now'}
+              </button>
+            </div>
 
             <p class="text-[10px] text-muted">{getAISettingsWorkloadDiscoverySummary().text}</p>
           </div>

@@ -506,6 +506,35 @@ describe('AISettings workload discovery persistence', () => {
     });
   });
 
+  it('keeps the manual discovery refresh visible when recurring discovery is off', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      discovery_enabled: false,
+      discovery_interval_hours: 0,
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Workload Discovery Off/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Workload Discovery Off/i }));
+
+    expect(screen.queryByLabelText('Scan Interval')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Runs a one-time workload discovery refresh without changing the schedule.'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Run discovery now/i }));
+
+    await waitFor(() => {
+      expect(runDiscoveryRefreshMock).toHaveBeenCalledTimes(1);
+      expect(notificationSuccessMock).toHaveBeenCalledWith(
+        'Discovery refresh finished: 1 workload refreshed.',
+      );
+    });
+  });
+
   it('reports when a manual discovery refresh has no pending work', async () => {
     getSettingsMock.mockResolvedValue({
       ...baseSettings(),

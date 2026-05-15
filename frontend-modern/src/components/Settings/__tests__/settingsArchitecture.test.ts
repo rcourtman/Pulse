@@ -268,6 +268,9 @@ describe('settings architecture guardrails', () => {
     expect(aiSettingsStateSource).toContain('discoveryRunRunning');
     expect(aiRuntimeControlsSectionSource).toContain('state.handleRunDiscoveryRefresh()');
     expect(aiRuntimeControlsSectionSource).toContain('Run discovery now');
+    expect(aiRuntimeControlsSectionSource).toContain(
+      'Runs a one-time workload discovery refresh without changing the schedule.',
+    );
     expect(aiRuntimeControlsSectionSource).not.toContain("fetch('/api/discovery/run");
   });
 
