@@ -242,7 +242,7 @@ Patrol's primary assessment strip is descriptive only; it must not render a
 Patrol-authored recommended next step, suggested prompt chips, or a secondary
 action band inside the assessment shell. If the same assessment opens
 Assistant, the Patrol-to-Assistant handoff must carry only bounded evidence,
-resource references, and governed approval/action posture as model-only
+resource references, and factual governed approval/action metadata as model-only
 context. Feature-owned Assistant handoffs may provide source context and safe
 metadata, but the shared drawer boundary must not turn those handoffs into
 frontend-authored prompts, tool routes, or remediation plans; the configured
@@ -1061,16 +1061,17 @@ AI runtime.
     drawer may render a generic
     context-briefing band from `frontend-modern/src/stores/aiChat.ts`, but
     feature-owned helpers must provide compact source labels, primary subject,
-    status, and governed approval/action posture while keeping attention reason,
-    evidence summaries, operator-decision copy, and safety notes compact and
-    source-owned. Prompt suggestions must stay out of Patrol drawer chrome.
+    status, and governed approval/action artifact metadata while keeping
+    detailed evidence, safety notes, and model-only finding context outside
+    drawer chrome. Prompt suggestions, attention-reason copy, and
+    operator-decision framing must stay out of Patrol drawer chrome.
     Patrol finding and action-artifact handoffs must not render suggested prompt
     chips in the drawer and must not become another primitive path for raw
     approval, command, or rollback command payload text. Missing-detail
     queued-fix recovery actions must still provide the feature-owned Patrol
     briefing and request-local approval-required posture rather than opening the
     shared drawer as context-free generic Assistant chat. If a feature-owned
-    expired-approval recovery action still has structured proposed-fix metadata,
+    expired-approval recovery action still has structured action artifact metadata,
     the shared drawer may receive only safe summary fields and command counts;
     raw command text remains outside shared Assistant primitives.
     When those feature-owned helpers attach backend model-only context, the
@@ -1085,7 +1086,7 @@ AI runtime.
     `AIChatContextBriefing`, including generated approval summaries and command
     counts when available; raw approval commands remain owned by the governed
     approval/remediation panels. If the generic finding-level helper hydrates
-    latest investigation detail to recover proposed-fix context, it may pass only
+    latest investigation detail to recover action artifact context, it may pass only
     safe summary fields and command counts into the drawer briefing. Shared
     approval-required posture must derive its subject from that briefing or
     structured finding context, so Patrol handoffs render as Patrol handoffs or
@@ -1093,7 +1094,7 @@ AI runtime.
     than generic dashboard briefs. Patrol approval-row Assistant prompts must
     route through the same
     feature-owned finding handoff helper rather than hand-written prompt-only
-    drawer opens: safe approval metadata, proposed-fix summaries, resource
+    drawer opens: safe approval metadata, action artifact summaries, resource
     references, and bounded `handoff_actions` may enter the prompt and context,
     but raw command text stays out and the scoped request must pass
     `autonomousMode:false` instead of changing the user's persistent Assistant

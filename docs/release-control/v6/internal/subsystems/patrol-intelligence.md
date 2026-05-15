@@ -138,7 +138,7 @@ Patrol-specific presentation helpers.
    presentation, but visible Patrol copy and Assistant handoff context
    must flow through the governed Patrol investigation-context helpers. Those
    helpers also own the Assistant drawer briefing content for Patrol records,
-   including the rule that proposed-fix commands are summarized by count only
+   including the rule that action artifact commands are summarized by count only
    and never rendered as raw command text in the handoff surface. When Patrol
    hands a pending fix or approval into Assistant, the shared handoff may retain
    only structured action references such as approval ID, status, request/expiry
@@ -150,9 +150,10 @@ Patrol-specific presentation helpers.
    the durable record lacks the current approval reference, but Patrol
    presentation must still keep command payloads inside governed
    approval/remediation context rather than rendering them as handoff copy.
-   Assistant's operator decision and approval/proposed-fix posture must derive
-   from the same structured handoff action after that recovery, so the
-   briefing cannot contradict the action reference passed to chat execution.
+   Assistant's governed action artifact metadata must derive from the same
+   structured handoff action after that recovery, so the briefing cannot
+   contradict the action reference passed to chat execution while still leaving
+   next-step reasoning to the configured LLM.
    Assistant may also hydrate the referenced action plan or action audit so the
    handoff explains current action lifecycle state, requester, capability,
    approval policy, plan expiry, preflight/dry-run posture, and terminal
@@ -173,13 +174,13 @@ Patrol-specific presentation helpers.
    canonical policy, state, topology, and timeline hydration, but Patrol
    presentation must treat them as explanation for the current finding rather
    than approval, lifecycle, disclosure, or execution authority.
-   Assistant handoffs from Patrol findings must also include a concise operator
-   briefing derived from the unified finding and structured investigation record
-   before the detailed finding context, so Assistant receives current risk,
-   attention reason, recency, evidence snapshot, verification summary,
-   conclusion, latest lifecycle event, explicit operator decision framing, and
-   governed approval/action posture instead of behaving like a generic chat over
-   a pasted incident dump. Patrol is the scheduled
+   Assistant handoffs from Patrol findings must also include a concise factual
+   finding briefing derived from the unified finding and structured
+   investigation record before the detailed finding context, so Assistant
+   receives current risk, recency, evidence snapshot, verification summary,
+   conclusion, latest lifecycle event, and governed approval/action artifact
+   metadata instead of behaving like a generic chat over a pasted incident dump.
+   Patrol is the scheduled
    probe, context assembler, and execution-governance owner; the configured LLM
    is the diagnostic and remediation-reasoning owner. Patrol handoffs may
    provide system context, resource posture, action posture, and governed tools,
@@ -209,28 +210,28 @@ Patrol-specific presentation helpers.
    expiry, target label, generated approval summary, and command count; it must
    not copy the approval command payload into Assistant drawer prose. The
    model-only runtime briefing must apply that same
-   recovered approval reference when framing the operator decision and action
-   posture. The initial prompt for a Patrol finding may include governed action
-   posture when safe metadata is attached, but it must frame that posture as
-   context for the LLM to evaluate rather than as a Patrol-authored remediation
+   recovered approval reference when adding factual governed action artifact
+   metadata. The initial prompt for a Patrol finding may include governed action
+   context when safe metadata is attached, but it must frame that context as
+   input for the LLM to evaluate rather than as a Patrol-authored remediation
    answer. Finding
    handoffs must be assembled through the Patrol-owned handoff model so the
    prompt, visible briefing, model-only finding context, resource reference,
    bounded action reference, and request-local approval-required posture stay in
    sync. The model-only context may include
    current finding status, recurrence, investigation record facts, evidence,
-   verification, approval posture, dry-run posture, proposed-fix summary, target
-   resource references, and governed action references without raw command
-   payloads. Inline Patrol approval actions in
+   verification, approval state, dry-run posture, existing action artifact
+   summary, target resource references, and governed action references without
+   raw command payloads. Inline Patrol approval actions in
    `frontend-modern/src/components/patrol/ApprovalSection.tsx` that open
    Assistant must follow that same Patrol-owned handoff model rather than a
    prompt-only local shortcut: pass approval ID/status/risk/target plus safe
    summary/count metadata as review context, attach the target resource
    reference, include bounded `handoff_actions` for live approvals or structured
-   proposed fixes when present, force the request-local approval-required mode,
+   action artifacts when present, force the request-local approval-required mode,
    attach the Patrol-owned visible drawer briefing for the pending approval or
    queued-fix recovery state, and never paste the approval command or
-   proposed-fix command text into the chat prompt. Existing remediation-plan or
+   action command text into the chat prompt. Existing remediation-plan or
    action-plan artifacts follow the same boundary: plan status, risk, and
    command counts are allowed as non-authoritative governed action posture for
    the LLM to critique, but visible handoffs must not render Patrol step lists
@@ -238,7 +239,7 @@ Patrol-specific presentation helpers.
    governed remediation or approval surface. Generic finding
    discussion handoffs must also force request-local approval-required mode for
    any non-empty Patrol `finding_id`, including context-only findings and
-   findings that reference a live approval, proposed fix, fix outcome, or
+   findings that reference a live approval, action artifact, fix outcome, or
    remediation plan, so default autonomous Assistant settings cannot bypass the
    Patrol action-governance boundary. The assembled handoff must still pass
    through the Assistant runtime's resource-policy sanitizer before prompt
@@ -246,19 +247,19 @@ Patrol-specific presentation helpers.
    cannot leak governed resource names, IDs, aliases, nodes, paths, or
    addresses outside the canonical policy boundary.
    If a `fix_queued` finding no longer has a live approval payload or detailed
-   proposed-fix payload available, the recovery action must still open Assistant
+   action artifact payload available, the recovery action must still open Assistant
    with the same Patrol-owned visible briefing and approval-required posture
    from current finding facts; it must not fall back to generic investigation
    chat or invite execution from missing command details.
-   If the live approval is gone but the structured proposed-fix payload is still
-   available, the recovery Assistant briefing must carry only safe proposed-fix
+   If the live approval is gone but the structured action artifact payload is still
+   available, the recovery Assistant briefing must carry only safe action artifact
    metadata such as description, target, risk, rationale, destructive posture,
    and command count. Raw command text remains in the governed remediation or
    approval panel, while Assistant gets enough context to explain approval
    recovery and risk without becoming an execution surface.
    Generic finding-level Assistant handoffs must use that same safe metadata
    boundary when the list response lacks a full investigation record: they may
-   hydrate the latest investigation session to recover proposed-fix summary,
+   hydrate the latest investigation session to recover action artifact summary,
    risk, target, rationale, destructive posture, and command count, but they must
    still keep command text out of both the user-authored prompt and visible
    Assistant briefing.
@@ -284,7 +285,7 @@ Patrol-specific presentation helpers.
    an investigation record exists with no impact text, and a parallel
    `Rollback not specified` placeholder whenever rollback is empty, so the
    operator-visible gap is conspicuous rather than hidden. The Patrol
-   operator briefing card built by
+   finding briefing card built by
    `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
    may include populated impact text in its bounded detail lines but must
    omit the placeholder copy from that compact card so it stays tight,

@@ -574,8 +574,8 @@ bypass the API fail-closed execution gate.
     event briefing lines, and detailed lifecycle context carried by the same
     handoff remain Patrol/AI review metadata and must not become backup recency,
     restore support, or storage-local lifecycle state. Primary finding
-    attention, recency, evidence, verification, and operator-decision facts in
-    the operator briefing and related root-cause or correlated finding summaries
+    recency, evidence, verification, and governed action artifact facts in
+    the finding briefing and related root-cause or correlated finding summaries
     resolved for that Assistant handoff are also adjacent AI/runtime explanation
     context only, including any recency or latest lifecycle facts attached to
     those related summaries; storage and recovery surfaces must not reinterpret
@@ -592,7 +592,7 @@ bypass the API fail-closed execution gate.
     bypass. Any refreshed approval or action-audit status snapshot in Assistant
     handoff context is still read-only AI/runtime context and must not become
     recovery freshness, restore eligibility, or storage-local execution state.
-    Operator briefings generated for those same Assistant finding handoffs are
+    Finding briefings generated for those same Assistant finding handoffs are
     also adjacent AI/runtime context only: storage and recovery surfaces may read
     their Patrol conclusion and bounded evidence as investigation context, but
     must not reinterpret the briefing as backup recency, restore support,
@@ -1332,12 +1332,12 @@ resource or mention type that still reaches shared AI handlers must collapse
 to canonical `agent` before storage/recovery-adjacent links, filters, or
 drill-ins consume it, so those surfaces never inherit a second live host-type
 contract from chat or alert investigation ingress.
-Assistant operator-decision and action-posture briefing text assembled from
-recovered Patrol handoff action references is also AI/runtime review context
-only. Storage and recovery may consume that explanation as incident context,
+Assistant finding-briefing action metadata assembled from recovered Patrol
+handoff action references is also AI/runtime review context only. Storage and
+recovery may consume that explanation as incident context,
 including safe approval status, request/expiry timestamps, action plan identity,
 approval policy, plan expiry, and dry-run posture, but they must not reinterpret
-a recovered approval or clearer proposed-fix posture as backup freshness,
+a recovered approval or clearer action artifact metadata as backup freshness,
 restore authority, recovery proof, or storage-local remediation execution
 state. Those handoffs must remain context-only for the configured model and
 must not be converted by storage/recovery code into pre-filled prompts,

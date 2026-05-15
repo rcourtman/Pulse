@@ -385,11 +385,12 @@ the canonical monitored-system blocked payload.
 3c. Route Assistant finding handoff context changes through
     `internal/api/ai_handler.go`, `internal/api/ai_handler_test.go`, and
     `internal/api/contract_test.go` together. Patrol-originated handoffs must
-    keep `[Operator Briefing]`, `[Finding Context]`, `[Finding Lifecycle
+    keep `[Finding Briefing]`, `[Finding Context]`, `[Finding Lifecycle
     Context]`, structured handoff resources, related root-cause/correlation
     finding context, and structured handoff actions model-only, with the
-    briefing summarizing latest lifecycle event and governed action posture without raw
-    command text. Structured handoff action
+    briefing summarizing latest lifecycle event and factual governed action
+    artifact metadata without raw command text or Pulse-authored next-step
+    guidance. Structured handoff action
     references may use the current live Patrol investigation-fix approval for
     the finding when that approval is newer than the approval ID on the durable
     record, but the payload may carry only IDs, status/risk/target metadata,
@@ -401,32 +402,32 @@ the canonical monitored-system blocked payload.
     while raw command and rollback command payloads remain in governed action
     surfaces. Frontend Patrol finding-discussion handoffs must force a
     request-local approval-required Assistant mode instead of inheriting the
-    user's persistent autonomous control setting; live approval, proposed-fix,
+    user's persistent autonomous control setting; live approval, action artifact,
     fix-outcome, and remediation-plan references only add structured action
-    posture, they are not the trigger for the boundary. Frontend-visible Patrol
+    metadata, they are not the trigger for the boundary. Frontend-visible Patrol
     briefing payloads must stay compact and must not include suggested prompt
     chips, Patrol-authored next-step recommendations, or route-owned
     recommendation metadata. Frontend queued-fix recovery handoffs
-    where the live approval or proposed-fix payload is unavailable must still
-    carry that Patrol-owned operator briefing, current `fix_queued` posture,
+    where the live approval or action artifact payload is unavailable must still
+    carry that Patrol-owned finding briefing, current `fix_queued` posture,
     request-local approval-required mode, and model-only evidence context; they must
     not degrade into generic Assistant investigation chat or imply that
     execution can proceed from missing command payloads. Expired-approval
-    recovery handoffs may use a still-available structured proposed-fix payload
+    recovery handoffs may use a still-available structured action artifact payload
     only as safe metadata: description, target, risk, rationale, destructive
     posture, and command count may enter the briefing, while raw command text
     remains owned by governed remediation or approval surfaces. If the unified
     finding list lacks a full investigation record, frontend finding-discussion
     handoffs may hydrate the latest investigation session for the same safe
-    proposed-fix metadata, but they must not paste raw proposed-fix command text
+    action artifact metadata, but they must not paste raw action command text
     into the authored prompt or visible briefing. Direct
     alert-investigation API handoffs through `internal/api/ai_handlers.go` must
     enforce that same request-scoped boundary by setting
     `ai.ExecuteRequest.AutonomousMode` to
     false and `ai.ExecuteRequest.RequireCommandApproval` to true; API proof must
     keep this guarded in both `internal/api/ai_handlers_test.go` and
-    `internal/api/contract_test.go`. The operator
-    decision and action-posture lines in the briefing must derive from those
+    `internal/api/contract_test.go`. Governed action artifact lines in the
+    briefing must derive from those
     same structured action references after recovery so the briefing cannot
     contradict the handoff action payload. Related finding
     context must resolve from the current unified finding store, stay bounded
@@ -598,11 +599,11 @@ the canonical monitored-system blocked payload.
    approval command payloads stay inside governed approval/remediation surfaces,
    and finding-level handoff context may be derived from the same
    bounded metadata only so Assistant receives approval status, risk,
-   dry-run posture, and proposed-fix posture without Pulse choosing the next
+   dry-run posture, and existing action artifact metadata without Pulse choosing the next
    step or receiving raw command/execution payloads; finding-level handoffs may also send one
    bounded model-only `handoff_context`, one `handoff_resources` target
    reference, and one `handoff_actions` entry for that governed approval or
-   proposed fix so the Assistant runtime can refresh finding and action posture
+   action artifact so the Assistant runtime can refresh finding and action posture
    from IDs and safe summaries instead of relying on pasted chat text
    and the dedicated `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` owner, so recent-change counts and governed policy-posture fallbacks normalize once at the shared store boundary instead of as Patrol-hook-local payload repair
    and the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` card, so learned correlations and correlation context stay rendered through one governed frontend card instead of separate page-local list loops
@@ -643,14 +644,14 @@ the canonical monitored-system blocked payload.
 14. Keep Patrol status transport semantics explicit in that same AI handler layer: the Patrol status endpoint must carry machine-readable runtime availability such as blocked, running, disabled, active, or unavailable rather than asking frontend consumers to infer operator state from stale summaries or run history.
 15. Keep legacy Patrol quickstart transport semantics retired from the public v6 GA contract: ordinary AI settings and Patrol status payloads must not expose quickstart credit/status fields, and any stale hosted-model blocked copy that survives from compatibility state must normalize back to provider/local-model setup rather than presenting credit badges or acquisition prompts.
 16. Keep Patrol intelligence summary transport semantics single-voiced: the canonical overall-health payload and Patrol run-history payload together must support one primary assessment plus one explicit verification explanation, and frontend consumers must not need to derive a second compact assessment or verification verdict row from the same payloads beneath the primary assessment strip.
-    That same transport split now supports the visible Patrol recommended next
-    step without adding another API field: the frontend summary contract derives
-    the recommendation from existing overall-health, run-history, active
-    finding, runtime, and pending-approval state, so the API remains the source
-    of facts while Patrol presentation owns the operator decision wording and
-    bounded action kind. Those action kinds map back to existing API-backed
-    Patrol controls and approval/finding filters; recommendation transport
-    must not become a new execution or approval API.
+    That same transport split now supports the visible Patrol assessment and
+    action metadata without adding another API field: the frontend summary
+    contract derives compact state from existing overall-health, run-history,
+    active finding, runtime, and pending-approval facts, so the API remains the
+    source of facts while the configured LLM owns next-step reasoning. Those
+    action references map back to existing API-backed Patrol controls and
+    approval/finding filters; summary transport must not become a new execution
+    or approval API.
     The API contract should stay presentation-neutral here: it supplies the
     score, current risk facts, verification facts, and action state needed for a
     compact operator summary, but it must not imply a hero, card, duplicate
@@ -1175,7 +1176,7 @@ the canonical monitored-system blocked payload.
    runs still allow the coverage caveat to surface.
    and the Assistant finding-context request contract, so `/api/ai/chat`
    payloads carrying `finding_id` may hydrate a structured investigation
-   summary from the unified finding, but raw proposed-fix commands must stay
+   summary from the unified finding, but raw action commands must stay
    out of the persisted prompt and inside governed approval/remediation
    context; the backend may pass that summary as model-only handoff context
    for the current turn and retain it as same-session model context for
@@ -1200,10 +1201,10 @@ the canonical monitored-system blocked payload.
    summary. The frontend store boundary must preserve those recurrence facts
    from the shared payload, including `times_raised`, so Patrol presentation and
    Assistant handoff helpers do not infer repeated findings from page-local
-   state. The briefing must carry the primary finding's current attention
-   reason, recency facts, bounded evidence snapshot, verification summary, and
-   explicit operator decision framing before investigation guidance and may
-   carry the latest lifecycle event as the current handoff state, while the
+   state. The briefing must carry the primary finding's current recency facts,
+   bounded evidence snapshot, verification summary, and factual governed action
+   artifact metadata before investigation guidance and may carry the latest
+   lifecycle event as the current handoff state, while the
    detailed lifecycle list must stay bounded and model-only. Chat execution may
    also resolve root-cause and correlated finding IDs from that current unified
    finding into compact related-finding summaries and structured handoff
@@ -1217,7 +1218,7 @@ the canonical monitored-system blocked payload.
    guidance is read-only, model-only context and must not become saved user text,
    disclosure authority, or action authority. Chat execution must apply that
    same resource-policy boundary to the assembled product-originated handoff
-   text before model prompt injection, including operator briefings and
+   text before model prompt injection, including finding briefings and
    lower-level finding/action context, so governed resource identities are
    redacted even when the selected model is local and no provider-bound
    sanitizer will run. Chat execution may also hydrate
@@ -1239,7 +1240,7 @@ the canonical monitored-system blocked payload.
    pending-action and approval references from the investigation record into chat
    execution, and may recover the current live Patrol investigation-fix approval
    for the finding when the durable record has no current approval ID, but those
-   references must omit raw proposed-fix commands, remain model-only review
+   references must omit raw action commands, remain model-only review
    context, and leave approval/execution authority with the governed approval
    and remediation APIs. Frontend-visible pending-approval drawer briefings must
    be a presentation of that same safe handoff context: approval ID, status,
@@ -1248,12 +1249,12 @@ the canonical monitored-system blocked payload.
    context payloads. Chat execution may refresh approval status snapshots for
    those references from the canonical approval store, but that snapshot is
    read-only, org-scoped, and must not expose or infer the raw command. When the
-   API handoff builder recovers a live approval, the first model-only operator
+   API handoff builder recovers a live approval, the first model-only finding
    briefing and structured handoff action must use that recovered approval's
    safe lifecycle metadata, request/expiry timestamps, action plan identity,
-   approval policy, plan expiry, and dry-run posture for operator-decision and
-   action-posture text instead of falling back to stale investigation-record
-   approval posture. When the reference resolves to a governed action plan or
+   approval policy, plan expiry, and dry-run posture as factual action artifact
+   metadata instead of falling back to stale investigation-record approval
+   posture. When the reference resolves to a governed action plan or
    action audit, chat execution must hydrate the canonical action ID, lifecycle
    state, requester, capability, approval policy, plan expiry, preflight/dry-run
    summary, and terminal success/failure state from the action-audit store so
@@ -3803,18 +3804,18 @@ actions visible even when no live pending approval remains and
 `proposed_fix`: queued remediation state cannot collapse into a dead badge with
 no user action path.
 The `/api/ai/chat` finding handoff contract must also include a model-only
-`[Operator Briefing]` generated from the unified finding and structured Patrol
+`[Finding Briefing]` generated from the unified finding and structured Patrol
 investigation record before detailed `[Finding Context]`. The briefing is the
-canonical operator-facing frame for Assistant: it carries the finding summary,
-resource, priority, current attention reason, current recency facts, bounded
-evidence and verification summaries, investigation confidence, and
-operator-decision framing plus approval/proposed-fix posture without raw command
-text. It must not include a Pulse-authored recommended next step. Any recorded
+canonical factual handoff frame for Assistant: it carries the finding summary,
+resource, priority, current recency facts, bounded evidence and verification
+summaries, investigation confidence, latest lifecycle facts, and governed
+action artifact metadata without raw command text. It must not include a
+Pulse-authored attention reason, operator decision, or recommended next step. Any recorded
 action note from a durable investigation record is context, not remediation
-guidance. That approval/proposed-fix posture must come from the same
+guidance. That governed action artifact metadata must come from the same
 structured action reference sent to chat execution, including any recovered live
 Patrol approval, so visible and model-only handoffs stay consistent. Patrol's
-frontend Assistant drawer briefing must use that same operator frame for
+frontend Assistant drawer briefing must use that same factual frame for
 visible handoffs from findings, while the downstream chat
 service hydrates live resource state, timeline, and action audit context around
 that same handoff. Backend chat handling must treat matching frontend Patrol
@@ -3825,12 +3826,12 @@ approval list payloads only as safe metadata for that visible briefing and any
    structured `handoff_actions`: approval ID, status, risk, request/expiry
    timestamps, target label, requester identity, action ID, approval policy,
    plan expiry, and dry-run summary are allowed. Assessment-level visible
-   briefings may reuse that same safe metadata for action labels and safety notes,
+   briefings may reuse that same safe metadata for factual action labels and safety notes,
    while approval command text remains inside the governed approval/remediation
    surface.
 Patrol approval-row Assistant handoffs must use the same safe metadata boundary
 and set `autonomousMode:false` for the request-local chat handoff; they must not
-paste raw approval or proposed-fix command text into a chat prompt.
+paste raw approval or action command text into a chat prompt.
 Patrol remediation-plan or action-artifact Assistant handoffs must pass only safe
 status, risk, description, and command-count posture as non-authoritative context
 for the configured LLM to critique; raw plan command and rollback command

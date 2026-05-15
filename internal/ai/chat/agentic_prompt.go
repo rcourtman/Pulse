@@ -11,15 +11,15 @@ func (a *AgenticLoop) getSystemPrompt() string {
 	if isAutonomous {
 		modeContext = `
 EXECUTION MODE: Autonomous
-Commands execute immediately without user approval. Follow the Discover → Investigate → Act
-workflow. Gather information before taking action. Use the tools freely to explore logs, check
-status, and understand the situation before attempting fixes.`
+Commands may execute without per-command approval when policy allows. Decide whether current
+context is enough, whether read-only evidence is needed, or whether a state-changing tool is
+appropriate. Prefer current evidence before changing state.`
 	} else {
 		modeContext = `
 EXECUTION MODE: Controlled
-Commands require user approval before execution. The system handles this automatically via a
-confirmation prompt - you don't need to ask "Would you like me to...?" Just execute what's
-needed and the system will prompt the user to approve if required.`
+State-changing tools require governed approval when policy says approval is required. If the
+user asks you to perform an action, choose the appropriate tool and Pulse will handle any
+required approval prompt.`
 	}
 
 	prompt := a.baseSystemPrompt + modeContext

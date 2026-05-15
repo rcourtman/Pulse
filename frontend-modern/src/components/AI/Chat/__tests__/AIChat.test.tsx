@@ -372,7 +372,7 @@ describe('AIChat', () => {
         autonomousMode: false,
         briefing: {
           sourceLabel: 'Pulse Patrol',
-          title: 'Operator briefing attached',
+          title: 'Patrol finding attached',
           subject: 'Provider connection issue on Patrol runtime',
           actionLabel: 'Open Patrol provider settings',
           actionHref: '/settings/system-ai',
@@ -1733,7 +1733,7 @@ describe('AIChat', () => {
         autonomousMode: false,
         briefing: {
           sourceLabel: 'Pulse Patrol',
-          title: 'Operator briefing attached',
+          title: 'Patrol finding attached',
         },
       };
 

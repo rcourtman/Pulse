@@ -823,7 +823,7 @@ function buildPatrolAssessmentAssistantModelContext(
     omittedFindingCount > 0
       ? `${omittedFindingCount} additional Patrol finding${omittedFindingCount === 1 ? '' : 's'} omitted from this bounded handoff summary.`
       : undefined,
-    'Operator Boundary: This Patrol assessment handoff is model-only context for explanation and review. Diagnostics, remediation, and command execution require explicit governed approval.',
+    'Model Boundary: This Patrol assessment handoff is model-only context for explanation and review. Diagnostics, remediation, and command execution require explicit governed approval.',
   ]
     .filter(isNonEmptyString)
     .join('\n');
@@ -877,7 +877,7 @@ function buildPatrolConfigurationFailureModelContext(
     input.status ? `HTTP Status: ${input.status}` : undefined,
     ...detailLines.map((line) => formatContextLine('Configuration Detail', line)),
     ...details.map((line) => formatContextLine('Backend Detail', line)),
-    'Operator Boundary: This Patrol configuration handoff is model-only context for explanation and review. Provider changes, retries, diagnostics, remediation, and command execution require explicit governed operator action.',
+    'Model Boundary: This Patrol configuration handoff is model-only context for explanation and review. Provider changes, retries, diagnostics, remediation, and command execution require explicit governed operator action.',
   ]
     .filter(isNonEmptyString)
     .join('\n');
@@ -1674,10 +1674,10 @@ function formatAssessmentFindingContextLine(
       : undefined,
     ...formatAssessmentPendingApprovalContextParts(pendingApproval),
     proposedFix?.description
-      ? `proposed fix ${truncateContextText(proposedFix.description, 160)}`
+      ? `action artifact ${truncateContextText(proposedFix.description, 160)}`
       : undefined,
     proposedFix?.commandSummary,
-    proposedFix?.destructive ? 'destructive proposed fix' : undefined,
+    proposedFix?.destructive ? 'destructive action artifact' : undefined,
     record.error ? `investigation error ${truncateContextText(record.error, 160)}` : undefined,
   ];
 
@@ -1729,20 +1729,18 @@ function buildPatrolAssistantFindingModelContext(
       ? `last regression ${formatBriefingTimestamp(normalizeText(input.lastRegressionAt))}`
       : undefined,
   ].filter(isNonEmptyString);
-  const attentionReason = buildPatrolAssistantAttentionReason(input, record);
-  const operatorDecision = buildPatrolAssistantOperatorDecision(input);
-  const proposedFixFacts = proposedFix
+  const actionArtifactFacts = proposedFix
     ? formatBriefingStringList(
         [
           proposedFix.description,
           proposedFix.targetHost ? `target ${proposedFix.targetHost}` : undefined,
           proposedFix.riskLabel ? `${proposedFix.riskLabel.toLowerCase()} risk` : undefined,
           proposedFix.commandSummary,
-          proposedFix.destructive ? 'destructive proposed fix' : undefined,
+          proposedFix.destructive ? 'destructive action artifact' : undefined,
           proposedFix.rationale ? `rationale ${proposedFix.rationale}` : undefined,
         ],
         6,
-        'proposed-fix facts',
+        'action-artifact facts',
       )
     : undefined;
 
@@ -1758,7 +1756,6 @@ function buildPatrolAssistantFindingModelContext(
     formatContextLine('Last Seen At', input.lastSeenAt),
     formatContextLine('Recurrence', raisedParts.join('; ')),
     formatContextLine('Description', input.description),
-    formatContextLine('Attention', attentionReason),
     formatContextLine('Investigation Record', input.investigationRecord?.id),
     formatContextLine('Investigation Status', record.statusLabel),
     formatContextLine('Investigation Outcome', record.outcomeLabel),
@@ -1795,10 +1792,9 @@ function buildPatrolAssistantFindingModelContext(
     formatContextLine('Action Plan Summary', pendingApproval.actionPlanMessage),
     formatContextLine('Action Preflight', pendingApproval.actionPreflight),
     formatContextLine('Dry-Run Posture', pendingApproval.actionDryRunSummary),
-    formatContextLine('Proposed Fix', proposedFixFacts),
-    formatContextLine('Operator Decision', operatorDecision),
+    formatContextLine('Existing Action Artifact', actionArtifactFacts),
     'Command Boundary: Command details stay in governed approval or remediation context; this model-only handoff may include command counts but not raw command text.',
-    'Operator Boundary: This Patrol finding handoff is model-only context for explanation and review. Diagnostics, remediation, and command execution require explicit governed approval.',
+    'Model Boundary: This Patrol finding handoff is model-only context for explanation and review. Diagnostics, remediation, and command execution require explicit governed approval.',
   ]
     .filter(isNonEmptyString)
     .join('\n');
@@ -1905,9 +1901,9 @@ export function buildPatrolRemediationPlanAssistantModelContext(
     formatContextLine('Recorded Risk', riskLabel),
     formatContextLine('Attached Action Context', planDescription),
     commandSummary
-      ? `Governed Action Posture: ${commandSummary}. Treat this as approval state, not remediation guidance.`
+      ? `Governed Action Context: ${commandSummary}. Treat this as approval state, not remediation guidance.`
       : undefined,
-    'Operator Boundary: Do not assume any Patrol-authored action is correct. Use the finding evidence, available tools, and current operational state to decide the remediation. Any state-changing command must go through governed approval; do not infer, repeat, or execute raw command text from this chat handoff.',
+    'Model Boundary: Do not assume any Patrol-authored action is correct. Use the finding evidence, available tools, and current operational state to decide the remediation. Any state-changing command must go through governed approval; do not infer, repeat, or execute raw command text from this chat handoff.',
   ]
     .filter(isNonEmptyString)
     .join('\n');
@@ -1966,273 +1962,40 @@ export function buildPatrolAssistantFindingBriefing(
     record.confidenceLabel,
     ...approvalStatusParts,
   ].filter(isNonEmptyString);
-  const attentionReason = buildPatrolAssistantAttentionReason(input, record);
-  const operatorDecision = buildPatrolAssistantOperatorDecision(input);
-  if (!record.hasRecord && !attentionReason && !operatorDecision) {
+  const hasFindingFacts = [
+    input.severity,
+    input.findingStatus,
+    input.investigationOutcome,
+    input.loopState,
+    normalizeNonNegativeCount(input.timesRaised) > 0 ? String(input.timesRaised) : '',
+    normalizeNonNegativeCount(input.regressionCount) > 0 ? String(input.regressionCount) : '',
+    input.lastRegressionAt,
+  ].some((value) => normalizeText(value).length > 0);
+  if (!record.hasRecord && !hasFindingFacts && !pendingApproval.id && !proposedFix) {
     return undefined;
   }
-  const proposedFixDetail = record.proposedFix
-    ? undefined
-    : formatPatrolAssistantProposedFixDetail(proposedFix);
+  const actionArtifactDetail = formatPatrolAssistantActionArtifactDetail(proposedFix);
 
   const detailLines = [
-    attentionReason ? `Attention: ${attentionReason}` : undefined,
     record.conclusion,
     record.impact ? `Impact: ${record.impact}` : undefined,
-    proposedFixDetail,
-    operatorDecision ? `Decision: ${operatorDecision}` : undefined,
+    actionArtifactDetail,
   ]
     .filter(isNonEmptyString)
     .slice(0, 4);
   const verificationLines = record.verificationSummaries.map((summary) => `Verified: ${summary}`);
-  const actionLabel =
-    proposedFix?.description ||
-    (pendingApproval.id ? `Approval ${pendingApproval.id}` : undefined) ||
-    undefined;
 
   return {
     sourceLabel: 'Pulse Patrol',
-    title: 'Operator briefing attached',
+    title: 'Patrol finding attached',
     subject: `${title} on ${subject}`,
     statusLabel: statusParts.join(' · ') || undefined,
     detailLines,
     evidence: [...record.evidenceSummaries, ...verificationLines].slice(0, 4),
-    actionLabel,
+    actionLabel: undefined,
     commandSummary: proposedFix?.commandSummary,
     safetyNote: buildPatrolAssistantSafetyNote(proposedFix, pendingApproval),
   };
-}
-
-function buildPatrolAssistantAttentionReason(
-  input: PatrolAssistantFindingBriefingInput,
-  record: PatrolInvestigationRecordPresentation,
-): string | undefined {
-  const parts: string[] = [];
-  const status = normalizeText(input.findingStatus).toLowerCase();
-  const severity = normalizeText(input.severity).toLowerCase();
-
-  switch (status) {
-    case 'active':
-      parts.push(severity ? `active ${severity} finding` : 'active finding');
-      break;
-    case 'resolved':
-      parts.push(
-        normalizeNonNegativeCount(input.regressionCount) > 0
-          ? 'resolved after prior regression'
-          : 'resolved finding',
-      );
-      break;
-    case 'snoozed':
-      parts.push('snoozed finding');
-      break;
-    case 'dismissed':
-      parts.push('dismissed finding');
-      break;
-  }
-
-  const regressionCount = normalizeNonNegativeCount(input.regressionCount);
-  const timesRaised = normalizeNonNegativeCount(input.timesRaised);
-  if (regressionCount > 0) {
-    parts.push(`regressed ${regressionCount} time${regressionCount === 1 ? '' : 's'}`);
-  } else if (timesRaised > 1) {
-    parts.push(`raised ${timesRaised} times`);
-  }
-
-  const lastRegressionAt = formatBriefingTimestamp(normalizeText(input.lastRegressionAt));
-  if (lastRegressionAt) {
-    parts.push(`last regression ${lastRegressionAt}`);
-  }
-
-  // Only surface loop state when it differs from the default "detected".
-  // Loop=detected means "Patrol detected it, no investigation in flight"
-  // which is the trivial state for any active finding; rendering "loop
-  // detected" in the Attention line adds noise without information. Keep
-  // the loop signal only when it indicates a non-default investigation
-  // posture ("awaiting approval", "remediation failed", etc.).
-  const rawLoopState = normalizeText(input.loopState).toLowerCase();
-  if (rawLoopState && rawLoopState !== 'detected') {
-    const loopLabel = formatIdentifierLabel(input.loopState)?.toLowerCase();
-    if (loopLabel) {
-      parts.push(`loop ${loopLabel}`);
-    }
-  }
-
-  const rawRecord = input.investigationRecord;
-  const approvalId = normalizeText(rawRecord?.approval_id);
-  if (approvalId) {
-    parts.push(`approval ${approvalId}`);
-  }
-  const pendingApproval = normalizeApprovalBriefing(input.pendingApproval);
-  if (pendingApproval.status === 'pending') {
-    parts.push('live approval pending');
-  }
-  if (record.proposedFix?.destructive) {
-    parts.push('destructive proposed fix');
-  }
-
-  switch (normalizeText(rawRecord?.outcome || input.investigationOutcome)) {
-    case 'fix_queued':
-      parts.push('fix queued for governed review');
-      break;
-    case 'fix_executed':
-      parts.push('fix executed awaiting verification');
-      break;
-    case 'fix_failed':
-      parts.push('fix failed');
-      break;
-    case 'fix_verification_failed':
-      parts.push('verification failed');
-      break;
-    case 'fix_verification_unknown':
-      parts.push('verification inconclusive');
-      break;
-    case 'needs_attention':
-      parts.push('needs operator attention');
-      break;
-    case 'cannot_fix':
-      parts.push('Patrol cannot safely fix');
-      break;
-    case 'timed_out':
-      parts.push('Patrol timed out');
-      break;
-  }
-
-  return formatBriefingStringList(parts, 8, 'attention facts');
-}
-
-function buildPatrolAssistantOperatorDecision(
-  input: PatrolAssistantFindingBriefingInput,
-): string | undefined {
-  if (normalizeText(input.findingStatus).toLowerCase() === 'resolved') {
-    return 'Finding is resolved; explain the resolution and monitoring follow-up without proposing execution.';
-  }
-
-  const record = input.investigationRecord;
-  if (record) {
-    const pendingApproval = normalizeApprovalBriefing(input.pendingApproval);
-    const approvalId = pendingApproval.id || normalizeText(record.approval_id);
-    if (approvalId) {
-      const parts = [
-        `review ${pendingApproval.status === 'pending' ? 'live ' : ''}governed approval ${approvalId} before execution`,
-      ];
-      if (pendingApproval.status) {
-        parts.push(`approval ${pendingApproval.status}`);
-      }
-      if (pendingApproval.targetName) {
-        parts.push(`target ${pendingApproval.targetName}`);
-      }
-      if (pendingApproval.expiresAt) {
-        parts.push(`expires ${pendingApproval.expiresAt}`);
-      }
-      if (pendingApproval.requestedAt) {
-        parts.push(`requested ${pendingApproval.requestedAt}`);
-      }
-      if (pendingApproval.actionRequestedBy) {
-        parts.push(`requested by ${pendingApproval.actionRequestedBy}`);
-      }
-      if (record.proposed_fix) {
-        const fixId = normalizeText(record.proposed_fix.id);
-        if (fixId) {
-          parts.push(`action artifact ${fixId}`);
-        } else if (normalizeText(record.proposed_fix.description)) {
-          parts.push('action artifact recorded');
-        }
-        const risk = pendingApproval.riskLevel || normalizeText(record.proposed_fix.risk_level);
-        if (risk) {
-          parts.push(`risk ${risk}`);
-        }
-        if (record.proposed_fix.destructive) {
-          parts.push('destructive true');
-        }
-      }
-      return parts.join('; ');
-    }
-
-    switch (normalizeText(record.outcome)) {
-      case 'fix_queued':
-        return 'Review the recorded action posture in the governed approval or remediation flow before execution.';
-      case 'fix_executed':
-        return 'Verify the execution result before closing or resolving the finding.';
-      case 'fix_failed':
-      case 'fix_verification_failed':
-        return 'Review failed remediation evidence before retrying or escalating.';
-      case 'fix_verification_unknown':
-        return 'Gather verification evidence before closing or retrying remediation.';
-      case 'needs_attention':
-      case 'cannot_fix':
-        return 'Operator intervention is required; use the evidence to choose the next manual step.';
-      case 'timed_out':
-        return 'Patrol timed out; rerun investigation or gather more evidence before remediation.';
-    }
-
-    switch (normalizeText(record.status)) {
-      case 'pending':
-      case 'running':
-        return 'Wait for Patrol to finish the investigation before approving remediation.';
-      case 'failed':
-        return 'Review the Patrol investigation failure and gather evidence before remediation.';
-      case 'needs_attention':
-        return 'Operator intervention is required; use the evidence to choose the next manual step.';
-    }
-  }
-
-  const pendingApproval = normalizeApprovalBriefing(input.pendingApproval);
-  if (pendingApproval.id) {
-    const parts = [`Review live governed approval ${pendingApproval.id} before execution.`];
-    if (pendingApproval.status) {
-      parts.push(`Status: ${pendingApproval.status}.`);
-    }
-    if (pendingApproval.targetName) {
-      parts.push(`Target: ${pendingApproval.targetName}.`);
-    }
-    if (pendingApproval.riskLevel) {
-      parts.push(`Risk: ${pendingApproval.riskLevel}.`);
-    }
-    if (pendingApproval.expiresAt) {
-      parts.push(`Expires: ${pendingApproval.expiresAt}.`);
-    }
-    if (pendingApproval.requestedAt) {
-      parts.push(`Requested: ${pendingApproval.requestedAt}.`);
-    }
-    if (pendingApproval.actionRequestedBy) {
-      parts.push(`Requested by: ${pendingApproval.actionRequestedBy}.`);
-    }
-    return parts.join(' ');
-  }
-
-  const remediationId = normalizeText(input.remediationId);
-  if (remediationId) {
-    return `Review governed remediation ${remediationId} before execution.`;
-  }
-
-  switch (normalizeText(input.investigationOutcome).toLowerCase()) {
-    case 'fix_queued':
-      return 'Recover or regenerate the governed approval before execution; do not execute from chat context.';
-    case 'fix_executed':
-      return 'Verify the execution result before closing or resolving the finding.';
-    case 'fix_failed':
-    case 'fix_verification_failed':
-      return 'Review failed remediation evidence before retrying or escalating.';
-    case 'fix_verification_unknown':
-      return 'Gather verification evidence before closing or retrying remediation.';
-    case 'needs_attention':
-    case 'cannot_fix':
-      return 'Operator intervention is required; use the evidence to choose the next manual step.';
-    case 'timed_out':
-      return 'Patrol timed out; rerun investigation or gather more evidence before remediation.';
-  }
-
-  const loopState = normalizeText(input.loopState).toLowerCase();
-  if (loopState.includes('approval')) {
-    return 'Review the governed approval flow before execution.';
-  }
-  if (loopState.includes('investigat')) {
-    return 'Wait for Patrol to finish the investigation before approving remediation.';
-  }
-  if (normalizeText(input.findingStatus).toLowerCase() === 'active') {
-    return 'Continue investigation or monitoring; no governed action reference is ready.';
-  }
-  return undefined;
 }
 
 function buildPatrolAssistantSafetyNote(
@@ -2286,7 +2049,7 @@ function normalizeProposedFixBriefing(
   return normalized;
 }
 
-function formatPatrolAssistantProposedFixDetail(
+function formatPatrolAssistantActionArtifactDetail(
   proposedFix?: PatrolInvestigationRecordPresentation['proposedFix'],
 ): string | undefined {
   if (!proposedFix) return undefined;
@@ -2296,13 +2059,13 @@ function formatPatrolAssistantProposedFixDetail(
       proposedFix.targetHost ? `target ${proposedFix.targetHost}` : undefined,
       proposedFix.riskLabel ? `${proposedFix.riskLabel.toLowerCase()} risk` : undefined,
       proposedFix.commandSummary,
-      proposedFix.destructive ? 'destructive proposed fix' : undefined,
+      proposedFix.destructive ? 'destructive action artifact' : undefined,
       proposedFix.rationale ? `rationale ${proposedFix.rationale}` : undefined,
     ],
     6,
-    'proposed-fix facts',
+    'action-artifact facts',
   );
-  return detail ? `Proposed fix: ${detail}` : undefined;
+  return detail ? `Existing action artifact: ${detail}` : undefined;
 }
 
 function normalizeApprovalBriefing(

@@ -54,7 +54,7 @@ func TestBuildPatrolRunAssistantHandoffUsesBackendSafeRunContext(t *testing.T) {
 		"Runtime Failure: Selected model does not support Patrol tools",
 		"no tool-capable endpoint",
 		"Patrol Analysis: Visible runtime summary.",
-		"Operator Boundary:",
+		"Model Boundary:",
 	} {
 		if !strings.Contains(handoff.Context, required) {
 			t.Fatalf("context missing %q in:\n%s", required, handoff.Context)

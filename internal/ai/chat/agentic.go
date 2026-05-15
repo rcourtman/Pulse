@@ -706,9 +706,13 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 					// Inject a minimal, factual constraint - not a narrative or example.
 					// This tells the model what is required, not how to do it.
+					verifyTarget := strings.TrimSpace(fsm.LastWriteTool)
+					if verifyTarget == "" {
+						verifyTarget = "the changed target"
+					}
 					verifyPrompt := fmt.Sprintf(
-						"Verification required: perform a read or status check on %s before responding.",
-						fsm.LastWriteTool,
+						"Verification evidence is required before responding about the write result for %s. Decide what available evidence or tool call is appropriate to verify the current state.",
+						verifyTarget,
 					)
 
 					// Update the last assistant message to include verification constraint

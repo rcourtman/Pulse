@@ -447,12 +447,12 @@ runtime cost control, and shared AI transport surfaces.
     runtime-failure boolean needed for browser presentation. Run-specific
     fields stay reserved for `patrol_run` handoffs, while hidden model context,
     command payloads, preflight output, and action results remain
-    backend-owned. The operator briefing must surface the primary
-    finding's current attention reason, recency facts, bounded evidence
-    snapshot, verification summary, and explicit operator decision framing
-    before investigation guidance, may surface the latest lifecycle event as
-    the current handoff state, and detailed lifecycle events must stay in a
-    bounded
+    backend-owned. The finding briefing may surface the primary
+    finding's current recency facts, bounded evidence snapshot,
+    verification summary, latest lifecycle event, and governed action
+    artifact metadata, but it must not generate Pulse-authored attention
+    reasons, operator-decision framing, or remediation next-step guidance
+    for the model. Detailed lifecycle events must stay in a bounded
     `[Finding Lifecycle Context]` block with an explicit model-only boundary.
     Assistant runtime may also hydrate canonical
     resource-policy context for those handoff resources, using the same
@@ -461,7 +461,7 @@ runtime cost control, and shared AI transport surfaces.
     model-only handling guidance, not saved user text or disclosure authority.
     Before injecting any product-originated handoff context into the model
     prompt, the runtime must also apply canonical resource-policy redaction to
-    the assembled handoff text itself, including operator briefings and
+    the assembled handoff text itself, including finding briefings and
     lower-level finding/action context, so local-model prompts and non-local
     provider transport share the same governed identity boundary.
     Assistant runtime may also hydrate current canonical resource-state context
@@ -486,17 +486,17 @@ runtime cost control, and shared AI transport surfaces.
     live Patrol investigation-fix approval by finding ID when the durable record
     does not yet carry the latest approval ID. Those references are review
     context only: they must not include raw command text, must not grant
-    approval or execution authority, and must route any operator decision back
+    approval or execution authority, and must route any requested action back
     through the governed approval/remediation flow. Patrol provides the
     configured LLM with observed finding context, evidence, policy posture, and
     governed action state; the LLM owns diagnosis and remediation reasoning.
     Operator-visible handoffs must not describe Patrol as having already
-    authored the correct remediation. The operator briefing's decision and
-    action-posture text must derive from those same structured action
+    authored the correct remediation. The finding briefing may carry only
+    factual governed action artifact metadata from those same structured
     references after live-approval recovery, including safe current status,
     request/expiry timestamps, approval policy, action plan identity, plan
-    expiry, and dry-run posture, so Assistant does not tell the operator that no
-    governed action is ready while a recovered approval is present.
+    expiry, and dry-run posture, so Assistant sees current approval/action state
+    without Pulse choosing the model's next investigative or corrective step.
     When those references include an approval ID, Assistant runtime may refresh
     a current status snapshot from the canonical approval store on each turn,
     but it must enforce org scoping and still omit the approval command payload.
@@ -559,7 +559,7 @@ runtime cost control, and shared AI transport surfaces.
     model-context hydration and current canonical stores instead of resending
     stale browser handoff payloads. Patrol approval-row Assistant entries are
     still Patrol finding handoffs, not local prompt-only shortcuts: live
-    approval rows, expired proposed-fix rows, and missing-detail queued-fix
+    approval rows, expired action-artifact rows, and missing-detail queued-fix
     recovery rows must route through the shared Patrol finding handoff builder
     so the backend receives the same bounded model-only finding context,
     resource reference, and safe action reference posture that the main finding
@@ -1538,13 +1538,14 @@ card, so the learned-correlation layout and edge wording stay aligned across
 both surfaces. That shared card also owns the correlation ordering and
 truncation rule, so callers pass raw learned edges instead of page-specific
 top-N slices.
-Assistant finding handoffs now also receive a model-only operator briefing
+Assistant finding handoffs now also receive a model-only finding briefing
 derived from the current unified finding and structured Patrol investigation
 record before the lower-level finding context. That briefing must summarize the
-finding, resource, priority, current attention reason, current recency facts,
-bounded evidence and verification summaries, investigation confidence,
-operator decision framing, latest lifecycle event, and governed action posture
-as model context, while leaving detailed lifecycle history, current
+finding, resource, priority, current recency facts, bounded evidence and
+verification summaries, investigation confidence, latest lifecycle event, and
+governed action artifact metadata as factual model context without generating
+Pulse-authored attention, operator-decision, or remediation guidance, while
+leaving detailed lifecycle history, current
 resource-state, timeline, related-finding, and action-audit
 hydration in the existing canonical AI runtime handoff builders. Related
 root-cause and

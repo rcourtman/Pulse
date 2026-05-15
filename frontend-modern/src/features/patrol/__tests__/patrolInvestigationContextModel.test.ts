@@ -571,7 +571,7 @@ describe('patrolInvestigationContextModel', () => {
     expect(handoff.context.handoffContext).toContain('expires 2026-05-06T12:10:00Z');
     expect(handoff.context.handoffContext).toContain('requested by pulse_patrol');
     expect(handoff.context.handoffContext).toContain('1 command recorded for approval context');
-    expect(handoff.context.handoffContext).toContain('destructive proposed fix');
+    expect(handoff.context.handoffContext).toContain('destructive action artifact');
     expect(handoff.context.handoffActions).toHaveLength(1);
     expect(handoff.context.handoffActions?.[0]).toMatchObject({
       findingId: 'finding-1',
@@ -883,7 +883,7 @@ describe('patrolInvestigationContextModel', () => {
     ]);
   });
 
-  it('normalizes safe proposed-fix briefing metadata without command text', () => {
+  it('normalizes safe action artifact briefing metadata without command text', () => {
     const briefing = buildPatrolAssistantProposedFixBriefingInput({
       description: 'Restart the workload service',
       commands: ['systemctl restart workload.service'],
@@ -1133,16 +1133,15 @@ describe('patrolInvestigationContextModel', () => {
 
     expect(briefing).toEqual({
       sourceLabel: 'Pulse Patrol',
-      title: 'Operator briefing attached',
+      title: 'Patrol finding attached',
       subject: 'High CPU usage on web-server',
       statusLabel: 'Completed · Fix Queued · High confidence',
       detailLines: [
-        'Attention: active critical finding; regressed 2 times; last regression 2 hours ago; loop awaiting approval; approval approval-1; live approval pending; destructive proposed fix; fix queued for governed review',
         'Backup job saturated CPU.',
-        `Decision: review live governed approval approval-1 before execution; approval pending; target web-server; expires ${approvalExpiresAt}; requested ${approvalRequestedAt}; action artifact fix-1; risk high; destructive true`,
+        'Existing action artifact: Restart the workload service; medium risk; 1 command recorded for approval context; destructive action artifact',
       ],
       evidence: ['CPU stayed above 95% for 10 minutes', 'Verified: CPU returned below 50%'],
-      actionLabel: 'Restart the workload service',
+      actionLabel: undefined,
       commandSummary: '1 command recorded for approval context',
       safetyNote:
         'Command details stay in approval context; destructive actions require governed approval.',
@@ -1299,7 +1298,7 @@ describe('patrolInvestigationContextModel', () => {
     });
     expect(handoff).not.toHaveProperty('prompt');
     expect(handoff.context.briefing).toMatchObject({
-      title: 'Operator briefing attached',
+      title: 'Patrol finding attached',
       subject: 'Provider connection issue on Patrol runtime',
     });
     expect(handoff.context.briefing?.actionLabel).toBeUndefined();
@@ -1310,11 +1309,11 @@ describe('patrolInvestigationContextModel', () => {
     expect(handoff.context.handoffActions).toBeUndefined();
     expect(handoff.context.handoffContext).not.toContain('Patrol Next Step');
     expect(handoff.context.handoffContext).toContain(
-      'Operator Boundary: This Patrol finding handoff is model-only context',
+      'Model Boundary: This Patrol finding handoff is model-only context',
     );
   });
 
-  it('builds an operator briefing from current finding facts before a Patrol record exists', () => {
+  it('builds a finding briefing from current finding facts before a Patrol record exists', () => {
     expect(
       buildPatrolAssistantFindingBriefing({
         title: 'High CPU usage',
@@ -1326,13 +1325,10 @@ describe('patrolInvestigationContextModel', () => {
       }),
     ).toEqual({
       sourceLabel: 'Pulse Patrol',
-      title: 'Operator briefing attached',
+      title: 'Patrol finding attached',
       subject: 'High CPU usage on web-server',
       statusLabel: undefined,
-      detailLines: [
-        'Attention: active warning finding; raised 3 times; loop investigating',
-        'Decision: Wait for Patrol to finish the investigation before approving remediation.',
-      ],
+      detailLines: [],
       evidence: [],
       actionLabel: undefined,
       commandSummary: undefined,
@@ -1358,15 +1354,12 @@ describe('patrolInvestigationContextModel', () => {
 
     expect(briefing).toEqual({
       sourceLabel: 'Pulse Patrol',
-      title: 'Operator briefing attached',
+      title: 'Patrol finding attached',
       subject: 'CPU saturation on node-1',
       statusLabel: 'Pending approval · High risk',
-      detailLines: [
-        'Attention: active finding; loop fix queued; live approval pending',
-        'Decision: Review live governed approval approval-1 before execution. Status: pending. Target: node-1. Risk: high. Expires: 2026-05-06T12:10:00Z. Requested: 2026-05-06T12:00:00Z.',
-      ],
+      detailLines: [],
       evidence: [],
-      actionLabel: 'Approval approval-1',
+      actionLabel: undefined,
       commandSummary: undefined,
       safetyNote: 'Execution requires the governed approval flow.',
     });
@@ -1383,13 +1376,10 @@ describe('patrolInvestigationContextModel', () => {
       }),
     ).toEqual({
       sourceLabel: 'Pulse Patrol',
-      title: 'Operator briefing attached',
+      title: 'Patrol finding attached',
       subject: 'CPU saturation on node-1',
       statusLabel: 'Fix Queued',
-      detailLines: [
-        'Attention: active finding; loop fix queued; fix queued for governed review',
-        'Decision: Recover or regenerate the governed approval before execution; do not execute from chat context.',
-      ],
+      detailLines: [],
       evidence: [],
       actionLabel: undefined,
       commandSummary: undefined,
@@ -1397,7 +1387,7 @@ describe('patrolInvestigationContextModel', () => {
     });
   });
 
-  it('builds queued-fix recovery briefing from safe proposed-fix metadata', () => {
+  it('builds queued-fix recovery briefing from safe action artifact metadata', () => {
     expect(
       buildPatrolAssistantFindingBriefing({
         title: 'CPU saturation',
@@ -1416,16 +1406,14 @@ describe('patrolInvestigationContextModel', () => {
       }),
     ).toEqual({
       sourceLabel: 'Pulse Patrol',
-      title: 'Operator briefing attached',
+      title: 'Patrol finding attached',
       subject: 'CPU saturation on node-1',
       statusLabel: 'Fix Queued',
       detailLines: [
-        'Attention: active finding; loop fix queued; fix queued for governed review',
-        'Proposed fix: Restart workload service; target node-1; high risk; 1 command recorded for approval context; destructive proposed fix; rationale service is wedged',
-        'Decision: Recover or regenerate the governed approval before execution; do not execute from chat context.',
+        'Existing action artifact: Restart workload service; target node-1; high risk; 1 command recorded for approval context; destructive action artifact; rationale service is wedged',
       ],
       evidence: [],
-      actionLabel: 'Restart workload service',
+      actionLabel: undefined,
       commandSummary: '1 command recorded for approval context',
       safetyNote:
         'Command details stay in approval context; destructive actions require governed approval.',

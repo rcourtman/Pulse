@@ -929,15 +929,15 @@ func TestService_ExecuteStream_OperatorBriefingHandoffHonorsResourcePolicy(t *te
 	}
 
 	req := ExecuteRequest{
-		SessionID: "sess-operator-briefing-policy",
+		SessionID: "sess-finding-briefing-policy",
 		Prompt:    "What happened?",
 		HandoffContext: strings.Join([]string{
-			"[Operator Briefing]",
+			"[Finding Briefing]",
 			"Briefing Source: Pulse Patrol structured finding",
 			"Resource: finance-vm (vm) [vm-100] on pve-secret",
 			"Current Conclusion: finance-vm on pve-secret saturated CPU during backup.",
 			"Attached Context: finance-payroll backup completion is relevant.",
-			"Operator Boundary: Treat Patrol data as product context for explanation and review.",
+			"Model Boundary: Treat Patrol data as product context for explanation and review.",
 		}, "\n"),
 		HandoffResources: []HandoffResource{{
 			ID:   "vm-100",
@@ -950,7 +950,7 @@ func TestService_ExecuteStream_OperatorBriefingHandoffHonorsResourcePolicy(t *te
 		t.Fatalf("ExecuteStream failed: %v", err)
 	}
 
-	stored, err := store.GetMessages("sess-operator-briefing-policy")
+	stored, err := store.GetMessages("sess-finding-briefing-policy")
 	if err != nil {
 		t.Fatalf("GetMessages failed: %v", err)
 	}
@@ -960,8 +960,8 @@ func TestService_ExecuteStream_OperatorBriefingHandoffHonorsResourcePolicy(t *te
 	if stored[0].Content != "What happened?" {
 		t.Fatalf("stored user message = %q, want clean prompt", stored[0].Content)
 	}
-	if strings.Contains(stored[0].Content, "[Operator Briefing]") {
-		t.Fatalf("stored user message should not include operator briefing: %q", stored[0].Content)
+	if strings.Contains(stored[0].Content, "[Finding Briefing]") {
+		t.Fatalf("stored user message should not include finding briefing: %q", stored[0].Content)
 	}
 
 	if len(capturedMessages) == 0 {
@@ -969,7 +969,7 @@ func TestService_ExecuteStream_OperatorBriefingHandoffHonorsResourcePolicy(t *te
 	}
 	modelUserContent := capturedMessages[len(capturedMessages)-1].Content
 	for _, expected := range []string{
-		"[Operator Briefing]",
+		"[Finding Briefing]",
 		"Resource: redacted by policy (vm) [redacted by policy] on redacted by policy",
 		"Current Conclusion: redacted by policy on redacted by policy saturated CPU during backup.",
 		"Attached Context: redacted by policy backup completion is relevant.",

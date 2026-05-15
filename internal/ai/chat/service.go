@@ -1348,7 +1348,7 @@ func buildHandoffActionContext(handoffActions []HandoffAction) string {
 		appendHandoffContextLine(&b, label+" Action Dry Run Summary", action.ActionDryRunSummary)
 		appendHandoffContextLine(&b, label+" Action Result", action.ActionResult)
 		appendHandoffContextLine(&b, label+" Fix ID", action.FixID)
-		appendHandoffContextLine(&b, label+" Proposed Fix", action.Description)
+		appendHandoffContextLine(&b, label+" Existing Action Artifact", action.Description)
 		appendHandoffContextLine(&b, label+" Risk", action.RiskLevel)
 		if action.Destructive {
 			appendHandoffContextLine(&b, label+" Destructive", "true")
@@ -2694,9 +2694,9 @@ You are like a colleague doing pair programming on infrastructure tasks. Tool ca
 5. BE DIRECT: Acknowledge mistakes or complications honestly. If something won't work as the user expects, say so clearly.
 
 ## TASK COMPLETION
-- After successful control actions, the system auto-verifies. Once verified, stop making tool calls and respond.
-- If a tool call is BLOCKED, read the error message carefully and follow its instructions exactly.
-- If a tool call is BLOCKED, use the returned facts and policy boundary to decide whether more read context, a different governed tool call, or user clarification is needed.`
+- After successful control actions, respond once you have enough evidence to explain the result.
+- If a tool call is blocked, treat the result as a policy boundary, not a tool-routing instruction.
+- Use the returned facts and policy boundary to decide whether more context, a different governed tool call, or user clarification is needed.`
 }
 
 func (s *Service) buildToolGovernancePromptSection() string {

@@ -161,13 +161,13 @@ func (fsm *SessionFSM) cleanupExpiredRecoveries() {
 func (fsm *SessionFSM) CanExecuteTool(kind ToolKind, toolName string) error {
 	switch fsm.State {
 	case StateResolving:
-		// In RESOLVING, only allow resolve/read tools (must discover before writing)
+		// In RESOLVING, state-changing tools require validated target/resource context.
 		if kind == ToolKindWrite {
 			return &FSMBlockedError{
 				State:       fsm.State,
 				ToolName:    toolName,
 				ToolKind:    kind,
-				Reason:      "BLOCKED: Call pulse_query first to discover resources, then retry this action.",
+				Reason:      "POLICY_BLOCKED: state-changing tools require a validated target/resource context. Establish the target from current context or available tools, then retry only if the requested action still fits.",
 				Recoverable: true,
 			}
 		}
@@ -182,7 +182,7 @@ func (fsm *SessionFSM) CanExecuteTool(kind ToolKind, toolName string) error {
 		return nil
 
 	case StateVerifying:
-		// In VERIFYING, only allow read/resolve tools until verification is complete
+		// In VERIFYING, state-changing tools wait for current verification evidence.
 		if kind == ToolKindWrite {
 			fsm.ConsecutiveVerifyBlocks++
 			if fsm.ConsecutiveVerifyBlocks >= 3 {
@@ -197,7 +197,7 @@ func (fsm *SessionFSM) CanExecuteTool(kind ToolKind, toolName string) error {
 				State:       fsm.State,
 				ToolName:    toolName,
 				ToolKind:    kind,
-				Reason:      "BLOCKED: Call pulse_query or pulse_read NEXT to verify your last action, then retry.",
+				Reason:      "POLICY_BLOCKED: the previous state-changing tool call still needs current verification evidence. Gather evidence for the changed target, then retry only if another action is still needed.",
 				Recoverable: true,
 			}
 		}
@@ -213,7 +213,7 @@ func (fsm *SessionFSM) CanFinalAnswer() error {
 	if fsm.State == StateVerifying && !fsm.ReadAfterWrite {
 		return &FSMBlockedError{
 			State:       fsm.State,
-			Reason:      "BLOCKED: Call pulse_query or pulse_read to verify your last action before responding.",
+			Reason:      "POLICY_BLOCKED: the previous state-changing tool call needs current verification evidence before responding about the result.",
 			Recoverable: true,
 		}
 	}

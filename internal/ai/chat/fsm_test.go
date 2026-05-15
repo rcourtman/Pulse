@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -39,6 +40,51 @@ func TestFSM_WriteBlockedInResolving(t *testing.T) {
 	if err != nil {
 		t.Errorf("Resolve should be allowed in RESOLVING: %v", err)
 	}
+}
+
+func TestFSMPolicyBlocksDoNotForceNextTool(t *testing.T) {
+	assertNoForcedTool := func(t *testing.T, reason string) {
+		t.Helper()
+		forbidden := []string{
+			"Call pulse_query",
+			"Call pulse_read",
+			"pulse_query first",
+			"pulse_read NEXT",
+			"required next tool",
+			"Discover → Investigate → Act",
+		}
+		for _, phrase := range forbidden {
+			if strings.Contains(reason, phrase) {
+				t.Fatalf("policy block forces model tool routing with %q in %q", phrase, reason)
+			}
+		}
+		if !strings.Contains(reason, "POLICY_BLOCKED") {
+			t.Fatalf("policy block should keep explicit boundary code, got %q", reason)
+		}
+	}
+
+	resolveFSM := NewSessionFSM()
+	resolveErr, ok := resolveFSM.CanExecuteTool(ToolKindWrite, "pulse_control").(*FSMBlockedError)
+	if !ok {
+		t.Fatalf("expected resolving FSMBlockedError, got %T", resolveErr)
+	}
+	assertNoForcedTool(t, resolveErr.Reason)
+
+	verifyFSM := NewSessionFSM()
+	verifyFSM.OnToolSuccess(ToolKindResolve, "pulse_query")
+	verifyFSM.OnToolSuccess(ToolKindWrite, "pulse_control")
+
+	writeErr, ok := verifyFSM.CanExecuteTool(ToolKindWrite, "pulse_docker").(*FSMBlockedError)
+	if !ok {
+		t.Fatalf("expected verifying write FSMBlockedError, got %T", writeErr)
+	}
+	assertNoForcedTool(t, writeErr.Reason)
+
+	finalErr, ok := verifyFSM.CanFinalAnswer().(*FSMBlockedError)
+	if !ok {
+		t.Fatalf("expected verifying final-answer FSMBlockedError, got %T", finalErr)
+	}
+	assertNoForcedTool(t, finalErr.Reason)
 }
 
 func TestFSM_WriteCausesVerifying(t *testing.T) {
@@ -252,7 +298,7 @@ func TestClassifyToolCall(t *testing.T) {
 		{"pulse_knowledge recall", "pulse_knowledge", map[string]interface{}{"action": "recall"}, ToolKindRead},
 		{"pulse_knowledge remember", "pulse_knowledge", map[string]interface{}{"action": "remember"}, ToolKindWrite},
 
-		// Unknown tool defaults to write (security-safe: requires discovery first)
+		// Unknown tool defaults to write so state-changing safety policy applies.
 		{"unknown_tool", "some_new_tool", nil, ToolKindWrite},
 
 		// Action parameter fallback

@@ -63,7 +63,7 @@ func buildPatrolRunAssistantContext(run PatrolRunRecord, runType, status, runtim
 		formatPatrolRunContextLine("Effort", patrolRunEffortSummary(run)),
 		formatPatrolRunContextLine("Findings Summary", run.FindingsSummary),
 		formatPatrolRunContextLine("Patrol Analysis", truncatePatrolRunContextText(sanitizePatrolRunAnalysis(run.AIAnalysis), 500)),
-		"Operator Boundary: This Patrol run handoff is model-only context for explanation and review. Configuration changes, diagnostics, remediation, and command execution require explicit governed operator action.",
+		"Model Boundary: This Patrol run handoff is model-only context for explanation and review. Configuration changes, diagnostics, remediation, and command execution require explicit governed operator action.",
 	}
 
 	filtered := make([]string, 0, len(lines))

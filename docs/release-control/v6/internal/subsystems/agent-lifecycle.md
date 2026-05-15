@@ -496,8 +496,8 @@ profile and assignment columns, but embedded table framing must route through
    lifecycle transition. Unified finding lifecycle facts, latest lifecycle
    event briefing lines, and detailed lifecycle context included in Assistant
    handoff context remain Patrol/AI review metadata and must not become agent
-   lifecycle state or fleet-control authority. Primary finding attention,
-   recency, evidence, verification, and operator-decision facts in the operator
+   lifecycle state or fleet-control authority. Primary finding recency,
+   evidence, verification, and governed action artifact facts in the finding
    briefing and related root-cause or correlated finding summaries resolved for
    the same Assistant handoff follow that same isolation rule, including any
    recency or latest lifecycle facts attached to those related summaries: they
@@ -516,10 +516,10 @@ profile and assignment columns, but embedded table framing must route through
    scoped resource label may restore Assistant presentation, but it must not
    become agent enrollment evidence, installer state, command-websocket
    identity, or fleet-control authority.
-   Assistant operator-decision and action-posture briefing text derived from
-   those same recovered handoff action references stays under that review-only
-   boundary; lifecycle surfaces must not reinterpret a clearer approval posture
-   as install, enrollment, or command-execution authority.
+   Assistant finding-briefing action metadata derived from those same recovered
+   handoff action references stays under that review-only boundary; lifecycle
+   surfaces must not reinterpret clearer approval metadata as install,
+   enrollment, or command-execution authority.
    The same isolation rule applies to CSRF token-store behavior in
    `internal/api/csrf_store.go`: lifecycle-adjacent browser flows may rely on
    the shared API/security layer to keep parallel replacement-token retries
@@ -1296,8 +1296,8 @@ on `/api/ai/approvals` becoming ready from the first governed settings save,
 not only after some earlier process-start or chat-start side effect has
 already initialized the approval store.
 That same shared `internal/api/ai_handler.go` dependency now also assumes
-Assistant finding handoffs may include a model-only operator briefing from
-Patrol's unified finding and structured investigation record. Lifecycle-adjacent
+Assistant finding handoffs may include a model-only factual finding briefing
+from Patrol's unified finding and structured investigation record. Lifecycle-adjacent
 setup, install, and fleet surfaces may treat that briefing as adjacent
 AI/runtime guidance only; it must not become agent readiness, install status,
 or lifecycle execution authority. When that briefing includes recovered
