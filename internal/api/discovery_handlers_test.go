@@ -22,6 +22,12 @@ type MockCommandExecutor struct {
 	mock.Mock
 }
 
+type discoveryHandlerTestAnalyzer struct{}
+
+func (discoveryHandlerTestAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
+	return `{"service_type":"unknown","service_name":"Unknown","service_version":"","category":"unknown","cli_access":"","facts":[],"config_paths":[],"data_paths":[],"log_paths":[],"ports":[],"confidence":0.1,"reasoning":"test"}`, nil
+}
+
 func (m *MockCommandExecutor) ExecuteCommand(ctx context.Context, agentID string, cmd servicediscovery.ExecuteCommandPayload) (*servicediscovery.CommandResultPayload, error) {
 	args := m.Called(ctx, agentID, cmd)
 	if args.Get(0) == nil {
@@ -348,6 +354,22 @@ func TestHandleGetStatus(t *testing.T) {
 	var status map[string]interface{}
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&status))
 	assert.Contains(t, status, "running")
+}
+
+func TestHandleRunDiscovery(t *testing.T) {
+	h, svc, _ := setupDiscoveryHandlers(t)
+	svc.SetAIAnalyzer(discoveryHandlerTestAnalyzer{})
+
+	req := httptest.NewRequest("POST", "/api/discovery/run", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleRunDiscovery(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var summary servicediscovery.DiscoveryRefreshSummary
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&summary))
+	assert.Equal(t, "manual", summary.Mode)
+	assert.Equal(t, 0, summary.CandidateCount)
 }
 
 func TestHandleUpdateSettings(t *testing.T) {

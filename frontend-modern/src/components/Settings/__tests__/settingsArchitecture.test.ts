@@ -259,6 +259,18 @@ describe('settings architecture guardrails', () => {
     expect(aiModelSelectionSectionSource).not.toContain("fetch('/api/ai/patrol/preflight");
   });
 
+  it('keeps workload discovery manual refresh on the canonical settings state', () => {
+    expect(aiSettingsStateSource).toContain(
+      "import { runDiscoveryRefresh } from '@/api/discovery';",
+    );
+    expect(aiSettingsStateSource).toContain('const handleRunDiscoveryRefresh = async () => {');
+    expect(aiSettingsStateSource).toContain('const result = await runDiscoveryRefresh();');
+    expect(aiSettingsStateSource).toContain('discoveryRunRunning');
+    expect(aiRuntimeControlsSectionSource).toContain('state.handleRunDiscoveryRefresh()');
+    expect(aiRuntimeControlsSectionSource).toContain('Run discovery now');
+    expect(aiRuntimeControlsSectionSource).not.toContain("fetch('/api/discovery/run");
+  });
+
   it('hydrates the Patrol preflight panel from the cached settings snapshot', () => {
     // The cached preflight outcome arrives on /api/settings/ai as
     // patrol_preflight; loadSettings and updateSettings must project it
@@ -541,7 +553,7 @@ describe('settings architecture guardrails', () => {
     // Discovery actions are now icon-only ghost buttons; the human copy
     // still lives in their title and aria-label attributes.
     expect(infrastructureSourceManagerSource).toContain('Run discovery');
-    expect(infrastructureSourceManagerSource).toContain('discovery settings');
+    expect(infrastructureSourceManagerSource).toContain('Discovery settings');
     expect(monitoredSystemImpactPreviewSource).toContain('getMonitoredSystemImpactPreviewTitle');
     expect(monitoredSystemImpactPreviewSource).toContain(
       'formatMonitoredSystemImpactPreviewSummary',

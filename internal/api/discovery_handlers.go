@@ -545,6 +545,23 @@ func (h *DiscoveryHandlers) HandleGetStatus(w http.ResponseWriter, r *http.Reque
 	writeDiscoveryJSON(w, status)
 }
 
+// HandleRunDiscovery handles POST /api/discovery/run.
+func (h *DiscoveryHandlers) HandleRunDiscovery(w http.ResponseWriter, r *http.Request) {
+	if h.service == nil {
+		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
+		return
+	}
+
+	summary, err := h.service.RunManualDiscoveryRefresh(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to run manual discovery refresh")
+		writeDiscoveryError(w, http.StatusInternalServerError, "Discovery refresh failed: "+err.Error())
+		return
+	}
+
+	writeDiscoveryJSON(w, summary)
+}
+
 // HandleUpdateSettings handles PUT /api/discovery/settings
 // Allows updating discovery settings like the staleness threshold.
 func (h *DiscoveryHandlers) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {

@@ -9,6 +9,7 @@ import type {
   ResourceDiscovery,
   DiscoveryListResponse,
   DiscoveryProgress,
+  DiscoveryRunResponse,
   DiscoveryStatus,
   TriggerDiscoveryRequest,
   UpdateNotesRequest,
@@ -232,6 +233,20 @@ export async function getDiscoveryStatus(): Promise<DiscoveryStatus> {
     response,
     'Failed to get discovery status',
     'Failed to parse discovery status',
+  );
+}
+
+/**
+ * Run the scheduler-equivalent discovery refresh now.
+ */
+export async function runDiscoveryRefresh(): Promise<DiscoveryRunResponse> {
+  const response = await apiFetch(`${API_BASE}/run`, {
+    method: 'POST',
+  });
+  return parseRequiredAPIResponse(
+    response,
+    'Failed to run discovery refresh',
+    'Failed to parse discovery refresh response',
   );
 }
 

@@ -346,6 +346,18 @@ type ServiceStatus struct {
 	LastFingerprintScan time.Time
 }
 
+// DiscoveryRefreshSummary describes one scheduler-equivalent discovery refresh.
+type DiscoveryRefreshSummary struct {
+	Mode             string    `json:"mode"`
+	FingerprintCount int       `json:"fingerprint_count"`
+	ChangedCount     int       `json:"changed_count"`
+	StaleCount       int       `json:"stale_count"`
+	CandidateCount   int       `json:"candidate_count"`
+	DiscoveredCount  int       `json:"discovered_count"`
+	FailedCount      int       `json:"failed_count"`
+	LastRun          time.Time `json:"last_run"`
+}
+
 // ToMap converts the status snapshot to a legacy map representation.
 func (s ServiceStatus) ToMap() map[string]any {
 	return map[string]any{

@@ -1,4 +1,5 @@
 import { Component, Show } from 'solid-js';
+import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import type { AIControlLevel } from '@/utils/aiControlLevelPresentation';
 import type { AISettingsState } from '@/components/Settings/useAISettingsState';
 import { HelpIcon } from '@/components/shared/HelpIcon';
@@ -117,9 +118,28 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
                 </FormSelect>
                 <p class="text-[10px] text-muted ml-32 pl-3">
                   {state.form.discoveryIntervalHours === 0
-                    ? 'Workload discovery runs only when you click "Update Discovery" on a resource'
+                    ? 'Workload discovery runs only when you click "Run discovery now" here or "Run Discovery" on a resource'
                     : 'Workload discovery will automatically re-scan resources at this interval'}
                 </p>
+              </div>
+              <div class="flex items-center justify-between gap-3 rounded border border-border bg-surface-alt px-3 py-2">
+                <p class="text-[10px] text-muted">
+                  Runs the new, changed, and stale workload sweep used by the schedule.
+                </p>
+                <button
+                  type="button"
+                  class="inline-flex min-h-10 sm:min-h-9 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-base-content hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => void state.handleRunDiscoveryRefresh()}
+                  disabled={state.saving() || state.discoveryRunRunning()}
+                >
+                  <Show
+                    when={state.discoveryRunRunning()}
+                    fallback={<RefreshCwIcon class="h-3.5 w-3.5" />}
+                  >
+                    <RefreshCwIcon class="h-3.5 w-3.5 animate-spin" />
+                  </Show>
+                  {state.discoveryRunRunning() ? 'Running...' : 'Run discovery now'}
+                </button>
               </div>
             </Show>
 

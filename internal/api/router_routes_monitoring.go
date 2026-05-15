@@ -259,6 +259,13 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// AI-powered infrastructure discovery endpoints
 	r.mux.HandleFunc("/api/discovery", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleListDiscoveries)))
 	r.mux.HandleFunc("/api/discovery/status", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleGetStatus)))
+	r.mux.HandleFunc("/api/discovery/run", RequireAuth(r.config, RequireScope(config.ScopeMonitoringWrite, func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost {
+			r.discoveryHandlers.HandleRunDiscovery(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
 	r.mux.HandleFunc("/api/discovery/settings", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, r.discoveryHandlers.HandleUpdateSettings)))
 	r.mux.HandleFunc("/api/discovery/info/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleGetInfo)))
 	r.mux.HandleFunc("/api/discovery/type/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleListByType)))

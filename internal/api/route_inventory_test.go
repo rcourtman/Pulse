@@ -650,6 +650,7 @@ var allRouteAllowlist = []string{
 	"/api/ai/question/",
 	"/api/discovery",
 	"/api/discovery/status",
+	"/api/discovery/run",
 	"/api/discovery/settings",
 	"/api/discovery/info/",
 	"/api/discovery/type/",

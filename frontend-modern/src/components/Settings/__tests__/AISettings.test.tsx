@@ -11,6 +11,7 @@ const updateSettingsMock = vi.fn();
 const getModelsMock = vi.fn();
 const testProviderMock = vi.fn();
 const testConnectionMock = vi.fn();
+const runDiscoveryRefreshMock = vi.fn();
 const listSessionsMock = vi.fn();
 const summarizeSessionMock = vi.fn();
 const getSessionDiffMock = vi.fn();
@@ -45,6 +46,10 @@ vi.mock('@/api/aiChat', () => ({
     getSessionDiff: (...args: unknown[]) => getSessionDiffMock(...args),
     revertSession: (...args: unknown[]) => revertSessionMock(...args),
   },
+}));
+
+vi.mock('@/api/discovery', () => ({
+  runDiscoveryRefresh: (...args: unknown[]) => runDiscoveryRefreshMock(...args),
 }));
 
 vi.mock('@/stores/notifications', () => ({
@@ -111,6 +116,7 @@ const resetAllMocks = () => {
   getModelsMock.mockReset();
   testProviderMock.mockReset();
   testConnectionMock.mockReset();
+  runDiscoveryRefreshMock.mockReset();
   listSessionsMock.mockReset();
   summarizeSessionMock.mockReset();
   getSessionDiffMock.mockReset();
@@ -141,6 +147,16 @@ const setupDefaultMocks = () => {
     success: true,
     message: 'OpenRouter reachable',
     provider: 'openrouter',
+  });
+  runDiscoveryRefreshMock.mockResolvedValue({
+    mode: 'manual',
+    fingerprint_count: 1,
+    changed_count: 1,
+    stale_count: 0,
+    candidate_count: 1,
+    discovered_count: 1,
+    failed_count: 0,
+    last_run: '2026-05-15T12:00:00Z',
   });
   listSessionsMock.mockResolvedValue([]);
   summarizeSessionMock.mockResolvedValue(undefined);
@@ -461,6 +477,65 @@ describe('AISettings workload discovery persistence', () => {
           discovery_enabled: true,
           discovery_interval_hours: 6,
         }),
+      );
+    });
+  });
+
+  it('runs a manual discovery refresh from workload discovery settings', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      discovery_enabled: true,
+      discovery_interval_hours: 0,
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /Workload Discovery Manual/i }),
+      ).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Workload Discovery Manual/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Run discovery now/i }));
+
+    await waitFor(() => {
+      expect(runDiscoveryRefreshMock).toHaveBeenCalledTimes(1);
+      expect(notificationSuccessMock).toHaveBeenCalledWith(
+        'Discovery refresh finished: 1 workload refreshed.',
+      );
+    });
+  });
+
+  it('reports when a manual discovery refresh has no pending work', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      discovery_enabled: true,
+      discovery_interval_hours: 0,
+    });
+    runDiscoveryRefreshMock.mockResolvedValue({
+      mode: 'manual',
+      fingerprint_count: 1,
+      changed_count: 0,
+      stale_count: 0,
+      candidate_count: 0,
+      discovered_count: 0,
+      failed_count: 0,
+      last_run: '2026-05-15T12:00:00Z',
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /Workload Discovery Manual/i }),
+      ).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Workload Discovery Manual/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Run discovery now/i }));
+
+    await waitFor(() => {
+      expect(notificationInfoMock).toHaveBeenCalledWith(
+        'Discovery refresh finished: no new, changed, or stale workloads.',
       );
     });
   });

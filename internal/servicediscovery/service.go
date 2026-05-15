@@ -625,8 +625,25 @@ func (s *Service) finishDiscoveryLoop(stopCh <-chan struct{}) {
 }
 
 func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
+	if _, err := s.runDiscoveryRefresh(ctx, "automatic"); err != nil {
+		log.Debug().Err(err).Msg("skipping automatic discovery refresh")
+	}
+}
+
+// RunManualDiscoveryRefresh runs the scheduler-equivalent discovery refresh on demand.
+func (s *Service) RunManualDiscoveryRefresh(ctx context.Context) (DiscoveryRefreshSummary, error) {
 	if ctx == nil || ctx.Err() != nil || s.store == nil {
-		return
+		return DiscoveryRefreshSummary{Mode: "manual"}, fmt.Errorf("discovery service is not ready")
+	}
+
+	s.collectFingerprints(ctx)
+	return s.runDiscoveryRefresh(ctx, "manual")
+}
+
+func (s *Service) runDiscoveryRefresh(ctx context.Context, mode string) (DiscoveryRefreshSummary, error) {
+	summary := DiscoveryRefreshSummary{Mode: mode}
+	if ctx == nil || ctx.Err() != nil || s.store == nil {
+		return summary, fmt.Errorf("discovery service is not ready")
 	}
 
 	s.mu.RLock()
@@ -634,19 +651,16 @@ func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
 	maxDiscoveryAge := s.maxDiscoveryAge
 	s.mu.RUnlock()
 	if !analyzerConfigured {
-		log.Debug().Msg("skipping automatic discovery refresh - AI analyzer not configured")
-		return
+		return summary, fmt.Errorf("AI analyzer not configured")
 	}
 
 	changedResources, err := s.store.GetChangedResources()
 	if err != nil {
-		log.Warn().Err(err).Msg("failed to fetch changed resources for automatic discovery refresh")
-		return
+		return summary, fmt.Errorf("fetch changed resources: %w", err)
 	}
 	staleResources, err := s.store.GetStaleResources(maxDiscoveryAge)
 	if err != nil {
-		log.Warn().Err(err).Msg("failed to fetch stale resources for automatic discovery refresh")
-		return
+		return summary, fmt.Errorf("fetch stale resources: %w", err)
 	}
 
 	candidates := make(map[string]struct{}, len(changedResources)+len(staleResources))
@@ -660,8 +674,15 @@ func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
 			candidates[id] = struct{}{}
 		}
 	}
+
+	summary.ChangedCount = len(changedResources)
+	summary.StaleCount = len(staleResources)
+	summary.CandidateCount = len(candidates)
+	summary.FingerprintCount = s.store.GetFingerprintCount()
+	summary.LastRun = time.Now()
+
 	if len(candidates) == 0 {
-		return
+		return summary, nil
 	}
 
 	resourceIDs := make([]string, 0, len(candidates))
@@ -671,13 +692,11 @@ func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
 	sort.Strings(resourceIDs)
 
 	log.Info().
+		Str("mode", mode).
 		Int("changed", len(changedResources)).
 		Int("stale", len(staleResources)).
 		Int("total", len(resourceIDs)).
-		Msg("Running automatic discovery refresh for changed/stale resources")
-
-	discoveredCount := 0
-	failedCount := 0
+		Msg("Running discovery refresh for changed/stale resources")
 
 	for _, id := range resourceIDs {
 		if ctx.Err() != nil {
@@ -686,7 +705,7 @@ func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
 
 		resourceType, targetID, resourceID, err := ParseResourceID(id)
 		if err != nil {
-			failedCount++
+			summary.FailedCount++
 			log.Warn().
 				Err(err).
 				Str("resource_id", id).
@@ -701,21 +720,24 @@ func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
 			Hostname:     targetID,
 		})
 		if err != nil {
-			failedCount++
+			summary.FailedCount++
 			log.Warn().
 				Err(err).
 				Str("resource_id", id).
 				Str("resource_type", string(resourceType)).
-				Msg("Automatic discovery refresh failed for resource")
+				Msg("Discovery refresh failed for resource")
 			continue
 		}
-		discoveredCount++
+		summary.DiscoveredCount++
 	}
 
 	log.Info().
-		Int("discovered", discoveredCount).
-		Int("failed", failedCount).
-		Msg("Automatic discovery refresh completed")
+		Str("mode", mode).
+		Int("discovered", summary.DiscoveredCount).
+		Int("failed", summary.FailedCount).
+		Msg("Discovery refresh completed")
+
+	return summary, nil
 }
 
 // getSnapshot returns the current infrastructure state from ReadState.

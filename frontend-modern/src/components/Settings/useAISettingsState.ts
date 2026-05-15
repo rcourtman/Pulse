@@ -2,6 +2,7 @@ import { createMemo, createSignal, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession, type FileChange } from '@/api/aiChat';
+import { runDiscoveryRefresh } from '@/api/discovery';
 import { runPatrolPreflight, type PatrolPreflightResponse } from '@/api/patrol';
 import {
   AI_PROVIDERS,
@@ -246,6 +247,7 @@ export const useAISettingsState = () => {
   const [patrolPreflightRunning, setPatrolPreflightRunning] = createSignal(false);
   const [patrolPreflightResult, setPatrolPreflightResult] =
     createSignal<PatrolPreflightResponse | null>(null);
+  const [discoveryRunRunning, setDiscoveryRunRunning] = createSignal(false);
 
   // hydratePatrolPreflightFromSettings projects the cached preflight
   // snapshot from /api/settings/ai into the same response shape the
@@ -977,6 +979,31 @@ export const useAISettingsState = () => {
     }
   };
 
+  const handleRunDiscoveryRefresh = async () => {
+    setDiscoveryRunRunning(true);
+    try {
+      const result = await runDiscoveryRefresh();
+      if (result.failed_count > 0) {
+        notificationStore.warning(
+          `Discovery refresh finished: ${result.discovered_count} refreshed, ${result.failed_count} failed.`,
+        );
+      } else if (result.candidate_count === 0) {
+        notificationStore.info('Discovery refresh finished: no new, changed, or stale workloads.');
+      } else {
+        notificationStore.success(
+          `Discovery refresh finished: ${result.discovered_count} workload${result.discovered_count === 1 ? '' : 's'} refreshed.`,
+        );
+      }
+    } catch (error) {
+      logger.error('[AISettings] Discovery refresh failed:', error);
+      notificationStore.error(
+        error instanceof Error ? error.message : 'Unable to run discovery refresh.',
+      );
+    } finally {
+      setDiscoveryRunRunning(false);
+    }
+  };
+
   const handleTestProvider = async (provider: AIProvider) => {
     setTestingProvider(provider);
     setProviderTestResult(null);
@@ -1114,6 +1141,7 @@ export const useAISettingsState = () => {
     diffFiles,
     diffSessionLabel,
     diffSummary,
+    discoveryRunRunning,
     expandedProviders,
     form,
     formatDiffStats,
@@ -1122,6 +1150,7 @@ export const useAISettingsState = () => {
     handleCloseSetupModal,
     handleEnableRequest,
     handleEnabledToggle,
+    handleRunDiscoveryRefresh,
     handleSave,
     handleSessionDiff,
     handleSessionRevert,

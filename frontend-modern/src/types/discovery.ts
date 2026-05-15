@@ -141,6 +141,17 @@ export interface DiscoveryStatus {
   stale_count?: number; // Discoveries > 30 days old
 }
 
+export interface DiscoveryRunResponse {
+  mode: 'manual' | 'automatic' | string;
+  fingerprint_count: number;
+  changed_count: number;
+  stale_count: number;
+  candidate_count: number;
+  discovered_count: number;
+  failed_count: number;
+  last_run: string;
+}
+
 export interface TriggerDiscoveryRequest {
   force?: boolean;
   hostname?: string;

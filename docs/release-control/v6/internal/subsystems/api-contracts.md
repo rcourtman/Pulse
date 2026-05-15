@@ -1368,10 +1368,11 @@ the canonical monitored-system blocked payload.
     explicit form truth, and the backend must persist a provided
     `discovery_interval_hours: 0` as manual-only rather than replacing it with
     the automatic-scan default. Manual discovery can be triggered directly
-    through the discovery API for a known resource and through the governed
-    `pulse_discovery` tool; the API progress payload must describe discovery
-    evidence analysis rather than presenting background work as a visible
-    Pulse Assistant chat session.
+    through the discovery API for a known resource, through the settings-level
+    `/api/discovery/run` sweep for new/changed/stale workload refresh, and
+    through the governed `pulse_discovery` tool; the API progress payload must
+    describe discovery evidence analysis rather than presenting background work
+    as a visible Pulse Assistant chat session.
 25. Keep shared AI runtime reads centralized on that same governed contract:
     `frontend-modern/src/stores/aiRuntimeState.ts` is the canonical frontend
     read owner for `/api/settings/ai` and `/api/ai/models`. AI-owned consumers

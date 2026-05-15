@@ -8,6 +8,7 @@ import {
   getDiscovery,
   getDiscoveryInfo,
   listDiscoveriesByType,
+  runDiscoveryRefresh,
   triggerDiscovery,
 } from '@/api/discovery';
 import { apiFetch } from '@/utils/apiClient';
@@ -406,6 +407,29 @@ describe('discovery api', () => {
       },
       body: JSON.stringify({ force: true }),
     });
+  });
+
+  it('runs the manual discovery refresh endpoint', async () => {
+    apiFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          mode: 'manual',
+          fingerprint_count: 1,
+          changed_count: 1,
+          stale_count: 0,
+          candidate_count: 1,
+          discovered_count: 1,
+          failed_count: 0,
+          last_run: '2026-05-15T12:00:00Z',
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await runDiscoveryRefresh();
+
+    expect(result.discovered_count).toBe(1);
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/discovery/run', { method: 'POST' });
   });
 
   it('maps canonical pod discovery type queries onto the backend k8s endpoint', async () => {

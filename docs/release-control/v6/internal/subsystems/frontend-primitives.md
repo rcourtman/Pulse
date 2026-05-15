@@ -894,6 +894,9 @@ AI runtime.
     must save workload discovery enablement and interval as one explicit
     settings pair so selecting "Every 6 hours" or "Manual only" round-trips
     through `/api/settings/ai` without depending on stale read-side diffing.
+    The same workload-discovery settings section must expose a manual
+    "Run discovery now" action wired through `/api/discovery/run`, while
+    resource-drawer discovery remains the forced single-resource refresh path.
     Assistant-only controls inside the shared shell, such
     as execution permissions and session maintenance, must stay explicitly
     labeled as Pulse Assistant controls, while Patrol schedule and autonomy

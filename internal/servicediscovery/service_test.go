@@ -919,6 +919,49 @@ func TestService_FingerprintCollectionAndDiscoveryWrappers(t *testing.T) {
 	service.collectFingerprints(context.Background())
 }
 
+func TestService_RunManualDiscoveryRefreshDiscoversNewFingerprints(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	state := StateSnapshot{
+		DockerHosts: []DockerHost{
+			{
+				AgentID:  "host1",
+				Hostname: "host1",
+				Containers: []DockerContainer{
+					{Name: "web", Image: "nginx:latest", Status: "running"},
+				},
+			},
+		},
+	}
+	analyzer := &stubAnalyzer{
+		response: `{"service_type":"nginx","service_name":"Nginx","service_version":"1.2","category":"web_server","cli_access":"docker exec {container} nginx -v","facts":[],"config_paths":["/etc/nginx"],"data_paths":[],"log_paths":[],"ports":[{"port":80,"protocol":"tcp","process":"nginx","address":"0.0.0.0"}],"confidence":0.9,"reasoning":"image"}`,
+	}
+	service := NewService(store, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(state))
+	service.SetAIAnalyzer(analyzer)
+
+	summary, err := service.RunManualDiscoveryRefresh(context.Background())
+	if err != nil {
+		t.Fatalf("RunManualDiscoveryRefresh error: %v", err)
+	}
+	if summary.Mode != "manual" || summary.CandidateCount != 1 || summary.DiscoveredCount != 1 || summary.FailedCount != 0 {
+		t.Fatalf("unexpected summary: %+v", summary)
+	}
+	if summary.FingerprintCount != 1 || summary.ChangedCount != 1 {
+		t.Fatalf("expected one new changed fingerprint, got %+v", summary)
+	}
+	if analyzer.calls != 1 {
+		t.Fatalf("expected one analyzer call, got %d", analyzer.calls)
+	}
+	if got, err := service.GetDiscovery("docker:host1:web"); err != nil || got == nil || got.ServiceName != "Nginx" {
+		t.Fatalf("expected stored Nginx discovery, got %#v err=%v", got, err)
+	}
+}
+
 // Regression: collectFingerprints used to panic-and-recover for every LXC/VM
 // because processFingerprint went through reflect.Value.Interface(), losing
 // addressability so reflect.Call hit a Container-vs-*Container type mismatch.

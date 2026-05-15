@@ -2348,6 +2348,7 @@ func TestDiscoveryMutationEndpointsRequireMonitoringWriteScope(t *testing.T) {
 		path   string
 		body   string
 	}{
+		{method: http.MethodPost, path: "/api/discovery/run", body: `{}`},
 		{method: http.MethodPost, path: "/api/discovery/agent/host-1/resource-1", body: `{}`},
 		{method: http.MethodPut, path: "/api/discovery/agent/host-1/resource-1/notes", body: `{}`},
 		{method: http.MethodDelete, path: "/api/discovery/agent/host-1/resource-1", body: ""},

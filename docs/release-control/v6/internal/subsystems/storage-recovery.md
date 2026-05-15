@@ -446,6 +446,11 @@ bypass the API fail-closed execution gate.
    observe the same node by hostname and IP, so storage- and
    recovery-adjacent consumers inherit one canonical represented-host identity
    instead of inventing local merge heuristics.
+   The settings-level manual discovery refresh at `/api/discovery/run` belongs
+   to that adjacent discovery/API boundary. Storage and recovery surfaces may
+   consume refreshed workload discovery records, but they must not reinterpret
+   the sweep as a recovery scan, protected-system admission, or storage-local
+   ownership signal.
    That same adjacent `internal/api/` boundary also keeps public hosted signup
    commercial-only: storage and recovery surfaces must not infer tenant
    existence, email issuance, or readiness from `/api/public/signup` response
