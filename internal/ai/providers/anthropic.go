@@ -72,11 +72,10 @@ type anthropicRequest struct {
 	ToolChoice  *anthropicToolChoice `json:"tool_choice,omitempty"`
 }
 
-// anthropicToolChoice controls how Claude selects tools
-// See: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/implement-tool-use#forcing-tool-use
+// anthropicToolChoice controls whether tools are available or disabled.
+// Pulse uses automatic selection by default and none only as a safety brake.
 type anthropicToolChoice struct {
-	Type string `json:"type"`           // "auto", "any", "tool", or "none"
-	Name string `json:"name,omitempty"` // Only used when Type is "tool"
+	Type string `json:"type"` // "auto" or "none"
 }
 
 type anthropicMessage struct {
@@ -256,14 +255,11 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 		anthropicReq.Tools[len(anthropicReq.Tools)-1].CacheControl = &anthropicCacheControl{Type: "ephemeral"}
 	}
 
-	// Add tool_choice if specified
-	// This controls whether Claude MUST use tools vs just being able to
-	// See: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/implement-tool-use#forcing-tool-use
-	// Anthropic may reject tool_choice if tools are not provided.
+	// Add tool_choice if specified. Pulse only sends automatic selection or
+	// text-only safety brakes.
 	if shouldAddTools && req.ToolChoice != nil {
 		anthropicReq.ToolChoice = &anthropicToolChoice{
 			Type: string(req.ToolChoice.Type),
-			Name: req.ToolChoice.Name,
 		}
 	}
 
@@ -645,12 +641,11 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 		anthropicReq.Tools[len(anthropicReq.Tools)-1].CacheControl = &anthropicCacheControl{Type: "ephemeral"}
 	}
 
-	// Add tool_choice if specified (same as non-streaming)
-	// Anthropic may reject tool_choice if tools are not provided.
+	// Add tool_choice if specified (same as non-streaming). Pulse only sends
+	// automatic selection or text-only safety brakes.
 	if shouldAddTools && req.ToolChoice != nil {
 		anthropicReq.ToolChoice = &anthropicToolChoice{
 			Type: string(req.ToolChoice.Type),
-			Name: req.ToolChoice.Name,
 		}
 	}
 

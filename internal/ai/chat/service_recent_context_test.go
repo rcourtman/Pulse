@@ -66,11 +66,8 @@ func TestInjectRecentContextIfNeeded_InjectsSummaryAndInstruction(t *testing.T) 
 	if !strings.Contains(content, "Use target_host=\"host-1\".") {
 		t.Fatalf("expected target host hint, got: %s", content)
 	}
-	if !strings.Contains(content, "Instruction: Show logs for api (last 50 lines).") {
-		t.Fatalf("expected log instruction, got: %s", content)
-	}
-	if !strings.Contains(content, "Use pulse_read action=logs target_host=\"host-1\" lines=50.") {
-		t.Fatalf("expected log tool instruction, got: %s", content)
+	if !strings.Contains(content, "Log routing context for api: target_host=\"host-1\".") {
+		t.Fatalf("expected log routing context, got: %s", content)
 	}
 	if !strings.Contains(content, "Explicit target: api") {
 		t.Fatalf("expected explicit target, got: %s", content)
@@ -127,8 +124,8 @@ func TestInjectRecentContextIfNeeded_PrimaryNameFallback(t *testing.T) {
 	if !strings.Contains(content, "Explicit target: node:alpha") {
 		t.Fatalf("expected fallback explicit target, got: %s", content)
 	}
-	if !strings.Contains(content, "Use pulse_read action=logs target_host=\"node:alpha\" lines=50.") {
-		t.Fatalf("expected log instruction to use primary name, got: %s", content)
+	if !strings.Contains(content, "Log routing context for node:alpha: target_host=\"node:alpha\".") {
+		t.Fatalf("expected log context to use primary name, got: %s", content)
 	}
 }
 
@@ -161,8 +158,8 @@ func TestInjectRecentContextIfNeeded_UsesResourceIDHintForTrueNASAppLogs(t *test
 	if !strings.Contains(content, "Use resource_id=\"Nextcloud\".") {
 		t.Fatalf("expected resource_id hint, got: %s", content)
 	}
-	if !strings.Contains(content, "Use pulse_read action=logs resource_id=\"Nextcloud\" lines=50.") {
-		t.Fatalf("expected resource-targeted log instruction, got: %s", content)
+	if !strings.Contains(content, "Log routing context for Nextcloud: resource_id=\"Nextcloud\".") {
+		t.Fatalf("expected resource-targeted log context, got: %s", content)
 	}
 }
 
@@ -197,10 +194,10 @@ func TestInjectRecentContextIfNeeded_UsesQueryResourceIDHintForVMwareLogs(t *tes
 	if strings.Contains(content, "target_host=\"esxi-01.lab.local\"") {
 		t.Fatalf("expected VMware recent context to avoid target_host log routing, got: %s", content)
 	}
-	if !strings.Contains(content, "does not support shared log reads") {
+	if !strings.Contains(content, "shared log reads are not supported") {
 		t.Fatalf("expected VMware log limitation guidance, got: %s", content)
 	}
-	if !strings.Contains(content, "Use pulse_query action=get resource_id=\"esxi-01.lab.local\"") {
-		t.Fatalf("expected VMware recent context to redirect to pulse_query, got: %s", content)
+	if !strings.Contains(content, "current status, alerts, recent activity, and metrics are available through resource_id=\"esxi-01.lab.local\"") {
+		t.Fatalf("expected VMware recent context to expose resource_id read context, got: %s", content)
 	}
 }

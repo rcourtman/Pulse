@@ -14,7 +14,7 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name:        "pulse_discovery",
-			Description: `Get AI-discovered service details (log paths, config locations, ports). action="get" triggers discovery for a resource (requires resource_type, resource_id, target_id). action="list" searches existing discoveries. Use pulse_query action="search" first to find resource details.`,
+			Description: `Get AI-discovered service details (log paths, config locations, ports). action="get" triggers discovery for a resource (requires resource_type, resource_id, target_id). action="list" searches existing discoveries. Resource details must already be known from the current context or a prior resource lookup.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -308,7 +308,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 				return CallToolResult{
 					Content: []Content{{
 						Type: "text",
-						Text: fmt.Sprintf("Discovery temporarily unavailable: %v. Do NOT retry this call. Use pulse_control or a different approach to investigate the resource.", err),
+						Text: fmt.Sprintf("Discovery temporarily unavailable: %v. Immediate retry is unlikely to add information; command-capable investigation or another approach may be needed.", err),
 					}},
 					IsError: true,
 				}, nil
@@ -322,7 +322,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 				"target_id":     targetID,
 				"cli_access":    cliAccess,
 				"message":       fmt.Sprintf("Discovery failed: %v", err),
-				"hint":          "Use pulse_control with type='command' to investigate. Try checking /var/log/ for logs.",
+				"hint":          "Command-capable investigation may still be possible. Common log locations include /var/log/.",
 			}), nil
 		}
 	}
@@ -336,7 +336,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 			"target_id":     targetID,
 			"cli_access":    cliAccess,
 			"message":       "Discovery returned no data. The resource may not be accessible.",
-			"hint":          "Use pulse_control with type='command' to investigate. Try listing /var/log/ or checking running processes.",
+			"hint":          "Command-capable investigation may still be possible. Common next evidence includes /var/log/ entries or running-process state.",
 		}), nil
 	}
 

@@ -23,7 +23,7 @@ func (e *PulseToolExecutor) registerControlTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name:        "pulse_control",
-			Description: `WRITE operations: control canonical resources that explicitly advertise shared Pulse actions (for example Proxmox guests and supported app-containers) or execute state-modifying commands. Some canonical resources are read-only and will reject pulse_control even when their type is vm or system-container. For read-only operations use pulse_read. For Docker-only workflows use pulse_docker.`,
+			Description: `WRITE operations: control canonical resources that explicitly advertise shared Pulse actions (for example Proxmox guests and supported app-containers) or execute state-modifying commands. Some canonical resources are read-only and will reject pulse_control even when their type is vm or system-container. Read-only and Docker-only workflows are exposed through their own governed tools.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -115,7 +115,7 @@ func (e *PulseToolExecutor) executeControlResource(ctx context.Context, args map
 		if validation.ErrorMsg != "" {
 			return NewErrorResult(errors.New(validation.ErrorMsg)), nil
 		}
-		return NewErrorResult(fmt.Errorf("resource '%s' has not been discovered in this session. Use pulse_query to find it first", resourceRef)), nil
+		return NewErrorResult(fmt.Errorf("resource '%s' has not been discovered in this session. Resource discovery is required first", resourceRef)), nil
 	}
 	if validation.ErrorMsg != "" {
 		return NewErrorResult(errors.New(validation.ErrorMsg)), nil

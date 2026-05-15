@@ -249,7 +249,11 @@ button/link shape, but they must not create a second full-width action band or
 nest another card inside the primary Pulse surface. If the same assessment
 opens Assistant, the Patrol-to-Assistant handoff must carry that exact
 recommendation as safe bounded metadata so the drawer briefing and first-turn
-prompt explain the same operator-facing priority.
+prompt explain the same operator-facing priority. Feature-owned Assistant
+handoff prompts may provide source context and safe metadata, but the shared
+drawer boundary must not turn those prompts into frontend-authored tool routes
+or remediation plans; the configured model owns tool choice and diagnostic
+reasoning after the request reaches the AI runtime.
 
 1. Add shared primitives in `frontend-modern/src/components/shared/`
    Framed product table surfaces must consume the shared `TableCard` frame and

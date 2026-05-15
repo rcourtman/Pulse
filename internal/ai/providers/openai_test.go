@@ -400,115 +400,6 @@ func TestOpenAIClient_ChatStream_ToolChoiceNone_DropsTools(t *testing.T) {
 	assert.True(t, doneCalled)
 }
 
-func TestOpenAIClient_Chat_DeepSeekCoercesForcedToolChoiceToAuto(t *testing.T) {
-	// Empirical: DeepSeek's API rejects tool_choice=required with HTTP 400
-	// for the canonical chat models (verified via live preflight against
-	// deepseek-v4-flash on 2026-05-11, deterministic 400 in 275ms). DeepSeek's
-	// official docs claim required is supported, but server behavior
-	// disagrees. Pulse coerces forced tool_choice to "auto" for any DeepSeek
-	// model so Patrol stays functional; the soft "model did not emit a tool
-	// call" warning surface handles auto-mode preflight outcomes correctly.
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var got map[string]interface{}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
-		assert.Equal(t, "deepseek-v4-flash", got["model"])
-		assert.Equal(t, "auto", got["tool_choice"])
-		require.Len(t, got["tools"], 1)
-
-		_ = json.NewEncoder(w).Encode(openaiResponse{
-			ID:    "chatcmpl-deepseek-tools",
-			Model: "deepseek-v4-flash",
-			Choices: []openaiChoice{
-				{
-					Message:      openaiRespMsg{Role: "assistant", Content: "ok"},
-					FinishReason: "stop",
-				},
-			},
-		})
-	}))
-	defer server.Close()
-
-	client := NewOpenAIClient("sk-test", "deepseek-v4-flash", server.URL, 0)
-	client.baseURL = strings.TrimSuffix(server.URL, "/") + "/v1/chat/completions#deepseek.com"
-
-	_, err := client.Chat(context.Background(), ChatRequest{
-		Messages: []Message{{Role: "user", Content: "Use the tool"}},
-		Tools: []Tool{
-			{Name: "ping", Description: "Ping", InputSchema: map[string]interface{}{"type": "object"}},
-		},
-		ToolChoice: &ToolChoice{Type: ToolChoiceTool, Name: "ping"},
-	})
-	require.NoError(t, err)
-}
-
-func TestOpenAIClient_ChatStream_DeepSeekCoercesAnyToolChoiceToAuto(t *testing.T) {
-	// Streaming variant of the same coercion. See the non-streaming test
-	// for the empirical-evidence note.
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var got map[string]interface{}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
-		assert.Equal(t, "deepseek-v4-flash", got["model"])
-		assert.Equal(t, "auto", got["tool_choice"])
-		require.Len(t, got["tools"], 1)
-
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "data: %s\n\n", `{"id":"chatcmpl-1","choices":[{"delta":{"content":"ok"}}],"object":"chat.completion.chunk"}`)
-		fmt.Fprintf(w, "data: [DONE]\n\n")
-		w.(http.Flusher).Flush()
-	}))
-	defer server.Close()
-
-	client := NewOpenAIClient("sk-test", "deepseek-v4-flash", server.URL, 0)
-	client.baseURL = strings.TrimSuffix(server.URL, "/") + "/v1/chat/completions#deepseek.com"
-
-	err := client.ChatStream(context.Background(), ChatRequest{
-		Messages: []Message{{Role: "user", Content: "Use the tool"}},
-		Tools: []Tool{
-			{Name: "ping", Description: "Ping", InputSchema: map[string]interface{}{"type": "object"}},
-		},
-		ToolChoice: &ToolChoice{Type: ToolChoiceAny},
-	}, func(event StreamEvent) {})
-	require.NoError(t, err)
-}
-
-func TestOpenAIClient_Chat_UnknownDeepSeekModelCoercesForcedToolChoiceToAuto(t *testing.T) {
-	// Unknown DeepSeek model ids share the canonical-models' coercion
-	// behavior. Until DeepSeek's documented tool_choice=required support
-	// actually works server-side, every DeepSeek request gets auto.
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var got map[string]interface{}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
-		assert.Equal(t, "deepseek-v4-flush7pro", got["model"])
-		assert.Equal(t, "auto", got["tool_choice"])
-		require.Len(t, got["tools"], 1)
-
-		_ = json.NewEncoder(w).Encode(openaiResponse{
-			ID:    "chatcmpl-deepseek-unknown-tools",
-			Model: "deepseek-v4-flush7pro",
-			Choices: []openaiChoice{
-				{
-					Message:      openaiRespMsg{Role: "assistant", Content: "ok"},
-					FinishReason: "stop",
-				},
-			},
-		})
-	}))
-	defer server.Close()
-
-	client := NewOpenAIClient("sk-test", "deepseek-v4-flush7pro", server.URL, 0)
-	client.baseURL = strings.TrimSuffix(server.URL, "/") + "/v1/chat/completions#deepseek.com"
-
-	_, err := client.Chat(context.Background(), ChatRequest{
-		Messages: []Message{{Role: "user", Content: "Use the tool"}},
-		Tools: []Tool{
-			{Name: "ping", Description: "Ping", InputSchema: map[string]interface{}{"type": "object"}},
-		},
-		ToolChoice: &ToolChoice{Type: ToolChoiceTool, Name: "ping"},
-	})
-	require.NoError(t, err)
-}
-
 func TestOpenAIClient_Chat_DeepSeekPreservesReasoningContentForToolTurns(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var got openaiRequest
@@ -728,7 +619,7 @@ func TestOpenAIClient_Chat_Success(t *testing.T) {
 		require.Len(t, req.Tools, 1)
 		assert.Equal(t, "function", req.Tools[0].Type)
 		assert.Equal(t, "get_time", req.Tools[0].Function.Name)
-		assert.Equal(t, "auto", req.ToolChoice)
+		assert.Nil(t, req.ToolChoice)
 
 		_ = json.NewEncoder(w).Encode(openaiResponse{
 			ID:    "chatcmpl-1",

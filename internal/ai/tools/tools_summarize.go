@@ -50,7 +50,7 @@ Time window defaults to the last 7 days; supported ranges: 24h, 7d, 30d.`,
 					},
 					"resource_ids": {
 						Type:        "string",
-						Description: "For action=fleet: comma-separated list of resource identifiers to include (e.g. \"instance:pve1:101,instance:pve1:102\"). Use pulse_query to enumerate resources of a type first if you need the full set.",
+						Description: "For action=fleet: comma-separated list of resource identifiers to include (e.g. \"instance:pve1:101,instance:pve1:102\"). Resource enumeration may be needed first if the full set is not already known.",
 					},
 					"range": {
 						Type:        "string",

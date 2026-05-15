@@ -142,7 +142,7 @@ func TestEnsureFinalTextResponse(t *testing.T) {
 		t.Fatalf("expected summary message to be appended")
 	}
 	if provider.lastRequest.ToolChoice == nil || provider.lastRequest.ToolChoice.Type != providers.ToolChoiceNone {
-		t.Fatalf("expected summary call to enforce text-only tool choice")
+		t.Fatalf("expected summary call to use the text-only safety brake")
 	}
 
 	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {

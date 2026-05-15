@@ -191,7 +191,6 @@ func TestRunner_RetryLogic_Advanced(t *testing.T) {
 	runner.config.RetryOnRateLimit = true
 	runner.config.RetryOnPhantom = true
 	runner.config.RetryOnToolErrors = true
-	runner.config.RetryOnExplicitTool = true
 
 	tests := []struct {
 		name        string
@@ -236,16 +235,6 @@ func TestRunner_RetryLogic_Advanced(t *testing.T) {
 				},
 			},
 			shouldRetry: false,
-		},
-		{
-			name: "Explicit Tool Requested but Missing",
-			step: Step{Prompt: "Please use pulse_read to check files"},
-			result: &StepResult{
-				Content:   "some content",
-				ToolCalls: []ToolCallEvent{},
-			},
-			shouldRetry: true,
-			retryReason: "no_tool_calls_for_explicit_tool",
 		},
 		{
 			name: "Tool Error (Retryable: timeout)",
@@ -454,7 +443,6 @@ func TestApplyEvalEnvOverrides_Comprehensive(t *testing.T) {
 		"EVAL_HTTP_TIMEOUT":            "60",
 		"EVAL_STEP_RETRIES":            "3",
 		"EVAL_RETRY_ON_PHANTOM":        "true",
-		"EVAL_RETRY_ON_EXPLICIT_TOOL":  "true",
 		"EVAL_RETRY_ON_STREAM_FAILURE": "false",
 		"EVAL_RETRY_ON_EMPTY_RESPONSE": "false",
 		"EVAL_RETRY_ON_TOOL_ERRORS":    "true",
@@ -477,7 +465,6 @@ func TestApplyEvalEnvOverrides_Comprehensive(t *testing.T) {
 	assert.Equal(t, 60*time.Second, cfg.RequestTimeout)
 	assert.Equal(t, 3, cfg.StepRetries)
 	assert.True(t, cfg.RetryOnPhantom)
-	assert.True(t, cfg.RetryOnExplicitTool)
 	assert.False(t, cfg.RetryOnStreamFailure)
 	assert.False(t, cfg.RetryOnEmptyResponse)
 	assert.True(t, cfg.RetryOnToolErrors)

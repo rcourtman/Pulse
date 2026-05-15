@@ -327,10 +327,8 @@ func TestTriggerPatrolPreflightAsync_PopulatesCacheInBackground(t *testing.T) {
 }
 
 func TestRunPatrolToolPreflight_RequestShapeIncludesVerifyTool(t *testing.T) {
-	// Locks the preflight request shape so a future refactor can't
-	// silently strip the tool definition or tool_choice (which would
-	// turn preflight into a connection-test that misses the original
-	// failure mode).
+	// Locks the preflight request shape so a future refactor can't silently
+	// strip the tool definition, while keeping tool selection model-owned.
 	var captured map[string]interface{}
 	h := newPatrolPreflightTestService(t, "openai:gpt-4o-mini", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&captured)
@@ -350,7 +348,7 @@ func TestRunPatrolToolPreflight_RequestShapeIncludesVerifyTool(t *testing.T) {
 	if fn["name"] != patrolPreflightToolName {
 		t.Fatalf("expected tool name %q, got %v", patrolPreflightToolName, fn["name"])
 	}
-	if captured["tool_choice"] == nil {
-		t.Fatalf("expected tool_choice to be set in preflight request, got %v", captured)
+	if captured["tool_choice"] != nil {
+		t.Fatalf("expected preflight to keep tool selection automatic, got %v", captured["tool_choice"])
 	}
 }

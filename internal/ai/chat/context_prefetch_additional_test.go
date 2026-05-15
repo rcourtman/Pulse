@@ -562,8 +562,8 @@ func TestContextPrefetcher_FormatContextSummary_VMwareGuestStaysReadOnly(t *test
 	if !strings.Contains(summary, "resource_id: \"app-01\"") {
 		t.Fatalf("expected VMware guest summary to expose canonical resource_id routing, got %q", summary)
 	}
-	if !strings.Contains(summary, "Use pulse_query action=get resource_id=\"app-01\"") {
-		t.Fatalf("expected VMware summary to direct the assistant to pulse_query, got %q", summary)
+	if !strings.Contains(summary, "Status, alerts, recent activity, and metrics are available through resource_id=\"app-01\"") {
+		t.Fatalf("expected VMware summary to expose resource_id read context, got %q", summary)
 	}
 }
 
@@ -597,8 +597,8 @@ func TestContextPrefetcher_FormatContextSummary_VMwareHostAndStorageStayReadOnly
 	if strings.Contains(summary, "target_host:") {
 		t.Fatalf("expected VMware host and datastore summary to avoid target_host routing, got %q", summary)
 	}
-	if got := strings.Count(summary, "Use pulse_query action=get resource_id="); got != 2 {
-		t.Fatalf("expected resource_id-based read guidance for VMware host and datastore, got count=%d summary=%q", got, summary)
+	if got := strings.Count(summary, "Status, alerts, recent activity, and metrics are available through resource_id="); got != 2 {
+		t.Fatalf("expected resource_id-based read context for VMware host and datastore, got count=%d summary=%q", got, summary)
 	}
 }
 
@@ -628,8 +628,8 @@ func TestContextPrefetcher_FormatContextSummary_TrueNASAppUsesNativeResourceRead
 	if !strings.Contains(summary, "resource_id: \"Nextcloud\"") {
 		t.Fatalf("expected native TrueNAS app summary to expose resource_id routing, got %q", summary)
 	}
-	if !strings.Contains(summary, "pulse_read action=logs resource_id=\"Nextcloud\"") {
-		t.Fatalf("expected native TrueNAS app summary to expose native log routing, got %q", summary)
+	if !strings.Contains(summary, "Shared reads address this resource by resource_id=\"Nextcloud\"") {
+		t.Fatalf("expected native TrueNAS app summary to expose native resource context, got %q", summary)
 	}
 }
 

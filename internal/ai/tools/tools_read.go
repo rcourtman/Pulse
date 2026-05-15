@@ -142,7 +142,7 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 	intentResult := ClassifyExecutionIntent(command)
 	if intentResult.Intent == IntentWriteOrUnknown {
 		hint := GetReadOnlyViolationHint(command, intentResult)
-		alternative := "Use pulse_control type=command for write operations"
+		alternative := "Write operations require the governed control path"
 
 		details := map[string]interface{}{
 			"command":     truncateCommand(command, 100),
@@ -164,7 +164,7 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 
 		return NewToolResponseResult(NewToolBlockedError(
 			"READ_ONLY_VIOLATION",
-			fmt.Sprintf("Command '%s' is not read-only. Use pulse_control for write operations.", truncateCommand(command, 50)),
+			fmt.Sprintf("Command '%s' is not read-only. Write operations require the governed control path.", truncateCommand(command, 50)),
 			details,
 		)), nil
 	}
@@ -465,7 +465,7 @@ func (e *PulseToolExecutor) executeNativeAppContainerReadLogs(ctx context.Contex
 		if validation.ErrorMsg != "" {
 			return NewErrorResult(fmt.Errorf("%s", validation.ErrorMsg)), nil
 		}
-		return NewErrorResult(fmt.Errorf("resource '%s' has not been discovered in this session. Use pulse_query action=search to find it first", resourceRef)), nil
+		return NewErrorResult(fmt.Errorf("resource '%s' has not been discovered in this session. Resource discovery is required first", resourceRef)), nil
 	}
 	if validation.ErrorMsg != "" {
 		log.Warn().
@@ -569,7 +569,7 @@ func blockedNativeReadLogsResult(resolved ResolvedResourceInfo, resourceRef, con
 			details["suggested_tool"] = "pulse_read"
 			details["suggested_arguments"] = suggestedArgs
 			details["recovery_hint"] = fmt.Sprintf(
-				"Use pulse_read action=logs target_host=%q container=%q for app logs on this platform.",
+				"App logs on this platform are addressed with target_host=%q and container=%q.",
 				targetHost,
 				containerName,
 			)
@@ -598,7 +598,7 @@ func blockedNativeReadLogsResult(resolved ResolvedResourceInfo, resourceRef, con
 	details["suggested_tool"] = "pulse_query"
 	details["suggested_arguments"] = suggestedArgs
 	details["recovery_hint"] = fmt.Sprintf(
-		"Use pulse_query action=get resource_type=%q resource_id=%q to inspect status, alerts, activity, and metrics for this resource.",
+		"Status, alerts, activity, and metrics are addressed with resource_type=%q and resource_id=%q.",
 		queryType,
 		queryResourceID,
 	)

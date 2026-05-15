@@ -94,7 +94,7 @@ func toolNameSet(list []providers.Tool) map[string]bool {
 	return set
 }
 
-func TestFilterToolsForPrompt_ReadOnlyAndSpecialty(t *testing.T) {
+func TestToolsForExecutionMode_InteractiveExposesGovernedTools(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
 		StateProvider: fakeStateProvider{},
 		AgentServer:   fakeAgentServer{},
@@ -110,16 +110,7 @@ func TestFilterToolsForPrompt_ReadOnlyAndSpecialty(t *testing.T) {
 		},
 	}
 
-	readOnlyTools := svc.filterToolsForPrompt(context.Background(), "show node status", true, false)
-	readOnlySet := toolNameSet(readOnlyTools)
-	if readOnlySet["pulse_control"] || readOnlySet["pulse_file_edit"] || readOnlySet["pulse_docker"] {
-		t.Fatalf("expected write tools to be filtered for read-only prompt")
-	}
-	if !readOnlySet["pulse_storage"] || !readOnlySet["pulse_kubernetes"] || !readOnlySet["pulse_pmg"] {
-		t.Fatalf("expected specialty tools to remain when no specialty keyword detected")
-	}
-
-	interactiveTools := svc.filterToolsForPrompt(context.Background(), "check kubernetes pods", false, false)
+	interactiveTools := svc.toolsForExecutionMode(false, false)
 	interactiveSet := toolNameSet(interactiveTools)
 	if !interactiveSet["pulse_kubernetes"] ||
 		!interactiveSet["pulse_storage"] ||
@@ -132,7 +123,7 @@ func TestFilterToolsForPrompt_ReadOnlyAndSpecialty(t *testing.T) {
 	}
 }
 
-func TestFilterToolsForPrompt_BroadInfraKeepsStorage(t *testing.T) {
+func TestToolsForExecutionMode_AutonomousNonPatrolExposesGovernedTools(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
 		StateProvider: fakeStateProvider{},
 		AgentServer:   fakeAgentServer{},
@@ -140,13 +131,16 @@ func TestFilterToolsForPrompt_BroadInfraKeepsStorage(t *testing.T) {
 	})
 
 	svc := &Service{executor: exec}
-	toolsList := svc.filterToolsForPrompt(context.Background(), "full status overview", false, false)
+	toolsList := svc.toolsForExecutionMode(true, false)
 	set := toolNameSet(toolsList)
 	if !set["pulse_storage"] {
-		t.Fatalf("expected storage tool to be kept for broad infrastructure prompt")
+		t.Fatalf("expected storage tool to be exposed without prompt keyword routing")
 	}
 	if !set["pulse_control"] || !set["pulse_file_edit"] || !set["pulse_docker"] {
-		t.Fatalf("expected interactive mode to keep write tools")
+		t.Fatalf("expected autonomous non-patrol mode to expose governed write tools")
+	}
+	if set[pulseQuestionToolName] {
+		t.Fatalf("expected autonomous mode to exclude the interactive clarification tool")
 	}
 }
 
@@ -172,7 +166,7 @@ func TestBuildSystemPrompt_DoesNotClaimGenericVMControl(t *testing.T) {
 	}
 }
 
-func TestFilterToolsForPrompt_RecoveryOnlyKeepsStorage(t *testing.T) {
+func TestToolsForExecutionMode_RecoveryOnlyKeepsStorage(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
 		RecoveryPointsProvider: &fakeRecoveryPointsProvider{points: []recovery.RecoveryPoint{{
 			ID:       "pve-snapshot:before-upgrade",
@@ -185,14 +179,14 @@ func TestFilterToolsForPrompt_RecoveryOnlyKeepsStorage(t *testing.T) {
 	})
 
 	svc := &Service{executor: exec}
-	toolsList := svc.filterToolsForPrompt(context.Background(), "list recovery snapshots for guest 100", false, false)
+	toolsList := svc.toolsForExecutionMode(false, false)
 	set := toolNameSet(toolsList)
 	if !set["pulse_storage"] {
 		t.Fatalf("expected storage tool to be kept when recovery points are the only storage source")
 	}
 }
 
-func TestFilterToolsForPrompt_AutonomousNonPatrol(t *testing.T) {
+func TestToolsForExecutionMode_PatrolScopeUsesConfigNotPrompt(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
 		StateProvider: fakeStateProvider{},
 		AgentServer:   fakeAgentServer{},
@@ -207,15 +201,17 @@ func TestFilterToolsForPrompt_AutonomousNonPatrol(t *testing.T) {
 		},
 	}
 
-	// Use write intent so read-only write-tool gating does not hide docker.
-	filtered := svc.filterToolsForPrompt(context.Background(), "restart docker containers and check storage pools", true, false)
+	filtered := svc.toolsForExecutionMode(true, true)
 	set := toolNameSet(filtered)
 
-	if !set["pulse_docker"] {
-		t.Fatalf("expected pulse_docker to be included for autonomous non-patrol runs")
+	if set["pulse_docker"] {
+		t.Fatalf("expected pulse_docker to follow disabled Patrol subsystem scope")
 	}
-	if !set["pulse_storage"] {
-		t.Fatalf("expected pulse_storage to be included for autonomous non-patrol runs")
+	if set["pulse_storage"] {
+		t.Fatalf("expected pulse_storage to follow disabled Patrol subsystem scope")
+	}
+	if !set["pulse_query"] {
+		t.Fatalf("expected core read/query tools to remain available to the Patrol model")
 	}
 }
 

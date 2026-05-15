@@ -35,22 +35,6 @@ func TestSanitizeFilename(t *testing.T) {
 	}
 }
 
-func TestRequiresExplicitTool(t *testing.T) {
-	tests := []struct {
-		prompt   string
-		expected bool
-	}{
-		{"use pulse_read please", true},
-		{"check the system", false},
-		{"use a read-only tool", true},
-		{"use a control tool", true},
-	}
-
-	for _, tc := range tests {
-		assert.Equal(t, tc.expected, requiresExplicitTool(tc.prompt), "Prompt: %s", tc.prompt)
-	}
-}
-
 func TestApplyEvalEnvOverrides(t *testing.T) {
 	os.Setenv("EVAL_STEP_RETRIES", "5")
 	os.Setenv("EVAL_RETRY_ON_PHANTOM", "false")

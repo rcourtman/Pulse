@@ -9,7 +9,7 @@
 //
 // Options:
 //
-//	-scenario string  Scenario to run: smoke, readonly, enforce, routing, routing-recovery, logs, readonly-recovery, search-id, disambiguate, context-target, discovery, writeverify, strict, strict-block, strict-recovery, readonly-guardrails, noninteractive, approval, approval-approve, approval-deny, approval-combo, patrol, patrol-basic, patrol-investigation, patrol-finding-quality, patrol-signal-coverage, matrix, all (default "smoke")
+//	-scenario string  Scenario to run: smoke, readonly, routing, routing-recovery, logs, readonly-recovery, search-id, disambiguate, context-target, discovery, writeverify, strict, strict-block, strict-recovery, readonly-guardrails, noninteractive, approval, approval-approve, approval-deny, approval-combo, patrol, patrol-basic, patrol-investigation, patrol-finding-quality, patrol-signal-coverage, matrix, all (default "smoke")
 //	-url string       Pulse API base URL (default "http://127.0.0.1:7655")
 //	-user string      Username for auth (default "admin")
 //	-pass string      Password for auth (default "admin")
@@ -36,7 +36,7 @@ import (
 )
 
 func main() {
-	scenario := flag.String("scenario", "smoke", "Scenario to run: smoke, readonly, enforce, routing, routing-recovery, logs, readonly-recovery, search-id, disambiguate, context-target, discovery, writeverify, guest-control, guest-idempotent, guest-discovery, guest-natural, guest-multi, readonly-filtering, read-loop-recovery, ambiguous-intent, strict, strict-block, strict-recovery, readonly-guardrails, noninteractive, approval, approval-approve, approval-deny, approval-combo, patrol, patrol-basic, patrol-investigation, patrol-finding-quality, patrol-signal-coverage, matrix, all")
+	scenario := flag.String("scenario", "smoke", "Scenario to run: smoke, readonly, routing, routing-recovery, logs, readonly-recovery, search-id, disambiguate, context-target, discovery, writeverify, guest-control, guest-idempotent, guest-discovery, guest-natural, guest-multi, readonly-model-choice, read-loop-recovery, ambiguous-intent, strict, strict-block, strict-recovery, readonly-guardrails, noninteractive, approval, approval-approve, approval-deny, approval-combo, patrol, patrol-basic, patrol-investigation, patrol-finding-quality, patrol-signal-coverage, matrix, all")
 	url := flag.String("url", "http://127.0.0.1:7655", "Pulse API base URL")
 	user := flag.String("user", "admin", "Username for auth")
 	pass := flag.String("pass", "admin", "Password for auth")
@@ -179,7 +179,6 @@ func listScenarios() {
 	fmt.Println("  Basic:")
 	fmt.Println("    smoke        - Quick smoke test (1 step)")
 	fmt.Println("    readonly     - Read-only infrastructure test (3 steps)")
-	fmt.Println("    enforce      - Explicit tool enforcement (1 step)")
 	fmt.Println("    routing      - Routing validation test (2 steps)")
 	fmt.Println("    routing-recovery - Routing mismatch recovery (2 steps)")
 	fmt.Println("    logs         - Log tailing/bounded command test (2 steps)")
@@ -196,8 +195,8 @@ func listScenarios() {
 	fmt.Println("    guest-natural    - Natural language variations (turn off, shut down, 4 steps)")
 	fmt.Println("    guest-multi      - Multi-mention status query (2 resources, 1 step)")
 	fmt.Println()
-	fmt.Println("  Safety & Filtering:")
-	fmt.Println("    readonly-filtering  - Control tools excluded from read-only queries (3 steps)")
+	fmt.Println("  Safety:")
+	fmt.Println("    readonly-model-choice - Model chooses read tools for read-only queries (3 steps)")
 	fmt.Println("    read-loop-recovery  - Model produces text after budget blocks (2 steps)")
 	fmt.Println("    ambiguous-intent    - Ambiguous requests default to read-only (3 steps)")
 	fmt.Println()
@@ -262,8 +261,6 @@ func getScenarios(name string) []eval.Scenario {
 		return []eval.Scenario{eval.QuickSmokeTest()}
 	case "readonly":
 		return []eval.Scenario{eval.ReadOnlyInfrastructureScenario()}
-	case "enforce":
-		return []eval.Scenario{eval.ExplicitToolEnforcementScenario()}
 	case "routing":
 		return []eval.Scenario{eval.RoutingValidationScenario()}
 	case "routing-recovery":
@@ -293,9 +290,9 @@ func getScenarios(name string) []eval.Scenario {
 	case "guest-multi":
 		return []eval.Scenario{eval.GuestControlMultiMentionScenario()}
 
-	// Safety & filtering scenarios
-	case "readonly-filtering":
-		return []eval.Scenario{eval.ReadOnlyToolFilteringScenario()}
+	// Safety scenarios
+	case "readonly-model-choice":
+		return []eval.Scenario{eval.ReadOnlyModelChoiceScenario()}
 	case "read-loop-recovery":
 		return []eval.Scenario{eval.ReadLoopRecoveryScenario()}
 	case "ambiguous-intent":
@@ -342,7 +339,6 @@ func getScenarios(name string) []eval.Scenario {
 		return []eval.Scenario{
 			eval.QuickSmokeTest(),
 			eval.ReadOnlyInfrastructureScenario(),
-			eval.ExplicitToolEnforcementScenario(),
 			eval.RoutingValidationScenario(),
 			eval.RoutingMismatchRecoveryScenario(),
 			eval.LogTailingScenario(),
@@ -372,7 +368,7 @@ func getScenarios(name string) []eval.Scenario {
 			eval.GuestControlDiscoveryScenario(),
 			eval.GuestControlNaturalLanguageScenario(),
 			eval.GuestControlMultiMentionScenario(),
-			eval.ReadOnlyToolFilteringScenario(),
+			eval.ReadOnlyModelChoiceScenario(),
 			eval.ReadLoopRecoveryScenario(),
 			eval.AmbiguousIntentScenario(),
 			eval.StrictResolutionScenario(),
@@ -386,7 +382,6 @@ func getScenarios(name string) []eval.Scenario {
 		return []eval.Scenario{
 			eval.QuickSmokeTest(),
 			eval.ReadOnlyInfrastructureScenario(),
-			eval.ExplicitToolEnforcementScenario(),
 			eval.RoutingValidationScenario(),
 			eval.RoutingMismatchRecoveryScenario(),
 			eval.LogTailingScenario(),
@@ -408,7 +403,7 @@ func getScenarios(name string) []eval.Scenario {
 			eval.GuestControlDiscoveryScenario(),
 			eval.GuestControlNaturalLanguageScenario(),
 			eval.GuestControlMultiMentionScenario(),
-			eval.ReadOnlyToolFilteringScenario(),
+			eval.ReadOnlyModelChoiceScenario(),
 			eval.ReadLoopRecoveryScenario(),
 			eval.AmbiguousIntentScenario(),
 			eval.StrictResolutionScenario(),

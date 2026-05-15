@@ -257,26 +257,14 @@ func sanitizeGeminiContents(contents []geminiContent) []geminiContent {
 	return result
 }
 
-// convertToolChoiceToGemini converts our ToolChoice to Gemini's mode string
-// Gemini uses: AUTO (default), ANY (force tool use), NONE (no tools)
+// convertToolChoiceToGemini converts our ToolChoice to Gemini's mode string.
+// Pulse omits automatic tool config so tool use stays model-owned.
 // See: https://ai.google.dev/api/caching#FunctionCallingConfig
 func convertToolChoiceToGemini(tc *ToolChoice) string {
-	if tc == nil {
-		return "AUTO"
-	}
-	switch tc.Type {
-	case ToolChoiceAuto:
-		return "AUTO"
-	case ToolChoiceNone:
+	if tc != nil && tc.Type == ToolChoiceNone {
 		return "NONE"
-	case ToolChoiceAny:
-		return "ANY"
-	case ToolChoiceTool:
-		// Gemini doesn't support forcing a specific tool, fall back to ANY
-		return "ANY"
-	default:
-		return "AUTO"
 	}
+	return ""
 }
 
 // Chat sends a chat request to the Gemini API
@@ -407,13 +395,10 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		}
 		if len(funcDecls) > 0 {
 			geminiReq.Tools = []geminiToolDef{{FunctionDeclarations: funcDecls}}
-
-			// Add tool_config based on ToolChoice
-			// Gemini uses: AUTO (default), ANY (force tool use), NONE (no tools)
-			geminiReq.ToolConfig = &geminiToolConfig{
-				FunctionCallingConfig: &geminiFunctionCallingConfig{
-					Mode: convertToolChoiceToGemini(req.ToolChoice),
-				},
+			if mode := convertToolChoiceToGemini(req.ToolChoice); mode != "" {
+				geminiReq.ToolConfig = &geminiToolConfig{
+					FunctionCallingConfig: &geminiFunctionCallingConfig{Mode: mode},
+				}
 			}
 
 			log.Debug().Int("tool_count", len(funcDecls)).Strs("tool_names", func() []string {
@@ -806,12 +791,10 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		}
 		if len(funcDecls) > 0 {
 			geminiReq.Tools = []geminiToolDef{{FunctionDeclarations: funcDecls}}
-
-			// Add tool_config based on ToolChoice (same as non-streaming)
-			geminiReq.ToolConfig = &geminiToolConfig{
-				FunctionCallingConfig: &geminiFunctionCallingConfig{
-					Mode: convertToolChoiceToGemini(req.ToolChoice),
-				},
+			if mode := convertToolChoiceToGemini(req.ToolChoice); mode != "" {
+				geminiReq.ToolConfig = &geminiToolConfig{
+					FunctionCallingConfig: &geminiFunctionCallingConfig{Mode: mode},
+				}
 			}
 
 			// Log tool names for debugging tool selection issues

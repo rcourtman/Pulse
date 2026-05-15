@@ -15,10 +15,10 @@ import (
 //
 // Unlike a connection test, which only lists models, the preflight
 // exercises the full chat-completions path with a minimal tool
-// definition. This surfaces real failure modes — provider rejecting the
-// tool_choice value, no tool-capable endpoint available, model genuinely
-// lacking tool support — at configuration time instead of waiting for
-// the next scheduled Patrol run to silently fail.
+// definition. This surfaces real failure modes — no tool-capable endpoint
+// available, model genuinely lacking tool support, or the model declining
+// the tool — at configuration time instead of waiting for the next
+// scheduled Patrol run to silently fail.
 type PatrolPreflightResult struct {
 	Success          bool
 	Provider         string
@@ -197,8 +197,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 				},
 			},
 		},
-		ToolChoice: &providers.ToolChoice{Type: providers.ToolChoiceAny},
-		MaxTokens:  256,
+		MaxTokens: 256,
 	}
 
 	resp, err := provider.Chat(ctx, req)

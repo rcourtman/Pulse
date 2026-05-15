@@ -31,7 +31,6 @@ type Config struct {
 	// Retry behavior for transient eval failures.
 	StepRetries          int
 	RetryOnPhantom       bool
-	RetryOnExplicitTool  bool
 	RetryOnStreamFailure bool
 	RetryOnEmptyResponse bool
 	RetryOnToolErrors    bool
@@ -54,7 +53,6 @@ func DefaultConfig() Config {
 		RequestTimeout:       5 * time.Minute,
 		StepRetries:          2,
 		RetryOnPhantom:       true,
-		RetryOnExplicitTool:  true,
 		RetryOnStreamFailure: true,
 		RetryOnEmptyResponse: true,
 		RetryOnToolErrors:    true,
@@ -429,11 +427,6 @@ func (r *Runner) shouldRetryStep(result *StepResult, step Step) (bool, string) {
 		}
 	}
 
-	// If an explicit tool was requested and no tool calls occurred, retry once.
-	if r.config.RetryOnExplicitTool && len(result.ToolCalls) == 0 && requiresExplicitTool(step.Prompt) {
-		return true, "no_tool_calls_for_explicit_tool"
-	}
-
 	if r.config.RetryOnToolErrors && len(result.ToolCalls) > 0 && !hasSuccessfulToolCallRetry(result.ToolCalls) {
 		if hasRetryableToolError(result.ToolCalls) {
 			return true, "tool_error"
@@ -441,32 +434,6 @@ func (r *Runner) shouldRetryStep(result *StepResult, step Step) (bool, string) {
 	}
 
 	return false, ""
-}
-
-func requiresExplicitTool(prompt string) bool {
-	prompt = strings.ToLower(prompt)
-	explicitTools := []string{
-		"pulse_read",
-		"pulse_control",
-		"pulse_query",
-		"pulse_discovery",
-		"pulse_docker",
-		"pulse_kubernetes",
-		"pulse_metrics",
-		"pulse_storage",
-	}
-	for _, tool := range explicitTools {
-		if strings.Contains(prompt, tool) {
-			return true
-		}
-	}
-	if strings.Contains(prompt, "read-only tool") || strings.Contains(prompt, "read only tool") {
-		return true
-	}
-	if strings.Contains(prompt, "control tool") || strings.Contains(prompt, "query tool") {
-		return true
-	}
-	return false
 }
 
 func applyEvalEnvOverrides(config *Config) {
@@ -488,12 +455,6 @@ func applyEvalEnvOverrides(config *Config) {
 		config.RetryOnPhantom = value
 	} else if !config.RetryOnPhantom {
 		config.RetryOnPhantom = true
-	}
-
-	if value, ok := envBool("EVAL_RETRY_ON_EXPLICIT_TOOL"); ok {
-		config.RetryOnExplicitTool = value
-	} else if !config.RetryOnExplicitTool {
-		config.RetryOnExplicitTool = true
 	}
 
 	if value, ok := envBool("EVAL_RETRY_ON_STREAM_FAILURE"); ok {

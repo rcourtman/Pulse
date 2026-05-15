@@ -435,8 +435,7 @@ func TestService_SettersAndUpdateControlSettings(t *testing.T) {
 	assert.True(t, hasTool(service.executor.ListTools(), "pulse_control"))
 }
 
-func TestService_FilterToolsForPrompt_ReadOnlyFiltersWriteTools(t *testing.T) {
-	// Read-only prompts should not include write/control tools.
+func TestService_ToolsForExecutionMode_ExposesGovernedTools(t *testing.T) {
 	service := NewService(Config{
 		AIConfig:      &config.AIConfig{ControlLevel: config.ControlLevelControlled},
 		StateProvider: &mockStateProvider{},
@@ -448,14 +447,13 @@ func TestService_FilterToolsForPrompt_ReadOnlyFiltersWriteTools(t *testing.T) {
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_docker"))
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_query"))
 
-	// Read-only prompts in autonomous mode should exclude write tools
-	filtered := service.filterToolsForPrompt(context.Background(), "run uptime", true, false)
-	assert.False(t, hasProviderTool(filtered, "pulse_control"))
-	assert.False(t, hasProviderTool(filtered, "pulse_docker"))
+	filtered := service.toolsForExecutionMode(true, false)
+	assert.True(t, hasProviderTool(filtered, "pulse_control"))
+	assert.True(t, hasProviderTool(filtered, "pulse_docker"))
 	assert.True(t, hasProviderTool(filtered, "pulse_query"))
 }
 
-func TestService_FilterToolsForPrompt_WriteIntentIncludesWriteTools(t *testing.T) {
+func TestService_ToolsForExecutionMode_InteractiveAddsQuestionTool(t *testing.T) {
 	service := NewService(Config{
 		AIConfig:      &config.AIConfig{ControlLevel: config.ControlLevelControlled},
 		StateProvider: &mockStateProvider{},
@@ -465,10 +463,11 @@ func TestService_FilterToolsForPrompt_WriteIntentIncludesWriteTools(t *testing.T
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_docker"))
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_query"))
 
-	filtered := service.filterToolsForPrompt(context.Background(), "restart vm 101", false, false)
+	filtered := service.toolsForExecutionMode(false, false)
 	assert.True(t, hasProviderTool(filtered, "pulse_control"))
 	assert.True(t, hasProviderTool(filtered, "pulse_docker"))
 	assert.True(t, hasProviderTool(filtered, "pulse_query"))
+	assert.True(t, hasProviderTool(filtered, pulseQuestionToolName))
 }
 
 func TestService_Execute_NonStreaming(t *testing.T) {

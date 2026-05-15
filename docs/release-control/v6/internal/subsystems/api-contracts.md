@@ -538,6 +538,11 @@ the canonical monitored-system blocked payload.
    and the Patrol verification summary derived from run history, so the page also states whether recent Patrol evidence came from a successful full patrol or only from scoped/erroring runs instead of leaving verification scope implicit
    and the same-day activity-mix explanation derived from that governed run history, so when a recent full patrol is followed by alert-triggered or anomaly-triggered scoped work the verification surface can explain the mix directly instead of reconstructing it from page-local timing heuristics
    and the Patrol status recency split, so `last_patrol_at` remains reserved for completed full Patrol sweeps while scoped runs and verification checks advance `last_activity_at` without claiming a fresh full-estate verification pass
+   and the Patrol Assistant handoff model, so frontend handoff prompts pass
+   current finding context, safe action posture, and resource references as
+   bounded request metadata while leaving tool selection and remediation
+   reasoning to the configured LLM instead of serializing a frontend-authored
+   tool route or fix plan into the API request
    and the canonical alert-triggered Patrol enqueue path in `internal/api/router.go`, so alert-fired Patrol work flows through the unified alert bridge and trigger manager instead of being duplicated by monitor callback wiring
    and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` card, so canonical recent-change timelines stay rendered through one governed frontend card instead of separate page-local list loops
    and the shared `frontend-modern/src/utils/resourceChangePresentation.ts` formatter used by the summary page and resource drawer, so canonical change wording does not drift across surfaces

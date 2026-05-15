@@ -282,7 +282,7 @@ func TestExecuteReadLogs_VMwareResourcesReturnStructuredQueryGuidance(t *testing
 
 			hint, ok := payload.Error.Details["recovery_hint"].(string)
 			require.True(t, ok)
-			assert.Contains(t, hint, `pulse_query action=get`)
+			assert.Contains(t, hint, `Status, alerts, activity, and metrics are addressed`)
 			assert.Contains(t, hint, `resource_type="`+tc.wantKind+`"`)
 
 			suggestedArgs, ok := payload.Error.Details["suggested_arguments"].(map[string]interface{})

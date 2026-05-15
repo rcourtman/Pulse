@@ -89,7 +89,7 @@ type openaiRequest struct {
 	MaxCompletionTokens int             `json:"max_completion_tokens,omitempty"` // For o1/o3 models
 	Temperature         float64         `json:"temperature,omitempty"`
 	Tools               []openaiTool    `json:"tools,omitempty"`
-	ToolChoice          interface{}     `json:"tool_choice,omitempty"` // "auto", "none", or specific tool
+	ToolChoice          interface{}     `json:"tool_choice,omitempty"` // "auto" or "none"
 }
 
 // openaiTool represents a function tool in OpenAI format
@@ -180,37 +180,6 @@ func (c *OpenAIClient) shouldSendReasoningContent() bool {
 	return c.isDeepSeek()
 }
 
-func (c *OpenAIClient) supportsForcedToolChoice(model string) bool {
-	// Empirical: DeepSeek's API returns HTTP 400 ("provider rejected
-	// forced tool selection") when tool_choice=required is sent against
-	// the canonical chat models, including deepseek-v4-flash. DeepSeek's
-	// official chat-completion docs list `required` as a supported value
-	// with no model-specific restriction (verified at
-	// https://api-docs.deepseek.com/api/create-chat-completion on
-	// 2026-05-11), but their server behavior disagrees with their docs.
-	// A live preflight against deepseek-v4-flash with required produced
-	// `cause: tool_choice_rejected` in 275ms — a deterministic 400, not
-	// a transient. The legacy `deepseek-reasoner` id is documented as a
-	// thinking-mode alias for v4-flash on the pricing page and shares
-	// the same behavior.
-	//
-	// Until DeepSeek's API matches their docs, coerce forced tool_choice
-	// to "auto" for any DeepSeek model so Patrol stays functional. With
-	// auto, the model is free to skip the tool call and preflight may
-	// record tool_call_observed=false; that is handled as a soft warning
-	// ("Model did not emit a tool call during preflight") rather than a
-	// hard failure, which is the correct surface for a model that
-	// supports tools but is not under forced selection.
-	return !c.isDeepSeek()
-}
-
-func (c *OpenAIClient) toolChoiceForModel(model string, choice *ToolChoice) interface{} {
-	if !c.supportsForcedToolChoice(model) {
-		return "auto"
-	}
-	return convertToolChoiceToOpenAI(choice)
-}
-
 func normalizeOpenAICompatibleModelName(model string) string {
 	model = strings.ToLower(strings.TrimSpace(model))
 	for _, prefix := range []string{"openai:", "openrouter:", "deepseek:"} {
@@ -233,32 +202,15 @@ func (c *OpenAIClient) requiresMaxCompletionTokens(model string) bool {
 	return strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "o4")
 }
 
-// convertToolChoiceToOpenAI converts our ToolChoice to OpenAI's format
-// OpenAI uses "required" instead of Anthropic's "any" to force tool use
+// convertToolChoiceToOpenAI converts our ToolChoice to OpenAI's format.
+// Pulse omits automatic tool_choice so tool use stays model-owned, and only
+// uses text-only safety brakes when tools are removed from the request.
 // See: https://platform.openai.com/docs/api-reference/chat/create#chat-create-tool_choice
 func convertToolChoiceToOpenAI(tc *ToolChoice) interface{} {
-	if tc == nil {
-		return "auto"
-	}
-	switch tc.Type {
-	case ToolChoiceAuto:
-		return "auto"
-	case ToolChoiceNone:
+	if tc != nil && tc.Type == ToolChoiceNone {
 		return "none"
-	case ToolChoiceAny:
-		// OpenAI uses "required" to force the model to use one of the provided tools
-		return "required"
-	case ToolChoiceTool:
-		// Force a specific tool
-		return map[string]interface{}{
-			"type": "function",
-			"function": map[string]string{
-				"name": tc.Name,
-			},
-		}
-	default:
-		return "auto"
 	}
+	return nil
 }
 
 // Chat sends a chat request to the OpenAI API
@@ -379,12 +331,9 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 			})
 		}
 		if len(openaiReq.Tools) > 0 {
-			// Map ToolChoice to OpenAI format
-			// OpenAI uses "required" instead of Anthropic's "any"
-			// DeepSeek V4 supports the OpenAI tool_choice contract. Unknown
-			// direct DeepSeek model IDs fall back to auto so provider errors
-			// become model/readiness diagnostics instead of forced-tool noise.
-			openaiReq.ToolChoice = c.toolChoiceForModel(model, req.ToolChoice)
+			if toolChoice := convertToolChoiceToOpenAI(req.ToolChoice); toolChoice != nil {
+				openaiReq.ToolChoice = toolChoice
+			}
 		}
 	}
 
@@ -786,11 +735,9 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 			})
 		}
 		if len(openaiReq.Tools) > 0 {
-			// Map ToolChoice to OpenAI format (same as non-streaming)
-			// DeepSeek V4 supports the OpenAI tool_choice contract. Unknown
-			// direct DeepSeek model IDs fall back to auto so provider errors
-			// become model/readiness diagnostics instead of forced-tool noise.
-			openaiReq.ToolChoice = c.toolChoiceForModel(model, req.ToolChoice)
+			if toolChoice := convertToolChoiceToOpenAI(req.ToolChoice); toolChoice != nil {
+				openaiReq.ToolChoice = toolChoice
+			}
 		}
 	}
 

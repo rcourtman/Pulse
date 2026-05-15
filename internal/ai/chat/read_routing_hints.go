@@ -65,40 +65,40 @@ func (h readRoutingHint) targetHintSuffix() string {
 	return ""
 }
 
-func (h readRoutingHint) recentLogsInstruction(resourceLabel string) string {
+func (h readRoutingHint) recentLogsContext(resourceLabel string) string {
 	switch h.mode {
 	case readRoutingTargetHost:
 		if h.ref == "" {
 			return ""
 		}
-		return fmt.Sprintf("Instruction: Show logs for %s (last 50 lines). Use pulse_read action=logs target_host=\"%s\" lines=50.", resourceLabel, h.ref)
+		return fmt.Sprintf("Log routing context for %s: target_host=%q.", resourceLabel, h.ref)
 	case readRoutingNativeResource:
 		if h.ref == "" {
 			return ""
 		}
-		return fmt.Sprintf("Instruction: Show logs for %s (last 50 lines). Use pulse_read action=logs resource_id=\"%s\" lines=50.", resourceLabel, h.ref)
+		return fmt.Sprintf("Log routing context for %s: resource_id=%q.", resourceLabel, h.ref)
 	case readRoutingQueryOnly:
 		if h.ref == "" {
 			return ""
 		}
-		return fmt.Sprintf("Instruction: %s does not support shared log reads. Use pulse_query action=get resource_id=\"%s\" to inspect current status, alerts, recent activity, and metrics instead.", resourceLabel, h.ref)
+		return fmt.Sprintf("Read capability context for %s: shared log reads are not supported; current status, alerts, recent activity, and metrics are available through resource_id=%q.", resourceLabel, h.ref)
 	default:
 		return ""
 	}
 }
 
-func (h readRoutingHint) prefetchInstruction() string {
+func (h readRoutingHint) prefetchContext() string {
 	switch h.mode {
 	case readRoutingNativeResource:
 		if h.ref == "" {
-			return "Native API-backed app. Use shared resource_id-based reads instead of Docker-style target routing."
+			return "Native API-backed app. Shared reads address this resource by resource_id rather than Docker-style target routing."
 		}
-		return fmt.Sprintf("Native API-backed app. Use pulse_read action=logs resource_id=\"%s\" or pulse_query action=config resource_id=\"%s\". Do NOT use pulse_discovery or target_host.", h.ref, h.ref)
+		return fmt.Sprintf("Native API-backed app. Shared reads address this resource by resource_id=%q; target_host is not valid for this resource.", h.ref)
 	case readRoutingQueryOnly:
 		if h.ref == "" {
-			return "API-backed read-only resource. Use pulse_query get/search on the shared resource identity. Do NOT use target_host, pulse_control, or pulse_discovery."
+			return "API-backed read-only resource. Shared reads address this resource by resource_id; target_host and control routing are not valid for this resource."
 		}
-		return fmt.Sprintf("API-backed read-only resource. Use pulse_query action=get resource_id=\"%s\" for status, alerts, recent activity, and metrics. Do NOT use target_host, pulse_control, or pulse_discovery.", h.ref)
+		return fmt.Sprintf("API-backed read-only resource. Status, alerts, recent activity, and metrics are available through resource_id=%q; target_host and control routing are not valid for this resource.", h.ref)
 	default:
 		return ""
 	}

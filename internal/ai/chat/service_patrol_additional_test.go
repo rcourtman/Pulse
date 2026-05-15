@@ -561,12 +561,3 @@ func TestService_ExecuteMCPTool(t *testing.T) {
 		t.Fatalf("expected error for missing resource_id")
 	}
 }
-
-func TestIsSpecialtyTool(t *testing.T) {
-	if !isSpecialtyTool("pulse_storage") {
-		t.Fatalf("expected pulse_storage to be specialty tool")
-	}
-	if isSpecialtyTool("pulse_query") {
-		t.Fatalf("expected pulse_query to be non-specialty tool")
-	}
-}

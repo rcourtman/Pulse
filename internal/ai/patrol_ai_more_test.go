@@ -193,7 +193,7 @@ func TestGetPatrolSystemPrompt_ModeSwitch(t *testing.T) {
 	svc := &Service{cfg: &config.AIConfig{PatrolAutoFix: true}}
 	ps := NewPatrolService(svc, nil)
 	prompt := ps.getPatrolSystemPrompt()
-	if !strings.Contains(prompt, "Auto-Fix Mode") || !strings.Contains(prompt, "pulse_control") {
+	if !strings.Contains(prompt, "Auto-Fix Mode") || !strings.Contains(prompt, "Governed read and control tools are available") {
 		t.Fatalf("expected auto-fix prompt, got: %s", prompt)
 	}
 

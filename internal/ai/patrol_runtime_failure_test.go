@@ -69,17 +69,17 @@ func TestPatrolRuntimeFailureFromError_ClassifiesNoToolCapableEndpoint(t *testin
 }
 
 func TestPatrolRuntimeFailureFromError_ClassifiesToolChoiceValueRejected(t *testing.T) {
-	// Direct DeepSeek path: provider accepts tools but rejects forced
-	// tool_choice. Pre-fix this misclassified as "model does not support
-	// tools" and pointed operators at the wrong remediation.
+	// Direct DeepSeek path: provider accepts tools but rejects the
+	// tool_choice request shape. Keep this distinct from "model does not
+	// support tools" so operators see the right remediation.
 	err := errors.New(`agentic patrol failed: provider error: API error (400): deepseek-reasoner does not support this tool_choice`)
 
 	failure := patrolRuntimeFailureFromError(err)
 
-	if failure.Title != "Pulse Patrol: Provider rejected forced tool selection" {
+	if failure.Title != "Pulse Patrol: Provider rejected tool-choice request" {
 		t.Fatalf("unexpected title %q", failure.Title)
 	}
-	if failure.Summary != "Provider rejected forced tool selection" {
+	if failure.Summary != "Provider rejected tool-choice request" {
 		t.Fatalf("unexpected summary %q", failure.Summary)
 	}
 	if failure.Cause != PatrolFailureCauseToolChoiceRejected {

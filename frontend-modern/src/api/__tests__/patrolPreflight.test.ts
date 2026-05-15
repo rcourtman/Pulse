@@ -39,9 +39,9 @@ describe('runPatrolPreflight', () => {
       success: false,
       tool_call_observed: false,
       duration_ms: 312,
-      message: 'Provider rejected forced tool selection',
+      message: 'Provider rejected tool-choice request',
       cause: 'tool_choice_rejected',
-      recommendation: 'Pulse will retry with automatic tool selection on the next Patrol run.',
+      recommendation: 'Retry with automatic tool selection.',
     });
 
     const result = await runPatrolPreflight({ provider: 'deepseek', model: 'deepseek-v4-flash' });
@@ -142,12 +142,11 @@ describe('runPatrolPreflight', () => {
       model: 'deepseek-v4-flash',
       tool_call_observed: false,
       duration_ms: 312,
-      message: 'Provider rejected forced tool selection',
+      message: 'Provider rejected tool-choice request',
       cause: 'tool_choice_rejected',
       summary:
-        'Pulse Patrol reached the provider and the model accepts tools, but the provider rejected the specific tool-selection coercion Pulse sent.',
-      recommendation:
-        'Pulse will retry with automatic tool selection on the next Patrol run.',
+        'Pulse Patrol reached the provider and the model accepts tools, but the provider rejected a tool_choice transport field.',
+      recommendation: 'Retry with automatic tool selection.',
       recorded_at: '2026-05-10T15:30:42Z',
       recorded_at_unix: 1778430642,
     });

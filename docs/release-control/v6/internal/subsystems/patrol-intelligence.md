@@ -181,9 +181,12 @@ Patrol-specific presentation helpers.
    decision framing, and governed approval/action posture instead of behaving
    like a generic chat over a pasted incident dump. Patrol is the scheduled
    probe, context assembler, and execution-governance owner; the configured LLM
-   is the diagnostic and remediation-reasoning owner. Visible Patrol Assistant
-   handoffs must not make the operator think Pulse has already produced the
-   correct fix. The visible Assistant drawer briefing opened from a Patrol
+   is the diagnostic and remediation-reasoning owner. Patrol handoff prompts may
+   provide system context, resource posture, action posture, and governed tools,
+   but must not force active tool use, name a required tool path, or present a
+   Patrol-authored remediation answer for the LLM to execute. Visible Patrol
+   Assistant handoffs must not make the operator think Pulse has already
+   produced the correct fix. The visible Assistant drawer briefing opened from a Patrol
    finding must be compact and source-named: current status/risk, one primary
    subject, and any approval-required boundary, with richer evidence, action
    artifacts, command counts, and prompt suggestions staying in model-only or

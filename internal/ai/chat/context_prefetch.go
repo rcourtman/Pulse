@@ -148,8 +148,8 @@ func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, struct
 			for _, name := range unresolvedMentions {
 				sb.WriteString(fmt.Sprintf("'%s' was NOT found in Pulse monitoring. It is not a tracked VM, container, Docker container, or host.\n", name))
 			}
-			sb.WriteString("Do NOT use pulse_discovery to search for these resources — they are not in the system.\n")
-			sb.WriteString("Instead: use pulse_control directly if you know the host where the service runs, or ask the user for the location.\n")
+			sb.WriteString("Pulse discovery cannot resolve these names as monitored resources.\n")
+			sb.WriteString("If their location is already known, command-capable investigation may still apply; otherwise ask the user for the location.\n")
 
 			return &PrefetchedContext{
 				Summary: sb.String(),
@@ -1049,7 +1049,7 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 		if mentionUsesDockerRouting(mention) {
 			sb.WriteString(fmt.Sprintf("## %s (Docker container)\n", mention.Name))
 
-			// Show the full routing chain unambiguously
+			// Show the full routing chain unambiguously.
 			if mention.DockerHostType == "system-container" {
 				sb.WriteString(fmt.Sprintf("Location: Docker on \"%s\" (container %d) on node \"%s\"\n",
 					mention.DockerHostName, mention.DockerHostVMID, mention.NodeName))
@@ -1060,8 +1060,7 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 				sb.WriteString(fmt.Sprintf("Location: Docker on host \"%s\"\n", mention.DockerHostName))
 			}
 
-			// THE target_host - this is the critical routing info
-			sb.WriteString(fmt.Sprintf(">>> target_host: \"%s\" <<<\n", mention.TargetHost))
+			sb.WriteString(fmt.Sprintf("target_host: \"%s\"\n", mention.TargetHost))
 
 			// Bind mounts - clarify these are on the LXC/VM filesystem
 			if len(mention.BindMounts) > 0 {
@@ -1088,7 +1087,7 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 					}
 				}
 			} else {
-				sb.WriteString("You have the resource location and target_host. Proceed directly with pulse_docker or pulse_control — do NOT call pulse_discovery.\n")
+				sb.WriteString("Resource location and target_host are already resolved; discovery is not required to identify this resource.\n")
 			}
 
 			sb.WriteString("\n")
@@ -1104,9 +1103,9 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 		if (mention.ResourceType == "system-container" || mention.ResourceType == "vm") && mention.ResourceID != "" {
 			sb.WriteString(fmt.Sprintf("VMID: %s\n", mention.ResourceID))
 			if mention.SupportsControl {
-				sb.WriteString(fmt.Sprintf("To control this guest, use: pulse_control type=\"guest\", guest_id=\"%s\", action=\"start|stop|shutdown|restart\"\n", mention.ResourceID))
+				sb.WriteString(fmt.Sprintf("Shared guest control actions are available with guest_id=\"%s\" and action=\"start|stop|shutdown|restart\".\n", mention.ResourceID))
 			} else {
-				sb.WriteString("This guest is read-only in Pulse. Do NOT use pulse_control for this resource.\n")
+				sb.WriteString("This guest is read-only in Pulse; shared write/control actions are unavailable for this resource.\n")
 			}
 		}
 
@@ -1188,8 +1187,8 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 				if hint.ref != "" {
 					sb.WriteString(fmt.Sprintf("resource_id: \"%s\"\n", hint.ref))
 				}
-				if instruction := hint.prefetchInstruction(); instruction != "" {
-					sb.WriteString(instruction + "\n")
+				if contextLine := hint.prefetchContext(); contextLine != "" {
+					sb.WriteString(contextLine + "\n")
 				}
 			default:
 				targetHost := firstNonEmptyTrimmed(hint.ref, mention.Name)
@@ -1197,9 +1196,9 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 					sb.WriteString(fmt.Sprintf("target_host: \"%s\"\n", targetHost))
 				}
 				if resourceRequiresReadOnlyGuidance(mention.ResourceType, mention.SupportsControl) {
-					sb.WriteString("Use pulse_query or pulse_read only — do NOT call pulse_control or pulse_discovery.\n")
+					sb.WriteString("Capability context: this resource is read-only in Pulse; shared control and discovery routing are not valid for it.\n")
 				} else {
-					sb.WriteString("Proceed directly with pulse_control — do NOT call pulse_discovery.\n")
+					sb.WriteString("Resource location is already resolved; discovery is not required to identify this resource.\n")
 				}
 			}
 		}

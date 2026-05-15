@@ -88,11 +88,10 @@ export interface PatrolInvestigationRecordPresentation {
 
 // 'discuss' = open-ended chat entry, operator drives.
 // 'explain' = action-style "do the explaining," auto-sent.
-// 'investigate' = action-style "run the investigation now using tools" —
-// the prompt explicitly invites the LLM to query metrics/alerts/state
-// rather than just narrate the attached context, and the surface
-// auto-sends the prompt so the work is already in flight on the screen
-// the operator lands on.
+// 'investigate' = action-style "work out what's true now" — the prompt
+// gives the LLM context and lets it decide whether fresh tool evidence is
+// needed before synthesis. The surface auto-sends the prompt so the work is
+// already in flight on the screen the operator lands on.
 // 'why' = diagnostic "why did this happen" — focuses the LLM on cause
 // rather than current state: recent changes around detection time,
 // learned correlations, prior incident memory, regression history.
@@ -548,9 +547,8 @@ export function buildPatrolAssistantFindingPrompt(
   } else if (input.intent === 'investigate') {
     prompt =
       `Investigate this Patrol finding now: "${title}" on ${subject}. ` +
-      'Do not just summarize the attached context — actively use the Pulse tools available to you ' +
-      '(metrics, alerts, resource state, recent changes, correlations) to gather fresh evidence ' +
-      'about the current state of the affected resource and any related resources. ' +
+      'Use the attached context and decide whether the available Pulse tools are needed to gather fresh evidence ' +
+      'about the current state of the affected resource and related resources. ' +
       'Then synthesize: what is the root cause given the current evidence, ' +
       'what is your confidence, what is the safe next step, and is the recommended action still right? ' +
       'If any command-running step is involved, surface it for governed approval rather than executing on your own judgment.';
@@ -563,14 +561,12 @@ export function buildPatrolAssistantFindingPrompt(
       'Then answer: what most likely caused this to fire now, ' +
       'what evidence in the attached context supports that cause, ' +
       'and what would have to be true for the cause to recur. ' +
-      'If the cause requires verification through a Pulse tool call, do that; do not run anything ' +
-      'that changes state without operator approval.';
+      'If the cause requires verification, decide whether the available Pulse tools are needed; do not run anything that changes state without operator approval.';
   } else if (input.intent === 'verify_fix') {
     prompt =
       `Verify the fix applied to this Patrol finding: "${title}" on ${subject}. ` +
       'A remediation step has been executed against this finding — confirm whether the underlying ' +
-      'condition has actually cleared. Use the Pulse tools (metrics, resource state, recent alerts, ' +
-      'service health) to check the current evidence against the original signal that fired this ' +
+      'condition has actually cleared. Decide whether the available Pulse tools are needed to check current evidence against the original signal that fired this ' +
       'finding, not against an unrelated state. ' +
       'Then answer: is the condition cleared, what evidence supports that judgment, ' +
       'how confident are you, and is there any residual risk the operator should monitor for. ' +

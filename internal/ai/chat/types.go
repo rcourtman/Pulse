@@ -1243,7 +1243,7 @@ type ResourceNotResolvedError struct {
 }
 
 func (e *ResourceNotResolvedError) Error() string {
-	return "resource not resolved: " + e.ResourceID + " - use pulse_query first to discover this resource"
+	return "resource not resolved: " + e.ResourceID + " - resource discovery is required before this action"
 }
 
 // ActionNotAllowedError indicates an action isn't permitted for a resource

@@ -51,7 +51,7 @@ func (e *ErrStrictResolution) ToToolResponse() ToolResponse {
 		map[string]interface{}{
 			"resource_id":      e.ResourceID,
 			"action":           e.Action,
-			"recovery_hint":    "Use pulse_query action=search to discover the resource first",
+			"recovery_hint":    "Resource discovery is required before resource-specific actions.",
 			"auto_recoverable": true, // Signal to agentic loop that auto-discovery can help
 		},
 	)
@@ -1508,13 +1508,13 @@ func isPhase1GuardrailFailure(reason string) bool {
 func getPhase1Hint(reason, baseHint string) string {
 	switch {
 	case strings.Contains(reason, "sudo"):
-		return baseHint + ". Remove sudo to use pulse_read; use pulse_control for privileged operations."
+		return baseHint + ". Read-only execution does not accept sudo; privileged operations require the governed control path."
 	case strings.Contains(reason, "redirect"):
-		return baseHint + ". Remove redirects (>, >>, <, <<, <<<) to use pulse_read."
+		return baseHint + ". Read-only execution does not accept redirects (>, >>, <, <<, <<<)."
 	case strings.Contains(reason, "tee"):
-		return baseHint + ". Remove tee to use pulse_read; tee writes to files."
+		return baseHint + ". Read-only execution does not accept tee because tee writes to files."
 	case strings.Contains(reason, "substitution"):
-		return baseHint + ". Remove $() or backticks to use pulse_read."
+		return baseHint + ". Read-only execution does not accept $() or backticks."
 	case strings.Contains(reason, "chaining"):
 		return baseHint + ". Run commands separately instead of chaining with ; && ||."
 	case strings.Contains(reason, "piped input"):
@@ -1529,7 +1529,7 @@ func getPhase1Hint(reason, baseHint string) string {
 	case strings.Contains(reason, "unbounded") || strings.Contains(reason, "streaming"):
 		return baseHint + ". Add line limit: journalctl -n 100 -f or tail -n 50 -f, or wrap with timeout."
 	default:
-		return baseHint + ". Remove redirects, chaining, sudo, or subshells to use pulse_read."
+		return baseHint + ". Read-only execution does not accept redirects, chaining, sudo, or subshells."
 	}
 }
 
@@ -1651,7 +1651,7 @@ func (e *PulseToolExecutor) validateResolvedResource(resourceName, action string
 			err := &ErrStrictResolution{
 				ResourceID: resourceName,
 				Action:     action,
-				Message:    fmt.Sprintf("Resource '%s' has not been discovered. Use pulse_query to find resources before performing '%s' action.", resourceName, action),
+				Message:    fmt.Sprintf("Resource '%s' has not been discovered. Resource discovery is required before performing '%s' action.", resourceName, action),
 			}
 			return ValidationResult{
 				ErrorMsg:    err.Message,
@@ -1662,7 +1662,7 @@ func (e *PulseToolExecutor) validateResolvedResource(resourceName, action string
 			return ValidationResult{}
 		}
 		return ValidationResult{
-			ErrorMsg: fmt.Sprintf("Resource '%s' has not been discovered. Use pulse_query to find resources first.", resourceName),
+			ErrorMsg: fmt.Sprintf("Resource '%s' has not been discovered. Resource discovery is required first.", resourceName),
 		}
 	}
 
@@ -1721,7 +1721,7 @@ func (e *PulseToolExecutor) validateResolvedResource(resourceName, action string
 		err := &ErrStrictResolution{
 			ResourceID: resourceName,
 			Action:     action,
-			Message:    fmt.Sprintf("Resource '%s' has not been discovered in this session. Use pulse_query action=search to find it before performing '%s' action.", resourceName, action),
+			Message:    fmt.Sprintf("Resource '%s' has not been discovered in this session. Resource discovery is required before performing '%s' action.", resourceName, action),
 		}
 		return ValidationResult{
 			ErrorMsg:    err.Message,
@@ -1735,7 +1735,7 @@ func (e *PulseToolExecutor) validateResolvedResource(resourceName, action string
 	}
 
 	return ValidationResult{
-		ErrorMsg: fmt.Sprintf("Resource '%s' has not been discovered in this session. Use pulse_query action=search to find it first.", resourceName),
+		ErrorMsg: fmt.Sprintf("Resource '%s' has not been discovered in this session. Resource discovery is required first.", resourceName),
 	}
 }
 
@@ -1781,11 +1781,11 @@ func (e *PulseToolExecutor) validateResolvedResourceForExec(resourceName, comman
 			e.telemetryCallback.RecordStrictResolutionBlock("validateResolvedResourceForExec", "exec (read-only)")
 		}
 		return ValidationResult{
-			ErrorMsg: "No resources discovered in this session. Use pulse_query to discover resources first.",
+			ErrorMsg: "No resources discovered in this session. Resource discovery is required first.",
 			StrictError: &ErrStrictResolution{
 				ResourceID: resourceName,
 				Action:     "exec (read-only)",
-				Message:    fmt.Sprintf("Resource '%s' cannot be accessed. No resources have been discovered in this session. Use pulse_query action=search to discover available resources.", resourceName),
+				Message:    fmt.Sprintf("Resource '%s' cannot be accessed. No resources have been discovered in this session. Resource discovery is required first.", resourceName),
 			},
 		}
 	}

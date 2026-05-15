@@ -2855,7 +2855,7 @@
     },
     {
       "id": "RA29",
-      "summary": "Interactive Pulse Assistant chat behaves like a governed LLM tool surface, not a Pulse-authored intent router: the operator's selected model receives the user turn and the governed tools, decides whether tools are needed, and Pulse only enforces approvals, resource resolution, FSM gates, and tool policy after that model choice. The chat surface must echo user messages before network/session creation finishes and must not emit Pulse-owned explore or synthetic investigating workflow events before the model acts.",
+      "summary": "Interactive Pulse Assistant chat behaves like a governed LLM tool surface, not a Pulse-authored intent router: the operator's selected model receives the user turn and governed tools, decides whether tools are needed, and Pulse must not use prompt heuristics to force tool_choice, force a named tool, retry because an expected tool was not used, or hide tools from the model by keyword detection. Pulse only enforces approvals, resource resolution, FSM gates, and tool policy after that model choice. The chat surface must echo user messages before network/session creation finishes and must not emit Pulse-owned explore or synthetic investigating workflow events before the model acts.",
       "kind": "invariant",
       "blocking_level": "repo-ready",
       "proof_type": "automated",

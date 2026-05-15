@@ -260,10 +260,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	toolsSucceededThisEpisode := false // Track if any tool executed successfully this episode
 	writeCompletedLastTurn := false    // When true, force text-only response on next turn
 	toolBlockedLastTurn := false       // When true, force text-only response after budget/loop block
-	preferredToolName := ""
-	preferredToolRetried := false
-	singleToolRequested := isSingleToolRequest(providerMessages)
-	singleToolEnforced := false
 
 	// Fresh-data intent: if the user's latest message indicates they want
 	// fresh/updated data, bypass the knowledge gate so tools re-execute.
@@ -338,18 +334,14 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			ExecutionID: a.executionID,
 		}
 
-		// Determine tool_choice based on turn, intent, and explicit tool requests.
-		// We only force tool use when:
-		// 1. Tools are available
-		// 2. It's the first turn
-		// 3. The user's message indicates they need live data or an action
-		// This prevents forcing tool calls on conceptual questions like "What is TCP?"
-		forcedTextOnly := false
+		// Tool selection is model-owned. Pulse exposes the governed tool manifest
+		// and only applies text-only brakes for loop/budget/FSM safety.
+		textOnlySafetyBrake := false
 		if turn >= maxTurns-1 {
 			// Last turn before hitting the limit — force a text-only response so
 			// the model summarizes its findings instead of silently stopping.
 			req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceNone}
-			forcedTextOnly = true
+			textOnlySafetyBrake = true
 			log.Warn().
 				Int("turn", turn).
 				Int("max_turns", maxTurns).
@@ -360,7 +352,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			// Force text-only response so the model summarizes the result instead of
 			// making more tool calls (which often return stale cached data and cause loops).
 			req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceNone}
-			forcedTextOnly = true
+			textOnlySafetyBrake = true
 			writeCompletedLastTurn = false
 			log.Debug().
 				Str("session_id", sessionID).
@@ -370,38 +362,11 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			// The model already has the data it gathered — force it to produce a text
 			// response instead of continuing to call tools that will just be blocked again.
 			req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceNone}
-			forcedTextOnly = true
+			textOnlySafetyBrake = true
 			toolBlockedLastTurn = false
 			log.Debug().
 				Str("session_id", sessionID).
 				Msg("[AgenticLoop] Tool calls blocked last turn — forcing text-only response")
-		} else if len(tools) > 0 {
-			if preferredToolName == "" {
-				preferredToolName = getPreferredTool(providerMessages, tools)
-			}
-			if preferredToolName != "" {
-				req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceTool, Name: preferredToolName}
-				if singleToolRequested {
-					singleToolEnforced = true
-				}
-				log.Debug().
-					Str("session_id", sessionID).
-					Str("tool", preferredToolName).
-					Msg("[AgenticLoop] Explicit tool request - forcing tool")
-			} else if turn == 0 && requiresToolUse(providerMessages) {
-				// First turn with action intent: force the model to use a tool
-				req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceAny}
-				log.Debug().
-					Str("session_id", sessionID).
-					Msg("[AgenticLoop] First turn with action intent - forcing tool use")
-			} else {
-				req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceAuto}
-				if turn == 0 {
-					log.Debug().
-						Str("session_id", sessionID).
-						Msg("[AgenticLoop] First turn appears conceptual - using auto tool choice")
-				}
-			}
 		}
 
 		// Pre-request context validation: catch overflow from message history growth.
@@ -440,7 +405,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 					req.Tools = nil
 					req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceNone}
-					forcedTextOnly = true
+					textOnlySafetyBrake = true
 
 					// Final check: if system + messages alone still exceed limit,
 					// prune old messages as last resort.
@@ -649,11 +614,11 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			return resultMessages, fmt.Errorf("provider error: %w", err)
 		}
 
-		// Guard: if we forced text-only but the model still returned tool calls
+		// Guard: if a safety brake requested text-only but the model still returned tool calls
 		// (some providers like Gemini can hallucinate function calls from conversation
 		// history even when tools are not offered in the request), strip them so the
 		// model's text content is treated as the final response.
-		if forcedTextOnly && len(toolCalls) > 0 {
+		if textOnlySafetyBrake && len(toolCalls) > 0 {
 			log.Warn().
 				Str("session_id", sessionID).
 				Int("stripped_tool_calls", len(toolCalls)).
@@ -724,19 +689,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			// No tool calls breaks the "consecutive all-error tool turns" streak.
 			consecutiveAllErrorTurns = 0
 
-			// If the user explicitly requested a tool and the model didn't comply, retry once.
-			if preferredToolName != "" && !preferredToolRetried {
-				preferredToolRetried = true
-
-				retryPrompt := fmt.Sprintf("Tool required: use %s for this request.", preferredToolName)
-				if len(resultMessages) > 0 {
-					resultMessages[len(resultMessages)-1].Content = retryPrompt
-				}
-
-				turn++
-				continue
-			}
-
 			// === FSM ENFORCEMENT GATE 2: Check if final answer is allowed ===
 			a.mu.Lock()
 			fsm := a.sessionFSM
@@ -788,8 +740,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				}
 			}
 
-			// Detect phantom execution: model claims to have done something without tool calls
-			// This is especially important for providers that can't force tool use (e.g., Ollama)
+			// Detect phantom execution: model claims to have done something without tool calls.
 			// IMPORTANT: Skip this check if tools already succeeded this episode - the model is
 			// legitimately summarizing tool results, not hallucinating.
 			log.Debug().
@@ -834,10 +785,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		// Phase 1: Pre-check (sequential) — FSM, loop detection, knowledge gate
 		// Phase 2: Execute (parallel) — actual tool calls via goroutines
 		// Phase 3: Post-process (sequential) — streaming, FSM transitions, KA extraction
-		if len(toolCalls) > 0 && preferredToolName != "" {
-			// Clear preferred tool once the model has used any tool.
-			preferredToolName = ""
-		}
 		firstToolResultText := ""
 		budgetBlockedThisTurn := 0
 		anyToolSucceededThisTurn := false
@@ -1654,20 +1601,13 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		a.mu.Lock()
 		autonomousMode := a.autonomousMode
 		a.mu.Unlock()
-		if !autonomousMode && !singleToolRequested && consecutiveToolOnlyTurns >= maxConsecutiveToolOnlyTurns {
+		if !autonomousMode && consecutiveToolOnlyTurns >= maxConsecutiveToolOnlyTurns {
 			toolBlockedLastTurn = true
 			log.Warn().
 				Int("consecutive_tool_only_turns", consecutiveToolOnlyTurns).
 				Int("turn", turn).
 				Str("session_id", sessionID).
 				Msg("[AgenticLoop] Consecutive tool-only turns exceeded threshold — forcing text-only response")
-		}
-
-		if singleToolEnforced && len(toolCalls) > 0 {
-			// Single tool request completed - ensure we have a proper response
-			// Don't just return raw tool output, let ensureFinalTextResponse synthesize if needed
-			resultMessages = a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
-			return resultMessages, nil
 		}
 
 		// Track cumulative tool calls and inject wrap-up nudge/escalation if threshold exceeded

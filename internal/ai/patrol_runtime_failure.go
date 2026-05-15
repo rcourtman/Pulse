@@ -76,10 +76,9 @@ type PatrolRuntimeFailureDiagnostic struct {
 }
 
 // patrolToolChoiceValueRejected reports whether the upstream error indicates
-// the provider rejected the specific tool_choice value Pulse sent (for
-// example, "deepseek-reasoner does not support this tool_choice"). This is
-// distinct from the model truly lacking tool support: the model accepts
-// tools but not the requested coercion.
+// the provider rejected a tool_choice transport field. This is distinct from
+// the model truly lacking tool support: the provider accepted tools but not
+// that request-shape detail.
 func patrolToolChoiceValueRejected(lower string) bool {
 	if !strings.Contains(lower, "tool_choice") {
 		return false
@@ -153,11 +152,11 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 		failure.Description = "Pulse Patrol reached the provider, but the conversation it sent had an assistant message containing tool_calls without matching tool result messages for every tool_call_id. The provider rejects this structure. This usually means a previous Patrol run ended after the model emitted tool calls but before all results were captured, leaving orphan tool_calls in persisted state that the next run reused."
 		failure.Recommendation = "Pulse should treat each Patrol run as stateless. If the failure persists across runs, restart Pulse to clear any in-memory session state and report the issue."
 	case patrolToolChoiceValueRejected(lower):
-		failure.Title = "Pulse Patrol: Provider rejected forced tool selection"
-		failure.Summary = "Provider rejected forced tool selection"
+		failure.Title = "Pulse Patrol: Provider rejected tool-choice request"
+		failure.Summary = "Provider rejected tool-choice request"
 		failure.Cause = PatrolFailureCauseToolChoiceRejected
-		failure.Description = "Pulse Patrol reached the provider and the model accepts tools, but the provider rejected the specific tool-selection coercion Pulse sent. This usually means the routed model accepts tools yet does not honour a request to force a particular tool, only automatic selection."
-		failure.Recommendation = "Pulse will retry with automatic tool selection on the next Patrol run. If the failure persists, switch Patrol to a different model or provider where forced tool selection is accepted, or report the model in question."
+		failure.Description = "Pulse Patrol reached the provider and the model accepts tools, but the provider rejected a tool_choice transport field. Patrol should keep model tool selection automatic and avoid provider-specific coercion."
+		failure.Recommendation = "Retry with automatic tool selection. If the failure persists, switch Patrol to a model or provider route with reliable tool-call support, or report the model in question."
 	case patrolNoToolCapableEndpoint(lower):
 		failure.Title = "Pulse Patrol: No tool-capable provider endpoint available"
 		failure.Summary = "No tool-capable provider endpoint available"
@@ -267,7 +266,7 @@ func summarizePatrolRuntimeFailureDetail(raw string) string {
 	case patrolMalformedToolHistory(lower):
 		return "Pulse sent a malformed tool-call conversation. Each Patrol run should be stateless; restart Pulse if the failure persists."
 	case patrolToolChoiceValueRejected(lower):
-		return "Provider rejected Pulse's forced tool selection. Pulse will retry with automatic tool selection on the next Patrol run."
+		return "Provider rejected a tool-choice transport setting. Patrol should use automatic model-owned tool selection."
 	case patrolNoToolCapableEndpoint(lower):
 		return "Provider has no tool-capable endpoint for the selected model. Review provider routing or privacy filters."
 	case strings.Contains(lower, "tool_choice") ||

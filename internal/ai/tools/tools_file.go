@@ -90,7 +90,7 @@ Examples:
 		Governance: ToolGovernance{
 			ActionMode:     ToolActionWrite,
 			ApprovalPolicy: "hidden in read-only mode; approval required in controlled mode",
-			Summary:        "Reads or changes files through the governed file-edit path; use pulse_read for read-only file inspection.",
+			Summary:        "Reads or changes files through the governed file-edit path; read-only file inspection is exposed through the read-only tool surface.",
 		},
 	})
 }

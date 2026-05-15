@@ -765,11 +765,11 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	}
 
 	// Run agentic loop
-	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt, autonomousMode, false)
+	filteredTools := s.toolsForExecutionMode(autonomousMode, false)
 	log.Debug().
 		Str("session_id", session.ID).
 		Int("tools_count", len(filteredTools)).
-		Msg("[ChatService] Filtered tools, starting agentic loop")
+		Msg("[ChatService] Prepared governed tool manifest, starting agentic loop")
 
 	// Set session-scoped FSM on agentic loop for workflow enforcement
 	// This ensures structural guarantees: discover before write, verify after write
@@ -1969,8 +1969,8 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	// this run's user prompt; the session is just a forensic log.
 	messages := []Message{userMsg}
 
-	// Get all tools (patrol runs in autonomous mode)
-	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt, true, true)
+	// Get governed tools for the Patrol run.
+	filteredTools := s.toolsForExecutionMode(true, true)
 
 	// Run the agentic loop
 	resultMessages, err := tempLoop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, callback)
@@ -2102,7 +2102,7 @@ func (s *Service) ListAvailableTools(ctx context.Context, prompt string) []strin
 		return nil
 	}
 
-	tools := s.filterToolsForPrompt(ctx, prompt, s.isAutonomousModeEnabled(), false)
+	tools := s.toolsForExecutionMode(s.isAutonomousModeEnabled(), false)
 	names := make([]string, 0, len(tools))
 	for _, tool := range tools {
 		if tool.Name == "" {
@@ -2652,10 +2652,9 @@ func (s *Service) applyChatContextSettings() {
 // buildSystemPrompt builds the base system prompt for the AI.
 // Mode-specific context (autonomous vs controlled) is added dynamically by the AgenticLoop.
 //
-// Philosophy: This prompt provides IDENTITY and CONTEXT only, not behavioral steering.
-// Behavioral guarantees (tool use, no hallucination) are enforced structurally via:
-// - tool_choice API parameter (forces tool calls when needed)
-// - Phantom execution detection (catches false claims at runtime)
+// Philosophy: This prompt provides identity, context, and tool policy. Tool
+// selection remains model-owned; Pulse enforces safety after a model choice via
+// tool policy, approvals, FSM verification gates, and phantom execution checks.
 func (s *Service) buildSystemPrompt() string {
 	return `You are Pulse AI, a knowledgeable infrastructure assistant. You pair-program with the user on their homelab and infrastructure tasks.
 
@@ -2670,22 +2669,22 @@ func (s *Service) buildSystemPrompt() string {
 ## DOCKER BIND MOUNTS
 - Container files are often mapped to host paths via bind mounts
 - To edit a container's config, find the bind mount and edit the host path
-- Use pulse_discovery to find bind mount mappings
+- Bind mount mappings may be available in Pulse discovery context or tools when needed
 
 ## TOOL SELECTION
 - Tool action modes and approval policies are generated from Pulse's tool registry. Treat that manifest as the source of truth for whether a tool is read-only, mixed, or write-capable.
 - pulse_control and pulse_file_edit are WRITE tools — they change infrastructure state.
 - pulse_docker, pulse_kubernetes, pulse_alerts, and pulse_knowledge are MIXED tools — their read subactions are safe, but their write or decision-recording subactions require the governed path described in the manifest.
 - Not every VM or container supports control. Some API-backed platforms are read-only even when the resource type is "vm" or "system-container".
-- ONLY use write tools when the user explicitly asks you to perform an action.
-- For status checks or monitoring, use pulse_query or pulse_read instead.
-- If you are missing critical information (target, risky choice, preference), use pulse_question to ask structured questions.
-- Do not use pulse_question in autonomous mode; proceed with safe defaults and clearly state assumptions instead.
+- Write tools are allowed only when the user explicitly asks you to perform an action.
+- Status checks and monitoring are read-oriented; do not change state unless the user asked for a state change.
+- If you are missing critical information (target, risky choice, preference), pulse_question is available for structured clarification.
+- pulse_question is not available in autonomous mode; proceed with safe defaults and clearly state assumptions instead.
 
 ## HOW TO RESPOND
 You are like a colleague doing pair programming on infrastructure tasks. Tool calls are your internal investigation — the user sees your final synthesized response.
 
-1. INVESTIGATE THOROUGHLY: Use tools to gather the information you need. Don't stop after the first tool call if more context would help.
+1. INVESTIGATE THOROUGHLY: Decide whether tool evidence is needed, then gather enough information to answer well. Don't stop after the first tool call if more context would help.
 
 2. SYNTHESIZE YOUR FINDINGS: After using tools, explain what you learned and did. Don't just confirm "done" — provide context that helps the user understand the outcome.
 
@@ -2885,8 +2884,8 @@ func (s *Service) injectRecentContextIfNeeded(prompt, sessionID string, messages
 		if instructionTarget == "" {
 			instructionTarget = primary
 		}
-		if instruction := readHint.recentLogsInstruction(instructionTarget); instruction != "" {
-			summary += "\n" + instruction
+		if contextLine := readHint.recentLogsContext(instructionTarget); contextLine != "" {
+			summary += "\n" + contextLine
 		}
 	}
 
@@ -2906,111 +2905,38 @@ func (s *Service) injectRecentContextIfNeeded(prompt, sessionID string, messages
 	messages[lastIdx].Content = summary + "\n\n---\nExplicit target: " + primaryName + "\nUser question (targeted): " + messages[lastIdx].Content
 }
 
-func (s *Service) filterToolsForPrompt(ctx context.Context, prompt string, autonomousMode bool, patrolMode bool) []providers.Tool {
+func (s *Service) toolsForExecutionMode(autonomousMode bool, patrolMode bool) []providers.Tool {
 	mcpTools := s.executor.ListTools()
 	providerTools := ConvertMCPToolsToProvider(mcpTools)
 
-	// For patrol (autonomous mode), use config flags instead of keyword detection.
-	// Patrol seed context can mention all resource types, which defeats keyword filtering.
+	// Patrol may be scoped by explicit product configuration, but never by
+	// prompt keyword inference. The selected Patrol model owns tool choice.
 	if patrolMode {
 		filtered := s.filterToolsForPatrol(providerTools)
-
-		// Keep write-intent gating for autonomous runs.
-		if !hasWriteIntent(convertPromptToMessages(prompt)) {
-			nonWrite := make([]providers.Tool, 0, len(filtered))
-			for _, tool := range filtered {
-				if !isWriteTool(tool.Name) {
-					nonWrite = append(nonWrite, tool)
-				}
-			}
-			filtered = nonWrite
-		}
-
 		log.Debug().
 			Int("total_tools", len(providerTools)).
-			Int("filtered_tools", len(filtered)).
-			Bool("autonomous_patrol_filter", true).
-			Msg("[filterToolsForPrompt] Filtered tools for patrol using config flags")
+			Int("tool_manifest_count", len(filtered)).
+			Bool("patrol_scope_filter", true).
+			Msg("[toolsForExecutionMode] Built Patrol tool manifest from configured subsystem scope")
 		return filtered
 	}
 
-	if !autonomousMode {
-		tools := append([]providers.Tool{}, providerTools...)
-		tools = append(tools, userQuestionTool())
-		log.Debug().
-			Int("total_tools", len(providerTools)).
-			Int("filtered_tools", len(tools)).
-			Msg("[filterToolsForPrompt] Exposing governed interactive chat tools")
-		return tools
-	}
-
-	// Keep write-intent gating for autonomous runs where commands execute
-	// without approval. Interactive chat does not use prompt-owned routing:
-	// the selected model sees the governed tools and chooses what to call.
-	readOnly := autonomousMode && !hasWriteIntent(convertPromptToMessages(prompt))
-
-	// Determine which specialty tools are relevant based on prompt keywords.
-	// Core tools are always included; specialty tools only when topic-relevant.
-	// This reduces token consumption on every request.
-	lowerPrompt := strings.ToLower(prompt)
-	includeK8s := promptMentionsAny(lowerPrompt, k8sKeywords)
-	includePMG := promptMentionsAny(lowerPrompt, pmgKeywords)
-	includeStorage := promptMentionsAny(lowerPrompt, storageKeywords) || promptMentionsBroadInfra(lowerPrompt)
-	includeDocker := promptMentionsAny(lowerPrompt, dockerKeywords)
-
-	// If no specialty keywords detected, include everything (safe default).
-	noSpecialtyDetected := !includeK8s && !includePMG && !includeStorage && !includeDocker
-
-	filtered := make([]providers.Tool, 0, len(providerTools))
-	for _, tool := range providerTools {
-		// Remove write tools for read-only prompts
-		if readOnly && isWriteTool(tool.Name) {
-			continue
-		}
-		// Conditionally include specialty tools
-		if !noSpecialtyDetected && isSpecialtyTool(tool.Name) {
-			switch tool.Name {
-			case "pulse_kubernetes":
-				if !includeK8s {
-					continue
-				}
-			case "pulse_pmg":
-				if !includePMG {
-					continue
-				}
-			case "pulse_storage":
-				if !includeStorage {
-					continue
-				}
-			case "pulse_docker":
-				if !includeDocker && readOnly {
-					// Only filter docker for read-only; write-intent already implies docker may be needed
-					continue
-				}
-			}
-		}
-		filtered = append(filtered, tool)
-	}
-
-	log.Debug().
-		Int("total_tools", len(providerTools)).
-		Int("filtered_tools", len(filtered)).
-		Bool("read_only", readOnly).
-		Bool("specialty_filter_active", !noSpecialtyDetected).
-		Str("prompt_prefix", truncateForLog(prompt, 80)).
-		Msg("[filterToolsForPrompt] Filtered tools for prompt")
-
+	filtered := append([]providers.Tool{}, providerTools...)
 	// pulse_question is interactive; exclude it for autonomous runs (Pulse Patrol).
 	if !autonomousMode {
 		filtered = append(filtered, userQuestionTool())
 	}
+	log.Debug().
+		Int("total_tools", len(providerTools)).
+		Int("tool_manifest_count", len(filtered)).
+		Bool("autonomous", autonomousMode).
+		Msg("[toolsForExecutionMode] Exposing governed tool manifest")
 
 	return filtered
 }
 
-// filterToolsForPatrol filters tools for patrol runs using AI config flags
-// instead of keyword-based detection. This prevents the seed context
-// (which mentions all resource types) from causing all tools to be included.
+// filterToolsForPatrol applies explicit Patrol subsystem scope settings. It
+// must not inspect prompt text or infer which tool the model should use.
 func (s *Service) filterToolsForPatrol(providerTools []providers.Tool) []providers.Tool {
 	s.mu.RLock()
 	cfg := s.cfg
@@ -3047,69 +2973,6 @@ func (s *Service) filterToolsForPatrol(providerTools []providers.Tool) []provide
 	}
 
 	return filtered
-}
-
-// isSpecialtyTool returns true for tools that are only relevant to specific topics.
-func isSpecialtyTool(name string) bool {
-	switch name {
-	case "pulse_kubernetes", "pulse_pmg", "pulse_storage", "pulse_docker":
-		return true
-	default:
-		return false
-	}
-}
-
-// Keyword lists for specialty tool detection
-var (
-	k8sKeywords = []string{
-		"k8s", "kubernetes", "kubectl", "pod", "pods", "deployment", "deployments",
-		"namespace", "namespaces", "replica", "replicas", "cluster",
-		"node pool", "daemonset", "statefulset", "ingress", "helm",
-	}
-	pmgKeywords = []string{
-		"mail", "email", "spam", "pmg", "mail gateway", "postfix",
-		"smtp", "queue", "bounce", "quarantine",
-	}
-	storageKeywords = []string{
-		"backup", "backups", "snapshot", "snapshots", "storage", "disk",
-		"ceph", "zfs", "raid", "replication", "pbs", "lvm",
-		"smart", "pool", "pools", "s3", "nfs",
-	}
-	dockerKeywords = []string{
-		"docker", "container", "containers", "swarm", "compose",
-		"image", "images", "registry",
-	}
-)
-
-// promptMentionsAny checks if the lowercased prompt contains any of the keywords.
-func promptMentionsAny(lowerPrompt string, keywords []string) bool {
-	for _, kw := range keywords {
-		if strings.Contains(lowerPrompt, kw) {
-			return true
-		}
-	}
-	return false
-}
-
-// promptMentionsBroadInfra returns true for broad infrastructure questions
-// where storage tools should remain available.
-func promptMentionsBroadInfra(lowerPrompt string) bool {
-	broadPatterns := []string{
-		"infrastructure", "overview", "health check", "full status",
-		"everything", "all systems", "entire",
-	}
-	for _, p := range broadPatterns {
-		if strings.Contains(lowerPrompt, p) {
-			return true
-		}
-	}
-	return false
-}
-
-// convertPromptToMessages wraps a prompt string into a providers.Message slice
-// for use with hasWriteIntent.
-func convertPromptToMessages(prompt string) []providers.Message {
-	return []providers.Message{{Role: "user", Content: prompt}}
 }
 
 func (s *Service) isAutonomousModeEnabled() bool {

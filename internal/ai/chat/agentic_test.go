@@ -353,60 +353,6 @@ func TestWaitForApprovalDecision(t *testing.T) {
 	})
 }
 
-func TestRequiresToolUse(t *testing.T) {
-	tests := []struct {
-		name     string
-		message  string
-		expected bool
-	}{
-		// Should require tools - action requests
-		{"@mention", "@jellyfin status", true},
-		{"check status", "check the status of my server", true},
-		{"restart request", "please restart nginx", true},
-		{"status query", "is homepage running?", true},
-		{"logs request", "show me the logs for influxdb", true},
-		{"cpu query", "what's the cpu usage on pve-node?", true},
-		{"memory query", "how much memory is traefik using?", true},
-		{"container query", "list my docker containers", true},
-		{"my infrastructure", "what's happening on my server?", true},
-		{"troubleshoot my", "troubleshoot my plex server", true},
-		{"my docker", "show me my docker containers", true},
-
-		// Should NOT require tools (conceptual questions)
-		{"what is tcp", "what is tcp?", false},
-		{"explain docker", "explain how docker networking works", false},
-		{"general question", "how do i configure nginx?", false},
-		{"theory question", "what's the difference between lxc and vm?", false},
-		{"empty message", "", false},
-		{"greeting", "hello", false},
-		{"thanks", "thanks for your help!", false},
-		{"explain proxmox", "explain what proxmox is", false},
-		{"describe kubernetes", "describe how kubernetes pods work", false},
-
-		// Edge cases from feedback - these are conceptual despite mentioning infra terms
-		{"is docker hard", "is docker networking hard?", false},
-		{"best way cpu", "what's the best way to monitor CPU usage?", false},
-		{"best practice", "what are the best practices for container security?", false},
-		{"should i use", "should i use kubernetes or docker swarm?", false},
-
-		// Edge cases - conceptual patterns with action keywords should still be action
-		// ONLY when they reference MY specific infrastructure
-		{"what is status", "what is the status of my server", true},
-		{"what is running", "what is running on my host", true},
-		{"my cpu usage", "what is my cpu usage", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			messages := []providers.Message{
-				{Role: "user", Content: tt.message},
-			}
-			result := requiresToolUse(messages)
-			assert.Equal(t, tt.expected, result, "message: %q", tt.message)
-		})
-	}
-}
-
 func TestHasPhantomExecution(t *testing.T) {
 	tests := []struct {
 		name     string

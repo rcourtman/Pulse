@@ -1130,12 +1130,11 @@ describe('patrolInvestigationContextModel', () => {
     expect(prompt).not.toContain('Investigate this Patrol finding now');
   });
 
-  it('seeds an investigate-intent prompt that instructs active tool use, not just narration', () => {
+  it('seeds an investigate-intent prompt that lets the model decide whether tools are needed', () => {
     // Investigate is the action counterpart to Explain. Where Explain says
     // "tell me what we know," Investigate says "go find out what's true
-    // right now" — the prompt must explicitly direct the LLM toward its
-    // Pulse tools (metrics, alerts, state) rather than just summarizing
-    // the attached briefing.
+    // right now" — the prompt should provide the available context without
+    // forcing a specific tool path before the model has reasoned about it.
     const prompt = buildPatrolAssistantFindingPrompt({
       title: 'Backup job failing',
       subject: 'vm-101',
@@ -1146,9 +1145,9 @@ describe('patrolInvestigationContextModel', () => {
     expect(prompt).toContain('Investigate this Patrol finding now');
     expect(prompt).toContain('Backup job failing');
     expect(prompt).toContain('vm-101');
-    // Active-tool-use instruction — the differentiator vs Explain.
-    expect(prompt.toLowerCase()).toContain('actively use the pulse tools');
-    expect(prompt.toLowerCase()).toMatch(/metrics|alerts|resource state|recent changes/);
+    // Model-owned tool choice — the differentiator vs Explain.
+    expect(prompt.toLowerCase()).toContain('decide whether the available pulse tools are needed');
+    expect(prompt.toLowerCase()).toContain('fresh evidence');
     // Synthesis instruction — root cause + confidence + safe next step.
     expect(prompt.toLowerCase()).toContain('root cause');
     expect(prompt.toLowerCase()).toContain('confidence');
