@@ -176,6 +176,9 @@ func TestGetPatrolSystemPrompt_ModeSwitch(t *testing.T) {
 	if !strings.Contains(prompt, "Auto-Fix Mode") || !strings.Contains(prompt, "Governed read and control tools are available") {
 		t.Fatalf("expected auto-fix prompt, got: %s", prompt)
 	}
+	if !strings.Contains(prompt, "pulse_discovery") || !strings.Contains(prompt, "Read or refresh discovered service details") {
+		t.Fatalf("expected patrol prompt to expose discovery refresh capability, got: %s", prompt)
+	}
 
 	svc.cfg = &config.AIConfig{PatrolAutoFix: false}
 	prompt = ps.getPatrolSystemPrompt()

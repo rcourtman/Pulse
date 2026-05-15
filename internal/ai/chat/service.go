@@ -2750,9 +2750,9 @@ func fallbackAssistantToolGovernance() []tools.ToolGovernanceDescriptor {
 		},
 		{
 			Name:           "pulse_discovery",
-			ActionMode:     tools.ToolActionRead,
-			ApprovalPolicy: "no approval required",
-			Summary:        "Reads discovered service details, config paths, ports, and bind mounts.",
+			ActionMode:     tools.ToolActionMixed,
+			ApprovalPolicy: "no approval required; run uses read-only evidence collection and updates the discovery cache",
+			Summary:        "Reads or refreshes discovered service paths, ports, and bind mounts for known resources.",
 		},
 		{
 			Name:           "pulse_control",

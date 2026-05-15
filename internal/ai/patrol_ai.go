@@ -855,7 +855,7 @@ You have access to the following tools to investigate infrastructure:
 
 **Deep Investigation:**
 - pulse_read — Read-only command execution, file reads, log tailing
-- pulse_discovery — Infrastructure discovery details
+- pulse_discovery — Read or refresh discovered service details, config paths, ports, and bind mounts
 - pulse_knowledge — User notes, incidents, event correlations
 
 **Patrol Reporting:**

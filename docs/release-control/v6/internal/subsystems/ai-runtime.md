@@ -186,7 +186,10 @@ runtime cost control, and shared AI transport surfaces.
    registry. Tool prompts and approval surfaces must derive read, mixed, write,
    and approval-policy claims from `internal/ai/tools/registry.go` and
    `internal/ai/tools/executor.go` instead of maintaining hand-written
-   prompt-only tool lists, and frontend approval cards must surface backend
+   prompt-only tool lists. Fallback Assistant governance text and Patrol
+   system-prompt tool summaries must mirror the same registry-owned capability
+   shape, including `pulse_discovery` read-or-refresh behavior, instead of
+   presenting stale read-only summaries. Frontend approval cards must surface backend
    approval risk/description without hiding a pending approval when skip or
    deny fails. Action-producing tools must also persist the unified
    `ActionPlan.Preflight` dry-run boundary through

@@ -166,6 +166,19 @@ func TestBuildSystemPrompt_DoesNotClaimGenericVMControl(t *testing.T) {
 	}
 }
 
+func TestBuildToolGovernancePromptSection_FallbackDiscoveryMatchesRunContract(t *testing.T) {
+	svc := &Service{}
+
+	prompt := svc.buildToolGovernancePromptSection()
+
+	if !strings.Contains(prompt, "pulse_discovery: mode=mixed") {
+		t.Fatalf("expected fallback governance to classify pulse_discovery as mixed, got %q", prompt)
+	}
+	if !strings.Contains(prompt, "run uses read-only evidence collection and updates the discovery cache") {
+		t.Fatalf("expected fallback governance to describe discovery refresh behavior, got %q", prompt)
+	}
+}
+
 func TestToolsForExecutionMode_RecoveryOnlyKeepsStorage(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
 		RecoveryPointsProvider: &fakeRecoveryPointsProvider{points: []recovery.RecoveryPoint{{
