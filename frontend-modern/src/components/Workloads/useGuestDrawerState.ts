@@ -1,5 +1,6 @@
 import { createEffect, createMemo, createSignal } from 'solid-js';
 
+import type { HistoryTimeRange } from '@/api/charts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
 import type { DisplayMetricType } from '@/utils/metricThresholds';
@@ -9,7 +10,6 @@ import {
   hasDiscoverySupportForWorkload,
   getWebInterfaceTargetLabelForWorkload,
 } from '@/utils/workloads';
-import { buildInfrastructureHrefForWorkload } from '@/routing/resourceLinks';
 
 import {
   getDiscoveryHostIdForWorkload,
@@ -21,6 +21,7 @@ import {
   getGuestDrawerAgentLabel,
   getGuestDrawerAgentTitle,
   getGuestDrawerBackupPresentation,
+  GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   getGuestDrawerHistoryTarget,
   getGuestDrawerMemoryExtraLines,
   getGuestDrawerNetworkInterfaces,
@@ -34,6 +35,9 @@ import {
 export function useGuestDrawerState(props: GuestDrawerProps) {
   const alertsActivation = useAlertsActivation();
   const [activeTab, setActiveTab] = createSignal<GuestDrawerTab>('overview');
+  const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>(
+    GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
+  );
 
   const guestId = createMemo(() => getCanonicalWorkloadId(props.guest));
   const alertThresholdScope = createMemo(() => getWorkloadAlertThresholdScope(props.guest));
@@ -49,7 +53,6 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
       ),
     );
   const diskThresholds = metricThresholds('disk');
-  const infrastructureHref = createMemo(() => buildInfrastructureHrefForWorkload(props.guest));
   const osName = createMemo(() => props.guest.osName || '');
   const osVersion = createMemo(() => props.guest.osVersion || '');
   const guestOsSummary = createMemo(() => {
@@ -113,7 +116,7 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     hasNetworkInterfaces,
     hasOsInfo,
     historyTarget,
-    infrastructureHref,
+    historyRange,
     ipAddresses,
     memoryExtraLines,
     networkInterfaces,
@@ -121,6 +124,7 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     osName,
     osVersion,
     switchTab,
+    setHistoryRange,
     webInterfaceTargetLabel,
   };
 }

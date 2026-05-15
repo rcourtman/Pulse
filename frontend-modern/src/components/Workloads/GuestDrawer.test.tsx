@@ -1,18 +1,13 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, fireEvent, cleanup, waitFor } from '@solidjs/testing-library';
+import { render, screen, fireEvent, cleanup, waitFor, within } from '@solidjs/testing-library';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Memory, Disk, GuestNetworkInterface } from '@/types/api';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
 
-const mockNavigate = vi.fn();
 const chartsApiMocks = vi.hoisted(() => ({
   getMetricsHistory: vi.fn(),
-}));
-
-vi.mock('@solidjs/router', () => ({
-  useNavigate: () => mockNavigate,
 }));
 
 vi.mock('@/api/charts', async () => {
@@ -203,6 +198,56 @@ describe('GuestDrawer', () => {
       expect(screen.getByText('Utilization')).toBeInTheDocument();
       expect(screen.getByText('Network I/O')).toBeInTheDocument();
       expect(screen.getByText('Disk I/O')).toBeInTheDocument();
+      expect(screen.getByTestId('guest-history-range-control')).toBeInTheDocument();
+      expect(screen.queryByText('Open related infrastructure')).toBeNull();
+    });
+
+    it('updates grouped metric header values on History chart hover', async () => {
+      render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
+
+      await fireEvent.click(screen.getByText('History'));
+
+      await waitFor(() => {
+        expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalled();
+      });
+      const utilizationChart = screen.getAllByTestId('guest-history-group-chart')[0];
+      const plot = within(utilizationChart).getByTestId('guest-history-plot');
+      plot.getBoundingClientRect = () =>
+        ({
+          bottom: 100,
+          height: 100,
+          left: 0,
+          right: 360,
+          top: 0,
+          width: 360,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        }) as DOMRect;
+
+      expect(utilizationChart).toHaveTextContent('20.0%');
+      expect(utilizationChart).toHaveTextContent('30.0%');
+      expect(utilizationChart).toHaveTextContent('40.0%');
+
+      await fireEvent.mouseMove(plot, { clientX: 180, clientY: 50 });
+
+      expect(
+        within(utilizationChart).getByTestId('guest-history-hover-time').textContent,
+      ).toBeTruthy();
+      expect(within(utilizationChart).queryByTestId('guest-history-tooltip')).toBeNull();
+      expect(utilizationChart).toHaveTextContent('CPU');
+      expect(utilizationChart).toHaveTextContent('15.0%');
+      expect(utilizationChart).toHaveTextContent('Memory');
+      expect(utilizationChart).toHaveTextContent('25.0%');
+      expect(utilizationChart).toHaveTextContent('Disk');
+      expect(utilizationChart).toHaveTextContent('35.0%');
+
+      await fireEvent.pointerLeave(plot);
+
+      expect(within(utilizationChart).queryByTestId('guest-history-hover-time')).toBeNull();
+      expect(utilizationChart).toHaveTextContent('20.0%');
+      expect(utilizationChart).toHaveTextContent('30.0%');
+      expect(utilizationChart).toHaveTextContent('40.0%');
     });
 
     it('switches back to Overview tab', async () => {
@@ -212,45 +257,6 @@ describe('GuestDrawer', () => {
       const panels = container.querySelectorAll('[style*="overflow-anchor"]');
       expect(panels[0]).not.toHaveClass('hidden');
       expect(panels[1]).toHaveClass('hidden');
-    });
-  });
-
-  // ── Infrastructure navigation ──
-
-  describe('infrastructure link', () => {
-    it('navigates to proxmox infrastructure for a VM', async () => {
-      render(() => (
-        <GuestDrawer guest={makeGuest({ node: 'pve1', type: 'qemu' })} onClose={vi.fn()} />
-      ));
-      await fireEvent.click(screen.getByText('Open related infrastructure'));
-      expect(mockNavigate).toHaveBeenCalledTimes(1);
-      const path = mockNavigate.mock.calls[0][0] as string;
-      expect(path).toContain('infrastructure');
-      expect(path).toContain('proxmox');
-    });
-
-    it('navigates to docker infrastructure for an app-container workload', async () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({ workloadType: 'app-container', contextLabel: 'my-host' })}
-          onClose={vi.fn()}
-        />
-      ));
-      await fireEvent.click(screen.getByText('Open related infrastructure'));
-      const path = mockNavigate.mock.calls[0][0] as string;
-      expect(path).toContain('source=docker');
-    });
-
-    it('navigates to kubernetes infrastructure for a pod workload', async () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({ workloadType: 'pod', contextLabel: 'my-cluster' })}
-          onClose={vi.fn()}
-        />
-      ));
-      await fireEvent.click(screen.getByText('Open related infrastructure'));
-      const path = mockNavigate.mock.calls[0][0] as string;
-      expect(path).toContain('kubernetes');
     });
   });
 

@@ -554,9 +554,12 @@ range control is part of the same hot-path state owner: bar mode must not start
 history fetches, and sparkline ranges must stay bounded to the governed compact
 table windows. Expanded history belongs in the existing guest drawer chart
 surface, where longer-range reads stay demand-driven and scoped to the selected
-workload. The drawer history view must preserve visual density by grouping
+workload. Its range control belongs in the drawer chrome rather than a dedicated
+chart row. The drawer history view must preserve visual density by grouping
 related series into utilization, network I/O, and disk I/O charts rather than
-repeating one chart frame per metric.
+repeating one chart frame per metric. Those grouped charts must still support
+inline hover inspection by updating the existing legend values and showing only
+the hovered timestamp, so density does not remove point-in-time metric detail.
 
 The investigation enrichment path in `MaybeInvestigateFinding`
 adds at most one operator-state projection lookup per investigation

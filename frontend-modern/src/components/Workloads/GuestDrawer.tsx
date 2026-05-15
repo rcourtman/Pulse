@@ -1,13 +1,11 @@
-import { Component, Suspense } from 'solid-js';
-import { useNavigate } from '@solidjs/router';
+import { Component, Show, Suspense } from 'solid-js';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
 import type { GuestDrawerProps } from './guestDrawerModel';
 import { useGuestDrawerState } from './useGuestDrawerState';
-import { GuestDrawerHistory } from './GuestDrawerHistory';
+import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from './GuestDrawerHistory';
 import { GuestDrawerOverview } from './GuestDrawerOverview';
 
 export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
-  const navigate = useNavigate();
   const {
     activeTab,
     agentLabel,
@@ -25,13 +23,14 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     hasHistorySupport,
     hasNetworkInterfaces,
     hasOsInfo,
+    historyRange,
     historyTarget,
-    infrastructureHref,
     ipAddresses,
     guestOsSummary,
     memoryExtraLines,
     networkInterfaces,
     normalizedTags,
+    setHistoryRange,
     switchTab,
     webInterfaceTargetLabel,
   } = useGuestDrawerState(props);
@@ -43,53 +42,53 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
         {props.guest.name} details
       </h2>
       {/* Tabs */}
-      <div class="flex items-center gap-6 border-b border-border px-1 mb-1">
-        <button
-          onClick={() => switchTab('overview')}
-          class={`pb-2 text-sm font-medium transition-colors relative ${
-            activeTab() === 'overview' ? 'text-blue-600 dark:text-blue-400' : ' hover:text-muted'
-          }`}
-        >
-          Overview
-          {activeTab() === 'overview' && (
-            <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
+      <div class="mb-1 flex items-center justify-between gap-3 border-b border-border px-1">
+        <div class="flex items-center gap-6">
+          <button
+            onClick={() => switchTab('overview')}
+            class={`pb-2 text-sm font-medium transition-colors relative ${
+              activeTab() === 'overview' ? 'text-blue-600 dark:text-blue-400' : ' hover:text-muted'
+            }`}
+          >
+            Overview
+            {activeTab() === 'overview' && (
+              <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
+            )}
+          </button>
+          {hasHistorySupport() && (
+            <button
+              onClick={() => switchTab('history')}
+              class={`pb-2 text-sm font-medium transition-colors relative ${
+                activeTab() === 'history' ? 'text-blue-600 dark:text-blue-400' : ' hover:text-muted'
+              }`}
+            >
+              History
+              {activeTab() === 'history' && (
+                <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
+              )}
+            </button>
           )}
-        </button>
-        {hasHistorySupport() && (
-          <button
-            onClick={() => switchTab('history')}
-            class={`pb-2 text-sm font-medium transition-colors relative ${
-              activeTab() === 'history' ? 'text-blue-600 dark:text-blue-400' : ' hover:text-muted'
-            }`}
-          >
-            History
-            {activeTab() === 'history' && (
-              <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
-            )}
-          </button>
-        )}
-        {hasDiscoverySupport() && (
-          <button
-            onClick={() => switchTab('discovery')}
-            class={`pb-2 text-sm font-medium transition-colors relative ${
-              activeTab() === 'discovery' ? 'text-blue-600 dark:text-blue-400' : ' hover:text-muted'
-            }`}
-          >
-            Discovery
-            {activeTab() === 'discovery' && (
-              <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
-            )}
-          </button>
-        )}
-      </div>
-      <div class="flex justify-end">
-        <button
-          type="button"
-          onClick={() => navigate(infrastructureHref())}
-          class="inline-flex items-center rounded border border-border bg-surface-alt px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
-        >
-          Open related infrastructure
-        </button>
+          {hasDiscoverySupport() && (
+            <button
+              onClick={() => switchTab('discovery')}
+              class={`pb-2 text-sm font-medium transition-colors relative ${
+                activeTab() === 'discovery'
+                  ? 'text-blue-600 dark:text-blue-400'
+                  : ' hover:text-muted'
+              }`}
+            >
+              Discovery
+              {activeTab() === 'discovery' && (
+                <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
+              )}
+            </button>
+          )}
+        </div>
+        <Show when={hasHistorySupport() && activeTab() === 'history'}>
+          <div class="pb-1">
+            <GuestDrawerHistoryRangeSelect range={historyRange()} onRangeChange={setHistoryRange} />
+          </div>
+        </Show>
       </div>
 
       {/* Use CSS hidden instead of Show to avoid mount/unmount which causes scroll jumps.
@@ -119,7 +118,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
       {hasHistorySupport() && activeTab() === 'history' && (
         <div style={{ 'overflow-anchor': 'none' }}>
-          <GuestDrawerHistory target={historyTarget()} />
+          <GuestDrawerHistory target={historyTarget()} range={historyRange()} />
         </div>
       )}
 
