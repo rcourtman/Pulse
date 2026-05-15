@@ -1834,16 +1834,20 @@ describe('Storage', () => {
 
     render(() => <Storage embedded tableOnly forcedSourceFilter="proxmox-pve" />);
 
-    expect(screen.getByRole('tablist', { name: 'Storage view' })).toBeInTheDocument();
+    const viewOptions = screen.getByRole('group', { name: 'Storage table view' });
+    expect(within(viewOptions).getByRole('button', { name: 'Storage' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(screen.queryByTestId('storage-summary')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Physical Disks' }));
+    fireEvent.click(within(viewOptions).getByRole('button', { name: 'Physical Disks' }));
 
     await waitFor(() => {
       expect(screen.getByTestId('disk-list')).toHaveTextContent('disk-view:all:');
     });
-    expect(screen.getByRole('tab', { name: 'Physical Disks' })).toHaveAttribute(
-      'aria-selected',
+    expect(within(viewOptions).getByRole('button', { name: 'Physical Disks' })).toHaveAttribute(
+      'aria-pressed',
       'true',
     );
   });
@@ -1870,6 +1874,7 @@ describe('Storage', () => {
     expect(screen.queryByTestId('storage-summary')).not.toBeInTheDocument();
     expect(screen.queryByText('Ceph')).not.toBeInTheDocument();
     expect(screen.queryByRole('tablist', { name: 'Storage view' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Storage table view' })).not.toBeInTheDocument();
   });
 
   it('collapses and restores storage charts from the shared toolbar toggle', async () => {

@@ -2,8 +2,9 @@ import { Component, Show, createEffect } from 'solid-js';
 import StorageCephSection from '@/components/Storage/StorageCephSection';
 import StorageContentCard from '@/components/Storage/StorageContentCard';
 import StoragePageBanners from '@/components/Storage/StoragePageBanners';
-import StoragePageControls, { StorageViewSwitcher } from '@/components/Storage/StoragePageControls';
+import StoragePageControls from '@/components/Storage/StoragePageControls';
 import StoragePageSummary from '@/components/Storage/StoragePageSummary';
+import { StorageViewSegmentedControl } from '@/components/Storage/StorageViewSegmentedControl';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StickySummarySection } from '@/components/shared/StickySummarySection';
 import { isStorageRecordCeph } from './storagePageState';
@@ -166,12 +167,6 @@ const Storage: Component<StorageProps> = (props) => {
       </Show>
 
       <div class="space-y-4" data-testid="storage-interaction-surface">
-        <Show when={props.tableOnly && !props.forcedView && !kioskMode()}>
-          <div data-summary-clear-ignore>
-            <StorageViewSwitcher view={view} setView={setView} />
-          </div>
-        </Show>
-
         <Show when={!props.tableOnly}>
           <div data-summary-clear-ignore>
             <StoragePageControls
@@ -245,6 +240,11 @@ const Storage: Component<StorageProps> = (props) => {
           setHoveredStorageResourceId={setHoveredStorageResourceId}
           selectedDiskId={selectedDiskId}
           setSelectedDiskId={setSelectedDiskId}
+          actions={
+            props.tableOnly && !props.forcedView && !kioskMode() ? (
+              <StorageViewSegmentedControl value={view()} onChange={setView} />
+            ) : undefined
+          }
         />
       </div>
     </div>

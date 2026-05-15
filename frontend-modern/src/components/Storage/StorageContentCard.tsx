@@ -1,4 +1,4 @@
-import { Component, Show } from 'solid-js';
+import { Component, Show, type JSX } from 'solid-js';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { TableCard } from '@/components/shared/TableCard';
 import { DiskList } from '@/components/Storage/DiskList';
@@ -48,6 +48,7 @@ type StorageContentCardProps = {
   setHoveredStorageResourceId: (value: string | null) => void;
   selectedDiskId: () => string | null;
   setSelectedDiskId: (value: string | null) => void;
+  actions?: JSX.Element;
 };
 
 export const StorageContentCard: Component<StorageContentCardProps> = (props) => {
@@ -66,6 +67,7 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
     >
       <TableCardHeader
         title={model.heading()}
+        actions={props.actions}
         showClearAction={showClearSelection()}
         onClear={props.clearPinnedSummaryScope}
       />

@@ -1047,8 +1047,8 @@ Storage and Recovery can now be embedded by a platform page in table-only mode
 with a forced Proxmox source/platform filter. The embedded mode suppresses
 standalone page chrome, summary charts, and full filter chrome, but the
 Storage surface must keep the canonical Storage / Physical Disks view selector
-available unless the embedding explicitly locks a `forcedView`. The canonical
-route-backed filter state, fetch builders, table rendering, and
+inside the table header unless the embedding explicitly locks a `forcedView`.
+The canonical route-backed filter state, fetch builders, table rendering, and
 storage/recovery vocabulary remain owned by the Storage and Recovery surfaces.
 Platform pages must compose those owners rather than cloning storage pools,
 physical disks, recovery events, or protected-inventory tables under
