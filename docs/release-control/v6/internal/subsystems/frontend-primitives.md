@@ -186,11 +186,9 @@ work extends shared components instead of creating new local variants.
    `handoffContext`, `handoffResources`, `handoffActions`, and safe
    `handoffMetadata` while preserving the safe visible briefing and scoped
    approval-required posture, so later turns rely on backend session hydration
-   instead of resending stale browser context. When a Patrol handoff includes a
-   safe next-step label, action kind, or whitelisted app-route href, those
-   reload-safe fields must travel through `handoffMetadata` rather than relying
-   on the browser to reconstruct them from model-only handoff text. The drawer
-   must treat
+   instead of resending stale browser context. Patrol handoffs must not include
+   safe next-step labels, action kinds, or whitelisted app-route hrefs in
+   `handoffMetadata`; the drawer must treat
    `handoff_summary.requires_approval` as a current pending-decision flag, not a
    historical action marker, so completed or rejected handoff actions render as
    action context rather than pending approval. A restored Patrol run summary
@@ -204,16 +202,16 @@ work extends shared components instead of creating new local variants.
    can rebuild model-bound context from the stored Patrol run. Restored
    Patrol assessment, Patrol finding, and Patrol configuration-failure sessions
    follow the same safe-summary rule: the drawer may restore source label,
-   title, target type, status badge, action label, and suggested prompts from
-   `handoff_summary`, but
+   title, target type, status badge, bounded resource facts, and approval/action
+   status from `handoff_summary`, but
    it must not infer a finding target from bounded action references or
    reconstruct hidden model context, provider details, retry payloads, commands,
    preflight output, or action results in the browser. If the safe summary
-   includes a Patrol recommended next step, recommendation detail, action
-   label, safe action kind, or whitelisted app-route href, the session picker
-   plus restored drawer briefing and action copy must use that recommendation
-   and may carry the safe detail, action kind, or href as context metadata
-   rather than falling back to generic handoff copy.
+   was created by a legacy build that stored Patrol next-step metadata,
+   recommendation detail, action labels, safe action kind, or whitelisted
+   app-route href, the session picker plus restored drawer must ignore those
+   fields rather than carrying them forward as hidden context or visible
+   recommendation copy.
    Session-load and new-conversation transitions must be success-bound: if the
    underlying session operation fails, the shared drawer store must not clear or
    replace the current scoped handoff context.
@@ -237,17 +235,14 @@ surface, while paid-plan copy and compatibility feature probes stay out of the
 frontend primitive boundary.
 
 Feature surfaces under `frontend-modern/src/features/` may own product-specific
-assessment and recommendation semantics, but they must keep those semantics in
-their governed presentation helpers and render them inside the shared neutral
-Pulse surface language rather than introducing page-local verdict bands or
-nested cards. Patrol's primary recommended next step follows this boundary:
-the Patrol helper owns the decision text, while the section component only
-renders the compact default next-step title and one bounded action inside the
-existing assessment shell, with detail copy deferred to the section's details
-expansion. Feature-owned recommendation actions may use the shared
-button/link shape, but they must not create a second full-width action band or
-nest another card inside the primary Pulse surface. If the same assessment
-opens Assistant, the Patrol-to-Assistant handoff must carry that exact
+assessment semantics, but they must keep those semantics in their governed
+presentation helpers and render them inside the shared neutral Pulse surface
+language rather than introducing page-local verdict bands or nested cards.
+Patrol's primary assessment strip is descriptive only; it must not render a
+Patrol-authored recommended next step, suggested prompt chips, or a secondary
+action band inside the assessment shell. If the same assessment opens
+Assistant, the Patrol-to-Assistant handoff must carry only bounded evidence,
+resource references, and governed approval/action posture as model-only context.
 recommendation as safe bounded metadata so the drawer briefing and first-turn
 prompt explain the same operator-facing priority. Feature-owned Assistant
 handoff prompts may provide source context and safe metadata, but the shared
@@ -1055,33 +1050,24 @@ reasoning after the request reaches the AI runtime.
     `handoff_actions` for
     model-only refresh, but the shared drawer stays a generic shell rather than
     a Patrol summary prompt builder. The Patrol helper may turn those same safe
-    references into visible action labels, safety notes, and approval-aware
-    suggested prompts or first-turn prompt emphasis for assessment and
-    finding-level handoffs; if a source-owned Patrol recommendation action is
-    currently disabled, the helper must pass the bounded disabled reason in
-    visible briefing and model-only context instead of presenting that action as
-    available. Assessment recommendation briefings must keep the safe
-    recommendation title, reason, and route-owned action as separate visible
-    drawer facts so the shared Assistant shell presents operator guidance
-    without parsing a compressed context sentence. The same feature helper owns
-    recommendation-aware suggested prompts; shared drawer primitives must render
-    those prompts without replacing a provider-settings recovery path with
-    generic coverage wording. Assessment-level Patrol prompts, action labels,
-    and safety notes must also prioritize active findings, pending approvals,
-    and governed action references over secondary coverage caveats, reserving
-    coverage-gap-first wording for assessments with no active findings.
+    references into visible action labels and safety notes for assessment and
+    finding-level handoffs, but it must not produce Patrol-authored suggested
+    prompt chips, recommendation titles, recommendation reasons, or route-owned
+    next-step actions. Assessment-level Patrol prompts, action labels, and
+    safety notes must describe active findings, pending approvals, governed
+    action references, and coverage caveats as evidence for the configured
+    model, not as a frontend-authored decision tree.
     Finding-level drawer opens may also pass one bounded
-    model-only finding context, one target resource reference, one safe
-    route-owned next-step action label/href, and one `handoff_actions` reference
-    for a live approval or proposed fix. It must not expose raw command or
-    execution payloads.
+    model-only finding context, one target resource reference, and one
+    `handoff_actions` reference for a live approval or proposed fix. It must not
+    expose raw command or execution payloads.
     The
     drawer may render a generic
     context-briefing band from `frontend-modern/src/stores/aiChat.ts`, but
     feature-owned helpers must provide compact source labels, primary subject,
-    status, and any safe route action while keeping attention reason, evidence
-    summaries, operator-decision copy, safety notes, and prompt suggestions in
-    model-only or governed action context unless the operator asks for them.
+    status, and governed approval/action posture while keeping attention reason,
+    evidence summaries, operator-decision copy, and safety notes compact and
+    source-owned. Prompt suggestions must stay out of Patrol drawer chrome.
     Patrol finding and action-artifact handoffs must not render suggested prompt
     chips in the drawer and must not become another primitive path for raw
     approval, command, or rollback command payload text. Missing-detail
@@ -1686,8 +1672,7 @@ repeat assessment or verification labels as a second compact verdict row.
 The collapsed Patrol assessment strip itself must remain a compact readout
 rather than a headline-plus-paragraph block; explanatory assessment and
 recommendation copy belongs in the owning Findings, Runs, Supporting context,
-or recommended-action surfaces rather than a normal-path summary details
-expansion.
+or Assistant chat surfaces rather than a normal-path summary details expansion.
 That readout should lead with current operator state and score rather than
 mixing a reassuring grade label with issue-state copy in the same line.
 That same summary shell should also keep the shared Pulse surface neutral:

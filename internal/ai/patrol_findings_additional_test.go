@@ -907,49 +907,7 @@ func TestIsActionable_EscapeHatchesPreserved(t *testing.T) {
 	}
 }
 
-func TestPatrolService_GenerateRemediationSteps(t *testing.T) {
-	ps := NewPatrolService(nil, nil)
-
-	cases := []struct {
-		name     string
-		category FindingCategory
-		title    string
-		wantLen  int
-	}{
-		{name: "performance-cpu", category: FindingCategoryPerformance, title: "High CPU usage", wantLen: 4},
-		{name: "capacity-disk", category: FindingCategoryCapacity, title: "Disk space low", wantLen: 4},
-		{name: "reliability-offline", category: FindingCategoryReliability, title: "Service offline", wantLen: 4},
-		{name: "backup-failed", category: FindingCategoryBackup, title: "Backup failed", wantLen: 4},
-		{name: "security", category: FindingCategorySecurity, title: "Vulnerability detected", wantLen: 4},
-		{name: "general", category: FindingCategoryGeneral, title: "Config drift detected", wantLen: 4},
-	}
-
-	for _, c := range cases {
-		finding := &Finding{
-			ID:         "f-" + c.name,
-			ResourceID: "res-1",
-			Category:   c.category,
-			Title:      c.title,
-		}
-		steps := ps.generateRemediationSteps(finding)
-		if len(steps) != c.wantLen {
-			t.Fatalf("%s: expected %d steps, got %d", c.name, c.wantLen, len(steps))
-		}
-	}
-
-	unknown := &Finding{
-		ID:         "f-unknown",
-		ResourceID: "res-1",
-		Category:   FindingCategory("mystery"),
-		Title:      "Unknown issue",
-	}
-	steps := ps.generateRemediationSteps(unknown)
-	if len(steps) != 3 {
-		t.Fatalf("unknown category: expected 3 generic steps, got %d", len(steps))
-	}
-}
-
-func TestPatrolService_GenerateRemediationPlan(t *testing.T) {
+func TestPatrolService_RecordFindingDoesNotGenerateTemplateRemediationPlan(t *testing.T) {
 	engine := newTestRemediationEngine()
 	ps := NewPatrolService(nil, nil)
 	ps.SetRemediationEngine(engine)
@@ -967,17 +925,13 @@ func TestPatrolService_GenerateRemediationPlan(t *testing.T) {
 		Recommendation: "Investigate restart cause",
 	}
 
-	ps.generateRemediationPlan(finding)
+	if !ps.recordFinding(finding) {
+		t.Fatal("expected finding to be recorded as new")
+	}
 
 	plan := engine.GetPlanForFinding(finding.ID)
-	if plan == nil {
-		t.Fatal("expected remediation plan to be created")
-	}
-	if plan.RiskLevel == "" {
-		t.Fatal("expected risk level to be set on plan")
-	}
-	if len(plan.Warnings) == 0 {
-		t.Fatal("expected warnings to be added to plan")
+	if plan != nil {
+		t.Fatalf("unexpected Pulse-authored remediation plan generated: %+v", plan)
 	}
 }
 

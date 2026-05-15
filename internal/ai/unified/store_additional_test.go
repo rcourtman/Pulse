@@ -183,7 +183,7 @@ func TestUnifiedStore_AddFromAI_PropagatesImpactOnUpdate(t *testing.T) {
 		Severity:   SeverityWarning,
 		ResourceID: "res-1",
 		Title:      "Pulse Patrol: Provider issue",
-		Impact:     "While Patrol cannot analyze, alerts continue to fire without evidence or recommended actions.",
+		Impact:     "While Patrol cannot analyze, alerts continue to fire without fresh Patrol evidence.",
 	}
 	updated, isNew := store.AddFromAI(update)
 	if isNew {

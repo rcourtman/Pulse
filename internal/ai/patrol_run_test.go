@@ -1948,9 +1948,9 @@ func TestAlertResolutionHelpers_UseReadStateForAppContainer(t *testing.T) {
 	}
 }
 
-// --- shouldResolveAlert (heuristic-only, no AI) ---
+// --- shouldResolveAlert (model-owned, no local auto-resolution without AI) ---
 
-func TestShouldResolveAlert_StorageUsageDropped(t *testing.T) {
+func TestShouldResolveAlert_StorageUsageDroppedDoesNotResolveWithoutAI(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{
 		Storage: []models.Storage{
@@ -1969,15 +1969,12 @@ func TestShouldResolveAlert_StorageUsageDropped(t *testing.T) {
 	}
 
 	shouldResolve, reason := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil, "")
-	if !shouldResolve {
-		t.Error("expected alert to be resolved (usage dropped below threshold)")
-	}
-	if reason == "" {
-		t.Error("expected a reason string")
+	if shouldResolve || reason != "" {
+		t.Errorf("expected alert to remain unresolved without AI review, got resolved=%v reason=%q", shouldResolve, reason)
 	}
 }
 
-func TestShouldResolveAlert_CPUDropped(t *testing.T) {
+func TestShouldResolveAlert_CPUDroppedDoesNotResolveWithoutAI(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{
 		Nodes: []models.Node{
@@ -1996,12 +1993,12 @@ func TestShouldResolveAlert_CPUDropped(t *testing.T) {
 	}
 
 	shouldResolve, _ := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil, "")
-	if !shouldResolve {
-		t.Error("expected alert to be resolved (CPU dropped)")
+	if shouldResolve {
+		t.Error("expected alert to remain unresolved without AI review")
 	}
 }
 
-func TestShouldResolveAlert_OfflineNowOnline(t *testing.T) {
+func TestShouldResolveAlert_OfflineNowOnlineDoesNotResolveWithoutAI(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{
 		Nodes: []models.Node{
@@ -2018,11 +2015,8 @@ func TestShouldResolveAlert_OfflineNowOnline(t *testing.T) {
 	}
 
 	shouldResolve, reason := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil, "")
-	if !shouldResolve {
-		t.Error("expected offline alert to be resolved (resource now online)")
-	}
-	if reason != "resource is now online/running" {
-		t.Errorf("unexpected reason: %s", reason)
+	if shouldResolve || reason != "" {
+		t.Errorf("expected offline alert to remain unresolved without AI review, got resolved=%v reason=%q", shouldResolve, reason)
 	}
 }
 

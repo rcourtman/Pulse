@@ -512,12 +512,11 @@ runtime cost control, and shared AI transport surfaces.
     handoffs. That summary may include the handoff kind, finding ID, resource
     and Patrol run ID, safe run type/status/runtime-failure flags, resource and
     action counts, a primary resource label, last-known approval/action status,
-    risk level, timestamp, and Patrol recommended next-step title/detail/action
-    labels plus the safe recommendation action kind or whitelisted app-route href only when
-    they can be safely extracted from the stored Patrol handoff, but it must not
-    expose model-only handoff text,
-    runtime failure detail, action preflight/result bodies, remediation
-    descriptions, raw commands, or approval command payloads. Its
+    risk level, and timestamp, but it must not expose Patrol-authored
+    recommended next-step titles, recommendation details, route-owned action
+    labels, model-only handoff text, runtime failure detail, action
+    preflight/result bodies, remediation descriptions, raw commands, or
+    approval command payloads. Its
     `requires_approval` field is a current operator-decision flag only: pending
     approval states may set it, but approved, denied, rejected, executing,
     completed, failed, expired, or otherwise historical action references must
@@ -527,8 +526,8 @@ runtime cost control, and shared AI transport surfaces.
     safe visible briefing: the next chat turn must carry
     `autonomous_mode:false` even when the summary is context-only and has no
     queued action, while the visible badge/action copy must still reflect the
-    actual last-known action state or Patrol assessment recommendation instead
-    of inventing a pending approval. That
+    actual last-known action state or Patrol assessment context instead of
+    inventing a pending approval or restoring a Patrol recommendation. That
     restoration is success-bound: if the underlying session message load fails,
     the drawer must leave the current context untouched instead of applying
     summary-derived Patrol or approval state for a session the operator is not
@@ -542,20 +541,17 @@ runtime cost control, and shared AI transport surfaces.
     The Assistant drawer must also fetch that current session list before
     opening the session picker instead of presenting mount-time cached
     summaries as the operator's decision surface. For restored Patrol
-    assessment or finding sessions, that picker must present the safe
-    recommended next-step title/detail/action label from `handoff_summary` when
-    one is available and restore the safe recommendation detail, action kind,
-    or route-owned href as context metadata instead of reducing the saved
-    session to generic context.
-    Live Patrol assessment handoffs that include a currently unavailable
-    Patrol-owned recommendation action must carry the bounded disabled reason in
-    the model-only handoff and visible briefing so Assistant explains the
-    current availability state instead of treating the action as executable.
+    assessment or finding sessions, that picker must present only the safe
+    handoff kind, source, resource/action counts, and approval/action status
+    from `handoff_summary`; it must not restore Patrol recommended
+    next-step title/detail/action labels, route-owned hrefs, or disabled-action
+    reasons as visible or hidden context.
     Browser-originated `handoff_context`, `handoff_resources`, and
     `handoff_actions` plus safe `handoff_metadata` are one-shot request seeds
-    for the first successful chat turn. Safe Patrol next-step titles, details,
-    labels, and route-owned hrefs belong in `handoff_metadata` first, with model-context
-    text parsing only as a legacy fallback. After that send succeeds, the drawer
+    for the first successful chat turn. Patrol next-step titles, details,
+    labels, and route-owned hrefs do not belong in `handoff_metadata`, and
+    model-context text parsing must not resurrect them as a legacy fallback.
+    After that send succeeds, the drawer
     must clear those request payloads while preserving the safe visible
     briefing and request-local
     approval-required posture; later turns must rely on backend-owned session
@@ -1528,9 +1524,9 @@ derived from the current unified finding and structured Patrol investigation
 record before the lower-level finding context. That briefing must summarize the
 finding, resource, priority, current attention reason, current recency facts,
 bounded evidence and verification summaries, investigation confidence,
-recommended next step, operator decision framing, latest lifecycle event, and
-governed action posture as operator guidance, while leaving detailed lifecycle
-history, current resource-state, timeline, related-finding, and action-audit
+operator decision framing, latest lifecycle event, and governed action posture
+as model context, while leaving detailed lifecycle history, current
+resource-state, timeline, related-finding, and action-audit
 hydration in the existing canonical AI runtime handoff builders. Related
 root-cause and
 correlated finding records may be summarized from current unified finding state,

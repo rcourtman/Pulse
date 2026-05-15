@@ -33,7 +33,7 @@ describe('aiChatPresentation', () => {
     );
     expect(AI_CHAT_EMPTY_STATE_TITLE).toBe('Ask about your infrastructure');
     expect(AI_CHAT_EMPTY_STATE_SUBTITLE).toBe(
-      'Pulse Assistant uses observed infrastructure context and your configured provider to inspect state, explain findings, and suggest safe next steps.',
+      'Chat with your configured model using Pulse context and governed tools.',
     );
     expect(AI_CHAT_NEW_SESSION_SHORT_LABEL).toBe('New');
     expect(AI_CHAT_NEW_SESSION_MENU_LABEL).toBe('New session');
@@ -53,17 +53,9 @@ describe('aiChatPresentation', () => {
     expect(getAIChatLauncherTitle()).not.toContain('⌘K');
   });
 
-  it('builds canonical empty-state suggestions for cluster and single-system chat', () => {
-    expect(getAIChatEmptyStateSuggestions(true)).toEqual([
-      'Summarize cluster health',
-      'Find failed services',
-      'Check node load and pressure',
-    ]);
-    expect(getAIChatEmptyStateSuggestions(false)).toEqual([
-      'Summarize system health',
-      'Check storage pressure',
-      'Explain recent Patrol findings',
-    ]);
+  it('keeps the default empty state as plain chat without prompt chips', () => {
+    expect(getAIChatEmptyStateSuggestions(true)).toEqual([]);
+    expect(getAIChatEmptyStateSuggestions(false)).toEqual([]);
   });
 
   it('uses attached briefing context for scoped assistant handoff empty states', () => {

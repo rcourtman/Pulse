@@ -380,10 +380,9 @@ the canonical monitored-system blocked payload.
     `internal/api/ai_handler.go`, `internal/api/ai_handler_test.go`, and
     `internal/api/contract_test.go` together. Patrol-originated handoffs must
     keep `[Operator Briefing]`, `[Finding Context]`, `[Finding Lifecycle
-    Context]`, structured handoff resources, safe route-owned next-step action
-    labels/hrefs, related root-cause/correlation finding context, and structured
-    handoff actions model-only, with the briefing summarizing operator next
-    steps, latest lifecycle event, and governed action posture without raw
+    Context]`, structured handoff resources, related root-cause/correlation
+    finding context, and structured handoff actions model-only, with the
+    briefing summarizing latest lifecycle event and governed action posture without raw
     command text. Structured handoff action
     references may use the current live Patrol investigation-fix approval for
     the finding when that approval is newer than the approval ID on the durable
@@ -399,13 +398,12 @@ the canonical monitored-system blocked payload.
     user's persistent autonomous control setting; live approval, proposed-fix,
     fix-outcome, and remediation-plan references only add structured action
     posture, they are not the trigger for the boundary. Frontend-visible Patrol
-    briefing payloads may include short suggested prompts, but those prompts
-    must be derived from the same safe action posture, evidence, recurrence, and
-    remediation-plan metadata as the briefing and must never carry raw approval,
-    command, or rollback command text. Frontend queued-fix recovery handoffs
+    briefing payloads must stay compact and must not include suggested prompt
+    chips, Patrol-authored next-step recommendations, or route-owned
+    recommendation metadata. Frontend queued-fix recovery handoffs
     where the live approval or proposed-fix payload is unavailable must still
     carry that Patrol-owned operator briefing, current `fix_queued` posture,
-    request-local approval-required mode, and safe suggested prompts; they must
+    request-local approval-required mode, and model-only evidence context; they must
     not degrade into generic Assistant investigation chat or imply that
     execution can proceed from missing command payloads. Expired-approval
     recovery handoffs may use a still-available structured proposed-fix payload
@@ -562,32 +560,29 @@ the canonical monitored-system blocked payload.
    and that same Patrol investigation-context owner, so the current Patrol
    assessment summary may open Assistant with bounded model-only assessment,
    verification, latest-run, supporting-context evidence, active-finding, and
-   resource reference context plus safe source-owned suggested prompts and the
-   Patrol-owned recommended next step as safe metadata; active
+   resource reference context while leaving prioritization and next-step
+   reasoning to the configured LLM; active
    finding entries may carry live pending Patrol approval posture only as safe
    structured handoff actions with approval ID/status/risk/target/request/expiry
    metadata, action plan identity/policy/expiry, dry-run posture, and command
    counts instead of pasting page-local UI text or raw command payloads into chat,
    the drawer target must stay `patrol-assessment` rather than a retired
    dashboard target,
-   and may derive visible action labels, safety notes, and approval-aware
-   suggested prompts plus first-turn prompt emphasis from that same safe metadata
-   plus the current disabled reason for a Patrol-owned recommended action when
-   the visible summary action is unavailable,
-   so the drawer does not fall back to generic assessment copy when governed
-   actions are present or when the summary already exposes a concrete
-   recommended next step
+   and may derive model-only approval/action posture from that same safe
+   metadata, while visible drawer copy stays compact and does not expose
+   Patrol-authored recommendations, prompt chips, or action labels as the
+   answer,
    and that same Patrol investigation-context owner, so coverage signals from
    the canonical AI summary remain secondary caveats when the same assessment
    carries active findings, pending approvals, or governed action references;
    Assistant prompt emphasis, briefing action labels, and safety notes must
-   lead with finding priority, affected resources, evidence, and the governed
-   next step instead of recasting the whole handoff as a coverage gap
+   carry finding priority, affected resources, evidence, and governed approval
+   posture as context instead of recasting the whole handoff as a coverage gap
    and that same Patrol investigation-context owner, so coverage-incomplete
    assessments with no active infrastructure findings are serialized as a
    verification-gap handoff: prompt and visible briefing copy must explain what
    scoped activity did and did not prove, keep latest-run and supporting-context
-   facts model-only, carry the existing summary recommendation as safe
+   facts model-only, and leave next-step selection to the configured LLM
    handoff-only metadata, and avoid introducing backend fields beyond the
    existing Patrol status plus run-history contracts
    and that same Patrol investigation-context owner, so visible Assistant
@@ -2609,14 +2604,10 @@ references used to seed canonical approval and action-audit refresh.
 `handoff_metadata` is the browser-safe identity envelope for restoring saved
 product handoffs, currently including Patrol run kind, run ID, safe run
 type/status, a runtime-failure boolean rather than runtime failure detail, and
-safe Patrol recommended next-step title/detail/action labels plus whitelisted app-route
-hrefs when the browser handoff already owns that route. Frontend-visible
-Patrol assessment briefings may render those same safe recommendation fields as
-separate title, reason, and route-action facts, but they must not introduce new
-browser-owned authority beyond the structured handoff metadata and bounded
-chat context. Browser-visible suggested prompts may follow the structured
-recommendation action, such as provider-settings recovery for runtime
-visibility failures, while remaining review prompts rather than API authority.
+bounded resource/action counts when available. Frontend-visible Patrol
+assessment briefings must not render recommendation fields as separate title,
+reason, route-action facts, or prompt chips; the configured model owns those
+decisions from the structured handoff metadata and bounded chat context.
 Frontend handoff builders may send these fields for owned alert, incident,
 Patrol assessment, Patrol finding, or Patrol run-history context, but the
 backend must not
@@ -2631,13 +2622,11 @@ The `/api/ai/sessions` response may expose `handoff_summary` for sessions that
 carry private Assistant model-context metadata, but that payload is a safe
 reload marker only. It may carry the handoff kind, finding ID, Patrol run ID,
 safe run type/status/runtime-failure flags, counts, primary-resource label,
-last-known approval/action status, risk level, Patrol recommended
-next-step title/detail/action labels plus the safe recommendation action kind or whitelisted
-app-route href when safely extractable from the stored Patrol handoff, and
-summary timestamp; it must
+last-known approval/action status, risk level, and summary timestamp; it must
 not serialize the model-only `handoff_context`, runtime failure detail, action
 preflight/result bodies, remediation descriptions, raw commands, or approval
-command payloads.
+command payloads, and it must not preserve Patrol-authored next-step
+recommendation fields from legacy handoffs.
 Patrol finding handoffs are stricter than ordinary chat requests: when a request
 carries a non-empty `finding_id` or resolves to model-only Patrol briefing,
 resource, or action context, `internal/api/ai_handler.go` must clamp the

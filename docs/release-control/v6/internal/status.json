@@ -2739,7 +2739,7 @@
     },
     {
       "id": "RA28",
-      "summary": "Pulse Patrol remains a simple scheduled LLM probe and governance surface: Pulse supplies observed infrastructure context, evidence, policy posture, approval state, and governed execution boundaries, while the configured LLM owns diagnosis and remediation reasoning. Patrol UI and Assistant handoffs must not present Patrol-authored remediation plans, internal step lists, command summaries, or suggested prompt chips as the answer.",
+      "summary": "Pulse Patrol remains a simple scheduled LLM probe and governance surface: Pulse supplies observed infrastructure context, evidence, policy posture, approval state, and governed execution boundaries, while the configured LLM owns diagnosis, alert-resolution judgment, remediation reasoning, tool choice, and next-step reasoning. Patrol UI, Assistant session summaries, and Assistant handoffs must not present or persist Patrol-authored remediation plans, internal step lists, command summaries, next-step recommendations, route-owned recommendation metadata, or suggested prompt chips as the answer.",
       "kind": "invariant",
       "blocking_level": "repo-ready",
       "proof_type": "automated",
@@ -2767,11 +2767,37 @@
             "--",
             "--run",
             "src/components/AI/Chat/__tests__/AIChat.test.tsx",
+            "src/components/AI/Chat/__tests__/ChatMessages.test.tsx",
             "src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts",
             "src/components/patrol/__tests__/ApprovalSection.test.tsx",
             "src/components/AI/__tests__/FindingsPanel.test.ts",
-            "src/components/AI/__tests__/FindingsPanel.capacityForecast.test.tsx",
-            "src/utils/__tests__/patrolPagePresentation.test.ts"
+            "src/features/patrol/__tests__/PatrolIntelligenceSummary.test.tsx",
+            "src/pages/__tests__/AIIntelligence.test.tsx",
+            "src/utils/__tests__/patrolPagePresentation.test.ts",
+            "src/utils/__tests__/patrolSummaryPresentation.test.ts",
+            "src/utils/__tests__/aiChatPresentation.test.ts",
+            "src/api/__tests__/aiChat.test.ts",
+            "src/stores/__tests__/aiChat.test.ts"
+          ]
+        },
+        {
+          "id": "patrol-assistant-session-summary-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/ai/chat",
+            "-run",
+            "TestSessionStore_List|TestService_ExecuteStream_AttachesModelOnlyHandoffContext"
+          ]
+        },
+        {
+          "id": "patrol-model-owned-remediation-runtime-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/ai",
+            "-run",
+            "TestPatrolService_RecordFindingDoesNotGenerateTemplateRemediationPlan|TestShouldResolveAlert|TestReviewAndResolveAlerts"
           ]
         }
       ],
@@ -2803,17 +2829,17 @@
         },
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/components/AI/__tests__/FindingsPanel.capacityForecast.test.tsx",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
           "path": "frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts",
           "kind": "file"
         },
         {
           "repo": "pulse",
           "path": "frontend-modern/src/components/AI/Chat/__tests__/AIChat.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/AI/Chat/__tests__/ChatMessages.test.tsx",
           "kind": "file"
         },
         {
@@ -2833,6 +2859,11 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/features/patrol/__tests__/PatrolIntelligenceSummary.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts",
           "kind": "file"
         },
@@ -2843,12 +2874,42 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/utils/__tests__/patrolPagePresentation.test.ts",
           "kind": "file"
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/utils/aiChatPresentation.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/utils/patrolPagePresentation.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/chat/session.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/chat/types.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol_findings.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol_run.go",
           "kind": "file"
         }
       ]

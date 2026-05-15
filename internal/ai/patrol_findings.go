@@ -1,5 +1,5 @@
 // patrol_findings.go manages the finding lifecycle: creation, resolution, dismissal,
-// remediation plan generation, investigation triggering and verification,
+// investigation-triggered action artifact capture and verification,
 // and the adapter types that bridge patrol findings to the investigation subsystem.
 package ai
 
@@ -56,11 +56,10 @@ func (p *PatrolService) recordFinding(f *Finding) bool {
 			Str("title", stored.Title).
 			Msg("AI Patrol: New finding")
 
-		// Generate remediation plan for actionable findings
-		// Skip internal error findings (not actionable by users)
-		if !patrolFindingUsesSyntheticRuntimeResource(stored) {
-			p.generateRemediationPlan(stored)
-		}
+		// Findings are evidence. Pulse does not manufacture remediation plans
+		// from category/title heuristics; the selected model owns diagnosis and
+		// remediation reasoning, with Pulse enforcing approval/verification gates
+		// after the model proposes an action.
 
 		// Send push notification for new critical/warning findings
 		if stored.Severity == FindingSeverityCritical || stored.Severity == FindingSeverityWarning {
@@ -127,92 +126,6 @@ func (p *PatrolService) clearBlockedReason() {
 	p.lastBlockedCause = ""
 	p.lastBlockedAt = time.Time{}
 	p.mu.Unlock()
-}
-
-// generateRemediationPlan creates a remediation plan for a finding if appropriate.
-// Only generates plans for critical/warning findings when a remediation engine is configured.
-func (p *PatrolService) generateRemediationPlan(finding *Finding) {
-	p.mu.RLock()
-	engine := p.remediationEngine
-	p.mu.RUnlock()
-
-	if engine == nil {
-		return
-	}
-
-	// Only generate plans for actionable findings
-	if finding.Severity != FindingSeverityCritical && finding.Severity != FindingSeverityWarning {
-		return
-	}
-
-	// Generate remediation steps based on finding category and resource type
-	steps := p.generateRemediationSteps(finding)
-	if len(steps) == 0 {
-		return
-	}
-
-	// Determine risk level based on finding severity and category
-	riskLevel := aicontracts.RiskLow
-	if finding.Severity == FindingSeverityWarning {
-		riskLevel = aicontracts.RiskMedium
-	}
-	if finding.Severity == FindingSeverityCritical {
-		riskLevel = aicontracts.RiskHigh
-	}
-	// Reliability issues involving restarts/reboots are higher risk
-	if finding.Category == FindingCategoryReliability {
-		title := strings.ToLower(finding.Title)
-		if strings.Contains(title, "restart") || strings.Contains(title, "reboot") || strings.Contains(title, "offline") {
-			if riskLevel < aicontracts.RiskHigh {
-				riskLevel = aicontracts.RiskHigh
-			}
-		} else if riskLevel < aicontracts.RiskMedium {
-			riskLevel = aicontracts.RiskMedium
-		}
-	}
-
-	// Create the remediation plan
-	plan := &aicontracts.RemediationPlan{
-		FindingID:   finding.ID,
-		ResourceID:  finding.ResourceID,
-		Title:       fmt.Sprintf("Fix: %s", finding.Title),
-		Description: finding.Description,
-		Category:    aicontracts.CategoryGuided, // All auto-generated plans require user approval
-		RiskLevel:   riskLevel,
-		Steps:       steps,
-		Rationale:   finding.Recommendation,
-	}
-
-	// Add warnings based on risk level
-	if riskLevel == aicontracts.RiskHigh {
-		plan.Warnings = append(plan.Warnings, "High risk: This action may cause service disruption. Review carefully and consider scheduling during maintenance window.")
-	} else if riskLevel == aicontracts.RiskMedium {
-		plan.Warnings = append(plan.Warnings, "Review steps carefully before execution")
-	}
-
-	// Capacity-forecast proposal attachment: when a capacity finding has
-	// a registered deterministic action template, attach the proposal so
-	// FindingsPanel can render the forecast approval card. RequiresApproval
-	// is invariant on the template side; we never auto-execute.
-	if proposal := buildCapacityActionProposal(finding); proposal != nil {
-		plan.ProposedActionPlan = proposal
-	}
-
-	if err := engine.CreatePlan(plan); err != nil {
-		log.Debug().
-			Err(err).
-			Str("finding_id", finding.ID).
-			Str("resource", finding.ResourceName).
-			Msg("AI Patrol: Failed to create remediation plan")
-		return
-	}
-
-	log.Info().
-		Str("plan_id", plan.ID).
-		Str("finding_id", finding.ID).
-		Str("resource", finding.ResourceName).
-		Int("steps", len(steps)).
-		Msg("AI Patrol: Remediation plan generated")
 }
 
 // generateRemediationPlanFromInvestigation persists a remediation plan artifact when
@@ -339,190 +252,6 @@ func (p *PatrolService) generateRemediationPlanFromInvestigation(findingID strin
 		if createErr := engine.CreatePlan(plan); createErr != nil {
 			log.Warn().Err(createErr).Str("findingID", finding.ID).Msg("failed to create fallback remediation plan")
 		}
-	}
-}
-
-// generateRemediationSteps creates appropriate steps based on finding type
-func (p *PatrolService) generateRemediationSteps(finding *Finding) []aicontracts.RemediationStep {
-	var steps []aicontracts.RemediationStep
-
-	switch finding.Category {
-	case FindingCategoryPerformance:
-		steps = p.generatePerformanceSteps(finding)
-	case FindingCategoryCapacity:
-		steps = p.generateCapacitySteps(finding)
-	case FindingCategoryReliability:
-		steps = p.generateAvailabilitySteps(finding)
-	case FindingCategoryBackup:
-		steps = p.generateBackupSteps(finding)
-	case FindingCategorySecurity:
-		steps = p.generateSecuritySteps(finding)
-	case FindingCategoryGeneral:
-		steps = p.generateConfigurationSteps(finding)
-	default:
-		// Generic investigation steps for unknown categories
-		steps = []aicontracts.RemediationStep{
-			{Order: 1, Description: "Investigate the issue by reviewing current resource state"},
-			{Order: 2, Description: "Review recent changes that may have caused this issue"},
-			{Order: 3, Description: "Take appropriate corrective action based on findings"},
-		}
-	}
-
-	return steps
-}
-
-// generatePerformanceSteps creates steps for performance issues
-func (p *PatrolService) generatePerformanceSteps(finding *Finding) []aicontracts.RemediationStep {
-	title := strings.ToLower(finding.Title)
-
-	if strings.Contains(title, "cpu") {
-		return []aicontracts.RemediationStep{
-			{Order: 1, Description: "Identify processes consuming excessive CPU", Target: finding.ResourceID},
-			{Order: 2, Description: "Check if resource needs more CPU cores allocated"},
-			{Order: 3, Description: "Consider migrating to a less loaded host if VM/container"},
-			{Order: 4, Description: "Optimize or restart resource-hungry applications"},
-		}
-	}
-
-	if strings.Contains(title, "memory") || strings.Contains(title, "ram") {
-		return []aicontracts.RemediationStep{
-			{Order: 1, Description: "Identify processes consuming excessive memory", Target: finding.ResourceID},
-			{Order: 2, Description: "Check for memory leaks in running applications"},
-			{Order: 3, Description: "Consider increasing allocated memory"},
-			{Order: 4, Description: "Restart affected services to reclaim memory"},
-		}
-	}
-
-	if strings.Contains(title, "io") || strings.Contains(title, "disk") {
-		return []aicontracts.RemediationStep{
-			{Order: 1, Description: "Identify processes causing high disk I/O", Target: finding.ResourceID},
-			{Order: 2, Description: "Check for runaway log files or heavy writes"},
-			{Order: 3, Description: "Consider migrating to faster storage"},
-		}
-	}
-
-	// Generic performance steps
-	return []aicontracts.RemediationStep{
-		{Order: 1, Description: "Review current resource utilization metrics", Target: finding.ResourceID},
-		{Order: 2, Description: "Identify performance bottlenecks"},
-		{Order: 3, Description: "Optimize resource allocation or application configuration"},
-	}
-}
-
-// generateCapacitySteps creates steps for capacity issues
-func (p *PatrolService) generateCapacitySteps(finding *Finding) []aicontracts.RemediationStep {
-	title := strings.ToLower(finding.Title)
-
-	if strings.Contains(title, "disk") || strings.Contains(title, "storage") {
-		return []aicontracts.RemediationStep{
-			{Order: 1, Description: "Identify largest files and directories consuming space", Target: finding.ResourceID},
-			{Order: 2, Description: "Clean up temporary files, logs, and caches"},
-			{Order: 3, Description: "Remove unused packages and old kernels"},
-			{Order: 4, Description: "Consider expanding disk or adding additional storage"},
-		}
-	}
-
-	if strings.Contains(title, "memory") {
-		return []aicontracts.RemediationStep{
-			{Order: 1, Description: "Review memory allocation across workloads", Target: finding.ResourceID},
-			{Order: 2, Description: "Reduce memory allocation on over-provisioned VMs"},
-			{Order: 3, Description: "Add more physical memory to the host"},
-		}
-	}
-
-	// Generic capacity steps
-	return []aicontracts.RemediationStep{
-		{Order: 1, Description: "Review current capacity utilization", Target: finding.ResourceID},
-		{Order: 2, Description: "Identify growth trends and plan for expansion"},
-		{Order: 3, Description: "Clean up unused resources to free capacity"},
-	}
-}
-
-// generateAvailabilitySteps creates steps for availability issues
-func (p *PatrolService) generateAvailabilitySteps(finding *Finding) []aicontracts.RemediationStep {
-	title := strings.ToLower(finding.Title)
-
-	if strings.Contains(title, "offline") || strings.Contains(title, "down") {
-		return []aicontracts.RemediationStep{
-			{Order: 1, Description: "Verify network connectivity to the resource", Target: finding.ResourceID},
-			{Order: 2, Description: "Check host status if this is a VM/container"},
-			{Order: 3, Description: "Review system logs for crash or shutdown reasons"},
-			{Order: 4, Description: "Attempt to start or restart the resource"},
-		}
-	}
-
-	if strings.Contains(title, "restart") || strings.Contains(title, "reboot") {
-		return []aicontracts.RemediationStep{
-			{Order: 1, Description: "Review system logs for cause of restarts", Target: finding.ResourceID},
-			{Order: 2, Description: "Check for OOM kills or kernel panics"},
-			{Order: 3, Description: "Investigate application crashes"},
-			{Order: 4, Description: "Consider enabling watchdog or health checks"},
-		}
-	}
-
-	// Generic availability steps
-	return []aicontracts.RemediationStep{
-		{Order: 1, Description: "Verify resource health and connectivity", Target: finding.ResourceID},
-		{Order: 2, Description: "Review recent events and logs"},
-		{Order: 3, Description: "Take corrective action to restore availability"},
-	}
-}
-
-// generateBackupSteps creates steps for backup-related issues
-func (p *PatrolService) generateBackupSteps(finding *Finding) []aicontracts.RemediationStep {
-	title := strings.ToLower(finding.Title)
-
-	if strings.Contains(title, "missing") || strings.Contains(title, "no backup") {
-		return []aicontracts.RemediationStep{
-			{Order: 1, Description: "Verify backup job configuration exists", Target: finding.ResourceID},
-			{Order: 2, Description: "Check backup storage availability and capacity"},
-			{Order: 3, Description: "Create or enable backup schedule"},
-			{Order: 4, Description: "Run initial backup job"},
-		}
-	}
-
-	if strings.Contains(title, "failed") || strings.Contains(title, "error") {
-		return []aicontracts.RemediationStep{
-			{Order: 1, Description: "Review backup job logs for error details", Target: finding.ResourceID},
-			{Order: 2, Description: "Check backup storage connectivity and space"},
-			{Order: 3, Description: "Verify backup credentials and permissions"},
-			{Order: 4, Description: "Retry backup job after fixing issues"},
-		}
-	}
-
-	if strings.Contains(title, "old") || strings.Contains(title, "stale") || strings.Contains(title, "outdated") {
-		return []aicontracts.RemediationStep{
-			{Order: 1, Description: "Check why scheduled backups are not running", Target: finding.ResourceID},
-			{Order: 2, Description: "Review backup retention policy"},
-			{Order: 3, Description: "Trigger a new backup immediately"},
-		}
-	}
-
-	// Generic backup steps
-	return []aicontracts.RemediationStep{
-		{Order: 1, Description: "Review backup configuration and schedule", Target: finding.ResourceID},
-		{Order: 2, Description: "Verify backup storage health"},
-		{Order: 3, Description: "Ensure backup jobs are running successfully"},
-	}
-}
-
-// generateConfigurationSteps creates steps for configuration issues
-func (p *PatrolService) generateConfigurationSteps(finding *Finding) []aicontracts.RemediationStep {
-	return []aicontracts.RemediationStep{
-		{Order: 1, Description: "Review current configuration settings", Target: finding.ResourceID},
-		{Order: 2, Description: "Compare against recommended best practices"},
-		{Order: 3, Description: "Apply configuration changes as needed"},
-		{Order: 4, Description: "Verify changes don't impact dependent services"},
-	}
-}
-
-// generateSecuritySteps creates steps for security issues
-func (p *PatrolService) generateSecuritySteps(finding *Finding) []aicontracts.RemediationStep {
-	return []aicontracts.RemediationStep{
-		{Order: 1, Description: "Assess the security impact and urgency", Target: finding.ResourceID},
-		{Order: 2, Description: "Review access logs for suspicious activity"},
-		{Order: 3, Description: "Apply security patches or configuration fixes"},
-		{Order: 4, Description: "Verify remediation and update security policies"},
 	}
 }
 

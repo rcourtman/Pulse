@@ -127,7 +127,7 @@ describe('ApprovalSection', () => {
     expect(prompt).toContain(
       'I\'d like to discuss this Patrol finding: "CPU saturation" on node-1',
     );
-    expect(prompt).toContain('Start by reviewing the governed action posture');
+    expect(prompt).toContain('Governed action posture is attached');
     expect(prompt).toContain('Recover or regenerate the governed approval before execution');
     expect(context).toEqual(
       expect.objectContaining({
@@ -143,11 +143,6 @@ describe('ApprovalSection', () => {
             expect.stringContaining('fix queued for governed review'),
             expect.stringContaining('Recover or regenerate the governed approval before execution'),
           ]),
-          suggestedPrompts: [
-            'Review approval risk and next step',
-            'Explain current finding status',
-            'List approval prerequisites before action',
-          ],
         }),
         autonomousMode: false,
         handoffResources: [{ id: 'host-1', name: 'node-1', node: undefined, type: 'host' }],
@@ -202,7 +197,7 @@ describe('ApprovalSection', () => {
 
     expect(openWithPromptMock).toHaveBeenCalledTimes(1);
     const [prompt, context] = openWithPromptMock.mock.calls[0];
-    expect(prompt).toContain('Start by reviewing governed approval approval-1');
+    expect(prompt).toContain('Governed approval approval-1 is attached');
     expect(prompt).toContain('approval status pending');
     expect(prompt).toContain('high risk');
     expect(prompt).not.toContain('systemctl restart nginx');
@@ -227,11 +222,6 @@ describe('ApprovalSection', () => {
           commandSummary: '1 command recorded for approval context',
           safetyNote:
             'Command details stay in approval context; execution requires the governed approval flow.',
-          suggestedPrompts: [
-            'Review approval risk and next step',
-            'Explain current finding status',
-            'Summarize remediation without command text',
-          ],
         }),
         autonomousMode: false,
         handoffResources: [{ id: 'agent-1', name: 'node-1', node: undefined, type: 'agent' }],
@@ -305,7 +295,7 @@ describe('ApprovalSection', () => {
 
     expect(openWithPromptMock).toHaveBeenCalledTimes(1);
     const [prompt, context] = openWithPromptMock.mock.calls[0];
-    expect(prompt).toContain('Start by reviewing the governed action posture');
+    expect(prompt).toContain('Governed action posture is attached');
     expect(prompt).toContain('recorded action artifact Restart the workload service');
     expect(prompt).toContain('target node-1');
     expect(prompt).toContain('high risk');
@@ -329,11 +319,6 @@ describe('ApprovalSection', () => {
           commandSummary: '1 command recorded for approval context',
           safetyNote:
             'Command details stay in approval context; destructive actions require governed approval.',
-          suggestedPrompts: [
-            'Review approval risk and next step',
-            'Explain current finding status',
-            'Summarize remediation without command text',
-          ],
         }),
         autonomousMode: false,
         handoffResources: [{ id: 'agent-1', name: 'node-1', node: undefined, type: 'agent' }],

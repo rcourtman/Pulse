@@ -360,7 +360,7 @@ describe('patrolInvestigationContextModel', () => {
     });
 
     expect(handoff.prompt).toContain('Discuss the current Pulse Patrol assessment');
-    expect(handoff.prompt).toContain('Start by reviewing 1 governed action reference');
+    expect(handoff.prompt).toContain('1 governed action reference');
     expect(handoff.prompt).toContain('Do not infer, repeat, or execute raw command text');
     expect(handoff.context.autonomousMode).toBe(false);
     expect(handoff.context.handoffContext).toContain('[Patrol Assessment Context]');
@@ -396,16 +396,12 @@ describe('patrolInvestigationContextModel', () => {
       actionLabel: '1 governed action reference attached',
       safetyNote:
         'Review action posture in the governed flow; raw command payloads stay out of Assistant.',
-      suggestedPrompts: [
-        'Prioritize findings and safest next step',
-        'Explain recent changes and correlations',
-        'Summarize governed remediation risks',
-      ],
     });
+    expect(handoff.context.briefing?.suggestedPrompts).toBeUndefined();
     expect(JSON.stringify(handoff)).not.toContain('systemctl restart workload.service');
   });
 
-  it('frames coverage-incomplete assessment handoffs as a verification gap', () => {
+  it('frames coverage-incomplete assessment handoffs as evidence-only context', () => {
     const handoff = buildPatrolAssessmentAssistantHandoff({
       assessment: {
         title: 'Coverage incomplete',
@@ -448,37 +444,21 @@ describe('patrolInvestigationContextModel', () => {
         hasContext: true,
         summaryText: '100 recent changes · 29 correlations · 116 policy-covered resources',
       },
-      recommendedNextStep: {
-        title: 'Verify full coverage',
-        description:
-          'Run a full Patrol sweep before treating this assessment as an all-clear; recent evidence is incomplete or limited to targeted activity.',
-        actionLabel: 'Run Patrol',
-        actionKind: 'run_patrol',
-      },
       activeFindings: [],
     });
 
-    expect(handoff.prompt).toContain('why Patrol coverage is incomplete');
-    expect(handoff.prompt).toContain('what the latest scoped activity did and did not prove');
-    expect(handoff.prompt).toContain(
-      'Patrol\'s visible recommended next step is "Verify full coverage"',
-    );
-    expect(handoff.prompt).toContain('available Patrol-owned action: Run Patrol');
+    expect(handoff.prompt).toContain('incomplete Patrol coverage signals');
+    expect(handoff.prompt).toContain('Decide from the evidence whether more verification is needed');
+    expect(handoff.prompt).not.toContain('next-step metadata');
     expect(handoff.context.briefing).toMatchObject({
-      actionLabel: 'Recommended: Run Patrol',
+      actionLabel: 'Discuss Patrol coverage',
       safetyNote:
-        'Assistant can explain the gap; full Patrol runs, diagnostics, and remediation remain operator-controlled.',
-      suggestedPrompts: [
-        'Explain why coverage is incomplete',
-        'Explain scoped activity and full-run gap',
-        'Identify early warning signals before full verification',
-      ],
+        'Assistant can review the coverage evidence; Patrol runs, diagnostics, and remediation remain governed controls.',
     });
+    expect(handoff.context.briefing?.suggestedPrompts).toBeUndefined();
+    expect(handoff.context.briefing?.actionHref).toBeUndefined();
     expect(handoff.context.handoffContext).toContain('Assessment: Coverage incomplete');
-    expect(handoff.context.handoffContext).toContain('Recommended Next Step: Verify full coverage');
-    expect(handoff.context.handoffContext).toContain(
-      'Recommended Next Step Action: Run Patrol (run_patrol)',
-    );
+    expect(handoff.context.handoffContext).not.toContain('Recommended Next Step');
     expect(handoff.context.handoffContext).toContain(
       'Supporting Context: 100 recent changes · 29 correlations · 116 policy-covered resources',
     );
@@ -487,21 +467,14 @@ describe('patrolInvestigationContextModel', () => {
       targetId: 'pulse-patrol-assessment',
       autonomousMode: false,
     });
-    expect(handoff.context.context).toMatchObject({
-      recommendedNextStepTitle: 'Verify full coverage',
-      recommendedNextStepActionKind: 'run_patrol',
-    });
-    expect(handoff.context.handoffMetadata).toMatchObject({
+    expect(handoff.context.context).not.toHaveProperty('recommendedNextStepTitle');
+    expect(handoff.context.context).not.toHaveProperty('recommendedNextStepActionKind');
+    expect(handoff.context.handoffMetadata).toEqual({
       kind: 'patrol_assessment',
-      recommendedNextStep: 'Verify full coverage',
-      recommendedNextStepDetail:
-        'Run a full Patrol sweep before treating this assessment as an all-clear; recent evidence is incomplete or limited to targeted activity.',
-      recommendedNextStepAction: 'Run Patrol',
-      recommendedNextStepActionKind: 'run_patrol',
     });
   });
 
-  it('prioritizes active findings over secondary coverage caveats in assessment handoffs', () => {
+  it('surfaces active findings as facts rather than Patrol recommendations', () => {
     const handoff = buildPatrolAssessmentAssistantHandoff({
       assessment: {
         title: 'Issues detected',
@@ -535,13 +508,6 @@ describe('patrolInvestigationContextModel', () => {
         hasContext: true,
         summaryText: '3 recent changes · 70 correlations · 55 policy-covered resources',
       },
-      recommendedNextStep: {
-        title: 'Review active findings',
-        description:
-          'Use the findings workspace to prioritize current risk, recent changes, and governed remediation.',
-        actionLabel: 'Review findings',
-        actionKind: 'review_findings',
-      },
       activeFindings: [
         {
           id: 'finding-backup',
@@ -555,147 +521,14 @@ describe('patrolInvestigationContextModel', () => {
       ],
     });
 
-    expect(handoff.prompt).toContain('Start by prioritizing 1 active finding');
-    expect(handoff.prompt).not.toContain('why Patrol coverage is incomplete');
-    expect(handoff.prompt).not.toContain('what the latest scoped activity did and did not prove');
+    expect(handoff.prompt).toContain('1 active finding');
+    expect(handoff.prompt).not.toContain('next-step metadata');
     expect(handoff.context.briefing).toMatchObject({
-      actionLabel: 'Recommended: Review findings',
-      safetyNote:
-        'Assistant can explain the Patrol recommendation; Patrol runs, settings changes, diagnostics, and remediation remain operator-controlled.',
-      suggestedPrompts: [
-        'Prioritize findings and safest next step',
-        'Explain recent changes and correlations',
-        'List evidence to verify before action',
-      ],
+      actionLabel: 'Discuss Patrol assessment',
+      safetyNote: 'Diagnostics and remediation require governed approval.',
     });
-  });
-
-  it('links route-owned Patrol assessment recommendations in Assistant briefing', () => {
-    const handoff = buildPatrolAssessmentAssistantHandoff({
-      assessment: {
-        title: 'Patrol runtime issue',
-        description: 'Patrol coverage is incomplete.',
-      },
-      overallHealth: {
-        grade: 'C',
-        score: 60,
-        factors: [{ category: 'coverage' }],
-      },
-      recommendedNextStep: {
-        title: 'Restore Patrol visibility',
-        description: 'Fix the Patrol runtime issue before treating the assessment as current.',
-        actionLabel: 'Open Patrol provider settings',
-        actionKind: 'open_provider_settings',
-      },
-      activeFindings: [],
-    });
-
-    expect(handoff.context.briefing).toMatchObject({
-      actionLabel: 'Recommended: Open Patrol provider settings',
-      actionHref: '/settings/system-ai',
-      suggestedPrompts: [
-        'Explain why Patrol visibility is blocked',
-        'What should I check in provider settings?',
-        'What should I verify after restoring Patrol?',
-      ],
-    });
-    expect(handoff.context.briefing?.detailLines).toEqual(
-      expect.arrayContaining([
-        'Recommended next step: Restore Patrol visibility',
-        'Reason: Fix the Patrol runtime issue before treating the assessment as current.',
-        'Available action: Open Patrol provider settings',
-      ]),
-    );
-    expect(handoff.context.handoffContext).toContain(
-      'Recommended Next Step Action: Open Patrol provider settings (open_provider_settings)',
-    );
-    expect(handoff.context.context).toMatchObject({
-      recommendedNextStepActionKind: 'open_provider_settings',
-    });
-    expect(handoff.context.handoffMetadata).toMatchObject({
-      kind: 'patrol_assessment',
-      recommendedNextStep: 'Restore Patrol visibility',
-      recommendedNextStepDetail:
-        'Fix the Patrol runtime issue before treating the assessment as current.',
-      recommendedNextStepAction: 'Open Patrol provider settings',
-      recommendedNextStepActionKind: 'open_provider_settings',
-      recommendedNextStepActionHref: '/settings/system-ai',
-    });
-  });
-
-  it('marks unavailable recommended Patrol actions in assessment handoffs', () => {
-    const handoff = buildPatrolAssessmentAssistantHandoff({
-      assessment: {
-        title: 'Coverage incomplete',
-        description: 'Patrol coverage is incomplete.',
-      },
-      overallHealth: {
-        grade: 'C',
-        score: 65,
-        factors: [{ category: 'coverage' }],
-      },
-      recommendedNextStep: {
-        title: 'Verify full coverage',
-        description: 'Run a full Patrol sweep before treating this assessment as an all-clear.',
-        actionLabel: 'Run Patrol',
-        actionKind: 'run_patrol',
-        actionDisabledReason: 'Patrol is already running',
-      },
-    });
-
-    expect(handoff.prompt).toContain(
-      'Patrol-owned action "Run Patrol" is currently unavailable: Patrol is already running',
-    );
-    expect(handoff.context.handoffContext).toContain(
-      'Recommended Next Step Action Status: unavailable - Patrol is already running',
-    );
-    expect(handoff.context.context).toMatchObject({
-      recommendedNextStepActionKind: 'run_patrol',
-      recommendedNextStepActionDisabledReason: 'Patrol is already running',
-    });
-    expect(handoff.context.briefing).toMatchObject({
-      actionLabel: 'Recommended: Run Patrol',
-      safetyNote:
-        'Assistant can explain the gap; full Patrol runs, diagnostics, and remediation remain operator-controlled. Run Patrol is currently unavailable: Patrol is already running.',
-    });
-    expect(handoff.context.briefing?.detailLines).toEqual(
-      expect.arrayContaining([
-        'Recommended next step: Verify full coverage',
-        'Reason: Run a full Patrol sweep before treating this assessment as an all-clear.',
-        'Action unavailable: Run Patrol - Patrol is already running',
-      ]),
-    );
-  });
-
-  it('withholds unsafe recommendation text from assessment handoffs', () => {
-    const handoff = buildPatrolAssessmentAssistantHandoff({
-      assessment: {
-        title: 'Coverage incomplete',
-        description: 'Patrol coverage is incomplete.',
-      },
-      overallHealth: {
-        grade: 'C',
-        score: 65,
-        factors: [{ category: 'coverage' }],
-      },
-      recommendedNextStep: {
-        title: 'Run sudo systemctl restart workload.service',
-        description: 'Use token abc123 before running curl against the host.',
-        actionLabel: 'sudo restart',
-        actionKind: 'run_patrol',
-      },
-    });
-
-    expect(handoff.context.handoffContext).toContain('Recommended Next Step: Run Patrol');
-    expect(handoff.context.handoffContext).toContain(
-      'Recommended Next Step Detail: sensitive or command detail withheld',
-    );
-    expect(handoff.context.handoffContext).toContain(
-      'Recommended Next Step Action: Run Patrol (run_patrol)',
-    );
-    expect(JSON.stringify(handoff)).not.toContain('systemctl');
-    expect(JSON.stringify(handoff)).not.toContain('abc123');
-    expect(JSON.stringify(handoff)).not.toContain('curl');
+    expect(handoff.context.briefing?.suggestedPrompts).toBeUndefined();
+    expect(handoff.context.handoffContext).not.toContain('Recommended Next Step');
   });
 
   it('carries live governed approval posture into assessment finding handoffs', () => {
@@ -739,7 +572,7 @@ describe('patrolInvestigationContextModel', () => {
     });
 
     expect(handoff.context.autonomousMode).toBe(false);
-    expect(handoff.prompt).toContain('Start by reviewing 1 pending governed approval');
+    expect(handoff.prompt).toContain('The attached context includes 1 pending governed approval');
     expect(handoff.prompt).toContain('approval policy, dry-run posture');
     expect(handoff.context.handoffContext).toContain('Finding 1: High CPU usage');
     expect(handoff.context.handoffContext).toContain('approval approval-1');
@@ -781,9 +614,7 @@ describe('patrolInvestigationContextModel', () => {
       safetyNote:
         'Review approvals in the governed flow; approval policy is attached; dry-run posture is attached; destructive actions remain approval-bound; raw command payloads stay out of Assistant.',
     });
-    expect(handoff.context.briefing?.suggestedPrompts).toContain(
-      'Review pending approvals and safest next step',
-    );
+    expect(handoff.context.briefing?.suggestedPrompts).toBeUndefined();
     expect(JSON.stringify(handoff)).not.toContain('systemctl restart workload.service');
   });
 
@@ -829,7 +660,7 @@ describe('patrolInvestigationContextModel', () => {
     const handoff = buildPatrolRunAssistantHandoff(run);
 
     expect(handoff.prompt).toContain('Discuss this Pulse Patrol run');
-    expect(handoff.prompt).toContain('Start by explaining the Patrol runtime failure');
+    expect(handoff.prompt).toContain('The attached context includes a Patrol runtime failure');
     expect(handoff.prompt).toContain('Provider rejected Patrol tool calls');
     expect(handoff.prompt).not.toContain('tool_choice');
     expect(handoff.prompt).not.toContain('No endpoints found');
@@ -860,12 +691,8 @@ describe('patrolInvestigationContextModel', () => {
       sourceLabel: 'Pulse Patrol',
       title: 'Patrol run attached',
       actionLabel: 'Review Patrol runtime failure',
-      suggestedPrompts: [
-        'Explain why this Patrol run failed',
-        'List provider or model checks',
-        'What should I retry after fixing it?',
-      ],
     });
+    expect(handoff.context.briefing?.suggestedPrompts).toBeUndefined();
     expect(JSON.stringify(handoff)).not.toContain('provider trace');
     expect(JSON.stringify(handoff)).not.toContain('tool_choice');
     expect(JSON.stringify(handoff)).not.toContain('No endpoints found');
@@ -913,12 +740,8 @@ describe('patrolInvestigationContextModel', () => {
       sourceLabel: 'Pulse Patrol',
       title: 'Patrol configuration failure attached',
       actionLabel: 'Review Patrol configuration failure',
-      suggestedPrompts: [
-        'Explain why Patrol configuration failed',
-        'List provider or model checks',
-        'What should I change before retrying?',
-      ],
     });
+    expect(handoff.context.briefing?.suggestedPrompts).toBeUndefined();
     expect(JSON.stringify(handoff)).not.toContain('systemctl restart pulse.service');
   });
 
@@ -1148,10 +971,10 @@ describe('patrolInvestigationContextModel', () => {
     // Model-owned tool choice — the differentiator vs Explain.
     expect(prompt.toLowerCase()).toContain('decide whether the available pulse tools are needed');
     expect(prompt.toLowerCase()).toContain('fresh evidence');
-    // Synthesis instruction — root cause + confidence + safe next step.
+    // Synthesis instruction — root cause + confidence + model-owned next step.
     expect(prompt.toLowerCase()).toContain('root cause');
     expect(prompt.toLowerCase()).toContain('confidence');
-    expect(prompt.toLowerCase()).toContain('safe next step');
+    expect(prompt.toLowerCase()).toContain('what should happen next');
     // Safety: any command-running must route through governed approval,
     // not the LLM's own judgment.
     expect(prompt.toLowerCase()).toContain('governed approval');
@@ -1256,7 +1079,7 @@ describe('patrolInvestigationContextModel', () => {
           started_at: '2026-05-06T12:00:00Z',
         },
       }),
-    ).toContain('Use that record as the main context before suggesting next actions.');
+    ).toContain('Use that record as context, then decide next steps from current evidence.');
   });
 
   it('leads finding prompts with live governed approval context without command text', () => {
@@ -1281,12 +1104,12 @@ describe('patrolInvestigationContextModel', () => {
       }),
     });
 
-    expect(prompt).toContain('Start by reviewing governed approval approval-1');
+    expect(prompt).toContain('Governed approval approval-1 is attached');
     expect(prompt).toContain('approval status pending');
     expect(prompt).toContain('high risk');
     expect(prompt).toContain('approval policy attached');
     expect(prompt).toContain('dry-run posture attached');
-    expect(prompt).toContain('safest next step');
+    expect(prompt).toContain('next steps');
     expect(prompt).not.toContain('systemctl restart workload.service');
   });
 
@@ -1306,11 +1129,11 @@ describe('patrolInvestigationContextModel', () => {
       }),
     });
 
-    expect(prompt).toContain('Start by reviewing the governed action posture');
+    expect(prompt).toContain('Governed action posture is attached');
     expect(prompt).toContain('medium risk');
     expect(prompt).toContain('1 command recorded for approval context');
     expect(prompt).toContain('destructive action');
-    expect(prompt).toContain('safest next step');
+    expect(prompt).toContain('next steps');
     expect(prompt).not.toContain('systemctl restart nginx');
   });
 
@@ -1427,7 +1250,7 @@ describe('patrolInvestigationContextModel', () => {
       }),
     });
 
-    expect(handoff.prompt).toContain('Start by reviewing governed approval approval-1');
+    expect(handoff.prompt).toContain('Governed approval approval-1 is attached');
     expect(handoff.context).toMatchObject({
       targetType: 'agent',
       targetId: 'agent-1',
@@ -1528,11 +1351,6 @@ describe('patrolInvestigationContextModel', () => {
       commandSummary: '1 command recorded for approval context',
       safetyNote:
         'Command details stay in approval context; destructive actions require governed approval.',
-      suggestedPrompts: [
-        'Review approval risk and next step',
-        'Explain Patrol evidence and confidence',
-        'Summarize remediation without command text',
-      ],
     });
     expect(JSON.stringify(briefing)).not.toContain('systemctl restart workload.service');
     vi.useRealTimers();
@@ -1582,7 +1400,7 @@ describe('patrolInvestigationContextModel', () => {
     });
 
     expect(prompt).toBe(
-      'Review this Patrol finding and decide the safest next step: "Nginx down" on node-1.',
+      'Review this Patrol finding with the attached evidence: "Nginx down" on node-1. Decide what, if anything, should happen next.',
     );
     expect(modelContext).toContain('[Patrol Finding Action Context]');
     expect(modelContext).toContain(
@@ -1677,10 +1495,6 @@ describe('patrolInvestigationContextModel', () => {
       resourceId: 'pulse-patrol-runtime',
       resourceName: 'Patrol runtime',
       resourceType: 'service',
-      nextStepAction: {
-        label: 'Open Patrol provider settings',
-        href: '/settings/system-ai',
-      },
     });
 
     expect(handoff.context).toMatchObject({
@@ -1694,34 +1508,22 @@ describe('patrolInvestigationContextModel', () => {
         resourceId: 'pulse-patrol-runtime',
         resourceName: 'Patrol runtime',
         resourceType: 'service',
-        nextStepActionLabel: 'Open Patrol provider settings',
-        nextStepActionHref: '/settings/system-ai',
         actionReferenceCount: 0,
       },
     });
-    expect(handoff.prompt).toContain(
-      'Patrol\'s visible next step is "Open Patrol provider settings"',
-    );
+    expect(handoff.prompt).not.toContain('visible Patrol navigation');
     expect(handoff.context.briefing).toMatchObject({
-      actionLabel: 'Open Patrol provider settings',
-      actionHref: '/settings/system-ai',
-      suggestedPrompts: [
-        'Review Patrol next step',
-        'Explain current Patrol loop state',
-        'Check prerequisites before next step',
-      ],
+      title: 'Operator briefing attached',
+      subject: 'Provider connection issue on Patrol runtime',
     });
-    expect(handoff.context.handoffMetadata).toMatchObject({
+    expect(handoff.context.briefing?.actionLabel).toBeUndefined();
+    expect(handoff.context.briefing?.actionHref).toBeUndefined();
+    expect(handoff.context.briefing?.suggestedPrompts).toBeUndefined();
+    expect(handoff.context.handoffMetadata).toEqual({
       kind: 'patrol_finding',
-      recommendedNextStep: 'Open Patrol provider settings',
-      recommendedNextStepAction: 'Open Patrol provider settings',
-      recommendedNextStepActionHref: '/settings/system-ai',
     });
     expect(handoff.context.handoffActions).toBeUndefined();
-    expect(handoff.context.handoffContext).toContain(
-      'Patrol Next Step: Open Patrol provider settings',
-    );
-    expect(handoff.context.handoffContext).toContain('Patrol Next Step Route: /settings/system-ai');
+    expect(handoff.context.handoffContext).not.toContain('Patrol Next Step');
     expect(handoff.context.handoffContext).toContain(
       'Operator Boundary: This Patrol finding handoff is model-only context',
     );
@@ -1750,11 +1552,6 @@ describe('patrolInvestigationContextModel', () => {
       actionLabel: undefined,
       commandSummary: undefined,
       safetyNote: undefined,
-      suggestedPrompts: [
-        'Explain current finding status',
-        'Explain current Patrol loop state',
-        'Explain recurrence and what changed',
-      ],
     });
   });
 
@@ -1787,11 +1584,6 @@ describe('patrolInvestigationContextModel', () => {
       actionLabel: 'Approval approval-1',
       commandSummary: undefined,
       safetyNote: 'Execution requires the governed approval flow.',
-      suggestedPrompts: [
-        'Review approval risk and next step',
-        'Explain current finding status',
-        'List approval prerequisites before action',
-      ],
     });
   });
 
@@ -1817,11 +1609,6 @@ describe('patrolInvestigationContextModel', () => {
       actionLabel: undefined,
       commandSummary: undefined,
       safetyNote: undefined,
-      suggestedPrompts: [
-        'Review approval risk and next step',
-        'Explain current finding status',
-        'List approval prerequisites before action',
-      ],
     });
   });
 
@@ -1857,11 +1644,6 @@ describe('patrolInvestigationContextModel', () => {
       commandSummary: '1 command recorded for approval context',
       safetyNote:
         'Command details stay in approval context; destructive actions require governed approval.',
-      suggestedPrompts: [
-        'Review approval risk and next step',
-        'Explain current finding status',
-        'Summarize remediation without command text',
-      ],
     });
   });
 });

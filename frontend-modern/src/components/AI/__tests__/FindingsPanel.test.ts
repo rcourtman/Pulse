@@ -66,10 +66,7 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('investigationRecord: finding.investigationRecord');
     expect(findingsPanelSource).toContain('pendingApproval: pendingApprovalBriefing');
     expect(findingsPanelSource).toContain('proposedFix,');
-    expect(findingsPanelSource).toContain(
-      'const nextStepAction = getFindingPrimaryActionPresentation(finding);',
-    );
-    expect(findingsPanelSource).toContain('nextStepAction,');
+    expect(findingsPanelSource).not.toContain('nextStepAction,');
     expect(findingsPanelSource).toContain('AIAPI.getInvestigation(finding.id)');
     expect(findingsPanelSource).toContain('await aiIntelligenceStore.loadPendingApprovals()');
   });
@@ -238,38 +235,19 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('text-amber-600 dark:text-amber-400');
   });
 
-  it('renders a distinct capacity-forecast approval card when a forecast-driven proposal is attached', () => {
-    // The capacity-forecast card variant is only rendered when the
-    // RemediationPlan carries a proposed_action_plan with
-    // source === 'capacity_forecast' AND the finding category is
-    // 'capacity'. Pin the wiring so the variant doesn't accidentally take
-    // over the generic remediation plan card.
-    expect(findingsPanelSource).toContain("finding.category === 'capacity'");
-    expect(findingsPanelSource).toContain("proposal()?.source === 'capacity_forecast'");
-    expect(findingsPanelSource).toContain('isCapacityForecastProposal()');
-    expect(findingsPanelSource).toContain('data-testid="capacity-forecast-approval-card"');
-    // Card must surface current/projected/threshold so the operator can
-    // decide without digging into Patrol metrics.
-    expect(findingsPanelSource).toContain('metric!.currentValue.toFixed(1)');
-    expect(findingsPanelSource).toContain('metric!.predictedValue!.toFixed(1)');
-    expect(findingsPanelSource).toContain('metric!.thresholdValue!.toFixed(0)');
-    // Approval-gated by contract; the badge must communicate that even when
-    // the action is preflight-only (Allowed=false).
-    expect(findingsPanelSource).toContain('requires approval');
-    expect(findingsPanelSource).toContain('p.allowed === false');
-    expect(findingsPanelSource).toContain('preflight only');
-    // Must reuse the existing approval handlers - approve flows through
-    // AIAPI.approveRemediationPlan, reject flows through handleDismissPlan.
-    // No bypass / parallel state machine.
-    expect(findingsPanelSource).toContain('handleApproveProposedPlan');
-    expect(findingsPanelSource).toContain('AIAPI.approveRemediationPlan(plan.id)');
-    expect(findingsPanelSource).toContain('data-testid="capacity-forecast-approve"');
-    expect(findingsPanelSource).toContain('data-testid="capacity-forecast-reject"');
-    // The fallback path keeps non-capacity action artifacts compact for
-    // Assistant review rather than rendering Patrol-authored steps.
-    expect(findingsPanelSource).toContain('fallback={(()');
-    expect(findingsPanelSource).toContain('Action review');
+  it('keeps remediation artifacts as compact Assistant context only', () => {
+    // Patrol findings should not grow a frontend-authored proposal surface.
+    // Any existing artifact is a pointer for Assistant review, not a visible
+    // fix plan, capacity proposal, or approval bypass.
+    expect(findingsPanelSource).toContain('Assistant context');
     expect(findingsPanelSource).toContain('Ask Assistant');
+    expect(findingsPanelSource).toContain('handleOpenPlanInAssistant');
+    expect(findingsPanelSource).toContain('handleDismissPlan');
+    expect(findingsPanelSource).not.toContain('capacity_forecast');
+    expect(findingsPanelSource).not.toContain('Capacity-forecast proposal');
+    expect(findingsPanelSource).not.toContain('Approve proposal');
+    expect(findingsPanelSource).not.toContain('handleApproveProposedPlan');
+    expect(findingsPanelSource).not.toContain('AIAPI.approveRemediationPlan(plan.id)');
     expect(findingsPanelSource).not.toContain('Remediation Plan');
     expect(findingsPanelSource).not.toContain('<For each={plan().steps}>');
   });

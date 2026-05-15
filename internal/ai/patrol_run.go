@@ -2022,7 +2022,6 @@ func (p *PatrolService) reviewAndResolveAlertsState(ctx context.Context, state p
 
 	resolvedCount := 0
 
-	// Pass nil for aiService if LLM is not allowed (use heuristic checks only).
 	aiSvc := aiService
 	if !llmAllowed {
 		aiSvc = nil
@@ -2052,42 +2051,11 @@ func (p *PatrolService) reviewAndResolveAlertsState(ctx context.Context, state p
 	return resolvedCount
 }
 
-// shouldResolveAlert determines if an alert should be auto-resolved based on current state.
-// Returns (shouldResolve, reason)
+// shouldResolveAlert determines if an alert should be auto-resolved based on
+// model review of current state. Pulse can gather context and enforce the
+// resolution gate, but it must not use local alert-type heuristics to decide
+// that an infrastructure issue has cleared.
 func (p *PatrolService) shouldResolveAlertState(ctx context.Context, alert AlertInfo, snap patrolRuntimeState, aiService *Service, executionID string) (bool, string) {
-	// First, try smart heuristic checks based on alert type
-	switch alert.Type {
-	case "usage": // Storage usage alert
-		resource := lookupPatrolAlertResourceState(alert, snap)
-		if resource.found {
-			if resource.disk < alert.Threshold*0.95 { // 5% margin below threshold
-				return true, fmt.Sprintf("storage usage dropped from %.1f%% to %.1f%% (threshold: %.1f%%)",
-					alert.Value, resource.disk, alert.Threshold)
-			}
-			return false, ""
-		}
-		// Storage not found in current snapshot - might have been removed
-		// Resolve after 24 hours if resource is gone
-		if time.Since(alert.StartTime) > 24*time.Hour {
-			return true, "resource no longer present in infrastructure"
-		}
-
-	case "cpu", "memory": // Resource utilization alerts
-		// Check if this is a node, VM, container, or docker container
-		currentValue := p.getCurrentMetricValueState(alert, snap)
-		if currentValue >= 0 && currentValue < alert.Threshold*0.95 {
-			return true, fmt.Sprintf("%s dropped from %.1f%% to %.1f%% (threshold: %.1f%%)",
-				alert.Type, alert.Value, currentValue, alert.Threshold)
-		}
-
-	case "offline", "stopped", "docker-offline":
-		// Check if the resource is now online
-		if p.isResourceOnlineState(alert, snap) {
-			return true, "resource is now online/running"
-		}
-	}
-
-	// For complex cases or when heuristics don't apply, use AI judgment if available
 	if aiService != nil && aiService.IsEnabled() {
 		return p.askAIAboutAlertState(ctx, alert, snap, aiService, executionID)
 	}

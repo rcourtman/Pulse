@@ -145,33 +145,6 @@ const getSessionHandoffBadgeLabel = (summary: ChatSessionHandoffSummary) => {
   return summary.has_model_context ? 'Context attached' : 'Scoped handoff';
 };
 
-const formatSessionHandoffRecommendationLabel = (summary: ChatSessionHandoffSummary) => {
-  if (!isPatrolSessionHandoff(summary)) return '';
-  const action = summary.recommended_next_step_action?.trim();
-  if (action) return isPatrolFindingSessionHandoff(summary) ? action : `Recommended: ${action}`;
-  const nextStep = summary.recommended_next_step?.trim();
-  return nextStep ? `Recommended: ${nextStep}` : '';
-};
-
-const getSessionHandoffRecommendedActionHref = (
-  summary: ChatSessionHandoffSummary,
-): string | undefined => {
-  const summaryHref = summary.recommended_next_step_action_href?.trim();
-  if (summaryHref === '/settings/system-ai' || summaryHref === '/patrol') {
-    return summaryHref;
-  }
-
-  switch (summary.recommended_next_step_action_kind?.trim()) {
-    case 'open_provider_settings':
-      return '/settings/system-ai';
-    case 'review_approvals':
-    case 'review_findings':
-      return '/patrol';
-    default:
-      return undefined;
-  }
-};
-
 const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | undefined => {
   const summary = session?.handoff_summary;
   if (!summary) return undefined;
@@ -180,11 +153,6 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
   const resourceLabel = formatSessionHandoffResourceLabel(summary);
   const resourceDetail = formatSessionHandoffResourceDetail(summary);
   const statusLabel = formatSessionHandoffStatus(summary);
-  const recommendedNextStep = summary.recommended_next_step?.trim() || '';
-  const recommendedNextStepDetail = summary.recommended_next_step_detail?.trim() || '';
-  const recommendedNextStepAction = summary.recommended_next_step_action?.trim() || '';
-  const recommendedNextStepActionKind = summary.recommended_next_step_action_kind?.trim() || '';
-  const recommendedNextStepActionHref = getSessionHandoffRecommendedActionHref(summary);
   const actionCount = summary.action_count ?? 0;
   const resourceCount = summary.resource_count ?? 0;
   const findingId = summary.finding_id?.trim() || undefined;
@@ -243,11 +211,6 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
       lastKnownApprovalStatus: summary.last_known_approval_status,
       lastKnownActionState: summary.last_known_action_state,
       lastKnownActionRisk: summary.last_known_action_risk,
-      recommendedNextStep,
-      recommendedNextStepDetail,
-      recommendedNextStepAction,
-      recommendedNextStepActionKind,
-      recommendedNextStepActionHref,
       updatedAt: summary.updated_at,
     },
     findingId,
@@ -275,15 +238,6 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
         resourceCount > 1
           ? pluralizeCount(resourceCount, 'linked resource', 'linked resources')
           : undefined,
-        isPatrolAssessment && recommendedNextStep
-          ? `Recommended next step: ${recommendedNextStep}`
-          : undefined,
-        isPatrolAssessment && recommendedNextStepDetail
-          ? `Reason: ${recommendedNextStepDetail}`
-          : undefined,
-        isPatrolAssessment && recommendedNextStepAction
-          ? `Available action: ${recommendedNextStepAction}`
-          : undefined,
         actionCount > 0
           ? pluralizeCount(actionCount, 'governed action', 'governed actions')
           : undefined,
@@ -294,27 +248,14 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
         : isPatrolConfigurationFailure
           ? 'Review Patrol configuration issue'
           : isPatrolAssessment
-            ? recommendedNextStepAction
-              ? `Recommended: ${recommendedNextStepAction}`
-              : recommendedNextStep
-                ? `Recommended: ${recommendedNextStep}`
-                : 'Review Patrol assessment'
+            ? 'Review Patrol assessment'
             : isPatrolRun && summary.runtime_failure
               ? 'Review Patrol runtime issue'
               : isPatrolRun
                 ? 'Review Patrol run'
-                : isPatrolFinding && recommendedNextStepAction
-                  ? recommendedNextStepAction
-                  : actionCount > 0
-                    ? 'Governed action context'
-                    : undefined,
-      actionHref:
-        !summary.requires_approval &&
-        recommendedNextStepActionHref &&
-        (isPatrolFinding ||
-          (isPatrolAssessment && Boolean(recommendedNextStepAction || recommendedNextStep)))
-          ? recommendedNextStepActionHref
-          : undefined,
+                : actionCount > 0
+                  ? 'Governed action context'
+                  : undefined,
       commandSummary: statusLabel
         ? isPatrolRun
           ? `Run state: ${statusLabel}`
@@ -325,37 +266,9 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
         : actionCount > 0
           ? 'Detailed command payloads stay in governed approval context.'
           : undefined,
-      suggestedPrompts: isPatrolRun
-        ? summary.runtime_failure
-          ? [
-              'Explain this Patrol runtime issue',
-              'What should I check before retrying?',
-              'What should I verify next?',
-            ]
-          : [
-              'Explain this Patrol run',
-              'What changed during this run?',
-              'What should I verify next?',
-            ]
-        : isPatrolConfigurationFailure
-          ? [
-              'Explain this Patrol configuration issue',
-              'What should I check before retrying?',
-              'What should I change before the next run?',
-            ]
-          : isPatrolAssessment
-            ? [
-                'Prioritize findings and safest next step',
-                'Explain recent changes and correlations',
-                'What should I verify next?',
-              ]
-            : isPatrolFinding
-              ? [
-                  'What changed since this finding was opened?',
-                  'What evidence supports this finding?',
-                  'What should I verify next?',
-                ]
-              : ['Summarize this handoff', 'What needs attention?', 'What should I verify next?'],
+      suggestedPrompts: isPatrolSessionHandoff(summary)
+        ? []
+        : ['Summarize this handoff', 'What needs attention?', 'What should I verify next?'],
     },
   };
 };
@@ -1453,15 +1366,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                         {(status) => (
                                           <span class="max-w-full truncate rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
                                             {status()}
-                                          </span>
-                                        )}
-                                      </Show>
-                                      <Show
-                                        when={formatSessionHandoffRecommendationLabel(summary())}
-                                      >
-                                        {(recommendation) => (
-                                          <span class="max-w-full truncate rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
-                                            {recommendation()}
                                           </span>
                                         )}
                                       </Show>

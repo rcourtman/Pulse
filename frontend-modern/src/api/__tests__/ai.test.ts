@@ -188,7 +188,7 @@ describe('AIAPI', () => {
           description:
             'Pulse Patrol could not maintain a healthy connection to the configured provider during analysis.',
           impact:
-            'While Patrol cannot analyze, alerts continue to fire without evidence or recommended actions, and AI Intelligence summaries cannot refresh.',
+            'While Patrol cannot analyze, alerts continue to fire without fresh Patrol evidence, and AI Intelligence summaries cannot refresh.',
           recommendation:
             'Check provider reachability, base URL, firewall or proxy rules, and provider availability, then rerun Patrol.',
           detected_at: '2026-05-08T12:00:00Z',
@@ -200,7 +200,7 @@ describe('AIAPI', () => {
 
     const result = await AIAPI.getUnifiedFindings();
     expect(result.findings[0].impact).toBe(
-      'While Patrol cannot analyze, alerts continue to fire without evidence or recommended actions, and AI Intelligence summaries cannot refresh.',
+      'While Patrol cannot analyze, alerts continue to fire without fresh Patrol evidence, and AI Intelligence summaries cannot refresh.',
     );
   });
 

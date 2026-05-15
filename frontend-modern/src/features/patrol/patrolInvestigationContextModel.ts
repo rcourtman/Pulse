@@ -116,7 +116,6 @@ export interface PatrolAssistantFindingPromptInput {
   pendingApproval?: PatrolAssistantApprovalBriefingInput | null;
   proposedFix?: PatrolAssistantProposedFixBriefingInput | null;
   investigationRecord?: InvestigationRecord | null;
-  nextStepAction?: PatrolAssistantNextStepInput | null;
   intent?: PatrolAssistantFindingIntent;
 }
 
@@ -145,11 +144,6 @@ export interface PatrolAssistantProposedFixBriefingInput {
   destructive?: boolean | null;
 }
 
-export interface PatrolAssistantNextStepInput {
-  label?: string | null;
-  href?: string | null;
-}
-
 export interface PatrolAssistantProposedFixBriefingSource {
   description?: string | null;
   riskLevel?: string | null;
@@ -176,7 +170,6 @@ export interface PatrolAssistantFindingBriefingInput {
   pendingApproval?: PatrolAssistantApprovalBriefingInput | null;
   proposedFix?: PatrolAssistantProposedFixBriefingInput | null;
   investigationRecord?: InvestigationRecord | null;
-  nextStepAction?: PatrolAssistantNextStepInput | null;
 }
 
 export interface PatrolAssistantFindingHandoffInput {
@@ -201,7 +194,6 @@ export interface PatrolAssistantFindingHandoffInput {
   pendingApproval?: PatrolAssistantApprovalBriefingInput | null;
   proposedFix?: PatrolAssistantProposedFixBriefingInput | null;
   investigationRecord?: InvestigationRecord | null;
-  nextStepAction?: PatrolAssistantNextStepInput | null;
   intent?: PatrolAssistantFindingIntent;
 }
 
@@ -238,21 +230,6 @@ export interface PatrolAssessmentAssistantFindingInput {
   pendingApproval?: PatrolAssistantApprovalBriefingInput | null;
   proposedFix?: PatrolAssistantProposedFixBriefingInput | null;
   investigationRecord?: InvestigationRecord | null;
-}
-
-export type PatrolAssessmentRecommendedNextStepActionKind =
-  | 'discuss_assessment'
-  | 'open_provider_settings'
-  | 'review_approvals'
-  | 'review_findings'
-  | 'run_patrol';
-
-export interface PatrolAssessmentRecommendedNextStepInput {
-  title?: string | null;
-  description?: string | null;
-  actionLabel?: string | null;
-  actionKind?: PatrolAssessmentRecommendedNextStepActionKind | string | null;
-  actionDisabledReason?: string | null;
 }
 
 export interface PatrolAssessmentAssistantHandoffInput {
@@ -300,7 +277,6 @@ export interface PatrolAssessmentAssistantHandoffInput {
     recentChanges?: ResourceChange[] | null;
     correlations?: ResourceCorrelation[] | null;
   } | null;
-  recommendedNextStep?: PatrolAssessmentRecommendedNextStepInput | null;
   activeFindings?: PatrolAssessmentAssistantFindingInput[] | null;
 }
 
@@ -352,7 +328,6 @@ const MAX_ASSESSMENT_CORRELATIONS = 3;
 const MAX_ASSESSMENT_RESOURCES = 8;
 const MAX_ASSESSMENT_HANDOFF_ACTIONS = 4;
 const MAX_PATROL_RUN_HANDOFF_RESOURCES = 8;
-const MAX_PATROL_BRIEFING_SUGGESTED_PROMPTS = 3;
 const MAX_ASSESSMENT_RELATED_RESOURCE_LABELS = 4;
 const MAX_ASSESSMENT_RELATED_RESOURCE_LABEL_LENGTH = 80;
 const SAME_STATE_CHANGED_FIELD_LABELS: Record<string, string> = {
@@ -368,27 +343,6 @@ const SAME_STATE_CHANGED_FIELD_LABELS: Record<string, string> = {
   customUrl: 'custom URL',
   identity: 'identity',
 };
-
-interface NormalizedPatrolAssessmentRecommendedNextStep {
-  title: string;
-  description?: string;
-  actionLabel?: string;
-  actionKind?: PatrolAssessmentRecommendedNextStepActionKind;
-  actionDisabledReason?: string;
-  actionSummary?: string;
-}
-
-const PATROL_ASSESSMENT_RECOMMENDED_NEXT_STEP_ACTION_LABELS: Record<
-  PatrolAssessmentRecommendedNextStepActionKind,
-  string
-> = {
-  discuss_assessment: 'Discuss with Assistant',
-  open_provider_settings: 'Open provider settings',
-  review_approvals: 'Review approvals',
-  review_findings: 'Review findings',
-  run_patrol: 'Run Patrol',
-};
-const WITHHELD_RECOMMENDATION_TEXT = 'sensitive or command detail withheld';
 
 export function buildPatrolInvestigationContextSummary(
   input: PatrolInvestigationContextSummaryInput,
@@ -535,14 +489,13 @@ export function buildPatrolAssistantFindingPrompt(
   const description = normalizeText(input.description);
   const hasRecord = Boolean(input.investigationRecord?.id);
   const actionInstruction = buildPatrolAssistantFindingActionPromptInstruction(input);
-  const nextStepAction = normalizePatrolAssistantNextStepAction(input.nextStepAction);
 
   let prompt: string;
   if (input.intent === 'explain') {
     prompt =
       `Explain this Patrol finding: "${title}" on ${subject}. ` +
       'Walk me through what we know, why it matters for the affected workloads, ' +
-      'how confident the analysis is, and whether the recommended action is the right next step. ' +
+      'how confident the analysis is, what remains uncertain, and what you would do next. ' +
       'Use the structured investigation record and operational memory in the attached context as the primary source.';
   } else if (input.intent === 'investigate') {
     prompt =
@@ -550,7 +503,7 @@ export function buildPatrolAssistantFindingPrompt(
       'Use the attached context and decide whether the available Pulse tools are needed to gather fresh evidence ' +
       'about the current state of the affected resource and related resources. ' +
       'Then synthesize: what is the root cause given the current evidence, ' +
-      'what is your confidence, what is the safe next step, and is the recommended action still right? ' +
+      'what is your confidence, and what should happen next? ' +
       'If any command-running step is involved, surface it for governed approval rather than executing on your own judgment.';
   } else if (input.intent === 'why') {
     prompt =
@@ -582,13 +535,10 @@ export function buildPatrolAssistantFindingPrompt(
     input.intent !== 'verify_fix'
   ) {
     prompt +=
-      '\n\nPulse Patrol has a structured investigation record for this finding. Use that record as the main context before suggesting next actions.';
+      '\n\nPulse Patrol has a structured investigation record for this finding. Use that record as context, then decide next steps from current evidence.';
   }
   if (actionInstruction) {
     prompt += `\n\n${actionInstruction}`;
-  }
-  if (nextStepAction.label) {
-    prompt += `\n\nPatrol's visible next step is "${nextStepAction.label}". Treat it as operator guidance for review, not an execution command.`;
   }
   if (description) {
     prompt += `\n\n${description}`;
@@ -619,9 +569,9 @@ function buildPatrolAssistantFindingActionPromptInstruction(
         : undefined,
     ].filter(isNonEmptyString);
 
-    return `Start by reviewing governed approval ${pendingApproval.id}${
+    return `Governed approval ${pendingApproval.id} is attached${
       contextParts.length > 0 ? ` (${contextParts.join('; ')})` : ''
-    }. Use the attached Patrol context to explain prerequisites, risk, and the safest next step before any execution.`;
+    }. Treat it as approval context. Use the attached Patrol evidence to decide prerequisites, risk, and next steps before any execution.`;
   }
 
   const hasGovernedActionPosture = Boolean(
@@ -648,9 +598,9 @@ function buildPatrolAssistantFindingActionPromptInstruction(
     outcome ? `outcome ${formatIdentifierLabel(outcome)?.toLowerCase() || outcome}` : undefined,
   ].filter(isNonEmptyString);
 
-  return `Start by reviewing the governed action posture${
+  return `Governed action posture is attached${
     contextParts.length > 0 ? ` (${contextParts.join('; ')})` : ''
-  }. Use the attached Patrol context to explain risk, prerequisites, and the safest next step without repeating command text.`;
+  }. Treat it as approval context, not a remediation decision. Use the attached Patrol evidence to decide risk, prerequisites, and next steps without repeating command text.`;
 }
 
 export function buildPatrolAssessmentAssistantHandoff(
@@ -658,9 +608,6 @@ export function buildPatrolAssessmentAssistantHandoff(
 ): PatrolAssessmentAssistantHandoff {
   const title = normalizeText(input.assessment?.title) || 'Pulse Patrol assessment';
   const description = normalizeText(input.assessment?.description);
-  const recommendedNextStep = normalizeAssessmentRecommendedNextStep(input.recommendedNextStep);
-  const recommendedNextStepActionHref =
-    getAssessmentRecommendedNextStepActionHref(recommendedNextStep);
   const handoffContext = buildPatrolAssessmentAssistantModelContext(input);
   const recentChanges = normalizeAssessmentRecentChanges(input.supportingEvidence?.recentChanges);
   const correlations = normalizeAssessmentCorrelations(input.supportingEvidence?.correlations);
@@ -677,11 +624,6 @@ export function buildPatrolAssessmentAssistantHandoff(
       handoffActions: handoffActions.length > 0 ? handoffActions : undefined,
       handoffMetadata: {
         kind: 'patrol_assessment',
-        recommendedNextStep: recommendedNextStep?.title,
-        recommendedNextStepDetail: recommendedNextStep?.description,
-        recommendedNextStepAction: recommendedNextStep?.actionLabel,
-        recommendedNextStepActionKind: recommendedNextStep?.actionKind,
-        recommendedNextStepActionHref,
       },
       briefing: buildPatrolAssessmentAssistantBriefing(input),
       context: {
@@ -693,13 +635,6 @@ export function buildPatrolAssessmentAssistantHandoff(
         correlationDetailCount: correlations.length,
         governedResourceCount: input.investigationContext?.governedResourceCount ?? 0,
         pendingApprovalCount: normalizeAssessmentPendingApprovalCount(input.activeFindings),
-        ...(recommendedNextStep
-          ? {
-              recommendedNextStepTitle: recommendedNextStep.title,
-              recommendedNextStepActionKind: recommendedNextStep.actionKind,
-              recommendedNextStepActionDisabledReason: recommendedNextStep.actionDisabledReason,
-            }
-          : {}),
       },
     },
   };
@@ -712,7 +647,6 @@ export function buildPatrolAssistantFindingHandoff(
   const resource = buildPatrolFindingHandoffResource(input);
   const handoffResources = resource ? [resource] : [];
   const handoffActions = buildPatrolAssistantFindingHandoffActions(input);
-  const nextStepAction = normalizePatrolAssistantNextStepAction(input.nextStepAction);
 
   return {
     prompt: buildPatrolAssistantFindingPrompt({
@@ -724,7 +658,6 @@ export function buildPatrolAssistantFindingHandoff(
       pendingApproval: input.pendingApproval,
       proposedFix: input.proposedFix,
       investigationRecord: input.investigationRecord,
-      nextStepAction: input.nextStepAction,
       intent: input.intent,
     }),
     context: {
@@ -735,14 +668,9 @@ export function buildPatrolAssistantFindingHandoff(
       handoffContext: buildPatrolAssistantFindingModelContext(input),
       handoffResources: handoffResources.length > 0 ? handoffResources : undefined,
       handoffActions: handoffActions.length > 0 ? handoffActions : undefined,
-      handoffMetadata: nextStepAction.label
-        ? {
-            kind: 'patrol_finding',
-            recommendedNextStep: nextStepAction.label,
-            recommendedNextStepAction: nextStepAction.label,
-            recommendedNextStepActionHref: nextStepAction.href || undefined,
-          }
-        : undefined,
+      handoffMetadata: {
+        kind: 'patrol_finding',
+      },
       briefing: buildPatrolAssistantFindingBriefing({
         title: input.title,
         subject: input.subject,
@@ -757,7 +685,6 @@ export function buildPatrolAssistantFindingHandoff(
         pendingApproval: input.pendingApproval,
         proposedFix: input.proposedFix,
         investigationRecord: input.investigationRecord,
-        nextStepAction: input.nextStepAction,
       }),
       context: {
         source: 'pulse-patrol-finding',
@@ -767,8 +694,6 @@ export function buildPatrolAssistantFindingHandoff(
         resourceName: resource?.name,
         resourceType: resource?.type,
         pendingApprovalId: normalizeApprovalBriefing(input.pendingApproval).id || undefined,
-        nextStepActionLabel: nextStepAction.label || undefined,
-        nextStepActionHref: nextStepAction.href || undefined,
         actionReferenceCount: handoffActions.length,
       },
     },
@@ -859,11 +784,6 @@ export function buildPatrolConfigurationFailureHandoff(
         actionLabel: `Review ${issueLabel}`,
         safetyNote:
           'Assistant can explain the configuration state; provider changes, retries, and remediation remain operator-controlled.',
-        suggestedPrompts: formatPatrolSuggestedPrompts([
-          'Explain why Patrol configuration failed',
-          'List provider or model checks',
-          'What should I change before retrying?',
-        ]),
       },
       context: {
         source: 'pulse-patrol-configuration-failure',
@@ -892,14 +812,13 @@ function buildPatrolAssessmentAssistantPrompt(
   description: string,
   handoffActions: AIChatHandoffAction[],
 ): string {
-  const recommendationInstruction = buildPatrolAssessmentRecommendationPromptInstruction(input);
   const reviewInstruction = buildPatrolAssessmentReviewPromptInstruction(input, handoffActions);
 
   return [
     `Discuss the current Pulse Patrol assessment: ${title}.`,
     description,
     reviewInstruction,
-    recommendationInstruction,
+    'Use the attached model-only assessment context and decide what, if anything, needs fresh evidence, operator action, or governed tool use.',
     'Do not infer, repeat, or execute raw command text from this handoff.',
   ]
     .filter(isNonEmptyString)
@@ -916,31 +835,31 @@ function buildPatrolAssessmentReviewPromptInstruction(
   const hasCoverageOnlyGap = assessmentHasCoverageGap(input) && activeFindingCount === 0;
 
   if (pendingApprovalCount > 0) {
-    return `Start by reviewing ${formatAssessmentMetricCount(
+    return `The attached context includes ${formatAssessmentMetricCount(
       'pending governed approvals',
       pendingApprovalCount,
-    )}, approval policy, dry-run posture, and the safest next step from the attached context.`;
+    )}, approval policy, dry-run posture, and current evidence.`;
   }
 
   if (actionCount > 0) {
-    return `Start by reviewing ${formatAssessmentMetricCount(
+    return `The attached context includes ${formatAssessmentMetricCount(
       'governed action references',
       actionCount,
-    )}, risk, and the safest next step from the attached context.`;
+    )}, risk, and current evidence.`;
   }
 
   if (activeFindingCount > 0) {
-    return `Start by prioritizing ${formatAssessmentMetricCount(
+    return `The attached context includes ${formatAssessmentMetricCount(
       'active findings',
       activeFindingCount,
-    )}, affected resources, evidence, verification caveats, and the safest next step from the attached context.`;
+    )}, affected resources, evidence, and verification caveats.`;
   }
 
   if (hasCoverageOnlyGap) {
-    return 'Start by explaining why Patrol coverage is incomplete, what the latest scoped activity did and did not prove, and whether a full Patrol verification should run before action.';
+    return 'The attached context includes incomplete Patrol coverage signals. Decide from the evidence whether more verification is needed before action.';
   }
 
-  return 'Use the attached model-only Patrol assessment context before suggesting next actions. Help me understand priority, risk, and safe next steps.';
+  return 'Review the attached model-only Patrol assessment context.';
 }
 
 function buildPatrolAssessmentAssistantBriefing(
@@ -953,9 +872,6 @@ function buildPatrolAssessmentAssistantBriefing(
   const verification = formatAssessmentVerification(input);
   const latestRun = formatAssessmentLatestRun(input);
   const contextSummary = normalizeText(input.investigationContext?.summaryText);
-  const recommendedNextStep = normalizeAssessmentRecommendedNextStep(input.recommendedNextStep);
-  const recommendedNextStepLines =
-    formatAssessmentRecommendedNextStepDetailLines(recommendedNextStep);
   const findings = normalizeAssessmentFindings(input.activeFindings);
   const recentChanges = normalizeAssessmentRecentChanges(input.supportingEvidence?.recentChanges);
   const correlations = normalizeAssessmentCorrelations(input.supportingEvidence?.correlations);
@@ -974,98 +890,14 @@ function buildPatrolAssessmentAssistantBriefing(
     title: 'Patrol assessment attached',
     subject: title,
     statusLabel: [health, attentionSummary].filter(isNonEmptyString).join(' · ') || undefined,
-    detailLines: [description, ...recommendedNextStepLines, verification, latestRun, contextSummary]
+    detailLines: [description, verification, latestRun, contextSummary]
       .filter(isNonEmptyString)
       .slice(0, 7),
     evidence: [...findingEvidence.slice(0, 3), ...supportingEvidence].slice(0, 5),
     actionLabel: actionPosture.actionLabel,
     actionHref: actionPosture.actionHref,
     safetyNote: actionPosture.safetyNote,
-    suggestedPrompts: buildPatrolAssessmentSuggestedPrompts(input, {
-      findings,
-      recentChanges,
-      correlations,
-    }),
   };
-}
-
-function buildPatrolAssessmentRecommendationPromptInstruction(
-  input: PatrolAssessmentAssistantHandoffInput,
-): string | undefined {
-  const recommendedNextStep = normalizeAssessmentRecommendedNextStep(input.recommendedNextStep);
-  if (!recommendedNextStep) return undefined;
-
-  const parts = [
-    `Patrol's visible recommended next step is "${recommendedNextStep.title}"`,
-    recommendedNextStep.description
-      ? `detail: ${truncateContextText(recommendedNextStep.description, 180)}`
-      : undefined,
-    formatAssessmentRecommendedNextStepActionInstruction(recommendedNextStep),
-  ].filter(isNonEmptyString);
-
-  return `${parts.join('; ')}. Explain that recommendation before alternatives, but keep Patrol runs, settings changes, diagnostics, remediation, and approvals in governed controls.`;
-}
-
-function formatAssessmentRecommendedNextStepActionInstruction(
-  recommendedNextStep: NormalizedPatrolAssessmentRecommendedNextStep,
-): string | undefined {
-  if (!recommendedNextStep.actionLabel) return undefined;
-  if (recommendedNextStep.actionDisabledReason) {
-    return `Patrol-owned action "${recommendedNextStep.actionLabel}" is currently unavailable: ${recommendedNextStep.actionDisabledReason}`;
-  }
-  return `available Patrol-owned action: ${recommendedNextStep.actionLabel}`;
-}
-
-function formatAssessmentRecommendedNextStepActionBriefingDetail(
-  recommendedNextStep: NormalizedPatrolAssessmentRecommendedNextStep,
-): string | undefined {
-  if (!recommendedNextStep.actionLabel) return undefined;
-  return recommendedNextStep.actionDisabledReason
-    ? `Action unavailable: ${recommendedNextStep.actionLabel} - ${recommendedNextStep.actionDisabledReason}`
-    : `Available action: ${recommendedNextStep.actionLabel}`;
-}
-
-function formatAssessmentRecommendedNextStepActionAvailability(
-  recommendedNextStep?: NormalizedPatrolAssessmentRecommendedNextStep,
-): string | undefined {
-  if (!recommendedNextStep?.actionDisabledReason) return undefined;
-  return `unavailable - ${recommendedNextStep.actionDisabledReason}`;
-}
-
-function formatAssessmentRecommendationSafetyNote(
-  base: string,
-  recommendedNextStep?: NormalizedPatrolAssessmentRecommendedNextStep,
-): string {
-  if (!recommendedNextStep?.actionLabel || !recommendedNextStep.actionDisabledReason) {
-    return base;
-  }
-  return `${base} ${recommendedNextStep.actionLabel} is currently unavailable: ${recommendedNextStep.actionDisabledReason}.`;
-}
-
-function formatAssessmentRecommendedNextStepDetailLines(
-  recommendedNextStep?: NormalizedPatrolAssessmentRecommendedNextStep,
-): string[] {
-  if (!recommendedNextStep) return [];
-
-  return [
-    `Recommended next step: ${recommendedNextStep.title}`,
-    recommendedNextStep.description ? `Reason: ${recommendedNextStep.description}` : undefined,
-    formatAssessmentRecommendedNextStepActionBriefingDetail(recommendedNextStep),
-  ].filter(isNonEmptyString);
-}
-
-function getAssessmentRecommendedNextStepActionHref(
-  recommendedNextStep?: NormalizedPatrolAssessmentRecommendedNextStep,
-): string | undefined {
-  switch (recommendedNextStep?.actionKind) {
-    case 'open_provider_settings':
-      return '/settings/system-ai';
-    case 'review_approvals':
-    case 'review_findings':
-      return '/patrol';
-    default:
-      return undefined;
-  }
 }
 
 function buildPatrolAssessmentActionPosture(
@@ -1077,9 +909,6 @@ function buildPatrolAssessmentActionPosture(
   const activeFindingCount = normalizeNonNegativeCount(input.activeFindings?.length);
   const hasCoverageGap = assessmentHasCoverageGap(input);
   const hasCoverageOnlyGap = hasCoverageGap && activeFindingCount === 0;
-  const recommendedNextStep = normalizeAssessmentRecommendedNextStep(input.recommendedNextStep);
-  const recommendedNextStepActionHref =
-    getAssessmentRecommendedNextStepActionHref(recommendedNextStep);
   const hasDryRunPosture = handoffActions.some((action) =>
     Boolean(normalizeText(action.actionDryRunSummary) || normalizeText(action.actionPreflight)),
   );
@@ -1120,25 +949,9 @@ function buildPatrolAssessmentActionPosture(
 
   if (hasCoverageOnlyGap) {
     return {
-      actionLabel: recommendedNextStep?.actionLabel
-        ? `Recommended: ${recommendedNextStep.actionLabel}`
-        : 'Review coverage gap',
-      actionHref: recommendedNextStep?.actionLabel ? recommendedNextStepActionHref : undefined,
-      safetyNote: formatAssessmentRecommendationSafetyNote(
-        'Assistant can explain the gap; full Patrol runs, diagnostics, and remediation remain operator-controlled.',
-        recommendedNextStep,
-      ),
-    };
-  }
-
-  if (recommendedNextStep?.actionLabel || recommendedNextStep?.title) {
-    return {
-      actionLabel: `Recommended: ${recommendedNextStep.actionLabel || recommendedNextStep.title}`,
-      actionHref: recommendedNextStep.actionLabel ? recommendedNextStepActionHref : undefined,
-      safetyNote: formatAssessmentRecommendationSafetyNote(
-        'Assistant can explain the Patrol recommendation; Patrol runs, settings changes, diagnostics, and remediation remain operator-controlled.',
-        recommendedNextStep,
-      ),
+      actionLabel: 'Discuss Patrol coverage',
+      safetyNote:
+        'Assistant can review the coverage evidence; Patrol runs, diagnostics, and remediation remain governed controls.',
     };
   }
 
@@ -1168,72 +981,6 @@ function formatAssessmentActionSafetyNote(input: {
   return `${parts.join('; ')}.`;
 }
 
-function buildPatrolAssessmentSuggestedPrompts(
-  input: PatrolAssessmentAssistantHandoffInput,
-  normalized: {
-    findings: PatrolAssessmentAssistantFindingInput[];
-    recentChanges: ResourceChange[];
-    correlations: ResourceCorrelation[];
-  },
-): string[] {
-  const prompts: string[] = [];
-  const activeFindingCount = normalizeNonNegativeCount(input.activeFindings?.length);
-  const hasCoverageGap = assessmentHasCoverageGap(input);
-  const hasCoverageOnlyGap = hasCoverageGap && activeFindingCount === 0;
-  const hasSupportingEvidence =
-    normalized.recentChanges.length > 0 ||
-    normalized.correlations.length > 0 ||
-    input.investigationContext?.hasContext === true;
-  const hasGovernedAction = normalized.findings.some(assessmentFindingHasGovernedAction);
-  const recommendedNextStep = normalizeAssessmentRecommendedNextStep(input.recommendedNextStep);
-
-  if (recommendedNextStep?.actionKind === 'open_provider_settings') {
-    return formatPatrolSuggestedPrompts([
-      'Explain why Patrol visibility is blocked',
-      'What should I check in provider settings?',
-      'What should I verify after restoring Patrol?',
-    ]);
-  }
-
-  if (activeFindingCount > 0) {
-    prompts.push('Prioritize findings and safest next step');
-  } else if (hasCoverageOnlyGap) {
-    prompts.push('Explain why coverage is incomplete');
-  } else {
-    prompts.push('Explain current health and what to watch');
-  }
-
-  if (hasCoverageOnlyGap) {
-    prompts.push(
-      input.verification?.activityMixLabel || input.latestRun?.kindLabel
-        ? 'Explain scoped activity and full-run gap'
-        : 'What should a full Patrol verify next?',
-    );
-  } else if (hasSupportingEvidence) {
-    prompts.push('Explain recent changes and correlations');
-  }
-
-  if (hasGovernedAction) {
-    prompts.push(
-      normalizeAssessmentPendingApprovalCount(input.activeFindings) > 0
-        ? 'Review pending approvals and safest next step'
-        : 'Summarize governed remediation risks',
-    );
-  } else if (activeFindingCount > 0) {
-    prompts.push('List evidence to verify before action');
-  } else if (hasCoverageOnlyGap) {
-    prompts.push(
-      hasSupportingEvidence
-        ? 'Identify early warning signals before full verification'
-        : 'What should a full Patrol verify next?',
-    );
-  } else if (hasSupportingEvidence) {
-    prompts.push('Identify early warning signals');
-  }
-
-  return formatPatrolSuggestedPrompts(prompts);
-}
-
 function assessmentHasCoverageGap(input: PatrolAssessmentAssistantHandoffInput): boolean {
   const title = normalizeText(input.assessment?.title).toLowerCase();
   const description = normalizeText(input.assessment?.description).toLowerCase();
@@ -1254,31 +1001,9 @@ function assessmentHasCoverageGap(input: PatrolAssessmentAssistantHandoffInput):
   );
 }
 
-function assessmentFindingHasGovernedAction(
-  finding: PatrolAssessmentAssistantFindingInput,
-): boolean {
-  if (
-    patrolAssistantFindingHandoffRequiresApprovalMode({
-      investigationOutcome: finding.investigationOutcome,
-      pendingApproval: finding.pendingApproval,
-      investigationRecord: finding.investigationRecord,
-    })
-  ) {
-    return true;
-  }
-
-  if (normalizeProposedFixBriefing(finding.proposedFix)) {
-    return true;
-  }
-
-  const loopState = normalizeText(finding.loopState).toLowerCase();
-  return loopState.includes('approval') || loopState.includes('remediation');
-}
-
 function buildPatrolAssessmentAssistantModelContext(
   input: PatrolAssessmentAssistantHandoffInput,
 ): string {
-  const recommendedNextStep = normalizeAssessmentRecommendedNextStep(input.recommendedNextStep);
   const findings = normalizeAssessmentFindings(input.activeFindings);
   const recentChanges = normalizeAssessmentRecentChanges(input.supportingEvidence?.recentChanges);
   const correlations = normalizeAssessmentCorrelations(input.supportingEvidence?.correlations);
@@ -1306,13 +1031,6 @@ function buildPatrolAssessmentAssistantModelContext(
     formatContextLine('Assessment Scope', input.assessment?.eyebrow),
     formatContextLine('Health', formatAssessmentHealth(input)),
     formatContextLine('Attention', formatAssessmentAttentionSummary(input)),
-    formatContextLine('Recommended Next Step', recommendedNextStep?.title),
-    formatContextLine('Recommended Next Step Detail', recommendedNextStep?.description),
-    formatContextLine('Recommended Next Step Action', recommendedNextStep?.actionSummary),
-    formatContextLine(
-      'Recommended Next Step Action Status',
-      formatAssessmentRecommendedNextStepActionAvailability(recommendedNextStep),
-    ),
     formatContextLine('Verification', formatAssessmentVerification(input)),
     formatContextLine('Last Patrol', formatAssessmentRecency(input)),
     formatContextLine('Latest Run', formatAssessmentLatestRun(input)),
@@ -1353,15 +1071,15 @@ function buildPatrolRunAssistantPrompt(
   const trigger = formatTriggerReason(run.trigger_reason);
   const runLabel = [kindLabel, runId].filter(isNonEmptyString).join(' ') || 'Patrol run';
   const focus = runtimeFailure
-    ? `Start by explaining the Patrol runtime failure (${truncateContextText(runtimeFailure, 180)}), what likely caused it, and what should be checked before retrying Patrol.`
-    : `Start by explaining the run outcome (${statusLabel}${
+    ? `The attached context includes a Patrol runtime failure: ${truncateContextText(runtimeFailure, 180)}.`
+    : `The attached context includes a Patrol run outcome: ${statusLabel}${
         trigger ? `, ${trigger.toLowerCase()}` : ''
-      }) and the safest next operational step from the attached context.`;
+      }.`;
 
   return [
     `Discuss this Pulse Patrol run: ${runLabel}.`,
     focus,
-    'Use the attached model-only run history context before suggesting next actions.',
+    'Use the attached model-only run history context and decide what, if anything, needs fresh evidence, operator action, or governed tool use.',
     'Do not infer, repeat, or execute raw command text from this handoff.',
   ]
     .filter(isNonEmptyString)
@@ -1399,24 +1117,7 @@ function buildPatrolRunAssistantBriefing(
     actionLabel: runtimeFailure ? 'Review Patrol runtime failure' : 'Discuss Patrol run outcome',
     safetyNote:
       'Assistant can explain the Patrol run context; retries, configuration changes, and remediation remain operator-controlled.',
-    suggestedPrompts: buildPatrolRunSuggestedPrompts(Boolean(runtimeFailure)),
   };
-}
-
-function buildPatrolRunSuggestedPrompts(hasRuntimeFailure: boolean): string[] {
-  if (hasRuntimeFailure) {
-    return formatPatrolSuggestedPrompts([
-      'Explain why this Patrol run failed',
-      'List provider or model checks',
-      'What should I retry after fixing it?',
-    ]);
-  }
-
-  return formatPatrolSuggestedPrompts([
-    'Summarize this Patrol run',
-    'What needs attention from this run?',
-    'What should I verify next?',
-  ]);
 }
 
 function buildPatrolConfigurationFailurePrompt(
@@ -1429,9 +1130,9 @@ function buildPatrolConfigurationFailurePrompt(
   return [
     `Discuss this Pulse Patrol ${issueLabel}.`,
     code ? `Server code: ${code}.` : undefined,
-    `Start by explaining this failure: ${truncateContextText(message, 220)}.`,
+    `The attached context includes this failure: ${truncateContextText(message, 220)}.`,
     detailLines.length > 0 ? `Attached details: ${detailLines.join('; ')}.` : undefined,
-    'Use the attached model-only configuration context before suggesting next actions.',
+    'Use the attached model-only configuration context and decide what, if anything, needs fresh evidence, operator action, or governed tool use.',
     'Do not infer, repeat, or execute raw command text from this handoff.',
   ]
     .filter(isNonEmptyString)
@@ -2304,7 +2005,6 @@ function buildPatrolAssistantFindingModelContext(
       ? `last regression ${formatBriefingTimestamp(normalizeText(input.lastRegressionAt))}`
       : undefined,
   ].filter(isNonEmptyString);
-  const nextStepAction = normalizePatrolAssistantNextStepAction(input.nextStepAction);
   const attentionReason = buildPatrolAssistantAttentionReason(input, record);
   const operatorDecision = buildPatrolAssistantOperatorDecision(input);
   const proposedFixFacts = proposedFix
@@ -2372,8 +2072,6 @@ function buildPatrolAssistantFindingModelContext(
     formatContextLine('Action Preflight', pendingApproval.actionPreflight),
     formatContextLine('Dry-Run Posture', pendingApproval.actionDryRunSummary),
     formatContextLine('Proposed Fix', proposedFixFacts),
-    formatContextLine('Patrol Next Step', nextStepAction.label),
-    formatContextLine('Patrol Next Step Route', nextStepAction.href),
     formatContextLine('Operator Decision', operatorDecision),
     'Command Boundary: Command details stay in governed approval or remediation context; this model-only handoff may include command counts but not raw command text.',
     'Operator Boundary: This Patrol finding handoff is model-only context for explanation and review. Diagnostics, remediation, and command execution require explicit governed approval.',
@@ -2468,7 +2166,7 @@ export function buildPatrolRemediationPlanAssistantPrompt(
   const title = normalizeText(input.title) || 'Patrol finding';
   const subject = normalizeText(input.subject) || 'the affected resource';
 
-  return `Review this Patrol finding and decide the safest next step: "${title}" on ${subject}.`;
+  return `Review this Patrol finding with the attached evidence: "${title}" on ${subject}. Decide what, if anything, should happen next.`;
 }
 
 export function buildPatrolRemediationPlanAssistantModelContext(
@@ -2485,7 +2183,7 @@ export function buildPatrolRemediationPlanAssistantModelContext(
 
   return [
     '[Patrol Finding Action Context]',
-    'Pulse is attaching observed finding context and any existing governed action artifact. The selected language model should decide whether remediation is appropriate and propose the safest next step.',
+    'Pulse is attaching observed finding context and any existing governed action artifact. The selected language model should decide whether remediation is appropriate and what should happen next.',
     formatContextLine('Finding', `${title} on ${subject}`),
     formatContextLine('Existing Action Artifact', planTitle),
     formatContextLine('Artifact Status', statusLabel),
@@ -2540,7 +2238,6 @@ export function buildPatrolAssistantFindingBriefing(
   const subject = normalizeText(input.subject) || 'affected resource';
   const pendingApproval = normalizeApprovalBriefing(input.pendingApproval);
   const proposedFix = record.proposedFix || normalizeProposedFixBriefing(input.proposedFix);
-  const nextStepAction = normalizePatrolAssistantNextStepAction(input.nextStepAction);
   const approvalStatusParts = !record.hasRecord
     ? [
         pendingApproval.status ? `${formatIdentifierLabel(pendingApproval.status)} approval` : '',
@@ -2577,7 +2274,6 @@ export function buildPatrolAssistantFindingBriefing(
   const actionLabel =
     proposedFix?.description ||
     (pendingApproval.id ? `Approval ${pendingApproval.id}` : undefined) ||
-    nextStepAction.label ||
     undefined;
 
   return {
@@ -2588,72 +2284,9 @@ export function buildPatrolAssistantFindingBriefing(
     detailLines,
     evidence: [...record.evidenceSummaries, ...verificationLines].slice(0, 4),
     actionLabel,
-    actionHref: actionLabel === nextStepAction.label ? nextStepAction.href || undefined : undefined,
     commandSummary: proposedFix?.commandSummary,
     safetyNote: buildPatrolAssistantSafetyNote(proposedFix, pendingApproval),
-    suggestedPrompts: buildPatrolFindingSuggestedPrompts(
-      input,
-      record,
-      pendingApproval,
-      proposedFix,
-    ),
   };
-}
-
-function buildPatrolFindingSuggestedPrompts(
-  input: PatrolAssistantFindingBriefingInput,
-  record: PatrolInvestigationRecordPresentation,
-  pendingApproval: Required<PatrolAssistantApprovalBriefingInput>,
-  proposedFix?: PatrolInvestigationRecordPresentation['proposedFix'],
-): string[] {
-  const prompts: string[] = [];
-  const requiresApproval = patrolAssistantFindingHandoffRequiresApprovalMode({
-    investigationOutcome: input.investigationOutcome || input.investigationRecord?.outcome,
-    remediationId: input.remediationId,
-    pendingApproval,
-    investigationRecord: input.investigationRecord,
-  });
-  const hasLoopState = Boolean(normalizeText(input.loopState));
-  const hasRecurrence =
-    normalizeNonNegativeCount(input.regressionCount) > 0 ||
-    normalizeNonNegativeCount(input.timesRaised) > 1;
-  const nextStepAction = normalizePatrolAssistantNextStepAction(input.nextStepAction);
-
-  if (requiresApproval) {
-    prompts.push('Review approval risk and next step');
-  } else if (record.hasRecord) {
-    prompts.push('Prioritize finding and safest next step');
-  } else if (nextStepAction.label) {
-    prompts.push('Review Patrol next step');
-  } else {
-    prompts.push('Explain current finding status');
-  }
-
-  if (record.hasRecord) {
-    prompts.push('Explain Patrol evidence and confidence');
-  } else if (requiresApproval) {
-    prompts.push('Explain current finding status');
-  } else if (hasLoopState) {
-    prompts.push('Explain current Patrol loop state');
-  } else {
-    prompts.push('List evidence to gather before action');
-  }
-
-  if (proposedFix?.commandSummary) {
-    prompts.push('Summarize remediation without command text');
-  } else if (requiresApproval) {
-    prompts.push('List approval prerequisites before action');
-  } else if (nextStepAction.label) {
-    prompts.push('Check prerequisites before next step');
-  } else if (hasRecurrence) {
-    prompts.push('Explain recurrence and what changed');
-  } else if (hasLoopState) {
-    prompts.push('Explain current Patrol loop state');
-  } else {
-    prompts.push('List evidence to gather before action');
-  }
-
-  return formatPatrolSuggestedPrompts(prompts);
 }
 
 function buildPatrolAssistantAttentionReason(
@@ -2882,10 +2515,6 @@ function buildPatrolAssistantOperatorDecision(
   if (loopState.includes('investigat')) {
     return 'Wait for Patrol to finish the investigation before approving remediation.';
   }
-  const nextStepAction = normalizePatrolAssistantNextStepAction(input.nextStepAction);
-  if (nextStepAction.label) {
-    return `Use Patrol's next step: ${nextStepAction.label}; review the finding context before changing settings or rerunning Patrol.`;
-  }
   if (normalizeText(input.findingStatus).toLowerCase() === 'active') {
     return 'Continue investigation or monitoring; no governed action reference is ready.';
   }
@@ -2941,15 +2570,6 @@ function normalizeProposedFixBriefing(
   }
 
   return normalized;
-}
-
-function normalizePatrolAssistantNextStepAction(
-  action?: PatrolAssistantNextStepInput | null,
-): Required<PatrolAssistantNextStepInput> {
-  return {
-    label: normalizeText(action?.label),
-    href: normalizeText(action?.href),
-  };
 }
 
 function formatPatrolAssistantProposedFixDetail(
@@ -3037,94 +2657,6 @@ function formatPlanCommandSummary(plan: RemediationPlan): string | undefined {
     );
   }
   return parts.join('; ');
-}
-
-function formatPatrolSuggestedPrompts(values: string[]): string[] {
-  return Array.from(new Set(values.map(normalizeText).filter(isNonEmptyString))).slice(
-    0,
-    MAX_PATROL_BRIEFING_SUGGESTED_PROMPTS,
-  );
-}
-
-function normalizeAssessmentRecommendedNextStep(
-  input?: PatrolAssessmentRecommendedNextStepInput | null,
-): NormalizedPatrolAssessmentRecommendedNextStep | undefined {
-  if (!input) return undefined;
-
-  const actionKind = normalizeAssessmentRecommendedNextStepActionKind(input.actionKind);
-  const title = formatSafeAssessmentRecommendationText(input.title, 140);
-  const description = formatSafeAssessmentRecommendationText(input.description, 260);
-  const fallbackActionLabel = actionKind
-    ? PATROL_ASSESSMENT_RECOMMENDED_NEXT_STEP_ACTION_LABELS[actionKind]
-    : undefined;
-  const safeActionLabel = formatSafeAssessmentRecommendationText(input.actionLabel, 80);
-  const actionLabel =
-    safeActionLabel === WITHHELD_RECOMMENDATION_TEXT && fallbackActionLabel
-      ? fallbackActionLabel
-      : safeActionLabel || fallbackActionLabel;
-  const actionDisabledReason = formatSafeAssessmentRecommendationText(
-    input.actionDisabledReason,
-    140,
-  );
-  const effectiveTitle =
-    title === WITHHELD_RECOMMENDATION_TEXT && actionLabel ? actionLabel : title || actionLabel;
-  const actionSummary = formatAssessmentRecommendedNextStepActionSummary(actionLabel, actionKind);
-
-  if (!effectiveTitle && !description && !actionSummary) {
-    return undefined;
-  }
-
-  return {
-    title: effectiveTitle || 'Review Patrol recommendation',
-    description,
-    actionLabel,
-    actionKind,
-    actionDisabledReason,
-    actionSummary,
-  };
-}
-
-function normalizeAssessmentRecommendedNextStepActionKind(
-  value?: string | null,
-): PatrolAssessmentRecommendedNextStepActionKind | undefined {
-  const normalized = normalizeText(value).toLowerCase();
-  if (!normalized) return undefined;
-  return Object.prototype.hasOwnProperty.call(
-    PATROL_ASSESSMENT_RECOMMENDED_NEXT_STEP_ACTION_LABELS,
-    normalized,
-  )
-    ? (normalized as PatrolAssessmentRecommendedNextStepActionKind)
-    : undefined;
-}
-
-function formatAssessmentRecommendedNextStepActionSummary(
-  actionLabel?: string,
-  actionKind?: PatrolAssessmentRecommendedNextStepActionKind,
-): string | undefined {
-  if (actionLabel && actionKind) return `${actionLabel} (${actionKind})`;
-  if (actionLabel) return actionLabel;
-  if (actionKind) return PATROL_ASSESSMENT_RECOMMENDED_NEXT_STEP_ACTION_LABELS[actionKind];
-  return undefined;
-}
-
-function formatSafeAssessmentRecommendationText(
-  value?: string | null,
-  limit: number = 240,
-): string | undefined {
-  const normalized = truncateContextText(value, limit);
-  if (!normalized) return undefined;
-  if (assessmentRecommendationTextShouldBeWithheld(normalized)) {
-    return WITHHELD_RECOMMENDATION_TEXT;
-  }
-  return normalized;
-}
-
-function assessmentRecommendationTextShouldBeWithheld(value: string): boolean {
-  return (
-    /(password|secret|token|api[_-]?key|credential|private[_-]?key)/i.test(value) ||
-    /\b(systemctl|sudo|bash|sh\s+-c|curl|wget|kubectl)\b/i.test(value) ||
-    /\b(docker|ssh)\s+\S+/i.test(value)
-  );
 }
 
 function formatBriefingStringList(

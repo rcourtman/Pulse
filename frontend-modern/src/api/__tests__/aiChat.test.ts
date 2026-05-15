@@ -50,10 +50,6 @@ describe('AIChatAPI', () => {
         last_known_approval_status: 'pending',
         last_known_action_state: 'awaiting_approval',
         last_known_action_risk: 'high',
-        recommended_next_step: 'Review pending Patrol approval',
-        recommended_next_step_action: 'Review approvals',
-        recommended_next_step_action_kind: 'review_approvals',
-        recommended_next_step_action_href: '/patrol',
         updated_at: '2026-05-06T12:08:00Z',
       },
     };
@@ -225,10 +221,6 @@ describe('AIChatAPI', () => {
       undefined,
       {
         kind: 'patrol_finding',
-        recommendedNextStep: 'Open Patrol provider settings',
-        recommendedNextStepDetail: 'Fix the Patrol runtime issue before continuing.',
-        recommendedNextStepAction: 'Open Patrol provider settings',
-        recommendedNextStepActionHref: '/settings/system-ai',
       },
     );
 
@@ -243,10 +235,6 @@ describe('AIChatAPI', () => {
           autonomous_mode: false,
           handoff_metadata: {
             kind: 'patrol_finding',
-            recommended_next_step: 'Open Patrol provider settings',
-            recommended_next_step_detail: 'Fix the Patrol runtime issue before continuing.',
-            recommended_next_step_action: 'Open Patrol provider settings',
-            recommended_next_step_action_href: '/settings/system-ai',
           },
         }),
       }),

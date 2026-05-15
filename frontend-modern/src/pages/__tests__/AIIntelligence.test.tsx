@@ -1157,11 +1157,9 @@ describe('AIIntelligence entitlement gating', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Coverage incomplete · 70\/100/)).toBeInTheDocument();
-      expect(screen.getByText('Next:')).toBeInTheDocument();
-      expect(screen.getByText('Verify full coverage')).toBeInTheDocument();
-      expect(screen.getByTestId('patrol-recommended-next-step-action')).toHaveTextContent(
-        'Run Patrol',
-      );
+      expect(screen.queryByText('Next:')).not.toBeInTheDocument();
+      expect(screen.queryByText('Verify full coverage')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('patrol-recommended-next-step-action')).not.toBeInTheDocument();
       expect(findingsPanelState.latestProps).not.toBeNull();
     });
 
@@ -1330,10 +1328,9 @@ describe('AIIntelligence entitlement gating', () => {
     });
 
     expect(screen.getByText(/1 runtime issue · 60\/100/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open Patrol provider settings' })).toHaveAttribute(
-      'href',
-      '/settings/system-ai',
-    );
+    expect(
+      screen.queryByRole('link', { name: 'Open Patrol provider settings' }),
+    ).not.toBeInTheDocument();
     const assessmentShell = screen.getByText('Patrol assessment').closest('section');
     expect(assessmentShell).not.toBeNull();
     expect(assessmentShell!.className).toContain('border-y');

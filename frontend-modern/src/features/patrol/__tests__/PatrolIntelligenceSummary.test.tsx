@@ -1,7 +1,6 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import type { PatrolRunRecord } from '@/api/patrol';
 import { PatrolIntelligenceSummary } from '../PatrolIntelligenceSummary';
 import type { PatrolIntelligenceState } from '../usePatrolIntelligenceState';
@@ -12,55 +11,20 @@ describe('PatrolIntelligenceSummary', () => {
     vi.restoreAllMocks();
   });
 
-  it('routes pending approvals from the compact assessment strip', () => {
-    vi.spyOn(aiIntelligenceStore, 'patrolPendingApprovals', 'get').mockReturnValue([
-      {
-        id: 'approval-1',
-        toolId: 'investigation_fix',
-        command: 'systemctl restart workload.service',
-        targetType: 'finding',
-        targetId: 'finding-1',
-        targetName: 'web-server',
-        context: 'Restart the workload service after backup pressure clears.',
-        riskLevel: 'high',
-        status: 'pending',
-        requestedAt: '2026-05-06T12:00:00Z',
-        expiresAt: '2026-05-06T12:10:00Z',
-        plan: {
-          actionId: 'action-1',
-          requiresApproval: true,
-          approvalPolicy: 'admin',
-          message: 'Restart after the backup window clears.',
-          expiresAt: '2026-05-06T12:10:00Z',
-        },
-        preflight: {
-          intendedChange: 'Restart workload service',
-          dryRunAvailable: false,
-          dryRunSummary: 'No provider-supported dry run is available for this action.',
-        },
-      },
-    ]);
-
+  it('keeps the compact assessment strip descriptive only', () => {
     const patrolState = createPatrolState();
     render(() => <PatrolIntelligenceSummary state={patrolState} />);
 
-    expect(screen.getByTestId('patrol-recommended-next-step').textContent).toContain(
-      'Review the pending Patrol approval',
-    );
+    expect(screen.getByText('Patrol assessment')).toBeInTheDocument();
+    expect(screen.getByText('1 critical · 84/100')).toBeInTheDocument();
+    expect(screen.queryByTestId('patrol-recommended-next-step')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('patrol-recommended-next-step-action')).not.toBeInTheDocument();
     expect(screen.queryByTestId('patrol-summary-details-toggle')).not.toBeInTheDocument();
     expect(screen.queryByTestId('patrol-summary-details')).not.toBeInTheDocument();
     expect(screen.queryByTestId('patrol-assessment-assistant-button')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('patrol-recommended-next-step-action'));
-
-    expect(patrolState.setSelectedRun).toHaveBeenCalledWith(null);
-    expect(patrolState.setActiveTab).toHaveBeenCalledWith('findings');
-    expect(patrolState.setFindingsFilterOverride).toHaveBeenCalledWith('approvals');
   });
 
-  it('keeps unavailable run actions on the compact assessment strip', () => {
-    vi.spyOn(aiIntelligenceStore, 'patrolPendingApprovals', 'get').mockReturnValue([]);
-
+  it('does not surface disabled run actions on the compact assessment strip', () => {
     const patrolState = {
       ...createPatrolState(),
       activePatrolFindings: () => [],
@@ -144,10 +108,8 @@ describe('PatrolIntelligenceSummary', () => {
 
     render(() => <PatrolIntelligenceSummary state={patrolState} />);
 
-    const action = screen.getByTestId('patrol-recommended-next-step-action');
-    expect(action).toHaveTextContent('Running...');
-    expect(action).toBeDisabled();
-    expect(action).toHaveAttribute('title', 'Patrol is already running');
+    expect(screen.queryByTestId('patrol-recommended-next-step')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('patrol-recommended-next-step-action')).not.toBeInTheDocument();
     expect(screen.queryByTestId('patrol-summary-details-toggle')).not.toBeInTheDocument();
   });
 });

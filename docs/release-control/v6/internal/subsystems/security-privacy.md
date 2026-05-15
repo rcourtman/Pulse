@@ -474,8 +474,9 @@ IDs, action IDs, policy, expiry, dry-run posture, and proposed-fix labels; they
 must not expose raw command or execution payloads or become an approval bypass.
 Assistant operator briefings generated from Patrol findings follow the same
 boundary: they may summarize approval IDs, proposed-fix IDs, risk, destructive
-posture, and recommended next steps for review, but they must not expose raw
-command payloads or convert chat into approval or execution authority.
+posture, and bounded evidence for model review, but they must not expose raw
+command payloads, present Patrol-authored remediation guidance, or convert chat
+into approval or execution authority.
 Action planning and action decision mutations remain privileged runtime
 control surfaces even though the decision endpoint does not execute the
 capability. `POST /api/actions/plan` and

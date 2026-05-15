@@ -113,10 +113,6 @@ describe('aiChatStore', () => {
       },
       handoffMetadata: {
         kind: 'patrol_finding',
-        recommendedNextStep: 'Open Patrol provider settings',
-        recommendedNextStepDetail: 'Fix the Patrol runtime issue before continuing.',
-        recommendedNextStepAction: 'Open Patrol provider settings',
-        recommendedNextStepActionHref: '/settings/system-ai',
       },
     });
     expect(aiChatStore.isOpen).toBe(true);
@@ -130,8 +126,6 @@ describe('aiChatStore', () => {
     ]);
     expect(aiChatStore.context.handoffMetadata).toMatchObject({
       kind: 'patrol_finding',
-      recommendedNextStepDetail: 'Fix the Patrol runtime issue before continuing.',
-      recommendedNextStepActionHref: '/settings/system-ai',
     });
   });
 

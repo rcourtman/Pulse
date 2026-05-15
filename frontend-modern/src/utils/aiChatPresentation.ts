@@ -14,7 +14,7 @@ export const AI_CHAT_DISCOVERY_HINT_BODY =
   'Enable it in Settings so Pulse Assistant can reference real services, versions, and commands instead of generic guidance.';
 export const AI_CHAT_EMPTY_STATE_TITLE = 'Ask about your infrastructure';
 export const AI_CHAT_EMPTY_STATE_SUBTITLE =
-  'Pulse Assistant uses observed infrastructure context and your configured provider to inspect state, explain findings, and suggest safe next steps.';
+  'Chat with your configured model using Pulse context and governed tools.';
 export const AI_CHAT_INPUT_PLACEHOLDER = 'Ask about your infrastructure...';
 export const AI_CHAT_SUGGESTIONS_LABEL = 'Try asking';
 export const AI_CHAT_QUESTION_CARD_TITLE = 'Pulse Assistant needs your input';
@@ -35,18 +35,6 @@ export interface AIChatEmptyStatePresentation {
   title: string;
 }
 
-const AI_CHAT_CLUSTER_EMPTY_STATE_SUGGESTIONS = [
-  'Summarize cluster health',
-  'Find failed services',
-  'Check node load and pressure',
-];
-
-const AI_CHAT_SINGLE_SYSTEM_EMPTY_STATE_SUGGESTIONS = [
-  'Summarize system health',
-  'Check storage pressure',
-  'Explain recent Patrol findings',
-];
-
 export function getAIChatLauncherTitle(contextName?: unknown) {
   if (typeof contextName === 'string' && contextName.trim().length > 0) {
     return `Open Pulse Assistant for ${contextName}`;
@@ -56,9 +44,8 @@ export function getAIChatLauncherTitle(contextName?: unknown) {
 }
 
 export function getAIChatEmptyStateSuggestions(isCluster: boolean) {
-  return isCluster
-    ? AI_CHAT_CLUSTER_EMPTY_STATE_SUGGESTIONS
-    : AI_CHAT_SINGLE_SYSTEM_EMPTY_STATE_SUGGESTIONS;
+  void isCluster;
+  return [];
 }
 
 export function getAIChatEmptyStatePresentation(args: {

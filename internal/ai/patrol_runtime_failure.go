@@ -65,7 +65,7 @@ type patrolRuntimeFailure struct {
 // for any Patrol runtime failure. The cause varies but the operational
 // consequence is constant: while Patrol is not analyzing, alerts continue
 // to fire without enrichment.
-const patrolRuntimeFailureImpact = "While Patrol cannot analyze, alerts continue to fire without evidence or recommended actions, and AI Intelligence summaries cannot refresh."
+const patrolRuntimeFailureImpact = "While Patrol cannot analyze, alerts continue to fire without fresh Patrol evidence, and AI Intelligence summaries cannot refresh."
 
 type PatrolRuntimeFailureDiagnostic struct {
 	Title          string

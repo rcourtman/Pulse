@@ -13,15 +13,13 @@
 //	        ▼
 //	recordFinding()     ── dedup, threshold validation
 //	        │
-//	        ├──▶ MaybeInvestigateFinding()  ── autonomous investigation
+//	        └──▶ MaybeInvestigateFinding()  ── autonomous investigation
 //	        │         │
 //	        │         ▼
 //	        │    parseInvestigationSummary() ── extract PROPOSED_FIX
 //	        │         │
 //	        │         ▼
 //	        │    approval / execution / verification
-//	        │
-//	        └──▶ generateRemediationPlan()  ── template-based fix plan
 //
 // Safety: All command execution goes through internal/ai/safety for
 // blocked command detection. Investigation guardrails and remediation

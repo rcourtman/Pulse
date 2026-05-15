@@ -2,7 +2,6 @@ package ai
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -10,7 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-func TestShouldResolveAlert_UsageAndMissing(t *testing.T) {
+func TestShouldResolveAlert_DoesNotResolveUsageWithoutModel(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	now := time.Now()
 
@@ -26,8 +25,8 @@ func TestShouldResolveAlert_UsageAndMissing(t *testing.T) {
 		Storage: []models.Storage{{ID: "storage-1", Usage: 80}},
 	}
 	resolved, reason := ps.shouldResolveAlertState(context.Background(), usageAlert, patrolRuntimeStateForTest(ps, state), nil, "")
-	if !resolved || !strings.Contains(reason, "usage dropped") {
-		t.Fatalf("expected usage alert to resolve, got resolved=%v reason=%q", resolved, reason)
+	if resolved || reason != "" {
+		t.Fatalf("expected usage alert to remain unresolved without model review, got resolved=%v reason=%q", resolved, reason)
 	}
 
 	missingAlert := AlertInfo{
@@ -39,12 +38,12 @@ func TestShouldResolveAlert_UsageAndMissing(t *testing.T) {
 		StartTime:  now.Add(-25 * time.Hour),
 	}
 	resolved, reason = ps.shouldResolveAlertState(context.Background(), missingAlert, patrolRuntimeStateForTest(ps, state), nil, "")
-	if !resolved || !strings.Contains(reason, "resource no longer present") {
-		t.Fatalf("expected missing storage alert to resolve, got resolved=%v reason=%q", resolved, reason)
+	if resolved || reason != "" {
+		t.Fatalf("expected missing storage alert to remain unresolved without model review, got resolved=%v reason=%q", resolved, reason)
 	}
 }
 
-func TestShouldResolveAlert_UsageUsesReadState(t *testing.T) {
+func TestShouldResolveAlert_ReadStateDoesNotResolveWithoutModel(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	now := time.Now()
 	alert := AlertInfo{
@@ -62,12 +61,12 @@ func TestShouldResolveAlert_UsageUsesReadState(t *testing.T) {
 	})
 
 	resolved, reason := ps.shouldResolveAlertState(context.Background(), alert, patrolRuntimeState{readState: registry}, nil, "")
-	if !resolved || !strings.Contains(reason, "usage dropped") {
-		t.Fatalf("expected usage alert to resolve from readState, got resolved=%v reason=%q", resolved, reason)
+	if resolved || reason != "" {
+		t.Fatalf("expected readState alert to remain unresolved without model review, got resolved=%v reason=%q", resolved, reason)
 	}
 }
 
-func TestShouldResolveAlert_CPUAndOffline(t *testing.T) {
+func TestShouldResolveAlert_CPUAndOfflineDoNotResolveWithoutModel(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	now := time.Now()
 
@@ -85,8 +84,8 @@ func TestShouldResolveAlert_CPUAndOffline(t *testing.T) {
 		Nodes: []models.Node{{ID: "node-1", Name: "node-1", CPU: 0.10, Status: "online"}},
 	}
 	resolved, reason := ps.shouldResolveAlertState(context.Background(), cpuAlert, patrolRuntimeStateForTest(ps, state), nil, "")
-	if !resolved || !strings.Contains(reason, "cpu dropped") {
-		t.Fatalf("expected cpu alert to resolve, got resolved=%v reason=%q", resolved, reason)
+	if resolved || reason != "" {
+		t.Fatalf("expected cpu alert to remain unresolved without model review, got resolved=%v reason=%q", resolved, reason)
 	}
 
 	offlineAlert := AlertInfo{
@@ -99,8 +98,8 @@ func TestShouldResolveAlert_CPUAndOffline(t *testing.T) {
 	}
 	state.VMs = []models.VM{{ID: "vm-1", Name: "vm-1", Status: "running"}}
 	resolved, reason = ps.shouldResolveAlertState(context.Background(), offlineAlert, patrolRuntimeStateForTest(ps, state), nil, "")
-	if !resolved || !strings.Contains(reason, "resource is now online") {
-		t.Fatalf("expected offline alert to resolve, got resolved=%v reason=%q", resolved, reason)
+	if resolved || reason != "" {
+		t.Fatalf("expected offline alert to remain unresolved without model review, got resolved=%v reason=%q", resolved, reason)
 	}
 }
 
@@ -131,10 +130,10 @@ func TestReviewAndResolveAlerts(t *testing.T) {
 
 	state := models.StateSnapshot{Storage: []models.Storage{{ID: "storage-1", Usage: 70}}}
 	resolved := ps.reviewAndResolveAlertsState(context.Background(), patrolRuntimeStateForTest(ps, state), false, "")
-	if resolved != 1 {
-		t.Fatalf("expected 1 alert resolved, got %d", resolved)
+	if resolved != 0 {
+		t.Fatalf("expected no alert resolution without model review, got %d", resolved)
 	}
-	if len(resolver.clears) != 1 || resolver.clears[0] != "stale" {
-		t.Fatalf("expected stale alert to be resolved, got %v", resolver.clears)
+	if len(resolver.clears) != 0 {
+		t.Fatalf("expected no alerts to be resolved, got %v", resolver.clears)
 	}
 }

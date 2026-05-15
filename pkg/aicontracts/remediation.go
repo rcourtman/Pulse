@@ -78,25 +78,18 @@ type RemediationPlan struct {
 	CreatedAt     time.Time         `json:"created_at"`
 	ExpiresAt     *time.Time        `json:"expires_at,omitempty"`
 
-	// ProposedActionPlan is an optional deterministic remediation proposal
-	// attached by the patrol pipeline (currently only forecast-driven
-	// capacity proposals - see internal/ai/forecast.BuildActionPlanForFinding).
-	// It is a wire-side projection of unifiedresources.ActionPlan; the
-	// projection lives here so pkg/aicontracts stays free of a dependency
-	// on internal/. The frontend renders proposals with Source ==
-	// "capacity_forecast" as a distinguishable approve/reject card in
-	// FindingsPanel.tsx; everything else falls back to the generic plan
-	// surface. Always nil for plans that have no attached proposal -
-	// remediation behavior is unchanged when the field is absent.
+	// ProposedActionPlan is an optional governed action proposal projection.
+	// It is present only when the remediation owner has already produced a
+	// concrete action artifact; Patrol finding creation must not populate it
+	// from category/title heuristics. Always nil for plans that have no
+	// attached action proposal.
 	ProposedActionPlan *ProposedActionPlan `json:"proposed_action_plan,omitempty"`
 }
 
-// ProposedActionPlan is the wire-side projection of a deterministic action
-// proposal attached to a RemediationPlan. RequiresApproval is invariant -
-// every proposed plan must carry an explicit approval gate. Allowed=false
-// signals "no write capability is wired yet; this is a preflight-only
-// proposal" - the operator may still approve to record intent, but
-// execution is not connected.
+// ProposedActionPlan is the wire-side projection of a governed action proposal
+// attached to a RemediationPlan. RequiresApproval is invariant - every
+// proposed plan must carry an explicit approval gate. Allowed=false signals
+// "no write capability is wired yet; this is a preflight-only proposal".
 type ProposedActionPlan struct {
 	ActionID         string                   `json:"actionId"`
 	CapabilityName   string                   `json:"capabilityName,omitempty"`

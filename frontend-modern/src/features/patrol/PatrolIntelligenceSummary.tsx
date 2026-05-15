@@ -1,32 +1,13 @@
 import { createMemo, Show } from 'solid-js';
-import ActivityIcon from 'lucide-solid/icons/activity';
-import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
-import MessageSquareIcon from 'lucide-solid/icons/message-square';
-import PlayIcon from 'lucide-solid/icons/play';
-import SettingsIcon from 'lucide-solid/icons/settings';
 import {
   getPatrolAssessmentShellPresentation,
   getPatrolAssessmentPresentation,
-  getPatrolRecommendedNextStepPresentation,
   getPatrolRecencyPresentation,
-  getPatrolScoreChipLabel,
-  getPatrolVerificationPresentation,
   getPatrolSummaryMetricState,
-  type PatrolRecommendedNextStepAction,
 } from '@/utils/patrolSummaryPresentation';
-import { getPatrolLatestRunPresentation } from '@/utils/patrolRunPresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 import { formatRelativeTime } from '@/utils/format';
-import { aiChatStore } from '@/stores/aiChat';
-import { aiIntelligenceStore } from '@/stores/aiIntelligence';
-import type { ApprovalRequest } from '@/api/ai';
-import {
-  buildPatrolAssessmentAssistantHandoff,
-  buildPatrolAssistantApprovalBriefingInput,
-  buildPatrolAssistantProposedFixBriefingInput,
-  type PatrolAssessmentAssistantFindingInput,
-} from './patrolInvestigationContextModel';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 
 function PatrolAssessmentLoadingShell() {
@@ -106,35 +87,11 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       runs: state.patrolRunHistory.value() ?? [],
     }),
   );
-  const verification = createMemo(() =>
-    getPatrolVerificationPresentation({
-      runs: state.patrolRunHistory.value() ?? [],
-      runtimeState: state.runtimeState(),
-      blockedReason: state.blockedReason(),
-    }),
-  );
   const recency = createMemo(() =>
     getPatrolRecencyPresentation({
       runs: state.patrolRunHistory.value() ?? [],
       lastPatrolAt: state.patrolStatus()?.last_patrol_at,
       lastActivityAt: state.patrolStatus()?.last_activity_at,
-    }),
-  );
-  const latestRun = createMemo(() =>
-    getPatrolLatestRunPresentation(state.patrolRunHistory.value() ?? []),
-  );
-  const scoreChipLabel = createMemo(() =>
-    getPatrolScoreChipLabel({
-      overallHealth: state.intelligenceSummary()?.overall_health,
-      activeFindings: state.activePatrolFindings(),
-    }),
-  );
-  const recommendedNextStep = createMemo(() =>
-    getPatrolRecommendedNextStepPresentation({
-      assessment: assessment(),
-      verification: verification(),
-      activeFindings: state.activePatrolFindings(),
-      pendingApprovalCount: aiIntelligenceStore.patrolPendingApprovals.length,
     }),
   );
   const compactRiskSummary = createMemo(() => {
@@ -180,118 +137,6 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
 
     return parts.join(' · ');
   });
-  const recommendedNextStepAction = createMemo(() => recommendedNextStep().action);
-  const recommendedNextStepActionDisabled = createMemo(() => {
-    const action = recommendedNextStepAction();
-    return (
-      action?.kind === 'run_patrol' &&
-      (state.isTriggeringPatrol() ||
-        !state.canTriggerPatrol() ||
-        state.manualRunRequested() ||
-        state.patrolStream.isStreaming())
-    );
-  });
-  const recommendedNextStepActionDisabledReason = createMemo(() =>
-    recommendedNextStepActionDisabled() ? state.triggerPatrolDisabledReason() : '',
-  );
-  const recommendedNextStepActionLabel = createMemo(() => {
-    const action = recommendedNextStepAction();
-    if (action?.kind !== 'run_patrol') {
-      return action?.label;
-    }
-
-    if (state.isTriggeringPatrol()) {
-      return 'Starting...';
-    }
-
-    if (state.manualRunRequested() || state.patrolStream.isStreaming()) {
-      return 'Running...';
-    }
-
-    return action.label;
-  });
-  const activeFindingsWithApprovalContext = createMemo<PatrolAssessmentAssistantFindingInput[]>(
-    () => {
-      const approvalsByFindingId = new Map(
-        aiIntelligenceStore.patrolPendingApprovals.map((approval) => [approval.targetId, approval]),
-      );
-      return state.activePatrolFindings().map((finding) => {
-        const approval = approvalsByFindingId.get(finding.id);
-        if (!approval) {
-          return finding;
-        }
-
-        return {
-          ...finding,
-          pendingApproval: buildPatrolAssessmentApprovalBriefing(approval),
-          proposedFix: finding.investigationRecord?.proposed_fix
-            ? undefined
-            : buildPatrolAssessmentApprovalProposedFixBriefing(approval),
-        };
-      });
-    },
-  );
-  const assessmentAssistantHandoff = createMemo(() => {
-    const recommendation = recommendedNextStep();
-    return buildPatrolAssessmentAssistantHandoff({
-      assessment: assessment(),
-      overallHealth: state.intelligenceSummary()?.overall_health,
-      scoreChipLabel: scoreChipLabel(),
-      metricState: metricState(),
-      verification: verification(),
-      recency: recency(),
-      latestRun: latestRun(),
-      investigationContext: {
-        recentChangeCount: state.recentChangeCount(),
-        correlationCount: state.correlationTotal(),
-        governedResourceCount: state.policyPosture()?.total_resources ?? 0,
-        hasContext: state.hasInvestigationContext(),
-        summaryText: state.investigationContextSummary(),
-      },
-      supportingEvidence: {
-        recentChanges: state.supportingRecentChanges(),
-        correlations: state.correlations(),
-      },
-      recommendedNextStep: {
-        title: recommendation.title,
-        description: recommendation.description,
-        actionLabel: recommendation.action?.label,
-        actionKind: recommendation.action?.kind,
-        actionDisabledReason: recommendedNextStepActionDisabledReason(),
-      },
-      activeFindings: activeFindingsWithApprovalContext(),
-    });
-  });
-
-  const handleDiscussAssessment = async () => {
-    await aiIntelligenceStore.loadPendingApprovals();
-    const handoff = assessmentAssistantHandoff();
-    aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
-  };
-
-  const handleRecommendedNextStepAction = (action: PatrolRecommendedNextStepAction) => {
-    switch (action.kind) {
-      case 'discuss_assessment':
-        void handleDiscussAssessment();
-        return;
-      case 'review_approvals':
-        state.setSelectedRun(null);
-        state.setActiveTab('findings');
-        state.setFindingsFilterOverride('approvals');
-        return;
-      case 'review_findings':
-        state.setSelectedRun(null);
-        state.setActiveTab('findings');
-        state.setFindingsFilterOverride('active');
-        return;
-      case 'run_patrol':
-        void state.handleRunPatrol();
-        return;
-      case 'open_provider_settings':
-        return;
-    }
-  };
-
   return (
     <>
       <Show when={showLoadingSummary()}>
@@ -350,57 +195,6 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                   </span>
                   <span class="font-semibold text-base-content">{compactAssessmentSummary()}</span>
                 </div>
-
-                <div
-                  data-testid="patrol-recommended-next-step"
-                  class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted"
-                >
-                  <span class="font-medium text-base-content">Next:</span>
-                  <span class="font-medium text-base-content">{recommendedNextStep().title}</span>
-                </div>
-              </div>
-
-              <div class="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
-                <Show when={recommendedNextStepAction()}>
-                  {(action) => (
-                    <Show
-                      when={action().href}
-                      fallback={
-                        <button
-                          type="button"
-                          data-testid="patrol-recommended-next-step-action"
-                          disabled={recommendedNextStepActionDisabled()}
-                          title={
-                            action().kind === 'run_patrol'
-                              ? state.triggerPatrolDisabledReason()
-                              : undefined
-                          }
-                          class="inline-flex shrink-0 items-center gap-1.5 rounded border border-border-subtle bg-transparent px-2.5 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover disabled:text-muted"
-                          onClick={() => handleRecommendedNextStepAction(action())}
-                        >
-                          {renderRecommendedNextStepActionIcon(
-                            action(),
-                            state.isTriggeringPatrol() ||
-                              state.manualRunRequested() ||
-                              state.patrolStream.isStreaming(),
-                          )}
-                          <span>{recommendedNextStepActionLabel()}</span>
-                        </button>
-                      }
-                    >
-                      {(href) => (
-                        <a
-                          href={href()}
-                          data-testid="patrol-recommended-next-step-action"
-                          class="inline-flex shrink-0 items-center gap-1.5 rounded border border-border-subtle bg-transparent px-2.5 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover"
-                        >
-                          {renderRecommendedNextStepActionIcon(action(), false)}
-                          <span>{action().label}</span>
-                        </a>
-                      )}
-                    </Show>
-                  )}
-                </Show>
               </div>
             </div>
           </section>
@@ -408,37 +202,4 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       </Show>
     </>
   );
-}
-
-function buildPatrolAssessmentApprovalBriefing(approval: ApprovalRequest) {
-  return buildPatrolAssistantApprovalBriefingInput(approval);
-}
-
-function buildPatrolAssessmentApprovalProposedFixBriefing(approval: ApprovalRequest) {
-  return buildPatrolAssistantProposedFixBriefingInput({
-    description: approval.context,
-    riskLevel: approval.riskLevel,
-    targetHost: approval.targetName,
-    commandCount: approval.command ? 1 : 0,
-  });
-}
-
-function renderRecommendedNextStepActionIcon(
-  action: PatrolRecommendedNextStepAction,
-  running: boolean,
-) {
-  const iconClass = `h-4 w-4 ${running && action.kind === 'run_patrol' ? 'animate-pulse' : ''}`;
-
-  switch (action.kind) {
-    case 'open_provider_settings':
-      return <SettingsIcon class={iconClass} aria-hidden="true" />;
-    case 'run_patrol':
-      return <PlayIcon class={iconClass} aria-hidden="true" />;
-    case 'discuss_assessment':
-      return <MessageSquareIcon class={iconClass} aria-hidden="true" />;
-    case 'review_approvals':
-      return <CheckCircleIcon class={iconClass} aria-hidden="true" />;
-    case 'review_findings':
-      return <ActivityIcon class={iconClass} aria-hidden="true" />;
-  }
 }

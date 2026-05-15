@@ -34,7 +34,6 @@ import { AIAPI, type ApprovalRequest, type RemediationPlan } from '@/api/ai';
 import { createSuppressionRuleFromFinding } from '@/api/patrol';
 import type { PatrolRunRecord, PatrolRuntimeState } from '@/api/patrol';
 import { buildResolvedResourceSurfaceLinks } from '@/routing/resourceLinks';
-import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
 import { formatRelativeTime } from '@/utils/format';
 import { getFindingAlertIdentifier, hasTriggeringAlert } from '@/utils/findingAlertIdentity';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
@@ -193,45 +192,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     e.stopPropagation();
     setDismissedPlanIds((prev) => [...prev, plan.id]);
     notificationStore.success('Remediation plan dismissed');
-  };
-
-  // Reuses AIAPI.approveRemediationPlan, the existing approval contract for
-  // remediation plans. The capacity-forecast card surfaces this as
-  // "Approve proposal" so the operator can record intent on a preflight-only
-  // proposal (Allowed=false) - the action broker will still refuse execution
-  // until a Pulse write capability is wired for the resource type. See
-  // internal/ai/forecast.BuildActionPlanForFinding for the contract.
-  const handleApproveProposedPlan = async (plan: RemediationPlan, e: Event) => {
-    e.stopPropagation();
-    try {
-      await AIAPI.approveRemediationPlan(plan.id);
-      setDismissedPlanIds((prev) => [...prev, plan.id]);
-      notificationStore.success('Capacity-forecast proposal approved');
-    } catch (err) {
-      notificationStore.error(
-        err instanceof Error
-          ? `Failed to approve proposal: ${err.message}`
-          : 'Failed to approve proposal',
-      );
-    }
-  };
-
-  // formatTimeToThreshold collapses a "seconds until threshold breach"
-  // value into operator-readable copy. Mirrors forecast service phrasing
-  // ("3 days", "12 hours") so the proposal card and the existing forecast
-  // overview don't drift in tone.
-  const formatTimeToThreshold = (seconds?: number | null): string => {
-    if (!seconds || seconds <= 0) {
-      return '';
-    }
-    const hours = seconds / 3600;
-    if (hours < 1) {
-      return `${Math.max(1, Math.round(seconds / 60))} min`;
-    }
-    if (hours < 48) {
-      return `${Math.round(hours)} hr`;
-    }
-    return `${Math.round(hours / 24)} days`;
   };
 
   // Map of finding_id -> latest remediation plan artifact
@@ -680,7 +640,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     );
     const proposedFix =
       latestInvestigationProposedFix || buildLiveApprovalProposedFixBriefing(pendingApproval);
-    const nextStepAction = getFindingPrimaryActionPresentation(finding);
     const handoff = buildPatrolAssistantFindingHandoff({
       id: finding.id,
       title,
@@ -703,7 +662,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       pendingApproval: pendingApprovalBriefing,
       proposedFix,
       investigationRecord: finding.investigationRecord,
-      nextStepAction,
       intent,
     });
     // Explain, Investigate, and Why-did-this-happen are action-style
@@ -1759,173 +1717,33 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           />
         </Show>
 
-        {/* Existing action artifact: compact review entry, not a Patrol-authored fix answer. */}
+        {/* Existing model-owned action artifact: compact Assistant review entry. */}
         <Show when={finding.status === 'active' && plansByFindingId().get(finding.id)}>
           {(plan) => {
-            // Capacity-forecast proposal variant - rendered when patrol
-            // attached a deterministic forecast-driven ActionPlan via the
-            // template registry in internal/ai/forecast. Other plan artifacts
-            // collapse to a compact Assistant review entry.
-            const proposal = () => plan().proposed_action_plan;
-            const isCapacityForecastProposal = () =>
-              finding.category === 'capacity' && proposal()?.source === 'capacity_forecast';
             return (
               <div class="mt-3 pt-3 border-t border-border-subtle">
-                <Show
-                  when={isCapacityForecastProposal()}
-                  fallback={(() => {
-                    const planRisk = getApprovalRiskPresentation(plan().risk_level);
-                    return (
-                      <>
-                        <div class="flex flex-wrap items-center justify-between gap-3">
-                          <div class="flex min-w-0 items-center gap-2">
-                            <AlertCircleIcon class="h-4 w-4 flex-shrink-0 text-muted" />
-                            <span class="text-sm font-medium text-base-content">Action review</span>
-                            <span
-                              class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${planRisk.badgeClass}`}
-                            >
-                              {planRisk.label} risk
-                            </span>
-                          </div>
-                          <div class="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={(e) => handleOpenPlanInAssistant(finding, plan(), e)}
-                              class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
-                            >
-                              Ask Assistant
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => handleDismissPlan(plan(), e)}
-                              class="px-3 py-1.5 hover:bg-surface-hover text-muted text-xs font-medium rounded"
-                            >
-                              Dismiss
-                            </button>
-                          </div>
-                        </div>
-                      </>
-                    );
-                  })()}
-                >
-                  {(() => {
-                    const p = proposal()!;
-                    const metric = p.projectedMetric;
-                    const preflight = p.preflight;
-                    const ttbLabel = formatTimeToThreshold(metric?.timeToThresholdSeconds);
-                    return (
-                      <div data-testid="capacity-forecast-approval-card">
-                        <div class="flex items-center gap-2 mb-2">
-                          <svg
-                            class="w-4 h-4 text-amber-600 dark:text-amber-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                            aria-hidden="true"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M3 17l6-6 4 4 8-8M21 7v6h-6"
-                            />
-                          </svg>
-                          <span class="text-sm font-medium text-base-content">
-                            Capacity-forecast proposal
-                          </span>
-                          <span class="px-1.5 py-0.5 text-[10px] font-medium rounded border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300">
-                            requires approval
-                          </span>
-                          <Show when={p.allowed === false}>
-                            <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-surface-alt text-muted">
-                              preflight only
-                            </span>
-                          </Show>
-                        </div>
-
-                        <Show when={metric}>
-                          <div class="text-xs text-muted mb-2">
-                            <span class="font-medium text-base-content">
-                              {metric!.currentValue.toFixed(1)}%
-                            </span>{' '}
-                            now
-                            <Show
-                              when={
-                                typeof metric!.predictedValue === 'number' &&
-                                metric!.predictedValue !== metric!.currentValue
-                              }
-                            >
-                              {' '}
-                              <span aria-hidden="true">→</span>{' '}
-                              <span class="font-medium text-base-content">
-                                {metric!.predictedValue!.toFixed(1)}%
-                              </span>{' '}
-                              projected
-                            </Show>
-                            <Show
-                              when={
-                                typeof metric!.thresholdValue === 'number' &&
-                                metric!.thresholdValue! > 0
-                              }
-                            >
-                              {' '}
-                              · threshold {metric!.thresholdValue!.toFixed(0)}%
-                            </Show>
-                            <Show when={ttbLabel}> · breach in {ttbLabel}</Show>
-                          </div>
-                        </Show>
-
-                        <Show when={p.message}>
-                          <p class="text-sm text-base-content mb-2">{p.message}</p>
-                        </Show>
-
-                        <Show when={preflight}>
-                          <Show when={preflight!.intendedChange}>
-                            <div class="text-xs text-muted mb-1">
-                              <span class="font-medium text-base-content">Proposed change:</span>{' '}
-                              {preflight!.intendedChange}
-                            </div>
-                          </Show>
-                          <Show
-                            when={preflight!.safetyChecks && preflight!.safetyChecks!.length > 0}
-                          >
-                            <ul class="text-[11px] text-muted list-disc list-inside space-y-0.5 mb-2">
-                              <For each={preflight!.safetyChecks!}>
-                                {(check) => <li>{check}</li>}
-                              </For>
-                            </ul>
-                          </Show>
-                        </Show>
-
-                        <div class="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
-                          <button
-                            type="button"
-                            onClick={(e) => handleApproveProposedPlan(plan(), e)}
-                            class="flex-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
-                            data-testid="capacity-forecast-approve"
-                          >
-                            Approve proposal
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => handleOpenPlanInAssistant(finding, plan(), e)}
-                            class="px-3 py-1.5 border border-border hover:bg-surface-hover text-base-content text-xs font-medium rounded"
-                          >
-                            Discuss
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => handleDismissPlan(plan(), e)}
-                            class="px-3 py-1.5 hover:bg-surface-hover text-muted text-xs font-medium rounded"
-                            data-testid="capacity-forecast-reject"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </Show>
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <div class="flex min-w-0 items-center gap-2">
+                    <AlertCircleIcon class="h-4 w-4 flex-shrink-0 text-muted" />
+                    <span class="text-sm font-medium text-base-content">Assistant context</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenPlanInAssistant(finding, plan(), e)}
+                      class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
+                    >
+                      Ask Assistant
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDismissPlan(plan(), e)}
+                      class="px-3 py-1.5 hover:bg-surface-hover text-muted text-xs font-medium rounded"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
               </div>
             );
           }}

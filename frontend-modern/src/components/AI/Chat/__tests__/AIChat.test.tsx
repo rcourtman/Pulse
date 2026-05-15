@@ -985,11 +985,6 @@ describe('AIChat', () => {
             resource_count: 2,
             action_count: 0,
             requires_approval: false,
-            recommended_next_step: 'Verify full coverage',
-            recommended_next_step_detail:
-              'Run a full Patrol sweep before treating the assessment as current.',
-            recommended_next_step_action: 'Run Patrol',
-            recommended_next_step_action_kind: 'run_patrol',
           },
         },
       ]);
@@ -1003,7 +998,7 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
         expect(screen.getByText('Assessment context')).toBeInTheDocument();
-        expect(screen.getByText('Recommended: Run Patrol')).toBeInTheDocument();
+        expect(screen.queryByText('Recommended: Run Patrol')).not.toBeInTheDocument();
       });
 
       fireEvent.click(screen.getByText('Assessment follow-up'));
@@ -1018,22 +1013,13 @@ describe('AIChat', () => {
             context: expect.objectContaining({
               kind: 'patrol_assessment',
               findingId: undefined,
-              recommendedNextStep: 'Verify full coverage',
-              recommendedNextStepDetail:
-                'Run a full Patrol sweep before treating the assessment as current.',
-              recommendedNextStepAction: 'Run Patrol',
-              recommendedNextStepActionKind: 'run_patrol',
             }),
             briefing: expect.objectContaining({
               sourceLabel: 'Pulse Patrol',
               title: 'Patrol assessment handoff',
               subject: 'Current Patrol assessment',
-              actionLabel: 'Recommended: Run Patrol',
-              detailLines: expect.arrayContaining([
-                'Recommended next step: Verify full coverage',
-                'Reason: Run a full Patrol sweep before treating the assessment as current.',
-                'Available action: Run Patrol',
-              ]),
+              actionLabel: 'Review Patrol assessment',
+              detailLines: ['2 linked resources'],
             }),
           }),
         );
@@ -1183,9 +1169,6 @@ describe('AIChat', () => {
             },
             action_count: 0,
             requires_approval: false,
-            recommended_next_step: 'Open Patrol provider settings',
-            recommended_next_step_action: 'Open Patrol provider settings',
-            recommended_next_step_action_href: '/settings/system-ai',
           },
         },
       ]);
@@ -1199,7 +1182,7 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
         expect(screen.getByText('Context attached')).toBeInTheDocument();
-        expect(screen.getByText('Open Patrol provider settings')).toBeInTheDocument();
+        expect(screen.queryByText('Open Patrol provider settings')).not.toBeInTheDocument();
       });
 
       fireEvent.click(screen.getByText('Context-only Patrol follow-up'));
@@ -1213,15 +1196,11 @@ describe('AIChat', () => {
             context: expect.objectContaining({
               actionCount: 0,
               requiresApproval: false,
-              recommendedNextStep: 'Open Patrol provider settings',
-              recommendedNextStepAction: 'Open Patrol provider settings',
-              recommendedNextStepActionHref: '/settings/system-ai',
             }),
             briefing: expect.objectContaining({
               sourceLabel: 'Pulse Patrol',
               title: 'Patrol finding on web-server',
-              actionLabel: 'Open Patrol provider settings',
-              actionHref: '/settings/system-ai',
+              actionLabel: undefined,
             }),
           }),
         );

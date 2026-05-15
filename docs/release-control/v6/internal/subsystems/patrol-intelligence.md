@@ -94,8 +94,8 @@ Patrol-specific presentation helpers.
    Patrol assessment copy must not present an all-clear health prediction while
    active Patrol findings or Patrol runtime issues are still present. The
    canonical summary helper owns that conflict resolution so the visible
-   assessment title, description, metrics, and recommended next step all speak
-   from the same current findings state. Patrol-owned runtime issues must stay
+   assessment title, description, and compact metrics all speak from the same
+   current findings state. Patrol-owned runtime issues must stay
    distinct from infrastructure findings in assessment copy rather than being
    described as infrastructure warning findings about Patrol itself.
    Assessment coverage caveats must also reconcile against current run-history
@@ -175,11 +175,11 @@ Patrol-specific presentation helpers.
    than approval, lifecycle, disclosure, or execution authority.
    Assistant handoffs from Patrol findings must also include a concise operator
    briefing derived from the unified finding and structured investigation record
-   before the detailed finding context, so Assistant leads with the current risk,
+   before the detailed finding context, so Assistant receives current risk,
    attention reason, recency, evidence snapshot, verification summary,
-   conclusion, latest lifecycle event, recommended next step, explicit operator
-   decision framing, and governed approval/action posture instead of behaving
-   like a generic chat over a pasted incident dump. Patrol is the scheduled
+   conclusion, latest lifecycle event, explicit operator decision framing, and
+   governed approval/action posture instead of behaving like a generic chat over
+   a pasted incident dump. Patrol is the scheduled
    probe, context assembler, and execution-governance owner; the configured LLM
    is the diagnostic and remediation-reasoning owner. Patrol handoff prompts may
    provide system context, resource posture, action posture, and governed tools,
@@ -189,8 +189,9 @@ Patrol-specific presentation helpers.
    produced the correct fix. The visible Assistant drawer briefing opened from a Patrol
    finding must be compact and source-named: current status/risk, one primary
    subject, and any approval-required boundary, with richer evidence, action
-   artifacts, command counts, and prompt suggestions staying in model-only or
-   governed action context rather than drawer chrome. When a
+   artifacts, and command counts staying in model-only or governed action
+   context rather than drawer chrome; prompt suggestions must not be generated
+   for Patrol handoffs. When a
    structured investigation record is not available yet, the same Patrol-owned
    helper must still brief the operator from current finding facts such as
    active status, severity, recurrence, and loop state instead of opening a
@@ -207,12 +208,12 @@ Patrol-specific presentation helpers.
    answer. Finding
    handoffs must be assembled through the Patrol-owned handoff model so the
    prompt, visible briefing, model-only finding context, resource reference,
-   safe next-step action label/href, bounded action reference, and request-local
-   approval-required posture stay in sync. The model-only context may include
+   bounded action reference, and request-local approval-required posture stay in
+   sync. The model-only context may include
    current finding status, recurrence, investigation record facts, evidence,
    verification, approval posture, dry-run posture, proposed-fix summary, target
-   resource references, and safe route-owned next-step labels/hrefs such as
-   provider settings without raw command payloads. Inline Patrol approval actions in
+   resource references, and governed action references without raw command
+   payloads. Inline Patrol approval actions in
    `frontend-modern/src/components/patrol/ApprovalSection.tsx` that open
    Assistant must follow that same Patrol-owned handoff model rather than a
    prompt-only local shortcut: pass approval ID/status/risk/target plus safe
@@ -315,7 +316,7 @@ Patrol-specific presentation helpers.
    handoff, and a parallel "Explain" button opens the same handoff with
    a `PatrolAssistantFindingIntent='explain'` seed that asks the LLM to
    walk through what we know, why it matters, how confident the
-   analysis is, and whether the recommended action is appropriate. Both
+   analysis is, what remains uncertain, and what the model would do next. Both
    buttons must route through `buildPatrolAssistantFindingHandoff` so
    the structured context (investigation record, operational memory,
    pending approval, proposed fix, next-step action) is attached
@@ -354,13 +355,7 @@ Patrol-specific presentation helpers.
    verification recency, latest run, secondary investigation context, bounded
    recent-change and learned-correlation evidence, active-finding summaries,
    structured resource references, structured approval/action references, and
-   safe source-owned suggested prompts as model-only context. The same handoff
-   must also carry the Patrol-owned recommended next step as safe bounded
-   metadata, including its title, detail copy, action label, and known action
-   kind when present, plus the current action-disabled reason when the visible
-   Patrol-owned action is unavailable, so Assistant explains the same
-   operator-facing priority and current availability shown in the summary card
-   instead of inventing a separate next step. Assessment-level handoffs must
+   model-only context. Assessment-level handoffs must
    identify the drawer target as
    `patrol-assessment` with `targetId=pulse-patrol-assessment`, matching saved
    session restore semantics rather than the retired dashboard target.
@@ -372,30 +367,26 @@ Patrol-specific presentation helpers.
    command and approval payloads out of prompt and drawer copy, surface visible
    drawer action posture from the same safe references, make the initial prompt
    lead with approval/action review when governed references are attached, and
-   frame Assistant as explanation, prioritization, and safe next-step review
+   frame Assistant as explanation, prioritization, and model-owned next-step reasoning
    rather than a generic reactive chat
    box. That whole-surface assessment handoff must send safe
    `handoff_metadata.kind=patrol_assessment` so saved Assistant sessions restore
    as current-assessment context instead of becoming generic scoped context or
    an accidental single-finding session because one bounded action reference
-   names a finding. Saved assessment and finding sessions may expose the
-   Patrol-owned recommended next step title/detail/action and whitelisted
-   app-route href through the safe `handoff_summary` only after command-like
-   and secret-like text is withheld; live handoffs must send those safe fields
-   through structured `handoff_metadata` where available, and the browser must
-   use them for restored drawer copy without receiving the private model-only
-   handoff context. Assessment Assistant drawer briefings must present the safe
-   recommended step title, reason, and route-owned action as separate operator
-   facts instead of compressing them into an opaque context sentence, and the
-   suggested prompts must follow the structured recommendation action so
-   provider-setting/runtime-visibility failures lead with provider checks and
-   post-restore verification rather than generic coverage questions.
+   names a finding. Saved assessment and finding sessions must not expose or
+   restore Patrol-authored next-step titles, recommendation detail, action
+   labels, or app-route hrefs through `handoff_summary`; legacy stored
+   recommendation fields are ignored rather than converted into hidden context.
+   Assessment Assistant drawer briefings must stay compact and source-named
+   instead of presenting a recommended step title, reason, route action, or
+   suggested prompt chips as operator-facing answers, so
+   provider-setting/runtime-visibility failures remain plain context for the
+   configured model rather than Pulse-authored recovery guidance.
    When the current Patrol assessment is coverage-incomplete with no active
-   infrastructure finding, the same handoff model must frame the briefing as a
-   verification gap: the prompt leads with what scoped activity did and did not
-   prove, visible drawer copy names the coverage gap, suggested prompts focus
-   on full-run verification and early warning signals, and execution or retry
-   remains operator-controlled.
+   infrastructure finding, the same handoff model may describe incomplete
+   coverage as evidence, but it must let the configured model decide whether
+   more verification, operator action, or governed tool use is needed. Execution
+   or retry remains operator-controlled.
    Patrol run-history entries may also open Assistant for a selected run, but
    that handoff must flow through the same Patrol-owned investigation-context
    model rather than a row-local prompt. The browser-visible prompt and drawer
@@ -416,13 +407,11 @@ Patrol-specific presentation helpers.
    than a hero-style or decorative card surface. The default collapsed state is
    a compact readout, not a headline block: show the Patrol assessment label,
    current operator state, concise high-signal trust posture such as
-   regressions when present, score, one recommended next-step title, and one
-   route-owned action. Do not combine reassuring grade labels such as
+   regressions when present, and score. Do not combine reassuring grade labels such as
    `Health A` with issue-state copy such as `Issues detected` in the collapsed
    line. Do not add a normal-path assessment details expansion: assessment
-   explanation, recommendation detail, verification detail, activity mix,
-   supporting metrics, and whole-assessment Assistant discussion belong in the
-   owning Findings, Runs, Supporting context, or recommended-action surfaces
+   explanation, verification detail, activity mix, and supporting metrics belong in the
+   owning Findings, Runs, or Supporting context surfaces
    instead of reopening the compact strip into a sparse status panel.
 
 ## Current State
@@ -476,29 +465,16 @@ render contract: the header chip, primary summary card, and status bar must
 all route through the shared `frontend-modern/src/utils/patrolRuntimePresentation.ts`
 helper plus the backend `runtime_state` payload instead of inferring operator
 state from the last healthy summary snapshot or run history alone.
-The primary summary card now also has a Patrol-owned Assistant assessment
-handoff. `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`
-opens Assistant through
-`frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`, which
-packages the current Patrol assessment, verification posture, latest run,
+The primary summary strip is descriptive only: it surfaces the current Patrol
+assessment label and compact counts, while action choices remain in the
+Findings/Runs workspace, header controls, and the LLM-driven Assistant chat.
+`frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` may
+package the current Patrol assessment, verification posture, latest run,
 secondary investigation context, bounded recent-change and learned-correlation
-evidence, bounded active-finding summaries, source-owned suggested prompts, and
-the Patrol-owned recommended next step, plus deduped resource references and
-safe structured approval/action references as
-model-only context while forcing `autonomousMode:false` and summarizing
-proposed-fix command-bearing records and command-bearing change events without
-raw command text. Its visible Assistant briefing must also use those safe
-references to distinguish pending governed approvals or attached action
-references from a generic assessment discussion, including approval-policy and
-dry-run posture when available. When no approval or governed action outranks
-the summary recommendation, the briefing action label and initial prompt may
-lead with that recommendation, but Assistant remains explanatory and may not
-start Patrol runs, settings changes, diagnostics, remediation, or approvals
-from the handoff; if the recommended action is currently disabled, the prompt
-and briefing must say why instead of describing it as an available action. Its
-initial prompt must prioritize approvals or action
-references before broader assessment discussion while command payloads stay
-out of the drawer.
+evidence, bounded active-finding summaries, deduped resource references, and
+safe structured approval/action references as model-only context, but visible
+drawer copy must not promote Pulse-authored next-step metadata, action chips, or
+suggested prompts as the answer. Command payloads stay out of drawer chrome.
 Run-history rows now follow that same Assistant handoff model. A selected
 `frontend-modern/src/components/patrol/RunHistoryEntry.tsx` row may open
 Assistant through

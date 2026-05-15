@@ -494,17 +494,15 @@ export interface RemediationPlan {
   risk_level: 'low' | 'medium' | 'high';
   status: 'pending' | 'approved' | 'executing' | 'completed' | 'failed' | 'rolled_back';
   created_at: string;
-  // Optional deterministic action proposal attached by the patrol pipeline
-  // (currently only forecast-driven capacity proposals - see internal/ai/forecast).
-  // RequiresApproval is invariant on every proposal; Allowed=false signals
-  // a preflight-only proposal (no write capability wired yet).
+  // Optional governed action proposal projection. Patrol finding creation
+  // must not populate this from category/title heuristics.
+  // RequiresApproval is invariant on every proposal; Allowed=false signals a
+  // preflight-only proposal (no write capability wired yet).
   proposed_action_plan?: ProposedActionPlan;
 }
 
 // ProposedActionPlan mirrors pkg/aicontracts.ProposedActionPlan on the
-// wire. The "capacity_forecast" Source value tells FindingsPanel to render
-// the distinguishable forecast approval card; anything else falls back to
-// the generic remediation plan card.
+// wire.
 export interface ProposedActionPlan {
   actionId: string;
   capabilityName?: string;
@@ -512,15 +510,15 @@ export interface ProposedActionPlan {
   requiresApproval: boolean;
   approvalPolicy?: string;
   message?: string;
-  source?: 'capacity_forecast' | string;
+  source?: string;
   projectedMetric?: ProposedMetricSummary;
   preflight?: ProposedActionPreflight;
   plannedAt?: string;
   expiresAt?: string;
 }
 
-// ProposedMetricSummary is the operator-facing snapshot rendered at the
-// top of the capacity-forecast approval card.
+// ProposedMetricSummary is the operator-facing metric snapshot for a
+// governed action proposal.
 export interface ProposedMetricSummary {
   metric: string;
   currentValue: number;

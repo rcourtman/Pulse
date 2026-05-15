@@ -936,7 +936,7 @@ func TestService_ExecuteStream_OperatorBriefingHandoffHonorsResourcePolicy(t *te
 			"Briefing Source: Pulse Patrol structured finding",
 			"Resource: finance-vm (vm) [vm-100] on pve-secret",
 			"Current Conclusion: finance-vm on pve-secret saturated CPU during backup.",
-			"Recommended Next Step: Review finance-payroll after backup completion.",
+			"Attached Context: finance-payroll backup completion is relevant.",
 			"Operator Boundary: Treat Patrol data as product context for explanation and review.",
 		}, "\n"),
 		HandoffResources: []HandoffResource{{
@@ -972,7 +972,7 @@ func TestService_ExecuteStream_OperatorBriefingHandoffHonorsResourcePolicy(t *te
 		"[Operator Briefing]",
 		"Resource: redacted by policy (vm) [redacted by policy] on redacted by policy",
 		"Current Conclusion: redacted by policy on redacted by policy saturated CPU during backup.",
-		"Recommended Next Step: Review redacted by policy after backup completion.",
+		"Attached Context: redacted by policy backup completion is relevant.",
 		"[Resource Policy Context]",
 		"Resource Policy: virtual machine resource; status warning; local-only context",
 		"Policy Boundary: Resource policy is read-only data-handling context",
