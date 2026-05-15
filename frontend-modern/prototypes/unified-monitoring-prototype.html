@@ -321,7 +321,7 @@
       }
 
       col.name {
-        width: 190px;
+        width: 230px;
       }
 
       col.type {
@@ -353,7 +353,7 @@
       }
 
       col.activity {
-        width: 98px;
+        width: 104px;
       }
 
       col.scope {
@@ -409,14 +409,10 @@
       }
 
       tr.cluster-row {
-        background: linear-gradient(
-          90deg,
-          color-mix(in srgb, var(--group-color) 22%, #ffffff) 0,
-          color-mix(in srgb, var(--group-color) 10%, #ffffff) 310px,
-          #f8fafc 100%
-        );
-        border-top: 2px solid color-mix(in srgb, var(--group-color) 74%, #334155);
-        border-bottom-color: var(--line-strong);
+        background: #f8fafc;
+        border-top: 1px solid var(--line-strong);
+        border-bottom-color: var(--line);
+        box-shadow: inset 3px 0 0 color-mix(in srgb, var(--group-color) 52%, #cbd5e1);
       }
 
       .cluster-label {
@@ -442,17 +438,17 @@
       }
 
       tr.section-row {
-        background: color-mix(in srgb, var(--group-color) 8%, #ffffff);
-        border-bottom-color: color-mix(in srgb, var(--group-color) 20%, #eef2f7);
+        background: #fbfdff;
+        border-bottom-color: #f1f5f9;
       }
 
       tr.section-row td {
-        height: 21px;
+        height: 20px;
         padding-left: 31px;
-        color: color-mix(in srgb, var(--group-color) 72%, #334155);
+        color: #536276;
         font-size: 10px;
-        font-weight: 820;
-        letter-spacing: 0.02em;
+        font-weight: 780;
+        letter-spacing: 0.01em;
         text-transform: uppercase;
       }
 
@@ -464,10 +460,10 @@
       }
 
       .section-label::before {
-        width: 5px;
-        height: 5px;
+        width: 4px;
+        height: 4px;
         border-radius: 50%;
-        background: currentColor;
+        background: color-mix(in srgb, var(--group-color) 46%, #94a3b8);
         content: "";
       }
 
@@ -483,14 +479,9 @@
       }
 
       tbody tr.host-row {
-        background: linear-gradient(
-          90deg,
-          color-mix(in srgb, var(--group-color) 18%, #ffffff) 0,
-          color-mix(in srgb, var(--group-color) 8%, #ffffff) 260px,
-          #f8fbff 100%
-        );
-        border-top: 2px solid color-mix(in srgb, var(--group-color) 68%, #334155);
-        border-bottom-color: var(--line-strong);
+        background: #fbfdff;
+        border-top: 1px solid #e4ebf3;
+        border-bottom-color: #dfe7f0;
       }
 
       tbody tr.host-row td {
@@ -498,36 +489,23 @@
       }
 
       tbody tr.host-row td:first-child {
-        box-shadow: inset 4px 0 0 color-mix(in srgb, var(--group-color) 82%, #ffffff);
+        box-shadow: inset 3px 0 0 color-mix(in srgb, var(--group-color) 58%, #cbd5e1);
       }
 
       tbody tr.host-row:hover {
-        background: linear-gradient(
-          90deg,
-          color-mix(in srgb, var(--group-color) 22%, #ffffff) 0,
-          color-mix(in srgb, var(--group-color) 10%, #ffffff) 260px,
-          #f3f8ff 100%
-        );
+        background: #f7fbff;
       }
 
       tbody tr.child-row {
-        background: linear-gradient(
-          90deg,
-          color-mix(in srgb, var(--group-color) 8%, #ffffff) 0,
-          #ffffff 86px
-        );
+        background: #ffffff;
       }
 
       tbody tr.child-row td:first-child {
-        box-shadow: inset 3px 0 0 color-mix(in srgb, var(--group-color) 76%, #ffffff);
+        box-shadow: inset 2px 0 0 color-mix(in srgb, var(--group-color) 36%, #e2e8f0);
       }
 
       tbody tr.child-row:hover {
-        background: linear-gradient(
-          90deg,
-          color-mix(in srgb, var(--group-color) 13%, #ffffff) 0,
-          #f8fbff 110px
-        );
+        background: #f8fbff;
       }
 
       tbody tr.flat-row {
@@ -581,14 +559,17 @@
 
       .kind {
         display: inline-flex;
-        width: 20px;
+        min-width: 22px;
         height: 20px;
         flex: 0 0 auto;
         align-items: center;
         justify-content: center;
         border-radius: 6px;
+        padding: 0 5px;
         font-size: 9px;
         font-weight: 760;
+        letter-spacing: 0.01em;
+        text-transform: uppercase;
       }
 
       .kind.node {
@@ -637,10 +618,8 @@
       }
 
       .primary {
-        display: flex;
+        display: block;
         min-width: 0;
-        align-items: baseline;
-        gap: 6px;
       }
 
       .resource-name {
@@ -659,8 +638,12 @@
       }
 
       .host-row .resource-name {
-        font-size: 12.5px;
+        font-size: 13px;
         font-weight: 800;
+      }
+
+      .host-row .kind {
+        min-width: 34px;
       }
 
       .host-row .meta {
@@ -675,6 +658,24 @@
         font-size: 11px;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+
+      .table-text {
+        display: inline-block;
+        max-width: 100%;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 650;
+        line-height: 1.2;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: middle;
+      }
+
+      .storage-text {
+        font-size: 10.5px;
+        font-weight: 620;
       }
 
       .badge {
@@ -890,6 +891,48 @@
         font-weight: 650;
       }
 
+      .storage-signal {
+        display: grid;
+        min-width: 0;
+        grid-template-columns: minmax(112px, 1fr) auto auto;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .storage-signal .metric-line {
+        min-width: 0;
+      }
+
+      .rate-chip {
+        display: inline-flex;
+        height: 16px;
+        max-width: 60px;
+        align-items: center;
+        gap: 3px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: #f8fafc;
+        padding: 0 4px;
+        color: var(--muted);
+        font-size: 9px;
+        font-weight: 720;
+        line-height: 1;
+        white-space: nowrap;
+      }
+
+      .rate-chip strong {
+        color: #64748b;
+        font-size: 8px;
+        text-transform: uppercase;
+      }
+
+      .rate-chip span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
       .spark {
         width: 78px;
         height: 20px;
@@ -932,6 +975,15 @@
         stroke: var(--red);
       }
 
+      .metric-na {
+        display: inline-flex;
+        width: 100%;
+        justify-content: center;
+        color: var(--faint);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
       .right {
         text-align: right;
       }
@@ -944,7 +996,7 @@
         display: flex;
         min-width: 0;
         align-items: center;
-        gap: 6px;
+        gap: 5px;
         color: var(--muted);
         font-size: 11px;
       }
@@ -959,6 +1011,57 @@
       }
 
       .activity-list span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .state-cell {
+        display: inline-flex;
+        max-width: 100%;
+        align-items: center;
+        gap: 5px;
+        overflow: hidden;
+        font-size: 11px;
+        font-weight: 680;
+        white-space: nowrap;
+      }
+
+      .state-cell span:last-child {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .io-pair {
+        display: grid;
+        max-width: 100%;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 4px;
+        align-items: center;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 670;
+        line-height: 1.1;
+      }
+
+      .io-part {
+        display: inline-flex;
+        min-width: 0;
+        align-items: baseline;
+        gap: 3px;
+        overflow: hidden;
+      }
+
+      .io-part strong {
+        color: var(--faint);
+        font-size: 9px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .io-part span {
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1177,7 +1280,7 @@
               <h1>Unified Monitoring</h1>
               <p class="subtitle">
                 Live single-page inventory using the current Infrastructure, Workloads, Storage,
-                and Recovery evidence in one dense monitoring surface.
+                and Recovery evidence in one monitoring surface.
               </p>
               <div class="source-line" aria-live="polite">
                 <span id="sourceDot" class="dot info"></span>
@@ -1222,8 +1325,8 @@
                 aria-label="Search resources"
               />
               <div class="segmented" aria-label="Grouping">
-                <button type="button" data-group="host" class="active">Grouped</button>
-                <button type="button" data-group="platform">Platform</button>
+                <button type="button" data-group="host">Cluster</button>
+                <button type="button" data-group="platform" class="active">Platform</button>
                 <button type="button" data-group="flat">Flat</button>
               </div>
               <div class="segmented" aria-label="Status filter">
@@ -1233,12 +1336,6 @@
               </div>
             </div>
             <div class="toolbar-right">
-              <div class="segmented" aria-label="Column mode">
-                <button type="button" data-mode="dense" class="active">Dense</button>
-                <button type="button" data-mode="ops">Ops</button>
-                <button type="button" data-mode="capacity">Capacity</button>
-                <button type="button" data-mode="protection">Protection</button>
-              </div>
               <div class="segmented" aria-label="Metric cell style">
                 <button type="button" data-cell="bars" class="active">Bars</button>
                 <button type="button" data-cell="charts">Charts</button>
@@ -1254,8 +1351,8 @@
 
           <section class="table-wrap" aria-label="Combined infrastructure and workloads table">
             <div class="table-title">
-              <h2>Resource Inventory</h2>
-              <div class="hint" id="tableHint">Grouped by infrastructure node</div>
+              <h2 id="tableTitle">Resource Inventory</h2>
+              <div class="hint" id="tableHint">Grouped by cluster, node, and platform</div>
             </div>
             <table>
               <colgroup id="colgroup"></colgroup>
@@ -1699,7 +1796,7 @@
       };
 
       const state = {
-        group: "host",
+        group: "platform",
         status: "all",
         mode: "dense",
         cell: "bars",
@@ -1890,7 +1987,11 @@
           memory: percentFromMetric(resource.memory),
           disk: diskValue,
           network: formatRate(networkIn + networkOut),
+          networkIn: formatRate(networkIn),
+          networkOut: formatRate(networkOut),
           io: formatRate(diskRead + diskWrite),
+          ioRead: formatRate(diskRead),
+          ioWrite: formatRate(diskWrite),
           storage: storageOwner,
           protection,
           recovery,
@@ -1947,6 +2048,16 @@
       };
 
       const columnsByMode = {
+        map: [
+          ["name", "Resource", "name"],
+          ["info", "Info", "info"],
+          ["cpu", "CPU", "metric"],
+          ["memory", "Mem", "metric"],
+          ["disk", "Disk", "metric"],
+          ["recovery", "Recovery", "medium"],
+          ["protection", "Bk", "icon"],
+          ["activity", "Latest", "activity"],
+        ],
         dense: [
           ["name", "Name", "name"],
           ["info", "Info", "info"],
@@ -1956,9 +2067,9 @@
           ["recovery", "Recovery", "medium"],
           ["protection", "Bk", "icon"],
           ["storage", "Storage", "medium"],
-          ["network", "Net I/O", "medium"],
-          ["io", "Disk I/O", "medium"],
-          ["activity", "Signal", "activity"],
+          ["network", "Net In/Out", "medium"],
+          ["io", "Disk R/W", "medium"],
+          ["activity", "State", "activity"],
         ],
         ops: [
           ["name", "Resource", "name"],
@@ -1966,8 +2077,8 @@
           ["cpu", "CPU", "metric"],
           ["memory", "Memory", "metric"],
           ["disk", "Disk", "metric"],
-          ["network", "Network", "medium"],
-          ["activity", "Activity", "activity"],
+          ["network", "Net In/Out", "medium"],
+          ["activity", "State", "activity"],
         ],
         capacity: [
           ["name", "Resource", "name"],
@@ -1975,7 +2086,7 @@
           ["cpu", "CPU trend", "metric"],
           ["memory", "Memory trend", "metric"],
           ["disk", "Storage", "metric"],
-          ["io", "Disk IO", "medium"],
+          ["io", "Disk R/W", "medium"],
           ["storage", "Storage owner", "medium"],
         ],
         protection: [
@@ -1984,12 +2095,12 @@
           ["protection", "Protection", "medium"],
           ["recovery", "Recovery", "medium"],
           ["storage", "Repository or pool", "medium"],
-          ["activity", "Last evidence", "activity"],
+          ["activity", "State", "activity"],
         ],
       };
 
       const flatDenseColumns = [
-        ["scope", "Scope", "scope"],
+        ["scope", "Location", "scope"],
         ...columnsByMode.dense,
       ];
 
@@ -2023,6 +2134,14 @@
         if (kind === "backup") return "B";
         return "S";
       };
+      const kindBadgeLabel = (resource) => {
+        if (resource.kind === "node") return "node";
+        if (resource.kind === "vm") return "vm";
+        if (resource.kind === "container") return resource.platform === "LXC" ? "lxc" : "ctr";
+        if (resource.kind === "backup") return "pbs";
+        if (resource.source?.type === "physical_disk") return "disk";
+        return "store";
+      };
       const typeLabel = (resource) => {
         if (resource.kind === "node") return "Node";
         if (resource.kind === "vm") return "VM";
@@ -2034,6 +2153,9 @@
       const hostLabel = (resource) => parentResource(resource)?.label || resource.label;
 
       function metricCell(resource, key) {
+        if (resource.kind === "storage" && (key === "cpu" || key === "memory")) {
+          return '<span class="metric-na">-</span>';
+        }
         const value = resource[key];
         const tone = value >= 85 ? "bad" : value >= 70 ? "warn" : value < 45 ? "good" : "";
         const label = key === "memory" ? "mem" : key;
@@ -2068,6 +2190,33 @@
         `;
       }
 
+      function storageSignalCell(resource) {
+        const value = Number.isFinite(resource.disk) ? resource.disk : 0;
+        const tone = value >= 85 ? "bad" : value >= 70 ? "warn" : value < 45 ? "good" : "";
+        const label = resource.source?.type === "physical_disk" ? "disk" : "used";
+        const read = compactRateText(resource.ioRead || resource.io);
+        const write = compactRateText(resource.ioWrite || "-");
+        const titleParts = [
+          resource.storage,
+          `${value}% ${label}`,
+          read !== "-" ? `read ${read}` : "",
+          write !== "-" ? `write ${write}` : "",
+        ].filter(Boolean);
+        return `
+          <div class="storage-signal" title="${escapeHtml(titleParts.join(" / "))}">
+            <div class="metric-line">
+              <div class="bar ${tone}">
+                <span style="width:${Math.max(4, value)}%"></span>
+                <strong>${value}%</strong>
+                <em>${label}</em>
+              </div>
+            </div>
+            ${read === "-" ? "" : `<span class="rate-chip"><strong>r</strong><span>${escapeHtml(read)}</span></span>`}
+            ${write === "-" ? "" : `<span class="rate-chip"><strong>w</strong><span>${escapeHtml(write)}</span></span>`}
+          </div>
+        `;
+      }
+
       function statusBadge(resource) {
         const tone = rowTone(resource);
         const label = tone === "ok" ? "Healthy" : tone === "warn" ? "Attention" : "Critical";
@@ -2075,7 +2224,43 @@
       }
 
       function textCell(value) {
-        return `<span class="muted">${escapeHtml(value || "-")}</span>`;
+        return `<span class="table-text">${escapeHtml(value || "-")}</span>`;
+      }
+
+      function storageCell(resource) {
+        return `<span class="table-text storage-text" title="${escapeHtml(resource.storage || "-")}">${escapeHtml(resource.storage || "-")}</span>`;
+      }
+
+      function compactRateText(value) {
+        const text = String(value || "-");
+        return text === "0 B/s" || text === "0" ? "-" : text;
+      }
+
+      function ratePairCell(readLabel, readValue, writeLabel, writeValue) {
+        const read = compactRateText(readValue);
+        const write = compactRateText(writeValue);
+        if (read === "-" && write === "-") return '<span class="metric-na">-</span>';
+        return `
+          <span class="io-pair">
+            <span class="io-part"><strong>${escapeHtml(readLabel)}</strong><span>${escapeHtml(read)}</span></span>
+            <span class="io-part"><strong>${escapeHtml(writeLabel)}</strong><span>${escapeHtml(write)}</span></span>
+          </span>
+        `;
+      }
+
+      function stateCell(resource) {
+        const tone = rowTone(resource);
+        const label = String(resource.activity || resource.status || "-").split(",")[0];
+        const routine =
+          tone === "ok" &&
+          /^(status (running|online|active|healthy|ok)|no active incidents)$/i.test(label.trim());
+        if (routine) return '<span class="metric-na">-</span>';
+        return `
+          <span class="state-cell ${tone}" title="${escapeHtml(resource.activity || resource.status || "-")}">
+            <span class="dot ${tone}"></span>
+            <span>${escapeHtml(label)}</span>
+          </span>
+        `;
       }
 
       function compactRecoveryCell(resource) {
@@ -2088,8 +2273,7 @@
           .replace(" backup", "")
           .replace(" point", "");
         if (raw === "-" || lower.includes("unknown")) {
-          tone = "muted";
-          label = "-";
+          return '<span class="metric-na">-</span>';
         } else if (lower.includes("stale") || lower.includes("warning")) {
           tone = "warn";
           label = lower.includes("stale") ? "stale" : label;
@@ -2106,6 +2290,7 @@
         const ratio = raw.match(/(\d+)\s*\/\s*(\d+)/);
         const ratioProtected = ratio ? Number(ratio[1]) > 0 && Number(ratio[1]) === Number(ratio[2]) : false;
         const notApplicable = raw === "-" || lower === "n/a" || lower.includes("not applicable");
+        if (notApplicable) return '<span class="metric-na">-</span>';
         const protectedState =
           ratioProtected ||
           ((lower.includes("protected") || lower.includes("resource")) &&
@@ -2160,10 +2345,11 @@
                   : '<span class="indent"></span>'
             }
             <span class="row-status ${rowTone(resource)}" title="${escapeHtml(resource.status)}"></span>
-            <span class="kind ${resource.kind}">${kindLabel(resource.kind)}</span>
+            <span class="kind ${resource.kind}">${kindBadgeLabel(resource)}</span>
             <div class="primary">
-              <div class="resource-name"><span title="${escapeHtml(resource.label)}">${escapeHtml(resource.label)}</span></div>
-              <div class="meta">${escapeHtml(resource.role)} / ${escapeHtml(resource.meta)}</div>
+              <div class="resource-name">
+                <span title="${escapeHtml(`${resource.label} / ${resource.role} / ${resource.meta}`)}">${escapeHtml(resource.label)}</span>
+              </div>
             </div>
           </div>
         `;
@@ -2192,17 +2378,33 @@
         if (columnId === "cpu" || columnId === "memory" || columnId === "disk") {
           return metricCell(resource, columnId);
         }
-        if (columnId === "network") return textCell(resource.network);
-        if (columnId === "io") return textCell(resource.io);
-        if (columnId === "storage") return textCell(resource.storage);
+        if (columnId === "network") {
+          return ratePairCell("i", resource.networkIn || resource.network, "o", resource.networkOut || "-");
+        }
+        if (columnId === "io") return ratePairCell("r", resource.ioRead || resource.io, "w", resource.ioWrite || "-");
+        if (columnId === "storage") return storageCell(resource);
         if (columnId === "protection") {
           return protectionIconCell(resource);
         }
         if (columnId === "recovery") return compactRecoveryCell(resource);
         if (columnId === "activity") {
-          return `<div class="activity-list"><span><strong>${escapeHtml(String(resource.activity || "-").split(",")[0])}</strong></span><span>${escapeHtml(resource.platform)}</span></div>`;
+          return stateCell(resource);
         }
         return textCell(resource[columnId]);
+      }
+
+      function mapCellsFor(resource, columns, child) {
+        const cells = [];
+        for (let index = 0; index < columns.length; index += 1) {
+          const [columnId] = columns[index];
+          if (columnId === "cpu" && resource.kind === "storage") {
+            cells.push(`<td colspan="3">${storageSignalCell(resource)}</td>`);
+            index += 2;
+            continue;
+          }
+          cells.push(`<td>${cellFor(resource, columnId, child)}</td>`);
+        }
+        return cells.join("");
       }
 
       function matchesFilters(resource) {
@@ -2278,12 +2480,41 @@
         }
 
         if (state.group === "platform") {
-          const platforms = [...new Set(resources.map((resource) => resource.platform.split(" ")[0]))];
-          for (const platform of platforms) {
-            const items = resources.filter((resource) => resource.platform.startsWith(platform)).filter(matchesFilters);
-            if (items.length === 0) continue;
-            rows.push({ type: "group", label: platform, count: items.length, note: "platform scope" });
-            for (const resource of items) rows.push({ type: "resource", resource, child: isChild(resource) });
+          const parents = resources.filter((resource) => !resource.parent);
+          const parentsByGroup = new Map();
+          for (const parent of parents) {
+            const groupKey = parent.group || "Standalone";
+            if (!parentsByGroup.has(groupKey)) parentsByGroup.set(groupKey, []);
+            parentsByGroup.get(groupKey).push(parent);
+          }
+
+          for (const [groupLabel, groupParents] of parentsByGroup) {
+            const groupEntries = [];
+            for (const parent of groupParents) {
+              const children = (parent.children || []).map(getById).filter(Boolean);
+              const parentMatches = matchesFilters(parent);
+              const childMatches = children.filter(matchesFilters);
+              if (!parentMatches && childMatches.length === 0) continue;
+              groupEntries.push({ parent, childMatches });
+            }
+            if (groupEntries.length === 0) continue;
+
+            const childCount = groupEntries.reduce((total, entry) => total + entry.childMatches.length, 0);
+            rows.push({
+              type: "group",
+              label: groupLabel,
+              count: groupEntries.length,
+              note: `${groupEntries.length === 1 ? "node" : "nodes"} / ${childCount} platform rows`,
+              color: colorForGroup(groupLabel),
+              cluster: true,
+            });
+
+            for (const { parent, childMatches } of groupEntries) {
+              rows.push({ type: "resource", resource: parent, child: false });
+              if (!state.collapsed.has(parent.id)) {
+                for (const childRow of typedChildRows(childMatches)) rows.push(childRow);
+              }
+            }
           }
           return rows;
         }
@@ -2396,7 +2627,9 @@
             const color = groupColor(resource);
             return `
               <tr class="resource-row ${rowClass} ${state.selectedId === resource.id ? "selected" : ""}" data-row="${resource.id}" style="--group-color:${color}">
-                ${columns.map((column) => `<td>${cellFor(resource, column[0], row.child)}</td>`).join("")}
+                ${state.mode === "map" || state.mode === "dense"
+                  ? mapCellsFor(resource, columns, row.child)
+                  : columns.map((column) => `<td>${cellFor(resource, column[0], row.child)}</td>`).join("")}
               </tr>
             `;
           })
@@ -2405,10 +2638,20 @@
 
         document.getElementById("tableHint").textContent =
           state.group === "host"
-            ? "Grouped by node and resource type"
+            ? "Grouped by cluster, node, and resource type"
             : state.group === "platform"
-              ? "Grouped by platform"
+              ? "Grouped by cluster, node, and platform"
               : "Flat resource list";
+        document.getElementById("tableTitle").textContent =
+          state.mode === "map"
+            ? "Resource Map"
+            : state.mode === "dense"
+              ? "Resource Inventory"
+              : state.mode === "capacity"
+                ? "Capacity View"
+                : state.mode === "protection"
+                  ? "Protection View"
+                  : "Operations View";
       }
 
       function drawerMetricTile(label, value) {
@@ -2710,7 +2953,7 @@
           return;
         }
         if (target.id === "resetButton") {
-          state.group = "host";
+          state.group = "platform";
           state.status = "all";
           state.mode = "dense";
           state.cell = "bars";
@@ -2718,9 +2961,10 @@
           state.selectedId = null;
           state.showDrawer = false;
           document.getElementById("searchInput").value = "";
-          for (const selector of ["group", "status", "mode", "cell"]) {
-            document.querySelectorAll(`[data-${selector}]`).forEach((button, index) => button.classList.toggle("active", index === 0));
-          }
+          document.querySelectorAll("[data-group]").forEach((button) => button.classList.toggle("active", button.dataset.group === state.group));
+          document.querySelectorAll("[data-status]").forEach((button) => button.classList.toggle("active", button.dataset.status === state.status));
+          document.querySelectorAll("[data-mode]").forEach((button) => button.classList.toggle("active", button.dataset.mode === state.mode));
+          document.querySelectorAll("[data-cell]").forEach((button) => button.classList.toggle("active", button.dataset.cell === state.cell));
           render();
           return;
         }
