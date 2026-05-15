@@ -1,0 +1,2743 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pulse Unified Monitoring Prototype</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f8fb;
+        --surface: #ffffff;
+        --surface-alt: #f1f5f9;
+        --surface-hover: #e8eef6;
+        --line: #d8e0ea;
+        --line-strong: #b8c4d4;
+        --text: #162033;
+        --muted: #64748b;
+        --faint: #8a96a8;
+        --blue: #2563eb;
+        --blue-soft: #dbeafe;
+        --green: #16803c;
+        --green-soft: #dff7e7;
+        --amber: #a85d00;
+        --amber-soft: #fff1cf;
+        --red: #c43131;
+        --red-soft: #ffe4e4;
+        --violet: #6d28d9;
+        --violet-soft: #ede9fe;
+        --shadow: 0 14px 34px rgb(16 24 40 / 0.08);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 1100px;
+        background:
+          linear-gradient(180deg, rgb(230 236 244 / 0.58), transparent 260px),
+          var(--bg);
+        color: var(--text);
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      .app {
+        min-height: 100vh;
+        padding: 18px;
+      }
+
+      .shell {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 14px;
+        align-items: start;
+      }
+
+      .main {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .title-block {
+        min-width: 0;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 22px;
+        line-height: 1.16;
+        letter-spacing: 0;
+      }
+
+      .subtitle {
+        margin: 5px 0 0;
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .source-line {
+        display: flex;
+        max-width: 760px;
+        min-height: 25px;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .source-line strong {
+        color: var(--text);
+        font-weight: 760;
+      }
+
+      .source-line span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .source-button {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--surface);
+        color: var(--text);
+        padding: 4px 8px;
+        font-size: 11px;
+        font-weight: 720;
+      }
+
+      .source-button:hover {
+        background: var(--surface-hover);
+      }
+
+      .status-strip {
+        display: grid;
+        min-width: 510px;
+        grid-template-columns: repeat(4, minmax(110px, 1fr));
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: 0 1px 2px rgb(16 24 40 / 0.04);
+      }
+
+      .status-card {
+        min-width: 0;
+        padding: 9px 11px;
+        border-right: 1px solid var(--line);
+      }
+
+      .status-card:last-child {
+        border-right: 0;
+      }
+
+      .status-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 650;
+        text-transform: uppercase;
+      }
+
+      .status-value {
+        margin-top: 5px;
+        font-size: 17px;
+        font-weight: 720;
+        line-height: 1;
+      }
+
+      .status-note {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.25;
+      }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: var(--faint);
+      }
+
+      .dot.ok {
+        background: var(--green);
+      }
+
+      .dot.warn {
+        background: #d97706;
+      }
+
+      .dot.bad {
+        background: var(--red);
+      }
+
+      .dot.info {
+        background: var(--blue);
+      }
+
+      .toolbar {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        padding: 8px;
+      }
+
+      .toolbar-left,
+      .toolbar-right {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .search {
+        width: 280px;
+        min-width: 220px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--text);
+        padding: 8px 10px;
+        font-size: 13px;
+        outline: none;
+      }
+
+      .search:focus {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 3px rgb(37 99 235 / 0.14);
+      }
+
+      .segmented {
+        display: inline-flex;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--surface-alt);
+      }
+
+      .segmented button {
+        min-height: 32px;
+        border: 0;
+        border-right: 1px solid var(--line);
+        background: transparent;
+        color: var(--muted);
+        padding: 0 10px;
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .segmented button:last-child {
+        border-right: 0;
+      }
+
+      .segmented button.active {
+        background: var(--surface);
+        color: var(--text);
+        box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.8);
+      }
+
+      .icon-button {
+        display: inline-flex;
+        width: 32px;
+        height: 32px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--surface);
+        color: var(--muted);
+      }
+
+      .icon-button:hover,
+      .segmented button:hover {
+        background: var(--surface-hover);
+        color: var(--text);
+      }
+
+      .table-wrap {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .table-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--line);
+        padding: 9px 12px;
+      }
+
+      .table-title h2 {
+        margin: 0;
+        font-size: 13px;
+        letter-spacing: 0;
+      }
+
+      .table-title .hint {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+
+      col.name {
+        width: 190px;
+      }
+
+      col.type {
+        width: 48px;
+      }
+
+      col.icon {
+        width: 34px;
+      }
+
+      col.info {
+        width: 52px;
+      }
+
+      col.status {
+        width: 94px;
+      }
+
+      col.metric {
+        width: 88px;
+      }
+
+      col.compact {
+        width: 58px;
+      }
+
+      col.medium {
+        width: 80px;
+      }
+
+      col.activity {
+        width: 98px;
+      }
+
+      col.scope {
+        width: 118px;
+      }
+
+      thead th {
+        height: 29px;
+        border-bottom: 1px solid var(--line);
+        background: var(--surface-alt);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 720;
+        text-align: left;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      th,
+      td {
+        overflow: hidden;
+        padding: 0 6px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      tbody tr {
+        border-bottom: 1px solid #eef2f7;
+      }
+
+      tbody tr:last-child {
+        border-bottom: 0;
+      }
+
+      tbody tr:hover {
+        background: #f8fbff;
+      }
+
+      tbody tr.selected {
+        background: #eff6ff;
+        box-shadow: inset 3px 0 0 var(--blue);
+      }
+
+      tr.group-row {
+        background: #f8fafc;
+      }
+
+      tr.group-row td {
+        height: 26px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 680;
+      }
+
+      tr.cluster-row {
+        background: linear-gradient(
+          90deg,
+          color-mix(in srgb, var(--group-color) 22%, #ffffff) 0,
+          color-mix(in srgb, var(--group-color) 10%, #ffffff) 310px,
+          #f8fafc 100%
+        );
+        border-top: 2px solid color-mix(in srgb, var(--group-color) 74%, #334155);
+        border-bottom-color: var(--line-strong);
+      }
+
+      .cluster-label {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .cluster-label strong {
+        overflow: hidden;
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 820;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .cluster-label span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      tr.section-row {
+        background: color-mix(in srgb, var(--group-color) 8%, #ffffff);
+        border-bottom-color: color-mix(in srgb, var(--group-color) 20%, #eef2f7);
+      }
+
+      tr.section-row td {
+        height: 21px;
+        padding-left: 31px;
+        color: color-mix(in srgb, var(--group-color) 72%, #334155);
+        font-size: 10px;
+        font-weight: 820;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }
+
+      .section-label {
+        display: inline-flex;
+        max-width: 100%;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .section-label::before {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: currentColor;
+        content: "";
+      }
+
+      .section-label span {
+        color: var(--muted);
+        font-weight: 760;
+        letter-spacing: 0;
+        text-transform: none;
+      }
+
+      tr.resource-row td {
+        height: 29px;
+      }
+
+      tbody tr.host-row {
+        background: linear-gradient(
+          90deg,
+          color-mix(in srgb, var(--group-color) 18%, #ffffff) 0,
+          color-mix(in srgb, var(--group-color) 8%, #ffffff) 260px,
+          #f8fbff 100%
+        );
+        border-top: 2px solid color-mix(in srgb, var(--group-color) 68%, #334155);
+        border-bottom-color: var(--line-strong);
+      }
+
+      tbody tr.host-row td {
+        height: 31px;
+      }
+
+      tbody tr.host-row td:first-child {
+        box-shadow: inset 4px 0 0 color-mix(in srgb, var(--group-color) 82%, #ffffff);
+      }
+
+      tbody tr.host-row:hover {
+        background: linear-gradient(
+          90deg,
+          color-mix(in srgb, var(--group-color) 22%, #ffffff) 0,
+          color-mix(in srgb, var(--group-color) 10%, #ffffff) 260px,
+          #f3f8ff 100%
+        );
+      }
+
+      tbody tr.child-row {
+        background: linear-gradient(
+          90deg,
+          color-mix(in srgb, var(--group-color) 8%, #ffffff) 0,
+          #ffffff 86px
+        );
+      }
+
+      tbody tr.child-row td:first-child {
+        box-shadow: inset 3px 0 0 color-mix(in srgb, var(--group-color) 76%, #ffffff);
+      }
+
+      tbody tr.child-row:hover {
+        background: linear-gradient(
+          90deg,
+          color-mix(in srgb, var(--group-color) 13%, #ffffff) 0,
+          #f8fbff 110px
+        );
+      }
+
+      tbody tr.flat-row {
+        background: linear-gradient(
+          90deg,
+          color-mix(in srgb, var(--group-color) 10%, #ffffff) 0,
+          #ffffff 54px
+        );
+      }
+
+      tbody tr.empty-row:hover {
+        background: transparent;
+      }
+
+      .empty-state {
+        display: grid;
+        place-items: center;
+        min-height: 150px;
+        gap: 6px;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .empty-state strong {
+        color: var(--text);
+        font-size: 13px;
+      }
+
+      .name-cell {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .twisty {
+        width: 17px;
+        height: 17px;
+        flex: 0 0 auto;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        background: var(--surface);
+        color: var(--muted);
+        line-height: 1;
+      }
+
+      .indent {
+        width: 17px;
+        flex: 0 0 auto;
+      }
+
+      .kind {
+        display: inline-flex;
+        width: 20px;
+        height: 20px;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        font-size: 9px;
+        font-weight: 760;
+      }
+
+      .kind.node {
+        background: var(--blue-soft);
+        color: #1d4ed8;
+      }
+
+      .kind.vm {
+        background: var(--violet-soft);
+        color: var(--violet);
+      }
+
+      .kind.container {
+        background: #dcfce7;
+        color: #166534;
+      }
+
+      .kind.storage {
+        background: #e0f2fe;
+        color: #0369a1;
+      }
+
+      .kind.backup {
+        background: var(--amber-soft);
+        color: var(--amber);
+      }
+
+      .row-status {
+        width: 7px;
+        height: 7px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: var(--faint);
+      }
+
+      .row-status.ok {
+        background: #34d399;
+      }
+
+      .row-status.warn {
+        background: #d97706;
+      }
+
+      .row-status.bad {
+        background: var(--red);
+      }
+
+      .primary {
+        display: flex;
+        min-width: 0;
+        align-items: baseline;
+        gap: 6px;
+      }
+
+      .resource-name {
+        display: flex;
+        min-width: 64px;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .resource-name span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .host-row .resource-name {
+        font-size: 12.5px;
+        font-weight: 800;
+      }
+
+      .host-row .meta {
+        color: #475569;
+        font-weight: 650;
+      }
+
+      .meta {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 11px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        max-width: 100%;
+        border-radius: 999px;
+        padding: 2px 7px;
+        font-size: 10px;
+        font-weight: 720;
+        line-height: 1.2;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .badge.ok {
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .badge.warn {
+        background: var(--amber-soft);
+        color: var(--amber);
+      }
+
+      .badge.bad {
+        background: var(--red-soft);
+        color: var(--red);
+      }
+
+      .badge.neutral {
+        background: var(--surface-alt);
+        color: var(--muted);
+      }
+
+      .badge.blue {
+        background: var(--blue-soft);
+        color: #1d4ed8;
+      }
+
+      .shield {
+        display: inline-flex;
+        width: 20px;
+        height: 20px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 5px;
+      }
+
+      .shield svg {
+        width: 14px;
+        height: 14px;
+        display: block;
+      }
+
+      .shield.ok {
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .shield.warn {
+        background: var(--amber-soft);
+        color: var(--amber);
+      }
+
+      .shield.bad {
+        background: var(--red-soft);
+        color: var(--red);
+      }
+
+      .shield.muted {
+        background: var(--surface-alt);
+        color: var(--faint);
+      }
+
+      .compact-state {
+        display: inline-flex;
+        max-width: 100%;
+        align-items: center;
+        gap: 5px;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 650;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .compact-state .dot {
+        width: 7px;
+        height: 7px;
+      }
+
+      .compact-state.ok {
+        color: var(--green);
+      }
+
+      .compact-state.warn {
+        color: var(--amber);
+      }
+
+      .compact-state.bad {
+        color: var(--red);
+      }
+
+      .scope-cell {
+        display: inline-flex;
+        max-width: 100%;
+        align-items: center;
+        gap: 5px;
+        overflow: hidden;
+      }
+
+      .scope-chip {
+        display: inline-flex;
+        min-width: 0;
+        max-width: 100%;
+        align-items: center;
+        gap: 5px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--group-color) 13%, #ffffff);
+        color: color-mix(in srgb, var(--group-color) 76%, #0f172a);
+        padding: 2px 6px;
+        font-size: 10px;
+        font-weight: 760;
+        line-height: 1.1;
+      }
+
+      .scope-chip span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .cell-stack {
+        display: grid;
+        gap: 4px;
+      }
+
+      .metric-line,
+      .chart-line {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .metric-value {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        color: var(--text);
+        font-size: 11px;
+        font-weight: 690;
+      }
+
+      .metric-sub {
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .bar {
+        position: relative;
+        width: 100%;
+        height: 16px;
+        overflow: hidden;
+        border-radius: 4px;
+        background: #e8eef6;
+      }
+
+      .bar > span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--blue);
+      }
+
+      .bar.good > span {
+        background: var(--green);
+      }
+
+      .bar.warn > span {
+        background: #d97706;
+      }
+
+      .bar.bad > span {
+        background: var(--red);
+      }
+
+      .bar strong,
+      .bar em {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 10px;
+        line-height: 1;
+      }
+
+      .bar strong {
+        left: 7px;
+        color: var(--text);
+        font-weight: 760;
+      }
+
+      .bar em {
+        right: 7px;
+        color: var(--muted);
+        font-style: normal;
+        font-weight: 650;
+      }
+
+      .spark {
+        width: 78px;
+        height: 20px;
+        flex: 0 0 auto;
+      }
+
+      .spark path.area {
+        fill: rgb(37 99 235 / 0.1);
+      }
+
+      .spark path.line {
+        fill: none;
+        stroke: var(--blue);
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 2;
+      }
+
+      .spark.warn path.area {
+        fill: rgb(217 119 6 / 0.12);
+      }
+
+      .spark.warn path.line {
+        stroke: #d97706;
+      }
+
+      .spark.good path.area {
+        fill: rgb(22 128 60 / 0.12);
+      }
+
+      .spark.good path.line {
+        stroke: var(--green);
+      }
+
+      .spark.bad path.area {
+        fill: rgb(196 49 49 / 0.12);
+      }
+
+      .spark.bad path.line {
+        stroke: var(--red);
+      }
+
+      .right {
+        text-align: right;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .activity-list {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .activity-list strong {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--text);
+        font-weight: 680;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .activity-list span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .drawer {
+        display: none;
+        position: static;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .drawer.is-open {
+        display: block;
+      }
+
+      .drawer-header {
+        border-bottom: 1px solid var(--line);
+        padding: 12px;
+      }
+
+      .drawer-kicker {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 760;
+        text-transform: uppercase;
+      }
+
+      .drawer-title {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+      }
+
+      .drawer-title h2 {
+        margin: 0;
+        overflow: hidden;
+        font-size: 16px;
+        letter-spacing: 0;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .drawer-subtitle {
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .drawer-tabs {
+        display: flex;
+        gap: 4px;
+        border-bottom: 1px solid var(--line);
+        padding: 8px 8px 0;
+      }
+
+      .drawer-tabs button {
+        border: 0;
+        border-bottom: 2px solid transparent;
+        background: transparent;
+        color: var(--muted);
+        padding: 7px 8px;
+        font-size: 12px;
+        font-weight: 680;
+      }
+
+      .drawer-tabs button.active {
+        border-bottom-color: var(--blue);
+        color: var(--blue);
+      }
+
+      .drawer-body {
+        display: grid;
+        gap: 12px;
+        padding: 12px;
+      }
+
+      .section {
+        display: grid;
+        gap: 8px;
+      }
+
+      .section h3 {
+        margin: 0;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 760;
+        text-transform: uppercase;
+      }
+
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .metric-tile {
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fbfdff;
+        padding: 8px;
+      }
+
+      .metric-tile .label {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      .metric-tile .value {
+        margin-top: 5px;
+        font-size: 15px;
+        font-weight: 760;
+      }
+
+      .kv {
+        display: grid;
+        grid-template-columns: 120px minmax(0, 1fr);
+        gap: 8px;
+        border-bottom: 1px solid #eef2f7;
+        padding: 6px 0;
+        font-size: 12px;
+      }
+
+      .kv:last-child {
+        border-bottom: 0;
+      }
+
+      .kv .key {
+        color: var(--muted);
+      }
+
+      .kv .value {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .mini-table {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        overflow: hidden;
+      }
+
+      .mini-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 86px 72px;
+        gap: 8px;
+        align-items: center;
+        border-bottom: 1px solid #eef2f7;
+        padding: 7px 8px;
+        font-size: 12px;
+      }
+
+      .mini-row:last-child {
+        border-bottom: 0;
+      }
+
+      .mini-row.header {
+        background: var(--surface-alt);
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 760;
+        text-transform: uppercase;
+      }
+
+      .callout {
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--blue);
+        border-radius: 7px;
+        background: #fbfdff;
+        padding: 10px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      @media (max-width: 1260px) {
+        body {
+          min-width: 1100px;
+        }
+
+        .shell {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .drawer {
+          position: static;
+        }
+
+        .status-strip {
+          min-width: 460px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="shell">
+        <main class="main">
+          <header class="topbar">
+            <div class="title-block">
+              <h1>Unified Monitoring</h1>
+              <p class="subtitle">
+                Live single-page inventory using the current Infrastructure, Workloads, Storage,
+                and Recovery evidence in one dense monitoring surface.
+              </p>
+              <div class="source-line" aria-live="polite">
+                <span id="sourceDot" class="dot info"></span>
+                <strong id="sourceLabel">Loading live Pulse API</strong>
+                <span id="sourceMeta">Mock fallback is off.</span>
+                <button id="mockFallbackButton" class="source-button hidden" type="button">
+                  Show mock fallback
+                </button>
+              </div>
+            </div>
+            <div class="status-strip" aria-label="Monitoring summary">
+              <div class="status-card">
+                <div class="status-label"><span class="dot ok"></span>Resources</div>
+                <div class="status-value" id="summaryResources">-</div>
+                <div class="status-note" id="summaryResourceNote">Waiting for live state</div>
+              </div>
+              <div class="status-card">
+                <div class="status-label"><span class="dot warn"></span>Attention</div>
+                <div class="status-value" id="summaryAttention">-</div>
+                <div class="status-note" id="summaryAttentionNote">No mock rows shown</div>
+              </div>
+              <div class="status-card">
+                <div class="status-label"><span class="dot info"></span>Storage</div>
+                <div class="status-value" id="summaryStorage">-</div>
+                <div class="status-note" id="summaryStorageNote">Live storage resources</div>
+              </div>
+              <div class="status-card">
+                <div class="status-label"><span class="dot ok"></span>Recovery</div>
+                <div class="status-value" id="summaryRecovery">-</div>
+                <div class="status-note" id="summaryRecoveryNote">Backup evidence only</div>
+              </div>
+            </div>
+          </header>
+
+          <section class="toolbar" aria-label="Unified monitoring controls">
+            <div class="toolbar-left">
+              <input
+                id="searchInput"
+                class="search"
+                type="search"
+                placeholder="Search nodes, workloads, pools, backup jobs..."
+                aria-label="Search resources"
+              />
+              <div class="segmented" aria-label="Grouping">
+                <button type="button" data-group="host" class="active">Grouped</button>
+                <button type="button" data-group="platform">Platform</button>
+                <button type="button" data-group="flat">Flat</button>
+              </div>
+              <div class="segmented" aria-label="Status filter">
+                <button type="button" data-status="all" class="active">All</button>
+                <button type="button" data-status="attention">Attention</button>
+                <button type="button" data-status="protected">Protected</button>
+              </div>
+            </div>
+            <div class="toolbar-right">
+              <div class="segmented" aria-label="Column mode">
+                <button type="button" data-mode="dense" class="active">Dense</button>
+                <button type="button" data-mode="ops">Ops</button>
+                <button type="button" data-mode="capacity">Capacity</button>
+                <button type="button" data-mode="protection">Protection</button>
+              </div>
+              <div class="segmented" aria-label="Metric cell style">
+                <button type="button" data-cell="bars" class="active">Bars</button>
+                <button type="button" data-cell="charts">Charts</button>
+              </div>
+              <button id="refreshButton" class="icon-button" type="button" title="Refresh live data">
+                F
+              </button>
+              <button id="resetButton" class="icon-button" type="button" title="Reset filters">
+                R
+              </button>
+            </div>
+          </section>
+
+          <section class="table-wrap" aria-label="Combined infrastructure and workloads table">
+            <div class="table-title">
+              <h2>Resource Inventory</h2>
+              <div class="hint" id="tableHint">Grouped by infrastructure node</div>
+            </div>
+            <table>
+              <colgroup id="colgroup"></colgroup>
+              <thead id="tableHead"></thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </section>
+        </main>
+
+        <aside id="detailDrawer" class="drawer" aria-label="Resource detail drawer">
+          <div class="drawer-header">
+            <div class="drawer-kicker" id="drawerKicker">Selected resource</div>
+            <div class="drawer-title">
+              <span id="drawerKind" class="kind node">N</span>
+              <h2 id="drawerTitle">pve-01</h2>
+            </div>
+            <div id="drawerSubtitle" class="drawer-subtitle">
+              Proxmox node in production cluster. Parent row combines node health, workload count,
+              capacity, storage, and protection evidence.
+            </div>
+          </div>
+          <nav class="drawer-tabs" aria-label="Drawer tabs">
+            <button type="button" data-tab="overview" class="active">Overview</button>
+            <button type="button" data-tab="workloads">Workloads</button>
+            <button type="button" data-tab="storage">Storage</button>
+            <button type="button" data-tab="recovery">Recovery</button>
+          </nav>
+          <div id="drawerBody" class="drawer-body"></div>
+        </aside>
+      </div>
+    </div>
+
+    <script>
+      const mockResources = [
+        {
+          id: "pve-01",
+          kind: "node",
+          label: "pve-01",
+          platform: "Proxmox",
+          group: "Production cluster",
+          status: "ok",
+          role: "Cluster node",
+          meta: "12 cores, 128 GB RAM, 10 GbE",
+          cpu: 54,
+          memory: 68,
+          disk: 73,
+          network: "2.4 Gb/s",
+          io: "410 MB/s",
+          storage: "rpool 73%",
+          protection: "8 protected",
+          recovery: "Last success 14 min",
+          activity: "1 workload migrated, 2 backups complete",
+          trend: [42, 45, 49, 47, 53, 58, 54],
+          children: ["vm-101", "vm-102", "ct-205", "ct-210"],
+        },
+        {
+          id: "vm-101",
+          kind: "vm",
+          label: "billing-db-01",
+          platform: "Proxmox VM",
+          group: "Production cluster",
+          parent: "pve-01",
+          status: "warn",
+          role: "Postgres primary",
+          meta: "VMID 101, Debian 12",
+          cpu: 62,
+          memory: 81,
+          disk: 77,
+          network: "380 Mb/s",
+          io: "96 MB/s",
+          storage: "local-zfs/vm-101",
+          protection: "Protected",
+          recovery: "Verified 02:15",
+          activity: "Memory pressure above normal",
+          trend: [51, 58, 63, 59, 66, 74, 62],
+        },
+        {
+          id: "vm-102",
+          kind: "vm",
+          label: "app-api-02",
+          platform: "Proxmox VM",
+          group: "Production cluster",
+          parent: "pve-01",
+          status: "ok",
+          role: "API worker",
+          meta: "VMID 102, Ubuntu 24.04",
+          cpu: 38,
+          memory: 52,
+          disk: 46,
+          network: "210 Mb/s",
+          io: "42 MB/s",
+          storage: "local-zfs/vm-102",
+          protection: "Protected",
+          recovery: "Verified 01:48",
+          activity: "No active incidents",
+          trend: [34, 32, 35, 39, 43, 40, 38],
+        },
+        {
+          id: "ct-205",
+          kind: "container",
+          label: "redis-cache",
+          platform: "LXC",
+          group: "Production cluster",
+          parent: "pve-01",
+          status: "ok",
+          role: "Cache",
+          meta: "CT 205, privileged false",
+          cpu: 18,
+          memory: 42,
+          disk: 31,
+          network: "90 Mb/s",
+          io: "18 MB/s",
+          storage: "local-zfs/subvol-205",
+          protection: "Protected",
+          recovery: "Last success 28 min",
+          activity: "Low latency",
+          trend: [22, 20, 18, 21, 19, 17, 18],
+        },
+        {
+          id: "ct-210",
+          kind: "container",
+          label: "queue-worker",
+          platform: "LXC",
+          group: "Production cluster",
+          parent: "pve-01",
+          status: "ok",
+          role: "Worker",
+          meta: "CT 210, Alpine",
+          cpu: 26,
+          memory: 37,
+          disk: 22,
+          network: "64 Mb/s",
+          io: "12 MB/s",
+          storage: "local-zfs/subvol-210",
+          protection: "Protected",
+          recovery: "Last success 31 min",
+          activity: "Queue depth normal",
+          trend: [31, 28, 26, 30, 25, 27, 26],
+        },
+        {
+          id: "pve-02",
+          kind: "node",
+          label: "pve-02",
+          platform: "Proxmox",
+          group: "Production cluster",
+          status: "warn",
+          role: "Cluster node",
+          meta: "16 cores, 192 GB RAM, 10 GbE",
+          cpu: 71,
+          memory: 76,
+          disk: 88,
+          network: "3.1 Gb/s",
+          io: "620 MB/s",
+          storage: "tank 88%",
+          protection: "5 protected",
+          recovery: "1 stale backup",
+          activity: "Pool capacity warning",
+          trend: [55, 58, 64, 67, 73, 78, 71],
+          children: ["vm-201", "vm-220", "ct-240"],
+        },
+        {
+          id: "vm-201",
+          kind: "vm",
+          label: "analytics-warehouse",
+          platform: "Proxmox VM",
+          group: "Production cluster",
+          parent: "pve-02",
+          status: "warn",
+          role: "Warehouse",
+          meta: "VMID 201, Rocky Linux",
+          cpu: 74,
+          memory: 79,
+          disk: 84,
+          network: "460 Mb/s",
+          io: "210 MB/s",
+          storage: "tank/vm-201",
+          protection: "Protected",
+          recovery: "Last success 18h",
+          activity: "Backup outside target window",
+          trend: [64, 68, 71, 76, 81, 79, 74],
+        },
+        {
+          id: "vm-220",
+          kind: "vm",
+          label: "windows-build-01",
+          platform: "Proxmox VM",
+          group: "Production cluster",
+          parent: "pve-02",
+          status: "ok",
+          role: "Build agent",
+          meta: "VMID 220, Windows Server",
+          cpu: 44,
+          memory: 63,
+          disk: 49,
+          network: "180 Mb/s",
+          io: "72 MB/s",
+          storage: "tank/vm-220",
+          protection: "Protected",
+          recovery: "Verified 03:06",
+          activity: "Patch reboot completed",
+          trend: [41, 49, 53, 45, 42, 48, 44],
+        },
+        {
+          id: "ct-240",
+          kind: "container",
+          label: "nginx-edge",
+          platform: "LXC",
+          group: "Production cluster",
+          parent: "pve-02",
+          status: "ok",
+          role: "Ingress",
+          meta: "CT 240, Debian 12",
+          cpu: 29,
+          memory: 35,
+          disk: 27,
+          network: "820 Mb/s",
+          io: "16 MB/s",
+          storage: "tank/subvol-240",
+          protection: "Protected",
+          recovery: "Last success 16 min",
+          activity: "Traffic normal",
+          trend: [24, 27, 31, 33, 28, 30, 29],
+        },
+        {
+          id: "docker-01",
+          kind: "node",
+          label: "docker-01",
+          platform: "Docker",
+          group: "Edge services",
+          status: "ok",
+          role: "Docker host",
+          meta: "24 containers, Swarm worker",
+          cpu: 49,
+          memory: 58,
+          disk: 64,
+          network: "1.2 Gb/s",
+          io: "132 MB/s",
+          storage: "overlay 64%",
+          protection: "9 protected",
+          recovery: "Last success 11 min",
+          activity: "3 images updated",
+          trend: [44, 48, 46, 50, 55, 52, 49],
+          children: ["ctr-api", "ctr-jobs", "ctr-observability"],
+        },
+        {
+          id: "ctr-api",
+          kind: "container",
+          label: "pulse-api",
+          platform: "Docker",
+          group: "Edge services",
+          parent: "docker-01",
+          status: "ok",
+          role: "Service container",
+          meta: "ghcr.io/pulse/api:6.0",
+          cpu: 33,
+          memory: 48,
+          disk: 36,
+          network: "350 Mb/s",
+          io: "34 MB/s",
+          storage: "overlay2",
+          protection: "Protected",
+          recovery: "Last success 11 min",
+          activity: "Rolling update complete",
+          trend: [29, 31, 35, 38, 36, 34, 33],
+        },
+        {
+          id: "ctr-jobs",
+          kind: "container",
+          label: "pulse-jobs",
+          platform: "Docker",
+          group: "Edge services",
+          parent: "docker-01",
+          status: "ok",
+          role: "Worker container",
+          meta: "ghcr.io/pulse/jobs:6.0",
+          cpu: 22,
+          memory: 39,
+          disk: 29,
+          network: "110 Mb/s",
+          io: "26 MB/s",
+          storage: "overlay2",
+          protection: "Protected",
+          recovery: "Last success 13 min",
+          activity: "No active incidents",
+          trend: [18, 22, 25, 24, 21, 23, 22],
+        },
+        {
+          id: "ctr-observability",
+          kind: "container",
+          label: "grafana",
+          platform: "Docker",
+          group: "Edge services",
+          parent: "docker-01",
+          status: "ok",
+          role: "Observability",
+          meta: "grafana/grafana:11",
+          cpu: 14,
+          memory: 34,
+          disk: 41,
+          network: "45 Mb/s",
+          io: "15 MB/s",
+          storage: "volume:grafana-data",
+          protection: "Protected",
+          recovery: "Verified 04:24",
+          activity: "Dashboards healthy",
+          trend: [11, 12, 14, 16, 13, 15, 14],
+        },
+        {
+          id: "pbs-01",
+          kind: "backup",
+          label: "pbs-01",
+          platform: "PBS",
+          group: "Protection",
+          status: "ok",
+          role: "Backup server",
+          meta: "Datastore primary-backups",
+          cpu: 31,
+          memory: 46,
+          disk: 69,
+          network: "740 Mb/s",
+          io: "390 MB/s",
+          storage: "primary-backups 69%",
+          protection: "22 resources",
+          recovery: "97% success",
+          activity: "8 restore points created",
+          trend: [25, 29, 34, 38, 35, 32, 31],
+          children: [],
+        },
+      ];
+
+      const makeTrend = (value) => [
+        Math.max(0, value - 7),
+        Math.max(0, value - 3),
+        value + 2,
+        Math.max(0, value - 1),
+        value + 4,
+        Math.max(0, value - 2),
+        value,
+      ];
+
+      const appendParent = (resource) => {
+        mockResources.push({ ...resource, children: resource.children || [] });
+      };
+
+      const appendWorkload = (parentId, workload) => {
+        const parent = mockResources.find((resource) => resource.id === parentId);
+        if (!parent) return;
+        if (!Array.isArray(parent.children)) parent.children = [];
+        parent.children.push(workload.id);
+        mockResources.push({
+          kind: workload.kind || "container",
+          platform:
+            workload.platform ||
+            (parent.platform === "Docker" ? "Docker" : workload.kind === "vm" ? "Proxmox VM" : "LXC"),
+          group: parent.group,
+          parent: parentId,
+          status: workload.status || "ok",
+          network: workload.network || "0 B/s",
+          io: workload.io || "0 B/s",
+          protection: workload.protection || "Protected",
+          recovery: workload.recovery || "Last success 2h",
+          activity: workload.activity || "No active incidents",
+          trend: makeTrend(workload.cpu || 0),
+          ...workload,
+        });
+      };
+
+      appendParent({
+        id: "minipc",
+        kind: "node",
+        label: "minipc",
+        platform: "Proxmox",
+        group: "Homelab edge",
+        status: "ok",
+        role: "Standalone node",
+        meta: "8 cores, 64 GB RAM, 2.5 GbE",
+        cpu: 21,
+        memory: 29,
+        disk: 52,
+        network: "460 Mb/s",
+        io: "80 MB/s",
+        storage: "local 52%",
+        protection: "3 protected",
+        recovery: "1 warning",
+        activity: "Guest agent warning",
+        trend: [16, 18, 22, 20, 24, 19, 21],
+      });
+
+      appendParent({
+        id: "pi",
+        kind: "node",
+        label: "pi",
+        platform: "Linux",
+        group: "Edge services",
+        status: "ok",
+        role: "ARM edge host",
+        meta: "4 cores, 8 GB RAM, 1 GbE",
+        cpu: 12,
+        memory: 36,
+        disk: 41,
+        network: "72 Mb/s",
+        io: "9 MB/s",
+        storage: "sd-root 41%",
+        protection: "4 protected",
+        recovery: "Last success 107d",
+        activity: "Long-tail backup evidence",
+        trend: [10, 13, 11, 15, 12, 14, 12],
+      });
+
+      [
+        ["pve-01", { id: "ct-216", label: "mqtt", role: "Broker", meta: "CT 216, Alpine", cpu: 6, memory: 18, disk: 15, network: "240 B/s", io: "0 B/s" }],
+        ["pve-01", { id: "ct-217", label: "ntfy", role: "Notifications", meta: "CT 217, Debian 12", cpu: 4, memory: 19, disk: 5, network: "254 B/s", io: "0 B/s" }],
+        ["pve-01", { id: "ct-218", label: "prowlarr", role: "Indexer", meta: "CT 218, Debian 12", cpu: 18, memory: 28, disk: 6, network: "225 B/s", io: "0 B/s" }],
+        ["pve-01", { id: "ct-219", label: "radarr", role: "Media automation", meta: "CT 219, Debian 12", cpu: 31, memory: 31, disk: 52, network: "301 B/s", io: "0 B/s" }],
+        ["pve-01", { id: "vm-160", label: "windows-runner", kind: "vm", role: "CI runner", meta: "VMID 160, Windows Server", status: "warn", cpu: 0, memory: 0, disk: 0, network: "-", io: "-", protection: "Protected", recovery: "-", activity: "Powered off" }],
+        ["pve-02", { id: "ct-130", label: "sabnzbd", role: "Downloader", meta: "CT 130, Debian 12", cpu: 6, memory: 6, disk: 4, network: "272 B/s", io: "0 B/s" }],
+        ["pve-02", { id: "ct-133", label: "sonarr", role: "Media automation", meta: "CT 133, Debian 12", cpu: 34, memory: 34, disk: 9, network: "245 B/s", io: "0 B/s" }],
+        ["pve-02", { id: "ct-109", label: "tailscale-router", role: "Network relay", meta: "CT 109, Debian 12", cpu: 6, memory: 6, disk: 35, network: "237 B/s", io: "0 B/s" }],
+        ["pve-02", { id: "vm-260", label: "openclaw-vm", kind: "vm", role: "Test VM", meta: "VMID 260, Ubuntu", status: "warn", cpu: 0, memory: 0, disk: 0, network: "-", io: "-", protection: "Protected", recovery: "-", activity: "Powered off" }],
+        ["docker-01", { id: "ctr-cloudflared", label: "cloudflared", role: "Tunnel", meta: "cloudflare/cloudflared", cpu: 0, memory: 5, disk: 25, network: "672 B/s", io: "0 B/s" }],
+        ["docker-01", { id: "ctr-esphome", label: "esphome", role: "IoT builder", meta: "ghcr.io/esphome/esphome", cpu: 0, memory: 7, disk: 43, network: "238 B/s", io: "0 B/s" }],
+        ["docker-01", { id: "ctr-frigate", label: "frigate", role: "Video NVR", meta: "ghcr.io/blakeblackshear/frigate", cpu: 2, memory: 28, disk: 68, network: "552 KB/s", io: "510 KB/s" }],
+        ["minipc", { id: "ct-112", label: "debian-go", role: "Build sandbox", meta: "CT 112, Debian 12", status: "warn", cpu: 0, memory: 0, disk: 0, network: "-", io: "-", protection: "Unverified", recovery: "-", activity: "Agent offline" }],
+        ["minipc", { id: "ct-108", label: "jellyfin", role: "Media server", meta: "CT 108, Debian 12", status: "warn", cpu: 0, memory: 2, disk: 35, network: "235 B/s", io: "0 B/s", protection: "Protected", recovery: "1 stale point", activity: "Backup warning" }],
+        ["minipc", { id: "ct-113", label: "nzbtv-server", role: "Media service", meta: "CT 113, Debian 12", status: "warn", cpu: 0, memory: 0, disk: 0, network: "-", io: "-", protection: "Protected", recovery: "-", activity: "Powered off" }],
+        ["minipc", { id: "vm-100", label: "docker", kind: "vm", role: "Docker VM", meta: "VMID 100, Debian 12", status: "warn", cpu: 0, memory: 0, disk: 0, network: "-", io: "-", protection: "Protected", recovery: "-", activity: "Powered off" }],
+        ["pi", { id: "ct-140", label: "pulse-v4-prod", role: "Legacy monitor", meta: "CT 140, Debian 12", cpu: 0, memory: 0, disk: 22, network: "256 B/s", io: "0 B/s", recovery: "Last success 107d" }],
+        ["pi", { id: "ct-900", label: "socat", role: "Relay helper", meta: "CT 900, Alpine", cpu: 0, memory: 0, disk: 11, network: "260 B/s", io: "0 B/s", recovery: "Last success 15h" }],
+        ["pi", { id: "ct-901", label: "zigbee2mqtt", role: "IoT bridge", meta: "CT 901, Debian 12", cpu: 3, memory: 3, disk: 38, network: "236 B/s", io: "0 B/s", recovery: "Last success 2h" }],
+        ["pi", { id: "ct-902", label: "homebridge", role: "Home automation", meta: "CT 902, Debian 12", cpu: 5, memory: 12, disk: 31, network: "190 B/s", io: "0 B/s", recovery: "Last success 2h" }],
+      ].forEach(([parentId, workload]) => appendWorkload(parentId, workload));
+
+      let resources = [];
+      const dataSource = {
+        mode: "loading",
+        label: "Loading live Pulse API",
+        detail: "Mock fallback is off.",
+        lastUpdate: null,
+        error: null,
+        activeAlerts: [],
+      };
+
+      const state = {
+        group: "host",
+        status: "all",
+        mode: "dense",
+        cell: "bars",
+        selectedId: null,
+        activeTab: "overview",
+        showDrawer: false,
+        collapsed: new Set(),
+        search: "",
+      };
+
+      const escapeHtml = (value) =>
+        String(value ?? "").replace(/[&<>"']/g, (character) => {
+          if (character === "&") return "&amp;";
+          if (character === "<") return "&lt;";
+          if (character === ">") return "&gt;";
+          if (character === '"') return "&quot;";
+          return "&#39;";
+        });
+
+      const clampPercent = (value) => {
+        const number = Number(value);
+        if (!Number.isFinite(number)) return 0;
+        return Math.max(0, Math.min(100, Math.round(number)));
+      };
+
+      const percentFromMetric = (metric) => {
+        if (typeof metric === "number") return clampPercent(metric);
+        if (!metric || typeof metric !== "object") return 0;
+        if (Number.isFinite(metric.current)) return clampPercent(metric.current);
+        if (Number.isFinite(metric.used) && Number.isFinite(metric.total) && metric.total > 0) {
+          return clampPercent((metric.used / metric.total) * 100);
+        }
+        return 0;
+      };
+
+      const formatRate = (value) => {
+        const number = Number(value);
+        if (!Number.isFinite(number)) return "-";
+        if (number <= 0) return "0 B/s";
+        const units = ["B/s", "KB/s", "MB/s", "GB/s"];
+        let amount = number;
+        let index = 0;
+        while (amount >= 1024 && index < units.length - 1) {
+          amount /= 1024;
+          index += 1;
+        }
+        const precision = amount >= 10 || index === 0 ? 0 : 1;
+        return `${amount.toFixed(precision)} ${units[index]}`;
+      };
+
+      const formatRelativeTime = (value, referenceTime = Date.now()) => {
+        const timestamp = Date.parse(value || "");
+        if (!Number.isFinite(timestamp)) return "-";
+        const reference = Number.isFinite(Number(referenceTime)) ? Number(referenceTime) : Date.now();
+        const diff = Math.max(0, reference - timestamp);
+        const minute = 60 * 1000;
+        const hour = 60 * minute;
+        const day = 24 * hour;
+        if (diff < hour) return `Last ${Math.max(1, Math.round(diff / minute))}m`;
+        if (diff < day) return `Last ${Math.round(diff / hour)}h`;
+        return `Last ${Math.round(diff / day)}d`;
+      };
+
+      const statusToneFrom = (status) => {
+        const normalized = String(status || "").toLowerCase();
+        if (["running", "online", "active", "healthy", "ok"].includes(normalized)) return "ok";
+        if (["failed", "critical", "error"].includes(normalized)) return "bad";
+        return "warn";
+      };
+
+      const kindFromType = (type) => {
+        if (type === "agent" || type === "host" || type === "node") return "node";
+        if (type === "vm") return "vm";
+        if (type === "system-container" || type === "app-container" || type === "container") {
+          return "container";
+        }
+        if (type === "pbs" || type === "backup-server") return "backup";
+        if (type === "storage" || type === "physical_disk" || type === "datastore") return "storage";
+        return "storage";
+      };
+
+      const platformLabelFor = (resource, kind) => {
+        const platform = resource.platformType || resource.sourceType || resource.technology || "resource";
+        if (platform === "proxmox-pve") {
+          if (kind === "vm") return "Proxmox VM";
+          if (kind === "container") return "LXC";
+          if (kind === "storage") return "PVE storage";
+          return "Proxmox";
+        }
+        if (platform === "proxmox-pbs") return "PBS";
+        if (platform === "docker") return "Docker";
+        if (platform === "agent") return kind === "storage" ? "Host storage" : "Agent";
+        return platform;
+      };
+
+      const roleFor = (resource, kind) => {
+        if (kind === "node") return resource.platformType === "proxmox-pve" ? "Infrastructure node" : "Server host";
+        if (kind === "vm") return "Virtual machine";
+        if (kind === "container") return resource.type === "app-container" ? "App container" : "System container";
+        if (kind === "backup") return "Backup server";
+        if (resource.type === "physical_disk") return "Physical disk";
+        return "Storage";
+      };
+
+      const metaFor = (resource, kind) => {
+        const cpuCount = resource.proxmox?.cpus || resource.platformData?.cpus;
+        const osName = resource.proxmox?.osName;
+        const vmid = resource.proxmox?.vmid;
+        if (vmid && kind === "vm") return `VMID ${vmid}${osName ? `, ${osName}` : ""}`;
+        if (vmid && kind === "container") return `CT ${vmid}${osName ? `, ${osName}` : ""}`;
+        if (resource.type === "physical_disk") return resource.platformData?.device || resource.name || "Disk";
+        if (kind === "node") {
+          const bits = [];
+          if (cpuCount) bits.push(`${cpuCount} cores`);
+          if (resource.identity?.hostname) bits.push(resource.identity.hostname);
+          return bits.join(", ") || "Server";
+        }
+        if (kind === "backup") return resource.version ? `PBS ${resource.version}` : "Backup service";
+        return resource.technology || resource.type || "Resource";
+      };
+
+      const buildAlertIndexes = (alerts) => {
+        const byId = new Map();
+        const byName = new Map();
+        for (const alert of alerts || []) {
+          if (alert.resourceId && !byId.has(alert.resourceId)) byId.set(alert.resourceId, alert);
+          const name = String(alert.resourceName || "").toLowerCase();
+          if (name && !byName.has(name)) byName.set(name, alert);
+        }
+        return { byId, byName };
+      };
+
+      const alertFor = (resource, indexes) => {
+        const keys = [
+          resource.id,
+          resource.metricsTarget?.resourceId,
+          resource.proxmox?.sourceId,
+          resource.platformData?.sourceId,
+        ].filter(Boolean);
+        for (const key of keys) {
+          if (indexes.byId.has(key)) return indexes.byId.get(key);
+        }
+        return indexes.byName.get(String(resource.displayName || resource.name || "").toLowerCase()) || null;
+      };
+
+      const mapLiveResource = (resource, indexes, referenceTime) => {
+        const kind = kindFromType(resource.type);
+        const alert = alertFor(resource, indexes);
+        const label = resource.displayName || resource.name || resource.id;
+        const lastBackup = resource.proxmox?.lastBackup || resource.platformData?.lastBackup;
+        const diskValue = percentFromMetric(resource.disk);
+        const diskRead = resource.platformData?.diskRead || resource.diskIO?.readBytes || 0;
+        const diskWrite = resource.platformData?.diskWrite || resource.diskIO?.writeBytes || 0;
+        const networkIn = resource.platformData?.networkIn || resource.network?.rxBytes || resource.network?.rx || 0;
+        const networkOut = resource.platformData?.networkOut || resource.network?.txBytes || resource.network?.tx || 0;
+        const storageOwner =
+          resource.proxmox?.disks?.[0]?.device ||
+          resource.platformData?.disks?.[0]?.device ||
+          resource.storage?.pool ||
+          resource.storage?.path ||
+          (kind === "storage" ? `${label} ${diskValue ? `${diskValue}%` : ""}`.trim() : "-");
+        const protectable = kind === "vm" || kind === "container";
+        const protection = protectable
+          ? lastBackup
+            ? "Protected"
+            : "No backup"
+          : kind === "backup"
+            ? "N/A"
+            : "N/A";
+        const recovery = protectable && lastBackup ? formatRelativeTime(lastBackup, referenceTime) : "-";
+        const group =
+          resource.proxmox?.clusterName ||
+          (kind === "backup" ? "Recovery" : "") ||
+          (resource.platformType === "agent" ? "Server agents" : "") ||
+          "Standalone";
+
+        return {
+          id: resource.id,
+          kind,
+          label,
+          platform: platformLabelFor(resource, kind),
+          group,
+          parent: resource.parentId || null,
+          status: alert ? statusToneFrom(alert.level) : statusToneFrom(resource.status),
+          role: roleFor(resource, kind),
+          meta: metaFor(resource, kind),
+          cpu: percentFromMetric(resource.cpu),
+          memory: percentFromMetric(resource.memory),
+          disk: diskValue,
+          network: formatRate(networkIn + networkOut),
+          io: formatRate(diskRead + diskWrite),
+          storage: storageOwner,
+          protection,
+          recovery,
+          activity: alert?.message || `Status ${resource.status || "unknown"}`,
+          trend: makeTrend(percentFromMetric(resource.cpu)),
+          children: [],
+          source: resource,
+        };
+      };
+
+      const compareResources = (left, right) => {
+        const groupCompare = String(left.group).localeCompare(String(right.group));
+        if (groupCompare !== 0) return groupCompare;
+        const leftParent = left.parent ? 1 : 0;
+        const rightParent = right.parent ? 1 : 0;
+        if (leftParent !== rightParent) return leftParent - rightParent;
+        return String(left.label).localeCompare(String(right.label));
+      };
+
+      const enrichParentRows = (rows) => {
+        const byId = new Map(rows.map((resource) => [resource.id, resource]));
+        for (const resource of rows) {
+          if (!resource.parent || !byId.has(resource.parent)) {
+            if (resource.parent && !byId.has(resource.parent)) resource.parent = null;
+            continue;
+          }
+          const parent = byId.get(resource.parent);
+          parent.children.push(resource.id);
+          resource.group = parent.group || resource.group;
+        }
+
+        for (const resource of rows) {
+          const children = resource.children.map((id) => byId.get(id)).filter(Boolean);
+          if (children.length === 0) continue;
+          const workloads = children.filter((child) => child.kind === "vm" || child.kind === "container");
+          const protectedWorkloads = workloads.filter((child) => child.protection === "Protected");
+          const attention = children.filter((child) => child.status !== "ok").length;
+          if (workloads.length > 0) {
+            resource.protection = `${protectedWorkloads.length}/${workloads.length} protected`;
+            resource.recovery =
+              protectedWorkloads.length === workloads.length ? "Current" : `${workloads.length - protectedWorkloads.length} gaps`;
+          }
+          resource.activity = attention > 0 ? `${attention} child rows need attention` : `${children.length} child rows healthy`;
+        }
+
+        return rows.sort(compareResources);
+      };
+
+      const buildLiveResources = (payload) => {
+        const indexes = buildAlertIndexes(payload.activeAlerts);
+        const referenceTime = payload.lastUpdate || Date.now();
+        const rows = (payload.resources || []).map((resource) => mapLiveResource(resource, indexes, referenceTime));
+        return enrichParentRows(rows);
+      };
+
+      const columnsByMode = {
+        dense: [
+          ["name", "Name", "name"],
+          ["info", "Info", "info"],
+          ["cpu", "CPU", "metric"],
+          ["memory", "Mem", "metric"],
+          ["disk", "Disk", "metric"],
+          ["recovery", "Recovery", "medium"],
+          ["protection", "Bk", "icon"],
+          ["storage", "Storage", "medium"],
+          ["network", "Net I/O", "medium"],
+          ["io", "Disk I/O", "medium"],
+          ["activity", "Signal", "activity"],
+        ],
+        ops: [
+          ["name", "Resource", "name"],
+          ["status", "Status", "status"],
+          ["cpu", "CPU", "metric"],
+          ["memory", "Memory", "metric"],
+          ["disk", "Disk", "metric"],
+          ["network", "Network", "medium"],
+          ["activity", "Activity", "activity"],
+        ],
+        capacity: [
+          ["name", "Resource", "name"],
+          ["status", "Status", "status"],
+          ["cpu", "CPU trend", "metric"],
+          ["memory", "Memory trend", "metric"],
+          ["disk", "Storage", "metric"],
+          ["io", "Disk IO", "medium"],
+          ["storage", "Storage owner", "medium"],
+        ],
+        protection: [
+          ["name", "Resource", "name"],
+          ["status", "Status", "status"],
+          ["protection", "Protection", "medium"],
+          ["recovery", "Recovery", "medium"],
+          ["storage", "Repository or pool", "medium"],
+          ["activity", "Last evidence", "activity"],
+        ],
+      };
+
+      const flatDenseColumns = [
+        ["scope", "Scope", "scope"],
+        ...columnsByMode.dense,
+      ];
+
+      const getById = (id) => resources.find((resource) => resource.id === id);
+      const isChild = (resource) => Boolean(resource.parent);
+      const rowTone = (resource) => (resource.status === "warn" ? "warn" : resource.status === "bad" ? "bad" : "ok");
+      const baseGroupColors = {
+        "Production cluster": "#2563eb",
+        "Edge services": "#059669",
+        Protection: "#7c3aed",
+        "Homelab edge": "#0891b2",
+        homelab: "#2563eb",
+        Recovery: "#7c3aed",
+        "Server agents": "#059669",
+        Standalone: "#0891b2",
+      };
+      const colorPalette = ["#2563eb", "#059669", "#7c3aed", "#0891b2", "#d97706", "#be123c", "#4f46e5"];
+      const dynamicGroupColors = new Map();
+      const colorForGroup = (group) => {
+        if (baseGroupColors[group]) return baseGroupColors[group];
+        if (!dynamicGroupColors.has(group)) {
+          dynamicGroupColors.set(group, colorPalette[dynamicGroupColors.size % colorPalette.length]);
+        }
+        return dynamicGroupColors.get(group);
+      };
+      const groupColor = (resource) => colorForGroup(resource.group || "Standalone");
+      const kindLabel = (kind) => {
+        if (kind === "node") return "N";
+        if (kind === "vm") return "VM";
+        if (kind === "container") return "C";
+        if (kind === "backup") return "B";
+        return "S";
+      };
+      const typeLabel = (resource) => {
+        if (resource.kind === "node") return "Node";
+        if (resource.kind === "vm") return "VM";
+        if (resource.kind === "container") return "LXC";
+        if (resource.kind === "backup") return "PBS";
+        return "Res";
+      };
+      const parentResource = (resource) => (resource.parent ? getById(resource.parent) : null);
+      const hostLabel = (resource) => parentResource(resource)?.label || resource.label;
+
+      function metricCell(resource, key) {
+        const value = resource[key];
+        const tone = value >= 85 ? "bad" : value >= 70 ? "warn" : value < 45 ? "good" : "";
+        const label = key === "memory" ? "mem" : key;
+        if (state.cell === "charts") {
+          const points = resource.trend || makeTrend(value);
+          const path = points
+            .map((point, index) => {
+              const x = 4 + index * 17;
+              const y = 25 - Math.max(0, Math.min(100, point)) * 0.2;
+              return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
+            })
+            .join(" ");
+          const area = `${path} L106 27 L4 27 Z`;
+          return `
+            <div class="chart-line">
+              <span class="metric-value">${value}%</span>
+              <svg class="spark ${tone}" viewBox="0 0 112 30" role="img" aria-label="${key} trend">
+                <path class="area" d="${area}"></path>
+                <path class="line" d="${path}"></path>
+              </svg>
+            </div>
+          `;
+        }
+        return `
+          <div class="metric-line">
+            <div class="bar ${tone}">
+              <span style="width:${Math.max(4, value)}%"></span>
+              <strong>${value}%</strong>
+              <em>${label}</em>
+            </div>
+          </div>
+        `;
+      }
+
+      function statusBadge(resource) {
+        const tone = rowTone(resource);
+        const label = tone === "ok" ? "Healthy" : tone === "warn" ? "Attention" : "Critical";
+        return `<span class="badge ${tone}">${label}</span>`;
+      }
+
+      function textCell(value) {
+        return `<span class="muted">${escapeHtml(value || "-")}</span>`;
+      }
+
+      function compactRecoveryCell(resource) {
+        const raw = String(resource.recovery || "-");
+        const lower = raw.toLowerCase();
+        let tone = "ok";
+        let label = raw
+          .replace("Last success ", "")
+          .replace("Verified ", "V ")
+          .replace(" backup", "")
+          .replace(" point", "");
+        if (raw === "-" || lower.includes("unknown")) {
+          tone = "muted";
+          label = "-";
+        } else if (lower.includes("stale") || lower.includes("warning")) {
+          tone = "warn";
+          label = lower.includes("stale") ? "stale" : label;
+        } else if (lower.includes("failed")) {
+          tone = "bad";
+        }
+        const dotClass = tone === "muted" ? "" : tone;
+        return `<span class="compact-state ${tone}" title="${escapeHtml(raw)}"><span class="dot ${dotClass}"></span>${escapeHtml(label)}</span>`;
+      }
+
+      function protectionIconCell(resource) {
+        const raw = String(resource.protection || "").trim();
+        const lower = raw.toLowerCase();
+        const ratio = raw.match(/(\d+)\s*\/\s*(\d+)/);
+        const ratioProtected = ratio ? Number(ratio[1]) > 0 && Number(ratio[1]) === Number(ratio[2]) : false;
+        const notApplicable = raw === "-" || lower === "n/a" || lower.includes("not applicable");
+        const protectedState =
+          ratioProtected ||
+          ((lower.includes("protected") || lower.includes("resource")) &&
+            !lower.includes("unverified") &&
+            !lower.includes("no backup"));
+        const tone = notApplicable
+          ? "muted"
+          : protectedState
+            ? "ok"
+            : lower.includes("unverified") || ratio
+              ? "warn"
+              : "bad";
+        const label = protectedState
+          ? raw || "Protected"
+          : notApplicable
+            ? "Not applicable"
+            : lower.includes("unverified") || ratio
+            ? "Backup unverified"
+            : "No backup";
+        return `
+          <span class="shield ${tone}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.2"
+                d="M12 3.5 19 6v5.2c0 4.3-2.8 7.8-7 9.3-4.2-1.5-7-5-7-9.3V6l7-2.5Z"
+              ></path>
+              ${
+                protectedState
+                  ? '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="m8.7 12 2.1 2.1 4.5-4.8"></path>'
+                  : '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.2" d="M9 9l6 6M15 9l-6 6"></path>'
+              }
+            </svg>
+          </span>
+        `;
+      }
+
+      function nameCell(resource, options = {}) {
+        const child = options.child === true;
+        const hasChildren = resource.children && resource.children.length > 0;
+        const collapsed = state.collapsed.has(resource.id);
+        return `
+          <div class="name-cell">
+            ${
+              hasChildren && state.group !== "flat"
+                ? `<button class="twisty" type="button" data-collapse="${resource.id}" title="Toggle group">${collapsed ? "+" : "-"}</button>`
+                : child
+                  ? '<span class="indent"></span>'
+                  : '<span class="indent"></span>'
+            }
+            <span class="row-status ${rowTone(resource)}" title="${escapeHtml(resource.status)}"></span>
+            <span class="kind ${resource.kind}">${kindLabel(resource.kind)}</span>
+            <div class="primary">
+              <div class="resource-name"><span title="${escapeHtml(resource.label)}">${escapeHtml(resource.label)}</span></div>
+              <div class="meta">${escapeHtml(resource.role)} / ${escapeHtml(resource.meta)}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      function cellFor(resource, columnId, child) {
+        if (columnId === "scope") {
+          const label =
+            resource.group === hostLabel(resource)
+              ? resource.group
+              : `${resource.group} / ${hostLabel(resource)}`;
+          return `<span class="scope-cell"><span class="scope-chip" title="${escapeHtml(label)}"><span>${escapeHtml(label)}</span></span></span>`;
+        }
+        if (columnId === "name") return nameCell(resource, { child });
+        if (columnId === "type") {
+          const tone = resource.kind === "node" || resource.kind === "backup" ? "blue" : "neutral";
+          return `<span class="badge ${tone}">${typeLabel(resource)}</span>`;
+        }
+        if (columnId === "info") {
+          if (resource.kind === "node") return textCell(resource.platform);
+          if (resource.kind === "backup") return textCell("PBS");
+          const id = String(resource.meta || "").split(",")[0].replace("VMID ", "").replace("CT ", "");
+          return textCell(id);
+        }
+        if (columnId === "status") return statusBadge(resource);
+        if (columnId === "cpu" || columnId === "memory" || columnId === "disk") {
+          return metricCell(resource, columnId);
+        }
+        if (columnId === "network") return textCell(resource.network);
+        if (columnId === "io") return textCell(resource.io);
+        if (columnId === "storage") return textCell(resource.storage);
+        if (columnId === "protection") {
+          return protectionIconCell(resource);
+        }
+        if (columnId === "recovery") return compactRecoveryCell(resource);
+        if (columnId === "activity") {
+          return `<div class="activity-list"><span><strong>${escapeHtml(String(resource.activity || "-").split(",")[0])}</strong></span><span>${escapeHtml(resource.platform)}</span></div>`;
+        }
+        return textCell(resource[columnId]);
+      }
+
+      function matchesFilters(resource) {
+        const query = state.search.trim().toLowerCase();
+        if (query) {
+          const haystack = [
+            resource.label,
+            resource.platform,
+            resource.group,
+            resource.role,
+            resource.meta,
+            resource.storage,
+            resource.protection,
+            resource.recovery,
+          ]
+            .join(" ")
+            .toLowerCase();
+          if (!haystack.includes(query)) return false;
+        }
+        if (state.status === "attention" && resource.status !== "warn" && resource.status !== "bad") {
+          return false;
+        }
+        if (state.status === "protected" && !String(resource.protection).toLowerCase().includes("protected")) {
+          return false;
+        }
+        return true;
+      }
+
+      function childSectionFor(resource) {
+        if (resource.kind === "vm") return { key: "vms", label: "VMs", order: 10 };
+        if (resource.kind === "container" && resource.platform === "LXC") {
+          return { key: "lxcs", label: "LXCs", order: 20 };
+        }
+        if (resource.kind === "container") return { key: "containers", label: "Containers", order: 30 };
+        if (resource.kind === "storage") {
+          return resource.source?.type === "physical_disk"
+            ? { key: "disks", label: "Disks", order: 50 }
+            : { key: "storage", label: "Storage", order: 40 };
+        }
+        if (resource.kind === "backup") return { key: "backup", label: "Backup", order: 60 };
+        return { key: "other", label: "Other resources", order: 90 };
+      }
+
+      function typedChildRows(children) {
+        const sections = new Map();
+        for (const child of children) {
+          const section = childSectionFor(child);
+          if (!sections.has(section.key)) {
+            sections.set(section.key, { ...section, resources: [] });
+          }
+          sections.get(section.key).resources.push(child);
+        }
+
+        return [...sections.values()]
+          .sort((left, right) => left.order - right.order)
+          .flatMap((section) => [
+            {
+              type: "section",
+              label: section.label,
+              count: section.resources.length,
+              color: groupColor(section.resources[0]),
+            },
+            ...section.resources
+              .sort((left, right) => String(left.label).localeCompare(String(right.label)))
+              .map((resource) => ({ type: "resource", resource, child: true })),
+          ]);
+      }
+
+      function groupedRows() {
+        const rows = [];
+        if (state.group === "flat") {
+          return resources.filter(matchesFilters).map((resource) => ({ type: "resource", resource, child: isChild(resource) }));
+        }
+
+        if (state.group === "platform") {
+          const platforms = [...new Set(resources.map((resource) => resource.platform.split(" ")[0]))];
+          for (const platform of platforms) {
+            const items = resources.filter((resource) => resource.platform.startsWith(platform)).filter(matchesFilters);
+            if (items.length === 0) continue;
+            rows.push({ type: "group", label: platform, count: items.length, note: "platform scope" });
+            for (const resource of items) rows.push({ type: "resource", resource, child: isChild(resource) });
+          }
+          return rows;
+        }
+
+        const parents = resources.filter((resource) => !resource.parent);
+        const parentsByGroup = new Map();
+        for (const parent of parents) {
+          const groupKey = parent.group || "Standalone";
+          if (!parentsByGroup.has(groupKey)) parentsByGroup.set(groupKey, []);
+          parentsByGroup.get(groupKey).push(parent);
+        }
+
+        for (const [groupLabel, groupParents] of parentsByGroup) {
+          const groupEntries = [];
+          for (const parent of groupParents) {
+            const children = (parent.children || []).map(getById).filter(Boolean);
+            const parentMatches = matchesFilters(parent);
+            const childMatches = children.filter(matchesFilters);
+            if (!parentMatches && childMatches.length === 0) continue;
+            groupEntries.push({ parent, childMatches });
+          }
+          if (groupEntries.length === 0) continue;
+
+          const workloadCount = groupEntries.reduce(
+            (total, entry) => total + entry.childMatches.length,
+            0,
+          );
+          rows.push({
+            type: "group",
+            label: groupLabel,
+            count: groupEntries.length,
+            note: `${groupEntries.length === 1 ? "parent" : "parents"} / ${workloadCount} child rows`,
+            color: colorForGroup(groupLabel),
+            cluster: true,
+          });
+
+          for (const { parent, childMatches } of groupEntries) {
+            rows.push({
+              type: "resource",
+              resource: parent,
+              child: false,
+            });
+            if (!state.collapsed.has(parent.id)) {
+              for (const childRow of typedChildRows(childMatches)) rows.push(childRow);
+            }
+          }
+        }
+        return rows;
+      }
+
+      function renderTable() {
+        const columns = state.group === "flat" && state.mode === "dense"
+          ? flatDenseColumns
+          : columnsByMode[state.mode];
+        document.getElementById("colgroup").innerHTML = columns
+          .map((column) => `<col class="${column[2]}">`)
+          .join("");
+        document.getElementById("tableHead").innerHTML = `
+          <tr>${columns.map((column) => `<th>${column[1]}</th>`).join("")}</tr>
+        `;
+        const rows = groupedRows();
+        if (rows.length === 0) {
+          const title = dataSource.mode === "loading" ? "Loading live resources" : "No live resources to show";
+          const detail =
+            dataSource.mode === "unavailable"
+              ? dataSource.detail
+              : state.search
+                ? "No rows match the current filters."
+                : "The prototype is not showing mock data unless you explicitly enable it.";
+          document.getElementById("tableBody").innerHTML = `
+            <tr class="empty-row">
+              <td colspan="${columns.length}">
+                <div class="empty-state">
+                  <strong>${escapeHtml(title)}</strong>
+                  <span>${escapeHtml(detail)}</span>
+                </div>
+              </td>
+            </tr>
+          `;
+        } else {
+          document.getElementById("tableBody").innerHTML = rows
+            .map((row) => {
+            if (row.type === "group") {
+              return `
+                <tr class="group-row ${row.cluster ? "cluster-row" : ""}" style="--group-color:${row.color || "#64748b"}">
+                  <td colspan="${columns.length}">
+                    <div class="cluster-label">
+                      <strong>${escapeHtml(row.label)}</strong>
+                      <span>${escapeHtml(`${row.count} ${row.note}`)}</span>
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }
+            if (row.type === "section") {
+              return `
+                <tr class="section-row" style="--group-color:${row.color || "#64748b"}">
+                  <td colspan="${columns.length}">
+                    <div class="section-label">
+                      ${escapeHtml(row.label)}
+                      <span>${escapeHtml(`${row.count} ${row.count === 1 ? "row" : "rows"}`)}</span>
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }
+            const resource = row.resource;
+            const rowClass =
+              state.group === "flat" ? "child-row flat-row" : row.child ? "child-row" : "host-row";
+            const color = groupColor(resource);
+            return `
+              <tr class="resource-row ${rowClass} ${state.selectedId === resource.id ? "selected" : ""}" data-row="${resource.id}" style="--group-color:${color}">
+                ${columns.map((column) => `<td>${cellFor(resource, column[0], row.child)}</td>`).join("")}
+              </tr>
+            `;
+          })
+          .join("");
+        }
+
+        document.getElementById("tableHint").textContent =
+          state.group === "host"
+            ? "Grouped by node and resource type"
+            : state.group === "platform"
+              ? "Grouped by platform"
+              : "Flat resource list";
+      }
+
+      function drawerMetricTile(label, value) {
+        return `<div class="metric-tile"><div class="label">${escapeHtml(label)}</div><div class="value">${escapeHtml(value)}</div></div>`;
+      }
+
+      function drawerKv(key, value) {
+        return `<div class="kv"><div class="key">${escapeHtml(key)}</div><div class="value">${escapeHtml(value)}</div></div>`;
+      }
+
+      function drawerKvHtml(key, value) {
+        return `<div class="kv"><div class="key">${escapeHtml(key)}</div><div class="value">${value}</div></div>`;
+      }
+
+      function relatedWorkloads(resource) {
+        if (resource.kind !== "node" && resource.kind !== "backup") return [];
+        return (resource.children || []).map(getById).filter(Boolean);
+      }
+
+      function renderDrawer() {
+        const drawerElement = document.getElementById("detailDrawer");
+        drawerElement.classList.toggle("is-open", state.showDrawer);
+        if (!state.showDrawer) return;
+
+        const resource = getById(state.selectedId) || resources[0];
+        if (!resource) return;
+        const childRows = relatedWorkloads(resource);
+        document.getElementById("drawerKind").className = `kind ${resource.kind}`;
+        document.getElementById("drawerKind").textContent = kindLabel(resource.kind);
+        document.getElementById("drawerKicker").textContent = `${resource.platform} / ${resource.role}`;
+        document.getElementById("drawerTitle").textContent = resource.label;
+        document.getElementById("drawerSubtitle").textContent =
+          resource.kind === "node"
+            ? "Infrastructure row with workload, capacity, storage, and protection evidence in one place."
+            : "Workload row with parent infrastructure context and storage/recovery evidence in the drawer.";
+
+        const tabs = [...document.querySelectorAll("[data-tab]")];
+        for (const tab of tabs) tab.classList.toggle("active", tab.dataset.tab === state.activeTab);
+
+        if (state.activeTab === "overview") {
+          document.getElementById("drawerBody").innerHTML = `
+            <div class="metric-grid">
+              ${drawerMetricTile("CPU", `${resource.cpu}%`)}
+              ${drawerMetricTile("Memory", `${resource.memory}%`)}
+              ${drawerMetricTile("Disk", `${resource.disk}%`)}
+              ${drawerMetricTile("Network", resource.network)}
+            </div>
+            <div class="section">
+              <h3>Identity</h3>
+              ${drawerKvHtml("Status", statusBadge(resource))}
+              ${drawerKv("Group", resource.group)}
+              ${drawerKv("Platform", resource.platform)}
+              ${drawerKv("Role", resource.role)}
+              ${drawerKv("Activity", resource.activity)}
+            </div>
+            <div class="callout">
+              This is the core unification move: the parent infrastructure row is no longer a blank
+              grouping label. It carries the same operational metrics the Infrastructure page already
+              owns, while child workload rows keep the Workloads table density.
+            </div>
+          `;
+          return;
+        }
+
+        if (state.activeTab === "workloads") {
+          document.getElementById("drawerBody").innerHTML =
+            childRows.length > 0
+              ? `
+                <div class="section">
+                  <h3>Workloads on this infrastructure</h3>
+                  <div class="mini-table">
+                    <div class="mini-row header"><span>Name</span><span>Status</span><span>CPU</span></div>
+                    ${childRows
+                      .map(
+                        (item) =>
+                          `<div class="mini-row"><span>${escapeHtml(item.label)}</span><span>${statusBadge(item)}</span><span>${item.cpu}%</span></div>`,
+                      )
+                      .join("")}
+                  </div>
+                </div>
+                <div class="callout">This drawer tab replaces a page hop for common host-to-workload checks.</div>
+              `
+              : `
+                <div class="section">
+                  <h3>Parent infrastructure</h3>
+                  ${drawerKv("Host", resource.parent || "None")}
+                  ${drawerKv("Platform", resource.platform)}
+                  ${drawerKv("Workload role", resource.role)}
+                </div>
+              `;
+          return;
+        }
+
+        if (state.activeTab === "storage") {
+          document.getElementById("drawerBody").innerHTML = `
+            <div class="metric-grid">
+              ${drawerMetricTile("Storage owner", resource.storage)}
+              ${drawerMetricTile("Disk usage", `${resource.disk}%`)}
+            </div>
+            <div class="section">
+              <h3>Storage evidence</h3>
+              ${drawerKv("Pool or volume", resource.storage)}
+              ${drawerKv("Disk IO", resource.io)}
+              ${drawerKv("Pressure", resource.disk >= 85 ? "Capacity warning" : "Normal")}
+            </div>
+            <div class="callout">
+              Storage does not need to become another whole table by default. It can surface as a
+              column mode and expand into drawer evidence when storage is the question.
+            </div>
+          `;
+          return;
+        }
+
+        document.getElementById("drawerBody").innerHTML = `
+          <div class="metric-grid">
+            ${drawerMetricTile("Protection", resource.protection)}
+            ${drawerMetricTile("Recovery", resource.recovery)}
+          </div>
+          <div class="section">
+            <h3>Recovery evidence</h3>
+            ${drawerKv("Latest result", resource.recovery)}
+            ${drawerKv("Protected scope", resource.protection)}
+            ${drawerKv("Repository", resource.kind === "backup" ? resource.storage : "pbs-01 / primary-backups")}
+          </div>
+          <div class="callout">
+            Recovery works best here as evidence tied to the resource row, with the detailed restore
+            timeline available from the drawer rather than a separate default page.
+          </div>
+        `;
+      }
+
+      function renderSummary() {
+        const parents = resources.filter((resource) => !resource.parent);
+        const workloads = resources.filter((resource) => resource.kind === "vm" || resource.kind === "container");
+        const storageRows = resources.filter((resource) => resource.kind === "storage");
+        const attentionRows = resources.filter((resource) => resource.status === "warn" || resource.status === "bad");
+        const protectedRows = workloads.filter((resource) => String(resource.protection).toLowerCase().includes("protected"));
+        const highestDisk = [...resources].sort((left, right) => right.disk - left.disk)[0];
+        const recoveryValue = workloads.length > 0 ? `${Math.round((protectedRows.length / workloads.length) * 100)}%` : "-";
+        const dotTone =
+          dataSource.mode === "live"
+            ? "ok"
+            : dataSource.mode === "mock"
+              ? "warn"
+              : dataSource.mode === "unavailable"
+                ? "bad"
+                : "info";
+
+        document.getElementById("summaryResources").textContent = resources.length || "-";
+        document.getElementById("summaryResourceNote").textContent =
+          resources.length > 0
+            ? `${parents.length} parent rows, ${workloads.length} workloads`
+            : dataSource.mode === "loading"
+              ? "Waiting for live state"
+              : "Mock rows are off";
+        document.getElementById("summaryAttention").textContent = attentionRows.length || "-";
+        document.getElementById("summaryAttentionNote").textContent =
+          resources.length > 0 ? `${dataSource.activeAlerts.length || attentionRows.length} live signals` : "No rows shown";
+        document.getElementById("summaryStorage").textContent = highestDisk ? `${highestDisk.disk}%` : "-";
+        document.getElementById("summaryStorageNote").textContent =
+          highestDisk ? `${storageRows.length} storage rows, highest ${highestDisk.label}` : "Live storage resources";
+        document.getElementById("summaryRecovery").textContent = recoveryValue;
+        document.getElementById("summaryRecoveryNote").textContent =
+          workloads.length > 0 ? `${protectedRows.length}/${workloads.length} workloads with backup evidence` : "Backup evidence only";
+        document.getElementById("sourceDot").className = `dot ${dotTone}`;
+        document.getElementById("sourceLabel").textContent = dataSource.label;
+        document.getElementById("sourceMeta").textContent = dataSource.detail;
+        document
+          .getElementById("mockFallbackButton")
+          .classList.toggle("hidden", dataSource.mode !== "unavailable");
+      }
+
+      async function fetchJson(url) {
+        const response = await fetch(url, {
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+            "X-Requested-With": "XMLHttpRequest",
+          },
+        });
+        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+        return response.json();
+      }
+
+      async function fetchLiveState() {
+        const candidates = ["/api/state", "http://127.0.0.1:7655/api/state"];
+        let lastError = null;
+        for (const candidate of candidates) {
+          try {
+            return await fetchJson(candidate);
+          } catch (error) {
+            lastError = error;
+          }
+        }
+        throw lastError || new Error("Unable to load live state");
+      }
+
+      async function loadLiveData() {
+        dataSource.mode = "loading";
+        dataSource.label = "Loading live Pulse API";
+        dataSource.detail = "Mock fallback is off.";
+        dataSource.error = null;
+        renderSummary();
+
+        try {
+          const payload = await fetchLiveState();
+          const liveResources = buildLiveResources(payload);
+          if (liveResources.length === 0) throw new Error("The live API returned no resources");
+          resources = liveResources;
+          dataSource.mode = "live";
+          dataSource.label = "Live Pulse API";
+          dataSource.activeAlerts = payload.activeAlerts || [];
+          dataSource.lastUpdate = payload.lastUpdate || Date.now();
+          const updateTime = new Date(dataSource.lastUpdate).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          });
+          dataSource.detail = `${resources.length} real resources from /api/state, refreshed ${updateTime}`;
+        } catch (error) {
+          resources = [];
+          dataSource.mode = "unavailable";
+          dataSource.label = "Live Pulse API unavailable";
+          dataSource.detail = `${error.message}. Mock fallback is still off.`;
+          dataSource.error = error;
+          dataSource.activeAlerts = [];
+        }
+
+        state.selectedId = null;
+        state.showDrawer = false;
+        render();
+      }
+
+      function showMockFallback() {
+        resources = mockResources.map((resource) => ({
+          ...resource,
+          children: Array.isArray(resource.children) ? [...resource.children] : [],
+        }));
+        dataSource.mode = "mock";
+        dataSource.label = "Mock fallback";
+        dataSource.detail = "Static prototype rows are being shown by explicit choice.";
+        dataSource.activeAlerts = [];
+        state.selectedId = null;
+        state.showDrawer = false;
+        render();
+      }
+
+      function render() {
+        renderSummary();
+        renderTable();
+        renderDrawer();
+      }
+
+      document.addEventListener("click", (event) => {
+        const target = event.target.closest("button, tr[data-row]");
+        if (!target) return;
+
+        if (target.dataset.group) {
+          state.group = target.dataset.group;
+          document.querySelectorAll("[data-group]").forEach((button) => button.classList.toggle("active", button === target));
+          render();
+          return;
+        }
+        if (target.dataset.status) {
+          state.status = target.dataset.status;
+          document.querySelectorAll("[data-status]").forEach((button) => button.classList.toggle("active", button === target));
+          render();
+          return;
+        }
+        if (target.dataset.mode) {
+          state.mode = target.dataset.mode;
+          document.querySelectorAll("[data-mode]").forEach((button) => button.classList.toggle("active", button === target));
+          render();
+          return;
+        }
+        if (target.dataset.cell) {
+          state.cell = target.dataset.cell;
+          document.querySelectorAll("[data-cell]").forEach((button) => button.classList.toggle("active", button === target));
+          render();
+          return;
+        }
+        if (target.dataset.tab) {
+          state.activeTab = target.dataset.tab;
+          renderDrawer();
+          return;
+        }
+        if (target.dataset.collapse) {
+          if (state.collapsed.has(target.dataset.collapse)) state.collapsed.delete(target.dataset.collapse);
+          else state.collapsed.add(target.dataset.collapse);
+          renderTable();
+          return;
+        }
+        if (target.id === "refreshButton") {
+          loadLiveData();
+          return;
+        }
+        if (target.id === "mockFallbackButton") {
+          showMockFallback();
+          return;
+        }
+        if (target.id === "resetButton") {
+          state.group = "host";
+          state.status = "all";
+          state.mode = "dense";
+          state.cell = "bars";
+          state.search = "";
+          state.selectedId = null;
+          state.showDrawer = false;
+          document.getElementById("searchInput").value = "";
+          for (const selector of ["group", "status", "mode", "cell"]) {
+            document.querySelectorAll(`[data-${selector}]`).forEach((button, index) => button.classList.toggle("active", index === 0));
+          }
+          render();
+          return;
+        }
+        if (target.dataset.row) {
+          state.selectedId = target.dataset.row;
+          state.showDrawer = true;
+          render();
+        }
+      });
+
+      document.getElementById("searchInput").addEventListener("input", (event) => {
+        state.search = event.target.value;
+        renderTable();
+      });
+
+      render();
+      loadLiveData();
+    </script>
+  </body>
+</html>
