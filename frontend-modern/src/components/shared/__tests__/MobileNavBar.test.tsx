@@ -44,6 +44,15 @@ describe('MobileNavBar', () => {
     expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavUtilityTabs');
     expect(mobileNavBarModelSource).toContain('getMobileNavAlertBadgeCounts');
     expect(mobileNavBarModelSource).toContain('getMobileNavFadeState');
+    expect(mobileNavBarModelSource).toContain("'proxmox'");
+    expect(mobileNavBarModelSource).toContain("'docker'");
+    expect(mobileNavBarModelSource).toContain("'kubernetes'");
+    expect(mobileNavBarModelSource).toContain("'truenas'");
+    expect(mobileNavBarModelSource).toContain("'vmware'");
+    expect(mobileNavBarModelSource).not.toContain("'infrastructure'");
+    expect(mobileNavBarModelSource).not.toContain("'workloads'");
+    expect(mobileNavBarModelSource).not.toContain("'storage'");
+    expect(mobileNavBarModelSource).not.toContain("'recovery'");
   });
 
   it('keeps decorative icon labels out of mobile tab accessible names', () => {

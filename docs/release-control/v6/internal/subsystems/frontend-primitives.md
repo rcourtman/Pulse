@@ -925,11 +925,16 @@ AI runtime.
     primitives live under `frontend-modern/src/features/platformPage/` so the
     chrome stays reusable across families.
     `frontend-modern/src/AppLayout.tsx` may extend the `PlatformTab` list with
-    new family entries; those entries must declare `alwaysShow` and `enabled`
-    derived from the family's canonical resource presence in
-    `state.resources` rather than hard-coded `true`, so unconnected platforms
-    stay hidden by default and do not displace the always-shown
-    Infrastructure, Workloads, Storage, and Recovery tabs.
+    new family entries; those entries must keep `alwaysShow: true` for
+    supported families so first-run operators discover the full platform set,
+    while `enabled` and `live` derive from the family's canonical resource
+    presence in `state.resources` so unconnected platforms render in a
+    disabled tone with the platform page's own empty-state setup affordance.
+    The `MOBILE_NAV_PLATFORM_PRIORITY` ordering in
+    `frontend-modern/src/components/shared/mobileNavBarModel.ts` mirrors
+    that platform-first set so mobile and desktop primary navigation stay
+    aligned; legacy Infrastructure / Workloads / Storage / Recovery entries
+    are intentionally absent from that priority list.
 
 ## Forbidden Paths
 

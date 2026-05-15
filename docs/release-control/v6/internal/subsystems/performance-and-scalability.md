@@ -533,6 +533,14 @@ shell clickable behind another overlay.
     2s dial / 1s read with at most 5 concurrent fingerprints so the probe
     endpoint cannot be repurposed into a slow-leak scanner that starves the
     dashboard hot path.
+    Platform-first top-level pages must remain in the app-shell route
+    preload registry. `frontend-modern/src/routing/routePreload.ts` carries
+    a `ROUTE_PRELOADERS` entry per supported platform (Proxmox plus the
+    Docker, Kubernetes, TrueNAS, and vSphere families) so first-paint
+    navigation between platform tabs stays warm and does not depend on a
+    cold dynamic import after the user clicks. New supported platform
+    families must extend that registry rather than skipping the preload
+    hot path; presentation-only platforms must not be registered.
 
 ## Forbidden Paths
 

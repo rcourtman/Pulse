@@ -120,6 +120,12 @@ runtime cost control, and shared AI transport surfaces.
     must not introduce a parallel chat surface, launcher button, or model
     picker on the platform page itself; cross-platform AI guidance stays
     routed through Assistant and Patrol.
+    The primary-nav demotion of Infrastructure / Workloads / Storage /
+    Recovery does not change Patrol or Assistant addressability: both
+    surfaces remain reachable through the utility tab strip in
+    `AppLayout.tsx` and via the canonical Patrol path, and platform pages
+    must not replicate Patrol findings, Assistant prompts, or AI launcher
+    affordances inside their own chrome.
 
 ## Forbidden Paths
 

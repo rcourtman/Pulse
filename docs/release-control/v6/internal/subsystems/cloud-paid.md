@@ -485,19 +485,29 @@ or other self-hosted uncapped continuity plans.
     `PULSE_EMAIL_REPLY_TO`, defaulting to `support@pulserelay.pro`, so magic
     links, checkout handoffs, and other hosted-account messages remain
     directly replyable by customers.
-    `App.tsx` and `AppLayout.tsx` may extend the platform-first top-level
-    surface set by registering new family-scoped routes (for example
-    `DOCKER_PATH`, `KUBERNETES_PATH`, `TRUENAS_PATH`, `VMWARE_PATH`) and the
-    matching `PlatformTab` entries, but those entries must be gated on
-    canonical resource presence in `state.resources` so unconnected platforms
-    stay hidden and do not displace the always-shown Infrastructure,
-    Workloads, Storage, and Recovery tabs. Each new platform page must remain
-    chrome-only: routing plus sub-tab navigation that embeds the canonical
+    `App.tsx` and `AppLayout.tsx` own the platform-first primary navigation.
+    `App.tsx` registers one top-level route per supported platform family
+    (Proxmox, Docker, Kubernetes, TrueNAS, vSphere) using the canonical path
+    constants from `frontend-modern/src/routing/resourceLinks.ts`. The
+    `PlatformTab` list in `AppLayout.tsx` must enumerate exactly those
+    supported families and must keep `alwaysShow: true` for every supported
+    family so first-run operators can discover what Pulse monitors; the
+    `enabled` and `live` flags are derived from canonical resource presence
+    in `state.resources` so unconnected platforms render in a disabled tone
+    and surface their own empty-state setup affordances inside the platform
+    page itself rather than being hidden from nav. Infrastructure, Workloads,
+    Storage, and Recovery are not duplicated as equal primary tabs in that
+    list; their tables are reused inside the platform pages via embedded
+    `tableOnly` surfaces, and their routes remain wired in `App.tsx` purely
+    for deep-link compatibility. Each platform page must remain chrome-only:
+    routing plus sub-tab navigation that embeds the canonical
     `WorkloadsSurface`, `StorageSurface`, `RecoverySurface`, or
     `UnifiedResourceTable` in `embedded tableOnly` mode with a forced
     platform/source filter. The shell must not introduce dashboard cards,
-    bespoke per-family tables, or synthetic placeholder data for that
-    expansion path.
+    bespoke per-family tables, or synthetic placeholder data, and must not
+    reintroduce Infrastructure / Workloads / Storage / Recovery as equal
+    primary navigation entries without a governed contract decision recorded
+    here.
 
 ## Forbidden Paths
 

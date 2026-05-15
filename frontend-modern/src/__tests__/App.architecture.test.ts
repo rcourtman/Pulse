@@ -58,6 +58,19 @@ describe('App architecture', () => {
     expect(appSource).toContain('<Route path={KUBERNETES_PATH} component={KubernetesPage} />');
     expect(appSource).toContain('<Route path={TRUENAS_PATH} component={TrueNASPage} />');
     expect(appSource).toContain('<Route path={VMWARE_PATH} component={VmwarePage} />');
+    expect(routePreloadSource).toContain("id: 'docker',");
+    expect(routePreloadSource).toContain("id: 'kubernetes',");
+    expect(routePreloadSource).toContain("id: 'truenas',");
+    expect(routePreloadSource).toContain("id: 'vmware',");
+    expect(appLayoutSource).toContain("id: 'docker',");
+    expect(appLayoutSource).toContain("id: 'kubernetes',");
+    expect(appLayoutSource).toContain("id: 'truenas',");
+    expect(appLayoutSource).toContain("id: 'vmware',");
+    // Platform-first primary nav: Infrastructure / Workloads / Storage /
+    // Recovery are not duplicated as equal primary PlatformTab entries.
+    expect(appLayoutSource).not.toContain("id: 'infrastructure',");
+    expect(appLayoutSource).not.toContain("id: 'workloads',");
+    expect(appLayoutSource).not.toContain('buildStorageRecoveryTabSpecs(');
     expect(appSource).not.toContain('DashboardPage');
     expect(headerAuditSource).not.toContain("['src/pages/Dashboard.tsx', 'PageHeader']");
     expect(appSource).toContain("import RuntimeHomePage from '@/pages/RuntimeHome';");

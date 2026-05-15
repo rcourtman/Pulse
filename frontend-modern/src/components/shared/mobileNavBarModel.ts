@@ -36,10 +36,10 @@ export type MobileNavBarProps = {
 
 const MOBILE_NAV_PLATFORM_PRIORITY = [
   'proxmox',
-  'infrastructure',
-  'workloads',
-  'storage',
-  'recovery',
+  'docker',
+  'kubernetes',
+  'truenas',
+  'vmware',
 ] as const;
 
 const MOBILE_NAV_UTILITY_PRIORITY = ['alerts', 'ai', 'settings'] as const;

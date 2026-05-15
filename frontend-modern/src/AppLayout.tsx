@@ -1,10 +1,6 @@
 import { For, Show, Suspense, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
-import BoxesIcon from 'lucide-solid/icons/boxes';
-import ServerIcon from 'lucide-solid/icons/server';
-import HardDriveIcon from 'lucide-solid/icons/hard-drive';
-import ArchiveIcon from 'lucide-solid/icons/archive';
 import BellIcon from 'lucide-solid/icons/bell';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
@@ -40,9 +36,7 @@ import {
   buildProxmoxPath,
   buildTrueNASPath,
   buildVmwarePath,
-  buildWorkloadsPath,
 } from '@/routing/resourceLinks';
-import { buildStorageRecoveryTabSpecs } from '@/routing/platformTabs';
 import { getKioskModePreference, setKioskMode } from '@/utils/url';
 import { updateStore } from '@/stores/updates';
 import { aiChatStore } from '@/stores/aiChat';
@@ -57,7 +51,6 @@ const ROOT_DOCKER_PATH = buildDockerPath();
 const ROOT_KUBERNETES_PATH = buildKubernetesPath();
 const ROOT_TRUENAS_PATH = buildTrueNASPath();
 const ROOT_VMWARE_PATH = buildVmwarePath();
-const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
 const AI_CHAT_LAUNCHER_BUTTON_CLASS =
   'fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] z-40 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-blue-600 shadow-lg transition-colors duration-200 hover:bg-surface-hover hover:text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 dark:hover:text-blue-300 lg:right-0 lg:top-1/2 lg:bottom-auto lg:h-auto lg:w-auto lg:min-h-9 lg:min-w-10 lg:-translate-y-1/2 lg:rounded-l-lg lg:rounded-r-none lg:border-r-0 lg:px-2.5 lg:py-2.5 lg:shadow-none';
@@ -313,6 +306,14 @@ export function AppLayout(props: AppLayoutProps) {
     return presence;
   });
 
+  // Primary nav is platform-first. Every supported platform family is
+  // always visible so first-run users can discover what Pulse monitors;
+  // platforms with no connected resources still render their canonical
+  // empty state inside the platform page itself. Infrastructure / Workloads
+  // / Storage / Recovery are NOT duplicated as equal primary tabs — their
+  // tables are reused inside each platform page via embedded tableOnly
+  // surfaces, and their routes remain wired in App.tsx purely for
+  // route-compatibility with existing deep links.
   const platformTabs = createMemo<PlatformTab[]>(() => {
     const presence = platformPresence();
     const allPlatforms: PlatformTab[] = [
@@ -322,8 +323,8 @@ export function AppLayout(props: AppLayoutProps) {
         route: ROOT_PROXMOX_PATH,
         settingsRoute: '/settings/infrastructure/platforms/proxmox/pve',
         tooltip: 'Proxmox VE, Backup Server, Mail Gateway, storage, backups, and guests',
-        enabled: true,
-        live: true,
+        enabled: presence.has('proxmox-pve'),
+        live: presence.has('proxmox-pve'),
         icon: ProxmoxIcon,
         alwaysShow: true,
       },
@@ -336,7 +337,7 @@ export function AppLayout(props: AppLayoutProps) {
         enabled: presence.has('docker'),
         live: presence.has('docker'),
         icon: ContainerIcon,
-        alwaysShow: presence.has('docker'),
+        alwaysShow: true,
       },
       {
         id: 'kubernetes',
@@ -347,7 +348,7 @@ export function AppLayout(props: AppLayoutProps) {
         enabled: presence.has('kubernetes'),
         live: presence.has('kubernetes'),
         icon: ShipWheelIcon,
-        alwaysShow: presence.has('kubernetes'),
+        alwaysShow: true,
       },
       {
         id: 'truenas',
@@ -358,7 +359,7 @@ export function AppLayout(props: AppLayoutProps) {
         enabled: presence.has('truenas'),
         live: presence.has('truenas'),
         icon: DatabaseIcon,
-        alwaysShow: presence.has('truenas'),
+        alwaysShow: true,
       },
       {
         id: 'vmware',
@@ -369,37 +370,8 @@ export function AppLayout(props: AppLayoutProps) {
         enabled: presence.has('vmware-vsphere'),
         live: presence.has('vmware-vsphere'),
         icon: CpuIcon,
-        alwaysShow: presence.has('vmware-vsphere'),
-      },
-      {
-        id: 'infrastructure',
-        label: 'Infrastructure',
-        route: ROOT_INFRASTRUCTURE_PATH,
-        settingsRoute: '/settings',
-        tooltip: 'All agents and nodes across platforms',
-        enabled: true,
-        live: true,
-        icon: ServerIcon,
         alwaysShow: true,
       },
-      {
-        id: 'workloads',
-        label: 'Workloads',
-        route: ROOT_WORKLOADS_PATH,
-        settingsRoute: '/settings/workloads/docker',
-        tooltip: 'VMs, containers, and Kubernetes workloads',
-        enabled: true,
-        live: true,
-        icon: BoxesIcon,
-        alwaysShow: true,
-      },
-      ...buildStorageRecoveryTabSpecs().map((tab) => ({
-        ...tab,
-        enabled: true,
-        live: true,
-        icon: tab.id.startsWith('storage') ? HardDriveIcon : ArchiveIcon,
-        alwaysShow: true,
-      })),
     ];
 
     return allPlatforms.filter((platform) => platform.alwaysShow || platform.enabled);

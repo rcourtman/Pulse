@@ -4,8 +4,12 @@ import {
   buildRecoveryPath,
   buildStoragePath,
   buildWorkloadsPath,
+  DOCKER_PATH,
+  KUBERNETES_PATH,
   PATROL_PATH,
   PROXMOX_PATH,
+  TRUENAS_PATH,
+  VMWARE_PATH,
 } from '@/routing/resourceLinks';
 
 type RoutePreloader = {
@@ -48,6 +52,30 @@ const ROUTE_PRELOADERS: readonly RoutePreloader[] = [
     matches: (route) => route === PROXMOX_PATH || route.startsWith(`${PROXMOX_PATH}/`),
     preload: () =>
       import('@/pages/Proxmox').then(() => undefined),
+  },
+  {
+    id: 'docker',
+    matches: (route) => route === DOCKER_PATH || route.startsWith(`${DOCKER_PATH}/`),
+    preload: () =>
+      import('@/pages/Docker').then(() => undefined),
+  },
+  {
+    id: 'kubernetes',
+    matches: (route) => route === KUBERNETES_PATH || route.startsWith(`${KUBERNETES_PATH}/`),
+    preload: () =>
+      import('@/pages/Kubernetes').then(() => undefined),
+  },
+  {
+    id: 'truenas',
+    matches: (route) => route === TRUENAS_PATH || route.startsWith(`${TRUENAS_PATH}/`),
+    preload: () =>
+      import('@/pages/TrueNAS').then(() => undefined),
+  },
+  {
+    id: 'vmware',
+    matches: (route) => route === VMWARE_PATH || route.startsWith(`${VMWARE_PATH}/`),
+    preload: () =>
+      import('@/pages/Vmware').then(() => undefined),
   },
   {
     id: 'infrastructure',
