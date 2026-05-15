@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -733,10 +732,10 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		}
 
 		if !mentionsFound {
-			s.injectRecentContextIfNeeded(req.Prompt, session.ID, messages, sessions)
+			s.injectRecentSessionContext(session.ID, messages, sessions)
 		}
 	} else {
-		s.injectRecentContextIfNeeded(req.Prompt, session.ID, messages, sessions)
+		s.injectRecentSessionContext(session.ID, messages, sessions)
 	}
 
 	// Set session-scoped resolved context on executor for resource validation.
@@ -2793,18 +2792,7 @@ func firstPromptLine(description string) string {
 	return strings.Join(strings.Fields(description), " ")
 }
 
-var recentContextPronounPattern = regexp.MustCompile(`(?i)\b(it|its|that|those|this|them|previous|earlier|last|same|former|latter)\b`)
-var recentContextNounPattern = regexp.MustCompile(`(?i)\b(the (service|container|vm|node|host|docker|instance|one))\b`)
-
-func shouldInjectRecentContext(prompt string) bool {
-	return recentContextPronounPattern.MatchString(prompt) || recentContextNounPattern.MatchString(prompt)
-}
-
-func (s *Service) injectRecentContextIfNeeded(prompt, sessionID string, messages []Message, sessions *SessionStore) {
-	if !shouldInjectRecentContext(prompt) {
-		return
-	}
-
+func (s *Service) injectRecentSessionContext(sessionID string, messages []Message, sessions *SessionStore) {
 	if sessions == nil {
 		return
 	}
@@ -2871,28 +2859,15 @@ func (s *Service) injectRecentContextIfNeeded(prompt, sessionID string, messages
 		primaryName = primary
 	}
 	readHint := readRoutingHintForResolvedResource(primaryKind, primaryAdapter, primaryTarget, primaryName, primaryResourceID)
-	targetHint := readHint.targetHintSuffix()
-	summary := fmt.Sprintf("Context: The most recently referenced resource is %s. If the user says \"it/its/that\", assume they mean this resource unless they specify otherwise. Do not ask for clarification unless the user names a different resource.%s", primary, targetHint)
-	if len(lines) > 1 {
-		others := strings.Join(lines[1:], "\n")
-		summary += "\nOther recent resources:\n" + others
-	}
-
-	lowerPrompt := strings.ToLower(prompt)
-	if strings.Contains(lowerPrompt, "log") || strings.Contains(lowerPrompt, "journal") {
-		instructionTarget := primaryName
-		if instructionTarget == "" {
-			instructionTarget = primary
-		}
-		if contextLine := readHint.recentLogsContext(instructionTarget); contextLine != "" {
-			summary += "\n" + contextLine
-		}
+	targetHint := readHint.targetFact()
+	if targetHint != "" {
+		lines[0] = lines[0] + "; " + targetHint
 	}
 
 	log.Debug().
 		Str("session_id", sessionID).
 		Strs("recent_resource_ids", recentIDs).
-		Msg("[ChatService] Injecting recent context")
+		Msg("[ChatService] Injecting neutral recent session context")
 
 	if len(messages) == 0 {
 		return
@@ -2902,7 +2877,8 @@ func (s *Service) injectRecentContextIfNeeded(prompt, sessionID string, messages
 		return
 	}
 
-	messages[lastIdx].Content = summary + "\n\n---\nExplicit target: " + primaryName + "\nUser question (targeted): " + messages[lastIdx].Content
+	context := "Session context from earlier Assistant turns. Use only if relevant to the user's message; otherwise ignore it or ask a clarifying question.\n" + strings.Join(lines, "\n")
+	messages[lastIdx].Content = context + "\n\n---\nUser message:\n" + messages[lastIdx].Content
 }
 
 func (s *Service) toolsForExecutionMode(autonomousMode bool, patrolMode bool) []providers.Tool {

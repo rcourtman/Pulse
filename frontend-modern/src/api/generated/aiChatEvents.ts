@@ -63,13 +63,6 @@ export interface ErrorData {
   message: string;
 }
 
-export interface ExploreStatusData {
-  phase: string;
-  message: string;
-  model?: string;
-  outcome?: string;
-}
-
 export interface Question {
   id: string;
   type?: string;
@@ -120,7 +113,6 @@ export interface WorkflowStateData {
 export type AIChatStreamEvent =
   | { type: 'content'; data: ContentData }
   | { type: 'thinking'; data: ThinkingData }
-  | { type: 'explore_status'; data: ExploreStatusData }
   | { type: 'workflow_state'; data: WorkflowStateData }
   | { type: 'tool_start'; data: ToolStartData }
   | { type: 'tool_end'; data: ToolEndData }

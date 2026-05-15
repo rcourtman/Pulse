@@ -329,8 +329,6 @@ import unifiedResourceTableModelSource from '@/components/Infrastructure/unified
 import useUnifiedResourcesSource from '@/hooks/useUnifiedResources.ts?raw';
 import useWorkloadsSource from '@/hooks/useWorkloads.ts?raw';
 import findingsPanelSource from '@/components/AI/FindingsPanel.tsx?raw';
-import exploreStatusBlockSource from '@/components/AI/Chat/ExploreStatusBlock.tsx?raw';
-import aiExplorePresentationSource from '@/utils/aiExplorePresentation.ts?raw';
 import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
 import discoveryPresentationSource from '@/utils/discoveryPresentation.ts?raw';
 import mailGatewaySource from '@/components/PMG/MailGateway.tsx?raw';
@@ -3144,10 +3142,6 @@ describe('frontend resource type boundaries', () => {
     expect(unifiedResourceTableViewportSyncSource).toContain('getBoundingClientRect');
     expect(unifiedResourceTableViewportSyncSource).toContain('hostWindowing.onScroll');
     expect(unifiedResourceTableViewportSyncSource).not.toContain('scrollIntoView');
-    expect(exploreStatusBlockSource).toContain('getAIExploreStatusPresentation');
-    expect(exploreStatusBlockSource).not.toContain('const phaseLabel =');
-    expect(exploreStatusBlockSource).not.toContain('const phaseClasses =');
-    expect(aiExplorePresentationSource).toContain('export function getAIExploreStatusPresentation');
     expect(discoveryTabSource).toContain('getDiscoveryURLSuggestionSourceLabel');
     expect(discoveryTabSource).toContain('getDiscoveryAnalysisProviderBadgeClass');
     expect(discoveryTabSource).toContain('getDiscoveryCategoryBadgeClass');

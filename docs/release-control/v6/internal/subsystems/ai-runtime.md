@@ -34,15 +34,14 @@ runtime cost control, and shared AI transport surfaces.
 12. `frontend-modern/src/utils/aiChatPresentation.ts`
 13. `frontend-modern/src/utils/aiControlLevelPresentation.ts`
 14. `frontend-modern/src/utils/aiCostPresentation.ts`
-15. `frontend-modern/src/utils/aiExplorePresentation.ts`
-16. `frontend-modern/src/utils/aiProviderHealthPresentation.ts`
-17. `frontend-modern/src/utils/aiProviderPresentation.ts`
-18. `frontend-modern/src/utils/aiSessionDiffPresentation.ts`
-19. `frontend-modern/src/utils/textPresentation.ts`
-20. `frontend-modern/src/stores/aiRuntimeState.ts`
-21. `frontend-modern/src/stores/aiChat.ts`
-22. `docs/AI.md`
-23. `pkg/aicontracts/investigation.go`
+15. `frontend-modern/src/utils/aiProviderHealthPresentation.ts`
+16. `frontend-modern/src/utils/aiProviderPresentation.ts`
+17. `frontend-modern/src/utils/aiSessionDiffPresentation.ts`
+18. `frontend-modern/src/utils/textPresentation.ts`
+19. `frontend-modern/src/stores/aiRuntimeState.ts`
+20. `frontend-modern/src/stores/aiChat.ts`
+21. `docs/AI.md`
+22. `pkg/aicontracts/investigation.go`
 
 ## Shared Boundaries
 
@@ -76,7 +75,7 @@ runtime cost control, and shared AI transport surfaces.
    require an explicit `allow_broad_scope` request from a dedicated rule
    management surface.
 5. Add or change AI usage/cost dashboard presentation through `frontend-modern/src/components/AI/AICostDashboard.tsx` and `frontend-modern/src/utils/aiCostPresentation.ts`
-6. Add or change AI provider, control-level, chat/session, or streamed-status presentation through `frontend-modern/src/components/AI/Chat/`, `frontend-modern/src/utils/aiProviderPresentation.ts`, `frontend-modern/src/utils/aiProviderHealthPresentation.ts`, `frontend-modern/src/utils/aiControlLevelPresentation.ts`, `frontend-modern/src/utils/aiChatPresentation.ts`, `frontend-modern/src/utils/aiSessionDiffPresentation.ts`, and `frontend-modern/src/utils/aiExplorePresentation.ts`
+6. Add or change AI provider, control-level, or chat/session presentation through `frontend-modern/src/components/AI/Chat/`, `frontend-modern/src/utils/aiProviderPresentation.ts`, `frontend-modern/src/utils/aiProviderHealthPresentation.ts`, `frontend-modern/src/utils/aiControlLevelPresentation.ts`, `frontend-modern/src/utils/aiChatPresentation.ts`, and `frontend-modern/src/utils/aiSessionDiffPresentation.ts`
 7. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
 8. Keep assistant drawer context, session, and org-switch reset state aligned through the shared `frontend-modern/src/stores/aiChat.ts` boundary instead of letting `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, or feature callers fork their own assistant shell state
    That shared drawer ownership also covers passive resource reads while the
@@ -979,6 +978,11 @@ context, or request an action. Pulse must not use prompt heuristics to force
 used, or hide tools from the model based on keyword detection. Pulse
 enforcement starts after that model choice: approval mode, FSM gates, strict
 resource resolution, and tool policy remain the safety boundary.
+Session continuity context follows the same boundary: Pulse may provide
+neutral recent-resource facts and explicit resource addressing facts, but it
+must not use prompt-keyword or pronoun heuristics to rewrite a user message as
+targeted, inject log-routing instructions, or tell the model which context is
+the answer.
 
 The same runtime ownership now includes the customer-facing AI usage and cost
 surface. `frontend-modern/src/components/AI/AICostDashboard.tsx` is the
@@ -993,14 +997,18 @@ helpers used across chat, settings, and usage surfaces.
 `frontend-modern/src/utils/aiProviderHealthPresentation.ts`,
 `frontend-modern/src/utils/aiControlLevelPresentation.ts`,
 `frontend-modern/src/utils/aiChatPresentation.ts`,
-`frontend-modern/src/utils/aiSessionDiffPresentation.ts`, and
-`frontend-modern/src/utils/aiExplorePresentation.ts` are the canonical owners
+`frontend-modern/src/utils/aiSessionDiffPresentation.ts` are the canonical owners
 for provider naming, provider health labels, control-level semantics,
 chat drawer title/subtitle, launcher title/aria copy, session-menu labeling,
 discovery hint framing, chat/session empty states, assistant message and
-question-card labels, session-diff badges, and streamed-status labels.
+question-card labels, and session-diff badges.
 Settings and chat surfaces must consume those helpers instead of keeping local
 AI wording or model/provider inference branches.
+Assistant chat must not render Pulse-authored explore pre-pass cards or
+internal workflow-state cards as assistant output. The user-facing stream is
+model text, model thinking where supported, model-selected tool calls, governed
+approval requests, and model questions; internal runtime telemetry stays out of
+the chat transcript.
 
 The AI transport files are shared with `api-contracts`, not delegated away to
 it. `frontend-modern/src/api/ai.ts`,

@@ -173,46 +173,6 @@ export function useChat(options: UseChatOptions = {}) {
               };
             }
 
-            case 'explore_status': {
-              const data = (event.data || {}) as {
-                phase?: string;
-                message?: string;
-                model?: string;
-                outcome?: string;
-              };
-              const message = typeof data.message === 'string' ? data.message.trim() : '';
-              if (!message) return msg;
-              return addStreamEvent(msg, {
-                type: 'explore_status',
-                exploreStatus: {
-                  phase: data.phase || 'unknown',
-                  message,
-                  model: data.model,
-                  outcome: data.outcome,
-                },
-              });
-            }
-
-            case 'workflow_state': {
-              const data = (event.data || {}) as {
-                phase?: string;
-                message?: string;
-                state?: string;
-                tool?: string;
-              };
-              const message = typeof data.message === 'string' ? data.message.trim() : '';
-              if (!message) return msg;
-              return addStreamEvent(msg, {
-                type: 'workflow',
-                workflow: {
-                  phase: data.phase || 'unknown',
-                  message,
-                  state: data.state,
-                  tool: data.tool,
-                },
-              });
-            }
-
             case 'tool_start': {
               const data = (event.data || {}) as {
                 id?: string;

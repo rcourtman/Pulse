@@ -199,14 +199,6 @@ type ThinkingData struct {
 	Text string `json:"text"`
 }
 
-// ExploreStatusData is the data for "explore_status" events
-type ExploreStatusData struct {
-	Phase   string `json:"phase"`             // started | completed | failed | skipped
-	Message string `json:"message"`           // Human-readable status text for the UI
-	Model   string `json:"model,omitempty"`   // Optional provider:model source for the status
-	Outcome string `json:"outcome,omitempty"` // success | failed | skipped_no_model | skipped_no_tools
-}
-
 // WorkflowStateData is the data for "workflow_state" events.
 type WorkflowStateData struct {
 	Phase   string `json:"phase"`           // investigate | clarify | plan | approve | execute | verify | complete

@@ -51,40 +51,18 @@ func readRoutingHintForResolvedResource(kind, adapter, targetHost, displayName, 
 	return buildReadRoutingHint(kind, adapter, targetHost, displayName, resourceID)
 }
 
-func (h readRoutingHint) targetHintSuffix() string {
+func (h readRoutingHint) targetFact() string {
 	switch h.mode {
 	case readRoutingTargetHost:
 		if h.ref != "" {
-			return fmt.Sprintf(" Use target_host=\"%s\".", h.ref)
+			return fmt.Sprintf("tool addressing fact: target_host=%q", h.ref)
 		}
 	case readRoutingNativeResource, readRoutingQueryOnly:
 		if h.ref != "" {
-			return fmt.Sprintf(" Use resource_id=\"%s\".", h.ref)
+			return fmt.Sprintf("tool addressing fact: resource_id=%q", h.ref)
 		}
 	}
 	return ""
-}
-
-func (h readRoutingHint) recentLogsContext(resourceLabel string) string {
-	switch h.mode {
-	case readRoutingTargetHost:
-		if h.ref == "" {
-			return ""
-		}
-		return fmt.Sprintf("Log routing context for %s: target_host=%q.", resourceLabel, h.ref)
-	case readRoutingNativeResource:
-		if h.ref == "" {
-			return ""
-		}
-		return fmt.Sprintf("Log routing context for %s: resource_id=%q.", resourceLabel, h.ref)
-	case readRoutingQueryOnly:
-		if h.ref == "" {
-			return ""
-		}
-		return fmt.Sprintf("Read capability context for %s: shared log reads are not supported; current status, alerts, recent activity, and metrics are available through resource_id=%q.", resourceLabel, h.ref)
-	default:
-		return ""
-	}
 }
 
 func (h readRoutingHint) prefetchContext() string {

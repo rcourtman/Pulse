@@ -236,6 +236,12 @@ checks, merge tenants, or become the source of truth for telemetry freshness.
     actions when the run cannot be resolved. Stored session metadata must be
     readable by the handler so follow-up turns can rehydrate the same backend
     context without asking the browser to resend provider-bound payloads.
+    Chat stream events are generated from `internal/ai/chat` payload structs
+    into `frontend-modern/src/api/generated/aiChatEvents.ts`; that generated
+    union must not include the retired `explore_status` pre-pass event. Runtime
+    workflow telemetry may remain a transport event, but browser Assistant
+    output is owned by the AI runtime presentation contract rather than by
+    API-client event typing.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
     Provider test responses from `/api/ai/test` and provider-specific
     `/api/ai/test/{provider}` preflight responses must return one safe

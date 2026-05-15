@@ -10170,15 +10170,6 @@ func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
 			want: `{"type":"content","data":{"text":"hello"}}`,
 		},
 		{
-			name: "explore_status",
-			event: mustStreamEvent(t, "explore_status", chat.ExploreStatusData{
-				Phase:   "started",
-				Message: "Context status running.",
-				Model:   "openai:chat-main",
-			}),
-			want: `{"type":"explore_status","data":{"phase":"started","message":"Context status running.","model":"openai:chat-main"}}`,
-		},
-		{
 			name: "workflow_state",
 			event: mustStreamEvent(t, "workflow_state", chat.WorkflowStateData{
 				Phase:   "plan",

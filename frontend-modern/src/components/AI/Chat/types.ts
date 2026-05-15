@@ -82,25 +82,9 @@ export interface PendingQuestion {
   isAnswering?: boolean;
 }
 
-export interface ExploreStatus {
-  phase: string;
-  message: string;
-  model?: string;
-  outcome?: string;
-}
-
-export interface WorkflowStatus {
-  phase: string;
-  message: string;
-  state?: string;
-  tool?: string;
-}
-
 // Unified event for chronological display
 export type StreamEventType =
   | 'thinking'
-  | 'explore_status'
-  | 'workflow'
   | 'tool'
   | 'content'
   | 'pending_tool'
@@ -110,8 +94,6 @@ export type StreamEventType =
 export interface StreamDisplayEvent {
   type: StreamEventType;
   thinking?: string;
-  exploreStatus?: ExploreStatus;
-  workflow?: WorkflowStatus;
   tool?: ToolExecution;
   pendingTool?: PendingTool;
   content?: string;

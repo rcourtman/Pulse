@@ -6,19 +6,7 @@ import (
 	"time"
 )
 
-func TestShouldInjectRecentContext(t *testing.T) {
-	if !shouldInjectRecentContext("show me its status") {
-		t.Fatalf("expected pronoun prompt to trigger recent context")
-	}
-	if !shouldInjectRecentContext("restart the service") {
-		t.Fatalf("expected noun prompt to trigger recent context")
-	}
-	if shouldInjectRecentContext("what is the uptime") {
-		t.Fatalf("expected unrelated prompt to skip recent context")
-	}
-}
-
-func TestInjectRecentContextIfNeeded_InjectsSummaryAndInstruction(t *testing.T) {
+func TestInjectRecentSessionContext_InjectsNeutralResourceFacts(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to create session store: %v", err)
@@ -51,33 +39,30 @@ func TestInjectRecentContextIfNeeded_InjectsSummaryAndInstruction(t *testing.T) 
 
 	messages := []Message{{Role: "user", Content: "show its logs"}}
 	service := &Service{}
-	service.injectRecentContextIfNeeded("show its logs", session.ID, messages, store)
+	service.injectRecentSessionContext(session.ID, messages, store)
 
 	content := messages[0].Content
 	if content == "show its logs" {
 		t.Fatalf("expected recent context to be injected")
 	}
-	if !strings.Contains(content, "Context: The most recently referenced resource is api (app-container on minipc).") {
-		t.Fatalf("expected primary resource summary, got: %s", content)
+	if !strings.Contains(content, "Session context from earlier Assistant turns. Use only if relevant to the user's message; otherwise ignore it or ask a clarifying question.") {
+		t.Fatalf("expected neutral session context framing, got: %s", content)
 	}
-	if !strings.Contains(content, "Other recent resources:\n- db (vm on node-2)") {
+	if !strings.Contains(content, "- api (app-container on minipc); tool addressing fact: target_host=\"host-1\"") {
+		t.Fatalf("expected primary resource facts, got: %s", content)
+	}
+	if !strings.Contains(content, "- db (vm on node-2)") {
 		t.Fatalf("expected secondary resource summary, got: %s", content)
 	}
-	if !strings.Contains(content, "Use target_host=\"host-1\".") {
-		t.Fatalf("expected target host hint, got: %s", content)
+	if strings.Contains(content, "Log routing context") || strings.Contains(content, "User question (targeted)") {
+		t.Fatalf("expected no prompt-keyword routing instruction, got: %s", content)
 	}
-	if !strings.Contains(content, "Log routing context for api: target_host=\"host-1\".") {
-		t.Fatalf("expected log routing context, got: %s", content)
-	}
-	if !strings.Contains(content, "Explicit target: api") {
-		t.Fatalf("expected explicit target, got: %s", content)
-	}
-	if !strings.Contains(content, "User question (targeted): show its logs") {
-		t.Fatalf("expected targeted user question, got: %s", content)
+	if !strings.Contains(content, "User message:\nshow its logs") {
+		t.Fatalf("expected original user message to remain neutral, got: %s", content)
 	}
 }
 
-func TestInjectRecentContextIfNeeded_NoRecentDoesNotModify(t *testing.T) {
+func TestInjectRecentSessionContext_NoRecentDoesNotModify(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to create session store: %v", err)
@@ -92,14 +77,14 @@ func TestInjectRecentContextIfNeeded_NoRecentDoesNotModify(t *testing.T) {
 
 	messages := []Message{{Role: "user", Content: "restart it"}}
 	service := &Service{}
-	service.injectRecentContextIfNeeded("restart it", session.ID, messages, store)
+	service.injectRecentSessionContext(session.ID, messages, store)
 
 	if messages[0].Content != "restart it" {
 		t.Fatalf("expected message to remain unchanged")
 	}
 }
 
-func TestInjectRecentContextIfNeeded_PrimaryNameFallback(t *testing.T) {
+func TestInjectRecentSessionContext_PrimaryNameFallback(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to create session store: %v", err)
@@ -115,21 +100,18 @@ func TestInjectRecentContextIfNeeded_PrimaryNameFallback(t *testing.T) {
 
 	messages := []Message{{Role: "user", Content: "show its logs"}}
 	service := &Service{}
-	service.injectRecentContextIfNeeded("show its logs", session.ID, messages, store)
+	service.injectRecentSessionContext(session.ID, messages, store)
 
 	content := messages[0].Content
-	if !strings.Contains(content, "Context: The most recently referenced resource is node:alpha.") {
+	if !strings.Contains(content, "- node:alpha; tool addressing fact: target_host=\"node:alpha\"") {
 		t.Fatalf("expected resource ID label, got: %s", content)
 	}
-	if !strings.Contains(content, "Explicit target: node:alpha") {
-		t.Fatalf("expected fallback explicit target, got: %s", content)
-	}
-	if !strings.Contains(content, "Log routing context for node:alpha: target_host=\"node:alpha\".") {
-		t.Fatalf("expected log context to use primary name, got: %s", content)
+	if strings.Contains(content, "Explicit target") || strings.Contains(content, "Log routing context") {
+		t.Fatalf("expected no targeted rewrite or log routing instruction, got: %s", content)
 	}
 }
 
-func TestInjectRecentContextIfNeeded_UsesResourceIDHintForTrueNASAppLogs(t *testing.T) {
+func TestInjectRecentSessionContext_UsesResourceIDFactForTrueNASApp(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to create session store: %v", err)
@@ -152,18 +134,15 @@ func TestInjectRecentContextIfNeeded_UsesResourceIDHintForTrueNASAppLogs(t *test
 
 	messages := []Message{{Role: "user", Content: "show its logs"}}
 	service := &Service{}
-	service.injectRecentContextIfNeeded("show its logs", session.ID, messages, store)
+	service.injectRecentSessionContext(session.ID, messages, store)
 
 	content := messages[0].Content
-	if !strings.Contains(content, "Use resource_id=\"Nextcloud\".") {
-		t.Fatalf("expected resource_id hint, got: %s", content)
-	}
-	if !strings.Contains(content, "Log routing context for Nextcloud: resource_id=\"Nextcloud\".") {
-		t.Fatalf("expected resource-targeted log context, got: %s", content)
+	if !strings.Contains(content, "- Nextcloud (app-container on truenas-main); tool addressing fact: resource_id=\"Nextcloud\"") {
+		t.Fatalf("expected resource_id fact, got: %s", content)
 	}
 }
 
-func TestInjectRecentContextIfNeeded_UsesQueryResourceIDHintForVMwareLogs(t *testing.T) {
+func TestInjectRecentSessionContext_UsesQueryResourceIDFactForVMware(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to create session store: %v", err)
@@ -185,19 +164,13 @@ func TestInjectRecentContextIfNeeded_UsesQueryResourceIDHintForVMwareLogs(t *tes
 
 	messages := []Message{{Role: "user", Content: "show its logs"}}
 	service := &Service{}
-	service.injectRecentContextIfNeeded("show its logs", session.ID, messages, store)
+	service.injectRecentSessionContext(session.ID, messages, store)
 
 	content := messages[0].Content
-	if !strings.Contains(content, "Use resource_id=\"esxi-01.lab.local\".") {
-		t.Fatalf("expected resource_id hint, got: %s", content)
+	if !strings.Contains(content, "- esxi-01.lab.local (agent on Lab VC); tool addressing fact: resource_id=\"esxi-01.lab.local\"") {
+		t.Fatalf("expected resource_id fact, got: %s", content)
 	}
 	if strings.Contains(content, "target_host=\"esxi-01.lab.local\"") {
-		t.Fatalf("expected VMware recent context to avoid target_host log routing, got: %s", content)
-	}
-	if !strings.Contains(content, "shared log reads are not supported") {
-		t.Fatalf("expected VMware log limitation guidance, got: %s", content)
-	}
-	if !strings.Contains(content, "current status, alerts, recent activity, and metrics are available through resource_id=\"esxi-01.lab.local\"") {
-		t.Fatalf("expected VMware recent context to expose resource_id read context, got: %s", content)
+		t.Fatalf("expected VMware recent context to avoid target_host routing, got: %s", content)
 	}
 }

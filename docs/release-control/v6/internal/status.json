@@ -2956,7 +2956,7 @@
     },
     {
       "id": "RA29",
-      "summary": "Interactive Pulse Assistant chat behaves like a governed LLM tool surface, not a Pulse-authored intent router: the operator's selected model receives the user turn and governed tools, decides whether tools are needed, and Pulse must not use prompt heuristics to force tool_choice, force a named tool, retry because an expected tool was not used, or hide tools from the model by keyword detection. Pulse only enforces approvals, resource resolution, FSM gates, and tool policy after that model choice. The chat surface must echo user messages before network/session creation finishes and must not emit Pulse-owned explore or synthetic investigating workflow events before the model acts.",
+      "summary": "Interactive Pulse Assistant chat behaves like a governed LLM tool surface, not a Pulse-authored intent router: the operator's selected model receives the user turn and governed tools, decides whether tools are needed, and Pulse must not use prompt heuristics to force tool_choice, force a named tool, retry because an expected tool was not used, hide tools from the model by keyword detection, or rewrite recent-context turns into Pulse-targeted instructions. Pulse only provides context and enforces approvals, resource resolution, FSM gates, and tool policy after that model choice. The chat surface must echo user messages before network/session creation finishes and must not render Pulse-owned explore or internal workflow status cards as assistant output.",
       "kind": "invariant",
       "blocking_level": "repo-ready",
       "proof_type": "automated",
@@ -2988,7 +2988,31 @@
             "test",
             "--",
             "--run",
-            "src/components/AI/Chat/__tests__/useChat.test.ts"
+            "src/components/AI/Chat/__tests__/useChat.test.ts",
+            "src/components/AI/Chat/__tests__/MessageItem.test.tsx"
+          ]
+        },
+        {
+          "id": "assistant-chat-stream-contract-tests",
+          "run": [
+            "npm",
+            "--prefix",
+            "frontend-modern",
+            "test",
+            "--",
+            "--run",
+            "src/api/__tests__/aiChatEvents.test.ts"
+          ]
+        },
+        {
+          "id": "assistant-neutral-session-context-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/ai/chat",
+            "-run",
+            "TestInjectRecentSessionContext",
+            "-count=1"
           ]
         },
         {
@@ -3027,12 +3051,52 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/api-contracts.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/registry.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/api/__tests__/aiChatEvents.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/api/generated/aiChatEvents.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/AI/Chat/__tests__/MessageItem.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/components/AI/Chat/__tests__/useChat.test.ts",
           "kind": "file"
         },
         {
           "repo": "pulse",
           "path": "frontend-modern/src/components/AI/Chat/hooks/useChat.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/AI/Chat/MessageItem.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/AI/Chat/types.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
           "kind": "file"
         },
         {
@@ -3052,6 +3116,11 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/ai/chat/read_routing_hints.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/ai/chat/service.go",
           "kind": "file"
         },
@@ -3062,7 +3131,17 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/ai/chat/service_recent_context_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/ai/chat/service_tooling_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/chat/types.go",
           "kind": "file"
         },
         {
@@ -3083,6 +3162,16 @@
         {
           "repo": "pulse",
           "path": "internal/ai/tools/tools_read_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/contract_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/generate-types.go",
           "kind": "file"
         }
       ]

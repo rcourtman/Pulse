@@ -1142,7 +1142,6 @@
         "frontend-modern/src/utils/aiChatPresentation.ts",
         "frontend-modern/src/utils/aiControlLevelPresentation.ts",
         "frontend-modern/src/utils/aiCostPresentation.ts",
-        "frontend-modern/src/utils/aiExplorePresentation.ts",
         "frontend-modern/src/utils/aiProviderHealthPresentation.ts",
         "frontend-modern/src/utils/aiProviderPresentation.ts",
         "frontend-modern/src/utils/aiSessionDiffPresentation.ts",
@@ -1221,7 +1220,6 @@
             "match_files": [
               "frontend-modern/src/utils/aiChatPresentation.ts",
               "frontend-modern/src/utils/aiControlLevelPresentation.ts",
-              "frontend-modern/src/utils/aiExplorePresentation.ts",
               "frontend-modern/src/utils/aiProviderHealthPresentation.ts",
               "frontend-modern/src/utils/aiProviderPresentation.ts",
               "frontend-modern/src/utils/aiSessionDiffPresentation.ts"
@@ -1231,7 +1229,6 @@
             "exact_files": [
               "frontend-modern/src/utils/__tests__/aiChatPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/aiControlLevelPresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/aiExplorePresentation.test.ts",
               "frontend-modern/src/utils/__tests__/aiProviderHealthPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/aiProviderPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/aiSessionDiffPresentation.test.ts",

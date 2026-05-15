@@ -464,7 +464,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('processes explore_status events', async () => {
+    it('ignores product telemetry events that are not the model response', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
@@ -474,49 +474,11 @@ describe('useChat', () => {
       fire({
         type: 'explore_status',
         data: {
-          phase: 'investigating',
-          message: 'Checking logs',
+          phase: 'started',
+          message: 'Explore pre-pass running',
           model: 'claude-3',
-          outcome: 'ok',
         },
-      });
-
-      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
-      const exploreEvents =
-        assistant.streamEvents?.filter((e) => e.type === 'explore_status') ?? [];
-      expect(exploreEvents).toHaveLength(1);
-      expect(exploreEvents[0].exploreStatus).toEqual({
-        phase: 'investigating',
-        message: 'Checking logs',
-        model: 'claude-3',
-        outcome: 'ok',
-      });
-      dispose();
-    });
-
-    it('ignores explore_status with empty message', async () => {
-      const { getFireEvent } = setupWithEventCapture();
-      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
-
-      await chat.sendMessage('hi');
-      const fire = getFireEvent();
-
-      fire({ type: 'explore_status', data: { phase: 'x', message: '  ' } });
-
-      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
-      const exploreEvents =
-        assistant.streamEvents?.filter((e) => e.type === 'explore_status') ?? [];
-      expect(exploreEvents).toHaveLength(0);
-      dispose();
-    });
-
-    it('processes workflow_state events', async () => {
-      const { getFireEvent } = setupWithEventCapture();
-      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
-
-      await chat.sendMessage('hi');
-      const fire = getFireEvent();
-
+      } as any);
       fire({
         type: 'workflow_state',
         data: {
@@ -528,14 +490,8 @@ describe('useChat', () => {
       });
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
-      const workflowEvents = assistant.streamEvents?.filter((e) => e.type === 'workflow') ?? [];
-      expect(workflowEvents).toHaveLength(1);
-      expect(workflowEvents[0].workflow).toEqual({
-        phase: 'plan',
-        message: 'Planning governed action and safety checks before execution.',
-        state: 'READING',
-        tool: 'pulse_exec',
-      });
+      expect(assistant.content).toBe('');
+      expect(assistant.streamEvents).toEqual([]);
       dispose();
     });
 
