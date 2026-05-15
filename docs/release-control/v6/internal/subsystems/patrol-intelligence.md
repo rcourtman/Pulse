@@ -178,16 +178,16 @@ Patrol-specific presentation helpers.
    before the detailed finding context, so Assistant leads with the current risk,
    attention reason, recency, evidence snapshot, verification summary,
    conclusion, latest lifecycle event, recommended next step, explicit operator
-   decision framing, and governed approval/proposed-fix posture instead of
-   behaving like a generic chat over a pasted incident dump. The visible
-   Assistant drawer briefing opened from a Patrol finding must mirror that same
-   Patrol-owned operator frame, including current severity/status, recurrence or
-   regression, loop state, approval/proposed-fix posture, and the explicit
-   operator decision being requested. That visible briefing remains a summary
-   surface only: proposed-fix commands stay summarized by count, safe suggested
-   prompts must steer the operator toward evidence, approval risk, recurrence,
-   and next-step review without carrying command text, and destructive action
-   copy must point back to governed approval/remediation context. When a
+   decision framing, and governed approval/action posture instead of behaving
+   like a generic chat over a pasted incident dump. Patrol is the scheduled
+   probe, context assembler, and execution-governance owner; the configured LLM
+   is the diagnostic and remediation-reasoning owner. Visible Patrol Assistant
+   handoffs must not make the operator think Pulse has already produced the
+   correct fix. The visible Assistant drawer briefing opened from a Patrol
+   finding must be compact and source-named: current status/risk, one primary
+   subject, and any approval-required boundary, with richer evidence, action
+   artifacts, command counts, and prompt suggestions staying in model-only or
+   governed action context rather than drawer chrome. When a
    structured investigation record is not available yet, the same Patrol-owned
    helper must still brief the operator from current finding facts such as
    active status, severity, recurrence, and loop state instead of opening a
@@ -198,10 +198,10 @@ Patrol-specific presentation helpers.
    not copy the approval command payload into Assistant drawer prose. The
    model-only runtime briefing must apply that same
    recovered approval reference when framing the operator decision and action
-   posture. The initial visible prompt for a Patrol finding must lead with that
-   governed approval or proposed-fix review instruction when safe metadata is
-   attached, so the operator starts from approval status, risk, dry-run posture,
-   and safest-next-step review instead of generic incident discussion. Finding
+   posture. The initial prompt for a Patrol finding may include governed action
+   posture when safe metadata is attached, but it must frame that posture as
+   context for the LLM to evaluate rather than as a Patrol-authored remediation
+   answer. Finding
    handoffs must be assembled through the Patrol-owned handoff model so the
    prompt, visible briefing, model-only finding context, resource reference,
    safe next-step action label/href, bounded action reference, and request-local
@@ -218,11 +218,12 @@ Patrol-specific presentation helpers.
    proposed fixes when present, force the request-local approval-required mode,
    attach the Patrol-owned visible drawer briefing for the pending approval or
    queued-fix recovery state, and never paste the approval command or
-   proposed-fix command text into the chat prompt. Remediation-plan Assistant
-   handoffs follow the same boundary: step labels, plan status, risk, and command
-   counts are allowed, safe suggested prompts may ask about plan risk,
-   prerequisites, rollback, and verification, while command and rollback command
-   text stays in the governed remediation or approval surface. Generic finding
+   proposed-fix command text into the chat prompt. Existing remediation-plan or
+   action-plan artifacts follow the same boundary: plan status, risk, and
+   command counts are allowed as non-authoritative governed action posture for
+   the LLM to critique, but visible handoffs must not render Patrol step lists
+   or suggested prompt chips, and command or rollback command text stays in the
+   governed remediation or approval surface. Generic finding
    discussion handoffs must also force request-local approval-required mode for
    any non-empty Patrol `finding_id`, including context-only findings and
    findings that reference a live approval, proposed fix, fix outcome, or
@@ -1194,17 +1195,14 @@ than "auto-resolved" when the operator clicked Mark resolved
 themselves. Patrol-driven fix outcomes keep their existing copy because
 those describe Pulse's actual remediation, which is more specific than
 mere auto-detection.
-The Patrol page header copy must also name the trust loop the surface
-owns end-to-end, not the runtime controls it happens to embed. The
-canonical `PATROL_PAGE_DESCRIPTION` (and the matching
-`PATROL_PAGE_TITLE_TOOLTIP`) state that "Pulse investigates your
-infrastructure, gathers evidence for every finding, and proposes safe
-fixes under your approval policy" — the proactive-intelligence framing
-described in the Pulse Intelligence vision (investigation +
-explanation + governed action). The tooltip on the page-header title
-must read the same string from the canonical helper rather than
-maintaining a parallel copy, so hover and inline never tell different
-stories about what Patrol does.
+The Patrol page header copy must also name the surface boundary, not
+the runtime controls it happens to embed. The canonical
+`PATROL_PAGE_DESCRIPTION` (and the matching `PATROL_PAGE_TITLE_TOOLTIP`)
+must frame Patrol as scheduled infrastructure probing and context
+assembly for the configured model, with fixes kept behind the approval
+policy. The tooltip on the page-header title must read the same string
+from the canonical helper rather than maintaining a parallel copy, so
+hover and inline never tell different stories about what Patrol does.
 The Patrol page header must not add a second trust-at-a-glance line under
 the page title. Current active/regressed/finding posture belongs to the
 primary assessment readout and the finding rows, so the header remains

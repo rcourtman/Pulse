@@ -76,7 +76,9 @@ describe('FindingsPanel assistant handoff', () => {
 
   it('routes remediation plan handoffs through the command-free Patrol handoff model', () => {
     expect(findingsPanelSource).toContain('buildPatrolRemediationPlanAssistantPrompt');
+    expect(findingsPanelSource).toContain('buildPatrolRemediationPlanAssistantModelContext');
     expect(findingsPanelSource).toContain('buildPatrolRemediationPlanAssistantBriefing');
+    expect(findingsPanelSource).toContain('handoffContext,');
     expect(findingsPanelSource).toContain('autonomousMode: false');
     expect(findingsPanelSource).not.toContain('Command: `');
     expect(findingsPanelSource).not.toContain('Rollback: `');
@@ -263,12 +265,13 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('AIAPI.approveRemediationPlan(plan.id)');
     expect(findingsPanelSource).toContain('data-testid="capacity-forecast-approve"');
     expect(findingsPanelSource).toContain('data-testid="capacity-forecast-reject"');
-    // The fallback path keeps the generic remediation plan card unchanged
-    // for non-capacity findings or capacity findings without a proposal -
-    // both must continue to read "Open In Assistant" / "Dismiss" as
-    // before, with no capacity-forecast affordances bleeding through.
+    // The fallback path keeps non-capacity action artifacts compact for
+    // Assistant review rather than rendering Patrol-authored steps.
     expect(findingsPanelSource).toContain('fallback={(()');
-    expect(findingsPanelSource).toContain('Open In Assistant');
+    expect(findingsPanelSource).toContain('Action review');
+    expect(findingsPanelSource).toContain('Ask Assistant');
+    expect(findingsPanelSource).not.toContain('Remediation Plan');
+    expect(findingsPanelSource).not.toContain('<For each={plan().steps}>');
   });
 
   it('renders the operator-facing Impact line between Description and Recommendation', () => {

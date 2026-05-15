@@ -17,6 +17,7 @@ import {
   buildPatrolRunAssistantHandoff,
   buildPatrolInvestigationRecordPresentation,
   buildPatrolRemediationPlanAssistantBriefing,
+  buildPatrolRemediationPlanAssistantModelContext,
   buildPatrolRemediationPlanAssistantPrompt,
   patrolAssistantFindingHandoffRequiresApprovalMode,
   selectPatrolSupportingRecentChanges,
@@ -1306,7 +1307,7 @@ describe('patrolInvestigationContextModel', () => {
       }),
     });
 
-    expect(prompt).toContain('Start by reviewing the governed proposed fix');
+    expect(prompt).toContain('Start by reviewing the governed action posture');
     expect(prompt).toContain('medium risk');
     expect(prompt).toContain('1 command recorded for approval context');
     expect(prompt).toContain('destructive action');
@@ -1521,7 +1522,7 @@ describe('patrolInvestigationContextModel', () => {
         'Attention: active critical finding; regressed 2 times; last regression 2 hours ago; loop awaiting approval; approval approval-1; live approval pending; destructive proposed fix; fix queued for governed review',
         'Backup job saturated CPU.',
         'Approve a controlled restart after the backup completes.',
-        `Decision: review live governed approval approval-1 before execution; approval pending; target web-server; expires ${approvalExpiresAt}; requested ${approvalRequestedAt}; proposed fix fix-1; risk high; destructive true`,
+        `Decision: review live governed approval approval-1 before execution; approval pending; target web-server; expires ${approvalExpiresAt}; requested ${approvalRequestedAt}; action artifact fix-1; risk high; destructive true`,
       ],
       evidence: ['CPU stayed above 95% for 10 minutes', 'Verified: CPU returned below 50%'],
       actionLabel: 'Restart the workload service',
@@ -1538,7 +1539,7 @@ describe('patrolInvestigationContextModel', () => {
     vi.useRealTimers();
   });
 
-  it('builds remediation plan Assistant handoff context without exposing raw commands', () => {
+  it('treats existing remediation artifacts as non-authoritative Assistant context', () => {
     const plan: RemediationPlan = {
       id: 'plan-1',
       finding_id: 'finding-1',
@@ -1570,29 +1571,53 @@ describe('patrolInvestigationContextModel', () => {
       subject: 'node-1',
       plan,
     });
+    const modelContext = buildPatrolRemediationPlanAssistantModelContext({
+      title: 'Nginx down',
+      subject: 'node-1',
+      plan,
+    });
     const briefing = buildPatrolRemediationPlanAssistantBriefing({
       title: 'Nginx down',
       subject: 'node-1',
       plan,
     });
 
-    expect(prompt).toContain('Pulse Patrol generated a governed remediation plan');
-    expect(prompt).toContain('1. Restart web service (high risk; command recorded');
-    expect(prompt).toContain('2 commands recorded for governed plan review');
-    expect(prompt).not.toContain('systemctl restart nginx');
-    expect(prompt).not.toContain('systemctl stop nginx');
-    expect(prompt).not.toContain('systemctl status nginx');
+    expect(prompt).toBe(
+      'Review this Patrol finding and decide the safest next step: "Nginx down" on node-1.',
+    );
+    expect(modelContext).toContain('[Patrol Finding Action Context]');
+    expect(modelContext).toContain(
+      'Pulse is attaching observed finding context and any existing governed action artifact',
+    );
+    expect(modelContext).toContain(
+      'The selected language model should decide whether remediation is appropriate',
+    );
+    expect(modelContext).toContain('Existing Action Artifact: Restore web service');
+    expect(modelContext).toContain(
+      '2 commands recorded for governed plan review; 1 rollback command recorded',
+    );
+    expect(modelContext).toContain('Treat this as approval state, not remediation guidance.');
+    expect(modelContext).toContain('Do not assume any Patrol-authored action is correct.');
+    expect(modelContext).not.toContain('1. Restart web service');
+    expect(modelContext).not.toContain('2. Check service health');
+    expect(modelContext).not.toContain('systemctl restart nginx');
+    expect(modelContext).not.toContain('systemctl stop nginx');
+    expect(modelContext).not.toContain('systemctl status nginx');
+    expect(briefing.title).toBe('Patrol finding attached');
+    expect(briefing.subject).toBe('Nginx down on node-1');
+    expect(briefing.detailLines).toEqual([
+      'Existing action artifact: Restore web service',
+      'Restart the service and verify health.',
+    ]);
+    expect(briefing.evidence).toBeUndefined();
+    expect(briefing.actionLabel).toBeUndefined();
     expect(briefing.commandSummary).toBe(
       '2 commands recorded for governed plan review; 1 rollback command recorded',
     );
     expect(briefing.safetyNote).toBe(
-      'Command details stay in governed remediation context; execution requires the approval flow.',
+      'Assistant should decide remediation from evidence; command execution requires governed approval.',
     );
-    expect(briefing.suggestedPrompts).toEqual([
-      'Review plan risk and prerequisites',
-      'Explain commands without command text',
-      'Check rollback and verification steps',
-    ]);
+    expect(briefing.suggestedPrompts).toBeUndefined();
     expect(JSON.stringify(briefing)).not.toContain('systemctl');
   });
 
@@ -1883,17 +1908,14 @@ describe('Patrol page header IA framing', () => {
 
   it('names the proactive trust loop on the canonical Patrol surface', async () => {
     // The Patrol page header is the most visible piece of operator-facing
-    // copy on the canonical Patrol surface. The IA reframe replaces the
-    // prior passive "verify, review, control" framing with one that names
-    // the loop the page actually owns: investigate, capture evidence,
-    // propose safe fixes under approval. Pin the wording on the canonical
-    // helper from the patrol-intelligence subsystem so a refactor cannot
-    // silently drop the framing or split the tooltip from the description.
+    // copy on the canonical Patrol surface. The IA framing must keep the
+    // product boundary clear: Pulse probes and assembles evidence, the
+    // configured model reasons over it, and action stays approval-bound.
     const { getPatrolPageHeaderMeta, PATROL_PAGE_DESCRIPTION, PATROL_PAGE_TITLE_TOOLTIP } =
       await import('@/utils/patrolPagePresentation');
-    expect(PATROL_PAGE_DESCRIPTION).toContain('Pulse investigates your infrastructure');
-    expect(PATROL_PAGE_DESCRIPTION).toContain('gathers evidence');
-    expect(PATROL_PAGE_DESCRIPTION).toContain('proposes safe fixes');
+    expect(PATROL_PAGE_DESCRIPTION).toContain('Pulse checks your infrastructure');
+    expect(PATROL_PAGE_DESCRIPTION).toContain('configured model');
+    expect(PATROL_PAGE_DESCRIPTION).toContain('right evidence');
     expect(PATROL_PAGE_DESCRIPTION).toContain('approval policy');
     expect(PATROL_PAGE_TITLE_TOOLTIP).toBe(PATROL_PAGE_DESCRIPTION);
     expect(getPatrolPageHeaderMeta()).toMatchObject({

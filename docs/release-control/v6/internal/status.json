@@ -2741,6 +2741,122 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA28",
+      "summary": "Pulse Patrol remains a simple scheduled LLM probe and governance surface: Pulse supplies observed infrastructure context, evidence, policy posture, approval state, and governed execution boundaries, while the configured LLM owns diagnosis and remediation reasoning. Patrol UI and Assistant handoffs must not present Patrol-authored remediation plans, internal step lists, command summaries, or suggested prompt chips as the answer.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L6",
+        "L8",
+        "L20",
+        "L23"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "frontend-primitives",
+        "patrol-intelligence"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "patrol-assistant-compact-briefing-tests",
+          "run": [
+            "npm",
+            "--prefix",
+            "frontend-modern",
+            "test",
+            "--",
+            "--run",
+            "src/components/AI/Chat/__tests__/AIChat.test.tsx",
+            "src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts",
+            "src/components/patrol/__tests__/ApprovalSection.test.tsx",
+            "src/components/AI/__tests__/FindingsPanel.test.ts",
+            "src/components/AI/__tests__/FindingsPanel.capacityForecast.test.tsx",
+            "src/utils/__tests__/patrolPagePresentation.test.ts"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/status.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/api-contracts.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/patrol-intelligence.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/AI/__tests__/FindingsPanel.capacityForecast.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/AI/Chat/__tests__/AIChat.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/AI/Chat/index.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/AI/FindingsPanel.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/patrol/__tests__/ApprovalSection.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/patrolPagePresentation.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/patrolPagePresentation.ts",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {

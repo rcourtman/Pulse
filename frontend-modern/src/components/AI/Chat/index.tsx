@@ -292,15 +292,15 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
       actionLabel: summary.requires_approval
         ? 'Approval required'
         : isPatrolConfigurationFailure
-        ? 'Review Patrol configuration issue'
-        : isPatrolAssessment
-          ? recommendedNextStepAction
-            ? `Recommended: ${recommendedNextStepAction}`
-            : recommendedNextStep
-              ? `Recommended: ${recommendedNextStep}`
-              : 'Review Patrol assessment'
-          : isPatrolRun && summary.runtime_failure
-            ? 'Review Patrol runtime issue'
+          ? 'Review Patrol configuration issue'
+          : isPatrolAssessment
+            ? recommendedNextStepAction
+              ? `Recommended: ${recommendedNextStepAction}`
+              : recommendedNextStep
+                ? `Recommended: ${recommendedNextStep}`
+                : 'Review Patrol assessment'
+            : isPatrolRun && summary.runtime_failure
+              ? 'Review Patrol runtime issue'
               : isPatrolRun
                 ? 'Review Patrol run'
                 : isPatrolFinding && recommendedNextStepAction
@@ -312,8 +312,7 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
         !summary.requires_approval &&
         recommendedNextStepActionHref &&
         (isPatrolFinding ||
-          (isPatrolAssessment &&
-            Boolean(recommendedNextStepAction || recommendedNextStep)))
+          (isPatrolAssessment && Boolean(recommendedNextStepAction || recommendedNextStep)))
           ? recommendedNextStepActionHref
           : undefined,
       commandSummary: statusLabel
@@ -471,7 +470,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
     return match ? match.name || match.id.split(':').pop() || match.id : override;
   });
 
-  const controlPresentation = createMemo(() => getAIChatControlLevelPresentation(controlLevel()));
   const isOverlayLayout = createMemo(() => width() < AI_CHAT_MIN_DOCKED_VIEWPORT_WIDTH);
   const rootClassName = createMemo(() => {
     if (isOverlayLayout()) {
@@ -617,28 +615,38 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   });
 
-  const hasScopedApprovalHandoff = createMemo(() => aiChatStore.context.autonomousMode === false);
   const contextBriefing = createMemo(() => aiChatStore.context.briefing);
-  const contextBriefingEvidence = createMemo(() => contextBriefing()?.evidence ?? []);
-  const contextBriefingDetails = createMemo(() => contextBriefing()?.detailLines ?? []);
-  const contextBriefingSuggestedPrompts = createMemo(
-    () => contextBriefing()?.suggestedPrompts ?? [],
+  const hasScopedApprovalHandoff = createMemo(() => aiChatStore.context.autonomousMode === false);
+  const controlPresentation = createMemo(() =>
+    getAIChatControlLevelPresentation(
+      hasScopedApprovalHandoff() && controlLevel() === 'autonomous' ? 'controlled' : controlLevel(),
+    ),
   );
+  const contextBriefingTitle = createMemo(() => {
+    const briefing = contextBriefing();
+    if (!briefing) return '';
+
+    const title = briefing.title?.trim() ?? '';
+    const subject = briefing.subject?.trim() ?? '';
+    if (subject && /attached|briefing/i.test(title)) {
+      return subject;
+    }
+
+    return title || subject || 'Context attached';
+  });
+  const contextBriefingNote = createMemo(() => {
+    if (hasScopedApprovalHandoff()) {
+      return 'Approval required before any action.';
+    }
+
+    return '';
+  });
   const emptyStatePresentation = createMemo(() =>
     getAIChatEmptyStatePresentation({
       briefing: contextBriefing(),
       isCluster: isCluster(),
     }),
   );
-  const scopedApprovalHandoffLabel = createMemo(() => {
-    const source = contextBriefing()?.sourceLabel?.toLowerCase() || '';
-    if (source.includes('patrol')) return 'this Patrol handoff';
-    if (source.includes('alert') || aiChatStore.context.context?.alertIdentifier) {
-      return 'this alert investigation';
-    }
-    if (aiChatStore.context.findingId) return 'this Patrol finding';
-    return 'this dashboard brief';
-  });
 
   // Compute current status for display
   const currentStatus = createMemo(() => {
@@ -663,13 +671,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     return { type: 'thinking', text: 'Thinking...' };
   });
-
-  const handleContextBriefingPrompt = (prompt: string) => {
-    setInput(prompt);
-    setMentionActive(false);
-    setMentionQuery('');
-    queueMicrotask(() => textareaRef?.focus());
-  };
 
   createEffect(() => {
     if (!isOpen()) {
@@ -1455,7 +1456,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                           </span>
                                         )}
                                       </Show>
-                                      <Show when={formatSessionHandoffRecommendationLabel(summary())}>
+                                      <Show
+                                        when={formatSessionHandoffRecommendationLabel(summary())}
+                                      >
                                         {(recommendation) => (
                                           <span class="max-w-full truncate rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
                                             {recommendation()}
@@ -1514,15 +1517,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
               </button>
             </div>
           </div>
-
-          <Show when={hasScopedApprovalHandoff() && controlLevel() === 'autonomous'}>
-            <div class="px-4 py-2 border-b border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 flex items-center gap-2 text-[11px] text-blue-700 dark:text-blue-200">
-              <span>
-                Approval required for {scopedApprovalHandoffLabel()}. Commands will ask before
-                running; your default Assistant mode is unchanged.
-              </span>
-            </div>
-          </Show>
 
           <Show
             when={
@@ -1599,7 +1593,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
           <Show when={contextBriefing()}>
             <section
-              class="border-b border-border bg-surface px-4 py-3"
+              class="border-b border-border bg-surface px-4 py-2.5"
               aria-label="Assistant context"
             >
               <div class="flex flex-wrap items-center gap-2 text-[10px] font-medium uppercase text-muted">
@@ -1610,72 +1604,18 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </Show>
               </div>
               <div class="mt-1 text-sm font-semibold text-base-content">
-                {contextBriefing()!.title}
+                {contextBriefingTitle()}
               </div>
-              <Show when={contextBriefing()!.subject}>
-                <div class="mt-0.5 text-xs text-muted">{contextBriefing()!.subject}</div>
+              <Show when={contextBriefingNote()}>
+                <div class="mt-0.5 text-xs text-muted">{contextBriefingNote()}</div>
               </Show>
-              <Show when={contextBriefingDetails().length > 0}>
-                <div class="mt-2 space-y-1">
-                  <For each={contextBriefingDetails()}>
-                    {(line) => <div class="text-xs text-base-content leading-relaxed">{line}</div>}
-                  </For>
-                </div>
-              </Show>
-              <Show when={contextBriefingEvidence().length > 0}>
-                <div class="mt-2 flex flex-wrap gap-1.5">
-                  <For each={contextBriefingEvidence()}>
-                    {(item) => (
-                      <span class="rounded border border-border bg-surface-alt px-2 py-1 text-[11px] text-muted">
-                        {item}
-                      </span>
-                    )}
-                  </For>
-                </div>
-              </Show>
-              <Show when={contextBriefingSuggestedPrompts().length > 0}>
-                <div class="mt-2 flex flex-wrap gap-1.5">
-                  <For each={contextBriefingSuggestedPrompts()}>
-                    {(prompt) => (
-                      <button
-                        type="button"
-                        onClick={() => handleContextBriefingPrompt(prompt)}
-                        class="max-w-full rounded border border-border bg-surface px-2 py-1 text-left text-[11px] font-medium text-base-content transition-colors hover:bg-surface-alt focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        {prompt}
-                      </button>
-                    )}
-                  </For>
-                </div>
-              </Show>
-              <Show when={contextBriefing()!.actionLabel || contextBriefing()!.commandSummary}>
-                <div class="mt-2 rounded border border-border bg-surface-alt px-2.5 py-2 text-[11px] text-muted">
-                  <Show when={contextBriefing()!.actionLabel}>
-                    <Show
-                      when={contextBriefing()!.actionHref}
-                      fallback={
-                        <div class="font-medium text-base-content">
-                          {contextBriefing()!.actionLabel}
-                        </div>
-                      }
-                    >
-                      {(href) => (
-                        <a
-                          href={href()}
-                          class="font-medium text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
-                        >
-                          {contextBriefing()!.actionLabel}
-                        </a>
-                      )}
-                    </Show>
-                  </Show>
-                  <Show when={contextBriefing()!.commandSummary}>
-                    <div>{contextBriefing()!.commandSummary}</div>
-                  </Show>
-                  <Show when={contextBriefing()!.safetyNote}>
-                    <div>{contextBriefing()!.safetyNote}</div>
-                  </Show>
-                </div>
+              <Show when={contextBriefing()!.actionHref && contextBriefing()!.actionLabel}>
+                <a
+                  href={contextBriefing()!.actionHref}
+                  class="mt-2 inline-flex rounded border border-border bg-surface px-2 py-1 text-[11px] font-medium text-base-content hover:bg-surface-alt"
+                >
+                  {contextBriefing()!.actionLabel}
+                </a>
               </Show>
             </section>
           </Show>

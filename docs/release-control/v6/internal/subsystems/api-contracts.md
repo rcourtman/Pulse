@@ -1143,9 +1143,10 @@ the canonical monitored-system blocked payload.
    `PatrolIntelligenceHeader` shell on the Patrol API surface reads
    the title, description, and title tooltip from
    `getPatrolPageHeaderMeta()` rather than carrying inline copy, so the
-   operator-facing framing of what Patrol does (proactive
-   investigation, evidence capture, governed action) stays tied to the
-   contract instead of drifting between hover and inline.
+   operator-facing framing of what Patrol owns (scheduled probing,
+   context assembly for the configured model, and approval-bound action)
+   stays tied to the contract instead of drifting between hover and
+   inline.
    The Patrol page must not introduce header or workspace trust strips over
    this payload. High-signal trust facts from
    `state.patrolStatus()?.trust` (the `FindingsTrustSummary` block already
@@ -3828,13 +3829,15 @@ approval list payloads only as safe metadata for that visible briefing and any
 Patrol approval-row Assistant prompts must use the same safe metadata boundary
 and set `autonomousMode:false` for the request-local chat handoff; they must not
 paste raw approval or proposed-fix command text into the authored chat prompt.
-Patrol remediation-plan Assistant prompts must also pass only safe plan metadata,
-step labels, risk/status, and command counts; raw plan command and rollback
-command payloads remain owned by the governed remediation/action APIs and panels.
-Frontend Assistant briefing suggested prompts for those finding and plan
-handoffs must stay bounded to safe operator questions about evidence,
+Patrol remediation-plan or action-artifact Assistant prompts must pass only safe
+status, risk, description, and command-count posture as non-authoritative context
+for the configured LLM to critique; raw plan command and rollback command
+payloads remain owned by the governed remediation/action APIs and panels. The
+frontend Assistant drawer must not turn those artifacts into visible Patrol step
+lists, suggested-prompt chips, or a "plan attached" answer. Evidence,
 confidence, approval risk, prerequisites, recurrence, rollback, and verification
-rather than becoming another place to serialize executable action details.
+belong in model-only context or governed approval surfaces unless the operator
+explicitly asks the LLM for them.
 Patrol run-history serialization and persistence must also preserve full field
 parity across API responses and restart boundaries, including
 `pmg_checked`, `rejected_findings`, `triage_flags`, `triage_skipped_llm`, and

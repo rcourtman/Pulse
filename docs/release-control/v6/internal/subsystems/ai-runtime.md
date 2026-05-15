@@ -92,10 +92,12 @@ runtime cost control, and shared AI transport surfaces.
    and meaningful badge text rather than icon title duplication. Scoped
    approval handoffs sourced from Patrol, active alerts, or alert incident
    timelines must render as source-named investigation handoffs in the drawer
-   instead of generic dashboard briefs. Source-owned handoff helpers may attach
-   bounded suggested prompts to that briefing, but those prompts are only input
-   starters; they must not auto-submit, bypass approval mode, or carry raw
-   command payloads. Patrol assessment handoffs must use the same
+   instead of generic dashboard briefs. Source-owned handoff helpers may retain
+   bounded prompt and action metadata for model/request context, but the drawer
+   presentation must stay compact: source, status, one primary subject, and an
+   optional safe route link. It must not render Patrol-authored remediation
+   steps, evidence chips, command summaries, or suggested-prompt chips as the
+   answer. Patrol assessment handoffs must use the same
    `patrol-assessment` target identity for live opens and restored sessions
    rather than inheriting retired dashboard context. While such a handoff is
    attached, the Assistant empty
@@ -484,12 +486,16 @@ runtime cost control, and shared AI transport surfaces.
     does not yet carry the latest approval ID. Those references are review
     context only: they must not include raw command text, must not grant
     approval or execution authority, and must route any operator decision back
-    through the governed approval/remediation flow. The operator briefing's
-    decision and action-posture text must derive from those same structured
-    action references after live-approval recovery, including safe current
-    status, request/expiry timestamps, approval policy, action plan identity,
-    plan expiry, and dry-run posture, so Assistant does not tell the operator
-    that no governed action is ready while a recovered approval is present.
+    through the governed approval/remediation flow. Patrol provides the
+    configured LLM with observed finding context, evidence, policy posture, and
+    governed action state; the LLM owns diagnosis and remediation reasoning.
+    Operator-visible handoffs must not describe Patrol as having already
+    authored the correct remediation. The operator briefing's decision and
+    action-posture text must derive from those same structured action
+    references after live-approval recovery, including safe current status,
+    request/expiry timestamps, approval policy, action plan identity, plan
+    expiry, and dry-run posture, so Assistant does not tell the operator that no
+    governed action is ready while a recovered approval is present.
     When those references include an approval ID, Assistant runtime may refresh
     a current status snapshot from the canonical approval store on each turn,
     but it must enforce org scoping and still omit the approval command payload.
@@ -586,11 +592,10 @@ runtime cost control, and shared AI transport surfaces.
     Safe route-owned briefing actions may render as app links when the handoff
     includes an `actionHref`, but those links are navigation guidance only and
     do not grant tool execution or approval authority.
-    When the drawer renders a request-local approval-required banner for a
-    scoped handoff, the banner must derive its subject from the attached
-    briefing or structured finding context, so Patrol approval/finding handoffs
-    and alert-investigation handoffs are named by their source rather than as
-    generic dashboard briefs.
+    Request-local approval-required scoped handoffs must present that boundary
+    through compact source-named drawer state and the effective control label,
+    so Patrol approval/finding handoffs and alert-investigation handoffs are
+    named by their source rather than as generic dashboard briefs.
 
 ## Current State
 

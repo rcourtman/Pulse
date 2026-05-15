@@ -125,9 +125,9 @@ describe('ApprovalSection', () => {
     expect(openWithPromptMock).toHaveBeenCalledTimes(1);
     const [prompt, context] = openWithPromptMock.mock.calls[0];
     expect(prompt).toContain(
-      "I'd like to discuss this Patrol finding: \"CPU saturation\" on node-1",
+      'I\'d like to discuss this Patrol finding: "CPU saturation" on node-1',
     );
-    expect(prompt).toContain('Start by reviewing the governed proposed fix or action posture');
+    expect(prompt).toContain('Start by reviewing the governed action posture');
     expect(prompt).toContain('Recover or regenerate the governed approval before execution');
     expect(context).toEqual(
       expect.objectContaining({
@@ -305,8 +305,8 @@ describe('ApprovalSection', () => {
 
     expect(openWithPromptMock).toHaveBeenCalledTimes(1);
     const [prompt, context] = openWithPromptMock.mock.calls[0];
-    expect(prompt).toContain('Start by reviewing the governed proposed fix or action posture');
-    expect(prompt).toContain('proposed fix Restart the workload service');
+    expect(prompt).toContain('Start by reviewing the governed action posture');
+    expect(prompt).toContain('recorded action artifact Restart the workload service');
     expect(prompt).toContain('target node-1');
     expect(prompt).toContain('high risk');
     expect(prompt).not.toContain('systemctl restart nginx');
@@ -323,9 +323,7 @@ describe('ApprovalSection', () => {
           detailLines: expect.arrayContaining([
             expect.stringContaining('fix queued for governed review'),
             expect.stringContaining('Proposed fix: Restart the workload service'),
-            expect.stringContaining(
-              'Recover or regenerate the governed approval before execution',
-            ),
+            expect.stringContaining('Recover or regenerate the governed approval before execution'),
           ]),
           actionLabel: 'Restart the workload service',
           commandSummary: '1 command recorded for approval context',

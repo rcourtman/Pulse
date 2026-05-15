@@ -208,7 +208,10 @@ beforeEach(() => {
   mockState.approveRemediationPlan.mockClear();
   if (typeof window.requestAnimationFrame !== 'function') {
     window.requestAnimationFrame = ((callback: FrameRequestCallback) =>
-      window.setTimeout(() => callback(performance.now()), 0)) as typeof window.requestAnimationFrame;
+      window.setTimeout(
+        () => callback(performance.now()),
+        0,
+      )) as typeof window.requestAnimationFrame;
   }
 });
 
@@ -243,12 +246,12 @@ describe('FindingsPanel capacity-forecast approval card', () => {
     expect(within(card).getAllByText(/93\.5%/).length).toBeGreaterThanOrEqual(1);
     expect(within(card).getByText(/threshold 75%/)).toBeInTheDocument();
     expect(within(card).getByText(/breach in/i)).toBeInTheDocument();
-    // The generic "Open In Assistant" affordance must NOT appear when the
+    // The generic "Ask Assistant" affordance must NOT appear when the
     // forecast variant is active - the generic card is gated by fallback.
-    expect(screen.queryByText('Open In Assistant')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ask Assistant')).not.toBeInTheDocument();
   });
 
-  it('renders the generic remediation plan card when a capacity finding has no proposal attached', async () => {
+  it('renders compact action review when a capacity finding has no proposal attached', async () => {
     const finding = makeFinding({ id: 'finding-cap-2' });
     mockState.findings = [finding];
     mockState.remediationPlans = [makePlan(finding.id, false)];
@@ -260,7 +263,9 @@ describe('FindingsPanel capacity-forecast approval card', () => {
     fireEvent.click(screen.getByText('Storage pool tank at 87.3% usage'));
 
     expect(screen.queryByTestId('capacity-forecast-approval-card')).not.toBeInTheDocument();
-    expect(screen.getByText('Open In Assistant')).toBeInTheDocument();
+    expect(screen.getByText('Action review')).toBeInTheDocument();
+    expect(screen.getByText('Ask Assistant')).toBeInTheDocument();
+    expect(screen.queryByText('Remediation Plan')).not.toBeInTheDocument();
   });
 
   it('never renders the capacity-forecast card for a non-capacity finding even if a proposal somehow attaches', async () => {
@@ -283,7 +288,8 @@ describe('FindingsPanel capacity-forecast approval card', () => {
     fireEvent.click(screen.getByText('High CPU on appserver: 92.0%'));
 
     expect(screen.queryByTestId('capacity-forecast-approval-card')).not.toBeInTheDocument();
-    expect(screen.getByText('Open In Assistant')).toBeInTheDocument();
+    expect(screen.getByText('Action review')).toBeInTheDocument();
+    expect(screen.getByText('Ask Assistant')).toBeInTheDocument();
   });
 
   it('routes Approve through AIAPI.approveRemediationPlan and Reject through dismiss without bypassing handlers', async () => {
@@ -299,6 +305,8 @@ describe('FindingsPanel capacity-forecast approval card', () => {
 
     fireEvent.click(screen.getByTestId('capacity-forecast-approve'));
 
-    await waitFor(() => expect(mockState.approveRemediationPlan).toHaveBeenCalledWith('plan-finding-cap-3'));
+    await waitFor(() =>
+      expect(mockState.approveRemediationPlan).toHaveBeenCalledWith('plan-finding-cap-3'),
+    );
   });
 });

@@ -462,10 +462,7 @@ export function buildPatrolInvestigationRecordPresentation(
       .map(normalizeText)
       .filter(Boolean)
       .slice(0, 3),
-    rollbackSummaries: (record.rollback || [])
-      .map(normalizeText)
-      .filter(Boolean)
-      .slice(0, 3),
+    rollbackSummaries: (record.rollback || []).map(normalizeText).filter(Boolean).slice(0, 3),
     toolsUsed: (record.tools_used || []).map(formatToolLabel).filter(Boolean).slice(0, 4),
     proposedFix:
       proposedFix && proposedFix.description
@@ -643,7 +640,7 @@ function buildPatrolAssistantFindingActionPromptInstruction(
 
   const contextParts = [
     proposedFix?.description
-      ? `proposed fix ${truncateContextText(proposedFix.description, 120)}`
+      ? `recorded action artifact ${truncateContextText(proposedFix.description, 120)}`
       : undefined,
     proposedFix?.riskLabel ? `${proposedFix.riskLabel.toLowerCase()} risk` : undefined,
     proposedFix?.targetHost
@@ -655,7 +652,7 @@ function buildPatrolAssistantFindingActionPromptInstruction(
     outcome ? `outcome ${formatIdentifierLabel(outcome)?.toLowerCase() || outcome}` : undefined,
   ].filter(isNonEmptyString);
 
-  return `Start by reviewing the governed proposed fix or action posture${
+  return `Start by reviewing the governed action posture${
     contextParts.length > 0 ? ` (${contextParts.join('; ')})` : ''
   }. Use the attached Patrol context to explain risk, prerequisites, and the safest next step without repeating command text.`;
 }
@@ -2110,9 +2107,7 @@ function formatAssessmentRecentChangeContextLine(change: ResourceChange, index: 
   return `Recent Change ${index}: ${parts.join('; ')}`;
 }
 
-function formatAssessmentRecentChangeRelatedResources(
-  change: ResourceChange,
-): string | undefined {
+function formatAssessmentRecentChangeRelatedResources(change: ResourceChange): string | undefined {
   const labels: string[] = [];
   for (const relatedResource of change.relatedResources ?? []) {
     const label = truncateContextText(
@@ -2476,43 +2471,37 @@ export function buildPatrolRemediationPlanAssistantPrompt(
 ): string {
   const title = normalizeText(input.title) || 'Patrol finding';
   const subject = normalizeText(input.subject) || 'the affected resource';
+
+  return `Review this Patrol finding and decide the safest next step: "${title}" on ${subject}.`;
+}
+
+export function buildPatrolRemediationPlanAssistantModelContext(
+  input: PatrolRemediationPlanAssistantInput,
+): string {
+  const title = normalizeText(input.title) || 'Patrol finding';
+  const subject = normalizeText(input.subject) || 'the affected resource';
   const plan = input.plan;
   const planTitle = normalizeText(plan.title);
   const planDescription = normalizeText(plan.description);
   const riskLabel = formatIdentifierLabel(plan.risk_level)?.toLowerCase();
   const statusLabel = formatIdentifierLabel(plan.status)?.toLowerCase();
-
-  let prompt =
-    'Pulse Patrol generated a governed remediation plan for a finding. Review it from the attached plan context before suggesting next actions.\n\n';
-  prompt += `**Finding:** ${title} on ${subject}\n`;
-  if (planTitle) prompt += `**Plan:** ${planTitle}\n`;
-  if (statusLabel) prompt += `**Plan status:** ${statusLabel}\n`;
-  if (riskLabel) prompt += `**Risk level:** ${riskLabel}\n`;
-  if (planDescription) prompt += `\n**Plan context:** ${planDescription}\n`;
-
-  const steps = Array.isArray(plan.steps) ? plan.steps : [];
-  if (steps.length > 0) {
-    prompt += '\n**Steps:**\n';
-    for (const step of steps) {
-      const action = normalizeText(step.action) || `Step ${step.order}`;
-      const qualifiers = [
-        formatIdentifierLabel(step.risk_level)?.toLowerCase()
-          ? `${formatIdentifierLabel(step.risk_level)?.toLowerCase()} risk`
-          : undefined,
-        step.command ? 'command recorded in governed plan' : undefined,
-        step.rollback_command ? 'rollback command recorded in governed plan' : undefined,
-      ].filter(isNonEmptyString);
-      prompt += `${step.order}. ${action}${qualifiers.length > 0 ? ` (${qualifiers.join('; ')})` : ''}\n`;
-    }
-  }
-
   const commandSummary = formatPlanCommandSummary(plan);
-  if (commandSummary) {
-    prompt += `\n**Governed action details:** ${commandSummary}.\n`;
-  }
-  prompt +=
-    '\nCommand details stay in the remediation or approval surface. Do not infer, repeat, or execute raw command text from this chat handoff. If any step is risky or ambiguous, ask before proceeding.';
-  return prompt;
+
+  return [
+    '[Patrol Finding Action Context]',
+    'Pulse is attaching observed finding context and any existing governed action artifact. The selected language model should decide whether remediation is appropriate and propose the safest next step.',
+    formatContextLine('Finding', `${title} on ${subject}`),
+    formatContextLine('Existing Action Artifact', planTitle),
+    formatContextLine('Artifact Status', statusLabel),
+    formatContextLine('Recorded Risk', riskLabel),
+    formatContextLine('Attached Action Context', planDescription),
+    commandSummary
+      ? `Governed Action Posture: ${commandSummary}. Treat this as approval state, not remediation guidance.`
+      : undefined,
+    'Operator Boundary: Do not assume any Patrol-authored action is correct. Use the finding evidence, available tools, and current operational state to decide the remediation. Any state-changing command must go through governed approval; do not infer, repeat, or execute raw command text from this chat handoff.',
+  ]
+    .filter(isNonEmptyString)
+    .join('\n');
 }
 
 export function buildPatrolRemediationPlanAssistantBriefing(
@@ -2521,7 +2510,6 @@ export function buildPatrolRemediationPlanAssistantBriefing(
   const title = normalizeText(input.title) || 'Patrol finding';
   const subject = normalizeText(input.subject) || 'affected resource';
   const plan = input.plan;
-  const steps = Array.isArray(plan.steps) ? plan.steps : [];
   const statusParts = [
     formatIdentifierLabel(plan.status),
     formatIdentifierLabel(plan.risk_level)
@@ -2531,33 +2519,20 @@ export function buildPatrolRemediationPlanAssistantBriefing(
   const planTitle = normalizeText(plan.title);
   const planDescription = normalizeText(plan.description);
   const commandSummary = formatPlanCommandSummary(plan);
-  const stepSummaries = steps
-    .map((step) => {
-      const action = normalizeText(step.action);
-      if (!action) return undefined;
-      const risk = formatIdentifierLabel(step.risk_level);
-      return risk ? `${action} (${risk} risk)` : action;
-    })
-    .filter(isNonEmptyString)
-    .slice(0, 4);
 
   return {
     sourceLabel: 'Pulse Patrol',
-    title: 'Remediation plan attached',
+    title: 'Patrol finding attached',
     subject: `${title} on ${subject}`,
     statusLabel: statusParts.join(' · ') || undefined,
     detailLines: [
-      planTitle ? `Plan: ${planTitle}` : undefined,
+      planTitle ? `Existing action artifact: ${planTitle}` : undefined,
       planDescription,
-      steps.length > 0 ? `${steps.length} planned step${steps.length === 1 ? '' : 's'}` : undefined,
     ].filter(isNonEmptyString),
-    evidence: stepSummaries,
-    actionLabel: planTitle || undefined,
     commandSummary,
     safetyNote: commandSummary
-      ? 'Command details stay in governed remediation context; execution requires the approval flow.'
-      : 'Review the governed remediation context before execution.',
-    suggestedPrompts: buildPatrolRemediationPlanSuggestedPrompts(plan, steps, commandSummary),
+      ? 'Assistant should decide remediation from evidence; command execution requires governed approval.'
+      : 'Assistant should decide remediation from evidence before any governed action.',
   };
 }
 
@@ -2627,32 +2602,6 @@ export function buildPatrolAssistantFindingBriefing(
       proposedFix,
     ),
   };
-}
-
-function buildPatrolRemediationPlanSuggestedPrompts(
-  plan: RemediationPlan,
-  steps: RemediationPlan['steps'],
-  commandSummary?: string,
-): string[] {
-  const prompts = ['Review plan risk and prerequisites'];
-  const hasSteps = Array.isArray(steps) && steps.length > 0;
-  const riskLevel = normalizeText(plan.risk_level).toLowerCase();
-
-  if (commandSummary) {
-    prompts.push('Explain commands without command text');
-  }
-
-  if (hasSteps) {
-    prompts.push('Check rollback and verification steps');
-  } else {
-    prompts.push('Identify missing plan details');
-  }
-
-  if (!commandSummary && (riskLevel === 'high' || riskLevel === 'critical')) {
-    prompts.push('Check rollback and failure handling');
-  }
-
-  return formatPatrolSuggestedPrompts(prompts);
 }
 
 function buildPatrolFindingSuggestedPrompts(
@@ -2841,9 +2790,9 @@ function buildPatrolAssistantOperatorDecision(
       if (record.proposed_fix) {
         const fixId = normalizeText(record.proposed_fix.id);
         if (fixId) {
-          parts.push(`proposed fix ${fixId}`);
+          parts.push(`action artifact ${fixId}`);
         } else if (normalizeText(record.proposed_fix.description)) {
-          parts.push('proposed fix recorded');
+          parts.push('action artifact recorded');
         }
         const risk = pendingApproval.riskLevel || normalizeText(record.proposed_fix.risk_level);
         if (risk) {
@@ -2858,7 +2807,7 @@ function buildPatrolAssistantOperatorDecision(
 
     switch (normalizeText(record.outcome)) {
       case 'fix_queued':
-        return 'Review the proposed fix in the governed approval or remediation flow before execution.';
+        return 'Review the recorded action posture in the governed approval or remediation flow before execution.';
       case 'fix_executed':
         return 'Verify the execution result before closing or resolving the finding.';
       case 'fix_failed':

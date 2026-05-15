@@ -360,14 +360,11 @@ describe('AIChat', () => {
       expect(screen.getByLabelText('Assistant context')).toBeInTheDocument();
       expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
       expect(screen.getByText('High CPU usage on web-server')).toBeInTheDocument();
-      expect(screen.getByText('Backup job saturated CPU.')).toBeInTheDocument();
-      expect(screen.getByText('1 command recorded for approval context')).toBeInTheDocument();
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Explain recent changes and correlations' }),
-      );
-      expect(screen.getByPlaceholderText('Ask about your infrastructure...')).toHaveValue(
-        'Explain recent changes and correlations',
-      );
+      expect(screen.queryByText('Backup job saturated CPU.')).not.toBeInTheDocument();
+      expect(screen.queryByText('1 command recorded for approval context')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Explain recent changes and correlations' }),
+      ).not.toBeInTheDocument();
       expect(screen.queryByText('systemctl restart workload.service')).not.toBeInTheDocument();
     });
 
@@ -386,9 +383,89 @@ describe('AIChat', () => {
 
       renderChat();
 
+      expect(screen.getByRole('link', { name: 'Open Patrol provider settings' })).toHaveAttribute(
+        'href',
+        '/settings/system-ai',
+      );
+    });
+
+    it('keeps Patrol action-artifact briefings compact in the sidebar', () => {
+      mockAiChatStore.context = {
+        initialPrompt: undefined,
+        autonomousMode: false,
+        briefing: {
+          sourceLabel: 'Pulse Patrol',
+          title: 'Patrol finding attached',
+          subject: 'Backup failed on delly (backup)',
+          statusLabel: 'Pending · Medium risk',
+          detailLines: ['Existing action artifact: Fix: Backup failed'],
+          evidence: [
+            'Review backup job logs for error details',
+            'Check backup storage connectivity and space',
+          ],
+          commandSummary: '4 commands recorded for governed plan review',
+          safetyNote:
+            'Assistant should decide remediation from evidence; command execution requires governed approval.',
+        },
+      };
+
+      renderChat();
+
+      expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
+      expect(screen.getByText('Pending · Medium risk')).toBeInTheDocument();
+      expect(screen.getByText('Backup failed on delly (backup)')).toBeInTheDocument();
+      expect(screen.getByText('Approval required before any action.')).toBeInTheDocument();
       expect(
-        screen.getByRole('link', { name: 'Open Patrol provider settings' }),
-      ).toHaveAttribute('href', '/settings/system-ai');
+        screen.queryByText('Existing action artifact: Fix: Backup failed'),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText('4 planned steps')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('Review backup job logs for error details'),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Fix: Backup failed' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('4 commands recorded for governed plan review'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('does not expose legacy Patrol remediation-plan briefing internals', () => {
+      mockAiChatStore.context = {
+        initialPrompt: undefined,
+        autonomousMode: false,
+        briefing: {
+          sourceLabel: 'Pulse Patrol',
+          title: 'Remediation plan attached',
+          subject: 'Backup failed on delly (backup)',
+          statusLabel: 'Pending · Medium risk',
+          detailLines: ['Plan: Fix: Backup failed', '4 planned steps'],
+          evidence: ['Review backup job logs for error details'],
+          actionLabel: 'Fix: Backup failed',
+          commandSummary: '4 commands recorded for approval context',
+          safetyNote: 'Command details stay in governed remediation context.',
+          suggestedPrompts: [
+            'Review plan risk and prerequisites',
+            'Check rollback and verification steps',
+          ],
+        },
+      };
+
+      renderChat();
+
+      expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
+      expect(screen.getByText('Pending · Medium risk')).toBeInTheDocument();
+      expect(screen.getByText('Backup failed on delly (backup)')).toBeInTheDocument();
+      expect(screen.getByText('Approval required before any action.')).toBeInTheDocument();
+      expect(screen.queryByText('Plan: Fix: Backup failed')).not.toBeInTheDocument();
+      expect(screen.queryByText('4 planned steps')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('Review backup job logs for error details'),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Review plan risk and prerequisites' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('4 commands recorded for approval context'),
+      ).not.toBeInTheDocument();
     });
 
     it('uses Patrol briefing context instead of generic empty-state suggestions', () => {
@@ -410,8 +487,8 @@ describe('AIChat', () => {
 
       expect(screen.getByText('Review Pulse Patrol context')).toBeInTheDocument();
       expect(
-        screen.getByRole('button', { name: 'Explain why coverage is incomplete' }),
-      ).toBeInTheDocument();
+        screen.queryByRole('button', { name: 'Explain why coverage is incomplete' }),
+      ).not.toBeInTheDocument();
       expect(
         screen.queryByRole('button', { name: 'Summarize cluster health' }),
       ).not.toBeInTheDocument();
@@ -1656,8 +1733,11 @@ describe('AIChat', () => {
       renderChat();
 
       await waitFor(() => {
-        expect(screen.getByText(/Approval required for this dashboard brief/)).toBeInTheDocument();
+        expect(screen.getByText('Approval')).toBeInTheDocument();
       });
+      expect(
+        screen.queryByText(/Approval required for this dashboard brief/),
+      ).not.toBeInTheDocument();
       expect(screen.queryByText('Commands execute without approval.')).not.toBeInTheDocument();
 
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
@@ -1672,7 +1752,7 @@ describe('AIChat', () => {
       );
     });
 
-    it('names scoped Patrol handoffs in the approval banner', async () => {
+    it('shows scoped Patrol handoffs as approval-bound without a banner', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'gpt-4',
         chat_model: '',
@@ -1693,14 +1773,18 @@ describe('AIChat', () => {
       renderChat();
 
       await waitFor(() => {
-        expect(screen.getByText(/Approval required for this Patrol handoff/)).toBeInTheDocument();
+        expect(screen.getByText('Approval')).toBeInTheDocument();
       });
+      expect(screen.getByText('Approval required before any action.')).toBeInTheDocument();
+      expect(
+        screen.queryByText(/Approval required for this Patrol handoff/),
+      ).not.toBeInTheDocument();
       expect(
         screen.queryByText(/Approval required for this dashboard brief/),
       ).not.toBeInTheDocument();
     });
 
-    it('names scoped alert handoffs in the approval banner', async () => {
+    it('shows scoped alert handoffs as approval-bound without a banner', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'gpt-4',
         chat_model: '',
@@ -1723,10 +1807,12 @@ describe('AIChat', () => {
       renderChat();
 
       await waitFor(() => {
-        expect(
-          screen.getByText(/Approval required for this alert investigation/),
-        ).toBeInTheDocument();
+        expect(screen.getByText('Approval')).toBeInTheDocument();
       });
+      expect(screen.getByText('Approval required before any action.')).toBeInTheDocument();
+      expect(
+        screen.queryByText(/Approval required for this alert investigation/),
+      ).not.toBeInTheDocument();
       expect(
         screen.queryByText(/Approval required for this dashboard brief/),
       ).not.toBeInTheDocument();

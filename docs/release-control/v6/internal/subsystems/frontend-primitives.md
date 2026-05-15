@@ -1074,15 +1074,13 @@ prompt explain the same operator-facing priority.
     The
     drawer may render a generic
     context-briefing band from `frontend-modern/src/stores/aiChat.ts`, but
-    feature-owned helpers must provide the source labels, attention reason,
-    evidence summaries, operator-decision copy, action copy, safety note, and
-    any bounded suggested prompts. Suggested prompts may fill the drawer input
-    for the operator, but they must not submit automatically or change the
-    request-local approval-required mode. Patrol finding and remediation-plan
-    suggested prompts must be derived from safe briefing metadata such as
-    evidence, confidence, approval risk, prerequisites, recurrence, rollback,
-    and verification posture; they must not become another primitive path for
-    raw approval, command, or rollback command payload text. Missing-detail
+    feature-owned helpers must provide compact source labels, primary subject,
+    status, and any safe route action while keeping attention reason, evidence
+    summaries, operator-decision copy, safety notes, and prompt suggestions in
+    model-only or governed action context unless the operator asks for them.
+    Patrol finding and action-artifact handoffs must not render suggested prompt
+    chips in the drawer and must not become another primitive path for raw
+    approval, command, or rollback command payload text. Missing-detail
     queued-fix recovery actions must still provide the feature-owned Patrol
     briefing and request-local approval-required posture rather than opening the
     shared drawer as context-free generic Assistant chat. If a feature-owned
@@ -1102,12 +1100,12 @@ prompt explain the same operator-facing priority.
     counts when available; raw approval commands remain owned by the governed
     approval/remediation panels. If the generic finding-level helper hydrates
     latest investigation detail to recover proposed-fix context, it may pass only
-    safe summary fields and command counts into the drawer briefing. The shared
-    approval-required drawer banner must derive its subject from that briefing or
-    structured finding context, so
-    Patrol handoffs render as Patrol handoffs or Patrol findings, and alert
-    handoffs render as alert investigations, rather than generic dashboard
-    briefs. Patrol approval-row Assistant prompts must route through the same
+    safe summary fields and command counts into the drawer briefing. Shared
+    approval-required posture must derive its subject from that briefing or
+    structured finding context, so Patrol handoffs render as Patrol handoffs or
+    Patrol findings, and alert handoffs render as alert investigations, rather
+    than generic dashboard briefs. Patrol approval-row Assistant prompts must
+    route through the same
     feature-owned finding handoff helper rather than hand-written prompt-only
     drawer opens: safe approval metadata, proposed-fix summaries, resource
     references, and bounded `handoff_actions` may enter the prompt and context,
@@ -1339,8 +1337,8 @@ The Patrol page header copy lives in a single canonical helper at
 tooltip on `PatrolIntelligenceHeader.tsx` must read from
 `PATROL_PAGE_TITLE_TOOLTIP` exported alongside the description rather
 than carrying an inline copy, so hover and inline never drift apart on
-what Patrol actually does (proactive investigation, evidence capture,
-governed action under operator approval).
+what Patrol actually owns: scheduled probing, context assembly for the
+configured model, and approval-bound action.
 The same `PatrolIntelligenceHeader.tsx` shell also renders a compact
 trust-at-a-glance summary directly under the page title (a
 render-only consumer of `state.patrolStatus()?.trust`), gated on at
@@ -1369,15 +1367,18 @@ that mention the Infrastructure settings destination now consume
 `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` for the
 canonical `Settings → Infrastructure` label and source-strategy copy. Shared
 primitives must not fork that string or revive removed nested route labels.
-The shared Assistant drawer owns source-named approval banners for governed
-handoffs. Patrol handoffs render as Patrol, and alert plus alert incident
-timeline handoffs render as alert investigations rather than dashboard briefs.
-Those same drawer handoffs may carry model-only chat context and resource
-references to the backend, but the drawer remains a presentation and transport
-owner rather than the source of approval or execution truth. If a feature-owned
-briefing includes a safe route-owned `actionHref`, the drawer may render the
-briefing action label as a normal app link; that link is navigation guidance
-only and must not become approval or execution authority.
+The shared Assistant drawer owns compact source-named approval posture for
+governed handoffs. Patrol handoffs render as Patrol, and alert plus alert
+incident timeline handoffs render as alert investigations rather than dashboard
+briefs. Those same drawer handoffs may carry model-only chat context and
+resource references to the backend, but the drawer remains a presentation and
+transport owner rather than the source of approval or execution truth. Patrol
+briefings must stay simple: source, status, one primary subject, and an optional
+safe route link. They must not render remediation step lists, evidence chips,
+command summaries, or suggested-prompt chips as drawer chrome. If a
+feature-owned briefing includes a safe route-owned `actionHref`, the drawer may
+render the briefing action label as a normal app link; that link is navigation
+guidance only and must not become approval or execution authority.
 
 `SettingsTab` no longer includes `infrastructure-connections` or
 `infrastructure-install`. The single `infrastructure-systems` entry in
