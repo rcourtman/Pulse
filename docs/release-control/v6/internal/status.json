@@ -2791,6 +2791,17 @@
           ]
         },
         {
+          "id": "patrol-model-owned-probe-runtime-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/ai",
+            "-run",
+            "TestRunAIAnalysis_TriageQuietStillCallsLLM|TestRunEvaluationPass",
+            "-count=1"
+          ]
+        },
+        {
           "id": "patrol-model-owned-remediation-runtime-tests",
           "run": [
             "go",
@@ -2798,6 +2809,15 @@
             "./internal/ai",
             "-run",
             "TestPatrolService_RecordFindingDoesNotGenerateTemplateRemediationPlan|TestShouldResolveAlert|TestReviewAndResolveAlerts"
+          ]
+        },
+        {
+          "id": "patrol-unified-finding-no-auto-remediation-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/ai/unified",
+            "-count=1"
           ]
         }
       ],
@@ -2904,12 +2924,32 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/ai/patrol_ai.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/ai/patrol_findings.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
           "path": "internal/ai/patrol_run.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol_triage_integration_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/unified/integration.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/unified/integration_test.go",
           "kind": "file"
         }
       ]
@@ -2950,6 +2990,28 @@
             "--run",
             "src/components/AI/Chat/__tests__/useChat.test.ts"
           ]
+        },
+        {
+          "id": "assistant-no-automatic-tool-retry-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/ai/chat",
+            "-run",
+            "TestAgenticLoop_DoesNotAutoRecoverStructuredToolCall|TestEnsureFinalTextResponse|TestCommandExtraction",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "assistant-tool-policy-facts-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/ai/tools",
+            "-run",
+            "TestExecuteReadLogs|TestRoutingMismatch|TestWriteExecutionContext|TestExecutionIntent|TestReadExec|TestStrictResolution",
+            "-count=1"
+          ]
         }
       ],
       "evidence": [
@@ -2980,6 +3042,16 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/ai/chat/agentic_additional_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/chat/agentic_final.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/ai/chat/service.go",
           "kind": "file"
         },
@@ -2991,6 +3063,26 @@
         {
           "repo": "pulse",
           "path": "internal/ai/chat/service_tooling_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/tools/tools_file.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/tools/tools_query.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/tools/tools_read.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/tools/tools_read_test.go",
           "kind": "file"
         }
       ]

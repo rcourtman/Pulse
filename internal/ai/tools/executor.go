@@ -597,9 +597,9 @@ type PulseToolExecutor struct {
 type TelemetryCallback interface {
 	// RecordStrictResolutionBlock records when strict resolution blocks an action
 	RecordStrictResolutionBlock(tool, action string)
-	// RecordAutoRecoveryAttempt records an auto-recovery attempt
+	// RecordAutoRecoveryAttempt records when a model receives a recoverable policy block.
 	RecordAutoRecoveryAttempt(errorCode, tool string)
-	// RecordAutoRecoverySuccess records a successful auto-recovery
+	// RecordAutoRecoverySuccess records model-owned follow-up success after a policy block.
 	RecordAutoRecoverySuccess(errorCode, tool string)
 	// RecordRoutingMismatchBlock records when routing validation blocks an operation
 	// that targeted a parent host when a child resource was recently referenced.

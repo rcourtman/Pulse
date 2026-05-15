@@ -257,13 +257,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 	var resultMessages []Message
 	turn := 0
-	toolsSucceededThisEpisode := false // Track if any tool executed successfully this episode
-	writeCompletedLastTurn := false    // When true, force text-only response on next turn
-	toolBlockedLastTurn := false       // When true, force text-only response after budget/loop block
-
-	// Fresh-data intent: if the user's latest message indicates they want
-	// fresh/updated data, bypass the knowledge gate so tools re-execute.
-	userWantsFresh := detectFreshDataIntent(messages)
+	writeCompletedLastTurn := false // When true, request final text without offering tools
+	toolBlockedLastTurn := false    // When true, request final text after budget/loop block
 
 	// Loop detection: track identical tool calls (name + serialized input).
 	// After maxIdenticalCalls identical invocations, the next one is blocked.
@@ -334,39 +329,38 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			ExecutionID: a.executionID,
 		}
 
-		// Tool selection is model-owned. Pulse exposes the governed tool manifest
-		// and only applies text-only brakes for loop/budget/FSM safety.
+		// Tool selection is model-owned. Pulse normally exposes the governed tool
+		// manifest unchanged. When a run must stop for safety or budget reasons,
+		// omit tools entirely rather than sending provider-specific tool_choice.
 		textOnlySafetyBrake := false
 		if turn >= maxTurns-1 {
-			// Last turn before hitting the limit — force a text-only response so
-			// the model summarizes its findings instead of silently stopping.
-			req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceNone}
+			// Last turn before hitting the limit: ask the model to summarize with
+			// the context already gathered.
+			req.Tools = nil
 			textOnlySafetyBrake = true
 			log.Warn().
 				Int("turn", turn).
 				Int("max_turns", maxTurns).
 				Str("session_id", sessionID).
-				Msg("[AgenticLoop] Approaching max turns — forcing text-only response for summary")
+				Msg("[AgenticLoop] Approaching max turns — omitting tools for final response")
 		} else if writeCompletedLastTurn {
 			// A write action completed successfully on the previous turn.
-			// Force text-only response so the model summarizes the result instead of
-			// making more tool calls (which often return stale cached data and cause loops).
-			req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceNone}
+			// Ask for the final response with the execution result already in context.
+			req.Tools = nil
 			textOnlySafetyBrake = true
 			writeCompletedLastTurn = false
 			log.Debug().
 				Str("session_id", sessionID).
-				Msg("[AgenticLoop] Write completed last turn — forcing text-only response")
+				Msg("[AgenticLoop] Write completed last turn — omitting tools for final response")
 		} else if toolBlockedLastTurn {
 			// Tool calls were blocked last turn (budget exceeded or loop detected).
-			// The model already has the data it gathered — force it to produce a text
-			// response instead of continuing to call tools that will just be blocked again.
-			req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceNone}
+			// Ask for a response using the data already gathered.
+			req.Tools = nil
 			textOnlySafetyBrake = true
 			toolBlockedLastTurn = false
 			log.Debug().
 				Str("session_id", sessionID).
-				Msg("[AgenticLoop] Tool calls blocked last turn — forcing text-only response")
+				Msg("[AgenticLoop] Tool calls blocked last turn — omitting tools for final response")
 		}
 
 		// Pre-request context validation: catch overflow from message history growth.
@@ -394,8 +388,12 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				// Re-build request with compacted messages
 				req.Messages = providerMessages
 
-				// Re-estimate after compaction
-				estimatedTokens = EstimateTokens(req.System) + EstimateMessagesTokens(req.Messages) + cachedToolTokens
+				// Re-estimate after compaction.
+				toolTokensForRequest := cachedToolTokens
+				if req.Tools == nil {
+					toolTokensForRequest = 0
+				}
+				estimatedTokens = EstimateTokens(req.System) + EstimateMessagesTokens(req.Messages) + toolTokensForRequest
 				if estimatedTokens > contextLimit {
 					log.Warn().
 						Int("estimated_tokens", estimatedTokens).
@@ -404,7 +402,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						Msg("[AgenticLoop] Still over limit after compaction - dropping tools for this turn")
 
 					req.Tools = nil
-					req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceNone}
 					textOnlySafetyBrake = true
 
 					// Final check: if system + messages alone still exceed limit,
@@ -614,15 +611,14 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			return resultMessages, fmt.Errorf("provider error: %w", err)
 		}
 
-		// Guard: if a safety brake requested text-only but the model still returned tool calls
-		// (some providers like Gemini can hallucinate function calls from conversation
-		// history even when tools are not offered in the request), strip them so the
-		// model's text content is treated as the final response.
+		// Guard: if a safety brake omitted tools but the model still returned tool
+		// calls from conversation history, strip them so the model's text content
+		// is treated as the final response.
 		if textOnlySafetyBrake && len(toolCalls) > 0 {
 			log.Warn().
 				Str("session_id", sessionID).
 				Int("stripped_tool_calls", len(toolCalls)).
-				Msg("[AgenticLoop] Model returned tool calls despite ToolChoiceNone — stripping them")
+				Msg("[AgenticLoop] Model returned tool calls after tools were omitted — stripping them")
 			toolCalls = nil
 		}
 
@@ -740,49 +736,13 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				}
 			}
 
-			// Detect phantom execution: model claims to have done something without tool calls.
-			// IMPORTANT: Skip this check if tools already succeeded this episode - the model is
-			// legitimately summarizing tool results, not hallucinating.
-			log.Debug().
-				Bool("toolsSucceededThisEpisode", toolsSucceededThisEpisode).
-				Bool("hasPhantomExecution", hasPhantomExecution(assistantMsg.Content)).
-				Str("content_preview", truncateForLog(assistantMsg.Content, 200)).
-				Msg("[AgenticLoop] Phantom detection check")
-			if !toolsSucceededThisEpisode && hasPhantomExecution(assistantMsg.Content) {
-				log.Warn().
-					Str("session_id", sessionID).
-					Str("content_preview", truncateForLog(assistantMsg.Content, 200)).
-					Msg("[AgenticLoop] Phantom execution detected - model claims action without tool call")
-
-				// Record telemetry for phantom detection
-				if metrics := GetAIMetrics(); metrics != nil {
-					metrics.RecordPhantomDetected(providerName, modelName)
-				}
-
-				// Replace the response with a safe failure message
-				safeResponse := "I apologize, but I wasn't able to access the infrastructure tools needed to complete that request. This can happen when:\n\n" +
-					"1. The tools aren't available right now\n" +
-					"2. There was a connection issue\n" +
-					"3. The model I'm running on doesn't support function calling\n\n" +
-					"Please try again, or let me know if you have a question I can answer without checking live infrastructure."
-
-				// Update the last result message
-				if len(resultMessages) > 0 {
-					resultMessages[len(resultMessages)-1].Content = safeResponse
-				}
-
-				// Send corrected content to callback
-				jsonData, _ := json.Marshal(ContentData{Text: "\n\n---\n" + safeResponse})
-				callback(StreamEvent{Type: "content", Data: jsonData})
-			}
-
 			log.Debug().Msg("agentic loop complete - no tool calls")
 			resultMessages = a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
 			return resultMessages, nil
 		}
 
 		// === Execute tool calls (three-phase pipeline) ===
-		// Phase 1: Pre-check (sequential) — FSM, loop detection, knowledge gate
+		// Phase 1: Pre-check (sequential) — FSM, loop detection, budget checks
 		// Phase 2: Execute (parallel) — actual tool calls via goroutines
 		// Phase 3: Post-process (sequential) — streaming, FSM transitions, KA extraction
 		firstToolResultText := ""
@@ -1030,7 +990,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					if ok && fsmBlockedErr.Recoverable {
 						// Track pending recovery for success correlation
 						fsm.TrackPendingRecovery("FSM_BLOCKED", tc.Name)
-						// Record auto-recovery attempt (model gets a chance to self-correct)
+						// Record that the model received a recoverable policy block.
 						if metrics := GetAIMetrics(); metrics != nil {
 							metrics.RecordAutoRecoveryAttempt("FSM_BLOCKED", tc.Name)
 						}
@@ -1118,68 +1078,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				continue
 			}
 
-			// === KNOWLEDGE GATE: Return cached facts for redundant tool calls ===
-			// Skip gate on first turn if the user explicitly asked for fresh data.
-			if a.knowledgeAccumulator != nil && !(userWantsFresh && turn == 0) {
-				if keys := PredictFactKeys(tc.Name, tc.Input); len(keys) > 0 {
-					var cachedParts []string
-					for _, key := range keys {
-						if value, found := a.knowledgeAccumulator.Lookup(key); found {
-							cachedParts = append(cachedParts, value)
-						}
-					}
-					if len(cachedParts) > 0 {
-						// Enrich marker-based cache hits with related per-resource facts
-						for _, key := range keys {
-							if prefix, ok := MarkerExpansions[key]; ok {
-								if related := a.knowledgeAccumulator.RelatedFacts(prefix); related != "" {
-									cachedParts = append(cachedParts, related)
-								}
-							}
-						}
-						cachedResult := fmt.Sprintf("Already known (from earlier investigation): %s. If you need fresh data, use a different query or approach.", strings.Join(cachedParts, "; "))
-						anyToolSucceededThisTurn = true
-
-						log.Info().
-							Str("tool", tc.Name).
-							Str("session_id", sessionID).
-							Strs("matched_keys", keys).
-							Int("cached_parts", len(cachedParts)).
-							Msg("[AgenticLoop] Knowledge gate: returning cached fact instead of re-executing tool")
-
-						jsonData, _ := json.Marshal(ToolEndData{
-							ID:      tc.ID,
-							Name:    tc.Name,
-							Input:   "",
-							Output:  cachedResult,
-							Success: true,
-						})
-						callback(StreamEvent{Type: "tool_end", Data: jsonData})
-
-						toolResultMsg := Message{
-							ID:        uuid.New().String(),
-							Role:      "user",
-							Timestamp: time.Now(),
-							ToolResult: &ToolResult{
-								ToolUseID: tc.ID,
-								Content:   cachedResult,
-								IsError:   false,
-							},
-						}
-						resultMessages = append(resultMessages, toolResultMsg)
-						providerMessages = append(providerMessages, providers.Message{
-							Role: "user",
-							ToolResult: &providers.ToolResult{
-								ToolUseID: tc.ID,
-								Content:   cachedResult,
-								IsError:   false,
-							},
-						})
-						continue
-					}
-				}
-			}
-
 			// Tool passed all pre-checks — queue for execution
 			pendingExec = append(pendingExec, pendingToolExec{tc: tc, toolKind: toolKind})
 		}
@@ -1246,12 +1144,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			} else {
 				resultText = FormatToolResult(result)
 				isError = result.IsError
-				if !isError {
-					toolsSucceededThisEpisode = true // Tool executed successfully
-					log.Debug().
-						Str("tool", tc.Name).
-						Msg("[AgenticLoop] Tool succeeded - toolsSucceededThisEpisode set to true")
-				}
 				// Extract and accumulate knowledge facts from both success and structured error responses
 				if a.knowledgeAccumulator != nil {
 					a.knowledgeAccumulator.SetTurn(turn)
@@ -1296,54 +1188,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				log.Debug().
 					Str("tool", tc.Name).
 					Msg("[AgenticLoop] Tracking pending recovery for strict resolution block")
-			}
-
-			// === AUTO-RECOVERY FOR STRUCTURED BLOCKS ===
-			// If a tool returns a blocked response with auto_recoverable=true and a
-			// governed recovery plan, automatically apply that plan and retry once.
-			// Note: err == nil means executor didn't throw, isError means the tool result indicates error/block
-			if err == nil && isError && strings.Contains(resultText, `"auto_recoverable":true`) {
-				// Result is a blocked response (not a hard error)
-				if recoveryPlan, recoveryAttempted := tryAutoRecovery(result, tc, a.executor, ctx); recoveryPlan != nil && !recoveryAttempted {
-					// This is a fresh recoverable block - attempt auto-recovery
-					log.Info().
-						Str("tool", tc.Name).
-						Str("recovery_tool", recoveryPlan.ToolName).
-						Interface("recovery_input", recoveryPlan.Input).
-						Msg("[AgenticLoop] Attempting structured auto-recovery")
-
-					// Record auto-recovery attempt
-					if metrics := GetAIMetrics(); metrics != nil {
-						metrics.RecordAutoRecoveryAttempt(recoveryPlan.ErrorCode, tc.Name)
-					}
-
-					retryResult, retryErr := a.executeToolSafely(ctx, recoveryPlan.ToolName, recoveryPlan.Input)
-					if retryErr != nil {
-						log.Warn().
-							Err(retryErr).
-							Str("tool", tc.Name).
-							Msg("[AgenticLoop] Auto-recovery retry failed with error")
-					} else if !retryResult.IsError {
-						// Recovery succeeded!
-						log.Info().
-							Str("tool", tc.Name).
-							Msg("[AgenticLoop] Auto-recovery succeeded")
-						if metrics := GetAIMetrics(); metrics != nil {
-							metrics.RecordAutoRecoverySuccess(recoveryPlan.ErrorCode, tc.Name)
-						}
-						// Use the successful result
-						result = retryResult
-						resultText = FormatToolResult(result)
-						isError = false
-					} else {
-						log.Warn().
-							Str("tool", tc.Name).
-							Str("retry_error", FormatToolResult(retryResult)).
-							Msg("[AgenticLoop] Auto-recovery retry still blocked")
-						// Keep original error but note the failed recovery attempt
-						resultText = resultText + "\n\n[Auto-recovery attempted but failed. Follow the recovery hint manually.]"
-					}
-				}
 			}
 
 			// Check if this is an approval request
@@ -1524,13 +1368,13 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					Bool("read_after_write", fsm.ReadAfterWrite).
 					Msg("[AgenticLoop] FSM state transition after tool success")
 
-				// Check if this success resolves a pending recovery
+				// Check if this success resolves a pending policy block.
 				if pr := fsm.CheckRecoverySuccess(tc.Name); pr != nil {
 					log.Info().
 						Str("tool", tc.Name).
 						Str("error_code", pr.ErrorCode).
 						Str("recovery_id", pr.RecoveryID).
-						Msg("[AgenticLoop] Auto-recovery succeeded")
+						Msg("[AgenticLoop] model self-correction after policy block succeeded")
 					if metrics := GetAIMetrics(); metrics != nil {
 						metrics.RecordAutoRecoverySuccess(pr.ErrorCode, pr.Tool)
 					}
@@ -1578,7 +1422,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						Int("consecutive_all_error_turns", consecutiveAllErrorTurns).
 						Int("turn", turn).
 						Str("session_id", sessionID).
-						Msg("[AgenticLoop] All tool calls failed for 3 consecutive turns — forcing text-only response")
+						Msg("[AgenticLoop] All tool calls failed for 3 consecutive turns — next turn omits tools")
 				}
 			}
 		}
@@ -1593,7 +1437,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				Int("total_calls", len(toolCalls)).
 				Int("turn", turn).
 				Str("session_id", sessionID).
-				Msg("[AgenticLoop] Tool calls blocked this turn — will force text-only next turn")
+				Msg("[AgenticLoop] Tool calls blocked this turn — next turn omits tools")
 		}
 
 		// Guardrail: in interactive chat mode, force wrap-up after repeated
@@ -1607,7 +1451,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				Int("consecutive_tool_only_turns", consecutiveToolOnlyTurns).
 				Int("turn", turn).
 				Str("session_id", sessionID).
-				Msg("[AgenticLoop] Consecutive tool-only turns exceeded threshold — forcing text-only response")
+				Msg("[AgenticLoop] Consecutive tool-only turns exceeded threshold — next turn omits tools")
 		}
 
 		// Track cumulative tool calls and inject wrap-up nudge/escalation if threshold exceeded

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -167,25 +166,6 @@ func TestComputePatrolMaxTurns(t *testing.T) {
 	}
 	if got := computePatrolMaxTurns(200, quickScope); got != patrolQuickMaxTurns {
 		t.Fatalf("expected quick max turns %d, got %d", patrolQuickMaxTurns, got)
-	}
-}
-
-func TestEnsureInvestigationToolCall_NoOp(t *testing.T) {
-	ps := NewPatrolService(nil, nil)
-	ctx := context.Background()
-
-	var mu sync.Mutex
-	completed := []ToolCallRecord{{ToolName: "pulse_query"}}
-	raw := []string{"existing"}
-
-	ps.ensureInvestigationToolCall(ctx, &tools.PulseToolExecutor{}, &mu, &completed, &raw, true)
-	if len(completed) != 1 || len(raw) != 1 {
-		t.Fatalf("expected no changes when investigation tool already present")
-	}
-
-	ps.ensureInvestigationToolCall(ctx, nil, &mu, &completed, &raw, true)
-	if len(completed) != 1 || len(raw) != 1 {
-		t.Fatalf("expected no changes when executor is nil")
 	}
 }
 

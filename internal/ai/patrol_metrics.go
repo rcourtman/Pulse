@@ -222,7 +222,7 @@ func (m *PatrolMetrics) RecordTriageFlags(count int) {
 	m.triageFlags.Observe(float64(count))
 }
 
-// RecordTriageQuiet records a patrol run that skipped LLM due to quiet infrastructure.
+// RecordTriageQuiet records a patrol run whose pre-model triage found no flags.
 func (m *PatrolMetrics) RecordTriageQuiet() {
 	m.triageQuietTotal.Inc()
 }

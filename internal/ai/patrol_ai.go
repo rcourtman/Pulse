@@ -33,7 +33,7 @@ type AIAnalysisResult struct {
 	Findings         []*Finding // Parsed findings from the response
 	RejectedFindings int        // Findings rejected by threshold validation
 	TriageFlags      int        // Number of deterministic triage flags
-	TriageSkippedLLM bool       // True if LLM was skipped due to quiet triage
+	TriageSkippedLLM bool       // Legacy: true for older records where quiet triage skipped LLM
 	InputTokens      int
 	OutputTokens     int
 	ToolCalls        []ToolCallRecord // Tool invocations during this analysis
@@ -244,14 +244,10 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 		metrics.RecordTriageQuiet()
 	}
 
-	// Quiet infrastructure: skip LLM entirely
+	// Quiet infrastructure still goes through the configured model. Triage is
+	// context, not a replacement for model-owned assessment.
 	if triageResult.IsQuiet {
-		log.Info().Msg("AI Patrol: Infrastructure quiet, skipping LLM analysis")
-		return &AIAnalysisResult{
-			Response:         "Infrastructure healthy — deterministic triage found no issues.",
-			TriageFlags:      0,
-			TriageSkippedLLM: true,
-		}, nil
+		log.Info().Msg("AI Patrol: Infrastructure quiet, continuing with model-owned analysis")
 	}
 
 	// Phase 2: Build focused seed context from triage results
@@ -557,10 +553,8 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 		Int("findings_resolved", adapter.getResolvedCount()).
 		Msg("AI Patrol: Agentic patrol analysis complete")
 
-	var toolCallsMu sync.Mutex
 	completedToolCalls := append([]ToolCallRecord(nil), attempt.toolCalls...)
 	rawToolOutputs := append([]string(nil), attempt.rawToolOutputs...)
-	p.ensureInvestigationToolCall(ctx, executor, &toolCallsMu, &completedToolCalls, &rawToolOutputs, noStream)
 
 	// Broadcast completion
 	if !noStream {
@@ -572,7 +566,6 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 	}
 
 	// Collect completed tool calls
-	toolCallsMu.Lock()
 	collectedToolCalls := completedToolCalls
 	signalToolCalls := make([]ToolCallRecord, len(collectedToolCalls))
 	for i, tc := range collectedToolCalls {
@@ -581,7 +574,6 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 			signalToolCalls[i].Output = rawToolOutputs[i]
 		}
 	}
-	toolCallsMu.Unlock()
 
 	// --- Deterministic signal detection + evaluation pass ---
 	// Build signal thresholds from user config so detection aligns with alert settings
@@ -618,16 +610,11 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 					Msg("AI Patrol: Evaluation pass completed")
 			}
 
-			// Deterministic fallback: if unmatched signals remain, create findings directly.
 			remaining := UnmatchedSignals(detectedSignals, adapter.getCollectedFindings())
 			if len(remaining) > 0 {
-				created := p.createFindingsFromSignals(adapter, remaining)
-				if created > 0 {
-					log.Info().
-						Int("created", created).
-						Int("remaining", len(remaining)).
-						Msg("AI Patrol: Created deterministic findings for unmatched signals")
-				}
+				log.Info().
+					Int("remaining", len(remaining)).
+					Msg("AI Patrol: Unmatched signals remain after model evaluation; not creating Pulse-authored findings")
 			}
 		} else {
 			log.Debug().
@@ -696,96 +683,6 @@ func computeTriageMaxTurns(flagCount int, scope *PatrolScope) int {
 	}
 
 	return turns
-}
-
-func (p *PatrolService) ensureInvestigationToolCall(
-	ctx context.Context,
-	executor *tools.PulseToolExecutor,
-	toolCallsMu *sync.Mutex,
-	completedToolCalls *[]ToolCallRecord,
-	rawToolOutputs *[]string,
-	noStream bool,
-) {
-	if executor == nil {
-		return
-	}
-
-	toolCallsMu.Lock()
-	needsInvestigation := true
-	for _, tc := range *completedToolCalls {
-		if isInvestigationTool(tc.ToolName) {
-			needsInvestigation = false
-			break
-		}
-	}
-	toolCallsMu.Unlock()
-
-	if !needsInvestigation {
-		return
-	}
-
-	fallbackName := "pulse_query"
-	args := map[string]interface{}{"action": "health"}
-	inputBytes, _ := json.Marshal(args)
-	inputStr := string(inputBytes)
-	fallbackID := fmt.Sprintf("patrol-fallback-%d", time.Now().UnixNano())
-
-	start := time.Now().UnixMilli()
-	if !noStream {
-		p.broadcast(PatrolStreamEvent{
-			Type:         "tool_start",
-			ToolID:       fallbackID,
-			ToolName:     fallbackName,
-			ToolInput:    inputStr,
-			ToolRawInput: inputStr,
-		})
-	}
-
-	result, err := executor.ExecuteTool(ctx, fallbackName, args)
-	output := ""
-	success := false
-	if err != nil {
-		output = err.Error()
-	} else {
-		output = formatToolResult(result)
-		success = !result.IsError
-	}
-
-	end := time.Now().UnixMilli()
-	if !noStream {
-		p.broadcast(PatrolStreamEvent{
-			Type:         "tool_end",
-			ToolID:       fallbackID,
-			ToolName:     fallbackName,
-			ToolInput:    inputStr,
-			ToolRawInput: inputStr,
-			ToolOutput:   output,
-			ToolSuccess:  &success,
-		})
-	}
-
-	toolCallsMu.Lock()
-	*completedToolCalls = append(*completedToolCalls, ToolCallRecord{
-		ID:        fallbackID,
-		ToolName:  fallbackName,
-		Input:     truncateString(inputStr, MaxToolInputSize),
-		Output:    truncateString(output, MaxToolOutputSize),
-		Success:   success,
-		StartTime: start,
-		EndTime:   end,
-		Duration:  end - start,
-	})
-	*rawToolOutputs = append(*rawToolOutputs, output)
-	toolCallsMu.Unlock()
-}
-
-func isInvestigationTool(name string) bool {
-	switch name {
-	case "pulse_query", "pulse_metrics", "pulse_storage", "pulse_read":
-		return true
-	default:
-		return false
-	}
 }
 
 func formatToolResult(result tools.CallToolResult) string {
@@ -927,122 +824,6 @@ func buildEvalUserPrompt(signals []DetectedSignal) string {
 	}
 
 	return sb.String()
-}
-
-func (p *PatrolService) createFindingsFromSignals(adapter *patrolFindingCreatorAdapter, signals []DetectedSignal) int {
-	if adapter == nil || len(signals) == 0 {
-		return 0
-	}
-	created := 0
-	for _, s := range signals {
-		input := signalToFindingInput(s)
-		if input.ResourceName == "" {
-			input.ResourceName = input.ResourceID
-		}
-		if input.ResourceType == "" {
-			input.ResourceType = inferFindingResourceType(input.ResourceID, input.ResourceName)
-		}
-		if input.Category == "" {
-			input.Category = "general"
-		}
-		if input.Severity == "" {
-			input.Severity = "warning"
-		}
-		if input.Recommendation == "" {
-			input.Recommendation = defaultRecommendationForSignal(s)
-		}
-		if input.Title == "" {
-			input.Title = s.Summary
-		}
-		if input.Description == "" {
-			input.Description = s.Summary
-		}
-
-		if _, _, err := adapter.CreateFinding(input); err == nil {
-			created++
-		}
-	}
-	return created
-}
-
-func signalToFindingInput(s DetectedSignal) tools.PatrolFindingInput {
-	key := signalKey(s)
-	category := s.Category
-	severity := s.SuggestedSeverity
-	return tools.PatrolFindingInput{
-		Key:          key,
-		Severity:     severity,
-		Category:     category,
-		ResourceID:   s.ResourceID,
-		ResourceName: s.ResourceName,
-		ResourceType: s.ResourceType,
-		Title:        signalTitle(s),
-		Description:  s.Summary,
-		Evidence:     s.Evidence,
-	}
-}
-
-func signalKey(s DetectedSignal) string {
-	switch s.SignalType {
-	case SignalSMARTFailure:
-		return "smart-failure"
-	case SignalHighCPU:
-		return "cpu-high"
-	case SignalHighMemory:
-		return "memory-high"
-	case SignalHighDisk:
-		return "disk-high"
-	case SignalBackupFailed:
-		return "backup-failed"
-	case SignalBackupStale:
-		return "backup-stale"
-	case SignalGuestUnreachable:
-		return "guest-unreachable"
-	default:
-		return "deterministic-signal"
-	}
-}
-
-func signalTitle(s DetectedSignal) string {
-	switch s.SignalType {
-	case SignalSMARTFailure:
-		return "SMART health check failed"
-	case SignalHighCPU:
-		return "High CPU usage detected"
-	case SignalHighMemory:
-		return "High memory usage detected"
-	case SignalHighDisk:
-		return "Storage usage is high"
-	case SignalBackupFailed:
-		return "Backup failed"
-	case SignalBackupStale:
-		return "Backup is stale"
-	case SignalGuestUnreachable:
-		return fmt.Sprintf("Guest unreachable: %s", s.ResourceName)
-	default:
-		return "Infrastructure signal detected"
-	}
-}
-
-func defaultRecommendationForSignal(s DetectedSignal) string {
-	switch s.SignalType {
-	case SignalSMARTFailure:
-		return "Inspect the disk for errors and consider replacing it if SMART failures persist."
-	case SignalHighCPU:
-		return "Identify processes causing high CPU usage and optimize or scale resources."
-	case SignalHighMemory:
-		return "Identify memory-heavy processes and consider increasing memory or tuning workloads."
-	case SignalHighDisk:
-		return "Investigate disk usage growth and clean up or expand storage as needed."
-	case SignalBackupFailed:
-		return "Review backup logs and fix the underlying error, then rerun the backup."
-	case SignalBackupStale:
-		return "Ensure backups are scheduled and completing successfully; run a new backup."
-	case SignalGuestUnreachable:
-		return "Investigate why this guest is not responding to ping. Check network configuration, firewall rules, or whether the guest has crashed."
-	default:
-		return "Investigate the signal and take corrective action if needed."
-	}
 }
 
 // getPatrolSystemPrompt returns the system prompt for AI patrol analysis.

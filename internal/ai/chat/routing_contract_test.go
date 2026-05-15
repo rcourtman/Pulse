@@ -17,14 +17,14 @@ import (
 // TestContract_MentionTriggersRoutingMismatchBlock verifies that:
 // 1. @mention resolution marks resources as explicitly accessed
 // 2. Tool execution targeting the parent host gets blocked
-// 3. The error response includes target_resource_id for auto-recovery
+// 3. The error response includes routing facts without choosing the next tool call
 //
 // This is the core contract for Invariant 7: routing validation.
 func TestContract_MentionTriggersRoutingMismatchBlock(t *testing.T) {
 	// Simulate: User message contains "@homepage-docker"
 	// Prefetch resolves it to system-container:pve-node:141 and marks explicit access
 	// Tool call attempts to write with target_host="pve-node"
-	// Assert: ROUTING_MISMATCH with target_resource_id suggestion
+	// Assert: ROUTING_MISMATCH with factual child-resource context
 
 	// Step 1: Create resolved context (simulating session creation)
 	resolvedCtx := NewResolvedContext("test-session")
@@ -112,16 +112,17 @@ func TestContract_MentionTriggersRoutingMismatchBlock(t *testing.T) {
 		t.Error("Expected Blocked=true for routing mismatch")
 	}
 
-	// Verify auto-recovery hints
+	// Verify policy facts without Pulse-authored retry instructions.
 	details := response.Error.Details
-	if details["auto_recoverable"] != true {
-		t.Error("Expected auto_recoverable=true in response")
+	if details["auto_recoverable"] != nil {
+		t.Error("Expected auto_recoverable to be absent")
 	}
-	if details["target_resource_id"] != "system-container:pve-node:141" {
-		t.Errorf("Expected target_resource_id='system-container:pve-node:141', got %v", details["target_resource_id"])
+	ids, ok := details["more_specific_resource_ids"].([]string)
+	if !ok || len(ids) != 1 || ids[0] != "system-container:pve-node:141" {
+		t.Errorf("Expected more_specific_resource_ids=['system-container:pve-node:141'], got %v", details["more_specific_resource_ids"])
 	}
-	if details["recovery_hint"] == nil {
-		t.Error("Expected recovery_hint in response")
+	if details["policy_boundary"] == nil {
+		t.Error("Expected policy_boundary in response")
 	}
 
 	t.Log("✓ @mention → explicit access → routing mismatch block contract verified")

@@ -632,8 +632,11 @@ func TestErrRoutingMismatch(t *testing.T) {
 	if len(resources) != 2 || resources[0] != "homepage-docker" {
 		t.Errorf("Details[more_specific_resources] = %v, want [homepage-docker jellyfin]", resources)
 	}
-	if response.Error.Details["auto_recoverable"] != true {
-		t.Error("Details[auto_recoverable] should be true")
+	if response.Error.Details["auto_recoverable"] != nil {
+		t.Error("Details[auto_recoverable] should not be present")
+	}
+	if response.Error.Details["policy_boundary"] == nil {
+		t.Error("Details[policy_boundary] should be present")
 	}
 }
 
@@ -689,17 +692,16 @@ func TestRoutingMismatch_RegressionHomepageScenario(t *testing.T) {
 
 	response := err.ToToolResponse()
 
-	// Verify the error response has the right structure for auto-recovery
-	if response.Error.Details["auto_recoverable"] != true {
-		t.Error("ROUTING_MISMATCH should be auto_recoverable")
+	// Verify the error response gives policy facts without directing a retry.
+	if response.Error.Details["auto_recoverable"] != nil {
+		t.Error("ROUTING_MISMATCH should not expose auto_recoverable")
 	}
-
-	hint, ok := response.Error.Details["recovery_hint"].(string)
+	policy, ok := response.Error.Details["policy_boundary"].(string)
 	if !ok {
-		t.Fatal("recovery_hint should be a string")
+		t.Fatal("policy_boundary should be a string")
 	}
-	if !containsString(hint, "homepage-docker") {
-		t.Errorf("recovery_hint should mention the specific resource: %s", hint)
+	if !containsString(policy, "more specific child resource") {
+		t.Errorf("policy_boundary should explain the routing boundary: %s", policy)
 	}
 }
 
@@ -1080,8 +1082,11 @@ func TestWriteExecutionContext_BlocksNodeFallbackForLXC(t *testing.T) {
 	if response.Error.Details["resolved_kind"] != "system-container" {
 		t.Errorf("Expected resolved_kind=system-container, got %v", response.Error.Details["resolved_kind"])
 	}
-	if response.Error.Details["auto_recoverable"] != false {
-		t.Error("Expected auto_recoverable=false")
+	if response.Error.Details["auto_recoverable"] != nil {
+		t.Error("Expected auto_recoverable to be absent")
+	}
+	if response.Error.Details["policy_boundary"] == nil {
+		t.Error("Expected policy_boundary")
 	}
 
 	t.Log("✓ Write to LXC blocked when routing would execute on node (no pct exec)")

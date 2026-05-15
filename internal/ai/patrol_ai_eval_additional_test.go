@@ -7,17 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
-
-func TestIsInvestigationTool(t *testing.T) {
-	if !isInvestigationTool("pulse_query") || !isInvestigationTool("pulse_metrics") || !isInvestigationTool("pulse_storage") || !isInvestigationTool("pulse_read") {
-		t.Fatal("expected investigation tools to be recognized")
-	}
-	if isInvestigationTool("pulse_control") {
-		t.Fatal("expected non-investigation tool to be false")
-	}
-}
 
 func TestFormatToolResult(t *testing.T) {
 	result := tools.CallToolResult{
@@ -57,67 +47,6 @@ func TestEvalPromptBuilders(t *testing.T) {
 	userPrompt := buildEvalUserPrompt(signals)
 	if !strings.Contains(userPrompt, "Signal 1") || !strings.Contains(userPrompt, "CPU high") || !strings.Contains(userPrompt, "cpu=99%") {
 		t.Fatalf("unexpected eval user prompt: %s", userPrompt)
-	}
-}
-
-func TestSignalHelpersAndFindingsFromSignals(t *testing.T) {
-	cases := []struct {
-		signal       DetectedSignal
-		wantKey      string
-		wantTitle    string
-		recSubstring string
-	}{
-		{signal: DetectedSignal{SignalType: SignalSMARTFailure}, wantKey: "smart-failure", wantTitle: "SMART health check failed", recSubstring: "disk"},
-		{signal: DetectedSignal{SignalType: SignalHighCPU}, wantKey: "cpu-high", wantTitle: "High CPU usage detected", recSubstring: "CPU"},
-		{signal: DetectedSignal{SignalType: SignalHighMemory}, wantKey: "memory-high", wantTitle: "High memory usage detected", recSubstring: "memory"},
-		{signal: DetectedSignal{SignalType: SignalHighDisk}, wantKey: "disk-high", wantTitle: "Storage usage is high", recSubstring: "storage"},
-		{signal: DetectedSignal{SignalType: SignalBackupFailed}, wantKey: "backup-failed", wantTitle: "Backup failed", recSubstring: "backup"},
-		{signal: DetectedSignal{SignalType: SignalBackupStale}, wantKey: "backup-stale", wantTitle: "Backup is stale", recSubstring: "backup"},
-		{signal: DetectedSignal{SignalType: SignalGuestUnreachable, ResourceName: "db-server"}, wantKey: "guest-unreachable", wantTitle: "Guest unreachable: db-server", recSubstring: "ping"},
-		{signal: DetectedSignal{SignalType: SignalType("unknown")}, wantKey: "deterministic-signal", wantTitle: "Infrastructure signal detected", recSubstring: "Investigate"},
-	}
-
-	for _, c := range cases {
-		if got := signalKey(c.signal); got != c.wantKey {
-			t.Fatalf("signalKey(%s) = %s, want %s", c.signal.SignalType, got, c.wantKey)
-		}
-		if got := signalTitle(c.signal); got != c.wantTitle {
-			t.Fatalf("signalTitle(%s) = %s, want %s", c.signal.SignalType, got, c.wantTitle)
-		}
-		if !strings.Contains(defaultRecommendationForSignal(c.signal), c.recSubstring) {
-			t.Fatalf("unexpected recommendation for %s: %s", c.signal.SignalType, defaultRecommendationForSignal(c.signal))
-		}
-	}
-
-	ps := NewPatrolService(nil, nil)
-	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, models.StateSnapshot{}))
-
-	signals := []DetectedSignal{
-		{
-			SignalType:        SignalHighCPU,
-			ResourceID:        "node-1",
-			ResourceName:      "",
-			ResourceType:      "",
-			SuggestedSeverity: "",
-			Category:          "",
-			Summary:           "CPU high",
-			Evidence:          "cpu=99%",
-		},
-		{
-			SignalType:        SignalBackupFailed,
-			ResourceID:        "vm-101",
-			ResourceName:      "vm-101",
-			ResourceType:      "vm",
-			SuggestedSeverity: "warning",
-			Category:          "backup",
-			Summary:           "Backup failed",
-			Evidence:          "job failed",
-		},
-	}
-
-	created := ps.createFindingsFromSignals(adapter, signals)
-	if created != len(signals) {
-		t.Fatalf("expected %d findings created, got %d", len(signals), created)
 	}
 }
 

@@ -216,7 +216,7 @@ func (p *PatrolService) SetCircuitBreaker(breaker *circuit.Breaker) {
 	log.Info().Msg("circuit breaker configured for patrol")
 }
 
-// SetRemediationEngine sets the remediation engine for generating fix plans from findings.
+// SetRemediationEngine sets the governed plan store/executor for model-proposed fixes.
 func (p *PatrolService) SetRemediationEngine(engine aicontracts.RemediationEngine) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

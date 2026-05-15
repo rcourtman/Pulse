@@ -184,7 +184,14 @@ Patrol-specific presentation helpers.
    is the diagnostic and remediation-reasoning owner. Patrol handoff prompts may
    provide system context, resource posture, action posture, and governed tools,
    but must not force active tool use, name a required tool path, or present a
-   Patrol-authored remediation answer for the LLM to execute. Visible Patrol
+   Patrol-authored remediation answer for the LLM to execute. Patrol
+   runs must still call the configured model when deterministic triage is quiet,
+   and unmatched deterministic signals may be returned as context for another
+   model pass but must not be converted into Pulse-authored findings after the
+   model declines to report them. Legacy unified AI-finding integration must
+   likewise store model-reported findings as evidence and must not auto-generate
+   remediation plans from finding metadata.
+   Visible Patrol
    Assistant handoffs must not make the operator think Pulse has already
    produced the correct fix. The visible Assistant drawer briefing opened from a Patrol
    finding must be compact and source-named: current status/risk, one primary

@@ -41,7 +41,7 @@ type AIMetrics struct {
 	// Phantom detection - tracks hallucinated tool execution claims
 	phantomDetected *prometheus.CounterVec
 
-	// Auto-recovery - tracks self-healing attempts and outcomes
+	// Policy-block self-correction - tracks model-owned follow-up after blocked tools.
 	autoRecoveryAttempt *prometheus.CounterVec
 	autoRecoverySuccess *prometheus.CounterVec
 
@@ -115,7 +115,7 @@ func newAIMetrics() *AIMetrics {
 				Namespace: "pulse",
 				Subsystem: "ai",
 				Name:      "auto_recovery_attempt_total",
-				Help:      "Total auto-recovery attempts by error code and tool",
+				Help:      "Total model self-correction opportunities after policy blocks by error code and tool",
 			},
 			[]string{"error_code", "tool"},
 		),
@@ -124,7 +124,7 @@ func newAIMetrics() *AIMetrics {
 				Namespace: "pulse",
 				Subsystem: "ai",
 				Name:      "auto_recovery_success_total",
-				Help:      "Total successful auto-recoveries by error code and tool",
+				Help:      "Total successful model-owned follow-ups after policy blocks by error code and tool",
 			},
 			[]string{"error_code", "tool"},
 		),
@@ -183,14 +183,14 @@ func (m *AIMetrics) RecordPhantomDetected(provider, model string) {
 	m.phantomDetected.WithLabelValues(sanitizeLabel(provider), sanitizeLabel(model)).Inc()
 }
 
-// RecordAutoRecoveryAttempt records an auto-recovery attempt.
-// Definition: "we returned a recoverable error that the model can self-correct"
+// RecordAutoRecoveryAttempt records when the model receives a recoverable policy block.
+// Definition: "we returned policy facts and the model may decide the next step"
 func (m *AIMetrics) RecordAutoRecoveryAttempt(errorCode, tool string) {
 	m.autoRecoveryAttempt.WithLabelValues(sanitizeLabel(errorCode), sanitizeLabel(tool)).Inc()
 }
 
-// RecordAutoRecoverySuccess records a successful auto-recovery.
-// Definition: "a previously blocked operation succeeded on retry after discovery"
+// RecordAutoRecoverySuccess records a successful model-owned follow-up after a policy block.
+// Definition: "a previously blocked operation later succeeded without Pulse forcing a tool retry"
 func (m *AIMetrics) RecordAutoRecoverySuccess(errorCode, tool string) {
 	m.autoRecoverySuccess.WithLabelValues(sanitizeLabel(errorCode), sanitizeLabel(tool)).Inc()
 }
@@ -218,7 +218,7 @@ func NewAIMetricsTelemetryCallback() *AIMetricsTelemetryCallback {
 func (c *AIMetricsTelemetryCallback) RecordStrictResolutionBlock(tool, action string) {
 	if c.metrics != nil {
 		c.metrics.RecordStrictResolutionBlock(tool, action)
-		// Strict resolution blocks are recoverable (model can discover then retry)
+		// Strict resolution returns policy facts; the model owns any follow-up.
 		c.metrics.RecordAutoRecoveryAttempt("STRICT_RESOLUTION", tool)
 	}
 }
@@ -241,7 +241,7 @@ func (c *AIMetricsTelemetryCallback) RecordAutoRecoverySuccess(errorCode, tool s
 func (c *AIMetricsTelemetryCallback) RecordRoutingMismatchBlock(tool, targetKind, childKind string) {
 	if c.metrics != nil {
 		c.metrics.RecordRoutingMismatchBlock(tool, targetKind, childKind)
-		// Routing mismatch blocks are recoverable (model can retry with correct target)
+		// Routing mismatch returns policy facts; the model owns any follow-up.
 		c.metrics.RecordAutoRecoveryAttempt("ROUTING_MISMATCH", tool)
 	}
 }

@@ -353,56 +353,6 @@ func TestWaitForApprovalDecision(t *testing.T) {
 	})
 }
 
-func TestHasPhantomExecution(t *testing.T) {
-	tests := []struct {
-		name     string
-		content  string
-		expected bool
-	}{
-		// Phantom execution patterns - concrete metrics
-		{"cpu percentage", "The CPU usage is at 85%", true},
-		{"memory usage", "Memory usage is 4.2GB", true},
-		{"disk at", "Disk is at 92% capacity", true},
-
-		// Phantom execution patterns - state claims
-		{"currently running", "The service is currently running", true},
-		{"currently stopped", "The container is currently stopped", true},
-		{"logs show", "The logs show several errors", true},
-		{"output shows", "The output shows the service failed", true},
-
-		// Phantom execution patterns - fake tool formatting
-		{"fake tool block", "```tool\npulse_query\n```", true},
-		{"fake function call", "pulse_query({\"type\": \"nodes\"})", true},
-
-		// Phantom execution patterns - action claims
-		{"restarted the", "I restarted the nginx service", true},
-		{"successfully restarted", "The service was successfully restarted", true},
-		{"has been stopped", "The container has been stopped", true},
-
-		// NOT phantom execution - these are safe
-		{"suggestion", "You should check the logs", false},
-		{"question", "Would you like me to restart it?", false},
-		{"explanation", "Docker containers run in isolated environments", false},
-		{"future tense", "I will check the status for you", false},
-		{"empty", "", false},
-		{"general info", "Proxmox uses LXC for containers", false},
-
-		// NOT phantom - these used to false-positive
-		{"checked docs", "I checked the documentation and found...", false},
-		{"ran through logic", "I ran through the logic and it seems...", false},
-		{"looked at code", "I looked at the configuration options", false},
-		{"verified understanding", "I verified my understanding of the issue", false},
-		{"found that general", "I found that Docker networking is complex", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := hasPhantomExecution(tt.content)
-			assert.Equal(t, tt.expected, result, "content: %q", tt.content)
-		})
-	}
-}
-
 func TestToolCallKey(t *testing.T) {
 	t.Run("same name and input produce same key", func(t *testing.T) {
 		input := map[string]interface{}{"action": "get", "resource_type": "lxc", "target_id": "node1"}
@@ -627,71 +577,6 @@ func TestSummarizeForNegativeMarker(t *testing.T) {
 			for _, c := range tt.contains {
 				assert.Contains(t, result, c, "expected %q to contain %q", result, c)
 			}
-		})
-	}
-}
-
-func TestDetectFreshDataIntent(t *testing.T) {
-	tests := []struct {
-		name     string
-		messages []Message
-		want     bool
-	}{
-		{
-			name:     "empty messages",
-			messages: nil,
-			want:     false,
-		},
-		{
-			name: "normal question",
-			messages: []Message{
-				{Role: "user", Content: "What containers are running?"},
-			},
-			want: false,
-		},
-		{
-			name: "check again",
-			messages: []Message{
-				{Role: "user", Content: "Check again please"},
-			},
-			want: true,
-		},
-		{
-			name: "refresh",
-			messages: []Message{
-				{Role: "user", Content: "Can you refresh the data?"},
-			},
-			want: true,
-		},
-		{
-			name: "has it changed",
-			messages: []Message{
-				{Role: "user", Content: "Has it changed since last time?"},
-			},
-			want: true,
-		},
-		{
-			name: "latest data",
-			messages: []Message{
-				{Role: "user", Content: "Show me the latest data for frigate"},
-			},
-			want: true,
-		},
-		{
-			name: "uses last user message only",
-			messages: []Message{
-				{Role: "user", Content: "Check again"},
-				{Role: "assistant", Content: "OK, checking..."},
-				{Role: "user", Content: "What is the CPU usage?"},
-			},
-			want: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := detectFreshDataIntent(tt.messages)
-			assert.Equal(t, tt.want, got)
 		})
 	}
 }

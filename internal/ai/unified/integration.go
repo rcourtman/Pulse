@@ -16,7 +16,6 @@ type Integration struct {
 
 	// Component references for cross-feature integration
 	correlationEngine CorrelationEngine
-	remediationEngine RemediationEngine
 	learningStore     LearningStore
 }
 
@@ -24,12 +23,6 @@ type Integration struct {
 type CorrelationEngine interface {
 	// AnalyzeForFinding performs root-cause analysis for a finding
 	AnalyzeForFinding(findingID string, resourceID string) (rootCauseID string, correlatedIDs []string, explanation string, err error)
-}
-
-// RemediationEngine interface for remediation
-type RemediationEngine interface {
-	// GeneratePlanForFinding generates a remediation plan for a finding
-	GeneratePlanForFinding(finding *UnifiedFinding) (planID string, err error)
 }
 
 // LearningStore interface for feedback learning
@@ -81,11 +74,6 @@ func (i *Integration) SetCorrelationEngine(engine CorrelationEngine) {
 	i.bridge.SetAIEnhancement(func(findingID string) error {
 		return i.enhanceFindingWithCorrelation(findingID)
 	})
-}
-
-// SetRemediationEngine sets the remediation engine
-func (i *Integration) SetRemediationEngine(engine RemediationEngine) {
-	i.remediationEngine = engine
 }
 
 // SetLearningStore sets the learning store
@@ -142,15 +130,6 @@ func (i *Integration) AddAIFinding(finding *UnifiedFinding) (*UnifiedFinding, bo
 	}
 
 	result, isNew := i.store.AddFromAI(finding)
-
-	// Generate remediation plan for new findings
-	if isNew && i.remediationEngine != nil {
-		go func() {
-			if planID, err := i.remediationEngine.GeneratePlanForFinding(result); err == nil {
-				i.store.LinkRemediation(result.ID, planID)
-			}
-		}()
-	}
 
 	return result, isNew
 }

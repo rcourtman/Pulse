@@ -6,12 +6,32 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-func TestRunAIAnalysis_TriageQuietSkipsLLM(t *testing.T) {
-	ps := NewPatrolService(&Service{}, nil)
+func TestRunAIAnalysis_TriageQuietStillCallsLLM(t *testing.T) {
+	svc := NewService(config.NewConfigPersistence(t.TempDir()), nil)
+	svc.cfg = &config.AIConfig{Enabled: true, PatrolModel: "mock:model"}
+
+	calls := 0
+	svc.SetChatService(&mockChatService{
+		executor: tools.NewPulseToolExecutor(tools.ExecutorConfig{}),
+		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
+			calls++
+			if !strings.Contains(req.Prompt, "# Deterministic Triage Results") {
+				t.Fatalf("expected quiet triage context in model prompt, got:\n%s", req.Prompt)
+			}
+			return &PatrolStreamResponse{
+				Content:      "No issues found after reviewing the provided infrastructure context.",
+				InputTokens:  10,
+				OutputTokens: 6,
+			}, nil
+		},
+	})
+
+	ps := NewPatrolService(svc, nil)
 	state := models.StateSnapshot{}
 
 	triage := ps.runDeterministicTriageState(context.Background(), patrolRuntimeStateForTest(ps, state), nil, nil)
@@ -29,8 +49,14 @@ func TestRunAIAnalysis_TriageQuietSkipsLLM(t *testing.T) {
 	if res == nil {
 		t.Fatal("expected analysis result")
 	}
-	if !strings.Contains(res.Response, "Infrastructure healthy") {
-		t.Fatalf("expected quiet short-circuit response, got: %q", res.Response)
+	if calls != 1 {
+		t.Fatalf("expected quiet patrol to call the model once, got %d", calls)
+	}
+	if res.TriageSkippedLLM {
+		t.Fatal("quiet patrol should not mark LLM as skipped")
+	}
+	if !strings.Contains(res.Response, "No issues found") {
+		t.Fatalf("expected model response, got: %q", res.Response)
 	}
 }
 

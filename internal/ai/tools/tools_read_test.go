@@ -277,18 +277,15 @@ func TestExecuteReadLogs_VMwareResourcesReturnStructuredQueryGuidance(t *testing
 			assert.Contains(t, payload.Error.Message, "does not expose native logs through pulse_read")
 			assert.Equal(t, tc.wantKind, payload.Error.Details["resource_type"])
 			assert.Equal(t, "vmware-vsphere", payload.Error.Details["adapter"])
-			assert.Equal(t, true, payload.Error.Details["auto_recoverable"])
-			assert.Equal(t, "pulse_query", payload.Error.Details["suggested_tool"])
+			assert.NotContains(t, payload.Error.Details, "auto_recoverable")
+			assert.NotContains(t, payload.Error.Details, "suggested_tool")
+			assert.NotContains(t, payload.Error.Details, "suggested_arguments")
 
-			hint, ok := payload.Error.Details["recovery_hint"].(string)
+			policy, ok := payload.Error.Details["policy_boundary"].(string)
 			require.True(t, ok)
-			assert.Contains(t, hint, `Status, alerts, activity, and metrics are addressed`)
-			assert.Contains(t, hint, `resource_type="`+tc.wantKind+`"`)
-
-			suggestedArgs, ok := payload.Error.Details["suggested_arguments"].(map[string]interface{})
-			require.True(t, ok)
-			assert.Equal(t, "get", suggestedArgs["action"])
-			assert.Equal(t, tc.wantKind, suggestedArgs["resource_type"])
+			assert.Contains(t, policy, `Status, alerts, activity, and metrics are addressed`)
+			assert.Contains(t, policy, `resource_type="`+tc.wantKind+`"`)
+			assert.Equal(t, tc.wantKind, payload.Error.Details["query_resource_type"])
 		})
 	}
 }
@@ -329,19 +326,14 @@ func TestExecuteReadLogs_NonNativeAppContainersReturnStructuredTargetHostGuidanc
 	assert.Equal(t, "app-container", payload.Error.Details["resource_type"])
 	assert.Equal(t, "docker-host", payload.Error.Details["target_host"])
 	assert.Equal(t, "homepage", payload.Error.Details["container"])
-	assert.Equal(t, true, payload.Error.Details["auto_recoverable"])
-	assert.Equal(t, "pulse_read", payload.Error.Details["suggested_tool"])
+	assert.NotContains(t, payload.Error.Details, "auto_recoverable")
+	assert.NotContains(t, payload.Error.Details, "suggested_tool")
+	assert.NotContains(t, payload.Error.Details, "suggested_arguments")
 
-	hint, ok := payload.Error.Details["recovery_hint"].(string)
+	policy, ok := payload.Error.Details["policy_boundary"].(string)
 	require.True(t, ok)
-	assert.Contains(t, hint, `target_host="docker-host"`)
-	assert.Contains(t, hint, `container="homepage"`)
-
-	suggestedArgs, ok := payload.Error.Details["suggested_arguments"].(map[string]interface{})
-	require.True(t, ok)
-	assert.Equal(t, "logs", suggestedArgs["action"])
-	assert.Equal(t, "docker-host", suggestedArgs["target_host"])
-	assert.Equal(t, "homepage", suggestedArgs["container"])
+	assert.Contains(t, policy, `target_host="docker-host"`)
+	assert.Contains(t, policy, `container="homepage"`)
 }
 
 func decodeToolResponse(t *testing.T, result CallToolResult) ToolResponse {

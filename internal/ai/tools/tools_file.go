@@ -161,9 +161,9 @@ func (e *PulseToolExecutor) executeFileRead(ctx context.Context, path, targetHos
 			"SENSITIVE_PATH",
 			fmt.Sprintf("Refusing to read sensitive path '%s' (%s).", path, reason),
 			map[string]interface{}{
-				"path":          path,
-				"reason":        reason,
-				"recovery_hint": "Avoid reading credential files. If you need a value, provide it manually or scope the request to non-sensitive config/log files.",
+				"path":            path,
+				"reason":          reason,
+				"policy_boundary": "Credential files cannot be read through AI tools.",
 			},
 		)), nil
 	}
@@ -243,9 +243,9 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 			"SENSITIVE_PATH",
 			fmt.Sprintf("Refusing to write sensitive path '%s' (%s).", path, reason),
 			map[string]interface{}{
-				"path":          path,
-				"reason":        reason,
-				"recovery_hint": "Avoid modifying credential files via AI. Apply this change manually if needed.",
+				"path":            path,
+				"reason":          reason,
+				"policy_boundary": "Credential files cannot be modified through AI tools.",
 			},
 		)), nil
 	}
@@ -396,9 +396,9 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 			"SENSITIVE_PATH",
 			fmt.Sprintf("Refusing to write sensitive path '%s' (%s).", path, reason),
 			map[string]interface{}{
-				"path":          path,
-				"reason":        reason,
-				"recovery_hint": "Avoid modifying credential files via AI. Apply this change manually if needed.",
+				"path":            path,
+				"reason":          reason,
+				"policy_boundary": "Credential files cannot be modified through AI tools.",
 			},
 		)), nil
 	}
@@ -636,12 +636,11 @@ func (e *ErrExecutionContextUnavailable) Error() string {
 
 func (e *ErrExecutionContextUnavailable) ToToolResponse() ToolResponse {
 	return NewToolBlockedError("EXECUTION_CONTEXT_UNAVAILABLE", e.Message, map[string]interface{}{
-		"target_host":      e.TargetHost,
-		"resolved_kind":    e.ResolvedKind,
-		"resolved_node":    e.ResolvedNode,
-		"transport":        e.Transport,
-		"auto_recoverable": false,
-		"recovery_hint":    "Cannot write files to this target. The execution context (container/VM) is not reachable via pct exec/qm guest exec. Verify the agent is installed on the host node and the target is running.",
+		"target_host":     e.TargetHost,
+		"resolved_kind":   e.ResolvedKind,
+		"resolved_node":   e.ResolvedNode,
+		"transport":       e.Transport,
+		"policy_boundary": "Cannot write files to this target because the execution context is not reachable through the governed container/VM transport.",
 	})
 }
 

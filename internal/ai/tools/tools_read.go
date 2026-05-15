@@ -129,8 +129,8 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 			"SENSITIVE_COMMAND",
 			fmt.Sprintf("Refusing to run command that touches sensitive paths (%s).", reason),
 			map[string]interface{}{
-				"reason":        reason,
-				"recovery_hint": "Avoid reading credential files or process env via AI tools. Scope the request to non-sensitive logs/status output instead.",
+				"reason":          reason,
+				"policy_boundary": "Credential files and process environment values cannot be read through AI tools.",
 			},
 		)), nil
 	}
@@ -151,15 +151,9 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 			"alternative": alternative,
 		}
 
-		// If this is a NonInteractiveOnly block with a suggested rewrite,
-		// include auto-recovery information
 		if niBlock := intentResult.NonInteractiveBlock; niBlock != nil {
-			details["auto_recoverable"] = niBlock.AutoRecoverable
 			details["category"] = niBlock.Category
-			if niBlock.SuggestedCmd != "" {
-				details["suggested_rewrite"] = niBlock.SuggestedCmd
-				details["recovery_hint"] = fmt.Sprintf("Retry with: %s", niBlock.SuggestedCmd)
-			}
+			details["policy_boundary"] = "pulse_read only accepts bounded, non-interactive, read-only commands."
 		}
 
 		return NewToolResponseResult(NewToolBlockedError(
@@ -555,20 +549,9 @@ func blockedNativeReadLogsResult(resolved ResolvedResourceInfo, resourceRef, con
 			containerName = resourceName
 		}
 		if targetHost != "" {
-			suggestedArgs := map[string]interface{}{
-				"action":      "logs",
-				"target_host": targetHost,
-				"container":   containerName,
-			}
-			if lines > 0 {
-				suggestedArgs["lines"] = lines
-			}
 			details["target_host"] = targetHost
 			details["container"] = containerName
-			details["auto_recoverable"] = true
-			details["suggested_tool"] = "pulse_read"
-			details["suggested_arguments"] = suggestedArgs
-			details["recovery_hint"] = fmt.Sprintf(
+			details["policy_boundary"] = fmt.Sprintf(
 				"App logs on this platform are addressed with target_host=%q and container=%q.",
 				targetHost,
 				containerName,
@@ -589,15 +572,9 @@ func blockedNativeReadLogsResult(resolved ResolvedResourceInfo, resourceRef, con
 	if queryResourceID == "" {
 		queryResourceID = resourceRef
 	}
-	suggestedArgs := map[string]interface{}{
-		"action":        "get",
-		"resource_type": queryType,
-		"resource_id":   queryResourceID,
-	}
-	details["auto_recoverable"] = true
-	details["suggested_tool"] = "pulse_query"
-	details["suggested_arguments"] = suggestedArgs
-	details["recovery_hint"] = fmt.Sprintf(
+	details["query_resource_type"] = queryType
+	details["query_resource_id"] = queryResourceID
+	details["policy_boundary"] = fmt.Sprintf(
 		"Status, alerts, activity, and metrics are addressed with resource_type=%q and resource_id=%q.",
 		queryType,
 		queryResourceID,

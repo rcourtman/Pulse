@@ -20,19 +20,6 @@ func (s *stubCorrelationEngine) AnalyzeForFinding(findingID string, resourceID s
 	return s.rootCauseID, s.correlated, s.explanation, s.returnErr
 }
 
-type stubRemediationEngine struct {
-	planID string
-	err    error
-	called chan string
-}
-
-func (s *stubRemediationEngine) GeneratePlanForFinding(finding *UnifiedFinding) (string, error) {
-	if s.called != nil {
-		s.called <- finding.ID
-	}
-	return s.planID, s.err
-}
-
 type stubLearningStore struct {
 	suppress bool
 	last     string
@@ -64,41 +51,6 @@ func TestIntegration_AddAIFinding_Suppressed(t *testing.T) {
 	if result != nil || isNew {
 		t.Fatalf("expected suppressed finding to be dropped")
 	}
-}
-
-func TestIntegration_AddAIFinding_Remediation(t *testing.T) {
-	integration := NewIntegration(DefaultIntegrationConfig(t.TempDir()))
-	remediation := &stubRemediationEngine{
-		planID: "plan-1",
-		called: make(chan string, 1),
-	}
-	integration.SetRemediationEngine(remediation)
-
-	finding := &UnifiedFinding{
-		ID:         "ai-1",
-		Source:     SourceAIPatrol,
-		Severity:   SeverityWarning,
-		Category:   CategoryCapacity,
-		ResourceID: "res-1",
-		Title:      "test",
-	}
-	integration.AddAIFinding(finding)
-
-	select {
-	case <-remediation.called:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("expected remediation to be invoked")
-	}
-
-	deadline := time.Now().Add(200 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		stored := integration.store.Get(finding.ID)
-		if stored != nil && stored.RemediationID == "plan-1" {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	t.Fatalf("expected remediation ID to be linked")
 }
 
 func TestIntegration_EnhanceFindingWithCorrelation(t *testing.T) {

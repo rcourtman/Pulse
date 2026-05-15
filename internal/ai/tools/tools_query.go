@@ -43,16 +43,15 @@ func (e *ErrStrictResolution) Code() string {
 }
 
 // ToToolResponse returns a consistent ToolResponse for blocked operations.
-// This enables the agentic loop to detect and auto-recover (discover then retry).
+// The model receives the policy facts and decides any follow-up tool use.
 func (e *ErrStrictResolution) ToToolResponse() ToolResponse {
 	return NewToolBlockedError(
 		ErrCodeStrictResolution,
 		e.Message,
 		map[string]interface{}{
-			"resource_id":      e.ResourceID,
-			"action":           e.Action,
-			"recovery_hint":    "Resource discovery is required before resource-specific actions.",
-			"auto_recoverable": true, // Signal to agentic loop that auto-discovery can help
+			"resource_id":     e.ResourceID,
+			"action":          e.Action,
+			"policy_boundary": "Resource discovery is required before resource-specific actions.",
 		},
 	)
 }
@@ -94,22 +93,15 @@ func (e *ErrRoutingMismatch) ToToolResponse() ToolResponse {
 	details := map[string]interface{}{
 		"target_host":             e.TargetHost,
 		"more_specific_resources": e.MoreSpecificResources,
-		"auto_recoverable":        true,
 	}
 
-	// Include canonical IDs and prefer ID-based targeting in recovery hint
+	// Include canonical IDs as facts for the model. Do not pick one as the
+	// next tool target; the selected model owns that decision.
 	if len(e.MoreSpecificIDs) > 0 {
 		details["more_specific_resource_ids"] = e.MoreSpecificIDs
-		details["target_resource_id"] = e.MoreSpecificIDs[0] // Primary suggestion
-		// Prefer ID-based targeting; keep name-based targeting as a fallback.
-		details["recovery_hint"] = fmt.Sprintf(
-			"Retry with target_resource_id='%s' (preferred) or target_host='%s'",
-			e.MoreSpecificIDs[0], e.MoreSpecificResources[0])
+		details["policy_boundary"] = "A more specific child resource exists on the requested host; choose the intended resource before retrying a scoped action."
 	} else {
-		// Fallback if no IDs available
-		details["recovery_hint"] = fmt.Sprintf(
-			"Use target_host='%s' to target the specific resource, not the parent host node",
-			e.MoreSpecificResources[0])
+		details["policy_boundary"] = "A more specific child resource exists on the requested host; choose the intended resource before retrying a scoped action."
 	}
 
 	return NewToolBlockedError(
@@ -286,7 +278,7 @@ func classifySingleCommand(command string) IntentResult {
 	if niBlock := checkNonInteractiveGuardrails(command, cmdLower); niBlock != nil {
 		return IntentResult{
 			Intent:              IntentWriteOrUnknown,
-			Reason:              niBlock.FormatMessage(),
+			Reason:              niBlock.Message,
 			NonInteractiveBlock: niBlock,
 		}
 	}
@@ -378,12 +370,10 @@ func checkMutationCapabilityGuards(command, cmdLower string) string {
 	return ""
 }
 
-// NonInteractiveBlockResult contains structured information about a NonInteractiveOnly block.
+// NonInteractiveBlockResult contains structured policy facts about a NonInteractiveOnly block.
 type NonInteractiveBlockResult struct {
-	Category        string // telemetry category: tty_flag, pager, unbounded_stream, interactive_repl
-	Message         string // human-readable reason
-	SuggestedCmd    string // drop-in rewrite suggestion (empty if none available)
-	AutoRecoverable bool   // true if the suggested rewrite is safe for auto-recovery
+	Category string // telemetry category: tty_flag, pager, unbounded_stream, interactive_repl
+	Message  string // human-readable reason
 }
 
 // checkNonInteractiveGuardrails enforces the exit-boundedness invariant:
@@ -400,226 +390,44 @@ func checkNonInteractiveGuardrails(command, cmdLower string) *NonInteractiveBloc
 	// [tty_flag] Interactive TTY flags allocate a terminal
 	if hasInteractiveTTYFlags(cmdLower) {
 		return &NonInteractiveBlockResult{
-			Category:        "tty_flag",
-			Message:         "[tty_flag] interactive/TTY flags require terminal; use non-interactive form",
-			SuggestedCmd:    suggestNonInteractiveTTY(command),
-			AutoRecoverable: true,
+			Category: "tty_flag",
+			Message:  "[tty_flag] interactive/TTY flags require terminal; pulse_read requires bounded non-interactive commands",
 		}
 	}
 
 	// [pager] Pager and editor tools require terminal interaction
 	if isPagerOrEditorTool(cmdLower) {
 		return &NonInteractiveBlockResult{
-			Category:        "pager",
-			Message:         "[pager] pager/editor tools require terminal; use cat, head, or tail instead",
-			SuggestedCmd:    suggestPagerReplacement(command, cmdLower),
-			AutoRecoverable: true,
+			Category: "pager",
+			Message:  "[pager] pager/editor tools require terminal; pulse_read requires bounded non-interactive commands",
 		}
 	}
 
 	// [unbounded_stream] Live monitoring tools never terminate
 	if isLiveMonitoringTool(cmdLower) {
 		return &NonInteractiveBlockResult{
-			Category:        "unbounded_stream",
-			Message:         "[unbounded_stream] live monitoring tools run indefinitely; use bounded alternatives",
-			SuggestedCmd:    suggestLiveMonitoringReplacement(command, cmdLower),
-			AutoRecoverable: true,
+			Category: "unbounded_stream",
+			Message:  "[unbounded_stream] live monitoring tools run indefinitely; pulse_read requires commands that terminate deterministically",
 		}
 	}
 
 	// [unbounded_stream] Follow mode without explicit bound
 	if isUnboundedStreaming(cmdLower) {
 		return &NonInteractiveBlockResult{
-			Category:        "unbounded_stream",
-			Message:         "[unbounded_stream] follow mode without bound; add --tail/--since or wrap with timeout",
-			SuggestedCmd:    suggestBoundedStreaming(command, cmdLower),
-			AutoRecoverable: true,
+			Category: "unbounded_stream",
+			Message:  "[unbounded_stream] follow mode without bound; pulse_read requires commands that terminate deterministically",
 		}
 	}
 
 	// [interactive_repl] Commands that open REPL/interactive session
 	if isInteractiveREPL(cmdLower) {
 		return &NonInteractiveBlockResult{
-			Category:        "interactive_repl",
-			Message:         "[interactive_repl] command opens interactive session; add -c/--execute flag or inline command",
-			SuggestedCmd:    suggestNonInteractiveREPL(command, cmdLower),
-			AutoRecoverable: false, // REPL rewrites need human judgment (what query to run?)
+			Category: "interactive_repl",
+			Message:  "[interactive_repl] command opens interactive session; pulse_read requires bounded non-interactive commands",
 		}
 	}
 
 	return nil
-}
-
-// FormatNonInteractiveBlock formats a block result for tool response.
-func (r *NonInteractiveBlockResult) FormatMessage() string {
-	if r.SuggestedCmd != "" {
-		return fmt.Sprintf("%s\n\nSuggested rewrite:\n  %s", r.Message, r.SuggestedCmd)
-	}
-	return r.Message
-}
-
-// suggestNonInteractiveTTY suggests removing -it flags from docker/kubectl commands.
-func suggestNonInteractiveTTY(command string) string {
-	// Remove -it, -i -t, --interactive, --tty flags
-	result := command
-	replacements := []struct{ old, new string }{
-		{" -it ", " "},
-		{" -i -t ", " "},
-		{" -ti ", " "},
-		{" --interactive --tty ", " "},
-		{" --tty --interactive ", " "},
-		{" --interactive ", " "},
-		{" --tty ", " "},
-	}
-	for _, r := range replacements {
-		result = strings.ReplaceAll(result, r.old, r.new)
-	}
-	// Clean up double spaces
-	for strings.Contains(result, "  ") {
-		result = strings.ReplaceAll(result, "  ", " ")
-	}
-	if result != command {
-		return strings.TrimSpace(result)
-	}
-	return ""
-}
-
-// suggestPagerReplacement suggests cat/head/tail instead of pagers.
-func suggestPagerReplacement(command, cmdLower string) string {
-	parts := strings.Fields(command)
-	if len(parts) < 2 {
-		return ""
-	}
-	// Extract the file argument (everything after the pager command)
-	fileArgs := strings.Join(parts[1:], " ")
-	pager := strings.ToLower(parts[0])
-
-	switch pager {
-	case "less", "more":
-		return fmt.Sprintf("cat %s | head -200", fileArgs)
-	case "vim", "vi", "nano", "emacs", "pico", "ed":
-		return fmt.Sprintf("cat %s", fileArgs)
-	}
-	return ""
-}
-
-// suggestLiveMonitoringReplacement suggests bounded alternatives for live tools.
-func suggestLiveMonitoringReplacement(command, cmdLower string) string {
-	parts := strings.Fields(cmdLower)
-	if len(parts) == 0 {
-		return ""
-	}
-	tool := parts[0]
-
-	switch tool {
-	case "top", "htop", "atop":
-		return "ps aux --sort=-%cpu | head -20"
-	case "iotop":
-		return "iotop -b -n 1" // batch mode, 1 iteration
-	case "iftop", "nload":
-		return "ss -s" // socket statistics summary
-	case "watch":
-		// Extract the watched command and suggest running it once
-		if len(parts) > 1 {
-			// Skip watch and any flags like -n 1
-			cmdStart := 1
-			for i := 1; i < len(parts); i++ {
-				if strings.HasPrefix(parts[i], "-") {
-					cmdStart = i + 1
-					if parts[i] == "-n" && i+1 < len(parts) {
-						cmdStart = i + 2
-					}
-				} else {
-					break
-				}
-			}
-			if cmdStart < len(parts) {
-				watchedCmd := strings.Join(strings.Fields(command)[cmdStart:], " ")
-				return strings.Trim(watchedCmd, "'\"")
-			}
-		}
-	}
-	return ""
-}
-
-// suggestBoundedStreaming adds --tail/--since bounds to streaming commands.
-func suggestBoundedStreaming(command, cmdLower string) string {
-	parts := strings.Fields(command)
-	if len(parts) == 0 {
-		return ""
-	}
-	tool := strings.ToLower(parts[0])
-
-	switch {
-	case tool == "tail":
-		// tail -f /var/log/app.log → tail -n 200 --follow=name /var/log/app.log (or just remove -f)
-		// Simplest: add -n 200 and keep -f for "recent + follow with bound"
-		// Or suggest removing -f entirely
-		result := strings.ReplaceAll(command, " -f", " -n 200")
-		result = strings.ReplaceAll(result, " --follow", " -n 200")
-		return result
-
-	case tool == "journalctl":
-		// journalctl -f → journalctl -n 200 --since "10 min ago"
-		result := command
-		if strings.Contains(cmdLower, " -f") {
-			result = strings.ReplaceAll(result, " -f", ` -n 200 --since "10 min ago"`)
-		}
-		if strings.Contains(cmdLower, " --follow") {
-			result = strings.ReplaceAll(result, " --follow", ` -n 200 --since "10 min ago"`)
-		}
-		return result
-
-	case strings.HasPrefix(tool, "docker") && strings.Contains(cmdLower, "logs"):
-		// docker logs -f container → docker logs --tail=200 container
-		result := strings.ReplaceAll(command, " -f ", " --tail=200 ")
-		result = strings.ReplaceAll(result, " -f", " --tail=200")
-		result = strings.ReplaceAll(result, " --follow ", " --tail=200 ")
-		result = strings.ReplaceAll(result, " --follow", " --tail=200")
-		return result
-
-	case strings.HasPrefix(tool, "kubectl") && strings.Contains(cmdLower, "logs"):
-		// kubectl logs -f pod → kubectl logs --tail=200 --since=10m pod
-		result := strings.ReplaceAll(command, " -f ", " --tail=200 --since=10m ")
-		result = strings.ReplaceAll(result, " -f", " --tail=200 --since=10m")
-		result = strings.ReplaceAll(result, " --follow ", " --tail=200 --since=10m ")
-		result = strings.ReplaceAll(result, " --follow", " --tail=200 --since=10m")
-		return result
-
-	case tool == "dmesg":
-		// dmesg -w → dmesg | tail -200
-		result := strings.ReplaceAll(command, " -w", "")
-		result = strings.ReplaceAll(result, " --follow", "")
-		return result + " | tail -200"
-	}
-	return ""
-}
-
-// suggestNonInteractiveREPL suggests non-interactive form for REPL commands.
-// Returns empty string for cases needing human judgment (what query to run?).
-func suggestNonInteractiveREPL(command, cmdLower string) string {
-	parts := strings.Fields(command)
-	if len(parts) == 0 {
-		return ""
-	}
-	tool := strings.ToLower(parts[0])
-
-	// For SQL CLIs and REPLs, we can't suggest a specific query
-	// but we can show the pattern
-	switch tool {
-	case "mysql", "mariadb":
-		return fmt.Sprintf("%s -e \"SELECT ...\"", command)
-	case "psql":
-		return fmt.Sprintf("%s -c \"SELECT ...\"", command)
-	case "sqlite3":
-		return fmt.Sprintf("%s \"SELECT ...\"", command)
-	case "redis-cli":
-		return fmt.Sprintf("%s PING", command)
-	case "ssh":
-		// ssh host → ssh host "command"
-		return fmt.Sprintf("%s \"ls -la\"", command)
-	}
-	return ""
 }
 
 // hasInteractiveTTYFlags detects flags that request interactive/TTY mode.

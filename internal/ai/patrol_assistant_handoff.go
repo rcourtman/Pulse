@@ -314,7 +314,7 @@ func patrolRunEffortSummary(run PatrolRunRecord) string {
 		countPatrolRunSingularFact(run.TriageFlags, "triage flag"),
 	}
 	if run.TriageSkippedLLM {
-		parts = append(parts, "LLM skipped for deterministic triage")
+		parts = append(parts, "legacy quiet-triage run skipped LLM")
 	}
 	if tokenCount > 0 {
 		parts = append(parts, fmt.Sprintf("%d tokens", tokenCount))

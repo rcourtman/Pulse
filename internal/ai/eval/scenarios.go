@@ -1292,10 +1292,9 @@ func GuestControlNaturalLanguageScenario() Scenario {
 // GuestControlMultiMentionScenario tests querying multiple resources via mentions.
 // Each step queries one resource with a structured mention.
 //
-// KNOWN LIMITATION: The model loops on read-only queries because tool_choice=none
-// forcing only applies after writes. The model calls pulse_query repeatedly until
-// budget-exhausted, often producing 0 content. Assertions are relaxed to document
-// this behavior — tighten them once read-looping is fixed.
+// KNOWN LIMITATION: Some models loop on read-only queries until budget-exhausted,
+// often producing 0 content. Assertions are relaxed to document this behavior;
+// tighten them once read-looping is fixed without Pulse-owned tool forcing.
 func GuestControlMultiMentionScenario() Scenario {
 	t := loadEvalTargets()
 	mention1 := StepMention{
@@ -1401,8 +1400,8 @@ func ReadOnlyModelChoiceScenario() Scenario {
 }
 
 // ReadLoopRecoveryScenario tests that the model produces text output even when
-// tool calls are budget-blocked or loop-detected. This validates the toolBlockedLastTurn
-// fix: after blocked calls, tool_choice=none forces a text response.
+// tool calls are budget-blocked or loop-detected. After blocked calls, Pulse
+// omits tools on the follow-up turn so the selected model can produce text.
 //
 // The scenario asks a broad question that may trigger multiple tool calls. The key
 // assertion is that the model always produces meaningful content — it should never

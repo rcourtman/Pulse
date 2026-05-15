@@ -2654,7 +2654,7 @@ func (s *Service) applyChatContextSettings() {
 //
 // Philosophy: This prompt provides identity, context, and tool policy. Tool
 // selection remains model-owned; Pulse enforces safety after a model choice via
-// tool policy, approvals, FSM verification gates, and phantom execution checks.
+// tool policy, approvals, and FSM verification gates.
 func (s *Service) buildSystemPrompt() string {
 	return `You are Pulse AI, a knowledgeable infrastructure assistant. You pair-program with the user on their homelab and infrastructure tasks.
 
@@ -2697,7 +2697,7 @@ You are like a colleague doing pair programming on infrastructure tasks. Tool ca
 ## TASK COMPLETION
 - After successful control actions, the system auto-verifies. Once verified, stop making tool calls and respond.
 - If a tool call is BLOCKED, read the error message carefully and follow its instructions exactly.
-- If told to call pulse_query or pulse_read first, you MUST do that before retrying the blocked action.`
+- If a tool call is BLOCKED, use the returned facts and policy boundary to decide whether more read context, a different governed tool call, or user clarification is needed.`
 }
 
 func (s *Service) buildToolGovernancePromptSection() string {

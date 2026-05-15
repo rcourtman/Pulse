@@ -14,7 +14,8 @@ import (
 )
 
 // ensureFinalTextResponse checks if the result messages contain any assistant text.
-// If not, it makes one last text-only LLM call to force the model to summarize its findings.
+// If not, it makes one last LLM call without tools so the model can summarize
+// its findings.
 // This prevents the loop from exiting silently after making tool calls without answering.
 //
 // cost-recording-exempt: any tokens this final summary turn consumes
@@ -62,8 +63,8 @@ func (a *AgenticLoop) ensureFinalTextResponse(
 		Messages:    cleanMessages,
 		System:      a.getSystemPrompt(),
 		ExecutionID: a.executionID,
-		ToolChoice:  &providers.ToolChoice{Type: providers.ToolChoiceNone},
-		// No Tools field — completely omit tools to prevent hallucinated function calls
+		// No Tools field: this is a final narrative turn, and Pulse avoids
+		// provider-specific tool_choice transport fields.
 	}
 	a.mu.Lock()
 	requestSanitizer := a.requestSanitizer
