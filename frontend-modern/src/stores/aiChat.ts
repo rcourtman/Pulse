@@ -15,7 +15,6 @@ export interface AIChatContextBriefing {
   actionHref?: string;
   commandSummary?: string;
   safetyNote?: string;
-  suggestedPrompts?: string[];
 }
 
 export interface AIChatHandoffResource {
@@ -69,7 +68,6 @@ export interface AIChatContext {
   targetType?: string;
   targetId?: string;
   context?: Record<string, unknown>;
-  initialPrompt?: string;
   findingId?: string; // If opened from AI Insights "Get Help", the finding ID to resolve on success
   briefing?: AIChatContextBriefing;
   handoffContext?: string;
@@ -78,15 +76,6 @@ export interface AIChatContext {
   handoffMetadata?: AIChatHandoffMetadata;
   // Per-request execution mode override; false keeps scoped handoffs approval-required.
   autonomousMode?: boolean;
-  // When true, the chat surface should auto-submit the initialPrompt as
-  // soon as the drawer opens, rather than just pre-filling the input and
-  // waiting for the operator to press Enter. Used by action-style entry
-  // points like "Explain" / "Investigate" where the operator has already
-  // decided to invoke the action by clicking the button — leaving them
-  // to also press Enter is friction. Discuss-style entry points where
-  // the operator is opening chat to drive the conversation themselves
-  // should leave this false (the default).
-  autoSendInitialPrompt?: boolean;
 }
 
 // A single context item that can be accumulated
@@ -468,34 +457,6 @@ export const aiChatStore = {
       (additionalContext?.guestName as string) || (additionalContext?.name as string) || targetId;
     this.addContextItem(targetType, targetId, name, additionalContext || {});
     setIsAIChatOpen(true);
-  },
-
-  // Open with a pre-filled prompt
-  openWithPrompt(prompt: string, context?: Omit<AIChatContext, 'initialPrompt'>) {
-    setAIChatContext({
-      ...context,
-      initialPrompt: prompt,
-    });
-    setIsAIChatOpen(true);
-  },
-
-  // Clear the initialPrompt so it doesn't re-fire on subsequent opens
-  clearInitialPrompt() {
-    setAIChatContext((prev) => {
-      if (!prev.initialPrompt) return prev;
-      const { initialPrompt: _, ...rest } = prev;
-      return rest;
-    });
-  },
-
-  // Clear the auto-send flag after firing, so a subsequent open of the
-  // drawer without an explicit autoSend doesn't accidentally re-fire.
-  clearAutoSendFlag() {
-    setAIChatContext((prev) => {
-      if (!prev.autoSendInitialPrompt) return prev;
-      const { autoSendInitialPrompt: _, ...rest } = prev;
-      return rest;
-    });
   },
 
   // Clear the findingId after first message is sent

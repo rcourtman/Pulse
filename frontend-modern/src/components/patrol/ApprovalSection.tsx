@@ -91,13 +91,13 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   ) => {
     e.stopPropagation();
     const handoff = assistantHandoff(approval, fix);
-    aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
+    aiChatStore.open(handoff.context);
   };
 
   const handleDiscussQueuedFix = (e: Event) => {
     e.stopPropagation();
     const handoff = assistantHandoff(null);
-    aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
+    aiChatStore.open(handoff.context);
   };
 
   // Load investigation details when outcome indicates a fix was proposed/executed

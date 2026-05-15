@@ -313,8 +313,6 @@ type AlertToFindingConfig struct {
 	DefaultCategory UnifiedCategory
 	// TypeCategoryMap maps alert types to categories
 	TypeCategoryMap map[string]UnifiedCategory
-	// GenerateRecommendation enables AI-style recommendations for threshold alerts
-	GenerateRecommendation bool
 }
 
 // DefaultAlertToFindingConfig returns sensible defaults
@@ -346,7 +344,6 @@ func DefaultAlertToFindingConfig() AlertToFindingConfig {
 			"oom":              CategoryReliability,
 			"imageUpdateAvail": CategoryConfiguration,
 		},
-		GenerateRecommendation: true,
 	}
 }
 
@@ -513,11 +510,6 @@ func (s *UnifiedStore) ConvertAlert(alert AlertAdapter) *UnifiedFinding {
 	// Generate evidence
 	finding.Evidence = fmt.Sprintf("Threshold alert triggered: %s = %.1f (threshold: %.1f)",
 		alertType, alert.GetValue(), alert.GetThreshold())
-
-	// Generate recommendation if enabled
-	if s.config.GenerateRecommendation {
-		finding.Recommendation = generateRecommendation(alertType, alert.GetValue(), alert.GetThreshold())
-	}
 
 	// Author detection-time impact text per alert type. The text describes the
 	// operational consequence of operator inaction; it does not vary with
@@ -1281,30 +1273,6 @@ func generateImpact(alertType string) string {
 		return "Nothing on this resource is running, so any workload, backup, or dependent service it provides is unavailable."
 	default:
 		return ""
-	}
-}
-
-func generateRecommendation(alertType string, value, threshold float64) string {
-	switch alertType {
-	case "cpu":
-		return "Consider investigating high CPU processes or allocating more CPU resources."
-	case "memory":
-		return "Consider investigating memory-intensive processes or increasing RAM allocation."
-	case "disk":
-		if value > 95 {
-			return "URGENT: Disk is nearly full. Free up space immediately or expand storage."
-		}
-		return "Consider cleaning up unused files or expanding disk capacity."
-	case "usage", "storage":
-		return "Consider removing unused data or expanding storage capacity."
-	case "temperature":
-		return "Check cooling systems and airflow. Consider reducing workload."
-	case "offline", "nodeOffline":
-		return "Investigate connectivity and check if the resource is accessible."
-	case "poweredOff":
-		return "Start the resource if it should be running, or acknowledge if maintenance is planned."
-	default:
-		return "Investigate the alert and take appropriate action."
 	}
 }
 

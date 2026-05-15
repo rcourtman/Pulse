@@ -16,7 +16,6 @@ export const AI_CHAT_EMPTY_STATE_TITLE = 'Ask about your infrastructure';
 export const AI_CHAT_EMPTY_STATE_SUBTITLE =
   'Chat with your configured model using Pulse context and governed tools.';
 export const AI_CHAT_INPUT_PLACEHOLDER = 'Ask about your infrastructure...';
-export const AI_CHAT_SUGGESTIONS_LABEL = 'Try asking';
 export const AI_CHAT_QUESTION_CARD_TITLE = 'Pulse Assistant needs your input';
 export const AI_CHAT_QUESTION_CARD_PLACEHOLDER = 'Type your answer...';
 export const AI_CHAT_ASSISTANT_MESSAGE_LABEL = 'Pulse Assistant';
@@ -25,12 +24,10 @@ export const AI_CHAT_CONTEXT_USED_LABEL = 'Context used';
 export interface AIChatEmptyStateBriefingInput {
   sourceLabel?: string;
   subject?: string;
-  suggestedPrompts?: string[];
   title?: string;
 }
 
 export interface AIChatEmptyStatePresentation {
-  suggestions: string[];
   subtitle?: string;
   title: string;
 }
@@ -43,11 +40,6 @@ export function getAIChatLauncherTitle(contextName?: unknown) {
   return 'Open Pulse Assistant';
 }
 
-export function getAIChatEmptyStateSuggestions(isCluster: boolean) {
-  void isCluster;
-  return [];
-}
-
 export function getAIChatEmptyStatePresentation(args: {
   briefing?: AIChatEmptyStateBriefingInput;
   isCluster: boolean;
@@ -55,21 +47,17 @@ export function getAIChatEmptyStatePresentation(args: {
   const sourceLabel = args.briefing?.sourceLabel?.trim();
   const title = args.briefing?.title?.trim();
   const subject = args.briefing?.subject?.trim();
-  const hasSuggestedPrompts = (args.briefing?.suggestedPrompts ?? []).some(
-    (prompt) => prompt.trim().length > 0,
-  );
+  void args.isCluster;
 
-  if (args.briefing && (sourceLabel || title || subject || hasSuggestedPrompts)) {
+  if (args.briefing && (sourceLabel || title || subject)) {
     return {
-      title: sourceLabel ? `Review ${sourceLabel} context` : 'Review attached context',
-      subtitle: [title, subject].filter(Boolean).join(' · ') || undefined,
-      suggestions: [],
+      title: 'Context attached',
+      subtitle: [sourceLabel, title, subject].filter(Boolean).join(' · ') || undefined,
     };
   }
 
   return {
     title: AI_CHAT_EMPTY_STATE_TITLE,
     subtitle: AI_CHAT_EMPTY_STATE_SUBTITLE,
-    suggestions: getAIChatEmptyStateSuggestions(args.isCluster),
   };
 }

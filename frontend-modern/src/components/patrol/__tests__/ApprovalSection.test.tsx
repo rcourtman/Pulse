@@ -21,7 +21,7 @@ const approveInvestigationFixMock = vi.hoisted(() => vi.fn());
 const denyInvestigationFixMock = vi.hoisted(() => vi.fn());
 const notificationSuccessMock = vi.hoisted(() => vi.fn());
 const notificationErrorMock = vi.hoisted(() => vi.fn());
-const openWithPromptMock = vi.hoisted(() => vi.fn());
+const openMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/api/ai', () => ({
   AIAPI: {
@@ -52,7 +52,7 @@ vi.mock('@/stores/notifications', () => ({
 
 vi.mock('@/stores/aiChat', () => ({
   aiChatStore: {
-    openWithPrompt: (...args: unknown[]) => openWithPromptMock(...args),
+    open: (...args: unknown[]) => openMock(...args),
   },
 }));
 
@@ -85,7 +85,7 @@ describe('ApprovalSection', () => {
     denyInvestigationFixMock.mockReset();
     notificationSuccessMock.mockReset();
     notificationErrorMock.mockReset();
-    openWithPromptMock.mockReset();
+    openMock.mockReset();
   });
 
   afterEach(() => {
@@ -122,13 +122,8 @@ describe('ApprovalSection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /discuss with assistant/i }));
 
-    expect(openWithPromptMock).toHaveBeenCalledTimes(1);
-    const [prompt, context] = openWithPromptMock.mock.calls[0];
-    expect(prompt).toContain(
-      'I\'d like to discuss this Patrol finding: "CPU saturation" on node-1',
-    );
-    expect(prompt).toContain('Governed action posture is attached');
-    expect(prompt).toContain('Recover or regenerate the governed approval before execution');
+    expect(openMock).toHaveBeenCalledTimes(1);
+    const [context] = openMock.mock.calls[0];
     expect(context).toEqual(
       expect.objectContaining({
         targetType: 'host',
@@ -195,13 +190,10 @@ describe('ApprovalSection', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /fix with assistant/i }));
 
-    expect(openWithPromptMock).toHaveBeenCalledTimes(1);
-    const [prompt, context] = openWithPromptMock.mock.calls[0];
-    expect(prompt).toContain('Governed approval approval-1 is attached');
-    expect(prompt).toContain('approval status pending');
-    expect(prompt).toContain('high risk');
-    expect(prompt).not.toContain('systemctl restart nginx');
-    expect(prompt).not.toContain('Please execute this fix');
+    expect(openMock).toHaveBeenCalledTimes(1);
+    const [context] = openMock.mock.calls[0];
+    expect(JSON.stringify(context)).not.toContain('systemctl restart nginx');
+    expect(JSON.stringify(context)).not.toContain('Please execute this fix');
     expect(context).toEqual(
       expect.objectContaining({
         targetType: 'agent',
@@ -293,13 +285,9 @@ describe('ApprovalSection', () => {
     expect(await screen.findByText('approval expired')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /fix with assistant/i }));
 
-    expect(openWithPromptMock).toHaveBeenCalledTimes(1);
-    const [prompt, context] = openWithPromptMock.mock.calls[0];
-    expect(prompt).toContain('Governed action posture is attached');
-    expect(prompt).toContain('recorded action artifact Restart the workload service');
-    expect(prompt).toContain('target node-1');
-    expect(prompt).toContain('high risk');
-    expect(prompt).not.toContain('systemctl restart nginx');
+    expect(openMock).toHaveBeenCalledTimes(1);
+    const [context] = openMock.mock.calls[0];
+    expect(JSON.stringify(context)).not.toContain('systemctl restart nginx');
     expect(context).toEqual(
       expect.objectContaining({
         targetType: 'agent',

@@ -8,8 +8,7 @@ interface BuildAlertIncidentAssistantHandoffInput {
 }
 
 interface AlertIncidentAssistantHandoff {
-  prompt: string;
-  context: Omit<AIChatContext, 'initialPrompt'>;
+  context: AIChatContext;
 }
 
 interface SanitizedIncidentEvent {
@@ -55,29 +54,7 @@ export function buildAlertIncidentAssistantHandoff({
     eventCountLabel,
   });
 
-  const prompt = [
-    `Discuss this ${levelLabel} alert incident from Pulse Alerts.`,
-    '',
-    `**Resource:** ${resourceLabel}`,
-    `**Alert Type:** ${incident.alertType}`,
-    `**Status:** ${statusLabel}`,
-    `**Duration:** ${durationText}`,
-    incident.node ? `**Node:** ${incident.node}` : undefined,
-    incident.message ? `**Message:** ${incident.message}` : undefined,
-    '',
-    'Use the attached sanitized incident timeline context. Command details and output stay in the incident or approval surface; do not infer, repeat, or execute raw command text from this chat handoff.',
-    '',
-    'Please:',
-    '1. Explain what the incident record says happened',
-    '2. Identify the likely cause and any uncertainty',
-    '3. Call out related checks the operator should review',
-    '4. Ask for approval before running diagnostics or remediation',
-  ]
-    .filter((line): line is string => line !== undefined)
-    .join('\n');
-
   return {
-    prompt,
     context: {
       targetType,
       targetId: incident.resourceId,

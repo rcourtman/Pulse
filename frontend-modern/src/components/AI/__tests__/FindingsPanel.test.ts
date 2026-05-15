@@ -51,12 +51,9 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('buildPatrolAssistantFindingHandoff');
     expect(findingsPanelSource).toContain('buildPatrolAssistantApprovalBriefingInput');
     expect(findingsPanelSource).toContain('buildPatrolAssistantProposedFixBriefingInput');
-    // openWithPrompt receives the handoff context spread inline (so the call
-    // site can layer autoSendInitialPrompt for verb-style entrypoints like
-    // Investigate / Why / Verify fix). The base handoff.context must still
-    // flow through.
-    expect(findingsPanelSource).toContain('aiChatStore.openWithPrompt(handoff.prompt, {');
-    expect(findingsPanelSource).toContain('...handoff.context');
+    expect(findingsPanelSource).toContain('aiChatStore.open(handoff.context)');
+    expect(findingsPanelSource).not.toContain('autoSendInitialPrompt');
+    expect(findingsPanelSource).not.toContain('openWithPrompt');
     expect(findingsPanelSource).toContain('investigationOutcome: finding.investigationOutcome');
     expect(findingsPanelSource).toContain('investigationStatus: finding.investigationStatus');
     expect(findingsPanelSource).toContain('remediationId: finding.remediationPlanId');
@@ -72,7 +69,7 @@ describe('FindingsPanel assistant handoff', () => {
   });
 
   it('routes remediation plan handoffs through the command-free Patrol handoff model', () => {
-    expect(findingsPanelSource).toContain('buildPatrolRemediationPlanAssistantPrompt');
+    expect(findingsPanelSource).not.toContain('buildPatrolRemediationPlanAssistantPrompt');
     expect(findingsPanelSource).toContain('buildPatrolRemediationPlanAssistantModelContext');
     expect(findingsPanelSource).toContain('buildPatrolRemediationPlanAssistantBriefing');
     expect(findingsPanelSource).toContain('handoffContext,');
@@ -91,15 +88,13 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('Last time this resolved');
   });
 
-  it('exposes an Explain entry point that seeds Assistant with an explanation prompt', () => {
-    // The Explain button is a contextual entry point parallel to "Discuss with
-    // Assistant" but with an intent that produces explanation framing rather
-    // than open-ended discussion. Both flow through the same handoff builder
-    // so context attachment stays uniform.
-    expect(findingsPanelSource).toContain('handleExplainFinding');
-    expect(findingsPanelSource).toContain("openFindingInAssistant(finding, 'explain')");
-    expect(findingsPanelSource).toMatch(/>\s*Explain\s*</);
-    expect(findingsPanelSource).toContain("openFindingInAssistant(finding, 'discuss')");
+  it('does not expose intent-specific Assistant routing from finding actions', () => {
+    expect(findingsPanelSource).toContain('Open in Assistant');
+    expect(findingsPanelSource).not.toContain('handleExplainFinding');
+    expect(findingsPanelSource).not.toContain('handleInvestigateFinding');
+    expect(findingsPanelSource).not.toContain('handleWhyFinding');
+    expect(findingsPanelSource).not.toContain('handleVerifyFixFinding');
+    expect(findingsPanelSource).not.toContain("openFindingInAssistant(finding, '");
   });
 
   it('surfaces investigation_record.confidence as a badge in the collapsed row', () => {
@@ -153,12 +148,11 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toMatch(/>\s*Copy summary\s*</);
   });
 
-  it('keeps expanded finding actions behind a primary action and compact menus', () => {
+  it('keeps expanded finding actions behind a primary Assistant action and compact Manage menu', () => {
     expect(findingsPanelSource).toContain('getPrimaryAssistantFindingAction');
-    expect(findingsPanelSource).toContain('Assistant');
     expect(findingsPanelSource).toContain('Manage');
-    expect(findingsPanelSource).toContain('min-w-40');
     expect(findingsPanelSource).toContain('min-w-48');
+    expect(findingsPanelSource).not.toContain('min-w-40');
   });
 
   it('exposes a manual Mark resolved action that goes through the patrol resolve store action', () => {
@@ -252,19 +246,13 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).not.toContain('<For each={plan().steps}>');
   });
 
-  it('renders the operator-facing Impact line between Description and Recommendation', () => {
+  it('renders the operator-facing Impact line without a Pulse-authored recommendation line', () => {
     // The expanded finding card must surface Finding.Impact directly so
     // detection-time consequence-if-ignored copy reaches the operator on the
     // findings list, not just inside the durable investigation record.
     expect(findingsPanelSource).toContain('Show when={finding.impact}');
     expect(findingsPanelSource).toContain('>Impact:</span> {finding.impact}');
-    // Impact must precede Recommendation in the rendered card, mirroring the
-    // narrative order: what we found, why it matters, what to do about it.
-    const impactIndex = findingsPanelSource.indexOf('>Impact:</span>');
-    const recommendationIndex = findingsPanelSource.indexOf('>Recommendation:</span>');
-    expect(impactIndex).toBeGreaterThan(0);
-    expect(recommendationIndex).toBeGreaterThan(0);
-    expect(impactIndex).toBeLessThan(recommendationIndex);
+    expect(findingsPanelSource).not.toContain('>Recommendation:</span>');
   });
 });
 
@@ -1072,7 +1060,7 @@ describe('aiFindingPresentation', () => {
       expect(formatted).toContain('Resource: db-01 (vm)');
       expect(formatted).toContain('Description: Datastore is at 92% capacity.');
       expect(formatted).toContain('Impact: Backups will be skipped if free space drops below 5%.');
-      expect(formatted).toContain('Recommendation: Free 200GB before the next backup window.');
+      expect(formatted).not.toContain('Recommendation: Free 200GB before the next backup window.');
       expect(formatted).toContain('Confidence: medium');
       expect(formatted).toContain('Regressed: 2×');
     });

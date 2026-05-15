@@ -100,8 +100,8 @@ describe('aiChatStore', () => {
     expect(aiChatStore.contextItems[0].name).toBe('storage-1');
   });
 
-  it('opens with a pre-filled prompt', () => {
-    aiChatStore.openWithPrompt('hello', {
+  it('opens with attached context only', () => {
+    aiChatStore.open({
       targetType: 'vm',
       targetId: 'vm-101',
       briefing: {
@@ -109,76 +109,34 @@ describe('aiChatStore', () => {
         title: 'Investigation record attached',
         actionLabel: 'Open Patrol provider settings',
         actionHref: '/settings/system-ai',
-        suggestedPrompts: ['Explain recent changes and correlations'],
       },
       handoffMetadata: {
         kind: 'patrol_finding',
       },
     });
     expect(aiChatStore.isOpen).toBe(true);
-    expect(aiChatStore.context.initialPrompt).toBe('hello');
     expect(aiChatStore.context.targetId).toBe('vm-101');
     expect(aiChatStore.context.briefing?.title).toBe('Investigation record attached');
     expect(aiChatStore.context.briefing?.actionLabel).toBe('Open Patrol provider settings');
     expect(aiChatStore.context.briefing?.actionHref).toBe('/settings/system-ai');
-    expect(aiChatStore.context.briefing?.suggestedPrompts).toEqual([
-      'Explain recent changes and correlations',
-    ]);
     expect(aiChatStore.context.handoffMetadata).toMatchObject({
       kind: 'patrol_finding',
     });
   });
 
-  it('threads autoSendInitialPrompt through openWithPrompt and clears it on clearAutoSendFlag', () => {
-    // Action-style entry points (Explain, Investigate, eventually Verify
-    // fix) set autoSendInitialPrompt: true so the chat surface submits
-    // immediately on open instead of pre-filling the input and waiting
-    // for Enter. Discuss-style entries leave it falsy.
-    aiChatStore.openWithPrompt('Explain this Patrol finding', {
-      targetType: 'vm',
-      targetId: 'vm-100',
-      autoSendInitialPrompt: true,
-    });
-
-    expect(aiChatStore.context.initialPrompt).toBe('Explain this Patrol finding');
-    expect(aiChatStore.context.autoSendInitialPrompt).toBe(true);
-
-    aiChatStore.clearAutoSendFlag();
-
-    expect(aiChatStore.context.autoSendInitialPrompt).toBeUndefined();
-    // The initialPrompt is independent — clearAutoSendFlag must not also
-    // clear the prompt itself (the chat effect still needs to read and
-    // submit it before its own clearInitialPrompt runs).
-    expect(aiChatStore.context.initialPrompt).toBe('Explain this Patrol finding');
-  });
-
-  it('defaults autoSendInitialPrompt to undefined when not provided', () => {
-    aiChatStore.openWithPrompt('discuss this', {
-      targetType: 'vm',
-      targetId: 'vm-200',
-    });
-    expect(aiChatStore.context.autoSendInitialPrompt).toBeUndefined();
-  });
-
-  it('preserves scoped autonomous-mode overrides for pre-filled prompts', () => {
-    aiChatStore.openWithPrompt('brief me', {
+  it('preserves scoped autonomous-mode overrides for context-only opens', () => {
+    aiChatStore.open({
       targetType: 'dashboard',
       targetId: 'pulse-brief',
       autonomousMode: false,
     });
 
     expect(aiChatStore.isOpen).toBe(true);
-    expect(aiChatStore.context.initialPrompt).toBe('brief me');
-    expect(aiChatStore.context.autonomousMode).toBe(false);
-
-    aiChatStore.clearInitialPrompt();
-
-    expect(aiChatStore.context.initialPrompt).toBeUndefined();
     expect(aiChatStore.context.autonomousMode).toBe(false);
   });
 
-  it('preserves model-only handoff context and resources for pre-filled prompts', () => {
-    aiChatStore.openWithPrompt('discuss this incident', {
+  it('preserves model-only handoff context and resources for context-only opens', () => {
+    aiChatStore.open({
       targetType: 'storage',
       targetId: 'storage-1',
       autonomousMode: false,
@@ -188,19 +146,7 @@ describe('aiChatStore', () => {
       handoffActions: [{ findingId: 'finding-1', approvalId: 'approval-1' }],
     });
 
-    expect(aiChatStore.context.initialPrompt).toBe('discuss this incident');
     expect(aiChatStore.context.handoffContext).toContain('[Alert Incident Context]');
-    expect(aiChatStore.context.handoffResources).toEqual([
-      { id: 'storage-1', name: 'tank', type: 'storage', node: 'nas-1' },
-    ]);
-    expect(aiChatStore.context.handoffActions).toEqual([
-      { findingId: 'finding-1', approvalId: 'approval-1' },
-    ]);
-
-    aiChatStore.clearInitialPrompt();
-
-    expect(aiChatStore.context.initialPrompt).toBeUndefined();
-    expect(aiChatStore.context.handoffContext).toContain('Command event recorded');
     expect(aiChatStore.context.handoffResources).toEqual([
       { id: 'storage-1', name: 'tank', type: 'storage', node: 'nas-1' },
     ]);
@@ -210,7 +156,7 @@ describe('aiChatStore', () => {
   });
 
   it('clears request handoff payloads while preserving safe visible context', () => {
-    aiChatStore.openWithPrompt('discuss this incident', {
+    aiChatStore.open({
       targetType: 'storage',
       targetId: 'storage-1',
       autonomousMode: false,

@@ -88,7 +88,7 @@ describe('AlertResourceIncidentsPanel', () => {
   });
 
   it('opens Assistant from a resource incident without carrying raw command details', () => {
-    const openWithPromptSpy = vi.spyOn(aiChatStore, 'openWithPrompt');
+    const openSpy = vi.spyOn(aiChatStore, 'open');
     aiChatStore.setEnabled(true);
 
     render(() => (
@@ -147,8 +147,8 @@ describe('AlertResourceIncidentsPanel', () => {
       }),
     );
 
-    expect(openWithPromptSpy).toHaveBeenCalledTimes(1);
-    const [, context] = openWithPromptSpy.mock.calls[0] as [string, Record<string, unknown>];
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    const [context] = openSpy.mock.calls[0] as [Record<string, unknown>];
     expect(context).toMatchObject({
       targetType: 'storage',
       targetId: 'storage:tank',

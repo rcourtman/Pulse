@@ -111,9 +111,10 @@ operator-facing alert routing behavior for live runtime alerts.
    `frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts`;
    these handoffs must preserve alert context, force request-scoped approval
    mode, send bounded model-only handoff context plus structured resource
-   references through the shared Assistant chat transport, and render a visible
+   references through the shared Assistant chat transport, and render a compact
    Alerts-owned briefing in the Assistant drawer without transferring raw
-   command payloads.
+   command payloads or synthesizing, pre-filling, or auto-submitting a chat
+   prompt.
 8. Add or change Pulse Assistant incident timeline handoffs through
    `frontend-modern/src/components/Alerts/IncidentAssistantHandoffButton.tsx`
    and `frontend-modern/src/components/Alerts/incidentAssistantHandoffModel.ts`;
@@ -121,7 +122,10 @@ operator-facing alert routing behavior for live runtime alerts.
    summaries, force request-scoped approval mode, send the same sanitized facts
    as model-only handoff context plus structured resource references through
    the shared Assistant chat transport, and keep raw command/output details in
-   the incident or approval surface rather than the chat handoff.
+   the incident or approval surface rather than the chat handoff. Incident
+   handoffs must not add suggested prompt chips or route-owned remediation
+   instructions; the configured model owns investigation and next-step
+   reasoning after it receives the context.
 
 ## Forbidden Paths
 
@@ -375,9 +379,9 @@ show Pro-required tooltip copy, track upgrade clicks, or open the commercial
 handoff route.
 Unlocked alert-investigation Assistant handoffs are contextual explanation and
 triage entries, not autonomous execution grants. `InvestigateAlertButton.tsx`
-must pass `autonomousMode: false` when it opens Pulse Assistant, and the seeded
-prompt may ask for root-cause analysis, metrics checks, and remediation advice
-only if command or change execution remains explicitly approval-bound. The
+must pass `autonomousMode: false` when it opens Pulse Assistant, and it must
+open the drawer with context only rather than seeding a product-authored prompt
+or choosing a diagnostic/remediation route. The
 visible drawer briefing for that same handoff is Alerts-owned presentation
 context: alert identifier, severity, metric, resource, threshold, duration,
 node label, and message may be shown, while raw diagnostic or remediation

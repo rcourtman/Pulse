@@ -62,7 +62,7 @@ vi.mock('@/stores/notifications', () => ({
 
 vi.mock('@/stores/aiChat', () => ({
   aiChatStore: {
-    openWithPrompt: vi.fn(),
+    open: vi.fn(),
   },
 }));
 

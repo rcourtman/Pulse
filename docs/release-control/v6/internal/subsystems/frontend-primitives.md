@@ -195,7 +195,7 @@ work extends shared components instead of creating new local variants.
    must remain visibly sourced to Pulse Patrol, restore a `patrol-run` target
    plus run ID/type/status/runtime-failure presentation only, and must not
    rehydrate model-only runtime failure detail into browser context. New Patrol
-   run requests follow the same drawer boundary: source-owned prompt text and
+   run requests follow the same drawer boundary: source-owned context and
    briefing copy may show classified, redacted failure summaries for operator
    review, but `handoffContext`, `handoffResources`, and `handoffActions` for
    run-history context must stay absent from the browser request so the backend
@@ -242,13 +242,12 @@ Patrol's primary assessment strip is descriptive only; it must not render a
 Patrol-authored recommended next step, suggested prompt chips, or a secondary
 action band inside the assessment shell. If the same assessment opens
 Assistant, the Patrol-to-Assistant handoff must carry only bounded evidence,
-resource references, and governed approval/action posture as model-only context.
-recommendation as safe bounded metadata so the drawer briefing and first-turn
-prompt explain the same operator-facing priority. Feature-owned Assistant
-handoff prompts may provide source context and safe metadata, but the shared
-drawer boundary must not turn those prompts into frontend-authored tool routes
-or remediation plans; the configured model owns tool choice and diagnostic
-reasoning after the request reaches the AI runtime.
+resource references, and governed approval/action posture as model-only
+context. Feature-owned Assistant handoffs may provide source context and safe
+metadata, but the shared drawer boundary must not turn those handoffs into
+frontend-authored prompts, tool routes, or remediation plans; the configured
+model owns tool choice and diagnostic reasoning after the request reaches the
+AI runtime.
 
 1. Add shared primitives in `frontend-modern/src/components/shared/`
    Framed product table surfaces must consume the shared `TableCard` frame and
@@ -1003,18 +1002,15 @@ reasoning after the request reaches the AI runtime.
     than guessing a model in the modal.
     Scoped Assistant handoffs must keep request-local execution overrides in
     drawer context. Dashboard and other route-owned entry points may open the
-    Assistant drawer with a pre-filled prompt, context, and
-    `autonomousMode:false`, but they must not mutate persistent AI control-level
+    Assistant drawer with source context and `autonomousMode:false`, but they
+    must not pre-fill or auto-submit a prompt, mutate persistent AI control-level
     settings or trigger background Assistant settings/model bootstrap before
     the drawer is open. Patrol finding handoffs that add structured
-    investigation-record framing must derive that prompt copy through
+    investigation-record framing must derive that context through
     `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
     so shared drawer primitives stay shell-owned rather than becoming a
-    Patrol-specific prompt formatter. The Patrol-owned helper exposes a
-    `PatrolAssistantFindingIntent` parameter ('discuss' | 'explain') so
-    contextual entry points can vary the seeded leading sentence without
-    duplicating the structured-context attachment; shared drawer
-    primitives must not branch on intent themselves. Patrol-page
+    Patrol-specific diagnosis formatter; shared drawer primitives must not
+    branch on intent themselves. Patrol-page
     surfaces must not add standalone trust strips to shared header or
     workspace chrome; high-signal trust facts may feed the Patrol-owned
     assessment readout, but shared drawer/chrome primitives stay free of
@@ -3169,8 +3165,9 @@ that plain settings routes render without assistant bootstrap traffic or
 console noise.
 When an owned Patrol or alert surface attaches a source-named Assistant
 handoff, that same drawer shell must keep the empty conversation state aligned
-with the attached briefing instead of rendering generic cluster/system starter
-prompts below the source-owned context.
+with the attached briefing as neutral `Context attached` copy instead of
+rendering generic cluster/system starter prompts or feature-authored suggested
+prompt chips below the source-owned context.
 Shared table, disclosure, and form primitives must also stay explicitly typed
 at the browser edge. Summary rows may memoize repeated pending-update reads,
 shared buttons must preserve discriminated disclosure props, toggle and a11y

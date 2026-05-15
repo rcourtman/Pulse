@@ -13,8 +13,7 @@ interface BuildAlertAssistantHandoffInput {
 }
 
 interface AlertAssistantHandoff {
-  prompt: string;
-  context: Omit<AIChatContext, 'initialPrompt'>;
+  context: AIChatContext;
 }
 
 export function buildAlertAssistantHandoff({
@@ -55,35 +54,7 @@ export function buildAlertAssistantHandoff({
     levelLabel,
   });
 
-  const promptLines = [
-    `Investigate this ${alert.level.toUpperCase()} alert:`,
-    ``,
-    `**Resource:** ${alert.resourceName}`,
-    `**Alert Type:** ${alert.type}`,
-  ];
-  if (hasMetricValues) {
-    promptLines.push(`**Current Value:** ${currentValue}`);
-    promptLines.push(`**Threshold:** ${thresholdValue}`);
-  }
-  promptLines.push(`**Duration:** ${durationText}`);
-  if (nodeLabel) promptLines.push(`**Node:** ${nodeLabel}`);
-  if (alert.message) promptLines.push(`**Message:** ${alert.message}`);
-  promptLines.push(``);
-  promptLines.push(`Please:`);
-  promptLines.push(`1. Identify the root cause`);
-  if (hasMetricValues) {
-    promptLines.push(`2. Check related metrics`);
-    promptLines.push(`3. Suggest specific remediation steps`);
-    promptLines.push(`4. Ask for operator approval before running any diagnostic command or change`);
-  } else {
-    promptLines.push(`2. Check what changed recently for this resource (state events, recent commands, related alerts)`);
-    promptLines.push(`3. Suggest specific remediation steps`);
-    promptLines.push(`4. Ask for operator approval before running any diagnostic command or change`);
-  }
-  const prompt = promptLines.join('\n');
-
   return {
-    prompt,
     context: {
       targetType,
       targetId: alert.resourceId,

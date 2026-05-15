@@ -47,8 +47,7 @@ describe('incidentAssistantHandoffModel', () => {
       now: new Date('2026-03-20T10:05:00Z'),
     });
 
-    expect(handoff.prompt).toContain('Discuss this Critical alert incident from Pulse Alerts.');
-    expect(handoff.prompt).toContain('Command details and output stay in the incident');
+    expect(handoff).not.toHaveProperty('prompt');
     expect(handoff.context).toMatchObject({
       targetType: 'app-container',
       targetId: 'docker:app-1',

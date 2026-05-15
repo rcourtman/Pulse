@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
 import { ChatMessages } from '../ChatMessages';
 import type { ChatMessage, PendingApproval, PendingQuestion } from '../types';
 
@@ -100,89 +100,6 @@ describe('ChatMessages', () => {
       expect(screen.queryByText('Ask me anything')).not.toBeInTheDocument();
     });
 
-    it('renders suggestion buttons when suggestions provided', () => {
-      render(() => (
-        <ChatMessages
-          messages={[]}
-          {...makeHandlers()}
-          emptyState={{
-            title: 'Welcome',
-            suggestions: ['Show disk usage', 'Check CPU load'],
-          }}
-        />
-      ));
-
-      expect(screen.getByText('Show disk usage')).toBeInTheDocument();
-      expect(screen.getByText('Check CPU load')).toBeInTheDocument();
-    });
-
-    it('calls onSuggestionClick when a suggestion is clicked', () => {
-      const onSuggestionClick = vi.fn();
-      render(() => (
-        <ChatMessages
-          messages={[]}
-          {...makeHandlers()}
-          emptyState={{
-            title: 'Welcome',
-            suggestions: ['Show disk usage', 'Check CPU load'],
-            onSuggestionClick,
-          }}
-        />
-      ));
-
-      fireEvent.click(screen.getByText('Show disk usage'));
-      expect(onSuggestionClick).toHaveBeenCalledWith('Show disk usage');
-      expect(onSuggestionClick).toHaveBeenCalledTimes(1);
-    });
-
-    it('calls onSuggestionClick with the correct suggestion text', () => {
-      const onSuggestionClick = vi.fn();
-      render(() => (
-        <ChatMessages
-          messages={[]}
-          {...makeHandlers()}
-          emptyState={{
-            title: 'Welcome',
-            suggestions: ['Show disk usage', 'Check CPU load'],
-            onSuggestionClick,
-          }}
-        />
-      ));
-
-      fireEvent.click(screen.getByText('Check CPU load'));
-      expect(onSuggestionClick).toHaveBeenCalledWith('Check CPU load');
-    });
-
-    it('does not render suggestions section when suggestions array is empty', () => {
-      render(() => (
-        <ChatMessages
-          messages={[]}
-          {...makeHandlers()}
-          emptyState={{
-            title: 'Welcome',
-            suggestions: [],
-          }}
-        />
-      ));
-
-      expect(screen.queryByText('Try asking')).not.toBeInTheDocument();
-    });
-
-    it('renders "Try asking" label when suggestions exist', () => {
-      render(() => (
-        <ChatMessages
-          messages={[]}
-          {...makeHandlers()}
-          emptyState={{
-            title: 'Welcome',
-            suggestions: ['Check nodes'],
-          }}
-        />
-      ));
-
-      expect(screen.getByText('Try asking')).toBeInTheDocument();
-    });
-
     it('does not show empty state when there are messages', () => {
       render(() => (
         <ChatMessages
@@ -200,30 +117,6 @@ describe('ChatMessages', () => {
 
       expect(screen.queryByText('Welcome')).not.toBeInTheDocument();
       expect(screen.queryByText('Try asking')).not.toBeInTheDocument();
-    });
-
-    it('each suggestion button is individually clickable', () => {
-      const onSuggestionClick = vi.fn();
-      render(() => (
-        <ChatMessages
-          messages={[]}
-          {...makeHandlers()}
-          emptyState={{
-            title: 'Welcome',
-            suggestions: ['A', 'B', 'C'],
-            onSuggestionClick,
-          }}
-        />
-      ));
-
-      fireEvent.click(screen.getByText('A'));
-      fireEvent.click(screen.getByText('B'));
-      fireEvent.click(screen.getByText('C'));
-
-      expect(onSuggestionClick).toHaveBeenCalledTimes(3);
-      expect(onSuggestionClick).toHaveBeenNthCalledWith(1, 'A');
-      expect(onSuggestionClick).toHaveBeenNthCalledWith(2, 'B');
-      expect(onSuggestionClick).toHaveBeenNthCalledWith(3, 'C');
     });
   });
 

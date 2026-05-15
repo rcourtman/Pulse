@@ -8,7 +8,7 @@ import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 // ---------------------------------------------------------------------------
 
 const {
-  openWithPromptMock,
+  openMock,
   openUpgradeDestinationMock,
   formatAlertValueMock,
   mockAiChatStore,
@@ -16,7 +16,7 @@ const {
   getUpgradeActionUrlOrFallbackMock,
   presentationPolicyHidesUpgradePromptsMock,
 } = vi.hoisted(() => {
-  const openWithPromptMock = vi.fn();
+  const openMock = vi.fn();
   const openUpgradeDestinationMock = vi.fn();
   const formatAlertValueMock = vi.fn((value?: number, _type?: string) =>
     value !== undefined ? `${value.toFixed(1)}%` : 'N/A',
@@ -26,10 +26,10 @@ const {
   const presentationPolicyHidesUpgradePromptsMock = vi.fn();
   const mockAiChatStore = {
     enabled: true as boolean | null,
-    openWithPrompt: (...args: unknown[]) => openWithPromptMock(...args),
+    open: (...args: unknown[]) => openMock(...args),
   };
   return {
-    openWithPromptMock,
+    openMock,
     openUpgradeDestinationMock,
     formatAlertValueMock,
     mockAiChatStore,
@@ -86,6 +86,18 @@ function makeAlert(overrides: Partial<Alert> = {}): Alert {
   };
 }
 
+function openedContext(): Record<string, unknown> {
+  return openMock.mock.calls[0]?.[0] as Record<string, unknown>;
+}
+
+function openedBriefing(): { statusLabel?: string; detailLines?: string[]; subject?: string } {
+  return openedContext().briefing as {
+    statusLabel?: string;
+    detailLines?: string[];
+    subject?: string;
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -96,7 +108,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
-  openWithPromptMock.mockReset();
+  openMock.mockReset();
   formatAlertValueMock.mockClear();
   openUpgradeDestinationMock.mockReset();
   getUpgradeActionDestinationMock.mockReset();
@@ -231,7 +243,7 @@ describe('InvestigateAlertButton', () => {
         href: getPublicPricingUrl('ai_alerts'),
         external: true,
       });
-      expect(openWithPromptMock).not.toHaveBeenCalled();
+      expect(openMock).not.toHaveBeenCalled();
     });
 
     it('keeps the locked state non-promotional when upgrade prompts are hidden', async () => {
@@ -248,7 +260,7 @@ describe('InvestigateAlertButton', () => {
       await fireEvent.click(button);
 
       expect(openUpgradeDestinationMock).not.toHaveBeenCalled();
-      expect(openWithPromptMock).not.toHaveBeenCalled();
+      expect(openMock).not.toHaveBeenCalled();
     });
 
     it('still stops propagation when locked and clicked', () => {
@@ -270,23 +282,14 @@ describe('InvestigateAlertButton', () => {
   // Click behavior (unlocked)
   // ---------------------------------------------------------------------------
   describe('click behavior (unlocked)', () => {
-    it('calls openWithPrompt with alert context on click', async () => {
+    it('calls open with alert context on click', async () => {
       const alert = makeAlert();
       render(() => <InvestigateAlertButton alert={alert} />);
       const button = screen.getByRole('button');
       await fireEvent.click(button);
 
-      expect(openWithPromptMock).toHaveBeenCalledTimes(1);
-      const [prompt, context] = openWithPromptMock.mock.calls[0] as [
-        string,
-        Record<string, unknown>,
-      ];
-
-      // Verify prompt contains key alert details
-      expect(prompt).toContain('WARNING');
-      expect(prompt).toContain('test-vm');
-      expect(prompt).toContain('cpu');
-      expect(prompt).toContain('PVE Node 1');
+      expect(openMock).toHaveBeenCalledTimes(1);
+      const context = openedContext();
 
       // Verify context
       expect(context).toMatchObject({
@@ -322,18 +325,14 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [prompt, context] = openWithPromptMock.mock.calls[0] as [
-        string,
-        Record<string, unknown>,
-      ];
+      const context = openedContext();
 
       expect(context.autonomousMode).toBe(false);
       expect(context.briefing).toMatchObject({
         sourceLabel: 'Pulse Alerts',
         title: 'Alert investigation attached',
       });
-      expect(prompt).toContain('Ask for operator approval before running any diagnostic command');
-      expect(prompt).not.toContain('Execute diagnostic commands if safe');
+      expect(JSON.stringify(context)).not.toContain('Execute diagnostic commands if safe');
       expect(JSON.stringify(context.briefing)).not.toContain('systemctl');
     });
 
@@ -362,7 +361,7 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
+      const context = openedContext();
       expect(context.targetType).toBe('agent');
     });
 
@@ -371,7 +370,7 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
+      const context = openedContext();
       expect(context.targetType).toBe('app-container');
     });
 
@@ -380,7 +379,7 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
+      const context = openedContext();
       expect(context.targetType).toBe('storage');
     });
 
@@ -389,7 +388,7 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} resourceType="lxc" />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
+      const context = openedContext();
       expect(context.targetType).toBe('vm');
     });
 
@@ -398,7 +397,7 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
+      const context = openedContext();
       expect(context.targetType).toBe('vm');
     });
 
@@ -407,7 +406,7 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
+      const context = openedContext();
       expect(context.targetType).toBe('agent');
     });
 
@@ -416,7 +415,7 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
+      const context = openedContext();
       expect(context.targetType).toBe('pod');
     });
 
@@ -425,7 +424,7 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
+      const context = openedContext();
       expect(context.targetType).toBe('pod');
     });
 
@@ -437,7 +436,7 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
+      const context = openedContext();
       expect(context.targetType).toBe('agent');
     });
 
@@ -449,7 +448,7 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
+      const context = openedContext();
       expect(context.targetType).toBe('agent');
     });
 
@@ -458,13 +457,13 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} resourceType="lxc" />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
+      const context = openedContext();
       expect(context.targetType).toBe('agent');
     });
   });
 
   // ---------------------------------------------------------------------------
-  // Duration formatting in prompt
+  // Duration formatting in attached context
   // ---------------------------------------------------------------------------
   describe('duration formatting', () => {
     const FIXED_NOW = new Date('2026-03-02T12:00:00Z').getTime();
@@ -485,8 +484,7 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [prompt] = openWithPromptMock.mock.calls[0] as [string];
-      expect(prompt).toContain('15 mins');
+      expect(openedBriefing().statusLabel).toContain('15 mins');
     });
 
     it('formats 1 minute as singular "1 min"', async () => {
@@ -496,9 +494,8 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [prompt] = openWithPromptMock.mock.calls[0] as [string];
-      expect(prompt).toContain('1 min');
-      expect(prompt).not.toContain('1 mins');
+      expect(openedBriefing().statusLabel).toContain('1 min');
+      expect(openedBriefing().statusLabel).not.toContain('1 mins');
     });
 
     it('formats duration in hours and minutes for long-lived alerts', async () => {
@@ -508,8 +505,7 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [prompt] = openWithPromptMock.mock.calls[0] as [string];
-      expect(prompt).toContain('1h 30m');
+      expect(openedBriefing().statusLabel).toContain('1h 30m');
     });
 
     it('formats 0 minutes for alerts that just started', async () => {
@@ -519,22 +515,20 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [prompt] = openWithPromptMock.mock.calls[0] as [string];
-      expect(prompt).toContain('0 mins');
+      expect(openedBriefing().statusLabel).toContain('0 mins');
     });
   });
 
   // ---------------------------------------------------------------------------
-  // Prompt content — node display name
+  // Attached-context content — node display name
   // ---------------------------------------------------------------------------
-  describe('prompt content', () => {
+  describe('attached context content', () => {
     it('uses nodeDisplayName when available', async () => {
       const alert = makeAlert({ node: 'pve1', nodeDisplayName: 'My Node' });
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [prompt] = openWithPromptMock.mock.calls[0] as [string];
-      expect(prompt).toContain('**Node:** My Node');
+      expect(openedBriefing().detailLines).toContain('Node: My Node');
     });
 
     it('falls back to node ID when nodeDisplayName is absent', async () => {
@@ -542,8 +536,7 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [prompt] = openWithPromptMock.mock.calls[0] as [string];
-      expect(prompt).toContain('**Node:** pve2');
+      expect(openedBriefing().detailLines).toContain('Node: pve2');
     });
 
     it('omits node line when node is empty', async () => {
@@ -551,17 +544,15 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [prompt] = openWithPromptMock.mock.calls[0] as [string];
-      expect(prompt).not.toContain('**Node:**');
+      expect(openedBriefing().detailLines?.some((line) => line.startsWith('Node:'))).toBe(false);
     });
 
-    it('includes CRITICAL in prompt for critical alerts', async () => {
+    it('includes Critical in context for critical alerts', async () => {
       const alert = makeAlert({ level: 'critical' });
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [prompt] = openWithPromptMock.mock.calls[0] as [string];
-      expect(prompt).toContain('CRITICAL');
+      expect(openedBriefing().subject).toContain('Critical');
     });
 
     it('passes vmid in context when provided', async () => {
@@ -569,7 +560,7 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={alert} vmid={101} />);
       await fireEvent.click(screen.getByRole('button'));
 
-      const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
+      const context = openedContext();
       expect((context.context as Record<string, unknown>).vmid).toBe(101);
     });
   });

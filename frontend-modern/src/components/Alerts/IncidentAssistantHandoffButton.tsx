@@ -19,7 +19,7 @@ export function IncidentAssistantHandoffButton(props: IncidentAssistantHandoffBu
     event.stopPropagation();
 
     const handoff = buildAlertIncidentAssistantHandoff({ incident: props.incident });
-    aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
+    aiChatStore.open(handoff.context);
   };
 
   return (

@@ -91,12 +91,13 @@ runtime cost control, and shared AI transport surfaces.
    and meaningful badge text rather than icon title duplication. Scoped
    approval handoffs sourced from Patrol, active alerts, or alert incident
    timelines must render as source-named investigation handoffs in the drawer
-   instead of generic dashboard briefs. Source-owned handoff helpers may retain
-   bounded prompt and action metadata for model/request context, but the drawer
+   instead of generic dashboard briefs. Source-owned handoff helpers may attach
+   bounded model-only context, resources, action references, and metadata, but
+   they must not synthesize, prefill, or auto-submit a user prompt. The drawer
    presentation must stay compact: source, status, one primary subject, and an
    optional safe route link. It must not render Patrol-authored remediation
-   steps, evidence chips, command summaries, or suggested-prompt chips as the
-   answer. Patrol assessment handoffs must use the same
+   steps, evidence chips, command summaries, recommendations, or suggested-prompt
+   chips as the answer. Patrol assessment handoffs must use the same
    `patrol-assessment` target identity for live opens and restored sessions
    rather than inheriting retired dashboard context. While such a handoff is
    attached, the Assistant empty
@@ -277,10 +278,11 @@ runtime cost control, and shared AI transport surfaces.
     AI investigation. The unified-store update paths
     (`UnifiedStore.AddFromAlert` and `UnifiedStore.AddFromAI`) must
     propagate Impact on re-detected findings the same way they propagate
-    Description and Recommendation: AddFromAlert backfills empty Impact
-    on existing findings; AddFromAI overwrites existing Impact when the
-    incoming finding carries one. Unknown alert types must return an
-    empty impact rather than synthesizing generic copy.
+    Description: AddFromAlert backfills empty Impact on existing findings;
+    AddFromAI overwrites existing Impact when the incoming finding carries
+    one. Threshold-alert conversion must not synthesize remediation
+    recommendations; unknown alert types must return an empty impact rather
+    than synthesizing generic copy.
     Investigation-record `Rollback` is sourced from the canonical
     `RemediationPlan` when one exists for the finding:
     `AggregatePlanRollbackSteps` in

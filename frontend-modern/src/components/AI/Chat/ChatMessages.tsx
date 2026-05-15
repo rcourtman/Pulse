@@ -2,7 +2,6 @@ import { Component, Show, For, createEffect, createMemo } from 'solid-js';
 import { MessageItem } from './MessageItem';
 import type { ChatSession } from '@/api/aiChat';
 import type { ChatMessage, PendingApproval, PendingQuestion } from './types';
-import { AI_CHAT_SUGGESTIONS_LABEL } from '@/utils/aiChatPresentation';
 
 interface ChatMessagesProps {
   messages: ChatMessage[];
@@ -20,8 +19,6 @@ interface ChatMessagesProps {
   emptyState?: {
     title: string;
     subtitle?: string;
-    suggestions?: string[];
-    onSuggestionClick?: (suggestion: string) => void;
   };
 }
 
@@ -30,7 +27,7 @@ interface ChatMessagesProps {
  *
  * Features:
  * - Auto-scroll to bottom on new messages
- * - Empty state with suggestions
+ * - Empty state
  * - Smooth scrolling behavior
  */
 export const ChatMessages: Component<ChatMessagesProps> = (props) => {
@@ -78,31 +75,8 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
         <div class="flex flex-col items-center justify-center min-h-full text-center py-8">
           <h3 class="text-base font-semibold text-base-content mb-3">{props.emptyState!.title}</h3>
           <Show when={props.emptyState!.subtitle}>
-            <p class="text-sm text-muted max-w-xs mb-6">{props.emptyState!.subtitle}</p>
+            <p class="text-sm text-muted max-w-xs">{props.emptyState!.subtitle}</p>
           </Show>
-
-          <div class="w-full max-w-xs space-y-6">
-            {/* Suggestions */}
-            <Show when={props.emptyState!.suggestions && props.emptyState!.suggestions!.length > 0}>
-              <div class="space-y-2">
-                <div class="text-xs font-medium text-muted text-left uppercase tracking-wider pl-1">
-                  {AI_CHAT_SUGGESTIONS_LABEL}
-                </div>
-                <For each={props.emptyState!.suggestions}>
-                  {(suggestion) => (
-                    <button
-                      type="button"
-                      onClick={() => props.emptyState!.onSuggestionClick?.(suggestion)}
-                      class="w-full text-left px-4 py-2.5 rounded-md bg-surface-alt text-base-content text-sm hover:bg-surface-hover transition-colors border border-transparent hover:border-border"
-                    >
-                      <span class="text-blue-500 dark:text-blue-400 mr-2">→</span>
-                      {suggestion}
-                    </button>
-                  )}
-                </For>
-              </div>
-            </Show>
-          </div>
         </div>
       </Show>
 

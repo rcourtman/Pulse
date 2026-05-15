@@ -782,7 +782,7 @@ export function usePatrolIntelligenceState() {
     const failure = advancedSettingsError();
     if (!failure) return;
     const handoff = buildPatrolConfigurationFailureHandoff(failure);
-    aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
+    aiChatStore.open(handoff.context);
     setShowAdvancedSettings(false);
   }
 

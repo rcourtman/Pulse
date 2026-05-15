@@ -23,7 +23,6 @@ import {
   buildPatrolAssistantProposedFixBriefingInput,
   buildPatrolRemediationPlanAssistantBriefing,
   buildPatrolRemediationPlanAssistantModelContext,
-  buildPatrolRemediationPlanAssistantPrompt,
   patrolAssistantFindingHandoffRequiresApprovalMode,
   type PatrolAssistantApprovalBriefingInput,
   type PatrolAssistantProposedFixBriefingInput,
@@ -65,7 +64,6 @@ import {
   getFindingSubjectPresentation,
   getFindingTitlePresentation,
   getFindingRecencyPresentation,
-  findingHasAppliedFix,
   hasFindingInvestigationDetails,
   hasFindingInvestigationHandoffPointer,
   getInvestigationConfidenceBadgeClasses,
@@ -103,31 +101,13 @@ interface FindingsPanelProps {
   >;
 }
 
-type FindingAssistantIntent = 'discuss' | 'explain' | 'investigate' | 'why' | 'verify_fix';
-
-function getPrimaryAssistantFindingAction(finding: UnifiedFinding): {
-  intent: FindingAssistantIntent;
+function getPrimaryAssistantFindingAction(_finding: UnifiedFinding): {
   label: string;
   title: string;
 } {
-  if (findingHasAppliedFix(finding) && finding.status === 'active') {
-    return {
-      intent: 'verify_fix',
-      label: 'Verify fix',
-      title: 'Ask Pulse Assistant to verify whether the applied fix cleared the condition',
-    };
-  }
-  if (finding.status === 'active') {
-    return {
-      intent: 'investigate',
-      label: 'Investigate',
-      title: 'Ask Pulse Assistant to investigate this finding with the attached evidence',
-    };
-  }
   return {
-    intent: 'explain',
-    label: 'Explain',
-    title: 'Ask Pulse Assistant to explain what happened and why it matters',
+    label: 'Open in Assistant',
+    title: 'Open Pulse Assistant with this finding attached',
   };
 }
 
@@ -623,10 +603,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     }
   };
 
-  const openFindingInAssistant = async (
-    finding: UnifiedFinding,
-    intent: FindingAssistantIntent,
-  ) => {
+  const openFindingInAssistant = async (finding: UnifiedFinding) => {
     await aiIntelligenceStore.loadPendingApprovals();
     const subject = getFindingSubjectPresentation(finding).label;
     const title = getFindingTitlePresentation(finding).label;
@@ -662,69 +639,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       pendingApproval: pendingApprovalBriefing,
       proposedFix,
       investigationRecord: finding.investigationRecord,
-      intent,
     });
-    // Explain, Investigate, and Why-did-this-happen are action-style
-    // entry points — clicking the button is the operator asking "do this
-    // for me," not "open chat so I can type a question." Auto-submit the
-    // handoff prompt so the work is already in flight when the drawer is
-    // on screen. Discuss with Assistant keeps the previous behaviour
-    // (pre-fill, operator drives) because that entry is open-ended by
-    // intent.
-    aiChatStore.openWithPrompt(handoff.prompt, {
-      ...handoff.context,
-      autoSendInitialPrompt:
-        intent === 'explain' ||
-        intent === 'investigate' ||
-        intent === 'why' ||
-        intent === 'verify_fix',
-    });
+    aiChatStore.open(handoff.context);
   };
-
-  const handleDiscussWithAssistant = async (finding: UnifiedFinding, e: Event) => {
-    e.stopPropagation();
-    await openFindingInAssistant(finding, 'discuss');
-  };
-
-  const handleExplainFinding = async (finding: UnifiedFinding, e: Event) => {
-    e.stopPropagation();
-    await openFindingInAssistant(finding, 'explain');
-  };
-
-  // Investigate is the active counterpart to Explain. Explain says "tell me
-  // what we already know"; Investigate says "go find out what's true right
-  // now." The prompt instructs the LLM to use its Pulse tools (metrics,
-  // alerts, state, recent changes, correlations) rather than just narrate
-  // the attached context, and the surface auto-sends so the work is in
-  // flight when the operator lands.
-  const handleInvestigateFinding = async (finding: UnifiedFinding, e: Event) => {
-    e.stopPropagation();
-    await openFindingInAssistant(finding, 'investigate');
-  };
-
-  // Why is the diagnostic counterpart. Where Explain says "what we know"
-  // and Investigate says "what's true now," Why says "what caused this":
-  // the prompt focuses the LLM on recent changes around detection time,
-  // learned correlations, prior incidents, and regression history rather
-  // than current state.
-  const handleWhyFinding = async (finding: UnifiedFinding, e: Event) => {
-    e.stopPropagation();
-    await openFindingInAssistant(finding, 'why');
-  };
-
-  // Verify fix is the post-remediation check. After a fix has been
-  // executed against this finding, the operator asks the Assistant
-  // whether it actually worked — confirming the underlying condition
-  // cleared rather than trusting the fix command's exit code. Only
-  // meaningful when a fix has been applied (see hasAppliedFix).
-  const handleVerifyFixFinding = async (finding: UnifiedFinding, e: Event) => {
-    e.stopPropagation();
-    await openFindingInAssistant(finding, 'verify_fix');
-  };
-
-  // hasAppliedFix logic lives in @/utils/aiFindingPresentation as
-  // findingHasAppliedFix so the investigation-outcome switch stays in a
-  // shared adapter (per the resource-type-boundaries test).
 
   // Create rule from this is the promotion path: take the operator's
   // implicit pattern (silencing the same {resource, category} pair
@@ -815,7 +732,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     e.stopPropagation();
     const subject = getFindingSubjectPresentation(finding).label;
     const title = getFindingTitlePresentation(finding).label;
-    const prompt = buildPatrolRemediationPlanAssistantPrompt({ title, subject, plan });
     const briefing = buildPatrolRemediationPlanAssistantBriefing({ title, subject, plan });
     const handoffContext = buildPatrolRemediationPlanAssistantModelContext({
       title,
@@ -823,7 +739,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       plan,
     });
 
-    aiChatStore.openWithPrompt(prompt, {
+    aiChatStore.open({
       targetType: finding.resourceType,
       targetId: finding.resourceId,
       findingId: finding.id,
@@ -1234,11 +1150,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <span class="font-medium">Impact:</span> {finding.impact}
           </p>
         </Show>
-        <Show when={finding.recommendation}>
-          <p class="text-sm text-base-content mt-2">
-            <span class="font-medium">Recommendation:</span> {finding.recommendation}
-          </p>
-        </Show>
         <Show when={finding.previousResolvedFixSummary}>
           <p class="text-sm text-base-content mt-2 px-2 py-1 rounded border border-emerald-200 bg-emerald-50/40 dark:border-emerald-800 dark:bg-emerald-950/30">
             <span class="font-medium text-emerald-800 dark:text-emerald-300">
@@ -1374,9 +1285,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <button
             type="button"
             onClick={(e) => {
-              const action = getPrimaryAssistantFindingAction(finding);
               e.stopPropagation();
-              void openFindingInAssistant(finding, action.intent);
+              void openFindingInAssistant(finding);
             }}
             class="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-blue-700"
             title={getPrimaryAssistantFindingAction(finding).title}
@@ -1391,53 +1301,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </svg>
             {getPrimaryAssistantFindingAction(finding).label}
           </button>
-
-          <details onClick={(e) => e.stopPropagation()}>
-            <summary class="list-none cursor-pointer rounded border border-border bg-surface px-3 py-1.5 font-medium text-base-content hover:bg-surface-hover">
-              Assistant
-            </summary>
-            <div class="mt-1 flex min-w-40 flex-col gap-1 rounded border border-border bg-surface p-1 shadow-sm">
-              <button
-                type="button"
-                onClick={(e) => handleExplainFinding(finding, e)}
-                class="rounded px-2 py-1 text-left hover:bg-surface-hover"
-              >
-                Explain
-              </button>
-              <Show when={finding.status === 'active'}>
-                <button
-                  type="button"
-                  onClick={(e) => handleInvestigateFinding(finding, e)}
-                  class="rounded px-2 py-1 text-left hover:bg-surface-hover"
-                >
-                  Investigate
-                </button>
-              </Show>
-              <button
-                type="button"
-                onClick={(e) => handleWhyFinding(finding, e)}
-                class="rounded px-2 py-1 text-left hover:bg-surface-hover"
-              >
-                Why
-              </button>
-              <Show when={findingHasAppliedFix(finding) && finding.status === 'active'}>
-                <button
-                  type="button"
-                  onClick={(e) => handleVerifyFixFinding(finding, e)}
-                  class="rounded px-2 py-1 text-left hover:bg-surface-hover"
-                >
-                  Verify fix
-                </button>
-              </Show>
-              <button
-                type="button"
-                onClick={(e) => handleDiscussWithAssistant(finding, e)}
-                class="rounded px-2 py-1 text-left hover:bg-surface-hover"
-              >
-                Discuss
-              </button>
-            </div>
-          </details>
 
           <details onClick={(e) => e.stopPropagation()}>
             <summary class="list-none cursor-pointer rounded border border-border bg-surface px-3 py-1.5 font-medium text-base-content hover:bg-surface-hover">

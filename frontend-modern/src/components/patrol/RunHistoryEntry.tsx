@@ -170,7 +170,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
   const handleDiscussRun = (event: Event) => {
     event.stopPropagation();
     const handoff = buildPatrolRunAssistantHandoff(run);
-    aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
+    aiChatStore.open(handoff.context);
   };
 
   return (

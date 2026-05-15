@@ -10,7 +10,6 @@ import {
   buildPatrolAssistantFindingBriefing,
   buildPatrolAssistantFindingHandoff,
   buildPatrolAssistantFindingHandoffActions,
-  buildPatrolAssistantFindingPrompt,
   buildPatrolAssistantProposedFixBriefingInput,
   buildPatrolConfigurationFailureHandoff,
   buildPatrolInvestigationContextSummary,
@@ -18,7 +17,6 @@ import {
   buildPatrolInvestigationRecordPresentation,
   buildPatrolRemediationPlanAssistantBriefing,
   buildPatrolRemediationPlanAssistantModelContext,
-  buildPatrolRemediationPlanAssistantPrompt,
   patrolAssistantFindingHandoffRequiresApprovalMode,
   selectPatrolSupportingRecentChanges,
 } from '../patrolInvestigationContextModel';
@@ -359,9 +357,7 @@ describe('patrolInvestigationContextModel', () => {
       ],
     });
 
-    expect(handoff.prompt).toContain('Discuss the current Pulse Patrol assessment');
-    expect(handoff.prompt).toContain('1 governed action reference');
-    expect(handoff.prompt).toContain('Do not infer, repeat, or execute raw command text');
+    expect(handoff).not.toHaveProperty('prompt');
     expect(handoff.context.autonomousMode).toBe(false);
     expect(handoff.context.handoffContext).toContain('[Patrol Assessment Context]');
     expect(handoff.context.handoffContext).toContain('Source: Pulse Patrol current assessment');
@@ -397,7 +393,6 @@ describe('patrolInvestigationContextModel', () => {
       safetyNote:
         'Review action posture in the governed flow; raw command payloads stay out of Assistant.',
     });
-    expect(handoff.context.briefing?.suggestedPrompts).toBeUndefined();
     expect(JSON.stringify(handoff)).not.toContain('systemctl restart workload.service');
   });
 
@@ -447,15 +442,12 @@ describe('patrolInvestigationContextModel', () => {
       activeFindings: [],
     });
 
-    expect(handoff.prompt).toContain('incomplete Patrol coverage signals');
-    expect(handoff.prompt).toContain('Decide from the evidence whether more verification is needed');
-    expect(handoff.prompt).not.toContain('next-step metadata');
+    expect(handoff).not.toHaveProperty('prompt');
     expect(handoff.context.briefing).toMatchObject({
       actionLabel: 'Discuss Patrol coverage',
       safetyNote:
         'Assistant can review the coverage evidence; Patrol runs, diagnostics, and remediation remain governed controls.',
     });
-    expect(handoff.context.briefing?.suggestedPrompts).toBeUndefined();
     expect(handoff.context.briefing?.actionHref).toBeUndefined();
     expect(handoff.context.handoffContext).toContain('Assessment: Coverage incomplete');
     expect(handoff.context.handoffContext).not.toContain('Recommended Next Step');
@@ -521,13 +513,11 @@ describe('patrolInvestigationContextModel', () => {
       ],
     });
 
-    expect(handoff.prompt).toContain('1 active finding');
-    expect(handoff.prompt).not.toContain('next-step metadata');
+    expect(handoff).not.toHaveProperty('prompt');
     expect(handoff.context.briefing).toMatchObject({
       actionLabel: 'Discuss Patrol assessment',
       safetyNote: 'Diagnostics and remediation require governed approval.',
     });
-    expect(handoff.context.briefing?.suggestedPrompts).toBeUndefined();
     expect(handoff.context.handoffContext).not.toContain('Recommended Next Step');
   });
 
@@ -572,8 +562,7 @@ describe('patrolInvestigationContextModel', () => {
     });
 
     expect(handoff.context.autonomousMode).toBe(false);
-    expect(handoff.prompt).toContain('The attached context includes 1 pending governed approval');
-    expect(handoff.prompt).toContain('approval policy, dry-run posture');
+    expect(handoff).not.toHaveProperty('prompt');
     expect(handoff.context.handoffContext).toContain('Finding 1: High CPU usage');
     expect(handoff.context.handoffContext).toContain('approval approval-1');
     expect(handoff.context.handoffContext).toContain('live approval pending');
@@ -614,7 +603,6 @@ describe('patrolInvestigationContextModel', () => {
       safetyNote:
         'Review approvals in the governed flow; approval policy is attached; dry-run posture is attached; destructive actions remain approval-bound; raw command payloads stay out of Assistant.',
     });
-    expect(handoff.context.briefing?.suggestedPrompts).toBeUndefined();
     expect(JSON.stringify(handoff)).not.toContain('systemctl restart workload.service');
   });
 
@@ -659,11 +647,9 @@ describe('patrolInvestigationContextModel', () => {
 
     const handoff = buildPatrolRunAssistantHandoff(run);
 
-    expect(handoff.prompt).toContain('Discuss this Pulse Patrol run');
-    expect(handoff.prompt).toContain('The attached context includes a Patrol runtime failure');
-    expect(handoff.prompt).toContain('Provider rejected Patrol tool calls');
-    expect(handoff.prompt).not.toContain('tool_choice');
-    expect(handoff.prompt).not.toContain('No endpoints found');
+    expect(handoff).not.toHaveProperty('prompt');
+    expect(JSON.stringify(handoff.context)).not.toContain('tool_choice');
+    expect(JSON.stringify(handoff.context)).not.toContain('No endpoints found');
     expect(handoff.context.autonomousMode).toBe(false);
     expect(handoff.context).toMatchObject({
       targetType: 'patrol-run',
@@ -692,7 +678,6 @@ describe('patrolInvestigationContextModel', () => {
       title: 'Patrol run attached',
       actionLabel: 'Review Patrol runtime failure',
     });
-    expect(handoff.context.briefing?.suggestedPrompts).toBeUndefined();
     expect(JSON.stringify(handoff)).not.toContain('provider trace');
     expect(JSON.stringify(handoff)).not.toContain('tool_choice');
     expect(JSON.stringify(handoff)).not.toContain('No endpoints found');
@@ -722,8 +707,7 @@ describe('patrolInvestigationContextModel', () => {
       runtimeState: 'active',
     });
 
-    expect(handoff.prompt).toContain('Discuss this Pulse Patrol configuration failure');
-    expect(handoff.prompt).toContain('Do not infer, repeat, or execute raw command text');
+    expect(handoff).not.toHaveProperty('prompt');
     expect(handoff.context.autonomousMode).toBe(false);
     expect(handoff.context.handoffMetadata).toMatchObject({
       kind: 'patrol_configuration_failure',
@@ -741,7 +725,6 @@ describe('patrolInvestigationContextModel', () => {
       title: 'Patrol configuration failure attached',
       actionLabel: 'Review Patrol configuration failure',
     });
-    expect(handoff.context.briefing?.suggestedPrompts).toBeUndefined();
     expect(JSON.stringify(handoff)).not.toContain('systemctl restart pulse.service');
   });
 
@@ -759,7 +742,7 @@ describe('patrolInvestigationContextModel', () => {
       },
     });
 
-    expect(handoff.prompt).toContain('Discuss this Pulse Patrol configuration issue');
+    expect(handoff).not.toHaveProperty('prompt');
     expect(handoff.context.briefing).toMatchObject({
       title: 'Patrol configuration issue attached',
       actionLabel: 'Review Patrol configuration issue',
@@ -872,116 +855,6 @@ describe('patrolInvestigationContextModel', () => {
     expect(presentation.rollbackSummaries).toEqual([]);
   });
 
-  it('seeds an explain-intent prompt with explanation framing rather than discussion framing', () => {
-    const discussPrompt = buildPatrolAssistantFindingPrompt({
-      title: 'Backup job failing',
-      subject: 'vm-101',
-      description: 'Datastore quota exhausted',
-    });
-    const explainPrompt = buildPatrolAssistantFindingPrompt({
-      title: 'Backup job failing',
-      subject: 'vm-101',
-      description: 'Datastore quota exhausted',
-      intent: 'explain',
-    });
-
-    expect(discussPrompt).toContain("I'd like to discuss");
-    expect(explainPrompt).toContain('Explain this Patrol finding');
-    expect(explainPrompt.toLowerCase()).toContain('walk me through what we know');
-    // Both prompts include the title and subject so the seed reads naturally.
-    expect(explainPrompt).toContain('Backup job failing');
-    expect(explainPrompt).toContain('vm-101');
-  });
-
-  it('seeds a verify_fix-intent prompt that asks the LLM to confirm the fix actually worked', () => {
-    // Verify fix is the post-remediation check. After a fix has run,
-    // the operator asks "did that actually clear the underlying
-    // condition" — and the LLM should check via Pulse tools rather
-    // than trust the fix command's exit code. Verification is
-    // read-only; no state-changing tool calls.
-    const prompt = buildPatrolAssistantFindingPrompt({
-      title: 'Backup job failing',
-      subject: 'vm-101',
-      description: 'Datastore quota exhausted',
-      intent: 'verify_fix',
-    });
-
-    expect(prompt).toContain('Verify the fix applied to this Patrol finding');
-    expect(prompt).toContain('Backup job failing');
-    expect(prompt).toContain('vm-101');
-    // The verification dimensions: condition cleared, evidence,
-    // confidence, residual risk.
-    expect(prompt.toLowerCase()).toContain('condition');
-    expect(prompt.toLowerCase()).toContain('cleared');
-    expect(prompt.toLowerCase()).toContain('evidence');
-    expect(prompt.toLowerCase()).toContain('confident');
-    expect(prompt.toLowerCase()).toMatch(/residual|monitor/);
-    // Read-only safety: no state-changing commands during verification.
-    expect(prompt.toLowerCase()).toContain('read-only');
-    expect(prompt).not.toContain("I'd like to discuss");
-    expect(prompt).not.toContain('Investigate this Patrol finding now');
-  });
-
-  it('seeds a why-intent prompt that focuses on cause, not current state', () => {
-    // Why-did-this-happen is the diagnostic counterpart to Explain. Where
-    // Explain says "tell me what we know" and Investigate says "go find
-    // out what's true now," Why focuses the LLM on cause — recent
-    // changes, correlations, prior incidents, regression patterns. Not
-    // "is it bad right now" but "what made it become bad."
-    const prompt = buildPatrolAssistantFindingPrompt({
-      title: 'Backup job failing',
-      subject: 'vm-101',
-      description: 'Datastore quota exhausted',
-      intent: 'why',
-    });
-
-    expect(prompt).toContain('Why did this Patrol finding happen');
-    expect(prompt).toContain('Backup job failing');
-    expect(prompt).toContain('vm-101');
-    expect(prompt.toLowerCase()).toContain('cause, not on current state');
-    // The diagnostic signals the prompt directs the LLM toward.
-    expect(prompt.toLowerCase()).toMatch(/recent changes|correlations|prior incidents|regression/);
-    // Synthesis: what caused it, what evidence supports the cause, what
-    // would have to be true for it to recur.
-    expect(prompt.toLowerCase()).toContain('most likely caused');
-    expect(prompt.toLowerCase()).toContain('evidence');
-    expect(prompt.toLowerCase()).toContain('recur');
-    // Safety: cause investigation may need tools but must not run
-    // anything that changes state without operator approval.
-    expect(prompt.toLowerCase()).toContain('operator approval');
-    expect(prompt).not.toContain("I'd like to discuss");
-    expect(prompt).not.toContain('Investigate this Patrol finding now');
-  });
-
-  it('seeds an investigate-intent prompt that lets the model decide whether tools are needed', () => {
-    // Investigate is the action counterpart to Explain. Where Explain says
-    // "tell me what we know," Investigate says "go find out what's true
-    // right now" — the prompt should provide the available context without
-    // forcing a specific tool path before the model has reasoned about it.
-    const prompt = buildPatrolAssistantFindingPrompt({
-      title: 'Backup job failing',
-      subject: 'vm-101',
-      description: 'Datastore quota exhausted',
-      intent: 'investigate',
-    });
-
-    expect(prompt).toContain('Investigate this Patrol finding now');
-    expect(prompt).toContain('Backup job failing');
-    expect(prompt).toContain('vm-101');
-    // Model-owned tool choice — the differentiator vs Explain.
-    expect(prompt.toLowerCase()).toContain('decide whether the available pulse tools are needed');
-    expect(prompt.toLowerCase()).toContain('fresh evidence');
-    // Synthesis instruction — root cause + confidence + model-owned next step.
-    expect(prompt.toLowerCase()).toContain('root cause');
-    expect(prompt.toLowerCase()).toContain('confidence');
-    expect(prompt.toLowerCase()).toContain('what should happen next');
-    // Safety: any command-running must route through governed approval,
-    // not the LLM's own judgment.
-    expect(prompt.toLowerCase()).toContain('governed approval');
-    // Must not be the open-ended Discuss prompt.
-    expect(prompt).not.toContain("I'd like to discuss");
-  });
-
   it('surfaces investigation impact and rollback when the backend record carries them', () => {
     const presentation = buildPatrolInvestigationRecordPresentation({
       id: 'record-2',
@@ -1058,83 +931,6 @@ describe('patrolInvestigationContextModel', () => {
       actionRequestedBy: 'pulse_patrol',
     });
     expect(JSON.stringify(briefing)).not.toContain('systemctl restart nginx');
-  });
-
-  it('frames Assistant handoff around the structured Patrol record when one exists', () => {
-    expect(
-      buildPatrolAssistantFindingPrompt({
-        title: 'High CPU usage',
-        subject: 'web-server',
-        description: 'CPU stayed above 95%.',
-        investigationRecord: {
-          id: 'record-1',
-          finding_id: 'finding-1',
-          subject: { resource_id: 'vm-100' },
-          trigger: { detected_at: '2026-05-06T12:00:00Z' },
-          status: 'completed',
-          evidence: [],
-          verification: [],
-          rollback: [],
-          tools_used: [],
-          started_at: '2026-05-06T12:00:00Z',
-        },
-      }),
-    ).toContain('Use that record as context, then decide next steps from current evidence.');
-  });
-
-  it('leads finding prompts with live governed approval context without command text', () => {
-    const prompt = buildPatrolAssistantFindingPrompt({
-      title: 'High CPU usage',
-      subject: 'web-server',
-      description: 'CPU stayed above 95%.',
-      pendingApproval: {
-        id: 'approval-1',
-        status: 'pending',
-        riskLevel: 'high',
-        targetName: 'web-server',
-        actionApprovalPolicy: 'operator',
-        actionPreflight: 'Service restart would be attempted after health checks.',
-        actionDryRunSummary: 'Dry run completed with one restart action.',
-      },
-      proposedFix: buildPatrolAssistantProposedFixBriefingInput({
-        description: 'Restart the workload service',
-        commands: ['systemctl restart workload.service'],
-        riskLevel: 'high',
-        targetHost: 'web-server',
-      }),
-    });
-
-    expect(prompt).toContain('Governed approval approval-1 is attached');
-    expect(prompt).toContain('approval status pending');
-    expect(prompt).toContain('high risk');
-    expect(prompt).toContain('approval policy attached');
-    expect(prompt).toContain('dry-run posture attached');
-    expect(prompt).toContain('next steps');
-    expect(prompt).not.toContain('systemctl restart workload.service');
-  });
-
-  it('leads finding prompts with proposed-fix posture without command text', () => {
-    const prompt = buildPatrolAssistantFindingPrompt({
-      title: 'Nginx down',
-      subject: 'node-1',
-      description: 'The service stopped responding.',
-      investigationOutcome: 'fix_queued',
-      remediationId: 'remediation-1',
-      proposedFix: buildPatrolAssistantProposedFixBriefingInput({
-        description: 'Restart nginx',
-        commands: ['systemctl restart nginx'],
-        riskLevel: 'medium',
-        targetHost: 'node-1',
-        destructive: true,
-      }),
-    });
-
-    expect(prompt).toContain('Governed action posture is attached');
-    expect(prompt).toContain('medium risk');
-    expect(prompt).toContain('1 command recorded for approval context');
-    expect(prompt).toContain('destructive action');
-    expect(prompt).toContain('next steps');
-    expect(prompt).not.toContain('systemctl restart nginx');
   });
 
   it('builds finding-level Assistant handoff actions without raw command text', () => {
@@ -1250,7 +1046,7 @@ describe('patrolInvestigationContextModel', () => {
       }),
     });
 
-    expect(handoff.prompt).toContain('Governed approval approval-1 is attached');
+    expect(handoff).not.toHaveProperty('prompt');
     expect(handoff.context).toMatchObject({
       targetType: 'agent',
       targetId: 'agent-1',
@@ -1343,7 +1139,6 @@ describe('patrolInvestigationContextModel', () => {
       detailLines: [
         'Attention: active critical finding; regressed 2 times; last regression 2 hours ago; loop awaiting approval; approval approval-1; live approval pending; destructive proposed fix; fix queued for governed review',
         'Backup job saturated CPU.',
-        'Approve a controlled restart after the backup completes.',
         `Decision: review live governed approval approval-1 before execution; approval pending; target web-server; expires ${approvalExpiresAt}; requested ${approvalRequestedAt}; action artifact fix-1; risk high; destructive true`,
       ],
       evidence: ['CPU stayed above 95% for 10 minutes', 'Verified: CPU returned below 50%'],
@@ -1383,11 +1178,6 @@ describe('patrolInvestigationContextModel', () => {
       ],
     };
 
-    const prompt = buildPatrolRemediationPlanAssistantPrompt({
-      title: 'Nginx down',
-      subject: 'node-1',
-      plan,
-    });
     const modelContext = buildPatrolRemediationPlanAssistantModelContext({
       title: 'Nginx down',
       subject: 'node-1',
@@ -1399,9 +1189,6 @@ describe('patrolInvestigationContextModel', () => {
       plan,
     });
 
-    expect(prompt).toBe(
-      'Review this Patrol finding with the attached evidence: "Nginx down" on node-1. Decide what, if anything, should happen next.',
-    );
     expect(modelContext).toContain('[Patrol Finding Action Context]');
     expect(modelContext).toContain(
       'Pulse is attaching observed finding context and any existing governed action artifact',
@@ -1434,7 +1221,6 @@ describe('patrolInvestigationContextModel', () => {
     expect(briefing.safetyNote).toBe(
       'Assistant should decide remediation from evidence; command execution requires governed approval.',
     );
-    expect(briefing.suggestedPrompts).toBeUndefined();
     expect(JSON.stringify(briefing)).not.toContain('systemctl');
   });
 
@@ -1511,14 +1297,13 @@ describe('patrolInvestigationContextModel', () => {
         actionReferenceCount: 0,
       },
     });
-    expect(handoff.prompt).not.toContain('visible Patrol navigation');
+    expect(handoff).not.toHaveProperty('prompt');
     expect(handoff.context.briefing).toMatchObject({
       title: 'Operator briefing attached',
       subject: 'Provider connection issue on Patrol runtime',
     });
     expect(handoff.context.briefing?.actionLabel).toBeUndefined();
     expect(handoff.context.briefing?.actionHref).toBeUndefined();
-    expect(handoff.context.briefing?.suggestedPrompts).toBeUndefined();
     expect(handoff.context.handoffMetadata).toEqual({
       kind: 'patrol_finding',
     });

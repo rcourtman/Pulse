@@ -478,7 +478,7 @@ describe('tab path helpers', () => {
     expect(alertResourceIncidentsPanelSource).toContain('IncidentAssistantHandoffButton');
     expect(incidentTimelinePanelSource).toContain('IncidentAssistantHandoffButton');
     expect(incidentAssistantHandoffButtonSource).toContain('buildAlertIncidentAssistantHandoff');
-    expect(incidentAssistantHandoffButtonSource).toContain('aiChatStore.openWithPrompt');
+    expect(incidentAssistantHandoffButtonSource).toContain('aiChatStore.open');
     expect(alertAssistantHandoffModelSource).toContain('handoffContext');
     expect(alertAssistantHandoffModelSource).toContain('handoffResources');
     expect(alertAssistantHandoffModelSource).toContain('[Alert Investigation Context]');

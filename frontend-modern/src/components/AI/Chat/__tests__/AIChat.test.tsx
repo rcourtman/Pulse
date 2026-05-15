@@ -73,7 +73,6 @@ const {
   };
 
   const emptyChatContext = () => ({
-    initialPrompt: undefined,
     findingId: undefined,
     autonomousMode: undefined,
     context: undefined,
@@ -86,7 +85,6 @@ const {
   const mockAiChatStore = {
     isOpenSignal: vi.fn(() => true),
     context: emptyChatContext() as {
-      initialPrompt?: string;
       findingId?: string;
       autonomousMode?: boolean;
       context?: Record<string, unknown>;
@@ -112,7 +110,6 @@ const {
         actionLabel?: string;
         commandSummary?: string;
         safetyNote?: string;
-        suggestedPrompts?: string[];
         actionHref?: string;
       };
     },
@@ -122,7 +119,6 @@ const {
     clearContext: vi.fn(() => {
       mockAiChatStore.context = emptyChatContext();
     }),
-    clearInitialPrompt: vi.fn(),
     clearFindingId: vi.fn(() => {
       const { findingId: _findingId, ...rest } = mockAiChatStore.context;
       mockAiChatStore.context = rest;
@@ -163,10 +159,16 @@ vi.mock('../hooks/useChat', () => ({
 }));
 
 vi.mock('../ChatMessages', () => ({
-  ChatMessages: (props: { messages: ChatMessage[]; emptyState?: { title: string } }) => (
+  ChatMessages: (props: {
+    messages: ChatMessage[];
+    emptyState?: { title: string; subtitle?: string };
+  }) => (
     <div data-testid="chat-messages" data-msg-count={props.messages.length}>
       {props.emptyState?.title && (
         <span data-testid="empty-state-title">{props.emptyState.title}</span>
+      )}
+      {props.emptyState?.subtitle && (
+        <span data-testid="empty-state-subtitle">{props.emptyState.subtitle}</span>
       )}
     </div>
   ),
@@ -275,7 +277,6 @@ beforeEach(() => {
   resetAIRuntimeState();
   mockAiChatStore.isOpenSignal.mockReturnValue(true);
   mockAiChatStore.context = {
-    initialPrompt: undefined,
     findingId: undefined,
     autonomousMode: undefined,
     briefing: undefined,
@@ -338,7 +339,6 @@ describe('AIChat', () => {
 
     it('renders attached context briefing without raw command text', () => {
       mockAiChatStore.context = {
-        initialPrompt: undefined,
         findingId: 'finding-1',
         autonomousMode: undefined,
         briefing: {
@@ -351,7 +351,6 @@ describe('AIChat', () => {
           actionLabel: 'Restart the workload service',
           commandSummary: '1 command recorded for approval context',
           safetyNote: 'Command details stay in approval context.',
-          suggestedPrompts: ['Explain recent changes and correlations'],
         },
       };
 
@@ -370,7 +369,6 @@ describe('AIChat', () => {
 
     it('renders safe briefing actions as links when a route is attached', () => {
       mockAiChatStore.context = {
-        initialPrompt: undefined,
         autonomousMode: false,
         briefing: {
           sourceLabel: 'Pulse Patrol',
@@ -391,7 +389,6 @@ describe('AIChat', () => {
 
     it('keeps Patrol action-artifact briefings compact in the sidebar', () => {
       mockAiChatStore.context = {
-        initialPrompt: undefined,
         autonomousMode: false,
         briefing: {
           sourceLabel: 'Pulse Patrol',
@@ -430,7 +427,6 @@ describe('AIChat', () => {
 
     it('does not expose legacy Patrol remediation-plan briefing internals', () => {
       mockAiChatStore.context = {
-        initialPrompt: undefined,
         autonomousMode: false,
         briefing: {
           sourceLabel: 'Pulse Patrol',
@@ -442,10 +438,6 @@ describe('AIChat', () => {
           actionLabel: 'Fix: Backup failed',
           commandSummary: '4 commands recorded for approval context',
           safetyNote: 'Command details stay in governed remediation context.',
-          suggestedPrompts: [
-            'Review plan risk and prerequisites',
-            'Check rollback and verification steps',
-          ],
         },
       };
 
@@ -468,24 +460,22 @@ describe('AIChat', () => {
       ).not.toBeInTheDocument();
     });
 
-    it('uses Patrol briefing context instead of generic empty-state suggestions', () => {
+    it('uses attached briefing context instead of product-authored empty-state prompts', () => {
       mockAiChatStore.context = {
-        initialPrompt: undefined,
         autonomousMode: false,
         briefing: {
           sourceLabel: 'Pulse Patrol',
           title: 'Patrol assessment attached',
           subject: 'Coverage incomplete',
-          suggestedPrompts: [
-            'Explain why coverage is incomplete',
-            'Explain scoped activity and full-run gap',
-          ],
         },
       };
 
       renderChat();
 
-      expect(screen.getByText('Review Pulse Patrol context')).toBeInTheDocument();
+      expect(screen.getByText('Context attached')).toBeInTheDocument();
+      expect(
+        screen.getByText('Pulse Patrol · Patrol assessment attached · Coverage incomplete'),
+      ).toBeInTheDocument();
       expect(
         screen.queryByRole('button', { name: 'Explain why coverage is incomplete' }),
       ).not.toBeInTheDocument();
@@ -1703,7 +1693,6 @@ describe('AIChat', () => {
         discovery_enabled: true,
       });
       mockAiChatStore.context = {
-        initialPrompt: undefined,
         findingId: undefined,
         autonomousMode: false,
         briefing: undefined,
@@ -1740,7 +1729,6 @@ describe('AIChat', () => {
         discovery_enabled: true,
       });
       mockAiChatStore.context = {
-        initialPrompt: undefined,
         findingId: 'finding-1',
         autonomousMode: false,
         briefing: {
@@ -1772,7 +1760,6 @@ describe('AIChat', () => {
         discovery_enabled: true,
       });
       mockAiChatStore.context = {
-        initialPrompt: undefined,
         autonomousMode: false,
         briefing: {
           sourceLabel: 'Pulse Alerts',
@@ -1806,7 +1793,6 @@ describe('AIChat', () => {
         discovery_enabled: true,
       });
       mockAiChatStore.context = {
-        initialPrompt: undefined,
         autonomousMode: false,
         handoffContext:
           '[Alert Incident Context]\nIncident ID: incident-1\nTimeline Event 1: Command event recorded',
@@ -1873,7 +1859,6 @@ describe('AIChat', () => {
         discovery_enabled: true,
       });
       mockAiChatStore.context = {
-        initialPrompt: undefined,
         findingId: 'finding-1',
         autonomousMode: false,
         handoffContext: '[Patrol Finding Context]\nFinding ID: finding-1',
@@ -2014,7 +1999,6 @@ describe('AIChat', () => {
   describe('finding ID context', () => {
     it('passes findingId from store context on first message', () => {
       mockAiChatStore.context = {
-        initialPrompt: undefined,
         findingId: 'finding-123',
         autonomousMode: undefined,
         briefing: undefined,

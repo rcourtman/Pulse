@@ -54,8 +54,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
       vmid: props.vmid,
     });
 
-    // Open AI chat with this context and prompt
-    aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
+    aiChatStore.open(handoff.context);
   };
 
   const sizeClasses = {

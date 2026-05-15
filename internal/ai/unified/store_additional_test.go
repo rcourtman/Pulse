@@ -94,8 +94,8 @@ func TestUnifiedStore_ConvertAlert_MetadataAndRecommendation(t *testing.T) {
 	if finding.ResourceType != "node" {
 		t.Fatalf("expected resource type from metadata")
 	}
-	if !strings.Contains(finding.Recommendation, "URGENT") {
-		t.Fatalf("expected urgent recommendation, got %q", finding.Recommendation)
+	if finding.Recommendation != "" {
+		t.Fatalf("expected no product-authored recommendation, got %q", finding.Recommendation)
 	}
 }
 
@@ -393,12 +393,6 @@ func TestUnifiedHelpers(t *testing.T) {
 	title := generateTitle("offline", "node-1", 0, 0)
 	if !strings.Contains(title, "offline") {
 		t.Fatalf("expected offline title")
-	}
-	if !strings.Contains(generateRecommendation("temperature", 0, 0), "cooling") {
-		t.Fatalf("expected temperature recommendation")
-	}
-	if !strings.Contains(generateRecommendation("unknown", 0, 0), "Investigate") {
-		t.Fatalf("expected default recommendation")
 	}
 	if formatSourceName("custom") != "custom" {
 		t.Fatalf("expected fallback source name")

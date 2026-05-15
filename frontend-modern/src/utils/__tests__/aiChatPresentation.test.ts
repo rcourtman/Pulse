@@ -15,9 +15,7 @@ import {
   AI_CHAT_QUESTION_CARD_TITLE,
   AI_CHAT_SESSION_EMPTY_STATE,
   AI_CHAT_SESSION_MENU_TITLE,
-  AI_CHAT_SUGGESTIONS_LABEL,
   getAIChatLauncherTitle,
-  getAIChatEmptyStateSuggestions,
   getAIChatEmptyStatePresentation,
 } from '@/utils/aiChatPresentation';
 
@@ -41,7 +39,6 @@ describe('aiChatPresentation', () => {
     expect(AI_CHAT_SESSION_MENU_TITLE).toBe('Pulse Assistant sessions');
     expect(AI_CHAT_SESSION_EMPTY_STATE).toBe('No previous assistant sessions');
     expect(AI_CHAT_MODEL_SELECTOR_EMPTY_STATE).toBe('No matching models.');
-    expect(AI_CHAT_SUGGESTIONS_LABEL).toBe('Try asking');
     expect(AI_CHAT_QUESTION_CARD_TITLE).toBe('Pulse Assistant needs your input');
     expect(AI_CHAT_ASSISTANT_MESSAGE_LABEL).toBe('Pulse Assistant');
     expect(AI_CHAT_CONTEXT_USED_LABEL).toBe('Context used');
@@ -53,11 +50,6 @@ describe('aiChatPresentation', () => {
     expect(getAIChatLauncherTitle()).not.toContain('⌘K');
   });
 
-  it('keeps the default empty state as plain chat without prompt chips', () => {
-    expect(getAIChatEmptyStateSuggestions(true)).toEqual([]);
-    expect(getAIChatEmptyStateSuggestions(false)).toEqual([]);
-  });
-
   it('uses attached briefing context for scoped assistant handoff empty states', () => {
     expect(
       getAIChatEmptyStatePresentation({
@@ -66,16 +58,11 @@ describe('aiChatPresentation', () => {
           sourceLabel: 'Pulse Patrol',
           title: 'Patrol assessment attached',
           subject: 'Coverage incomplete',
-          suggestedPrompts: [
-            'Explain why coverage is incomplete',
-            'Explain scoped activity and full-run gap',
-          ],
         },
       }),
     ).toEqual({
-      title: 'Review Pulse Patrol context',
-      subtitle: 'Patrol assessment attached · Coverage incomplete',
-      suggestions: [],
+      title: 'Context attached',
+      subtitle: 'Pulse Patrol · Patrol assessment attached · Coverage incomplete',
     });
   });
 });

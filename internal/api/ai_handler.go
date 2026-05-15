@@ -1062,7 +1062,6 @@ func buildUnifiedFindingChatContext(f *unified.UnifiedFinding, lookup unifiedFin
 		appendChatContextLine(&b, "Finding Times Raised", strconv.Itoa(f.TimesRaised))
 	}
 	appendChatContextLine(&b, "Description", f.Description)
-	appendChatContextLine(&b, "Recommendation", f.Recommendation)
 	appendChatContextLine(&b, "Evidence", f.Evidence)
 	appendChatContextLine(&b, "AI Context", f.AIContext)
 	if f.AIConfidence > 0 {
@@ -1218,7 +1217,7 @@ func isSafePatrolFindingRequestHandoffLine(line string) bool {
 		"Investigation Outcome",
 		"Investigation Confidence",
 		"Conclusion",
-		"Recommended Action",
+		"Recorded Action Note",
 		"Tools Used",
 		"Approval",
 		"Approval Status",
@@ -1485,7 +1484,6 @@ func appendUnifiedFindingOperatorBriefingContext(b *strings.Builder, f *unified.
 		appendChatContextLine(b, "Latest Lifecycle Event", latestLifecycle)
 	}
 	appendChatContextLine(b, "Current Conclusion", unifiedFindingBriefingConclusion(f))
-	appendChatContextLine(b, "Recommended Next Step", unifiedFindingBriefingNextStep(f))
 	if decision := unifiedFindingBriefingOperatorDecision(f, handoffActions); decision != "" {
 		appendChatContextLine(b, "Operator Decision", decision)
 	}
@@ -1748,29 +1746,6 @@ func unifiedFindingBriefingVerification(f *unified.UnifiedFinding) string {
 		return ""
 	}
 	return formatBriefingStringList(f.InvestigationRecord.Verification, 2, "verification")
-}
-
-func unifiedFindingBriefingNextStep(f *unified.UnifiedFinding) string {
-	if f == nil {
-		return ""
-	}
-	if unifiedFindingChatStatus(f, time.Now()) == "resolved" {
-		return "Explain the resolution and any monitoring follow-up; do not propose execution unless a new active finding is raised."
-	}
-	if f.InvestigationRecord != nil {
-		if next := strings.TrimSpace(f.InvestigationRecord.RecommendedAction); next != "" {
-			return next
-		}
-		if f.InvestigationRecord.ProposedFix != nil {
-			if description := strings.TrimSpace(f.InvestigationRecord.ProposedFix.Description); description != "" {
-				return "Review proposed fix: " + description
-			}
-		}
-	}
-	if recommendation := strings.TrimSpace(f.Recommendation); recommendation != "" {
-		return recommendation
-	}
-	return "Explain what Patrol knows and identify the next evidence to verify before remediation."
 }
 
 func unifiedFindingBriefingOperatorDecision(f *unified.UnifiedFinding, handoffActions []chat.HandoffAction) string {
@@ -2192,7 +2167,7 @@ func appendInvestigationRecordChatContext(b *strings.Builder, rec *aicontracts.I
 	appendChatContextLine(b, "Subject Resource ID", rec.Subject.ResourceID)
 	appendChatContextLine(b, "Subject Node", rec.Subject.Node)
 	appendChatContextLine(b, "Conclusion", rec.Conclusion)
-	appendChatContextLine(b, "Recommended Action", rec.RecommendedAction)
+	appendChatContextLine(b, "Recorded Action Note", rec.RecommendedAction)
 	appendChatContextLine(b, "Trigger", rec.Trigger.Title)
 	appendChatContextLine(b, "Trigger Description", rec.Trigger.Description)
 	if !rec.Trigger.DetectedAt.IsZero() {

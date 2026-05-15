@@ -1339,7 +1339,9 @@ including safe approval status, request/expiry timestamps, action plan identity,
 approval policy, plan expiry, and dry-run posture, but they must not reinterpret
 a recovered approval or clearer proposed-fix posture as backup freshness,
 restore authority, recovery proof, or storage-local remediation execution
-state.
+state. Those handoffs must remain context-only for the configured model and
+must not be converted by storage/recovery code into pre-filled prompts,
+suggested prompt chips, or recovery-owned next-step instructions.
 Patrol run `handoff_metadata` retained for saved Assistant sessions is also
 AI/runtime review identity only. Storage and recovery may display or link from
 the safe run ID, run type/status, runtime-failure flag, or scoped resource label
@@ -1350,7 +1352,8 @@ non-empty `finding_id` follow the same adjacent API boundary: storage and
 recovery may treat the resulting Assistant session as incident context, but
 must not reinterpret the finding ID or approval-required chat mode as backup
 freshness, restore authorization, storage remediation permission, or recovery
-transport state.
+transport state, and must not treat the context-only handoff as a
+storage/recovery-authored diagnostic prompt.
 Patrol queued-fix approvals that seed shared action-audit records follow the
 same rule: storage and recovery may display the resulting action history as
 incident-adjacent context, including the requester identity that distinguishes

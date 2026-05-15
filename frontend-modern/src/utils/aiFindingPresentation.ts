@@ -812,10 +812,6 @@ export const formatFindingForClipboard = (
     lines.push('');
     lines.push(`Impact: ${finding.impact}`);
   }
-  if (finding.recommendation) {
-    lines.push('');
-    lines.push(`Recommendation: ${finding.recommendation}`);
-  }
   const trustParts: string[] = [];
   const confidence = finding.investigationRecord?.confidence;
   if (confidence) {

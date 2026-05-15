@@ -135,7 +135,7 @@ Patrol-specific presentation helpers.
 8. Keep the Patrol store aligned with the shared structured investigation
    record when transport carries one. `frontend-modern/src/stores/aiIntelligence.ts`
    may retain `investigationRecord` as data for Assistant handoff and Patrol
-   presentation, but visible Patrol copy and Assistant handoff prompt framing
+   presentation, but visible Patrol copy and Assistant handoff context
    must flow through the governed Patrol investigation-context helpers. Those
    helpers also own the Assistant drawer briefing content for Patrol records,
    including the rule that proposed-fix commands are summarized by count only
@@ -181,10 +181,11 @@ Patrol-specific presentation helpers.
    governed approval/action posture instead of behaving like a generic chat over
    a pasted incident dump. Patrol is the scheduled
    probe, context assembler, and execution-governance owner; the configured LLM
-   is the diagnostic and remediation-reasoning owner. Patrol handoff prompts may
+   is the diagnostic and remediation-reasoning owner. Patrol handoffs may
    provide system context, resource posture, action posture, and governed tools,
-   but must not force active tool use, name a required tool path, or present a
-   Patrol-authored remediation answer for the LLM to execute. Patrol
+   but must not synthesize, pre-fill, or auto-submit chat prompts, force active
+   tool use, name a required tool path, show suggested prompt chips, or present
+   a Patrol-authored remediation answer for the LLM to execute. Patrol
    runs must still call the configured model when deterministic triage is quiet,
    and unmatched deterministic signals may be returned as context for another
    model pass but must not be converted into Pulse-authored findings after the

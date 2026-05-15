@@ -29,10 +29,7 @@ describe('alertAssistantHandoffModel', () => {
       vmid: 101,
     });
 
-    expect(handoff.prompt).toContain('Investigate this WARNING alert');
-    expect(handoff.prompt).toContain(
-      'Ask for operator approval before running any diagnostic command',
-    );
+    expect(handoff).not.toHaveProperty('prompt');
     expect(handoff.context).toMatchObject({
       targetType: 'vm',
       targetId: 'vm-101',
@@ -91,8 +88,8 @@ describe('alertAssistantHandoffModel', () => {
   it('suppresses current-value and threshold for state alerts (powered-off, etc.)', () => {
     // State alerts are binary/enumerated conditions. The backend sends
     // value=0 and threshold=0 for those; rendering "current 0.0% / threshold
-    // 0.0%" is meaningless. The briefing and prompt must omit those lines
-    // and use the alert message instead to convey what's wrong.
+    // 0.0%" is meaningless. The briefing must omit those lines and use the
+    // alert message instead to convey what's wrong.
     const handoff = buildAlertAssistantHandoff({
       alert: makeAlert({
         type: 'powered-off',
@@ -102,12 +99,6 @@ describe('alertAssistantHandoffModel', () => {
       }),
       now: new Date('2026-05-07T10:05:00.000Z'),
     });
-
-    expect(handoff.prompt).not.toContain('**Current Value:**');
-    expect(handoff.prompt).not.toContain('**Threshold:**');
-    expect(handoff.prompt).not.toContain('0.0%');
-    expect(handoff.prompt).toContain('**Alert Type:** powered-off');
-    expect(handoff.prompt).toContain("**Message:** VM 'docker' is powered off");
 
     const briefing = handoff.context.briefing as { detailLines: string[] };
     for (const line of briefing.detailLines) {
@@ -129,8 +120,6 @@ describe('alertAssistantHandoffModel', () => {
       now: new Date('2026-05-07T10:05:00.000Z'),
     });
 
-    expect(handoff.prompt).toContain('**Current Value:** 92.5%');
-    expect(handoff.prompt).toContain('**Threshold:** 80.0%');
     const briefing = handoff.context.briefing as { detailLines: string[] };
     expect(briefing.detailLines).toContain('Current value 92.5%; threshold 80.0%');
   });

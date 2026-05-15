@@ -1420,6 +1420,10 @@ lifecycle-adjacent surfaces may treat those references as AI/runtime
 explanation context only, and must not reinterpret them as agent readiness,
 install status, command reachability, enrollment health, fleet execution
 authority, or agent command grants.
+Those handoffs must remain context-only for the configured model. Lifecycle
+code must not convert alert, incident, or Patrol Assistant handoffs into
+pre-filled prompts, suggested prompt chips, required tool routes, or agent
+lifecycle next-step instructions.
 That same shared `internal/api/` dependency also now assumes SSO test and
 metadata-preview routes fail closed on validated outbound URL handling.
 Lifecycle-adjacent setup and hosted bootstrap surfaces may depend on those

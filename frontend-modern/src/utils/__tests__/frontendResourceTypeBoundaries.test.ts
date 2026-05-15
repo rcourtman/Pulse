@@ -4348,7 +4348,7 @@ describe('frontend resource type boundaries', () => {
     expect(patrolInvestigationContextModelSource).toContain(
       'export function buildPatrolInvestigationRecordPresentation',
     );
-    expect(patrolInvestigationContextModelSource).toContain(
+    expect(patrolInvestigationContextModelSource).not.toContain(
       'export function buildPatrolAssistantFindingPrompt',
     );
     expect(patrolInvestigationContextModelSource).toContain(
@@ -4367,7 +4367,6 @@ describe('frontend resource type boundaries', () => {
     expect(patrolIntelligenceHeaderSource).not.toContain('getAIQuickstartCreditsPresentation');
     expect(patrolIntelligenceHeaderSource).not.toContain('quickstart_credits');
     expect(patrolIntelligenceHeaderSource).not.toContain('using_quickstart');
-    expect(patrolIntelligenceSummarySource).toContain('getPatrolSummaryPresentation');
     expect(patrolIntelligenceSummarySource).toContain('getPatrolAssessmentPresentation');
     expect(patrolIntelligenceWorkspaceSource).toContain('ApprovalBanner');
     expect(patrolIntelligenceWorkspaceSource).toContain('FindingsPanel');
@@ -4496,7 +4495,8 @@ describe('frontend resource type boundaries', () => {
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_DISCOVERY_HINT_TITLE');
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_QUESTION_CARD_TITLE');
     expect(aiChatPresentationSource).toContain('export function getAIChatLauncherTitle');
-    expect(aiChatPresentationSource).toContain('export function getAIChatEmptyStateSuggestions');
+    expect(aiChatPresentationSource).not.toContain('AI_CHAT_SUGGESTIONS_LABEL');
+    expect(aiChatPresentationSource).not.toContain('getAIChatEmptyStateSuggestions');
     expect(remediationStatusSource).toContain('getRemediationPresentation');
     expect(remediationStatusSource).not.toContain(
       "'bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800'",

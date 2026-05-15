@@ -122,7 +122,7 @@ describe('IncidentTimelinePanel', () => {
 
   it('opens Assistant with a sanitized incident briefing from the loaded timeline', () => {
     const [filters, setFilters] = createSignal(new Set(['command']));
-    const openWithPromptSpy = vi.spyOn(aiChatStore, 'openWithPrompt');
+    const openSpy = vi.spyOn(aiChatStore, 'open');
     aiChatStore.setEnabled(true);
 
     render(() => (
@@ -148,9 +148,8 @@ describe('IncidentTimelinePanel', () => {
       }),
     );
 
-    expect(openWithPromptSpy).toHaveBeenCalledTimes(1);
-    const [prompt, context] = openWithPromptSpy.mock.calls[0] as [string, Record<string, unknown>];
-    expect(prompt).toContain('Discuss this Warning alert incident from Pulse Alerts.');
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    const [context] = openSpy.mock.calls[0] as [Record<string, unknown>];
     expect(context).toMatchObject({
       autonomousMode: false,
       briefing: {

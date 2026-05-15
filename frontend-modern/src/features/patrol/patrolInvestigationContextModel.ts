@@ -86,39 +86,6 @@ export interface PatrolInvestigationRecordPresentation {
   error?: string;
 }
 
-// 'discuss' = open-ended chat entry, operator drives.
-// 'explain' = action-style "do the explaining," auto-sent.
-// 'investigate' = action-style "work out what's true now" — the prompt
-// gives the LLM context and lets it decide whether fresh tool evidence is
-// needed before synthesis. The surface auto-sends the prompt so the work is
-// already in flight on the screen the operator lands on.
-// 'why' = diagnostic "why did this happen" — focuses the LLM on cause
-// rather than current state: recent changes around detection time,
-// learned correlations, prior incident memory, regression history.
-// Action-style and auto-sent like Explain and Investigate.
-// 'verify_fix' = post-remediation verification — ask the LLM to confirm
-// whether the recently-applied fix actually resolved the underlying
-// condition. Only meaningful when a fix has been applied to the
-// finding (investigation outcome is one of the fix-* states).
-export type PatrolAssistantFindingIntent =
-  | 'discuss'
-  | 'explain'
-  | 'investigate'
-  | 'why'
-  | 'verify_fix';
-
-export interface PatrolAssistantFindingPromptInput {
-  title: string;
-  subject: string;
-  description: string;
-  investigationOutcome?: string | null;
-  remediationId?: string | null;
-  pendingApproval?: PatrolAssistantApprovalBriefingInput | null;
-  proposedFix?: PatrolAssistantProposedFixBriefingInput | null;
-  investigationRecord?: InvestigationRecord | null;
-  intent?: PatrolAssistantFindingIntent;
-}
-
 export interface PatrolAssistantApprovalBriefingInput {
   id?: string | null;
   status?: string | null;
@@ -194,7 +161,6 @@ export interface PatrolAssistantFindingHandoffInput {
   pendingApproval?: PatrolAssistantApprovalBriefingInput | null;
   proposedFix?: PatrolAssistantProposedFixBriefingInput | null;
   investigationRecord?: InvestigationRecord | null;
-  intent?: PatrolAssistantFindingIntent;
 }
 
 export interface PatrolAssistantFindingModeInput {
@@ -281,18 +247,15 @@ export interface PatrolAssessmentAssistantHandoffInput {
 }
 
 export interface PatrolAssessmentAssistantHandoff {
-  prompt: string;
-  context: Omit<AIChatContext, 'initialPrompt'>;
+  context: AIChatContext;
 }
 
 export interface PatrolAssistantFindingHandoff {
-  prompt: string;
-  context: Omit<AIChatContext, 'initialPrompt'>;
+  context: AIChatContext;
 }
 
 export interface PatrolRunAssistantHandoff {
-  prompt: string;
-  context: Omit<AIChatContext, 'initialPrompt'>;
+  context: AIChatContext;
 }
 
 export interface PatrolConfigurationFailureInput {
@@ -318,8 +281,7 @@ export interface PatrolConfigurationFailureInput {
 }
 
 export interface PatrolConfigurationFailureHandoff {
-  prompt: string;
-  context: Omit<AIChatContext, 'initialPrompt'>;
+  context: AIChatContext;
 }
 
 const MAX_ASSESSMENT_FINDINGS = 5;
@@ -481,140 +443,15 @@ export function buildPatrolAssistantApprovalBriefingInput(
   };
 }
 
-export function buildPatrolAssistantFindingPrompt(
-  input: PatrolAssistantFindingPromptInput,
-): string {
-  const title = normalizeText(input.title) || 'Patrol finding';
-  const subject = normalizeText(input.subject) || 'the affected resource';
-  const description = normalizeText(input.description);
-  const hasRecord = Boolean(input.investigationRecord?.id);
-  const actionInstruction = buildPatrolAssistantFindingActionPromptInstruction(input);
-
-  let prompt: string;
-  if (input.intent === 'explain') {
-    prompt =
-      `Explain this Patrol finding: "${title}" on ${subject}. ` +
-      'Walk me through what we know, why it matters for the affected workloads, ' +
-      'how confident the analysis is, what remains uncertain, and what you would do next. ' +
-      'Use the structured investigation record and operational memory in the attached context as the primary source.';
-  } else if (input.intent === 'investigate') {
-    prompt =
-      `Investigate this Patrol finding now: "${title}" on ${subject}. ` +
-      'Use the attached context and decide whether the available Pulse tools are needed to gather fresh evidence ' +
-      'about the current state of the affected resource and related resources. ' +
-      'Then synthesize: what is the root cause given the current evidence, ' +
-      'what is your confidence, and what should happen next? ' +
-      'If any command-running step is involved, surface it for governed approval rather than executing on your own judgment.';
-  } else if (input.intent === 'why') {
-    prompt =
-      `Why did this Patrol finding happen: "${title}" on ${subject}? ` +
-      'Focus on cause, not on current state. Look at recent changes around the detection time, ' +
-      'learned correlations with other resources, prior incidents for this resource, and any ' +
-      'regression history that suggests a recurring trigger. ' +
-      'Then answer: what most likely caused this to fire now, ' +
-      'what evidence in the attached context supports that cause, ' +
-      'and what would have to be true for the cause to recur. ' +
-      'If the cause requires verification, decide whether the available Pulse tools are needed; do not run anything that changes state without operator approval.';
-  } else if (input.intent === 'verify_fix') {
-    prompt =
-      `Verify the fix applied to this Patrol finding: "${title}" on ${subject}. ` +
-      'A remediation step has been executed against this finding — confirm whether the underlying ' +
-      'condition has actually cleared. Decide whether the available Pulse tools are needed to check current evidence against the original signal that fired this ' +
-      'finding, not against an unrelated state. ' +
-      'Then answer: is the condition cleared, what evidence supports that judgment, ' +
-      'how confident are you, and is there any residual risk the operator should monitor for. ' +
-      'Do not execute any new state-changing commands; verification is read-only.';
-  } else {
-    prompt = `I'd like to discuss this Patrol finding: "${title}" on ${subject}.`;
-  }
-  if (
-    hasRecord &&
-    input.intent !== 'explain' &&
-    input.intent !== 'investigate' &&
-    input.intent !== 'why' &&
-    input.intent !== 'verify_fix'
-  ) {
-    prompt +=
-      '\n\nPulse Patrol has a structured investigation record for this finding. Use that record as context, then decide next steps from current evidence.';
-  }
-  if (actionInstruction) {
-    prompt += `\n\n${actionInstruction}`;
-  }
-  if (description) {
-    prompt += `\n\n${description}`;
-  }
-  return prompt;
-}
-
-function buildPatrolAssistantFindingActionPromptInstruction(
-  input: PatrolAssistantFindingPromptInput,
-): string | undefined {
-  const pendingApproval = normalizeApprovalBriefing(input.pendingApproval);
-  const record = buildPatrolInvestigationRecordPresentation(input.investigationRecord);
-  const proposedFix = record.proposedFix || normalizeProposedFixBriefing(input.proposedFix);
-  const remediationId = normalizeText(input.remediationId);
-  const outcome = normalizeText(input.investigationOutcome || input.investigationRecord?.outcome);
-  const normalizedOutcome = outcome.toLowerCase();
-
-  if (pendingApproval.id) {
-    const contextParts = [
-      pendingApproval.status ? `approval status ${pendingApproval.status}` : undefined,
-      pendingApproval.riskLevel ? `${pendingApproval.riskLevel} risk` : undefined,
-      pendingApproval.targetName
-        ? `target ${truncateContextText(pendingApproval.targetName, 120)}`
-        : undefined,
-      pendingApproval.actionApprovalPolicy ? 'approval policy attached' : undefined,
-      pendingApproval.actionPreflight || pendingApproval.actionDryRunSummary
-        ? 'dry-run posture attached'
-        : undefined,
-    ].filter(isNonEmptyString);
-
-    return `Governed approval ${pendingApproval.id} is attached${
-      contextParts.length > 0 ? ` (${contextParts.join('; ')})` : ''
-    }. Treat it as approval context. Use the attached Patrol evidence to decide prerequisites, risk, and next steps before any execution.`;
-  }
-
-  const hasGovernedActionPosture = Boolean(
-    proposedFix ||
-    remediationId ||
-    normalizeText(input.investigationRecord?.approval_id) ||
-    GOVERNED_ACTION_OUTCOMES.has(normalizedOutcome),
-  );
-  if (!hasGovernedActionPosture) {
-    return undefined;
-  }
-
-  const contextParts = [
-    proposedFix?.description
-      ? `recorded action artifact ${truncateContextText(proposedFix.description, 120)}`
-      : undefined,
-    proposedFix?.riskLabel ? `${proposedFix.riskLabel.toLowerCase()} risk` : undefined,
-    proposedFix?.targetHost
-      ? `target ${truncateContextText(proposedFix.targetHost, 120)}`
-      : undefined,
-    proposedFix?.commandSummary,
-    proposedFix?.destructive ? 'destructive action' : undefined,
-    remediationId ? `remediation ${truncateContextText(remediationId, 120)}` : undefined,
-    outcome ? `outcome ${formatIdentifierLabel(outcome)?.toLowerCase() || outcome}` : undefined,
-  ].filter(isNonEmptyString);
-
-  return `Governed action posture is attached${
-    contextParts.length > 0 ? ` (${contextParts.join('; ')})` : ''
-  }. Treat it as approval context, not a remediation decision. Use the attached Patrol evidence to decide risk, prerequisites, and next steps without repeating command text.`;
-}
-
 export function buildPatrolAssessmentAssistantHandoff(
   input: PatrolAssessmentAssistantHandoffInput,
 ): PatrolAssessmentAssistantHandoff {
-  const title = normalizeText(input.assessment?.title) || 'Pulse Patrol assessment';
-  const description = normalizeText(input.assessment?.description);
   const handoffContext = buildPatrolAssessmentAssistantModelContext(input);
   const recentChanges = normalizeAssessmentRecentChanges(input.supportingEvidence?.recentChanges);
   const correlations = normalizeAssessmentCorrelations(input.supportingEvidence?.correlations);
   const handoffActions = buildPatrolAssessmentHandoffActions(input);
 
   return {
-    prompt: buildPatrolAssessmentAssistantPrompt(input, title, description, handoffActions),
     context: {
       targetType: 'patrol-assessment',
       targetId: 'pulse-patrol-assessment',
@@ -649,17 +486,6 @@ export function buildPatrolAssistantFindingHandoff(
   const handoffActions = buildPatrolAssistantFindingHandoffActions(input);
 
   return {
-    prompt: buildPatrolAssistantFindingPrompt({
-      title: input.title,
-      subject: input.subject,
-      description: normalizeText(input.description),
-      investigationOutcome: input.investigationOutcome,
-      remediationId: input.remediationId,
-      pendingApproval: input.pendingApproval,
-      proposedFix: input.proposedFix,
-      investigationRecord: input.investigationRecord,
-      intent: input.intent,
-    }),
     context: {
       targetType: resource?.type,
       targetId: resource?.id,
@@ -713,7 +539,6 @@ export function buildPatrolRunAssistantHandoff(run: PatrolRunRecord): PatrolRunA
   const handoffResources = buildPatrolRunHandoffResources(run);
 
   return {
-    prompt: buildPatrolRunAssistantPrompt(run, kindLabel, statusLabel, runtimeFailure),
     context: {
       targetType: 'patrol-run',
       targetId: runId || undefined,
@@ -761,7 +586,6 @@ export function buildPatrolConfigurationFailureHandoff(
   ].filter(isNonEmptyString);
 
   return {
-    prompt: buildPatrolConfigurationFailurePrompt(input, message, detailLines),
     context: {
       targetType: 'patrol-configuration',
       targetId: 'pulse-patrol-configuration',
@@ -804,62 +628,6 @@ export function buildPatrolAssistantFindingHandoffActions(
 ): AIChatHandoffAction[] {
   const action = buildPatrolFindingHandoffAction(finding);
   return action ? [action] : [];
-}
-
-function buildPatrolAssessmentAssistantPrompt(
-  input: PatrolAssessmentAssistantHandoffInput,
-  title: string,
-  description: string,
-  handoffActions: AIChatHandoffAction[],
-): string {
-  const reviewInstruction = buildPatrolAssessmentReviewPromptInstruction(input, handoffActions);
-
-  return [
-    `Discuss the current Pulse Patrol assessment: ${title}.`,
-    description,
-    reviewInstruction,
-    'Use the attached model-only assessment context and decide what, if anything, needs fresh evidence, operator action, or governed tool use.',
-    'Do not infer, repeat, or execute raw command text from this handoff.',
-  ]
-    .filter(isNonEmptyString)
-    .join('\n\n');
-}
-
-function buildPatrolAssessmentReviewPromptInstruction(
-  input: PatrolAssessmentAssistantHandoffInput,
-  handoffActions: AIChatHandoffAction[],
-): string {
-  const pendingApprovalCount = normalizeAssessmentPendingApprovalCount(input.activeFindings);
-  const actionCount = handoffActions.length;
-  const activeFindingCount = normalizeNonNegativeCount(input.activeFindings?.length);
-  const hasCoverageOnlyGap = assessmentHasCoverageGap(input) && activeFindingCount === 0;
-
-  if (pendingApprovalCount > 0) {
-    return `The attached context includes ${formatAssessmentMetricCount(
-      'pending governed approvals',
-      pendingApprovalCount,
-    )}, approval policy, dry-run posture, and current evidence.`;
-  }
-
-  if (actionCount > 0) {
-    return `The attached context includes ${formatAssessmentMetricCount(
-      'governed action references',
-      actionCount,
-    )}, risk, and current evidence.`;
-  }
-
-  if (activeFindingCount > 0) {
-    return `The attached context includes ${formatAssessmentMetricCount(
-      'active findings',
-      activeFindingCount,
-    )}, affected resources, evidence, and verification caveats.`;
-  }
-
-  if (hasCoverageOnlyGap) {
-    return 'The attached context includes incomplete Patrol coverage signals. Decide from the evidence whether more verification is needed before action.';
-  }
-
-  return 'Review the attached model-only Patrol assessment context.';
 }
 
 function buildPatrolAssessmentAssistantBriefing(
@@ -1061,31 +829,6 @@ function buildPatrolAssessmentAssistantModelContext(
     .join('\n');
 }
 
-function buildPatrolRunAssistantPrompt(
-  run: PatrolRunRecord,
-  kindLabel: string,
-  statusLabel: string,
-  runtimeFailure: string | undefined,
-): string {
-  const runId = normalizeText(run.id);
-  const trigger = formatTriggerReason(run.trigger_reason);
-  const runLabel = [kindLabel, runId].filter(isNonEmptyString).join(' ') || 'Patrol run';
-  const focus = runtimeFailure
-    ? `The attached context includes a Patrol runtime failure: ${truncateContextText(runtimeFailure, 180)}.`
-    : `The attached context includes a Patrol run outcome: ${statusLabel}${
-        trigger ? `, ${trigger.toLowerCase()}` : ''
-      }.`;
-
-  return [
-    `Discuss this Pulse Patrol run: ${runLabel}.`,
-    focus,
-    'Use the attached model-only run history context and decide what, if anything, needs fresh evidence, operator action, or governed tool use.',
-    'Do not infer, repeat, or execute raw command text from this handoff.',
-  ]
-    .filter(isNonEmptyString)
-    .join('\n\n');
-}
-
 function buildPatrolRunAssistantBriefing(
   run: PatrolRunRecord,
   kindLabel: string,
@@ -1118,25 +861,6 @@ function buildPatrolRunAssistantBriefing(
     safetyNote:
       'Assistant can explain the Patrol run context; retries, configuration changes, and remediation remain operator-controlled.',
   };
-}
-
-function buildPatrolConfigurationFailurePrompt(
-  input: PatrolConfigurationFailureInput,
-  message: string,
-  detailLines: string[],
-): string {
-  const code = normalizeText(input.code);
-  const issueLabel = input.saved ? 'configuration issue' : 'configuration failure';
-  return [
-    `Discuss this Pulse Patrol ${issueLabel}.`,
-    code ? `Server code: ${code}.` : undefined,
-    `The attached context includes this failure: ${truncateContextText(message, 220)}.`,
-    detailLines.length > 0 ? `Attached details: ${detailLines.join('; ')}.` : undefined,
-    'Use the attached model-only configuration context and decide what, if anything, needs fresh evidence, operator action, or governed tool use.',
-    'Do not infer, repeat, or execute raw command text from this handoff.',
-  ]
-    .filter(isNonEmptyString)
-    .join('\n\n');
 }
 
 function buildPatrolConfigurationFailureModelContext(
@@ -1943,7 +1667,7 @@ function formatAssessmentFindingContextLine(
     record.confidenceLabel,
     record.conclusion ? `conclusion ${truncateContextText(record.conclusion, 180)}` : undefined,
     record.recommendedAction
-      ? `recommended ${truncateContextText(record.recommendedAction, 180)}`
+      ? `recorded action note ${truncateContextText(record.recommendedAction, 180)}`
       : undefined,
     recordApprovalId && recordApprovalId !== pendingApproval.id
       ? `approval ${recordApprovalId}`
@@ -2044,7 +1768,7 @@ function buildPatrolAssistantFindingModelContext(
       'Impact',
       record.hasRecord ? record.impact || 'Impact not assessed' : record.impact,
     ),
-    formatContextLine('Recommended Action', record.recommendedAction),
+    formatContextLine('Recorded Action Note', record.recommendedAction),
     ...record.evidenceSummaries.map((summary, index) =>
       formatContextLine(`Evidence ${index + 1}`, summary),
     ),
@@ -2160,15 +1884,6 @@ export function patrolAssistantFindingHandoffRequiresApprovalMode(
   return GOVERNED_ACTION_OUTCOMES.has(outcome);
 }
 
-export function buildPatrolRemediationPlanAssistantPrompt(
-  input: PatrolRemediationPlanAssistantInput,
-): string {
-  const title = normalizeText(input.title) || 'Patrol finding';
-  const subject = normalizeText(input.subject) || 'the affected resource';
-
-  return `Review this Patrol finding with the attached evidence: "${title}" on ${subject}. Decide what, if anything, should happen next.`;
-}
-
 export function buildPatrolRemediationPlanAssistantModelContext(
   input: PatrolRemediationPlanAssistantInput,
 ): string {
@@ -2264,7 +1979,6 @@ export function buildPatrolAssistantFindingBriefing(
     attentionReason ? `Attention: ${attentionReason}` : undefined,
     record.conclusion,
     record.impact ? `Impact: ${record.impact}` : undefined,
-    record.recommendedAction,
     proposedFixDetail,
     operatorDecision ? `Decision: ${operatorDecision}` : undefined,
   ]

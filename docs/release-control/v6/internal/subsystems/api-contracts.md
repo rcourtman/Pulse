@@ -396,8 +396,8 @@ the canonical monitored-system blocked payload.
     request/expiry timestamps, action plan identity and expiry, safe generated
     approval summaries, command counts, and fix/action references, never the
     approval command payload. Patrol
-    remediation-plan handoffs must use the same boundary for frontend-authored
-    prompts: plan status, risk, step labels, and command counts are allowed,
+    remediation-plan handoffs must use the same boundary for model-only
+    context: plan status, risk, step labels, and command counts are allowed,
     while raw command and rollback command payloads remain in governed action
     surfaces. Frontend Patrol finding-discussion handoffs must force a
     request-local approval-required Assistant mode instead of inheriting the
@@ -581,12 +581,12 @@ the canonical monitored-system blocked payload.
    and that same Patrol investigation-context owner, so coverage signals from
    the canonical AI summary remain secondary caveats when the same assessment
    carries active findings, pending approvals, or governed action references;
-   Assistant prompt emphasis, briefing action labels, and safety notes must
+   Assistant context, briefing action labels, and safety notes must
    carry finding priority, affected resources, evidence, and governed approval
    posture as context instead of recasting the whole handoff as a coverage gap
    and that same Patrol investigation-context owner, so coverage-incomplete
    assessments with no active infrastructure findings are serialized as a
-   verification-gap handoff: prompt and visible briefing copy must explain what
+   verification-gap handoff: model-only context and visible briefing copy must explain what
    scoped activity did and did not prove, keep latest-run and supporting-context
    facts model-only, and leave next-step selection to the configured LLM
    handoff-only metadata, and avoid introducing backend fields beyond the
@@ -596,10 +596,10 @@ the canonical monitored-system blocked payload.
    operator context: approval ID, status, risk, requested/expiry timestamps,
    target label, generated approval summary, and command count are allowed, while
    approval command payloads stay inside governed approval/remediation surfaces,
-   and finding-level first-turn prompt emphasis may be derived from the same
-   bounded metadata only so Assistant starts by reviewing approval status, risk,
-   dry-run posture, proposed-fix posture, and safest next step without receiving
-   raw command or execution payloads; finding-level handoffs may also send one
+   and finding-level handoff context may be derived from the same
+   bounded metadata only so Assistant receives approval status, risk,
+   dry-run posture, and proposed-fix posture without Pulse choosing the next
+   step or receiving raw command/execution payloads; finding-level handoffs may also send one
    bounded model-only `handoff_context`, one `handoff_resources` target
    reference, and one `handoff_actions` entry for that governed approval or
    proposed fix so the Assistant runtime can refresh finding and action posture
@@ -2616,9 +2616,10 @@ reason, route-action facts, or prompt chips; the configured model owns those
 decisions from the structured handoff metadata and bounded chat context.
 Frontend handoff builders may send these fields for owned alert, incident,
 Patrol assessment, Patrol finding, or Patrol run-history context, but the
-backend must not
-persist them as user-authored message text and must treat them as
-explanation/review context only. When a Patrol `finding_id` resolves,
+backend must not persist them as user-authored message text, and the frontend
+must not prefill or auto-submit a product-authored user prompt from them. They
+are context only and must be treated as explanation/review context only. When a
+Patrol `finding_id` resolves,
 backend-refreshed durable finding context remains canonical; the handler may
 merge only recognized same-finding Patrol product handoff text and same-finding
 resource/action references as secondary model-only review context, while
@@ -3806,9 +3807,11 @@ The `/api/ai/chat` finding handoff contract must also include a model-only
 investigation record before detailed `[Finding Context]`. The briefing is the
 canonical operator-facing frame for Assistant: it carries the finding summary,
 resource, priority, current attention reason, current recency facts, bounded
-evidence and verification summaries, investigation confidence, recommended next
-step, and operator-decision framing plus approval/proposed-fix posture without
-raw command text. That approval/proposed-fix posture must come from the same
+evidence and verification summaries, investigation confidence, and
+operator-decision framing plus approval/proposed-fix posture without raw command
+text. It must not include a Pulse-authored recommended next step. Any recorded
+action note from a durable investigation record is context, not remediation
+guidance. That approval/proposed-fix posture must come from the same
 structured action reference sent to chat execution, including any recovered live
 Patrol approval, so visible and model-only handoffs stay consistent. Patrol's
 frontend Assistant drawer briefing must use that same operator frame for
@@ -3822,14 +3825,13 @@ approval list payloads only as safe metadata for that visible briefing and any
    structured `handoff_actions`: approval ID, status, risk, request/expiry
    timestamps, target label, requester identity, action ID, approval policy,
    plan expiry, and dry-run summary are allowed. Assessment-level visible
-   briefings may reuse that same
-   safe metadata for action labels, safety notes, and approval-aware suggested
-   prompts, while approval command text remains inside the governed
-   approval/remediation surface.
-Patrol approval-row Assistant prompts must use the same safe metadata boundary
+   briefings may reuse that same safe metadata for action labels and safety notes,
+   while approval command text remains inside the governed approval/remediation
+   surface.
+Patrol approval-row Assistant handoffs must use the same safe metadata boundary
 and set `autonomousMode:false` for the request-local chat handoff; they must not
-paste raw approval or proposed-fix command text into the authored chat prompt.
-Patrol remediation-plan or action-artifact Assistant prompts must pass only safe
+paste raw approval or proposed-fix command text into a chat prompt.
+Patrol remediation-plan or action-artifact Assistant handoffs must pass only safe
 status, risk, description, and command-count posture as non-authoritative context
 for the configured LLM to critique; raw plan command and rollback command
 payloads remain owned by the governed remediation/action APIs and panels. The

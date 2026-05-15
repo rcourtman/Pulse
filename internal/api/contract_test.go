@@ -277,6 +277,14 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	if strings.Contains(handlerText, "prompt = findingCtx +") {
 		t.Fatal("ai_handler.go must not prepend finding context into the persisted prompt")
 	}
+	for _, forbidden := range []string{
+		"Recommended Next Step",
+		"unifiedFindingBriefingNextStep",
+	} {
+		if strings.Contains(handlerText, forbidden) {
+			t.Fatalf("ai_handler.go must not synthesize product-authored handoff recommendations: found %q", forbidden)
+		}
+	}
 
 	settingsHandlerText := string(settingsHandlerSource)
 	for _, required := range []string{

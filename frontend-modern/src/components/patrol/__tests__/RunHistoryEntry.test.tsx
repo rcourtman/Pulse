@@ -3,11 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PatrolRunRecord } from '@/api/patrol';
 import { RunHistoryEntry } from '../RunHistoryEntry';
 
-const { findingsPanelState, openWithPromptMock } = vi.hoisted(() => ({
+const { findingsPanelState, openMock } = vi.hoisted(() => ({
   findingsPanelState: {
     latestProps: null as Record<string, unknown> | null,
   },
-  openWithPromptMock: vi.fn(),
+  openMock: vi.fn(),
 }));
 
 vi.mock('@/components/AI/FindingsPanel', () => ({
@@ -42,7 +42,7 @@ vi.mock('@/components/AI/aiChatUtils', () => ({
 
 vi.mock('@/stores/aiChat', () => ({
   aiChatStore: {
-    openWithPrompt: openWithPromptMock,
+    open: openMock,
   },
 }));
 
@@ -96,7 +96,7 @@ describe('RunHistoryEntry', () => {
 
   beforeEach(() => {
     findingsPanelState.latestProps = null;
-    openWithPromptMock.mockReset();
+    openMock.mockReset();
   });
 
   afterEach(() => {
@@ -281,13 +281,10 @@ describe('RunHistoryEntry', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /discuss/i }));
 
-    expect(openWithPromptMock).toHaveBeenCalledTimes(1);
-    const [prompt, context] = openWithPromptMock.mock.calls[0];
-    expect(prompt).toContain('Discuss this Pulse Patrol run');
-    expect(prompt).toContain('Start by explaining the Patrol runtime failure');
-    expect(prompt).toContain('Provider rejected Patrol tool calls');
-    expect(prompt).not.toContain('tool_choice');
-    expect(prompt).not.toContain('No endpoints found');
+    expect(openMock).toHaveBeenCalledTimes(1);
+    const [context] = openMock.mock.calls[0];
+    expect(JSON.stringify(context)).not.toContain('tool_choice');
+    expect(JSON.stringify(context)).not.toContain('No endpoints found');
     expect(context).toMatchObject({
       targetType: 'patrol-run',
       targetId: 'run-runtime-error',
