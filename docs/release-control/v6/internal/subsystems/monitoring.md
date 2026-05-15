@@ -767,6 +767,12 @@ stopping at disconnected toast notifications.
 That same runtime owner also defines the feature-default contract for TrueNAS:
 the API-backed integration is on by default, and `PULSE_ENABLE_TRUENAS` is an
 explicit opt-out switch rather than a required bootstrap toggle.
+That same TrueNAS monitoring boundary owns system identity compatibility for
+`/system/info`. `internal/truenas/client.go` must tolerate provider-version
+drift in non-identity display fields such as `buildtime`, including structured
+date/value wrappers, and still preserve the canonical hostname, version,
+machine ID, capacity, and poll-health path instead of failing connection tests
+or background refreshes during JSON decoding.
 That same monitoring boundary now also owns live TrueNAS disk temperatures.
 `internal/truenas/client.go` and `internal/truenas/provider.go` must ingest
 `disk.temperatures` from the TrueNAS API, fall back to modern

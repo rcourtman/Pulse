@@ -158,7 +158,7 @@ func (c *Client) GetSystemInfo(ctx context.Context) (*SystemInfo, error) {
 		machineID = strings.TrimSpace(response.Hostname)
 	}
 
-	build := strings.TrimSpace(response.BuildTime)
+	build := strings.TrimSpace(response.BuildTime.String())
 	if build == "" {
 		build = strings.TrimSpace(response.Version)
 	}
@@ -2868,15 +2868,30 @@ func normalizeFingerprint(fingerprint string) (string, error) {
 }
 
 type systemInfoResponse struct {
-	Hostname      string `json:"hostname"`
-	Version       string `json:"version"`
-	BuildTime     string `json:"buildtime"`
-	UptimeSeconds int64  `json:"uptime_seconds"`
-	SystemSerial  string `json:"system_serial"`
-	SystemVendor  string `json:"system_manufacturer"`
-	Cores         int    `json:"cores"`
-	PhysicalCores int    `json:"physical_cores"`
-	Physmem       int64  `json:"physmem"`
+	Hostname      string            `json:"hostname"`
+	Version       string            `json:"version"`
+	BuildTime     textResponseField `json:"buildtime"`
+	UptimeSeconds int64             `json:"uptime_seconds"`
+	SystemSerial  string            `json:"system_serial"`
+	SystemVendor  string            `json:"system_manufacturer"`
+	Cores         int               `json:"cores"`
+	PhysicalCores int               `json:"physical_cores"`
+	Physmem       int64             `json:"physmem"`
+}
+
+type textResponseField string
+
+func (f textResponseField) String() string {
+	return string(f)
+}
+
+func (f *textResponseField) UnmarshalJSON(data []byte) error {
+	value, err := parseTextResponseField(data)
+	if err != nil {
+		return err
+	}
+	*f = textResponseField(value)
+	return nil
 }
 
 type poolResponse struct {
@@ -3066,6 +3081,34 @@ func readStringAny(record map[string]any, keys ...string) string {
 		}
 	}
 	return ""
+}
+
+func parseTextResponseField(raw json.RawMessage) (string, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return "", nil
+	}
+
+	var decoded any
+	decoder := json.NewDecoder(bytes.NewReader(trimmed))
+	decoder.UseNumber()
+	if err := decoder.Decode(&decoded); err != nil {
+		return "", err
+	}
+	return textFromDecodedAny(decoded), nil
+}
+
+func textFromDecodedAny(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case json.Number:
+		return strings.TrimSpace(typed.String())
+	case map[string]any:
+		return readStringAny(typed, "rawvalue", "value", "parsed", "$date", "date", "datetime", "text", "string")
+	default:
+		return ""
+	}
 }
 
 func readStringSliceAny(record map[string]any, keys ...string) []string {
