@@ -187,12 +187,30 @@ export function GuestRow(props: GuestRowProps) {
                 size="xs"
               />
               <div class="flex items-center gap-1.5 min-w-0 group/name">
-                <span
-                  class="text-[11px] font-medium text-base-content select-none truncate"
-                  title={props.guest.name}
+                <Show
+                  when={customUrl()}
+                  fallback={
+                    <span
+                      class="text-[11px] font-medium text-base-content select-none truncate"
+                      title={props.guest.name}
+                    >
+                      {props.guest.name}
+                    </span>
+                  }
                 >
-                  {props.guest.name}
-                </span>
+                  {(href) => (
+                    <a
+                      href={href()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline select-none truncate"
+                      title={`Open ${href()}`}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {props.guest.name}
+                    </a>
+                  )}
+                </Show>
                 {/* Show backup indicator in name cell only if backup column is hidden */}
                 <Show when={!isColVisible('backup') && supportsBackup()}>
                   <BackupIndicator
@@ -422,7 +440,7 @@ export function GuestRow(props: GuestRowProps) {
                 <button
                   type="button"
                   class="text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[80px]"
-                  title={`${props.guest.node} (Open related infrastructure)`}
+                  title={`Open infrastructure node ${props.guest.node}`}
                   onClick={(event) => {
                     event.stopPropagation();
                     navigate(infrastructureHref());
@@ -705,59 +723,6 @@ export function GuestRow(props: GuestRowProps) {
                 />
               </Show>
             </div>
-          </td>
-        </Show>
-
-        {/* Link Column - at the end like InfrastructureSummaryTable */}
-        <Show when={isColVisible('link')}>
-          <td class="px-0 py-0.5 align-middle text-center">
-            <Show
-              when={customUrl() && customUrl() !== ''}
-              fallback={
-                <button
-                  type="button"
-                  class="inline-flex justify-center items-center text-muted hover:text-base-content transition-colors"
-                  title="Open related infrastructure"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    navigate(infrastructureHref());
-                  }}
-                >
-                  <svg
-                    class="w-3.5 h-3.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                  >
-                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
-                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
-                    <line x1="6" y1="6" x2="6.01" y2="6" />
-                    <line x1="6" y1="18" x2="6.01" y2="18" />
-                  </svg>
-                </button>
-              }
-            >
-              <a
-                href={customUrl()}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex justify-center items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                title={`Open ${customUrl()}`}
-                onClick={(event) => event.stopPropagation()}
-              >
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                  />
-                </svg>
-              </a>
-            </Show>
           </td>
         </Show>
       </tr>

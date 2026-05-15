@@ -690,8 +690,8 @@ describe('GuestRow', () => {
     });
   });
 
-  describe('custom URL in link column', () => {
-    it('renders external link when customUrl is set', () => {
+  describe('custom URL on the name cell', () => {
+    it('renders the workload name as the external link when customUrl is set', () => {
       const { container } = renderGuestRow({
         guest: makeGuest(),
         customUrl: 'https://example.com',
@@ -700,16 +700,17 @@ describe('GuestRow', () => {
       const link = container.querySelector('a[href="https://example.com"]');
       expect(link).toBeTruthy();
       expect(link?.getAttribute('target')).toBe('_blank');
+      expect(link?.textContent).toBe('test-vm');
+      expect(container.querySelector('td[data-workload-col="link"]')).toBeNull();
     });
 
-    it('renders infrastructure link button when no customUrl', () => {
+    it('does not render a trailing infrastructure fallback link when no customUrl is set', () => {
       const { container } = renderGuestRow({
         guest: makeGuest(),
         visibleColumnIds: ['name', 'link'],
       });
-      // Should have a button instead of an anchor
-      const buttons = container.querySelectorAll('td:last-child button');
-      expect(buttons.length).toBeGreaterThan(0);
+      expect(container.querySelector('a[href="/infrastructure/node1"]')).toBeNull();
+      expect(container.querySelector('td[data-workload-col="link"]')).toBeNull();
     });
   });
 
@@ -805,16 +806,17 @@ describe('GuestRow', () => {
 describe('GUEST_COLUMNS', () => {
   it('has the expected number of columns', () => {
     // name, type, info, vmid, cpu, memory, disk, ip, uptime, node,
-    // image, namespace, context, backup, tags, update, os, netIo, diskIo, link
-    expect(GUEST_COLUMNS.length).toBe(20);
+    // image, namespace, context, backup, tags, update, os, netIo, diskIo
+    expect(GUEST_COLUMNS.length).toBe(19);
   });
 
   it('has name as the first column', () => {
     expect(GUEST_COLUMNS[0].id).toBe('name');
   });
 
-  it('has link as the last column', () => {
-    expect(GUEST_COLUMNS[GUEST_COLUMNS.length - 1].id).toBe('link');
+  it('does not expose a trailing link column', () => {
+    expect(GUEST_COLUMNS.map((column) => column.id)).not.toContain('link');
+    expect(GUEST_COLUMNS[GUEST_COLUMNS.length - 1].id).toBe('diskIo');
   });
 
   it('marks toggleable columns correctly', () => {
@@ -848,12 +850,15 @@ describe('GUEST_COLUMNS', () => {
   });
 
   it('derives mobile overrides from the canonical guest column model', () => {
-    expect(getGuestColumnStyle('name', true)).toEqual({ width: '44%', 'max-width': '44%' });
-    expect(getGuestColumnStyle('cpu', true)).toEqual({
-      width: '17%',
-      'max-width': '17%',
+    expect(getGuestColumnStyle('name', true)).toEqual({
+      width: '46.3158%',
+      'max-width': '46.3158%',
     });
-    expect(getGuestColumnWidthStyle('name', true)).toEqual({ width: '44%' });
+    expect(getGuestColumnStyle('cpu', true)).toEqual({
+      width: '17.8947%',
+      'max-width': '17.8947%',
+    });
+    expect(getGuestColumnWidthStyle('name', true)).toEqual({ width: '46.3158%' });
     expect(getGuestColumnWidthStyle('diskIo', true)).toEqual({ width: '170px' });
   });
 
@@ -869,7 +874,6 @@ describe('GUEST_COLUMNS', () => {
       'cpu',
       'memory',
       'disk',
-      'link',
     ]);
     expect(compactColumns.map((column) => column.id)).toEqual([
       'name',
@@ -880,7 +884,6 @@ describe('GUEST_COLUMNS', () => {
       'disk',
       'uptime',
       'backup',
-      'link',
     ]);
 
     expect(
@@ -890,7 +893,7 @@ describe('GUEST_COLUMNS', () => {
         'tablet',
         tabletColumns.map((column) => column.id),
       ),
-    ).toEqual({ width: '30%' });
+    ).toEqual({ width: '30.9278%' });
     expect(
       getGuestColumnWidthStyle(
         'name',
@@ -898,7 +901,7 @@ describe('GUEST_COLUMNS', () => {
         'compact',
         compactColumns.map((column) => column.id),
       ),
-    ).toEqual({ width: '26%' });
+    ).toEqual({ width: '27.6596%' });
   });
 
   it('normalizes compact widths for workload view modes with different column sets', () => {
@@ -906,20 +909,9 @@ describe('GUEST_COLUMNS', () => {
     const compactPodColumns = getWorkloadVisibleColumnsForLayout(podColumns, 'compact');
     const compactPodColumnIds = compactPodColumns.map((column) => column.id);
 
-    expect(compactPodColumnIds).toEqual([
-      'name',
-      'cpu',
-      'memory',
-      'image',
-      'namespace',
-      'context',
-      'link',
-    ]);
+    expect(compactPodColumnIds).toEqual(['name', 'cpu', 'memory', 'image', 'namespace', 'context']);
     expect(getGuestColumnWidthStyle('name', false, 'compact', compactPodColumnIds)).toEqual({
-      width: '25.7426%',
-    });
-    expect(getGuestColumnWidthStyle('link', false, 'compact', compactPodColumnIds)).toEqual({
-      width: '5.9406%',
+      width: '27.3684%',
     });
   });
 
@@ -1180,15 +1172,16 @@ describe('event propagation', () => {
     expect(rowClick).not.toHaveBeenCalled();
   });
 
-  it('link button click does not trigger row onClick', () => {
+  it('name custom URL click does not trigger row onClick', () => {
     const rowClick = vi.fn();
     const { container } = renderGuestRow({
       guest: makeGuest(),
+      customUrl: 'https://example.com',
       onClick: rowClick,
-      visibleColumnIds: ['name', 'link'],
+      visibleColumnIds: ['name'],
     });
-    const linkButton = container.querySelector('td:last-child button')!;
-    fireEvent.click(linkButton);
+    const link = container.querySelector('a[href="https://example.com"]')!;
+    fireEvent.click(link);
     expect(rowClick).not.toHaveBeenCalled();
   });
 });

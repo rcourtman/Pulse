@@ -76,9 +76,8 @@ const GROUP_NODE_NAME_CELL_CLASS = getGroupedTableRowCellClass(
   '!py-1 !pl-2 sm:!pl-3 !pr-1.5 sm:!pr-2',
 );
 
-const getGroupNodeColumnCellClass = (columnId: string, isNameColumn: boolean): string => {
+const getGroupNodeColumnCellClass = (_columnId: string, isNameColumn: boolean): string => {
   if (isNameColumn) return GROUP_NODE_NAME_CELL_CLASS;
-  if (columnId === 'link') return 'px-0 py-0.5 align-middle text-center';
   return GROUP_NODE_METRIC_CELL_CLASS;
 };
 
@@ -324,30 +323,6 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
           'font-mono text-amber-500',
           node.diskWrite,
         );
-      case 'link': {
-        const href = node.guestURL || node.host || `https://${node.name}:8006`;
-        return (
-          <Show when={href}>
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex justify-center items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-              title={`Open ${node.name} web interface`}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                />
-              </svg>
-            </a>
-          </Show>
-        );
-      }
       default:
         return renderGroupNodeEmptyCell();
     }

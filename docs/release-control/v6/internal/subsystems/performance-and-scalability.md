@@ -351,7 +351,12 @@ regression protection.
     responsive workload column priority and width model. `WorkloadsTable`,
     `WorkloadTableHeader`, and `WorkloadPanel` must consume one shared
     layout-visible column set so headers, colgroups, and rows stay aligned during
-    live resize. View-mode-specific column sets in
+    live resize. Workload rows keep navigation inside owned identity cells
+    rather than trailing action columns: guest custom web-interface URLs render
+    on the workload name, and
+    grouped node web-interface navigation stays on the shared node header name,
+    so responsive colgroups and rows do not carry an otherwise empty link
+    column. View-mode-specific column sets in
     `frontend-modern/src/components/Workloads/guestRowModel.tsx` must retain
     core monitoring metrics when narrowing scope: app-container mode keeps CPU,
     memory, disk, and the responsive Net I/O and Disk I/O columns available,

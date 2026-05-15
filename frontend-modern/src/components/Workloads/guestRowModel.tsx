@@ -27,7 +27,6 @@ const WORKLOAD_COLUMN_MIN_LAYOUT: Record<string, WorkloadTableLayoutMode> = {
   cpu: 'mobile',
   memory: 'mobile',
   disk: 'mobile',
-  link: 'mobile',
   type: 'tablet',
   info: 'tablet',
   vmid: 'tablet',
@@ -324,7 +323,6 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     toggleable: true,
     sortKey: 'diskIo',
   },
-  { id: 'link', label: '', width: '28px' },
 ];
 
 const GUEST_COLUMN_BY_ID = new Map(GUEST_COLUMNS.map((column) => [column.id, column] as const));
@@ -354,7 +352,6 @@ const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
     cpu: 17,
     memory: 17,
     disk: 17,
-    link: 5,
   },
   tablet: {
     name: 30,
@@ -364,7 +361,6 @@ const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
     cpu: 17,
     memory: 17,
     disk: 17,
-    link: 3,
   },
   compact: {
     name: 26,
@@ -380,7 +376,6 @@ const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
     namespace: 11,
     context: 13,
     update: 6,
-    link: 6,
   },
 };
 
@@ -490,7 +485,6 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'os',
     'diskIo',
     'netIo',
-    'link',
   ]),
   vm: new Set([
     'name',
@@ -506,7 +500,6 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'os',
     'diskIo',
     'netIo',
-    'link',
   ]),
   'system-container': new Set([
     'name',
@@ -522,7 +515,6 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'os',
     'diskIo',
     'netIo',
-    'link',
   ]),
   container: new Set([
     'name',
@@ -542,7 +534,6 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'update',
     'diskIo',
     'netIo',
-    'link',
   ]),
   'app-container': new Set([
     'name',
@@ -556,7 +547,6 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'update',
     'diskIo',
     'netIo',
-    'link',
   ]),
-  pod: new Set(['name', 'cpu', 'memory', 'image', 'namespace', 'context', 'link']),
+  pod: new Set(['name', 'cpu', 'memory', 'image', 'namespace', 'context']),
 };

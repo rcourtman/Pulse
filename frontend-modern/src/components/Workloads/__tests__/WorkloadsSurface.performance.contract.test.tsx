@@ -1029,6 +1029,10 @@ describe('Workloads performance contract', () => {
       expect(guestRowSource).toContain('style={getGuestColumnStyle(');
       expect(guestRowSource).toContain('props.workloadTableLayoutMode');
       expect(guestRowSource).toContain('props.visibleColumnIds');
+      expect(guestRowSource).toContain('when={customUrl()}');
+      expect(guestRowSource).toContain('target="_blank"');
+      expect(guestRowSource).not.toContain('data-workload-col="link"');
+      expect(guestRowSource).not.toContain('Open related infrastructure');
       expect(guestRowSource).not.toContain('export const GUEST_COLUMNS');
       expect(guestRowSource).not.toContain('const guestId = createMemo(');
       expect(guestRowSource).not.toContain('function NetworkInfoCell(');
@@ -1046,6 +1050,8 @@ describe('Workloads performance contract', () => {
       expect(guestRowStateSource).toContain("from '@/routing/resourceLinks'");
       expect(guestRowStateSource).toContain("from './workloadTopology'");
       expect(guestRowStateSource).not.toContain('./infrastructureLink');
+      expect(guestRowModelSource).not.toContain("id: 'link'");
+      expect(guestRowModelSource).not.toContain("'link'");
       expect(guestRowStateSource).not.toContain('rowStyle');
       expect(guestRowStateSource).not.toContain('box-shadow');
       expect(guestRowStateSource).toContain('getWorkloadTypeBadge');
