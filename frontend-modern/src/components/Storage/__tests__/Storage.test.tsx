@@ -1825,6 +1825,29 @@ describe('Storage', () => {
     );
   });
 
+  it('keeps the storage view selector available in table-only embedding', async () => {
+    mockLocationPath = '/proxmox/storage';
+    hookResources = [
+      buildPhysicalDiskResource('sda', 'node-1', 'pve1'),
+      buildStorageResource('storage-1', 'Local-LVM-PVE1', 'pve1'),
+    ];
+
+    render(() => <Storage embedded tableOnly forcedSourceFilter="proxmox-pve" />);
+
+    expect(screen.getByRole('tablist', { name: 'Storage view' })).toBeInTheDocument();
+    expect(screen.queryByTestId('storage-summary')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Physical Disks' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('disk-list')).toHaveTextContent('disk-view:all:');
+    });
+    expect(screen.getByRole('tab', { name: 'Physical Disks' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
   it('supports Proxmox platform table embedding without standalone page chrome', async () => {
     mockLocationPath = '/proxmox/storage';
     hookResources = [
@@ -1846,6 +1869,7 @@ describe('Storage', () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByTestId('storage-summary')).not.toBeInTheDocument();
     expect(screen.queryByText('Ceph')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: 'Storage view' })).not.toBeInTheDocument();
   });
 
   it('collapses and restores storage charts from the shared toolbar toggle', async () => {

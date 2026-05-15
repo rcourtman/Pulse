@@ -2,7 +2,7 @@ import { Component, Show, createEffect } from 'solid-js';
 import StorageCephSection from '@/components/Storage/StorageCephSection';
 import StorageContentCard from '@/components/Storage/StorageContentCard';
 import StoragePageBanners from '@/components/Storage/StoragePageBanners';
-import StoragePageControls from '@/components/Storage/StoragePageControls';
+import StoragePageControls, { StorageViewSwitcher } from '@/components/Storage/StoragePageControls';
 import StoragePageSummary from '@/components/Storage/StoragePageSummary';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StickySummarySection } from '@/components/shared/StickySummarySection';
@@ -166,6 +166,12 @@ const Storage: Component<StorageProps> = (props) => {
       </Show>
 
       <div class="space-y-4" data-testid="storage-interaction-surface">
+        <Show when={props.tableOnly && !props.forcedView && !kioskMode()}>
+          <div data-summary-clear-ignore>
+            <StorageViewSwitcher view={view} setView={setView} />
+          </div>
+        </Show>
+
         <Show when={!props.tableOnly}>
           <div data-summary-clear-ignore>
             <StoragePageControls

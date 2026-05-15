@@ -70,6 +70,22 @@ type StoragePageControlsProps = {
 
 const VIEW_TABS = STORAGE_VIEW_OPTIONS as { value: string; label: string }[];
 
+type StorageViewSwitcherProps = {
+  view: () => StorageView;
+  setView: (value: StorageView) => void;
+  class?: string;
+};
+
+export const StorageViewSwitcher: Component<StorageViewSwitcherProps> = (props) => (
+  <Subtabs
+    class={props.class}
+    value={props.view()}
+    onChange={(value) => props.setView(value as StorageView)}
+    ariaLabel="Storage view"
+    tabs={VIEW_TABS}
+  />
+);
+
 export const StoragePageControls: Component<StoragePageControlsProps> = (props) => {
   const { isMobile } = useBreakpoint();
   const isPoolsView = () => props.view() === 'pools';
@@ -154,8 +170,7 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
         label: 'Status',
         group: 'status',
         value: () => props.statusFilter(),
-        setValue: (value: string) =>
-          props.setStatusFilter(value as StorageStatusFilterValue),
+        setValue: (value: string) => props.setStatusFilter(value as StorageStatusFilterValue),
         defaultValue: DEFAULT_STORAGE_STATUS_FILTER as StorageStatusFilterValue,
         options: () =>
           STORAGE_STATUS_FILTER_OPTIONS.map((option) => ({
@@ -167,12 +182,7 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
       const diskRoleFilter = props.diskRoleFilter;
       const setDiskRoleFilter = props.setDiskRoleFilter;
       const diskRoleOptions = props.diskRoleOptions;
-      if (
-        diskRoleFilter &&
-        setDiskRoleFilter &&
-        diskRoleOptions &&
-        diskRoleOptions().length > 1
-      ) {
+      if (diskRoleFilter && setDiskRoleFilter && diskRoleOptions && diskRoleOptions().length > 1) {
         filters.push({
           id: 'storage-disk-role',
           label: 'Role',
@@ -219,12 +229,7 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
   return (
     <Show when={!props.kioskMode()}>
       <div class="flex flex-col gap-2">
-        <Subtabs
-          value={props.view()}
-          onChange={(value) => props.setView(value as StorageView)}
-          ariaLabel="Storage view"
-          tabs={VIEW_TABS}
-        />
+        <StorageViewSwitcher view={props.view} setView={props.setView} />
 
         <FilterBar
           role="group"
