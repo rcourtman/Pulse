@@ -1,0 +1,68 @@
+import { describe, expect, it } from 'vitest';
+import type { Resource } from '@/types/resource';
+import { filterPlatformResources } from '../sharedPlatformPage';
+
+const makeResource = (
+  partial: Partial<Resource> & Pick<Resource, 'id' | 'type' | 'status'>,
+): Resource => ({
+  name: partial.id,
+  displayName: partial.id,
+  platformId: 'lab',
+  platformType: 'docker',
+  sourceType: 'agent',
+  sources: ['docker'],
+  lastSeen: 1_700_000_000_000,
+  ...partial,
+});
+
+describe('filterPlatformResources', () => {
+  const resources: Resource[] = [
+    makeResource({ id: 'host-alpha', type: 'agent', status: 'online' }),
+    makeResource({ id: 'host-bravo', type: 'agent', status: 'running' }),
+    makeResource({ id: 'host-charlie', type: 'agent', status: 'degraded' }),
+    makeResource({ id: 'host-delta', type: 'agent', status: 'offline' }),
+    makeResource({ id: 'host-echo', type: 'agent', status: 'stopped' }),
+    makeResource({ id: 'host-foxtrot', type: 'agent', status: 'paused' }),
+    makeResource({
+      id: 'host-with-tag',
+      type: 'agent',
+      status: 'online',
+      tags: ['prod', 'gpu'],
+    }),
+  ];
+
+  it('keeps all rows when no filters apply', () => {
+    expect(filterPlatformResources(resources, '', 'all')).toHaveLength(resources.length);
+  });
+
+  it('collapses online/running into the online status chip', () => {
+    const filtered = filterPlatformResources(resources, '', 'online');
+    expect(filtered.map((r) => r.id).sort()).toEqual(
+      ['host-alpha', 'host-bravo', 'host-with-tag'].sort(),
+    );
+  });
+
+  it('collapses degraded/paused into the degraded chip', () => {
+    const filtered = filterPlatformResources(resources, '', 'degraded');
+    expect(filtered.map((r) => r.id).sort()).toEqual(['host-charlie', 'host-foxtrot'].sort());
+  });
+
+  it('collapses offline/stopped into the offline chip', () => {
+    const filtered = filterPlatformResources(resources, '', 'offline');
+    expect(filtered.map((r) => r.id).sort()).toEqual(['host-delta', 'host-echo'].sort());
+  });
+
+  it('searches against id, display name, parent, and tags case-insensitively', () => {
+    expect(filterPlatformResources(resources, 'ALPHA', 'all').map((r) => r.id)).toEqual([
+      'host-alpha',
+    ]);
+    expect(filterPlatformResources(resources, 'gpu', 'all').map((r) => r.id)).toEqual([
+      'host-with-tag',
+    ]);
+  });
+
+  it('combines search and status filters', () => {
+    const filtered = filterPlatformResources(resources, 'host', 'degraded');
+    expect(filtered.map((r) => r.id).sort()).toEqual(['host-charlie', 'host-foxtrot'].sort());
+  });
+});
