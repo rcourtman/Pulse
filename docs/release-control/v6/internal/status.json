@@ -2956,7 +2956,7 @@
     },
     {
       "id": "RA29",
-      "summary": "Interactive Pulse Assistant chat behaves like a governed LLM tool surface, not a Pulse-authored intent router: the operator's selected model receives the user turn and governed tools, decides whether tools are needed, and Pulse must not use prompt heuristics to force tool_choice, force a named tool, retry because an expected tool was not used, hide tools from the model by keyword detection, rewrite recent-context turns into Pulse-targeted instructions, or synthesize/prefill/auto-submit product-authored Assistant prompts from handoffs. Pulse only provides context and enforces approvals, resource resolution, FSM gates, and tool policy after that model choice. The chat surface must echo user messages before network/session creation finishes and must not render Pulse-owned explore or internal workflow status cards as assistant output.",
+      "summary": "Interactive Pulse Assistant chat behaves like a governed LLM tool surface, not a Pulse-authored intent router: the operator's selected model receives the user turn and governed tools, decides whether tools are needed, and Pulse must not use prompt heuristics to force tool_choice, force a named tool, retry because an expected tool was not used, hide tools from the model by keyword detection, rewrite recent-context turns into Pulse-targeted instructions, fuzzy-match plain chat text into resource context before the model acts, synthesize/prefill/auto-submit product-authored Assistant prompts from handoffs, or keyword-match prior remediation history into suggested fixes. Pulse only provides context and enforces approvals, resource resolution, FSM gates, and tool policy after that model choice. The chat surface must echo user messages before network/session creation finishes and must not render Pulse-owned explore or internal workflow status cards as assistant output.",
       "kind": "invariant",
       "blocking_level": "repo-ready",
       "proof_type": "automated",
@@ -3005,6 +3005,17 @@
           ]
         },
         {
+          "id": "assistant-context-prefetch-structured-mentions-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/ai/chat",
+            "-run",
+            "TestContextPrefetcher",
+            "-count=1"
+          ]
+        },
+        {
           "id": "assistant-neutral-session-context-tests",
           "run": [
             "go",
@@ -3023,6 +3034,18 @@
             "./internal/ai/chat",
             "-run",
             "TestAgenticLoop_DoesNotAutoRecoverStructuredToolCall|TestEnsureFinalTextResponse|TestCommandExtraction",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "assistant-remediation-memory-context-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/ai",
+            "./internal/ai/memory",
+            "-run",
+            "TestService_Remediation|TestService_BuildRemediationContext_Empty|TestService_BuildSystemPrompt_FindingContextDoesNotForceLifecycleTool|TestRemediationLog_(LogAndRetrieve|Stats|RecentStatsBranches|FormatAndStats)",
             "-count=1"
           ]
         },
@@ -3181,6 +3204,16 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/ai/chat/context_prefetch.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/chat/context_prefetch_additional_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/ai/chat/read_routing_hints.go",
           "kind": "file"
         },
@@ -3207,6 +3240,41 @@
         {
           "repo": "pulse",
           "path": "internal/ai/chat/types.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/memory/memory_coverage_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/memory/memory_extended_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/memory/memory_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/memory/remediation.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/memory/remediation_memory_regression_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/service.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/service_remediation_test.go",
           "kind": "file"
         },
         {

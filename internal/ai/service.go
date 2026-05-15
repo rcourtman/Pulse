@@ -4197,22 +4197,21 @@ Latest version: https://api.github.com/repos/rcourtman/Pulse/releases/latest`, c
 			prompt += fmt.Sprintf("\n\n## Current Focus\nYou are analyzing %s '%s'", req.TargetType, req.TargetID)
 		}
 
-		// Add past remediation history for this resource
-		prompt += s.buildRemediationContext(req.TargetID, req.Prompt)
+		// Add prior action history for this resource as neutral context.
+		prompt += s.buildRemediationContext(req.TargetID)
 
 	}
 
-	// If we're helping fix a patrol finding, tell the AI the finding ID so it can resolve or dismiss it
+	// If we're helping with a patrol finding, provide the finding ID and the
+	// available lifecycle tools without forcing a tool choice.
 	if req.FindingID != "" {
 		prompt += fmt.Sprintf("\n\n## Patrol Finding Context\n"+
 			"You are helping with patrol finding **%s**.\n\n"+
-			"**After investigating, use ONE of these tools:**\n"+
-			"- `resolve_finding` - Use when you've actually FIXED the underlying issue\n"+
-			"- `dismiss_finding` - Use when the finding is a FALSE POSITIVE or EXPECTED BEHAVIOR\n\n"+
-			"**Examples:**\n"+
-			"- Issue fixed: `resolve_finding(finding_id=\"%s\", resolution_note=\"Restarted service\")`\n"+
-			"- False positive: `dismiss_finding(finding_id=\"%s\", reason=\"expected_behavior\", note=\"Storage restricted to specific node is intentional\")`\n",
-			req.FindingID, req.FindingID, req.FindingID)
+			"Lifecycle tools are available when current evidence supports them:\n"+
+			"- `resolve_finding` records that the underlying issue has actually been fixed.\n"+
+			"- `dismiss_finding` records a false positive or expected behavior.\n"+
+			"Only call a lifecycle tool when that is the model's conclusion from the current evidence.\n",
+			req.FindingID)
 	}
 
 	// Add any provided context in a structured way
@@ -4695,8 +4694,10 @@ func (s *Service) Reload() error {
 	return nil
 }
 
-// buildRemediationContext adds past remediation history to help AI learn from previous fixes
-func (s *Service) buildRemediationContext(resourceID, currentProblem string) string {
+// buildRemediationContext adds resource-scoped remediation history as neutral context.
+// Pulse must not keyword-match the current problem to old fixes or recommend a
+// prior command; the selected model owns diagnosis and remediation reasoning.
+func (s *Service) buildRemediationContext(resourceID string) string {
 	s.mu.RLock()
 	patrol := s.patrolService
 	s.mu.RUnlock()
@@ -4710,28 +4711,12 @@ func (s *Service) buildRemediationContext(resourceID, currentProblem string) str
 		return ""
 	}
 
-	var context string
-
-	// Get similar past remediations based on the current problem
-	if currentProblem != "" {
-		successful := remLog.GetSuccessfulRemediations(currentProblem, 3)
-		if len(successful) > 0 {
-			context += "\n\n## Past Successful Fixes for Similar Issues\n"
-			context += "These actions worked for similar problems before:\n"
-			for _, rec := range successful {
-				context += fmt.Sprintf("- **%s**: `%s` (%s)\n",
-					truncateString(rec.Problem, 60),
-					truncateString(rec.Action, 80),
-					rec.Outcome)
-			}
-		}
-	}
-
-	// Get history for this specific resource
 	if resourceID != "" {
 		history := remLog.GetForResource(resourceID, 5)
 		if len(history) > 0 {
-			context += "\n\n## Remediation History for This Resource\n"
+			var context string
+			context += "\n\n## Prior Actions Recorded For This Resource\n"
+			context += "These are historical actions only. Decide from current evidence whether they are relevant.\n"
 			for _, rec := range history {
 				ago := time.Since(rec.Timestamp)
 				agoStr := formatDuration(ago)
@@ -4741,10 +4726,11 @@ func (s *Service) buildRemediationContext(resourceID, currentProblem string) str
 					truncateString(rec.Action, 60),
 					rec.Outcome)
 			}
+			return context
 		}
 	}
 
-	return context
+	return ""
 }
 
 // buildIncidentContext adds alert-scoped incident memory first, then the

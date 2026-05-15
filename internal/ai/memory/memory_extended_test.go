@@ -395,45 +395,6 @@ func TestTruncateOutput(t *testing.T) {
 	}
 }
 
-func TestExtractKeywords(t *testing.T) {
-	tests := []struct {
-		input       string
-		minKeywords int
-	}{
-		{"High memory usage causing OOM", 3},
-		{"CPU spike detected", 2},
-		{"", 0},
-		{"a b c", 0}, // Short words ignored
-	}
-
-	for _, tt := range tests {
-		result := extractKeywords(tt.input)
-		if len(result) < tt.minKeywords {
-			t.Errorf("extractKeywords(%q) returned %d keywords, expected at least %d", tt.input, len(result), tt.minKeywords)
-		}
-	}
-}
-
-func TestCountMatches(t *testing.T) {
-	tests := []struct {
-		a        []string
-		b        []string
-		expected int
-	}{
-		{[]string{"a", "b", "c"}, []string{"b", "c", "d"}, 2},
-		{[]string{"a", "b"}, []string{"c", "d"}, 0},
-		{[]string{}, []string{"a"}, 0},
-		{[]string{"a"}, []string{}, 0},
-	}
-
-	for _, tt := range tests {
-		result := countMatches(tt.a, tt.b)
-		if result != tt.expected {
-			t.Errorf("countMatches(%v, %v) = %d, want %d", tt.a, tt.b, result, tt.expected)
-		}
-	}
-}
-
 func TestChangeDetector_TrimChanges(t *testing.T) {
 	d := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 3})
 

@@ -44,18 +44,18 @@ func TestService_Remediation(t *testing.T) {
 	}
 
 	// Test buildRemediationContext
-	ctx := svc.buildRemediationContext("vm-101", "High CPU")
-	if !containsString(ctx, "Remediation History for This Resource") {
+	ctx := svc.buildRemediationContext("vm-101")
+	if !containsString(ctx, "Prior Actions Recorded For This Resource") {
 		t.Error("Expected remediation history section in context")
 	}
 	if !containsString(ctx, "systemctl restart myservice") {
 		t.Error("Expected logged action in context")
 	}
 
-	// Test with similar problem
-	ctx2 := svc.buildRemediationContext("other-vm", "High CPU")
-	if !containsString(ctx2, "Past Successful Fixes for Similar Issues") {
-		t.Error("Expected successful fixes section in context for similar problem")
+	// Similar problems on other resources must not inject recommended fixes.
+	ctx2 := svc.buildRemediationContext("other-vm")
+	if ctx2 != "" {
+		t.Error("Expected no keyword-matched remediation context for another resource")
 	}
 }
 
@@ -63,9 +63,24 @@ func TestService_BuildRemediationContext_Empty(t *testing.T) {
 	svc := NewService(nil, nil)
 
 	// With no remediationLog set, should return empty
-	ctx := svc.buildRemediationContext("unknown", "Unknown problem")
+	ctx := svc.buildRemediationContext("unknown")
 	if ctx != "" {
 		t.Error("Expected empty context when no remediation log")
+	}
+}
+
+func TestService_BuildSystemPrompt_FindingContextDoesNotForceLifecycleTool(t *testing.T) {
+	svc := NewService(nil, nil)
+
+	prompt := svc.buildSystemPrompt(ExecuteRequest{FindingID: "finding-123"}, "")
+	if containsString(prompt, "use ONE of these tools") {
+		t.Fatalf("finding context must not force a lifecycle tool choice:\n%s", prompt)
+	}
+	if containsString(prompt, "Past Successful Fixes for Similar Issues") {
+		t.Fatalf("finding context must not include keyword-matched remediation suggestions:\n%s", prompt)
+	}
+	if !containsString(prompt, "Lifecycle tools are available when current evidence supports them") {
+		t.Fatalf("expected neutral lifecycle-tool context, got:\n%s", prompt)
 	}
 }
 

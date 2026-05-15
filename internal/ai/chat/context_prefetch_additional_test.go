@@ -78,16 +78,16 @@ func TestContextPrefetcher_NoReadState(t *testing.T) {
 	}
 }
 
-func TestContextPrefetcher_UnresolvedMention(t *testing.T) {
+func TestContextPrefetcher_UnresolvedPlainTextMentionDoesNotInjectContext(t *testing.T) {
 	state := models.StateSnapshot{}
 	prefetcher := NewContextPrefetcher(newTestReadState(state), nil)
 	ctx := prefetcher.Prefetch(context.Background(), "check @missing", nil)
-	if ctx == nil || !strings.Contains(ctx.Summary, "NOT found") {
-		t.Fatalf("expected unresolved mention summary, got %#v", ctx)
+	if ctx != nil {
+		t.Fatalf("expected plain-text mentions to stay model-owned, got %#v", ctx)
 	}
 }
 
-func TestContextPrefetcher_ExtractResourceMentions(t *testing.T) {
+func TestContextPrefetcher_PlainTextResourceNamesDoNotPrefetch(t *testing.T) {
 	state := models.StateSnapshot{
 		Nodes:      []models.Node{{ID: "node1", Name: "node1"}},
 		VMs:        []models.VM{{ID: "vm-1", Name: "alpha", VMID: 101, Node: "node1"}},
@@ -123,25 +123,9 @@ func TestContextPrefetcher_ExtractResourceMentions(t *testing.T) {
 
 	rs := newTestReadState(state)
 	prefetcher := NewContextPrefetcher(rs, nil)
-	mentions := prefetcher.extractResourceMentions("alpha beta homepage node1 host1 pod1 dep1")
-	if len(mentions) == 0 {
-		t.Fatalf("expected mentions to be detected")
-	}
-
-	foundAppContainer := false
-	for _, m := range mentions {
-		if m.ResourceType == "app-container" && m.Name == "homepage" {
-			foundAppContainer = true
-			if m.TargetHost == "" {
-				t.Fatalf("expected app-container mention to have target host")
-			}
-			if len(m.BindMounts) == 0 {
-				t.Fatalf("expected app-container bind mounts to be captured")
-			}
-		}
-	}
-	if !foundAppContainer {
-		t.Fatalf("expected app-container mention")
+	ctx := prefetcher.Prefetch(context.Background(), "alpha beta homepage node1 host1 pod1 dep1", nil)
+	if ctx != nil {
+		t.Fatalf("expected plain resource names to stay model-owned, got %#v", ctx)
 	}
 }
 
@@ -630,22 +614,6 @@ func TestContextPrefetcher_FormatContextSummary_TrueNASAppUsesNativeResourceRead
 	}
 	if !strings.Contains(summary, "Shared reads address this resource by resource_id=\"Nextcloud\"") {
 		t.Fatalf("expected native TrueNAS app summary to expose native resource context, got %q", summary)
-	}
-}
-
-func TestContextPrefetcher_ExtractHelpers(t *testing.T) {
-	words := extractWords("hello-123 world")
-	if len(words) != 3 {
-		t.Fatalf("expected 3 words, got %d", len(words))
-	}
-
-	mentions := extractExplicitAtMentions("ping @alpha and @beta")
-	if len(mentions) != 2 {
-		t.Fatalf("expected 2 mentions, got %d", len(mentions))
-	}
-
-	if !matchesResource("homepage docker", []string{"homepage"}, "homepage-docker") {
-		t.Fatalf("expected fuzzy match to succeed")
 	}
 }
 

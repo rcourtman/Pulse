@@ -144,58 +144,6 @@ func TestRemediationLog_LogAndRetrieve(t *testing.T) {
 	}
 }
 
-func TestRemediationLog_GetSimilar(t *testing.T) {
-	r := NewRemediationLog(RemediationLogConfig{MaxRecords: 100})
-
-	// Log some remediations
-	_ = r.Log(RemediationRecord{
-		ResourceID: "vm-100",
-		Problem:    "High memory usage causing OOM",
-		Action:     "Restart service",
-		Outcome:    OutcomeResolved,
-	})
-	_ = r.Log(RemediationRecord{
-		ResourceID: "vm-200",
-		Problem:    "Memory leak detected",
-		Action:     "Cleared cache",
-		Outcome:    OutcomePartial,
-	})
-	_ = r.Log(RemediationRecord{
-		ResourceID: "vm-300",
-		Problem:    "CPU spike from backup",
-		Action:     "Rescheduled backup",
-		Outcome:    OutcomeResolved,
-	})
-
-	// Search for similar memory issues
-	similar := r.GetSimilar("High memory usage causing slowdown", 5)
-	if len(similar) < 1 {
-		t.Errorf("Expected at least 1 similar record")
-	}
-}
-
-func TestRemediationLog_GetSuccessfulRemediations(t *testing.T) {
-	r := NewRemediationLog(RemediationLogConfig{MaxRecords: 100})
-
-	_ = r.Log(RemediationRecord{
-		Problem: "Memory usage high",
-		Action:  "Restart service",
-		Outcome: OutcomeResolved,
-	})
-	_ = r.Log(RemediationRecord{
-		Problem: "Memory usage high",
-		Action:  "Kill process",
-		Outcome: OutcomeFailed,
-	})
-
-	successful := r.GetSuccessfulRemediations("Memory usage issue", 5)
-	for _, rec := range successful {
-		if rec.Outcome != OutcomeResolved && rec.Outcome != OutcomePartial {
-			t.Errorf("Got unsuccessful remediation in successful list: %s", rec.Outcome)
-		}
-	}
-}
-
 func TestRemediationLog_Stats(t *testing.T) {
 	r := NewRemediationLog(RemediationLogConfig{MaxRecords: 100})
 

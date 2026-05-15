@@ -172,58 +172,6 @@ func (r *RemediationLog) GetForFinding(findingID string, limit int) []Remediatio
 	return result
 }
 
-// GetSimilar finds remediation records with similar problems
-func (r *RemediationLog) GetSimilar(problem string, limit int) []RemediationRecord {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	// Simple keyword-based matching
-	keywords := extractKeywords(problem)
-	if len(keywords) == 0 {
-		return nil
-	}
-
-	type scored struct {
-		record RemediationRecord
-		score  int
-	}
-
-	var matches []scored
-	for _, record := range r.records {
-		recordKeywords := extractKeywords(record.Problem)
-		score := countMatches(keywords, recordKeywords)
-		if score > 0 {
-			matches = append(matches, scored{record: record, score: score})
-		}
-	}
-
-	// Sort by score descending
-	sort.Slice(matches, func(i, j int) bool {
-		return matches[i].score > matches[j].score
-	})
-
-	var result []RemediationRecord
-	for i := 0; i < len(matches) && len(result) < limit; i++ {
-		result = append(result, matches[i].record)
-	}
-	return result
-}
-
-// GetSuccessfulRemediations returns successful remediations for similar problems
-func (r *RemediationLog) GetSuccessfulRemediations(problem string, limit int) []RemediationRecord {
-	similar := r.GetSimilar(problem, limit*3) // Get more to filter
-	var result []RemediationRecord
-	for _, rec := range similar {
-		if rec.Outcome == OutcomeResolved || rec.Outcome == OutcomePartial {
-			result = append(result, rec)
-			if len(result) >= limit {
-				break
-			}
-		}
-	}
-	return result
-}
-
 // GetRecentRemediations returns the most recent remediations
 func (r *RemediationLog) GetRecentRemediations(limit int, since time.Time) []RemediationRecord {
 	r.mu.RLock()
@@ -415,44 +363,6 @@ func truncateOutput(output string, maxLen int) string {
 		return output
 	}
 	return output[:maxLen-3] + "..."
-}
-
-func extractKeywords(text string) []string {
-	// Simple keyword extraction - split by common delimiters
-	// In production, this could use NLP or embeddings
-	var keywords []string
-	var current string
-
-	for _, c := range text {
-		if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' {
-			current += string(c)
-		} else {
-			if len(current) > 3 { // Only keep words > 3 chars
-				keywords = append(keywords, current)
-			}
-			current = ""
-		}
-	}
-	if len(current) > 3 {
-		keywords = append(keywords, current)
-	}
-
-	return keywords
-}
-
-func countMatches(a, b []string) int {
-	bSet := make(map[string]bool)
-	for _, s := range b {
-		bSet[s] = true
-	}
-
-	count := 0
-	for _, s := range a {
-		if bSet[s] {
-			count++
-		}
-	}
-	return count
 }
 
 // GetByID returns a remediation record by its ID.

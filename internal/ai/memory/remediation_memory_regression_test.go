@@ -42,7 +42,7 @@ func TestRemediationLogMemoryStability(t *testing.T) {
 			}
 		}
 		_ = log.GetForResource("vm-01", 5)
-		_ = log.GetSimilar("memory spike", 5)
+		_ = log.GetRecentRemediations(5, time.Now().Add(-24*time.Hour))
 	}
 
 	for i := 0; i < warmupCycles; i++ {

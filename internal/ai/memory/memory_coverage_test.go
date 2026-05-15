@@ -947,35 +947,16 @@ func TestNewRemediationLog_LoadError(t *testing.T) {
 	}
 }
 
-func TestRemediationLog_SimilarAndStatsBranches(t *testing.T) {
+func TestRemediationLog_RecentStatsBranches(t *testing.T) {
 	log := NewRemediationLog(RemediationLogConfig{})
-	if matches := log.GetSimilar("a b c", 5); matches != nil {
-		t.Fatalf("expected nil for no keywords")
-	}
 
 	_ = log.Log(RemediationRecord{Problem: "memory issue", Action: "a1", Outcome: OutcomePartial})
 	_ = log.Log(RemediationRecord{Problem: "memory issue", Action: "a2", Outcome: OutcomeFailed})
-
-	success := log.GetSuccessfulRemediations("memory issue", 5)
-	if len(success) != 1 || success[0].Outcome != OutcomePartial {
-		t.Fatalf("expected partial to be included")
-	}
-
 	_ = log.Log(RemediationRecord{Problem: "unknown", Action: "a3", Outcome: OutcomeUnknown})
+
 	stats := log.GetRecentRemediationStats(time.Now().Add(-1 * time.Hour))
 	if stats["unknown"] == 0 {
 		t.Fatalf("expected unknown outcome to be counted")
-	}
-}
-
-func TestRemediationLog_GetSuccessfulRemediations_Limit(t *testing.T) {
-	log := NewRemediationLog(RemediationLogConfig{})
-	_ = log.Log(RemediationRecord{Problem: "disk full", Action: "a1", Outcome: OutcomeResolved})
-	_ = log.Log(RemediationRecord{Problem: "disk full", Action: "a2", Outcome: OutcomePartial})
-
-	results := log.GetSuccessfulRemediations("disk full", 1)
-	if len(results) != 1 {
-		t.Fatalf("expected limited results, got %d", len(results))
 	}
 }
 
