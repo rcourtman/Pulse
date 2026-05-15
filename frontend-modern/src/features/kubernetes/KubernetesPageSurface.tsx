@@ -15,8 +15,11 @@ import {
   type KubernetesPageTabId,
 } from './kubernetesPageModel';
 
+// Include `agent` rows so K8s nodes that the backend registry merged onto
+// the linked agent host (sources=['agent','kubernetes']) still appear in the
+// Nodes tab; the page model filters them down to those tagged kubernetes.
 const KUBERNETES_RESOURCE_QUERY =
-  'type=k8s-cluster,k8s-node,pod,k8s-deployment,k8s-service';
+  'type=k8s-cluster,k8s-node,pod,k8s-deployment,agent';
 const KUBERNETES_PLATFORM_FILTER = 'kubernetes';
 const VALID_TABS = new Set<KubernetesPageTabId>(KUBERNETES_TAB_SPECS.map((tab) => tab.id));
 
@@ -108,14 +111,6 @@ export function KubernetesPageSurface() {
                 emptyIcon={k8sIcon()}
                 emptyTitle="No deployments reported"
                 emptyDescription="Deployments appear here once the cluster reports them."
-              />
-            </Show>
-            <Show when={activeTab() === 'services'}>
-              <PlatformResourceTable
-                resources={model().services}
-                emptyIcon={k8sIcon()}
-                emptyTitle="No services reported"
-                emptyDescription="Kubernetes services appear here once the cluster reports them."
               />
             </Show>
           </Show>

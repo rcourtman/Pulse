@@ -6,7 +6,6 @@ import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
-  PlatformResourceTable,
   PlatformSectionTabs,
   PlatformTableEmptyState,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -17,7 +16,7 @@ import {
 } from './truenasPageModel';
 
 const TRUENAS_RESOURCE_QUERY =
-  'type=agent,app-container,storage,pool,dataset,physical_disk';
+  'type=app-container,storage,pool,dataset,physical_disk';
 const TRUENAS_PLATFORM_FILTER = 'truenas';
 const VALID_TABS = new Set<TrueNASPageTabId>(TRUENAS_TAB_SPECS.map((tab) => tab.id));
 
@@ -32,7 +31,7 @@ export function TrueNASPageSurface() {
   });
   const activeTab = createMemo<TrueNASPageTabId>(() => {
     const segment = location.pathname.split('/').filter(Boolean)[1] as TrueNASPageTabId | undefined;
-    return segment && VALID_TABS.has(segment) ? segment : 'overview';
+    return segment && VALID_TABS.has(segment) ? segment : 'storage';
   });
   const model = createMemo(() => buildTrueNASPageModel(resources()));
 
@@ -74,14 +73,6 @@ export function TrueNASPageSurface() {
               />
             }
           >
-            <Show when={activeTab() === 'overview'}>
-              <PlatformResourceTable
-                resources={model().hosts}
-                emptyIcon={truenasIcon()}
-                emptyTitle="No TrueNAS hosts"
-                emptyDescription="TrueNAS hosts appear here once they report via the agent or the API connection."
-              />
-            </Show>
             <Show when={activeTab() === 'storage'}>
               <StorageSurface embedded tableOnly forcedSourceFilter={TRUENAS_PLATFORM_FILTER} />
             </Show>

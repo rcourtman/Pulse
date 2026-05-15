@@ -86,9 +86,11 @@ describe('resource link routing contract', () => {
     expect(buildKubernetesPath()).toBe('/kubernetes/overview');
     expect(buildKubernetesPath('pods')).toBe('/kubernetes/pods');
 
+    // TrueNAS defaults to Storage because the canonical adapter does not
+    // emit a TrueNAS-platform agent row to back an Overview/Hosts tab.
     expect(TRUENAS_PATH).toBe('/truenas');
-    expect(buildTrueNASPath()).toBe('/truenas/overview');
-    expect(buildTrueNASPath('storage')).toBe('/truenas/storage');
+    expect(buildTrueNASPath()).toBe('/truenas/storage');
+    expect(buildTrueNASPath('apps')).toBe('/truenas/apps');
 
     expect(VMWARE_PATH).toBe('/vmware');
     expect(buildVmwarePath()).toBe('/vmware/overview');

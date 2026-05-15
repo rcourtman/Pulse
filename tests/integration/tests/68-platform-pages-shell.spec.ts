@@ -56,7 +56,7 @@ const PLATFORM_PAGES: readonly PlatformPageCase[] = [
     rootPath: '/docker',
     testId: 'docker-page',
     ariaLabel: 'Docker sections',
-    tabPaths: ['/docker/overview', '/docker/containers', '/docker/services'],
+    tabPaths: ['/docker/overview', '/docker/containers'],
     populatedTabPaths: ['/docker/overview', '/docker/containers'],
   },
   {
@@ -69,17 +69,21 @@ const PLATFORM_PAGES: readonly PlatformPageCase[] = [
       '/kubernetes/nodes',
       '/kubernetes/pods',
       '/kubernetes/deployments',
-      '/kubernetes/services',
     ],
-    populatedTabPaths: ['/kubernetes/pods', '/kubernetes/deployments'],
+    populatedTabPaths: [
+      '/kubernetes/overview',
+      '/kubernetes/nodes',
+      '/kubernetes/pods',
+      '/kubernetes/deployments',
+    ],
   },
   {
     id: 'truenas',
     rootPath: '/truenas',
     testId: 'truenas-page',
     ariaLabel: 'TrueNAS sections',
-    tabPaths: ['/truenas/overview', '/truenas/storage', '/truenas/apps'],
-    populatedTabPaths: ['/truenas/storage'],
+    tabPaths: ['/truenas/storage', '/truenas/apps'],
+    populatedTabPaths: ['/truenas/storage', '/truenas/apps'],
   },
   {
     id: 'vmware',
@@ -87,7 +91,7 @@ const PLATFORM_PAGES: readonly PlatformPageCase[] = [
     testId: 'vmware-page',
     ariaLabel: 'VMware sections',
     tabPaths: ['/vmware/overview', '/vmware/vms', '/vmware/storage'],
-    populatedTabPaths: ['/vmware/vms', '/vmware/storage'],
+    populatedTabPaths: ['/vmware/overview', '/vmware/vms', '/vmware/storage'],
   },
 ];
 

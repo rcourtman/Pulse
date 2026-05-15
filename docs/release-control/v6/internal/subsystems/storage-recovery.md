@@ -843,6 +843,13 @@ bypass the API fail-closed execution gate.
     routes themselves must derive their paths from the canonical builders
     in `frontend-modern/src/routing/resourceLinks.ts`; ad hoc storage or
     recovery route strings inside per-platform features are not permitted.
+    Platform-page default sub-tab choices must land the user on a
+    canonical surface that actually populates: when the canonical adapter
+    does not emit a platform's top-level infrastructure projection, the
+    platform's `*_DEFAULT_TAB` constant in `resourceLinks.ts` must point
+    at the next-most-relevant canonical surface (for TrueNAS today that is
+    the embedded `StorageSurface` at `/truenas/storage`) rather than at a
+    placeholder Hosts overview that would render empty.
 
 ## Forbidden Paths
 
