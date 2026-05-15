@@ -6,6 +6,7 @@ import {
   normalizeSourcePlatformQueryValue,
   normalizeSourcePlatformKey,
   resolvePlatformTypeFromSources,
+  resolveResourcePlatformType,
   resolveSourceTypeFromSources,
 } from '@/utils/sourcePlatforms';
 import {
@@ -180,6 +181,32 @@ describe('sourcePlatforms', () => {
       expect(resolvePlatformTypeFromSources(['agent'])).toBe('agent');
       expect(resolvePlatformTypeFromSources(['availability'])).toBe('availability');
       expect(resolvePlatformTypeFromSources(['custom-source'])).toBeUndefined();
+    });
+  });
+
+  describe('resolveResourcePlatformType', () => {
+    it('prefers the resource platformType field when present', () => {
+      expect(
+        resolveResourcePlatformType({ platformType: 'proxmox-pve', sources: ['agent'] }),
+      ).toBe('proxmox-pve');
+      expect(resolveResourcePlatformType({ platformType: 'docker', sources: [] })).toBe('docker');
+    });
+
+    it('falls back to the source-derived platform when platformType is empty', () => {
+      expect(resolveResourcePlatformType({ platformType: null, sources: ['docker'] })).toBe(
+        'docker',
+      );
+      expect(resolveResourcePlatformType({ sources: ['kubernetes'] })).toBe('kubernetes');
+      expect(resolveResourcePlatformType({ platformType: '', sources: ['truenas', 'agent'] })).toBe(
+        'truenas',
+      );
+      expect(resolveResourcePlatformType({ sources: ['vmware'] })).toBe('vmware-vsphere');
+      expect(resolveResourcePlatformType({ sources: ['pbs'] })).toBe('proxmox-pbs');
+    });
+
+    it('returns undefined when neither field nor sources resolve a known platform', () => {
+      expect(resolveResourcePlatformType({})).toBeUndefined();
+      expect(resolveResourcePlatformType({ sources: ['mystery-source'] })).toBeUndefined();
     });
   });
 

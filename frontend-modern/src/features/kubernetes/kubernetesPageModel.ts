@@ -1,4 +1,4 @@
-import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
+import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import type { Resource, ResourceType } from '@/types/resource';
 
 export type KubernetesPageTabId =
@@ -31,7 +31,7 @@ const KUBERNETES_RESOURCE_TYPES = new Set<ResourceType>([
 ]);
 
 const isKubernetesPlatform = (resource: Resource): boolean => {
-  if (normalizeSourcePlatformQueryValue(resource.platformType || '') === 'kubernetes') return true;
+  if (resolveResourcePlatformType(resource) === 'kubernetes') return true;
   return KUBERNETES_RESOURCE_TYPES.has(resource.type);
 };
 

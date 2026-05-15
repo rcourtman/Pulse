@@ -1,4 +1,4 @@
-import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
+import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import type { Resource, ResourceType } from '@/types/resource';
 
 export type TrueNASPageTabId = 'overview' | 'storage' | 'apps';
@@ -25,7 +25,7 @@ const TRUENAS_RESOURCE_TYPES = new Set<ResourceType>([
 ]);
 
 const isTrueNASPlatform = (resource: Resource): boolean =>
-  normalizeSourcePlatformQueryValue(resource.platformType || '') === 'truenas';
+  resolveResourcePlatformType(resource) === 'truenas';
 
 export type TrueNASPageModel = {
   resources: Resource[];

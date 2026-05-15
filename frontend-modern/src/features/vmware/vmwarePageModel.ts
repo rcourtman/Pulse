@@ -1,4 +1,4 @@
-import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
+import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import type { Resource, ResourceType } from '@/types/resource';
 
 export type VmwarePageTabId = 'overview' | 'vms' | 'storage';
@@ -23,7 +23,7 @@ const VMWARE_RESOURCE_TYPES = new Set<ResourceType>([
 ]);
 
 const isVmwarePlatform = (resource: Resource): boolean =>
-  normalizeSourcePlatformQueryValue(resource.platformType || '') === 'vmware-vsphere';
+  resolveResourcePlatformType(resource) === 'vmware-vsphere';
 
 export type VmwarePageModel = {
   resources: Resource[];

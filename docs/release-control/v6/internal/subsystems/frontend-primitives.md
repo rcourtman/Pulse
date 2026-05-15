@@ -706,6 +706,16 @@ AI runtime.
    must derive primary issue labels and summaries from explicit incidents,
    storage risk summaries, or storage-risk reasons so healthy rows do not
    render impact text as a warning.
+   The shared `resolveResourcePlatformType(resource)` helper in
+   `frontend-modern/src/utils/sourcePlatforms.ts` is the canonical reader for
+   "what platform family does this unified resource belong to" and must be
+   used by every frontend consumer that buckets unified resources by family
+   (platform pages, filter resolvers, presentation pickers). The helper
+   prefers `resource.platformType` when present and falls back to the
+   resource's `sources` array via the existing source-platform normalization,
+   so client-side family grouping behaves identically against mock fixtures
+   and live backends that leave `platformType` empty on a subset of
+   canonical resource types.
 8. Keep shared source/platform vocabulary on the governed manifest boundary. `frontend-modern/src/utils/platformSupportManifest.generated.ts` must be the tracked frontend projection of `docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json`, `frontend-modern/src/utils/platformSupportManifest.ts`, `frontend-modern/src/utils/sourcePlatforms.ts`, and `frontend-modern/src/utils/sourcePlatformOptions.ts` must consume that generated projection instead of embedding divergent future-label lists, setup/onboarding path allowlists, host-profile labels, or presentation-only guesses, and `frontend-modern/scripts/canonical-platform-audit.mjs` must fail when the generated projection drifts from the governed manifest. The generic `docker` source-platform label is "Docker / Podman" in shared selectors, badges, and filter options so v5 Docker users can find the runtime surface while Podman-backed rows are not mislabeled as Docker-only; "Container runtime" remains the governed platform family, not the primary customer-facing label. Agent host-profile entries, including Unraid, stay in the generated `agentHostProfiles` projection and shared wrapper helpers; frontend primitives may render those labels for Pulse Agent install/identity copy but must not add them to the first-class platform union.
    The generated host-profile projection also carries runtime platform fallback
    metadata for shared explanation and parity with backend normalization, but

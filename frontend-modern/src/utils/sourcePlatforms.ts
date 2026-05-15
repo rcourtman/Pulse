@@ -155,6 +155,21 @@ export const resolvePlatformTypeFromSources = (sources?: string[]): PlatformType
   return undefined;
 };
 
+// Canonical resolver: prefer the backend-emitted `platformType` when present,
+// otherwise derive it from the resource's `sources` array. Platform pages and
+// other consumers that filter unified resources by family should use this so
+// they work uniformly against mock fixtures and live data — the legacy backend
+// path leaves `platformType` empty on certain resource types and the
+// derivation by source remains the canonical fallback.
+export const resolveResourcePlatformType = (resource: {
+  platformType?: string | null;
+  sources?: string[];
+}): PlatformType | undefined => {
+  const fromField = normalizeSourcePlatformQueryValue(resource.platformType || '');
+  if (fromField) return fromField as PlatformType;
+  return resolvePlatformTypeFromSources(resource.sources);
+};
+
 export const resolveSourceTypeFromSources = (sources?: string[]): SourceType => {
   const flags = readSourcePlatformFlags(sources);
   const hasOther =

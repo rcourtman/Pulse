@@ -42,6 +42,12 @@ type PlatformPageCase = {
   testId: string;
   ariaLabel: string;
   tabPaths: readonly string[];
+  // Sub-tab routes that should render at least one canonical row under the
+  // mock backend. We assert presence of a `<table>` to confirm the embedded
+  // canonical surface mounted and reached a non-empty state. Empty arrays
+  // are allowed for platform pages whose subtab is service-only or stays
+  // empty under the default mock fixtures.
+  populatedTabPaths?: readonly string[];
 };
 
 const PLATFORM_PAGES: readonly PlatformPageCase[] = [
@@ -51,6 +57,7 @@ const PLATFORM_PAGES: readonly PlatformPageCase[] = [
     testId: 'docker-page',
     ariaLabel: 'Docker sections',
     tabPaths: ['/docker/overview', '/docker/containers', '/docker/services'],
+    populatedTabPaths: ['/docker/overview', '/docker/containers'],
   },
   {
     id: 'kubernetes',
@@ -64,6 +71,7 @@ const PLATFORM_PAGES: readonly PlatformPageCase[] = [
       '/kubernetes/deployments',
       '/kubernetes/services',
     ],
+    populatedTabPaths: ['/kubernetes/pods', '/kubernetes/deployments'],
   },
   {
     id: 'truenas',
@@ -71,6 +79,7 @@ const PLATFORM_PAGES: readonly PlatformPageCase[] = [
     testId: 'truenas-page',
     ariaLabel: 'TrueNAS sections',
     tabPaths: ['/truenas/overview', '/truenas/storage', '/truenas/apps'],
+    populatedTabPaths: ['/truenas/storage'],
   },
   {
     id: 'vmware',
@@ -78,6 +87,7 @@ const PLATFORM_PAGES: readonly PlatformPageCase[] = [
     testId: 'vmware-page',
     ariaLabel: 'VMware sections',
     tabPaths: ['/vmware/overview', '/vmware/vms', '/vmware/storage'],
+    populatedTabPaths: ['/vmware/vms', '/vmware/storage'],
   },
 ];
 
@@ -100,7 +110,7 @@ test.describe('Platform pages shell', () => {
   test.setTimeout(180_000);
 
   for (const platform of PLATFORM_PAGES) {
-    test(`${platform.id} platform page renders with table-first sub-tab chrome`, async ({
+    test(`${platform.id} no-data state renders sub-tab chrome with empty resources`, async ({
       page,
     }, testInfo) => {
       test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop shell smoke');
@@ -116,6 +126,32 @@ test.describe('Platform pages shell', () => {
 
       for (const tabPath of platform.tabPaths) {
         await expect(sectionNav.locator(`a[href="${tabPath}"]`)).toBeVisible();
+      }
+    });
+
+    test(`${platform.id} populated state renders canonical rows under mock mode`, async ({
+      page,
+    }, testInfo) => {
+      test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop shell smoke');
+
+      const populated = platform.populatedTabPaths ?? [];
+      if (populated.length === 0) {
+        test.skip(
+          true,
+          `No mock-populated sub-tabs declared for ${platform.id}; default mock fixtures do not exercise this platform's tables yet.`,
+        );
+      }
+
+      for (const tabPath of populated) {
+        await page.goto(tabPath, { waitUntil: 'domcontentloaded' });
+
+        const pageRoot = page.getByTestId(platform.testId);
+        await expect(pageRoot).toBeVisible({ timeout: 30_000 });
+
+        // Each populated sub-tab must render at least one canonical table.
+        await expect(pageRoot.locator('table tbody tr').first()).toBeVisible({
+          timeout: 30_000,
+        });
       }
     });
   }

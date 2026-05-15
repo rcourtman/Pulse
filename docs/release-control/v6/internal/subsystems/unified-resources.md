@@ -137,6 +137,15 @@ cross-source deduplication.
     selectors, badges, and filter options render it as "Docker / Podman" so
     v5 Docker users can still find the runtime surface while Podman-backed
     rows are not mislabeled as Docker-only.
+    That same boundary also owns `resolveResourcePlatformType(resource)`,
+    the canonical reader for "what platform family does a unified resource
+    belong to". Consumers that bucket unified resources by family (platform
+    pages, filter resolvers, presentation pickers) must call it instead of
+    inspecting `resource.platformType` directly: the legacy backend resource
+    projection leaves `platformType` empty on several canonical resource
+    types, and the helper falls back through the existing source-platform
+    normalization so client-side grouping behaves identically against mock
+    fixtures and live backends.
 17. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
 ## Extension Points
 
@@ -2269,6 +2278,14 @@ sources, `frontend-modern/src/utils/sourcePlatforms.ts` must still resolve the
 platform as `truenas` and the source mode as `hybrid`, so workload and
 infrastructure consumers do not collapse API-backed TrueNAS systems or apps
 back onto the generic agent path just because host telemetry is also present.
+The shared `resolveResourcePlatformType(resource)` helper in that same module
+is the canonical "what platform does this unified resource belong to" reader.
+Platform-first top-level pages and any consumer that buckets unified resources
+by family must call it instead of inspecting `resource.platformType` directly,
+because the legacy backend resource projection leaves `platformType` empty on
+several canonical resource types; the helper falls back to the resource's
+`sources` array via the existing source-platform normalization so mock
+fixtures and live backends produce the same client-side platform grouping.
 That same boundary also owns the infrastructure table's operator-facing system
 identity vocabulary. `frontend-modern/src/utils/resourceBadgePresentation.ts`,
 `frontend-modern/src/components/Infrastructure/resourceBadges.ts`, and the

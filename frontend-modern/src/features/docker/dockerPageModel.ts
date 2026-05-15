@@ -1,4 +1,4 @@
-import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
+import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import type { Resource, ResourceType } from '@/types/resource';
 
 export type DockerPageTabId = 'overview' | 'containers' | 'services';
@@ -20,7 +20,7 @@ const DOCKER_CONTAINER_TYPES = new Set<ResourceType>(['app-container']);
 const DOCKER_SERVICE_TYPES = new Set<ResourceType>(['docker-service']);
 
 const isDockerPlatform = (resource: Resource): boolean =>
-  normalizeSourcePlatformQueryValue(resource.platformType || '') === 'docker';
+  resolveResourcePlatformType(resource) === 'docker';
 
 export type DockerPageModel = {
   resources: Resource[];
