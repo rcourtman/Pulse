@@ -352,6 +352,10 @@
         width: 80px;
       }
 
+      col.wide {
+        width: 340px;
+      }
+
       col.activity {
         width: 104px;
       }
@@ -394,7 +398,6 @@
 
       tbody tr.selected {
         background: #eff6ff;
-        box-shadow: inset 3px 0 0 var(--blue);
       }
 
       tr.group-row {
@@ -412,7 +415,6 @@
         background: #f8fafc;
         border-top: 1px solid var(--line-strong);
         border-bottom-color: var(--line);
-        box-shadow: inset 3px 0 0 color-mix(in srgb, var(--group-color) 52%, #cbd5e1);
       }
 
       .cluster-label {
@@ -442,6 +444,48 @@
         border-bottom-color: #f1f5f9;
       }
 
+      tr.section-row.section-vms {
+        background: #fbf7ff;
+      }
+
+      tr.section-row.section-vms td {
+        color: #7c3aed;
+      }
+
+      tr.section-row.section-lxcs,
+      tr.section-row.section-containers {
+        background: #f0fdf4;
+      }
+
+      tr.section-row.section-lxcs td,
+      tr.section-row.section-containers td {
+        color: #15803d;
+      }
+
+      tr.section-row.section-storage {
+        background: #f0f9ff;
+      }
+
+      tr.section-row.section-storage td {
+        color: #0369a1;
+      }
+
+      tr.section-row.section-disks {
+        background: #f8fafc;
+      }
+
+      tr.section-row.section-disks td {
+        color: #475569;
+      }
+
+      tr.section-row.section-backup {
+        background: #fffbeb;
+      }
+
+      tr.section-row.section-backup td {
+        color: #b45309;
+      }
+
       tr.section-row td {
         height: 20px;
         padding-left: 31px;
@@ -463,7 +507,8 @@
         width: 4px;
         height: 4px;
         border-radius: 50%;
-        background: color-mix(in srgb, var(--group-color) 46%, #94a3b8);
+        background: currentColor;
+        opacity: 0.65;
         content: "";
       }
 
@@ -488,10 +533,6 @@
         height: 31px;
       }
 
-      tbody tr.host-row td:first-child {
-        box-shadow: inset 3px 0 0 color-mix(in srgb, var(--group-color) 58%, #cbd5e1);
-      }
-
       tbody tr.host-row:hover {
         background: #f7fbff;
       }
@@ -500,20 +541,56 @@
         background: #ffffff;
       }
 
-      tbody tr.child-row td:first-child {
-        box-shadow: inset 2px 0 0 color-mix(in srgb, var(--group-color) 36%, #e2e8f0);
+      tbody tr.resource-row.type-vm {
+        background: #fdfaff;
+      }
+
+      tbody tr.resource-row.type-lxc,
+      tbody tr.resource-row.type-container {
+        background: #f7fef9;
+      }
+
+      tbody tr.resource-row.type-storage {
+        background: #f6fbff;
+      }
+
+      tbody tr.resource-row.type-disk {
+        background: #fbfdff;
+      }
+
+      tbody tr.resource-row.type-backup {
+        background: #fffdf4;
       }
 
       tbody tr.child-row:hover {
         background: #f8fbff;
       }
 
-      tbody tr.flat-row {
-        background: linear-gradient(
-          90deg,
-          color-mix(in srgb, var(--group-color) 10%, #ffffff) 0,
-          #ffffff 54px
-        );
+      tbody tr.resource-row.type-vm:hover {
+        background: #faf5ff;
+      }
+
+      tbody tr.resource-row.type-lxc:hover,
+      tbody tr.resource-row.type-container:hover {
+        background: #f0fdf4;
+      }
+
+      tbody tr.resource-row.type-storage:hover {
+        background: #eff8ff;
+      }
+
+      tbody tr.resource-row.type-disk:hover {
+        background: #f8fafc;
+      }
+
+      tbody tr.resource-row.type-backup:hover {
+        background: #fffbeb;
+      }
+
+      tbody tr.resource-row.selected {
+        background: #eff6ff;
+        outline: 1px solid #bfdbfe;
+        outline-offset: -1px;
       }
 
       tbody tr.empty-row:hover {
@@ -931,6 +1008,52 @@
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
+      }
+
+      .placement-strip {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 5px;
+        overflow: hidden;
+      }
+
+      .placement-main {
+        min-width: 0;
+        overflow: hidden;
+        color: #475569;
+        font-size: 10.5px;
+        font-weight: 650;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .placement-chip {
+        display: inline-flex;
+        height: 16px;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 3px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: rgb(255 255 255 / 0.58);
+        padding: 0 4px;
+        color: #475569;
+        font-size: 9px;
+        font-weight: 720;
+        line-height: 1;
+        white-space: nowrap;
+      }
+
+      .placement-chip strong {
+        color: #64748b;
+        font-size: 8px;
+        text-transform: uppercase;
+      }
+
+      .placement-chip .dot {
+        width: 6px;
+        height: 6px;
       }
 
       .spark {
@@ -2066,10 +2189,7 @@
           ["disk", "Disk", "metric"],
           ["recovery", "Recovery", "medium"],
           ["protection", "Bk", "icon"],
-          ["storage", "Storage", "medium"],
-          ["network", "Net In/Out", "medium"],
-          ["io", "Disk R/W", "medium"],
-          ["activity", "State", "activity"],
+          ["placement", "Placement / I/O", "wide"],
         ],
         ops: [
           ["name", "Resource", "name"],
@@ -2148,6 +2268,15 @@
         if (resource.kind === "container") return "LXC";
         if (resource.kind === "backup") return "PBS";
         return "Res";
+      };
+      const rowTypeClass = (resource) => {
+        if (resource.kind === "node") return "type-node";
+        if (resource.kind === "vm") return "type-vm";
+        if (resource.kind === "container") return resource.platform === "LXC" ? "type-lxc" : "type-container";
+        if (resource.kind === "backup") return "type-backup";
+        if (resource.source?.type === "physical_disk") return "type-disk";
+        if (resource.kind === "storage") return "type-storage";
+        return "type-resource";
       };
       const parentResource = (resource) => (resource.parent ? getById(resource.parent) : null);
       const hostLabel = (resource) => parentResource(resource)?.label || resource.label;
@@ -2248,19 +2377,83 @@
         `;
       }
 
-      function stateCell(resource) {
+      function stateSummary(resource) {
         const tone = rowTone(resource);
         const label = String(resource.activity || resource.status || "-").split(",")[0];
         const routine =
           tone === "ok" &&
           /^(status (running|online|active|healthy|ok)|no active incidents)$/i.test(label.trim());
-        if (routine) return '<span class="metric-na">-</span>';
+        return {
+          label,
+          routine,
+          tone,
+          title: resource.activity || resource.status || "-",
+        };
+      }
+
+      function stateCell(resource) {
+        const summary = stateSummary(resource);
+        if (summary.routine) return '<span class="metric-na">-</span>';
         return `
-          <span class="state-cell ${tone}" title="${escapeHtml(resource.activity || resource.status || "-")}">
-            <span class="dot ${tone}"></span>
-            <span>${escapeHtml(label)}</span>
+          <span class="state-cell ${summary.tone}" title="${escapeHtml(summary.title)}">
+            <span class="dot ${summary.tone}"></span>
+            <span>${escapeHtml(summary.label)}</span>
           </span>
         `;
+      }
+
+      function placementCell(resource) {
+        const parts = [];
+        if (resource.storage && resource.storage !== "-") {
+          parts.push(`<span class="placement-main" title="${escapeHtml(resource.storage)}">${escapeHtml(resource.storage)}</span>`);
+        }
+        const networkIn = compactRateText(resource.networkIn || resource.network);
+        const networkOut = compactRateText(resource.networkOut || "-");
+        if (networkIn !== "-") {
+          parts.push(`<span class="placement-chip"><strong>i</strong>${escapeHtml(networkIn)}</span>`);
+        }
+        if (networkOut !== "-") {
+          parts.push(`<span class="placement-chip"><strong>o</strong>${escapeHtml(networkOut)}</span>`);
+        }
+        const read = compactRateText(resource.ioRead || resource.io);
+        const write = compactRateText(resource.ioWrite || "-");
+        if (read !== "-") {
+          parts.push(`<span class="placement-chip"><strong>r</strong>${escapeHtml(read)}</span>`);
+        }
+        if (write !== "-") {
+          parts.push(`<span class="placement-chip"><strong>w</strong>${escapeHtml(write)}</span>`);
+        }
+        const summary = stateSummary(resource);
+        if (!summary.routine) {
+          parts.push(`
+            <span class="placement-chip" title="${escapeHtml(summary.title)}">
+              <span class="dot ${summary.tone}"></span>${escapeHtml(summary.label)}
+            </span>
+          `);
+        }
+        if (parts.length === 0) return "";
+        return `<span class="placement-strip">${parts.join("")}</span>`;
+      }
+
+      function storageDetailCell(resource) {
+        const parts = [];
+        if (resource.storage && resource.storage !== "-") {
+          parts.push(`<span class="placement-main" title="${escapeHtml(resource.storage)}">${escapeHtml(resource.storage)}</span>`);
+        }
+        const summary = stateSummary(resource);
+        if (!summary.routine) {
+          parts.push(`
+            <span class="placement-chip" title="${escapeHtml(summary.title)}">
+              <span class="dot ${summary.tone}"></span>${escapeHtml(summary.label)}
+            </span>
+          `);
+        }
+        const read = compactRateText(resource.ioRead || resource.io);
+        const write = compactRateText(resource.ioWrite || "-");
+        if (read !== "-") parts.push(`<span class="placement-chip"><strong>r</strong>${escapeHtml(read)}</span>`);
+        if (write !== "-") parts.push(`<span class="placement-chip"><strong>w</strong>${escapeHtml(write)}</span>`);
+        if (parts.length === 0) return "";
+        return `<span class="placement-strip">${parts.join("")}</span>`;
       }
 
       function compactRecoveryCell(resource) {
@@ -2382,6 +2575,7 @@
           return ratePairCell("i", resource.networkIn || resource.network, "o", resource.networkOut || "-");
         }
         if (columnId === "io") return ratePairCell("r", resource.ioRead || resource.io, "w", resource.ioWrite || "-");
+        if (columnId === "placement") return placementCell(resource);
         if (columnId === "storage") return storageCell(resource);
         if (columnId === "protection") {
           return protectionIconCell(resource);
@@ -2401,6 +2595,10 @@
             cells.push(`<td colspan="3">${storageSignalCell(resource)}</td>`);
             index += 2;
             continue;
+          }
+          if (columnId === "recovery" && resource.kind === "storage") {
+            cells.push(`<td colspan="${columns.length - index}">${storageDetailCell(resource)}</td>`);
+            break;
           }
           cells.push(`<td>${cellFor(resource, columnId, child)}</td>`);
         }
@@ -2463,6 +2661,7 @@
           .flatMap((section) => [
             {
               type: "section",
+              key: section.key,
               label: section.label,
               count: section.resources.length,
               color: groupColor(section.resources[0]),
@@ -2611,7 +2810,7 @@
             }
             if (row.type === "section") {
               return `
-                <tr class="section-row" style="--group-color:${row.color || "#64748b"}">
+                <tr class="section-row section-${row.key}" style="--group-color:${row.color || "#64748b"}">
                   <td colspan="${columns.length}">
                     <div class="section-label">
                       ${escapeHtml(row.label)}
@@ -2626,7 +2825,7 @@
               state.group === "flat" ? "child-row flat-row" : row.child ? "child-row" : "host-row";
             const color = groupColor(resource);
             return `
-              <tr class="resource-row ${rowClass} ${state.selectedId === resource.id ? "selected" : ""}" data-row="${resource.id}" style="--group-color:${color}">
+              <tr class="resource-row ${rowClass} ${rowTypeClass(resource)} ${state.selectedId === resource.id ? "selected" : ""}" data-row="${resource.id}" style="--group-color:${color}">
                 ${state.mode === "map" || state.mode === "dense"
                   ? mapCellsFor(resource, columns, row.child)
                   : columns.map((column) => `<td>${cellFor(resource, column[0], row.child)}</td>`).join("")}
