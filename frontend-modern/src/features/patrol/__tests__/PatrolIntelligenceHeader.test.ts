@@ -42,21 +42,14 @@ describe('PatrolIntelligenceHeader', () => {
     ).toEqual(['patrol_autonomy_pro_required · license_required']);
   });
 
-  it('renders a compact trust summary in the page header above the runtime status row', () => {
-    // Second wedge of the Patrol page IA reframe. The detailed Trust strip
-    // in PatrolIntelligenceWorkspace stays as the canonical breakdown, but
-    // operators should see "X active, Y regressed, Z fixes verified"
-    // immediately under the page title without scrolling into the
-    // workspace tabs. Pin the wiring so this trust-at-a-glance line cannot
-    // silently regress to an empty header during refactors.
-    expect(headerSource).toContain('aria-label="Patrol trust summary header"');
-    expect(headerSource).toContain('state.patrolStatus()?.trust');
-    expect(headerSource).toContain('trust.currently_active');
-    expect(headerSource).toContain('trust.regressed_at_least_once');
-    expect(headerSource).toContain('trust.fix_verified');
-    // Visibility must gate on at least one non-zero signal so fresh installs
-    // don't render an empty header strip.
-    expect(headerSource).toContain('trust.currently_active > 0');
-    expect(headerSource).toContain('trust.fix_verified > 0');
+  it('keeps trust counters out of the page header chrome', () => {
+    // The Patrol assessment strip owns the default status readout. The header
+    // should stay focused on title, recency, and controls rather than adding
+    // another active/regressed summary row.
+    expect(headerSource).not.toContain('aria-label="Patrol trust summary header"');
+    expect(headerSource).not.toContain('state.patrolStatus()?.trust');
+    expect(headerSource).not.toContain('trust.currently_active');
+    expect(headerSource).not.toContain('trust.regressed_at_least_once');
+    expect(headerSource).not.toContain('trust.fix_verified');
   });
 });

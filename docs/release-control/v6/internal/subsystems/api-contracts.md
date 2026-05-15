@@ -647,10 +647,11 @@ the canonical monitored-system blocked payload.
     must not become a new execution or approval API.
     The API contract should stay presentation-neutral here: it supplies the
     score, current risk facts, verification facts, and action state needed for a
-    compact operator summary, but it must not imply a hero, card, or duplicate
-    verdict layout. Frontend consumers may keep explanatory assessment and
-    recommendation copy behind a details expansion while deriving the collapsed
-    readout from the same canonical payloads.
+    compact operator summary, but it must not imply a hero, card, duplicate
+    verdict layout, or expanded assessment panel. Normal Patrol page consumers
+    should keep explanatory assessment, verification, activity, and supporting
+    context in the owning Findings, Runs, and Supporting context surfaces rather
+    than re-expanding the primary assessment strip.
 17. Keep Pulse Mobile relay credential minting and permission ownership on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, `internal/api/auth.go`, `internal/api/relay_mobile_capability.go`, `internal/api/router_routes_ai_relay.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator and governed route gates, but browser callers must only consume that route and must not define the mobile runtime scope, compatibility gate list, route inventory, or token-purpose metadata locally.
 18. Keep hosted tenant browser-session precedence on the shared auth boundary: `internal/api/auth.go`, `internal/api/contract_test.go`, and hosted tenant callers must treat a valid `pulse_session` as authoritative before any API-only token fallback or no-local-auth anonymous fallback, so cloud handoff can continue into protected hosted routes without flattening the operator back to `anonymous` or forcing a browser session through bearer-token-only mode after the tenant has minted API tokens.
     That same shared auth boundary also owns hosted handoff authorization. `internal/api/cloud_handoff.go`,
@@ -1145,13 +1146,13 @@ the canonical monitored-system blocked payload.
    operator-facing framing of what Patrol does (proactive
    investigation, evidence capture, governed action) stays tied to the
    contract instead of drifting between hover and inline.
-   The same Patrol page header also surfaces a compact trust summary
-   above the runtime status row, reading
-   `state.patrolStatus()?.trust` (the `FindingsTrustSummary` block
-   already plumbed through the patrol status payload). It must not
-   introduce a new fetch path or duplicate data plumbing — the strip is
-   a render-only consumer of the existing canonical signal so the
-   header line and the workspace's detailed Trust strip stay aligned.
+   The Patrol page must not introduce header or workspace trust strips over
+   this payload. High-signal trust facts from
+   `state.patrolStatus()?.trust` (the `FindingsTrustSummary` block already
+   plumbed through the patrol status payload) may feed the primary
+   assessment readout, but they remain render-only consumers of the existing
+   canonical signal and must not introduce a new fetch path or duplicate data
+   plumbing.
    The same page-header recency line also reads
    `PatrolRecencyPresentation.resourcesCheckedLabel` — derived by
    `getPatrolRecencyPresentation` from
@@ -1254,7 +1255,7 @@ the canonical monitored-system blocked payload.
    and must not expose raw command text or raw execution output. Frontend
    handoff briefings must derive from the same shared investigation payload
    rather than inventing a second finding-context transport shape.
-7. Keep Patrol summary payload consumers aligned on one assessment hierarchy: transport-driven Patrol summary surfaces may show supporting counts and outcomes, but the canonical assessment and verification states must remain singular and not be repeated as a second compact verdict strip
+7. Keep Patrol summary payload consumers aligned on one assessment hierarchy: transport-driven Patrol summary surfaces may show supporting counts and outcomes, but the canonical assessment and verification states must remain singular and not be repeated as a second compact verdict strip. The collapsed readout should describe current operator state and score directly rather than combining reassuring grade labels with active-issue copy.
 8. Keep Patrol verification and activity facts unified on one transport-backed secondary status area: when frontend consumers combine Patrol status payloads (`runtime_state`, `last_patrol_at`, `last_activity_at`, `trigger_status`) with run-history transport, the latest run result, activity mix, scoped-trigger state, and circuit-breaker context must read as one supporting explanation beneath the primary assessment instead of being re-expanded into a separate full-width status strip plus duplicate summary layers
    and the Patrol runtime-failure run-history contract, so backend payloads,
    persistence adapters, and `frontend-modern/src/api/patrol.ts` preserve

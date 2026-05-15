@@ -1697,9 +1697,7 @@ describe('patrolInvestigationContextModel', () => {
     expect(handoff.context.handoffContext).toContain(
       'Patrol Next Step: Open Patrol provider settings',
     );
-    expect(handoff.context.handoffContext).toContain(
-      'Patrol Next Step Route: /settings/system-ai',
-    );
+    expect(handoff.context.handoffContext).toContain('Patrol Next Step Route: /settings/system-ai');
     expect(handoff.context.handoffContext).toContain(
       'Operator Boundary: This Patrol finding handoff is model-only context',
     );
@@ -1861,24 +1859,26 @@ describe('Patrol page header IA framing', () => {
     expect(headerSource).not.toContain('verified {recency().resourcesChecked}');
   });
 
-  it('hoists a trust-at-a-glance summary into the page header above the runtime row', () => {
-    // The compact trust summary on the Patrol page header is the second
-    // wedge of the IA reframe (the first being PATROL_PAGE_DESCRIPTION).
-    // It must read from the same FindingsTrustSummary block plumbed
-    // through state.patrolStatus()?.trust as the workspace strip — no
-    // duplicate data path — and surface the three highest-signal
-    // counts (active, regressed, fixes verified) so operators see the
-    // trust loop's own state before scrolling into the workspace tabs.
+  it('keeps trust-at-a-glance state inside the primary assessment readout', () => {
+    // The default Patrol scan path has one status owner: the assessment strip.
+    // Regression trust counters may feed that compact readout, but the header
+    // and workspace tabs should not repeat another active/regressed strip.
+    const summarySource = readFileSync(
+      resolve(__dirname, '..', 'PatrolIntelligenceSummary.tsx'),
+      'utf-8',
+    );
     const headerSource = readFileSync(
       resolve(__dirname, '..', 'PatrolIntelligenceHeader.tsx'),
       'utf-8',
     );
-    expect(headerSource).toContain('aria-label="Patrol trust summary header"');
-    expect(headerSource).toContain('state.patrolStatus()?.trust');
-    expect(headerSource).toContain('trust.currently_active');
-    expect(headerSource).toContain('trust.regressed_at_least_once');
-    expect(headerSource).toContain('trust.fix_verified');
-    expect(headerSource).toContain('trust.currently_active > 0');
+    const workspaceSource = readFileSync(
+      resolve(__dirname, '..', 'PatrolIntelligenceWorkspace.tsx'),
+      'utf-8',
+    );
+    expect(summarySource).toContain('compactAssessmentSummary');
+    expect(summarySource).toContain('state.patrolStatus()?.trust?.regressed_at_least_once');
+    expect(headerSource).not.toContain('aria-label="Patrol trust summary header"');
+    expect(workspaceSource).not.toContain('aria-label="Patrol trust summary"');
   });
 
   it('names the proactive trust loop on the canonical Patrol surface', async () => {

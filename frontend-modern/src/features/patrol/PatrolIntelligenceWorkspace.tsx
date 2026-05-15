@@ -42,60 +42,6 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
         }}
       />
 
-      <Show
-        when={(() => {
-          const trust = state.patrolStatus()?.trust;
-          if (!trust) return false;
-          // Render only when at least one trust signal has non-zero value;
-          // fresh installs with no findings should not show an empty strip.
-          return (
-            trust.fix_verified > 0 ||
-            trust.auto_resolved > 0 ||
-            trust.dismissed_as_noise > 0 ||
-            trust.dismissed_as_expected > 0 ||
-            trust.currently_active > 0
-          );
-        })()}
-      >
-        {(() => {
-          const trust = state.patrolStatus()!.trust!;
-          return (
-            <div
-              class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 rounded-md border border-border bg-surface-alt/40 text-[11px] text-muted"
-              aria-label="Patrol trust summary"
-            >
-              <span class="font-medium uppercase tracking-[0.14em] text-[10px] text-muted/80">
-                Trust
-              </span>
-              <Show when={trust.fix_verified > 0}>
-                <span class="text-emerald-700 dark:text-emerald-300">
-                  {trust.fix_verified} fix{trust.fix_verified === 1 ? '' : 'es'} verified
-                </span>
-              </Show>
-              <Show when={trust.auto_resolved > 0}>
-                <span>{trust.auto_resolved} auto-resolved</span>
-              </Show>
-              <Show when={trust.dismissed_as_noise > 0}>
-                <span class="text-amber-700 dark:text-amber-300">
-                  {trust.dismissed_as_noise} dismissed as noise
-                </span>
-              </Show>
-              <Show when={trust.dismissed_as_expected > 0}>
-                <span>{trust.dismissed_as_expected} expected</span>
-              </Show>
-              <Show when={trust.currently_active > 0}>
-                <span>{trust.currently_active} active</span>
-              </Show>
-              <Show when={trust.regressed_at_least_once > 0}>
-                <span class="text-amber-700 dark:text-amber-300">
-                  {trust.regressed_at_least_once} regressed
-                </span>
-              </Show>
-            </div>
-          );
-        })()}
-      </Show>
-
       <div class="flex items-center gap-1 border-b border-border">
         <button
           type="button"

@@ -1,7 +1,6 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { aiChatStore } from '@/stores/aiChat';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import type { PatrolRunRecord } from '@/api/patrol';
 import { PatrolIntelligenceSummary } from '../PatrolIntelligenceSummary';
@@ -13,11 +12,7 @@ describe('PatrolIntelligenceSummary', () => {
     vi.restoreAllMocks();
   });
 
-  it('opens Assistant with model-only context for the current Patrol assessment', async () => {
-    const openWithPrompt = vi.spyOn(aiChatStore, 'openWithPrompt').mockImplementation(() => {});
-    const loadPendingApprovals = vi
-      .spyOn(aiIntelligenceStore, 'loadPendingApprovals')
-      .mockResolvedValue(undefined);
+  it('routes pending approvals from the compact assessment strip', () => {
     vi.spyOn(aiIntelligenceStore, 'patrolPendingApprovals', 'get').mockReturnValue([
       {
         id: 'approval-1',
@@ -46,97 +41,24 @@ describe('PatrolIntelligenceSummary', () => {
       },
     ]);
 
-    const patrolState = {
-      ...createPatrolState(),
-      summaryDetailsExpanded: () => true,
-    };
+    const patrolState = createPatrolState();
     render(() => <PatrolIntelligenceSummary state={patrolState} />);
 
     expect(screen.getByTestId('patrol-recommended-next-step').textContent).toContain(
       'Review the pending Patrol approval',
     );
-    expect(screen.getByTestId('patrol-summary-details').textContent).toContain(
-      'risk, dry-run posture, and expiry',
-    );
+    expect(screen.queryByTestId('patrol-summary-details-toggle')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('patrol-summary-details')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('patrol-assessment-assistant-button')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('patrol-recommended-next-step-action'));
 
     expect(patrolState.setSelectedRun).toHaveBeenCalledWith(null);
     expect(patrolState.setActiveTab).toHaveBeenCalledWith('findings');
     expect(patrolState.setFindingsFilterOverride).toHaveBeenCalledWith('approvals');
-
-    fireEvent.click(screen.getByTestId('patrol-assessment-assistant-button'));
-
-    await waitFor(() => expect(openWithPrompt).toHaveBeenCalledTimes(1));
-    expect(loadPendingApprovals).toHaveBeenCalledTimes(1);
-    const [prompt, context] = openWithPrompt.mock.calls[0] as [string, Record<string, unknown>];
-    expect(prompt).toContain('Discuss the current Pulse Patrol assessment');
-    expect(prompt).toContain('Start by reviewing 1 pending governed approval');
-    expect(prompt).toContain('approval policy, dry-run posture');
-    expect(prompt).toContain('Do not infer, repeat, or execute raw command text');
-    expect(context.autonomousMode).toBe(false);
-    expect(context.handoffContext).toContain('[Patrol Assessment Context]');
-    expect(context.handoffContext).toContain('Source: Pulse Patrol current assessment');
-    expect(context.handoffContext).toContain('Supporting Context: 2 recent changes');
-    expect(context.handoffContext).toContain(
-      'Recommended Next Step: Review the pending Patrol approval',
-    );
-    expect(context.handoffContext).toContain(
-      'Recommended Next Step Action: Review approvals (review_approvals)',
-    );
-    expect(context.handoffContext).toContain('Recent Change 1: Metric anomaly');
-    expect(context.handoffContext).toContain('Correlation 1: Nightly backup job');
-    expect(context.handoffContext).toContain('Finding 1: High CPU usage');
-    expect(context.handoffContext).toContain('approval approval-1');
-    expect(context.handoffContext).toContain('live approval pending');
-    expect(context.handoffContext).toContain('high risk');
-    expect(context.handoffContext).toContain('approval target web-server');
-    expect(context.handoffContext).toContain('expires 2026-05-06T12:10:00Z');
-    expect(context.context).toMatchObject({
-      pendingApprovalCount: 1,
-      recommendedNextStepTitle: 'Review the pending Patrol approval',
-      recommendedNextStepActionKind: 'review_approvals',
-    });
-    expect(context.handoffResources).toEqual([
-      { id: 'vm-100', name: 'web-server', type: 'vm', node: 'pve-1' },
-      { id: 'backup-job', name: 'Nightly backup job', type: 'job', node: undefined },
-    ]);
-    expect(context.handoffActions).toHaveLength(1);
-    expect((context.handoffActions as Array<Record<string, unknown>>)[0]).toMatchObject({
-      findingId: 'finding-1',
-      approvalId: 'approval-1',
-      approvalStatus: 'pending',
-      approvalRequestedAt: '2026-05-06T12:00:00Z',
-      approvalExpiresAt: '2026-05-06T12:10:00Z',
-      actionId: 'action-1',
-      actionApprovalPolicy: 'admin',
-      actionRequiresApproval: true,
-      actionPlanExpiresAt: '2026-05-06T12:10:00Z',
-      actionPlanMessage: 'Restart after the backup window clears.',
-      actionPreflight: 'Restart workload service',
-      actionDryRunSummary: 'No provider-supported dry run is available for this action.',
-    });
-    expect(context.briefing).toMatchObject({
-      actionLabel: '1 pending governed approval attached',
-      safetyNote:
-        'Review approvals in the governed flow; approval policy is attached; dry-run posture is attached; raw command payloads stay out of Assistant.',
-      suggestedPrompts: [
-        'Prioritize findings and safest next step',
-        'Explain recent changes and correlations',
-        'Review pending approvals and safest next step',
-      ],
-    });
-    expect((context.briefing as { detailLines?: string[] }).detailLines).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('Recommended next step: Review the pending Patrol approval'),
-      ]),
-    );
-    expect(JSON.stringify(context)).not.toContain('systemctl restart workload.service');
   });
 
-  it('passes current run-action availability into assessment Assistant handoff', async () => {
-    const openWithPrompt = vi.spyOn(aiChatStore, 'openWithPrompt').mockImplementation(() => {});
-    vi.spyOn(aiIntelligenceStore, 'loadPendingApprovals').mockResolvedValue(undefined);
+  it('keeps unavailable run actions on the compact assessment strip', () => {
     vi.spyOn(aiIntelligenceStore, 'patrolPendingApprovals', 'get').mockReturnValue([]);
 
     const patrolState = {
@@ -210,7 +132,6 @@ describe('PatrolIntelligenceSummary', () => {
         errorMessage: () => '',
       },
       runtimeState: () => 'running',
-      summaryDetailsExpanded: () => true,
       summaryStats: () => ({
         criticalFindings: 0,
         warningFindings: 0,
@@ -223,27 +144,11 @@ describe('PatrolIntelligenceSummary', () => {
 
     render(() => <PatrolIntelligenceSummary state={patrolState} />);
 
-    fireEvent.click(screen.getByTestId('patrol-assessment-assistant-button'));
-
-    await waitFor(() => expect(openWithPrompt).toHaveBeenCalledTimes(1));
-    const [prompt, context] = openWithPrompt.mock.calls[0] as [string, Record<string, unknown>];
-
-    expect(prompt).toContain(
-      'Patrol-owned action "Run Patrol" is currently unavailable: Patrol is already running',
-    );
-    expect(context.handoffContext).toContain(
-      'Recommended Next Step Action Status: unavailable - Patrol is already running',
-    );
-    expect(context.context).toMatchObject({
-      recommendedNextStepActionKind: 'run_patrol',
-      recommendedNextStepActionDisabledReason: 'Patrol is already running',
-    });
-    expect(context.briefing).toMatchObject({
-      actionLabel: 'Recommended: Run Patrol',
-      safetyNote: expect.stringContaining(
-        'Run Patrol is currently unavailable: Patrol is already running.',
-      ),
-    });
+    const action = screen.getByTestId('patrol-recommended-next-step-action');
+    expect(action).toHaveTextContent('Running...');
+    expect(action).toBeDisabled();
+    expect(action).toHaveAttribute('title', 'Patrol is already running');
+    expect(screen.queryByTestId('patrol-summary-details-toggle')).not.toBeInTheDocument();
   });
 });
 
@@ -418,8 +323,6 @@ function createPatrolState(): PatrolIntelligenceState {
     setActiveTab: vi.fn(),
     setFindingsFilterOverride: vi.fn(),
     setSelectedRun: vi.fn(),
-    setSummaryDetailsExpanded: vi.fn(),
-    summaryDetailsExpanded: () => false,
     summaryStats: () => ({
       criticalFindings: 1,
       warningFindings: 0,

@@ -297,15 +297,15 @@ Patrol-specific presentation helpers.
    presentation; the Patrol-owned investigation-context model must not
    absorb it into impact, verification, or rollback (those represent
    the current investigation, not history).
-   The Patrol page renders a small Trust strip above the Findings/Runs
-   tab bar that surfaces `state.patrolStatus()?.trust` (the
-   FindingsTrustSummary block on the patrol-status response) as compact
-   signals: fixes verified, auto-resolved, dismissed-as-noise,
-   dismissed-as-expected, currently-active, and regressed-at-least-once.
-   The strip is hidden when every signal is zero so a fresh install
-   does not show an empty pill. The strip must read field names that
-   exist on `FindingsTrustSummary`; new strip categories must extend
-   that contract first rather than inventing per-page keys.
+   The Patrol page must not render a standalone Trust strip above the
+   Findings/Runs tab bar or a parallel header trust line. The primary
+   Patrol assessment readout is the default owner for current operator
+   state, and may include high-signal trust facts such as
+   `state.patrolStatus()?.trust.regressed_at_least_once` (the
+   FindingsTrustSummary block on the patrol-status response) only as
+   compact status text. New trust categories must extend the
+   `FindingsTrustSummary` contract first rather than inventing
+   per-page keys.
    Findings carry contextual Assistant entry points keyed on intent: the
    default "Discuss with Assistant" button opens an open-ended chat
    handoff, and a parallel "Explain" button opens the same handoff with
@@ -411,11 +411,15 @@ Patrol-specific presentation helpers.
 9. Keep the normal Patrol assessment summary plain and operator-first rather
    than a hero-style or decorative card surface. The default collapsed state is
    a compact readout, not a headline block: show the Patrol assessment label,
-   score, concise current-risk copy, one recommended next-step title, and one
-   route-owned action. Assessment explanation, recommendation detail,
-   verification detail, supporting metrics, and whole-assessment Assistant
-   discussion belong behind the details expansion unless Assistant itself is
-   the recommended action.
+   current operator state, concise high-signal trust posture such as
+   regressions when present, score, one recommended next-step title, and one
+   route-owned action. Do not combine reassuring grade labels such as
+   `Health A` with issue-state copy such as `Issues detected` in the collapsed
+   line. Do not add a normal-path assessment details expansion: assessment
+   explanation, recommendation detail, verification detail, activity mix,
+   supporting metrics, and whole-assessment Assistant discussion belong in the
+   owning Findings, Runs, Supporting context, or recommended-action surfaces
+   instead of reopening the compact strip into a sparse status panel.
 
 ## Current State
 
@@ -1201,15 +1205,11 @@ explanation + governed action). The tooltip on the page-header title
 must read the same string from the canonical helper rather than
 maintaining a parallel copy, so hover and inline never tell different
 stories about what Patrol does.
-The same Patrol page header must also surface a compact trust summary
-("N active · M regressed · K fixes verified") read from
-`state.patrolStatus()?.trust` immediately under the page title, gated
-on at least one non-zero signal so a fresh install doesn't render an
-empty header strip. The detailed Trust strip in
-`PatrolIntelligenceWorkspace.tsx` stays as the canonical breakdown for
-operators reviewing findings; the header line is the
-trust-at-a-glance entry point that names what Patrol's loop has
-produced before the operator scrolls into the workspace tabs.
+The Patrol page header must not add a second trust-at-a-glance line under
+the page title. Current active/regressed/finding posture belongs to the
+primary assessment readout and the finding rows, so the header remains
+focused on product title, recency, and route controls instead of repeating
+the same trust counters above the workspace tabs.
 The same page-header recency line must also surface the coverage
 signal from the most recent completed run via
 `PatrolRecencyPresentation.resourcesChecked`, populated by

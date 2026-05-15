@@ -142,7 +142,6 @@ export function usePatrolIntelligenceState() {
   const [initialSurfaceReady, setInitialSurfaceReady] = createSignal(false);
   const [activeTab, setActiveTab] = createSignal<PatrolTab>('findings');
   const [showInvestigationContext, setShowInvestigationContext] = createSignal(false);
-  const [summaryDetailsExpanded, setSummaryDetailsExpanded] = createSignal(false);
   const [findingsFilterOverride, setFindingsFilterOverride] = createSignal<
     'all' | 'active' | 'resolved' | 'approvals' | 'attention' | undefined
   >(undefined);
@@ -171,8 +170,7 @@ export function usePatrolIntelligenceState() {
   const [patrolAlertTriggers, setPatrolAlertTriggers] = createSignal<boolean>(true);
   const [patrolAnomalyTriggers, setPatrolAnomalyTriggers] = createSignal<boolean>(true);
   const [selectedRun, setSelectedRun] = createSignal<PatrolRunRecord | null>(null);
-  const [patrolModelSelectElement, setPatrolModelSelectElement] =
-    createSignal<HTMLSelectElement>();
+  const [patrolModelSelectElement, setPatrolModelSelectElement] = createSignal<HTMLSelectElement>();
 
   let advancedSettingsRef: HTMLDivElement | undefined;
   let safetyTimerRef: ReturnType<typeof setTimeout> | undefined;
@@ -993,7 +991,6 @@ export function usePatrolIntelligenceState() {
     setSelectedRun,
     setShowAdvancedSettings,
     setShowInvestigationContext,
-    setSummaryDetailsExpanded,
     setFindingScrollTimer: (timer: ReturnType<typeof setTimeout> | undefined) => {
       findingScrollTimerRef = timer;
     },
@@ -1005,7 +1002,6 @@ export function usePatrolIntelligenceState() {
     showReadinessBanner,
     showInvestigationContext,
     shouldSurfaceInvestigationContext,
-    summaryDetailsExpanded,
     summaryStats,
     supportingRecentChanges,
     triggerPatrolDisabledReason,

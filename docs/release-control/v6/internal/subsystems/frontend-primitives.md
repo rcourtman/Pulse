@@ -1016,11 +1016,11 @@ prompt explain the same operator-facing priority.
     contextual entry points can vary the seeded leading sentence without
     duplicating the structured-context attachment; shared drawer
     primitives must not branch on intent themselves. Patrol-page
-    surfaces may also render a Trust strip from
-    `state.patrolStatus()?.trust`, but the strip must read field names
-    that exist on `FindingsTrustSummary`; shared drawer/chrome
-    primitives stay free of the trust shape so adding new trust signals
-    goes through the contract first rather than per-shell branching.
+    surfaces must not add standalone trust strips to shared header or
+    workspace chrome; high-signal trust facts may feed the Patrol-owned
+    assessment readout, but shared drawer/chrome primitives stay free of
+    the `FindingsTrustSummary` shape so adding new trust signals goes
+    through the contract first rather than per-shell branching.
     Patrol header refresh controls stay on that same feature-owned shell
     boundary: `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
     must make the refresh affordance generation-aware and timeout-bounded, so
@@ -1680,7 +1680,11 @@ supporting metrics under that strip must stay metric-oriented and must not
 repeat assessment or verification labels as a second compact verdict row.
 The collapsed Patrol assessment strip itself must remain a compact readout
 rather than a headline-plus-paragraph block; explanatory assessment and
-recommendation copy belongs behind the summary details expansion.
+recommendation copy belongs in the owning Findings, Runs, Supporting context,
+or recommended-action surfaces rather than a normal-path summary details
+expansion.
+That readout should lead with current operator state and score rather than
+mixing a reassuring grade label with issue-state copy in the same line.
 That same summary shell should also keep the shared Pulse surface neutral:
 severity belongs in compact accents, inline readouts, and badges rather than
 turning the whole assessment into a tinted warning banner, nested card, or

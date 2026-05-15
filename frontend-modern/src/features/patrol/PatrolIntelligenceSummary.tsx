@@ -1,9 +1,7 @@
-import { createMemo, For, Show } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 import ActivityIcon from 'lucide-solid/icons/activity';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
-import ChevronDownIcon from 'lucide-solid/icons/chevron-down';
-import ChevronUpIcon from 'lucide-solid/icons/chevron-up';
 import MessageSquareIcon from 'lucide-solid/icons/message-square';
 import PlayIcon from 'lucide-solid/icons/play';
 import SettingsIcon from 'lucide-solid/icons/settings';
@@ -14,14 +12,10 @@ import {
   getPatrolRecencyPresentation,
   getPatrolScoreChipLabel,
   getPatrolVerificationPresentation,
-  getPatrolSummaryPresentation,
   getPatrolSummaryMetricState,
   type PatrolRecommendedNextStepAction,
 } from '@/utils/patrolSummaryPresentation';
-import {
-  getPatrolLatestRunPresentation,
-  getPatrolTriggerStatusSummary,
-} from '@/utils/patrolRunPresentation';
+import { getPatrolLatestRunPresentation } from '@/utils/patrolRunPresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 import { formatRelativeTime } from '@/utils/format';
 import { aiChatStore } from '@/stores/aiChat';
@@ -86,9 +80,6 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       fixedCount: summaryStats().fixedCount,
     }),
   );
-  const warningSummaryPresentation = createMemo(() =>
-    getPatrolSummaryPresentation(metricState().secondarySeverity, metricState().secondaryValue > 0),
-  );
   const runtimePresentation = createMemo(() =>
     getPatrolRuntimePresentation(state.runtimeState(), state.blockedReason()),
   );
@@ -115,9 +106,6 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       runs: state.patrolRunHistory.value() ?? [],
     }),
   );
-  const activeFindingsSummaryPresentation = createMemo(() =>
-    getPatrolSummaryPresentation(metricState().primarySeverity, metricState().primaryValue > 0),
-  );
   const verification = createMemo(() =>
     getPatrolVerificationPresentation({
       runs: state.patrolRunHistory.value() ?? [],
@@ -132,33 +120,9 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       lastActivityAt: state.patrolStatus()?.last_activity_at,
     }),
   );
-  const fixedSummaryPresentation = createMemo(() =>
-    getPatrolSummaryPresentation('success', summaryStats().fixedCount > 0),
-  );
   const latestRun = createMemo(() =>
     getPatrolLatestRunPresentation(state.patrolRunHistory.value() ?? []),
   );
-  const triggerSummary = createMemo(() =>
-    getPatrolTriggerStatusSummary(state.patrolStatus()?.trigger_status),
-  );
-  const circuitBreakerPresentation = createMemo(() => {
-    const circuitBreaker = state.circuitBreakerStatus();
-    if (!circuitBreaker || circuitBreaker.state === 'closed') {
-      return undefined;
-    }
-
-    if (circuitBreaker.state === 'open') {
-      return {
-        message: `Provider circuit breaker tripped after ${circuitBreaker.consecutive_failures} consecutive failures.`,
-        toneClass: 'text-red-600 dark:text-red-400',
-      };
-    }
-
-    return {
-      message: 'Provider circuit breaker recovering; the next Patrol run is a live test.',
-      toneClass: 'text-amber-600 dark:text-amber-400',
-    };
-  });
   const scoreChipLabel = createMemo(() =>
     getPatrolScoreChipLabel({
       overallHealth: state.intelligenceSummary()?.overall_health,
@@ -201,6 +165,21 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
 
     return parts.join(' · ');
   });
+  const compactAssessmentSummary = createMemo(() => {
+    const overallHealth = state.intelligenceSummary()?.overall_health;
+    const parts: string[] = [compactRiskSummary() || assessment().compactLabel];
+    const regressedCount = state.patrolStatus()?.trust?.regressed_at_least_once ?? 0;
+
+    if (regressedCount > 0) {
+      parts.push(`${regressedCount} regressed`);
+    }
+
+    if (overallHealth) {
+      parts.push(`${Math.round(overallHealth.score)}/100`);
+    }
+
+    return parts.join(' · ');
+  });
   const recommendedNextStepAction = createMemo(() => recommendedNextStep().action);
   const recommendedNextStepActionDisabled = createMemo(() => {
     const action = recommendedNextStepAction();
@@ -230,53 +209,6 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
     }
 
     return action.label;
-  });
-  const showAssessmentAssistantButton = createMemo(
-    () => recommendedNextStepAction()?.kind !== 'discuss_assessment',
-  );
-  const hasAttentionMetrics = createMemo(
-    () => metricState().primaryValue > 0 || metricState().secondaryValue > 0,
-  );
-  const visibleMetrics = createMemo(() => {
-    const metrics: Array<{
-      key: string;
-      label: string;
-      presentation: ReturnType<typeof getPatrolSummaryPresentation>;
-      value: number;
-    }> = [];
-
-    if (metricState().primaryValue > 0) {
-      metrics.push({
-        key: 'primary',
-        label: metricState().primaryLabel,
-        presentation: activeFindingsSummaryPresentation(),
-        value: metricState().primaryValue,
-      });
-    }
-
-    if (
-      metricState().secondaryValue > 0 &&
-      (metricState().secondaryLabel === 'Runtime issues' ||
-        metricState().secondaryValue !== metricState().primaryValue)
-    ) {
-      metrics.push({
-        key: 'secondary',
-        label: metricState().secondaryLabel,
-        presentation: warningSummaryPresentation(),
-        value: metricState().secondaryValue,
-      });
-    }
-
-    if (metricState().fixedValue > 0 && hasAttentionMetrics()) {
-      metrics.push({
-        key: 'fixed',
-        label: metricState().fixedLabel,
-        presentation: fixedSummaryPresentation(),
-        value: metricState().fixedValue,
-      });
-    }
-
-    return metrics;
   });
   const activeFindingsWithApprovalContext = createMemo<PatrolAssessmentAssistantFindingInput[]>(
     () => {
@@ -409,253 +341,70 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
 
       <Show when={!showRuntimeSummary() && !showLoadingSummary()}>
         <Show when={state.intelligenceSummary()}>
-          {(summary) => (
-            <section class="border-y border-border-subtle py-2">
-              <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                <div class="min-w-0 space-y-1">
-                  <div class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
-                    <span class="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
-                      {assessment().eyebrow}
-                    </span>
-                    <span class="font-semibold text-base-content">
-                      {scoreChipLabel()} {summary().overall_health.grade} ·{' '}
-                      {Math.round(summary().overall_health.score)}/100
-                    </span>
-                    <span class="font-semibold text-base-content">{assessment().title}</span>
-                    <Show when={compactRiskSummary()}>
-                      {(riskSummary) => (
-                        <>
-                          <span class="text-muted" aria-hidden="true">
-                            ·
-                          </span>
-                          <span class="text-muted">{riskSummary()}</span>
-                        </>
-                      )}
-                    </Show>
-                  </div>
-
-                  <div
-                    data-testid="patrol-recommended-next-step"
-                    class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted"
-                  >
-                    <span class="font-medium text-base-content">Next:</span>
-                    <span class="font-medium text-base-content">{recommendedNextStep().title}</span>
-                  </div>
+          <section class="border-y border-border-subtle py-2">
+            <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+              <div class="min-w-0 space-y-1">
+                <div class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
+                  <span class="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                    {assessment().eyebrow}
+                  </span>
+                  <span class="font-semibold text-base-content">{compactAssessmentSummary()}</span>
                 </div>
 
-                <div class="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
-                  <Show when={recommendedNextStepAction()}>
-                    {(action) => (
-                      <Show
-                        when={action().href}
-                        fallback={
-                          <button
-                            type="button"
-                            data-testid="patrol-recommended-next-step-action"
-                            disabled={recommendedNextStepActionDisabled()}
-                            title={
-                              action().kind === 'run_patrol'
-                                ? state.triggerPatrolDisabledReason()
-                                : undefined
-                            }
-                            class="inline-flex shrink-0 items-center gap-1.5 rounded border border-border-subtle bg-transparent px-2.5 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover disabled:text-muted"
-                            onClick={() => handleRecommendedNextStepAction(action())}
-                          >
-                            {renderRecommendedNextStepActionIcon(
-                              action(),
-                              state.isTriggeringPatrol() ||
-                                state.manualRunRequested() ||
-                                state.patrolStream.isStreaming(),
-                            )}
-                            <span>{recommendedNextStepActionLabel()}</span>
-                          </button>
-                        }
-                      >
-                        {(href) => (
-                          <a
-                            href={href()}
-                            data-testid="patrol-recommended-next-step-action"
-                            class="inline-flex shrink-0 items-center gap-1.5 rounded border border-border-subtle bg-transparent px-2.5 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover"
-                          >
-                            {renderRecommendedNextStepActionIcon(action(), false)}
-                            <span>{action().label}</span>
-                          </a>
-                        )}
-                      </Show>
-                    )}
-                  </Show>
-                  <button
-                    type="button"
-                    data-testid="patrol-summary-details-toggle"
-                    aria-expanded={state.summaryDetailsExpanded()}
-                    aria-controls="patrol-summary-details"
-                    onClick={() => state.setSummaryDetailsExpanded((value) => !value)}
-                    class="inline-flex items-center gap-1 text-xs font-medium text-muted transition-colors hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                  >
-                    <Show
-                      when={state.summaryDetailsExpanded()}
-                      fallback={<ChevronDownIcon class="h-3.5 w-3.5" aria-hidden="true" />}
-                    >
-                      <ChevronUpIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                    </Show>
-                    <span>{state.summaryDetailsExpanded() ? 'Hide details' : 'Show details'}</span>
-                  </button>
+                <div
+                  data-testid="patrol-recommended-next-step"
+                  class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted"
+                >
+                  <span class="font-medium text-base-content">Next:</span>
+                  <span class="font-medium text-base-content">{recommendedNextStep().title}</span>
                 </div>
               </div>
 
-              <Show when={state.summaryDetailsExpanded()}>
-                <div
-                  id="patrol-summary-details"
-                  data-testid="patrol-summary-details"
-                  class="mt-3 border-t border-border-subtle pt-3"
-                >
-                  <div class="grid gap-4 lg:grid-cols-3">
-                    <div>
-                      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-                        Assessment
-                      </p>
-                      <p class="mt-1 text-sm font-medium text-base-content">{assessment().title}</p>
-                      <p class="mt-1 text-sm text-muted">{assessment().description}</p>
-                      <div class="mt-3">
-                        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-                          Recommended next step
-                        </p>
-                        <p class="mt-1 text-sm font-medium text-base-content">
-                          {recommendedNextStep().title}
-                        </p>
-                        <p class="mt-1 text-sm text-muted">{recommendedNextStep().description}</p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-                        Verification
-                      </p>
-                      <p class="mt-1 text-sm font-medium text-base-content">
-                        {verification().title}
-                        <Show when={verification().lastFullRunAt}>
-                          <span class="text-muted">
-                            {' '}
-                            ·{' '}
-                            {formatRelativeTime(verification().lastFullRunAt!, {
-                              compact: true,
-                              emptyText: 'never',
-                            })}
-                          </span>
-                        </Show>
-                      </p>
-                      <p class="mt-1 text-sm text-muted">{verification().description}</p>
-                      <Show when={verification().activityMixLabel}>
-                        <p class="mt-2 text-xs font-medium text-base-content">
-                          Recent activity mix: {verification().activityMixLabel}
-                        </p>
-                      </Show>
-                    </div>
-
-                    <div>
-                      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-                        Latest activity
-                      </p>
-                      <Show
-                        when={latestRun()}
-                        fallback={
-                          <p class="mt-1 text-sm text-muted">
-                            Patrol has not completed recent activity yet.
-                          </p>
-                        }
-                      >
-                        {(latest) => (
-                          <>
-                            <div class="mt-1 flex flex-wrap items-center gap-2 text-sm">
-                              <span class="font-medium text-base-content">
-                                {latest().kindLabel}
-                              </span>
-                              <span
-                                class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${latest().status.badgeClass}`}
-                              >
-                                {latest().status.label}
-                              </span>
-                              <Show when={latest().timestamp}>
-                                <span class="text-muted">
-                                  {formatRelativeTime(latest().timestamp!, {
-                                    compact: true,
-                                    emptyText: 'never',
-                                  })}
-                                </span>
-                              </Show>
-                            </div>
-                            <Show when={latest().coverageSummary}>
-                              <p class="mt-1 text-sm text-muted">{latest().coverageSummary}</p>
-                            </Show>
-                            <Show when={!latest().findingsSnapshotAvailable}>
-                              <p class="mt-1 text-xs text-muted">
-                                Findings snapshot unavailable for this run.
-                              </p>
-                            </Show>
-                          </>
-                        )}
-                      </Show>
-
-                      <Show when={triggerSummary()}>
-                        <p class="mt-3 text-sm text-muted">
-                          <span class="font-medium text-base-content">Trigger mode:</span>{' '}
-                          {triggerSummary()}
-                        </p>
-                      </Show>
-
-                      <Show when={circuitBreakerPresentation()}>
-                        {(circuitBreaker) => (
-                          <p class={`mt-3 text-sm ${circuitBreaker().toneClass}`}>
-                            {circuitBreaker().message}
-                          </p>
-                        )}
-                      </Show>
-                    </div>
-                  </div>
-
-                  <Show when={showAssessmentAssistantButton()}>
-                    <div class="mt-4">
-                      <button
-                        type="button"
-                        data-testid="patrol-assessment-assistant-button"
-                        class="inline-flex items-center gap-1.5 rounded border border-border-subtle bg-transparent px-2.5 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                        title="Discuss current Patrol assessment"
-                        onClick={handleDiscussAssessment}
-                      >
-                        <MessageSquareIcon class="h-4 w-4" aria-hidden="true" />
-                        <span>Discuss with Assistant</span>
-                      </button>
-                    </div>
-                  </Show>
-                </div>
-              </Show>
-            </section>
-          )}
+              <div class="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
+                <Show when={recommendedNextStepAction()}>
+                  {(action) => (
+                    <Show
+                      when={action().href}
+                      fallback={
+                        <button
+                          type="button"
+                          data-testid="patrol-recommended-next-step-action"
+                          disabled={recommendedNextStepActionDisabled()}
+                          title={
+                            action().kind === 'run_patrol'
+                              ? state.triggerPatrolDisabledReason()
+                              : undefined
+                          }
+                          class="inline-flex shrink-0 items-center gap-1.5 rounded border border-border-subtle bg-transparent px-2.5 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover disabled:text-muted"
+                          onClick={() => handleRecommendedNextStepAction(action())}
+                        >
+                          {renderRecommendedNextStepActionIcon(
+                            action(),
+                            state.isTriggeringPatrol() ||
+                              state.manualRunRequested() ||
+                              state.patrolStream.isStreaming(),
+                          )}
+                          <span>{recommendedNextStepActionLabel()}</span>
+                        </button>
+                      }
+                    >
+                      {(href) => (
+                        <a
+                          href={href()}
+                          data-testid="patrol-recommended-next-step-action"
+                          class="inline-flex shrink-0 items-center gap-1.5 rounded border border-border-subtle bg-transparent px-2.5 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover"
+                        >
+                          {renderRecommendedNextStepActionIcon(action(), false)}
+                          <span>{action().label}</span>
+                        </a>
+                      )}
+                    </Show>
+                  )}
+                </Show>
+              </div>
+            </div>
+          </section>
         </Show>
-      </Show>
-
-      <Show
-        when={
-          !showRuntimeSummary() &&
-          state.intelligenceSummary() &&
-          visibleMetrics().length > 0 &&
-          state.summaryDetailsExpanded()
-        }
-      >
-        <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-          <For each={visibleMetrics()}>
-            {(metric) => {
-              return (
-                <p>
-                  <span class="text-muted">{metric.label}</span>{' '}
-                  <span class={`font-semibold ${metric.presentation.valueClass}`}>
-                    {metric.value}
-                  </span>
-                </p>
-              );
-            }}
-          </For>
-        </div>
       </Show>
     </>
   );

@@ -866,10 +866,11 @@ describe('AIIntelligence entitlement gating', () => {
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
       expect(screen.getByText('Patrol assessment')).toBeInTheDocument();
-      expect(screen.getByText('No active issues detected')).toBeInTheDocument();
+      expect(screen.getByText(/No issues found · 91\/100/)).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/Health A · 91\/100/)).toBeInTheDocument();
+    expect(screen.queryByText('No active issues detected')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Health A · 91\/100/)).not.toBeInTheDocument();
     expect(screen.queryByText('Supporting context')).not.toBeInTheDocument();
     expect(
       screen.queryByText('1 recent change · 4 policy-covered resources'),
@@ -996,7 +997,7 @@ describe('AIIntelligence entitlement gating', () => {
     });
 
     expect(screen.queryByText('Patrol quickstart exhausted')).not.toBeInTheDocument();
-    expect(screen.getByText(/Health A · 100\/100/)).toBeInTheDocument();
+    expect(screen.getByText(/No issues found · 100\/100/)).toBeInTheDocument();
   });
 
   it('normalizes retired hosted availability copy on unactivated installs', async () => {
@@ -1155,7 +1156,7 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('Coverage incomplete').length).toBeGreaterThan(0);
+      expect(screen.getByText(/Coverage incomplete · 70\/100/)).toBeInTheDocument();
       expect(screen.getByText('Next:')).toBeInTheDocument();
       expect(screen.getByText('Verify full coverage')).toBeInTheDocument();
       expect(screen.getByTestId('patrol-recommended-next-step-action')).toHaveTextContent(
@@ -1164,20 +1165,10 @@ describe('AIIntelligence entitlement gating', () => {
       expect(findingsPanelState.latestProps).not.toBeNull();
     });
 
-    // Patrol summary verification + activity-mix copy live behind the
-    // "Show details" toggle since commit 174d2b04d. Expand the section so
-    // the deeper assertions can find the text.
-    fireEvent.click(screen.getByTestId('patrol-summary-details-toggle'));
-
-    await waitFor(() => {
-      expect(screen.getByText('No recent full patrol')).toBeInTheDocument();
-      expect(screen.getAllByText(/Last activity/i)).toHaveLength(1);
-    });
-
+    expect(screen.queryByTestId('patrol-summary-details-toggle')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('patrol-summary-details')).not.toBeInTheDocument();
+    expect(screen.queryByText('No recent full patrol')).not.toBeInTheDocument();
     expect(screen.queryByText('No issues found')).not.toBeInTheDocument();
-    expect(screen.getByTestId('patrol-summary-details')).toHaveTextContent(
-      'Run a full Patrol sweep before treating this assessment as an all-clear; recent evidence is incomplete or limited to targeted activity.',
-    );
     expect(screen.queryByText(/Last patrol/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Last:/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Partial verification')).not.toBeInTheDocument();
@@ -1185,10 +1176,10 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByText('Warnings')).not.toBeInTheDocument();
     expect(screen.queryByText('Critical')).not.toBeInTheDocument();
     expect(
-      screen.getAllByText(
+      screen.queryByText(
         'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
       ),
-    ).toHaveLength(1);
+    ).not.toBeInTheDocument();
     expect(findingsPanelState.latestProps?.nextPatrolAt).toBeUndefined();
     expect(findingsPanelState.latestProps?.lastPatrolAt).toBeUndefined();
     expect(findingsPanelState.latestProps?.lastPatrolLabel).toBeUndefined();
@@ -1335,24 +1326,10 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByText('Patrol runtime issue')).toBeInTheDocument();
+      expect(screen.getByText(/1 runtime issue · 60\/100/)).toBeInTheDocument();
     });
 
-    // "Runtime issues" and "Latest activity" both live in the collapsible
-    // Patrol summary detail section (commit 174d2b04d).
-    fireEvent.click(screen.getByTestId('patrol-summary-details-toggle'));
-
-    await waitFor(() => {
-      expect(
-        screen.getByText(
-          'Patrol has an active runtime issue: Provider billing or quota issue. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
-        ),
-      ).toBeInTheDocument();
-      expect(screen.getByText('Runtime issues')).toBeInTheDocument();
-      expect(screen.getByText('Latest activity')).toBeInTheDocument();
-    });
-
-    expect(screen.getByText(/Assessment C · 60\/100/)).toBeInTheDocument();
+    expect(screen.getByText(/1 runtime issue · 60\/100/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Patrol provider settings' })).toHaveAttribute(
       'href',
       '/settings/system-ai',
@@ -1363,8 +1340,11 @@ describe('AIIntelligence entitlement gating', () => {
     expect(assessmentShell!.className).not.toContain('rounded-md');
     expect(assessmentShell!.className).not.toContain('shadow-sm');
     expect(assessmentShell!.className).not.toContain('bg-amber-50');
+    expect(screen.queryByTestId('patrol-summary-details-toggle')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('patrol-summary-details')).not.toBeInTheDocument();
     expect(screen.queryByText('Infrastructure findings')).not.toBeInTheDocument();
     expect(screen.queryByText('Warnings')).not.toBeInTheDocument();
+    expect(screen.queryByText('Latest activity')).not.toBeInTheDocument();
     expect(screen.queryByTestId('patrol-status-bar')).not.toBeInTheDocument();
 
     expect(screen.getByRole('button', { name: 'Findings' }).textContent).toBe('Findings 1');
@@ -1379,7 +1359,24 @@ describe('AIIntelligence entitlement gating', () => {
   it('does not repeat stale coverage caveats after a successful full patrol verified resources', async () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
-    getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
+    getPatrolStatusMock.mockResolvedValue(
+      defaultPatrolStatus({
+        license_required: false,
+        trust: {
+          tracked: 3,
+          currently_active: 1,
+          resolved: 2,
+          auto_resolved: 0,
+          fix_verified: 0,
+          fix_failed: 0,
+          dismissed_as_noise: 0,
+          dismissed_as_expected: 0,
+          dismissed_as_later: 0,
+          suppressed: 0,
+          regressed_at_least_once: 2,
+        },
+      }),
+    );
     getPatrolRunHistoryMock.mockResolvedValue([
       {
         id: 'run-full-success',
@@ -1469,11 +1466,12 @@ describe('AIIntelligence entitlement gating', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/verified 58 resources/i)).toBeInTheDocument();
+      expect(screen.getByText(/1 warning · 2 regressed · 85\/100/)).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('patrol-summary-details-toggle'));
-    expect(screen.getByTestId('patrol-summary-details')).toHaveTextContent(
-      'Patrol surfaced 1 active warning finding in your infrastructure. Review the active findings for more detail.',
-    );
+    expect(screen.queryByLabelText('Patrol trust summary header')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Patrol trust summary')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('patrol-summary-details-toggle')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('patrol-summary-details')).not.toBeInTheDocument();
 
     expect(
       screen.queryByText(
@@ -1483,7 +1481,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByText(/Recent coverage is also incomplete/i)).not.toBeInTheDocument();
   });
 
-  it('surfaces the recent activity mix in the verification summary when scoped runs are creating noise', async () => {
+  it('keeps recent activity mix out of the default Patrol assessment chrome', async () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
     getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
@@ -1615,18 +1613,12 @@ describe('AIIntelligence entitlement gating', () => {
 
     render(() => <AIIntelligence />);
 
-    // "Recent activity mix" copy lives in the collapsible Patrol summary
-    // detail section (commit 174d2b04d). Expand before asserting.
     await waitFor(() => {
-      expect(screen.getByTestId('patrol-summary-details-toggle')).toBeInTheDocument();
+      expect(screen.getByText(/No issues found · 100\/100/)).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('patrol-summary-details-toggle'));
 
-    await waitFor(() => {
-      expect(
-        screen.getByText('Recent activity mix: 1 full, 1 alert-triggered, 1 anomaly-triggered'),
-      ).toBeInTheDocument();
-    });
+    expect(screen.queryByTestId('patrol-summary-details-toggle')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Recent activity mix:/)).not.toBeInTheDocument();
   });
 
   it('treats a selected zero-finding run as an empty snapshot and uses effective scope ids', async () => {
