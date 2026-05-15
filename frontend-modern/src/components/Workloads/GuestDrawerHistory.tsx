@@ -281,7 +281,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
 
   return (
     <section
-      class="min-h-[154px] rounded-sm border border-border bg-surface p-2.5"
+      class="flex min-h-[154px] flex-col rounded-sm border border-border bg-surface p-2.5"
       data-testid="guest-history-group-chart"
       data-history-group={props.group.id}
     >
@@ -316,7 +316,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         </div>
       </div>
 
-      <div class="relative h-24">
+      <div class="relative min-h-24 flex-1">
         <For each={[0, 0.5, 1]}>
           {(tick) => (
             <span

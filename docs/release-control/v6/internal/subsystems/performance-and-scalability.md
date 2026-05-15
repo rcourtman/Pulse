@@ -68,6 +68,7 @@ regression protection.
 43. `frontend-modern/src/components/Workloads/useGuestRowState.ts`
 44. `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
 45. `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`
+45. `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`
 46. `frontend-modern/src/components/Workloads/guestDrawerModel.ts`
 47. `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`
 48. `frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts`
@@ -244,6 +245,11 @@ regression protection.
 9. Format infrastructure sensor labels through the shared `frontend-modern/src/utils/textPresentation.ts` presentation helper instead of maintaining a local title-casing implementation in `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
 10. Extend workload row contract and per-row hot-path derivations through `frontend-modern/src/components/Workloads/guestRowModel.tsx` and `frontend-modern/src/components/Workloads/useGuestRowState.ts`, and extend tooltip-backed row cell presentation through `frontend-modern/src/components/Workloads/GuestRowCells.tsx`, rather than rebuilding column metadata, row identity, cell tooltips, or anomaly correlation inside `frontend-modern/src/components/Workloads/GuestRow.tsx`
 11. Extend workload drawer derivations and runtime wiring through `frontend-modern/src/components/Workloads/guestDrawerModel.ts` and `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`, and extend drawer overview rendering through `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`, rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
+    Drawer history charts belong to `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`.
+    History cards must let the plot area stretch to the card height instead of
+    pinning the SVG wrapper to a fixed short height, so guest and node drawer
+    history cards do not leave unused card space when headers have different
+    legend heights.
 12. Extend workload disk-list derivations and fallback runtime wiring through `frontend-modern/src/components/Workloads/diskListModel.ts` and `frontend-modern/src/components/Workloads/useDiskListState.ts` rather than rebuilding usage math, progress-state mapping, or tooltip fallback logic inside `frontend-modern/src/components/Workloads/DiskList.tsx`
 13. Extend workload guest metadata cache persistence, metadata refresh, org-scope switching, and optimistic custom-URL updates through `frontend-modern/src/components/Workloads/useWorkloadGuestMetadataState.ts` rather than rebuilding workload-local storage caches, event listeners, or guest metadata API wiring inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
 14. Extend workload deep-link selection and hovered-row continuity semantics through `frontend-modern/src/components/Workloads/workloadSelectionModel.ts`, and extend table scroll preservation plus reactive selection state through `frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts`, rather than rebuilding resource-query parsing, selected-row scroll pinning, or hovered-row invalidation inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`; canonical typed workload IDs such as `app-container:<host>:<provider-id>` must remain exact route/selection keys and must not be reinterpreted into synthetic node scopes

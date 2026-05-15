@@ -1071,6 +1071,9 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerHistorySource).toContain('onPointerMove={handleHoverMove}');
       expect(guestDrawerHistorySource).toContain('fallbackMetrics');
       expect(guestDrawerHistorySource).toContain('props.groups ?? GUEST_DRAWER_HISTORY_GROUPS');
+      expect(guestDrawerHistorySource).toContain('flex min-h-[154px] flex-col');
+      expect(guestDrawerHistorySource).toContain('relative min-h-24 flex-1');
+      expect(guestDrawerHistorySource).not.toContain('relative h-24');
       expect(nodeDrawerSource).toContain('NodeDrawerOverview');
       expect(nodeDrawerSource).toContain('GuestDrawerHistoryRangeSelect');
       expect(nodeDrawerSource).toContain('NODE_DRAWER_HISTORY_GROUPS');
