@@ -369,6 +369,65 @@ func TestService_ExecuteStream_Success(t *testing.T) {
 	}
 }
 
+func TestService_ExecuteStream_InteractiveChatLetsModelChooseTools(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	sawTools := false
+	provider := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			sawTools = len(req.Tools) > 0
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "Assistant is ready."},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1},
+			})
+			return nil
+		},
+	}
+
+	service := NewService(Config{
+		AIConfig:      &config.AIConfig{ControlLevel: config.ControlLevelControlled},
+		StateProvider: &mockStateProvider{},
+		AgentServer:   &mockAgentServer{},
+	})
+	service.sessions = store
+	service.provider = provider
+	service.started = true
+
+	exploreEvents := 0
+	workflowEvents := 0
+	err = service.ExecuteStream(context.Background(), ExecuteRequest{
+		SessionID: "interactive-chat-model-choice",
+		Prompt:    "test",
+	}, func(event StreamEvent) {
+		switch event.Type {
+		case "explore_status":
+			exploreEvents++
+		case "workflow_state":
+			workflowEvents++
+		}
+	})
+	if err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+	if !sawTools {
+		t.Fatal("expected interactive chat to expose governed tools and let the model choose")
+	}
+	if exploreEvents != 0 {
+		t.Fatalf("did not expect Pulse-owned explore events before model choice, got %d", exploreEvents)
+	}
+	if workflowEvents != 0 {
+		t.Fatalf("did not expect synthetic workflow events before model choice, got %d", workflowEvents)
+	}
+}
+
 func TestService_ExecuteStream_RequestAutonomousOverrideClampsToolExecutor(t *testing.T) {
 	installTestApprovalStore(t, nil)
 

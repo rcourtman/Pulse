@@ -76,7 +76,7 @@ runtime cost control, and shared AI transport surfaces.
    require an explicit `allow_broad_scope` request from a dedicated rule
    management surface.
 5. Add or change AI usage/cost dashboard presentation through `frontend-modern/src/components/AI/AICostDashboard.tsx` and `frontend-modern/src/utils/aiCostPresentation.ts`
-6. Add or change AI provider, control-level, chat/session, or explore-state presentation through `frontend-modern/src/components/AI/Chat/`, `frontend-modern/src/utils/aiProviderPresentation.ts`, `frontend-modern/src/utils/aiProviderHealthPresentation.ts`, `frontend-modern/src/utils/aiControlLevelPresentation.ts`, `frontend-modern/src/utils/aiChatPresentation.ts`, `frontend-modern/src/utils/aiSessionDiffPresentation.ts`, and `frontend-modern/src/utils/aiExplorePresentation.ts`
+6. Add or change AI provider, control-level, chat/session, or streamed-status presentation through `frontend-modern/src/components/AI/Chat/`, `frontend-modern/src/utils/aiProviderPresentation.ts`, `frontend-modern/src/utils/aiProviderHealthPresentation.ts`, `frontend-modern/src/utils/aiControlLevelPresentation.ts`, `frontend-modern/src/utils/aiChatPresentation.ts`, `frontend-modern/src/utils/aiSessionDiffPresentation.ts`, and `frontend-modern/src/utils/aiExplorePresentation.ts`
 7. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
 8. Keep assistant drawer context, session, and org-switch reset state aligned through the shared `frontend-modern/src/stores/aiChat.ts` boundary instead of letting `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, or feature callers fork their own assistant shell state
    That shared drawer ownership also covers passive resource reads while the
@@ -974,12 +974,13 @@ provider credentials or base URLs when the operator connects a provider, and
 resolved provider model returned by the canonical runtime selection path. The
 setup surface must not reintroduce vendor-default model IDs in modal payloads
 just to make the backend accept the request.
-That same provider-model contract applies to the chat explore pre-pass in
-`internal/ai/chat/service_explore.go`: any runtime model that is valid for the
-main chat execution path must resolve through the dedicated explore provider
-path as well. Retired quickstart model strings such as
-`quickstart:pulse-hosted` must fail closed and route the operator back to
-BYOK/local-provider setup instead of being accepted as managed-model runtime.
+Interactive Assistant chat must not put a Pulse-authored intent router, scout
+model, or explore pre-pass in front of the operator's selected model. The
+runtime may assemble governed context and expose the approved tool list, but
+the selected model owns the decision to answer directly, ask a question, read
+context, or request an action. Pulse enforcement starts after that model choice:
+approval mode, FSM gates, strict resource resolution, and tool policy remain
+the safety boundary.
 
 The same runtime ownership now includes the customer-facing AI usage and cost
 surface. `frontend-modern/src/components/AI/AICostDashboard.tsx` is the
@@ -999,7 +1000,7 @@ helpers used across chat, settings, and usage surfaces.
 for provider naming, provider health labels, control-level semantics,
 chat drawer title/subtitle, launcher title/aria copy, session-menu labeling,
 discovery hint framing, chat/session empty states, assistant message and
-question-card labels, session-diff badges, and explore-status labels.
+question-card labels, session-diff badges, and streamed-status labels.
 Settings and chat surfaces must consume those helpers instead of keeping local
 AI wording or model/provider inference branches.
 

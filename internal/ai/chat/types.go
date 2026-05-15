@@ -213,7 +213,7 @@ type ThinkingData struct {
 type ExploreStatusData struct {
 	Phase   string `json:"phase"`             // started | completed | failed | skipped
 	Message string `json:"message"`           // Human-readable status text for the UI
-	Model   string `json:"model,omitempty"`   // provider:model used for explore
+	Model   string `json:"model,omitempty"`   // Optional provider:model source for the status
 	Outcome string `json:"outcome,omitempty"` // success | failed | skipped_no_model | skipped_no_tools
 }
 

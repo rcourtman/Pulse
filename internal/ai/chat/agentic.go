@@ -496,9 +496,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			Str("session_id", sessionID).
 			Int("system_prompt_len", len(systemPrompt)).
 			Msg("[AgenticLoop] Calling provider.ChatStream")
-		if turn == 0 {
-			emitWorkflowState(callback, "investigate", "Inspecting infrastructure context and deciding the next step.", a.currentFSMState(), "")
-		}
 		if requestSanitizer != nil {
 			req = requestSanitizer(req)
 		}
@@ -829,7 +826,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			}
 
 			log.Debug().Msg("agentic loop complete - no tool calls")
-			emitWorkflowState(callback, "complete", "Assistant response is ready.", sessionFSMState(fsm), "")
 			resultMessages = a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
 			return resultMessages, nil
 		}

@@ -350,6 +350,11 @@ server-side update execution surfaces.
    in `deploy/helm/pulse/README.md` output must be regenerated from the same
    chart metadata and release line so published Helm docs, chart version
    badges, and packaged archive metadata all describe the identical cut.
+   Chart monitoring surfaces must only expose metrics emitted by the shipped
+   runtime. Retired Pulse Assistant explore-prepass metrics, values, schema
+   entries, README rows, and PrometheusRule templates must not remain in
+   `deploy/helm/pulse/` after interactive Assistant chat routes directly
+   through the operator-selected model.
    External helper binaries fetched by governed release workflows are part of
    the same supply-chain boundary and must be checksum-verified before they are
    executed.

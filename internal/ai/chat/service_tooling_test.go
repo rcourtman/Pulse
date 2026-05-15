@@ -119,13 +119,16 @@ func TestFilterToolsForPrompt_ReadOnlyAndSpecialty(t *testing.T) {
 		t.Fatalf("expected specialty tools to remain when no specialty keyword detected")
 	}
 
-	k8sTools := svc.filterToolsForPrompt(context.Background(), "check kubernetes pods", false, false)
-	k8sSet := toolNameSet(k8sTools)
-	if !k8sSet["pulse_kubernetes"] {
-		t.Fatalf("expected kubernetes tool to be included")
+	interactiveTools := svc.filterToolsForPrompt(context.Background(), "check kubernetes pods", false, false)
+	interactiveSet := toolNameSet(interactiveTools)
+	if !interactiveSet["pulse_kubernetes"] ||
+		!interactiveSet["pulse_storage"] ||
+		!interactiveSet["pulse_pmg"] ||
+		!interactiveSet["pulse_docker"] {
+		t.Fatalf("expected interactive chat to expose all governed tools to the selected model")
 	}
-	if k8sSet["pulse_storage"] || k8sSet["pulse_pmg"] {
-		t.Fatalf("expected non-k8s specialty tools to be excluded")
+	if !interactiveSet[pulseQuestionToolName] {
+		t.Fatalf("expected interactive chat to expose the clarification tool")
 	}
 }
 

@@ -516,24 +516,9 @@ export function useChat(options: UseChatOptions = {}) {
       );
     }
 
-    // Ensure we have a session for conversation continuity
-    // Without this, every message creates a new session and loses context
-    let currentSessionId = sessionId();
-    if (!currentSessionId) {
-      try {
-        const session = await AIChatAPI.createSession();
-        currentSessionId = session.id;
-        setSessionId(currentSessionId);
-        await notifyConversationChanged();
-        logger.debug('[useChat] Created new session', { sessionId: currentSessionId });
-      } catch (error) {
-        logger.error('[useChat] Failed to create session:', error);
-        notificationStore.error('Failed to create chat session');
-        return false;
-      }
-    }
-
-    // Add user message
+    // Echo the user's message before any network work. Cold sessions can spend
+    // noticeable time creating the server-side session; the chat surface should
+    // still feel immediate.
     const userMessage: ChatMessage = {
       id: generateId(),
       role: 'user',
@@ -542,6 +527,34 @@ export function useChat(options: UseChatOptions = {}) {
     };
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
+
+    // Ensure we have a session for conversation continuity
+    // Without this, every message creates a new session and loses context
+    let currentSessionId = sessionId();
+    if (!currentSessionId) {
+      try {
+        const session = await AIChatAPI.createSession();
+        currentSessionId = session.id;
+        setSessionId(currentSessionId);
+        void notifyConversationChanged();
+        logger.debug('[useChat] Created new session', { sessionId: currentSessionId });
+      } catch (error) {
+        logger.error('[useChat] Failed to create session:', error);
+        notificationStore.error('Failed to create chat session');
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: generateId(),
+            role: 'assistant',
+            content: 'Error: Failed to create chat session',
+            timestamp: new Date(),
+            isStreaming: false,
+          },
+        ]);
+        setIsLoading(false);
+        return false;
+      }
+    }
 
     abortControllerRef = new AbortController();
 

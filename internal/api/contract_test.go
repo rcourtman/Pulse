@@ -10173,10 +10173,10 @@ func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
 			name: "explore_status",
 			event: mustStreamEvent(t, "explore_status", chat.ExploreStatusData{
 				Phase:   "started",
-				Message: "Explore pre-pass running (read-only context).",
-				Model:   "openai:explore-fast",
+				Message: "Context status running.",
+				Model:   "openai:chat-main",
 			}),
-			want: `{"type":"explore_status","data":{"phase":"started","message":"Explore pre-pass running (read-only context).","model":"openai:explore-fast"}}`,
+			want: `{"type":"explore_status","data":{"phase":"started","message":"Context status running.","model":"openai:chat-main"}}`,
 		},
 		{
 			name: "workflow_state",

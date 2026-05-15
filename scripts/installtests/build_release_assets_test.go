@@ -633,6 +633,42 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 	}
 }
 
+func TestHelmChartDoesNotPublishRetiredExplorePrepassMonitoring(t *testing.T) {
+	chartDir := repoFile("deploy", "helm", "pulse")
+	err := filepath.WalkDir(chartDir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			return nil
+		}
+		switch filepath.Ext(path) {
+		case ".yaml", ".json", ".md":
+		default:
+			return nil
+		}
+		content, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		text := string(content)
+		for _, forbidden := range []string{
+			"prometheusRule",
+			"pulse_ai_explore",
+			"Explore pre-pass",
+			"explore_runs_total",
+		} {
+			if strings.Contains(text, forbidden) {
+				t.Fatalf("helm chart file %s must not publish retired Assistant explore-prepass monitoring %q", path, forbidden)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk helm chart: %v", err)
+	}
+}
+
 func TestDeployDemoWorkflowFailsClosedForPreviewAndVerifiesFrontendParity(t *testing.T) {
 	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "deploy-demo-server.yml"))
 	if err != nil {

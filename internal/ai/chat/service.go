@@ -750,7 +750,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			Msg("[ChatService] Set resolved context on executor")
 	}
 
-	// Shared session state for pre-pass + main loop.
+	// Shared session state for the selected model's turn.
 	sessionFSM := sessions.GetSessionFSM(session.ID)
 	ka := sessions.GetKnowledgeAccumulator(session.ID)
 
@@ -762,41 +762,6 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		log.Info().
 			Str("session_id", session.ID).
 			Msg("[ChatService] Advanced FSM to READING — prefetched mentions count as resolution")
-	}
-
-	// Explore pre-pass (interactive chat only): run a short read-only scout step
-	// and inject its findings into the main loop context.
-	if s.shouldRunExplore(autonomousMode, req.Prompt) {
-		exploreResult := s.runExplorePrepass(
-			ctx,
-			session.ID,
-			req.Prompt,
-			overrideModel,
-			selectedModel,
-			messages,
-			executor,
-			loop.provider,
-			callback,
-		)
-		if exploreResult.Summary != "" {
-			injectExploreSummaryIntoLatestUserMessage(messages, exploreResult.Summary, exploreResult.Model)
-			log.Info().
-				Str("session_id", session.ID).
-				Str("outcome", exploreResult.Outcome).
-				Str("model", exploreResult.Model).
-				Int("summary_len", len(exploreResult.Summary)).
-				Int("input_tokens", exploreResult.InputTokens).
-				Int("output_tokens", exploreResult.OutputTokens).
-				Dur("duration", exploreResult.Duration).
-				Msg("[ChatService] Explore pre-pass completed")
-		} else {
-			log.Debug().
-				Str("session_id", session.ID).
-				Str("outcome", exploreResult.Outcome).
-				Str("model", exploreResult.Model).
-				Dur("duration", exploreResult.Duration).
-				Msg("[ChatService] Explore pre-pass skipped or produced no summary")
-		}
 	}
 
 	// Run agentic loop
@@ -2969,17 +2934,19 @@ func (s *Service) filterToolsForPrompt(ctx context.Context, prompt string, auton
 		return filtered
 	}
 
-	// Filter out write/control tools when the user's request is read-only.
-	// This prevents models from calling pulse_control (restart, stop, etc.) when
-	// the user only asked for status, logs, or monitoring information.
-	//
-	// The tool set is determined once per user message and stays consistent for
-	// the entire agentic loop. This avoids the old problem of tools appearing/
-	// disappearing mid-conversation (which caused hallucinated tool names).
-	//
-	// Keep write-intent gating only for autonomous runs where commands execute
-	// without approval. In interactive chat, always include write tools; safety
-	// is enforced by approval flow, FSM gates, and tool-level policy checks.
+	if !autonomousMode {
+		tools := append([]providers.Tool{}, providerTools...)
+		tools = append(tools, userQuestionTool())
+		log.Debug().
+			Int("total_tools", len(providerTools)).
+			Int("filtered_tools", len(tools)).
+			Msg("[filterToolsForPrompt] Exposing governed interactive chat tools")
+		return tools
+	}
+
+	// Keep write-intent gating for autonomous runs where commands execute
+	// without approval. Interactive chat does not use prompt-owned routing:
+	// the selected model sees the governed tools and chooses what to call.
 	readOnly := autonomousMode && !hasWriteIntent(convertPromptToMessages(prompt))
 
 	// Determine which specialty tools are relevant based on prompt keywords.

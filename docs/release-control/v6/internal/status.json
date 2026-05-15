@@ -2043,11 +2043,6 @@
         },
         {
           "repo": "pulse",
-          "path": "internal/ai/chat/service_explore_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
           "path": "internal/api/contract_test.go",
           "kind": "file"
         },
@@ -2854,6 +2849,87 @@
         {
           "repo": "pulse",
           "path": "frontend-modern/src/utils/patrolPagePresentation.ts",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "RA29",
+      "summary": "Interactive Pulse Assistant chat behaves like a governed LLM tool surface, not a Pulse-authored intent router: the operator's selected model receives the user turn and the governed tools, decides whether tools are needed, and Pulse only enforces approvals, resource resolution, FSM gates, and tool policy after that model choice. The chat surface must echo user messages before network/session creation finishes and must not emit Pulse-owned explore or synthetic investigating workflow events before the model acts.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L6"
+      ],
+      "subsystem_ids": [
+        "ai-runtime"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "assistant-chat-model-owned-routing-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/ai/chat",
+            "-run",
+            "TestService_ExecuteStream_InteractiveChatLetsModelChooseTools|TestFilterToolsForPrompt_ReadOnlyAndSpecialty|TestAgenticLoop",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "assistant-chat-optimistic-echo-tests",
+          "run": [
+            "npm",
+            "--prefix",
+            "frontend-modern",
+            "test",
+            "--",
+            "--run",
+            "src/components/AI/Chat/__tests__/useChat.test.ts"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/status.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/AI/Chat/__tests__/useChat.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/AI/Chat/hooks/useChat.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/chat/agentic.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/chat/service.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/chat/service_execute_additional_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/chat/service_tooling_test.go",
           "kind": "file"
         }
       ]

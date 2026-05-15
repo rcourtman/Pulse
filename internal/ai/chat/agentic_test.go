@@ -98,13 +98,11 @@ func TestAgenticLoop(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, results, 1)
 		assert.Equal(t, "Hi there!", results[0].Content)
-		require.Len(t, events, 3)
-		assert.Equal(t, "workflow_state", events[0].Type)
-		assert.Equal(t, "content", events[1].Type)
-		assert.Equal(t, "workflow_state", events[2].Type)
+		require.Len(t, events, 1)
+		assert.Equal(t, "content", events[0].Type)
 
 		var eventContent ContentData
-		_ = json.Unmarshal(events[1].Data, &eventContent)
+		_ = json.Unmarshal(events[0].Data, &eventContent)
 		assert.Equal(t, "Hi there!", eventContent.Text)
 	})
 

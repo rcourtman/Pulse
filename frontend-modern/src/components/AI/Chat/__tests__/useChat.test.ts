@@ -141,6 +141,32 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('echoes the user message before cold-session creation finishes', async () => {
+      let resolveSession!: (value: { id: string }) => void;
+      mockCreateSession.mockReturnValue(
+        new Promise((resolve) => {
+          resolveSession = resolve;
+        }),
+      );
+      mockChat.mockResolvedValue(undefined);
+
+      const { value: chat, dispose } = withRoot(() => useChat());
+      const result = chat.sendMessage('test');
+
+      expect(chat.isLoading()).toBe(true);
+      expect(chat.messages()).toHaveLength(1);
+      expect(chat.messages()[0]).toMatchObject({ role: 'user', content: 'test' });
+      expect(mockChat).not.toHaveBeenCalled();
+
+      resolveSession({ id: 'new-sess' });
+      await result;
+
+      expect(chat.sessionId()).toBe('new-sess');
+      expect(chat.messages()).toHaveLength(2);
+      expect(chat.messages()[1].role).toBe('assistant');
+      dispose();
+    });
+
     it('reuses existing session', async () => {
       mockChat.mockResolvedValue(undefined);
 
@@ -161,7 +187,14 @@ describe('useChat', () => {
 
       expect(result).toBe(false);
       expect(mockNotifyError).toHaveBeenCalledWith('Failed to create chat session');
-      expect(chat.messages()).toHaveLength(0);
+      expect(chat.messages()).toHaveLength(2);
+      expect(chat.messages()[0]).toMatchObject({ role: 'user', content: 'hello' });
+      expect(chat.messages()[1]).toMatchObject({
+        role: 'assistant',
+        content: 'Error: Failed to create chat session',
+        isStreaming: false,
+      });
+      expect(chat.isLoading()).toBe(false);
       dispose();
     });
 
