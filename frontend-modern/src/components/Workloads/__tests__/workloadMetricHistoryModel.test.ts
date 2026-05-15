@@ -10,7 +10,10 @@ import {
   getMetricSparklineSeriesFromChartData,
   getNodeChartKeyCandidates,
   getWorkloadChartKeyCandidates,
+  isWorkloadTableMetricHistoryRange,
   normalizeWorkloadChartKey,
+  WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE,
+  WORKLOAD_TABLE_HISTORY_RANGES,
 } from '../workloadMetricHistoryModel';
 
 describe('workloadMetricHistoryModel', () => {
@@ -18,6 +21,13 @@ describe('workloadMetricHistoryModel', () => {
     expect(normalizeWorkloadChartKey('pve-101')).toBe('pve:pve:101');
     expect(normalizeWorkloadChartKey('cluster-a-pve-101')).toBe('cluster-a:pve:101');
     expect(normalizeWorkloadChartKey('cluster-a:pve:101')).toBe('cluster-a:pve:101');
+  });
+
+  it('keeps table sparkline history ranges bounded to dense table windows', () => {
+    expect(WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE).toBe('1h');
+    expect(WORKLOAD_TABLE_HISTORY_RANGES).toEqual(['1h', '12h', '24h', '7d']);
+    expect(isWorkloadTableMetricHistoryRange('12h')).toBe(true);
+    expect(isWorkloadTableMetricHistoryRange('30d')).toBe(false);
   });
 
   it('builds workload chart lookup candidates around canonical identity', () => {

@@ -1,9 +1,10 @@
-import type { ChartData, MetricPoint } from '@/api/charts';
+import type { ChartData, MetricPoint, TimeRange } from '@/api/charts';
 import type { Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
 
 export type WorkloadTableMetric = 'cpu' | 'memory' | 'disk' | 'netIo' | 'diskIo';
+export type WorkloadTableMetricHistoryRange = Extract<TimeRange, '1h' | '12h' | '24h' | '7d'>;
 
 export interface WorkloadMetricSparklineSeries {
   id: string;
@@ -33,7 +34,21 @@ const NET_OUT_COLOR = '#fb923c';
 const DISK_READ_COLOR = '#3b82f6';
 const DISK_WRITE_COLOR = '#f59e0b';
 
-export const WORKLOAD_TABLE_HISTORY_RANGE = '1h' as const;
+export const WORKLOAD_TABLE_HISTORY_RANGES: WorkloadTableMetricHistoryRange[] = [
+  '1h',
+  '12h',
+  '24h',
+  '7d',
+];
+export const WORKLOAD_TABLE_HISTORY_RANGE_LABELS: Record<WorkloadTableMetricHistoryRange, string> =
+  {
+    '1h': '1h',
+    '12h': '12h',
+    '24h': '24h',
+    '7d': '7d',
+  };
+export const WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE: WorkloadTableMetricHistoryRange = '1h';
+export const WORKLOAD_TABLE_HISTORY_RANGE = WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE;
 export const WORKLOAD_TABLE_HISTORY_MAX_POINTS = 72;
 export const WORKLOAD_TABLE_HISTORY_POLL_MS = 30_000;
 
@@ -46,6 +61,11 @@ export const WORKLOAD_TABLE_HISTORY_INFRA_METRICS = [
   'netin',
   'netout',
 ] as const;
+
+export const isWorkloadTableMetricHistoryRange = (
+  value: string,
+): value is WorkloadTableMetricHistoryRange =>
+  (WORKLOAD_TABLE_HISTORY_RANGES as readonly string[]).includes(value);
 
 const clampPercent = (value: number): number => {
   if (!Number.isFinite(value)) return 0;

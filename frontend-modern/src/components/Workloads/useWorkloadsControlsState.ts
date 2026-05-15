@@ -25,6 +25,11 @@ import {
   type WorkloadsSortKey,
   type WorkloadsStatusMode,
 } from './workloadsFilterModel';
+import {
+  isWorkloadTableMetricHistoryRange,
+  WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE,
+  type WorkloadTableMetricHistoryRange,
+} from './workloadMetricHistoryModel';
 
 interface WorkloadsControlsStateOptions {
   forcedGroupingMode?: WorkloadsGroupingMode;
@@ -82,6 +87,15 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
       {
         deserialize: (raw) =>
           raw === 'bars' || raw === 'sparklines' ? raw : DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
+      },
+    );
+  const [workloadMetricHistoryRange, setWorkloadMetricHistoryRange] =
+    usePersistentSignal<WorkloadTableMetricHistoryRange>(
+      STORAGE_KEYS.WORKLOADS_METRIC_HISTORY_RANGE,
+      WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE,
+      {
+        deserialize: (raw) =>
+          isWorkloadTableMetricHistoryRange(raw) ? raw : WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE,
       },
     );
 
@@ -219,12 +233,14 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     statusMode,
     totalColumns,
     visibleColumns,
+    workloadMetricHistoryRange,
     workloadMetricDisplayMode,
     workloadTableVisibleColumnIds,
     workloadTableVisibleColumns,
     workloadsSummaryCollapsed,
     workloadsSummaryRange,
     workloadTableLayoutMode,
+    setWorkloadMetricHistoryRange,
     setWorkloadMetricDisplayMode,
     setWorkloadsSummaryCollapsed,
     setWorkloadsSummaryRange,

@@ -187,6 +187,7 @@ export const STORAGE_KEYS = {
   WORKLOADS_SUMMARY_RANGE: 'workloadsSummaryRange',
   WORKLOADS_SUMMARY_COLLAPSED: 'workloadsSummaryCollapsed',
   WORKLOADS_METRIC_DISPLAY_MODE: 'workloadsMetricDisplayMode',
+  WORKLOADS_METRIC_HISTORY_RANGE: 'workloadsMetricHistoryRange',
   INFRASTRUCTURE_SUMMARY_RANGE: 'infrastructureSummaryRange',
   INFRASTRUCTURE_SUMMARY_COLLAPSED: 'infrastructureSummaryCollapsed',
 

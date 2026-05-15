@@ -1,6 +1,11 @@
 import type { WorkloadGuest } from '@/types/workloads';
-import type { HistoryTimeRange, ResourceType as HistoryResourceType } from '@/api/charts';
+import type {
+  AggregatedMetricPoint,
+  HistoryTimeRange,
+  ResourceType as HistoryResourceType,
+} from '@/api/charts';
 
+import { formatHistoryChartTooltipValue } from '@/components/shared/historyChartModel';
 import { formatBytes } from '@/utils/format';
 import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
 
@@ -27,6 +32,18 @@ export interface GuestDrawerHistoryChartConfig {
   color: string;
 }
 
+export interface GuestDrawerHistoryGroupConfig {
+  id: string;
+  label: string;
+  unit: string;
+  series: GuestDrawerHistoryChartConfig[];
+}
+
+export interface GuestDrawerHistoryScale {
+  minValue: number;
+  maxValue: number;
+}
+
 export interface GuestDrawerBackupPresentation {
   ageClass: string;
   ageLabel: string;
@@ -37,15 +54,133 @@ export const isGuestDrawerVM = (guest: Guest): boolean => resolveWorkloadType(gu
 
 export const GUEST_DRAWER_HISTORY_DEFAULT_RANGE: HistoryTimeRange = '24h';
 
-export const GUEST_DRAWER_HISTORY_CHARTS: GuestDrawerHistoryChartConfig[] = [
-  { metric: 'cpu', label: 'CPU', unit: '%', color: '#8b5cf6' },
-  { metric: 'memory', label: 'Memory', unit: '%', color: '#f59e0b' },
-  { metric: 'disk', label: 'Disk', unit: '%', color: '#10b981' },
-  { metric: 'netin', label: 'Network In', unit: 'B/s', color: '#10b981' },
-  { metric: 'netout', label: 'Network Out', unit: 'B/s', color: '#fb923c' },
-  { metric: 'diskread', label: 'Disk Read', unit: 'B/s', color: '#3b82f6' },
-  { metric: 'diskwrite', label: 'Disk Write', unit: 'B/s', color: '#f59e0b' },
+export const GUEST_DRAWER_HISTORY_GROUPS: GuestDrawerHistoryGroupConfig[] = [
+  {
+    id: 'utilization',
+    label: 'Utilization',
+    unit: '%',
+    series: [
+      { metric: 'cpu', label: 'CPU', unit: '%', color: '#8b5cf6' },
+      { metric: 'memory', label: 'Memory', unit: '%', color: '#f59e0b' },
+      { metric: 'disk', label: 'Disk', unit: '%', color: '#10b981' },
+    ],
+  },
+  {
+    id: 'network',
+    label: 'Network I/O',
+    unit: 'B/s',
+    series: [
+      { metric: 'netin', label: 'In', unit: 'B/s', color: '#10b981' },
+      { metric: 'netout', label: 'Out', unit: 'B/s', color: '#fb923c' },
+    ],
+  },
+  {
+    id: 'disk-io',
+    label: 'Disk I/O',
+    unit: 'B/s',
+    series: [
+      { metric: 'diskread', label: 'Read', unit: 'B/s', color: '#3b82f6' },
+      { metric: 'diskwrite', label: 'Write', unit: 'B/s', color: '#f59e0b' },
+    ],
+  },
 ];
+
+const clampHistoryPointValue = (value: number, unit: string): number => {
+  if (!Number.isFinite(value)) return 0;
+  const nonNegative = Math.max(0, value);
+  return unit === '%' ? Math.min(100, nonNegative) : nonNegative;
+};
+
+export const normalizeGuestDrawerHistoryPoints = (
+  points: AggregatedMetricPoint[] | undefined,
+  unit: string,
+): AggregatedMetricPoint[] =>
+  (points ?? [])
+    .filter((point) => Number.isFinite(point.timestamp) && Number.isFinite(point.value))
+    .map((point) => {
+      const value = clampHistoryPointValue(point.value, unit);
+      return {
+        ...point,
+        value,
+        min:
+          typeof point.min === 'number' && Number.isFinite(point.min)
+            ? clampHistoryPointValue(point.min, unit)
+            : value,
+        max:
+          typeof point.max === 'number' && Number.isFinite(point.max)
+            ? clampHistoryPointValue(point.max, unit)
+            : value,
+      };
+    })
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+export const getGuestDrawerHistoryScale = (
+  series: readonly { points: readonly AggregatedMetricPoint[] }[],
+  unit: string,
+): GuestDrawerHistoryScale => {
+  if (unit === '%') return { minValue: 0, maxValue: 100 };
+
+  let maxValue = 0;
+  for (const item of series) {
+    for (const point of item.points) {
+      const value = typeof point.max === 'number' ? point.max : point.value;
+      if (Number.isFinite(value) && value > maxValue) {
+        maxValue = value;
+      }
+    }
+  }
+
+  return { minValue: 0, maxValue: Math.max(1, maxValue * 1.15) };
+};
+
+export const buildGuestDrawerHistoryPath = (
+  points: readonly AggregatedMetricPoint[],
+  scale: GuestDrawerHistoryScale,
+  startTime: number,
+  endTime: number,
+  width = 360,
+  height = 92,
+): string => {
+  if (points.length < 2) return '';
+
+  const left = 34;
+  const right = 8;
+  const top = 8;
+  const bottom = 18;
+  const plotWidth = width - left - right;
+  const plotHeight = height - top - bottom;
+  const timeSpan = Math.max(1, endTime - startTime);
+  const valueSpan = Math.max(1, scale.maxValue - scale.minValue);
+
+  return points
+    .map((point, index) => {
+      const x = left + ((point.timestamp - startTime) / timeSpan) * plotWidth;
+      const bounded = Math.min(Math.max(point.value, scale.minValue), scale.maxValue);
+      const y = top + (1 - (bounded - scale.minValue) / valueSpan) * plotHeight;
+      return `${index === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(' ');
+};
+
+export const getGuestDrawerHistoryValueLabel = (
+  points: readonly AggregatedMetricPoint[],
+  unit: string,
+): string => {
+  const latest = points[points.length - 1];
+  if (!latest) return '-';
+  return formatHistoryChartTooltipValue(latest.value, unit);
+};
+
+export const getGuestDrawerHistoryRangeBounds = (
+  groupedSeries: readonly { points: readonly AggregatedMetricPoint[] }[],
+): { startTime: number; endTime: number } | null => {
+  const timestamps = groupedSeries.flatMap((item) => item.points.map((point) => point.timestamp));
+  if (timestamps.length === 0) return null;
+  return {
+    startTime: Math.min(...timestamps),
+    endTime: Math.max(...timestamps),
+  };
+};
 
 export const getGuestDrawerHistoryTarget = (guest: Guest): GuestDrawerHistoryTarget | null => {
   const resourceId = getCanonicalWorkloadId(guest).trim();

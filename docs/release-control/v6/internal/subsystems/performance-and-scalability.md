@@ -549,9 +549,14 @@ The Workloads table metric display mode is part of the protected Workloads
 hot path. The default bar mode must keep the existing zero-extra-history cost;
 the sparkline mode may hydrate a short shared history window only when selected
 and must reuse `fetchWorkloadsSummaryAndCache` /
-`fetchInfrastructureSummaryAndCache` instead of adding row-local polling.
-Expanded history belongs in the existing guest drawer chart surface, where
-longer-range reads stay demand-driven and scoped to the selected workload.
+`fetchInfrastructureSummaryAndCache` instead of adding row-local polling. Its
+range control is part of the same hot-path state owner: bar mode must not start
+history fetches, and sparkline ranges must stay bounded to the governed compact
+table windows. Expanded history belongs in the existing guest drawer chart
+surface, where longer-range reads stay demand-driven and scoped to the selected
+workload. The drawer history view must preserve visual density by grouping
+related series into utilization, network I/O, and disk I/O charts rather than
+repeating one chart frame per metric.
 
 The investigation enrichment path in `MaybeInvestigateFinding`
 adds at most one operator-state projection lookup per investigation

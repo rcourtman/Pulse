@@ -8,6 +8,7 @@ import workloadsStateCardsSource from '../WorkloadsStateCards.tsx?raw';
 import workloadsStatsStripSource from '../WorkloadsStatsStrip.tsx?raw';
 import workloadsFilterSource from '../WorkloadsFilter.tsx?raw';
 import workloadsWorkloadTableSource from '../WorkloadsTable.tsx?raw';
+import metricDisplayModeSegmentedControlSource from '../MetricDisplayModeSegmentedControl.tsx?raw';
 import workloadPanelSource from '../WorkloadPanel.tsx?raw';
 import workloadTableHeaderSource from '../WorkloadTableHeader.tsx?raw';
 import workloadsFilterModelSource from '../workloadsFilterModel.ts?raw';
@@ -25,6 +26,7 @@ import workloadsWorkloadViewportSyncSource from '../useWorkloadViewportSync.ts?r
 import workloadsWorkloadRouteStateSource from '../useWorkloadRouteState.ts?raw';
 import workloadsWorkloadUrlSyncSource from '../useWorkloadUrlSync.ts?raw';
 import workloadsStateSource from '../useWorkloadsState.ts?raw';
+import workloadTableMetricHistoryStateSource from '../useWorkloadTableMetricHistory.ts?raw';
 import workloadInventorySourceIssuesSource from '../workloadInventorySourceIssues.ts?raw';
 import groupedTableWindowingSource from '../useGroupedTableWindowing.ts?raw';
 import thresholdSliderSource from '../ThresholdSlider.tsx?raw';
@@ -811,6 +813,7 @@ describe('Workloads performance contract', () => {
       expect(workloadsControlsStateSource).toContain('useBreakpoint');
       expect(workloadsControlsStateSource).toContain('useColumnVisibility');
       expect(workloadsControlsStateSource).toContain('usePersistentSignal');
+      expect(workloadsControlsStateSource).toContain('WORKLOADS_METRIC_HISTORY_RANGE');
       expect(workloadsControlsStateSource).toContain('blurFocusedTypeToSearch');
       expect(workloadsControlsStateSource).toContain('DEFAULT_WORKLOADS_SORT_KEY');
       expect(workloadsWorkloadDerivedStateSource).toContain('groupWorkloads(');
@@ -889,6 +892,11 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadTableSource).toContain('data-testid="workloads-table-surface"');
       expect(workloadsWorkloadTableSource).toContain('TableCard');
       expect(workloadsWorkloadTableSource).toContain('TableCardHeader');
+      expect(workloadsWorkloadTableSource).toContain('workloadMetricHistoryRange');
+      expect(metricDisplayModeSegmentedControlSource).toContain(
+        'WORKLOAD_TABLE_HISTORY_RANGES.map',
+      );
+      expect(metricDisplayModeSegmentedControlSource).toContain('aria-label="Sparkline range"');
       expect(workloadsWorkloadTableSource).toContain('showClearSelection');
       expect(workloadsWorkloadTableSource).toContain('clearPinnedSummaryScope');
       expect(workloadsFilterSource).not.toContain('const [filtersOpen, setFiltersOpen] =');
@@ -905,6 +913,13 @@ describe('Workloads performance contract', () => {
       expect(workloadsFilterModelSource).toContain('utilityActions?: JSX.Element;');
       expect(workloadsFilterModelSource).toContain('mobileTrailing?: JSX.Element;');
       expect(workloadsStateSource).toContain('useWorkloadRouteState');
+      expect(workloadsStateSource).toContain('range: workloadMetricHistoryRange');
+      expect(workloadTableMetricHistoryStateSource).toContain(
+        'fetchWorkloadsSummaryAndCache(parsed.range',
+      );
+      expect(workloadTableMetricHistoryStateSource).toContain(
+        'fetchInfrastructureSummaryAndCache(parsed.range',
+      );
       expect(workloadsStateSource).toContain('filterWorkloads(params)');
       expect(workloadsStateSource).not.toContain('const containerRuntimeFilterConfig = createMemo');
       expect(workloadsStateSource).not.toContain('useGroupedTableWindowing');

@@ -165,11 +165,13 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
             windowedGroupedGuests={state.windowedGroupedGuests}
             workloadIOEmphasis={state.workloadIOEmphasis}
             workloadMetricDisplayMode={state.workloadMetricDisplayMode}
+            workloadMetricHistoryRange={state.workloadMetricHistoryRange}
             workloadMetricHistory={state.workloadMetricHistory}
             workloadTableLayoutMode={state.workloadTableLayoutMode}
             workloadTableVisibleColumnIds={state.workloadTableVisibleColumnIds}
             workloadTableVisibleColumns={state.workloadTableVisibleColumns}
             setWorkloadMetricDisplayMode={state.setWorkloadMetricDisplayMode}
+            setWorkloadMetricHistoryRange={state.setWorkloadMetricHistoryRange}
           />
         </Show>
         <Show

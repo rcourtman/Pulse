@@ -51,11 +51,13 @@ type WorkloadsTableProps = Pick<
   | 'windowedGroupedGuests'
   | 'workloadIOEmphasis'
   | 'workloadMetricDisplayMode'
+  | 'workloadMetricHistoryRange'
   | 'workloadMetricHistory'
   | 'workloadTableLayoutMode'
   | 'workloadTableVisibleColumnIds'
   | 'workloadTableVisibleColumns'
   | 'setWorkloadMetricDisplayMode'
+  | 'setWorkloadMetricHistoryRange'
 >;
 
 export function WorkloadsTable(props: WorkloadsTableProps) {
@@ -76,6 +78,8 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             <MetricDisplayModeSegmentedControl
               value={props.workloadMetricDisplayMode()}
               onChange={props.setWorkloadMetricDisplayMode}
+              range={props.workloadMetricHistoryRange()}
+              onRangeChange={props.setWorkloadMetricHistoryRange}
             />
           }
           showClearAction={showClearSelection()}

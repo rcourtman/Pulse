@@ -169,9 +169,11 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     workloadTableVisibleColumns,
     workloadTableLayoutMode,
     workloadMetricDisplayMode,
+    workloadMetricHistoryRange,
     workloadsSummaryCollapsed,
     workloadsSummaryRange,
     setWorkloadMetricDisplayMode,
+    setWorkloadMetricHistoryRange,
     setWorkloadsSummaryCollapsed,
     setWorkloadsSummaryRange,
   } = useWorkloadsControlsState({
@@ -214,6 +216,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   );
   const workloadMetricHistory = useWorkloadTableMetricHistory({
     enabled: () => workloadMetricDisplayMode() === 'sparklines',
+    range: workloadMetricHistoryRange,
     selectedNode,
   });
   const hasWorkloadsData = createMemo(() => allGuests().length > 0);
@@ -434,6 +437,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     setTableWrapperRef,
     setViewMode,
     setWorkloadMetricDisplayMode,
+    setWorkloadMetricHistoryRange,
     setWorkloadsSummaryCollapsed,
     setWorkloadsSummaryRange,
     shouldShowJumpToActiveWorkloadRow,
@@ -450,6 +454,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     visibleGroupKeys,
     windowedGroupedGuests,
     workloadIOEmphasis,
+    workloadMetricHistoryRange,
     workloadMetricDisplayMode,
     workloadMetricHistory,
     workloadTableVisibleColumnIds,

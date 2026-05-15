@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@solidjs/testing-library';
+import { render, screen, fireEvent, cleanup, waitFor } from '@solidjs/testing-library';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Memory, Disk, GuestNetworkInterface } from '@/types/api';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
@@ -7,9 +7,28 @@ import { getCanonicalWorkloadId } from '@/utils/workloads';
 // ── Mocks ──────────────────────────────────────────────────────────────
 
 const mockNavigate = vi.fn();
+const chartsApiMocks = vi.hoisted(() => ({
+  getMetricsHistory: vi.fn(),
+}));
 
 vi.mock('@solidjs/router', () => ({
   useNavigate: () => mockNavigate,
+}));
+
+vi.mock('@/api/charts', async () => {
+  const actual = await vi.importActual<typeof import('@/api/charts')>('@/api/charts');
+  return {
+    ...actual,
+    ChartsAPI: {
+      getMetricsHistory: chartsApiMocks.getMetricsHistory,
+    },
+  };
+});
+
+vi.mock('@/stores/license', () => ({
+  isRangeLocked: () => false,
+  loadRuntimeCapabilities: vi.fn(),
+  maxHistoryDays: () => 90,
 }));
 
 vi.mock('./DiskList', () => ({
@@ -47,26 +66,6 @@ vi.mock('@/components/shared/WebInterfaceUrlField', () => ({
   ),
 }));
 
-vi.mock('@/components/shared/HistoryChart', () => ({
-  HistoryChart: (props: {
-    resourceType: string;
-    resourceId: string;
-    metric: string;
-    label?: string;
-    range?: string;
-  }) => (
-    <div
-      data-testid="history-chart"
-      data-resource-type={props.resourceType}
-      data-resource-id={props.resourceId}
-      data-metric={props.metric}
-      data-range={props.range}
-    >
-      {props.label}
-    </div>
-  ),
-}));
-
 // After mocks, import the component under test
 import { GuestDrawer } from './GuestDrawer';
 
@@ -99,6 +98,32 @@ function makeGuest(overrides: Partial<WorkloadGuest> = {}): WorkloadGuest {
     ...overrides,
   } as WorkloadGuest;
 }
+
+const makeHistoryPoints = (base: number) => [
+  { timestamp: 1, value: base, min: base, max: base },
+  { timestamp: 2, value: base + 5, min: base + 5, max: base + 5 },
+  { timestamp: 3, value: base + 10, min: base + 10, max: base + 10 },
+];
+
+beforeEach(() => {
+  chartsApiMocks.getMetricsHistory.mockResolvedValue({
+    resourceType: 'vm',
+    resourceId: 'inst1:node1:100',
+    range: '24h',
+    start: 1,
+    end: 3,
+    metrics: {
+      cpu: makeHistoryPoints(10),
+      memory: makeHistoryPoints(20),
+      disk: makeHistoryPoints(30),
+      netin: makeHistoryPoints(1000),
+      netout: makeHistoryPoints(2000),
+      diskread: makeHistoryPoints(3000),
+      diskwrite: makeHistoryPoints(4000),
+    },
+    source: 'store',
+  });
+});
 
 afterEach(() => {
   cleanup();
@@ -157,16 +182,27 @@ describe('GuestDrawer', () => {
 
     it('renders persistent metric charts on the History tab', async () => {
       render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
-      expect(screen.queryByTestId('history-chart')).toBeNull();
+      expect(screen.queryByTestId('guest-history-group-chart')).toBeNull();
 
       await fireEvent.click(screen.getByText('History'));
 
-      const charts = screen.getAllByTestId('history-chart');
-      expect(charts).toHaveLength(7);
-      expect(charts[0].dataset.resourceType).toBe('vm');
-      expect(charts[0].dataset.resourceId).toBe('inst1:node1:100');
-      expect(charts[0].dataset.metric).toBe('cpu');
-      expect(charts[0].dataset.range).toBe('24h');
+      await waitFor(() => {
+        expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledWith(
+          expect.objectContaining({
+            resourceType: 'vm',
+            resourceId: 'inst1:node1:100',
+            range: '24h',
+          }),
+        );
+      });
+      const charts = screen.getAllByTestId('guest-history-group-chart');
+      expect(charts).toHaveLength(3);
+      expect(charts[0].dataset.historyGroup).toBe('utilization');
+      expect(charts[1].dataset.historyGroup).toBe('network');
+      expect(charts[2].dataset.historyGroup).toBe('disk-io');
+      expect(screen.getByText('Utilization')).toBeInTheDocument();
+      expect(screen.getByText('Network I/O')).toBeInTheDocument();
+      expect(screen.getByText('Disk I/O')).toBeInTheDocument();
     });
 
     it('switches back to Overview tab', async () => {

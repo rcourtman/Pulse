@@ -18,13 +18,14 @@ import {
   WORKLOAD_TABLE_HISTORY_INFRA_METRICS,
   WORKLOAD_TABLE_HISTORY_MAX_POINTS,
   WORKLOAD_TABLE_HISTORY_POLL_MS,
-  WORKLOAD_TABLE_HISTORY_RANGE,
   type WorkloadMetricHistoryReader,
+  type WorkloadTableMetricHistoryRange,
   type WorkloadTableMetric,
 } from './workloadMetricHistoryModel';
 
 interface WorkloadTableMetricHistoryOptions {
   enabled: Accessor<boolean>;
+  range: Accessor<WorkloadTableMetricHistoryRange>;
   selectedNode: Accessor<string | null | undefined>;
 }
 
@@ -42,6 +43,15 @@ const EMPTY_INFRASTRUCTURE_CHARTS_RESPONSE: InfrastructureSummaryFetchResult = {
 };
 
 const normalizeNodeScope = (value: string | null | undefined): string => value?.trim() ?? '';
+const buildHistoryScope = (range: WorkloadTableMetricHistoryRange, nodeScope = ''): string =>
+  `${range}::${nodeScope || '__all__'}`;
+const parseHistoryScope = (scope: string) => {
+  const [range, nodeScope = '__all__'] = scope.split('::');
+  return {
+    range: range as WorkloadTableMetricHistoryRange,
+    nodeScope,
+  };
+};
 
 export function useWorkloadTableMetricHistory(
   options: WorkloadTableMetricHistoryOptions,
@@ -49,32 +59,38 @@ export function useWorkloadTableMetricHistory(
   const selectedNodeScope = createMemo(() => normalizeNodeScope(options.selectedNode()));
   const workloadHistoryScope = createMemo(() => {
     if (!options.enabled()) return null;
-    return selectedNodeScope() || '__all__';
+    return buildHistoryScope(options.range(), selectedNodeScope());
   });
-  const infrastructureHistoryScope = createMemo(() => (options.enabled() ? '__all__' : null));
+  const infrastructureHistoryScope = createMemo(() =>
+    options.enabled() ? buildHistoryScope(options.range()) : null,
+  );
 
   const workloadHistory = createNonSuspendingQuery<WorkloadChartsResponse, string>({
     source: workloadHistoryScope,
-    fetcher: (scope) =>
-      fetchWorkloadsSummaryAndCache(WORKLOAD_TABLE_HISTORY_RANGE, {
+    fetcher: (scope) => {
+      const parsed = parseHistoryScope(scope);
+      return fetchWorkloadsSummaryAndCache(parsed.range, {
         caller: 'WorkloadTableMetricHistory',
         maxPoints: WORKLOAD_TABLE_HISTORY_MAX_POINTS,
-        nodeId: scope === '__all__' ? null : scope,
-      }),
+        nodeId: parsed.nodeScope === '__all__' ? null : parsed.nodeScope,
+      });
+    },
     initialValue: EMPTY_WORKLOAD_CHARTS_RESPONSE,
-    cacheKey: (scope) => `workload-table-history:${WORKLOAD_TABLE_HISTORY_RANGE}:${scope}`,
+    cacheKey: (scope) => `workload-table-history:${scope}`,
     pollMs: WORKLOAD_TABLE_HISTORY_POLL_MS,
   });
 
   const infrastructureHistory = createNonSuspendingQuery<InfrastructureSummaryFetchResult, string>({
     source: infrastructureHistoryScope,
-    fetcher: () =>
-      fetchInfrastructureSummaryAndCache(WORKLOAD_TABLE_HISTORY_RANGE, {
+    fetcher: (scope) => {
+      const parsed = parseHistoryScope(scope);
+      return fetchInfrastructureSummaryAndCache(parsed.range, {
         caller: 'WorkloadTableMetricHistory',
         metrics: WORKLOAD_TABLE_HISTORY_INFRA_METRICS,
-      }),
+      });
+    },
     initialValue: EMPTY_INFRASTRUCTURE_CHARTS_RESPONSE,
-    cacheKey: (scope) => `workload-table-infra-history:${WORKLOAD_TABLE_HISTORY_RANGE}:${scope}`,
+    cacheKey: (scope) => `workload-table-infra-history:${scope}`,
     pollMs: WORKLOAD_TABLE_HISTORY_POLL_MS,
   });
 
