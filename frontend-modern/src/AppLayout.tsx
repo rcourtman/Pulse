@@ -10,7 +10,12 @@ import SettingsIcon from 'lucide-solid/icons/settings';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
+import ContainerIcon from 'lucide-solid/icons/container';
+import ShipWheelIcon from 'lucide-solid/icons/ship-wheel';
+import DatabaseIcon from 'lucide-solid/icons/database';
+import CpuIcon from 'lucide-solid/icons/cpu';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
+import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import {
   MobileNavBar,
   type MobileNavBarPlatformTab as PlatformTab,
@@ -29,8 +34,12 @@ import { logger } from '@/utils/logger';
 import { getActiveTabForPath } from '@/routing/navigation';
 import { preloadRouteModule } from '@/routing/routePreload';
 import {
+  buildDockerPath,
   buildInfrastructurePath,
+  buildKubernetesPath,
   buildProxmoxPath,
+  buildTrueNASPath,
+  buildVmwarePath,
   buildWorkloadsPath,
 } from '@/routing/resourceLinks';
 import { buildStorageRecoveryTabSpecs } from '@/routing/platformTabs';
@@ -44,6 +53,10 @@ import type { AppConnectionStatus } from '@/useAppRuntimeState';
 
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
 const ROOT_PROXMOX_PATH = buildProxmoxPath();
+const ROOT_DOCKER_PATH = buildDockerPath();
+const ROOT_KUBERNETES_PATH = buildKubernetesPath();
+const ROOT_TRUENAS_PATH = buildTrueNASPath();
+const ROOT_VMWARE_PATH = buildVmwarePath();
 const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
 const AI_CHAT_LAUNCHER_BUTTON_CLASS =
@@ -194,6 +207,10 @@ export function AppLayout(props: AppLayoutProps) {
   // as the bare app name.
   const tabTitleByActive: Record<NonNullable<ReturnType<typeof getActiveTabForPath>>, string> = {
     proxmox: 'Proxmox',
+    docker: 'Docker',
+    kubernetes: 'Kubernetes',
+    truenas: 'TrueNAS',
+    vmware: 'vSphere',
     infrastructure: 'Infrastructure',
     workloads: 'Workloads',
     storage: 'Storage',
@@ -287,7 +304,17 @@ export function AppLayout(props: AppLayoutProps) {
   const getActiveTabDesktop = () => getActiveTabForPath(location.pathname);
   const getActiveTabMobile = () => getActiveTabForPath(location.pathname);
 
+  const platformPresence = createMemo(() => {
+    const presence = new Set<string>();
+    for (const resource of props.state().resources || []) {
+      const key = normalizeSourcePlatformQueryValue(resource.platformType || '');
+      if (key) presence.add(key);
+    }
+    return presence;
+  });
+
   const platformTabs = createMemo<PlatformTab[]>(() => {
+    const presence = platformPresence();
     const allPlatforms: PlatformTab[] = [
       {
         id: 'proxmox',
@@ -299,6 +326,50 @@ export function AppLayout(props: AppLayoutProps) {
         live: true,
         icon: ProxmoxIcon,
         alwaysShow: true,
+      },
+      {
+        id: 'docker',
+        label: 'Docker',
+        route: ROOT_DOCKER_PATH,
+        settingsRoute: '/settings/workloads/docker',
+        tooltip: 'Docker and Podman hosts, containers, and Swarm services',
+        enabled: presence.has('docker'),
+        live: presence.has('docker'),
+        icon: ContainerIcon,
+        alwaysShow: presence.has('docker'),
+      },
+      {
+        id: 'kubernetes',
+        label: 'Kubernetes',
+        route: ROOT_KUBERNETES_PATH,
+        settingsRoute: '/settings',
+        tooltip: 'Kubernetes clusters, nodes, pods, deployments, and services',
+        enabled: presence.has('kubernetes'),
+        live: presence.has('kubernetes'),
+        icon: ShipWheelIcon,
+        alwaysShow: presence.has('kubernetes'),
+      },
+      {
+        id: 'truenas',
+        label: 'TrueNAS',
+        route: ROOT_TRUENAS_PATH,
+        settingsRoute: '/settings/infrastructure',
+        tooltip: 'TrueNAS hosts, storage, and apps',
+        enabled: presence.has('truenas'),
+        live: presence.has('truenas'),
+        icon: DatabaseIcon,
+        alwaysShow: presence.has('truenas'),
+      },
+      {
+        id: 'vmware',
+        label: 'vSphere',
+        route: ROOT_VMWARE_PATH,
+        settingsRoute: '/settings/infrastructure',
+        tooltip: 'VMware vSphere hosts, virtual machines, and datastores',
+        enabled: presence.has('vmware-vsphere'),
+        live: presence.has('vmware-vsphere'),
+        icon: CpuIcon,
+        alwaysShow: presence.has('vmware-vsphere'),
       },
       {
         id: 'infrastructure',

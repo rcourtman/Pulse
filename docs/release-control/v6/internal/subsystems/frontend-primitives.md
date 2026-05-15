@@ -924,6 +924,12 @@ AI runtime.
     shared canonical surface already exists; new shared platform-page
     primitives live under `frontend-modern/src/features/platformPage/` so the
     chrome stays reusable across families.
+    `frontend-modern/src/AppLayout.tsx` may extend the `PlatformTab` list with
+    new family entries; those entries must declare `alwaysShow` and `enabled`
+    derived from the family's canonical resource presence in
+    `state.resources` rather than hard-coded `true`, so unconnected platforms
+    stay hidden by default and do not displace the always-shown
+    Infrastructure, Workloads, Storage, and Recovery tabs.
 
 ## Forbidden Paths
 

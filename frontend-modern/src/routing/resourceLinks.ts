@@ -40,6 +40,14 @@ export const WORKLOADS_QUERY_PARAMS = {
 export const WORKLOADS_PATH = '/workloads';
 export const PROXMOX_PATH = '/proxmox';
 export const PROXMOX_DEFAULT_TAB = 'overview';
+export const DOCKER_PATH = '/docker';
+export const DOCKER_DEFAULT_TAB = 'overview';
+export const KUBERNETES_PATH = '/kubernetes';
+export const KUBERNETES_DEFAULT_TAB = 'overview';
+export const TRUENAS_PATH = '/truenas';
+export const TRUENAS_DEFAULT_TAB = 'overview';
+export const VMWARE_PATH = '/vmware';
+export const VMWARE_DEFAULT_TAB = 'overview';
 export const PMG_THRESHOLDS_PATH = '/alerts/thresholds/mail-gateway';
 export const ALERTS_OVERVIEW_PATH = '/alerts/overview';
 export const PATROL_PATH = '/patrol';
@@ -227,6 +235,26 @@ export const buildWorkloadsPath = (options: WorkloadsLinkOptions = {}): string =
 export const buildProxmoxPath = (tab: string = PROXMOX_DEFAULT_TAB): string => {
   const normalized = tab.trim().replace(/^\/+|\/+$/g, '');
   return normalized ? `${PROXMOX_PATH}/${normalized}` : PROXMOX_PATH;
+};
+
+export const buildDockerPath = (tab: string = DOCKER_DEFAULT_TAB): string => {
+  const normalized = tab.trim().replace(/^\/+|\/+$/g, '');
+  return normalized ? `${DOCKER_PATH}/${normalized}` : DOCKER_PATH;
+};
+
+export const buildKubernetesPath = (tab: string = KUBERNETES_DEFAULT_TAB): string => {
+  const normalized = tab.trim().replace(/^\/+|\/+$/g, '');
+  return normalized ? `${KUBERNETES_PATH}/${normalized}` : KUBERNETES_PATH;
+};
+
+export const buildTrueNASPath = (tab: string = TRUENAS_DEFAULT_TAB): string => {
+  const normalized = tab.trim().replace(/^\/+|\/+$/g, '');
+  return normalized ? `${TRUENAS_PATH}/${normalized}` : TRUENAS_PATH;
+};
+
+export const buildVmwarePath = (tab: string = VMWARE_DEFAULT_TAB): string => {
+  const normalized = tab.trim().replace(/^\/+|\/+$/g, '');
+  return normalized ? `${VMWARE_PATH}/${normalized}` : VMWARE_PATH;
 };
 
 export const parseInfrastructureLinkSearch = (search: string) => {

@@ -27,8 +27,12 @@ import { aiChatStore } from './stores/aiChat';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import {
+  DOCKER_PATH,
+  KUBERNETES_PATH,
   PATROL_PATH,
   PROXMOX_PATH,
+  TRUENAS_PATH,
+  VMWARE_PATH,
   buildRecoveryPath,
   buildInfrastructurePath,
   buildStoragePath,
@@ -59,6 +63,10 @@ const AlertsPage = lazy(() =>
 const SettingsPage = lazy(() => import('./components/Settings/Settings'));
 const InfrastructurePage = lazy(() => import('./pages/Infrastructure'));
 const ProxmoxPage = lazy(() => import('./pages/Proxmox'));
+const DockerPage = lazy(() => import('./pages/Docker'));
+const KubernetesPage = lazy(() => import('./pages/Kubernetes'));
+const TrueNASPage = lazy(() => import('./pages/TrueNAS'));
+const VmwarePage = lazy(() => import('./pages/Vmware'));
 const WorkloadsPage = lazy(() => import('./pages/Workloads'));
 const AIIntelligencePage = lazy(() =>
   import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
@@ -465,6 +473,14 @@ function App() {
       <Route path="/" component={RuntimeHomePage} />
       <Route path={PROXMOX_PATH} component={ProxmoxPage} />
       <Route path={`${PROXMOX_PATH}/*`} component={ProxmoxPage} />
+      <Route path={DOCKER_PATH} component={DockerPage} />
+      <Route path={`${DOCKER_PATH}/*`} component={DockerPage} />
+      <Route path={KUBERNETES_PATH} component={KubernetesPage} />
+      <Route path={`${KUBERNETES_PATH}/*`} component={KubernetesPage} />
+      <Route path={TRUENAS_PATH} component={TrueNASPage} />
+      <Route path={`${TRUENAS_PATH}/*`} component={TrueNASPage} />
+      <Route path={VMWARE_PATH} component={VmwarePage} />
+      <Route path={`${VMWARE_PATH}/*`} component={VmwarePage} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsPage} />
       <Route path={STORAGE_PATH} component={StoragePage} />
       <Route path={RECOVERY_ROUTE_PATH} component={RecoveryPage} />

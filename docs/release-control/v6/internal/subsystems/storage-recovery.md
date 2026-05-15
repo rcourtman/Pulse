@@ -828,6 +828,16 @@ bypass the API fail-closed execution gate.
     Storage and recovery UI must keep sourcing those signals from their
     existing canonical page models instead of polling the connections
     ledger for per-datastore or per-backup truth.
+    Platform-first top-level pages may embed `StorageSurface` and
+    `RecoverySurface` with `embedded tableOnly` and forced source or
+    platform filters (e.g. `forcedSourceFilter`, `forcedPlatformFilter`)
+    so platform-scoped storage and recovery rows render through the same
+    canonical surfaces rather than a forked per-platform table.
+    `frontend-modern/src/App.tsx` may carry the platform-page route
+    registrations that mount those embedded canonical surfaces, but the
+    routes themselves must derive their paths from the canonical builders
+    in `frontend-modern/src/routing/resourceLinks.ts`; ad hoc storage or
+    recovery route strings inside per-platform features are not permitted.
 
 ## Forbidden Paths
 

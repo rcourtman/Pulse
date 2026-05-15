@@ -50,6 +50,14 @@ describe('App architecture', () => {
     );
     expect(appSource).toContain('<Route path={PROXMOX_PATH} component={ProxmoxPage} />');
     expect(appSource).toContain('<Route path={`${PROXMOX_PATH}/*`} component={ProxmoxPage} />');
+    expect(appSource).toContain("const DockerPage = lazy(() => import('./pages/Docker'));");
+    expect(appSource).toContain("const KubernetesPage = lazy(() => import('./pages/Kubernetes'));");
+    expect(appSource).toContain("const TrueNASPage = lazy(() => import('./pages/TrueNAS'));");
+    expect(appSource).toContain("const VmwarePage = lazy(() => import('./pages/Vmware'));");
+    expect(appSource).toContain('<Route path={DOCKER_PATH} component={DockerPage} />');
+    expect(appSource).toContain('<Route path={KUBERNETES_PATH} component={KubernetesPage} />');
+    expect(appSource).toContain('<Route path={TRUENAS_PATH} component={TrueNASPage} />');
+    expect(appSource).toContain('<Route path={VMWARE_PATH} component={VmwarePage} />');
     expect(appSource).not.toContain('DashboardPage');
     expect(headerAuditSource).not.toContain("['src/pages/Dashboard.tsx', 'PageHeader']");
     expect(appSource).toContain("import RuntimeHomePage from '@/pages/RuntimeHome';");

@@ -485,6 +485,19 @@ or other self-hosted uncapped continuity plans.
     `PULSE_EMAIL_REPLY_TO`, defaulting to `support@pulserelay.pro`, so magic
     links, checkout handoffs, and other hosted-account messages remain
     directly replyable by customers.
+    `App.tsx` and `AppLayout.tsx` may extend the platform-first top-level
+    surface set by registering new family-scoped routes (for example
+    `DOCKER_PATH`, `KUBERNETES_PATH`, `TRUENAS_PATH`, `VMWARE_PATH`) and the
+    matching `PlatformTab` entries, but those entries must be gated on
+    canonical resource presence in `state.resources` so unconnected platforms
+    stay hidden and do not displace the always-shown Infrastructure,
+    Workloads, Storage, and Recovery tabs. Each new platform page must remain
+    chrome-only: routing plus sub-tab navigation that embeds the canonical
+    `WorkloadsSurface`, `StorageSurface`, `RecoverySurface`, or
+    `UnifiedResourceTable` in `embedded tableOnly` mode with a forced
+    platform/source filter. The shell must not introduce dashboard cards,
+    bespoke per-family tables, or synthetic placeholder data for that
+    expansion path.
 
 ## Forbidden Paths
 

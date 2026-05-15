@@ -116,7 +116,10 @@ runtime cost control, and shared AI transport surfaces.
     intact: they extend `aiChatStore`-aware route shells rather than mounting
     bespoke layouts that suppress the Assistant launcher, Patrol entry, or
     the AI keyboard-shortcut handlers. New per-platform sub-routes inherit
-    the shared AI-aware chrome by virtue of routing through `AppLayout`.
+    the shared AI-aware chrome by virtue of routing through `AppLayout`, and
+    must not introduce a parallel chat surface, launcher button, or model
+    picker on the platform page itself; cross-platform AI guidance stays
+    routed through Assistant and Patrol.
 
 ## Forbidden Paths
 

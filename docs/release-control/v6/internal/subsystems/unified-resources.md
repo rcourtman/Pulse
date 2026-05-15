@@ -393,6 +393,14 @@ AI-only summary payloads, or page-local heuristics.
     another shared surface needs to explain how the same governed policy counts
     should be read, but those framing lines must extend the shared card API
     rather than spawning page-local policy summary shells.
+16. Keep platform-first top-level route paths on the canonical resource-link
+    helper. `frontend-modern/src/routing/resourceLinks.ts` owns the
+    `DOCKER_PATH`, `KUBERNETES_PATH`, `TRUENAS_PATH`, `VMWARE_PATH` constants
+    and the `buildDockerPath`, `buildKubernetesPath`, `buildTrueNASPath`,
+    `buildVmwarePath` builders. Per-platform surfaces and tab specs must
+    derive every internal link from those builders so the canonical resource
+    URL vocabulary stays single-sourced; ad hoc string concatenation of
+    platform routes inside feature directories is not permitted.
 
 ## Forbidden Paths
 

@@ -2,13 +2,19 @@ import { describe, expect, it } from 'vitest';
 import type { WorkloadGuest } from '@/types/workloads';
 import {
   AI_PATROL_PATH,
+  DOCKER_PATH,
+  KUBERNETES_PATH,
   PMG_THRESHOLDS_PATH,
   PATROL_PATH,
   PROXMOX_DEFAULT_TAB,
   PROXMOX_PATH,
   RECOVERY_QUERY_PARAMS,
+  TRUENAS_PATH,
+  VMWARE_PATH,
+  buildDockerPath,
   buildInfrastructureResourceLink,
   buildInfrastructureHrefForWorkload,
+  buildKubernetesPath,
   buildRecoveryPath,
   buildRecoveryHrefForResource,
   buildInfrastructurePath,
@@ -18,6 +24,8 @@ import {
   buildResourceSurfaceLinksForResource,
   buildStorageHrefForResource,
   buildStoragePath,
+  buildTrueNASPath,
+  buildVmwarePath,
   buildWorkloadsHrefForResource,
   buildWorkloadsPath,
   parseRecoveryLinkSearch,
@@ -66,6 +74,25 @@ describe('resource link routing contract', () => {
     expect(buildProxmoxPath()).toBe('/proxmox/overview');
     expect(buildProxmoxPath('/storage/')).toBe('/proxmox/storage');
     expect(buildProxmoxPath('')).toBe('/proxmox');
+  });
+
+  it('builds canonical Docker, Kubernetes, TrueNAS, and vSphere platform tab paths', () => {
+    expect(DOCKER_PATH).toBe('/docker');
+    expect(buildDockerPath()).toBe('/docker/overview');
+    expect(buildDockerPath('containers')).toBe('/docker/containers');
+    expect(buildDockerPath('')).toBe('/docker');
+
+    expect(KUBERNETES_PATH).toBe('/kubernetes');
+    expect(buildKubernetesPath()).toBe('/kubernetes/overview');
+    expect(buildKubernetesPath('pods')).toBe('/kubernetes/pods');
+
+    expect(TRUENAS_PATH).toBe('/truenas');
+    expect(buildTrueNASPath()).toBe('/truenas/overview');
+    expect(buildTrueNASPath('storage')).toBe('/truenas/storage');
+
+    expect(VMWARE_PATH).toBe('/vmware');
+    expect(buildVmwarePath()).toBe('/vmware/overview');
+    expect(buildVmwarePath('vms')).toBe('/vmware/vms');
   });
 
   it('builds and parses workloads query params', () => {
