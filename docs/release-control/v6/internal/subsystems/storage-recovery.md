@@ -850,6 +850,15 @@ bypass the API fail-closed execution gate.
     at the next-most-relevant canonical surface (for TrueNAS today that is
     the embedded `StorageSurface` at `/truenas/storage`) rather than at a
     placeholder Hosts overview that would render empty.
+    Platform pages that embed `StorageSurface` reuse the canonical
+    `StoragePageControls` toolbar through the `showFilterToolbar` prop on
+    `StorageProps`. The page keeps `tableOnly` to hide the storage summary
+    section but opts in to the shared search, status, group-by, sort,
+    node, view, and chart-collapse controls so platform operators get
+    dense-table storage controls on every embedded storage tab without
+    forking the toolbar. The source scope flows through
+    `forcedSourceFilter` as a typed page input; the source filter remains
+    available in the toolbar only when not forced.
 
 ## Forbidden Paths
 

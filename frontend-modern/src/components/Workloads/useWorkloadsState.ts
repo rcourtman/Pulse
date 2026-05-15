@@ -58,6 +58,14 @@ export interface WorkloadsSurfaceProps {
   tableOnly?: boolean;
   forcedPlatform?: string;
   forcedGroupingMode?: WorkloadsGroupingMode;
+  // When the surface is mounted inside a platform-first page, the page owns
+  // platform scope through `forcedPlatform`. Setting `showFilterToolbar`
+  // keeps the operator-facing WorkloadsFilter visible alongside the table
+  // even when `tableOnly` hides the summary cards/strip, and
+  // `suppressPlatformFilter` removes the redundant Platform chip from that
+  // filter row since the platform is already fixed by the owning page.
+  showFilterToolbar?: boolean;
+  suppressPlatformFilter?: boolean;
 }
 
 export type WorkloadSortKey = WorkloadsSortKey;
@@ -406,7 +414,9 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     navigate,
     nodeByInstance,
     namespaceFilterConfig,
-    platformFilterConfig,
+    platformFilterConfig: props.suppressPlatformFilter
+      ? () => undefined
+      : platformFilterConfig,
     platformOptions,
     reconnect,
     reconnectSurface,

@@ -88,6 +88,8 @@ export function DockerPageSurface() {
                 useWorkloads
                 embedded
                 tableOnly
+                showFilterToolbar
+                suppressPlatformFilter
                 forcedPlatform={DOCKER_PLATFORM_FILTER}
               />
             </Show>

@@ -159,4 +159,38 @@ test.describe('Platform pages shell', () => {
       }
     });
   }
+
+  test('platform sub-tabs that embed Workloads/Storage surfaces expose v5-style operator controls', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop chrome audit');
+
+    // Each entry verifies that the embedded canonical surface renders its
+    // operator toolbar (search + status/grouping/view chips) under
+    // platform-page chrome — not a stripped table-only view.
+    const cases: ReadonlyArray<{ path: string; testId: string }> = [
+      { path: '/docker/containers', testId: 'docker-page' },
+      { path: '/kubernetes/pods', testId: 'kubernetes-page' },
+      { path: '/truenas/storage', testId: 'truenas-page' },
+      { path: '/truenas/apps', testId: 'truenas-page' },
+      { path: '/vmware/vms', testId: 'vmware-page' },
+      { path: '/vmware/storage', testId: 'vmware-page' },
+    ];
+
+    for (const c of cases) {
+      await page.goto(c.path, { waitUntil: 'domcontentloaded' });
+      const pageRoot = page.getByTestId(c.testId);
+      await expect(pageRoot).toBeVisible({ timeout: 30_000 });
+
+      // The canonical Workloads/Storage operator toolbars use the shared
+      // FilterBar primitive, which renders a search input. If the platform
+      // page mistakenly stripped the toolbar, no search input would render
+      // inside the page region.
+      await expect(
+        pageRoot
+          .locator('input[type="search"], input[placeholder*="Search" i], input[placeholder*="filter" i]')
+          .first(),
+      ).toBeVisible({ timeout: 30_000 });
+    }
+  });
 });

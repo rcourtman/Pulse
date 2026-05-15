@@ -541,6 +541,18 @@ shell clickable behind another overlay.
     cold dynamic import after the user clicks. New supported platform
     families must extend that registry rather than skipping the preload
     hot path; presentation-only platforms must not be registered.
+    Platform pages that embed `WorkloadsSurface` reuse the canonical
+    workloads filter toolbar through the `showFilterToolbar` +
+    `suppressPlatformFilter` props in `WorkloadsSurfaceProps`. The page
+    keeps `tableOnly` to hide the dashboard cards and summary strip but
+    opts in to the same shared `FilterBar`, `GroupedTableModeSegmentedControl`,
+    `ColumnPicker`, status/type chips, and search-history primitives that
+    the global Workloads page renders, so platform operators get
+    dense-table search, sort, grouping, view, status, and column controls
+    on every embedded workloads tab without spawning a forked toolbar.
+    The platform scope flows through `forcedPlatform` as a typed page
+    input; `suppressPlatformFilter` drops the now-redundant Platform chip
+    from the rendered toolbar so the user never sees a removable lock.
 
 ## Forbidden Paths
 

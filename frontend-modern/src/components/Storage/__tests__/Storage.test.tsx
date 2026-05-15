@@ -347,6 +347,14 @@ vi.mock('@/components/Storage/DiskList', () => ({
   ),
 }));
 
+describe('Storage platform-page embed contract', () => {
+  it('exposes showFilterToolbar on StorageProps so platform pages keep StoragePageControls visible under tableOnly', async () => {
+    const storageSource = (await import('../Storage.tsx?raw')).default;
+    expect(storageSource).toContain('showFilterToolbar?: boolean;');
+    expect(storageSource).toContain('props.showFilterToolbar || !props.tableOnly');
+  });
+});
+
 describe('Storage', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', fetchMock);

@@ -82,7 +82,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
       <div class="space-y-3" data-testid="workloads-interaction-surface">
         <Show
           when={
-            !props.tableOnly &&
+            (props.showFilterToolbar || !props.tableOnly) &&
             !state.kioskMode() &&
             state.surfaceConnected() &&
             state.surfaceInitialDataReceived() &&

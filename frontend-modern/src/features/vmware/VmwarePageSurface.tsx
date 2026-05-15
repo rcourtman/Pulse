@@ -89,11 +89,18 @@ export function VmwarePageSurface() {
                 useWorkloads
                 embedded
                 tableOnly
+                showFilterToolbar
+                suppressPlatformFilter
                 forcedPlatform={VMWARE_PLATFORM_FILTER}
               />
             </Show>
             <Show when={activeTab() === 'storage'}>
-              <StorageSurface embedded tableOnly forcedSourceFilter={VMWARE_PLATFORM_FILTER} />
+              <StorageSurface
+                embedded
+                tableOnly
+                showFilterToolbar
+                forcedSourceFilter={VMWARE_PLATFORM_FILTER}
+              />
             </Show>
           </Show>
         </Show>

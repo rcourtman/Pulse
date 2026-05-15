@@ -15,6 +15,14 @@ type StorageProps = {
   tableOnly?: boolean;
   forcedView?: 'pools' | 'disks';
   forcedSourceFilter?: string;
+  // Mirrors the WorkloadsSurface platform-page contract: when a platform
+  // page mounts StorageSurface inside its own chrome, set
+  // `showFilterToolbar` so the canonical StoragePageControls row stays
+  // visible alongside the table even when `tableOnly` hides the summary
+  // section. The page owns source scope via `forcedSourceFilter`; the
+  // controls toolbar still exposes search, status, grouping, sort, and
+  // node filters to the operator.
+  showFilterToolbar?: boolean;
 };
 
 const Storage: Component<StorageProps> = (props) => {
@@ -167,7 +175,7 @@ const Storage: Component<StorageProps> = (props) => {
       </Show>
 
       <div class="space-y-4" data-testid="storage-interaction-surface">
-        <Show when={!props.tableOnly}>
+        <Show when={props.showFilterToolbar || !props.tableOnly}>
           <div data-summary-clear-ignore>
             <StoragePageControls
               kioskMode={kioskMode}

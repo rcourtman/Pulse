@@ -354,6 +354,17 @@ const flushEffects = async () => {
   await Promise.resolve();
 };
 
+describe('Workloads platform-page embed contract', () => {
+  it('exposes showFilterToolbar and suppressPlatformFilter on WorkloadsSurfaceProps', async () => {
+    const stateSource = (await import('../useWorkloadsState.ts?raw')).default;
+    expect(stateSource).toContain('showFilterToolbar?: boolean;');
+    expect(stateSource).toContain('suppressPlatformFilter?: boolean;');
+    expect(stateSource).toContain('suppressPlatformFilter');
+    const surfaceSource = (await import('../WorkloadsSurface.tsx?raw')).default;
+    expect(surfaceSource).toContain('props.showFilterToolbar || !props.tableOnly');
+  });
+});
+
 describe('Workloads performance contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();

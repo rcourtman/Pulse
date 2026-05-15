@@ -74,7 +74,12 @@ export function TrueNASPageSurface() {
             }
           >
             <Show when={activeTab() === 'storage'}>
-              <StorageSurface embedded tableOnly forcedSourceFilter={TRUENAS_PLATFORM_FILTER} />
+              <StorageSurface
+                embedded
+                tableOnly
+                showFilterToolbar
+                forcedSourceFilter={TRUENAS_PLATFORM_FILTER}
+              />
             </Show>
             <Show when={activeTab() === 'apps'}>
               <WorkloadsSurface
@@ -84,6 +89,8 @@ export function TrueNASPageSurface() {
                 useWorkloads
                 embedded
                 tableOnly
+                showFilterToolbar
+                suppressPlatformFilter
                 forcedPlatform={TRUENAS_PLATFORM_FILTER}
               />
             </Show>

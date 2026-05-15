@@ -102,6 +102,8 @@ export function KubernetesPageSurface() {
                 useWorkloads
                 embedded
                 tableOnly
+                showFilterToolbar
+                suppressPlatformFilter
                 forcedPlatform={KUBERNETES_PLATFORM_FILTER}
               />
             </Show>
