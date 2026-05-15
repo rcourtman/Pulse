@@ -290,6 +290,10 @@ regression protection.
 23. Extend grouped workload row windowing, reveal-index clamping, overscan math, and per-group visible-slice derivation through `frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts`, and extend viewport event wiring through `frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts` rather than rebuilding scroll handlers, mounted-row budgets, viewport listeners, or group-slice math inside `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`
 24. Extend Workloads shell rendering through `frontend-modern/src/components/Workloads/WorkloadsStateCards.tsx`, `frontend-modern/src/components/Workloads/WorkloadsTable.tsx`, and `frontend-modern/src/components/Workloads/WorkloadsStatsStrip.tsx` rather than accreting loading cards, workload table markup, or stats-strip presentation back into `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
 25. Extend workload table shell ownership through `frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx` and `frontend-modern/src/components/Workloads/WorkloadPanel.tsx` rather than rebuilding sortable header markup, grouped node rows, row expansion, or guest-drawer rendering inside `frontend-modern/src/components/Workloads/WorkloadsTable.tsx`
+    `WorkloadPanel` owns the mutually exclusive host/guest drawer handoff:
+    clicking a grouped host row while a guest drawer is open must clear the
+    selected guest and keep/focus the host summary group so the node drawer can
+    replace the guest drawer.
     Compact icon headers inside `WorkloadTableHeader.tsx` may stay visually
     dense for responsive workload tables, but the icon must be decorative and
     the column label must remain present through an `sr-only` label so the

@@ -1084,6 +1084,9 @@ describe('Workloads performance contract', () => {
       expect(nodeDrawerModelSource).toContain("metric: 'temperature'");
       expect(workloadPanelSource).toContain('NodeDrawer');
       expect(workloadPanelSource).toContain('data-inline-node-detail-for');
+      expect(workloadPanelSource).toContain('const selectedGuestId = props.selectedGuestId()');
+      expect(workloadPanelSource).toContain('props.setSelectedGuestId(null)');
+      expect(workloadPanelSource).toContain('selectedGuestId === null');
       expect(guestDrawerSource).not.toContain('const guestId = () =>');
       expect(guestDrawerSource).not.toContain('const infrastructureHref = () =>');
       expect(guestDrawerSource).not.toContain('Filesystems');

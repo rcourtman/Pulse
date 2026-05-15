@@ -371,9 +371,17 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
           };
           const handleGroupFocusToggle = () => {
             const scope = groupSummaryScope();
-            props.setFocusedWorkloadGroupScope(
-              scope && props.focusedSummaryWorkloadGroupId() === scope.id ? null : scope,
-            );
+            const selectedGuestId = props.selectedGuestId();
+            const nextFocusedScope =
+              scope &&
+              props.focusedSummaryWorkloadGroupId() === scope.id &&
+              selectedGuestId === null
+                ? null
+                : scope;
+            if (nextFocusedScope && selectedGuestId !== null) {
+              props.setSelectedGuestId(null);
+            }
+            props.setFocusedWorkloadGroupScope(nextFocusedScope);
           };
           const groupRowInteraction = createSummaryInteractiveRowPreviewHandlers({
             onPreview: () => handleGroupHoverChange(groupSummaryScope()),
