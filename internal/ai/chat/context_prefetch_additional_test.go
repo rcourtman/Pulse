@@ -48,7 +48,7 @@ func (m *mockDiscoveryProvider) FormatForAIContext(discoveries []*tools.Resource
 	return ""
 }
 
-func (m *mockDiscoveryProvider) TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string) (*tools.ResourceDiscoveryInfo, error) {
+func (m *mockDiscoveryProvider) TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string, _ bool) (*tools.ResourceDiscoveryInfo, error) {
 	m.triggeredKey = append(m.triggeredKey, m.key(resourceType, targetID, resourceID))
 	if m.triggerErr != nil {
 		return nil, m.triggerErr

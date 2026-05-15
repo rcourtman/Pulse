@@ -2956,7 +2956,7 @@
     },
     {
       "id": "RA29",
-      "summary": "Interactive Pulse Assistant chat behaves like a governed LLM tool surface, not a Pulse-authored intent router: the operator's selected model receives the user turn and governed tools, decides whether tools are needed, and Pulse must not use prompt heuristics to force tool_choice, force a named tool, retry because an expected tool was not used, hide tools from the model by keyword detection, rewrite recent-context turns into Pulse-targeted instructions, fuzzy-match plain chat text into resource context before the model acts, synthesize/prefill/auto-submit product-authored Assistant prompts from handoffs, keyword-match prior remediation history into suggested fixes, or generate Patrol handoff attention/decision/remediation guidance before the model reasons. Pulse only provides current context and enforces approvals, resource resolution, FSM gates, and tool policy after that model choice; any model-visible policy block must describe the boundary without naming a required next tool. The chat surface must echo user messages before network/session creation finishes and must not render Pulse-owned explore or internal workflow status cards as assistant output.",
+      "summary": "Pulse intelligence comes from the operator-selected large language model using governed Pulse tools over data the model cannot reach on its own: agent-collected machine evidence, canonical APIs, metrics, discovery records, and resource state. Interactive Pulse Assistant chat therefore behaves like a governed LLM tool surface, not a Pulse-authored intent router: the operator's selected model receives the user turn and governed tools, decides whether tools are needed, and Pulse must not use prompt heuristics to force tool_choice, force a named tool, retry because an expected tool was not used, hide tools from the model by keyword detection, rewrite recent-context turns into Pulse-targeted instructions, fuzzy-match plain chat text into resource context before the model acts, synthesize/prefill/auto-submit product-authored Assistant prompts from handoffs, keyword-match prior remediation history into suggested fixes, or generate Patrol handoff attention/decision/remediation guidance before the model reasons. Pulse only provides current context and enforces approvals, resource resolution, FSM gates, and tool policy after that model choice; any model-visible policy block must describe the boundary without naming a required next tool. The chat surface must echo user messages before network/session creation finishes and must not render Pulse-owned explore or internal workflow status cards as assistant output.",
       "kind": "invariant",
       "blocking_level": "repo-ready",
       "proof_type": "automated",
@@ -6446,21 +6446,7 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [
-    {
-      "id": "codex-lane-l6",
-      "agent_id": "codex",
-      "summary": "Fix workload discovery settings persistence and per-guest manual discovery control",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-05-15T21:36:03Z",
-      "heartbeat_at": "2026-05-15T21:36:03Z",
-      "expires_at": "2026-05-15T23:36:03Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L6"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

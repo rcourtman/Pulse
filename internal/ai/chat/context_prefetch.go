@@ -628,7 +628,7 @@ func (p *ContextPrefetcher) getOrTriggerDiscovery(ctx context.Context, mention R
 			Str("type", canonicalType).
 			Msg("[ContextPrefetch] Triggering discovery")
 
-		discovery, err = p.discoveryProvider.TriggerDiscovery(ctx, discoveryType, mention.TargetID, mention.ResourceID)
+		discovery, err = p.discoveryProvider.TriggerDiscovery(ctx, discoveryType, mention.TargetID, mention.ResourceID, false)
 		if err != nil {
 			return nil, err
 		}

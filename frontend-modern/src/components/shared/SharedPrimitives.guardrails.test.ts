@@ -248,6 +248,9 @@ describe('shared primitive guardrails', () => {
     expect(formSelectSource).toContain('<select');
     expect(formSelectSource).toContain('id={selectId()}');
     expect(formSelectSource).toContain('aria-describedby={describedBy()}');
+    expect(formSelectSource).toContain('createEffect');
+    expect(formSelectSource).toContain("'value'");
+    expect(formSelectSource).toContain('selectElement.value = nextValue');
     expect(formSelectSource).toContain('local.selectBaseClass ?? formSelect');
     expect(formSelectSource).toContain('local.fieldBaseClass ?? formField');
   });

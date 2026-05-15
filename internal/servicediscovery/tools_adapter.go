@@ -83,12 +83,12 @@ func (a *ToolsAdapter) FormatForAIContext(sourceData []tools.DiscoverySourceData
 }
 
 // TriggerDiscovery implements tools.DiscoverySource - initiates discovery for a resource
-func (a *ToolsAdapter) TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string) (tools.DiscoverySourceData, error) {
+func (a *ToolsAdapter) TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string, force bool) (tools.DiscoverySourceData, error) {
 	req := DiscoveryRequest{
 		ResourceType: ResourceType(resourceType),
 		TargetID:     targetID,
 		ResourceID:   resourceID,
-		Force:        false, // Don't force if recently discovered
+		Force:        force,
 	}
 
 	discovery, err := a.service.DiscoverResource(ctx, req)

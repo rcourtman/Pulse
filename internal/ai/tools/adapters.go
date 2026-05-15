@@ -876,7 +876,7 @@ type DiscoverySource interface {
 	ListDiscoveriesByTarget(targetID string) ([]DiscoverySourceData, error)
 	FormatForAIContext(discoveries []DiscoverySourceData) string
 	// TriggerDiscovery initiates discovery for a resource, returning discovered data
-	TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string) (DiscoverySourceData, error)
+	TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string, force bool) (DiscoverySourceData, error)
 }
 
 // DiscoverySourceData represents discovery data from the source
@@ -1085,12 +1085,12 @@ func (a *DiscoveryMCPAdapter) FormatForAIContext(discoveries []*ResourceDiscover
 }
 
 // TriggerDiscovery implements tools.DiscoveryProvider
-func (a *DiscoveryMCPAdapter) TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string) (*ResourceDiscoveryInfo, error) {
+func (a *DiscoveryMCPAdapter) TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string, force bool) (*ResourceDiscoveryInfo, error) {
 	if a.source == nil {
 		return nil, fmt.Errorf("discovery source not available")
 	}
 
-	data, err := a.source.TriggerDiscovery(ctx, resourceType, targetID, resourceID)
+	data, err := a.source.TriggerDiscovery(ctx, resourceType, targetID, resourceID, force)
 	if err != nil {
 		return nil, err
 	}

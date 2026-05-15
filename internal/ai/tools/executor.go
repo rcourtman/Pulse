@@ -280,7 +280,7 @@ type DiscoveryProvider interface {
 	ListDiscoveriesByTarget(targetID string) ([]*ResourceDiscoveryInfo, error)
 	FormatForAIContext(discoveries []*ResourceDiscoveryInfo) string
 	// TriggerDiscovery initiates discovery for a resource and returns the result
-	TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string) (*ResourceDiscoveryInfo, error)
+	TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string, force bool) (*ResourceDiscoveryInfo, error)
 }
 
 // ResolvedResourceInfo contains the minimal information needed for tool validation.
@@ -1087,7 +1087,7 @@ func (e *PulseToolExecutor) registerTools() {
 	// pulse_file_edit - read, append, write files (requires control permission)
 	e.registerFileTools()
 
-	// pulse_discovery - get, list discoveries
+	// pulse_discovery - get, run, list discoveries
 	e.registerDiscoveryTools()
 
 	// pulse_knowledge - remember, recall, incidents, correlate, relationships

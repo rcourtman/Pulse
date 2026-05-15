@@ -1656,9 +1656,10 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 
 	// Broadcast progress: AI analysis starting
 	s.broadcastProgress(&DiscoveryProgress{
-		ResourceID:  resourceID,
-		Status:      DiscoveryStatusRunning,
-		CurrentStep: "Analyzing with Pulse Assistant...",
+		ResourceID:      resourceID,
+		Status:          DiscoveryStatusRunning,
+		CurrentStep:     "Analyzing discovery evidence with the selected model...",
+		PercentComplete: 75,
 	})
 
 	analyzeCtx, cancel := context.WithTimeout(ctx, s.aiAnalysisTimeout)

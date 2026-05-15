@@ -1,4 +1,4 @@
-import { Show, createUniqueId, splitProps } from 'solid-js';
+import { Show, createEffect, createUniqueId, splitProps } from 'solid-js';
 import type { Component, JSX } from 'solid-js';
 import { formField, formHelpText, formLabel, formSelect } from '@/components/shared/Form';
 
@@ -30,7 +30,9 @@ export const FormSelect: Component<FormSelectProps> = (props) => {
     'class',
     'selectBaseClass',
     'selectClass',
+    'value',
   ]);
+  let selectElement: HTMLSelectElement | undefined;
   const generatedId = `form-select-${createUniqueId()}`;
   const selectId = () => (typeof local.id === 'string' && local.id ? local.id : generatedId);
   const helpId = () => `${selectId()}-help`;
@@ -46,12 +48,33 @@ export const FormSelect: Component<FormSelectProps> = (props) => {
     return ids || undefined;
   };
 
+  createEffect(() => {
+    const value = local.value;
+    if (!selectElement || value === undefined || value === null) return;
+
+    if (Array.isArray(value)) {
+      const selectedValues = new Set(value.map(String));
+      for (const option of Array.from(selectElement.options)) {
+        option.selected = selectedValues.has(option.value);
+      }
+      return;
+    }
+
+    const nextValue = String(value);
+    if (selectElement.value !== nextValue) {
+      selectElement.value = nextValue;
+    }
+  });
+
   return (
     <div class={joinClass(local.fieldBaseClass ?? formField, local.fieldClass)}>
       <label for={selectId()} class={joinClass(formLabel, local.labelClass)}>
         {local.label}
       </label>
       <select
+        ref={(element) => {
+          selectElement = element;
+        }}
         {...selectProps}
         id={selectId()}
         aria-describedby={describedBy()}

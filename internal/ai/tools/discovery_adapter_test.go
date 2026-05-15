@@ -45,8 +45,8 @@ func (m *MockDiscoverySource) FormatForAIContext(discoveries []DiscoverySourceDa
 	return args.String(0)
 }
 
-func (m *MockDiscoverySource) TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string) (DiscoverySourceData, error) {
-	args := m.Called(ctx, resourceType, targetID, resourceID)
+func (m *MockDiscoverySource) TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string, force bool) (DiscoverySourceData, error) {
+	args := m.Called(ctx, resourceType, targetID, resourceID, force)
 	return args.Get(0).(DiscoverySourceData), args.Error(1)
 }
 
@@ -191,9 +191,9 @@ func TestDiscoveryMCPAdapter_TriggerDiscovery(t *testing.T) {
 	ctx := context.Background()
 
 	expectedData := DiscoverySourceData{ID: "new1"}
-	mockSource.On("TriggerDiscovery", ctx, "vm", "h1", "100").Return(expectedData, nil)
+	mockSource.On("TriggerDiscovery", ctx, "vm", "h1", "100", true).Return(expectedData, nil)
 
-	result, err := adapter.TriggerDiscovery(ctx, "vm", "h1", "100")
+	result, err := adapter.TriggerDiscovery(ctx, "vm", "h1", "100", true)
 	assert.NoError(t, err)
 	assert.Equal(t, "new1", result.ID)
 

@@ -322,6 +322,11 @@ AI runtime.
    if the shell exposes a shortcut hint, it must name an actual key chord,
    otherwise the hint must remain unset so the shared `SearchInput` renders no
    shortcut chip.
+   Native select state belongs to the shared
+   `frontend-modern/src/components/shared/FormSelect.tsx` primitive. It must
+   apply controlled `value` props after options are mounted so settings panels
+   such as workload discovery show the persisted option instead of falling back
+   to the first option while the collapsed summary shows a different value.
 2. Route new top-level settings surfaces through the canonical settings shell
    instead of introducing page-local framing.
    When a new operator-facing concern is closely related to an
@@ -909,6 +914,16 @@ AI runtime.
     plain select options. The picker must also constrain its dropdown and
     internal result list to the available viewport height so settings model
     catalogs remain usable on mobile and tablet layouts with bottom navigation.
+    Platform-first top-level pages registered through
+    `frontend-modern/src/App.tsx` must stay chrome-only and route through the
+    canonical app shell: each per-platform surface owns navigation and sub-tab
+    chrome, then embeds the canonical `WorkloadsSurface`, `StorageSurface`,
+    `RecoverySurface`, or `UnifiedResourceTable` in `embedded tableOnly` mode
+    with a forced platform or source filter. Per-platform features must not
+    fork their own table primitives, header layouts, or summary cards when a
+    shared canonical surface already exists; new shared platform-page
+    primitives live under `frontend-modern/src/features/platformPage/` so the
+    chrome stays reusable across families.
 
 ## Forbidden Paths
 

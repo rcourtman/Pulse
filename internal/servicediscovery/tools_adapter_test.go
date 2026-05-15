@@ -226,7 +226,7 @@ func TestToolsAdapter_TriggerDiscovery(t *testing.T) {
 		d1 := &ResourceDiscovery{ID: id, ResourceType: "docker", TargetID: "h1", ResourceID: "r1", DiscoveredAt: time.Now()}
 		require.NoError(t, store.Save(d1))
 
-		result, err := adapter.TriggerDiscovery(context.Background(), "docker", "h1", "r1")
+		result, err := adapter.TriggerDiscovery(context.Background(), "docker", "h1", "r1", false)
 		require.NoError(t, err)
 		assert.Equal(t, id, result.ID)
 	})

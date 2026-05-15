@@ -20,6 +20,13 @@ type stubDiscoveryProvider struct {
 	lastListTargetID string
 	listResp         []*ResourceDiscoveryInfo
 	listErr          error
+
+	lastTriggerResourceType string
+	lastTriggerTargetID     string
+	lastTriggerResourceID   string
+	lastTriggerForce        bool
+	triggerResp             *ResourceDiscoveryInfo
+	triggerErr              error
 }
 
 func (s *stubDiscoveryProvider) GetDiscovery(_ string) (*ResourceDiscoveryInfo, error) {
@@ -51,8 +58,12 @@ func (s *stubDiscoveryProvider) FormatForAIContext(_ []*ResourceDiscoveryInfo) s
 	return ""
 }
 
-func (s *stubDiscoveryProvider) TriggerDiscovery(_ context.Context, _, _, _ string) (*ResourceDiscoveryInfo, error) {
-	return nil, nil
+func (s *stubDiscoveryProvider) TriggerDiscovery(_ context.Context, resourceType, targetID, resourceID string, force bool) (*ResourceDiscoveryInfo, error) {
+	s.lastTriggerResourceType = resourceType
+	s.lastTriggerTargetID = targetID
+	s.lastTriggerResourceID = resourceID
+	s.lastTriggerForce = force
+	return s.triggerResp, s.triggerErr
 }
 
 func TestIsTransientError(t *testing.T) {
@@ -133,6 +144,26 @@ func TestExecuteGetDiscovery_UsesTargetID(t *testing.T) {
 	assert.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
 	assert.Equal(t, "node1", payload["target_id"])
 	assert.NotContains(t, payload, "host_id")
+}
+
+func TestPulseDiscoveryToolSchemaIncludesRunAction(t *testing.T) {
+	exec := NewPulseToolExecutor(ExecutorConfig{DiscoveryProvider: &stubDiscoveryProvider{}})
+	tools := exec.ListTools()
+
+	var discoveryTool *Tool
+	for i := range tools {
+		if tools[i].Name == "pulse_discovery" {
+			discoveryTool = &tools[i]
+			break
+		}
+	}
+	if discoveryTool == nil {
+		t.Fatalf("expected pulse_discovery tool")
+	}
+
+	actionSchema := discoveryTool.InputSchema.Properties["action"]
+	assert.Contains(t, actionSchema.Enum, "run")
+	assert.Contains(t, discoveryTool.Description, `action="run" forces a fresh discovery run`)
 }
 
 func TestCanonicalDiscoveryResourceType(t *testing.T) {
@@ -323,6 +354,38 @@ func TestExecuteGetDiscovery_CanonicalAppContainerUsesDockerProviderType(t *test
 	var payload map[string]interface{}
 	assert.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
 	assert.Equal(t, "app-container", payload["resource_type"])
+}
+
+func TestExecuteRunDiscovery_ForcesFreshDiscovery(t *testing.T) {
+	provider := &stubDiscoveryProvider{
+		triggerResp: &ResourceDiscoveryInfo{
+			ID:           "vm:node1:101",
+			ResourceType: "vm",
+			ResourceID:   "101",
+			TargetID:     "node1",
+			Hostname:     "vm-101",
+			ServiceName:  "PostgreSQL",
+		},
+	}
+	exec := NewPulseToolExecutor(ExecutorConfig{DiscoveryProvider: provider})
+
+	result, err := exec.executeDiscovery(context.Background(), map[string]interface{}{
+		"action":        "run",
+		"resource_type": "vm",
+		"resource_id":   "101",
+		"target_id":     "node1",
+	})
+	assert.NoError(t, err)
+	assert.False(t, result.IsError)
+	assert.Equal(t, "vm", provider.lastTriggerResourceType)
+	assert.Equal(t, "node1", provider.lastTriggerTargetID)
+	assert.Equal(t, "101", provider.lastTriggerResourceID)
+	assert.True(t, provider.lastTriggerForce)
+
+	var payload map[string]interface{}
+	assert.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
+	assert.Equal(t, true, payload["refreshed"])
+	assert.Equal(t, "PostgreSQL", payload["service_name"])
 }
 
 func TestExecuteListDiscoveries_FiltersByTargetID(t *testing.T) {

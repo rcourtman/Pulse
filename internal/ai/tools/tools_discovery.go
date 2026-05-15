@@ -14,27 +14,27 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name:        "pulse_discovery",
-			Description: `Get AI-discovered service details (log paths, config locations, ports). action="get" triggers discovery for a resource (requires resource_type, resource_id, target_id). action="list" searches existing discoveries. Resource details must already be known from the current context or a prior resource lookup.`,
+			Description: `Get or run AI-discovered service details from Pulse-owned resource access. action="get" returns existing discovery and triggers discovery only when missing. action="run" forces a fresh discovery run for a known resource. action="list" searches existing discoveries. Resource details must already be known from the current context or a prior resource lookup.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"action": {
 						Type:        "string",
-						Description: "Discovery action: get or list",
-						Enum:        []string{"get", "list"},
+						Description: "Discovery action: get, run, or list",
+						Enum:        []string{"get", "run", "list"},
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "For get: canonical v6 resource type (vm, system-container, app-container, agent)",
+						Description: "For get/run: canonical v6 resource type (vm, system-container, app-container, agent)",
 						Enum:        []string{"vm", "system-container", "app-container", "agent"},
 					},
 					"resource_id": {
 						Type:        "string",
-						Description: "For get: resource identifier (VMID, container name, hostname)",
+						Description: "For get/run: resource identifier (VMID, container name, hostname)",
 					},
 					"target_id": {
 						Type:        "string",
-						Description: "For get/list: canonical target identifier (agent ID, node ID, or cluster ID)",
+						Description: "For get/run/list: canonical target identifier (agent ID, node ID, or cluster ID)",
 					},
 					"type": {
 						Type:        "string",
@@ -57,9 +57,9 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 			return exec.executeDiscovery(ctx, args)
 		},
 		Governance: ToolGovernance{
-			ActionMode:     ToolActionRead,
-			ApprovalPolicy: "no approval required",
-			Summary:        "Reads discovered service paths, ports, and bind mounts for known resources.",
+			ActionMode:     ToolActionMixed,
+			ApprovalPolicy: "no approval required; run uses read-only evidence collection and updates the discovery cache",
+			Summary:        "Reads or refreshes discovered service paths, ports, and bind mounts for known resources.",
 		},
 	})
 }
@@ -70,10 +70,12 @@ func (e *PulseToolExecutor) executeDiscovery(ctx context.Context, args map[strin
 	switch action {
 	case "get":
 		return e.executeGetDiscovery(ctx, args)
+	case "run":
+		return e.executeRunDiscovery(ctx, args)
 	case "list":
 		return e.executeListDiscoveries(ctx, args)
 	default:
-		return NewErrorResult(fmt.Errorf("unknown action: %s. Use: get, list", action)), nil
+		return NewErrorResult(fmt.Errorf("unknown action: %s. Use: get, run, list", action)), nil
 	}
 }
 
@@ -227,32 +229,40 @@ func CanonicalDiscoveryTargetID(discovery *ResourceDiscoveryInfo, fallbackTarget
 	return targetID
 }
 
-func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+type discoveryResourceRequest struct {
+	resourceType         string
+	providerResourceType string
+	resourceID           string
+	targetID             string
+	cliAccess            string
+}
+
+func (e *PulseToolExecutor) normalizeDiscoveryResourceRequest(args map[string]interface{}) (discoveryResourceRequest, CallToolResult, bool) {
 	if e.discoveryProvider == nil {
-		return NewTextResult("Discovery service not available."), nil
+		return discoveryResourceRequest{}, NewTextResult("Discovery service not available."), false
 	}
 
 	resourceTypeRaw, _ := args["resource_type"].(string)
 	resourceID, _ := args["resource_id"].(string)
 	targetID, _ := args["target_id"].(string)
 	if isUnsupportedDiscoveryLegacyResourceTypeToken(resourceTypeRaw) {
-		return NewErrorResult(fmt.Errorf("unsupported resource_type %q", strings.TrimSpace(resourceTypeRaw))), nil
+		return discoveryResourceRequest{}, NewErrorResult(fmt.Errorf("unsupported resource_type %q", strings.TrimSpace(resourceTypeRaw))), false
 	}
 	resourceType := CanonicalDiscoveryResourceType(resourceTypeRaw)
 	providerResourceType := DiscoveryProviderResourceType(resourceType)
 	targetID = strings.TrimSpace(targetID)
 
 	if resourceType == "" {
-		return NewErrorResult(fmt.Errorf("resource_type is required")), nil
+		return discoveryResourceRequest{}, NewErrorResult(fmt.Errorf("resource_type is required")), false
 	}
 	if !isSupportedDiscoveryResourceType(resourceType) {
-		return NewErrorResult(fmt.Errorf("unsupported resource_type %q", strings.TrimSpace(resourceTypeRaw))), nil
+		return discoveryResourceRequest{}, NewErrorResult(fmt.Errorf("unsupported resource_type %q", strings.TrimSpace(resourceTypeRaw))), false
 	}
 	if resourceID == "" {
-		return NewErrorResult(fmt.Errorf("resource_id is required")), nil
+		return discoveryResourceRequest{}, NewErrorResult(fmt.Errorf("resource_id is required")), false
 	}
 	if targetID == "" {
-		return NewErrorResult(fmt.Errorf("target_id is required - use the node/agent field from search or get_resource results")), nil
+		return discoveryResourceRequest{}, NewErrorResult(fmt.Errorf("target_id is required - use the node/agent field from search or get_resource results")), false
 	}
 
 	// For system-container and VM types, resourceID should be a numeric VMID.
@@ -284,23 +294,35 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 			}
 
 			if !resolved {
-				return NewErrorResult(fmt.Errorf("could not resolve resource name '%s' to a VMID on target '%s'", resourceID, targetID)), nil
+				return discoveryResourceRequest{}, NewErrorResult(fmt.Errorf("could not resolve resource name '%s' to a VMID on target '%s'", resourceID, targetID)), false
 			}
 		}
 	}
 
+	return discoveryResourceRequest{
+		resourceType:         resourceType,
+		providerResourceType: providerResourceType,
+		resourceID:           resourceID,
+		targetID:             targetID,
+		cliAccess:            getCLIAccessPattern(resourceType, targetID, resourceID),
+	}, CallToolResult{}, true
+}
+
+func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+	req, blocked, ok := e.normalizeDiscoveryResourceRequest(args)
+	if !ok {
+		return blocked, nil
+	}
+
 	// First try to get existing discovery
-	discovery, err := e.discoveryProvider.GetDiscoveryByResource(providerResourceType, targetID, resourceID)
+	discovery, err := e.discoveryProvider.GetDiscoveryByResource(req.providerResourceType, req.targetID, req.resourceID)
 	if err != nil {
 		return NewErrorResult(fmt.Errorf("failed to get discovery: %w", err)), nil
 	}
 
-	// Compute CLI access pattern (always useful, even if discovery fails)
-	cliAccess := getCLIAccessPattern(resourceType, targetID, resourceID)
-
 	// If no discovery exists, trigger one
 	if discovery == nil {
-		discovery, err = e.discoveryProvider.TriggerDiscovery(ctx, providerResourceType, targetID, resourceID)
+		discovery, err = e.discoveryProvider.TriggerDiscovery(ctx, req.providerResourceType, req.targetID, req.resourceID, false)
 		if err != nil {
 			// Distinguish transient errors (rate limits, timeouts) from genuine not-found.
 			// Transient errors must surface as IsError so the model stops retrying.
@@ -317,10 +339,10 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 			// Genuine failure (e.g. resource doesn't exist) — keep existing behavior
 			return NewJSONResult(map[string]interface{}{
 				"found":         false,
-				"resource_type": resourceType,
-				"resource_id":   resourceID,
-				"target_id":     targetID,
-				"cli_access":    cliAccess,
+				"resource_type": req.resourceType,
+				"resource_id":   req.resourceID,
+				"target_id":     req.targetID,
+				"cli_access":    req.cliAccess,
 				"message":       fmt.Sprintf("Discovery failed: %v", err),
 				"hint":          "Command-capable investigation may still be possible. Common log locations include /var/log/.",
 			}), nil
@@ -331,19 +353,70 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 		// No discovery but provide cli_access for manual investigation
 		return NewJSONResult(map[string]interface{}{
 			"found":         false,
-			"resource_type": resourceType,
-			"resource_id":   resourceID,
-			"target_id":     targetID,
-			"cli_access":    cliAccess,
+			"resource_type": req.resourceType,
+			"resource_id":   req.resourceID,
+			"target_id":     req.targetID,
+			"cli_access":    req.cliAccess,
 			"message":       "Discovery returned no data. The resource may not be accessible.",
 			"hint":          "Command-capable investigation may still be possible. Common next evidence includes /var/log/ entries or running-process state.",
 		}), nil
 	}
 
+	return NewJSONResult(buildDiscoveryToolResponse(req, discovery)), nil
+}
+
+func (e *PulseToolExecutor) executeRunDiscovery(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+	req, blocked, ok := e.normalizeDiscoveryResourceRequest(args)
+	if !ok {
+		return blocked, nil
+	}
+
+	discovery, err := e.discoveryProvider.TriggerDiscovery(ctx, req.providerResourceType, req.targetID, req.resourceID, true)
+	if err != nil {
+		if isTransientError(err) {
+			return CallToolResult{
+				Content: []Content{{
+					Type: "text",
+					Text: fmt.Sprintf("Discovery run temporarily unavailable: %v. Immediate retry is unlikely to add information; command-capable investigation or another approach may be needed.", err),
+				}},
+				IsError: true,
+			}, nil
+		}
+		return NewJSONResult(map[string]interface{}{
+			"found":         false,
+			"refreshed":     false,
+			"resource_type": req.resourceType,
+			"resource_id":   req.resourceID,
+			"target_id":     req.targetID,
+			"cli_access":    req.cliAccess,
+			"message":       fmt.Sprintf("Discovery run failed: %v", err),
+			"hint":          "Command-capable investigation may still be possible. Common next evidence includes /var/log/ entries or running-process state.",
+		}), nil
+	}
+
+	if discovery == nil {
+		return NewJSONResult(map[string]interface{}{
+			"found":         false,
+			"refreshed":     false,
+			"resource_type": req.resourceType,
+			"resource_id":   req.resourceID,
+			"target_id":     req.targetID,
+			"cli_access":    req.cliAccess,
+			"message":       "Discovery run returned no data. The resource may not be accessible.",
+			"hint":          "Command-capable investigation may still be possible. Common next evidence includes /var/log/ entries or running-process state.",
+		}), nil
+	}
+
+	response := buildDiscoveryToolResponse(req, discovery)
+	response["refreshed"] = true
+	return NewJSONResult(response), nil
+}
+
+func buildDiscoveryToolResponse(req discoveryResourceRequest, discovery *ResourceDiscoveryInfo) map[string]interface{} {
 	// Use fallback cli_access if discovery didn't provide one
 	responseCLIAccess := discovery.CLIAccess
 	if responseCLIAccess == "" {
-		responseCLIAccess = cliAccess
+		responseCLIAccess = req.cliAccess
 	}
 
 	// Use fallback paths for known services if discovery didn't find specific ones
@@ -364,12 +437,12 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 		}
 	}
 
-	discoveryTargetID := CanonicalDiscoveryTargetID(discovery, targetID)
+	discoveryTargetID := CanonicalDiscoveryTargetID(discovery, req.targetID)
 
 	// Return the discovery information
 	responseResourceType := CanonicalDiscoveryResourceType(discovery.ResourceType)
 	if responseResourceType == "" {
-		responseResourceType = resourceType
+		responseResourceType = req.resourceType
 	}
 	response := map[string]interface{}{
 		"found":           true,
@@ -438,7 +511,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 		response["ports"] = ports
 	}
 
-	return NewJSONResult(response), nil
+	return response
 }
 
 // isTransientError checks whether an error is a transient API/infrastructure error

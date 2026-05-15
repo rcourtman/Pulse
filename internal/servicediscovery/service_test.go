@@ -50,6 +50,29 @@ func (b *blockingAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt strin
 	return "", ctx.Err()
 }
 
+type captureProgressHub struct {
+	mu       sync.Mutex
+	progress []*DiscoveryProgress
+}
+
+func (h *captureProgressHub) BroadcastDiscoveryProgress(progress *DiscoveryProgress) {
+	if progress == nil {
+		return
+	}
+	progressCopy := *progress
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.progress = append(h.progress, &progressCopy)
+}
+
+func (h *captureProgressHub) snapshots() []*DiscoveryProgress {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := make([]*DiscoveryProgress, len(h.progress))
+	copy(out, h.progress)
+	return out
+}
+
 func TestFilterSensitiveLabels(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -208,6 +231,52 @@ func TestFilterSensitiveLabels(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestService_DiscoverResource_ProgressDescribesModelAnalysisNotAssistantChat(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	service := NewService(store, nil, DefaultConfig())
+	service.SetAIAnalyzer(&stubAnalyzer{
+		response: `{"service_type":"postgresql","service_name":"PostgreSQL","service_version":"16","category":"database","cli_access":"ssh root@host","facts":[],"config_paths":[],"data_paths":[],"ports":[],"confidence":0.9,"reasoning":"metadata-only identification"}`,
+	})
+	hub := &captureProgressHub{}
+	service.SetWSHub(hub)
+
+	_, err = service.DiscoverResource(context.Background(), DiscoveryRequest{
+		ResourceType: ResourceTypeAgent,
+		TargetID:     "agent-1",
+		ResourceID:   "agent-1",
+		Hostname:     "agent-1",
+		Force:        true,
+	})
+	if err != nil {
+		t.Fatalf("DiscoverResource error: %v", err)
+	}
+
+	var analysisProgress *DiscoveryProgress
+	for _, progress := range hub.snapshots() {
+		if progress.Status == DiscoveryStatusRunning {
+			analysisProgress = progress
+			break
+		}
+	}
+	if analysisProgress == nil {
+		t.Fatalf("expected running analysis progress")
+	}
+	if strings.Contains(analysisProgress.CurrentStep, "Pulse Assistant") {
+		t.Fatalf("progress step must not imply a live Assistant chat, got %q", analysisProgress.CurrentStep)
+	}
+	if analysisProgress.CurrentStep != "Analyzing discovery evidence with the selected model..." {
+		t.Fatalf("unexpected progress step: %q", analysisProgress.CurrentStep)
+	}
+	if analysisProgress.PercentComplete != 75 {
+		t.Fatalf("expected analysis progress at 75%%, got %v", analysisProgress.PercentComplete)
 	}
 }
 
