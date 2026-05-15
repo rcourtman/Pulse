@@ -6,6 +6,7 @@ import { Table } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
 
 import { getGuestColumnWidthStyle } from './guestRowModel';
+import { MetricDisplayModeSegmentedControl } from './MetricDisplayModeSegmentedControl';
 import type { WorkloadsState } from './useWorkloadsState';
 import { WorkloadPanel } from './WorkloadPanel';
 import { WorkloadTableHeader } from './WorkloadTableHeader';
@@ -49,9 +50,12 @@ type WorkloadsTableProps = Pick<
   | 'visibleGroupKeys'
   | 'windowedGroupedGuests'
   | 'workloadIOEmphasis'
+  | 'workloadMetricDisplayMode'
+  | 'workloadMetricHistory'
   | 'workloadTableLayoutMode'
   | 'workloadTableVisibleColumnIds'
   | 'workloadTableVisibleColumns'
+  | 'setWorkloadMetricDisplayMode'
 >;
 
 export function WorkloadsTable(props: WorkloadsTableProps) {
@@ -68,6 +72,12 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
       >
         <TableCardHeader
           title="Workloads"
+          actions={
+            <MetricDisplayModeSegmentedControl
+              value={props.workloadMetricDisplayMode()}
+              onChange={props.setWorkloadMetricDisplayMode}
+            />
+          }
           showClearAction={showClearSelection()}
           onClear={props.clearPinnedSummaryScope}
         />
@@ -117,6 +127,7 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             focusedSummaryWorkloadGroupScope={props.focusedSummaryWorkloadGroupScope}
             focusedSummaryWorkloadGroupId={props.focusedSummaryWorkloadGroupId}
             hoveredSummaryWorkloadGroupScope={props.hoveredSummaryWorkloadGroupScope}
+            isMobile={props.isMobile}
             nodeByInstance={props.nodeByInstance}
             search={props.search}
             selectedGuestId={props.selectedGuestId}
@@ -130,8 +141,11 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             visibleGroupKeys={props.visibleGroupKeys}
             windowedGroupedGuests={props.windowedGroupedGuests}
             workloadIOEmphasis={props.workloadIOEmphasis}
+            workloadMetricDisplayMode={props.workloadMetricDisplayMode}
+            workloadMetricHistory={props.workloadMetricHistory}
             workloadTableLayoutMode={props.workloadTableLayoutMode}
             workloadTableVisibleColumnIds={props.workloadTableVisibleColumnIds}
+            workloadTableVisibleColumns={props.workloadTableVisibleColumns}
           />
         </Table>
       </TableCard>

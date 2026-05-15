@@ -21,6 +21,7 @@ import {
   getGuestDrawerAgentLabel,
   getGuestDrawerAgentTitle,
   getGuestDrawerBackupPresentation,
+  getGuestDrawerHistoryTarget,
   getGuestDrawerMemoryExtraLines,
   getGuestDrawerNetworkInterfaces,
   hasGuestDrawerFilesystemDetails,
@@ -71,6 +72,8 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     props.guest.lastBackup ? getGuestDrawerBackupPresentation(props.guest.lastBackup) : null,
   );
   const hasDiscoverySupport = createMemo(() => hasDiscoverySupportForWorkload(props.guest));
+  const historyTarget = createMemo(() => getGuestDrawerHistoryTarget(props.guest));
+  const hasHistorySupport = createMemo(() => historyTarget() !== null);
   const discoveryAgentId = createMemo(() => getDiscoveryHostIdForWorkload(props.guest));
   const discoveryResourceId = createMemo(() => getDiscoveryResourceIdForWorkload(props.guest));
   const discoveryResourceType = createMemo(() => getDiscoveryResourceTypeForWorkload(props.guest));
@@ -84,6 +87,9 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
 
   createEffect(() => {
     if (activeTab() === 'discovery' && !hasDiscoverySupport()) {
+      setActiveTab('overview');
+    }
+    if (activeTab() === 'history' && !hasHistorySupport()) {
       setActiveTab('overview');
     }
   });
@@ -103,8 +109,10 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     hasAgentInfo,
     hasDiscoverySupport,
     hasFilesystemDetails,
+    hasHistorySupport,
     hasNetworkInterfaces,
     hasOsInfo,
+    historyTarget,
     infrastructureHref,
     ipAddresses,
     memoryExtraLines,

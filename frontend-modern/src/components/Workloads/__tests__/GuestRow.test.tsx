@@ -231,6 +231,33 @@ describe('GuestRow', () => {
       expect(screen.getByTestId('disk-bar')).toBeTruthy();
     });
 
+    it('renders metric sparklines instead of bars when the display mode is sparklines', () => {
+      renderGuestRow({
+        guest: makeGuest({ name: 'spark-vm' }),
+        visibleColumnIds: ['name', 'cpu', 'memory', 'disk'],
+        metricDisplayMode: 'sparklines',
+        metricHistory: {
+          getGuestMetricSeries: (_guest, metric) => [
+            {
+              id: metric,
+              label: metric,
+              color: '#8b5cf6',
+              points: [
+                { timestamp: 1, value: 10 },
+                { timestamp: 2, value: 25 },
+              ],
+            },
+          ],
+          getNodeMetricSeries: () => [],
+        },
+      });
+
+      expect(screen.getAllByTestId('metric-mini-sparkline')).toHaveLength(3);
+      expect(screen.queryByTestId('cpu-bar')).toBeNull();
+      expect(screen.queryByTestId('memory-bar')).toBeNull();
+      expect(screen.queryByTestId('disk-bar')).toBeNull();
+    });
+
     it('shows dash when disk data is unavailable', () => {
       renderGuestRow({
         guest: makeGuest({ disk: { total: 0, used: 0, free: 0, usage: 0 } }),

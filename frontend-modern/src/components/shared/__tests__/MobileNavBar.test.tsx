@@ -15,6 +15,7 @@ window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
 const InfrastructureIcon: Component<{ class?: string }> = (props) => (
   <span class={props.class}>IN</span>
 );
+const ProxmoxIcon: Component<{ class?: string }> = (props) => <span class={props.class}>PX</span>;
 const StorageIcon: Component<{ class?: string }> = (props) => <span class={props.class}>ST</span>;
 const AlertsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>AL</span>;
 const SettingsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>SE</span>;
@@ -125,6 +126,17 @@ describe('MobileNavBar', () => {
         activeTab={() => 'infrastructure'}
         platformTabs={() => [
           {
+            id: 'proxmox',
+            label: 'Proxmox',
+            route: '/proxmox/overview',
+            settingsRoute: '/settings/infrastructure/platforms/proxmox/pve',
+            tooltip: 'Proxmox',
+            enabled: true,
+            live: true,
+            icon: ProxmoxIcon,
+            alwaysShow: true,
+          },
+          {
             id: 'infrastructure',
             label: 'Infrastructure',
             route: '/infrastructure',
@@ -182,10 +194,11 @@ describe('MobileNavBar', () => {
     fireEvent.scroll(navList);
 
     const buttons = container.querySelectorAll('button[data-tab-id]');
-    expect(buttons[0]).toHaveAttribute('data-tab-id', 'infrastructure');
-    expect(buttons[1]).toHaveAttribute('data-tab-id', 'storage');
-    expect(buttons[2]).toHaveAttribute('data-tab-id', 'alerts');
-    expect(buttons[3]).toHaveAttribute('data-tab-id', 'settings');
+    expect(buttons[0]).toHaveAttribute('data-tab-id', 'proxmox');
+    expect(buttons[1]).toHaveAttribute('data-tab-id', 'infrastructure');
+    expect(buttons[2]).toHaveAttribute('data-tab-id', 'storage');
+    expect(buttons[3]).toHaveAttribute('data-tab-id', 'alerts');
+    expect(buttons[4]).toHaveAttribute('data-tab-id', 'settings');
 
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();

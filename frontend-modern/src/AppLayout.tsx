@@ -10,6 +10,7 @@ import SettingsIcon from 'lucide-solid/icons/settings';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
+import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import {
   MobileNavBar,
   type MobileNavBarPlatformTab as PlatformTab,
@@ -29,6 +30,7 @@ import { getActiveTabForPath } from '@/routing/navigation';
 import { preloadRouteModule } from '@/routing/routePreload';
 import {
   buildInfrastructurePath,
+  buildProxmoxPath,
   buildWorkloadsPath,
 } from '@/routing/resourceLinks';
 import { buildStorageRecoveryTabSpecs } from '@/routing/platformTabs';
@@ -41,6 +43,7 @@ import { AI_CHAT_LAUNCHER_ARIA_LABEL, getAIChatLauncherTitle } from '@/utils/aiC
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
 
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
+const ROOT_PROXMOX_PATH = buildProxmoxPath();
 const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
 const AI_CHAT_LAUNCHER_BUTTON_CLASS =
@@ -190,6 +193,7 @@ export function AppLayout(props: AppLayoutProps) {
   // identify the current Pulse surface instead of every page reading
   // as the bare app name.
   const tabTitleByActive: Record<NonNullable<ReturnType<typeof getActiveTabForPath>>, string> = {
+    proxmox: 'Proxmox',
     infrastructure: 'Infrastructure',
     workloads: 'Workloads',
     storage: 'Storage',
@@ -285,6 +289,17 @@ export function AppLayout(props: AppLayoutProps) {
 
   const platformTabs = createMemo<PlatformTab[]>(() => {
     const allPlatforms: PlatformTab[] = [
+      {
+        id: 'proxmox',
+        label: 'Proxmox',
+        route: ROOT_PROXMOX_PATH,
+        settingsRoute: '/settings/infrastructure/platforms/proxmox/pve',
+        tooltip: 'Proxmox VE, Backup Server, Mail Gateway, storage, backups, and guests',
+        enabled: true,
+        live: true,
+        icon: ProxmoxIcon,
+        alwaysShow: true,
+      },
       {
         id: 'infrastructure',
         label: 'Infrastructure',

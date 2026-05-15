@@ -619,6 +619,13 @@ or other self-hosted uncapped continuity plans.
 
 ## Current State
 
+The Proxmox platform tab in the authenticated app shell is ordinary product
+navigation. It must stay separate from hosted acquisition, monitored-system
+pressure, billing prompts, and Pulse Account handoffs: self-hosted operators
+may open the Proxmox page without seeing commercial upgrade copy, while hosted
+commercial policy continues to render through the existing cloud-paid banners
+and settings surfaces.
+
 `frontend-modern/src/utils/pricingHandoff.ts` now routes displayable paid
 self-hosted feature keys (`relay`, `mobile_app`, `push_notifications`,
 `ai_alerts`, `ai_autofix`, `long_term_metrics`, `rbac`,

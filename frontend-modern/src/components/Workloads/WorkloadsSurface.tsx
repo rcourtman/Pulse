@@ -1,6 +1,8 @@
 import { Show } from 'solid-js';
 import { InfrastructureSelector } from '@/components/shared/InfrastructureSelector';
+import { EmptyState } from '@/components/shared/EmptyState';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { TableCard } from '@/components/shared/TableCard';
 import { WorkloadsFilter } from './WorkloadsFilter';
 import { WorkloadsSummary } from '@/components/Workloads/WorkloadsSummary';
 import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
@@ -15,12 +17,16 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
 
   return (
     <div ref={state.setClearSurfaceRootRef} class="space-y-3" data-testid="workloads-page">
-      <PageHeader
-        title="Workloads"
-        description="Inspect live workloads, filter by platform and status, and drill into compute, memory, and I/O posture."
-      />
+      <Show when={!props.embedded}>
+        <PageHeader
+          title="Workloads"
+          description="Inspect live workloads, filter by platform and status, and drill into compute, memory, and I/O posture."
+        />
+      </Show>
 
-      <Show when={state.isWorkloadsRoute() && !state.workloadsSummaryCollapsed()}>
+      <Show
+        when={!props.tableOnly && state.isWorkloadsRoute() && !state.workloadsSummaryCollapsed()}
+      >
         <StickySummarySection>
           <WorkloadsSummary
             timeRange={state.workloadsSummaryRange()}
@@ -41,37 +47,42 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
         </StickySummarySection>
       </Show>
 
-      <InfrastructureSelector
-        currentTab="workloads"
-        globalTemperatureMonitoringEnabled={state.ws.state.temperatureMonitoringEnabled}
-        onNodeSelect={state.handleNodeSelect}
-        nodes={props.nodes}
-        searchTerm={state.search()}
-        showNodeSummary={!state.isWorkloadsRoute()}
-      />
+      <Show when={!props.embedded}>
+        <InfrastructureSelector
+          currentTab="workloads"
+          globalTemperatureMonitoringEnabled={state.ws.state.temperatureMonitoringEnabled}
+          onNodeSelect={state.handleNodeSelect}
+          nodes={state.infrastructureNodes()}
+          searchTerm={state.search()}
+          showNodeSummary={!state.isWorkloadsRoute()}
+        />
+      </Show>
 
-      <WorkloadsStateCards
-        allGuests={state.allGuests}
-        connected={state.surfaceConnected}
-        workloadsDisconnectedState={state.workloadsDisconnectedState}
-        workloadsGuestsEmptyState={state.workloadsGuestsEmptyState}
-        workloadsInfrastructureEmptyState={state.workloadsInfrastructureEmptyState}
-        workloadsLoadingState={state.workloadsLoadingState}
-        workloadsNoInventoryState={state.workloadsNoInventoryState}
-        filteredGuests={state.filteredGuests}
-        hasInfrastructureSources={state.hasInfrastructureSources}
-        infrastructureSourceStateReady={state.infrastructureSourceStateReady}
-        initialDataReceived={state.surfaceInitialDataReceived}
-        kioskMode={state.kioskMode}
-        navigate={state.navigate}
-        reconnect={state.reconnectSurface}
-        workloadInventoryIssues={state.workloadInventoryIssues}
-        workloads={state.workloads}
-      />
+      <Show when={!props.tableOnly}>
+        <WorkloadsStateCards
+          allGuests={state.allGuests}
+          connected={state.surfaceConnected}
+          workloadsDisconnectedState={state.workloadsDisconnectedState}
+          workloadsGuestsEmptyState={state.workloadsGuestsEmptyState}
+          workloadsInfrastructureEmptyState={state.workloadsInfrastructureEmptyState}
+          workloadsLoadingState={state.workloadsLoadingState}
+          workloadsNoInventoryState={state.workloadsNoInventoryState}
+          filteredGuests={state.filteredGuests}
+          hasInfrastructureSources={state.hasInfrastructureSources}
+          infrastructureSourceStateReady={state.infrastructureSourceStateReady}
+          initialDataReceived={state.surfaceInitialDataReceived}
+          kioskMode={state.kioskMode}
+          navigate={state.navigate}
+          reconnect={state.reconnectSurface}
+          workloadInventoryIssues={state.workloadInventoryIssues}
+          workloads={state.workloads}
+        />
+      </Show>
 
       <div class="space-y-3" data-testid="workloads-interaction-surface">
         <Show
           when={
+            !props.tableOnly &&
             !state.kioskMode() &&
             state.surfaceConnected() &&
             state.surfaceInitialDataReceived() &&
@@ -153,20 +164,44 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
             visibleGroupKeys={state.visibleGroupKeys}
             windowedGroupedGuests={state.windowedGroupedGuests}
             workloadIOEmphasis={state.workloadIOEmphasis}
+            workloadMetricDisplayMode={state.workloadMetricDisplayMode}
+            workloadMetricHistory={state.workloadMetricHistory}
             workloadTableLayoutMode={state.workloadTableLayoutMode}
             workloadTableVisibleColumnIds={state.workloadTableVisibleColumnIds}
             workloadTableVisibleColumns={state.workloadTableVisibleColumns}
+            setWorkloadMetricDisplayMode={state.setWorkloadMetricDisplayMode}
           />
+        </Show>
+        <Show
+          when={
+            props.tableOnly &&
+            state.surfaceConnected() &&
+            state.surfaceInitialDataReceived() &&
+            state.filteredGuests().length === 0
+          }
+        >
+          <TableCard>
+            <div class="p-6">
+              <EmptyState
+                title="No Proxmox workloads"
+                description="Proxmox VMs and containers appear here when inventory is available."
+              />
+            </div>
+          </TableCard>
         </Show>
       </div>
 
-      <WorkloadsStatsStrip
-        connected={state.surfaceConnected}
-        initialDataReceived={state.surfaceInitialDataReceived}
-        totalStats={state.totalStats}
-      />
+      <Show when={!props.embedded}>
+        <WorkloadsStatsStrip
+          connected={state.surfaceConnected}
+          initialDataReceived={state.surfaceInitialDataReceived}
+          totalStats={state.totalStats}
+        />
+      </Show>
 
-      <ScrollToTopButton />
+      <Show when={!props.embedded}>
+        <ScrollToTopButton />
+      </Show>
     </div>
   );
 }

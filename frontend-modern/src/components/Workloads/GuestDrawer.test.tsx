@@ -47,6 +47,26 @@ vi.mock('@/components/shared/WebInterfaceUrlField', () => ({
   ),
 }));
 
+vi.mock('@/components/shared/HistoryChart', () => ({
+  HistoryChart: (props: {
+    resourceType: string;
+    resourceId: string;
+    metric: string;
+    label?: string;
+    range?: string;
+  }) => (
+    <div
+      data-testid="history-chart"
+      data-resource-type={props.resourceType}
+      data-resource-id={props.resourceId}
+      data-metric={props.metric}
+      data-range={props.range}
+    >
+      {props.label}
+    </div>
+  ),
+}));
+
 // After mocks, import the component under test
 import { GuestDrawer } from './GuestDrawer';
 
@@ -95,6 +115,7 @@ describe('GuestDrawer', () => {
     it('renders Overview and Discovery tabs', () => {
       render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
       expect(screen.getByText('Overview')).toBeInTheDocument();
+      expect(screen.getByText('History')).toBeInTheDocument();
       expect(screen.getByText('Discovery')).toBeInTheDocument();
     });
 
@@ -114,6 +135,7 @@ describe('GuestDrawer', () => {
         />
       ));
       expect(screen.getByText('Overview')).toBeInTheDocument();
+      expect(screen.getByText('History')).toBeInTheDocument();
       expect(screen.queryByText('Discovery')).toBeNull();
       expect(screen.queryByTestId('discovery-tab')).toBeNull();
     });
@@ -131,6 +153,20 @@ describe('GuestDrawer', () => {
       const panels = container.querySelectorAll('[style*="overflow-anchor"]');
       expect(panels[0]).toHaveClass('hidden');
       expect(panels[1]).not.toHaveClass('hidden');
+    });
+
+    it('renders persistent metric charts on the History tab', async () => {
+      render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
+      expect(screen.queryByTestId('history-chart')).toBeNull();
+
+      await fireEvent.click(screen.getByText('History'));
+
+      const charts = screen.getAllByTestId('history-chart');
+      expect(charts).toHaveLength(7);
+      expect(charts[0].dataset.resourceType).toBe('vm');
+      expect(charts[0].dataset.resourceId).toBe('inst1:node1:100');
+      expect(charts[0].dataset.metric).toBe('cpu');
+      expect(charts[0].dataset.range).toBe('24h');
     });
 
     it('switches back to Overview tab', async () => {

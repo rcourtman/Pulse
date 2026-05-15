@@ -2,6 +2,7 @@ import { createEffect, createMemo, onCleanup } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { ConnectionsAPI, type ConnectionsListResponse } from '@/api/connections';
 import type { VM, Container, Node } from '@/types/api';
+import type { Resource } from '@/types/resource';
 import type { WorkloadGuest } from '@/types/workloads';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -18,19 +19,21 @@ import {
   getWorkloadsNoInventoryState,
 } from '@/utils/workloadEmptyStatePresentation';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
+import { nodeFromResource } from '@/utils/resourceStateAdapters';
 import {
   buildWorkloadSummaryGroupScopeMap,
   createWorkloadSortComparator,
   filterWorkloads,
   type FilterWorkloadsParams,
 } from './workloadSelectors';
-import { type WorkloadsSortKey } from './workloadsFilterModel';
+import { type WorkloadsGroupingMode, type WorkloadsSortKey } from './workloadsFilterModel';
 import { useWorkloadsControlsState } from './useWorkloadsControlsState';
 import { useWorkloadGuestMetadataState } from './useWorkloadGuestMetadataState';
 import { useWorkloadSelectionState } from './useWorkloadSelectionState';
 import { useWorkloadsDerivedState } from './useWorkloadsDerivedState';
 import { useWorkloadRouteState } from './useWorkloadRouteState';
 import { buildWorkloadInventorySourceIssues } from './workloadInventorySourceIssues';
+import { useWorkloadTableMetricHistory } from './useWorkloadTableMetricHistory';
 
 const WORKLOADS_INFRASTRUCTURE_SOURCES_QUERY =
   'type=agent,docker-host,k8s-cluster,k8s-node,pbs,pmg,storage,physical_disk,ceph';
@@ -40,11 +43,21 @@ const EMPTY_CONNECTIONS_RESPONSE: ConnectionsListResponse = {
   systems: [],
 };
 
+const isProxmoxNodeResource = (resource: Resource): boolean =>
+  resource.type === 'agent' &&
+  (resource.platformType === 'proxmox-pve' ||
+    Boolean(resource.proxmox) ||
+    Boolean(resource.platformData?.proxmox));
+
 export interface WorkloadsSurfaceProps {
   vms: VM[];
   containers: Container[];
   nodes: Node[];
   useWorkloads?: boolean;
+  embedded?: boolean;
+  tableOnly?: boolean;
+  forcedPlatform?: string;
+  forcedGroupingMode?: WorkloadsGroupingMode;
 }
 
 export type WorkloadSortKey = WorkloadsSortKey;
@@ -155,14 +168,36 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     workloadTableVisibleColumnIds,
     workloadTableVisibleColumns,
     workloadTableLayoutMode,
+    workloadMetricDisplayMode,
     workloadsSummaryCollapsed,
     workloadsSummaryRange,
+    setWorkloadMetricDisplayMode,
     setWorkloadsSummaryCollapsed,
     setWorkloadsSummaryRange,
   } = useWorkloadsControlsState({
+    forcedGroupingMode: props.forcedGroupingMode,
     setShowFilters,
     showFilters,
     viewMode,
+  });
+
+  const infrastructureNodes = createMemo<Node[]>(() => {
+    const merged = new Map<string, Node>();
+    props.nodes.forEach((node) => merged.set(node.id, node));
+
+    if (workloadsEnabled()) {
+      infrastructureSources
+        .resources()
+        .filter(isProxmoxNodeResource)
+        .map(nodeFromResource)
+        .filter((node): node is Node => Boolean(node))
+        .forEach((node) => {
+          const existing = merged.get(node.id);
+          merged.set(node.id, existing ? { ...existing, ...node } : node);
+        });
+    }
+
+    return Array.from(merged.values());
   });
 
   const workloadsInfrastructureEmptyState = createMemo(() =>
@@ -177,11 +212,15 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   const workloadInventoryIssues = createMemo(() =>
     buildWorkloadInventorySourceIssues(connectionsSnapshot.value().connections ?? []),
   );
+  const workloadMetricHistory = useWorkloadTableMetricHistory({
+    enabled: () => workloadMetricDisplayMode() === 'sparklines',
+    selectedNode,
+  });
   const hasWorkloadsData = createMemo(() => allGuests().length > 0);
   const hasInfrastructureSources = createMemo(() =>
     workloadsEnabled()
-      ? props.nodes.length > 0 || infrastructureSources.resources().length > 0
-      : props.nodes.length > 0,
+      ? infrastructureNodes().length > 0 || infrastructureSources.resources().length > 0
+      : infrastructureNodes().length > 0,
   );
   const infrastructureSourceStateReady = createMemo(() =>
     workloadsEnabled() ? hasInfrastructureSources() || !infrastructureSources.loading() : true,
@@ -239,7 +278,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
       searchTerm: search().trim(),
       selectedNode: selectedNode(),
       selectedHostHint: selectedHostHint(),
-      selectedPlatform: selectedPlatform(),
+      selectedPlatform: props.forcedPlatform?.trim() || selectedPlatform(),
       selectedKubernetesContext: selectedKubernetesContext(),
       selectedKubernetesNamespace: selectedKubernetesNamespace(),
       containerRuntime: containerRuntime().trim() || null,
@@ -249,7 +288,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   const summaryGroupScopes = createMemo(() =>
     buildWorkloadSummaryGroupScopeMap({
       guests: filteredGuests(),
-      nodes: props.nodes,
+      nodes: infrastructureNodes(),
       groupingMode: groupingMode(),
       sortComparator: guestSortComparator(),
     }),
@@ -309,7 +348,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     filteredGuests,
     groupingMode,
     guestSortComparator,
-    nodes: () => props.nodes,
+    nodes: infrastructureNodes,
     revealedGuestId,
     selectedGuestId,
     tableBodyRef,
@@ -352,6 +391,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     hoveredSummaryWorkloadGroupScope,
     hoveredWorkloadId,
     infrastructureSourceStateReady,
+    infrastructureNodes,
     initialDataReceived,
     isMobile,
     isSearchLocked,
@@ -393,6 +433,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     setTableRootRef,
     setTableWrapperRef,
     setViewMode,
+    setWorkloadMetricDisplayMode,
     setWorkloadsSummaryCollapsed,
     setWorkloadsSummaryRange,
     shouldShowJumpToActiveWorkloadRow,
@@ -409,6 +450,8 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     visibleGroupKeys,
     windowedGroupedGuests,
     workloadIOEmphasis,
+    workloadMetricDisplayMode,
+    workloadMetricHistory,
     workloadTableVisibleColumnIds,
     workloadTableVisibleColumns,
     workloadTableLayoutMode,

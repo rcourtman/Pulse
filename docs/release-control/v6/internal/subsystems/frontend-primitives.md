@@ -1310,6 +1310,16 @@ AI runtime.
 
 ## Current State
 
+The shared table chrome now allows `TableCardHeader` to expose a right-aligned
+action slot, currently used by the Workloads/Proxmox metric display control.
+That slot belongs to the table header band and must not reintroduce nested
+cards or page-local toolbar wrappers inside `TableCard`. Proxmox host grouping
+also extends the shared `NodeGroupHeader` row pattern: host metrics may align
+with workload table columns, but the shared primitive owns the header/table
+shell boundary rather than platform pages copying their own card headers.
+Mobile navigation now recognizes `proxmox` as a first-class platform tab in
+the shared priority model so app-shell ordering remains centralized.
+
 `ResourceOperatorStateSection.tsx` on the resource detail drawer
 overview tab uses `createNonSuspendingQuery` to fetch
 `/api/resources/{id}/operator-state` so the drawer's parent

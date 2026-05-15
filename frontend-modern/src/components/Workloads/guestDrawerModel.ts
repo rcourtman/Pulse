@@ -1,7 +1,8 @@
 import type { WorkloadGuest } from '@/types/workloads';
+import type { HistoryTimeRange, ResourceType as HistoryResourceType } from '@/api/charts';
 
 import { formatBytes } from '@/utils/format';
-import { resolveWorkloadType } from '@/utils/workloads';
+import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
 
 type Guest = WorkloadGuest;
 
@@ -12,7 +13,19 @@ export interface GuestDrawerProps {
   onCustomUrlChange?: (guestId: string, url: string) => void;
 }
 
-export type GuestDrawerTab = 'overview' | 'discovery';
+export type GuestDrawerTab = 'overview' | 'history' | 'discovery';
+
+export interface GuestDrawerHistoryTarget {
+  resourceType: HistoryResourceType;
+  resourceId: string;
+}
+
+export interface GuestDrawerHistoryChartConfig {
+  metric: string;
+  label: string;
+  unit: string;
+  color: string;
+}
 
 export interface GuestDrawerBackupPresentation {
   ageClass: string;
@@ -21,6 +34,37 @@ export interface GuestDrawerBackupPresentation {
 }
 
 export const isGuestDrawerVM = (guest: Guest): boolean => resolveWorkloadType(guest) === 'vm';
+
+export const GUEST_DRAWER_HISTORY_DEFAULT_RANGE: HistoryTimeRange = '24h';
+
+export const GUEST_DRAWER_HISTORY_CHARTS: GuestDrawerHistoryChartConfig[] = [
+  { metric: 'cpu', label: 'CPU', unit: '%', color: '#8b5cf6' },
+  { metric: 'memory', label: 'Memory', unit: '%', color: '#f59e0b' },
+  { metric: 'disk', label: 'Disk', unit: '%', color: '#10b981' },
+  { metric: 'netin', label: 'Network In', unit: 'B/s', color: '#10b981' },
+  { metric: 'netout', label: 'Network Out', unit: 'B/s', color: '#fb923c' },
+  { metric: 'diskread', label: 'Disk Read', unit: 'B/s', color: '#3b82f6' },
+  { metric: 'diskwrite', label: 'Disk Write', unit: 'B/s', color: '#f59e0b' },
+];
+
+export const getGuestDrawerHistoryTarget = (guest: Guest): GuestDrawerHistoryTarget | null => {
+  const resourceId = getCanonicalWorkloadId(guest).trim();
+  if (!resourceId) return null;
+
+  const workloadType = resolveWorkloadType(guest);
+  switch (workloadType) {
+    case 'vm':
+      return { resourceType: 'vm', resourceId };
+    case 'system-container':
+      return { resourceType: 'system-container', resourceId };
+    case 'app-container':
+      return { resourceType: 'app-container', resourceId };
+    case 'pod':
+      return { resourceType: 'pod', resourceId };
+    default:
+      return null;
+  }
+};
 
 export const hasGuestDrawerOsInfo = (guest: Guest): boolean =>
   (guest.osName?.length ?? 0) > 0 || (guest.osVersion?.length ?? 0) > 0;
@@ -85,8 +129,7 @@ export const getGuestDrawerBackupPresentation = (
       : isOld
         ? 'text-amber-600 dark:text-amber-400'
         : 'text-green-600 dark:text-green-400',
-    ageLabel:
-      daysSince === 0 ? 'Today' : daysSince === 1 ? 'Yesterday' : `${daysSince}d ago`,
+    ageLabel: daysSince === 0 ? 'Today' : daysSince === 1 ? 'Yesterday' : `${daysSince}d ago`,
     dateLabel: backupDate.toLocaleDateString(),
   };
 };

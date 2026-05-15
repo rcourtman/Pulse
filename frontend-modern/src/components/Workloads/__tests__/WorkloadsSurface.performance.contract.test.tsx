@@ -201,6 +201,7 @@ vi.mock('@/stores/aiChat', () => ({
 
 vi.mock('@/utils/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logError: vi.fn(),
 }));
 
 vi.mock('@/utils/url', () => ({

@@ -28,6 +28,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import {
   PATROL_PATH,
+  PROXMOX_PATH,
   buildRecoveryPath,
   buildInfrastructurePath,
   buildStoragePath,
@@ -57,6 +58,7 @@ const AlertsPage = lazy(() =>
 );
 const SettingsPage = lazy(() => import('./components/Settings/Settings'));
 const InfrastructurePage = lazy(() => import('./pages/Infrastructure'));
+const ProxmoxPage = lazy(() => import('./pages/Proxmox'));
 const WorkloadsPage = lazy(() => import('./pages/Workloads'));
 const AIIntelligencePage = lazy(() =>
   import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
@@ -461,6 +463,8 @@ function App() {
       <Route path="/preview/setup-complete" component={SetupCompletionPreviewPage} />
       <Route path="/login" component={RuntimeHomePage} />
       <Route path="/" component={RuntimeHomePage} />
+      <Route path={PROXMOX_PATH} component={ProxmoxPage} />
+      <Route path={`${PROXMOX_PATH}/*`} component={ProxmoxPage} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsPage} />
       <Route path={STORAGE_PATH} component={StoragePage} />
       <Route path={RECOVERY_ROUTE_PATH} component={RecoveryPage} />

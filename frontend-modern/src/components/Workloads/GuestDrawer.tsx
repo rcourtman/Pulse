@@ -3,6 +3,7 @@ import { useNavigate } from '@solidjs/router';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
 import type { GuestDrawerProps } from './guestDrawerModel';
 import { useGuestDrawerState } from './useGuestDrawerState';
+import { GuestDrawerHistory } from './GuestDrawerHistory';
 import { GuestDrawerOverview } from './GuestDrawerOverview';
 
 export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
@@ -21,8 +22,10 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     hasAgentInfo,
     hasDiscoverySupport,
     hasFilesystemDetails,
+    hasHistorySupport,
     hasNetworkInterfaces,
     hasOsInfo,
+    historyTarget,
     infrastructureHref,
     ipAddresses,
     guestOsSummary,
@@ -52,6 +55,19 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
             <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
           )}
         </button>
+        {hasHistorySupport() && (
+          <button
+            onClick={() => switchTab('history')}
+            class={`pb-2 text-sm font-medium transition-colors relative ${
+              activeTab() === 'history' ? 'text-blue-600 dark:text-blue-400' : ' hover:text-muted'
+            }`}
+          >
+            History
+            {activeTab() === 'history' && (
+              <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
+            )}
+          </button>
+        )}
         {hasDiscoverySupport() && (
           <button
             onClick={() => switchTab('discovery')}
@@ -100,6 +116,12 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           webInterfaceTargetLabel={webInterfaceTargetLabel()}
         />
       </div>
+
+      {hasHistorySupport() && activeTab() === 'history' && (
+        <div style={{ 'overflow-anchor': 'none' }}>
+          <GuestDrawerHistory target={historyTarget()} />
+        </div>
+      )}
 
       {/* Always rendered, hidden via CSS. Wrapped in a local Suspense
                      so DiscoveryTab's createResource loading state doesn't bubble

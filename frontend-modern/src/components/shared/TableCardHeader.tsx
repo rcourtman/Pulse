@@ -2,6 +2,7 @@ import { Show, type Component, type JSX } from 'solid-js';
 
 export type TableCardHeaderProps = {
   title: JSX.Element;
+  actions?: JSX.Element;
   showClearAction?: boolean;
   clearLabel?: string;
   clearAriaLabel?: string;
@@ -16,6 +17,11 @@ export const TABLE_CARD_HEADER_CLEAR_BUTTON_CLASS = [
   'hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1',
 ].join(' ');
 
+const TABLE_CARD_HEADER_ACTIONS_CLEAR_BUTTON_CLASS = TABLE_CARD_HEADER_CLEAR_BUTTON_CLASS.replace(
+  'ml-auto ',
+  '',
+);
+
 export const TableCardHeader: Component<TableCardHeaderProps> = (props) => {
   const clearLabel = () => props.clearLabel ?? 'Clear';
   const clearAriaLabel = () => props.clearAriaLabel ?? 'Clear selection';
@@ -23,18 +29,23 @@ export const TableCardHeader: Component<TableCardHeaderProps> = (props) => {
   return (
     <div class={TABLE_CARD_HEADER_CLASS}>
       <span>{props.title}</span>
-      <Show when={props.showClearAction && props.onClear}>
-        <button
-          type="button"
-          class={TABLE_CARD_HEADER_CLEAR_BUTTON_CLASS}
-          aria-label={clearAriaLabel()}
-          onClick={(event) => {
-            event.stopPropagation();
-            props.onClear?.();
-          }}
-        >
-          {clearLabel()}
-        </button>
+      <Show when={props.actions || (props.showClearAction && props.onClear)}>
+        <div class="ml-auto flex items-center gap-2 normal-case tracking-normal">
+          {props.actions}
+          <Show when={props.showClearAction && props.onClear}>
+            <button
+              type="button"
+              class={TABLE_CARD_HEADER_ACTIONS_CLEAR_BUTTON_CLASS}
+              aria-label={clearAriaLabel()}
+              onClick={(event) => {
+                event.stopPropagation();
+                props.onClear?.();
+              }}
+            >
+              {clearLabel()}
+            </button>
+          </Show>
+        </div>
       </Show>
     </div>
   );

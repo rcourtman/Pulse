@@ -470,14 +470,7 @@ const getCanonicalSourceList = (
 };
 
 const sourceListContainsRuntimePlatform = (sources: string[] | undefined): boolean =>
-  sourceListHas(
-    sources,
-    'proxmox-pve',
-    'docker',
-    'kubernetes',
-    'vmware-vsphere',
-    'truenas',
-  );
+  sourceListHas(sources, 'proxmox-pve', 'docker', 'kubernetes', 'vmware-vsphere', 'truenas');
 
 const getHostResourceMergeKey = (resource: Resource): string | undefined => {
   if (resource.type !== 'agent') return undefined;
@@ -520,10 +513,7 @@ const preferHostResourcePrimary = (candidate: Resource, other: Resource): boolea
   return candidate.lastSeen >= other.lastSeen;
 };
 
-const withMergedSnapshotSources = (
-  resource: Resource,
-  sources: string[] | undefined,
-): Resource => {
+const withMergedSnapshotSources = (resource: Resource, sources: string[] | undefined): Resource => {
   if (!sources || sources.length === 0) return resource;
   const platform = asRecord(resource.platformData);
   return canonicalizeRealtimeResource({
@@ -877,16 +867,23 @@ export const nodeFromResource = (resource: Resource): Node | null => {
     resource.platformId ||
     getCanonicalPlatformId(resource) ||
     preferredHostLabel;
-  const name = asString(proxmox?.nodeName) || preferredHostLabel;
+  const name = asString(proxmox?.nodeName) || asString(proxmox?.node) || preferredHostLabel;
   const linkedAgentId =
     asString(platform?.linkedAgentId) || getActionableAgentIdFromResource(resource);
+  const agentFacet = resource.agent;
+  const pveVersion =
+    asString(proxmox?.pveVersion) ||
+    ((agentFacet?.osName || '').toLowerCase().includes('proxmox')
+      ? asString(agentFacet?.osVersion)
+      : '') ||
+    'Unknown';
 
   return {
     id: resource.id,
     name,
     displayName: getPreferredInfrastructureDisplayName(resource),
     instance,
-    host: asString(proxmox?.nodeName) || preferredHostLabel,
+    host: name || preferredHostLabel,
     guestURL:
       asString((resource as unknown as Record<string, unknown>).customURL) ||
       asString((resource as unknown as Record<string, unknown>).customUrl),
@@ -895,12 +892,16 @@ export const nodeFromResource = (resource: Resource): Node | null => {
     cpu: resource.cpu?.current ?? 0,
     memory: buildMemory(resource.memory, asRecord(proxmox?.memory)),
     disk: buildDisk(resource.disk, asRecord(proxmox?.disk)),
+    networkIn: resource.network?.rxBytes,
+    networkOut: resource.network?.txBytes,
+    diskRead: resource.diskIO?.readRate,
+    diskWrite: resource.diskIO?.writeRate,
     uptime: resource.uptime ?? asNumber(proxmox?.uptime) ?? 0,
     loadAverage: asArray(proxmox?.loadAverage)
       .map((value) => asNumber(value))
       .filter((value): value is number => typeof value === 'number'),
     kernelVersion: asString(proxmox?.kernelVersion) || 'Unknown',
-    pveVersion: asString(proxmox?.pveVersion) || 'Unknown',
+    pveVersion,
     cpuInfo: {
       model: asString(cpuInfo?.model) || 'Unknown',
       cores: asNumber(cpuInfo?.cores) ?? 0,

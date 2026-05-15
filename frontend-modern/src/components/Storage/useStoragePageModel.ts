@@ -38,7 +38,11 @@ import {
 } from './storagePageState';
 import { buildStorageSummaryGroupScopeMap } from './storageSummaryGroups';
 
-export const useStoragePageModel = () => {
+type UseStoragePageModelOptions = {
+  forcedSourceFilter?: () => string | undefined;
+};
+
+export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) => {
   const navigate = useNavigate();
   const location = useLocation();
   const routeStateNavigate = createRouteStateNavigateScheduler(
@@ -386,6 +390,7 @@ export const useStoragePageModel = () => {
     diskGroupOptions,
     sourceFilter,
     setSourceFilter,
+    lockedSourceFilter: options.forcedSourceFilter,
     healthFilter,
     setHealthFilter,
     diskRoleFilter,

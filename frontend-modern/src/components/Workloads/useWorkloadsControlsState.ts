@@ -18,13 +18,16 @@ import {
 import {
   DEFAULT_WORKLOADS_SORT_DIRECTION,
   DEFAULT_WORKLOADS_SORT_KEY,
+  DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
   DEFAULT_WORKLOADS_STATUS_MODE,
   type WorkloadsGroupingMode,
+  type WorkloadsMetricDisplayMode,
   type WorkloadsSortKey,
   type WorkloadsStatusMode,
 } from './workloadsFilterModel';
 
 interface WorkloadsControlsStateOptions {
+  forcedGroupingMode?: WorkloadsGroupingMode;
   setShowFilters: (value: boolean | ((current: boolean) => boolean)) => void;
   showFilters: Accessor<boolean>;
   viewMode: Accessor<ViewMode>;
@@ -55,6 +58,9 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
       deserialize: (raw) => (raw === 'grouped' || raw === 'flat' ? raw : 'grouped'),
     },
   );
+  const effectiveGroupingMode = createMemo<WorkloadsGroupingMode>(
+    () => options.forcedGroupingMode ?? groupingMode(),
+  );
 
   const [workloadsSummaryRange, setWorkloadsSummaryRange] = usePersistentSignal(
     STORAGE_KEYS.WORKLOADS_SUMMARY_RANGE,
@@ -69,10 +75,17 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     false,
     { deserialize: (raw) => raw === 'true' },
   );
+  const [workloadMetricDisplayMode, setWorkloadMetricDisplayMode] =
+    usePersistentSignal<WorkloadsMetricDisplayMode>(
+      STORAGE_KEYS.WORKLOADS_METRIC_DISPLAY_MODE,
+      DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
+      {
+        deserialize: (raw) =>
+          raw === 'bars' || raw === 'sparklines' ? raw : DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
+      },
+    );
 
-  const [sortKey, setSortKey] = createSignal<WorkloadsSortKey | null>(
-    DEFAULT_WORKLOADS_SORT_KEY,
-  );
+  const [sortKey, setSortKey] = createSignal<WorkloadsSortKey | null>(DEFAULT_WORKLOADS_SORT_KEY);
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>(
     DEFAULT_WORKLOADS_SORT_DIRECTION,
   );
@@ -80,7 +93,7 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
   const relevantColumns = createMemo(() => {
     const base = VIEW_MODE_COLUMNS[options.viewMode()];
     if (!base) return null;
-    if (groupingMode() === 'grouped' && base.has('node')) {
+    if (effectiveGroupingMode() === 'grouped' && base.has('node')) {
       const filtered = new Set(base);
       filtered.delete('node');
       return filtered;
@@ -188,7 +201,7 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
   return {
     columnVisibility,
     workloadsFilterColumnVisibility,
-    groupingMode,
+    groupingMode: effectiveGroupingMode,
     handleBeforeAutoFocus,
     handleSort,
     handleTagClick,
@@ -206,11 +219,13 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     statusMode,
     totalColumns,
     visibleColumns,
+    workloadMetricDisplayMode,
     workloadTableVisibleColumnIds,
     workloadTableVisibleColumns,
     workloadsSummaryCollapsed,
     workloadsSummaryRange,
     workloadTableLayoutMode,
+    setWorkloadMetricDisplayMode,
     setWorkloadsSummaryCollapsed,
     setWorkloadsSummaryRange,
   } as const;

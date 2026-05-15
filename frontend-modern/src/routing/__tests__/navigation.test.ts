@@ -5,6 +5,8 @@ describe('navigation routing helpers', () => {
   it('maps paths to the correct primary tab', () => {
     expect(getActiveTabForPath('/unknown')).toBeNull();
     expect(getActiveTabForPath('/dashboard')).toBeNull();
+    expect(getActiveTabForPath('/proxmox')).toBe('proxmox');
+    expect(getActiveTabForPath('/proxmox/storage')).toBe('proxmox');
     expect(getActiveTabForPath('/infrastructure')).toBe('infrastructure');
     expect(getActiveTabForPath('/workloads?type=pod')).toBe('workloads');
     expect(getActiveTabForPath('/storage')).toBe('storage');

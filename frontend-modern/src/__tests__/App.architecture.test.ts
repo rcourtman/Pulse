@@ -29,11 +29,13 @@ describe('App architecture', () => {
     expect(appSource).toContain('readPendingAppShellRestoreTop');
     expect(appSource).toContain('clearPendingAppShellRestoreTop');
     expect(appSource).toContain('const INFRASTRUCTURE_ROUTE_PATH = buildInfrastructurePath();');
+    expect(appSource).toContain("const ProxmoxPage = lazy(() => import('./pages/Proxmox'));");
     expect(appSource).toContain('const ROOT_PATROL_PATH = PATROL_PATH;');
     expect(appSource).toContain(
       "import { APP_SHELL_ROUTE_PRELOAD_PATHS, preloadRouteModule } from '@/routing/routePreload';",
     );
     expect(routePreloadSource).toContain('export const APP_SHELL_ROUTE_PRELOAD_PATHS = [');
+    expect(routePreloadSource).toContain('ROOT_PROXMOX_PATH,');
     expect(routePreloadSource).toContain('ROOT_WORKLOADS_PATH,');
     expect(routePreloadSource).toContain('RECOVERY_ROUTE_PATH,');
     expect(routePreloadSource).toContain('PATROL_PATH,');
@@ -46,6 +48,8 @@ describe('App architecture', () => {
     expect(appSource).toContain(
       '<Route path={INFRASTRUCTURE_ROUTE_PATH} component={InfrastructurePage} />',
     );
+    expect(appSource).toContain('<Route path={PROXMOX_PATH} component={ProxmoxPage} />');
+    expect(appSource).toContain('<Route path={`${PROXMOX_PATH}/*`} component={ProxmoxPage} />');
     expect(appSource).not.toContain('DashboardPage');
     expect(headerAuditSource).not.toContain("['src/pages/Dashboard.tsx', 'PageHeader']");
     expect(appSource).toContain("import RuntimeHomePage from '@/pages/RuntimeHome';");
@@ -68,6 +72,7 @@ describe('App architecture', () => {
     expect(appSource).not.toContain('<Route path="/cloud" component=');
     expect(appSource).not.toContain('<Route path="/cloud/signup" component=');
     expect(appSource).toContain("const StoragePage = lazy(() => import('./pages/Storage'));");
+    expect(appSource).toContain("const ProxmoxPage = lazy(() => import('./pages/Proxmox'));");
     expect(appSource).toContain("const OperationsPage = lazy(() => import('./pages/Operations'));");
     expect(appSource).toContain("const WorkloadsPage = lazy(() => import('./pages/Workloads'));");
     expect(appSource).toContain("const RecoveryPage = lazy(() => import('./pages/Recovery'));");
@@ -173,6 +178,8 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('function getDesktopUtilityTabAriaLabel(tab: UtilityTab)');
     expect(appLayoutSource).toContain('return `${count} ${tab.label}`;');
     expect(appLayoutSource).toContain('const platformTabs = createMemo<PlatformTab[]>(() =>');
+    expect(appLayoutSource).toContain("id: 'proxmox',");
+    expect(appLayoutSource).toContain('icon: ProxmoxIcon,');
     expect(appLayoutSource).toContain('const Icon = platform.icon;');
     expect(appLayoutSource).toContain('const Icon = tab.icon;');
     expect(appLayoutSource).toContain('aria-label={platform.label}');
@@ -271,12 +278,14 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).not.toContain('function AppLayout(');
     expect(routePreloadSource).toContain('const ROUTE_PRELOADERS: readonly RoutePreloader[] = [');
     expect(routePreloadSource).toContain('export const APP_SHELL_ROUTE_PRELOAD_PATHS = [');
+    expect(routePreloadSource).toContain("id: 'proxmox',");
     expect(routePreloadSource).toContain("id: 'recovery',");
     expect(routePreloadSource).toContain("id: 'patrol',");
     expect(routePreloadSource).toContain(
       'const routePreloadCache = new Map<string, Promise<void>>();',
     );
     expect(routePreloadSource).toContain("import('@/pages/Infrastructure')");
+    expect(routePreloadSource).toContain("import('@/pages/Proxmox')");
     expect(routePreloadSource).toContain("import('@/pages/Workloads')");
     expect(routePreloadSource).toContain("import('@/pages/Recovery')");
     expect(routePreloadSource).not.toContain("import('@/components/Workloads/WorkloadsSurface')");

@@ -1,9 +1,11 @@
 import {
   buildInfrastructurePath,
+  buildProxmoxPath,
   buildRecoveryPath,
   buildStoragePath,
   buildWorkloadsPath,
   PATROL_PATH,
+  PROXMOX_PATH,
 } from '@/routing/resourceLinks';
 
 type RoutePreloader = {
@@ -13,6 +15,7 @@ type RoutePreloader = {
 };
 
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
+const ROOT_PROXMOX_PATH = buildProxmoxPath();
 const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 const STORAGE_PATH = buildStoragePath();
 const RECOVERY_ROUTE_PATH = buildRecoveryPath();
@@ -21,6 +24,7 @@ const SETTINGS_PATH = '/settings';
 const routePreloadCache = new Map<string, Promise<void>>();
 
 export const APP_SHELL_ROUTE_PRELOAD_PATHS = [
+  ROOT_PROXMOX_PATH,
   ROOT_WORKLOADS_PATH,
   RECOVERY_ROUTE_PATH,
   PATROL_PATH,
@@ -39,6 +43,12 @@ function normalizeRoute(route: string): string {
 }
 
 const ROUTE_PRELOADERS: readonly RoutePreloader[] = [
+  {
+    id: 'proxmox',
+    matches: (route) => route === PROXMOX_PATH || route.startsWith(`${PROXMOX_PATH}/`),
+    preload: () =>
+      import('@/pages/Proxmox').then(() => undefined),
+  },
   {
     id: 'infrastructure',
     matches: (route) => route === ROOT_INFRASTRUCTURE_PATH,

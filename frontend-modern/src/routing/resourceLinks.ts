@@ -38,6 +38,8 @@ export const WORKLOADS_QUERY_PARAMS = {
 } as const;
 
 export const WORKLOADS_PATH = '/workloads';
+export const PROXMOX_PATH = '/proxmox';
+export const PROXMOX_DEFAULT_TAB = 'overview';
 export const PMG_THRESHOLDS_PATH = '/alerts/thresholds/mail-gateway';
 export const ALERTS_OVERVIEW_PATH = '/alerts/overview';
 export const PATROL_PATH = '/patrol';
@@ -220,6 +222,11 @@ export const buildWorkloadsPath = (options: WorkloadsLinkOptions = {}): string =
   if (summaryGroup) params.set(WORKLOADS_QUERY_PARAMS.summaryGroup, summaryGroup);
   const query = params.toString();
   return query ? `${WORKLOADS_PATH}?${query}` : WORKLOADS_PATH;
+};
+
+export const buildProxmoxPath = (tab: string = PROXMOX_DEFAULT_TAB): string => {
+  const normalized = tab.trim().replace(/^\/+|\/+$/g, '');
+  return normalized ? `${PROXMOX_PATH}/${normalized}` : PROXMOX_PATH;
 };
 
 export const parseInfrastructureLinkSearch = (search: string) => {

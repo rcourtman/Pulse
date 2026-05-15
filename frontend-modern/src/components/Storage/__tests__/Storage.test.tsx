@@ -1825,6 +1825,29 @@ describe('Storage', () => {
     );
   });
 
+  it('supports Proxmox platform table embedding without standalone page chrome', async () => {
+    mockLocationPath = '/proxmox/storage';
+    hookResources = [
+      buildPhysicalDiskResource('sda', 'node-1', 'pve1'),
+      buildStorageResource('storage-1', 'Local-LVM-PVE1', 'pve1'),
+    ];
+
+    render(() => (
+      <Storage embedded tableOnly forcedSourceFilter="proxmox-pve" forcedView="disks" />
+    ));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('disk-list')).toHaveTextContent('disk-view:all:');
+    });
+    expect(
+      screen.queryByText(
+        'Review capacity, topology, protection, and physical media across connected storage platforms.',
+      ),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('storage-summary')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ceph')).not.toBeInTheDocument();
+  });
+
   it('collapses and restores storage charts from the shared toolbar toggle', async () => {
     hookResources = [buildStorageResource('storage-1', 'Local-LVM-PVE1', 'pve1')];
 

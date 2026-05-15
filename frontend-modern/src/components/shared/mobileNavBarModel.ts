@@ -35,6 +35,7 @@ export type MobileNavBarProps = {
 };
 
 const MOBILE_NAV_PLATFORM_PRIORITY = [
+  'proxmox',
   'infrastructure',
   'workloads',
   'storage',

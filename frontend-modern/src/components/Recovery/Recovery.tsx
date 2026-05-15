@@ -51,7 +51,13 @@ const LEGACY_RECOVERY_COLUMN_ID_ALIASES = {
 } as const;
 type RecoveryActivityRangeDays = 7 | 30 | 90 | 365;
 
-const Recovery: Component = () => {
+type RecoveryProps = {
+  embedded?: boolean;
+  tableOnly?: boolean;
+  forcedPlatformFilter?: string;
+};
+
+const Recovery: Component<RecoveryProps> = (props) => {
   const kioskMode = useKioskMode();
   const { isMobile } = useBreakpoint();
 
@@ -108,6 +114,14 @@ const Recovery: Component = () => {
     verificationFilter,
     workspaceView,
   } = useRecoverySurfaceState();
+
+  createEffect(() => {
+    const forcedPlatform = props.forcedPlatformFilter?.trim();
+    if (!forcedPlatform) return;
+    if (platformFilter() !== forcedPlatform) {
+      setPlatformFilter(forcedPlatform);
+    }
+  });
 
   const baseRollups = createMemo<ProtectionRollup[]>(() => {
     const query = queryFilter().trim().toLowerCase();
@@ -574,30 +588,32 @@ const Recovery: Component = () => {
 
   return (
     <div data-testid="recovery-page" class="flex flex-col gap-2">
-      <PageHeader
-        title="Recovery"
-        description="Review recovery activity, restore posture, and backup history across platforms."
-        actions={
-          <>
-            <Show when={workspaceView() === 'events'}>
-              <button
-                type="button"
-                class={headerActionClass}
-                onClick={() => {
-                  openCoverageView('all');
-                }}
-              >
-                Protection coverage
-              </button>
-            </Show>
-            <Show when={workspaceView() === 'inventory'}>
-              <button type="button" class={headerActionClass} onClick={openEventsView}>
-                Back to recovery events
-              </button>
-            </Show>
-          </>
-        }
-      />
+      <Show when={!props.embedded}>
+        <PageHeader
+          title="Recovery"
+          description="Review recovery activity, restore posture, and backup history across platforms."
+          actions={
+            <>
+              <Show when={workspaceView() === 'events'}>
+                <button
+                  type="button"
+                  class={headerActionClass}
+                  onClick={() => {
+                    openCoverageView('all');
+                  }}
+                >
+                  Protection coverage
+                </button>
+              </Show>
+              <Show when={workspaceView() === 'inventory'}>
+                <button type="button" class={headerActionClass} onClick={openEventsView}>
+                  Back to recovery events
+                </button>
+              </Show>
+            </>
+          }
+        />
+      </Show>
 
       <div class="flex flex-col gap-2">
         {(() => {
@@ -632,7 +648,7 @@ const Recovery: Component = () => {
               </Show>
 
               <Show when={workspaceView() === 'events'}>
-                {eventsActivity()}
+                <Show when={!props.tableOnly}>{eventsActivity()}</Show>
 
                 <Show when={!recoveryPointsLoading() && recoveryPoints.response.error}>
                   <TableCard>

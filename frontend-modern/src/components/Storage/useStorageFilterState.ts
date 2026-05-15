@@ -35,6 +35,7 @@ type UseStorageFilterStateOptions = {
   diskGroupOptions?: Accessor<PhysicalDiskFilterOption[]>;
   sourceFilter: Accessor<string>;
   setSourceFilter: (value: string) => void;
+  lockedSourceFilter?: Accessor<string | undefined>;
   healthFilter: Accessor<StorageHealthFilter>;
   setHealthFilter: (value: StorageHealthFilter) => void;
   diskRoleFilter: Accessor<string>;
@@ -102,6 +103,10 @@ export const useStorageFilterState = (options: UseStorageFilterStateOptions) => 
   createEffect(() => {
     const selectedSource = normalizeStorageSourceKey(options.sourceFilter());
     if (selectedSource === 'all') {
+      return;
+    }
+    const lockedSource = normalizeStorageSourceKey(options.lockedSourceFilter?.() || '');
+    if (lockedSource && selectedSource === lockedSource) {
       return;
     }
     const availableSources = new Set(

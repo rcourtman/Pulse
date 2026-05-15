@@ -1,4 +1,4 @@
-import { Component, Show } from 'solid-js';
+import { Component, Show, createEffect } from 'solid-js';
 import StorageCephSection from '@/components/Storage/StorageCephSection';
 import StorageContentCard from '@/components/Storage/StorageContentCard';
 import StoragePageBanners from '@/components/Storage/StoragePageBanners';
@@ -9,7 +9,14 @@ import { StickySummarySection } from '@/components/shared/StickySummarySection';
 import { isStorageRecordCeph } from './storagePageState';
 import { useStoragePageModel } from './useStoragePageModel';
 
-const Storage: Component = () => {
+type StorageProps = {
+  embedded?: boolean;
+  tableOnly?: boolean;
+  forcedView?: 'pools' | 'disks';
+  forcedSourceFilter?: string;
+};
+
+const Storage: Component<StorageProps> = (props) => {
   const {
     kioskMode,
     reconnect,
@@ -82,16 +89,35 @@ const Storage: Component = () => {
     setSelectedDiskId,
     setSummaryTableRootRef,
     shouldShowJumpToActiveStorageRow,
-  } = useStoragePageModel();
+  } = useStoragePageModel({
+    forcedSourceFilter: () => props.forcedSourceFilter,
+  });
+
+  createEffect(() => {
+    const forcedSource = props.forcedSourceFilter?.trim();
+    if (!forcedSource) return;
+    if (sourceFilter() !== forcedSource) {
+      setSourceFilter(forcedSource);
+    }
+  });
+
+  createEffect(() => {
+    if (!props.forcedView) return;
+    if (view() !== props.forcedView) {
+      setView(props.forcedView);
+    }
+  });
 
   return (
     <div ref={setClearSurfaceRootRef} class="space-y-4" data-testid="storage-page">
-      <PageHeader
-        title="Storage"
-        description="Review capacity, topology, protection, and physical media across connected storage platforms."
-      />
+      <Show when={!props.embedded}>
+        <PageHeader
+          title="Storage"
+          description="Review capacity, topology, protection, and physical media across connected storage platforms."
+        />
+      </Show>
 
-      <Show when={!storageSummaryCollapsed()}>
+      <Show when={!props.tableOnly && !storageSummaryCollapsed()}>
         <StickySummarySection desktopOnly={false} stickyDesktopOnly>
           <div class="space-y-2">
             <StoragePageSummary
@@ -130,48 +156,53 @@ const Storage: Component = () => {
         </StickySummarySection>
       </Show>
 
-      <StorageCephSection
-        view={view}
-        summary={cephSummaryStats}
-        filteredRecords={filteredRecords}
-        isCephRecord={isStorageRecordCeph}
-      />
+      <Show when={!props.tableOnly}>
+        <StorageCephSection
+          view={view}
+          summary={cephSummaryStats}
+          filteredRecords={filteredRecords}
+          isCephRecord={isStorageRecordCeph}
+        />
+      </Show>
 
       <div class="space-y-4" data-testid="storage-interaction-surface">
-        <div data-summary-clear-ignore>
-          <StoragePageControls
-            kioskMode={kioskMode}
-            view={view}
-            setView={setView}
-            search={search}
-            setSearch={setSearch}
-            groupBy={groupBy}
-            setGroupBy={setGroupBy}
-            sortKey={sortKey}
-            setSortKey={setSortKey}
-            sortDirection={sortDirection}
-            setSortDirection={setSortDirection}
-            statusFilter={storageFilterStatus}
-            setStatusFilter={setStorageFilterStatus}
-            sourceFilter={sourceFilter}
-            setSourceFilter={setSourceFilter}
-            sourceOptions={sourceFilterOptions}
-            diskRoleFilter={diskRoleFilter}
-            setDiskRoleFilter={setDiskRoleFilter}
-            diskRoleOptions={diskRoleOptions}
-            diskGroupFilter={diskGroupFilter}
-            setDiskGroupFilter={setDiskGroupFilter}
-            diskGroupOptions={diskGroupOptions}
-            nodeFilterOptions={nodeFilterOptions()}
-            selectedNodeId={selectedNodeId}
-            setSelectedNodeId={setSelectedNodeId}
-            storageFilterGroupBy={storageFilterGroupBy}
-            chartsCollapsed={storageSummaryCollapsed}
-            onChartsToggle={() => setStorageSummaryCollapsed((collapsed) => !collapsed)}
-          />
-        </div>
-
-        <StoragePageBanners kind={activeBannerKind} reconnect={reconnect} />
+        <Show when={!props.tableOnly}>
+          <div data-summary-clear-ignore>
+            <StoragePageControls
+              kioskMode={kioskMode}
+              view={view}
+              setView={setView}
+              search={search}
+              setSearch={setSearch}
+              groupBy={groupBy}
+              setGroupBy={setGroupBy}
+              sortKey={sortKey}
+              setSortKey={setSortKey}
+              sortDirection={sortDirection}
+              setSortDirection={setSortDirection}
+              statusFilter={storageFilterStatus}
+              setStatusFilter={setStorageFilterStatus}
+              sourceFilter={sourceFilter}
+              setSourceFilter={setSourceFilter}
+              sourceOptions={sourceFilterOptions}
+              diskRoleFilter={diskRoleFilter}
+              setDiskRoleFilter={setDiskRoleFilter}
+              diskRoleOptions={diskRoleOptions}
+              diskGroupFilter={diskGroupFilter}
+              setDiskGroupFilter={setDiskGroupFilter}
+              diskGroupOptions={diskGroupOptions}
+              nodeFilterOptions={nodeFilterOptions()}
+              selectedNodeId={selectedNodeId}
+              setSelectedNodeId={setSelectedNodeId}
+              storageFilterGroupBy={storageFilterGroupBy}
+              chartsCollapsed={storageSummaryCollapsed}
+              onChartsToggle={() => setStorageSummaryCollapsed((collapsed) => !collapsed)}
+            />
+          </div>
+        </Show>
+        <Show when={!props.tableOnly}>
+          <StoragePageBanners kind={activeBannerKind} reconnect={reconnect} />
+        </Show>
 
         <StorageContentCard
           view={view}

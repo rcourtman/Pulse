@@ -4,6 +4,10 @@ import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import type { SummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import { createVisibleCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
+import type {
+  WorkloadMetricHistoryReader,
+  WorkloadTableMetric,
+} from './workloadMetricHistoryModel';
 
 export type WorkloadTableLayoutMode = 'mobile' | 'tablet' | 'compact' | 'wide';
 
@@ -83,9 +87,13 @@ export interface GuestRowProps {
   isSummaryHighlighted?: boolean;
   summaryGroupMemberState?: SummaryGroupMemberInteractionState;
   ioEmphasis?: WorkloadIOEmphasis;
+  metricDisplayMode?: 'bars' | 'sparklines';
+  metricHistory?: WorkloadMetricHistoryReader;
   workloadTableLayoutMode?: WorkloadTableLayoutMode;
   onHoverChange?: (guestId: string | null) => void;
 }
+
+export type GuestRowMetric = WorkloadTableMetric;
 
 export interface IOEmphasis {
   className: string;

@@ -4,6 +4,7 @@ import type { JSX } from 'solid-js';
 
 export type WorkloadsStatusMode = 'all' | 'running' | 'degraded' | 'stopped';
 export type WorkloadsGroupingMode = 'grouped' | 'flat';
+export type WorkloadsMetricDisplayMode = 'bars' | 'sparklines';
 export type WorkloadsSortKey = keyof WorkloadGuest | 'diskIo' | 'netIo';
 
 export interface WorkloadsFilterSelectOption {
@@ -66,6 +67,7 @@ export const DEFAULT_WORKLOADS_SORT_DIRECTION = 'asc';
 export const DEFAULT_WORKLOADS_VIEW_MODE: ViewMode = 'all';
 export const DEFAULT_WORKLOADS_STATUS_MODE: WorkloadsStatusMode = 'all';
 export const DEFAULT_WORKLOADS_GROUPING_MODE: WorkloadsGroupingMode = 'grouped';
+export const DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE: WorkloadsMetricDisplayMode = 'bars';
 
 export const countActiveWorkloadsFilters = (
   options: CountActiveWorkloadsFiltersOptions,
@@ -82,8 +84,6 @@ export const countActiveWorkloadsFilters = (
   return count;
 };
 
-export const hasActiveWorkloadsFilters = (
-  options: HasActiveWorkloadsFiltersOptions,
-): boolean =>
+export const hasActiveWorkloadsFilters = (options: HasActiveWorkloadsFiltersOptions): boolean =>
   countActiveWorkloadsFilters(options) > 0 ||
   options.groupingMode !== DEFAULT_WORKLOADS_GROUPING_MODE;

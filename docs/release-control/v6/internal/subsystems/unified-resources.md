@@ -648,6 +648,15 @@ AI-only summary payloads, or page-local heuristics.
 
 ## Current State
 
+The Proxmox platform page is a route-level consumer of canonical unified
+resources, not a new resource source. It filters the existing resource snapshot
+to Proxmox VE, Backup Server, Mail Gateway, storage, disk, and workload rows,
+then composes the existing Workloads, Storage, Recovery, and infrastructure
+table owners. Proxmox host row version, uptime, temperature, CPU, memory, disk,
+network I/O, and disk I/O presentation must derive from canonical resource
+facets and the shared `nodeFromResource` adapter; platform pages must not
+rebuild resource identity, merge policy, or metric-target inference locally.
+
 `resource_operator_state.go` owns the operator-set per-resource intent
 schema. `ResourceOperatorState` carries four narrow operator-intent
 fields (`IntentionallyOffline`, `NeverAutoRemediate`, maintenance

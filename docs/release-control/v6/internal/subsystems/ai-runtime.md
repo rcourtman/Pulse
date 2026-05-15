@@ -596,6 +596,14 @@ runtime cost control, and shared AI transport surfaces.
 
 ## Current State
 
+The route-backed Proxmox platform tab is app-shell navigation only. Adding the
+tab through `frontend-modern/src/App.tsx` and
+`frontend-modern/src/AppLayout.tsx` must not fork Assistant or Patrol shell
+state, synthesize platform-specific handoffs, or add AI-owned platform reads.
+Future Proxmox-native Assistant or Patrol read/write claims must extend the
+shared AI tool, handoff, and platform-support contracts instead of hiding
+behind route registration or tab chrome.
+
 Patrol deterministic signal extraction (`internal/ai/patrol_signals.go`)
 does not mirror the Alerts surface. The `pulse_alerts` tool output is
 intentionally absent from the signal switch in `DetectSignals` — alerts

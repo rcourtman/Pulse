@@ -1444,6 +1444,13 @@ the canonical monitored-system blocked payload.
 
 ## Current State
 
+The frontend `Node` API projection now carries optional `networkIn`,
+`networkOut`, `diskRead`, and `diskWrite` fields so table consumers can align
+Proxmox host rows with workload I/O columns. These fields are a read-model
+extension over existing resource telemetry; they must remain optional until the
+backend transport contract explicitly guarantees them for every node source,
+and consumers must tolerate absence without inventing a second API shape.
+
 `aicontracts.Finding` (the shape Patrol hands the investigation
 orchestrator) carries optional `OperatorContext` and
 `OperationalMemory` projections. The router-side wire-up populates

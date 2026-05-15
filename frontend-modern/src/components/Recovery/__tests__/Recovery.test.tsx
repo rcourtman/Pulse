@@ -1167,6 +1167,29 @@ describe('Recovery', () => {
     });
   });
 
+  it('supports Proxmox platform table embedding without standalone page chrome', async () => {
+    render(() => <Recovery embedded tableOnly forcedPlatformFilter="proxmox-pve" />);
+
+    expect(
+      screen.queryByText(
+        'Review recovery activity, restore posture, and backup history across platforms.',
+      ),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Recovery Activity')).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      const urls = apiFetchMock.mock.calls.map((call) => String(call[0] || ''));
+      const hasRollups = urls.some(
+        (url) => url.includes('/api/recovery/rollups') && url.includes('platform=proxmox-pve'),
+      );
+      const hasPoints = urls.some(
+        (url) => url.includes('/api/recovery/points') && url.includes('platform=proxmox-pve'),
+      );
+      expect(hasRollups && hasPoints).toBe(true);
+    });
+    expect(await screen.findByText(/Showing 1 - 1 of 1 recovery points/i)).toBeInTheDocument();
+  });
+
   it('keeps route-owned recovery platform and node filters visible while options hydrate', async () => {
     mockLocationSearch = '?view=events&platform=truenas&node=tower';
     apiFetchMock.mockImplementation(() => new Promise(() => {}));

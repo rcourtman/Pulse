@@ -4,6 +4,8 @@ import {
   AI_PATROL_PATH,
   PMG_THRESHOLDS_PATH,
   PATROL_PATH,
+  PROXMOX_DEFAULT_TAB,
+  PROXMOX_PATH,
   RECOVERY_QUERY_PARAMS,
   buildInfrastructureResourceLink,
   buildInfrastructureHrefForWorkload,
@@ -11,6 +13,7 @@ import {
   buildRecoveryHrefForResource,
   buildInfrastructurePath,
   buildInfrastructureResourceHref,
+  buildProxmoxPath,
   buildResolvedResourceSurfaceLinks,
   buildResourceSurfaceLinksForResource,
   buildStorageHrefForResource,
@@ -55,6 +58,14 @@ describe('resource link routing contract', () => {
   it('keeps Patrol links on the canonical Patrol route', () => {
     expect(PATROL_PATH).toBe('/patrol');
     expect(AI_PATROL_PATH).toBe(PATROL_PATH);
+  });
+
+  it('builds canonical Proxmox platform tab paths', () => {
+    expect(PROXMOX_PATH).toBe('/proxmox');
+    expect(PROXMOX_DEFAULT_TAB).toBe('overview');
+    expect(buildProxmoxPath()).toBe('/proxmox/overview');
+    expect(buildProxmoxPath('/storage/')).toBe('/proxmox/storage');
+    expect(buildProxmoxPath('')).toBe('/proxmox');
   });
 
   it('builds and parses workloads query params', () => {

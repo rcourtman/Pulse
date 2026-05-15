@@ -129,6 +129,23 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expect(node?.clusterName).toBe('cluster-a');
   });
 
+  it('falls back to normalized Proxmox resource facets for node name and version', () => {
+    const node = nodeFromResource({
+      ...createNodeResource({}),
+      proxmox: { node: 'pve-node-2', instance: 'cluster-a' },
+      agent: { osName: 'Proxmox VE', osVersion: '9.1.9' },
+      network: { rxBytes: 1024, txBytes: 2048 },
+      diskIO: { readRate: 4096, writeRate: 8192 },
+    } as Resource);
+
+    expect(node?.name).toBe('pve-node-2');
+    expect(node?.pveVersion).toBe('9.1.9');
+    expect(node?.networkIn).toBe(1024);
+    expect(node?.networkOut).toBe(2048);
+    expect(node?.diskRead).toBe(4096);
+    expect(node?.diskWrite).toBe(8192);
+  });
+
   it('maps PBS display and host identity through shared resource helpers', () => {
     const instance = pbsInstanceFromResource(
       createServiceResource('pbs', {
@@ -465,7 +482,10 @@ describe('resourceStateAdapters nodeFromResource', () => {
       [],
     );
 
-    expect(resources.map((resource) => resource.id)).toEqual(['agent-runtime-1', 'agent-runtime-2']);
+    expect(resources.map((resource) => resource.id)).toEqual([
+      'agent-runtime-1',
+      'agent-runtime-2',
+    ]);
   });
 
   it('uses authoritative top-level sources for realtime storage platform canonicalization', () => {
