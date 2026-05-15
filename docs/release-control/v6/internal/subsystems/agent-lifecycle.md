@@ -1019,6 +1019,13 @@ The agent runtime keeps the broadcaster wired across restarts, and
 the capabilities manifest declares the stream under
 `subscribe_events` so the surface stays self-describing.
 
+Shared `internal/api/router.go` metrics-history reads may now expose
+host-agent CPU temperature as an `agent` chart metric for Proxmox node
+drawers, but lifecycle surfaces must continue treating that data as
+presentation telemetry only. Temperature history is not heartbeat authority,
+agent enrollment state, or freshness proof; those remain owned by the
+agent-lifecycle event, token, and last-seen contracts.
+
 `/api/agent/capabilities` is the discovery document any external
 agent reads to learn what Pulse exposes. The manifest is
 unauthenticated and cacheable; the underlying capabilities keep

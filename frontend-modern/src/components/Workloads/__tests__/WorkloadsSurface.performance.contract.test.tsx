@@ -51,6 +51,9 @@ import guestDrawerSource from '../GuestDrawer.tsx?raw';
 import guestDrawerHistorySource from '../GuestDrawerHistory.tsx?raw';
 import guestDrawerOverviewSource from '../GuestDrawerOverview.tsx?raw';
 import guestDrawerModelSource from '../guestDrawerModel.ts?raw';
+import nodeDrawerSource from '../NodeDrawer.tsx?raw';
+import nodeDrawerOverviewSource from '../NodeDrawerOverview.tsx?raw';
+import nodeDrawerModelSource from '../nodeDrawerModel.ts?raw';
 import guestRowSource from '../GuestRow.tsx?raw';
 import guestRowCellsSource from '../GuestRowCells.tsx?raw';
 import guestDrawerStateSource from '../useGuestDrawerState.ts?raw';
@@ -228,6 +231,10 @@ vi.mock('../WorkloadsFilter', () => ({
 
 vi.mock('../GuestDrawer', () => ({
   GuestDrawer: () => <div data-testid="guest-drawer">drawer</div>,
+}));
+
+vi.mock('../NodeDrawer', () => ({
+  NodeDrawer: () => <div data-testid="node-drawer">node drawer</div>,
 }));
 
 vi.mock('../GuestRow', () => {
@@ -1056,6 +1063,18 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerHistorySource).toContain('data-testid="guest-history-hover-time"');
       expect(guestDrawerHistorySource).toContain('data-testid="guest-history-range-control"');
       expect(guestDrawerHistorySource).toContain('onPointerMove={handleHoverMove}');
+      expect(guestDrawerHistorySource).toContain('fallbackMetrics');
+      expect(guestDrawerHistorySource).toContain('props.groups ?? GUEST_DRAWER_HISTORY_GROUPS');
+      expect(nodeDrawerSource).toContain('NodeDrawerOverview');
+      expect(nodeDrawerSource).toContain('GuestDrawerHistoryRangeSelect');
+      expect(nodeDrawerSource).toContain('NODE_DRAWER_HISTORY_GROUPS');
+      expect(nodeDrawerOverviewSource).toContain('Hardware');
+      expect(nodeDrawerOverviewSource).toContain('Telemetry');
+      expect(nodeDrawerOverviewSource).toContain('Thermals');
+      expect(nodeDrawerModelSource).toContain("id: 'thermals'");
+      expect(nodeDrawerModelSource).toContain("metric: 'temperature'");
+      expect(workloadPanelSource).toContain('NodeDrawer');
+      expect(workloadPanelSource).toContain('data-inline-node-detail-for');
       expect(guestDrawerSource).not.toContain('const guestId = () =>');
       expect(guestDrawerSource).not.toContain('const infrastructureHref = () =>');
       expect(guestDrawerSource).not.toContain('Filesystems');

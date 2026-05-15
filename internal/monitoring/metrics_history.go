@@ -14,13 +14,14 @@ type MetricPoint = models.MetricPoint
 
 // GuestMetrics holds historical metrics for a single guest
 type GuestMetrics struct {
-	CPU        []MetricPoint `json:"cpu"`
-	Memory     []MetricPoint `json:"memory"`
-	Disk       []MetricPoint `json:"disk"`
-	DiskRead   []MetricPoint `json:"diskread"`
-	DiskWrite  []MetricPoint `json:"diskwrite"`
-	NetworkIn  []MetricPoint `json:"netin"`
-	NetworkOut []MetricPoint `json:"netout"`
+	CPU         []MetricPoint `json:"cpu"`
+	Memory      []MetricPoint `json:"memory"`
+	Disk        []MetricPoint `json:"disk"`
+	DiskRead    []MetricPoint `json:"diskread"`
+	DiskWrite   []MetricPoint `json:"diskwrite"`
+	NetworkIn   []MetricPoint `json:"netin"`
+	NetworkOut  []MetricPoint `json:"netout"`
+	Temperature []MetricPoint `json:"temperature"`
 }
 
 // StorageMetrics holds historical metrics for a single storage
@@ -102,6 +103,8 @@ func (mh *MetricsHistory) AddGuestMetric(guestID string, metricType string, valu
 		metrics.NetworkIn = mh.appendMetric(metrics.NetworkIn, point)
 	case "netout":
 		metrics.NetworkOut = mh.appendMetric(metrics.NetworkOut, point)
+	case "temperature":
+		metrics.Temperature = mh.appendMetric(metrics.Temperature, point)
 	}
 }
 
@@ -130,6 +133,8 @@ func (mh *MetricsHistory) AddNodeMetric(nodeID string, metricType string, value 
 		metrics.NetworkIn = mh.appendMetric(metrics.NetworkIn, point)
 	case "netout":
 		metrics.NetworkOut = mh.appendMetric(metrics.NetworkOut, point)
+	case "temperature":
+		metrics.Temperature = mh.appendMetric(metrics.Temperature, point)
 	}
 }
 
@@ -194,6 +199,8 @@ func (mh *MetricsHistory) GetGuestMetrics(guestID string, metricType string, dur
 		data = metrics.NetworkIn
 	case "netout":
 		data = metrics.NetworkOut
+	case "temperature":
+		data = metrics.Temperature
 	default:
 		return []MetricPoint{}
 	}
@@ -233,6 +240,8 @@ func (mh *MetricsHistory) GetNodeMetrics(nodeID string, metricType string, durat
 		data = metrics.NetworkIn
 	case "netout":
 		data = metrics.NetworkOut
+	case "temperature":
+		data = metrics.Temperature
 	default:
 		return []MetricPoint{}
 	}
@@ -299,6 +308,8 @@ func guestMetricSeries(metrics *GuestMetrics, metricType string) []MetricPoint {
 		return metrics.NetworkIn
 	case "netout":
 		return metrics.NetworkOut
+	case "temperature":
+		return metrics.Temperature
 	default:
 		return nil
 	}
@@ -310,7 +321,7 @@ func guestMetricsCoverageSpan(metrics *GuestMetrics, metricTypes []string, cutof
 	}
 
 	if len(metricTypes) == 0 {
-		metricTypes = []string{"cpu", "memory", "disk", "diskread", "diskwrite", "netin", "netout"}
+		metricTypes = []string{"cpu", "memory", "disk", "diskread", "diskwrite", "netin", "netout", "temperature"}
 	}
 
 	var best time.Duration
@@ -378,6 +389,7 @@ func (mh *MetricsHistory) GetAllGuestMetrics(guestID string, duration time.Durat
 	result["diskwrite"] = filterMetricsByTime(metrics.DiskWrite, cutoffTime)
 	result["netin"] = filterMetricsByTime(metrics.NetworkIn, cutoffTime)
 	result["netout"] = filterMetricsByTime(metrics.NetworkOut, cutoffTime)
+	result["temperature"] = filterMetricsByTime(metrics.Temperature, cutoffTime)
 
 	return result
 }
@@ -498,11 +510,13 @@ func (mh *MetricsHistory) Cleanup() {
 		metrics.DiskWrite = mh.cleanupMetrics(metrics.DiskWrite, cutoffTime)
 		metrics.NetworkIn = mh.cleanupMetrics(metrics.NetworkIn, cutoffTime)
 		metrics.NetworkOut = mh.cleanupMetrics(metrics.NetworkOut, cutoffTime)
+		metrics.Temperature = mh.cleanupMetrics(metrics.Temperature, cutoffTime)
 
 		// If all slices are empty, remove the map entry entirely to free memory
 		if len(metrics.CPU) == 0 && len(metrics.Memory) == 0 && len(metrics.Disk) == 0 &&
 			len(metrics.DiskRead) == 0 && len(metrics.DiskWrite) == 0 &&
-			len(metrics.NetworkIn) == 0 && len(metrics.NetworkOut) == 0 {
+			len(metrics.NetworkIn) == 0 && len(metrics.NetworkOut) == 0 &&
+			len(metrics.Temperature) == 0 {
 			delete(mh.guestMetrics, key)
 			guestsRemoved++
 		}
@@ -513,8 +527,13 @@ func (mh *MetricsHistory) Cleanup() {
 		metrics.CPU = mh.cleanupMetrics(metrics.CPU, cutoffTime)
 		metrics.Memory = mh.cleanupMetrics(metrics.Memory, cutoffTime)
 		metrics.Disk = mh.cleanupMetrics(metrics.Disk, cutoffTime)
+		metrics.NetworkIn = mh.cleanupMetrics(metrics.NetworkIn, cutoffTime)
+		metrics.NetworkOut = mh.cleanupMetrics(metrics.NetworkOut, cutoffTime)
+		metrics.Temperature = mh.cleanupMetrics(metrics.Temperature, cutoffTime)
 
-		if len(metrics.CPU) == 0 && len(metrics.Memory) == 0 && len(metrics.Disk) == 0 {
+		if len(metrics.CPU) == 0 && len(metrics.Memory) == 0 && len(metrics.Disk) == 0 &&
+			len(metrics.NetworkIn) == 0 && len(metrics.NetworkOut) == 0 &&
+			len(metrics.Temperature) == 0 {
 			delete(mh.nodeMetrics, key)
 			nodesRemoved++
 		}

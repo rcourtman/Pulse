@@ -1450,6 +1450,13 @@ Proxmox host rows with workload I/O columns. These fields are a read-model
 extension over existing resource telemetry; they must remain optional until the
 backend transport contract explicitly guarantees them for every node source,
 and consumers must tolerate absence without inventing a second API shape.
+The shared metrics-history API also treats `metric=temperature` as a canonical
+agent/node chart metric for Proxmox node drawers. `resourceType=agent` may serve
+the current host-agent CPU package temperature as a live fallback when persisted
+history is still cold, while `resourceType=node` may serve the Proxmox node
+temperature fallback from the same `/api/metrics-store/history` response shape.
+The transport remains the existing metrics-history payload; it must not add a
+Proxmox-only chart endpoint or drawer-local temperature response contract.
 
 `aicontracts.Finding` (the shape Patrol hands the investigation
 orchestrator) carries optional `OperatorContext` and

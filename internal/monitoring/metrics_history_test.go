@@ -170,6 +170,33 @@ func TestAppendMetric(t *testing.T) {
 	}
 }
 
+func TestMetricsHistoryStoresGuestAndNodeTemperature(t *testing.T) {
+	mh := NewMetricsHistory(10, time.Hour)
+	now := time.Now()
+
+	mh.AddGuestMetric("agent:host-1", "temperature", 62.5, now.Add(-time.Minute))
+	mh.AddNodeMetric("node-1", "temperature", 58.25, now)
+
+	guestPoints := mh.GetGuestMetrics("agent:host-1", "temperature", time.Hour)
+	if len(guestPoints) != 1 || guestPoints[0].Value != 62.5 {
+		t.Fatalf("expected guest temperature 62.5, got %+v", guestPoints)
+	}
+
+	nodePoints := mh.GetNodeMetrics("node-1", "temperature", time.Hour)
+	if len(nodePoints) != 1 || nodePoints[0].Value != 58.25 {
+		t.Fatalf("expected node temperature 58.25, got %+v", nodePoints)
+	}
+
+	allGuestMetrics := mh.GetAllGuestMetrics("agent:host-1", time.Hour)
+	if len(allGuestMetrics["temperature"]) != 1 || allGuestMetrics["temperature"][0].Value != 62.5 {
+		t.Fatalf("expected all guest metrics to include temperature, got %+v", allGuestMetrics)
+	}
+
+	if span := mh.GuestMetricCoverageSpan("agent:host-1", []string{"temperature"}, time.Hour); span != 0 {
+		t.Fatalf("single-point guest temperature coverage span = %s, want 0", span)
+	}
+}
+
 func TestCleanupMetrics(t *testing.T) {
 	now := time.Now()
 

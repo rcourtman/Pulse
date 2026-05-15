@@ -1282,11 +1282,17 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 		mh.AddNodeMetric(node.ID, "cpu", cpu, ts)
 		mh.AddNodeMetric(node.ID, "memory", memory, ts)
 		mh.AddNodeMetric(node.ID, "disk", disk, ts)
+		if temperature := nodePrimaryTemperatureCelsius(node.Temperature); temperature != nil {
+			mh.AddNodeMetric(node.ID, "temperature", *temperature, ts)
+		}
 
 		if ms != nil {
 			ms.Write("node", node.ID, "cpu", cpu, ts)
 			ms.Write("node", node.ID, "memory", memory, ts)
 			ms.Write("node", node.ID, "disk", disk, ts)
+			if temperature := nodePrimaryTemperatureCelsius(node.Temperature); temperature != nil {
+				ms.Write("node", node.ID, "temperature", *temperature, ts)
+			}
 		}
 	}
 
@@ -1474,6 +1480,7 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 		diskwrite := mock.SampleMetric("agent", host.ID, "diskwrite", ts)
 		netin := mock.SampleMetric("agent", host.ID, "netin", ts)
 		netout := mock.SampleMetric("agent", host.ID, "netout", ts)
+		temperature := hostPrimaryTemperatureCelsius(host.Sensors)
 		mh.AddGuestMetric(hostKey, "cpu", cpu, ts)
 		mh.AddGuestMetric(hostKey, "memory", memory, ts)
 		mh.AddGuestMetric(hostKey, "disk", disk, ts)
@@ -1481,6 +1488,9 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 		mh.AddGuestMetric(hostKey, "diskwrite", diskwrite, ts)
 		mh.AddGuestMetric(hostKey, "netin", netin, ts)
 		mh.AddGuestMetric(hostKey, "netout", netout, ts)
+		if temperature != nil {
+			mh.AddGuestMetric(hostKey, "temperature", *temperature, ts)
+		}
 
 		if ms != nil {
 			ms.Write("agent", host.ID, "cpu", cpu, ts)
@@ -1490,6 +1500,9 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 			ms.Write("agent", host.ID, "diskwrite", diskwrite, ts)
 			ms.Write("agent", host.ID, "netin", netin, ts)
 			ms.Write("agent", host.ID, "netout", netout, ts)
+			if temperature != nil {
+				ms.Write("agent", host.ID, "temperature", *temperature, ts)
+			}
 		}
 	}
 

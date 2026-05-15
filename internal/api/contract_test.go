@@ -9890,6 +9890,59 @@ func TestContract_MetricsHistoryLiveFallbackJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_MetricsHistoryAgentTemperatureLiveFallback(t *testing.T) {
+	state := models.NewState()
+	state.UpsertHost(models.Host{
+		ID:       "agent-pve-node-1",
+		Hostname: "pve-node-1",
+		Status:   "online",
+		Sensors: models.HostSensorSummary{
+			TemperatureCelsius: map[string]float64{
+				"cpu_package": 62.5,
+			},
+		},
+	})
+
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "state", state)
+	setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
+
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/metrics-store/history?resourceType=agent&resourceId=agent-pve-node-1&metric=temperature&range=5m",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	router.handleMetricsHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp metricsHistoryResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp.ResourceType != "agent" {
+		t.Fatalf("expected resourceType agent, got %q", resp.ResourceType)
+	}
+	if resp.ResourceId != "agent-pve-node-1" {
+		t.Fatalf("expected resource id agent-pve-node-1, got %q", resp.ResourceId)
+	}
+	if resp.Metric != "temperature" {
+		t.Fatalf("expected metric temperature, got %q", resp.Metric)
+	}
+	if resp.Source != "live" {
+		t.Fatalf("expected source live, got %q", resp.Source)
+	}
+	if len(resp.Points) != 1 || resp.Points[0].Value != 62.5 {
+		t.Fatalf("expected one live temperature point 62.5, got %+v", resp.Points)
+	}
+}
+
 func TestContract_MetricsHistoryCanonicalizesLegacyKubernetesPodIDs(t *testing.T) {
 	mh := monitoring.NewMetricsHistory(1000, time.Hour)
 	now := time.Now().UTC().Truncate(time.Second)

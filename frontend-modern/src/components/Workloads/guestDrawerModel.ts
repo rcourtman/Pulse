@@ -120,6 +120,38 @@ export const getGuestDrawerHistoryScale = (
 ): GuestDrawerHistoryScale => {
   if (unit === '%') return { minValue: 0, maxValue: 100 };
 
+  if (unit === 'C') {
+    let minValue = Infinity;
+    let maxValue = -Infinity;
+    for (const item of series) {
+      for (const point of item.points) {
+        const low = typeof point.min === 'number' ? point.min : point.value;
+        const high = typeof point.max === 'number' ? point.max : point.value;
+        if (Number.isFinite(low) && low < minValue) {
+          minValue = low;
+        }
+        if (Number.isFinite(high) && high > maxValue) {
+          maxValue = high;
+        }
+      }
+    }
+
+    if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
+      return { minValue: 0, maxValue: 100 };
+    }
+    if (minValue === maxValue) {
+      return {
+        minValue: Math.max(0, minValue - 5),
+        maxValue: maxValue + 5,
+      };
+    }
+    const padding = Math.max(2, (maxValue - minValue) * 0.15);
+    return {
+      minValue: Math.max(0, minValue - padding),
+      maxValue: maxValue + padding,
+    };
+  }
+
   let maxValue = 0;
   for (const item of series) {
     for (const point of item.points) {

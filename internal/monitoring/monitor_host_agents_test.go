@@ -1236,6 +1236,69 @@ func TestApplyHostReportPersistsSMARTMetricsForAgentDisks(t *testing.T) {
 	}
 }
 
+func TestApplyHostReportPersistsAgentTemperatureMetric(t *testing.T) {
+	t.Helper()
+
+	storeCfg := metrics.DefaultConfig(t.TempDir())
+	storeCfg.WriteBufferSize = 1
+	store, err := metrics.NewStore(storeCfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+		metricsHistory:    NewMetricsHistory(10, time.Hour),
+		metricsStore:      store,
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-thermal",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-thermal",
+			Hostname:  "thermal-node",
+			MachineID: "machine-thermal",
+		},
+		Metrics: agentshost.Metrics{
+			CPUUsagePercent: 12.5,
+			Memory:          agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Sensors: agentshost.Sensors{
+			TemperatureCelsius: map[string]float64{
+				"cpu_core_0":  59,
+				"cpu_package": 62.5,
+			},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	host, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	store.Flush()
+
+	storePoints := waitForStoredMetric(t, store, "agent", host.ID, "temperature")
+	if got := storePoints[len(storePoints)-1].Value; got != 62.5 {
+		t.Fatalf("expected persisted temperature 62.5, got %f", got)
+	}
+
+	historyPoints := monitor.GetGuestMetrics("agent:"+host.ID, time.Hour)["temperature"]
+	if len(historyPoints) == 0 || historyPoints[len(historyPoints)-1].Value != 62.5 {
+		t.Fatalf("expected in-memory temperature 62.5, got %+v", historyPoints)
+	}
+}
+
 func TestApplyHostReportPersistsSMARTMetricsForAgentDisksWithFallbackID(t *testing.T) {
 	t.Helper()
 
@@ -1481,10 +1544,16 @@ func TestApplyHostReportSkipsMetricsAndSMARTWritesInMockMode(t *testing.T) {
 func waitForStoredDiskMetric(t *testing.T, store *metrics.Store, resourceID, metric string) []metrics.MetricPoint {
 	t.Helper()
 
+	return waitForStoredMetric(t, store, "disk", resourceID, metric)
+}
+
+func waitForStoredMetric(t *testing.T, store *metrics.Store, resourceType, resourceID, metric string) []metrics.MetricPoint {
+	t.Helper()
+
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		now := time.Now().UTC()
-		points, err := store.Query("disk", resourceID, metric, now.Add(-time.Hour), now.Add(time.Hour), 60)
+		points, err := store.Query(resourceType, resourceID, metric, now.Add(-time.Hour), now.Add(time.Hour), 60)
 		if err != nil {
 			t.Fatalf("Query %s: %v", metric, err)
 		}

@@ -560,6 +560,17 @@ related series into utilization, network I/O, and disk I/O charts rather than
 repeating one chart frame per metric. Those grouped charts must still support
 inline hover inspection by updating the existing legend values and showing only
 the hovered timestamp, so density does not remove point-in-time metric detail.
+Proxmox node thermals follow that same drawer-only rule: temperature remains a
+node-context metric, not a universal Workloads table column, and the node detail
+drawer may add one compact `Thermals` history group beside utilization and I/O
+only after a grouped node row is selected. Host-agent CPU temperature must be
+persisted into the same metrics-store history stream as other agent metrics,
+with current node temperature used only as drawer-local fallback while history
+is still accumulating.
+The Proxmox node drawer overview should follow the existing guest drawer
+compact detail-card pattern and expose node-specific context such as platform,
+kernel, hardware, raw capacity, telemetry, and thermal facts rather than
+repeating the metric cells already visible in the grouped table row.
 
 The investigation enrichment path in `MaybeInvestigateFinding`
 adds at most one operator-state projection lookup per investigation

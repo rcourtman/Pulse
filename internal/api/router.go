@@ -9011,6 +9011,9 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: node.CPU}
 			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: node.Memory.Usage}
 			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: node.Disk.Usage}
+			if temperature := primaryNodeTemperatureCelsius(node.Temperature); temperature != nil {
+				points["temperature"] = monitoring.MetricPoint{Timestamp: now, Value: *temperature}
+			}
 		case "storage":
 			storage := findStorage(resourceID)
 			if storage == nil {
@@ -9047,6 +9050,9 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					diskPercent = host.Disks[0].Usage
 				}
 				points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: diskPercent}
+				if temperature := primaryHostSensorTemperatureCelsius(host.Sensors); temperature != nil {
+					points["temperature"] = monitoring.MetricPoint{Timestamp: now, Value: *temperature}
+				}
 				// Note: We intentionally don't include netin/netout here because the host model
 				// only has cumulative RXBytes/TXBytes (total since boot), not rates.
 				// The RateTracker in ApplyHostReport calculates rates and stores them in metrics history.
@@ -9060,6 +9066,9 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: node.CPU}
 			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: node.Memory.Usage}
 			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: node.Disk.Usage}
+			if temperature := primaryNodeTemperatureCelsius(node.Temperature); temperature != nil {
+				points["temperature"] = monitoring.MetricPoint{Timestamp: now, Value: *temperature}
+			}
 		case "app-container":
 			container := findDockerContainer(resourceID)
 			if container == nil {
@@ -9573,6 +9582,61 @@ func canonicalizeMetricsHistoryResourceID(runtimeResourceType, resourceID string
 		return unifiedresources.CanonicalKubernetesPodMetricID(trimmed)
 	}
 	return trimmed
+}
+
+func primaryHostSensorTemperatureCelsius(sensors models.HostSensorSummary) *float64 {
+	if len(sensors.TemperatureCelsius) == 0 {
+		return nil
+	}
+	if value, ok := sensors.TemperatureCelsius["cpu_package"]; ok && value > 0 {
+		return &value
+	}
+
+	var best float64
+	found := false
+	for key, value := range sensors.TemperatureCelsius {
+		if value <= 0 || !strings.HasPrefix(strings.ToLower(key), "cpu") {
+			continue
+		}
+		if !found || value > best {
+			best = value
+			found = true
+		}
+	}
+	if !found {
+		return nil
+	}
+	return &best
+}
+
+func primaryNodeTemperatureCelsius(temperature *models.Temperature) *float64 {
+	if temperature == nil || !temperature.Available {
+		return nil
+	}
+	if temperature.CPUMax > 0 {
+		value := temperature.CPUMax
+		return &value
+	}
+	if temperature.CPUPackage > 0 {
+		value := temperature.CPUPackage
+		return &value
+	}
+
+	var best float64
+	found := false
+	for _, core := range temperature.Cores {
+		if core.Temp <= 0 {
+			continue
+		}
+		if !found || core.Temp > best {
+			best = core.Temp
+			found = true
+		}
+	}
+	if !found {
+		return nil
+	}
+	return &best
 }
 
 func normalizeMetricsHistoryResourceType(input string) (responseType string, runtimeType string, storeTypes []string, err error) {

@@ -29,6 +29,8 @@ import {
 } from './guestDrawerModel';
 
 interface GuestDrawerHistoryProps {
+  fallbackMetrics?: Record<string, number | null | undefined>;
+  groups?: GuestDrawerHistoryGroupConfig[];
   range: HistoryTimeRange;
   target: GuestDrawerHistoryTarget | null;
 }
@@ -129,6 +131,11 @@ const getAxisLabel = (unit: string, pct: number): string => {
     if (pct === 0.5) return '50%';
     return '0%';
   }
+  if (unit === 'C') {
+    if (pct === 0) return 'Max';
+    if (pct === 0.5) return 'Mid';
+    return 'Min';
+  }
   if (pct === 0) return 'Max';
   if (pct === 0.5) return 'Avg';
   return '0';
@@ -175,6 +182,32 @@ const findClosestGuestDrawerHistoryPoint = (
     }
   }
   return closest;
+};
+
+const buildFallbackHistoryPoints = (value: number): AggregatedMetricPoint[] => {
+  if (!Number.isFinite(value)) return [];
+  const end = Date.now();
+  return [
+    { timestamp: end - 60_000, value, min: value, max: value },
+    { timestamp: end, value, min: value, max: value },
+  ];
+};
+
+const mergeFallbackHistoryMetrics = (
+  metrics: Record<string, AggregatedMetricPoint[] | undefined>,
+  fallbackMetrics: Record<string, number | null | undefined> | undefined,
+): Record<string, AggregatedMetricPoint[] | undefined> => {
+  if (!fallbackMetrics) return metrics;
+
+  let next: Record<string, AggregatedMetricPoint[] | undefined> | null = null;
+  for (const [metric, value] of Object.entries(fallbackMetrics)) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) continue;
+    const existing = metrics[metric] ?? [];
+    if (existing.length >= 2) continue;
+    next ??= { ...metrics };
+    next[metric] = buildFallbackHistoryPoints(value);
+  }
+  return next ?? metrics;
 };
 
 const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps> = (props) => {
@@ -421,6 +454,10 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
   });
 
   const metrics = createMemo(() => historyQuery.value().metrics ?? {});
+  const displayMetrics = createMemo(() =>
+    mergeFallbackHistoryMetrics(metrics(), props.fallbackMetrics),
+  );
+  const groups = createMemo(() => props.groups ?? GUEST_DRAWER_HISTORY_GROUPS);
   const errorText = createMemo(() => (historyQuery.error() ? 'Failed to load history data' : ''));
 
   return (
@@ -446,13 +483,13 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
               </div>
             }
           >
-            <div class="grid gap-3 xl:grid-cols-3">
-              <For each={GUEST_DRAWER_HISTORY_GROUPS}>
+            <div class={`grid gap-3 ${groups().length > 3 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}>
+              <For each={groups()}>
                 {(group) => (
                   <GuestDrawerHistoryGroupChart
                     group={group}
                     loading={historyQuery.loading() && !historyQuery.resolvedOnce()}
-                    metrics={metrics()}
+                    metrics={displayMetrics()}
                     range={props.range}
                   />
                 )}

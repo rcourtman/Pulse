@@ -2022,12 +2022,16 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	if len(host.Disks) > 0 {
 		hostDiskPercent = host.Disks[0].Usage
 	}
+	hostTemperature := hostPrimaryTemperatureCelsius(host.Sensors)
 
 	if !shouldSkipNativeMockStateMetricWrites() {
 		if m.metricsHistory != nil {
 			m.metricsHistory.AddGuestMetric(hostMetricKey, "cpu", host.CPUUsage, now)
 			m.metricsHistory.AddGuestMetric(hostMetricKey, "memory", host.Memory.Usage, now)
 			m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
+			if hostTemperature != nil {
+				m.metricsHistory.AddGuestMetric(hostMetricKey, "temperature", *hostTemperature, now)
+			}
 
 			if netInRate >= 0 {
 				m.metricsHistory.AddGuestMetric(hostMetricKey, "netin", netInRate, now)
@@ -2049,6 +2053,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			m.metricsStore.Write("agent", host.ID, "cpu", host.CPUUsage, now)
 			m.metricsStore.Write("agent", host.ID, "memory", host.Memory.Usage, now)
 			m.metricsStore.Write("agent", host.ID, "disk", hostDiskPercent, now)
+			if hostTemperature != nil {
+				m.metricsStore.Write("agent", host.ID, "temperature", *hostTemperature, now)
+			}
 			m.writeHostSMARTMetrics(host, now)
 			if netInRate >= 0 {
 				m.metricsStore.Write("agent", host.ID, "netin", netInRate, now)
@@ -2070,6 +2077,61 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	m.persistHostContinuity(host, report)
 
 	return host, nil
+}
+
+func hostPrimaryTemperatureCelsius(sensors models.HostSensorSummary) *float64 {
+	if len(sensors.TemperatureCelsius) == 0 {
+		return nil
+	}
+	if value, ok := sensors.TemperatureCelsius["cpu_package"]; ok && value > 0 {
+		return &value
+	}
+
+	var best float64
+	found := false
+	for key, value := range sensors.TemperatureCelsius {
+		if value <= 0 || !strings.HasPrefix(strings.ToLower(key), "cpu") {
+			continue
+		}
+		if !found || value > best {
+			best = value
+			found = true
+		}
+	}
+	if !found {
+		return nil
+	}
+	return &best
+}
+
+func nodePrimaryTemperatureCelsius(temperature *models.Temperature) *float64 {
+	if temperature == nil || !temperature.Available {
+		return nil
+	}
+	if temperature.CPUMax > 0 {
+		value := temperature.CPUMax
+		return &value
+	}
+	if temperature.CPUPackage > 0 {
+		value := temperature.CPUPackage
+		return &value
+	}
+
+	var best float64
+	found := false
+	for _, core := range temperature.Cores {
+		if core.Temp <= 0 {
+			continue
+		}
+		if !found || core.Temp > best {
+			best = core.Temp
+			found = true
+		}
+	}
+	if !found {
+		return nil
+	}
+	return &best
 }
 
 func (m *Monitor) writeHostSMARTMetrics(host models.Host, now time.Time) {

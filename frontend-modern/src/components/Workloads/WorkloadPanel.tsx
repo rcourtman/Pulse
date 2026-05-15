@@ -27,6 +27,7 @@ import {
 
 import { GuestDrawer } from './GuestDrawer';
 import { GuestRow } from './GuestRow';
+import { NodeDrawer } from './NodeDrawer';
 import { buildWorkloadSummaryGroupScope } from './workloadSelectors';
 import type { WorkloadsState } from './useWorkloadsState';
 import type { WorkloadTableMetric } from './workloadMetricHistoryModel';
@@ -384,6 +385,12 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
           const isSummaryGroupHighlighted = createMemo(
             () => props.activeSummaryWorkloadGroupScope()?.id === groupKey(),
           );
+          const shouldShowNodeDrawer = createMemo(
+            () =>
+              Boolean(node()) &&
+              props.focusedSummaryWorkloadGroupId() === groupKey() &&
+              props.selectedGuestId() === null,
+          );
           const handleGroupHoverChange = (next: SummarySeriesGroupScope | null) => {
             props.setHoveredWorkloadGroupScope(next);
           };
@@ -443,6 +450,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                     showFactsInName={!props.workloadTableVisibleColumnIds().includes('info')}
                     trClass="cursor-pointer select-none duration-150"
                     trProps={{
+                      'aria-expanded': shouldShowNodeDrawer() ? 'true' : 'false',
                       'data-summary-group-id': groupKey(),
                       'data-summary-group-series-count': String(
                         groupSummaryScope()?.seriesIds.length ?? 0,
@@ -452,6 +460,21 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                       ...groupRowInteraction,
                     }}
                   />
+                </Show>
+                <Show when={shouldShowNodeDrawer()}>
+                  <TableRow data-inline-node-detail-for={groupKey()}>
+                    <TableCell
+                      colspan={props.totalColumns()}
+                      class="p-0 border-b border-border bg-surface-alt"
+                    >
+                      <div
+                        class="px-2 sm:px-4 py-3 sm:py-4"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <NodeDrawer node={node()!} />
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 </Show>
               </Show>
               <Index each={groupGuests()} fallback={<></>}>

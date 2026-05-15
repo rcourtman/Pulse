@@ -274,6 +274,13 @@ when that span already covers the requested chart window before falling back
 to SQLite, so long-range chart batches do not pay an unnecessary store round
 trip just because the request is larger than the old fixed in-memory
 threshold.
+Agent and node CPU temperature are part of that shared metrics-history family.
+`internal/monitoring/monitor_agents.go` must write the primary host-agent CPU
+temperature into both in-memory guest history and the persisted `agent`
+metrics-store stream, while `internal/monitoring/metrics_history.go` keeps
+`temperature` alongside CPU, memory, disk, and I/O for guest and node history
+reads. Mock history must seed the same metric so Proxmox node drawer thermals
+exercise the production contract instead of relying on a frontend-only fallback.
 That same monitoring owner also owns canonical unified-resource publication on
 `/api/state` and the websocket `state.resources` hydrate path. Monitoring must
 publish those resources from the same canonical unified snapshot that

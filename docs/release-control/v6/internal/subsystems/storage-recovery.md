@@ -1312,6 +1312,11 @@ history for adjacent overview or shared summary cards, it may parallelize the
 provider reads, but it must not widen the shared hot path to disk read/write
 or fetch-all metrics just because storage or recovery also mount nearby chart
 shells.
+That adjacent shared chart transport may also expose host-agent or Proxmox node
+CPU temperature as `metric=temperature` for node drawers. Storage and recovery
+may consume the surrounding context, but they must not reinterpret that
+agent/node CPU temperature history as physical-disk SMART temperature, backup
+freshness, restore evidence, or a storage-owned thermal timeline.
 
 Storage and recovery still consume the shared unified-resource contract, but
 they do not own the timeline store itself. The canonical resource-change
