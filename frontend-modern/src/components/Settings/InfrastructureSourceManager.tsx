@@ -538,12 +538,8 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
             </button>
           </Show>
 
-          {/* Discovery actions are utility-tier: most users never run them.
-              Render as icon-only ghost buttons so they don't compete with
-              the primary '+ Add infrastructure' CTA for visual weight. The
-              full action description lives in title for hover discovery and
-              in aria-label for screen readers; the scanning state still
-              shows a 'Scanning…' label inline so the user gets feedback. */}
+          {/* Discovery actions stay utility-tier but must remain explicit:
+              manual scans are an operator command, not an icon-hunt. */}
           <div class="ml-auto flex flex-wrap items-center gap-1">
             <Show when={props.onRunDiscovery}>
               <button
@@ -551,15 +547,14 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 onClick={props.onRunDiscovery}
                 disabled={props.discoveryScanStatus().scanning}
                 class={utilityToolbarButtonClass}
-                aria-label="Run discovery scan"
                 title="Scan configured networks for reachable Proxmox VE, TrueNAS, PBS, PMG, and VMware vCenter endpoints. Discovered candidates appear here for review before they are added."
               >
                 <RotateCw
                   class={`h-4 w-4 ${props.discoveryScanStatus().scanning ? 'animate-spin' : ''}`}
                 />
-                <Show when={props.discoveryScanStatus().scanning}>
-                  <span>Scanning…</span>
-                </Show>
+                <span>
+                  {props.discoveryScanStatus().scanning ? 'Scanning...' : 'Run discovery'}
+                </span>
               </button>
             </Show>
 
@@ -568,10 +563,10 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 type="button"
                 onClick={props.onOpenDiscoverySettings}
                 class={utilityToolbarButtonClass}
-                aria-label="Open discovery settings"
                 title="Configure which networks and ports Pulse scans for platform APIs, and how often."
               >
                 <SlidersHorizontal class="h-4 w-4" />
+                <span>Discovery settings</span>
               </button>
             </Show>
           </div>

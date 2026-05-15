@@ -286,8 +286,8 @@ describe('InfrastructureWorkspace', () => {
     // contents distinctly. Card-level description was dropped because it
     // duplicated the page-level subtitle.
     await waitFor(() => expect(screen.getByText('Connected systems')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: /Run discovery/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Discovery settings/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Run discovery$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Discovery settings$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Add infrastructure$/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Detect address$/i })).toBeNull();
     // Row-level 'Install agent' surfaces per system that has API coverage

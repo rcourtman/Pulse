@@ -1,5 +1,5 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InfrastructureSourceManager } from '../InfrastructureSourceManager';
 import type {
   FleetGovernanceSignal,
@@ -85,6 +85,29 @@ const member = (
 
 describe('InfrastructureSourceManager setup summary', () => {
   afterEach(() => cleanup());
+
+  it('renders manual discovery as a visible operator action', () => {
+    const onRunDiscovery = vi.fn();
+    const onOpenDiscoverySettings = vi.fn();
+
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => []}
+        discoveredNodes={() => []}
+        discoveryEnabled
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly={false}
+        onRunDiscovery={onRunDiscovery}
+        onOpenDiscoverySettings={onOpenDiscoverySettings}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: /^Run discovery$/i }));
+    expect(onRunDiscovery).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Discovery settings$/i }));
+    expect(onOpenDiscoverySettings).toHaveBeenCalledTimes(1);
+  });
 
   it('keeps setup status compact while preserving row-level attention signals', () => {
     render(() => (
