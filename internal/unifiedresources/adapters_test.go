@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockruntime"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
@@ -626,5 +627,50 @@ func TestResourceFromHostSMARTDiskNormalizesLegacyUnraidKiBSize(t *testing.T) {
 	}
 	if got := agentResource.Agent.Unraid.Disks[0].SizeBytes; got != normalizedDiskBytes {
 		t.Fatalf("agent Unraid disk sizeBytes = %d, want %d", got, normalizedDiskBytes)
+	}
+}
+
+func TestResourceFromKubernetesDeployment_PopulatesMetricsUnderMockMode(t *testing.T) {
+	mockruntime.SetEnabled(true)
+	t.Cleanup(func() { mockruntime.SetEnabled(false) })
+
+	cluster := models.KubernetesCluster{
+		ID:   "cluster-1",
+		Name: "production",
+	}
+	deployment := models.KubernetesDeployment{
+		UID:               "dep-uid-1",
+		Name:              "checkout-api",
+		Namespace:         "services",
+		DesiredReplicas:   3,
+		UpdatedReplicas:   3,
+		ReadyReplicas:     2,
+		AvailableReplicas: 2,
+	}
+
+	resource, _ := resourceFromKubernetesDeployment(cluster, deployment, nil)
+	if resource.Metrics == nil {
+		t.Fatal("expected mock-mode deployment to carry synthetic Metrics, got nil")
+	}
+	if resource.Metrics.CPU == nil || resource.Metrics.CPU.Percent <= 0 {
+		t.Fatalf("expected non-zero CPU percent, got %+v", resource.Metrics.CPU)
+	}
+	if resource.Metrics.Memory == nil || resource.Metrics.Memory.Percent <= 0 {
+		t.Fatalf("expected non-zero Memory percent, got %+v", resource.Metrics.Memory)
+	}
+	if resource.Metrics.Disk == nil || resource.Metrics.Disk.Percent < 0 {
+		t.Fatalf("expected Disk metric, got %+v", resource.Metrics.Disk)
+	}
+}
+
+func TestResourceFromKubernetesDeployment_NilMetricsOutsideMockMode(t *testing.T) {
+	mockruntime.SetEnabled(false)
+	cluster := models.KubernetesCluster{ID: "cluster-2", Name: "live"}
+	deployment := models.KubernetesDeployment{
+		Name: "frontend", Namespace: "web", DesiredReplicas: 2, ReadyReplicas: 2, AvailableReplicas: 2,
+	}
+	resource, _ := resourceFromKubernetesDeployment(cluster, deployment, nil)
+	if resource.Metrics != nil {
+		t.Fatalf("expected nil Metrics outside mock mode (no canonical aggregation yet), got %+v", resource.Metrics)
 	}
 }

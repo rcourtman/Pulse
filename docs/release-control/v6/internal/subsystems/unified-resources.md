@@ -271,7 +271,19 @@ payloads may expose a camelCase transport projection, but the counts must be
 derived from `internal/unifiedresources/policy_posture.go` after canonical
 policy metadata has been refreshed, not recomputed from frontend labels,
 AI-only summary payloads, or page-local heuristics.
-4. Add metrics-target normalization or synthetic metrics support through `internal/unifiedresources/metrics_targets.go` and `internal/unifiedresources/metrics.go`
+4. Add metrics-target normalization or synthetic metrics support through `internal/unifiedresources/metrics_targets.go` and `internal/unifiedresources/metrics.go`.
+   Kubernetes deployment metrics live on the canonical adapter through
+   `metricsFromKubernetesDeployment(cluster, deployment)`. Upstream
+   Deployments do not expose CPU / memory natively because they are
+   scheduling abstractions over their controlled pods, so the helper
+   returns nil for non-mock runtimes (until the adapter aggregates pod
+   metrics into the owning deployment) and synthesizes deployment-stable
+   CPU / memory / disk / network values for mock mode so the
+   platform-page Deployments table renders meaningful operator values
+   instead of dashes. The synthetic branch is gated by
+   `mockmode.IsEnabled()` and scales with the deployment's
+   ready/desired/available replica state so degraded deployments read as
+   elevated pressure on the surviving replicas.
 5. Add platform registry, resolution, host-dedup, or monitored-system
    projection behavior through `internal/unifiedresources/registry.go`,
    `internal/unifiedresources/resolve.go`,

@@ -2169,6 +2169,7 @@ func resourceFromKubernetesDeployment(cluster models.KubernetesCluster, deployme
 		Status:    statusFromKubernetesDeployment(deployment),
 		LastSeen:  cluster.LastSeen,
 		UpdatedAt: time.Now().UTC(),
+		Metrics:   metricsFromKubernetesDeployment(cluster, deployment),
 		Kubernetes: &K8sData{
 			ClusterID:          cluster.ID,
 			ClusterName:        clusterName,

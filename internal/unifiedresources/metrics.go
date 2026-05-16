@@ -456,6 +456,90 @@ func metricsFromKubernetesNode(_ models.KubernetesCluster, node models.Kubernete
 	return metrics
 }
 
+// metricsFromKubernetesDeployment projects deployment-level metrics so the
+// platform-page Deployments table stops rendering dashes for CPU / Memory /
+// Disk. Real upstream Deployments do not natively expose resource metrics —
+// they are scheduling abstractions over their controlled pods — so this
+// helper currently synthesises mock-mode values from the deployment's
+// replica state. Production deployments without aggregated pod metrics
+// still return nil here; once the canonical adapter learns how to roll up
+// pod metrics into the owning deployment, swap the synthetic branch for the
+// real aggregate while keeping the synthetic fallback for mock mode.
+func metricsFromKubernetesDeployment(cluster models.KubernetesCluster, deployment models.KubernetesDeployment) *ResourceMetrics {
+	if !mockmode.IsEnabled() {
+		return nil
+	}
+	values := syntheticKubernetesDeploymentMetrics(cluster, deployment)
+	return &ResourceMetrics{
+		CPU:    &MetricValue{Value: values.CPU, Percent: values.CPU, Unit: "percent", Source: SourceK8s},
+		Memory: &MetricValue{Value: values.Memory, Percent: values.Memory, Unit: "percent", Source: SourceK8s},
+		Disk:   &MetricValue{Value: values.Disk, Percent: values.Disk, Unit: "percent", Source: SourceK8s},
+		NetIn:  &MetricValue{Value: values.NetIn, Unit: "bytes/s", Source: SourceK8s},
+		NetOut: &MetricValue{Value: values.NetOut, Unit: "bytes/s", Source: SourceK8s},
+	}
+}
+
+type kubernetesDeploymentSyntheticMetrics struct {
+	CPU    float64
+	Memory float64
+	Disk   float64
+	NetIn  float64
+	NetOut float64
+}
+
+func syntheticKubernetesDeploymentMetrics(cluster models.KubernetesCluster, deployment models.KubernetesDeployment) kubernetesDeploymentSyntheticMetrics {
+	seed := hashMetricsSeed(
+		cluster.ID,
+		cluster.Name,
+		cluster.DisplayName,
+		deployment.UID,
+		deployment.Namespace,
+		deployment.Name,
+	)
+	rng := rand.New(rand.NewSource(int64(seed)))
+
+	desired := float64(deployment.DesiredReplicas)
+	if desired <= 0 {
+		desired = 1
+	}
+	ready := float64(deployment.ReadyReplicas)
+	if ready < 0 {
+		ready = 0
+	}
+	if ready > desired {
+		ready = desired
+	}
+	available := float64(deployment.AvailableReplicas)
+	if available < 0 {
+		available = 0
+	}
+	if available > desired {
+		available = desired
+	}
+	readiness := ready / desired
+	availability := available / desired
+
+	// Healthy deployments cluster around moderate utilisation; degraded
+	// deployments (ready < desired) read as elevated CPU / memory pressure
+	// because the surviving pods absorb the dropped replicas' load.
+	pressure := 1.0 + (1.0-readiness)*0.85
+	scale := math.Min(1.0+desired*0.05, 1.6)
+
+	cpu := (24 + rng.Float64()*18) * pressure * scale
+	memory := (38 + rng.Float64()*22) * pressure * scale
+	disk := (12 + rng.Float64()*16) * scale
+	netIn := (12_000 + rng.Float64()*60_000) * scale * availability
+	netOut := (9_000 + rng.Float64()*48_000) * scale * availability
+
+	return kubernetesDeploymentSyntheticMetrics{
+		CPU:    clampMetricValue(cpu, 0, 100),
+		Memory: clampMetricValue(memory, 0, 100),
+		Disk:   clampMetricValue(disk, 0, 100),
+		NetIn:  netIn,
+		NetOut: netOut,
+	}
+}
+
 func metricsFromKubernetesPod(cluster models.KubernetesCluster, pod models.KubernetesPod) *ResourceMetrics {
 	metrics := &ResourceMetrics{}
 	if pod.UsageCPUPercent > 0 {

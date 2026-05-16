@@ -1,6 +1,11 @@
 package unifiedresources
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockruntime"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+)
 
 func TestBuildMetricsTarget_UsesCanonicalAgentTypeForInfrastructureFamilies(t *testing.T) {
 	tests := []struct {
@@ -356,5 +361,40 @@ func TestBuildMetricsTarget_UsesCanonicalAgentMetricIDForTrueNAS(t *testing.T) {
 	}
 	if target.ResourceID != "truenas-main" {
 		t.Fatalf("ResourceID = %q, want truenas-main", target.ResourceID)
+	}
+}
+
+func TestMetricsFromKubernetesDeployment_NilOutsideMockMode(t *testing.T) {
+	mockruntime.SetEnabled(false)
+	got := metricsFromKubernetesDeployment(
+		models.KubernetesCluster{ID: "c1", Name: "prod"},
+		models.KubernetesDeployment{Name: "frontend", DesiredReplicas: 2, ReadyReplicas: 2},
+	)
+	if got != nil {
+		t.Fatalf("expected nil metrics when mock mode is disabled, got %+v", got)
+	}
+}
+
+func TestMetricsFromKubernetesDeployment_SyntheticUnderMockMode(t *testing.T) {
+	mockruntime.SetEnabled(true)
+	t.Cleanup(func() { mockruntime.SetEnabled(false) })
+
+	healthy := metricsFromKubernetesDeployment(
+		models.KubernetesCluster{ID: "c1", Name: "prod"},
+		models.KubernetesDeployment{Name: "checkout", UID: "u1", DesiredReplicas: 3, ReadyReplicas: 3, AvailableReplicas: 3},
+	)
+	if healthy == nil || healthy.CPU == nil || healthy.Memory == nil {
+		t.Fatalf("expected synthetic metrics for healthy deployment, got %+v", healthy)
+	}
+
+	degraded := metricsFromKubernetesDeployment(
+		models.KubernetesCluster{ID: "c1", Name: "prod"},
+		models.KubernetesDeployment{Name: "checkout", UID: "u1", DesiredReplicas: 3, ReadyReplicas: 1, AvailableReplicas: 1},
+	)
+	if degraded == nil || degraded.CPU == nil {
+		t.Fatalf("expected synthetic metrics for degraded deployment, got %+v", degraded)
+	}
+	if degraded.CPU.Percent <= healthy.CPU.Percent {
+		t.Fatalf("expected degraded deployment CPU (%.1f) to exceed healthy CPU (%.1f)", degraded.CPU.Percent, healthy.CPU.Percent)
 	}
 }
