@@ -2,7 +2,6 @@ import { For, Show, createMemo, type Component } from 'solid-js';
 import type { ResourceCorrelation } from '@/types/aiIntelligence';
 import type { ResourceRelationship } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
-import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 import {
   formatResourceCorrelationEndpoint,
   formatResourceCorrelationHeadline,
@@ -36,7 +35,7 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
   const relationships = createMemo(() => sortResourceRelationships(props.relationships ?? []));
   const dependencies = () => props.dependencies ?? [];
   const dependents = () => props.dependents ?? [];
-  const buildResourceHref = props.buildResourceHref ?? buildInfrastructureResourceHref;
+  const buildResourceHref = props.buildResourceHref ?? (() => null);
   const resolveResourceLabel = props.resolveResourceLabel;
   const maxCorrelations = () => props.maxCorrelations ?? 3;
   const hasContent = () =>

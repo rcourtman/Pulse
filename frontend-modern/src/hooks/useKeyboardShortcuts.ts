@@ -1,10 +1,11 @@
 import { createSignal, onCleanup, type Accessor } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import {
-  buildRecoveryPath,
-  buildInfrastructurePath,
-  buildStoragePath,
-  buildWorkloadsPath,
+  buildDockerPath,
+  buildKubernetesPath,
+  buildProxmoxPath,
+  buildTrueNASPath,
+  buildVmwarePath,
 } from '@/routing/resourceLinks';
 import { focusActiveTypeToSearch } from '@/hooks/useTypeToSearch';
 
@@ -76,11 +77,13 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
 
   const getRoutes = (): Record<string, string> => {
     return {
-      i: buildInfrastructurePath(),
-      w: buildWorkloadsPath(),
-      s: buildStoragePath(),
-      b: buildRecoveryPath(),
+      p: buildProxmoxPath(),
+      d: buildDockerPath(),
+      k: buildKubernetesPath(),
+      n: buildTrueNASPath(),
+      v: buildVmwarePath(),
       a: '/alerts',
+      r: '/patrol',
       t: '/settings',
     };
   };

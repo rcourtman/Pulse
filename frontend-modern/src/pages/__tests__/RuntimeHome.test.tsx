@@ -17,11 +17,11 @@ describe('RuntimeHome', () => {
     navigateSpy.mockReset();
   });
 
-  it('routes authenticated runtimes straight to Infrastructure', async () => {
+  it('routes authenticated runtimes straight to the Proxmox platform page', async () => {
     render(() => <RuntimeHome />);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/infrastructure', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith('/proxmox/overview', { replace: true });
     });
   });
 });

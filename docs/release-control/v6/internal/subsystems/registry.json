@@ -2968,12 +2968,12 @@
               "scripts/dev-deploy-agent.sh",
               "scripts/dev-launchd-setup.sh",
               "scripts/dev-launchd-wrapper.sh",
-            "scripts/hot-dev-bg.sh",
-            "scripts/hot-dev.sh",
-            "scripts/lib/hot-dev-auth.sh",
-            "scripts/lib/hot-dev-runtime.sh",
-            "scripts/toggle-mock.sh",
-            "tests/integration/playwright.config.ts",
+              "scripts/hot-dev-bg.sh",
+              "scripts/hot-dev.sh",
+              "scripts/lib/hot-dev-auth.sh",
+              "scripts/lib/hot-dev-runtime.sh",
+              "scripts/toggle-mock.sh",
+              "tests/integration/playwright.config.ts",
               "tests/integration/QUICK_START.md",
               "tests/integration/README.md",
               "tests/integration/scripts/managed-dev-runtime.mjs",
@@ -2983,11 +2983,11 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-            "scripts/release_control/ssh_host_key_policy_test.py",
-            "scripts/tests/test-hot-dev-auth.sh",
-            "scripts/tests/test-hot-dev-bg.sh",
-            "scripts/tests/test-hot-dev-runtime.sh",
-            "scripts/tests/test-toggle-mock.sh",
+              "scripts/release_control/ssh_host_key_policy_test.py",
+              "scripts/tests/test-hot-dev-auth.sh",
+              "scripts/tests/test-hot-dev-bg.sh",
+              "scripts/tests/test-hot-dev-runtime.sh",
+              "scripts/tests/test-toggle-mock.sh",
               "tests/integration/tests/16-dev-runtime-recovery.spec.ts"
             ]
           },
@@ -3286,8 +3286,6 @@
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
               "frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx",
               "frontend-modern/src/pages/__tests__/Operations.helpers.test.ts",
-              "frontend-modern/src/pages/__tests__/Recovery.test.tsx",
-              "frontend-modern/src/pages/__tests__/Workloads.helpers.test.ts",
               "frontend-modern/src/routing/__tests__/routePreload.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/reportableResourceTypes.test.ts",
@@ -4309,7 +4307,6 @@
         "frontend-modern/src/components/Workloads/workloadTopology.ts",
         "frontend-modern/src/components/Workloads/workloadUrlSyncModel.ts",
         "frontend-modern/src/hooks/useWorkloads.ts",
-        "frontend-modern/src/pages/Workloads.tsx",
         "frontend-modern/src/routing/routePreload.ts",
         "frontend-modern/src/useAppRuntimeState.ts",
         "frontend-modern/src/utils/thresholdSliderPresentation.ts",
@@ -4458,7 +4455,6 @@
               "frontend-modern/src/components/Workloads/workloadTopology.ts",
               "frontend-modern/src/components/Workloads/workloadUrlSyncModel.ts",
               "frontend-modern/src/hooks/useWorkloads.ts",
-              "frontend-modern/src/pages/Workloads.tsx",
               "frontend-modern/src/utils/thresholdSliderPresentation.ts",
               "frontend-modern/src/utils/workloadsSummaryCache.ts"
             ],
@@ -4495,7 +4491,6 @@
               "frontend-modern/src/components/Workloads/ThresholdSlider.test.tsx",
               "frontend-modern/src/components/Workloads/WorkloadsSummary.test.tsx",
               "frontend-modern/src/hooks/__tests__/useWorkloads.test.ts",
-              "frontend-modern/src/pages/__tests__/Workloads.helpers.test.ts",
               "frontend-modern/src/utils/__tests__/thresholdSliderPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/workloadsSummaryCache.test.ts"
             ]
@@ -4851,9 +4846,6 @@
         "frontend-modern/src/hooks/useRecoveryPointsFacets.ts",
         "frontend-modern/src/hooks/useRecoveryPointsSeries.ts",
         "frontend-modern/src/hooks/useRecoveryRollups.ts",
-        "frontend-modern/src/pages/Ceph.tsx",
-        "frontend-modern/src/pages/Recovery.tsx",
-        "frontend-modern/src/pages/Storage.tsx",
         "frontend-modern/src/types/recovery.ts",
         "frontend-modern/src/utils/recoveryActionPresentation.ts",
         "frontend-modern/src/utils/recoveryArtifactModePresentation.ts",
@@ -4875,7 +4867,6 @@
         "exact_files": [
           "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
           "frontend-modern/src/components/Storage/code_standards.test.ts",
-          "frontend-modern/src/pages/__tests__/Recovery.test.tsx",
           "internal/recovery/recovery_test.go"
         ],
         "require_explicit_path_policy_coverage": true,
@@ -4911,7 +4902,6 @@
               "frontend-modern/src/hooks/useRecoveryPointsFacets.ts",
               "frontend-modern/src/hooks/useRecoveryPointsSeries.ts",
               "frontend-modern/src/hooks/useRecoveryRollups.ts",
-              "frontend-modern/src/pages/Recovery.tsx",
               "frontend-modern/src/types/recovery.ts",
               "frontend-modern/src/utils/recoveryActionPresentation.ts",
               "frontend-modern/src/utils/recoveryArtifactModePresentation.ts",
@@ -4931,7 +4921,6 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-              "frontend-modern/src/pages/__tests__/Recovery.test.tsx",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "tests/integration/tests/17-recovery-layout.spec.ts"
             ]
@@ -4943,10 +4932,7 @@
               "frontend-modern/src/components/Storage/",
               "frontend-modern/src/features/storageBackups/"
             ],
-            "match_files": [
-              "frontend-modern/src/pages/Ceph.tsx",
-              "frontend-modern/src/pages/Storage.tsx"
-            ],
+            "match_files": [],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
@@ -4964,7 +4950,6 @@
               "frontend-modern/src/features/storageBackups/__tests__/storageModelCore.test.ts",
               "frontend-modern/src/features/storageBackups/__tests__/storagePagePresentation.test.ts",
               "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts",
-              "frontend-modern/src/pages/__tests__/Storage.helpers.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
             ]
           }
@@ -5025,7 +5010,6 @@
         "frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts",
         "frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts",
         "frontend-modern/src/hooks/useUnifiedResources.ts",
-        "frontend-modern/src/pages/Infrastructure.tsx",
         "frontend-modern/src/routing/resourceLinks.ts",
         "frontend-modern/src/types/resource.ts",
         "frontend-modern/src/utils/actionAuditPresentation.ts",
@@ -5149,7 +5133,6 @@
               "frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts",
               "frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts",
               "frontend-modern/src/hooks/useUnifiedResources.ts",
-              "frontend-modern/src/pages/Infrastructure.tsx",
               "frontend-modern/src/routing/resourceLinks.ts",
               "frontend-modern/src/types/resource.ts",
               "frontend-modern/src/utils/resourceIdentity.ts",
@@ -5175,8 +5158,6 @@
               "frontend-modern/src/features/infrastructure/__tests__/infrastructurePageModel.test.ts",
               "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",
               "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
-              "frontend-modern/src/pages/__tests__/Infrastructure.empty-state.test.tsx",
-              "frontend-modern/src/pages/__tests__/Infrastructure.pbs-pmg.test.tsx",
               "frontend-modern/src/routing/__tests__/resourceLinks.test.ts",
               "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
               "frontend-modern/src/types/__tests__/resource.test.ts",

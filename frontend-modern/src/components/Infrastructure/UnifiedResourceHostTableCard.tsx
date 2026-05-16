@@ -41,7 +41,6 @@ import {
 import { getAvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
 import { ResourceDetailDrawer } from './ResourceDetailDrawer';
 import { getResourceHealthIssuePresentation } from './resourceHealthPresentation';
-import { buildWorkloadsHref } from './workloadsLink';
 import { ClusterDeployBanner } from './ClusterDeployBanner';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
 import { UnifiedResourceSourceBadgeCell } from './UnifiedResourceSourceBadgeCell';
@@ -330,7 +329,6 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                 const availabilityProbe = createMemo(() =>
                   getAvailabilityProbePresentation(resource),
                 );
-                const workloadsHref = createMemo(() => buildWorkloadsHref(resource));
                 const resourceRowInteraction = createSummaryInteractiveRowPreviewHandlers({
                   onPreview: () => tableProps.onHoverChange?.(resource.id),
                   onPreviewClear: () => tableProps.onHoverChange?.(null),
@@ -418,36 +416,6 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                               </Show>
                             </div>
                           </div>
-                          <Show when={workloadsHref()}>
-                            {(href) => (
-                              <a
-                                href={href()}
-                                class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:text-blue-300 dark:hover:bg-blue-800 dark:hover:text-blue-200"
-                                title="View related workloads"
-                                aria-label={`View workloads for ${displayName()}`}
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <svg
-                                  class="h-3.5 w-3.5"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                  stroke-width="2"
-                                >
-                                  <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    d="M14 5h5m0 0v5m0-5-8 8"
-                                  />
-                                  <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    d="M5 10v9h9"
-                                  />
-                                </svg>
-                              </a>
-                            )}
-                          </Show>
                         </div>
                       </TableCell>
 

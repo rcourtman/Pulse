@@ -30,12 +30,11 @@ describe('ResourceCorrelationSummary', () => {
 
     expect(screen.getByText('Learned correlations')).toBeInTheDocument();
     expect(screen.getByText('5 total')).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: 'Open source resource Storage 1 in Infrastructure' }),
-    ).toHaveAttribute('href', '/infrastructure?resource=storage-1');
-    expect(
-      screen.getByRole('link', { name: 'Open target resource Host 1 in Infrastructure' }),
-    ).toHaveAttribute('href', '/infrastructure?resource=host-1');
+    // Cross-jump links to the legacy /infrastructure surface were retired;
+    // labels render as plain text by default in the platform-first layout.
+    expect(screen.queryAllByRole('link')).toHaveLength(0);
+    expect(screen.getByText('Storage 1')).toBeInTheDocument();
+    expect(screen.getByText('Host 1')).toBeInTheDocument();
     expect(screen.getByText('Disk Full → Restart')).toBeInTheDocument();
     expect(screen.getByText(/2 occurrences · avg delay 2m · 88% confidence/)).toBeInTheDocument();
     expect(screen.getByText('Disk pressure often precedes restarts')).toBeInTheDocument();
@@ -97,23 +96,14 @@ describe('ResourceCorrelationSummary', () => {
     expect(screen.getByText('Depends on')).toBeInTheDocument();
     expect(screen.getByText('Used by')).toBeInTheDocument();
     expect(screen.getByText('Correlations')).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: 'Open source resource PVE 1 in Infrastructure' }),
-    ).toHaveAttribute('href', '/infrastructure?resource=node%3Apve-1');
-    expect(
-      screen.getByRole('link', { name: 'Open target resource VM Child in Infrastructure' }),
-    ).toHaveAttribute('href', '/infrastructure?resource=vm-child');
+    // Cross-jump links to /infrastructure were retired; labels render as
+    // plain text by default in the platform-first layout.
+    expect(screen.queryAllByRole('link')).toHaveLength(0);
+    expect(screen.getByText('PVE 1')).toBeInTheDocument();
+    expect(screen.getAllByText('VM Child').length).toBeGreaterThan(0);
+    expect(screen.getByText('Storage 1 alias')).toBeInTheDocument();
     expect(screen.getByText('Runs On')).toBeInTheDocument();
     expect(screen.getByText(/100% confidence · Proxmox Adapter · last seen/)).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', {
-        name: 'Open dependency resource Storage 1 alias in Infrastructure',
-      }),
-    ).toHaveAttribute('href', '/infrastructure?resource=storage-1');
-    expect(screen.getByText('Storage 1 alias')).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: 'Open dependent resource VM Child in Infrastructure' }),
-    ).toHaveAttribute('href', '/infrastructure?resource=vm-child');
     expect(screen.getAllByText(/last seen/i).length).toBeGreaterThanOrEqual(2);
   });
 });

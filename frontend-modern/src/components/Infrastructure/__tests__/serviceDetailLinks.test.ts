@@ -18,7 +18,7 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 });
 
 describe('buildServiceDetailLinks', () => {
-  it('returns PBS drill-down link to recovery events filtered for remote PBS activity', () => {
+  it('returns no service links for PBS now that the standalone Recovery surface is retired', () => {
     const links = buildServiceDetailLinks(
       baseResource({
         id: 'pbs-main',
@@ -29,14 +29,7 @@ describe('buildServiceDetailLinks', () => {
       }),
     );
 
-    expect(links).toEqual([
-      {
-        href: '/recovery?view=events&platform=proxmox-pbs&mode=remote',
-        label: 'Open Recovery Events',
-        compactLabel: 'Recovery',
-        ariaLabel: 'Open recovery events for PBS Main',
-      },
-    ]);
+    expect(links).toEqual([]);
   });
 
   it('returns PMG drill-down link to mail gateway thresholds', () => {

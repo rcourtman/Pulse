@@ -642,6 +642,18 @@ or other self-hosted uncapped continuity plans.
 
 ## Current State
 
+Primary nav moved to platform-first on 2026-05-16 through
+`frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, and
+`frontend-modern/src/pages/RuntimeHome.tsx`. The authenticated-runtime landing
+redirect now resolves to `/proxmox/overview` via `buildProxmoxPath()` rather
+than the retired `/infrastructure` shell; kiosk-mode blocked-prefix redirects
+follow the same canonical home. The hosted bootstrap / activation / recovery
+routes (`/pricing`, `/preview/setup-complete`, `/login`, settings panels
+under `/settings/...`) are unchanged. Pricing-handoff and hosted-signup
+upgrade paths must use platform routes as their canonical "back to product"
+destination instead of the retired top-level Infrastructure / Workloads /
+Storage / Recovery pages.
+
 The Proxmox platform tab in the authenticated app shell is ordinary product
 navigation. It must stay separate from hosted acquisition, monitored-system
 pressure, billing prompts, and Pulse Account handoffs: self-hosted operators

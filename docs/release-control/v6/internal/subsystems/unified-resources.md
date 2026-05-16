@@ -701,6 +701,33 @@ AI-only summary payloads, or page-local heuristics.
 
 ## Current State
 
+Cross-resource drilldown affordances were retired on 2026-05-16 alongside the
+platform-first primary nav. The default `buildResourceHref` in
+`frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
+and `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
+now returns `null` instead of building a `/infrastructure?resource=...` link,
+so correlation, change, dependency, dependent, and related-resource labels
+render as plain text inside resource drawers
+(`frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`)
+unless the caller supplies a platform-aware override. The host-row workloads
+icon
+(`frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`)
+and the PBS "Open Recovery Events" link
+(`frontend-modern/src/components/Infrastructure/serviceDetailLinks.ts`) were
+removed because they targeted the retired `/workloads` and `/recovery` route
+shells; the workloads-href helper module
+(`frontend-modern/src/components/Infrastructure/workloadsLink.ts`) was deleted
+in the same pass. The K8s Namespaces and Deployments drawer "Open Pods" /
+"View Pods" buttons
+(`frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx`,
+`frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx`) now
+route to `/kubernetes/pods` rather than building
+`/workloads?type=pod&context=...&namespace=...` URLs; the legacy
+context/namespace query filter does not carry forward because the new
+Kubernetes Pods sub-tab does not consume those parameters. New drawer or
+correlation surfaces must anchor on platform routes (or stay-in-place drawer
+expansion) instead of resurrecting the retired top-level paths.
+
 The Proxmox platform page is a route-level consumer of canonical unified
 resources, not a new resource source. It filters the existing resource snapshot
 to Proxmox VE, Backup Server, Mail Gateway, storage, disk, and workload rows,

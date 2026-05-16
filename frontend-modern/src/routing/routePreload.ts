@@ -1,9 +1,5 @@
 import {
-  buildInfrastructurePath,
   buildProxmoxPath,
-  buildRecoveryPath,
-  buildStoragePath,
-  buildWorkloadsPath,
   DOCKER_PATH,
   KUBERNETES_PATH,
   PATROL_PATH,
@@ -18,22 +14,15 @@ type RoutePreloader = {
   preload: () => Promise<void>;
 };
 
-const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
 const ROOT_PROXMOX_PATH = buildProxmoxPath();
-const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
-const STORAGE_PATH = buildStoragePath();
-const RECOVERY_ROUTE_PATH = buildRecoveryPath();
 const ALERTS_PATH = '/alerts';
 const SETTINGS_PATH = '/settings';
 const routePreloadCache = new Map<string, Promise<void>>();
 
 export const APP_SHELL_ROUTE_PRELOAD_PATHS = [
   ROOT_PROXMOX_PATH,
-  ROOT_WORKLOADS_PATH,
-  RECOVERY_ROUTE_PATH,
   PATROL_PATH,
   ALERTS_PATH,
-  STORAGE_PATH,
   SETTINGS_PATH,
 ] as const;
 
@@ -76,30 +65,6 @@ const ROUTE_PRELOADERS: readonly RoutePreloader[] = [
     matches: (route) => route === VMWARE_PATH || route.startsWith(`${VMWARE_PATH}/`),
     preload: () =>
       import('@/pages/Vmware').then(() => undefined),
-  },
-  {
-    id: 'infrastructure',
-    matches: (route) => route === ROOT_INFRASTRUCTURE_PATH,
-    preload: () =>
-      import('@/pages/Infrastructure').then(() => undefined),
-  },
-  {
-    id: 'workloads',
-    matches: (route) => route === ROOT_WORKLOADS_PATH,
-    preload: () =>
-      import('@/pages/Workloads').then(() => undefined),
-  },
-  {
-    id: 'storage',
-    matches: (route) => route === STORAGE_PATH,
-    preload: () =>
-      import('@/pages/Storage').then(() => undefined),
-  },
-  {
-    id: 'recovery',
-    matches: (route) => route === RECOVERY_ROUTE_PATH,
-    preload: () =>
-      import('@/pages/Recovery').then(() => undefined),
   },
   {
     id: 'alerts',

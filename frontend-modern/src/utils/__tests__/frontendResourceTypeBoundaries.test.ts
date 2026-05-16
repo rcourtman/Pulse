@@ -140,7 +140,6 @@ import updatesPresentationSource from '@/utils/updatesPresentation.ts?raw';
 import environmentLockBadgeSource from '@/components/shared/EnvironmentLockBadge.tsx?raw';
 import environmentLockPresentationSource from '@/utils/environmentLockPresentation.ts?raw';
 import dockerRuntimeSettingsCardSource from '@/components/Settings/DockerRuntimeSettingsCard.tsx?raw';
-import infrastructurePageShellSource from '@/pages/Infrastructure.tsx?raw';
 import operationsPageRouteSource from '@/pages/Operations.tsx?raw';
 import discoveryTargetSource from '@/utils/discoveryTarget.ts?raw';
 import infrastructureEmptyStatePresentationSource from '@/utils/infrastructureEmptyStatePresentation.ts?raw';
@@ -350,8 +349,6 @@ import nodeModalSetupGuideSectionSource from '@/components/Settings/NodeModalSet
 import nodeModalStatusFooterSource from '@/components/Settings/NodeModalStatusFooter.tsx?raw';
 import nodeModalStateSource from '@/components/Settings/useNodeModalState.ts?raw';
 import nodeModalPresentationSource from '@/utils/nodeModalPresentation.ts?raw';
-import cephPageSource from '@/pages/Ceph.tsx?raw';
-import cephServiceIconSource from '@/components/Ceph/CephServiceIcon.tsx?raw';
 import diskPresentationSource from '@/features/storageBackups/diskPresentation.ts?raw';
 import diskLiveMetricPresentationSource from '@/features/storageBackups/diskLiveMetricPresentation.ts?raw';
 import storageDetailPresentationSource from '@/features/storageBackups/detailPresentation.ts?raw';
@@ -604,7 +601,6 @@ const resourceDetailDrawerSource = [
 ].join('\n');
 
 const infrastructurePageSource = [
-  infrastructurePageShellSource,
   infrastructurePageSurfaceSource,
   infrastructurePageRouteStateSource,
   infrastructurePageStateSource,
@@ -949,7 +945,9 @@ describe('frontend resource type boundaries', () => {
     expect(guestRowSource).not.toContain('function NetworkInfoCell(');
     expect(guestRowSource).not.toContain('function OSInfoCell(');
     expect(guestRowStateSource).toContain('getCanonicalWorkloadId');
-    expect(guestRowStateSource).toContain("from '@/routing/resourceLinks'");
+    // The legacy cross-jump to /infrastructure?... was retired; guestRowState
+    // no longer needs anything from resourceLinks.
+    expect(guestRowStateSource).not.toContain("from '@/routing/resourceLinks'");
     expect(guestRowStateSource).not.toContain('./infrastructureLink');
     expect(guestRowModelSource).toContain('export const GUEST_COLUMNS');
     expect(guestRowCellsSource).toContain('function NetworkInfoCell(');
@@ -3348,27 +3346,14 @@ describe('frontend resource type boundaries', () => {
     expect(nodeModalPresentationSource).toContain(
       'export function buildNodeModalMonitoringPayload',
     );
-    expect(cephPageSource).toContain('getCephServiceStatusPresentation');
-    expect(cephPageSource).toContain('getCephLoadingStatePresentation');
-    expect(cephPageSource).toContain('getCephDisconnectedStatePresentation');
-    expect(cephPageSource).toContain('getCephNoClustersStatePresentation');
-    expect(cephPageSource).toContain('getCephPoolsSearchEmptyStatePresentation');
-    expect(cephPageSource).toContain('CephServiceIcon');
-    expect(cephPageSource).not.toContain('<div class="overflow-x-auto"');
-    expect(cephPageSource).not.toContain(
-      '<style>{`.overflow-x-auto::-webkit-scrollbar { display: none; }`}</style>',
-    );
-    expect(cephPageSource).not.toContain('const getServiceStatus =');
-    expect(cephPageSource).not.toContain('const ServiceIcon: Component');
-    expect(cephPageSource).not.toContain('Loading Ceph data...');
-    expect(cephPageSource).not.toContain('No Ceph Clusters Detected');
-    expect(cephPageSource).not.toContain('No pools match "');
+    // Canonical Ceph presentation helpers still live in storageDomain and
+    // are consumed by ProxmoxCephTable / ProxmoxCephClusterDrawer now that
+    // the standalone /ceph page has been retired.
     expect(storageDomainSource).toContain('export const getCephServiceStatusPresentation');
     expect(storageDomainSource).toContain('export const getCephLoadingStatePresentation');
     expect(storageDomainSource).toContain('export const getCephDisconnectedStatePresentation');
     expect(storageDomainSource).toContain('export const getCephNoClustersStatePresentation');
     expect(storageDomainSource).toContain('export const getCephPoolsSearchEmptyStatePresentation');
-    expect(cephServiceIconSource).toContain('export const CephServiceIcon');
     expect(deployStatusBadgeSource).toContain('getDeployStatusPresentation');
     expect(deployStatusBadgeSource).not.toContain('const statusConfig: Record<DeployTargetStatus');
     expect(deployCandidatesStepSource).toContain('getDeployCandidatesLoadingState');

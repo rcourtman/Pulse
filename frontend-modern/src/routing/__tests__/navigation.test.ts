@@ -7,11 +7,13 @@ describe('navigation routing helpers', () => {
     expect(getActiveTabForPath('/dashboard')).toBeNull();
     expect(getActiveTabForPath('/proxmox')).toBe('proxmox');
     expect(getActiveTabForPath('/proxmox/storage')).toBe('proxmox');
-    expect(getActiveTabForPath('/infrastructure')).toBe('infrastructure');
-    expect(getActiveTabForPath('/workloads?type=pod')).toBe('workloads');
-    expect(getActiveTabForPath('/storage')).toBe('storage');
-    expect(getActiveTabForPath('/ceph')).toBe('storage');
-    expect(getActiveTabForPath('/recovery')).toBe('recovery');
+    // Legacy top-level routes (/infrastructure, /workloads, /storage,
+    // /recovery, /ceph) were retired when primary nav moved to platform-first.
+    expect(getActiveTabForPath('/infrastructure')).toBeNull();
+    expect(getActiveTabForPath('/workloads?type=pod')).toBeNull();
+    expect(getActiveTabForPath('/storage')).toBeNull();
+    expect(getActiveTabForPath('/ceph')).toBeNull();
+    expect(getActiveTabForPath('/recovery')).toBeNull();
     expect(getActiveTabForPath('/alerts/open')).toBe('alerts');
     expect(getActiveTabForPath('/patrol')).toBe('ai');
     expect(getActiveTabForPath('/ai')).toBe('ai');

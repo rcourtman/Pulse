@@ -1,10 +1,10 @@
 import { useNavigate } from '@solidjs/router';
 import { createEffect } from 'solid-js';
-import { buildInfrastructurePath } from '@/routing/resourceLinks';
+import { buildProxmoxPath } from '@/routing/resourceLinks';
 
 export default function RuntimeHome() {
   const navigate = useNavigate();
-  const destination = () => buildInfrastructurePath();
+  const destination = () => buildProxmoxPath();
 
   createEffect(() => {
     navigate(destination(), { replace: true });

@@ -110,10 +110,9 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(getByText('Datastores')).toBeInTheDocument();
     expect(getByText('Jobs')).toBeInTheDocument();
     expect(getByText('Types')).toBeInTheDocument();
-    expect(getByRole('link', { name: /open recovery events/i })).toHaveAttribute(
-      'href',
-      '/recovery?view=events&platform=proxmox-pbs&mode=remote',
-    );
+    // The legacy "Open Recovery Events" cross-jump was retired with the
+    // standalone Recovery surface; PBS detail no longer surfaces it.
+    expect(queryByText(/open recovery events/i)).toBeNull();
   });
 
   it('surfaces active PBS tasks before and inside job detail', () => {

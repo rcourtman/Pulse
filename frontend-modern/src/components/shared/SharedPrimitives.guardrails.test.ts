@@ -157,7 +157,6 @@ import deployConfirmStepSource from '@/components/Infrastructure/deploy/ConfirmS
 import deployDeployingStepSource from '@/components/Infrastructure/deploy/DeployingStep.tsx?raw';
 import deployPreflightStepSource from '@/components/Infrastructure/deploy/PreflightStep.tsx?raw';
 import deployResultsStepSource from '@/components/Infrastructure/deploy/ResultsStep.tsx?raw';
-import cephPageSource from '@/pages/Ceph.tsx?raw';
 import pmgMailGatewaySource from '@/components/PMG/MailGateway.tsx?raw';
 import pmgInstancePanelSource from '@/components/PMG/PMGInstancePanel.tsx?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
@@ -310,8 +309,14 @@ describe('shared primitive guardrails', () => {
 
     expect(commandPaletteStateSource).toContain('useNavigate');
     expect(commandPaletteStateSource).toContain('createSignal');
-    expect(commandPaletteStateSource).toContain('buildInfrastructurePath');
+    expect(commandPaletteStateSource).toContain('buildProxmoxPath');
     expect(commandPaletteStateSource).toContain('export function useCommandPaletteState');
+    // Legacy navigation entries (Infrastructure / Workloads / Storage /
+    // Recovery) were retired when primary nav moved to platform-first.
+    expect(commandPaletteStateSource).not.toContain('buildInfrastructurePath');
+    expect(commandPaletteStateSource).not.toContain('buildWorkloadsPath');
+    expect(commandPaletteStateSource).not.toContain('buildStoragePath');
+    expect(commandPaletteStateSource).not.toContain('buildRecoveryPath');
 
     expect(commandPaletteModelSource).toContain('buildCommandPaletteCommands');
     expect(commandPaletteModelSource).toContain('normalizeCommandPaletteQuery');
@@ -560,7 +565,6 @@ describe('shared primitive guardrails', () => {
       infrastructureSourceManagerSource,
       configuredNodeTablesSource,
       aiCostDashboardSource,
-      cephPageSource,
       deployCandidatesStepSource,
       deployConfirmStepSource,
       deployDeployingStepSource,

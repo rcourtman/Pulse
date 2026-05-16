@@ -33,7 +33,7 @@ describe('K8sNamespacesDrawer', () => {
     cleanup();
   });
 
-  it('navigates to canonical pod workloads for the cluster', async () => {
+  it('navigates to the Kubernetes Pods sub-tab from the cluster summary', async () => {
     apiFetchJSONMock.mockResolvedValueOnce(makeResponse([{ namespace: 'default' }]));
 
     render(() => <K8sNamespacesDrawer cluster="cluster-a" />);
@@ -44,10 +44,10 @@ describe('K8sNamespacesDrawer', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Open All Pods' }));
 
-    expect(navigateMock).toHaveBeenCalledWith('/workloads?type=pod&context=cluster-a');
+    expect(navigateMock).toHaveBeenCalledWith('/kubernetes/pods');
   });
 
-  it('navigates to canonical pod workloads scoped by namespace', async () => {
+  it('navigates to the Kubernetes Pods sub-tab from a namespace row', async () => {
     apiFetchJSONMock.mockResolvedValueOnce(makeResponse([{ namespace: 'kube-system' }]));
 
     render(() => <K8sNamespacesDrawer cluster="cluster-a" />);
@@ -58,9 +58,7 @@ describe('K8sNamespacesDrawer', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Open Pods' }));
 
-    expect(navigateMock).toHaveBeenCalledWith(
-      '/workloads?type=pod&context=cluster-a&namespace=kube-system',
-    );
+    expect(navigateMock).toHaveBeenCalledWith('/kubernetes/pods');
   });
 
   it('does not navigate when cluster is empty', async () => {

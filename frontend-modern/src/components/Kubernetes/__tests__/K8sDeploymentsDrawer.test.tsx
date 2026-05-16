@@ -741,7 +741,7 @@ describe('K8sDeploymentsDrawer', () => {
   });
 
   describe('navigation', () => {
-    it('"Open Pods" button navigates with cluster context', async () => {
+    it('"Open Pods" button navigates to the Kubernetes Pods sub-tab', async () => {
       mockApiResponse([makeDeployment()]);
       render(() => <K8sDeploymentsDrawer cluster="my-cluster" />);
 
@@ -753,13 +753,10 @@ describe('K8sDeploymentsDrawer', () => {
       fireEvent.click(openPodsBtn);
 
       expect(navigateMock).toHaveBeenCalledTimes(1);
-      const path = navigateMock.mock.calls[0][0] as string;
-      expect(path).toContain('/workloads');
-      expect(path).toContain('type=pod');
-      expect(path).toContain('context=my-cluster');
+      expect(navigateMock).toHaveBeenCalledWith('/kubernetes/pods');
     });
 
-    it('"Open Pods" passes selected namespace to navigation', async () => {
+    it('"Open Pods" routes to the Kubernetes Pods sub-tab regardless of selected namespace', async () => {
       mockApiResponse([
         makeDeployment({ id: '1', name: 'dep-a', kubernetes: { namespace: 'production' } }),
         makeDeployment({ id: '2', name: 'dep-b', kubernetes: { namespace: 'staging' } }),
@@ -770,7 +767,9 @@ describe('K8sDeploymentsDrawer', () => {
         expect(screen.getByText('dep-a')).toBeInTheDocument();
       });
 
-      // Select a namespace first
+      // Selecting a namespace narrows the in-drawer view but no longer
+      // forwards as a URL filter (the platform-first Kubernetes Pods tab
+      // does not consume legacy ?namespace= query params).
       const select = screen.getByLabelText('Namespace');
       fireEvent.change(select, { target: { value: 'production' } });
 
@@ -778,11 +777,10 @@ describe('K8sDeploymentsDrawer', () => {
       fireEvent.click(openPodsBtn);
 
       expect(navigateMock).toHaveBeenCalledTimes(1);
-      const path = navigateMock.mock.calls[0][0] as string;
-      expect(path).toContain('namespace=production');
+      expect(navigateMock).toHaveBeenCalledWith('/kubernetes/pods');
     });
 
-    it('"View Pods" button on a row navigates with that deployment\'s namespace', async () => {
+    it('"View Pods" button on a row navigates to the Kubernetes Pods sub-tab', async () => {
       mockApiResponse([
         makeDeployment({ id: '1', name: 'dep-a', kubernetes: { namespace: 'kube-system' } }),
       ]);
@@ -796,8 +794,7 @@ describe('K8sDeploymentsDrawer', () => {
       fireEvent.click(viewPodsBtn);
 
       expect(navigateMock).toHaveBeenCalledTimes(1);
-      const path = navigateMock.mock.calls[0][0] as string;
-      expect(path).toContain('namespace=kube-system');
+      expect(navigateMock).toHaveBeenCalledWith('/kubernetes/pods');
     });
 
     it('does not navigate when cluster is empty', async () => {

@@ -651,7 +651,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
 
   it('surfaces canonical analysis context for the resource overview', async () => {
     const resource = baseResource({});
-    const { getByRole, getByTestId, getByText, queryByText } = render(() => (
+    const { getByRole, getByTestId, getByText, queryByRole, queryByText } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
 
@@ -678,16 +678,18 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     await waitFor(() => {
       expect(getByText('Storage 1')).toBeInTheDocument();
     });
+    // Cross-jump to /infrastructure?resource=... retired with the legacy
+    // surface; dependency / dependent labels render as plain text now.
     expect(
-      getByRole('link', {
+      queryByRole('link', {
         name: 'Open dependency resource storage-1 in Infrastructure',
       }),
-    ).toHaveAttribute('href', expect.stringContaining('/infrastructure?resource=storage-1'));
+    ).toBeNull();
     expect(
-      getByRole('link', {
+      queryByRole('link', {
         name: 'Open dependent resource vm-child in Infrastructure',
       }),
-    ).toHaveAttribute('href', expect.stringContaining('/infrastructure?resource=vm-child'));
+    ).toBeNull();
     expect(getByText('Storage 1')).toBeInTheDocument();
     expect(getByText('Host 1')).toBeInTheDocument();
     expect(getByText('Disk Full → Restart')).toBeInTheDocument();

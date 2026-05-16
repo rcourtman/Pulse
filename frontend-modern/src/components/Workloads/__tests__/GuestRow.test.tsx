@@ -104,15 +104,6 @@ vi.mock('@/components/shared/workloadTypeBadges', () => ({
   }),
 }));
 
-vi.mock('@/routing/resourceLinks', async () => {
-  const actual =
-    await vi.importActual<typeof import('@/routing/resourceLinks')>('@/routing/resourceLinks');
-  return {
-    ...actual,
-    buildInfrastructureHrefForWorkload: () => '/infrastructure/node1',
-  };
-});
-
 vi.mock('../workloadTopology', () => ({
   getWorkloadAlertResourceIdCandidates: (guest: WorkloadGuest) => [guest.id],
   getWorkloadAlertThresholdScope: (guest: WorkloadGuest) =>
@@ -543,23 +534,26 @@ describe('GuestRow', () => {
   });
 
   describe('node column', () => {
-    it('renders node name as a link button', () => {
+    it('renders node name as plain text in the platform-first layout', () => {
       renderGuestRow({
         guest: makeGuest({ node: 'pve1' }),
         visibleColumnIds: ['name', 'node'],
       });
-      const nodeButton = screen.getByText('pve1');
-      expect(nodeButton.tagName).toBe('BUTTON');
+      const nodeLabel = screen.getByText('pve1');
+      // The legacy cross-jump to /infrastructure?source=...&query=<node> was
+      // dropped; the node name is now non-interactive context inside the
+      // owning platform page.
+      expect(nodeLabel.tagName).toBe('SPAN');
     });
 
-    it('navigates on node click', () => {
+    it('does not navigate when the node label is clicked', () => {
       renderGuestRow({
         guest: makeGuest({ node: 'pve1' }),
         visibleColumnIds: ['name', 'node'],
       });
-      const nodeButton = screen.getByText('pve1');
-      fireEvent.click(nodeButton);
-      expect(mockNavigate).toHaveBeenCalledWith('/infrastructure/node1');
+      const nodeLabel = screen.getByText('pve1');
+      fireEvent.click(nodeLabel);
+      expect(mockNavigate).not.toHaveBeenCalled();
     });
   });
 
@@ -1159,19 +1153,6 @@ describe('info merged column', () => {
 });
 
 describe('event propagation', () => {
-  it('node button click does not trigger row onClick', () => {
-    const rowClick = vi.fn();
-    renderGuestRow({
-      guest: makeGuest({ node: 'pve1' }),
-      onClick: rowClick,
-      visibleColumnIds: ['name', 'node'],
-    });
-    const nodeButton = screen.getByText('pve1');
-    fireEvent.click(nodeButton);
-    // Node click calls stopPropagation, so row onClick should not fire
-    expect(rowClick).not.toHaveBeenCalled();
-  });
-
   it('name custom URL click does not trigger row onClick', () => {
     const rowClick = vi.fn();
     const { container } = renderGuestRow({

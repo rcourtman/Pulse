@@ -1,5 +1,4 @@
 import { createMemo, Show } from 'solid-js';
-import { useNavigate } from '@solidjs/router';
 import type { VM } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
 import { formatUptime, formatSpeed, getShortImageName } from '@/utils/format';
@@ -41,7 +40,6 @@ export type { GuestRowProps, WorkloadIOEmphasis } from './guestRowModel';
 import { getGuestColumnStyle } from './guestRowModel';
 
 export function GuestRow(props: GuestRowProps) {
-  const navigate = useNavigate();
   const {
     agentVersion,
     appContainerRuntimeLabel,
@@ -66,7 +64,6 @@ export function GuestRow(props: GuestRowProps) {
     hasOsInfo,
     infoTooltip,
     infoValue,
-    infrastructureHref,
     ipAddresses,
     isColVisible,
     isMobile,
@@ -437,17 +434,12 @@ export function GuestRow(props: GuestRowProps) {
                   </span>
                 }
               >
-                <button
-                  type="button"
-                  class="text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[80px]"
-                  title={`Open infrastructure node ${props.guest.node}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    navigate(infrastructureHref());
-                  }}
+                <span
+                  class="text-xs text-base-content truncate max-w-[80px]"
+                  title={props.guest.node}
                 >
                   {props.guest.node}
-                </button>
+                </span>
               </Show>
             </div>
           </td>

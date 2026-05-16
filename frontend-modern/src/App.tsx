@@ -33,10 +33,6 @@ import {
   PROXMOX_PATH,
   TRUENAS_PATH,
   VMWARE_PATH,
-  buildRecoveryPath,
-  buildInfrastructurePath,
-  buildStoragePath,
-  buildWorkloadsPath,
 } from './routing/resourceLinks';
 import { APP_SHELL_ROUTE_PRELOAD_PATHS, preloadRouteModule } from '@/routing/routePreload';
 import { AppLayout } from '@/AppLayout';
@@ -54,20 +50,15 @@ function isPublicRoutePath(pathname: string): boolean {
   return pathname === '/pricing' || pathname === '/preview/setup-complete';
 }
 
-const StoragePage = lazy(() => import('./pages/Storage'));
-const RecoveryPage = lazy(() => import('./pages/Recovery'));
-const CephPage = lazy(() => import('./pages/Ceph'));
 const AlertsPage = lazy(() =>
   import('./pages/Alerts').then((module) => ({ default: module.Alerts })),
 );
 const SettingsPage = lazy(() => import('./components/Settings/Settings'));
-const InfrastructurePage = lazy(() => import('./pages/Infrastructure'));
 const ProxmoxPage = lazy(() => import('./pages/Proxmox'));
 const DockerPage = lazy(() => import('./pages/Docker'));
 const KubernetesPage = lazy(() => import('./pages/Kubernetes'));
 const TrueNASPage = lazy(() => import('./pages/TrueNAS'));
 const VmwarePage = lazy(() => import('./pages/Vmware'));
-const WorkloadsPage = lazy(() => import('./pages/Workloads'));
 const AIIntelligencePage = lazy(() =>
   import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
 );
@@ -79,10 +70,6 @@ const SetupCompletionPreviewPage = lazy(() =>
     default: module.SetupCompletionPreview,
   })),
 );
-const INFRASTRUCTURE_ROUTE_PATH = buildInfrastructurePath();
-const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
-const STORAGE_PATH = buildStoragePath();
-const RECOVERY_ROUTE_PATH = buildRecoveryPath();
 const ROOT_PATROL_PATH = PATROL_PATH;
 
 async function preloadAppShellRoutes() {
@@ -481,11 +468,6 @@ function App() {
       <Route path={`${TRUENAS_PATH}/*`} component={TrueNASPage} />
       <Route path={VMWARE_PATH} component={VmwarePage} />
       <Route path={`${VMWARE_PATH}/*`} component={VmwarePage} />
-      <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsPage} />
-      <Route path={STORAGE_PATH} component={StoragePage} />
-      <Route path={RECOVERY_ROUTE_PATH} component={RecoveryPage} />
-      <Route path="/ceph" component={CephPage} />
-      <Route path={INFRASTRUCTURE_ROUTE_PATH} component={InfrastructurePage} />
 
       <Route path="/alerts/*" component={AlertsPage} />
       <Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />

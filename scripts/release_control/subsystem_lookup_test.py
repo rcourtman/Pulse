@@ -7,7 +7,6 @@ from subsystem_lookup import lookup_paths, parse_args, render_pretty
 
 RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
     "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-    "frontend-modern/src/pages/__tests__/Recovery.test.tsx",
     "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
     "tests/integration/tests/17-recovery-layout.spec.ts",
 ]
@@ -733,8 +732,11 @@ class SubsystemLookupTest(unittest.TestCase):
             "relay-frontend-surfaces",
         )
 
-    def test_lookup_paths_assigns_recovery_route_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/pages/Recovery.tsx"])
+    def test_lookup_paths_assigns_recovery_surface_to_storage_recovery(self) -> None:
+        # The legacy /recovery route shell (pages/Recovery.tsx) was retired
+        # with the platform-first migration; recovery is now exercised via
+        # the embedded surface at components/Recovery/Recovery.tsx.
+        result = lookup_paths(["frontend-modern/src/components/Recovery/Recovery.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},
@@ -924,7 +926,6 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/features/storageBackups/__tests__/storageModelCore.test.ts",
                 "frontend-modern/src/features/storageBackups/__tests__/storagePagePresentation.test.ts",
                 "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts",
-                "frontend-modern/src/pages/__tests__/Storage.helpers.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
             ],
         )
@@ -938,8 +939,11 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(file_entry["classification"], "runtime")
         self.assertEqual(file_entry["matches"], [])
 
-    def test_lookup_paths_assigns_storage_page_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/pages/Storage.tsx"])
+    def test_lookup_paths_assigns_storage_surface_to_storage_recovery(self) -> None:
+        # The legacy /storage route shell (pages/Storage.tsx) was retired
+        # with the platform-first migration; storage is now exercised via
+        # the embedded surface at components/Storage/Storage.tsx.
+        result = lookup_paths(["frontend-modern/src/components/Storage/Storage.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},
@@ -4832,8 +4836,6 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",
                 "frontend-modern/src/features/infrastructure/__tests__/infrastructurePageModel.test.ts",
                 "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
-                "frontend-modern/src/pages/__tests__/Infrastructure.empty-state.test.tsx",
-                "frontend-modern/src/pages/__tests__/Infrastructure.pbs-pmg.test.tsx",
                 "frontend-modern/src/routing/__tests__/resourceLinks.test.ts",
                 "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
                 "frontend-modern/src/types/__tests__/resource.test.ts",

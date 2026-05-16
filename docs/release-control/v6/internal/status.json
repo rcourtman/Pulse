@@ -3844,7 +3844,7 @@
         },
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/pages/Infrastructure.tsx",
+          "path": "frontend-modern/src/pages/Proxmox.tsx",
           "kind": "file"
         },
         {

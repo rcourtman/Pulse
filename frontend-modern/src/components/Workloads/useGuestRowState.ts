@@ -14,7 +14,6 @@ import {
   isDockerManagedAppContainer,
   resolveWorkloadType,
 } from '@/utils/workloads';
-import { buildInfrastructureHrefForWorkload } from '@/routing/resourceLinks';
 import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
 
 import {
@@ -35,7 +34,6 @@ export function useGuestRowState(props: GuestRowProps) {
   const alertsActivation = useAlertsActivation();
 
   const guestId = createMemo(() => getCanonicalWorkloadId(props.guest));
-  const infrastructureHref = createMemo(() => buildInfrastructureHrefForWorkload(props.guest));
 
   const visibleColumnIdSet = createMemo(() =>
     props.visibleColumnIds ? new Set(props.visibleColumnIds) : null,
@@ -297,7 +295,6 @@ export function useGuestRowState(props: GuestRowProps) {
     hasOsInfo,
     infoTooltip,
     infoValue,
-    infrastructureHref,
     ipAddresses,
     isColVisible,
     isMobile,

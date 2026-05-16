@@ -88,8 +88,7 @@ describe('UnifiedResourceTable workloads links', () => {
     ).toBe(true);
   });
 
-  it('renders workloads links for supported resource types and prevents row toggle on link click', async () => {
-    const onExpandedResourceChange = vi.fn();
+  it('no longer renders host-row workloads cross-jump links in the platform-first layout', () => {
     const resources: Resource[] = [
       baseResource({
         id: 'node-1',
@@ -114,41 +113,21 @@ describe('UnifiedResourceTable workloads links', () => {
           },
         },
       }),
-      baseResource({
-        id: 'pbs-1',
-        type: 'pbs',
-        name: 'pbs-main',
-        displayName: 'pbs-main',
-        platformType: 'proxmox-pbs',
-        sourceType: 'api',
-        platformData: {
-          sources: ['pbs'],
-        },
-      }),
     ];
 
-    const { getAllByRole } = render(() => (
+    const { queryAllByRole } = render(() => (
       <UnifiedResourceTable
         resources={resources}
         expandedResourceId={null}
-        onExpandedResourceChange={onExpandedResourceChange}
+        onExpandedResourceChange={vi.fn()}
         groupingMode="flat"
       />
     ));
 
-    const links = getAllByRole('link', { name: /view workloads/i });
-    expect(links).toHaveLength(2);
-    const hrefs = links
-      .map((link) => link.getAttribute('href'))
-      .filter((href): href is string => typeof href === 'string');
-    expect(hrefs).toContain('/workloads?agent=pve1');
-    expect(hrefs).toContain('/workloads?type=pod&platform=kubernetes&context=cluster-a');
-
-    const hostLink = links.find((link) => link.getAttribute('href') === '/workloads?agent=pve1');
-    expect(hostLink).toBeDefined();
-    hostLink!.addEventListener('click', (event) => event.preventDefault());
-    await fireEvent.click(hostLink!);
-    expect(onExpandedResourceChange).not.toHaveBeenCalled();
+    // Legacy cross-jump from a host row to /workloads?... was retired with
+    // the standalone Workloads page; the platform pages expose workloads as
+    // adjacent sub-tabs instead.
+    expect(queryAllByRole('link', { name: /view workloads/i })).toHaveLength(0);
   });
 
   it('renders PBS and PMG resources in a dedicated service table with service-native columns', async () => {
@@ -286,17 +265,11 @@ describe('UnifiedResourceTable workloads links', () => {
       expect(row.queryByText('Relationships 1')).toBeNull();
     }
 
-    const pbsLink = getByRole('link', { name: /open recovery events/i });
-    expect(pbsLink).toHaveTextContent('Recovery');
-    expect(pbsLink).toHaveAttribute(
-      'href',
-      '/recovery?view=events&platform=proxmox-pbs&mode=remote',
-    );
     const pmgLink = getByRole('link', { name: /open pmg thresholds/i });
     expect(pmgLink).toHaveTextContent('Thresholds');
     expect(pmgLink).toHaveAttribute('href', '/alerts/thresholds/mail-gateway');
-    pbsLink.addEventListener('click', (event) => event.preventDefault());
-    await fireEvent.click(pbsLink);
+    pmgLink.addEventListener('click', (event) => event.preventDefault());
+    await fireEvent.click(pmgLink);
     expect(onExpandedResourceChange).not.toHaveBeenCalled();
   });
 });

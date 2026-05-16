@@ -1,10 +1,11 @@
 import { useNavigate } from '@solidjs/router';
 import { createEffect, createMemo, createSignal } from 'solid-js';
 import {
-  buildRecoveryPath,
-  buildInfrastructurePath,
-  buildStoragePath,
-  buildWorkloadsPath,
+  buildDockerPath,
+  buildKubernetesPath,
+  buildProxmoxPath,
+  buildTrueNASPath,
+  buildVmwarePath,
 } from '@/routing/resourceLinks';
 import {
   buildCommandPaletteCommands,
@@ -26,11 +27,12 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
   const commands = createMemo(() =>
     buildCommandPaletteCommands({
       paths: {
-        infrastructurePath: buildInfrastructurePath(),
-        workloadsPath: buildWorkloadsPath(),
-        podWorkloadsPath: buildWorkloadsPath({ type: 'pod' }),
-        storagePath: buildStoragePath(),
-        recoveryPath: buildRecoveryPath(),
+        proxmoxPath: buildProxmoxPath(),
+        dockerPath: buildDockerPath(),
+        kubernetesPath: buildKubernetesPath(),
+        kubernetesPodsPath: buildKubernetesPath('pods'),
+        trueNasPath: buildTrueNASPath(),
+        vmwarePath: buildVmwarePath(),
       },
       navigate,
     }),

@@ -14,7 +14,7 @@ import {
 } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { buildWorkloadsPath } from '@/routing/resourceLinks';
+import { buildKubernetesPath } from '@/routing/resourceLinks';
 import {
   getK8sNamespacesDrawerPresentation,
   getK8sNamespacesEmptyState,
@@ -79,16 +79,9 @@ export const K8sNamespacesDrawer: Component<{
     return rows().filter((row) => row.namespace.toLowerCase().includes(term));
   });
 
-  const openPods = (namespace: string | null) => {
-    const cluster = clusterName();
-    if (!cluster) return;
-    navigate(
-      buildWorkloadsPath({
-        type: 'pod',
-        context: cluster,
-        namespace: asTrimmedString(namespace) ?? null,
-      }),
-    );
+  const openPods = (_namespace: string | null) => {
+    if (!clusterName()) return;
+    navigate(buildKubernetesPath('pods'));
   };
 
   const headingId = () => `k8s-namespaces-drawer-heading-${clusterName() || 'cluster'}`;

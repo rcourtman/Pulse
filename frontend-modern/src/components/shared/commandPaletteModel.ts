@@ -13,11 +13,12 @@ export type CommandPaletteModalCommand = {
 };
 
 export type CommandPaletteCommandPaths = {
-  infrastructurePath: string;
-  workloadsPath: string;
-  podWorkloadsPath: string;
-  storagePath: string;
-  recoveryPath: string;
+  proxmoxPath: string;
+  dockerPath: string;
+  kubernetesPath: string;
+  kubernetesPodsPath: string;
+  trueNasPath: string;
+  vmwarePath: string;
 };
 
 export function buildCommandPaletteCommands(options: {
@@ -26,51 +27,51 @@ export function buildCommandPaletteCommands(options: {
 }): CommandPaletteModalCommand[] {
   return [
     {
-      id: 'nav-infrastructure',
-      label: 'Go to Infrastructure',
-      description: options.paths.infrastructurePath,
-      shortcut: 'g i',
-      keywords: ['infra', 'agents', 'nodes', 'resources'],
-      action: () => options.navigate(options.paths.infrastructurePath),
+      id: 'nav-proxmox',
+      label: 'Go to Proxmox',
+      description: options.paths.proxmoxPath,
+      shortcut: 'g p',
+      keywords: ['proxmox', 'pve', 'pbs', 'pmg', 'mail', 'backups', 'ceph', 'vm', 'lxc'],
+      action: () => options.navigate(options.paths.proxmoxPath),
     },
     {
-      id: 'nav-workloads',
-      label: 'Go to Workloads',
-      description: options.paths.workloadsPath,
-      shortcut: 'g w',
-      keywords: [
-        'vm',
-        'system-container',
-        'app-container',
-        'docker',
-        'k8s',
-        'kubernetes',
-        'pods',
-      ],
-      action: () => options.navigate(options.paths.workloadsPath),
+      id: 'nav-docker',
+      label: 'Go to Docker',
+      description: options.paths.dockerPath,
+      shortcut: 'g d',
+      keywords: ['docker', 'podman', 'containers', 'compose', 'swarm', 'services'],
+      action: () => options.navigate(options.paths.dockerPath),
     },
     {
-      id: 'nav-workloads-pods',
+      id: 'nav-kubernetes',
+      label: 'Go to Kubernetes',
+      description: options.paths.kubernetesPath,
+      shortcut: 'g k',
+      keywords: ['k8s', 'kubernetes', 'clusters', 'nodes', 'deployments'],
+      action: () => options.navigate(options.paths.kubernetesPath),
+    },
+    {
+      id: 'nav-kubernetes-pods',
       label: 'Go to Kubernetes Pods',
-      description: options.paths.podWorkloadsPath,
-      keywords: ['k8s', 'kubernetes', 'pods', 'deployments', 'clusters'],
-      action: () => options.navigate(options.paths.podWorkloadsPath),
+      description: options.paths.kubernetesPodsPath,
+      keywords: ['k8s', 'kubernetes', 'pods', 'workloads'],
+      action: () => options.navigate(options.paths.kubernetesPodsPath),
     },
     {
-      id: 'nav-storage',
-      label: 'Go to Storage',
-      description: options.paths.storagePath,
-      shortcut: 'g s',
-      keywords: ['ceph', 'pbs'],
-      action: () => options.navigate(options.paths.storagePath),
+      id: 'nav-truenas',
+      label: 'Go to TrueNAS',
+      description: options.paths.trueNasPath,
+      shortcut: 'g n',
+      keywords: ['truenas', 'storage', 'disks', 'apps'],
+      action: () => options.navigate(options.paths.trueNasPath),
     },
     {
-      id: 'nav-recovery',
-      label: 'Go to Recovery',
-      description: options.paths.recoveryPath,
-      shortcut: 'g b',
-      keywords: ['recovery', 'backups', 'snapshots', 'replication', 'restore'],
-      action: () => options.navigate(options.paths.recoveryPath),
+      id: 'nav-vmware',
+      label: 'Go to vSphere',
+      description: options.paths.vmwarePath,
+      shortcut: 'g v',
+      keywords: ['vmware', 'vsphere', 'esxi', 'vms', 'datastores'],
+      action: () => options.navigate(options.paths.vmwarePath),
     },
     {
       id: 'nav-alerts',
@@ -79,6 +80,14 @@ export function buildCommandPaletteCommands(options: {
       shortcut: 'g a',
       keywords: ['alarms', 'notifications'],
       action: () => options.navigate('/alerts'),
+    },
+    {
+      id: 'nav-patrol',
+      label: 'Go to Patrol',
+      description: '/patrol',
+      shortcut: 'g r',
+      keywords: ['patrol', 'findings', 'ai', 'verification'],
+      action: () => options.navigate('/patrol'),
     },
     {
       id: 'nav-settings',

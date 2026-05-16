@@ -32,28 +32,46 @@ describe('CommandPaletteModal', () => {
 
     expect(commandPaletteStateSource).toContain('useNavigate');
     expect(commandPaletteStateSource).toContain('createSignal');
-    expect(commandPaletteStateSource).toContain('buildInfrastructurePath');
+    expect(commandPaletteStateSource).toContain('buildProxmoxPath');
     expect(commandPaletteStateSource).toContain('export function useCommandPaletteState');
+
+    // Legacy navigation entries (Infrastructure / Workloads / Storage / Recovery)
+    // were retired when primary nav moved to platform-first. The palette
+    // exposes the platform pages directly instead.
+    expect(commandPaletteStateSource).not.toContain('buildInfrastructurePath');
+    expect(commandPaletteStateSource).not.toContain('buildWorkloadsPath');
+    expect(commandPaletteStateSource).not.toContain('buildStoragePath');
+    expect(commandPaletteStateSource).not.toContain('buildRecoveryPath');
 
     expect(commandPaletteModelSource).toContain('buildCommandPaletteCommands');
     expect(commandPaletteModelSource).toContain('normalizeCommandPaletteQuery');
     expect(commandPaletteModelSource).toContain('filterCommandPaletteCommands');
+    expect(commandPaletteModelSource).toContain("id: 'nav-proxmox'");
+    expect(commandPaletteModelSource).toContain("id: 'nav-docker'");
+    expect(commandPaletteModelSource).toContain("id: 'nav-kubernetes'");
+    expect(commandPaletteModelSource).toContain("id: 'nav-truenas'");
+    expect(commandPaletteModelSource).toContain("id: 'nav-vmware'");
+    expect(commandPaletteModelSource).not.toContain("id: 'nav-infrastructure'");
+    expect(commandPaletteModelSource).not.toContain("id: 'nav-workloads'");
+    expect(commandPaletteModelSource).not.toContain("id: 'nav-storage'");
+    expect(commandPaletteModelSource).not.toContain("id: 'nav-recovery'");
   });
 
-  it('renders the dedicated pod workloads command with a canonical path', () => {
+  it('renders the platform entries and the dedicated Kubernetes pods command', () => {
     render(() => <CommandPaletteModal isOpen={true} onClose={vi.fn()} />);
 
+    expect(screen.getByText('Go to Proxmox')).toBeInTheDocument();
     expect(screen.getByText('Go to Kubernetes Pods')).toBeInTheDocument();
-    expect(screen.getByText('/workloads?type=pod')).toBeInTheDocument();
+    expect(screen.getByText('/kubernetes/pods')).toBeInTheDocument();
   });
 
-  it('navigates to the canonical pod workloads path', async () => {
+  it('navigates to the Kubernetes pods sub-tab', async () => {
     const onClose = vi.fn();
     render(() => <CommandPaletteModal isOpen={true} onClose={onClose} />);
 
     await fireEvent.click(screen.getByText('Go to Kubernetes Pods'));
 
-    expect(navigateMock).toHaveBeenCalledWith('/workloads?type=pod');
+    expect(navigateMock).toHaveBeenCalledWith('/kubernetes/pods');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -62,10 +80,10 @@ describe('CommandPaletteModal', () => {
     render(() => <CommandPaletteModal isOpen={true} onClose={onClose} />);
 
     const input = screen.getByPlaceholderText('Type a command or search...');
-    await fireEvent.input(input, { target: { value: 'type=pod' } });
+    await fireEvent.input(input, { target: { value: 'kubernetes pods' } });
     await fireEvent.keyDown(input, { key: 'Enter' });
 
-    expect(navigateMock).toHaveBeenCalledWith('/workloads?type=pod');
+    expect(navigateMock).toHaveBeenCalledWith('/kubernetes/pods');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

@@ -15,7 +15,7 @@ import {
   TableCell,
 } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { buildWorkloadsPath } from '@/routing/resourceLinks';
+import { buildKubernetesPath } from '@/routing/resourceLinks';
 import {
   getK8sDeploymentsDrawerPresentation,
   getK8sDeploymentsEmptyState,
@@ -160,16 +160,9 @@ export const K8sDeploymentsDrawer: Component<{
       });
   });
 
-  const openPods = (ns?: string) => {
-    const cluster = clusterName();
-    if (!cluster) return;
-    navigate(
-      buildWorkloadsPath({
-        type: 'pod',
-        context: cluster,
-        namespace: asTrimmedString(ns) || null,
-      }),
-    );
+  const openPods = (_ns?: string) => {
+    if (!clusterName()) return;
+    navigate(buildKubernetesPath('pods'));
   };
 
   const headingId = () => `k8s-deployments-drawer-heading-${clusterName() || 'cluster'}`;

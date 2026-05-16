@@ -1,7 +1,6 @@
 import { type Component, For, Show, createMemo } from 'solid-js';
 import type { ResourceChange } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
-import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 import {
   getResourceChangeKindPresentation,
   getResourceChangeSourceAdapterPresentation,
@@ -28,7 +27,7 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
   const visibleChanges = createMemo(() => sortedChanges().slice(0, maxChanges()));
   const hasChanges = () => visibleChanges().length > 0;
   const compact = () => props.compact ?? false;
-  const buildResourceHref = props.buildResourceHref ?? buildInfrastructureResourceHref;
+  const buildResourceHref = props.buildResourceHref ?? (() => null);
   const resolveResourceLabel = props.resolveResourceLabel;
   const itemPadding = () => (compact() ? 'p-2.5' : 'p-3');
   const itemText = () => (compact() ? 'text-[11px]' : 'text-xs');

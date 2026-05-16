@@ -41,7 +41,6 @@ import {
 import { formatConfidenceLabel } from '@/utils/confidencePresentation';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 import { shouldShowResourcePlatformId } from '@/utils/resourceIdentity';
-import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
 import {
   RESOURCE_ANALYSIS_LABEL,
@@ -541,16 +540,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                           <For each={change.relatedResources ?? []}>
                             {(relatedResource) => {
                               const label = drawer.resolveResourceLabel(relatedResource);
-                              const href = buildInfrastructureResourceHref(relatedResource);
-                              return href ? (
-                                <a
-                                  class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
-                                  href={href}
-                                  aria-label={`Open related resource ${label} in Infrastructure`}
-                                >
-                                  {label}
-                                </a>
-                              ) : (
+                              return (
                                 <span class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-base-content">
                                   {label}
                                 </span>

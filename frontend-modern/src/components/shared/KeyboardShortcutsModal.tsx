@@ -14,11 +14,13 @@ interface KeyboardShortcutsModalProps {
 const UNIFIED_NAV_SHORTCUTS: ShortcutGroup = {
   title: 'Navigation',
   items: [
-    { keys: 'g then i', description: 'Go to Infrastructure' },
-    { keys: 'g then w', description: 'Go to Workloads' },
-    { keys: 'g then s', description: 'Go to Storage' },
-    { keys: 'g then b', description: 'Go to Recovery' },
+    { keys: 'g then p', description: 'Go to Proxmox' },
+    { keys: 'g then d', description: 'Go to Docker' },
+    { keys: 'g then k', description: 'Go to Kubernetes' },
+    { keys: 'g then n', description: 'Go to TrueNAS' },
+    { keys: 'g then v', description: 'Go to vSphere' },
     { keys: 'g then a', description: 'Go to Alerts' },
+    { keys: 'g then r', description: 'Go to Patrol' },
     { keys: 'g then t', description: 'Go to Settings' },
   ],
 };

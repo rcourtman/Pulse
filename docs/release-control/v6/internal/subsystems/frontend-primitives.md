@@ -1354,6 +1354,24 @@ AI runtime.
 
 ## Current State
 
+Command palette and keyboard shortcuts moved to platform-first on 2026-05-16
+(`frontend-modern/src/components/shared/commandPaletteModel.ts`,
+`frontend-modern/src/components/shared/useCommandPaletteState.ts`,
+`frontend-modern/src/components/shared/KeyboardShortcutsModal.tsx`,
+`frontend-modern/src/hooks/useKeyboardShortcuts.ts`,
+`frontend-modern/src/routing/routePreload.ts`,
+`frontend-modern/src/routing/navigation.ts`). The legacy `nav-infrastructure`,
+`nav-workloads`, `nav-storage`, and `nav-recovery` palette entries — together
+with the `g i` / `g w` / `g s` / `g b` chord bindings — were retired and
+replaced with `nav-proxmox`, `nav-docker`, `nav-kubernetes`, `nav-truenas`,
+`nav-vmware` (chords `g p` / `g d` / `g k` / `g n` / `g v`) plus a dedicated
+`nav-kubernetes-pods` entry that lands on `/kubernetes/pods`. The shell
+preload set and `getActiveTabForPath` matcher no longer recognize the legacy
+top-level routes. New palette commands and shortcut chords must therefore
+anchor on canonical platform routes; do not reintroduce a top-level
+Infrastructure / Workloads / Storage / Recovery entry by reanimating the
+legacy paths.
+
 The shared table chrome now allows `TableCardHeader` to expose a right-aligned
 action slot, currently used by the Workloads/Proxmox metric display control.
 That slot belongs to the table header band and must not reintroduce nested

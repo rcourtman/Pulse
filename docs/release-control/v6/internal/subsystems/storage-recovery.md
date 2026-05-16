@@ -39,28 +39,25 @@ state.
 10. `frontend-modern/src/components/Recovery/RecoveryHistoryItemFilter.tsx`
 11. `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`
 12. `frontend-modern/src/components/Recovery/useRecoveryHistorySectionState.ts`
-13. `frontend-modern/src/pages/Storage.tsx`
-14. `frontend-modern/src/pages/Ceph.tsx`
-15. `frontend-modern/src/components/Storage/Storage.tsx`
-16. `frontend-modern/src/features/storageBackups/storageModelCore.ts`
-17. `frontend-modern/src/utils/storageSources.ts`
-18. `frontend-modern/src/hooks/useRecoveryPoints.ts`
-19. `frontend-modern/src/hooks/useRecoveryRollups.ts`
-20. `frontend-modern/src/hooks/useRecoveryPointsFacets.ts`
-21. `frontend-modern/src/hooks/useRecoveryPointsSeries.ts`
-22. `frontend-modern/src/pages/Recovery.tsx`
-23. `frontend-modern/src/routing/resourceLinks.ts`
-24. `frontend-modern/src/types/recovery.ts`
-25. `frontend-modern/src/utils/recoveryDatePresentation.ts`
-26. `frontend-modern/src/utils/recoveryEmptyStatePresentation.ts`
-27. `frontend-modern/src/utils/recoveryTablePresentation.ts`
-28. `frontend-modern/src/utils/recoveryTimelinePresentation.ts`
-29. `frontend-modern/src/utils/recoveryItemTypePresentation.ts`
-30. `frontend-modern/src/utils/textPresentation.ts`
-31. `frontend-modern/src/components/Storage/StorageSummary.tsx`
-32. `frontend-modern/src/utils/storageSummaryCache.ts`
-33. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
-34. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
+13. `frontend-modern/src/components/Storage/Storage.tsx`
+14. `frontend-modern/src/features/storageBackups/storageModelCore.ts`
+15. `frontend-modern/src/utils/storageSources.ts`
+16. `frontend-modern/src/hooks/useRecoveryPoints.ts`
+17. `frontend-modern/src/hooks/useRecoveryRollups.ts`
+18. `frontend-modern/src/hooks/useRecoveryPointsFacets.ts`
+19. `frontend-modern/src/hooks/useRecoveryPointsSeries.ts`
+20. `frontend-modern/src/routing/resourceLinks.ts`
+21. `frontend-modern/src/types/recovery.ts`
+22. `frontend-modern/src/utils/recoveryDatePresentation.ts`
+23. `frontend-modern/src/utils/recoveryEmptyStatePresentation.ts`
+24. `frontend-modern/src/utils/recoveryTablePresentation.ts`
+25. `frontend-modern/src/utils/recoveryTimelinePresentation.ts`
+26. `frontend-modern/src/utils/recoveryItemTypePresentation.ts`
+27. `frontend-modern/src/utils/textPresentation.ts`
+28. `frontend-modern/src/components/Storage/StorageSummary.tsx`
+29. `frontend-modern/src/utils/storageSummaryCache.ts`
+30. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
+31. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
 
 ## Shared Boundaries
 
@@ -201,7 +198,7 @@ bypass the API fail-closed execution gate.
    A selected timeline day is an active event-history filter: table totals,
    footer ranges, empty states, and search/date matching must describe the
    visible filtered recovery points, not the unfiltered API page metadata.
-3. Add or change storage page UX through `frontend-modern/src/pages/Storage.tsx`, `frontend-modern/src/pages/Ceph.tsx`, `frontend-modern/src/components/Storage/`, `frontend-modern/src/features/storageBackups/`, and the shared storage-source contract in `frontend-modern/src/utils/storageSources.ts`
+3. Add or change storage UX through `frontend-modern/src/components/Storage/Storage.tsx` (the canonical `StorageSurface`, embedded inside platform pages), `frontend-modern/src/components/Storage/`, `frontend-modern/src/features/storageBackups/`, the shared storage-source contract in `frontend-modern/src/utils/storageSources.ts`, and the Proxmox-native Ceph table at `frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx`. The standalone Storage, Ceph, and Recovery route shells under the legacy frontend-modern pages directory were retired with the platform-first primary nav (2026-05-16); the underlying surfaces stay alive as embedded views inside the matching platform page sub-tabs through `frontend-modern/src/pages/Proxmox.tsx`.
    The retired dashboard route must not reintroduce storage or recovery
    widgets as compatibility panels. Storage capacity, storage health,
    protected-item, and recovery-outcome readiness claims belong on the Storage

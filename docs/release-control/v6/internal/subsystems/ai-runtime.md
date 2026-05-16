@@ -615,6 +615,18 @@ runtime cost control, and shared AI transport surfaces.
 
 ## Current State
 
+Primary nav moved to platform-first on 2026-05-16 through
+`frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx`: the top
+of the app exposes the five canonical platform pages (Proxmox, Docker,
+Kubernetes, TrueNAS, vSphere) plus Alerts, Patrol, and Settings. The legacy
+`/infrastructure`, `/workloads`, `/storage`, `/recovery`, and `/ceph` route
+shells were retired alongside their page wrappers. The AI Chat launcher, the
+Patrol surfaces, and the `AssistantHandoffPayload` deep links must use
+platform routes (`/proxmox/overview`, `/proxmox/storage`, `/kubernetes/pods`,
+etc.) as canonical anchors rather than the retired top-level paths; adding a
+platform tab through the same shell files must not fork Assistant or Patrol
+shell state or smuggle in AI-owned platform reads.
+
 The route-backed Proxmox platform tab is app-shell navigation only. Adding the
 tab through `frontend-modern/src/App.tsx` and
 `frontend-modern/src/AppLayout.tsx` must not fork Assistant or Patrol shell

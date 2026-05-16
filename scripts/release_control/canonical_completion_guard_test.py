@@ -148,7 +148,6 @@ def first_matching_policy_id(rule: dict, rel: str) -> str:
 
 RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
     "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-    "frontend-modern/src/pages/__tests__/Recovery.test.tsx",
     "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
     "tests/integration/tests/17-recovery-layout.spec.ts",
 ]
@@ -769,8 +768,6 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",
                         "frontend-modern/src/features/infrastructure/__tests__/infrastructurePageModel.test.ts",
                         "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
-                        "frontend-modern/src/pages/__tests__/Infrastructure.empty-state.test.tsx",
-                        "frontend-modern/src/pages/__tests__/Infrastructure.pbs-pmg.test.tsx",
                         "frontend-modern/src/routing/__tests__/resourceLinks.test.ts",
                         "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
                         "frontend-modern/src/types/__tests__/resource.test.ts",
@@ -1120,8 +1117,14 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
-    def test_recovery_route_change_requires_storage_recovery_contract(self):
-        required = infer_impacted_subsystems(["frontend-modern/src/pages/Recovery.tsx"])
+    def test_recovery_surface_change_requires_storage_recovery_contract(self):
+        # The legacy /recovery route shell (pages/Recovery.tsx) was retired
+        # with the platform-first migration; the canonical Recovery surface
+        # now lives at components/Recovery/Recovery.tsx and is embedded inside
+        # platform pages.
+        required = infer_impacted_subsystems(
+            ["frontend-modern/src/components/Recovery/Recovery.tsx"]
+        )
         self.assertEqual(set(required), {"storage-recovery"})
 
         recovery = required["storage-recovery"]
@@ -1131,7 +1134,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
         self.assertEqual(
             recovery["touched_runtime_files"],
-            ["frontend-modern/src/pages/Recovery.tsx"],
+            ["frontend-modern/src/components/Recovery/Recovery.tsx"],
         )
         self.assertEqual(
             recovery["verification_requirements"],
@@ -1139,7 +1142,9 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 {
                     "id": "recovery-product-surface",
                     "label": "recovery product surface proof",
-                    "touched_runtime_files": ["frontend-modern/src/pages/Recovery.tsx"],
+                    "touched_runtime_files": [
+                        "frontend-modern/src/components/Recovery/Recovery.tsx"
+                    ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
@@ -1286,7 +1291,6 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/features/storageBackups/__tests__/storageModelCore.test.ts",
                         "frontend-modern/src/features/storageBackups/__tests__/storagePagePresentation.test.ts",
                         "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts",
-                        "frontend-modern/src/pages/__tests__/Storage.helpers.test.ts",
                         "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
                     ],
                 }
@@ -1299,8 +1303,14 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
         self.assertEqual(required, {})
 
-    def test_storage_page_route_change_requires_storage_recovery_contract(self):
-        required = infer_impacted_subsystems(["frontend-modern/src/pages/Storage.tsx"])
+    def test_storage_surface_change_requires_storage_recovery_contract(self):
+        # The legacy /storage route shell (pages/Storage.tsx) was retired
+        # with the platform-first migration; the canonical Storage surface
+        # now lives at components/Storage/Storage.tsx and is embedded inside
+        # platform pages.
+        required = infer_impacted_subsystems(
+            ["frontend-modern/src/components/Storage/Storage.tsx"]
+        )
         self.assertEqual(set(required), {"storage-recovery"})
 
         recovery = required["storage-recovery"]
@@ -1310,7 +1320,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
         self.assertEqual(
             recovery["touched_runtime_files"],
-            ["frontend-modern/src/pages/Storage.tsx"],
+            ["frontend-modern/src/components/Storage/Storage.tsx"],
         )
         self.assertEqual(
             recovery["verification_requirements"][0]["id"],
@@ -3044,7 +3054,6 @@ index 1111111..2222222 100644
                         "frontend-modern/src/components/Workloads/__tests__/workloadTopology.test.ts",
                         "frontend-modern/src/components/Workloads/__tests__/workloadUrlSyncModel.test.ts",
                         "frontend-modern/src/hooks/__tests__/useWorkloads.test.ts",
-                        "frontend-modern/src/pages/__tests__/Workloads.helpers.test.ts",
                         "frontend-modern/src/utils/__tests__/thresholdSliderPresentation.test.ts",
                         "frontend-modern/src/utils/__tests__/workloadsSummaryCache.test.ts",
                     ],

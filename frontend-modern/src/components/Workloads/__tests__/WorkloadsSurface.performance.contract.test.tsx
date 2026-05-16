@@ -1058,7 +1058,9 @@ describe('Workloads performance contract', () => {
       expect(guestRowModelSource).toContain('export const VIEW_MODE_COLUMNS');
       expect(guestRowStateSource).toContain('getCanonicalWorkloadId');
       expect(guestRowStateSource).toContain('buildMetricKey');
-      expect(guestRowStateSource).toContain("from '@/routing/resourceLinks'");
+      // The legacy /infrastructure cross-jump was retired; guest row state no
+      // longer needs anything from resourceLinks.
+      expect(guestRowStateSource).not.toContain("from '@/routing/resourceLinks'");
       expect(guestRowStateSource).toContain("from './workloadTopology'");
       expect(guestRowStateSource).not.toContain('./infrastructureLink');
       expect(guestRowModelSource).not.toContain("id: 'link'");

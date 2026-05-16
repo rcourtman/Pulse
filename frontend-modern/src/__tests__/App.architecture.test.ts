@@ -28,7 +28,6 @@ describe('App architecture', () => {
     expect(appSource).toContain('setAppScrollShellRef');
     expect(appSource).toContain('readPendingAppShellRestoreTop');
     expect(appSource).toContain('clearPendingAppShellRestoreTop');
-    expect(appSource).toContain('const INFRASTRUCTURE_ROUTE_PATH = buildInfrastructurePath();');
     expect(appSource).toContain("const ProxmoxPage = lazy(() => import('./pages/Proxmox'));");
     expect(appSource).toContain('const ROOT_PATROL_PATH = PATROL_PATH;');
     expect(appSource).toContain(
@@ -36,18 +35,24 @@ describe('App architecture', () => {
     );
     expect(routePreloadSource).toContain('export const APP_SHELL_ROUTE_PRELOAD_PATHS = [');
     expect(routePreloadSource).toContain('ROOT_PROXMOX_PATH,');
-    expect(routePreloadSource).toContain('ROOT_WORKLOADS_PATH,');
-    expect(routePreloadSource).toContain('RECOVERY_ROUTE_PATH,');
     expect(routePreloadSource).toContain('PATROL_PATH,');
+    // Legacy top-level routes (Infrastructure/Workloads/Storage/Recovery/Ceph)
+    // were retired when primary nav moved to platform-first. Their preloaders
+    // and route entries must not return.
+    expect(routePreloadSource).not.toContain('ROOT_INFRASTRUCTURE_PATH');
+    expect(routePreloadSource).not.toContain('ROOT_WORKLOADS_PATH');
+    expect(routePreloadSource).not.toContain('RECOVERY_ROUTE_PATH');
+    expect(routePreloadSource).not.toContain('STORAGE_PATH');
+    expect(appSource).not.toContain('INFRASTRUCTURE_ROUTE_PATH');
+    expect(appSource).not.toContain('ROOT_WORKLOADS_PATH');
+    expect(appSource).not.toContain('RECOVERY_ROUTE_PATH');
+    expect(appSource).not.toContain('STORAGE_PATH');
     expect(appSource).toContain('await preloadRouteModule(route);');
     expect(appRuntimeStateSource).not.toContain('preloadLazyRoutes');
     expect(appRuntimeStateSource).not.toContain("import('@/pages/Alerts')");
     expect(appRuntimeStateSource).not.toContain("import('@/components/Settings/Settings')");
     expect(appSource).toContain('const timeoutId = window.setTimeout(() => {');
     expect(appSource).toContain('void preloadAppShellRoutes();');
-    expect(appSource).toContain(
-      '<Route path={INFRASTRUCTURE_ROUTE_PATH} component={InfrastructurePage} />',
-    );
     expect(appSource).toContain('<Route path={PROXMOX_PATH} component={ProxmoxPage} />');
     expect(appSource).toContain('<Route path={`${PROXMOX_PATH}/*`} component={ProxmoxPage} />');
     expect(appSource).toContain("const DockerPage = lazy(() => import('./pages/Docker'));");
@@ -92,13 +97,15 @@ describe('App architecture', () => {
     );
     expect(appSource).not.toContain('<Route path="/cloud" component=');
     expect(appSource).not.toContain('<Route path="/cloud/signup" component=');
-    expect(appSource).toContain("const StoragePage = lazy(() => import('./pages/Storage'));");
     expect(appSource).toContain("const ProxmoxPage = lazy(() => import('./pages/Proxmox'));");
     expect(appSource).toContain("const OperationsPage = lazy(() => import('./pages/Operations'));");
-    expect(appSource).toContain("const WorkloadsPage = lazy(() => import('./pages/Workloads'));");
-    expect(appSource).toContain("const RecoveryPage = lazy(() => import('./pages/Recovery'));");
-    expect(appSource).toContain('<Route path={ROOT_WORKLOADS_PATH} component={WorkloadsPage} />');
-    expect(appSource).toContain('<Route path={RECOVERY_ROUTE_PATH} component={RecoveryPage} />');
+    // Legacy page wrappers were deleted when primary nav moved to
+    // platform-first; their tables are reused inside platform pages directly.
+    expect(appSource).not.toContain("import('./pages/Storage')");
+    expect(appSource).not.toContain("import('./pages/Workloads')");
+    expect(appSource).not.toContain("import('./pages/Recovery')");
+    expect(appSource).not.toContain("import('./pages/Infrastructure')");
+    expect(appSource).not.toContain("import('./pages/Ceph')");
     expect(appSource).not.toContain(
       "const StorageComponent = lazy(() => import('./components/Storage/Storage'));",
     );
@@ -300,15 +307,16 @@ describe('App architecture', () => {
     expect(routePreloadSource).toContain('const ROUTE_PRELOADERS: readonly RoutePreloader[] = [');
     expect(routePreloadSource).toContain('export const APP_SHELL_ROUTE_PRELOAD_PATHS = [');
     expect(routePreloadSource).toContain("id: 'proxmox',");
-    expect(routePreloadSource).toContain("id: 'recovery',");
     expect(routePreloadSource).toContain("id: 'patrol',");
     expect(routePreloadSource).toContain(
       'const routePreloadCache = new Map<string, Promise<void>>();',
     );
-    expect(routePreloadSource).toContain("import('@/pages/Infrastructure')");
     expect(routePreloadSource).toContain("import('@/pages/Proxmox')");
-    expect(routePreloadSource).toContain("import('@/pages/Workloads')");
-    expect(routePreloadSource).toContain("import('@/pages/Recovery')");
+    expect(routePreloadSource).not.toContain("import('@/pages/Infrastructure')");
+    expect(routePreloadSource).not.toContain("import('@/pages/Workloads')");
+    expect(routePreloadSource).not.toContain("import('@/pages/Recovery')");
+    expect(routePreloadSource).not.toContain("import('@/pages/Storage')");
+    expect(routePreloadSource).not.toContain("import('@/pages/Ceph')");
     expect(routePreloadSource).not.toContain("import('@/components/Workloads/WorkloadsSurface')");
     expect(routePreloadSource).not.toContain("import('@/pages/RecoveryRoute')");
     expect(appRuntimeContextSource).toContain(

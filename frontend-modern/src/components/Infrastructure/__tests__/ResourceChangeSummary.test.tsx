@@ -49,16 +49,15 @@ describe('ResourceChangeSummary', () => {
     expect(screen.getByText('Restart: running → restarting')).toBeInTheDocument();
     expect(screen.getByText('Platform event')).toBeInTheDocument();
     expect(screen.getByText('Docker adapter')).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: 'Open resource storage-2 in Infrastructure' }),
-    ).toHaveAttribute('href', '/infrastructure?resource=storage-2');
-    expect(
-      screen.getByRole('link', { name: 'Open related resource VM 200 in Infrastructure' }),
-    ).toHaveAttribute('href', '/infrastructure?resource=vm-200');
+    // Cross-jump links to /infrastructure?resource=... were retired with the
+    // legacy Infrastructure surface; the change feed now renders resource
+    // labels as plain text by default.
+    expect(screen.queryAllByRole('link')).toHaveLength(0);
+    expect(screen.getByText('storage-2')).toBeInTheDocument();
     expect(screen.getByText('VM 200')).toBeInTheDocument();
     expect(screen.getByText('By agent:ops-helper')).toBeInTheDocument();
     expect(screen.getByText('Restart after maintenance')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Open resource storage-1 in Infrastructure' })).toBeNull();
+    expect(screen.queryByText('storage-1')).toBeNull();
   });
 
   it('renders the empty state when no recent changes are available', () => {

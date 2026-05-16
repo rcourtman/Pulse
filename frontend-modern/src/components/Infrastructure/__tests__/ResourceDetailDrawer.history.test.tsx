@@ -526,11 +526,10 @@ describe('ResourceDetailDrawer change history section', () => {
     const relationshipMap = within(screen.getByTestId('resource-relationship-map-section'));
     expect(screen.getByText('Relationship map')).toBeInTheDocument();
     expect(relationshipMap.getByText('Canonical relationships')).toBeInTheDocument();
-    expect(
-      relationshipMap.getByRole('link', {
-        name: 'Open source resource PVE Node 1 in Infrastructure',
-      }),
-    ).toHaveAttribute('href', '/infrastructure?resource=node%3Apve-1');
+    // Legacy /infrastructure?resource=... cross-jumps were retired; the
+    // relationship map renders resource labels as plain text now.
+    expect(relationshipMap.queryAllByRole('link')).toHaveLength(0);
+    expect(relationshipMap.getByText('PVE Node 1')).toBeInTheDocument();
     expect(relationshipMap.getByText('Runs On')).toBeInTheDocument();
     expect(screen.getByText('Depends on')).toBeInTheDocument();
     expect(screen.getByText('Used by')).toBeInTheDocument();
@@ -735,9 +734,9 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(panel.queryByText('Recent activity')).toBeNull();
     expect(panel.queryByText('Filterable event history for this resource.')).toBeNull();
     expect(panel.queryByText('Event log')).toBeNull();
-    expect(
-      panel.getByRole('link', { name: 'Open related resource PVE Node 1 in Infrastructure' }),
-    ).toHaveAttribute('href', '/infrastructure?resource=node%3Apve-1');
+    // Cross-jump to /infrastructure?resource=... retired; related resources
+    // render as plain text now.
+    expect(panel.queryAllByRole('link')).toHaveLength(0);
     expect(panel.getByText('PVE Node 1')).toBeInTheDocument();
     expect(panel.getByText('Routine restart requested')).toBeInTheDocument();
     expect(panel.getByText('Confidence')).toBeInTheDocument();

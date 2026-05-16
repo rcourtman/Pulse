@@ -639,23 +639,18 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.getByText('2 learned patterns · explanatory context')).toBeInTheDocument();
     expect(screen.getByText('Coverage posture for policy-covered resources.')).toBeInTheDocument();
     expect(screen.getByText('3 policy-covered resources')).toBeInTheDocument();
-    const storage2Link = screen.getByRole('link', {
-      name: 'Open source resource Storage 2 in Infrastructure',
-    });
-    const storage1Link = screen.getByRole('link', {
-      name: 'Open source resource Storage 1 in Infrastructure',
-    });
-    expect(storage2Link).toHaveAttribute('href', '/infrastructure?resource=storage-2');
+    // Cross-jump to /infrastructure?resource=... retired with the legacy
+    // surface; correlation labels render as plain text and document order is
+    // verified via the resource label spans instead of anchor tags.
     expect(
-      screen.getByRole('link', { name: 'Open target resource VM 200 in Infrastructure' }),
-    ).toHaveAttribute('href', '/infrastructure?resource=vm-200');
+      screen.queryByRole('link', { name: /Open source resource .* in Infrastructure/ }),
+    ).toBeNull();
+    const storage2Label = screen.getByText('Storage 2');
+    const storage1Label = screen.getByText('Storage 1');
     expect(
-      screen.getByRole('link', { name: 'Open target resource VM 100 in Infrastructure' }),
-    ).toHaveAttribute('href', '/infrastructure?resource=vm-100');
-    expect(
-      storage2Link.compareDocumentPosition(storage1Link) & Node.DOCUMENT_POSITION_FOLLOWING,
+      storage2Label.compareDocumentPosition(storage1Label) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(screen.getByText('Storage 1')).toBeInTheDocument();
+    expect(screen.getByText('VM 200')).toBeInTheDocument();
     expect(screen.getByText('VM 100')).toBeInTheDocument();
     expect(screen.getByText('Cpu High → Restart')).toBeInTheDocument();
     expect(screen.getByText('Disk Full → Restart')).toBeInTheDocument();

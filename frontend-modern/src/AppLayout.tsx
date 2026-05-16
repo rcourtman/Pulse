@@ -31,7 +31,6 @@ import { getActiveTabForPath } from '@/routing/navigation';
 import { preloadRouteModule } from '@/routing/routePreload';
 import {
   buildDockerPath,
-  buildInfrastructurePath,
   buildKubernetesPath,
   buildProxmoxPath,
   buildTrueNASPath,
@@ -45,7 +44,6 @@ import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentat
 import { AI_CHAT_LAUNCHER_ARIA_LABEL, getAIChatLauncherTitle } from '@/utils/aiChatPresentation';
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
 
-const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
 const ROOT_PROXMOX_PATH = buildProxmoxPath();
 const ROOT_DOCKER_PATH = buildDockerPath();
 const ROOT_KUBERNETES_PATH = buildKubernetesPath();
@@ -204,10 +202,6 @@ export function AppLayout(props: AppLayoutProps) {
     kubernetes: 'Kubernetes',
     truenas: 'TrueNAS',
     vmware: 'vSphere',
-    infrastructure: 'Infrastructure',
-    workloads: 'Workloads',
-    storage: 'Storage',
-    recovery: 'Recovery',
     alerts: 'Alerts',
     ai: 'Patrol',
     settings: 'Settings',
@@ -260,8 +254,8 @@ export function AppLayout(props: AppLayoutProps) {
       !normalizedPath.startsWith('/alerts/overview/') &&
       !normalizedPath.startsWith('/alerts/history/');
 
-    if ((isBlocked || isAlertConfigTab) && normalizedPath !== ROOT_INFRASTRUCTURE_PATH) {
-      navigate(ROOT_INFRASTRUCTURE_PATH, { replace: true });
+    if ((isBlocked || isAlertConfigTab) && normalizedPath !== ROOT_PROXMOX_PATH) {
+      navigate(ROOT_PROXMOX_PATH, { replace: true });
     }
   });
 
