@@ -460,16 +460,19 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 	records := make([]unifiedresources.IngestRecord, 0, 1+len(snapshot.Pools)+len(snapshot.Datasets)+len(snapshot.Apps)+len(snapshot.Disks))
 
 	totalCapacity, totalUsed := aggregatePoolUsage(snapshot.Pools)
+	systemAgent := agentDataFromTrueNASSystem(snapshot.System, systemRisk, protectionReduced, protectionSummary, rebuildInProgress, rebuildSummary)
 	records = append(records, unifiedresources.IngestRecord{
 		SourceID: systemSourceID,
 		Resource: unifiedresources.Resource{
-			Type:      unifiedresources.ResourceTypeAgent,
-			Name:      strings.TrimSpace(snapshot.System.Hostname),
-			Status:    systemStatus(snapshot.System, systemRisk, systemIncidents),
-			LastSeen:  collectedAt,
-			UpdatedAt: collectedAt,
-			Metrics:   metricsFromTrueNASSystem(snapshot.System, totalCapacity, totalUsed),
-			Agent:     agentDataFromTrueNASSystem(snapshot.System, systemRisk, protectionReduced, protectionSummary, rebuildInProgress, rebuildSummary),
+			Type:        unifiedresources.ResourceTypeAgent,
+			Name:        strings.TrimSpace(snapshot.System.Hostname),
+			Status:      systemStatus(snapshot.System, systemRisk, systemIncidents),
+			LastSeen:    collectedAt,
+			UpdatedAt:   collectedAt,
+			Metrics:     metricsFromTrueNASSystem(snapshot.System, totalCapacity, totalUsed),
+			Uptime:      snapshot.System.UptimeSeconds,
+			Temperature: systemAgent.Temperature,
+			Agent:       systemAgent,
 			TrueNAS: &unifiedresources.TrueNASData{
 				Hostname:              strings.TrimSpace(snapshot.System.Hostname),
 				Version:               snapshot.System.Version,

@@ -82,8 +82,13 @@ const PLATFORM_PAGES: readonly PlatformPageCase[] = [
     rootPath: '/truenas',
     testId: 'truenas-page',
     ariaLabel: 'TrueNAS sections',
-    tabPaths: ['/truenas/overview', '/truenas/storage', '/truenas/apps'],
-    populatedTabPaths: ['/truenas/overview', '/truenas/storage', '/truenas/apps'],
+    tabPaths: ['/truenas/overview', '/truenas/storage', '/truenas/disks', '/truenas/apps'],
+    populatedTabPaths: [
+      '/truenas/overview',
+      '/truenas/storage',
+      '/truenas/disks',
+      '/truenas/apps',
+    ],
   },
   {
     id: 'vmware',
@@ -181,6 +186,7 @@ test.describe('Platform pages shell', () => {
       { path: '/kubernetes/deployments', testId: 'kubernetes-page' },
       { path: '/truenas/overview', testId: 'truenas-page' },
       { path: '/truenas/storage', testId: 'truenas-page' },
+      { path: '/truenas/disks', testId: 'truenas-page' },
       { path: '/truenas/apps', testId: 'truenas-page' },
       { path: '/vmware/overview', testId: 'vmware-page' },
       { path: '/vmware/vms', testId: 'vmware-page' },

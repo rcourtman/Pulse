@@ -1,7 +1,7 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import type { Resource, ResourceType } from '@/types/resource';
 
-export type TrueNASPageTabId = 'overview' | 'storage' | 'apps';
+export type TrueNASPageTabId = 'overview' | 'storage' | 'disks' | 'apps';
 
 export type TrueNASTabSpec = {
   id: TrueNASPageTabId;
@@ -12,6 +12,7 @@ export type TrueNASTabSpec = {
 export const TRUENAS_TAB_SPECS: readonly TrueNASTabSpec[] = [
   { id: 'overview', label: 'Systems', path: '/truenas/overview' },
   { id: 'storage', label: 'Storage', path: '/truenas/storage' },
+  { id: 'disks', label: 'Disks', path: '/truenas/disks' },
   { id: 'apps', label: 'Apps', path: '/truenas/apps' },
 ] as const;
 
@@ -30,6 +31,7 @@ const isTrueNASPlatform = (resource: Resource): boolean =>
 export type TrueNASPageModel = {
   resources: Resource[];
   systems: Resource[];
+  disks: Resource[];
   apps: Resource[];
 };
 
@@ -40,10 +42,12 @@ export function buildTrueNASPageModel(resources: Resource[]): TrueNASPageModel {
 
   const systems = trueNasResources.filter((resource) => resource.type === 'agent');
   const apps = trueNasResources.filter((resource) => resource.type === 'app-container');
+  const disks = trueNasResources.filter((resource) => resource.type === 'physical_disk');
 
   return {
     resources: trueNasResources,
     systems,
+    disks,
     apps,
   };
 }

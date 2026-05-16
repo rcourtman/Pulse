@@ -6,10 +6,11 @@ import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
-  PlatformResourceTable,
   PlatformSectionTabs,
   PlatformTableEmptyState,
 } from '@/features/platformPage/sharedPlatformPage';
+import { TrueNASDisksTable } from './TrueNASDisksTable';
+import { TrueNASSystemsTable } from './TrueNASSystemsTable';
 import {
   TRUENAS_TAB_SPECS,
   buildTrueNASPageModel,
@@ -75,8 +76,9 @@ export function TrueNASPageSurface() {
             }
           >
             <Show when={activeTab() === 'overview'}>
-              <PlatformResourceTable
-                resources={model().systems}
+              <TrueNASSystemsTable
+                systems={model().systems}
+                scope={model().resources}
                 emptyIcon={truenasIcon()}
                 emptyTitle="No TrueNAS systems"
                 emptyDescription="TrueNAS systems appear here once a TrueNAS connection reports its top-level appliance."
@@ -88,6 +90,14 @@ export function TrueNASPageSurface() {
                 tableOnly
                 showFilterToolbar
                 forcedSourceFilter={TRUENAS_PLATFORM_FILTER}
+              />
+            </Show>
+            <Show when={activeTab() === 'disks'}>
+              <TrueNASDisksTable
+                resources={model().disks}
+                emptyIcon={truenasIcon()}
+                emptyTitle="No TrueNAS disks reported"
+                emptyDescription="Physical disks appear here once a TrueNAS connection enumerates them."
               />
             </Show>
             <Show when={activeTab() === 'apps'}>

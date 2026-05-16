@@ -14,11 +14,16 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
 });
 
 describe('truenasPageModel', () => {
-  it('declares the TrueNAS section set with Systems, Storage, and Apps', () => {
-    expect(TRUENAS_TAB_SPECS.map((tab) => tab.id)).toEqual(['overview', 'storage', 'apps']);
+  it('declares the TrueNAS section set with Systems, Storage, Disks, and Apps', () => {
+    expect(TRUENAS_TAB_SPECS.map((tab) => tab.id)).toEqual([
+      'overview',
+      'storage',
+      'disks',
+      'apps',
+    ]);
   });
 
-  it('buckets systems, apps, storage, and disks while ignoring non-TrueNAS resources', () => {
+  it('buckets systems, disks, apps, storage while ignoring non-TrueNAS resources', () => {
     const model = buildTrueNASPageModel([
       makeResource({ id: 'truenas-system', type: 'agent' }),
       makeResource({ id: 'truenas-app', type: 'app-container' }),
@@ -29,6 +34,7 @@ describe('truenasPageModel', () => {
     ]);
 
     expect(model.systems.map((r) => r.id)).toEqual(['truenas-system']);
+    expect(model.disks.map((r) => r.id)).toEqual(['truenas-disk']);
     expect(model.apps.map((r) => r.id)).toEqual(['truenas-app']);
     expect(model.resources.map((r) => r.id).sort()).toEqual(
       ['truenas-app', 'truenas-disk', 'truenas-pool', 'truenas-system'].sort(),
