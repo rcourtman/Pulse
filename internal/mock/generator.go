@@ -499,7 +499,7 @@ func buildFixtureState(config MockConfig) models.StateSnapshot {
 
 	// Generate backups for VMs and containers
 	data.PVEBackups = models.PVEBackups{
-		BackupTasks:    []models.BackupTask{},
+		BackupTasks:    generateBackupTasks(data.VMs, data.Containers),
 		StorageBackups: generateBackups(data.VMs, data.Containers),
 		GuestSnapshots: generateSnapshots(data.VMs, data.Containers),
 	}
@@ -4717,6 +4717,93 @@ func generatePMGInstances() []models.PMGInstance {
 	}
 
 	return instances
+}
+
+// generateBackupTasks synthesizes a rolling backup-job task history
+// for the last 7 days. Real PVE backup-task history is bounded by the
+// scheduler's retention, so we generate 2-6 recent runs per backed-up
+// guest, weighted toward successful completions with the occasional
+// failure or in-progress run to keep the table interesting.
+func generateBackupTasks(vms []models.VM, containers []models.Container) []models.BackupTask {
+	tasks := make([]models.BackupTask, 0, len(vms)+len(containers))
+
+	addRun := func(node, instance, guestType string, vmid int, sizeBytes int64) {
+		// Skip ~30% of guests so not every guest appears in recent task
+		// history — matches what a partial backup schedule looks like.
+		if rand.Float64() < 0.3 {
+			return
+		}
+		runs := 2 + rand.Intn(5) // 2-6 recent runs
+		for i := 0; i < runs; i++ {
+			// Spread runs across the past 7 days.
+			startOffset := time.Duration(rand.Intn(7*24*60)) * time.Minute
+			start := time.Now().Add(-startOffset)
+			// Larger guests take longer; floor at 30s, cap at 4h.
+			durationSec := int64(30 + (sizeBytes / (50 * 1024 * 1024)))
+			if durationSec > 4*3600 {
+				durationSec = 4 * 3600
+			}
+			durationSec += int64(rand.Intn(60))
+			end := start.Add(time.Duration(durationSec) * time.Second)
+
+			status := "OK"
+			errMsg := ""
+			roll := rand.Float64()
+			switch {
+			case roll < 0.05:
+				status = "failed"
+				errMsg = pickBackupError()
+			case roll < 0.08 && i == 0:
+				status = "running"
+				end = time.Time{}
+			}
+
+			task := models.BackupTask{
+				ID:        fmt.Sprintf("backup-task-%s-%s-%d-%d", node, guestType, vmid, i),
+				Node:      node,
+				Instance:  instance,
+				Type:      guestType,
+				VMID:      vmid,
+				Status:    status,
+				StartTime: start,
+				EndTime:   end,
+				Size:      sizeBytes - rand.Int63n(sizeBytes/8),
+				Error:     errMsg,
+			}
+			if status == "running" {
+				task.Size = 0
+			}
+			tasks = append(tasks, task)
+		}
+	}
+
+	for _, vm := range vms {
+		size := vm.Disk.Total/10 + rand.Int63n(vm.Disk.Total/5)
+		if size <= 0 {
+			size = 1 << 30
+		}
+		addRun(vm.Node, vm.Instance, "qemu", vm.VMID, size)
+	}
+	for _, ct := range containers {
+		size := ct.Disk.Total/20 + rand.Int63n(ct.Disk.Total/10)
+		if size <= 0 {
+			size = 256 << 20
+		}
+		addRun(ct.Node, ct.Instance, "lxc", ct.VMID, size)
+	}
+
+	return tasks
+}
+
+func pickBackupError() string {
+	errs := []string{
+		"backup of VM failed - VM is locked (backup)",
+		"unable to open file '/var/lib/vz/dump/.tmp.vma' - No space left on device",
+		"job errors - check task log",
+		"backup write failed: connection timed out",
+		"snapshot failed - storage 'local-zfs' does not support snapshots",
+	}
+	return errs[rand.Intn(len(errs))]
 }
 
 // generateSnapshots generates mock snapshot data for VMs and containers
