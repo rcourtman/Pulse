@@ -4,6 +4,10 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { ResponsiveMetricCell } from '@/components/shared/responsive';
+import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
+import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
+import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import {
   Table,
   TableBody,
@@ -12,12 +16,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
-import { getSimpleStatusIndicator } from '@/utils/status';
+import { getSimpleStatusIndicator, getStatusIndicatorBadgeToneClasses } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { normalizeDiskArray } from '@/utils/format';
+import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   filterPlatformResources,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
+import type { Disk } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import {
   getResourceClusterLabel,
@@ -25,13 +32,11 @@ import {
   getResourceVersion,
 } from './proxmoxPageModel';
 
-// Proxmox Overview now mirrors the v5 layout: a dedicated hosts table sits
-// above the canonical Workloads filter + guest table on /proxmox/overview, so
-// operators can see node-level uptime / load / temperature without scrolling
-// past every guest row. The Workloads filter still drives the guest table
-// below; this table has its own narrow search + status filter the same way
-// the sibling platform-host tables (Docker / K8s / TrueNAS / vSphere) do, so
-// the page composes one canonical shape across the platform-first nav.
+// Proxmox Overview mirrors the v5 Dashboard layout: a dedicated nodes table on
+// top, the canonical Workloads filter + guest table below. The nodes table
+// uses the canonical metric primitives (ResponsiveMetricCell / StackedMemoryBar
+// / StackedDiskBar / TemperatureGauge) so the bars, severity coloring, and
+// sparkline overlays match the rest of the platform-first surfaces.
 
 const STATUS_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
   { value: 'all', label: 'All' },
@@ -40,24 +45,15 @@ const STATUS_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
   { value: 'offline', label: 'Offline' },
 ];
 
-const formatPercent = (percent?: number): JSX.Element => {
-  if (typeof percent !== 'number' || Number.isNaN(percent)) return <span class="text-muted">—</span>;
-  return <span class="tabular-nums">{percent.toFixed(1)}%</span>;
-};
-
-const formatUptime = (seconds: number | undefined): string => {
-  if (!seconds || seconds <= 0) return '—';
+const formatUptime = (seconds: number | undefined): { label: string; warn: boolean } => {
+  if (!seconds || seconds <= 0) return { label: '—', warn: false };
+  const warn = seconds < 3_600; // <1h matches v5 "recently restarted" highlight
   const days = Math.floor(seconds / 86_400);
-  if (days > 0) return `${days}d`;
+  if (days > 0) return { label: `${days}d`, warn };
   const hours = Math.floor(seconds / 3_600);
-  if (hours > 0) return `${hours}h`;
+  if (hours > 0) return { label: `${hours}h`, warn };
   const mins = Math.floor(seconds / 60);
-  return `${mins}m`;
-};
-
-const formatTemperature = (celsius: number | undefined): JSX.Element => {
-  if (typeof celsius !== 'number' || celsius <= 0) return <span class="text-muted">—</span>;
-  return <span class="tabular-nums">{celsius.toFixed(1)}°C</span>;
+  return { label: `${mins}m`, warn };
 };
 
 type GuestCounts = { vms: number; containers: number };
@@ -73,6 +69,13 @@ const countGuestsForNode = (guests: Resource[], nodeName: string): GuestCounts =
   }
   return counts;
 };
+
+const VMS_BADGE =
+  'inline-flex min-w-[2rem] justify-center items-center rounded-md bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-sky-700 dark:bg-sky-900/40 dark:text-sky-300';
+const CTS_BADGE =
+  'inline-flex min-w-[2rem] justify-center items-center rounded-md bg-violet-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-violet-700 dark:bg-violet-900/40 dark:text-violet-300';
+const ZERO_BADGE =
+  'inline-flex min-w-[2rem] justify-center items-center rounded-md bg-surface-alt px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted';
 
 export const ProxmoxNodesTable: Component<{
   nodes: Resource[];
@@ -131,18 +134,19 @@ export const ProxmoxNodesTable: Component<{
           }
         >
           <Card padding="none" tone="card" class="overflow-hidden">
-            <Table class="w-full min-w-[920px] border-collapse text-xs">
+            <Table class="w-full min-w-[1080px] border-collapse text-xs">
               <TableHeader class="bg-surface-alt text-muted border-b border-border">
                 <TableRow class="text-left text-[10px] uppercase tracking-wide">
                   <TableHead class="px-3 py-2 font-medium">Node</TableHead>
+                  <TableHead class="px-3 py-2 font-medium">Status</TableHead>
                   <TableHead class="px-3 py-2 font-medium">Version</TableHead>
                   <TableHead class="px-3 py-2 font-medium text-right">Uptime</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">CPU</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Memory</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Disk</TableHead>
+                  <TableHead class="px-3 py-2 font-medium" style={{ width: '180px' }}>CPU</TableHead>
+                  <TableHead class="px-3 py-2 font-medium" style={{ width: '180px' }}>Memory</TableHead>
+                  <TableHead class="px-3 py-2 font-medium" style={{ width: '180px' }}>Disk</TableHead>
                   <TableHead class="px-3 py-2 font-medium text-right">Temp</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">VMs</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">CTs</TableHead>
+                  <TableHead class="px-3 py-2 font-medium text-center">VMs</TableHead>
+                  <TableHead class="px-3 py-2 font-medium text-center">CTs</TableHead>
                   <TableHead class="px-3 py-2 font-medium">Cluster</TableHead>
                 </TableRow>
               </TableHeader>
@@ -150,10 +154,31 @@ export const ProxmoxNodesTable: Component<{
                 <For each={filtered()}>
                   {(node) => {
                     const name = () => asTrimmedString(node.name) || node.id;
-                    const version = () => asTrimmedString(getResourceVersion(node)) || '—';
+                    const version = () => asTrimmedString(getResourceVersion(node));
                     const cluster = () => getResourceClusterLabel(node);
-                    const counts = () => countGuestsForNode(props.guests, getResourceNodeName(node));
+                    const counts = () =>
+                      countGuestsForNode(props.guests, getResourceNodeName(node));
                     const indicator = () => getSimpleStatusIndicator(node.status);
+                    const isOnline = () => indicator().variant === 'success';
+                    const uptime = () => formatUptime(node.uptime);
+                    const metricsKey = () => buildMetricKeyForUnifiedResource(node);
+                    const temperature = () => node.temperature;
+                    const cpuPercent = () => node.cpu?.current ?? 0;
+                    const memoryUsed = () => node.memory?.used ?? 0;
+                    const memoryTotal = () => node.memory?.total ?? 0;
+                    const memoryPercentOnly = () =>
+                      !memoryTotal() && typeof node.memory?.current === 'number'
+                        ? node.memory.current
+                        : undefined;
+                    const aggregateDisk = (): Disk | undefined =>
+                      node.disk
+                        ? ({
+                            total: node.disk.total ?? 0,
+                            used: node.disk.used ?? 0,
+                            free: node.disk.free ?? 0,
+                            usage: node.disk.current ?? 0,
+                          } as Disk)
+                        : undefined;
                     return (
                       <TableRow class="hover:bg-surface-hover">
                         <TableCell class="px-3 py-2">
@@ -169,31 +194,102 @@ export const ProxmoxNodesTable: Component<{
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
-                          {version()}
+                        <TableCell class="px-3 py-2">
+                          <span
+                            class={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getStatusIndicatorBadgeToneClasses(
+                              indicator().variant,
+                            )}`}
+                          >
+                            {indicator().label}
+                          </span>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
-                          {formatUptime(node.uptime)}
+                        <TableCell class="px-3 py-2">
+                          <Show
+                            when={version()}
+                            fallback={<span class="text-muted">—</span>}
+                          >
+                            <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 font-mono text-[10px] text-base-content">
+                              {version()}
+                            </span>
+                          </Show>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
-                          {formatPercent(node.cpu?.current)}
+                        <TableCell
+                          class={`px-3 py-2 text-right tabular-nums ${
+                            uptime().warn
+                              ? 'text-orange-600 dark:text-orange-400'
+                              : 'text-base-content'
+                          }`}
+                        >
+                          {uptime().label}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
-                          {formatPercent(node.memory?.current)}
+                        <TableCell class="px-3 py-2">
+                          <ResponsiveMetricCell
+                            class="w-full"
+                            value={cpuPercent()}
+                            type="cpu"
+                            resourceId={metricsKey()}
+                            isRunning={isOnline()}
+                            showMobile={false}
+                          />
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
-                          {formatPercent(node.disk?.current)}
+                        <TableCell class="px-3 py-2">
+                          <Show
+                            when={isOnline() && (memoryTotal() > 0 || memoryPercentOnly() != null)}
+                            fallback={
+                              <div class="flex justify-center">
+                                <span class="text-xs text-muted" aria-hidden="true">
+                                  —
+                                </span>
+                              </div>
+                            }
+                          >
+                            <StackedMemoryBar
+                              used={memoryUsed()}
+                              total={memoryTotal()}
+                              percentOnly={memoryPercentOnly()}
+                            />
+                          </Show>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
-                          {formatTemperature(node.temperature)}
+                        <TableCell class="px-3 py-2">
+                          <Show
+                            when={isOnline() && (aggregateDisk() || node.agent?.disks?.length)}
+                            fallback={
+                              <div class="flex justify-center">
+                                <span class="text-xs text-muted" aria-hidden="true">
+                                  —
+                                </span>
+                              </div>
+                            }
+                          >
+                            <StackedDiskBar
+                              disks={normalizeDiskArray(node.agent?.disks)}
+                              aggregateDisk={aggregateDisk()}
+                            />
+                          </Show>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
-                          {counts().vms}
+                        <TableCell class="px-3 py-2 text-right">
+                          <Show
+                            when={typeof temperature() === 'number' && (temperature() as number) > 0}
+                            fallback={<span class="text-xs text-muted">—</span>}
+                          >
+                            <TemperatureGauge value={temperature() as number} />
+                          </Show>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
-                          {counts().containers}
+                        <TableCell class="px-3 py-2 text-center">
+                          <span class={counts().vms > 0 ? VMS_BADGE : ZERO_BADGE}>
+                            {counts().vms}
+                          </span>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{cluster()}</TableCell>
+                        <TableCell class="px-3 py-2 text-center">
+                          <span class={counts().containers > 0 ? CTS_BADGE : ZERO_BADGE}>
+                            {counts().containers}
+                          </span>
+                        </TableCell>
+                        <TableCell class="px-3 py-2">
+                          <span class="inline-flex items-center rounded-md bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content">
+                            {cluster()}
+                          </span>
+                        </TableCell>
                       </TableRow>
                     );
                   }}
