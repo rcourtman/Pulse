@@ -19,6 +19,7 @@ import {
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
+import { ProxmoxMailGatewayDrawer } from './ProxmoxMailGatewayDrawer';
 
 // Proxmox Mail Gateway instances are mail-flow / quarantine appliances.
 // The generic infrastructure table renders dashes for Disk I/O / Uptime
@@ -55,6 +56,9 @@ export const ProxmoxMailGatewayTable: Component<{
 }> = (props) => {
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<PlatformResourceStatusFilter>('all');
+  const [selectedId, setSelectedId] = createSignal<string | null>(null);
+  const toggleSelected = (id: string) =>
+    setSelectedId((current) => (current === id ? null : id));
 
   const filtered = createMemo(() => filterPlatformResources(props.resources, search(), status()));
   const visible = createMemo(() => filtered().length);
@@ -124,49 +128,76 @@ export const ProxmoxMailGatewayTable: Component<{
                     const name = () => asTrimmedString(instance.name) || instance.id;
                     const version = () => asTrimmedString(pmg()?.version) || '—';
                     const indicator = () => getSimpleStatusIndicator(instance.status);
+                    const isOpen = () => selectedId() === instance.id;
                     return (
-                      <TableRow class="hover:bg-surface-hover">
-                        <TableCell class="px-3 py-2">
-                          <div class="flex items-center gap-2 min-w-0">
-                            <StatusDot
-                              size="sm"
-                              variant={indicator().variant}
-                              title={instance.status || 'unknown'}
-                              ariaHidden
-                            />
-                            <span class="font-semibold text-base-content truncate" title={name()}>
-                              {name()}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
-                          {version()}
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
-                          {countCell(pmg()?.nodeCount)}
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
-                          {formatUptime(instance.uptime ?? pmg()?.uptimeSeconds)}
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
-                          {countCell(pmg()?.mailCountTotal)}
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
-                          {countCell(pmg()?.spamIn)}
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
-                          {countCell(pmg()?.virusIn)}
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
-                          {countCell(pmg()?.quarantine)}
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
-                          {countCell(pmg()?.queueTotal ?? pmg()?.queueActive)}
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
-                          {countCell(pmg()?.queueDeferred)}
-                        </TableCell>
-                      </TableRow>
+                      <>
+                        <TableRow
+                          class={`cursor-pointer hover:bg-surface-hover ${
+                            isOpen() ? 'bg-surface-hover' : ''
+                          }`}
+                          onClick={() => toggleSelected(instance.id)}
+                          aria-expanded={isOpen()}
+                        >
+                          <TableCell class="px-3 py-2">
+                            <div class="flex items-center gap-2 min-w-0">
+                              <StatusDot
+                                size="sm"
+                                variant={indicator().variant}
+                                title={instance.status || 'unknown'}
+                                ariaHidden
+                              />
+                              <span class="font-semibold text-base-content truncate" title={name()}>
+                                {name()}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                            {version()}
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
+                            {countCell(pmg()?.nodeCount)}
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-right text-base-content">
+                            {formatUptime(instance.uptime ?? pmg()?.uptimeSeconds)}
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-right text-base-content">
+                            {countCell(pmg()?.mailCountTotal)}
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-right text-base-content">
+                            {countCell(pmg()?.spamIn)}
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-right text-base-content">
+                            {countCell(pmg()?.virusIn)}
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-right text-base-content">
+                            {countCell(pmg()?.quarantine)}
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-right text-base-content">
+                            {countCell(pmg()?.queueTotal ?? pmg()?.queueActive)}
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-right text-base-content">
+                            {countCell(pmg()?.queueDeferred)}
+                          </TableCell>
+                        </TableRow>
+                        <Show when={isOpen()}>
+                          <TableRow data-inline-detail-for={instance.id}>
+                            <TableCell
+                              colspan={10}
+                              class="p-0 border-b border-border bg-surface-alt"
+                            >
+                              <div
+                                class="px-4 py-4"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <ProxmoxMailGatewayDrawer
+                                  instanceRow={instance}
+                                  onClose={() => setSelectedId(null)}
+                                />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        </Show>
+                      </>
                     );
                   }}
                 </For>
