@@ -1,6 +1,7 @@
 import { For, Show, type Component } from 'solid-js';
 import XIcon from 'lucide-solid/icons/x';
 import { Card } from '@/components/shared/Card';
+import { ProgressBar } from '@/components/shared/ProgressBar';
 import { StatusDot } from '@/components/shared/StatusDot';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { formatBytes } from '@/utils/format';
@@ -36,64 +37,57 @@ function classifyService(svc: ResourceCephServiceMeta): {
   return { variant: 'warning', label: 'Partial' };
 }
 
+// Capacity utilization bar — matches the Workloads row convention:
+// the label sits on top of the fill, not in a legend below. Color
+// thresholds at 75%/90% match the rest of the app's storage bars.
+function capacityToneFor(percent: number): string {
+  if (percent >= 90) return 'bg-red-500 dark:bg-red-400';
+  if (percent >= 75) return 'bg-amber-500 dark:bg-amber-400';
+  return 'bg-emerald-500 dark:bg-emerald-400';
+}
+
 function CapacityBar(props: {
   used: number;
   total: number;
   percent: number;
 }) {
   const clamped = Math.max(0, Math.min(100, props.percent));
-  const tone =
-    clamped >= 90
-      ? 'bg-red-500 dark:bg-red-400'
-      : clamped >= 75
-        ? 'bg-amber-500 dark:bg-amber-400'
-        : 'bg-emerald-500 dark:bg-emerald-400';
   const available = Math.max(0, props.total - props.used);
   return (
-    <div class="space-y-2">
-      <div class="flex items-end justify-between gap-2">
-        <div class="min-w-0">
-          <div class="text-[10px] uppercase tracking-wide text-muted">Raw capacity</div>
-          <div class="flex items-baseline gap-2 text-base-content">
-            <span class="text-lg font-semibold tabular-nums">{clamped.toFixed(1)}%</span>
-            <span class="text-[11px] text-muted tabular-nums">
-              {formatBytes(props.used)} of {formatBytes(props.total)} used
+    <ProgressBar
+      value={clamped}
+      class="h-6"
+      fillClass={capacityToneFor(clamped)}
+      label={
+        <span class="absolute inset-0 flex items-center justify-between px-2 text-[11px] font-semibold text-base-content leading-none">
+          <span class="tabular-nums">
+            {clamped.toFixed(1)}%
+            <span class="ml-1 font-normal text-muted">
+              ({formatBytes(props.used)} of {formatBytes(props.total)})
             </span>
-          </div>
-        </div>
-        <div class="text-right">
-          <div class="text-[10px] uppercase tracking-wide text-muted">Available</div>
-          <div class="text-base-content tabular-nums text-[13px]">{formatBytes(available)}</div>
-        </div>
-      </div>
-      <div
-        class="relative h-2.5 w-full overflow-hidden rounded-full bg-surface-alt"
-        role="progressbar"
-        aria-valuenow={clamped}
-        aria-valuemin={0}
-        aria-valuemax={100}
-      >
-        <div
-          class={`absolute inset-y-0 left-0 ${tone}`}
-          style={{ width: `${clamped}%` }}
-        />
-      </div>
-    </div>
+          </span>
+          <span class="tabular-nums font-normal text-muted">
+            {formatBytes(available)} free
+          </span>
+        </span>
+      }
+    />
   );
 }
 
 function PoolUsageBar(props: { percent: number }) {
   const clamped = Math.max(0, Math.min(100, props.percent));
-  const tone =
-    clamped >= 90
-      ? 'bg-red-500 dark:bg-red-400'
-      : clamped >= 75
-        ? 'bg-amber-500 dark:bg-amber-400'
-        : 'bg-emerald-500 dark:bg-emerald-400';
   return (
-    <div class="relative h-1.5 w-32 overflow-hidden rounded-full bg-surface-alt">
-      <div class={`absolute inset-y-0 left-0 ${tone}`} style={{ width: `${clamped}%` }} />
-    </div>
+    <ProgressBar
+      value={clamped}
+      class="h-4 w-32"
+      fillClass={capacityToneFor(clamped)}
+      label={
+        <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none tabular-nums">
+          {clamped.toFixed(1)}%
+        </span>
+      }
+    />
   );
 }
 
@@ -140,13 +134,12 @@ export const ProxmoxCephClusterDrawer: Component<{
         </button>
       </header>
 
-      <Card padding="md">
-        <CapacityBar
-          used={usedCapacity()}
-          total={totalCapacity()}
-          percent={usagePercent()}
-        />
-      </Card>
+      <CapacityBar
+        used={usedCapacity()}
+        total={totalCapacity()}
+        percent={usagePercent()}
+      />
+
 
       <div class="grid gap-3 lg:grid-cols-2">
         <Card padding="md">
@@ -185,11 +178,8 @@ export const ProxmoxCephClusterDrawer: Component<{
                         {formatBytes(pool.availableBytes)}
                       </td>
                       <td class="py-2 text-right">
-                        <div class="flex items-center justify-end gap-2">
+                        <div class="flex items-center justify-end">
                           <PoolUsageBar percent={pool.percentUsed} />
-                          <span class="w-12 text-right text-base-content tabular-nums">
-                            {pool.percentUsed.toFixed(1)}%
-                          </span>
                         </div>
                       </td>
                     </tr>

@@ -196,9 +196,10 @@ function SpamHistogram(props: { buckets: PMGSpamBucket[] }) {
   );
 }
 
-// InOutBar is a side-by-side bar comparing two paired values (e.g.
-// mail in vs mail out, spam in vs spam out). The taller bar fills
-// 100%, the other scales relative.
+// InOutBar shows paired values (e.g. mail in vs mail out) as two
+// adjacent half-bars sharing a max scale. The label sits ABOVE the
+// bar and the values sit ON the bar segments — matches the Workloads
+// MetricBar convention of writing the value on the fill.
 function InOutBar(props: {
   label: string;
   inValue: number;
@@ -207,28 +208,28 @@ function InOutBar(props: {
 }) {
   const format = props.format ?? formatNumber;
   const max = Math.max(props.inValue, props.outValue, 1);
+  const inWidth = (props.inValue / max) * 50;
+  const outWidth = (props.outValue / max) * 50;
   return (
     <div class="space-y-1">
-      <div class="flex items-baseline justify-between text-[11px]">
-        <span class="text-muted">{props.label}</span>
-        <span class="font-mono text-[10px] text-muted">
-          <span class="text-base-content font-semibold">{format(props.inValue)}</span>
-          <span class="mx-1">/</span>
-          <span class="text-base-content font-semibold">{format(props.outValue)}</span>
-        </span>
-      </div>
-      <div class="flex h-1.5 w-full overflow-hidden rounded-full bg-surface-alt">
+      <div class="text-[11px] text-muted">{props.label}</div>
+      <div
+        class="relative flex h-4 w-full overflow-hidden rounded bg-surface-hover"
+        title={`In ${format(props.inValue)} · Out ${format(props.outValue)}`}
+      >
         <div
-          class="bg-blue-500 dark:bg-blue-400"
-          style={{ width: `${(props.inValue / max) * 50}%` }}
-          title={`In: ${format(props.inValue)}`}
+          class="relative bg-blue-500 dark:bg-blue-400"
+          style={{ width: `${inWidth}%` }}
         />
         <div class="w-px bg-surface" />
         <div
-          class="bg-purple-500 dark:bg-purple-400"
-          style={{ width: `${(props.outValue / max) * 50}%` }}
-          title={`Out: ${format(props.outValue)}`}
+          class="relative bg-purple-500 dark:bg-purple-400"
+          style={{ width: `${outWidth}%` }}
         />
+        <span class="pointer-events-none absolute inset-0 flex items-center justify-between px-1.5 text-[10px] font-semibold text-base-content leading-none tabular-nums">
+          <span>In {format(props.inValue)}</span>
+          <span>Out {format(props.outValue)}</span>
+        </span>
       </div>
     </div>
   );
