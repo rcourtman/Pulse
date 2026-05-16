@@ -147,7 +147,7 @@ export function ProxmoxPageSurface() {
                   showFilterToolbar
                   suppressPlatformFilter
                   forcedPlatform={PROXMOX_PLATFORM_FILTER}
-                  forcedGroupingMode="grouped"
+                  forcedGroupingMode="flat"
                 />
               </div>
             </Show>

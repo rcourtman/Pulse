@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
-import { getSimpleStatusIndicator, getStatusIndicatorBadgeToneClasses } from '@/utils/status';
+import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
@@ -138,7 +138,6 @@ export const ProxmoxNodesTable: Component<{
               <TableHeader class="bg-surface-alt text-muted border-b border-border">
                 <TableRow class="text-left text-[10px] uppercase tracking-wide">
                   <TableHead class="px-3 py-2 font-medium">Node</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Status</TableHead>
                   <TableHead class="px-3 py-2 font-medium">Version</TableHead>
                   <TableHead class="px-3 py-2 font-medium text-right">Uptime</TableHead>
                   <TableHead class="px-3 py-2 font-medium" style={{ width: '180px' }}>CPU</TableHead>
@@ -193,15 +192,6 @@ export const ProxmoxNodesTable: Component<{
                               {name()}
                             </span>
                           </div>
-                        </TableCell>
-                        <TableCell class="px-3 py-2">
-                          <span
-                            class={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getStatusIndicatorBadgeToneClasses(
-                              indicator().variant,
-                            )}`}
-                          >
-                            {indicator().label}
-                          </span>
                         </TableCell>
                         <TableCell class="px-3 py-2">
                           <Show
