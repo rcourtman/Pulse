@@ -16,17 +16,16 @@ import type {
   PMGInstance,
   PMGNodeStatus,
   PMGQueueStatus,
+  PMGSpamBucket,
 } from '@/types/api';
 import type { Resource } from '@/types/resource';
 
-// Inline drawer for a single Proxmox Mail Gateway instance. The row
-// table only exposes the slim ResourcePMGMeta projection (totals
-// only), but the backend State carries per-node cluster status with
-// individual postfix queue detail, full mail stats (in/out, bytes,
-// bounces, RBL/pregreet), quarantine-by-category, spam score
-// distribution, top-domain stats, and configured relay domains. Fetch
-// the full PMGInstance on first open from /api/pmg/instances so the
-// row stays cheap and the drawer is rich.
+// Inline drawer for a single Proxmox Mail Gateway instance. Drops the
+// per-stat tile pattern in favor of stacked-bar diagrams that show the
+// SHAPE of mail flow + quarantine + spam-score distribution at a
+// glance, paired with proper info-dense tables for cluster nodes and
+// top domains. Fetches the full PMGInstance on first open from
+// /api/pmg/instances so the row keeps its slim payload.
 
 interface PMGInstancesResponse {
   data: PMGInstance[];
@@ -88,38 +87,151 @@ function formatNumber(value: number | undefined): string {
   return Math.round(value).toLocaleString();
 }
 
-function StatTile(props: { label: string; value: string | number; sub?: string }) {
-  return (
-    <div class="min-w-0 rounded-sm border border-border bg-surface-alt px-3 py-2">
-      <div class="truncate text-[10px] uppercase tracking-wide text-muted">{props.label}</div>
-      <div class="mt-0.5 flex items-baseline gap-1 truncate text-base font-semibold text-base-content tabular-nums">
-        <span class="truncate">{props.value}</span>
-        <Show when={props.sub}>
-          <span class="truncate text-[10px] font-normal text-muted">{props.sub}</span>
-        </Show>
-      </div>
-    </div>
-  );
-}
-
-function QueueDot(props: { count: number }) {
-  const tone =
-    props.count === 0
-      ? 'muted'
-      : props.count > 50
-        ? 'danger'
-        : props.count > 10
-          ? 'warning'
-          : 'success';
-  return <StatusDot size="xs" variant={tone as StatusIndicatorVariant} ariaHidden />;
-}
-
 function queueCell(queue: PMGQueueStatus | undefined): { count: number; label: string } {
   if (!queue) return { count: 0, label: '—' };
   return {
     count: queue.total,
     label: `${queue.active}/${queue.deferred}/${queue.hold}/${queue.incoming}`,
   };
+}
+
+// StackedBar renders a horizontal stacked bar from labelled segments.
+// Each segment carries a tone (color), value, and label; segments with
+// 0 value collapse out. A legend with name + count + share renders
+// below.
+interface StackedSegment {
+  key: string;
+  label: string;
+  value: number;
+  tone: string;
+}
+
+function StackedBar(props: { segments: StackedSegment[]; ariaLabel: string }) {
+  const total = createMemo(() => props.segments.reduce((sum, s) => sum + Math.max(0, s.value), 0));
+  const visible = createMemo(() => props.segments.filter((s) => s.value > 0));
+  return (
+    <div class="space-y-2">
+      <Show
+        when={total() > 0}
+        fallback={
+          <div class="relative h-2.5 w-full overflow-hidden rounded-full bg-surface-alt" />
+        }
+      >
+        <div
+          class="relative flex h-2.5 w-full overflow-hidden rounded-full bg-surface-alt"
+          role="img"
+          aria-label={props.ariaLabel}
+        >
+          <For each={visible()}>
+            {(seg) => (
+              <div
+                class={seg.tone}
+                style={{ width: `${(seg.value / total()) * 100}%` }}
+                title={`${seg.label}: ${formatNumber(seg.value)}`}
+              />
+            )}
+          </For>
+        </div>
+      </Show>
+      <div class="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+        <For each={props.segments}>
+          {(seg) => {
+            const share = total() > 0 ? (seg.value / total()) * 100 : 0;
+            return (
+              <div class="flex items-center gap-1.5">
+                <span class={`inline-block h-2 w-2 rounded-sm ${seg.tone}`} aria-hidden="true" />
+                <span class="text-muted">{seg.label}</span>
+                <span class="text-base-content font-semibold tabular-nums">
+                  {formatNumber(seg.value)}
+                </span>
+                <Show when={total() > 0}>
+                  <span class="text-muted tabular-nums text-[10px]">{share.toFixed(1)}%</span>
+                </Show>
+              </div>
+            );
+          }}
+        </For>
+      </div>
+    </div>
+  );
+}
+
+// SpamHistogram renders a small bar chart of count per spam-score
+// bucket. The bucket label (eg "0", "1-3", "10+") sits below each bar;
+// the count sits above on hover via title.
+function SpamHistogram(props: { buckets: PMGSpamBucket[] }) {
+  const maxCount = createMemo(() =>
+    Math.max(0, ...props.buckets.map((b) => Math.max(0, b.count))),
+  );
+  return (
+    <div
+      class="flex items-end gap-1 h-16"
+      role="img"
+      aria-label="Spam score distribution"
+    >
+      <For each={props.buckets}>
+        {(bucket) => {
+          const heightPct = maxCount() > 0 ? (bucket.count / maxCount()) * 100 : 0;
+          const tone =
+            bucket.score === '0' || bucket.score.startsWith('0')
+              ? 'bg-emerald-500 dark:bg-emerald-400'
+              : Number(bucket.score) >= 10 || bucket.score.includes('10')
+                ? 'bg-red-500 dark:bg-red-400'
+                : Number(bucket.score) >= 5 || bucket.score.includes('5')
+                  ? 'bg-amber-500 dark:bg-amber-400'
+                  : 'bg-blue-400 dark:bg-blue-300';
+          return (
+            <div class="flex flex-1 min-w-[20px] flex-col items-center gap-1">
+              <div
+                class={`w-full rounded-sm ${tone}`}
+                style={{ height: `${Math.max(heightPct, 2)}%` }}
+                title={`Score ${bucket.score}: ${formatNumber(bucket.count)}`}
+              />
+              <span class="text-[10px] text-muted font-mono tabular-nums">{bucket.score}</span>
+            </div>
+          );
+        }}
+      </For>
+    </div>
+  );
+}
+
+// InOutBar is a side-by-side bar comparing two paired values (e.g.
+// mail in vs mail out, spam in vs spam out). The taller bar fills
+// 100%, the other scales relative.
+function InOutBar(props: {
+  label: string;
+  inValue: number;
+  outValue: number;
+  format?: (value: number) => string;
+}) {
+  const format = props.format ?? formatNumber;
+  const max = Math.max(props.inValue, props.outValue, 1);
+  return (
+    <div class="space-y-1">
+      <div class="flex items-baseline justify-between text-[11px]">
+        <span class="text-muted">{props.label}</span>
+        <span class="font-mono text-[10px] text-muted">
+          <span class="text-base-content font-semibold">{format(props.inValue)}</span>
+          <span class="mx-1">/</span>
+          <span class="text-base-content font-semibold">{format(props.outValue)}</span>
+        </span>
+      </div>
+      <div class="flex h-1.5 w-full overflow-hidden rounded-full bg-surface-alt">
+        <div
+          class="bg-blue-500 dark:bg-blue-400"
+          style={{ width: `${(props.inValue / max) * 50}%` }}
+          title={`In: ${format(props.inValue)}`}
+        />
+        <div class="w-px bg-surface" />
+        <div
+          class="bg-purple-500 dark:bg-purple-400"
+          style={{ width: `${(props.outValue / max) * 50}%` }}
+          title={`Out: ${format(props.outValue)}`}
+        />
+      </div>
+    </div>
+  );
 }
 
 export const ProxmoxMailGatewayDrawer: Component<{
@@ -138,7 +250,7 @@ export const ProxmoxMailGatewayDrawer: Component<{
   const stats = createMemo(() => instance()?.mailStats);
   const quarantine = createMemo(() => instance()?.quarantine);
   const nodes = createMemo<PMGNodeStatus[]>(() => instance()?.nodes ?? []);
-  const spamBuckets = createMemo(() => instance()?.spamDistribution ?? []);
+  const spamBuckets = createMemo<PMGSpamBucket[]>(() => instance()?.spamDistribution ?? []);
   const topDomains = createMemo(() =>
     (instance()?.domainStats ?? [])
       .slice()
@@ -149,12 +261,62 @@ export const ProxmoxMailGatewayDrawer: Component<{
 
   const health = () => classifyHealth(instance()?.status ?? props.instanceRow.status);
   const name = () =>
-    asTrimmedString(instance()?.name) || asTrimmedString(props.instanceRow.name) || props.instanceRow.id;
-  const version = () => asTrimmedString(instance()?.version) || asTrimmedString(props.instanceRow.pmg?.version) || '—';
+    asTrimmedString(instance()?.name) ||
+    asTrimmedString(props.instanceRow.name) ||
+    props.instanceRow.id;
+  const version = () =>
+    asTrimmedString(instance()?.version) ||
+    asTrimmedString(props.instanceRow.pmg?.version) ||
+    '—';
   const hostname = () => asTrimmedString(instance()?.host);
-  const totalQueue = createMemo(() =>
-    nodes().reduce((sum, n) => sum + (n.queueStatus?.total ?? 0), 0),
-  );
+
+  const inboundSegments = createMemo<StackedSegment[]>(() => {
+    const s = stats();
+    if (!s) return [];
+    const countIn = Math.max(0, s.countIn ?? 0);
+    const spam = Math.max(0, s.spamIn ?? 0);
+    const virus = Math.max(0, s.virusIn ?? 0);
+    const bounces = Math.max(0, s.bouncesIn ?? 0);
+    const greylist = Math.max(0, s.greylistCount ?? 0);
+    const rbl = Math.max(0, s.rblRejects ?? 0);
+    const pregreet = Math.max(0, s.pregreetRejects ?? 0);
+    const flagged = spam + virus + bounces;
+    const blocked = greylist + rbl + pregreet;
+    const clean = Math.max(0, countIn - flagged);
+    return [
+      { key: 'clean', label: 'Clean', value: clean, tone: 'bg-emerald-500 dark:bg-emerald-400' },
+      { key: 'spam', label: 'Spam', value: spam, tone: 'bg-amber-500 dark:bg-amber-400' },
+      { key: 'virus', label: 'Virus', value: virus, tone: 'bg-red-500 dark:bg-red-400' },
+      { key: 'bounces', label: 'Bounces', value: bounces, tone: 'bg-orange-500 dark:bg-orange-400' },
+      { key: 'greylist', label: 'Greylist', value: greylist, tone: 'bg-blue-500 dark:bg-blue-400' },
+      { key: 'rbl', label: 'RBL', value: rbl, tone: 'bg-purple-500 dark:bg-purple-400' },
+      { key: 'pregreet', label: 'Pregreet', value: pregreet, tone: 'bg-slate-500 dark:bg-slate-400' },
+      ...(blocked === 0 && flagged === 0 && clean === 0
+        ? []
+        : []),
+    ];
+  });
+
+  const quarantineSegments = createMemo<StackedSegment[]>(() => {
+    const q = quarantine();
+    if (!q) return [];
+    return [
+      { key: 'spam', label: 'Spam', value: q.spam ?? 0, tone: 'bg-amber-500 dark:bg-amber-400' },
+      { key: 'virus', label: 'Virus', value: q.virus ?? 0, tone: 'bg-red-500 dark:bg-red-400' },
+      {
+        key: 'attachment',
+        label: 'Attachment',
+        value: q.attachment ?? 0,
+        tone: 'bg-orange-500 dark:bg-orange-400',
+      },
+      {
+        key: 'blacklisted',
+        label: 'Blacklisted',
+        value: q.blacklisted ?? 0,
+        tone: 'bg-slate-500 dark:bg-slate-400',
+      },
+    ];
+  });
 
   return (
     <div class="space-y-4">
@@ -204,275 +366,258 @@ export const ProxmoxMailGatewayDrawer: Component<{
             when={instance()}
             fallback={<p class="text-xs text-muted">No detail available for this instance.</p>}
           >
-            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-              <StatTile label="Nodes" value={nodes().length} />
-              <StatTile
-                label="Mail in (24h)"
-                value={formatNumber(stats()?.countIn)}
-              />
-              <StatTile label="Mail out (24h)" value={formatNumber(stats()?.countOut)} />
-              <StatTile label="Spam in" value={formatNumber(stats()?.spamIn)} />
-              <StatTile label="Virus in" value={formatNumber(stats()?.virusIn)} />
-              <StatTile label="Queue total" value={totalQueue()} />
-            </div>
+            <Card padding="md">
+              <div class="mb-2 flex items-baseline justify-between">
+                <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
+                  Inbound disposition
+                </h4>
+                <span class="text-[10px] text-muted">{stats()?.timeframe ?? ''}</span>
+              </div>
+              <Show
+                when={stats()}
+                fallback={<p class="text-xs text-muted">No mail stats reported.</p>}
+              >
+                <StackedBar
+                  segments={inboundSegments()}
+                  ariaLabel="Inbound mail disposition breakdown"
+                />
+                <div class="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] sm:grid-cols-4">
+                  <InOutBar
+                    label="Mail in / out"
+                    inValue={stats()!.countIn ?? 0}
+                    outValue={stats()!.countOut ?? 0}
+                  />
+                  <InOutBar
+                    label="Spam in / out"
+                    inValue={stats()!.spamIn ?? 0}
+                    outValue={stats()!.spamOut ?? 0}
+                  />
+                  <InOutBar
+                    label="Virus in / out"
+                    inValue={stats()!.virusIn ?? 0}
+                    outValue={stats()!.virusOut ?? 0}
+                  />
+                  <InOutBar
+                    label="Bounces in / out"
+                    inValue={stats()!.bouncesIn ?? 0}
+                    outValue={stats()!.bouncesOut ?? 0}
+                  />
+                  <InOutBar
+                    label="Bytes in / out"
+                    inValue={stats()!.bytesIn ?? 0}
+                    outValue={stats()!.bytesOut ?? 0}
+                    format={(v) => (v > 0 ? formatBytes(v) : '—')}
+                  />
+                  <div class="space-y-1">
+                    <div class="flex items-baseline justify-between text-[11px]">
+                      <span class="text-muted">Greylist / Junk in</span>
+                      <span class="font-mono text-[10px] text-base-content font-semibold">
+                        {formatNumber(stats()!.greylistCount)} / {formatNumber(stats()!.junkIn)}
+                      </span>
+                    </div>
+                  </div>
+                  <div class="space-y-1">
+                    <div class="flex items-baseline justify-between text-[11px]">
+                      <span class="text-muted">RBL / Pregreet rejects</span>
+                      <span class="font-mono text-[10px] text-base-content font-semibold">
+                        {formatNumber(stats()!.rblRejects)} /{' '}
+                        {formatNumber(stats()!.pregreetRejects)}
+                      </span>
+                    </div>
+                  </div>
+                  <div class="space-y-1">
+                    <div class="flex items-baseline justify-between text-[11px]">
+                      <span class="text-muted">Avg process</span>
+                      <span class="font-mono text-[10px] text-base-content font-semibold">
+                        {stats()?.averageProcessTimeMs
+                          ? `${Math.round(stats()!.averageProcessTimeMs)}ms`
+                          : '—'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Show>
+            </Card>
 
             <div class="grid gap-3 lg:grid-cols-2">
-              <Card padding="md">
-                <div class="mb-2 flex items-baseline justify-between">
-                  <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
-                    Cluster nodes
-                  </h4>
-                  <span class="text-[10px] text-muted tabular-nums">
-                    {nodes().length} node{nodes().length === 1 ? '' : 's'}
-                  </span>
-                </div>
-                <Show
-                  when={nodes().length > 0}
-                  fallback={<p class="text-xs text-muted">No cluster nodes reported.</p>}
-                >
-                  <table class="w-full text-xs">
-                    <thead class="text-[10px] uppercase tracking-wide text-muted">
-                      <tr>
-                        <th class="pb-2 text-left font-medium">Node</th>
-                        <th class="pb-2 text-left font-medium">Role</th>
-                        <th class="pb-2 text-right font-medium">Uptime</th>
-                        <th class="pb-2 text-right font-medium">Load</th>
-                        <th class="pb-2 text-right font-medium">Queue</th>
-                        <th class="pb-2 text-right font-medium">Oldest</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-border-subtle">
-                      <For each={nodes()}>
-                        {(node) => {
-                          const cls = classifyNode(node);
-                          const queue = queueCell(node.queueStatus);
-                          return (
-                            <tr>
-                              <td class="py-2">
-                                <div class="flex items-center gap-2">
-                                  <StatusDot
-                                    size="sm"
-                                    variant={cls.variant}
-                                    title={cls.label}
-                                    ariaHidden
-                                  />
-                                  <span class="font-mono text-[11px] font-semibold text-base-content">
-                                    {node.name || '—'}
-                                  </span>
-                                </div>
-                              </td>
-                              <td class="py-2 text-base-content text-[11px]">
-                                {asTrimmedString(node.role) || '—'}
-                              </td>
-                              <td class="py-2 text-right text-base-content">
-                                {formatUptime(node.uptime)}
-                              </td>
-                              <td class="py-2 text-right text-base-content tabular-nums text-[11px]">
-                                {asTrimmedString(node.loadAvg) || '—'}
-                              </td>
-                              <td class="py-2 text-right">
-                                <div class="inline-flex items-center justify-end gap-1.5 tabular-nums">
-                                  <QueueDot count={queue.count} />
-                                  <span class="text-base-content font-semibold">{queue.count}</span>
-                                  <span
-                                    class="text-muted text-[10px] font-mono"
-                                    title="active/deferred/hold/incoming"
-                                  >
-                                    {queue.label}
-                                  </span>
-                                </div>
-                              </td>
-                              <td class="py-2 text-right text-base-content">
-                                {node.queueStatus?.oldestAge
-                                  ? formatAge(node.queueStatus.oldestAge)
-                                  : '—'}
-                              </td>
-                            </tr>
-                          );
-                        }}
-                      </For>
-                    </tbody>
-                  </table>
-                </Show>
-              </Card>
-
               <Card padding="md">
                 <div class="mb-2 flex items-baseline justify-between">
                   <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
                     Quarantine
                   </h4>
-                  <span class="text-[10px] text-muted tabular-nums">
-                    {formatNumber(
-                      (quarantine()?.spam ?? 0) +
-                        (quarantine()?.virus ?? 0) +
-                        (quarantine()?.attachment ?? 0) +
-                        (quarantine()?.blacklisted ?? 0),
-                    )}{' '}
-                    total
-                  </span>
                 </div>
                 <Show
                   when={quarantine()}
                   fallback={<p class="text-xs text-muted">No quarantine data reported.</p>}
                 >
-                  <div class="grid grid-cols-2 gap-2">
-                    <StatTile label="Spam" value={formatNumber(quarantine()?.spam)} />
-                    <StatTile label="Virus" value={formatNumber(quarantine()?.virus)} />
-                    <StatTile label="Attachment" value={formatNumber(quarantine()?.attachment)} />
-                    <StatTile
-                      label="Blacklisted"
-                      value={formatNumber(quarantine()?.blacklisted)}
-                    />
-                  </div>
+                  <StackedBar
+                    segments={quarantineSegments()}
+                    ariaLabel="Quarantine breakdown by category"
+                  />
                 </Show>
-                <div class="mt-3">
-                  <h5 class="mb-1 text-[10px] uppercase tracking-wide text-muted">
-                    Spam score distribution
-                  </h5>
-                  <Show
-                    when={spamBuckets().length > 0}
-                    fallback={<p class="text-xs text-muted">No spam score data.</p>}
-                  >
-                    <div class="flex flex-wrap gap-1">
-                      <For each={spamBuckets()}>
-                        {(bucket) => (
-                          <span class="inline-flex items-center gap-1 rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] font-mono tabular-nums">
-                            <span class="text-muted">{bucket.score}</span>
-                            <span class="text-base-content font-semibold">
-                              {formatNumber(bucket.count)}
-                            </span>
-                          </span>
-                        )}
-                      </For>
-                    </div>
-                  </Show>
-                </div>
               </Card>
-            </div>
 
-            <div class="grid gap-3 lg:grid-cols-2">
               <Card padding="md">
                 <div class="mb-2 flex items-baseline justify-between">
                   <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
-                    Top domains
+                    Spam score distribution
                   </h4>
                   <span class="text-[10px] text-muted tabular-nums">
-                    top {topDomains().length}
+                    {spamBuckets().length} bucket{spamBuckets().length === 1 ? '' : 's'}
                   </span>
                 </div>
                 <Show
-                  when={topDomains().length > 0}
-                  fallback={<p class="text-xs text-muted">No domain stats reported.</p>}
+                  when={spamBuckets().length > 0}
+                  fallback={<p class="text-xs text-muted">No spam score data.</p>}
                 >
-                  <table class="w-full text-xs">
-                    <thead class="text-[10px] uppercase tracking-wide text-muted">
-                      <tr>
-                        <th class="pb-2 text-left font-medium">Domain</th>
-                        <th class="pb-2 text-right font-medium">Mail</th>
-                        <th class="pb-2 text-right font-medium">Spam</th>
-                        <th class="pb-2 text-right font-medium">Virus</th>
-                        <th class="pb-2 text-right font-medium">Bytes</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-border-subtle">
-                      <For each={topDomains()}>
-                        {(domain) => (
-                          <tr>
-                            <td class="py-2 font-mono text-[11px] text-base-content truncate max-w-[14rem]" title={domain.domain}>
-                              {domain.domain || '—'}
-                            </td>
-                            <td class="py-2 text-right text-base-content tabular-nums">
-                              {formatNumber(domain.mailCount)}
-                            </td>
-                            <td class="py-2 text-right text-base-content tabular-nums">
-                              {formatNumber(domain.spamCount)}
-                            </td>
-                            <td class="py-2 text-right text-base-content tabular-nums">
-                              {formatNumber(domain.virusCount)}
-                            </td>
-                            <td class="py-2 text-right text-muted tabular-nums">
-                              {domain.bytes && domain.bytes > 0
-                                ? formatBytes(domain.bytes)
-                                : '—'}
-                            </td>
-                          </tr>
-                        )}
-                      </For>
-                    </tbody>
-                  </table>
-                </Show>
-              </Card>
-
-              <Card padding="md">
-                <div class="mb-2 flex items-baseline justify-between">
-                  <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
-                    Mail flow detail
-                  </h4>
-                  <Show when={stats()?.timeframe}>
-                    <span class="text-[10px] text-muted">{stats()?.timeframe}</span>
-                  </Show>
-                </div>
-                <Show
-                  when={stats()}
-                  fallback={<p class="text-xs text-muted">No mail stats reported.</p>}
-                >
-                  <div class="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
-                    <StatTile label="Bounces in" value={formatNumber(stats()?.bouncesIn)} />
-                    <StatTile label="Bounces out" value={formatNumber(stats()?.bouncesOut)} />
-                    <StatTile label="Greylist" value={formatNumber(stats()?.greylistCount)} />
-                    <StatTile label="Junk in" value={formatNumber(stats()?.junkIn)} />
-                    <StatTile label="RBL rejects" value={formatNumber(stats()?.rblRejects)} />
-                    <StatTile
-                      label="Pregreet rejects"
-                      value={formatNumber(stats()?.pregreetRejects)}
-                    />
-                    <StatTile
-                      label="Bytes in"
-                      value={
-                        stats()?.bytesIn && stats()!.bytesIn > 0
-                          ? formatBytes(stats()!.bytesIn)
-                          : '—'
-                      }
-                    />
-                    <StatTile
-                      label="Bytes out"
-                      value={
-                        stats()?.bytesOut && stats()!.bytesOut > 0
-                          ? formatBytes(stats()!.bytesOut)
-                          : '—'
-                      }
-                    />
-                    <StatTile
-                      label="Avg process"
-                      value={
-                        stats()?.averageProcessTimeMs
-                          ? `${Math.round(stats()!.averageProcessTimeMs)}ms`
-                          : '—'
-                      }
-                    />
-                  </div>
+                  <SpamHistogram buckets={spamBuckets()} />
                 </Show>
               </Card>
             </div>
 
-            <Show when={relayDomains().length > 0}>
-              <Card padding="md">
-                <h4 class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-                  Relay domains
+            <Card padding="md">
+              <div class="mb-2 flex items-baseline justify-between">
+                <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
+                  Cluster nodes
                 </h4>
-                <div class="flex flex-wrap gap-1">
-                  <For each={relayDomains()}>
-                    {(rd) => (
-                      <span
-                        class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] font-mono text-base-content"
-                        title={rd.comment || rd.domain}
-                      >
-                        {rd.domain}
-                      </span>
-                    )}
-                  </For>
-                </div>
-              </Card>
+                <span class="text-[10px] text-muted tabular-nums">
+                  {nodes().length} node{nodes().length === 1 ? '' : 's'}
+                </span>
+              </div>
+              <Show
+                when={nodes().length > 0}
+                fallback={<p class="text-xs text-muted">No cluster nodes reported.</p>}
+              >
+                <table class="w-full text-xs">
+                  <thead class="text-[10px] uppercase tracking-wide text-muted">
+                    <tr>
+                      <th class="pb-2 text-left font-medium">Node</th>
+                      <th class="pb-2 text-left font-medium">Role</th>
+                      <th class="pb-2 text-right font-medium">Uptime</th>
+                      <th class="pb-2 text-right font-medium">Load</th>
+                      <th class="pb-2 text-right font-medium">Queue</th>
+                      <th class="pb-2 text-right font-medium">Oldest</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-border-subtle">
+                    <For each={nodes()}>
+                      {(node) => {
+                        const cls = classifyNode(node);
+                        const queue = queueCell(node.queueStatus);
+                        return (
+                          <tr>
+                            <td class="py-2">
+                              <div class="flex items-center gap-2">
+                                <StatusDot
+                                  size="sm"
+                                  variant={cls.variant}
+                                  title={cls.label}
+                                  ariaHidden
+                                />
+                                <span class="font-mono text-[11px] font-semibold text-base-content">
+                                  {node.name || '—'}
+                                </span>
+                              </div>
+                            </td>
+                            <td class="py-2 text-base-content text-[11px]">
+                              {asTrimmedString(node.role) || '—'}
+                            </td>
+                            <td class="py-2 text-right text-base-content">
+                              {formatUptime(node.uptime)}
+                            </td>
+                            <td class="py-2 text-right text-base-content tabular-nums text-[11px]">
+                              {asTrimmedString(node.loadAvg) || '—'}
+                            </td>
+                            <td class="py-2 text-right tabular-nums">
+                              <span class="text-base-content font-semibold">{queue.count}</span>
+                              <span
+                                class="ml-1 text-muted text-[10px] font-mono"
+                                title="active/deferred/hold/incoming"
+                              >
+                                {queue.label}
+                              </span>
+                            </td>
+                            <td class="py-2 text-right text-base-content">
+                              {node.queueStatus?.oldestAge
+                                ? formatAge(node.queueStatus.oldestAge)
+                                : '—'}
+                            </td>
+                          </tr>
+                        );
+                      }}
+                    </For>
+                  </tbody>
+                </table>
+              </Show>
+            </Card>
+
+            <Card padding="md">
+              <div class="mb-2 flex items-baseline justify-between">
+                <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
+                  Top domains
+                </h4>
+                <span class="text-[10px] text-muted tabular-nums">
+                  top {topDomains().length}
+                </span>
+              </div>
+              <Show
+                when={topDomains().length > 0}
+                fallback={<p class="text-xs text-muted">No domain stats reported.</p>}
+              >
+                <table class="w-full text-xs">
+                  <thead class="text-[10px] uppercase tracking-wide text-muted">
+                    <tr>
+                      <th class="pb-2 text-left font-medium">Domain</th>
+                      <th class="pb-2 text-right font-medium">Mail</th>
+                      <th class="pb-2 text-right font-medium">Spam</th>
+                      <th class="pb-2 text-right font-medium">Virus</th>
+                      <th class="pb-2 text-right font-medium">Bytes</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-border-subtle">
+                    <For each={topDomains()}>
+                      {(domain) => (
+                        <tr>
+                          <td
+                            class="py-2 font-mono text-[11px] text-base-content truncate max-w-[14rem]"
+                            title={domain.domain}
+                          >
+                            {domain.domain || '—'}
+                          </td>
+                          <td class="py-2 text-right text-base-content tabular-nums">
+                            {formatNumber(domain.mailCount)}
+                          </td>
+                          <td class="py-2 text-right text-base-content tabular-nums">
+                            {formatNumber(domain.spamCount)}
+                          </td>
+                          <td class="py-2 text-right text-base-content tabular-nums">
+                            {formatNumber(domain.virusCount)}
+                          </td>
+                          <td class="py-2 text-right text-muted tabular-nums">
+                            {domain.bytes && domain.bytes > 0 ? formatBytes(domain.bytes) : '—'}
+                          </td>
+                        </tr>
+                      )}
+                    </For>
+                  </tbody>
+                </table>
+              </Show>
+            </Card>
+
+            <Show when={relayDomains().length > 0}>
+              <div class="flex flex-wrap items-center gap-1">
+                <span class="text-[10px] uppercase tracking-wide text-muted">Relay domains</span>
+                <For each={relayDomains()}>
+                  {(rd) => (
+                    <span
+                      class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] font-mono text-base-content"
+                      title={rd.comment || rd.domain}
+                    >
+                      {rd.domain}
+                    </span>
+                  )}
+                </For>
+              </div>
             </Show>
           </Show>
         </Show>

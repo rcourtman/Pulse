@@ -10,7 +10,10 @@ import type { Resource, ResourceCephServiceMeta } from '@/types/resource';
 // Inline drawer that renders below the clicked ceph row. Mirrors the
 // Pulse Workloads pattern (TableRow inserted under the clicked row,
 // spanning all columns), not a slide-over. Surfaces the per-pool and
-// per-service detail the row could only summarize as aggregates.
+// per-service detail the row could only summarize as aggregates, plus
+// a capacity utilization diagram. Deliberately avoids stat-card
+// tiles — duplicating the row numbers in single-stat boxes adds
+// nothing.
 
 function classifyHealth(status: string | undefined): {
   variant: StatusIndicatorVariant;
@@ -33,15 +36,47 @@ function classifyService(svc: ResourceCephServiceMeta): {
   return { variant: 'warning', label: 'Partial' };
 }
 
-function ClusterMetric(props: { label: string; value: string | number; sub?: string }) {
+function CapacityBar(props: {
+  used: number;
+  total: number;
+  percent: number;
+}) {
+  const clamped = Math.max(0, Math.min(100, props.percent));
+  const tone =
+    clamped >= 90
+      ? 'bg-red-500 dark:bg-red-400'
+      : clamped >= 75
+        ? 'bg-amber-500 dark:bg-amber-400'
+        : 'bg-emerald-500 dark:bg-emerald-400';
+  const available = Math.max(0, props.total - props.used);
   return (
-    <div class="min-w-0 rounded-sm border border-border bg-surface-alt px-3 py-2">
-      <div class="truncate text-[10px] uppercase tracking-wide text-muted">{props.label}</div>
-      <div class="mt-0.5 flex items-baseline gap-1 truncate text-base font-semibold text-base-content tabular-nums">
-        <span class="truncate">{props.value}</span>
-        <Show when={props.sub}>
-          <span class="truncate text-[10px] font-normal text-muted">{props.sub}</span>
-        </Show>
+    <div class="space-y-2">
+      <div class="flex items-end justify-between gap-2">
+        <div class="min-w-0">
+          <div class="text-[10px] uppercase tracking-wide text-muted">Raw capacity</div>
+          <div class="flex items-baseline gap-2 text-base-content">
+            <span class="text-lg font-semibold tabular-nums">{clamped.toFixed(1)}%</span>
+            <span class="text-[11px] text-muted tabular-nums">
+              {formatBytes(props.used)} of {formatBytes(props.total)} used
+            </span>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="text-[10px] uppercase tracking-wide text-muted">Available</div>
+          <div class="text-base-content tabular-nums text-[13px]">{formatBytes(available)}</div>
+        </div>
+      </div>
+      <div
+        class="relative h-2.5 w-full overflow-hidden rounded-full bg-surface-alt"
+        role="progressbar"
+        aria-valuenow={clamped}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <div
+          class={`absolute inset-y-0 left-0 ${tone}`}
+          style={{ width: `${clamped}%` }}
+        />
       </div>
     </div>
   );
@@ -105,21 +140,13 @@ export const ProxmoxCephClusterDrawer: Component<{
         </button>
       </header>
 
-      <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-        <ClusterMetric label="Monitors" value={meta()?.numMons ?? 0} />
-        <ClusterMetric label="Managers" value={meta()?.numMgrs ?? 0} />
-        <ClusterMetric
-          label="OSDs"
-          value={`${meta()?.numOsdsUp ?? 0}/${meta()?.numOsds ?? 0}`}
-          sub={`${meta()?.numOsdsIn ?? 0} in`}
+      <Card padding="md">
+        <CapacityBar
+          used={usedCapacity()}
+          total={totalCapacity()}
+          percent={usagePercent()}
         />
-        <ClusterMetric label="Placement groups" value={meta()?.numPGs ?? 0} />
-        <ClusterMetric
-          label="Capacity"
-          value={`${(usagePercent() ?? 0).toFixed(1)}%`}
-          sub={totalCapacity() > 0 ? `of ${formatBytes(totalCapacity())}` : undefined}
-        />
-      </div>
+      </Card>
 
       <div class="grid gap-3 lg:grid-cols-2">
         <Card padding="md">
@@ -220,38 +247,18 @@ export const ProxmoxCephClusterDrawer: Component<{
         </Card>
       </div>
 
-      <Card padding="md">
-        <div class="grid grid-cols-2 gap-3 text-xs md:grid-cols-3">
-          <div class="min-w-0">
-            <div class="text-[10px] uppercase tracking-wide text-muted">Used</div>
-            <div class="truncate text-base-content tabular-nums">{formatBytes(usedCapacity())}</div>
-          </div>
-          <div class="min-w-0">
-            <div class="text-[10px] uppercase tracking-wide text-muted">Available</div>
-            <div class="truncate text-base-content tabular-nums">
-              {formatBytes(Math.max(0, totalCapacity() - usedCapacity()))}
-            </div>
-          </div>
-          <div class="min-w-0">
-            <div class="text-[10px] uppercase tracking-wide text-muted">Raw capacity</div>
-            <div class="truncate text-base-content tabular-nums">{formatBytes(totalCapacity())}</div>
-          </div>
+      <Show when={(props.cluster.tags ?? []).length > 0}>
+        <div class="flex flex-wrap items-center gap-1">
+          <span class="text-[10px] uppercase tracking-wide text-muted">Tags</span>
+          <For each={props.cluster.tags ?? []}>
+            {(tag) => (
+              <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] font-mono text-base-content">
+                {tag}
+              </span>
+            )}
+          </For>
         </div>
-        <Show when={(props.cluster.tags ?? []).length > 0}>
-          <div class="mt-3 border-t border-border-subtle pt-2">
-            <div class="text-[10px] uppercase tracking-wide text-muted">Tags</div>
-            <div class="mt-1 flex flex-wrap gap-1">
-              <For each={props.cluster.tags ?? []}>
-                {(tag) => (
-                  <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] font-mono text-base-content">
-                    {tag}
-                  </span>
-                )}
-              </For>
-            </div>
-          </div>
-        </Show>
-      </Card>
+      </Show>
     </div>
   );
 };
