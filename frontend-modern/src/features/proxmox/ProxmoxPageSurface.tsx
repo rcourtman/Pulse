@@ -15,8 +15,15 @@ import {
   type ProxmoxPageTabId,
 } from './proxmoxPageModel';
 
+// `datastore`, `dataset`, and ZFS-style `pool` are not first-class
+// resource type tokens at the API boundary — they all collapse to
+// `storage` (with `storage.topology` differentiating dataset vs pool) or
+// `ceph` (for Ceph pools). Including them in the type filter triggers a
+// 400 from `/api/resources` which surfaces as "Could not load Proxmox
+// resources" in the UI. The page model still filters those topologies
+// client-side from the canonical `storage` rows.
 const PROXMOX_RESOURCE_QUERY =
-  'type=agent,vm,system-container,oci-container,storage,datastore,pool,dataset,physical_disk,ceph,pbs,pmg';
+  'type=agent,vm,system-container,oci-container,storage,physical_disk,ceph,pbs,pmg';
 
 const PROXMOX_PLATFORM_FILTER = 'proxmox-pve';
 const VALID_TABS = new Set<ProxmoxPageTabId>(PROXMOX_TAB_SPECS.map((tab) => tab.id));

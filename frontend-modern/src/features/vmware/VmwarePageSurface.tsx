@@ -16,7 +16,10 @@ import {
   type VmwarePageTabId,
 } from './vmwarePageModel';
 
-const VMWARE_RESOURCE_QUERY = 'type=agent,vm,storage,datastore';
+// `datastore` is not a first-class type token at the API boundary; vSphere
+// datastores are emitted as canonical `storage` rows. Including it
+// triggers a 400 from `/api/resources`.
+const VMWARE_RESOURCE_QUERY = 'type=agent,vm,storage';
 const VMWARE_PLATFORM_FILTER = 'vmware-vsphere';
 const VALID_TABS = new Set<VmwarePageTabId>(VMWARE_TAB_SPECS.map((tab) => tab.id));
 

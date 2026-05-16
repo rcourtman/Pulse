@@ -17,8 +17,13 @@ import {
   type TrueNASPageTabId,
 } from './truenasPageModel';
 
+// `pool` and `dataset` collapse into `storage` at the API boundary
+// (with `storage.topology` differentiating them) — they are not
+// first-class type tokens and including them triggers a 400 from
+// `/api/resources`. The page model still buckets by topology
+// client-side.
 const TRUENAS_RESOURCE_QUERY =
-  'type=agent,app-container,storage,pool,dataset,physical_disk';
+  'type=agent,app-container,storage,physical_disk';
 const TRUENAS_PLATFORM_FILTER = 'truenas';
 const VALID_TABS = new Set<TrueNASPageTabId>(TRUENAS_TAB_SPECS.map((tab) => tab.id));
 
