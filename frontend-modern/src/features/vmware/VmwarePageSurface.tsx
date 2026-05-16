@@ -1,8 +1,8 @@
 import { useLocation } from '@solidjs/router';
 import CpuIcon from 'lucide-solid/icons/cpu';
 import { Show, createMemo } from 'solid-js';
-import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
+import { VsphereDatastoresTable } from './VsphereDatastoresTable';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
@@ -99,11 +99,11 @@ export function VmwarePageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'storage'}>
-              <StorageSurface
-                embedded
-                tableOnly
-                showFilterToolbar
-                forcedSourceFilter={VMWARE_PLATFORM_FILTER}
+              <VsphereDatastoresTable
+                resources={model().datastores}
+                emptyIcon={vmwareIcon()}
+                emptyTitle="No vSphere datastores"
+                emptyDescription="Datastores appear here once a vCenter connection enumerates them."
               />
             </Show>
           </Show>

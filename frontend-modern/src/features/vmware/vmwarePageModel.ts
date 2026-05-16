@@ -29,6 +29,7 @@ export type VmwarePageModel = {
   resources: Resource[];
   hosts: Resource[];
   vms: Resource[];
+  datastores: Resource[];
 };
 
 export function buildVmwarePageModel(resources: Resource[]): VmwarePageModel {
@@ -37,10 +38,16 @@ export function buildVmwarePageModel(resources: Resource[]): VmwarePageModel {
   );
   const hosts = vmwareResources.filter((resource) => resource.type === 'agent');
   const vms = vmwareResources.filter((resource) => resource.type === 'vm');
+  const datastores = vmwareResources.filter(
+    (resource) =>
+      resource.type === 'storage' &&
+      (resource.storage?.topology === 'datastore' || resource.vmware?.entityType === 'datastore'),
+  );
 
   return {
     resources: vmwareResources,
     hosts,
     vms,
+    datastores,
   };
 }
