@@ -9,6 +9,7 @@ import { TableCard } from '@/components/shared/TableCard';
 import { ProxmoxBackupsTable } from './ProxmoxBackupsTable';
 import { ProxmoxCephTable } from './ProxmoxCephTable';
 import { ProxmoxMailGatewayTable } from './ProxmoxMailGatewayTable';
+import { ProxmoxNodesTable } from './ProxmoxNodesTable';
 import { ProxmoxReplicationTable } from './ProxmoxReplicationTable';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
@@ -128,18 +129,27 @@ export function ProxmoxPageSurface() {
             }
           >
             <Show when={activeTab() === 'overview'}>
-              <WorkloadsSurface
-                vms={[]}
-                containers={[]}
-                nodes={[]}
-                useWorkloads
-                embedded
-                tableOnly
-                showFilterToolbar
-                suppressPlatformFilter
-                forcedPlatform={PROXMOX_PLATFORM_FILTER}
-                forcedGroupingMode="grouped"
-              />
+              <div class="space-y-4">
+                <ProxmoxNodesTable
+                  nodes={model().pveNodes}
+                  guests={model().guests}
+                  emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
+                  emptyTitle="No Proxmox VE nodes"
+                  emptyDescription="Proxmox VE nodes appear here once a PVE host reports inventory."
+                />
+                <WorkloadsSurface
+                  vms={[]}
+                  containers={[]}
+                  nodes={[]}
+                  useWorkloads
+                  embedded
+                  tableOnly
+                  showFilterToolbar
+                  suppressPlatformFilter
+                  forcedPlatform={PROXMOX_PLATFORM_FILTER}
+                  forcedGroupingMode="grouped"
+                />
+              </div>
             </Show>
             <Show when={activeTab() === 'storage'}>
               <StorageSurface
