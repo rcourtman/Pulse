@@ -4065,6 +4065,59 @@ func generateStorage(nodes []models.Node) []models.Storage {
 		})
 	}
 
+	// Cluster-wide Ceph storage (RBD + CephFS) so the Proxmox Ceph
+	// surface has real cluster topology to render. Without these, the
+	// canonical Ceph adapter never sees any cephfs/rbd/ceph-typed
+	// storage and skips cluster synthesis entirely.
+	clusterInstance := ""
+	for _, n := range nodes {
+		if n.Instance == "mock-cluster" {
+			clusterInstance = n.Instance
+			break
+		}
+	}
+	if clusterInstance != "" {
+		cephRbdTotal := int64(48 * 1024 * 1024 * 1024 * 1024) // 48TB raw
+		cephRbdUsage := SampleMetric("storage", "ceph-rbd", "usage", now)
+		cephRbdUsed := int64(float64(cephRbdTotal) * (cephRbdUsage / 100.0))
+		storage = append(storage, models.Storage{
+			ID:       fmt.Sprintf("%s-ceph-rbd", clusterInstance),
+			Name:     "ceph-rbd",
+			Node:     "shared",
+			Instance: clusterInstance,
+			Type:     "rbd",
+			Status:   "available",
+			Total:    cephRbdTotal,
+			Used:     cephRbdUsed,
+			Free:     cephRbdTotal - cephRbdUsed,
+			Usage:    cephRbdUsage,
+			Content:  "images,rootdir",
+			Shared:   true,
+			Enabled:  true,
+			Active:   true,
+		})
+
+		cephFsTotal := int64(24 * 1024 * 1024 * 1024 * 1024) // 24TB
+		cephFsUsage := SampleMetric("storage", "cephfs-data", "usage", now)
+		cephFsUsed := int64(float64(cephFsTotal) * (cephFsUsage / 100.0))
+		storage = append(storage, models.Storage{
+			ID:       fmt.Sprintf("%s-cephfs", clusterInstance),
+			Name:     "cephfs-data",
+			Node:     "shared",
+			Instance: clusterInstance,
+			Type:     "cephfs",
+			Status:   "available",
+			Total:    cephFsTotal,
+			Used:     cephFsUsed,
+			Free:     cephFsTotal - cephFsUsed,
+			Usage:    cephFsUsage,
+			Content:  "vztmpl,iso,backup",
+			Shared:   true,
+			Enabled:  true,
+			Active:   true,
+		})
+	}
+
 	return storage
 }
 

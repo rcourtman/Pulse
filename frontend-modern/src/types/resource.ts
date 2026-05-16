@@ -362,6 +362,34 @@ export interface ResourcePhysicalDiskRisk {
   reasons?: ResourceStorageRiskReason[];
 }
 
+export interface ResourceCephPoolMeta {
+  name: string;
+  storedBytes: number;
+  availableBytes: number;
+  objects: number;
+  percentUsed: number;
+}
+
+export interface ResourceCephServiceMeta {
+  type: string;
+  running: number;
+  total: number;
+}
+
+export interface ResourceCephMeta {
+  fsid?: string;
+  healthStatus: string;
+  healthMessage?: string;
+  numMons: number;
+  numMgrs: number;
+  numOsds: number;
+  numOsdsUp: number;
+  numOsdsIn: number;
+  numPGs: number;
+  pools?: ResourceCephPoolMeta[];
+  services?: ResourceCephServiceMeta[];
+}
+
 export interface ResourcePhysicalDiskMeta {
   devPath?: string;
   model?: string;
@@ -746,6 +774,7 @@ export interface Resource {
   availability?: ResourceAvailabilityMeta;
   physicalDisk?: ResourcePhysicalDiskMeta;
   storage?: ResourceStorageMeta;
+  ceph?: ResourceCephMeta;
 
   // Platform-specific data (varies by type)
   platformData?: Record<string, unknown>;

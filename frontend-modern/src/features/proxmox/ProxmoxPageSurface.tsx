@@ -7,6 +7,7 @@ import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { TableCard } from '@/components/shared/TableCard';
 import { ProxmoxBackupsTable } from './ProxmoxBackupsTable';
+import { ProxmoxCephTable } from './ProxmoxCephTable';
 import { ProxmoxMailGatewayTable } from './ProxmoxMailGatewayTable';
 import { ProxmoxReplicationTable } from './ProxmoxReplicationTable';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
@@ -161,12 +162,11 @@ export function ProxmoxPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'ceph'}>
-              <StorageSurface
-                embedded
-                tableOnly
-                showFilterToolbar
-                forcedView="pools"
-                forcedSourceFilter={PROXMOX_PLATFORM_FILTER}
+              <ProxmoxCephTable
+                resources={model().ceph.filter((resource) => resource.type === 'ceph')}
+                emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
+                emptyTitle="No Ceph clusters"
+                emptyDescription="Ceph clusters appear here once a Proxmox VE node reports cluster topology."
               />
             </Show>
             <Show when={activeTab() === 'mail'}>
