@@ -1,15 +1,14 @@
 import { A, useLocation } from '@solidjs/router';
 import TriangleAlertIcon from 'lucide-solid/icons/triangle-alert';
-import { For, Show, createMemo, createSignal } from 'solid-js';
+import { For, Show, createMemo } from 'solid-js';
 import RecoverySurface from '@/components/Recovery/Recovery';
 import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { TableCard } from '@/components/shared/TableCard';
-import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
+import { ProxmoxMailGatewayTable } from './ProxmoxMailGatewayTable';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
-import type { Resource } from '@/types/resource';
 import {
   PROXMOX_TAB_SPECS,
   buildProxmoxPageModel,
@@ -58,30 +57,6 @@ function ProxmoxTableEmptyState(props: { title: string; description: string }) {
         />
       </div>
     </TableCard>
-  );
-}
-
-function ProxmoxInfrastructureTable(props: {
-  resources: Resource[];
-  emptyTitle: string;
-  emptyDescription: string;
-}) {
-  const [expandedResourceId, setExpandedResourceId] = createSignal<string | null>(null);
-
-  return (
-    <Show
-      when={props.resources.length > 0}
-      fallback={
-        <ProxmoxTableEmptyState title={props.emptyTitle} description={props.emptyDescription} />
-      }
-    >
-      <UnifiedResourceTable
-        resources={props.resources}
-        expandedResourceId={expandedResourceId()}
-        onExpandedResourceChange={setExpandedResourceId}
-        groupingMode="grouped"
-      />
-    </Show>
   );
 }
 
@@ -181,10 +156,10 @@ export function ProxmoxPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'mail'}>
-              <ProxmoxInfrastructureTable
+              <ProxmoxMailGatewayTable
                 resources={model().pmg}
-                emptyTitle="No Proxmox Mail Gateway services"
-                emptyDescription="PMG rows appear here using the existing service infrastructure table."
+                emptyTitle="No Proxmox Mail Gateway instances"
+                emptyDescription="PMG instances appear here once a Proxmox Mail Gateway connection reports them."
               />
             </Show>
           </Show>

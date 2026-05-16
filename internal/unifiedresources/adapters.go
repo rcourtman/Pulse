@@ -1211,6 +1211,7 @@ func resourceFromPBSInstance(instance models.PBSInstance) (Resource, ResourceIde
 		LastSeen:  instance.LastSeen,
 		UpdatedAt: time.Now().UTC(),
 		Metrics:   metricsFromPBSInstance(instance),
+		Uptime:    instance.Uptime,
 		CustomURL: instance.GuestURL,
 		Incidents: incidents,
 		PBS: &PBSData{
@@ -1322,6 +1323,7 @@ func resourceFromPMGInstance(instance models.PMGInstance) (Resource, ResourceIde
 		LastSeen:  instance.LastSeen,
 		UpdatedAt: time.Now().UTC(),
 		Metrics:   metricsFromPMGInstance(instance),
+		Uptime:    uptime,
 		CustomURL: instance.GuestURL,
 		PMG: &PMGData{
 			InstanceID:       instance.ID,

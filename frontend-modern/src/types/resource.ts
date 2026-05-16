@@ -582,6 +582,29 @@ export interface ResourceKubernetesMeta {
   allocatablePods?: number;
 }
 
+// Proxmox Mail Gateway projection emitted by the canonical adapter for
+// `pmg` resources. Surfaced on the Proxmox platform-page Mail Gateway
+// table where queue posture / spam / virus / quarantine counts are
+// the operator columns, not generic CPU/Memory bars.
+export interface ResourcePMGMeta {
+  instanceId?: string;
+  hostname?: string;
+  version?: string;
+  nodeCount?: number;
+  uptimeSeconds?: number;
+  connectionHealth?: string;
+  mailCountTotal?: number;
+  spamIn?: number;
+  virusIn?: number;
+  quarantine?: number;
+  queueIncoming?: number;
+  queueActive?: number;
+  queueDeferred?: number;
+  queueHold?: number;
+  queueTotal?: number;
+  lastUpdated?: string | number;
+}
+
 export interface ResourceVMwareMeta {
   connectionId?: string;
   connectionName?: string;
@@ -716,6 +739,7 @@ export interface Resource {
   agent?: ResourceAgentMeta;
   kubernetes?: ResourceKubernetesMeta;
   docker?: ResourceDockerMeta;
+  pmg?: ResourcePMGMeta;
   vmware?: ResourceVMwareMeta;
   proxmox?: ResourceProxmoxMeta;
   pbs?: ResourcePBSMeta;
