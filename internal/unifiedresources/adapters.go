@@ -1171,15 +1171,17 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 	metrics := metricsFromDockerHost(host)
 
 	resource := Resource{
-		Type:       ResourceTypeAgent,
-		Technology: strings.TrimSpace(host.Runtime),
-		Name:       name,
-		Status:     statusFromString(host.Status),
-		LastSeen:   host.LastSeen,
-		UpdatedAt:  time.Now().UTC(),
-		Metrics:    metrics,
-		Docker:     docker,
-		Tags:       nil,
+		Type:        ResourceTypeAgent,
+		Technology:  strings.TrimSpace(host.Runtime),
+		Name:        name,
+		Status:      statusFromString(host.Status),
+		LastSeen:    host.LastSeen,
+		UpdatedAt:   time.Now().UTC(),
+		Metrics:     metrics,
+		Uptime:      host.UptimeSeconds,
+		Temperature: host.Temperature,
+		Docker:      docker,
+		Tags:        nil,
 	}
 
 	return resource, identity

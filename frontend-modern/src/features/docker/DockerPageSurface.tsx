@@ -5,10 +5,10 @@ import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
-  PlatformResourceTable,
   PlatformSectionTabs,
   PlatformTableEmptyState,
 } from '@/features/platformPage/sharedPlatformPage';
+import { DockerHostsTable } from './DockerHostsTable';
 import { DockerServicesTable } from './DockerServicesTable';
 import {
   DOCKER_TAB_SPECS,
@@ -74,7 +74,7 @@ export function DockerPageSurface() {
             }
           >
             <Show when={activeTab() === 'overview'}>
-              <PlatformResourceTable
+              <DockerHostsTable
                 resources={model().hosts}
                 emptyIcon={dockerIcon()}
                 emptyTitle="No Docker hosts"

@@ -6,10 +6,10 @@ import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
-  PlatformResourceTable,
   PlatformSectionTabs,
   PlatformTableEmptyState,
 } from '@/features/platformPage/sharedPlatformPage';
+import { VsphereHostsTable } from './VsphereHostsTable';
 import {
   VMWARE_TAB_SPECS,
   buildVmwarePageModel,
@@ -74,8 +74,9 @@ export function VmwarePageSurface() {
             }
           >
             <Show when={activeTab() === 'overview'}>
-              <PlatformResourceTable
-                resources={model().hosts}
+              <VsphereHostsTable
+                hosts={model().hosts}
+                scope={model().resources}
                 emptyIcon={vmwareIcon()}
                 emptyTitle="No vSphere hosts"
                 emptyDescription="Hosts appear here once the vCenter connection enumerates them."
