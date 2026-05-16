@@ -1,8 +1,6 @@
-import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import { For, Show, type Component, type JSX } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
-import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
@@ -20,10 +18,6 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
-import {
-  filterPlatformResources,
-  type PlatformResourceStatusFilter,
-} from '@/features/platformPage/sharedPlatformPage';
 import type { Disk } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import {
@@ -36,14 +30,10 @@ import {
 // top, the canonical Workloads filter + guest table below. The nodes table
 // uses the canonical metric primitives (ResponsiveMetricCell / StackedMemoryBar
 // / StackedDiskBar / TemperatureGauge) so the bars, severity coloring, and
-// sparkline overlays match the rest of the platform-first surfaces.
-
-const STATUS_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
-  { value: 'all', label: 'All' },
-  { value: 'online', label: 'Healthy' },
-  { value: 'degraded', label: 'Degraded' },
-  { value: 'offline', label: 'Offline' },
-];
+// sparkline overlays match the rest of the platform-first surfaces. v5's
+// NodeSummaryTable didn't have a search box or status chip strip — node lists
+// are short and the Workloads filter below covers the place where filtering
+// actually matters, so this table renders the rows directly.
 
 const formatUptime = (seconds: number | undefined): { label: string; warn: boolean } => {
   if (!seconds || seconds <= 0) return { label: '—', warn: false };
@@ -84,13 +74,6 @@ export const ProxmoxNodesTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
 }> = (props) => {
-  const [search, setSearch] = createSignal('');
-  const [status, setStatus] = createSignal<PlatformResourceStatusFilter>('all');
-
-  const filtered = createMemo(() => filterPlatformResources(props.nodes, search(), status()));
-  const visible = createMemo(() => filtered().length);
-  const total = createMemo(() => props.nodes.length);
-
   return (
     <Show
       when={props.nodes.length > 0}
@@ -104,36 +87,7 @@ export const ProxmoxNodesTable: Component<{
         </Card>
       }
     >
-      <div class="space-y-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="min-w-[200px] flex-1 sm:max-w-xs">
-            <SearchInput value={search} onChange={setSearch} placeholder="Search Proxmox nodes" />
-          </div>
-          <FilterButtonGroup
-            options={STATUS_FILTER_OPTIONS}
-            value={status()}
-            onChange={setStatus}
-          />
-          <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-            <Show when={visible() !== total()} fallback={<>{total()} nodes</>}>
-              {visible()} of {total()} nodes
-            </Show>
-          </span>
-        </div>
-
-        <Show
-          when={filtered().length > 0}
-          fallback={
-            <Card padding="lg">
-              <EmptyState
-                icon={props.emptyIcon}
-                title="No nodes match current filters"
-                description="Adjust the search or status filter to see more nodes."
-              />
-            </Card>
-          }
-        >
-          <Card padding="none" tone="card" class="overflow-hidden">
+      <Card padding="none" tone="card" class="overflow-hidden">
             <Table class="w-full min-w-[1080px] border-collapse text-xs">
               <TableHeader class="bg-surface-alt text-muted border-b border-border">
                 <TableRow class="text-left text-[10px] uppercase tracking-wide">
@@ -150,7 +104,7 @@ export const ProxmoxNodesTable: Component<{
                 </TableRow>
               </TableHeader>
               <TableBody class="divide-y divide-border-subtle">
-                <For each={filtered()}>
+                <For each={props.nodes}>
                   {(node) => {
                     const name = () => asTrimmedString(node.name) || node.id;
                     const version = () => asTrimmedString(getResourceVersion(node));
@@ -286,9 +240,7 @@ export const ProxmoxNodesTable: Component<{
                 </For>
               </TableBody>
             </Table>
-          </Card>
-        </Show>
-      </div>
+      </Card>
     </Show>
   );
 };
