@@ -52,6 +52,38 @@ export interface GuestDrawerBackupPresentation {
 
 export const isGuestDrawerVM = (guest: Guest): boolean => resolveWorkloadType(guest) === 'vm';
 
+// Fallback current-value metrics for the guest drawer's history charts.
+// Mirrors `getNodeDrawerHistoryFallbackMetrics` — supplies a single
+// finite value per metric so `mergeFallbackHistoryMetrics` can synthesize
+// a flat 2-point line, replacing the "Collecting history" placeholder
+// when the metrics-store hasn't yet accumulated 2+ samples for that
+// resource within the selected range. Keys must match the `metric`
+// strings declared in `GUEST_DRAWER_HISTORY_GROUPS`.
+export const getGuestDrawerHistoryFallbackMetrics = (
+  guest: Guest,
+): Record<string, number | undefined> => {
+  const cpuRaw = typeof guest.cpu === 'number' ? guest.cpu : undefined;
+  const cpuPercent =
+    cpuRaw === undefined || !Number.isFinite(cpuRaw)
+      ? undefined
+      : cpuRaw <= 1.5
+        ? cpuRaw * 100
+        : cpuRaw;
+  const memUsage = guest.memory?.usage;
+  const diskUsage = guest.disk?.usage;
+  const finite = (value: number | undefined): number | undefined =>
+    typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  return {
+    cpu: finite(cpuPercent),
+    memory: finite(memUsage),
+    disk: finite(diskUsage),
+    netin: finite(guest.networkIn),
+    netout: finite(guest.networkOut),
+    diskread: finite(guest.diskRead),
+    diskwrite: finite(guest.diskWrite),
+  };
+};
+
 export const GUEST_DRAWER_HISTORY_DEFAULT_RANGE: HistoryTimeRange = '24h';
 
 export const GUEST_DRAWER_HISTORY_GROUPS: GuestDrawerHistoryGroupConfig[] = [

@@ -1,6 +1,6 @@
-import { Component, Show, Suspense } from 'solid-js';
+import { Component, Show, Suspense, createMemo } from 'solid-js';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
-import type { GuestDrawerProps } from './guestDrawerModel';
+import { getGuestDrawerHistoryFallbackMetrics, type GuestDrawerProps } from './guestDrawerModel';
 import { useGuestDrawerState } from './useGuestDrawerState';
 import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from './GuestDrawerHistory';
 import { GuestDrawerOverview } from './GuestDrawerOverview';
@@ -35,6 +35,9 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     webInterfaceTargetLabel,
   } = useGuestDrawerState(props);
   const headingId = () => `guest-drawer-heading-${guestId()}`;
+  const historyFallbackMetrics = createMemo(() =>
+    getGuestDrawerHistoryFallbackMetrics(props.guest),
+  );
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()}>
@@ -118,7 +121,11 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
       {hasHistorySupport() && activeTab() === 'history' && (
         <div style={{ 'overflow-anchor': 'none' }}>
-          <GuestDrawerHistory target={historyTarget()} range={historyRange()} />
+          <GuestDrawerHistory
+            target={historyTarget()}
+            range={historyRange()}
+            fallbackMetrics={historyFallbackMetrics()}
+          />
         </div>
       )}
 
