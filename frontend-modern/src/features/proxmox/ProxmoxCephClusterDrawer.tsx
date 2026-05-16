@@ -5,6 +5,7 @@ import { ProgressBar } from '@/components/shared/ProgressBar';
 import { StatusDot } from '@/components/shared/StatusDot';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { formatBytes } from '@/utils/format';
+import { getMetricColorClass } from '@/utils/metricThresholds';
 import { asTrimmedString } from '@/utils/stringUtils';
 import type { Resource, ResourceCephServiceMeta } from '@/types/resource';
 
@@ -38,12 +39,13 @@ function classifyService(svc: ResourceCephServiceMeta): {
 }
 
 // Capacity utilization bar — matches the Workloads row convention:
-// the label sits on top of the fill, not in a legend below. Color
-// thresholds at 75%/90% match the rest of the app's storage bars.
+// the label sits on top of the fill, not in a legend below. Reuses
+// the shared metric color tokens (bg-metric-normal-bg / warning /
+// critical) so the green/amber/red match the rest of the app exactly
+// (raw bg-emerald-500 was brighter and clashed with the dark label
+// text overlay).
 function capacityToneFor(percent: number): string {
-  if (percent >= 90) return 'bg-red-500 dark:bg-red-400';
-  if (percent >= 75) return 'bg-amber-500 dark:bg-amber-400';
-  return 'bg-emerald-500 dark:bg-emerald-400';
+  return getMetricColorClass(percent, 'disk');
 }
 
 function CapacityBar(props: {
@@ -52,23 +54,14 @@ function CapacityBar(props: {
   percent: number;
 }) {
   const clamped = Math.max(0, Math.min(100, props.percent));
-  const available = Math.max(0, props.total - props.used);
   return (
     <ProgressBar
       value={clamped}
-      class="h-6"
+      class="h-5"
       fillClass={capacityToneFor(clamped)}
       label={
-        <span class="absolute inset-0 flex items-center justify-between px-2 text-[11px] font-semibold text-base-content leading-none">
-          <span class="tabular-nums">
-            {clamped.toFixed(1)}%
-            <span class="ml-1 font-normal text-muted">
-              ({formatBytes(props.used)} of {formatBytes(props.total)})
-            </span>
-          </span>
-          <span class="tabular-nums font-normal text-muted">
-            {formatBytes(available)} free
-          </span>
+        <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none tabular-nums">
+          {clamped.toFixed(1)}% · {formatBytes(props.used)} / {formatBytes(props.total)}
         </span>
       }
     />
