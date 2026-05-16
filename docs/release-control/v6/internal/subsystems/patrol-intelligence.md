@@ -425,6 +425,19 @@ Patrol-specific presentation helpers.
 
 ## Current State
 
+The Patrol findings panel
+(`frontend-modern/src/components/AI/FindingsPanel.tsx`) dropped its "Open
+related infrastructure / workloads / storage / recovery" cross-jump chip
+strip on 2026-05-16 alongside the platform-first migration. The
+`useResources` lookup that fed those chips and the supporting
+`buildResolvedResourceSurfaceLinks` helper from
+`frontend-modern/src/routing/resourceLinks.ts` were retired in the same
+pass; the expanded finding body now keeps investigation in-place through
+`getFindingPrimaryActionPresentation` (the canonical action href) plus the
+shared manual-controls helper. New finding-detail affordances must not
+reanimate the legacy chip strip or build URLs against the retired top-level
+routes.
+
 The Patrol page, store, findings UI, and run-history presentation had been
 outside the governed subsystem map even though they are the top-level runtime
 surface for Patrol intelligence. This contract now owns that orchestration and

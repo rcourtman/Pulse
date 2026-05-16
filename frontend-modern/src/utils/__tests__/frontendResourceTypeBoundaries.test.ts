@@ -630,7 +630,10 @@ describe('frontend resource type boundaries', () => {
   it('keeps compatibility handling centralized in shared adapters and edge translators', () => {
     expect(resourceLinksSource).toContain('canonicalizeWorkloadFilterType');
     expect(resourceLinksSource).toContain('normalizeSourcePlatformQueryValue');
-    expect(resourceLinksSource).toContain('export const buildInfrastructureHrefForWorkload');
+    // buildInfrastructureHrefForWorkload was retired with the legacy
+    // /infrastructure route; the workload row no longer cross-jumps to a
+    // separate top-level surface.
+    expect(resourceLinksSource).not.toContain('buildInfrastructureHrefForWorkload');
     expect(resourceLinksSource).not.toContain("normalized === 'docker'");
     expect(resourceLinksSource).not.toContain("normalized === 'k8s'");
     expect(sourcePlatformsSource).toContain('export const normalizeSourcePlatformQueryValue');

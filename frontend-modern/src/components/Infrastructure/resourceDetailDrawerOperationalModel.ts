@@ -1,7 +1,6 @@
 import type { Resource } from '@/types/resource';
 import type { KubernetesMetricCapabilities, PlatformData } from './resourceDetailMappers';
 import { buildServiceDetailLinks, type ServiceDetailLink } from './serviceDetailLinks';
-import { buildResourceSurfaceLinksForResource } from '@/routing/resourceLinks';
 
 export type ResourceDetailDrawerOperationalBadge = {
   label: string;
@@ -195,11 +194,9 @@ export const buildAccessSummary = (options: {
 
 export const buildRelatedLinks = (
   resource: Resource,
-  displayName: string,
+  _displayName: string,
 ): ResourceDetailDrawerOperationalLink[] => {
-  const links: ResourceDetailDrawerOperationalLink[] = [
-    ...buildResourceSurfaceLinksForResource(resource, displayName),
-  ];
+  const links: ResourceDetailDrawerOperationalLink[] = [];
   links.push(...buildServiceDetailLinks(resource));
 
   const seen = new Set<string>();

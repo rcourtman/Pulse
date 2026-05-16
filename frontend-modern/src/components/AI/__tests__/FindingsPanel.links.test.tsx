@@ -196,7 +196,7 @@ describe('FindingsPanel resource links', () => {
     }
   });
 
-  it('surfaces canonical handoff links for TrueNAS workload findings', async () => {
+  it('renders the finding body without legacy surface cross-jump links', async () => {
     render(() => <FindingsPanel />);
 
     await waitFor(() => expect(mockState.loadFindings).toHaveBeenCalled());
@@ -206,15 +206,15 @@ describe('FindingsPanel resource links', () => {
     expect(
       screen.getByText('Nextcloud is unreachable for users until readiness recovers.'),
     ).toBeInTheDocument();
+    // The cross-jump chips to /infrastructure?resource=... and
+    // /workloads?... were retired with the platform-first migration;
+    // Patrol findings now stay in place inside the panel.
     expect(
-      screen.getByRole('link', { name: 'Open related infrastructure for Nextcloud' }),
-    ).toHaveAttribute('href', '/infrastructure?resource=app-container%3Atruenas-main%3Anextcloud');
+      screen.queryByRole('link', { name: 'Open related infrastructure for Nextcloud' }),
+    ).toBeNull();
     expect(
-      screen.getByRole('link', { name: 'Open related workloads for Nextcloud' }),
-    ).toHaveAttribute(
-      'href',
-      '/workloads?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
-    );
+      screen.queryByRole('link', { name: 'Open related workloads for Nextcloud' }),
+    ).toBeNull();
   });
 
   it('keeps finding disclosure separate from inline manual controls', async () => {

@@ -122,7 +122,10 @@ describe('resourceDetailDrawerOperationalModel', () => {
     expect(hasRuntimeOperationalContext([])).toBe(false);
   });
 
-  it('builds canonical related links from workloads and service detail surfaces', () => {
+  it('returns no cross-jump links for docker-host resources after the platform-first migration', () => {
+    // Surface link injection through buildResourceSurfaceLinksForResource was
+    // retired with the standalone /workloads, /storage, /recovery routes;
+    // only service-detail links (PMG thresholds) remain.
     expect(
       buildRelatedLinks(
         baseResource({
@@ -132,17 +135,10 @@ describe('resourceDetailDrawerOperationalModel', () => {
         }),
         'Host 1',
       ),
-    ).toEqual([
-      {
-        href: '/workloads?type=app-container&platform=docker&agent=agent-1',
-        label: 'Open in Workloads',
-        compactLabel: 'Workloads',
-        ariaLabel: 'Open related workloads for Host 1',
-      },
-    ]);
+    ).toEqual([]);
   });
 
-  it('builds canonical workloads and storage links for top-level truenas systems', () => {
+  it('returns no cross-jump links for top-level truenas systems', () => {
     expect(
       buildRelatedLinks(
         baseResource({
@@ -155,29 +151,10 @@ describe('resourceDetailDrawerOperationalModel', () => {
         }),
         'TrueNAS Main',
       ),
-    ).toEqual([
-      {
-        href: '/workloads?type=app-container&platform=truenas&agent=truenas-main',
-        label: 'Open in Workloads',
-        compactLabel: 'Workloads',
-        ariaLabel: 'Open related workloads for TrueNAS Main',
-      },
-      {
-        href: '/storage?source=truenas&node=truenas-main',
-        label: 'Open in Storage',
-        compactLabel: 'Storage',
-        ariaLabel: 'Open related storage for TrueNAS Main',
-      },
-      {
-        href: '/recovery?platform=truenas&node=truenas-main',
-        label: 'Open in Recovery',
-        compactLabel: 'Recovery',
-        ariaLabel: 'Open related recovery for TrueNAS Main',
-      },
-    ]);
+    ).toEqual([]);
   });
 
-  it('builds canonical workloads and storage links for hybrid agent resources with merged truenas sources', () => {
+  it('returns no cross-jump links for hybrid agent resources with merged truenas sources', () => {
     expect(
       buildRelatedLinks(
         baseResource({
@@ -191,26 +168,7 @@ describe('resourceDetailDrawerOperationalModel', () => {
         }),
         'TrueNAS Main',
       ),
-    ).toEqual([
-      {
-        href: '/workloads?type=app-container&platform=truenas&agent=truenas-main',
-        label: 'Open in Workloads',
-        compactLabel: 'Workloads',
-        ariaLabel: 'Open related workloads for TrueNAS Main',
-      },
-      {
-        href: '/storage?source=truenas&node=truenas-main',
-        label: 'Open in Storage',
-        compactLabel: 'Storage',
-        ariaLabel: 'Open related storage for TrueNAS Main',
-      },
-      {
-        href: '/recovery?platform=truenas&node=truenas-main',
-        label: 'Open in Recovery',
-        compactLabel: 'Recovery',
-        ariaLabel: 'Open related recovery for TrueNAS Main',
-      },
-    ]);
+    ).toEqual([]);
   });
 
   it('omits generic host-wide workloads links from drawer quick links', () => {

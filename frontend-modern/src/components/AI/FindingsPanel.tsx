@@ -11,7 +11,7 @@
  */
 
 import { Component, createSignal, createEffect, Show, For, createMemo } from 'solid-js';
-import { A, useLocation } from '@solidjs/router';
+import { useLocation } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligence';
@@ -27,12 +27,10 @@ import {
   type PatrolAssistantApprovalBriefingInput,
   type PatrolAssistantProposedFixBriefingInput,
 } from '@/features/patrol/patrolInvestigationContextModel';
-import { useResources } from '@/hooks/useResources';
 import { InvestigationSection, ApprovalSection } from '@/components/patrol';
 import { AIAPI, type ApprovalRequest, type RemediationPlan } from '@/api/ai';
 import { createSuppressionRuleFromFinding } from '@/api/patrol';
 import type { PatrolRunRecord, PatrolRuntimeState } from '@/api/patrol';
-import { buildResolvedResourceSurfaceLinks } from '@/routing/resourceLinks';
 import { formatRelativeTime } from '@/utils/format';
 import { getFindingAlertIdentifier, hasTriggeringAlert } from '@/utils/findingAlertIdentity';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
@@ -124,7 +122,6 @@ function getFindingSuppressionRuleScope(finding: UnifiedFinding) {
 
 export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const location = useLocation();
-  const { get: getResource } = useResources();
   const [filter, setFilter] = createSignal<
     'all' | 'active' | 'resolved' | 'approvals' | 'attention' | 'overdue'
   >(props.filterOverride ?? 'active');
@@ -781,11 +778,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     const title = getFindingTitlePresentation(finding);
     const manualControls = getFindingManualControlsPresentation(finding);
     const severityPresentation = getFindingSeverityPresentation(finding);
-    const surfaceLinks = buildResolvedResourceSurfaceLinks({
-      resourceId: finding.resourceId,
-      displayName: String(finding.resourceName || '').trim() || subject.label,
-      resource: getResource(finding.resourceId),
-    });
 
     const toggleExpanded = () => {
       if (expandedId() === finding.id) {
@@ -1093,17 +1085,14 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
         {/* Expanded content */}
         <Show when={expandedId() === finding.id}>
-          {renderExpandedContent(finding, surfaceLinks)}
+          {renderExpandedContent(finding)}
         </Show>
       </div>
     );
   };
 
   // Render expanded content for a finding
-  const renderExpandedContent = (
-    finding: UnifiedFinding,
-    surfaceLinks: ReturnType<typeof buildResolvedResourceSurfaceLinks>,
-  ) => {
+  const renderExpandedContent = (finding: UnifiedFinding) => {
     const primaryAction = getFindingPrimaryActionPresentation(finding);
     const manualControls = getFindingManualControlsPresentation(finding);
 
@@ -1121,22 +1110,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </a>
             </div>
           )}
-        </Show>
-        <Show when={surfaceLinks.length > 0}>
-          <div class="mb-3 flex flex-wrap gap-2">
-            <For each={surfaceLinks}>
-              {(link) => (
-                <A
-                  href={link.href}
-                  aria-label={link.ariaLabel}
-                  onClick={(e) => e.stopPropagation()}
-                  class="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-hover hover:text-base-content"
-                >
-                  {link.compactLabel}
-                </A>
-              )}
-            </For>
-          </div>
         </Show>
         <Show when={hasTriggeringAlert(finding)}>
           <div class="text-xs text-amber-700 dark:text-amber-300 mb-2">

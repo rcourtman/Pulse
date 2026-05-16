@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { WorkloadGuest } from '@/types/workloads';
 import {
   AI_PATROL_PATH,
   DOCKER_PATH,
@@ -12,21 +11,13 @@ import {
   TRUENAS_PATH,
   VMWARE_PATH,
   buildDockerPath,
-  buildInfrastructureResourceLink,
-  buildInfrastructureHrefForWorkload,
   buildKubernetesPath,
   buildRecoveryPath,
-  buildRecoveryHrefForResource,
   buildInfrastructurePath,
-  buildInfrastructureResourceHref,
   buildProxmoxPath,
-  buildResolvedResourceSurfaceLinks,
-  buildResourceSurfaceLinksForResource,
-  buildStorageHrefForResource,
   buildStoragePath,
   buildTrueNASPath,
   buildVmwarePath,
-  buildWorkloadsHrefForResource,
   buildWorkloadsPath,
   parseRecoveryLinkSearch,
   INFRASTRUCTURE_QUERY_PARAMS,
@@ -36,31 +27,6 @@ import {
   STORAGE_QUERY_PARAMS,
   WORKLOADS_QUERY_PARAMS,
 } from '@/routing/resourceLinks';
-
-const baseGuest = (overrides: Partial<WorkloadGuest>): WorkloadGuest => ({
-  id: 'guest-1',
-  vmid: 101,
-  name: 'guest-1',
-  node: 'node-1',
-  instance: 'cluster-a',
-  status: 'running',
-  type: 'vm',
-  cpu: 0,
-  cpus: 2,
-  memory: { total: 0, used: 0, free: 0, usage: 0 },
-  disk: { total: 0, used: 0, free: 0, usage: 0 },
-  networkIn: 0,
-  networkOut: 0,
-  diskRead: 0,
-  diskWrite: 0,
-  uptime: 0,
-  template: false,
-  lastBackup: 0,
-  tags: [],
-  lock: '',
-  lastSeen: new Date().toISOString(),
-  ...overrides,
-});
 
 describe('resource link routing contract', () => {
   it('keeps Patrol links on the canonical Patrol route', () => {
@@ -172,138 +138,6 @@ describe('resource link routing contract', () => {
     });
   });
 
-  it('builds canonical infrastructure resource links', () => {
-    expect(buildInfrastructureResourceHref(' resource-123 ')).toBe(
-      '/infrastructure?resource=resource-123',
-    );
-    expect(buildInfrastructureResourceHref('')).toBeNull();
-  });
-
-  it('builds canonical infrastructure resource link metadata', () => {
-    expect(buildInfrastructureResourceLink(' truenas-main ', 'TrueNAS Main')).toEqual({
-      href: '/infrastructure?resource=truenas-main',
-      label: 'Open in Infrastructure',
-      compactLabel: 'Infrastructure',
-      ariaLabel: 'Open related infrastructure for TrueNAS Main',
-    });
-  });
-
-  it('maps vm workloads to proxmox infrastructure source with node query', () => {
-    const href = buildInfrastructureHrefForWorkload(
-      baseGuest({
-        type: 'vm',
-        workloadType: 'vm',
-        node: 'pve1',
-        instance: 'cluster-main',
-      }),
-    );
-    expect(href).toBe('/infrastructure?source=proxmox-pve&q=pve1');
-  });
-
-  it('maps app-container workloads to docker infrastructure source with context query', () => {
-    const href = buildInfrastructureHrefForWorkload(
-      baseGuest({
-        type: 'app-container',
-        workloadType: 'app-container',
-        platformType: 'docker',
-        contextLabel: 'docker-host-1',
-      }),
-    );
-    expect(href).toBe('/infrastructure?source=docker&q=docker-host-1');
-  });
-
-  it('maps TrueNAS app-container workloads to the TrueNAS infrastructure source', () => {
-    const href = buildInfrastructureHrefForWorkload(
-      baseGuest({
-        type: 'app-container',
-        workloadType: 'app-container',
-        platformType: 'truenas',
-        contextLabel: 'truenas-main',
-      }),
-    );
-    expect(href).toBe('/infrastructure?source=truenas&q=truenas-main');
-  });
-
-  it('builds TrueNAS workloads links from canonical unified resources', () => {
-    expect(
-      buildWorkloadsHrefForResource({
-        id: 'truenas-main',
-        type: 'agent',
-        name: 'truenas-main',
-        displayName: 'TrueNAS Main',
-        platformId: 'truenas-main',
-        platformType: 'truenas',
-        sourceType: 'hybrid',
-        status: 'online',
-        lastSeen: Date.now(),
-      } as any),
-    ).toBe('/workloads?type=app-container&platform=truenas&agent=truenas-main');
-  });
-
-  it('builds exact workloads links for TrueNAS app-container resources', () => {
-    expect(
-      buildWorkloadsHrefForResource({
-        id: 'app-container:truenas-main:nextcloud',
-        type: 'app-container',
-        name: 'nextcloud',
-        displayName: 'Nextcloud',
-        parentId: 'truenas-main',
-        platformId: 'truenas-main',
-        platformType: 'truenas',
-        sourceType: 'api',
-        status: 'running',
-        lastSeen: Date.now(),
-      } as any),
-    ).toBe(
-      '/workloads?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
-    );
-  });
-
-  it('builds exact workloads links for Proxmox system-container resources using canonical guest ids', () => {
-    expect(
-      buildWorkloadsHrefForResource({
-        id: 'system-container-45cf61f16a6e2c16',
-        type: 'system-container',
-        name: 'artifact-cache-01',
-        displayName: 'Artifact Cache 01',
-        platformId: 'pve2',
-        platformType: 'proxmox-pve',
-        sourceType: 'api',
-        status: 'online',
-        lastSeen: Date.now(),
-        clusterId: 'Core Fabric',
-        proxmox: {
-          node: 'pve2',
-          instance: 'Core Fabric',
-          vmid: 112,
-        },
-      } as any),
-    ).toBe(
-      '/workloads?type=system-container&platform=proxmox-pve&agent=pve2&resource=Core+Fabric%3Apve2%3A112',
-    );
-  });
-
-  it('maps pod workloads to kubernetes infrastructure source with cluster query', () => {
-    const href = buildInfrastructureHrefForWorkload(
-      baseGuest({
-        type: 'pod',
-        workloadType: 'pod',
-        contextLabel: 'cluster-a',
-      }),
-    );
-    expect(href).toBe('/infrastructure?source=kubernetes&q=cluster-a');
-  });
-
-  it('defaults unknown workload types to proxmox infrastructure compatibility mapping', () => {
-    const href = buildInfrastructureHrefForWorkload(
-      baseGuest({
-        type: 'unknown',
-        workloadType: undefined,
-      }),
-    );
-    expect(href).toBe('/infrastructure?source=proxmox-pve&q=node-1');
-  });
-
   it('builds and parses storage query params', () => {
     const href = buildStoragePath({
       tab: 'disks',
@@ -347,188 +181,6 @@ describe('resource link routing contract', () => {
     expect(STORAGE_QUERY_PARAMS.sort).toBe('sort');
     expect(STORAGE_QUERY_PARAMS.order).toBe('order');
     expect(STORAGE_QUERY_PARAMS.summaryGroup).toBe('summaryGroup');
-  });
-
-  it('builds storage deep links for exact TrueNAS storage resources', () => {
-    const href = buildStorageHrefForResource({
-      id: 'storage-truenas-display',
-      type: 'storage',
-      name: 'tank',
-      displayName: 'tank',
-      platformId: 'truenas-1',
-      platformType: 'truenas',
-      sourceType: 'api',
-      status: 'online',
-      lastSeen: Date.now(),
-      storage: { platform: 'truenas', type: 'zfs-pool' },
-    } as any);
-
-    expect(href).toBe('/storage?source=truenas&resource=storage-truenas-display');
-  });
-
-  it('builds storage deep links for TrueNAS physical disks on the disks tab', () => {
-    const href = buildStorageHrefForResource({
-      id: 'disk:truenas-main:sda',
-      type: 'physical_disk',
-      name: 'sda',
-      displayName: 'Seagate IronWolf',
-      parentId: 'truenas-main',
-      platformId: 'truenas-main',
-      platformType: 'truenas',
-      sourceType: 'api',
-      status: 'online',
-      lastSeen: Date.now(),
-      physicalDisk: {
-        serial: '',
-      },
-    } as any);
-
-    expect(href).toBe(
-      '/storage?tab=disks&source=truenas&node=truenas-main&resource=disk%3Atruenas-main%3Asda',
-    );
-  });
-
-  it('builds storage deep links for top-level TrueNAS systems', () => {
-    const href = buildStorageHrefForResource({
-      id: 'truenas-main',
-      type: 'agent',
-      name: 'truenas-main',
-      displayName: 'TrueNAS Main',
-      platformId: 'truenas-main',
-      platformType: 'truenas',
-      sourceType: 'hybrid',
-      status: 'online',
-      lastSeen: Date.now(),
-    } as any);
-
-    expect(href).toBe('/storage?source=truenas&node=truenas-main');
-  });
-
-  it('builds storage deep links for hybrid agent resources with merged truenas sources', () => {
-    const href = buildStorageHrefForResource({
-      id: 'truenas-main',
-      type: 'agent',
-      name: 'truenas-main',
-      displayName: 'TrueNAS Main',
-      platformId: 'truenas-main',
-      platformType: 'agent',
-      sourceType: 'hybrid',
-      status: 'online',
-      lastSeen: Date.now(),
-      platformData: {
-        sources: ['agent', 'truenas'],
-      },
-    } as any);
-
-    expect(href).toBe('/storage?source=truenas&node=truenas-main');
-  });
-
-  it('builds recovery deep links for top-level TrueNAS systems', () => {
-    const href = buildRecoveryHrefForResource({
-      id: 'truenas-main',
-      type: 'agent',
-      name: 'truenas-main',
-      displayName: 'TrueNAS Main',
-      platformId: 'truenas-main',
-      platformType: 'truenas',
-      sourceType: 'hybrid',
-      status: 'online',
-      lastSeen: Date.now(),
-    } as any);
-
-    expect(href).toBe('/recovery?platform=truenas&node=truenas-main');
-  });
-
-  it('builds recovery deep links for hybrid agent resources with merged truenas sources', () => {
-    const href = buildRecoveryHrefForResource({
-      id: 'truenas-main',
-      type: 'agent',
-      name: 'truenas-main',
-      displayName: 'TrueNAS Main',
-      platformId: 'truenas-main',
-      platformType: 'agent',
-      sourceType: 'hybrid',
-      status: 'online',
-      lastSeen: Date.now(),
-      platformData: {
-        sources: ['agent', 'truenas'],
-      },
-    } as any);
-
-    expect(href).toBe('/recovery?platform=truenas&node=truenas-main');
-  });
-
-  it('builds canonical shared surface links for top-level truenas systems', () => {
-    expect(
-      buildResourceSurfaceLinksForResource(
-        {
-          id: 'truenas-main',
-          type: 'agent',
-          name: 'truenas-main',
-          displayName: 'TrueNAS Main',
-          platformId: 'truenas-main',
-          platformType: 'truenas',
-          sourceType: 'hybrid',
-          status: 'online',
-          lastSeen: Date.now(),
-          platformData: { sources: ['truenas'] },
-        } as any,
-        'TrueNAS Main',
-      ),
-    ).toEqual([
-      {
-        href: '/workloads?type=app-container&platform=truenas&agent=truenas-main',
-        label: 'Open in Workloads',
-        compactLabel: 'Workloads',
-        ariaLabel: 'Open related workloads for TrueNAS Main',
-      },
-      {
-        href: '/storage?source=truenas&node=truenas-main',
-        label: 'Open in Storage',
-        compactLabel: 'Storage',
-        ariaLabel: 'Open related storage for TrueNAS Main',
-      },
-      {
-        href: '/recovery?platform=truenas&node=truenas-main',
-        label: 'Open in Recovery',
-        compactLabel: 'Recovery',
-        ariaLabel: 'Open related recovery for TrueNAS Main',
-      },
-    ]);
-  });
-
-  it('builds canonical surface links for exact TrueNAS app-container resources', () => {
-    expect(
-      buildResolvedResourceSurfaceLinks({
-        resourceId: 'app-container:truenas-main:nextcloud',
-        displayName: 'Nextcloud',
-        resource: {
-          id: 'app-container:truenas-main:nextcloud',
-          type: 'app-container',
-          name: 'nextcloud',
-          displayName: 'Nextcloud',
-          parentId: 'truenas-main',
-          platformId: 'truenas-main',
-          platformType: 'truenas',
-          sourceType: 'api',
-          status: 'running',
-          lastSeen: Date.now(),
-        } as any,
-      }),
-    ).toEqual([
-      {
-        href: '/infrastructure?resource=app-container%3Atruenas-main%3Anextcloud',
-        label: 'Open in Infrastructure',
-        compactLabel: 'Infrastructure',
-        ariaLabel: 'Open related infrastructure for Nextcloud',
-      },
-      {
-        href: '/workloads?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
-        label: 'Open in Workloads',
-        compactLabel: 'Workloads',
-        ariaLabel: 'Open related workloads for Nextcloud',
-      },
-    ]);
   });
 
   it('canonicalizes legacy storage source aliases when parsing links', () => {

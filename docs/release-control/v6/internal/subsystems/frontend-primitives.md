@@ -1354,6 +1354,16 @@ AI runtime.
 
 ## Current State
 
+Cross-jump chip strips on alert and Patrol surfaces were retired on
+2026-05-16 alongside the platform-first migration. The
+`buildResolvedResourceSurfaceLinks` and `buildResourceSurfaceLinksForResource`
+helpers (and the per-surface builders for Infrastructure / Workloads /
+Storage / Recovery hrefs) were deleted from
+`frontend-modern/src/routing/resourceLinks.ts`; the alert resource-incidents
+panel and Patrol findings panel that consumed them now keep investigation
+in-place through their existing handoff buttons and inline actions. Future
+cross-surface drilldown chips must not reanimate the legacy helpers.
+
 Command palette and keyboard shortcuts moved to platform-first on 2026-05-16
 (`frontend-modern/src/components/shared/commandPaletteModel.ts`,
 `frontend-modern/src/components/shared/useCommandPaletteState.ts`,

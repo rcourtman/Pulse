@@ -22,7 +22,10 @@ describe('AlertResourceIncidentsPanel', () => {
     vi.restoreAllMocks();
   });
 
-  it('surfaces canonical investigation handoff links for TrueNAS resources', () => {
+  it('does not surface cross-jump links to the retired top-level routes', () => {
+    // Surface link chips to /infrastructure?resource=...,
+    // /workloads?type=...&platform=..., /storage?source=..., and
+    // /recovery?platform=... were retired with the platform-first migration.
     render(() => (
       <AlertResourceIncidentsPanel
         state={
@@ -74,17 +77,17 @@ describe('AlertResourceIncidentsPanel', () => {
     ));
 
     expect(
-      screen.getByRole('link', { name: 'Open related infrastructure for TrueNAS Main' }),
-    ).toHaveAttribute('href', '/infrastructure?resource=truenas-main');
+      screen.queryByRole('link', { name: 'Open related infrastructure for TrueNAS Main' }),
+    ).toBeNull();
     expect(
-      screen.getByRole('link', { name: 'Open related workloads for TrueNAS Main' }),
-    ).toHaveAttribute('href', '/workloads?type=app-container&platform=truenas&agent=truenas-main');
+      screen.queryByRole('link', { name: 'Open related workloads for TrueNAS Main' }),
+    ).toBeNull();
     expect(
-      screen.getByRole('link', { name: 'Open related storage for TrueNAS Main' }),
-    ).toHaveAttribute('href', '/storage?source=truenas&node=truenas-main');
+      screen.queryByRole('link', { name: 'Open related storage for TrueNAS Main' }),
+    ).toBeNull();
     expect(
-      screen.getByRole('link', { name: 'Open related recovery for TrueNAS Main' }),
-    ).toHaveAttribute('href', '/recovery?platform=truenas&node=truenas-main');
+      screen.queryByRole('link', { name: 'Open related recovery for TrueNAS Main' }),
+    ).toBeNull();
   });
 
   it('opens Assistant from a resource incident without carrying raw command details', () => {

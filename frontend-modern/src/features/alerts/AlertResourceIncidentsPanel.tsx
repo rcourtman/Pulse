@@ -1,14 +1,9 @@
-import { A } from '@solidjs/router';
 import { For, Show } from 'solid-js';
 
 import { IncidentEventFilters } from '@/components/Alerts/IncidentEventFilters';
 import { IncidentAssistantHandoffButton } from '@/components/Alerts/IncidentAssistantHandoffButton';
 import { IncidentTimelineEventCard } from '@/components/Alerts/IncidentTimelineEventCard';
 import { Card } from '@/components/shared/Card';
-import {
-  buildResolvedResourceSurfaceLinks,
-  type ResourceSurfaceLink,
-} from '@/routing/resourceLinks';
 import type { Resource } from '@/types/resource';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import {
@@ -56,14 +51,6 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
           }
           return selection().resourceName;
         };
-        const links = (): ResourceSurfaceLink[] => {
-          return buildResolvedResourceSurfaceLinks({
-            resourceId,
-            displayName: resourceDisplayName(),
-            resource: resource(),
-            allowInfrastructureFallback: true,
-          });
-        };
 
         return (
           <Card padding="md">
@@ -78,21 +65,6 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
                     <span> · {getAlertResourceIncidentCountLabel(incidents().length)}</span>
                   </Show>
                 </p>
-                <Show when={links().length > 0}>
-                  <div class="mt-2 flex flex-wrap gap-2">
-                    <For each={links()}>
-                      {(link) => (
-                        <A
-                          href={link.href}
-                          aria-label={link.ariaLabel}
-                          class="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-hover hover:text-base-content"
-                        >
-                          {link.compactLabel}
-                        </A>
-                      )}
-                    </For>
-                  </div>
-                </Show>
               </div>
               <div class="flex items-center gap-2">
                 <button

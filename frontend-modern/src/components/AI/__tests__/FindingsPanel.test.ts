@@ -661,15 +661,15 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('href={action().href}');
     });
 
-    it('resolves unified resources and shared route links for expanded finding handoffs', () => {
-      expect(findingsPanelSource).toContain("import { useResources } from '@/hooks/useResources';");
-      expect(findingsPanelSource).toContain(
-        "import { buildResolvedResourceSurfaceLinks } from '@/routing/resourceLinks';",
-      );
-      expect(findingsPanelSource).toContain('const { get: getResource } = useResources();');
-      expect(findingsPanelSource).toContain('buildResolvedResourceSurfaceLinks({');
-      expect(findingsPanelSource).toContain('resource: getResource(finding.resourceId)');
-      expect(findingsPanelSource).toContain('{link.compactLabel}');
+    it('does not cross-jump expanded findings to the retired top-level Infrastructure/Workloads/Storage/Recovery routes', () => {
+      // The platform-first migration retired buildResolvedResourceSurfaceLinks
+      // alongside the standalone /infrastructure, /workloads, /storage, and
+      // /recovery routes; Patrol findings now stay in place rather than
+      // offering external surface jumps.
+      expect(findingsPanelSource).not.toContain("from '@/hooks/useResources'");
+      expect(findingsPanelSource).not.toContain('buildResolvedResourceSurfaceLinks');
+      expect(findingsPanelSource).not.toContain('useResources()');
+      expect(findingsPanelSource).not.toContain('{link.compactLabel}');
     });
 
     it('routes generic finding controls through the shared manual-controls helper', () => {

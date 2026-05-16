@@ -470,11 +470,14 @@ describe('tab path helpers', () => {
     );
     expect(alertResourceIncidentsPanelSource).toContain('IncidentEventFilters');
     expect(alertResourceIncidentsPanelSource).toContain('IncidentTimelineEventCard');
-    expect(alertResourceIncidentsPanelSource).toContain('buildResolvedResourceSurfaceLinks');
-    expect(alertResourceIncidentsPanelSource).toContain('allowInfrastructureFallback: true');
+    // Cross-jump links to the legacy top-level Infrastructure / Workloads /
+    // Storage / Recovery routes were retired with the platform-first
+    // migration; the incidents panel no longer renders surface-link chips.
+    expect(alertResourceIncidentsPanelSource).not.toContain('buildResolvedResourceSurfaceLinks');
+    expect(alertResourceIncidentsPanelSource).not.toContain('allowInfrastructureFallback');
     expect(alertResourceIncidentsPanelSource).not.toContain('buildInfrastructureResourceLink');
     expect(alertResourceIncidentsPanelSource).not.toContain('buildResourceSurfaceLinksForResource');
-    expect(alertResourceIncidentsPanelSource).toContain('{link.compactLabel}');
+    expect(alertResourceIncidentsPanelSource).not.toContain('{link.compactLabel}');
     expect(alertResourceIncidentsPanelSource).toContain('IncidentAssistantHandoffButton');
     expect(incidentTimelinePanelSource).toContain('IncidentAssistantHandoffButton');
     expect(incidentAssistantHandoffButtonSource).toContain('buildAlertIncidentAssistantHandoff');

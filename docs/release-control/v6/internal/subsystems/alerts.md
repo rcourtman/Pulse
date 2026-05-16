@@ -142,6 +142,17 @@ operator-facing alert routing behavior for live runtime alerts.
 
 ## Current State
 
+The alert resource-incident panel
+(`frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`)
+dropped its "Open in Infrastructure / Workloads / Storage / Recovery"
+cross-jump chip strip on 2026-05-16 when the surrounding platform-first
+migration retired the underlying top-level routes. The panel now keeps
+investigation flow in-place through `IncidentAssistantHandoffButton` and the
+shared incident-timeline cards; it must not reintroduce a chip strip that
+links to the retired top-level routes, and the supporting
+`buildResolvedResourceSurfaceLinks` helper was deleted from
+`frontend-modern/src/routing/resourceLinks.ts` as part of the same pass.
+
 Alert browser surfaces no longer manage their own runtime-capabilities fetch or
 `hasAIAlertsFeature` prop chain. `frontend-modern/src/pages/Alerts.tsx` and the
 shared alert overview surfaces (`OverviewTab.tsx`, `HistoryTab.tsx`,

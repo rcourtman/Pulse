@@ -1075,6 +1075,17 @@ bypass the API fail-closed execution gate.
 
 ## Current State
 
+The Storage and Recovery cross-jump builders
+(`buildStorageHrefForResource`, `buildRecoveryHrefForResource`) were deleted
+from `frontend-modern/src/routing/resourceLinks.ts` on 2026-05-16 alongside
+the platform-first migration. The chip strips that previously rendered them
+inside the alert resource-incidents panel and Patrol findings panel were
+retired in the same pass; storage and recovery drilldowns now stay inside
+the platform-page sub-tabs rather than offering external surface jumps.
+Future cross-surface storage or recovery affordances must compose against
+the embedded `StorageSurface` / `RecoverySurface` consumers rather than
+reintroducing top-level URL builders.
+
 Storage and Recovery can now be embedded by a platform page in table-only mode
 with a forced Proxmox source/platform filter. The embedded mode suppresses
 standalone page chrome, summary charts, and full filter chrome, but the

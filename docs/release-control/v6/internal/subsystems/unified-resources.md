@@ -701,6 +701,19 @@ AI-only summary payloads, or page-local heuristics.
 
 ## Current State
 
+The resource detail drawer's "Open in Workloads / Storage / Recovery"
+related-links injection
+(`frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts`'s
+`buildRelatedLinks`) was retired on 2026-05-16 alongside the platform-first
+migration: the function now returns only service-detail links (PMG
+thresholds). The supporting
+`buildResourceSurfaceLinksForResource` /
+`buildWorkloadsHrefForResource` / `buildStorageHrefForResource` /
+`buildRecoveryHrefForResource` helpers were deleted from
+`frontend-modern/src/routing/resourceLinks.ts`. New drawer affordances must
+compose against the embedded platform-page sub-tabs rather than rebuilding
+cross-jump URLs.
+
 Cross-resource drilldown affordances were retired on 2026-05-16 alongside the
 platform-first primary nav. The default `buildResourceHref` in
 `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
