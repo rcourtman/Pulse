@@ -5,12 +5,12 @@ import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
-  PlatformResourceTable,
   PlatformSectionTabs,
   PlatformTableEmptyState,
 } from '@/features/platformPage/sharedPlatformPage';
 import { KubernetesClustersTable } from './KubernetesClustersTable';
 import { KubernetesDeploymentsTable } from './KubernetesDeploymentsTable';
+import { KubernetesNodesTable } from './KubernetesNodesTable';
 import {
   KUBERNETES_TAB_SPECS,
   buildKubernetesPageModel,
@@ -90,7 +90,7 @@ export function KubernetesPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'nodes'}>
-              <PlatformResourceTable
+              <KubernetesNodesTable
                 resources={model().nodes}
                 emptyIcon={k8sIcon()}
                 emptyTitle="No nodes reported"

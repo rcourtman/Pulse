@@ -562,6 +562,24 @@ export interface ResourceKubernetesMeta {
   // Clusters table for at-a-glance fleet posture.
   version?: string;
   server?: string;
+  // Node-only fields surfaced on the Kubernetes platform-page Nodes
+  // table. The canonical adapter populates these on `k8s-node` rows
+  // and on `agent` rows whose linked host has been merged into a K8s
+  // node by the backend registry.
+  nodeUid?: string;
+  kubeletVersion?: string;
+  containerRuntimeVersion?: string;
+  osImage?: string;
+  architecture?: string;
+  kernelVersion?: string;
+  roles?: string[];
+  ready?: boolean;
+  capacityCpuCores?: number;
+  allocatableCpuCores?: number;
+  capacityMemoryBytes?: number;
+  allocatableMemoryBytes?: number;
+  capacityPods?: number;
+  allocatablePods?: number;
 }
 
 export interface ResourceVMwareMeta {
