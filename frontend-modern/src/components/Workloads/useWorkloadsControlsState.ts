@@ -33,6 +33,14 @@ import {
 
 interface WorkloadsControlsStateOptions {
   forcedGroupingMode?: WorkloadsGroupingMode;
+  // When a platform page owns the metric display mode (e.g. Proxmox
+  // overview shares it across a top hosts table and the embedded workloads
+  // surface), pass the accessor + change handler so the controls track the
+  // page-level state instead of forking a local persistent signal.
+  metricDisplayMode?: Accessor<WorkloadsMetricDisplayMode>;
+  onMetricDisplayModeChange?: (value: WorkloadsMetricDisplayMode) => void;
+  metricHistoryRange?: Accessor<WorkloadTableMetricHistoryRange>;
+  onMetricHistoryRangeChange?: (value: WorkloadTableMetricHistoryRange) => void;
   setShowFilters: (value: boolean | ((current: boolean) => boolean)) => void;
   showFilters: Accessor<boolean>;
   viewMode: Accessor<ViewMode>;
@@ -80,7 +88,7 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     false,
     { deserialize: (raw) => raw === 'true' },
   );
-  const [workloadMetricDisplayMode, setWorkloadMetricDisplayMode] =
+  const [internalMetricDisplayMode, setInternalMetricDisplayMode] =
     usePersistentSignal<WorkloadsMetricDisplayMode>(
       STORAGE_KEYS.WORKLOADS_METRIC_DISPLAY_MODE,
       DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
@@ -89,7 +97,17 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
           raw === 'bars' || raw === 'sparklines' ? raw : DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
       },
     );
-  const [workloadMetricHistoryRange, setWorkloadMetricHistoryRange] =
+  const workloadMetricDisplayMode: Accessor<WorkloadsMetricDisplayMode> =
+    options.metricDisplayMode ?? internalMetricDisplayMode;
+  const setWorkloadMetricDisplayMode = (value: WorkloadsMetricDisplayMode): void => {
+    if (options.onMetricDisplayModeChange) {
+      options.onMetricDisplayModeChange(value);
+      return;
+    }
+    setInternalMetricDisplayMode(value);
+  };
+
+  const [internalMetricHistoryRange, setInternalMetricHistoryRange] =
     usePersistentSignal<WorkloadTableMetricHistoryRange>(
       STORAGE_KEYS.WORKLOADS_METRIC_HISTORY_RANGE,
       WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE,
@@ -98,6 +116,15 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
           isWorkloadTableMetricHistoryRange(raw) ? raw : WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE,
       },
     );
+  const workloadMetricHistoryRange: Accessor<WorkloadTableMetricHistoryRange> =
+    options.metricHistoryRange ?? internalMetricHistoryRange;
+  const setWorkloadMetricHistoryRange = (value: WorkloadTableMetricHistoryRange): void => {
+    if (options.onMetricHistoryRangeChange) {
+      options.onMetricHistoryRangeChange(value);
+      return;
+    }
+    setInternalMetricHistoryRange(value);
+  };
 
   const [sortKey, setSortKey] = createSignal<WorkloadsSortKey | null>(DEFAULT_WORKLOADS_SORT_KEY);
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>(

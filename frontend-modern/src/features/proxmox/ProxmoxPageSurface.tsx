@@ -3,9 +3,20 @@ import TriangleAlertIcon from 'lucide-solid/icons/triangle-alert';
 import { For, Show, createMemo } from 'solid-js';
 import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
+import {
+  DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
+  type WorkloadsMetricDisplayMode,
+} from '@/components/Workloads/workloadsFilterModel';
+import {
+  WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE,
+  isWorkloadTableMetricHistoryRange,
+  type WorkloadTableMetricHistoryRange,
+} from '@/components/Workloads/workloadMetricHistoryModel';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { TableCard } from '@/components/shared/TableCard';
+import { usePersistentSignal } from '@/hooks/usePersistentSignal';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 import { ProxmoxBackupsTable } from './ProxmoxBackupsTable';
 import { ProxmoxCephTable } from './ProxmoxCephTable';
 import { ProxmoxMailGatewayTable } from './ProxmoxMailGatewayTable';
@@ -83,6 +94,31 @@ export function ProxmoxPageSurface() {
   });
   const model = createMemo(() => buildProxmoxPageModel(resources()));
 
+  // The hosts table at the top and the embedded WorkloadsSurface below share
+  // the bars/sparklines toggle (and the sparkline history range that ships
+  // with it). Owning the persistent signals at the page level lets one
+  // segmented control in the workloads filter drive both tables; the surface
+  // accepts these as overrides so it skips its own internal persistent
+  // signal and tracks the shared state directly.
+  const [metricDisplayMode, setMetricDisplayMode] =
+    usePersistentSignal<WorkloadsMetricDisplayMode>(
+      STORAGE_KEYS.WORKLOADS_METRIC_DISPLAY_MODE,
+      DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
+      {
+        deserialize: (raw) =>
+          raw === 'bars' || raw === 'sparklines' ? raw : DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
+      },
+    );
+  const [metricHistoryRange, setMetricHistoryRange] =
+    usePersistentSignal<WorkloadTableMetricHistoryRange>(
+      STORAGE_KEYS.WORKLOADS_METRIC_HISTORY_RANGE,
+      WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE,
+      {
+        deserialize: (raw) =>
+          isWorkloadTableMetricHistoryRange(raw) ? raw : WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE,
+      },
+    );
+
   return (
     <div data-testid="proxmox-page" class="space-y-3">
       <ProxmoxSectionTabs active={activeTab()} />
@@ -133,6 +169,8 @@ export function ProxmoxPageSurface() {
                 <ProxmoxNodesTable
                   nodes={model().pveNodes}
                   guests={model().guests}
+                  metricDisplayMode={metricDisplayMode}
+                  metricHistoryRange={metricHistoryRange}
                   emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
                   emptyTitle="No Proxmox VE nodes"
                   emptyDescription="Proxmox VE nodes appear here once a PVE host reports inventory."
@@ -148,6 +186,10 @@ export function ProxmoxPageSurface() {
                   suppressPlatformFilter
                   forcedPlatform={PROXMOX_PLATFORM_FILTER}
                   compactGroupHeaders
+                  metricDisplayMode={metricDisplayMode}
+                  onMetricDisplayModeChange={setMetricDisplayMode}
+                  metricHistoryRange={metricHistoryRange}
+                  onMetricHistoryRangeChange={setMetricHistoryRange}
                 />
               </div>
             </Show>

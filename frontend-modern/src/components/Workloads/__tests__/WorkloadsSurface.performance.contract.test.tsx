@@ -364,6 +364,49 @@ describe('Workloads platform-page embed contract', () => {
     expect(surfaceSource).toContain('props.showFilterToolbar || !props.tableOnly');
   });
 
+  it('exposes metric-display-mode + history-range override hooks so platform pages can share the toggle across multiple tables', async () => {
+    const stateSource = (await import('../useWorkloadsState.ts?raw')).default;
+    expect(stateSource).toContain('metricDisplayMode?: Accessor<WorkloadsMetricDisplayMode>;');
+    expect(stateSource).toContain(
+      'onMetricDisplayModeChange?: (value: WorkloadsMetricDisplayMode) => void;',
+    );
+    expect(stateSource).toContain('metricHistoryRange?: Accessor<WorkloadTableMetricHistoryRange>;');
+    expect(stateSource).toContain(
+      'onMetricHistoryRangeChange?: (value: WorkloadTableMetricHistoryRange) => void;',
+    );
+    expect(stateSource).toContain('metricDisplayMode: props.metricDisplayMode,');
+    expect(stateSource).toContain('onMetricDisplayModeChange: props.onMetricDisplayModeChange,');
+
+    const controlsSource = (await import('../useWorkloadsControlsState.ts?raw')).default;
+    // The controls layer must short-circuit to the page-provided accessor +
+    // change handler when supplied; the internal persistent signal stays as
+    // the fallback so standalone usage keeps working.
+    expect(controlsSource).toContain(
+      'options.metricDisplayMode ?? internalMetricDisplayMode',
+    );
+    expect(controlsSource).toContain('options.onMetricDisplayModeChange');
+    expect(controlsSource).toContain(
+      'options.metricHistoryRange ?? internalMetricHistoryRange',
+    );
+
+    const proxmoxSource = (
+      await import('../../../features/proxmox/ProxmoxPageSurface.tsx?raw')
+    ).default;
+    expect(proxmoxSource).toContain('STORAGE_KEYS.WORKLOADS_METRIC_DISPLAY_MODE');
+    expect(proxmoxSource).toContain('STORAGE_KEYS.WORKLOADS_METRIC_HISTORY_RANGE');
+    expect(proxmoxSource).toContain('metricDisplayMode={metricDisplayMode}');
+    expect(proxmoxSource).toContain('onMetricDisplayModeChange={setMetricDisplayMode}');
+    expect(proxmoxSource).toContain('metricHistoryRange={metricHistoryRange}');
+    expect(proxmoxSource).toContain('onMetricHistoryRangeChange={setMetricHistoryRange}');
+
+    const nodesTableSource = (
+      await import('../../../features/proxmox/ProxmoxNodesTable.tsx?raw')
+    ).default;
+    expect(nodesTableSource).toContain('useWorkloadTableMetricHistory');
+    expect(nodesTableSource).toContain('MetricMiniSparkline');
+    expect(nodesTableSource).toContain('isSparklineMode');
+  });
+
   it('exposes compactGroupHeaders so platform pages can strip duplicate host stats from group rows', async () => {
     const stateSource = (await import('../useWorkloadsState.ts?raw')).default;
     expect(stateSource).toContain('compactGroupHeaders?: boolean;');

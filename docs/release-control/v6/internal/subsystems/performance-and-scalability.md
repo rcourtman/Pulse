@@ -580,6 +580,26 @@ shell clickable behind another overlay.
 
 ## Current State
 
+The bars / sparklines toggle and its sparkline-range picker on the
+WorkloadsSurface support page-level ownership through four optional
+overrides exposed by
+`frontend-modern/src/components/Workloads/useWorkloadsState.ts`:
+`metricDisplayMode`, `onMetricDisplayModeChange`, `metricHistoryRange`,
+and `onMetricHistoryRangeChange`. When a platform page renders a
+sibling table that also reacts to bars/sparklines (Proxmox overview's
+top hosts table today), the page owns the persistent signals against
+`STORAGE_KEYS.WORKLOADS_METRIC_DISPLAY_MODE` /
+`STORAGE_KEYS.WORKLOADS_METRIC_HISTORY_RANGE` and passes the accessors
++ change handlers into both surfaces. `useWorkloadsControlsState` then
+short-circuits to the supplied accessor / handler instead of its
+internal persistent signal so the toggle and the hosts-table render
+stay in lockstep. Embedded sibling tables that opt into sparklines
+re-instantiate `useWorkloadTableMetricHistory`; the cache key matches
+the workloads-table reader so both readers dedupe their fetches and
+the canonical Workloads hot-path budget is preserved. Standalone
+WorkloadsSurface callers (no override props) keep the original
+persistent-signal-backed behavior.
+
 The embedded WorkloadsSurface exposes a `compactGroupHeaders` prop on
 `frontend-modern/src/components/Workloads/useWorkloadsState.ts` that
 platform pages owning their own hosts table (Proxmox overview today) set

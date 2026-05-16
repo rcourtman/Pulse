@@ -1,4 +1,4 @@
-import { createEffect, createMemo, onCleanup } from 'solid-js';
+import { createEffect, createMemo, onCleanup, type Accessor } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { ConnectionsAPI, type ConnectionsListResponse } from '@/api/connections';
 import type { VM, Container, Node } from '@/types/api';
@@ -26,7 +26,12 @@ import {
   filterWorkloads,
   type FilterWorkloadsParams,
 } from './workloadSelectors';
-import { type WorkloadsGroupingMode, type WorkloadsSortKey } from './workloadsFilterModel';
+import {
+  type WorkloadsGroupingMode,
+  type WorkloadsMetricDisplayMode,
+  type WorkloadsSortKey,
+} from './workloadsFilterModel';
+import { type WorkloadTableMetricHistoryRange } from './workloadMetricHistoryModel';
 import { useWorkloadsControlsState } from './useWorkloadsControlsState';
 import { useWorkloadGuestMetadataState } from './useWorkloadGuestMetadataState';
 import { useWorkloadSelectionState } from './useWorkloadSelectionState';
@@ -72,6 +77,15 @@ export interface WorkloadsSurfaceProps {
   // `compactGroupHeaders` strips those stats from the NodeGroupHeader rows
   // in grouped mode so the section dividers don't duplicate the info.
   compactGroupHeaders?: boolean;
+  // When a platform page owns the metric display mode + sparkline range
+  // (so the same toggle drives both the page's hosts table and this
+  // embedded workloads surface), pass the accessors + change handlers.
+  // The page is responsible for persisting the values; when omitted, the
+  // surface falls back to its own persistent signals.
+  metricDisplayMode?: Accessor<WorkloadsMetricDisplayMode>;
+  onMetricDisplayModeChange?: (value: WorkloadsMetricDisplayMode) => void;
+  metricHistoryRange?: Accessor<WorkloadTableMetricHistoryRange>;
+  onMetricHistoryRangeChange?: (value: WorkloadTableMetricHistoryRange) => void;
 }
 
 export type WorkloadSortKey = WorkloadsSortKey;
@@ -192,6 +206,10 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     setWorkloadsSummaryRange,
   } = useWorkloadsControlsState({
     forcedGroupingMode: props.forcedGroupingMode,
+    metricDisplayMode: props.metricDisplayMode,
+    onMetricDisplayModeChange: props.onMetricDisplayModeChange,
+    metricHistoryRange: props.metricHistoryRange,
+    onMetricHistoryRangeChange: props.onMetricHistoryRangeChange,
     setShowFilters,
     showFilters,
     viewMode,
