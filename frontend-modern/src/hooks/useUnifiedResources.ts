@@ -9,6 +9,7 @@ import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type {
   Resource,
   ResourceAgentUnraidMeta,
+  ResourceCephMeta,
   ResourceChange,
   ResourceFacetCounts,
   ResourceDiscoveryTarget,
@@ -678,6 +679,7 @@ const toResource = (v2: APIResource): Resource => {
     availability: v2.availability as ResourceAvailabilityMeta | undefined,
     physicalDisk: v2.physicalDisk,
     storage: v2.storage as ResourceStorageMeta | undefined,
+    ceph: v2.ceph as ResourceCephMeta | undefined,
     proxmox: v2.proxmox
       ? {
           vmid: v2.proxmox.vmid,
