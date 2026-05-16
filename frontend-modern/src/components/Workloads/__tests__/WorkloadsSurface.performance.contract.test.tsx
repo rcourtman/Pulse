@@ -363,6 +363,35 @@ describe('Workloads platform-page embed contract', () => {
     const surfaceSource = (await import('../WorkloadsSurface.tsx?raw')).default;
     expect(surfaceSource).toContain('props.showFilterToolbar || !props.tableOnly');
   });
+
+  it('exposes compactGroupHeaders so platform pages can strip duplicate host stats from group rows', async () => {
+    const stateSource = (await import('../useWorkloadsState.ts?raw')).default;
+    expect(stateSource).toContain('compactGroupHeaders?: boolean;');
+    expect(stateSource).toContain(
+      'compactGroupHeaders: () => props.compactGroupHeaders === true,',
+    );
+
+    const tableSource = (await import('../WorkloadsTable.tsx?raw')).default;
+    expect(tableSource).toContain(`| 'compactGroupHeaders'`);
+    expect(tableSource).toContain('compactGroupHeaders={props.compactGroupHeaders}');
+
+    const panelSource = (await import('../WorkloadPanel.tsx?raw')).default;
+    expect(panelSource).toContain(`| 'compactGroupHeaders'`);
+    // When the flag is set the panel falls back to NodeGroupHeader's
+    // colspan layout: no per-column metric cells, no inline node facts.
+    expect(panelSource).toContain(
+      'props.compactGroupHeaders() ? undefined : props.workloadTableVisibleColumns()',
+    );
+    expect(panelSource).toContain(
+      'props.compactGroupHeaders() ? undefined : renderGroupNodeColumnCell',
+    );
+    expect(panelSource).toContain('!props.compactGroupHeaders() &&');
+
+    const proxmoxSource = (
+      await import('../../../features/proxmox/ProxmoxPageSurface.tsx?raw')
+    ).default;
+    expect(proxmoxSource).toContain('compactGroupHeaders');
+  });
 });
 
 describe('Workloads performance contract', () => {

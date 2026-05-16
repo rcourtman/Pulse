@@ -16,6 +16,7 @@ type WorkloadsTableProps = Pick<
   | 'activeAlerts'
   | 'alertsEnabled'
   | 'bottomSpacerHeight'
+  | 'compactGroupHeaders'
   | 'getGroupLabel'
   | 'groupedGuests'
   | 'groupedWindowing'
@@ -118,6 +119,7 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             activeAlerts={props.activeAlerts}
             alertsEnabled={props.alertsEnabled}
             bottomSpacerHeight={props.bottomSpacerHeight}
+            compactGroupHeaders={props.compactGroupHeaders}
             getGroupLabel={props.getGroupLabel}
             groupedGuests={props.groupedGuests}
             groupedWindowing={props.groupedWindowing}

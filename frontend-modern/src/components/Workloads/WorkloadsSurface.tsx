@@ -131,6 +131,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
             alertsEnabled={state.alertsEnabled}
             bottomSpacerHeight={state.bottomSpacerHeight}
             clearPinnedSummaryScope={state.clearPinnedSummaryScope}
+            compactGroupHeaders={state.compactGroupHeaders}
             getGroupLabel={state.getGroupLabel}
             groupedGuests={state.groupedGuests}
             groupedWindowing={state.groupedWindowing}

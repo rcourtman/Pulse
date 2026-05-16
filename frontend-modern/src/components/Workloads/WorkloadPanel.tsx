@@ -37,6 +37,7 @@ type WorkloadPanelProps = Pick<
   | 'activeAlerts'
   | 'alertsEnabled'
   | 'bottomSpacerHeight'
+  | 'compactGroupHeaders'
   | 'getGroupLabel'
   | 'groupedGuests'
   | 'groupedWindowing'
@@ -427,10 +428,17 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                     node={node()!}
                     renderAs="tr"
                     colspan={props.totalColumns()}
-                    columns={props.workloadTableVisibleColumns()}
-                    columnCellClass={getGroupNodeColumnCellClass}
-                    renderColumnCell={renderGroupNodeColumnCell}
-                    showFactsInName={!props.workloadTableVisibleColumnIds().includes('info')}
+                    columns={props.compactGroupHeaders() ? undefined : props.workloadTableVisibleColumns()}
+                    columnCellClass={
+                      props.compactGroupHeaders() ? undefined : getGroupNodeColumnCellClass
+                    }
+                    renderColumnCell={
+                      props.compactGroupHeaders() ? undefined : renderGroupNodeColumnCell
+                    }
+                    showFactsInName={
+                      !props.compactGroupHeaders() &&
+                      !props.workloadTableVisibleColumnIds().includes('info')
+                    }
                     trClass="cursor-pointer select-none duration-150"
                     trProps={{
                       'aria-expanded': shouldShowNodeDrawer() ? 'true' : 'false',

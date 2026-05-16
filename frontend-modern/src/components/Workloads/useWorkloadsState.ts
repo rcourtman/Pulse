@@ -66,6 +66,12 @@ export interface WorkloadsSurfaceProps {
   // filter row since the platform is already fixed by the owning page.
   showFilterToolbar?: boolean;
   suppressPlatformFilter?: boolean;
+  // Platform pages that render their own hosts table above the embedded
+  // workloads surface (e.g. Proxmox overview) own the per-host CPU / Memory
+  // / Disk / Temperature / uptime / version stats. Setting
+  // `compactGroupHeaders` strips those stats from the NodeGroupHeader rows
+  // in grouped mode so the section dividers don't duplicate the info.
+  compactGroupHeaders?: boolean;
 }
 
 export type WorkloadSortKey = WorkloadsSortKey;
@@ -481,6 +487,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     workloadsNoInventoryState,
     ws,
     groupingMode,
+    compactGroupHeaders: () => props.compactGroupHeaders === true,
   } as const;
 }
 

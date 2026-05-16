@@ -580,6 +580,23 @@ shell clickable behind another overlay.
 
 ## Current State
 
+The embedded WorkloadsSurface exposes a `compactGroupHeaders` prop on
+`frontend-modern/src/components/Workloads/useWorkloadsState.ts` that
+platform pages owning their own hosts table (Proxmox overview today) set
+to strip per-host metric cells out of the `NodeGroupHeader` rows in
+grouped mode. The flag is threaded through
+`frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`,
+`frontend-modern/src/components/Workloads/WorkloadsTable.tsx`, and
+`frontend-modern/src/components/Workloads/WorkloadPanel.tsx`; when set,
+`WorkloadPanel` calls `NodeGroupHeader` without `columns` /
+`renderColumnCell` so the existing colspan layout renders just the
+status dot, linked node name, cluster badge, and agent badge — the
+duplicate CPU / Memory / Disk / uptime / temperature / version stats
+the top-of-page hosts table already owns are dropped. New embedded
+platform-page consumers that render their own hosts summary must set
+this flag; standalone Workloads surfaces (no top hosts table) keep the
+original verbose group rows by default.
+
 The Workloads table metric display mode is part of the protected Workloads
 hot path. The default bar mode must keep the existing zero-extra-history cost;
 the sparkline mode may hydrate a short shared history window only when selected

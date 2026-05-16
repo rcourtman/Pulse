@@ -147,6 +147,7 @@ export function ProxmoxPageSurface() {
                   showFilterToolbar
                   suppressPlatformFilter
                   forcedPlatform={PROXMOX_PLATFORM_FILTER}
+                  compactGroupHeaders
                 />
               </div>
             </Show>
