@@ -599,6 +599,72 @@ export interface ReplicationJob {
   polledAt?: number;
 }
 
+export interface ReplicationJobsResponse {
+  data: ReplicationJob[];
+  meta: { total: number };
+}
+
+export interface BackupTask {
+  id: string;
+  node: string;
+  instance: string;
+  type: string;
+  vmid: number;
+  status: string;
+  startTime: string;
+  endTime?: string;
+  size?: number;
+  error?: string;
+}
+
+export interface StorageBackup {
+  id: string;
+  storage: string;
+  node: string;
+  instance: string;
+  type: string;
+  vmid: number;
+  time: string;
+  ctime: number;
+  size: number;
+  format: string;
+  notes?: string;
+  protected: boolean;
+  volid: string;
+  isPBS: boolean;
+  verified: boolean;
+  verification?: string;
+}
+
+export interface GuestSnapshot {
+  id: string;
+  name: string;
+  node: string;
+  instance: string;
+  type: string;
+  vmid: number;
+  time: string;
+  description?: string;
+  parent?: string;
+  vmstate: boolean;
+  sizeBytes?: number;
+}
+
+export interface PVEBackupsPayload {
+  backupTasks: BackupTask[];
+  storageBackups: StorageBackup[];
+  guestSnapshots: GuestSnapshot[];
+}
+
+export interface PVEBackupsResponse {
+  data: PVEBackupsPayload;
+  meta: {
+    totalBackupTasks: number;
+    totalStorageBackups: number;
+    totalGuestSnapshots: number;
+  };
+}
+
 export interface Storage {
   id: string;
   name: string;

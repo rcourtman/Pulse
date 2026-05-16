@@ -1,13 +1,14 @@
 import { A, useLocation } from '@solidjs/router';
 import TriangleAlertIcon from 'lucide-solid/icons/triangle-alert';
 import { For, Show, createMemo } from 'solid-js';
-import RecoverySurface from '@/components/Recovery/Recovery';
 import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { TableCard } from '@/components/shared/TableCard';
+import { ProxmoxBackupsTable } from './ProxmoxBackupsTable';
 import { ProxmoxMailGatewayTable } from './ProxmoxMailGatewayTable';
+import { ProxmoxReplicationTable } from './ProxmoxReplicationTable';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PROXMOX_TAB_SPECS,
@@ -148,10 +149,16 @@ export function ProxmoxPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'replication'}>
-              <RecoverySurface embedded tableOnly forcedPlatformFilter={PROXMOX_PLATFORM_FILTER} />
+              <ProxmoxReplicationTable
+                emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
+                emptyTitle="No replication jobs"
+                emptyDescription="Replication jobs appear here once PVE is configured to replicate guests between nodes."
+              />
             </Show>
             <Show when={activeTab() === 'backups'}>
-              <RecoverySurface embedded tableOnly forcedPlatformFilter={PROXMOX_PLATFORM_FILTER} />
+              <ProxmoxBackupsTable
+                emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
+              />
             </Show>
             <Show when={activeTab() === 'ceph'}>
               <StorageSurface
