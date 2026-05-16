@@ -35,12 +35,12 @@ function classifyService(svc: ResourceCephServiceMeta): {
 
 function ClusterMetric(props: { label: string; value: string | number; sub?: string }) {
   return (
-    <div class="rounded-sm border border-border bg-surface-alt px-3 py-2">
-      <div class="text-[10px] uppercase tracking-wide text-muted">{props.label}</div>
-      <div class="mt-0.5 text-base font-semibold text-base-content tabular-nums">
-        {props.value}
+    <div class="min-w-0 rounded-sm border border-border bg-surface-alt px-3 py-2">
+      <div class="truncate text-[10px] uppercase tracking-wide text-muted">{props.label}</div>
+      <div class="mt-0.5 flex items-baseline gap-1 truncate text-base font-semibold text-base-content tabular-nums">
+        <span class="truncate">{props.value}</span>
         <Show when={props.sub}>
-          <span class="ml-1 text-[10px] font-normal text-muted">{props.sub}</span>
+          <span class="truncate text-[10px] font-normal text-muted">{props.sub}</span>
         </Show>
       </div>
     </div>
@@ -78,13 +78,18 @@ export const ProxmoxCephClusterDrawer: Component<{
   return (
     <div class="space-y-4">
       <header class="flex items-start justify-between gap-3">
-        <div class="space-y-1">
-          <div class="flex items-center gap-2">
+        <div class="min-w-0 space-y-1">
+          <div class="flex items-center gap-2 min-w-0">
             <StatusDot size="md" variant={health().variant} title={health().label} ariaHidden />
-            <h3 class="text-sm font-semibold text-base-content">
+            <h3 class="truncate text-sm font-semibold text-base-content">
               {asTrimmedString(props.cluster.name) || props.cluster.id}
             </h3>
-            <span class="text-[10px] font-mono text-muted">{meta()?.healthStatus ?? ''}</span>
+            <span class="shrink-0 text-[10px] font-mono text-muted">
+              {meta()?.healthStatus ?? ''}
+            </span>
+          </div>
+          <div class="font-mono text-[10px] text-muted">
+            FSID <span class="break-all">{fsid()}</span>
           </div>
           <Show when={meta()?.healthMessage}>
             <p class="text-xs text-amber-700 dark:text-amber-300">{meta()?.healthMessage}</p>
@@ -93,23 +98,16 @@ export const ProxmoxCephClusterDrawer: Component<{
         <button
           type="button"
           onClick={props.onClose}
-          class="inline-flex h-7 w-7 items-center justify-center rounded-sm text-muted hover:bg-surface-hover hover:text-base-content"
+          class="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-sm text-muted hover:bg-surface-hover hover:text-base-content"
           aria-label="Close ceph cluster drawer"
         >
           <XIcon class="h-4 w-4" />
         </button>
       </header>
 
-      <div class="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-6">
-        <ClusterMetric label="FSID" value={fsid()} />
-        <ClusterMetric
-          label="Monitors"
-          value={meta()?.numMons ?? 0}
-        />
-        <ClusterMetric
-          label="Managers"
-          value={meta()?.numMgrs ?? 0}
-        />
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        <ClusterMetric label="Monitors" value={meta()?.numMons ?? 0} />
+        <ClusterMetric label="Managers" value={meta()?.numMgrs ?? 0} />
         <ClusterMetric
           label="OSDs"
           value={`${meta()?.numOsdsUp ?? 0}/${meta()?.numOsds ?? 0}`}
@@ -223,28 +221,36 @@ export const ProxmoxCephClusterDrawer: Component<{
       </div>
 
       <Card padding="md">
-        <div class="grid grid-cols-2 gap-3 text-xs md:grid-cols-4">
-          <div>
+        <div class="grid grid-cols-2 gap-3 text-xs md:grid-cols-3">
+          <div class="min-w-0">
             <div class="text-[10px] uppercase tracking-wide text-muted">Used</div>
-            <div class="text-base-content tabular-nums">{formatBytes(usedCapacity())}</div>
+            <div class="truncate text-base-content tabular-nums">{formatBytes(usedCapacity())}</div>
           </div>
-          <div>
+          <div class="min-w-0">
             <div class="text-[10px] uppercase tracking-wide text-muted">Available</div>
-            <div class="text-base-content tabular-nums">
+            <div class="truncate text-base-content tabular-nums">
               {formatBytes(Math.max(0, totalCapacity() - usedCapacity()))}
             </div>
           </div>
-          <div>
+          <div class="min-w-0">
             <div class="text-[10px] uppercase tracking-wide text-muted">Raw capacity</div>
-            <div class="text-base-content tabular-nums">{formatBytes(totalCapacity())}</div>
-          </div>
-          <div>
-            <div class="text-[10px] uppercase tracking-wide text-muted">Tags</div>
-            <div class="text-base-content text-[11px]">
-              {(props.cluster.tags ?? []).join(', ') || '—'}
-            </div>
+            <div class="truncate text-base-content tabular-nums">{formatBytes(totalCapacity())}</div>
           </div>
         </div>
+        <Show when={(props.cluster.tags ?? []).length > 0}>
+          <div class="mt-3 border-t border-border-subtle pt-2">
+            <div class="text-[10px] uppercase tracking-wide text-muted">Tags</div>
+            <div class="mt-1 flex flex-wrap gap-1">
+              <For each={props.cluster.tags ?? []}>
+                {(tag) => (
+                  <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] font-mono text-base-content">
+                    {tag}
+                  </span>
+                )}
+              </For>
+            </div>
+          </div>
+        </Show>
       </Card>
     </div>
   );
