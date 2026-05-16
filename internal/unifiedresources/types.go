@@ -30,6 +30,16 @@ type Resource struct {
 	Identity ResourceIdentity `json:"identity,omitempty"`
 	Metrics  *ResourceMetrics `json:"metrics,omitempty"`
 
+	// Surface-friendly projections of the nested source payloads that the
+	// frontend infrastructure table reads directly. Adapters that wrap an
+	// `AgentData` (Pulse-managed host) or `ProxmoxData` (Proxmox node)
+	// project the runtime uptime and the max-sensor temperature here so
+	// the canonical table renders real values instead of dashes for
+	// agent-backed rows. Resources that have no native uptime/temperature
+	// concept (e.g. k8s-deployment, docker-service) leave these unset.
+	Uptime      int64    `json:"uptime,omitempty"`
+	Temperature *float64 `json:"temperature,omitempty"`
+
 	ParentID       *string `json:"parentId,omitempty"`
 	ParentName     string  `json:"parentName,omitempty"`
 	ChildCount     int     `json:"childCount,omitempty"`

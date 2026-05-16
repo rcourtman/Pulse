@@ -9,6 +9,7 @@ import {
   PlatformSectionTabs,
   PlatformTableEmptyState,
 } from '@/features/platformPage/sharedPlatformPage';
+import { DockerServicesTable } from './DockerServicesTable';
 import {
   DOCKER_TAB_SPECS,
   buildDockerPageModel,
@@ -94,12 +95,11 @@ export function DockerPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'services'}>
-              <PlatformResourceTable
+              <DockerServicesTable
                 resources={model().services}
                 emptyIcon={dockerIcon()}
                 emptyTitle="No Swarm services"
                 emptyDescription="Docker Swarm services appear here when a Swarm manager reports them."
-                groupingMode="flat"
               />
             </Show>
           </Show>

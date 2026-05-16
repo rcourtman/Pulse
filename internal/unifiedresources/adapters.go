@@ -68,15 +68,17 @@ func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resourc
 	metrics := metricsFromProxmoxNode(node)
 
 	resource := Resource{
-		Type:       ResourceTypeAgent,
-		Technology: "proxmox",
-		Name:       name,
-		Status:     statusFromString(node.Status),
-		LastSeen:   node.LastSeen,
-		UpdatedAt:  time.Now().UTC(),
-		Metrics:    metrics,
-		Proxmox:    proxmox,
-		Tags:       nil,
+		Type:        ResourceTypeAgent,
+		Technology:  "proxmox",
+		Name:        name,
+		Status:      statusFromString(node.Status),
+		LastSeen:    node.LastSeen,
+		UpdatedAt:   time.Now().UTC(),
+		Metrics:     metrics,
+		Uptime:      node.Uptime,
+		Temperature: proxmox.Temperature,
+		Proxmox:     proxmox,
+		Tags:        nil,
 	}
 
 	return resource, identity
@@ -412,15 +414,17 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	metrics := metricsFromHost(host)
 
 	resource := Resource{
-		Type:       ResourceTypeAgent,
-		Technology: strings.TrimSpace(platform),
-		Name:       name,
-		Status:     storageStatus(statusFromString(host.Status), agent.StorageRisk),
-		LastSeen:   host.LastSeen,
-		UpdatedAt:  time.Now().UTC(),
-		Metrics:    metrics,
-		Agent:      agent,
-		Tags:       host.Tags,
+		Type:        ResourceTypeAgent,
+		Technology:  strings.TrimSpace(platform),
+		Name:        name,
+		Status:      storageStatus(statusFromString(host.Status), agent.StorageRisk),
+		LastSeen:    host.LastSeen,
+		UpdatedAt:   time.Now().UTC(),
+		Metrics:     metrics,
+		Uptime:      host.UptimeSeconds,
+		Temperature: agent.Temperature,
+		Agent:       agent,
+		Tags:        host.Tags,
 	}
 
 	return resource, identity

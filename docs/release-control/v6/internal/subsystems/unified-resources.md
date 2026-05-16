@@ -271,7 +271,20 @@ payloads may expose a camelCase transport projection, but the counts must be
 derived from `internal/unifiedresources/policy_posture.go` after canonical
 policy metadata has been refreshed, not recomputed from frontend labels,
 AI-only summary payloads, or page-local heuristics.
-4. Add metrics-target normalization or synthetic metrics support through `internal/unifiedresources/metrics_targets.go` and `internal/unifiedresources/metrics.go`.
+4. Add metrics-target normalization, surface-friendly projections of
+   nested source payloads, or synthetic metrics support through
+   `internal/unifiedresources/metrics_targets.go`,
+   `internal/unifiedresources/metrics.go`, and the relevant adapter in
+   `internal/unifiedresources/adapters.go`. The unified `Resource` shape
+   carries top-level `Uptime` and `Temperature` projections so frontend
+   tables that render those columns do not have to dig into per-source
+   payloads (`agent.uptimeSeconds`, `proxmox.uptime`,
+   `agent.temperature`, `proxmox.temperature`); adapters that wrap an
+   `AgentData` or `ProxmoxData` must populate those top-level fields
+   from the nested source values, and adapters for resource types that
+   have no native uptime/temperature concept (e.g. `k8s-deployment`,
+   `docker-service`, `k8s-cluster` aggregates) must leave them unset so
+   bespoke platform-page tables can hide the column entirely.
    Kubernetes deployment metrics live on the canonical adapter through
    `metricsFromKubernetesDeployment(cluster, deployment)`. Upstream
    Deployments do not expose CPU / memory natively because they are

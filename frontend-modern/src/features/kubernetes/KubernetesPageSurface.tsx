@@ -9,6 +9,7 @@ import {
   PlatformSectionTabs,
   PlatformTableEmptyState,
 } from '@/features/platformPage/sharedPlatformPage';
+import { KubernetesClustersTable } from './KubernetesClustersTable';
 import { KubernetesDeploymentsTable } from './KubernetesDeploymentsTable';
 import {
   KUBERNETES_TAB_SPECS,
@@ -80,8 +81,9 @@ export function KubernetesPageSurface() {
             }
           >
             <Show when={activeTab() === 'overview'}>
-              <PlatformResourceTable
-                resources={model().clusters}
+              <KubernetesClustersTable
+                clusters={model().clusters}
+                scope={model().resources}
                 emptyIcon={k8sIcon()}
                 emptyTitle="No clusters reported"
                 emptyDescription="Kubernetes clusters appear here once at least one agent reports cluster context."

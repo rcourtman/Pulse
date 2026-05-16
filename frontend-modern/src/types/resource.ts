@@ -496,6 +496,36 @@ export interface ResourceProxmoxMeta {
   osTemplate?: string;
 }
 
+// Docker Swarm service projection emitted by the canonical adapter for
+// `docker-service` resources. Surfaced on the Docker platform-page Swarm
+// services table where the generic infrastructure table's CPU / Memory /
+// Disk / Disk I/O / Uptime / Temperature columns are conceptually N/A
+// (services are cluster-scoped declarations, not running processes);
+// image, mode, replica counts, and ports are the operator columns.
+export interface ResourceDockerMeta {
+  serviceId?: string;
+  hostSourceId?: string;
+  hostname?: string;
+  image?: string;
+  mode?: string;
+  desiredTasks?: number;
+  runningTasks?: number;
+  endpointPorts?: Array<{
+    protocol?: string;
+    targetPort?: number;
+    publishedPort?: number;
+    publishMode?: string;
+  }>;
+  labels?: Record<string, string>;
+  swarm?: {
+    clusterId?: string;
+    clusterName?: string;
+    nodeId?: string;
+    nodeRole?: string;
+    scope?: string;
+  };
+}
+
 export interface ResourceKubernetesMetricCapabilities {
   nodeCpuMemory?: boolean;
   nodeTelemetry?: boolean;
@@ -528,6 +558,10 @@ export interface ResourceKubernetesMeta {
   updatedReplicas?: number;
   readyReplicas?: number;
   availableReplicas?: number;
+  // Cluster-only fields surfaced on the Kubernetes platform-page
+  // Clusters table for at-a-glance fleet posture.
+  version?: string;
+  server?: string;
 }
 
 export interface ResourceVMwareMeta {
@@ -663,6 +697,7 @@ export interface Resource {
   // Prefer these over casting `platformData` when available.
   agent?: ResourceAgentMeta;
   kubernetes?: ResourceKubernetesMeta;
+  docker?: ResourceDockerMeta;
   vmware?: ResourceVMwareMeta;
   proxmox?: ResourceProxmoxMeta;
   pbs?: ResourcePBSMeta;
