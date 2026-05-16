@@ -151,12 +151,19 @@ export function ProxmoxPageSurface() {
                 useWorkloads
                 embedded
                 tableOnly
+                showFilterToolbar
+                suppressPlatformFilter
                 forcedPlatform={PROXMOX_PLATFORM_FILTER}
                 forcedGroupingMode="grouped"
               />
             </Show>
             <Show when={activeTab() === 'storage'}>
-              <StorageSurface embedded tableOnly forcedSourceFilter={PROXMOX_PLATFORM_FILTER} />
+              <StorageSurface
+                embedded
+                tableOnly
+                showFilterToolbar
+                forcedSourceFilter={PROXMOX_PLATFORM_FILTER}
+              />
             </Show>
             <Show when={activeTab() === 'replication'}>
               <RecoverySurface embedded tableOnly forcedPlatformFilter={PROXMOX_PLATFORM_FILTER} />
@@ -168,6 +175,7 @@ export function ProxmoxPageSurface() {
               <StorageSurface
                 embedded
                 tableOnly
+                showFilterToolbar
                 forcedView="pools"
                 forcedSourceFilter={PROXMOX_PLATFORM_FILTER}
               />
