@@ -158,7 +158,9 @@ function StackedBar(props: { segments: StackedSegment[]; ariaLabel: string }) {
 
 // SpamHistogram renders a small bar chart of count per spam-score
 // bucket. The bucket label (eg "0", "1-3", "10+") sits below each bar;
-// the count sits above on hover via title.
+// the count sits above on hover via title. Tones use the canonical
+// metric severity palette: 0 = clean = normal, mid-score = warning,
+// high-score = critical.
 function SpamHistogram(props: { buckets: PMGSpamBucket[] }) {
   const maxCount = createMemo(() =>
     Math.max(0, ...props.buckets.map((b) => Math.max(0, b.count))),
@@ -174,12 +176,12 @@ function SpamHistogram(props: { buckets: PMGSpamBucket[] }) {
           const heightPct = maxCount() > 0 ? (bucket.count / maxCount()) * 100 : 0;
           const tone =
             bucket.score === '0' || bucket.score.startsWith('0')
-              ? 'bg-emerald-500 dark:bg-emerald-400'
+              ? 'bg-metric-normal-bg'
               : Number(bucket.score) >= 10 || bucket.score.includes('10')
-                ? 'bg-red-500 dark:bg-red-400'
+                ? 'bg-metric-critical-bg'
                 : Number(bucket.score) >= 5 || bucket.score.includes('5')
-                  ? 'bg-amber-500 dark:bg-amber-400'
-                  : 'bg-blue-400 dark:bg-blue-300';
+                  ? 'bg-metric-warning-bg'
+                  : 'bg-blue-500/60';
           return (
             <div class="flex flex-1 min-w-[20px] flex-col items-center gap-1">
               <div
@@ -218,12 +220,12 @@ function InOutBar(props: {
         title={`In ${format(props.inValue)} · Out ${format(props.outValue)}`}
       >
         <div
-          class="relative bg-blue-500 dark:bg-blue-400"
+          class="relative bg-blue-500/60"
           style={{ width: `${inWidth}%` }}
         />
         <div class="w-px bg-surface" />
         <div
-          class="relative bg-purple-500 dark:bg-purple-400"
+          class="relative bg-purple-500/60"
           style={{ width: `${outWidth}%` }}
         />
         <span class="pointer-events-none absolute inset-0 flex items-center justify-between px-1.5 text-[10px] font-semibold text-base-content leading-none tabular-nums">
@@ -282,19 +284,15 @@ export const ProxmoxMailGatewayDrawer: Component<{
     const rbl = Math.max(0, s.rblRejects ?? 0);
     const pregreet = Math.max(0, s.pregreetRejects ?? 0);
     const flagged = spam + virus + bounces;
-    const blocked = greylist + rbl + pregreet;
     const clean = Math.max(0, countIn - flagged);
     return [
-      { key: 'clean', label: 'Clean', value: clean, tone: 'bg-emerald-500 dark:bg-emerald-400' },
-      { key: 'spam', label: 'Spam', value: spam, tone: 'bg-amber-500 dark:bg-amber-400' },
-      { key: 'virus', label: 'Virus', value: virus, tone: 'bg-red-500 dark:bg-red-400' },
-      { key: 'bounces', label: 'Bounces', value: bounces, tone: 'bg-orange-500 dark:bg-orange-400' },
-      { key: 'greylist', label: 'Greylist', value: greylist, tone: 'bg-blue-500 dark:bg-blue-400' },
-      { key: 'rbl', label: 'RBL', value: rbl, tone: 'bg-purple-500 dark:bg-purple-400' },
-      { key: 'pregreet', label: 'Pregreet', value: pregreet, tone: 'bg-slate-500 dark:bg-slate-400' },
-      ...(blocked === 0 && flagged === 0 && clean === 0
-        ? []
-        : []),
+      { key: 'clean', label: 'Clean', value: clean, tone: 'bg-metric-normal-bg' },
+      { key: 'spam', label: 'Spam', value: spam, tone: 'bg-metric-warning-bg' },
+      { key: 'virus', label: 'Virus', value: virus, tone: 'bg-metric-critical-bg' },
+      { key: 'bounces', label: 'Bounces', value: bounces, tone: 'bg-orange-500/60' },
+      { key: 'greylist', label: 'Greylist', value: greylist, tone: 'bg-blue-500/60' },
+      { key: 'rbl', label: 'RBL', value: rbl, tone: 'bg-purple-500/60' },
+      { key: 'pregreet', label: 'Pregreet', value: pregreet, tone: 'bg-slate-500/60' },
     ];
   });
 
@@ -302,19 +300,19 @@ export const ProxmoxMailGatewayDrawer: Component<{
     const q = quarantine();
     if (!q) return [];
     return [
-      { key: 'spam', label: 'Spam', value: q.spam ?? 0, tone: 'bg-amber-500 dark:bg-amber-400' },
-      { key: 'virus', label: 'Virus', value: q.virus ?? 0, tone: 'bg-red-500 dark:bg-red-400' },
+      { key: 'spam', label: 'Spam', value: q.spam ?? 0, tone: 'bg-metric-warning-bg' },
+      { key: 'virus', label: 'Virus', value: q.virus ?? 0, tone: 'bg-metric-critical-bg' },
       {
         key: 'attachment',
         label: 'Attachment',
         value: q.attachment ?? 0,
-        tone: 'bg-orange-500 dark:bg-orange-400',
+        tone: 'bg-orange-500/60',
       },
       {
         key: 'blacklisted',
         label: 'Blacklisted',
         value: q.blacklisted ?? 0,
-        tone: 'bg-slate-500 dark:bg-slate-400',
+        tone: 'bg-slate-500/60',
       },
     ];
   });
