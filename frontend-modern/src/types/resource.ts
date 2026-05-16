@@ -518,6 +518,16 @@ export interface ResourceKubernetesMeta {
   temperature?: number;
   pendingUninstall?: boolean;
   metricCapabilities?: ResourceKubernetesMetricCapabilities;
+  // Deployment-only fields populated by the canonical adapter for
+  // `k8s-deployment` resources. Surfaced on the Kubernetes platform-page
+  // Deployments table where CPU/memory/uptime/temperature columns from
+  // the generic infrastructure table are not the meaningful operator
+  // columns; replica counts are.
+  deploymentUid?: string;
+  desiredReplicas?: number;
+  updatedReplicas?: number;
+  readyReplicas?: number;
+  availableReplicas?: number;
 }
 
 export interface ResourceVMwareMeta {

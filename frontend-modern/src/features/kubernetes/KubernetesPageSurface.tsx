@@ -9,6 +9,7 @@ import {
   PlatformSectionTabs,
   PlatformTableEmptyState,
 } from '@/features/platformPage/sharedPlatformPage';
+import { KubernetesDeploymentsTable } from './KubernetesDeploymentsTable';
 import {
   KUBERNETES_TAB_SPECS,
   buildKubernetesPageModel,
@@ -108,7 +109,7 @@ export function KubernetesPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'deployments'}>
-              <PlatformResourceTable
+              <KubernetesDeploymentsTable
                 resources={model().deployments}
                 emptyIcon={k8sIcon()}
                 emptyTitle="No deployments reported"
