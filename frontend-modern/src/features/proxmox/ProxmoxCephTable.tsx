@@ -23,6 +23,7 @@ import {
 import { formatBytes } from '@/utils/format';
 import { asTrimmedString } from '@/utils/stringUtils';
 import type { Resource, ResourceCephServiceMeta } from '@/types/resource';
+import { ProxmoxCephClusterDrawer } from './ProxmoxCephClusterDrawer';
 
 // Ceph clusters are first-class Resources (type='ceph') with structured
 // metadata: pools, monitors, managers, OSDs, placement groups, health.
@@ -152,6 +153,9 @@ export const ProxmoxCephTable: Component<{
 }> = (props) => {
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<CephStatusFilter>('all');
+  const [selectedId, setSelectedId] = createSignal<string | null>(null);
+  const toggleSelected = (id: string) =>
+    setSelectedId((current) => (current === id ? null : id));
 
   const filtered = createMemo(() => {
     const term = search().trim().toLowerCase();
@@ -241,48 +245,94 @@ export const ProxmoxCephTable: Component<{
                     const ind = indicatorFor(classify(cluster));
                     const name = asTrimmedString(cluster.name) || cluster.id;
                     const fsid = asTrimmedString(cluster.ceph?.fsid) || '—';
+                    const isOpen = () => selectedId() === cluster.id;
                     return (
-                      <TableRow class="hover:bg-surface-hover">
-                        <TableCell class="px-3 py-2">
-                          <div class="flex items-center gap-2 min-w-0">
-                            <span class="font-semibold text-base-content truncate" title={name}>
-                              {name}
-                            </span>
-                          </div>
-                          <Show when={cluster.platformId}>
-                            <div class="text-[10px] text-muted font-mono truncate" title={cluster.platformId}>
-                              {cluster.platformId}
+                      <>
+                        <TableRow
+                          class={`cursor-pointer hover:bg-surface-hover ${
+                            isOpen() ? 'bg-surface-hover' : ''
+                          }`}
+                          onClick={() => toggleSelected(cluster.id)}
+                          aria-expanded={isOpen()}
+                        >
+                          <TableCell class="px-3 py-2">
+                            <div class="flex items-center gap-2 min-w-0">
+                              <span class="font-semibold text-base-content truncate" title={name}>
+                                {name}
+                              </span>
                             </div>
-                          </Show>
-                        </TableCell>
-                        <TableCell class="px-3 py-2">
-                          <div class="flex items-center gap-2">
-                            <StatusDot size="sm" variant={ind.variant} title={ind.label} ariaHidden />
-                            <span class={`text-[11px] font-medium ${ind.tone}`}>{ind.label}</span>
-                          </div>
-                          <Show when={!!cluster.ceph?.healthStatus}>
-                            <div class="text-[10px] text-muted font-mono">{cluster.ceph?.healthStatus}</div>
-                          </Show>
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
-                          <span class="inline-block max-w-[10rem] truncate" title={fsid}>
-                            {fsid}
-                          </span>
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{quorumLabel(cluster.ceph)}</TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{osdLabel(cluster)}</TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
-                          <Show when={(cluster.ceph?.numPGs ?? 0) > 0} fallback={<span class="text-muted">—</span>}>
-                            {cluster.ceph?.numPGs}
-                          </Show>
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{poolsLabel(cluster)}</TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{capacityLabel(cluster)}</TableCell>
-                        <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
-                          {summarizeServices(cluster.ceph?.services)}
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{healthMessageCell(cluster)}</TableCell>
-                      </TableRow>
+                            <Show when={cluster.platformId}>
+                              <div
+                                class="text-[10px] text-muted font-mono truncate"
+                                title={cluster.platformId}
+                              >
+                                {cluster.platformId}
+                              </div>
+                            </Show>
+                          </TableCell>
+                          <TableCell class="px-3 py-2">
+                            <div class="flex items-center gap-2">
+                              <StatusDot
+                                size="sm"
+                                variant={ind.variant}
+                                title={ind.label}
+                                ariaHidden
+                              />
+                              <span class={`text-[11px] font-medium ${ind.tone}`}>{ind.label}</span>
+                            </div>
+                            <Show when={!!cluster.ceph?.healthStatus}>
+                              <div class="text-[10px] text-muted font-mono">
+                                {cluster.ceph?.healthStatus}
+                              </div>
+                            </Show>
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                            <span class="inline-block max-w-[10rem] truncate" title={fsid}>
+                              {fsid}
+                            </span>
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-base-content">
+                            {quorumLabel(cluster.ceph)}
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-base-content">{osdLabel(cluster)}</TableCell>
+                          <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
+                            <Show
+                              when={(cluster.ceph?.numPGs ?? 0) > 0}
+                              fallback={<span class="text-muted">—</span>}
+                            >
+                              {cluster.ceph?.numPGs}
+                            </Show>
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-base-content">{poolsLabel(cluster)}</TableCell>
+                          <TableCell class="px-3 py-2 text-base-content">
+                            {capacityLabel(cluster)}
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                            {summarizeServices(cluster.ceph?.services)}
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-base-content">
+                            {healthMessageCell(cluster)}
+                          </TableCell>
+                        </TableRow>
+                        <Show when={isOpen()}>
+                          <TableRow data-inline-detail-for={cluster.id}>
+                            <TableCell
+                              colspan={10}
+                              class="p-0 border-b border-border bg-surface-alt"
+                            >
+                              <div
+                                class="px-4 py-4"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <ProxmoxCephClusterDrawer
+                                  cluster={cluster}
+                                  onClose={() => setSelectedId(null)}
+                                />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        </Show>
+                      </>
                     );
                   }}
                 </For>
