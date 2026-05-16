@@ -353,6 +353,16 @@ describe('Storage platform-page embed contract', () => {
     expect(storageSource).toContain('showFilterToolbar?: boolean;');
     expect(storageSource).toContain('props.showFilterToolbar || !props.tableOnly');
   });
+
+  it('auto-suppresses the Source filter chip whenever forcedSourceFilter is set', async () => {
+    const storageSource = (await import('../Storage.tsx?raw')).default;
+    expect(storageSource).toContain(
+      'suppressSourceFilter={props.suppressSourceFilter || Boolean(props.forcedSourceFilter)}',
+    );
+    const controlsSource = (await import('../StoragePageControls.tsx?raw')).default;
+    expect(controlsSource).toContain('suppressSourceFilter?: boolean;');
+    expect(controlsSource).toContain('if (!props.suppressSourceFilter) {');
+  });
 });
 
 describe('Storage', () => {

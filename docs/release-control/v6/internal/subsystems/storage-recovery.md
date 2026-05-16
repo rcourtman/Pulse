@@ -844,12 +844,16 @@ bypass the API fail-closed execution gate.
     in `frontend-modern/src/routing/resourceLinks.ts`; ad hoc storage or
     recovery route strings inside per-platform features are not permitted.
     Platform-page default sub-tab choices must land the user on a
-    canonical surface that actually populates: when the canonical adapter
-    does not emit a platform's top-level infrastructure projection, the
-    platform's `*_DEFAULT_TAB` constant in `resourceLinks.ts` must point
-    at the next-most-relevant canonical surface (for TrueNAS today that is
-    the embedded `StorageSurface` at `/truenas/storage`) rather than at a
-    placeholder Hosts overview that would render empty.
+    canonical surface that actually populates. The canonical TrueNAS
+    adapter already emits the top-level TrueNAS system as a unified
+    `agent` row tagged with the `truenas` platform, so the platform
+    page defaults to `/truenas/overview` (the Systems sub-tab) and the
+    embedded `StorageSurface` lives at `/truenas/storage`. The Source
+    filter chip in `StoragePageControls` is also suppressed when a
+    platform page locks source scope through `forcedSourceFilter` (via
+    `suppressSourceFilter`, auto-applied whenever `forcedSourceFilter`
+    is set), so the user never sees the platform's name pinned as a
+    removable filter chip inside the embedded surface.
     Platform pages that embed `StorageSurface` reuse the canonical
     `StoragePageControls` toolbar through the `showFilterToolbar` prop on
     `StorageProps`. The page keeps `tableOnly` to hide the storage summary

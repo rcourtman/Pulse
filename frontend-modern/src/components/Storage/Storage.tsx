@@ -21,8 +21,11 @@ type StorageProps = {
   // visible alongside the table even when `tableOnly` hides the summary
   // section. The page owns source scope via `forcedSourceFilter`; the
   // controls toolbar still exposes search, status, grouping, sort, and
-  // node filters to the operator.
+  // node filters to the operator. `suppressSourceFilter` drops the
+  // redundant Source chip from the controls toolbar since the platform
+  // page already locks source scope through `forcedSourceFilter`.
   showFilterToolbar?: boolean;
+  suppressSourceFilter?: boolean;
 };
 
 const Storage: Component<StorageProps> = (props) => {
@@ -194,6 +197,7 @@ const Storage: Component<StorageProps> = (props) => {
               sourceFilter={sourceFilter}
               setSourceFilter={setSourceFilter}
               sourceOptions={sourceFilterOptions}
+              suppressSourceFilter={props.suppressSourceFilter || Boolean(props.forcedSourceFilter)}
               diskRoleFilter={diskRoleFilter}
               setDiskRoleFilter={setDiskRoleFilter}
               diskRoleOptions={diskRoleOptions}

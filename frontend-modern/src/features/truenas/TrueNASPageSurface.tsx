@@ -6,6 +6,7 @@ import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
+  PlatformResourceTable,
   PlatformSectionTabs,
   PlatformTableEmptyState,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -16,7 +17,7 @@ import {
 } from './truenasPageModel';
 
 const TRUENAS_RESOURCE_QUERY =
-  'type=app-container,storage,pool,dataset,physical_disk';
+  'type=agent,app-container,storage,pool,dataset,physical_disk';
 const TRUENAS_PLATFORM_FILTER = 'truenas';
 const VALID_TABS = new Set<TrueNASPageTabId>(TRUENAS_TAB_SPECS.map((tab) => tab.id));
 
@@ -31,7 +32,7 @@ export function TrueNASPageSurface() {
   });
   const activeTab = createMemo<TrueNASPageTabId>(() => {
     const segment = location.pathname.split('/').filter(Boolean)[1] as TrueNASPageTabId | undefined;
-    return segment && VALID_TABS.has(segment) ? segment : 'storage';
+    return segment && VALID_TABS.has(segment) ? segment : 'overview';
   });
   const model = createMemo(() => buildTrueNASPageModel(resources()));
 
@@ -73,6 +74,14 @@ export function TrueNASPageSurface() {
               />
             }
           >
+            <Show when={activeTab() === 'overview'}>
+              <PlatformResourceTable
+                resources={model().systems}
+                emptyIcon={truenasIcon()}
+                emptyTitle="No TrueNAS systems"
+                emptyDescription="TrueNAS systems appear here once a TrueNAS connection reports its top-level appliance."
+              />
+            </Show>
             <Show when={activeTab() === 'storage'}>
               <StorageSurface
                 embedded

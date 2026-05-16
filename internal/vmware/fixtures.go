@@ -1,6 +1,9 @@
 package vmware
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 func DefaultFixtures() InventorySnapshot {
 	collectedAt := time.Date(2026, time.March, 31, 9, 45, 0, 0, time.UTC)
@@ -8,6 +11,16 @@ func DefaultFixtures() InventorySnapshot {
 	accessible := true
 	multipleHostAccess := true
 
+	snapshot := defaultFixturesPrimaryCluster(collectedAt, accessible, multipleHostAccess)
+	appendEdgeClusterFixtures(&snapshot, collectedAt, accessible, multipleHostAccess)
+	return snapshot
+}
+
+func defaultFixturesPrimaryCluster(
+	collectedAt time.Time,
+	accessible bool,
+	multipleHostAccess bool,
+) InventorySnapshot {
 	return InventorySnapshot{
 		ConnectionID:   "vc-mock-1",
 		ConnectionName: "Lab vCenter",
@@ -504,5 +517,236 @@ func DefaultFixtures() InventorySnapshot {
 				}},
 			},
 		},
+	}
+}
+
+// appendEdgeClusterFixtures grows the canonical VMware mock inventory toward
+// a mature SMB lab. The edge cluster lives in a second datacenter and adds
+// 3 more ESXi hosts, 12 more VMs across a tier-1 application set + a
+// stateful tier + a windows fleet, and 4 more datastores (one of each
+// canonical storage technology) so the platform-page tables exercise
+// grouping, sorting, and responsive density beyond a single small cluster.
+func appendEdgeClusterFixtures(
+	snapshot *InventorySnapshot,
+	collectedAt time.Time,
+	accessible bool,
+	multipleHostAccess bool,
+) {
+	const (
+		edgeDatacenterID   = "datacenter-2"
+		edgeDatacenterName = "Edge DC"
+		edgeClusterID      = "domain-c201"
+		edgeClusterName    = "Edge Services"
+		edgeFolderHosts    = "group-h6"
+		edgeFolderHostsLbl = "Edge Cluster Hosts"
+		edgeFolderVMs      = "group-v9"
+		edgeFolderVMsLbl   = "Edge Production VMs"
+		edgeFolderDS       = "group-s6"
+		edgeFolderDSLbl    = "Edge Datastores"
+	)
+
+	edgeDatastoreIDs := []string{"datastore-301", "datastore-302", "datastore-303", "datastore-304"}
+	edgeDatastoreNames := []string{"edge-nvme-tier", "edge-warm-nfs", "edge-vsan", "edge-cold-iscsi"}
+
+	hostSpecs := []struct {
+		ID       string
+		Name     string
+		UUID     string
+		CPUPct   float64
+		MemPct   float64
+		MemUsed  int64
+		MemTotal int64
+		Status   string
+	}{
+		{"host-201", "esxi-05.lab.local", "uuid-host-201", 27.4, 51.6, 44_277_059_584, 85_899_345_920, "green"},
+		{"host-202", "esxi-06.lab.local", "uuid-host-202", 41.2, 67.9, 58_271_233_120, 85_899_345_920, "green"},
+		{"host-203", "esxi-07.lab.local", "uuid-host-203", 19.8, 38.4, 32_968_499_584, 85_899_345_920, "yellow"},
+	}
+
+	hostNames := make([]string, 0, len(hostSpecs))
+	for _, h := range hostSpecs {
+		hostNames = append(hostNames, h.Name)
+	}
+
+	for _, h := range hostSpecs {
+		snapshot.Hosts = append(snapshot.Hosts, InventoryHost{
+			Host:                h.ID,
+			Name:                h.Name,
+			ConnectionState:     "CONNECTED",
+			PowerState:          "POWERED_ON",
+			HostUUID:            h.UUID,
+			DatacenterID:        edgeDatacenterID,
+			DatacenterName:      edgeDatacenterName,
+			ComputeResourceID:   edgeClusterID,
+			ComputeResourceName: edgeClusterName,
+			ClusterID:           edgeClusterID,
+			ClusterName:         edgeClusterName,
+			FolderID:            edgeFolderHosts,
+			FolderName:          edgeFolderHostsLbl,
+			DatastoreIDs:        edgeDatastoreIDs,
+			DatastoreNames:      edgeDatastoreNames,
+			OverallStatus:       h.Status,
+			Metrics: &InventoryMetrics{
+				CPUPercent:              float64Ptr(h.CPUPct),
+				MemoryPercent:           float64Ptr(h.MemPct),
+				MemoryUsedBytes:         int64Ptr(h.MemUsed),
+				MemoryTotalBytes:        int64Ptr(h.MemTotal),
+				NetInBytesPerSecond:     float64Ptr(960_000),
+				NetOutBytesPerSecond:    float64Ptr(820_000),
+				DiskReadBytesPerSecond:  float64Ptr(1_820_000),
+				DiskWriteBytesPerSecond: float64Ptr(1_540_000),
+			},
+		})
+	}
+
+	vmSpecs := []struct {
+		ID         string
+		Name       string
+		Host       string
+		CPUCount   int
+		MemMiB     int64
+		Tier       string
+		Datastores []string
+		PowerState string
+		Status     string
+		Guest      string
+	}{
+		{"vm-301", "edge-api-01", "host-201", 4, 16 * 1024, "Tier 1", []string{"datastore-301"}, "POWERED_ON", "green", "edge-api-01.internal"},
+		{"vm-302", "edge-api-02", "host-202", 4, 16 * 1024, "Tier 1", []string{"datastore-301"}, "POWERED_ON", "green", "edge-api-02.internal"},
+		{"vm-303", "mariadb-replica-01", "host-203", 8, 32 * 1024, "Stateful", []string{"datastore-302"}, "POWERED_ON", "yellow", "mariadb-replica-01.internal"},
+		{"vm-304", "redis-cache-01", "host-201", 2, 8 * 1024, "Stateful", []string{"datastore-303"}, "POWERED_ON", "green", "redis-cache-01.internal"},
+		{"vm-305", "redis-cache-02", "host-202", 2, 8 * 1024, "Stateful", []string{"datastore-303"}, "POWERED_ON", "green", "redis-cache-02.internal"},
+		{"vm-306", "ingress-proxy-01", "host-201", 4, 12 * 1024, "Tier 1", []string{"datastore-301"}, "POWERED_ON", "green", "ingress-proxy-01.internal"},
+		{"vm-307", "ingress-proxy-02", "host-203", 4, 12 * 1024, "Tier 1", []string{"datastore-301"}, "POWERED_ON", "green", "ingress-proxy-02.internal"},
+		{"vm-308", "win-fleet-rdp-01", "host-202", 4, 16 * 1024, "Workstations", []string{"datastore-303"}, "POWERED_ON", "green", "win-fleet-rdp-01.lab.local"},
+		{"vm-309", "win-fleet-rdp-02", "host-203", 4, 16 * 1024, "Workstations", []string{"datastore-303"}, "POWERED_ON", "green", "win-fleet-rdp-02.lab.local"},
+		{"vm-310", "logging-collector-01", "host-201", 4, 24 * 1024, "Observability", []string{"datastore-302"}, "POWERED_ON", "green", "logging-collector-01.internal"},
+		{"vm-311", "logging-collector-02", "host-202", 4, 24 * 1024, "Observability", []string{"datastore-302"}, "POWERED_ON", "yellow", "logging-collector-02.internal"},
+		{"vm-312", "cold-archive-01", "host-203", 2, 8 * 1024, "Archive", []string{"datastore-304"}, "POWERED_OFF", "gray", ""},
+	}
+
+	for _, v := range vmSpecs {
+		hostName := ""
+		for _, hs := range hostSpecs {
+			if hs.ID == v.Host {
+				hostName = hs.Name
+				break
+			}
+		}
+		dsNames := make([]string, 0, len(v.Datastores))
+		for _, dsID := range v.Datastores {
+			for i, id := range edgeDatastoreIDs {
+				if id == dsID {
+					dsNames = append(dsNames, edgeDatastoreNames[i])
+				}
+			}
+		}
+		cpuPct := 28.0
+		memPct := 60.0
+		if v.Status == "yellow" {
+			cpuPct = 64.0
+			memPct = 81.0
+		} else if v.Status == "gray" {
+			cpuPct = 0
+			memPct = 0
+		}
+		guestIPs := []string{}
+		if v.PowerState == "POWERED_ON" {
+			guestIPs = []string{fmt.Sprintf("10.50.20.%d", 10+len(snapshot.VMs))}
+		}
+		vm := InventoryVM{
+			VM:                  v.ID,
+			Name:                v.Name,
+			PowerState:          v.PowerState,
+			CPUCount:            v.CPUCount,
+			MemorySizeMiB:       v.MemMiB,
+			DatacenterID:        edgeDatacenterID,
+			DatacenterName:      edgeDatacenterName,
+			ComputeResourceID:   edgeClusterID,
+			ComputeResourceName: edgeClusterName,
+			ClusterID:           edgeClusterID,
+			ClusterName:         edgeClusterName,
+			FolderID:            edgeFolderVMs,
+			FolderName:          edgeFolderVMsLbl,
+			ResourcePoolID:      fmt.Sprintf("resgroup-edge-%s", v.Tier),
+			ResourcePoolName:    v.Tier,
+			RuntimeHostID:       v.Host,
+			RuntimeHostName:     hostName,
+			DatastoreIDs:        v.Datastores,
+			DatastoreNames:      dsNames,
+			InstanceUUID:        fmt.Sprintf("vm-instance-%s", v.ID),
+			BIOSUUID:            fmt.Sprintf("vm-bios-%s", v.ID),
+			GuestOSFamily:       guestOSFamily(v.Name),
+			GuestHostname:       v.Guest,
+			GuestIPAddresses:    guestIPs,
+			OverallStatus:       v.Status,
+		}
+		if v.PowerState == "POWERED_ON" {
+			vm.Metrics = &InventoryMetrics{
+				CPUPercent:              float64Ptr(cpuPct),
+				MemoryPercent:           float64Ptr(memPct),
+				MemoryUsedBytes:         int64Ptr(int64(float64(v.MemMiB) * float64(memPct) / 100.0 * 1024 * 1024)),
+				MemoryTotalBytes:        int64Ptr(int64(v.MemMiB) * 1024 * 1024),
+				NetInBytesPerSecond:     float64Ptr(360_000),
+				NetOutBytesPerSecond:    float64Ptr(420_000),
+				DiskReadBytesPerSecond:  float64Ptr(720_000),
+				DiskWriteBytesPerSecond: float64Ptr(610_000),
+			}
+		}
+		snapshot.VMs = append(snapshot.VMs, vm)
+	}
+
+	type datastoreSpec struct {
+		ID       string
+		Name     string
+		Type     string
+		Free     int64
+		Cap      int64
+		HostIDs  []string
+		HostName []string
+		VMIDs    []string
+		VMNames  []string
+		URL      string
+		Status   string
+	}
+	dsList := []datastoreSpec{
+		{"datastore-301", "edge-nvme-tier", "VMFS", 3_200_000_000_000, 6_000_000_000_000, []string{"host-201", "host-202", "host-203"}, hostNames, []string{"vm-301", "vm-302", "vm-306", "vm-307"}, []string{"edge-api-01", "edge-api-02", "ingress-proxy-01", "ingress-proxy-02"}, "ds:///vmfs/volumes/datastore-301/", "green"},
+		{"datastore-302", "edge-warm-nfs", "NFS41", 9_100_000_000_000, 12_000_000_000_000, []string{"host-201", "host-203"}, []string{"esxi-05.lab.local", "esxi-07.lab.local"}, []string{"vm-303", "vm-310", "vm-311"}, []string{"mariadb-replica-01", "logging-collector-01", "logging-collector-02"}, "ds:///nfs/edge-warm-nfs/", "green"},
+		{"datastore-303", "edge-vsan", "vSAN", 4_900_000_000_000, 9_000_000_000_000, []string{"host-201", "host-202", "host-203"}, hostNames, []string{"vm-304", "vm-305", "vm-308", "vm-309"}, []string{"redis-cache-01", "redis-cache-02", "win-fleet-rdp-01", "win-fleet-rdp-02"}, "ds:///vsan/edge-vsan/", "green"},
+		{"datastore-304", "edge-cold-iscsi", "VMFS", 18_500_000_000_000, 24_000_000_000_000, []string{"host-202", "host-203"}, []string{"esxi-06.lab.local", "esxi-07.lab.local"}, []string{"vm-312"}, []string{"cold-archive-01"}, "ds:///vmfs/volumes/datastore-304/", "yellow"},
+	}
+	for _, ds := range dsList {
+		snapshot.Datastores = append(snapshot.Datastores, InventoryDatastore{
+			Datastore:          ds.ID,
+			Name:               ds.Name,
+			Type:               ds.Type,
+			FreeSpace:          ds.Free,
+			Capacity:           ds.Cap,
+			DatacenterID:       edgeDatacenterID,
+			DatacenterName:     edgeDatacenterName,
+			FolderID:           edgeFolderDS,
+			FolderName:         edgeFolderDSLbl,
+			HostIDs:            ds.HostIDs,
+			HostNames:          ds.HostName,
+			VMIDs:              ds.VMIDs,
+			VMNames:            ds.VMNames,
+			Accessible:         &accessible,
+			MultipleHostAccess: &multipleHostAccess,
+			MaintenanceMode:    "normal",
+			URL:                ds.URL,
+			OverallStatus:      ds.Status,
+		})
+	}
+}
+
+func guestOSFamily(name string) string {
+	if name == "" {
+		return ""
+	}
+	switch name[:3] {
+	case "win":
+		return "WINDOWS"
+	default:
+		return "LINUX"
 	}
 }

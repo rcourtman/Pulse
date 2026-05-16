@@ -15,7 +15,7 @@ import {
   type DockerPageTabId,
 } from './dockerPageModel';
 
-const DOCKER_RESOURCE_QUERY = 'type=agent,docker-host,app-container';
+const DOCKER_RESOURCE_QUERY = 'type=agent,docker-host,app-container,docker-service';
 const DOCKER_PLATFORM_FILTER = 'docker';
 const VALID_TABS = new Set<DockerPageTabId>(DOCKER_TAB_SPECS.map((tab) => tab.id));
 
@@ -91,6 +91,15 @@ export function DockerPageSurface() {
                 showFilterToolbar
                 suppressPlatformFilter
                 forcedPlatform={DOCKER_PLATFORM_FILTER}
+              />
+            </Show>
+            <Show when={activeTab() === 'services'}>
+              <PlatformResourceTable
+                resources={model().services}
+                emptyIcon={dockerIcon()}
+                emptyTitle="No Swarm services"
+                emptyDescription="Docker Swarm services appear here when a Swarm manager reports them."
+                groupingMode="flat"
               />
             </Show>
           </Show>

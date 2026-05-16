@@ -66,6 +66,12 @@ type StoragePageControlsProps = {
   storageFilterGroupBy: () => StorageGroupKey;
   chartsCollapsed?: () => boolean;
   onChartsToggle?: () => void;
+  // Mirrors the WorkloadsFilter `suppressPlatformFilter` contract: when a
+  // platform page mounts StorageSurface with `forcedSourceFilter`, the
+  // Source filter chip is redundant (it is already locked by the page)
+  // and would render as a user-visible pinned filter. Setting this drops
+  // the Source chip from the rendered filter row.
+  suppressSourceFilter?: boolean;
 };
 
 const VIEW_TABS = STORAGE_VIEW_OPTIONS as { value: string; label: string }[];
@@ -151,19 +157,21 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
           })),
       });
 
-      filters.push({
-        id: 'storage-source',
-        label: 'Source',
-        group: 'scope',
-        value: props.sourceFilter,
-        setValue: props.setSourceFilter,
-        defaultValue: DEFAULT_STORAGE_SOURCE_FILTER,
-        options: () =>
-          props.sourceOptions().map((option) => ({
-            value: option.key,
-            label: option.label,
-          })),
-      });
+      if (!props.suppressSourceFilter) {
+        filters.push({
+          id: 'storage-source',
+          label: 'Source',
+          group: 'scope',
+          value: props.sourceFilter,
+          setValue: props.setSourceFilter,
+          defaultValue: DEFAULT_STORAGE_SOURCE_FILTER,
+          options: () =>
+            props.sourceOptions().map((option) => ({
+              value: option.key,
+              label: option.label,
+            })),
+        });
+      }
 
       filters.push({
         id: 'storage-status',

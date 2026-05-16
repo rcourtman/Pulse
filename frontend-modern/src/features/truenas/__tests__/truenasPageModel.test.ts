@@ -14,12 +14,13 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
 });
 
 describe('truenasPageModel', () => {
-  it('declares the TrueNAS section set, omitting Hosts until the canonical projection exists', () => {
-    expect(TRUENAS_TAB_SPECS.map((tab) => tab.id)).toEqual(['storage', 'apps']);
+  it('declares the TrueNAS section set with Systems, Storage, and Apps', () => {
+    expect(TRUENAS_TAB_SPECS.map((tab) => tab.id)).toEqual(['overview', 'storage', 'apps']);
   });
 
-  it('buckets storage, apps, and disks while ignoring non-TrueNAS resources', () => {
+  it('buckets systems, apps, storage, and disks while ignoring non-TrueNAS resources', () => {
     const model = buildTrueNASPageModel([
+      makeResource({ id: 'truenas-system', type: 'agent' }),
       makeResource({ id: 'truenas-app', type: 'app-container' }),
       makeResource({ id: 'truenas-pool', type: 'pool' }),
       makeResource({ id: 'truenas-disk', type: 'physical_disk' }),
@@ -27,9 +28,10 @@ describe('truenasPageModel', () => {
       makeResource({ id: 'pve-node', type: 'agent', platformType: 'proxmox-pve' }),
     ]);
 
+    expect(model.systems.map((r) => r.id)).toEqual(['truenas-system']);
     expect(model.apps.map((r) => r.id)).toEqual(['truenas-app']);
     expect(model.resources.map((r) => r.id).sort()).toEqual(
-      ['truenas-app', 'truenas-disk', 'truenas-pool'].sort(),
+      ['truenas-app', 'truenas-disk', 'truenas-pool', 'truenas-system'].sort(),
     );
   });
 });

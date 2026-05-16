@@ -14,11 +14,15 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
 });
 
 describe('dockerPageModel', () => {
-  it('declares the Docker section set, omitting Swarm services until the canonical projection exists', () => {
-    expect(DOCKER_TAB_SPECS.map((tab) => tab.id)).toEqual(['overview', 'containers']);
+  it('declares the Docker section set with hosts, containers, and Swarm services', () => {
+    expect(DOCKER_TAB_SPECS.map((tab) => tab.id)).toEqual([
+      'overview',
+      'containers',
+      'services',
+    ]);
   });
 
-  it('buckets Docker hosts and containers from canonical resources', () => {
+  it('buckets Docker hosts, containers, and Swarm services from canonical resources', () => {
     const model = buildDockerPageModel([
       makeResource({ id: 'docker-host-1', type: 'agent' }),
       makeResource({
@@ -26,6 +30,7 @@ describe('dockerPageModel', () => {
         type: 'app-container',
         platformType: 'docker',
       }),
+      makeResource({ id: 'svc-1', type: 'docker-service' }),
       makeResource({
         id: 'pve-node-1',
         type: 'agent',
@@ -35,8 +40,9 @@ describe('dockerPageModel', () => {
 
     expect(model.hosts.map((r) => r.id)).toEqual(['docker-host-1']);
     expect(model.containers.map((r) => r.id)).toEqual(['ctr-1']);
+    expect(model.services.map((r) => r.id)).toEqual(['svc-1']);
     expect(model.resources.map((r) => r.id).sort()).toEqual(
-      ['ctr-1', 'docker-host-1'].sort(),
+      ['ctr-1', 'docker-host-1', 'svc-1'].sort(),
     );
   });
 

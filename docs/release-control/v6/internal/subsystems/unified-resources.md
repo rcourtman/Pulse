@@ -411,13 +411,16 @@ AI-only summary payloads, or page-local heuristics.
     URL vocabulary stays single-sourced; ad hoc string concatenation of
     platform routes inside feature directories is not permitted.
     The default tab for each platform path must point at a sub-tab whose
-    canonical unified-resource projection actually populates. TrueNAS
-    therefore defaults to `/truenas/storage` rather than `/truenas/overview`
-    because the canonical adapter does not yet emit a TrueNAS-platform
-    `agent` row to back a Hosts overview. Adding back an Overview/Hosts
-    default for a platform requires the canonical resource adapter to first
-    emit that platform's top-level system as a unified resource so the
-    builder default still resolves to a populated table.
+    canonical unified-resource projection actually populates. The
+    canonical TrueNAS adapter (`internal/truenas/provider.go::
+    truenasRecordsFromSnapshot`) already emits the top-level TrueNAS
+    appliance as a unified `agent` row tagged with the `truenas`
+    platform, so TrueNAS defaults to `/truenas/overview` (the Systems
+    sub-tab); the embedded `StorageSurface` lives at `/truenas/storage`.
+    Any future platform that wants to default to a Systems / Hosts
+    overview must first have its canonical resource adapter project the
+    platform's top-level system as a unified resource so the builder
+    default still resolves to a populated table.
 
 ## Forbidden Paths
 

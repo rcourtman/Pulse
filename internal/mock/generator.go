@@ -2139,11 +2139,19 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 		var services []models.DockerService
 		var tasks []models.DockerTask
 		if !isPodman {
+			// ClusterID/ClusterName are required for the unified resource
+			// adapter to project Swarm services as docker-service rows
+			// (`dockerSwarmClusterKey` returns empty without them). Anchor
+			// the mock estate to a single named cluster so all manager and
+			// worker hosts share Swarm identity and their services
+			// deduplicate correctly across managers.
 			swarmInfo = &models.DockerSwarmInfo{
 				NodeID:           fmt.Sprintf("%s-node", hostID),
 				NodeRole:         "worker",
 				LocalState:       "active",
 				ControlAvailable: false,
+				ClusterID:        "mock-swarm-cluster-1",
+				ClusterName:      "edge-swarm",
 				Scope:            "node",
 			}
 
