@@ -1,9 +1,9 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
-import { Card } from '@/components/shared/Card';
-import { EmptyState } from '@/components/shared/EmptyState';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { TableCard } from '@/components/shared/TableCard';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import {
   Table,
   TableBody,
@@ -15,7 +15,13 @@ import {
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_CARD_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformTableEmptyState,
   filterPlatformResources,
+  getPlatformTableCellClass,
+  getPlatformTableHeadClass,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
@@ -44,6 +50,8 @@ export const KubernetesDeploymentsTable: Component<{
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
+  title?: string;
+  showToolbar?: boolean;
 }> = (props) => {
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<PlatformResourceStatusFilter>('all');
@@ -56,62 +64,65 @@ export const KubernetesDeploymentsTable: Component<{
     <Show
       when={props.resources.length > 0}
       fallback={
-        <Card padding="lg">
-          <EmptyState
-            icon={props.emptyIcon}
-            title={props.emptyTitle}
-            description={props.emptyDescription}
-          />
-        </Card>
+        <PlatformTableEmptyState
+          icon={props.emptyIcon}
+          title={props.emptyTitle}
+          description={props.emptyDescription}
+        />
       }
     >
       <div class="space-y-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="min-w-[200px] flex-1 sm:max-w-xs">
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Search deployments"
+        <Show when={props.showToolbar !== false}>
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="min-w-[200px] flex-1 sm:max-w-xs">
+              <SearchInput value={search} onChange={setSearch} placeholder="Search deployments" />
+            </div>
+            <FilterButtonGroup
+              options={STATUS_FILTER_OPTIONS}
+              value={status()}
+              onChange={setStatus}
             />
+            <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
+              <Show when={visible() !== total()} fallback={<>{total()} deployments</>}>
+                {visible()} of {total()} deployments
+              </Show>
+            </span>
           </div>
-          <FilterButtonGroup
-            options={STATUS_FILTER_OPTIONS}
-            value={status()}
-            onChange={setStatus}
-          />
-          <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-            <Show when={visible() !== total()} fallback={<>{total()} deployments</>}>
-              {visible()} of {total()} deployments
-            </Show>
-          </span>
-        </div>
+        </Show>
 
         <Show
           when={filtered().length > 0}
           fallback={
-            <Card padding="lg">
-              <EmptyState
-                icon={props.emptyIcon}
-                title="No deployments match current filters"
-                description="Adjust the search or status filter to see more deployments."
-              />
-            </Card>
+            <PlatformTableEmptyState
+              icon={props.emptyIcon}
+              title="No deployments match current filters"
+              description="Adjust the search or status filter to see more deployments."
+            />
           }
         >
-          <Card padding="none" tone="card" class="overflow-hidden">
-            <Table class="w-full min-w-[820px] border-collapse text-xs">
-              <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                  <TableHead class="px-3 py-2 font-medium">Deployment</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Namespace</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Cluster</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Desired</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Updated</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Ready</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Available</TableHead>
+          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+            <TableCardHeader title={props.title ?? 'Deployments'} />
+            <Table class="min-w-full table-fixed text-xs md:min-w-[820px]">
+              <TableHeader>
+                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                  <TableHead class={getPlatformTableHeadClass()}>Deployment</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Namespace
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Cluster
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                    Desired
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                    Updated
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>Ready</TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>Available</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody class="divide-y divide-border-subtle">
+              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                 <For each={filtered()}>
                   {(deployment) => {
                     const name = () => asTrimmedString(deployment.name) || deployment.id;
@@ -122,35 +133,48 @@ export const KubernetesDeploymentsTable: Component<{
                       '—';
                     const indicator = () => getSimpleStatusIndicator(deployment.status);
                     return (
-                      <TableRow class="hover:bg-surface-hover">
-                        <TableCell class="px-3 py-2">
-                          <div class="flex items-center gap-2 min-w-0">
+                      <TableRow class="text-[11px] sm:text-xs">
+                        <TableCell class={getPlatformTableCellClass()}>
+                          <div class="flex min-w-0 items-center gap-2">
                             <StatusDot
                               size="sm"
                               variant={indicator().variant}
                               title={deployment.status || 'unknown'}
                               ariaHidden
                             />
-                            <span
-                              class="font-semibold text-base-content truncate"
-                              title={name()}
-                            >
+                            <span class="truncate font-semibold text-base-content" title={name()}>
                               {name()}
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{ns()}</TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{cluster()}</TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                        >
+                          {ns()}
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                        >
+                          {cluster()}
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                        >
                           {replicaCount(deployment.kubernetes?.desiredReplicas)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                        >
                           {replicaCount(deployment.kubernetes?.updatedReplicas)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                        >
                           {replicaCount(deployment.kubernetes?.readyReplicas)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                        >
                           {replicaCount(deployment.kubernetes?.availableReplicas)}
                         </TableCell>
                       </TableRow>
@@ -159,7 +183,7 @@ export const KubernetesDeploymentsTable: Component<{
                 </For>
               </TableBody>
             </Table>
-          </Card>
+          </TableCard>
         </Show>
       </div>
     </Show>

@@ -1,9 +1,9 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
-import { Card } from '@/components/shared/Card';
-import { EmptyState } from '@/components/shared/EmptyState';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { TableCard } from '@/components/shared/TableCard';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import {
   Table,
   TableBody,
@@ -14,7 +14,13 @@ import {
 } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_CARD_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformTableEmptyState,
   filterPlatformResources,
+  getPlatformTableCellClass,
+  getPlatformTableHeadClass,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
@@ -55,13 +61,13 @@ const formatWearout = (wearout: number | undefined): JSX.Element => {
   return <span class="tabular-nums">{wearout.toFixed(0)}%</span>;
 };
 
-const healthVariant = (
-  health: string | undefined,
-): 'success' | 'warning' | 'danger' | 'muted' => {
+const healthVariant = (health: string | undefined): 'success' | 'warning' | 'danger' | 'muted' => {
   const normalized = (health || '').trim().toLowerCase();
-  if (normalized === 'healthy' || normalized === 'passed' || normalized === 'pass') return 'success';
+  if (normalized === 'healthy' || normalized === 'passed' || normalized === 'pass')
+    return 'success';
   if (normalized === 'warning' || normalized === 'degraded') return 'warning';
-  if (normalized === 'failed' || normalized === 'fail' || normalized === 'critical') return 'danger';
+  if (normalized === 'failed' || normalized === 'fail' || normalized === 'critical')
+    return 'danger';
   return 'muted';
 };
 
@@ -70,6 +76,8 @@ export const TrueNASDisksTable: Component<{
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
+  title?: string;
+  showToolbar?: boolean;
 }> = (props) => {
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<PlatformResourceStatusFilter>('all');
@@ -82,63 +90,66 @@ export const TrueNASDisksTable: Component<{
     <Show
       when={props.resources.length > 0}
       fallback={
-        <Card padding="lg">
-          <EmptyState
-            icon={props.emptyIcon}
-            title={props.emptyTitle}
-            description={props.emptyDescription}
-          />
-        </Card>
+        <PlatformTableEmptyState
+          icon={props.emptyIcon}
+          title={props.emptyTitle}
+          description={props.emptyDescription}
+        />
       }
     >
       <div class="space-y-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="min-w-[200px] flex-1 sm:max-w-xs">
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Search disks"
+        <Show when={props.showToolbar !== false}>
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="min-w-[200px] flex-1 sm:max-w-xs">
+              <SearchInput value={search} onChange={setSearch} placeholder="Search disks" />
+            </div>
+            <FilterButtonGroup
+              options={STATUS_FILTER_OPTIONS}
+              value={status()}
+              onChange={setStatus}
             />
+            <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
+              <Show when={visible() !== total()} fallback={<>{total()} disks</>}>
+                {visible()} of {total()} disks
+              </Show>
+            </span>
           </div>
-          <FilterButtonGroup
-            options={STATUS_FILTER_OPTIONS}
-            value={status()}
-            onChange={setStatus}
-          />
-          <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-            <Show when={visible() !== total()} fallback={<>{total()} disks</>}>
-              {visible()} of {total()} disks
-            </Show>
-          </span>
-        </div>
+        </Show>
 
         <Show
           when={filtered().length > 0}
           fallback={
-            <Card padding="lg">
-              <EmptyState
-                icon={props.emptyIcon}
-                title="No disks match current filters"
-                description="Adjust the search or status filter to see more disks."
-              />
-            </Card>
+            <PlatformTableEmptyState
+              icon={props.emptyIcon}
+              title="No disks match current filters"
+              description="Adjust the search or status filter to see more disks."
+            />
           }
         >
-          <Card padding="none" tone="card" class="overflow-hidden">
-            <Table class="w-full min-w-[880px] border-collapse text-xs">
-              <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                  <TableHead class="px-3 py-2 font-medium">Disk</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Model</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Type</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Size</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Health</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Temp</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Wearout</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Serial</TableHead>
+          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+            <TableCardHeader title={props.title ?? 'Disks'} />
+            <Table class="min-w-full table-fixed text-xs md:min-w-[880px]">
+              <TableHeader>
+                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                  <TableHead class={getPlatformTableHeadClass()}>Disk</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Model
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClass()}>Type</TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>Size</TableHead>
+                  <TableHead class={getPlatformTableHeadClass()}>Health</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                    Temp
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                    Wearout
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Serial
+                  </TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody class="divide-y divide-border-subtle">
+              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                 <For each={filtered()}>
                   {(disk) => {
                     const meta = () => disk.physicalDisk;
@@ -148,22 +159,28 @@ export const TrueNASDisksTable: Component<{
                     const health = () => asTrimmedString(meta()?.health) || '—';
                     const serial = () => asTrimmedString(meta()?.serial) || '—';
                     return (
-                      <TableRow class="hover:bg-surface-hover">
-                        <TableCell class="px-3 py-2">
-                          <span class="font-semibold text-base-content truncate" title={name()}>
+                      <TableRow class="text-[11px] sm:text-xs">
+                        <TableCell class={getPlatformTableCellClass()}>
+                          <span class="truncate font-semibold text-base-content" title={name()}>
                             {name()}
                           </span>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">
-                          <span class="truncate inline-block max-w-[14rem]" title={model()}>
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                        >
+                          <span class="inline-block max-w-[14rem] truncate" title={model()}>
                             {model()}
                           </span>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{type()}</TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell class={`${getPlatformTableCellClass()} text-base-content`}>
+                          {type()}
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                        >
                           {formatBytes(meta()?.sizeBytes)}
                         </TableCell>
-                        <TableCell class="px-3 py-2">
+                        <TableCell class={getPlatformTableCellClass()}>
                           <div class="flex items-center gap-2">
                             <StatusDot
                               size="sm"
@@ -174,14 +191,20 @@ export const TrueNASDisksTable: Component<{
                             <span class="text-base-content">{health()}</span>
                           </div>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                        >
                           {formatTemperature(meta()?.temperature)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                        >
                           {formatWearout(meta()?.wearout)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
-                          <span class="truncate inline-block max-w-[10rem]" title={serial()}>
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                        >
+                          <span class="inline-block max-w-[10rem] truncate" title={serial()}>
                             {serial()}
                           </span>
                         </TableCell>
@@ -191,7 +214,7 @@ export const TrueNASDisksTable: Component<{
                 </For>
               </TableBody>
             </Table>
-          </Card>
+          </TableCard>
         </Show>
       </div>
     </Show>

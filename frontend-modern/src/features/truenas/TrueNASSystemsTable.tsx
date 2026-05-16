@@ -1,9 +1,9 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
-import { Card } from '@/components/shared/Card';
-import { EmptyState } from '@/components/shared/EmptyState';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { TableCard } from '@/components/shared/TableCard';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import {
   Table,
   TableBody,
@@ -15,7 +15,13 @@ import {
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_CARD_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformTableEmptyState,
   filterPlatformResources,
+  getPlatformTableCellClass,
+  getPlatformTableHeadClass,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
@@ -60,7 +66,8 @@ const formatBytes = (bytes: number | undefined): string => {
 };
 
 const formatPercent = (percent?: number): JSX.Element => {
-  if (typeof percent !== 'number' || Number.isNaN(percent)) return <span class="text-muted">—</span>;
+  if (typeof percent !== 'number' || Number.isNaN(percent))
+    return <span class="text-muted">—</span>;
   return <span class="tabular-nums">{percent.toFixed(1)}%</span>;
 };
 
@@ -77,6 +84,8 @@ export const TrueNASSystemsTable: Component<{
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
+  title?: string;
+  showToolbar?: boolean;
 }> = (props) => {
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<PlatformResourceStatusFilter>('all');
@@ -105,117 +114,165 @@ export const TrueNASSystemsTable: Component<{
     <Show
       when={props.systems.length > 0}
       fallback={
-        <Card padding="lg">
-          <EmptyState
-            icon={props.emptyIcon}
-            title={props.emptyTitle}
-            description={props.emptyDescription}
-          />
-        </Card>
+        <PlatformTableEmptyState
+          icon={props.emptyIcon}
+          title={props.emptyTitle}
+          description={props.emptyDescription}
+        />
       }
     >
       <div class="space-y-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="min-w-[200px] flex-1 sm:max-w-xs">
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Search TrueNAS systems"
+        <Show when={props.showToolbar !== false}>
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="min-w-[200px] flex-1 sm:max-w-xs">
+              <SearchInput
+                value={search}
+                onChange={setSearch}
+                placeholder="Search TrueNAS systems"
+              />
+            </div>
+            <FilterButtonGroup
+              options={STATUS_FILTER_OPTIONS}
+              value={status()}
+              onChange={setStatus}
             />
+            <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
+              <Show when={visible() !== total()} fallback={<>{total()} systems</>}>
+                {visible()} of {total()} systems
+              </Show>
+            </span>
           </div>
-          <FilterButtonGroup
-            options={STATUS_FILTER_OPTIONS}
-            value={status()}
-            onChange={setStatus}
-          />
-          <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-            <Show when={visible() !== total()} fallback={<>{total()} systems</>}>
-              {visible()} of {total()} systems
-            </Show>
-          </span>
-        </div>
+        </Show>
 
         <Show
           when={filtered().length > 0}
           fallback={
-            <Card padding="lg">
-              <EmptyState
-                icon={props.emptyIcon}
-                title="No systems match current filters"
-                description="Adjust the search or status filter to see more systems."
-              />
-            </Card>
+            <PlatformTableEmptyState
+              icon={props.emptyIcon}
+              title="No systems match current filters"
+              description="Adjust the search or status filter to see more systems."
+            />
           }
         >
-          <Card padding="none" tone="card" class="overflow-hidden">
-            <Table class="w-full min-w-[960px] border-collapse text-xs">
-              <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                  <TableHead class="px-3 py-2 font-medium">System</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Version</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Uptime</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">CPU</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Memory</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Storage</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Temp</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Pools</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Datasets</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Disks</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Apps</TableHead>
+          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+            <TableCardHeader title={props.title ?? 'Systems'} />
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1040px]">
+              <TableHeader>
+                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                  <TableHead class={getPlatformTableHeadClass()}>System</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Version
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                    Uptime
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>CPU</TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>Memory</TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>Storage</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                    Temp
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                    Pools
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                    Datasets
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                    Disks
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                    Apps
+                  </TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody class="divide-y divide-border-subtle">
+              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                 <For each={filtered()}>
                   {(system) => {
                     const name = () => asTrimmedString(system.name) || system.id;
                     const version = () => asTrimmedString(system.agent?.osVersion) || '—';
                     const indicator = () => getSimpleStatusIndicator(system.status);
+                    const storagePercent = () => {
+                      if (typeof system.disk?.current === 'number') return system.disk.current;
+                      if (
+                        typeof system.disk?.used === 'number' &&
+                        typeof system.disk?.total === 'number' &&
+                        system.disk.total > 0
+                      ) {
+                        return (system.disk.used / system.disk.total) * 100;
+                      }
+                      return undefined;
+                    };
+                    const storageFullLabel = () =>
+                      typeof system.disk?.used === 'number' &&
+                      typeof system.disk?.total === 'number'
+                        ? `${formatBytes(system.disk.used)} / ${formatBytes(system.disk.total)}`
+                        : formatPercent(storagePercent());
                     const c = counts();
                     return (
-                      <TableRow class="hover:bg-surface-hover">
-                        <TableCell class="px-3 py-2">
-                          <div class="flex items-center gap-2 min-w-0">
+                      <TableRow class="text-[11px] sm:text-xs">
+                        <TableCell class={getPlatformTableCellClass()}>
+                          <div class="flex min-w-0 items-center gap-2">
                             <StatusDot
                               size="sm"
                               variant={indicator().variant}
                               title={system.status || 'unknown'}
                               ariaHidden
                             />
-                            <span class="font-semibold text-base-content truncate" title={name()}>
+                            <span class="truncate font-semibold text-base-content" title={name()}>
                               {name()}
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                        >
                           {version()}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                        >
                           {formatUptime(system.uptime)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                        >
                           {formatPercent(system.cpu?.current)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                        >
                           {formatPercent(system.memory?.current)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
-                          {typeof system.disk?.used === 'number' && typeof system.disk?.total === 'number'
-                            ? `${formatBytes(system.disk.used)} / ${formatBytes(system.disk.total)}`
-                            : formatPercent(system.disk?.current)}
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                        >
+                          <span class="md:hidden">{formatPercent(storagePercent())}</span>
+                          <span class="hidden md:inline">{storageFullLabel()}</span>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                        >
                           {formatTemperature(system.temperature)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                        >
                           {c.pools}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                        >
                           {c.datasets}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                        >
                           {c.disks}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                        >
                           {c.apps}
                         </TableCell>
                       </TableRow>
@@ -224,7 +281,7 @@ export const TrueNASSystemsTable: Component<{
                 </For>
               </TableBody>
             </Table>
-          </Card>
+          </TableCard>
         </Show>
       </div>
     </Show>

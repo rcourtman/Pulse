@@ -10,11 +10,7 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import { DockerHostsTable } from './DockerHostsTable';
 import { DockerServicesTable } from './DockerServicesTable';
-import {
-  DOCKER_TAB_SPECS,
-  buildDockerPageModel,
-  type DockerPageTabId,
-} from './dockerPageModel';
+import { DOCKER_TAB_SPECS, buildDockerPageModel, type DockerPageTabId } from './dockerPageModel';
 
 const DOCKER_RESOURCE_QUERY = 'type=agent,docker-host,app-container,docker-service';
 const DOCKER_PLATFORM_FILTER = 'docker';
@@ -74,12 +70,36 @@ export function DockerPageSurface() {
             }
           >
             <Show when={activeTab() === 'overview'}>
-              <DockerHostsTable
-                resources={model().hosts}
-                emptyIcon={dockerIcon()}
-                emptyTitle="No Docker hosts"
-                emptyDescription="Container hosts appear here once a Pulse agent registers them."
-              />
+              <div class="space-y-4">
+                <DockerHostsTable
+                  resources={model().hosts}
+                  emptyIcon={dockerIcon()}
+                  emptyTitle="No Docker hosts"
+                  emptyDescription="Container hosts appear here once a Pulse agent registers them."
+                  showToolbar={false}
+                />
+                <WorkloadsSurface
+                  vms={[]}
+                  containers={[]}
+                  nodes={[]}
+                  useWorkloads
+                  embedded
+                  tableOnly
+                  showFilterToolbar
+                  suppressPlatformFilter
+                  forcedPlatform={DOCKER_PLATFORM_FILTER}
+                  compactGroupHeaders
+                />
+                <Show when={model().services.length > 0}>
+                  <DockerServicesTable
+                    resources={model().services}
+                    emptyIcon={dockerIcon()}
+                    emptyTitle="No Swarm services"
+                    emptyDescription="Docker Swarm services appear here when a Swarm manager reports them."
+                    showToolbar={false}
+                  />
+                </Show>
+              </div>
             </Show>
             <Show when={activeTab() === 'containers'}>
               <WorkloadsSurface

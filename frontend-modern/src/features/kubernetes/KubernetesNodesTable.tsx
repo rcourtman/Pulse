@@ -1,9 +1,9 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
-import { Card } from '@/components/shared/Card';
-import { EmptyState } from '@/components/shared/EmptyState';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { TableCard } from '@/components/shared/TableCard';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import {
   Table,
   TableBody,
@@ -15,7 +15,13 @@ import {
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_CARD_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformTableEmptyState,
   filterPlatformResources,
+  getPlatformTableCellClass,
+  getPlatformTableHeadClass,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
@@ -38,7 +44,8 @@ const STATUS_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
 ];
 
 const formatPercent = (percent?: number): JSX.Element => {
-  if (typeof percent !== 'number' || Number.isNaN(percent)) return <span class="text-muted">—</span>;
+  if (typeof percent !== 'number' || Number.isNaN(percent))
+    return <span class="text-muted">—</span>;
   return <span class="tabular-nums">{percent.toFixed(1)}%</span>;
 };
 
@@ -66,9 +73,7 @@ const formatBytes = (bytes: number | undefined): string => {
 
 const formatRoles = (roles: string[] | undefined): string => {
   if (!roles || roles.length === 0) return '—';
-  return roles
-    .map((role) => role.replace('node-role.kubernetes.io/', ''))
-    .join(', ');
+  return roles.map((role) => role.replace('node-role.kubernetes.io/', '')).join(', ');
 };
 
 export const KubernetesNodesTable: Component<{
@@ -76,6 +81,8 @@ export const KubernetesNodesTable: Component<{
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
+  title?: string;
+  showToolbar?: boolean;
 }> = (props) => {
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<PlatformResourceStatusFilter>('all');
@@ -88,64 +95,69 @@ export const KubernetesNodesTable: Component<{
     <Show
       when={props.resources.length > 0}
       fallback={
-        <Card padding="lg">
-          <EmptyState
-            icon={props.emptyIcon}
-            title={props.emptyTitle}
-            description={props.emptyDescription}
-          />
-        </Card>
+        <PlatformTableEmptyState
+          icon={props.emptyIcon}
+          title={props.emptyTitle}
+          description={props.emptyDescription}
+        />
       }
     >
       <div class="space-y-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="min-w-[200px] flex-1 sm:max-w-xs">
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Search nodes"
+        <Show when={props.showToolbar !== false}>
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="min-w-[200px] flex-1 sm:max-w-xs">
+              <SearchInput value={search} onChange={setSearch} placeholder="Search nodes" />
+            </div>
+            <FilterButtonGroup
+              options={STATUS_FILTER_OPTIONS}
+              value={status()}
+              onChange={setStatus}
             />
+            <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
+              <Show when={visible() !== total()} fallback={<>{total()} nodes</>}>
+                {visible()} of {total()} nodes
+              </Show>
+            </span>
           </div>
-          <FilterButtonGroup
-            options={STATUS_FILTER_OPTIONS}
-            value={status()}
-            onChange={setStatus}
-          />
-          <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-            <Show when={visible() !== total()} fallback={<>{total()} nodes</>}>
-              {visible()} of {total()} nodes
-            </Show>
-          </span>
-        </div>
+        </Show>
 
         <Show
           when={filtered().length > 0}
           fallback={
-            <Card padding="lg">
-              <EmptyState
-                icon={props.emptyIcon}
-                title="No nodes match current filters"
-                description="Adjust the search or status filter to see more nodes."
-              />
-            </Card>
+            <PlatformTableEmptyState
+              icon={props.emptyIcon}
+              title="No nodes match current filters"
+              description="Adjust the search or status filter to see more nodes."
+            />
           }
         >
-          <Card padding="none" tone="card" class="overflow-hidden">
-            <Table class="w-full min-w-[1000px] border-collapse text-xs">
-              <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                  <TableHead class="px-3 py-2 font-medium">Node</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Cluster</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Roles</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Kubelet</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Runtime</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">CPU</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Memory</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Capacity</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Uptime</TableHead>
+          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+            <TableCardHeader title={props.title ?? 'Nodes'} />
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1000px]">
+              <TableHeader>
+                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                  <TableHead class={getPlatformTableHeadClass()}>Node</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Cluster
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Roles
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Kubelet
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Runtime
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>CPU</TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>Memory</TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>Capacity</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                    Uptime
+                  </TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody class="divide-y divide-border-subtle">
+              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                 <For each={filtered()}>
                   {(node) => {
                     const meta = () => node.kubernetes;
@@ -164,42 +176,68 @@ export const KubernetesNodesTable: Component<{
                       if (typeof mem === 'number' && mem > 0) parts.push(formatBytes(mem));
                       return parts.join(' / ') || '—';
                     };
+                    const compactCapacityLabel = () => {
+                      const cores = meta()?.capacityCpuCores;
+                      if (typeof cores === 'number' && cores > 0) return `${cores} cores`;
+                      return capacityLabel();
+                    };
                     const indicator = () => getSimpleStatusIndicator(node.status);
                     return (
-                      <TableRow class="hover:bg-surface-hover">
-                        <TableCell class="px-3 py-2">
-                          <div class="flex items-center gap-2 min-w-0">
+                      <TableRow class="text-[11px] sm:text-xs">
+                        <TableCell class={getPlatformTableCellClass()}>
+                          <div class="flex min-w-0 items-center gap-2">
                             <StatusDot
                               size="sm"
                               variant={indicator().variant}
                               title={node.status || 'unknown'}
                               ariaHidden
                             />
-                            <span class="font-semibold text-base-content truncate" title={name()}>
+                            <span class="truncate font-semibold text-base-content" title={name()}>
                               {name()}
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{cluster()}</TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{formatRoles(meta()?.roles)}</TableCell>
-                        <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                        >
+                          {cluster()}
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                        >
+                          {formatRoles(meta()?.roles)}
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                        >
                           {kubelet()}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                        >
                           <span class="truncate inline-block max-w-[10rem]" title={runtime()}>
                             {runtime()}
                           </span>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                        >
                           {formatPercent(node.cpu?.current)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                        >
                           {formatPercent(node.memory?.current)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
-                          {capacityLabel()}
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content tabular-nums`}
+                        >
+                          <span class="md:hidden">{compactCapacityLabel()}</span>
+                          <span class="hidden md:inline">{capacityLabel()}</span>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                        >
                           {formatUptime(node.uptime)}
                         </TableCell>
                       </TableRow>
@@ -208,7 +246,7 @@ export const KubernetesNodesTable: Component<{
                 </For>
               </TableBody>
             </Table>
-          </Card>
+          </TableCard>
         </Show>
       </div>
     </Show>

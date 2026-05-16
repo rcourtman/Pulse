@@ -1,9 +1,9 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
-import { Card } from '@/components/shared/Card';
-import { EmptyState } from '@/components/shared/EmptyState';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { TableCard } from '@/components/shared/TableCard';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import {
   Table,
   TableBody,
@@ -15,7 +15,13 @@ import {
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_CARD_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformTableEmptyState,
   filterPlatformResources,
+  getPlatformTableCellClass,
+  getPlatformTableHeadClass,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
@@ -37,19 +43,26 @@ const STATUS_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
 ];
 
 const formatPorts = (ports: Resource['docker'] extends infer T ? T : never): string => {
-  const entries = (ports as { endpointPorts?: Array<{ publishedPort?: number; targetPort?: number; protocol?: string }> })?.endpointPorts ?? [];
-  if (entries.length === 0) return '—';
-  return entries
-    .map((entry) => {
-      const protocol = entry?.protocol ? `/${entry.protocol.toLowerCase()}` : '';
-      if (entry?.publishedPort && entry?.targetPort) {
-        return `${entry.publishedPort}:${entry.targetPort}${protocol}`;
+  const entries =
+    (
+      ports as {
+        endpointPorts?: Array<{ publishedPort?: number; targetPort?: number; protocol?: string }>;
       }
-      const single = entry?.publishedPort ?? entry?.targetPort;
-      return single ? `${single}${protocol}` : '';
-    })
-    .filter((part) => part.length > 0)
-    .join(', ') || '—';
+    )?.endpointPorts ?? [];
+  if (entries.length === 0) return '—';
+  return (
+    entries
+      .map((entry) => {
+        const protocol = entry?.protocol ? `/${entry.protocol.toLowerCase()}` : '';
+        if (entry?.publishedPort && entry?.targetPort) {
+          return `${entry.publishedPort}:${entry.targetPort}${protocol}`;
+        }
+        const single = entry?.publishedPort ?? entry?.targetPort;
+        return single ? `${single}${protocol}` : '';
+      })
+      .filter((part) => part.length > 0)
+      .join(', ') || '—'
+  );
 };
 
 const replicaCount = (value: number | undefined): JSX.Element => (
@@ -61,6 +74,8 @@ export const DockerServicesTable: Component<{
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
+  title?: string;
+  showToolbar?: boolean;
 }> = (props) => {
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<PlatformResourceStatusFilter>('all');
@@ -73,62 +88,69 @@ export const DockerServicesTable: Component<{
     <Show
       when={props.resources.length > 0}
       fallback={
-        <Card padding="lg">
-          <EmptyState
-            icon={props.emptyIcon}
-            title={props.emptyTitle}
-            description={props.emptyDescription}
-          />
-        </Card>
+        <PlatformTableEmptyState
+          icon={props.emptyIcon}
+          title={props.emptyTitle}
+          description={props.emptyDescription}
+        />
       }
     >
       <div class="space-y-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="min-w-[200px] flex-1 sm:max-w-xs">
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Search Swarm services"
+        <Show when={props.showToolbar !== false}>
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="min-w-[200px] flex-1 sm:max-w-xs">
+              <SearchInput
+                value={search}
+                onChange={setSearch}
+                placeholder="Search Swarm services"
+              />
+            </div>
+            <FilterButtonGroup
+              options={STATUS_FILTER_OPTIONS}
+              value={status()}
+              onChange={setStatus}
             />
+            <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
+              <Show when={visible() !== total()} fallback={<>{total()} services</>}>
+                {visible()} of {total()} services
+              </Show>
+            </span>
           </div>
-          <FilterButtonGroup
-            options={STATUS_FILTER_OPTIONS}
-            value={status()}
-            onChange={setStatus}
-          />
-          <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-            <Show when={visible() !== total()} fallback={<>{total()} services</>}>
-              {visible()} of {total()} services
-            </Show>
-          </span>
-        </div>
+        </Show>
 
         <Show
           when={filtered().length > 0}
           fallback={
-            <Card padding="lg">
-              <EmptyState
-                icon={props.emptyIcon}
-                title="No services match current filters"
-                description="Adjust the search or status filter to see more services."
-              />
-            </Card>
+            <PlatformTableEmptyState
+              icon={props.emptyIcon}
+              title="No services match current filters"
+              description="Adjust the search or status filter to see more services."
+            />
           }
         >
-          <Card padding="none" tone="card" class="overflow-hidden">
-            <Table class="w-full min-w-[900px] border-collapse text-xs">
-              <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                  <TableHead class="px-3 py-2 font-medium">Service</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Image</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Mode</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Desired</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Running</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Ports</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Host</TableHead>
+          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+            <TableCardHeader title={props.title ?? 'Swarm Services'} />
+            <Table class="min-w-full table-fixed text-xs md:min-w-[900px]">
+              <TableHeader>
+                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                  <TableHead class={getPlatformTableHeadClass()}>Service</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Image
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClass()}>Mode</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                    Desired
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>Running</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Ports
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Host
+                  </TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody class="divide-y divide-border-subtle">
+              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                 <For each={filtered()}>
                   {(service) => {
                     const name = () => asTrimmedString(service.name) || service.id;
@@ -137,48 +159,59 @@ export const DockerServicesTable: Component<{
                     const host = () => asTrimmedString(service.docker?.hostname) || '—';
                     const indicator = () => getSimpleStatusIndicator(service.status);
                     return (
-                      <TableRow class="hover:bg-surface-hover">
-                        <TableCell class="px-3 py-2">
-                          <div class="flex items-center gap-2 min-w-0">
+                      <TableRow class="text-[11px] sm:text-xs">
+                        <TableCell class={getPlatformTableCellClass()}>
+                          <div class="flex min-w-0 items-center gap-2">
                             <StatusDot
                               size="sm"
                               variant={indicator().variant}
                               title={service.status || 'unknown'}
                               ariaHidden
                             />
-                            <span
-                              class="font-semibold text-base-content truncate"
-                              title={name()}
-                            >
+                            <span class="truncate font-semibold text-base-content" title={name()}>
                               {name()}
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                        >
                           <span class="truncate inline-block max-w-[18rem]" title={image()}>
                             {image()}
                           </span>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{mode()}</TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell class={`${getPlatformTableCellClass()} text-base-content`}>
+                          {mode()}
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                        >
                           {replicaCount(service.docker?.desiredTasks)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                        >
                           {replicaCount(service.docker?.runningTasks)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                        >
                           <span class="font-mono text-[11px]" title={formatPorts(service.docker)}>
                             {formatPorts(service.docker)}
                           </span>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{host()}</TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                        >
+                          {host()}
+                        </TableCell>
                       </TableRow>
                     );
                   }}
                 </For>
               </TableBody>
             </Table>
-          </Card>
+          </TableCard>
         </Show>
       </div>
     </Show>

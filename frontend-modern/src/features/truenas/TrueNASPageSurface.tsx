@@ -22,8 +22,7 @@ import {
 // first-class type tokens and including them triggers a 400 from
 // `/api/resources`. The page model still buckets by topology
 // client-side.
-const TRUENAS_RESOURCE_QUERY =
-  'type=agent,app-container,storage,physical_disk';
+const TRUENAS_RESOURCE_QUERY = 'type=agent,app-container,storage,physical_disk';
 const TRUENAS_PLATFORM_FILTER = 'truenas';
 const VALID_TABS = new Set<TrueNASPageTabId>(TRUENAS_TAB_SPECS.map((tab) => tab.id));
 
@@ -81,13 +80,45 @@ export function TrueNASPageSurface() {
             }
           >
             <Show when={activeTab() === 'overview'}>
-              <TrueNASSystemsTable
-                systems={model().systems}
-                scope={model().resources}
-                emptyIcon={truenasIcon()}
-                emptyTitle="No TrueNAS systems"
-                emptyDescription="TrueNAS systems appear here once a TrueNAS connection reports its top-level appliance."
-              />
+              <div class="space-y-4">
+                <TrueNASSystemsTable
+                  systems={model().systems}
+                  scope={model().resources}
+                  emptyIcon={truenasIcon()}
+                  emptyTitle="No TrueNAS systems"
+                  emptyDescription="TrueNAS systems appear here once a TrueNAS connection reports its top-level appliance."
+                  showToolbar={false}
+                />
+                <StorageSurface
+                  embedded
+                  tableOnly
+                  showFilterToolbar
+                  forcedSourceFilter={TRUENAS_PLATFORM_FILTER}
+                />
+                <Show when={model().disks.length > 0}>
+                  <TrueNASDisksTable
+                    resources={model().disks}
+                    emptyIcon={truenasIcon()}
+                    emptyTitle="No TrueNAS disks reported"
+                    emptyDescription="Physical disks appear here once a TrueNAS connection enumerates them."
+                    showToolbar={false}
+                  />
+                </Show>
+                <Show when={model().apps.length > 0}>
+                  <WorkloadsSurface
+                    vms={[]}
+                    containers={[]}
+                    nodes={[]}
+                    useWorkloads
+                    embedded
+                    tableOnly
+                    showFilterToolbar
+                    suppressPlatformFilter
+                    forcedPlatform={TRUENAS_PLATFORM_FILTER}
+                    compactGroupHeaders
+                  />
+                </Show>
+              </div>
             </Show>
             <Show when={activeTab() === 'storage'}>
               <StorageSurface

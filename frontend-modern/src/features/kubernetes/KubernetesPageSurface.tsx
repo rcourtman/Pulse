@@ -20,8 +20,7 @@ import {
 // Include `agent` rows so K8s nodes that the backend registry merged onto
 // the linked agent host (sources=['agent','kubernetes']) still appear in the
 // Nodes tab; the page model filters them down to those tagged kubernetes.
-const KUBERNETES_RESOURCE_QUERY =
-  'type=k8s-cluster,k8s-node,pod,k8s-deployment,agent';
+const KUBERNETES_RESOURCE_QUERY = 'type=k8s-cluster,k8s-node,pod,k8s-deployment,agent';
 const KUBERNETES_PLATFORM_FILTER = 'kubernetes';
 const VALID_TABS = new Set<KubernetesPageTabId>(KUBERNETES_TAB_SPECS.map((tab) => tab.id));
 
@@ -81,13 +80,44 @@ export function KubernetesPageSurface() {
             }
           >
             <Show when={activeTab() === 'overview'}>
-              <KubernetesClustersTable
-                clusters={model().clusters}
-                scope={model().resources}
-                emptyIcon={k8sIcon()}
-                emptyTitle="No clusters reported"
-                emptyDescription="Kubernetes clusters appear here once at least one agent reports cluster context."
-              />
+              <div class="space-y-4">
+                <KubernetesClustersTable
+                  clusters={model().clusters}
+                  scope={model().resources}
+                  emptyIcon={k8sIcon()}
+                  emptyTitle="No clusters reported"
+                  emptyDescription="Kubernetes clusters appear here once at least one agent reports cluster context."
+                  showToolbar={false}
+                />
+                <KubernetesNodesTable
+                  resources={model().nodes}
+                  emptyIcon={k8sIcon()}
+                  emptyTitle="No nodes reported"
+                  emptyDescription="Kubernetes nodes appear here as soon as the agent enumerates them."
+                  showToolbar={false}
+                />
+                <WorkloadsSurface
+                  vms={[]}
+                  containers={[]}
+                  nodes={[]}
+                  useWorkloads
+                  embedded
+                  tableOnly
+                  showFilterToolbar
+                  suppressPlatformFilter
+                  forcedPlatform={KUBERNETES_PLATFORM_FILTER}
+                  compactGroupHeaders
+                />
+                <Show when={model().deployments.length > 0}>
+                  <KubernetesDeploymentsTable
+                    resources={model().deployments}
+                    emptyIcon={k8sIcon()}
+                    emptyTitle="No deployments reported"
+                    emptyDescription="Deployments appear here once the cluster reports them."
+                    showToolbar={false}
+                  />
+                </Show>
+              </div>
             </Show>
             <Show when={activeTab() === 'nodes'}>
               <KubernetesNodesTable

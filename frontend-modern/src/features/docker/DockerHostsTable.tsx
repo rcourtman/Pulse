@@ -1,9 +1,9 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
-import { Card } from '@/components/shared/Card';
-import { EmptyState } from '@/components/shared/EmptyState';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { TableCard } from '@/components/shared/TableCard';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import {
   Table,
   TableBody,
@@ -15,7 +15,13 @@ import {
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_CARD_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformTableEmptyState,
   filterPlatformResources,
+  getPlatformTableCellClass,
+  getPlatformTableHeadClass,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
@@ -37,7 +43,8 @@ const STATUS_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
 ];
 
 const formatPercent = (percent?: number): JSX.Element => {
-  if (typeof percent !== 'number' || Number.isNaN(percent)) return <span class="text-muted">—</span>;
+  if (typeof percent !== 'number' || Number.isNaN(percent))
+    return <span class="text-muted">—</span>;
   return <span class="tabular-nums">{percent.toFixed(1)}%</span>;
 };
 
@@ -68,6 +75,8 @@ export const DockerHostsTable: Component<{
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
+  title?: string;
+  showToolbar?: boolean;
 }> = (props) => {
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<PlatformResourceStatusFilter>('all');
@@ -80,76 +89,85 @@ export const DockerHostsTable: Component<{
     <Show
       when={props.resources.length > 0}
       fallback={
-        <Card padding="lg">
-          <EmptyState
-            icon={props.emptyIcon}
-            title={props.emptyTitle}
-            description={props.emptyDescription}
-          />
-        </Card>
+        <PlatformTableEmptyState
+          icon={props.emptyIcon}
+          title={props.emptyTitle}
+          description={props.emptyDescription}
+        />
       }
     >
       <div class="space-y-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="min-w-[200px] flex-1 sm:max-w-xs">
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Search Docker hosts"
+        <Show when={props.showToolbar !== false}>
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="min-w-[200px] flex-1 sm:max-w-xs">
+              <SearchInput value={search} onChange={setSearch} placeholder="Search Docker hosts" />
+            </div>
+            <FilterButtonGroup
+              options={STATUS_FILTER_OPTIONS}
+              value={status()}
+              onChange={setStatus}
             />
+            <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
+              <Show when={visible() !== total()} fallback={<>{total()} hosts</>}>
+                {visible()} of {total()} hosts
+              </Show>
+            </span>
           </div>
-          <FilterButtonGroup
-            options={STATUS_FILTER_OPTIONS}
-            value={status()}
-            onChange={setStatus}
-          />
-          <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-            <Show when={visible() !== total()} fallback={<>{total()} hosts</>}>
-              {visible()} of {total()} hosts
-            </Show>
-          </span>
-        </div>
+        </Show>
 
         <Show
           when={filtered().length > 0}
           fallback={
-            <Card padding="lg">
-              <EmptyState
-                icon={props.emptyIcon}
-                title="No hosts match current filters"
-                description="Adjust the search or status filter to see more hosts."
-              />
-            </Card>
+            <PlatformTableEmptyState
+              icon={props.emptyIcon}
+              title="No hosts match current filters"
+              description="Adjust the search or status filter to see more hosts."
+            />
           }
         >
-          <Card padding="none" tone="card" class="overflow-hidden">
-            <Table class="w-full min-w-[940px] border-collapse text-xs">
-              <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                  <TableHead class="px-3 py-2 font-medium">Host</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Runtime</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Version</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Containers</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">CPU</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Memory</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Uptime</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Temp</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Swarm role</TableHead>
+          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+            <TableCardHeader title={props.title ?? 'Hosts'} />
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1040px]">
+              <TableHeader>
+                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                  <TableHead class={getPlatformTableHeadClass()}>Host</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Runtime
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Version
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                    Containers
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>CPU</TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>Memory</TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>Disk</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                    Uptime
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                    Temp
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Swarm role
+                  </TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody class="divide-y divide-border-subtle">
+              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                 <For each={filtered()}>
                   {(host) => {
-                    const docker = () => host.docker as
-                      | (NonNullable<Resource['docker']> & {
-                          runtime?: string;
-                          runtimeVersion?: string;
-                          containerCount?: number;
-                          uptimeSeconds?: number;
-                          temperature?: number;
-                          swarm?: { nodeRole?: string };
-                        })
-                      | undefined;
+                    const docker = () =>
+                      host.docker as
+                        | (NonNullable<Resource['docker']> & {
+                            runtime?: string;
+                            runtimeVersion?: string;
+                            containerCount?: number;
+                            uptimeSeconds?: number;
+                            temperature?: number;
+                            swarm?: { nodeRole?: string };
+                          })
+                        | undefined;
                     const name = () => asTrimmedString(host.name) || host.id;
                     const runtime = () => runtimeLabel(docker()?.runtime);
                     const version = () => asTrimmedString(docker()?.runtimeVersion) || '—';
@@ -160,47 +178,72 @@ export const DockerHostsTable: Component<{
                     };
                     const indicator = () => getSimpleStatusIndicator(host.status);
                     return (
-                      <TableRow class="hover:bg-surface-hover">
-                        <TableCell class="px-3 py-2">
-                          <div class="flex items-center gap-2 min-w-0">
+                      <TableRow class="text-[11px] sm:text-xs">
+                        <TableCell class={getPlatformTableCellClass()}>
+                          <div class="flex min-w-0 items-center gap-2">
                             <StatusDot
                               size="sm"
                               variant={indicator().variant}
                               title={host.status || 'unknown'}
                               ariaHidden
                             />
-                            <span class="font-semibold text-base-content truncate" title={name()}>
+                            <span class="truncate font-semibold text-base-content" title={name()}>
                               {name()}
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{runtime()}</TableCell>
-                        <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                        >
+                          {runtime()}
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                        >
                           {version()}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                        >
                           {containerCount()}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                        >
                           {formatPercent(host.cpu?.current)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                        >
                           {formatPercent(host.memory?.current)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                        >
+                          {formatPercent(host.disk?.current)}
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                        >
                           {formatUptime(host.uptime ?? docker()?.uptimeSeconds)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                        >
                           {formatTemperature(host.temperature ?? docker()?.temperature)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{swarmRole()}</TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                        >
+                          {swarmRole()}
+                        </TableCell>
                       </TableRow>
                     );
                   }}
                 </For>
               </TableBody>
             </Table>
-          </Card>
+          </TableCard>
         </Show>
       </div>
     </Show>

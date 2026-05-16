@@ -1,9 +1,9 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
-import { Card } from '@/components/shared/Card';
-import { EmptyState } from '@/components/shared/EmptyState';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { TableCard } from '@/components/shared/TableCard';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import {
   Table,
   TableBody,
@@ -15,7 +15,13 @@ import {
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_CARD_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformTableEmptyState,
   filterPlatformResources,
+  getPlatformTableCellClass,
+  getPlatformTableHeadClass,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
@@ -38,7 +44,8 @@ const STATUS_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
 ];
 
 const formatPercent = (percent?: number): JSX.Element => {
-  if (typeof percent !== 'number' || Number.isNaN(percent)) return <span class="text-muted">—</span>;
+  if (typeof percent !== 'number' || Number.isNaN(percent))
+    return <span class="text-muted">—</span>;
   return <span class="tabular-nums">{percent.toFixed(1)}%</span>;
 };
 
@@ -51,6 +58,8 @@ export const KubernetesClustersTable: Component<{
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
+  title?: string;
+  showToolbar?: boolean;
 }> = (props) => {
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<PlatformResourceStatusFilter>('all');
@@ -86,7 +95,8 @@ export const KubernetesClustersTable: Component<{
       }
       if (!bucket) continue;
       if (resource.type === 'k8s-node') bucket.nodes += 1;
-      else if (resource.type === 'agent' && resource.sources?.includes('kubernetes')) bucket.nodes += 1;
+      else if (resource.type === 'agent' && resource.sources?.includes('kubernetes'))
+        bucket.nodes += 1;
       else if (resource.type === 'pod') bucket.pods += 1;
       else if (resource.type === 'k8s-deployment') bucket.deployments += 1;
     }
@@ -99,63 +109,66 @@ export const KubernetesClustersTable: Component<{
     <Show
       when={props.clusters.length > 0}
       fallback={
-        <Card padding="lg">
-          <EmptyState
-            icon={props.emptyIcon}
-            title={props.emptyTitle}
-            description={props.emptyDescription}
-          />
-        </Card>
+        <PlatformTableEmptyState
+          icon={props.emptyIcon}
+          title={props.emptyTitle}
+          description={props.emptyDescription}
+        />
       }
     >
       <div class="space-y-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="min-w-[200px] flex-1 sm:max-w-xs">
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Search clusters"
+        <Show when={props.showToolbar !== false}>
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="min-w-[200px] flex-1 sm:max-w-xs">
+              <SearchInput value={search} onChange={setSearch} placeholder="Search clusters" />
+            </div>
+            <FilterButtonGroup
+              options={STATUS_FILTER_OPTIONS}
+              value={status()}
+              onChange={setStatus}
             />
+            <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
+              <Show when={visible() !== total()} fallback={<>{total()} clusters</>}>
+                {visible()} of {total()} clusters
+              </Show>
+            </span>
           </div>
-          <FilterButtonGroup
-            options={STATUS_FILTER_OPTIONS}
-            value={status()}
-            onChange={setStatus}
-          />
-          <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-            <Show when={visible() !== total()} fallback={<>{total()} clusters</>}>
-              {visible()} of {total()} clusters
-            </Show>
-          </span>
-        </div>
+        </Show>
 
         <Show
           when={filtered().length > 0}
           fallback={
-            <Card padding="lg">
-              <EmptyState
-                icon={props.emptyIcon}
-                title="No clusters match current filters"
-                description="Adjust the search or status filter to see more clusters."
-              />
-            </Card>
+            <PlatformTableEmptyState
+              icon={props.emptyIcon}
+              title="No clusters match current filters"
+              description="Adjust the search or status filter to see more clusters."
+            />
           }
         >
-          <Card padding="none" tone="card" class="overflow-hidden">
-            <Table class="w-full min-w-[860px] border-collapse text-xs">
-              <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                  <TableHead class="px-3 py-2 font-medium">Cluster</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Context</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Version</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Nodes</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Pods</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Deployments</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">CPU</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Memory</TableHead>
+          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+            <TableCardHeader title={props.title ?? 'Clusters'} />
+            <Table class="min-w-full table-fixed text-xs md:min-w-[860px]">
+              <TableHeader>
+                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                  <TableHead class={getPlatformTableHeadClass()}>Cluster</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Context
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Version
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>Nodes</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                    Pods
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                    Deployments
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>CPU</TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>Memory</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody class="divide-y divide-border-subtle">
+              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                 <For each={filtered()}>
                   {(cluster) => {
                     const name = () =>
@@ -164,40 +177,61 @@ export const KubernetesClustersTable: Component<{
                       cluster.id;
                     const context = () => asTrimmedString(cluster.kubernetes?.context) || '—';
                     const version = () => asTrimmedString(cluster.kubernetes?.version) || '—';
-                    const counts = () => countsByCluster().get(cluster.id) ?? { nodes: 0, pods: 0, deployments: 0 };
+                    const counts = () =>
+                      countsByCluster().get(cluster.id) ?? {
+                        nodes: 0,
+                        pods: 0,
+                        deployments: 0,
+                      };
                     const indicator = () => getSimpleStatusIndicator(cluster.status);
                     return (
-                      <TableRow class="hover:bg-surface-hover">
-                        <TableCell class="px-3 py-2">
-                          <div class="flex items-center gap-2 min-w-0">
+                      <TableRow class="text-[11px] sm:text-xs">
+                        <TableCell class={getPlatformTableCellClass()}>
+                          <div class="flex min-w-0 items-center gap-2">
                             <StatusDot
                               size="sm"
                               variant={indicator().variant}
                               title={cluster.status || 'unknown'}
                               ariaHidden
                             />
-                            <span class="font-semibold text-base-content truncate" title={name()}>
+                            <span class="truncate font-semibold text-base-content" title={name()}>
                               {name()}
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{context()}</TableCell>
-                        <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                        >
+                          {context()}
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                        >
                           {version()}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content tabular-nums`}
+                        >
                           {counts().nodes}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                        >
                           {counts().pods}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                        >
                           {counts().deployments}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                        >
                           {formatPercent(cluster.cpu?.current)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                        >
                           {formatPercent(cluster.memory?.current)}
                         </TableCell>
                       </TableRow>
@@ -206,7 +240,7 @@ export const KubernetesClustersTable: Component<{
                 </For>
               </TableBody>
             </Table>
-          </Card>
+          </TableCard>
         </Show>
       </div>
     </Show>

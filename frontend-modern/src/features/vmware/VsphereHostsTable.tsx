@@ -1,9 +1,9 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
-import { Card } from '@/components/shared/Card';
-import { EmptyState } from '@/components/shared/EmptyState';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { TableCard } from '@/components/shared/TableCard';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import {
   Table,
   TableBody,
@@ -15,7 +15,13 @@ import {
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_CARD_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformTableEmptyState,
   filterPlatformResources,
+  getPlatformTableCellClass,
+  getPlatformTableHeadClass,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
@@ -38,7 +44,8 @@ const STATUS_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
 ];
 
 const formatPercent = (percent?: number): JSX.Element => {
-  if (typeof percent !== 'number' || Number.isNaN(percent)) return <span class="text-muted">—</span>;
+  if (typeof percent !== 'number' || Number.isNaN(percent))
+    return <span class="text-muted">—</span>;
   return <span class="tabular-nums">{percent.toFixed(1)}%</span>;
 };
 
@@ -69,6 +76,8 @@ export const VsphereHostsTable: Component<{
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
+  title?: string;
+  showToolbar?: boolean;
 }> = (props) => {
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<PlatformResourceStatusFilter>('all');
@@ -92,64 +101,69 @@ export const VsphereHostsTable: Component<{
     <Show
       when={props.hosts.length > 0}
       fallback={
-        <Card padding="lg">
-          <EmptyState
-            icon={props.emptyIcon}
-            title={props.emptyTitle}
-            description={props.emptyDescription}
-          />
-        </Card>
+        <PlatformTableEmptyState
+          icon={props.emptyIcon}
+          title={props.emptyTitle}
+          description={props.emptyDescription}
+        />
       }
     >
       <div class="space-y-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="min-w-[200px] flex-1 sm:max-w-xs">
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Search ESXi hosts"
+        <Show when={props.showToolbar !== false}>
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="min-w-[200px] flex-1 sm:max-w-xs">
+              <SearchInput value={search} onChange={setSearch} placeholder="Search ESXi hosts" />
+            </div>
+            <FilterButtonGroup
+              options={STATUS_FILTER_OPTIONS}
+              value={status()}
+              onChange={setStatus}
             />
+            <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
+              <Show when={visible() !== total()} fallback={<>{total()} hosts</>}>
+                {visible()} of {total()} hosts
+              </Show>
+            </span>
           </div>
-          <FilterButtonGroup
-            options={STATUS_FILTER_OPTIONS}
-            value={status()}
-            onChange={setStatus}
-          />
-          <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-            <Show when={visible() !== total()} fallback={<>{total()} hosts</>}>
-              {visible()} of {total()} hosts
-            </Show>
-          </span>
-        </div>
+        </Show>
 
         <Show
           when={filtered().length > 0}
           fallback={
-            <Card padding="lg">
-              <EmptyState
-                icon={props.emptyIcon}
-                title="No hosts match current filters"
-                description="Adjust the search or status filter to see more hosts."
-              />
-            </Card>
+            <PlatformTableEmptyState
+              icon={props.emptyIcon}
+              title="No hosts match current filters"
+              description="Adjust the search or status filter to see more hosts."
+            />
           }
         >
-          <Card padding="none" tone="card" class="overflow-hidden">
-            <Table class="w-full min-w-[960px] border-collapse text-xs">
-              <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                  <TableHead class="px-3 py-2 font-medium">Host</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Datacenter</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Cluster</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Power</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">CPU</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Memory</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Datastores</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">VMs</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">vCenter</TableHead>
+          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+            <TableCardHeader title={props.title ?? 'Hosts'} />
+            <Table class="min-w-full table-fixed text-xs md:min-w-[960px]">
+              <TableHeader>
+                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                  <TableHead class={getPlatformTableHeadClass()}>Host</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Datacenter
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Cluster
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Power
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>CPU</TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>Memory</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                    Datastores
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClass('right')}>VMs</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    vCenter
+                  </TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody class="divide-y divide-border-subtle">
+              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                 <For each={filtered()}>
                   {(host) => {
                     const meta = () => host.vmware;
@@ -157,28 +171,37 @@ export const VsphereHostsTable: Component<{
                     const datacenter = () => asTrimmedString(meta()?.datacenterName) || '—';
                     const cluster = () => asTrimmedString(meta()?.clusterName) || '—';
                     const vcenter = () => asTrimmedString(meta()?.vcenterHost) || '—';
-                    const datastoreCount = () => meta()?.datastoreIds?.length ?? meta()?.datastoreNames?.length ?? 0;
+                    const datastoreCount = () =>
+                      meta()?.datastoreIds?.length ?? meta()?.datastoreNames?.length ?? 0;
                     const vmCount = () =>
                       vmCountByHost().get(asTrimmedString(meta()?.managedObjectId) || '') ?? 0;
                     const indicator = () => getSimpleStatusIndicator(host.status);
                     return (
-                      <TableRow class="hover:bg-surface-hover">
-                        <TableCell class="px-3 py-2">
-                          <div class="flex items-center gap-2 min-w-0">
+                      <TableRow class="text-[11px] sm:text-xs">
+                        <TableCell class={getPlatformTableCellClass()}>
+                          <div class="flex min-w-0 items-center gap-2">
                             <StatusDot
                               size="sm"
                               variant={indicator().variant}
                               title={host.status || 'unknown'}
                               ariaHidden
                             />
-                            <span class="font-semibold text-base-content truncate" title={name()}>
+                            <span class="truncate font-semibold text-base-content" title={name()}>
                               {name()}
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{datacenter()}</TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{cluster()}</TableCell>
-                        <TableCell class="px-3 py-2">
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                        >
+                          {datacenter()}
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                        >
+                          {cluster()}
+                        </TableCell>
+                        <TableCell class={`${getPlatformTableCellClass()} hidden md:table-cell`}>
                           <div class="flex items-center gap-2">
                             <StatusDot
                               size="sm"
@@ -186,23 +209,35 @@ export const VsphereHostsTable: Component<{
                               title={meta()?.powerState || 'unknown'}
                               ariaHidden
                             />
-                            <span class="text-base-content">{formatPowerState(meta()?.powerState)}</span>
+                            <span class="text-base-content">
+                              {formatPowerState(meta()?.powerState)}
+                            </span>
                           </div>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                        >
                           {formatPercent(host.cpu?.current)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                        >
                           {formatPercent(host.memory?.current)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                        >
                           {datastoreCount()}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} text-base-content tabular-nums`}
+                        >
                           {vmCount()}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
-                          <span class="truncate inline-block max-w-[12rem]" title={vcenter()}>
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                        >
+                          <span class="inline-block max-w-[12rem] truncate" title={vcenter()}>
                             {vcenter()}
                           </span>
                         </TableCell>
@@ -212,7 +247,7 @@ export const VsphereHostsTable: Component<{
                 </For>
               </TableBody>
             </Table>
-          </Card>
+          </TableCard>
         </Show>
       </div>
     </Show>

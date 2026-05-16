@@ -20,7 +20,10 @@ export function PlatformSectionTabs<TabId extends string>(props: {
   ariaLabel: string;
 }) {
   return (
-    <nav class="flex flex-wrap items-center gap-1 border-b border-border" aria-label={props.ariaLabel}>
+    <nav
+      class="flex flex-wrap items-center gap-1 border-b border-border"
+      aria-label={props.ariaLabel}
+    >
       <For each={props.tabs}>
         {(tab) => (
           <A
@@ -53,6 +56,24 @@ export function PlatformTableEmptyState(props: {
     </TableCard>
   );
 }
+
+export type PlatformTableCellAlign = 'left' | 'right' | 'center';
+
+export const PLATFORM_TABLE_CARD_CLASS = 'rounded-md';
+export const PLATFORM_TABLE_HEADER_ROW_CLASS = 'bg-surface-alt text-muted border-b border-border';
+export const PLATFORM_TABLE_BODY_CLASS = 'divide-y divide-border';
+
+const getPlatformTableAlignClass = (align: PlatformTableCellAlign = 'left'): string => {
+  if (align === 'right') return 'text-right';
+  if (align === 'center') return 'text-center';
+  return '';
+};
+
+export const getPlatformTableHeadClass = (align?: PlatformTableCellAlign): string =>
+  `px-1.5 sm:px-2 py-0.5 font-medium ${getPlatformTableAlignClass(align)}`.trim();
+
+export const getPlatformTableCellClass = (align?: PlatformTableCellAlign): string =>
+  `px-1.5 sm:px-2 py-1 ${getPlatformTableAlignClass(align)}`.trim();
 
 export function PlatformErrorState(props: {
   title: string;

@@ -10,11 +10,7 @@ import {
   PlatformTableEmptyState,
 } from '@/features/platformPage/sharedPlatformPage';
 import { VsphereHostsTable } from './VsphereHostsTable';
-import {
-  VMWARE_TAB_SPECS,
-  buildVmwarePageModel,
-  type VmwarePageTabId,
-} from './vmwarePageModel';
+import { VMWARE_TAB_SPECS, buildVmwarePageModel, type VmwarePageTabId } from './vmwarePageModel';
 
 // `datastore` is not a first-class type token at the API boundary; vSphere
 // datastores are emitted as canonical `storage` rows. Including it
@@ -77,13 +73,37 @@ export function VmwarePageSurface() {
             }
           >
             <Show when={activeTab() === 'overview'}>
-              <VsphereHostsTable
-                hosts={model().hosts}
-                scope={model().resources}
-                emptyIcon={vmwareIcon()}
-                emptyTitle="No vSphere hosts"
-                emptyDescription="Hosts appear here once the vCenter connection enumerates them."
-              />
+              <div class="space-y-4">
+                <VsphereHostsTable
+                  hosts={model().hosts}
+                  scope={model().resources}
+                  emptyIcon={vmwareIcon()}
+                  emptyTitle="No vSphere hosts"
+                  emptyDescription="Hosts appear here once the vCenter connection enumerates them."
+                  showToolbar={false}
+                />
+                <WorkloadsSurface
+                  vms={[]}
+                  containers={[]}
+                  nodes={[]}
+                  useWorkloads
+                  embedded
+                  tableOnly
+                  showFilterToolbar
+                  suppressPlatformFilter
+                  forcedPlatform={VMWARE_PLATFORM_FILTER}
+                  compactGroupHeaders
+                />
+                <Show when={model().datastores.length > 0}>
+                  <VsphereDatastoresTable
+                    resources={model().datastores}
+                    emptyIcon={vmwareIcon()}
+                    emptyTitle="No vSphere datastores"
+                    emptyDescription="Datastores appear here once a vCenter connection enumerates them."
+                    showToolbar={false}
+                  />
+                </Show>
+              </div>
             </Show>
             <Show when={activeTab() === 'vms'}>
               <WorkloadsSurface

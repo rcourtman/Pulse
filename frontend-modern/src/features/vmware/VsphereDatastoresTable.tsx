@@ -1,16 +1,9 @@
-import {
-  For,
-  Show,
-  createMemo,
-  createSignal,
-  type Component,
-  type JSX,
-} from 'solid-js';
-import { Card } from '@/components/shared/Card';
-import { EmptyState } from '@/components/shared/EmptyState';
+import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { TableCard } from '@/components/shared/TableCard';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import {
   Table,
@@ -22,6 +15,14 @@ import {
 } from '@/components/shared/Table';
 import { formatBytes } from '@/utils/format';
 import { asTrimmedString } from '@/utils/stringUtils';
+import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_CARD_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformTableEmptyState,
+  getPlatformTableCellClass,
+  getPlatformTableHeadClass,
+} from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 
 // vSphere storage is just datastores — there are no "physical disks"
@@ -138,6 +139,8 @@ export const VsphereDatastoresTable: Component<{
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
+  title?: string;
+  showToolbar?: boolean;
 }> = (props) => {
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<DatastoreStatusFilter>('all');
@@ -171,88 +174,123 @@ export const VsphereDatastoresTable: Component<{
     <Show
       when={total() > 0}
       fallback={
-        <Card padding="lg">
-          <EmptyState
-            icon={props.emptyIcon}
-            title={props.emptyTitle}
-            description={props.emptyDescription}
-          />
-        </Card>
+        <PlatformTableEmptyState
+          icon={props.emptyIcon}
+          title={props.emptyTitle}
+          description={props.emptyDescription}
+        />
       }
     >
       <div class="space-y-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="min-w-[200px] flex-1 sm:max-w-xs">
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Search datastores, datacenters, hosts"
+        <Show when={props.showToolbar !== false}>
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="min-w-[200px] flex-1 sm:max-w-xs">
+              <SearchInput
+                value={search}
+                onChange={setSearch}
+                placeholder="Search datastores, datacenters, hosts"
+              />
+            </div>
+            <FilterButtonGroup
+              options={STATUS_FILTER_OPTIONS}
+              value={status()}
+              onChange={setStatus}
             />
+            <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
+              <Show when={visible() !== total()} fallback={<>{total()} datastores</>}>
+                {visible()} of {total()} datastores
+              </Show>
+            </span>
           </div>
-          <FilterButtonGroup options={STATUS_FILTER_OPTIONS} value={status()} onChange={setStatus} />
-          <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-            <Show when={visible() !== total()} fallback={<>{total()} datastores</>}>
-              {visible()} of {total()} datastores
-            </Show>
-          </span>
-        </div>
+        </Show>
 
         <Show
           when={filtered().length > 0}
           fallback={
-            <Card padding="lg">
-              <EmptyState
-                icon={props.emptyIcon}
-                title="No datastores match current filters"
-                description="Adjust the search or status filter to see more datastores."
-              />
-            </Card>
+            <PlatformTableEmptyState
+              icon={props.emptyIcon}
+              title="No datastores match current filters"
+              description="Adjust the search or status filter to see more datastores."
+            />
           }
         >
-          <Card padding="none" tone="card" class="overflow-hidden">
-            <Table class="w-full min-w-[1050px] border-collapse text-xs">
-              <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                  <TableHead class="px-3 py-2 font-medium">Datastore</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Type</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Datacenter</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Capacity</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Hosts</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Access</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Maintenance</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">vCenter</TableHead>
+          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+            <TableCardHeader title={props.title ?? 'Datastores'} />
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1050px]">
+              <TableHeader>
+                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                  <TableHead class={getPlatformTableHeadClass()}>Datastore</TableHead>
+                  <TableHead class={getPlatformTableHeadClass()}>Type</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Datacenter
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClass()}>Capacity</TableHead>
+                  <TableHead class={getPlatformTableHeadClass()}>Hosts</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Access
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    Maintenance
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    vCenter
+                  </TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody class="divide-y divide-border-subtle">
+              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                 <For each={filtered()}>
                   {(row) => {
                     const ind = indicatorFor(row);
                     const name = asTrimmedString(row.name) || row.id;
-                    const datacenter =
-                      asTrimmedString(row.vmware?.datacenterName) || '—';
+                    const datacenter = asTrimmedString(row.vmware?.datacenterName) || '—';
                     const vcenter =
                       asTrimmedString(row.vmware?.connectionName) ||
                       asTrimmedString(row.vmware?.vcenterHost) ||
                       '—';
                     return (
-                      <TableRow class="hover:bg-surface-hover">
-                        <TableCell class="px-3 py-2">
-                          <div class="flex items-center gap-2 min-w-0">
-                            <StatusDot size="sm" variant={ind.variant} title={ind.label} ariaHidden />
-                            <span class="font-semibold text-base-content truncate" title={name}>
+                      <TableRow class="text-[11px] sm:text-xs">
+                        <TableCell class={getPlatformTableCellClass()}>
+                          <div class="flex min-w-0 items-center gap-2">
+                            <StatusDot
+                              size="sm"
+                              variant={ind.variant}
+                              title={ind.label}
+                              ariaHidden
+                            />
+                            <span class="truncate font-semibold text-base-content" title={name}>
                               {name}
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content uppercase text-[10px] font-medium">
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} text-[10px] font-medium uppercase text-base-content`}
+                        >
                           {datastoreTypeLabel(row)}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{datacenter}</TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{capacityCell(row)}</TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{hostsCell(row)}</TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{accessLabel(row)}</TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{maintenanceLabel(row)}</TableCell>
-                        <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                        >
+                          {datacenter}
+                        </TableCell>
+                        <TableCell class={`${getPlatformTableCellClass()} text-base-content`}>
+                          {capacityCell(row)}
+                        </TableCell>
+                        <TableCell class={`${getPlatformTableCellClass()} text-base-content`}>
+                          {hostsCell(row)}
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                        >
+                          {accessLabel(row)}
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                        >
+                          {maintenanceLabel(row)}
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                        >
                           <span class="inline-block max-w-[12rem] truncate" title={vcenter}>
                             {vcenter}
                           </span>
@@ -263,7 +301,7 @@ export const VsphereDatastoresTable: Component<{
                 </For>
               </TableBody>
             </Table>
-          </Card>
+          </TableCard>
         </Show>
       </div>
     </Show>
