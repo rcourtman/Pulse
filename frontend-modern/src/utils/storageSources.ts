@@ -82,6 +82,24 @@ export const normalizeStorageSourceKey = (value: string | null | undefined): str
 };
 
 export const resolveStorageSourceKey = (storage: Storage): string => {
+  // Prefer the explicit canonical platform tag when the storage adapter
+  // already declared it (TrueNAS, VMware, Hyper-V, etc. set
+  // `storage.platform` to the canonical platform key). Falling through to
+  // raw `storage.type` here would otherwise collapse a vSAN/NFS/VMFS
+  // datastore to its on-disk technology and miss every platform-scoped
+  // filter (`forcedSourceFilter=vmware-vsphere` against a vSAN row, etc.).
+  const platform = normalizeStorageSourceKey(storage.platform || '');
+  if (
+    platform === 'truenas' ||
+    platform === 'vmware-vsphere' ||
+    platform === 'proxmox-pbs' ||
+    platform === 'proxmox-pmg' ||
+    platform === 'kubernetes' ||
+    platform === 'microsoft-hyperv'
+  ) {
+    return platform;
+  }
+
   const type = normalizeStorageSourceKey(storage.type);
 
   if (

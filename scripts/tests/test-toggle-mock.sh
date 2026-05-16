@@ -183,7 +183,7 @@ test_ensure_mock_env_file_seeds_canonical_demo_defaults() {
   assert_contains "ensure_mock_env_file seeds canonical docker host count" "${env_contents}" "PULSE_MOCK_DOCKER_HOSTS=5"
   assert_contains "ensure_mock_env_file seeds canonical docker container count" "${env_contents}" "PULSE_MOCK_DOCKER_CONTAINERS=14"
   assert_contains "ensure_mock_env_file seeds canonical generic host count" "${env_contents}" "PULSE_MOCK_GENERIC_HOSTS=4"
-  assert_contains "ensure_mock_env_file seeds canonical k8s cluster count" "${env_contents}" "PULSE_MOCK_K8S_CLUSTERS=1"
+  assert_contains "ensure_mock_env_file seeds canonical k8s cluster count" "${env_contents}" "PULSE_MOCK_K8S_CLUSTERS=3"
   assert_contains "ensure_mock_env_file seeds canonical k8s node count" "${env_contents}" "PULSE_MOCK_K8S_NODES=5"
   assert_contains "ensure_mock_env_file seeds canonical k8s pod count" "${env_contents}" "PULSE_MOCK_K8S_PODS=40"
   assert_contains "ensure_mock_env_file seeds canonical k8s deployment count" "${env_contents}" "PULSE_MOCK_K8S_DEPLOYMENTS=14"

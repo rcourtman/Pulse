@@ -435,13 +435,23 @@ mature small-to-mid homelab / SMB environment so platform-first pages
 exercise table density, sorting, grouping, drawer behavior, and
 responsive layout out of the box: 5 Proxmox cluster + standalone nodes
 with 6 VMs and 8 LXCs each, 5 Docker/Podman hosts with 14 containers
-each, 4 standalone Pulse-managed hosts, and 1 Kubernetes cluster with
-5 nodes, 40 pods, and 14 deployments. Bumps to those defaults must
-keep the curated demo scenario's per-node hostname seasoning in
+each, 4 standalone Pulse-managed hosts, and 3 Kubernetes clusters
+(production + staging + edge) with 5 nodes, 40 pods, and 14
+deployments each so the Kubernetes platform-page overview tab shows
+multiple clusters and the nodes/pods/deployments tabs exercise
+multi-cluster grouping. Bumps to those defaults must keep the
+curated demo scenario's per-node hostname seasoning in
 `demo_scenarios.go` aligned (today: pve1..pve6 with regional labels,
 shared-fabric storage names, and per-node fallback naming) so the
 broadcast and snapshot views render the same human-readable estate
-regardless of the configured fixture size.
+regardless of the configured fixture size. The
+monitor-broadcast equivalence test
+(`TestMonitorBuildBroadcastFrontendStateUsesCanonicalMockUnifiedResources`)
+compares broadcast count against the canonical snapshot count within a
+±5% tolerance to absorb the legitimate row drops from
+`coalesceBroadcastResources` and `convertResourcesForBroadcast` under
+larger fixture sizes; that tolerance does not loosen the rest of the
+test's exact-name and exact-identity assertions.
 That same chart boundary also owns storage-series identity. Monitoring and
 `ReadState` consumers must address storage pool and physical-disk history
 through the resolved unified-resource metrics target, so seeded history,

@@ -71,7 +71,10 @@ const (
 //     truth for hostname presentation in mock mode.
 //   - 5 Docker/Podman hosts with 14 containers each
 //   - 4 standalone Pulse-managed hosts
-//   - 1 Kubernetes cluster with 5 nodes, 40 pods, and 14 deployments
+//   - 3 Kubernetes clusters (production + staging + edge) with 5 nodes,
+//     40 pods, and 14 deployments each so the Kubernetes platform-page
+//     overview, nodes, pods, and deployments tabs all exercise grouped
+//     and flat layouts against a real multi-cluster footprint
 var DefaultConfig = MockConfig{
 	NodeCount:                5,
 	VMsPerNode:               6,
@@ -79,7 +82,7 @@ var DefaultConfig = MockConfig{
 	DockerHostCount:          5,
 	DockerContainersPerHost:  14,
 	GenericHostCount:         4,
-	K8sClusterCount:          1,
+	K8sClusterCount:          3,
 	K8sNodesPerCluster:       5,
 	K8sPodsPerCluster:        40,
 	K8sDeploymentsPerCluster: 14,

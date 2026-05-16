@@ -944,6 +944,16 @@ the canonical monitored-system blocked payload.
     payload as a deterministic CLI adapter for agent-ready operations, but it
     must remain a read-only view over the canonical connections ledger rather
     than re-deriving fleet governance state in CLI-local code.
+    The legacy `Storage` payload shape exposed by the frontend types in
+    `frontend-modern/src/types/api.ts` may also carry an optional
+    canonical `platform` field (e.g. `vmware-vsphere`, `truenas`,
+    `proxmox-pve`) when the source adapter knows which platform owns
+    the storage record. Frontend source-filter resolvers must prefer
+    that canonical platform key over the on-disk `type` (`vsan`,
+    `vmfs`, `nfs41`, `zfs-pool`) so platform-page source filters,
+    chip option counts, and grouping all collapse to the canonical
+    platform vocabulary instead of leaking storage technology labels
+    into operator chrome.
 
 ## Forbidden Paths
 

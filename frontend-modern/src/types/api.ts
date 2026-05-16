@@ -620,6 +620,13 @@ export interface Storage {
   nodeCount?: number;
   pbsNames?: string[];
   pool?: string;
+  // Canonical platform key (e.g. `vmware-vsphere`, `truenas`, `proxmox-pve`)
+  // set by source adapters that know what platform owns the storage
+  // record. Storage filter chips and platform-page source filters
+  // resolve against this when present, so on-disk `type` like `vsan`
+  // or `vmfs` does not silently bucket VMware datastores under their
+  // technology label instead of the canonical platform.
+  platform?: string;
   // ZFS pool status
   zfsPool?: ZFSPool;
 }

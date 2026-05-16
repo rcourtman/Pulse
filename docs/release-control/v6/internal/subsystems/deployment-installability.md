@@ -800,11 +800,12 @@ SMB environment so platform-first pages exercise real table density on
 first boot. Both `mock_default_entries()` in `scripts/toggle-mock.sh`
 and `internal/mock.DefaultConfig` carry the same baseline: 5 Proxmox
 nodes with 6 VMs and 8 LXCs each, 5 Docker hosts with 14 containers
-each, 4 standalone Pulse-managed hosts, and 1 Kubernetes cluster with
-5 nodes, 40 pods, and 14 deployments. Bumping either side requires
-bumping the other (and the matching `scripts/tests/test-toggle-mock.sh`
-fixtures) so toggle CLIs, managed runtime restarts, and the in-binary
-default never drift apart.
+each, 4 standalone Pulse-managed hosts, and 3 Kubernetes clusters
+(production + staging + edge) with 5 nodes, 40 pods, and 14
+deployments each. Bumping either side requires bumping the other (and
+the matching `scripts/tests/test-toggle-mock.sh` fixtures) so toggle
+CLIs, managed runtime restarts, and the in-binary default never drift
+apart.
 That same hosted runtime rollout boundary also owns public routing identity for
 managed tenants. `internal/cloudcp/docker/labels.go`,
 `internal/cloudcp/docker/manager.go`, and
