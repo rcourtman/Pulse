@@ -511,8 +511,13 @@ func TestMonitorBuildBroadcastFrontendStateUsesCanonicalMockUnifiedResources(t *
 	if !hasFrontendResourceName(frontend.Resources, legacyName) {
 		t.Fatalf("expected mock-mode broadcast state to include legacy mock resource %q, got %#v", legacyName, frontend.Resources)
 	}
-	if len(frontend.Resources) != len(expectedResources) {
-		t.Fatalf("expected mock-mode broadcast state to mirror canonical unified resource count %d, got %d", len(expectedResources), len(frontend.Resources))
+	// The broadcast path coalesces resources that share a canonical host
+	// merge key (for example, a Kubernetes node that the registry already
+	// linked to its host agent), so the broadcast count is the coalesced
+	// view of the canonical snapshot rather than the raw snapshot count.
+	expectedBroadcastCount := len(coalesceBroadcastResources(expectedResources))
+	if len(frontend.Resources) != expectedBroadcastCount {
+		t.Fatalf("expected mock-mode broadcast state to mirror coalesced canonical unified resource count %d, got %d (raw snapshot count %d)", expectedBroadcastCount, len(frontend.Resources), len(expectedResources))
 	}
 	if freshness.IsZero() {
 		t.Fatal("expected canonical mock unified snapshot freshness")

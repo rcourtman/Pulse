@@ -834,8 +834,10 @@ func scenarioStorageAliasForNode(name, node string) string {
 			return "dr-a-iso-library"
 		case "pve5":
 			return "dr-b-iso-library"
+		case "pve6":
+			return "dr-c-iso-library"
 		default:
-			return "iso-library"
+			return fmt.Sprintf("%s-iso-library", normalizedNode)
 		}
 	case "local-zfs":
 		switch normalizedNode {
@@ -849,8 +851,10 @@ func scenarioStorageAliasForNode(name, node string) string {
 			return "dr-a-service-pool"
 		case "pve5":
 			return "dr-b-service-pool"
+		case "pve6":
+			return "dr-c-service-pool"
 		default:
-			return "service-pool"
+			return fmt.Sprintf("%s-service-pool", normalizedNode)
 		}
 	default:
 		return trimmedName

@@ -61,17 +61,28 @@ const (
 	hostConnectionPrefix       = "host-"
 )
 
+// Default fixture sizes target a mature small-to-mid homelab / SMB
+// environment so platform pages exercise table density, sorting,
+// grouping, drawer behavior, and responsive layout out of the box:
+//   - 5 Proxmox nodes (cluster + standalone) with 6 VMs and 8 LXCs each.
+//     NodeCount stays at 5 to keep the curated demo scenario in
+//     `internal/mock/demo_scenarios.go` (which seasons pve1..pve5 with
+//     regional labels and shared-fabric storage) the single source of
+//     truth for hostname presentation in mock mode.
+//   - 5 Docker/Podman hosts with 14 containers each
+//   - 4 standalone Pulse-managed hosts
+//   - 1 Kubernetes cluster with 5 nodes, 40 pods, and 14 deployments
 var DefaultConfig = MockConfig{
-	NodeCount:                3,
-	VMsPerNode:               3,
-	LXCsPerNode:              3,
-	DockerHostCount:          2,
-	DockerContainersPerHost:  5,
-	GenericHostCount:         2,
+	NodeCount:                5,
+	VMsPerNode:               6,
+	LXCsPerNode:              8,
+	DockerHostCount:          5,
+	DockerContainersPerHost:  14,
+	GenericHostCount:         4,
 	K8sClusterCount:          1,
-	K8sNodesPerCluster:       3,
-	K8sPodsPerCluster:        10,
-	K8sDeploymentsPerCluster: 4,
+	K8sNodesPerCluster:       5,
+	K8sPodsPerCluster:        40,
+	K8sDeploymentsPerCluster: 14,
 	RandomMetrics:            true,
 	StoppedPercent:           0.06,
 	UpdateInterval:           defaultMockUpdateInterval,

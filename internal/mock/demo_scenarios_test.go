@@ -76,6 +76,21 @@ func TestBuildFixtureGraphAppliesCuratedDemoScenarioAcrossEstate(t *testing.T) {
 	}
 }
 
+func TestDemoScenarioStorageNamingHandlesScaledNodeCount(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.NodeCount = 6
+	cfg.RandomMetrics = false
+
+	graph := buildFixtureGraph(cfg, time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC))
+
+	if storageNameExists(graph, "service-pool") {
+		t.Fatal("expected demo storage naming to keep the generic service-pool alias retired even when NodeCount > 5")
+	}
+	if storageNameExists(graph, "iso-library") {
+		t.Fatal("expected demo storage naming to keep the generic iso-library alias retired even when NodeCount > 5")
+	}
+}
+
 func TestFixtureGraphUpdateMetricsPreservesCuratedDemoScenario(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.RandomMetrics = false

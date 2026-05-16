@@ -429,6 +429,19 @@ generic fixture synthesis, but that authored layer must stay graph-native and
 runtime-stable so infrastructure, workloads, storage, and recovery all present
 the same human-readable platform story instead of a lab of random names,
 legacy `mock-cluster` labels, or surface-specific mock overrides.
+Mock fixture defaults in `internal/mock/generator.go` (the `DefaultConfig`
+constant) are also part of that mock-runtime contract. They target a
+mature small-to-mid homelab / SMB environment so platform-first pages
+exercise table density, sorting, grouping, drawer behavior, and
+responsive layout out of the box: 5 Proxmox cluster + standalone nodes
+with 6 VMs and 8 LXCs each, 5 Docker/Podman hosts with 14 containers
+each, 4 standalone Pulse-managed hosts, and 1 Kubernetes cluster with
+5 nodes, 40 pods, and 14 deployments. Bumps to those defaults must
+keep the curated demo scenario's per-node hostname seasoning in
+`demo_scenarios.go` aligned (today: pve1..pve6 with regional labels,
+shared-fabric storage names, and per-node fallback naming) so the
+broadcast and snapshot views render the same human-readable estate
+regardless of the configured fixture size.
 That same chart boundary also owns storage-series identity. Monitoring and
 `ReadState` consumers must address storage pool and physical-disk history
 through the resolved unified-resource metrics target, so seeded history,
