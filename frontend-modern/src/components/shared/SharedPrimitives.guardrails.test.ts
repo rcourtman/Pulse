@@ -124,6 +124,7 @@ import workloadsTableSource from '@/components/Workloads/WorkloadsTable.tsx?raw'
 import workloadPanelSource from '@/components/Workloads/WorkloadPanel.tsx?raw';
 import guestRowStateSource from '@/components/Workloads/useGuestRowState.ts?raw';
 import workloadSelectionStateSource from '@/components/Workloads/useWorkloadSelectionState.ts?raw';
+import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?raw';
 import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
 import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
 import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
@@ -348,6 +349,7 @@ describe('shared primitive guardrails', () => {
     expect(summaryTableCardHeaderSource).not.toContain('border-b border-border bg-surface-hover');
     for (const source of [
       workloadsTableSource,
+      proxmoxNodesTableSource,
       unifiedResourceHostTableCardSource,
       unifiedResourceServiceInfrastructureCardSource,
       storageContentCardSource,
@@ -370,6 +372,7 @@ describe('shared primitive guardrails', () => {
 
     for (const source of [
       workloadsTableSource,
+      proxmoxNodesTableSource,
       unifiedResourceHostTableCardSource,
       unifiedResourceServiceInfrastructureCardSource,
       storageContentCardSource,

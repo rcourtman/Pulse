@@ -1,12 +1,14 @@
-import { For, Show, type Accessor, type Component, type JSX } from 'solid-js';
-import { Card } from '@/components/shared/Card';
+import { For, Show, createMemo, type Accessor, type Component, type JSX } from 'solid-js';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
+import { TableCard } from '@/components/shared/TableCard';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import {
   Table,
   TableBody,
@@ -20,6 +22,7 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import { normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { useWorkloadTableMetricHistory } from '@/components/Workloads/useWorkloadTableMetricHistory';
+import { getWorkloadTableLayoutMode } from '@/components/Workloads/guestRowModel';
 import { type WorkloadsMetricDisplayMode } from '@/components/Workloads/workloadsFilterModel';
 import { type WorkloadTableMetricHistoryRange } from '@/components/Workloads/workloadMetricHistoryModel';
 import type { Disk, Node as LegacyNode } from '@/types/api';
@@ -29,6 +32,12 @@ import {
   getResourceNodeName,
   getResourceVersion,
 } from './proxmoxPageModel';
+import {
+  getProxmoxHostColumnWidthStyle,
+  getProxmoxHostTableMinWidthClass,
+  getProxmoxHostVisibleColumnsForLayout,
+  type ProxmoxHostTableColumn,
+} from './proxmoxHostTableModel';
 
 // Proxmox Overview mirrors the v5 Dashboard layout: a dedicated nodes table on
 // top, the canonical Workloads filter + guest table below. The nodes table
@@ -103,6 +112,18 @@ const formatPercentLabel = (value: number | null | undefined): string => {
   return `${Math.round(Math.max(0, normalized))}%`;
 };
 
+const getHostHeaderCellClass = (column: ProxmoxHostTableColumn): string => {
+  const align =
+    column.align === 'right' ? 'text-right' : column.align === 'center' ? 'text-center' : '';
+  return `px-1.5 sm:px-2 py-0.5 font-medium ${align}`.trim();
+};
+
+const getHostBodyCellClass = (column: ProxmoxHostTableColumn): string => {
+  const align =
+    column.align === 'right' ? 'text-right' : column.align === 'center' ? 'text-center' : '';
+  return `px-1.5 sm:px-2 py-1 ${align}`.trim();
+};
+
 export const ProxmoxNodesTable: Component<{
   nodes: Resource[];
   guests: Resource[];
@@ -112,6 +133,10 @@ export const ProxmoxNodesTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
 }> = (props) => {
+  const breakpoint = useBreakpoint();
+  const layoutMode = createMemo(() => getWorkloadTableLayoutMode(breakpoint.width()));
+  const visibleColumns = createMemo(() => getProxmoxHostVisibleColumnsForLayout(layoutMode()));
+  const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
   const displayMode = () => props.metricDisplayMode?.() ?? 'bars';
   const isSparklineMode = () => displayMode() === 'sparklines';
 
@@ -127,38 +152,43 @@ export const ProxmoxNodesTable: Component<{
     <Show
       when={props.nodes.length > 0}
       fallback={
-        <Card padding="lg">
-          <EmptyState
-            icon={props.emptyIcon}
-            title={props.emptyTitle}
-            description={props.emptyDescription}
-          />
-        </Card>
+        <TableCard>
+          <div class="p-6">
+            <EmptyState
+              icon={props.emptyIcon}
+              title={props.emptyTitle}
+              description={props.emptyDescription}
+            />
+          </div>
+        </TableCard>
       }
     >
-      <Card padding="none" tone="card" class="overflow-hidden">
-        <Table class="w-full min-w-[1080px] border-collapse text-xs">
-          <TableHeader class="bg-surface-alt text-muted border-b border-border">
-            <TableRow class="text-left text-[10px] uppercase tracking-wide">
-              <TableHead class="px-3 py-2 font-medium">Node</TableHead>
-              <TableHead class="px-3 py-2 font-medium">Version</TableHead>
-              <TableHead class="px-3 py-2 font-medium text-right">Uptime</TableHead>
-              <TableHead class="px-3 py-2 font-medium" style={{ width: '180px' }}>
-                CPU
-              </TableHead>
-              <TableHead class="px-3 py-2 font-medium" style={{ width: '180px' }}>
-                Memory
-              </TableHead>
-              <TableHead class="px-3 py-2 font-medium" style={{ width: '180px' }}>
-                Disk
-              </TableHead>
-              <TableHead class="px-3 py-2 font-medium text-right">Temp</TableHead>
-              <TableHead class="px-3 py-2 font-medium text-center">VMs</TableHead>
-              <TableHead class="px-3 py-2 font-medium text-center">CTs</TableHead>
-              <TableHead class="px-3 py-2 font-medium">Cluster</TableHead>
+      <TableCard class="rounded-md">
+        <TableCardHeader title="Hosts" />
+        <Table class={`${getProxmoxHostTableMinWidthClass(layoutMode())} table-fixed text-xs`}>
+          <colgroup>
+            <For each={visibleColumns()}>
+              {(column) => (
+                <col
+                  style={getProxmoxHostColumnWidthStyle(
+                    column.id,
+                    layoutMode(),
+                    visibleColumnIds(),
+                  )}
+                />
+              )}
+            </For>
+          </colgroup>
+          <TableHeader>
+            <TableRow class="bg-surface-alt text-muted border-b border-border">
+              <For each={visibleColumns()}>
+                {(column) => (
+                  <TableHead class={getHostHeaderCellClass(column)}>{column.label}</TableHead>
+                )}
+              </For>
             </TableRow>
           </TableHeader>
-          <TableBody class="divide-y divide-border-subtle">
+          <TableBody class="divide-y divide-border">
             <For each={props.nodes}>
               {(node) => {
                 const name = () => asTrimmedString(node.name) || node.id;
@@ -194,151 +224,192 @@ export const ProxmoxNodesTable: Component<{
                       } as Disk)
                     : undefined;
                 const legacyNode = () => projectResourceToLegacyNode(node);
-                const cpuSeries = () =>
-                  metricHistory.getNodeMetricSeries(legacyNode(), 'cpu');
+                const cpuSeries = () => metricHistory.getNodeMetricSeries(legacyNode(), 'cpu');
                 const memorySeries = () =>
                   metricHistory.getNodeMetricSeries(legacyNode(), 'memory');
-                const diskSeries = () =>
-                  metricHistory.getNodeMetricSeries(legacyNode(), 'disk');
+                const diskSeries = () => metricHistory.getNodeMetricSeries(legacyNode(), 'disk');
+                const renderColumnCell = (column: ProxmoxHostTableColumn): JSX.Element => {
+                  switch (column.id) {
+                    case 'node':
+                      return (
+                        <TableCell class={getHostBodyCellClass(column)}>
+                          <div class="flex min-w-0 items-center gap-2">
+                            <StatusDot
+                              size="sm"
+                              variant={indicator().variant}
+                              title={node.status || 'unknown'}
+                              ariaHidden
+                            />
+                            <span class="truncate font-semibold text-base-content" title={name()}>
+                              {name()}
+                            </span>
+                          </div>
+                        </TableCell>
+                      );
+                    case 'version':
+                      return (
+                        <TableCell class={getHostBodyCellClass(column)}>
+                          <Show when={version()} fallback={<span class="text-muted">—</span>}>
+                            <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 font-mono text-[10px] text-base-content">
+                              {version()}
+                            </span>
+                          </Show>
+                        </TableCell>
+                      );
+                    case 'uptime':
+                      return (
+                        <TableCell
+                          class={`${getHostBodyCellClass(column)} tabular-nums ${
+                            uptime().warn
+                              ? 'text-orange-600 dark:text-orange-400'
+                              : 'text-base-content'
+                          }`}
+                        >
+                          {uptime().label}
+                        </TableCell>
+                      );
+                    case 'cpu':
+                      return (
+                        <TableCell class={getHostBodyCellClass(column)}>
+                          <Show
+                            when={isSparklineMode()}
+                            fallback={
+                              <ResponsiveMetricCell
+                                class="w-full"
+                                value={cpuPercent()}
+                                type="cpu"
+                                resourceId={metricsKey()}
+                                isRunning={isOnline()}
+                                showMobile={false}
+                              />
+                            }
+                          >
+                            <MetricMiniSparkline
+                              series={cpuSeries()}
+                              valueLabel={formatPercentLabel(cpuPercent())}
+                              title={`${name()} CPU history`}
+                            />
+                          </Show>
+                        </TableCell>
+                      );
+                    case 'memory':
+                      return (
+                        <TableCell class={getHostBodyCellClass(column)}>
+                          <Show
+                            when={isSparklineMode()}
+                            fallback={
+                              <Show
+                                when={
+                                  isOnline() && (memoryTotal() > 0 || memoryPercentOnly() != null)
+                                }
+                                fallback={
+                                  <div class="flex justify-center">
+                                    <span class="text-xs text-muted" aria-hidden="true">
+                                      —
+                                    </span>
+                                  </div>
+                                }
+                              >
+                                <StackedMemoryBar
+                                  used={memoryUsed()}
+                                  total={memoryTotal()}
+                                  percentOnly={memoryPercentOnly()}
+                                />
+                              </Show>
+                            }
+                          >
+                            <MetricMiniSparkline
+                              series={memorySeries()}
+                              valueLabel={formatPercentLabel(memoryPercent())}
+                              title={`${name()} memory history`}
+                            />
+                          </Show>
+                        </TableCell>
+                      );
+                    case 'disk':
+                      return (
+                        <TableCell class={getHostBodyCellClass(column)}>
+                          <Show
+                            when={isSparklineMode()}
+                            fallback={
+                              <Show
+                                when={isOnline() && (aggregateDisk() || node.agent?.disks?.length)}
+                                fallback={
+                                  <div class="flex justify-center">
+                                    <span class="text-xs text-muted" aria-hidden="true">
+                                      —
+                                    </span>
+                                  </div>
+                                }
+                              >
+                                <StackedDiskBar
+                                  disks={normalizeDiskArray(node.agent?.disks)}
+                                  aggregateDisk={aggregateDisk()}
+                                />
+                              </Show>
+                            }
+                          >
+                            <MetricMiniSparkline
+                              series={diskSeries()}
+                              valueLabel={formatPercentLabel(diskPercent())}
+                              title={`${name()} disk history`}
+                            />
+                          </Show>
+                        </TableCell>
+                      );
+                    case 'temp':
+                      return (
+                        <TableCell class={getHostBodyCellClass(column)}>
+                          <Show
+                            when={
+                              typeof temperature() === 'number' && (temperature() as number) > 0
+                            }
+                            fallback={<span class="text-xs text-muted">—</span>}
+                          >
+                            <TemperatureGauge value={temperature() as number} />
+                          </Show>
+                        </TableCell>
+                      );
+                    case 'vms':
+                      return (
+                        <TableCell class={getHostBodyCellClass(column)}>
+                          <span class={counts().vms > 0 ? VMS_BADGE : ZERO_BADGE}>
+                            {counts().vms}
+                          </span>
+                        </TableCell>
+                      );
+                    case 'cts':
+                      return (
+                        <TableCell class={getHostBodyCellClass(column)}>
+                          <span class={counts().containers > 0 ? CTS_BADGE : ZERO_BADGE}>
+                            {counts().containers}
+                          </span>
+                        </TableCell>
+                      );
+                    case 'cluster':
+                      return (
+                        <TableCell class={getHostBodyCellClass(column)}>
+                          <span class="inline-flex items-center rounded-md bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content">
+                            {cluster()}
+                          </span>
+                        </TableCell>
+                      );
+                    default:
+                      column.id satisfies never;
+                      return <></>;
+                  }
+                };
+
                 return (
-                  <TableRow class="hover:bg-surface-hover">
-                    <TableCell class="px-3 py-2">
-                      <div class="flex items-center gap-2 min-w-0">
-                        <StatusDot
-                          size="sm"
-                          variant={indicator().variant}
-                          title={node.status || 'unknown'}
-                          ariaHidden
-                        />
-                        <span class="font-semibold text-base-content truncate" title={name()}>
-                          {name()}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell class="px-3 py-2">
-                      <Show when={version()} fallback={<span class="text-muted">—</span>}>
-                        <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 font-mono text-[10px] text-base-content">
-                          {version()}
-                        </span>
-                      </Show>
-                    </TableCell>
-                    <TableCell
-                      class={`px-3 py-2 text-right tabular-nums ${
-                        uptime().warn
-                          ? 'text-orange-600 dark:text-orange-400'
-                          : 'text-base-content'
-                      }`}
-                    >
-                      {uptime().label}
-                    </TableCell>
-                    <TableCell class="px-3 py-2">
-                      <Show
-                        when={isSparklineMode()}
-                        fallback={
-                          <ResponsiveMetricCell
-                            class="w-full"
-                            value={cpuPercent()}
-                            type="cpu"
-                            resourceId={metricsKey()}
-                            isRunning={isOnline()}
-                            showMobile={false}
-                          />
-                        }
-                      >
-                        <MetricMiniSparkline
-                          series={cpuSeries()}
-                          valueLabel={formatPercentLabel(cpuPercent())}
-                          title={`${name()} CPU history`}
-                        />
-                      </Show>
-                    </TableCell>
-                    <TableCell class="px-3 py-2">
-                      <Show
-                        when={isSparklineMode()}
-                        fallback={
-                          <Show
-                            when={isOnline() && (memoryTotal() > 0 || memoryPercentOnly() != null)}
-                            fallback={
-                              <div class="flex justify-center">
-                                <span class="text-xs text-muted" aria-hidden="true">
-                                  —
-                                </span>
-                              </div>
-                            }
-                          >
-                            <StackedMemoryBar
-                              used={memoryUsed()}
-                              total={memoryTotal()}
-                              percentOnly={memoryPercentOnly()}
-                            />
-                          </Show>
-                        }
-                      >
-                        <MetricMiniSparkline
-                          series={memorySeries()}
-                          valueLabel={formatPercentLabel(memoryPercent())}
-                          title={`${name()} memory history`}
-                        />
-                      </Show>
-                    </TableCell>
-                    <TableCell class="px-3 py-2">
-                      <Show
-                        when={isSparklineMode()}
-                        fallback={
-                          <Show
-                            when={isOnline() && (aggregateDisk() || node.agent?.disks?.length)}
-                            fallback={
-                              <div class="flex justify-center">
-                                <span class="text-xs text-muted" aria-hidden="true">
-                                  —
-                                </span>
-                              </div>
-                            }
-                          >
-                            <StackedDiskBar
-                              disks={normalizeDiskArray(node.agent?.disks)}
-                              aggregateDisk={aggregateDisk()}
-                            />
-                          </Show>
-                        }
-                      >
-                        <MetricMiniSparkline
-                          series={diskSeries()}
-                          valueLabel={formatPercentLabel(diskPercent())}
-                          title={`${name()} disk history`}
-                        />
-                      </Show>
-                    </TableCell>
-                    <TableCell class="px-3 py-2 text-right">
-                      <Show
-                        when={typeof temperature() === 'number' && (temperature() as number) > 0}
-                        fallback={<span class="text-xs text-muted">—</span>}
-                      >
-                        <TemperatureGauge value={temperature() as number} />
-                      </Show>
-                    </TableCell>
-                    <TableCell class="px-3 py-2 text-center">
-                      <span class={counts().vms > 0 ? VMS_BADGE : ZERO_BADGE}>
-                        {counts().vms}
-                      </span>
-                    </TableCell>
-                    <TableCell class="px-3 py-2 text-center">
-                      <span class={counts().containers > 0 ? CTS_BADGE : ZERO_BADGE}>
-                        {counts().containers}
-                      </span>
-                    </TableCell>
-                    <TableCell class="px-3 py-2">
-                      <span class="inline-flex items-center rounded-md bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content">
-                        {cluster()}
-                      </span>
-                    </TableCell>
+                  <TableRow class="text-[11px] sm:text-xs">
+                    <For each={visibleColumns()}>{(column) => renderColumnCell(column)}</For>
                   </TableRow>
                 );
               }}
             </For>
           </TableBody>
         </Table>
-      </Card>
+      </TableCard>
     </Show>
   );
 };
