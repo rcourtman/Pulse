@@ -471,20 +471,24 @@ func metricsFromKubernetesDeployment(cluster models.KubernetesCluster, deploymen
 	}
 	values := syntheticKubernetesDeploymentMetrics(cluster, deployment)
 	return &ResourceMetrics{
-		CPU:    &MetricValue{Value: values.CPU, Percent: values.CPU, Unit: "percent", Source: SourceK8s},
-		Memory: &MetricValue{Value: values.Memory, Percent: values.Memory, Unit: "percent", Source: SourceK8s},
-		Disk:   &MetricValue{Value: values.Disk, Percent: values.Disk, Unit: "percent", Source: SourceK8s},
-		NetIn:  &MetricValue{Value: values.NetIn, Unit: "bytes/s", Source: SourceK8s},
-		NetOut: &MetricValue{Value: values.NetOut, Unit: "bytes/s", Source: SourceK8s},
+		CPU:       &MetricValue{Value: values.CPU, Percent: values.CPU, Unit: "percent", Source: SourceK8s},
+		Memory:    &MetricValue{Value: values.Memory, Percent: values.Memory, Unit: "percent", Source: SourceK8s},
+		Disk:      &MetricValue{Value: values.Disk, Percent: values.Disk, Unit: "percent", Source: SourceK8s},
+		NetIn:     &MetricValue{Value: values.NetIn, Unit: "bytes/s", Source: SourceK8s},
+		NetOut:    &MetricValue{Value: values.NetOut, Unit: "bytes/s", Source: SourceK8s},
+		DiskRead:  &MetricValue{Value: values.DiskRead, Unit: "bytes/s", Source: SourceK8s},
+		DiskWrite: &MetricValue{Value: values.DiskWrite, Unit: "bytes/s", Source: SourceK8s},
 	}
 }
 
 type kubernetesDeploymentSyntheticMetrics struct {
-	CPU    float64
-	Memory float64
-	Disk   float64
-	NetIn  float64
-	NetOut float64
+	CPU       float64
+	Memory    float64
+	Disk      float64
+	NetIn     float64
+	NetOut    float64
+	DiskRead  float64
+	DiskWrite float64
 }
 
 func syntheticKubernetesDeploymentMetrics(cluster models.KubernetesCluster, deployment models.KubernetesDeployment) kubernetesDeploymentSyntheticMetrics {
@@ -530,13 +534,17 @@ func syntheticKubernetesDeploymentMetrics(cluster models.KubernetesCluster, depl
 	disk := (12 + rng.Float64()*16) * scale
 	netIn := (12_000 + rng.Float64()*60_000) * scale * availability
 	netOut := (9_000 + rng.Float64()*48_000) * scale * availability
+	diskRead := (4_000 + rng.Float64()*32_000) * scale * availability
+	diskWrite := (3_000 + rng.Float64()*24_000) * scale * availability
 
 	return kubernetesDeploymentSyntheticMetrics{
-		CPU:    clampMetricValue(cpu, 0, 100),
-		Memory: clampMetricValue(memory, 0, 100),
-		Disk:   clampMetricValue(disk, 0, 100),
-		NetIn:  netIn,
-		NetOut: netOut,
+		CPU:       clampMetricValue(cpu, 0, 100),
+		Memory:    clampMetricValue(memory, 0, 100),
+		Disk:      clampMetricValue(disk, 0, 100),
+		NetIn:     netIn,
+		NetOut:    netOut,
+		DiskRead:  diskRead,
+		DiskWrite: diskWrite,
 	}
 }
 
