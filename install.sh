@@ -228,6 +228,13 @@ get_latest_maintenance_stable_version() {
     printf '%s\n' "$latest_version"
 }
 
+is_maintenance_stable_release_tag() {
+    local tag="${1:-}"
+    tag="${tag#v}"
+
+    [[ "$tag" =~ ^5[.]1[.][0-9]+$ ]]
+}
+
 resolve_bootstrap_install_script_url() {
     local requested_version="${1:-}"
 
@@ -2463,11 +2470,7 @@ resolve_target_release() {
                 LATEST_RELEASE=$(echo "$releases_json" | grep -v '"draft": true' | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
             fi
         else
-            if command -v jq >/dev/null 2>&1; then
-                LATEST_RELEASE=$(echo "$releases_json" | jq -r '[.[] | select(.draft == false and .prerelease == false)][0].tag_name' 2>/dev/null || true)
-            else
-                LATEST_RELEASE=$(echo "$releases_json" | awk '/"draft": true/,/"tag_name":/ {next} /"prerelease": true/,/"tag_name":/ {next} /"tag_name":/ {print; exit}' | sed -E 's/.*"([^"]+)".*/\1/' || true)
-            fi
+            LATEST_RELEASE=$(get_latest_maintenance_stable_version 2>/dev/null || true)
         fi
     fi
 
@@ -2475,7 +2478,9 @@ resolve_target_release() {
         print_info "GitHub API unavailable, trying alternative method..."
         local redirect_version=""
         redirect_version=$(get_latest_release_from_redirect 2>/dev/null || true)
-        if [[ -n "$redirect_version" ]]; then
+        if [[ "$UPDATE_CHANNEL" == "rc" && -n "$redirect_version" ]]; then
+            LATEST_RELEASE="$redirect_version"
+        elif is_maintenance_stable_release_tag "$redirect_version"; then
             LATEST_RELEASE="$redirect_version"
         fi
     fi

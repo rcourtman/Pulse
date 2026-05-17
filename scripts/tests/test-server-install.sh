@@ -212,6 +212,50 @@ EOF
   )
 }
 
+test_resolve_target_release_skips_prerelease_without_jq() {
+  (
+    load_installer
+
+    FORCE_VERSION=""
+    FORCE_CHANNEL=""
+    UPDATE_CHANNEL=""
+    LATEST_RELEASE=""
+
+    command() {
+      if [[ "$1" == "-v" && "${2:-}" == "jq" ]]; then
+        return 1
+      fi
+      builtin command "$@"
+    }
+
+    curl() {
+      cat <<'EOF'
+[
+  {
+    "tag_name": "v6.0.0-rc.5",
+    "draft": false,
+    "prerelease": true
+  },
+  {
+    "tag_name": "v5.1.30",
+    "draft": false,
+    "prerelease": false
+  }
+]
+EOF
+    }
+
+    get_latest_release_from_redirect() {
+      printf '%s\n' "v6.0.0-rc.5"
+    }
+
+    resolve_target_release >/dev/null
+
+    [[ "${UPDATE_CHANNEL}" == "stable" ]]
+    [[ "${LATEST_RELEASE}" == "v5.1.30" ]]
+  )
+}
+
 test_install_pulse_archive_rejects_mismatched_arch_without_replacing_existing_binary() {
   (
     load_installer
@@ -456,6 +500,7 @@ main() {
   assert_success "download_pulse installs from local archive without network" test_download_pulse_installs_from_local_archive_without_network
   assert_success "prefetch helper writes archive path via output variable" test_prefetch_pulse_archive_for_container_sets_output_var
   assert_success "resolve_target_release ignores host-configured rc during fresh LXC bootstrap" test_resolve_target_release_ignores_host_configured_rc_channel_when_requested
+  assert_success "resolve_target_release skips prereleases without jq" test_resolve_target_release_skips_prerelease_without_jq
   assert_success "wrong-arch archives fail before replacing the installed binary" test_install_pulse_archive_rejects_mismatched_arch_without_replacing_existing_binary
   assert_success "parse_args rejects archive with source builds" test_parse_args_rejects_archive_with_source
   assert_success "installer supports curl-pipe execution via bash stdin" test_installer_runs_when_streamed_over_stdin
