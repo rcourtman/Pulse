@@ -246,7 +246,8 @@ export type FleetGovernanceSignalKey =
   | 'credential-health'
   | 'updates'
   | 'remote-control'
-  | 'command-policy';
+  | 'command-policy'
+  | 'agent-attachment';
 
 export type FleetGovernanceSignalTone = 'ok' | 'info' | 'warning' | 'critical' | 'muted';
 
