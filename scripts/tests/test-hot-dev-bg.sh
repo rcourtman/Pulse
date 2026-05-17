@@ -678,6 +678,42 @@ test_hot_dev_script_ignores_test_only_backend_churn() {
   assert_contains "hot-dev watcher suppresses source churn during managed verification" "${output}" 'verify_lock_active'
 }
 
+test_hot_dev_reconciles_agent_reachable_bind_address() {
+  local output
+
+  output="$(
+    HOT_DEV_RUNTIME_PATH="${ROOT_DIR}/scripts/lib/hot-dev-runtime.sh" \
+    bash -lc '
+      source "${HOT_DEV_RUNTIME_PATH}"
+
+      LAN_IP=192.168.50.10
+      ALL_IPS="192.168.50.10 10.10.10.5"
+
+      BIND_ADDRESS=127.0.0.1
+      PULSE_PUBLIC_URL=http://192.168.50.10:7655
+      unset PULSE_AGENT_CONNECT_URL PULSE_AGENT_URL
+      hot_dev_reconcile_agent_bind_address
+      printf "lan_bind=%s\n" "${BIND_ADDRESS}"
+
+      BIND_ADDRESS=127.0.0.1
+      PULSE_PUBLIC_URL=https://pulse.example.com
+      unset PULSE_AGENT_CONNECT_URL PULSE_AGENT_URL
+      hot_dev_reconcile_agent_bind_address
+      printf "external_bind=%s\n" "${BIND_ADDRESS}"
+
+      BIND_ADDRESS=0.0.0.0
+      PULSE_AGENT_CONNECT_URL=http://192.168.50.10:7655
+      unset PULSE_PUBLIC_URL PULSE_AGENT_URL
+      hot_dev_reconcile_agent_bind_address
+      printf "already_exposed_bind=%s\n" "${BIND_ADDRESS}"
+    '
+  )"
+
+  assert_contains "hot-dev exposes backend for LAN public URL" "${output}" "lan_bind=0.0.0.0"
+  assert_contains "hot-dev leaves external public URLs on loopback" "${output}" "external_bind=127.0.0.1"
+  assert_contains "hot-dev preserves already exposed backend bind" "${output}" "already_exposed_bind=0.0.0.0"
+}
+
 test_hot_dev_health_monitor_probes_api_health() {
   local output
   output="$(cat "${HOT_DEV}")"
@@ -1226,6 +1262,7 @@ main() {
   test_makefile_routes_managed_runtime_through_npm
   test_hot_dev_script_advertises_foreground_escape_hatch
   test_hot_dev_script_ignores_test_only_backend_churn
+  test_hot_dev_reconciles_agent_reachable_bind_address
   test_hot_dev_health_monitor_probes_api_health
   test_hot_dev_bg_script_advertises_managed_entrypoint
   test_hot_dev_bg_usage_prefers_managed_wrappers

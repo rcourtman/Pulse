@@ -1059,6 +1059,11 @@ verification wrappers, and integration helper defaults must therefore advertise
 the same managed login and treat custom dev credentials as explicit
 `HOT_DEV_AUTH_*` or `PULSE_E2E_*` overrides instead of inheriting leftover auth
 state from a prior session.
+That same runtime override boundary also owns agent reachability coherence:
+when a managed dev runtime advertises a local-interface `PULSE_PUBLIC_URL` or
+agent connect URL for installed agents, a stale loopback `BIND_ADDRESS` in
+runtime `.env` must be reconciled before the backend starts or restarts so
+remote agents can report host telemetry instead of buffering indefinitely.
 That same takeover path must remain safe on the default macOS Bash runtime and
 must not tear down the operator's current shell lineage while reclaiming a
 foreground `hot-dev.sh` session. When the canonical ports are already owned by

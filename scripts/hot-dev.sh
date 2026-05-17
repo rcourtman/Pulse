@@ -418,6 +418,7 @@ fi
 
 sync_runtime_auth_env_overrides
 load_runtime_env_overrides
+hot_dev_reconcile_agent_bind_address
 
 if [[ "${PULSE_DATA_DIR}" == "${ROOT_DIR}/tmp/dev-config" ]] && [[ ${PULSE_MOCK_MODE:-false} != "true" ]]; then
     echo "Syncing production configuration..."
@@ -761,6 +762,7 @@ log_info "Starting backend file watcher..."
         # effect without a full hot-dev restart.
         sync_runtime_auth_env_overrides
         load_runtime_env_overrides
+        hot_dev_reconcile_agent_bind_address
 
         # Kill ALL pulse processes (not just one) to prevent duplicates
         pkill -f "^\./pulse$" 2>/dev/null || true
