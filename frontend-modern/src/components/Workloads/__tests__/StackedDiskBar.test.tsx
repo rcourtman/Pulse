@@ -47,7 +47,7 @@ function makeAnomaly(overrides: Partial<AnomalyReport> = {}): AnomalyReport {
 
 /** Get the bar trigger element (the element with mouse enter handler). */
 function getBarTrigger(container: HTMLElement): HTMLElement {
-  const trigger = container.querySelector('.bg-surface-hover');
+  const trigger = container.querySelector('[data-stacked-disk-trigger]');
   if (!trigger) throw new Error('Bar trigger element not found');
   return trigger as HTMLElement;
 }
@@ -61,6 +61,13 @@ function getSingleBarFill(container: HTMLElement): SVGRectElement | null {
 function getStackedSegments(container: HTMLElement): SVGRectElement[] {
   return Array.from(
     container.querySelectorAll<SVGRectElement>('rect[data-stacked-disk-fill="segment"]'),
+  );
+}
+
+/** Get inline per-disk bar fill elements. */
+function getInlineBars(container: HTMLElement): SVGRectElement[] {
+  return Array.from(
+    container.querySelectorAll<SVGRectElement>('rect[data-stacked-disk-fill="inline"]'),
   );
 }
 
@@ -130,9 +137,9 @@ describe('StackedDiskBar', () => {
     });
   });
 
-  // ── Multiple disks (pressure summary mode) ─────────────────────────────
+  // ── Multiple disks (inline per-disk mode) ──────────────────────────────
 
-  describe('pressure summary mode (multiple disks, default mode)', () => {
+  describe('inline per-disk mode (multiple disks, default mode)', () => {
     const disk1 = makeDisk({
       used: 21474836480, // 20 GiB
       total: 53687091200, // 50 GiB
@@ -146,31 +153,32 @@ describe('StackedDiskBar', () => {
       device: '/dev/sdb1',
     });
 
-    it('renders a single max-pressure bar for multiple disks by default', () => {
+    it('renders one compact inline bar for each disk by default', () => {
       const { container } = render(() => <StackedDiskBar disks={[disk1, disk2]} />);
       const segments = getStackedSegments(container);
       expect(segments.length).toBe(0);
-      const bar = getSingleBarFill(container);
-      expect(bar).toBeInTheDocument();
+      expect(getSingleBarFill(container)).not.toBeInTheDocument();
+      expect(getInlineBars(container)).toHaveLength(2);
     });
 
-    it('shows disk count badge', () => {
+    it('does not show a disk count badge when each disk is visible', () => {
       render(() => <StackedDiskBar disks={[disk1, disk2]} />);
-      expect(screen.getByText('[2]')).toBeInTheDocument();
+      expect(screen.queryByText('[2]')).not.toBeInTheDocument();
     });
 
-    it('summarizes the highest-filled disk instead of diluting it by aggregate capacity', () => {
+    it('labels each inline disk with its own short name and percentage', () => {
       // disk1: 20 / 50 GiB = 40%
       // disk2: 50 / 100 GiB = 50%
       render(() => <StackedDiskBar disks={[disk1, disk2]} />);
-      expect(screen.getByText('50%')).toBeInTheDocument();
+      expect(screen.getByText('boot 40%')).toBeInTheDocument();
+      expect(screen.getByText('data 50%')).toBeInTheDocument();
     });
 
-    it('sets the bar fill width to the highest individual disk pressure', () => {
+    it('sets each inline bar fill width to that disk usage percentage', () => {
       const { container } = render(() => <StackedDiskBar disks={[disk1, disk2]} />);
-      const bar = getSingleBarFill(container);
-      expect(bar).toBeInTheDocument();
-      expect(bar).toHaveAttribute('width', '50');
+      const bars = getInlineBars(container);
+      expect(bars[0]).toHaveAttribute('width', '40');
+      expect(bars[1]).toHaveAttribute('width', '50');
     });
   });
 
@@ -248,45 +256,40 @@ describe('StackedDiskBar', () => {
   // ── Mini mode ──────────────────────────────────────────────────────────
 
   describe('mini mode', () => {
-    it('renders individual mini bars for each disk', () => {
+    it('renders individual inline bars for each disk', () => {
       const disk1 = makeDisk({ mountpoint: '/boot' });
       const disk2 = makeDisk({ mountpoint: '/data' });
       render(() => <StackedDiskBar disks={[disk1, disk2]} mode="mini" />);
-      expect(screen.getByText('/boot')).toBeInTheDocument();
-      expect(screen.getByText('/data')).toBeInTheDocument();
+      expect(screen.getByText('boot 50%')).toBeInTheDocument();
+      expect(screen.getByText('data 50%')).toBeInTheDocument();
     });
 
     it('uses device name when mountpoint is missing', () => {
       const disk = makeDisk({ mountpoint: undefined, device: '/dev/nvme0n1' });
       render(() => <StackedDiskBar disks={[disk]} mode="mini" />);
-      expect(screen.getByText('/dev/nvme0n1')).toBeInTheDocument();
+      expect(screen.getByText('nvme0n1 50%')).toBeInTheDocument();
     });
 
     it('falls back to "Disk N" label when both mountpoint and device are missing', () => {
       const disk = makeDisk({ mountpoint: undefined, device: undefined });
       render(() => <StackedDiskBar disks={[disk]} mode="mini" />);
-      expect(screen.getByText('Disk 1')).toBeInTheDocument();
+      expect(screen.getByText('Disk 1 50%')).toBeInTheDocument();
     });
 
-    it('renders one equal-width mini column per disk', () => {
+    it('renders one equal-width inline bar per disk', () => {
       const disk1 = makeDisk({ mountpoint: '/boot' });
       const disk2 = makeDisk({ mountpoint: '/data' });
       const disk3 = makeDisk({ mountpoint: '/var' });
       const { container } = render(() => (
         <StackedDiskBar disks={[disk1, disk2, disk3]} mode="mini" />
       ));
-      const columns = container.querySelectorAll(
-        '.flex.min-w-0.flex-1.flex-col.items-stretch.gap-0\\.5',
-      );
-      expect(columns).toHaveLength(3);
+      expect(getInlineBars(container)).toHaveLength(3);
     });
 
-    it('clamps mini bar fill width to exactly 100% when used exceeds total', () => {
+    it('clamps inline bar fill width to exactly 100% when used exceeds total', () => {
       const disk = makeDisk({ used: 200000000000, total: 107374182400, mountpoint: '/full' });
       const { container } = render(() => <StackedDiskBar disks={[disk]} mode="mini" />);
-      const miniBars = container.querySelectorAll<SVGRectElement>(
-        'rect[data-stacked-disk-fill="mini"]',
-      );
+      const miniBars = getInlineBars(container);
       const barFill = miniBars[miniBars.length - 1];
       expect(barFill).toHaveAttribute('width', '100');
     });

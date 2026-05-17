@@ -13,7 +13,7 @@ import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 export interface StackedDiskBarProps {
   disks?: Disk[];
   aggregateDisk?: Disk;
-  mode?: 'stacked' | 'aggregate' | 'mini' | 'pressure';
+  mode?: 'stacked' | 'aggregate' | 'mini';
   anomaly?: AnomalyReport | null;
   thresholds?: MetricDisplayThresholds | null;
 }
@@ -36,15 +36,17 @@ export interface StackedDiskTooltipItem {
 
 export interface StackedDiskMiniDisk {
   color: string;
+  inlineText: string;
   label: string;
   percent: number;
+  percentLabel: string;
+  shortLabel: string;
+  title: string;
 }
 
 export interface StackedDiskMaxInfo {
   label: string;
   percent: number;
-  total: number;
-  used: number;
 }
 
 export interface StackedDiskBarPresentation {
@@ -60,6 +62,7 @@ export interface StackedDiskBarPresentation {
   displaySublabel: string;
   hasDisks: boolean;
   hasMultipleDisks: boolean;
+  inlineDiskMode: boolean;
   maxLabelFull: string;
   maxLabelShort: string;
   miniDisks: StackedDiskMiniDisk[];
@@ -96,6 +99,44 @@ function getDiskLabel(disk: Disk, index: number): string {
   return disk.mountpoint || disk.device || `Disk ${index + 1}`;
 }
 
+function getShortDiskLabel(label: string): string {
+  const trimmed = label.trim();
+  if (trimmed.startsWith('/dev/')) {
+    return trimmed.slice('/dev/'.length);
+  }
+
+  const parts = trimmed.split('/').filter(Boolean);
+  if (trimmed === '/') {
+    return '/';
+  }
+  if (trimmed.startsWith('/') && parts.length > 0) {
+    return parts[parts.length - 1];
+  }
+  if (trimmed.length <= 12) {
+    return trimmed;
+  }
+
+  return trimmed;
+}
+
+function estimateInlineTextWidth(text: string): number {
+  return text.length * 4.6 + 4;
+}
+
+function getInlineDiskText(shortLabel: string, percentLabel: string, slotWidth: number): string {
+  const fullText = `${shortLabel} ${percentLabel}`;
+  if (slotWidth <= 0 || estimateInlineTextWidth(fullText) <= slotWidth) {
+    return fullText;
+  }
+  if (estimateInlineTextWidth(shortLabel) <= slotWidth) {
+    return shortLabel;
+  }
+  if (estimateInlineTextWidth(percentLabel) <= slotWidth) {
+    return percentLabel;
+  }
+  return '';
+}
+
 function getStackedDiskColor(
   percent: number,
   index: number,
@@ -117,11 +158,12 @@ function buildTooltipContent(
   options: {
     aggregateDisk: Disk | undefined;
     aggregateMode: boolean;
+    inlineDiskMode: boolean;
     miniMode: boolean;
     thresholds?: MetricDisplayThresholds | null;
   },
 ): StackedDiskTooltipItem[] {
-  const useUsageColors = options.aggregateMode || options.miniMode;
+  const useUsageColors = options.aggregateMode || options.inlineDiskMode || options.miniMode;
   if (disks.length > 0) {
     return disks.map((disk, index) => {
       const percentValue = getDiskUsagePercent(disk);
@@ -165,8 +207,6 @@ function getMaxDiskInfo(disks: Disk[]): StackedDiskMaxInfo | null {
       maxInfo = {
         label: getDiskLabel(disk, index),
         percent,
-        total: disk.total,
-        used: disk.used,
       };
     }
   }
@@ -183,8 +223,9 @@ export function buildStackedDiskBarPresentation(
   const aggregateMode = props.mode === 'aggregate';
   const miniMode = props.mode === 'mini';
   const explicitStackedMode = props.mode === 'stacked';
-  const pressureMode = hasMultipleDisks && !aggregateMode && !miniMode && !explicitStackedMode;
+  const inlineDiskMode = (miniMode || hasMultipleDisks) && !aggregateMode && !explicitStackedMode;
   const useStackedSegments = hasMultipleDisks && explicitStackedMode;
+  const inlineDiskSlotWidth = disks.length > 0 ? containerWidth / disks.length : 0;
   const totalCapacity = hasDisks
     ? disks.reduce((sum, disk) => sum + (disk.total || 0), 0)
     : (props.aggregateDisk?.total ?? 0);
@@ -199,21 +240,14 @@ export function buildStackedDiskBarPresentation(
         : 0;
   const anomalyRatio = formatAnomalyRatio(props.anomaly) ?? '';
   const maxInfo = getMaxDiskInfo(disks);
-  const displayPercentValue = pressureMode && maxInfo ? maxInfo.percent : overallPercent;
+  const displayPercentValue = overallPercent;
   const barPercent = Math.min(displayPercentValue, 100);
-  const maxLabelShort = maxInfo
-    ? pressureMode
-      ? 'max'
-      : `max ${formatPercent(maxInfo.percent)}`
-    : '';
+  const maxLabelShort = maxInfo ? `max ${formatPercent(maxInfo.percent)}` : '';
   const maxLabelFull = maxInfo ? `Max ${formatPercent(maxInfo.percent)} (${maxInfo.label})` : '';
   const displayLabel = formatPercent(displayPercentValue);
-  const displaySublabel =
-    pressureMode && maxInfo
-      ? `${formatBytes(maxInfo.used)}/${formatBytes(maxInfo.total)}`
-      : `${formatBytes(totalUsed)}/${formatBytes(totalCapacity)}`;
+  const displaySublabel = `${formatBytes(totalUsed)}/${formatBytes(totalCapacity)}`;
   const showMaxLabel =
-    (aggregateMode || pressureMode) &&
+    aggregateMode &&
     hasMultipleDisks &&
     maxLabelShort.length > 0 &&
     containerWidth >= estimateTextWidth(`${displayLabel} ${maxLabelShort}`);
@@ -223,7 +257,7 @@ export function buildStackedDiskBarPresentation(
       `${displayLabel}${showMaxLabel ? ` ${maxLabelShort}` : ''} (${displaySublabel})`,
     );
   const barColor =
-    (aggregateMode || pressureMode) && hasMultipleDisks && maxInfo
+    aggregateMode && hasMultipleDisks && maxInfo
       ? getMetricColorRgba(maxInfo.percent, 'disk', props.thresholds)
       : getMetricColorRgba(overallPercent, 'disk', props.thresholds);
   const segments =
@@ -241,15 +275,23 @@ export function buildStackedDiskBarPresentation(
       : [];
   const miniDisks = disks.map((disk, index) => {
     const percent = getDiskUsagePercent(disk);
+    const label = getDiskLabel(disk, index);
+    const percentLabel = formatPercent(percent);
+    const shortLabel = getShortDiskLabel(label);
     return {
       color: getMetricColorRgba(percent, 'disk', props.thresholds),
-      label: getDiskLabel(disk, index),
+      inlineText: getInlineDiskText(shortLabel, percentLabel, inlineDiskSlotWidth),
+      label,
       percent,
+      percentLabel,
+      shortLabel,
+      title: `${label}: ${percentLabel} (${formatBytes(disk.used)}/${formatBytes(disk.total)})`,
     };
   });
   const tooltipContent = buildTooltipContent(disks, {
     aggregateDisk: props.aggregateDisk,
     aggregateMode,
+    inlineDiskMode,
     miniMode,
     thresholds: props.thresholds,
   });
@@ -264,20 +306,21 @@ export function buildStackedDiskBarPresentation(
     barColor,
     barPercent,
     containerClass:
-      miniMode && hasDisks
-        ? 'metric-text w-full'
+      inlineDiskMode && hasDisks
+        ? 'metric-text w-full h-4 min-w-0'
         : 'metric-text w-full h-4 flex items-center justify-center',
     displayLabel,
     displayPercentValue,
     displaySublabel,
     hasDisks,
     hasMultipleDisks,
+    inlineDiskMode,
     maxLabelFull,
     maxLabelShort,
     miniDisks,
     miniMode,
     segments,
-    showDiskCount: hasMultipleDisks && !aggregateMode && !miniMode,
+    showDiskCount: useStackedSegments,
     showMaxLabel,
     showSublabel,
     tooltipContent,

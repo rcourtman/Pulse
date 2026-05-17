@@ -18,9 +18,10 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
   return (
     <div ref={state.setContainerRef} class={presentation().containerClass}>
       <Show
-        when={presentation().miniMode && presentation().hasDisks}
+        when={presentation().inlineDiskMode && presentation().hasDisks}
         fallback={
           <div
+            data-stacked-disk-trigger
             class="relative w-full h-full overflow-hidden bg-surface-hover rounded"
             onMouseEnter={state.handleMouseEnter}
             onMouseLeave={state.handleMouseLeave}
@@ -144,36 +145,38 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
         }
       >
         <div
-          class="w-full"
+          data-stacked-disk-trigger
+          class="h-full w-full"
           onMouseEnter={state.handleMouseEnter}
           onMouseLeave={state.handleMouseLeave}
         >
-          <div class="flex items-stretch gap-1">
+          <div class="flex h-full items-stretch gap-0.5">
             <For each={presentation().miniDisks}>
               {(disk) => (
-                <div class="flex min-w-0 flex-1 flex-col items-stretch gap-0.5">
-                  <span class="text-[8px] text-muted truncate" title={disk.label}>
-                    {disk.label}
+                <div
+                  class="relative min-w-0 flex-1 overflow-hidden rounded-sm bg-surface-alt"
+                  title={disk.title}
+                >
+                  <svg
+                    aria-hidden="true"
+                    class="absolute inset-0 h-full w-full"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                  >
+                    <rect
+                      data-stacked-disk-fill="inline"
+                      class="metric-fill-geometry"
+                      x="0"
+                      y="0"
+                      width={clampPercent(disk.percent)}
+                      height="100"
+                      rx="2"
+                      fill={disk.color}
+                    />
+                  </svg>
+                  <span class="absolute inset-0 flex min-w-0 items-center justify-center overflow-hidden px-px text-center text-[8px] font-semibold leading-none text-base-content">
+                    <span class="min-w-0 truncate">{disk.inlineText}</span>
                   </span>
-                  <div class="relative h-2.5 rounded-sm bg-surface-alt overflow-hidden">
-                    <svg
-                      aria-hidden="true"
-                      class="absolute inset-0 h-full w-full"
-                      viewBox="0 0 100 100"
-                      preserveAspectRatio="none"
-                    >
-                      <rect
-                        data-stacked-disk-fill="mini"
-                        class="metric-fill-geometry"
-                        x="0"
-                        y="0"
-                        width={clampPercent(disk.percent)}
-                        height="100"
-                        rx="2"
-                        fill={disk.color}
-                      />
-                    </svg>
-                  </div>
                 </div>
               )}
             </For>
