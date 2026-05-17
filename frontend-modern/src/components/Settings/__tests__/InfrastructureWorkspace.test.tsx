@@ -923,13 +923,6 @@ describe('InfrastructureWorkspace', () => {
         tone: 'warning',
       },
     ];
-    const remoteControlDisabledSignal: InfrastructureSystemMemberRow['fleetHighlights'][number] = {
-      key: 'command-policy',
-      label: 'Remote control disabled',
-      detail: 'Commands are disabled by policy.',
-      tone: 'info',
-    };
-
     connectionState.connections = [primaryConnection, dellyAgent, minipcAgent];
     connectionState.rows = [
       {
@@ -946,14 +939,7 @@ describe('InfrastructureWorkspace', () => {
         lastActivityText: '1m ago',
         ...emptyFleetRow,
         fleetSignals: passiveAgentConfigSignals,
-        fleetHighlights: [
-          {
-            key: 'liveness',
-            label: 'Fleet OK',
-            detail: 'Visible fleet posture is healthy.',
-            tone: 'ok',
-          },
-        ],
+        fleetHighlights: [],
         enabled: true,
         canEdit: true,
         canPause: true,
@@ -974,7 +960,7 @@ describe('InfrastructureWorkspace', () => {
             lastActivityText: '1m ago',
             ...emptyFleetMember,
             fleetSignals: passiveAgentConfigSignals,
-            fleetHighlights: [remoteControlDisabledSignal],
+            fleetHighlights: [],
             primary: true,
             agentConnection: dellyAgent,
           },
@@ -990,7 +976,7 @@ describe('InfrastructureWorkspace', () => {
             lastActivityText: '1m ago',
             ...emptyFleetMember,
             fleetSignals: passiveAgentConfigSignals,
-            fleetHighlights: [remoteControlDisabledSignal],
+            fleetHighlights: [],
             primary: false,
             agentConnection: minipcAgent,
           },
@@ -1009,12 +995,12 @@ describe('InfrastructureWorkspace', () => {
       '0 systems',
     );
     expect(screen.getByText('Cluster · 2 nodes')).toBeInTheDocument();
-    expect(screen.getByText('Fleet OK')).toBeInTheDocument();
+    expect(screen.queryByText('Fleet OK')).toBeNull();
     expect(screen.getByText('Primary node')).toBeInTheDocument();
     expect(screen.getAllByText('Agent').length).toBeGreaterThan(0);
     expect(screen.getByText('delly')).toBeInTheDocument();
     expect(screen.getByText('minipc')).toBeInTheDocument();
-    expect(screen.getAllByText('Remote control disabled')).toHaveLength(2);
+    expect(screen.queryByText('Remote control disabled')).toBeNull();
     expect(screen.queryByText('Config pending')).toBeNull();
     expect(screen.queryByText('Rollout pending')).toBeNull();
     expect(screen.getAllByText('Host telemetry').length).toBeGreaterThan(0);

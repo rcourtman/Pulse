@@ -404,17 +404,26 @@ const systemToRow = (
 
   const isCluster =
     system.type === 'pve' && Boolean(system.clusterName?.trim()) && members.length > 0;
+  // Roll up the row's status across every component the system pulls in:
+  // the primary, any cluster members and their agents, and any cluster- or
+  // host-level attached agents. Without this, a row whose PVE API is healthy
+  // but whose paired agent is stale reads "Active" with no surfaced problem.
+  const memberAgents = rawMembers
+    .map((member) =>
+      member.agentConnectionId ? connectionsByID.get(member.agentConnectionId) : undefined,
+    )
+    .filter((connection): connection is Connection => Boolean(connection));
+  const attachedComponents = componentConnections.filter(
+    (connection) => connection.id !== primaryConnection.id,
+  );
+  const hasAttachments = memberAgents.length > 0 || attachedComponents.length > 0;
   let rollup: ClusterRollup | undefined;
-  if (isCluster) {
-    const memberAgents = rawMembers
-      .map((member) =>
-        member.agentConnectionId ? connectionsByID.get(member.agentConnectionId) : undefined,
-      )
-      .filter((connection): connection is Connection => Boolean(connection));
+  if (isCluster || hasAttachments) {
     const states: ConnectionState[] = [
       primaryConnection.state,
       ...rawMembers.map((member) => member.state),
       ...memberAgents.map((connection) => connection.state),
+      ...attachedComponents.map((connection) => connection.state),
     ];
     const worstState = states.reduce<ConnectionState>(
       (acc, state) => moreSevereState(acc, state),
@@ -424,6 +433,7 @@ const systemToRow = (
       primaryConnection.lastSeen,
       ...rawMembers.map((member) => member.lastSeen),
       ...memberAgents.map((connection) => connection.lastSeen),
+      ...attachedComponents.map((connection) => connection.lastSeen),
     ];
     rollup = { state: worstState, lastSeen: oldestTimestamp(lastSeens) };
   }

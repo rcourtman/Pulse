@@ -59,9 +59,7 @@ describe('visibleFleetGovernanceSignals', () => {
     expect(rawSignals.map((signal) => signal.label)).toEqual(
       expect.arrayContaining(['Config pending', 'Rollout pending', 'Remote control disabled']),
     );
-    expect(visibleFleetGovernanceSignals(rawSignals).map((signal) => signal.label)).toEqual([
-      'Remote control disabled',
-    ]);
+    expect(visibleFleetGovernanceSignals(rawSignals).map((signal) => signal.label)).toEqual([]);
   });
 
   it('does not turn default unmanaged agent config into setup attention', () => {
@@ -99,9 +97,7 @@ describe('visibleFleetGovernanceSignals', () => {
     expect(rawSignals.map((signal) => signal.label)).toEqual(
       expect.arrayContaining(['No config drift', 'Rollout current', 'Remote control disabled']),
     );
-    expect(visibleFleetGovernanceSignals(rawSignals).map((signal) => signal.label)).toEqual([
-      'Remote control disabled',
-    ]);
+    expect(visibleFleetGovernanceSignals(rawSignals).map((signal) => signal.label)).toEqual([]);
   });
 
   it('keeps actionable config and rollout warnings visible', () => {
@@ -138,7 +134,6 @@ describe('visibleFleetGovernanceSignals', () => {
     expect(visibleFleetGovernanceSignals(rawSignals).map((signal) => signal.label)).toEqual([
       'Config pending',
       'Rollout pending',
-      'Remote control disabled',
     ]);
   });
 
@@ -163,7 +158,7 @@ describe('visibleFleetGovernanceSignals', () => {
     ]);
   });
 
-  it('falls back to Fleet OK only when every warning was a passive handshake', () => {
+  it('returns no chips when every warning was a passive handshake', () => {
     const signals: FleetGovernanceSignal[] = [
       {
         key: 'config-drift',
@@ -179,13 +174,7 @@ describe('visibleFleetGovernanceSignals', () => {
       },
     ];
 
-    expect(visibleFleetGovernanceSignals(signals)).toMatchObject([
-      {
-        key: 'liveness',
-        label: 'Fleet OK',
-        tone: 'ok',
-      },
-    ]);
+    expect(visibleFleetGovernanceSignals(signals)).toEqual([]);
   });
 
   it('hides rollout fallback copy when a passive config confirmation marks the handshake', () => {
@@ -219,8 +208,6 @@ describe('visibleFleetGovernanceSignals', () => {
       }),
     );
 
-    expect(visibleFleetGovernanceSignals(rawSignals).map((signal) => signal.label)).toEqual([
-      'Remote control disabled',
-    ]);
+    expect(visibleFleetGovernanceSignals(rawSignals).map((signal) => signal.label)).toEqual([]);
   });
 });

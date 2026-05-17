@@ -80,7 +80,6 @@ describe('useConnectionsLedger', () => {
     expect(result.rows()[0].fleetHighlights.map((signal) => signal.label)).toEqual([
       'Version behind',
       'Update available',
-      'Remote control enabled',
     ]);
   });
 
@@ -430,7 +429,6 @@ describe('useConnectionsLedger', () => {
       'Version behind',
     ]);
     expect(byID.get('pve:invalid')?.fleetHighlights.map((signal) => signal.label)).toEqual([
-      'Unauthorized',
       'Credentials invalid',
       'Rollout blocked',
     ]);
@@ -439,16 +437,16 @@ describe('useConnectionsLedger', () => {
     ]);
     expect(
       byID.get('agent:remote-disabled')?.fleetHighlights.map((signal) => signal.label),
-    ).toEqual(['Remote control disabled']);
+    ).toEqual([]);
     expect(
       byID.get('agent:command-mismatch')?.fleetHighlights.map((signal) => signal.label),
     ).toEqual(['Command policy mismatch']);
     expect(byID.get('agent:command-mismatch')?.fleetHighlights[0]?.tone).toBe('critical');
     expect(byID.get('agent:config-pending')?.fleetHighlights.map((signal) => signal.label)).toEqual(
-      ['Config pending', 'Remote control enabled'],
+      ['Config pending'],
     );
     expect(byID.get('agent:config-unknown')?.fleetHighlights.map((signal) => signal.label)).toEqual(
-      ['Config unknown', 'Remote control enabled'],
+      ['Config unknown'],
     );
   });
 
@@ -616,7 +614,7 @@ describe('useConnectionsLedger', () => {
       'agent:agent-delly',
       'agent:agent-minipc',
     ]);
-    expect(result.rows()[0].fleetHighlights.map((signal) => signal.label)).toEqual(['Fleet OK']);
+    expect(result.rows()[0].fleetHighlights).toEqual([]);
     expect(result.rows()[0].members).toMatchObject([
       {
         id: 'node-delly',
@@ -627,7 +625,7 @@ describe('useConnectionsLedger', () => {
         hostAliases: ['delly', '192.168.0.10'],
         coverageLabels: ['Host telemetry'],
         statusLabel: 'Active',
-        fleetHighlights: [{ label: 'Remote control disabled' }],
+        fleetHighlights: [],
         primary: true,
       },
       {
@@ -639,7 +637,7 @@ describe('useConnectionsLedger', () => {
         hostAliases: ['minipc', '192.168.0.11'],
         coverageLabels: ['Host telemetry'],
         statusLabel: 'Active',
-        fleetHighlights: [{ label: 'Remote control disabled' }],
+        fleetHighlights: [],
         primary: false,
       },
     ]);

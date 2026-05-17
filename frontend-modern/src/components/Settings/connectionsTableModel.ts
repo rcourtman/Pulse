@@ -844,27 +844,36 @@ export const visibleFleetGovernanceSignals = (
   signals: readonly FleetGovernanceSignal[],
 ): FleetGovernanceSignal[] => {
   const hasPassiveAgentConfigConfirmation = signals.some(isPassiveAgentConfigConfirmationSignal);
-  const visibleSignals = signals.filter(
+  // A row can flatten signals from multiple connections (e.g. a PVE primary
+  // and its paired agent). Treat liveness as attention if any contributor
+  // is non-OK, otherwise an active PVE primary masks a stale agent.
+  const livenessIsAttention = signals.some(
     (signal) =>
-      !isPassiveAgentConfigConfirmationSignal(signal) &&
-      !isPassiveAgentRolloutConfirmationFallbackSignal(signal, hasPassiveAgentConfigConfirmation),
+      signal.key === 'liveness' && (signal.tone === 'warning' || signal.tone === 'critical'),
   );
+  const visibleSignals = signals.filter((signal) => {
+    if (isPassiveAgentConfigConfirmationSignal(signal)) return false;
+    if (isPassiveAgentRolloutConfirmationFallbackSignal(signal, hasPassiveAgentConfigConfirmation))
+      return false;
+    // Liveness duplicates the row's status badge column; skip it here so a
+    // stale connection doesn't get "Stale" rendered twice.
+    if (signal.key === 'liveness') return false;
+    // Adapter health degrades automatically when an agent stops heartbeating.
+    // When liveness is already raising attention, "Adapter degraded" is the
+    // same root cause restated, not an independent reading.
+    if (signal.key === 'adapter' && livenessIsAttention) return false;
+    // Default-disabled remote control is the unconfigured state on every
+    // fresh agent. Surface only when policy is actively wrong
+    // (blocked/mismatched/pending/unknown). The Manage drawer is the right
+    // place to read informational policy state.
+    if (signal.key === 'command-policy' && signal.tone === 'info') return false;
+    return true;
+  });
   const attention = visibleSignals.filter(
     (signal) => signal.tone === 'critical' || signal.tone === 'warning',
   );
   const control = visibleSignals.filter((signal) => signal.tone === 'info');
-  if (attention.length + control.length > 0) {
-    return [...attention, ...control].slice(0, 3);
-  }
-  return [
-    {
-      key: 'liveness',
-      label: 'Fleet OK',
-      detail:
-        'Enrollment, liveness, adapter health, credentials, and rollout state have no current warnings.',
-      tone: 'ok',
-    },
-  ];
+  return [...attention, ...control].slice(0, 3);
 };
 
 const isPassiveAgentConfigConfirmationSignal = (signal: FleetGovernanceSignal): boolean => {
