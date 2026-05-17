@@ -13,7 +13,7 @@ import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 export interface StackedDiskBarProps {
   disks?: Disk[];
   aggregateDisk?: Disk;
-  mode?: 'stacked' | 'aggregate' | 'mini';
+  mode?: 'stacked' | 'aggregate' | 'mini' | 'vertical-bars';
   anomaly?: AnomalyReport | null;
   thresholds?: MetricDisplayThresholds | null;
 }
@@ -41,6 +41,12 @@ export interface StackedDiskMiniDisk {
   percent: number;
   percentLabel: string;
   shortLabel: string;
+  title: string;
+}
+
+export interface StackedDiskVerticalBar {
+  color: string;
+  fillPercent: number;
   title: string;
 }
 
@@ -74,6 +80,8 @@ export interface StackedDiskBarPresentation {
   tooltipContent: StackedDiskTooltipItem[];
   tooltipTitle: string;
   useStackedSegments: boolean;
+  verticalBars: StackedDiskVerticalBar[];
+  verticalBarsMode: boolean;
 }
 
 const SEGMENT_COLORS = [
@@ -223,7 +231,12 @@ export function buildStackedDiskBarPresentation(
   const aggregateMode = props.mode === 'aggregate';
   const miniMode = props.mode === 'mini';
   const explicitStackedMode = props.mode === 'stacked';
-  const inlineDiskMode = (miniMode || hasMultipleDisks) && !aggregateMode && !explicitStackedMode;
+  const verticalBarsMode = props.mode === 'vertical-bars' && hasDisks;
+  const inlineDiskMode =
+    (miniMode || hasMultipleDisks) &&
+    !aggregateMode &&
+    !explicitStackedMode &&
+    !verticalBarsMode;
   const useStackedSegments = hasMultipleDisks && explicitStackedMode;
   const inlineDiskSlotWidth = disks.length > 0 ? containerWidth / disks.length : 0;
   const totalCapacity = hasDisks
@@ -288,6 +301,17 @@ export function buildStackedDiskBarPresentation(
       title: `${label}: ${percentLabel} (${formatBytes(disk.used)}/${formatBytes(disk.total)})`,
     };
   });
+  const verticalBars: StackedDiskVerticalBar[] = verticalBarsMode
+    ? disks.map((disk, index) => {
+        const percent = getDiskUsagePercent(disk);
+        const label = getDiskLabel(disk, index);
+        return {
+          color: getMetricColorRgba(percent, 'disk', props.thresholds),
+          fillPercent: Math.max(0, Math.min(percent, 100)),
+          title: `${label}: ${formatPercent(percent)} (${formatBytes(disk.used)}/${formatBytes(disk.total)})`,
+        };
+      })
+    : [];
   const tooltipContent = buildTooltipContent(disks, {
     aggregateDisk: props.aggregateDisk,
     aggregateMode,
@@ -305,8 +329,9 @@ export function buildStackedDiskBarPresentation(
     anomalyRatio,
     barColor,
     barPercent,
-    containerClass:
-      inlineDiskMode && hasDisks
+    containerClass: verticalBarsMode
+      ? 'metric-text w-full h-4 min-w-0'
+      : inlineDiskMode && hasDisks
         ? 'metric-text w-full h-4 min-w-0'
         : 'metric-text w-full h-4 flex items-center justify-center',
     displayLabel,
@@ -326,5 +351,7 @@ export function buildStackedDiskBarPresentation(
     tooltipContent,
     tooltipTitle: hasMultipleDisks ? 'Disk Breakdown' : 'Disk Usage',
     useStackedSegments,
+    verticalBars,
+    verticalBarsMode,
   };
 }

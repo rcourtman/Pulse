@@ -18,145 +18,69 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
   return (
     <div ref={state.setContainerRef} class={presentation().containerClass}>
       <Show
-        when={presentation().inlineDiskMode && presentation().hasDisks}
+        when={presentation().verticalBarsMode}
         fallback={
-          <div
-            data-stacked-disk-trigger
-            class="relative w-full h-full overflow-hidden bg-surface-hover rounded"
-            onMouseEnter={state.handleMouseEnter}
-            onMouseLeave={state.handleMouseLeave}
-          >
-            {/* Stacked segments for multiple disks */}
-            <Show when={presentation().useStackedSegments}>
-              <svg
-                aria-hidden="true"
-                class="absolute inset-0 h-full w-full"
-                viewBox="0 0 100 100"
-                preserveAspectRatio="none"
+          <Show
+            when={presentation().inlineDiskMode && presentation().hasDisks}
+            fallback={
+              <div
+                data-stacked-disk-trigger
+                class="relative w-full h-full overflow-hidden bg-surface-hover rounded"
+                onMouseEnter={state.handleMouseEnter}
+                onMouseLeave={state.handleMouseLeave}
               >
-                <For each={presentation().segments}>
-                  {(segment, idx) => (
-                    <>
-                      <rect
-                        data-stacked-disk-fill="segment"
-                        class="metric-fill-geometry"
-                        x={String(
-                          presentation()
-                            .segments.slice(0, idx())
-                            .reduce((sum, item) => sum + item.widthPercent, 0),
-                        )}
-                        y="0"
-                        width={clampPercent(segment.widthPercent)}
-                        height="100"
-                        rx="3"
-                        fill={segment.color}
-                      />
-                      <Show when={idx() < presentation().segments.length - 1}>
-                        <line
-                          class="metric-fill-divider"
-                          x1={String(
-                            presentation()
-                              .segments.slice(0, idx() + 1)
-                              .reduce((sum, item) => sum + item.widthPercent, 0),
-                          )}
-                          x2={String(
-                            presentation()
-                              .segments.slice(0, idx() + 1)
-                              .reduce((sum, item) => sum + item.widthPercent, 0),
-                          )}
-                          y1="0"
-                          y2="100"
-                          stroke="rgba(255,255,255,0.3)"
-                          stroke-width="1"
-                        />
-                      </Show>
-                    </>
-                  )}
-                </For>
-              </svg>
-            </Show>
+                {/* Stacked segments for multiple disks */}
+                <Show when={presentation().useStackedSegments}>
+                  <svg
+                    aria-hidden="true"
+                    class="absolute inset-0 h-full w-full"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                  >
+                    <For each={presentation().segments}>
+                      {(segment, idx) => (
+                        <>
+                          <rect
+                            data-stacked-disk-fill="segment"
+                            class="metric-fill-geometry"
+                            x={String(
+                              presentation()
+                                .segments.slice(0, idx())
+                                .reduce((sum, item) => sum + item.widthPercent, 0),
+                            )}
+                            y="0"
+                            width={clampPercent(segment.widthPercent)}
+                            height="100"
+                            rx="3"
+                            fill={segment.color}
+                          />
+                          <Show when={idx() < presentation().segments.length - 1}>
+                            <line
+                              class="metric-fill-divider"
+                              x1={String(
+                                presentation()
+                                  .segments.slice(0, idx() + 1)
+                                  .reduce((sum, item) => sum + item.widthPercent, 0),
+                              )}
+                              x2={String(
+                                presentation()
+                                  .segments.slice(0, idx() + 1)
+                                  .reduce((sum, item) => sum + item.widthPercent, 0),
+                              )}
+                              y1="0"
+                              y2="100"
+                              stroke="rgba(255,255,255,0.3)"
+                              stroke-width="1"
+                            />
+                          </Show>
+                        </>
+                      )}
+                    </For>
+                  </svg>
+                </Show>
 
-            {/* Single bar for aggregate or single disk */}
-            <Show when={!presentation().useStackedSegments}>
-              <svg
-                aria-hidden="true"
-                class="absolute inset-0 h-full w-full"
-                viewBox="0 0 100 100"
-                preserveAspectRatio="none"
-              >
-                <rect
-                  data-stacked-disk-fill="single"
-                  class="metric-fill-geometry"
-                  x="0"
-                  y="0"
-                  width={clampPercent(presentation().barPercent)}
-                  height="100"
-                  rx="3"
-                  fill={presentation().barColor}
-                />
-              </svg>
-            </Show>
-
-            {/* Label overlay */}
-            <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none min-w-0 overflow-hidden">
-              <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
-                <span>
-                  <AnimatedNumber
-                    value={presentation().displayPercentValue}
-                    format={formatPercent}
-                  />
-                </span>
-                <Show when={presentation().showMaxLabel}>
-                  <span
-                    class="text-[8px] font-normal text-muted"
-                    title={presentation().maxLabelFull}
-                  >
-                    {' '}
-                    {presentation().maxLabelShort}
-                  </span>
-                </Show>
-                <Show when={presentation().showSublabel}>
-                  <span class="metric-sublabel font-normal text-muted">
-                    {' '}
-                    ({presentation().displaySublabel})
-                  </span>
-                </Show>
-                <Show when={presentation().showDiskCount}>
-                  <span
-                    class="text-[8px] font-normal text-muted"
-                    title={`${props.disks?.length ?? 0} disks`}
-                  >
-                    {' '}
-                    [{props.disks?.length}]
-                  </span>
-                </Show>
-                {/* Anomaly indicator */}
-                <Show when={presentation().anomalyDescription && presentation().anomalyRatio}>
-                  <span
-                    class={`ml-0.5 font-bold animate-pulse ${presentation().anomalyClass}`}
-                    title={presentation().anomalyDescription}
-                  >
-                    {presentation().anomalyRatio}
-                  </span>
-                </Show>
-              </span>
-            </span>
-          </div>
-        }
-      >
-        <div
-          data-stacked-disk-trigger
-          class="h-full w-full"
-          onMouseEnter={state.handleMouseEnter}
-          onMouseLeave={state.handleMouseLeave}
-        >
-          <div class="flex h-full items-stretch gap-0.5">
-            <For each={presentation().miniDisks}>
-              {(disk) => (
-                <div
-                  class="relative min-w-0 flex-1 overflow-hidden rounded-sm bg-surface-alt"
-                  title={disk.title}
-                >
+                {/* Single bar for aggregate or single disk */}
+                <Show when={!presentation().useStackedSegments}>
                   <svg
                     aria-hidden="true"
                     class="absolute inset-0 h-full w-full"
@@ -164,19 +88,125 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                     preserveAspectRatio="none"
                   >
                     <rect
-                      data-stacked-disk-fill="inline"
+                      data-stacked-disk-fill="single"
                       class="metric-fill-geometry"
                       x="0"
                       y="0"
-                      width={clampPercent(disk.percent)}
+                      width={clampPercent(presentation().barPercent)}
                       height="100"
-                      rx="2"
-                      fill={disk.color}
+                      rx="3"
+                      fill={presentation().barColor}
                     />
                   </svg>
-                  <span class="absolute inset-0 flex min-w-0 items-center justify-center overflow-hidden px-px text-center text-[8px] font-semibold leading-none text-base-content">
-                    <span class="min-w-0 truncate">{disk.inlineText}</span>
+                </Show>
+
+                {/* Label overlay */}
+                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none min-w-0 overflow-hidden">
+                  <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
+                    <span>
+                      <AnimatedNumber
+                        value={presentation().displayPercentValue}
+                        format={formatPercent}
+                      />
+                    </span>
+                    <Show when={presentation().showMaxLabel}>
+                      <span
+                        class="text-[8px] font-normal text-muted"
+                        title={presentation().maxLabelFull}
+                      >
+                        {' '}
+                        {presentation().maxLabelShort}
+                      </span>
+                    </Show>
+                    <Show when={presentation().showSublabel}>
+                      <span class="metric-sublabel font-normal text-muted">
+                        {' '}
+                        ({presentation().displaySublabel})
+                      </span>
+                    </Show>
+                    <Show when={presentation().showDiskCount}>
+                      <span
+                        class="text-[8px] font-normal text-muted"
+                        title={`${props.disks?.length ?? 0} disks`}
+                      >
+                        {' '}
+                        [{props.disks?.length}]
+                      </span>
+                    </Show>
+                    {/* Anomaly indicator */}
+                    <Show when={presentation().anomalyDescription && presentation().anomalyRatio}>
+                      <span
+                        class={`ml-0.5 font-bold animate-pulse ${presentation().anomalyClass}`}
+                        title={presentation().anomalyDescription}
+                      >
+                        {presentation().anomalyRatio}
+                      </span>
+                    </Show>
                   </span>
+                </span>
+              </div>
+            }
+          >
+            <div
+              data-stacked-disk-trigger
+              class="h-full w-full"
+              onMouseEnter={state.handleMouseEnter}
+              onMouseLeave={state.handleMouseLeave}
+            >
+              <div class="flex h-full items-stretch gap-0.5">
+                <For each={presentation().miniDisks}>
+                  {(disk) => (
+                    <div
+                      class="relative min-w-0 flex-1 overflow-hidden rounded-sm bg-surface-alt"
+                      title={disk.title}
+                    >
+                      <svg
+                        aria-hidden="true"
+                        class="absolute inset-0 h-full w-full"
+                        viewBox="0 0 100 100"
+                        preserveAspectRatio="none"
+                      >
+                        <rect
+                          data-stacked-disk-fill="inline"
+                          class="metric-fill-geometry"
+                          x="0"
+                          y="0"
+                          width={clampPercent(disk.percent)}
+                          height="100"
+                          rx="2"
+                          fill={disk.color}
+                        />
+                      </svg>
+                      <span class="absolute inset-0 flex min-w-0 items-center justify-center overflow-hidden px-px text-center text-[8px] font-semibold leading-none text-base-content">
+                        <span class="min-w-0 truncate">{disk.inlineText}</span>
+                      </span>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
+          </Show>
+        }
+      >
+        {/* Vertical micro-bars: one per disk, fill height = utilization, color = threshold */}
+        <div
+          data-stacked-disk-trigger
+          class="h-full w-full"
+          onMouseEnter={state.handleMouseEnter}
+          onMouseLeave={state.handleMouseLeave}
+        >
+          <div class="flex h-full items-end justify-center gap-[3px]">
+            <For each={presentation().verticalBars}>
+              {(bar) => (
+                <div
+                  class="relative h-full w-[5px] shrink-0 overflow-hidden rounded-sm bg-surface-hover"
+                  title={bar.title}
+                >
+                  <div
+                    data-stacked-disk-fill="vertical"
+                    class="absolute bottom-0 left-0 right-0 rounded-sm"
+                    style={{ height: `${bar.fillPercent}%`, background: bar.color }}
+                  />
                 </div>
               )}
             </For>

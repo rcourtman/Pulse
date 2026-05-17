@@ -334,6 +334,11 @@ export const ProxmoxNodesTable: Component<{
                                 }
                               >
                                 <StackedDiskBar
+                                  mode={
+                                    (node.agent?.disks?.length ?? 0) > 1
+                                      ? 'vertical-bars'
+                                      : undefined
+                                  }
                                   disks={normalizeDiskArray(node.agent?.disks)}
                                   aggregateDisk={aggregateDisk()}
                                 />
