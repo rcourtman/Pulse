@@ -1122,3 +1122,44 @@ func TestNew_FallsBackToMACWhenMachineIDEmpty(t *testing.T) {
 		t.Fatalf("machineID = %q, want %q", agent.machineID, "mac-020000000001")
 	}
 }
+
+func TestExecuteCommandPayload_TrustedBypassesAgentApprovalGate(t *testing.T) {
+	// Discovery deep scans wrap probes in `docker exec ...` and dispatch them
+	// over the command WebSocket with Trusted=true. The agent-side authorize
+	// gate must honor that flag (matching the agentexec server-side behavior)
+	// or every scan returns empty stdout because the agent refuses to run the
+	// command — which is the bug this regression test guards against.
+	c := &CommandClient{commandPolicy: agentexec.DefaultPolicy()}
+
+	requireApproval := executeCommandPayload{
+		RequestID: "r1",
+		Command:   "docker exec pbs sh -c 'cat /etc/os-release'",
+		Timeout:   1,
+	}
+	if err := c.authorizeCommand(requireApproval); err == nil {
+		t.Fatalf("baseline: agent must reject untrusted docker exec without ApprovalID")
+	}
+
+	requireApproval.Trusted = true
+	if err := c.authorizeCommand(requireApproval); err != nil {
+		t.Fatalf("Trusted=true must bypass the agent approval gate, got %v", err)
+	}
+
+	// PolicyBlock is still enforced even when Trusted.
+	blocked := executeCommandPayload{
+		RequestID: "r2",
+		Command:   "rm -rf /",
+		Trusted:   true,
+		Timeout:   1,
+	}
+	if err := c.authorizeCommand(blocked); err == nil || !strings.Contains(err.Error(), "blocked by policy") {
+		t.Fatalf("Trusted must not bypass PolicyBlock; got %v", err)
+	}
+
+	// toAgentExecPayload must propagate Trusted so the agentexec server side
+	// can also bypass its mirrored approval mint step.
+	round := requireApproval.toAgentExecPayload()
+	if !round.Trusted {
+		t.Fatalf("toAgentExecPayload dropped Trusted field; round-trip must preserve it")
+	}
+}

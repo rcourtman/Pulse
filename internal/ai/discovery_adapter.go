@@ -139,6 +139,13 @@ func normalizeDiscoveryExecuteCommandPayload(ctx context.Context, cmd servicedis
 		TargetType: cmd.TargetType,
 		TargetID:   cmd.TargetID,
 		Timeout:    timeoutSeconds,
+		// Discovery probes are a fixed, in-source catalog of read-only
+		// inspections (cat /etc/os-release, ps, ss, env, find under a few
+		// known config roots) wrapped in `docker exec <container>` or
+		// `pct/qm exec`. They never accept user-supplied commands. The
+		// trusted flag lets them bypass the user-driven approval gate that
+		// would otherwise block every `docker exec` dispatch.
+		Trusted: true,
 	}
 }
 

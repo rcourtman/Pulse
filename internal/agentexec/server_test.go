@@ -3,6 +3,7 @@ package agentexec
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -164,6 +165,73 @@ func TestExecuteCommandSecurityValidation_RequiresApprovalIDWhenPolicyRequiresAp
 	})
 	if err == nil || !strings.Contains(err.Error(), "requires approval") {
 		t.Fatalf("expected approval-required error, got %v", err)
+	}
+}
+
+func TestAuthorizeCommandPayload_TrustedBypassesApproval(t *testing.T) {
+	s := NewServer(allowAllTestTokens)
+
+	// A command in the require-approval list (docker exec wraps Discovery probes).
+	cmd := ExecuteCommandPayload{
+		RequestID: "r1",
+		Command:   "docker exec pbs sh -c 'cat /etc/os-release'",
+		Timeout:   1,
+	}
+
+	if err := s.authorizeCommandPayload(cmd); err == nil {
+		t.Fatalf("baseline: expected approval-required error without Trusted, got nil")
+	}
+
+	cmd.Trusted = true
+	if err := s.authorizeCommandPayload(cmd); err != nil {
+		t.Fatalf("Trusted payload should bypass approval gate, got %v", err)
+	}
+
+	// Blocked commands are still blocked even when Trusted (defense in depth).
+	blocked := ExecuteCommandPayload{
+		RequestID: "r2",
+		Command:   "rm -rf /",
+		Trusted:   true,
+		Timeout:   1,
+	}
+	if err := s.authorizeCommandPayload(blocked); err == nil || !strings.Contains(err.Error(), "blocked by policy") {
+		t.Fatalf("Trusted must not bypass PolicyBlock; got %v", err)
+	}
+}
+
+func TestExecuteCommand_TrustedSkipsApprovalGrantMint(t *testing.T) {
+	// Regression for the auto-grant path: even when the policy says
+	// RequireApproval, a Trusted command without an ApprovalID must not
+	// trigger NewCommandApprovalGrant (which errors "approval id is
+	// required"). The grant is only meaningful for user-driven approvals.
+	s := NewServer(allowAllTestTokens)
+	serverConn, _, cleanup := newConnPair(t)
+	defer cleanup()
+	ac := &agentConn{
+		conn:             serverConn,
+		agent:            ConnectedAgent{AgentID: "a1"},
+		approvalGrantKey: []byte("not-empty-so-the-mint-path-is-reachable"),
+		done:             make(chan struct{}),
+		writeMu:          sync.Mutex{},
+	}
+	s.mu.Lock()
+	s.agents["a1"] = ac
+	s.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_, err := s.ExecuteCommand(ctx, "a1", ExecuteCommandPayload{
+		RequestID: "r1",
+		Command:   "docker exec pbs sh -c 'cat /etc/os-release'",
+		Trusted:   true,
+		Timeout:   1,
+	})
+	// Expected: command is dispatched and we time out waiting for a result
+	// from the fake conn (no agent code on the other side). What must NOT
+	// appear is the "approval id is required" / "failed to issue approval
+	// grant" mint failure.
+	if err != nil && (strings.Contains(err.Error(), "failed to issue approval grant") || strings.Contains(err.Error(), "approval id is required")) {
+		t.Fatalf("Trusted command must skip auto-grant mint, got %v", err)
 	}
 }
 

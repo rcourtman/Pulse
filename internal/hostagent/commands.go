@@ -197,6 +197,12 @@ type executeCommandPayload struct {
 	TargetType    string                          `json:"target_type"`
 	TargetID      string                          `json:"target_id,omitempty"`
 	Timeout       int                             `json:"timeout,omitempty"`
+	// Trusted is set by the Pulse server when the command originates from a
+	// vetted internal subsystem (e.g. servicediscovery deep scans whose
+	// command catalog is hardcoded in Pulse source). When set, the agent's
+	// policy approval gate is bypassed since the command did not come from
+	// a user-driven path. PolicyBlock is still enforced.
+	Trusted bool `json:"trusted,omitempty"`
 }
 
 type commandResultPayload struct {
@@ -641,6 +647,12 @@ func (c *CommandClient) authorizeCommand(payload executeCommandPayload) error {
 	case agentexec.PolicyBlock:
 		return fmt.Errorf("command blocked by policy")
 	case agentexec.PolicyRequireApproval:
+		// Trusted commands come from vetted Pulse-internal subsystems over an
+		// authenticated WebSocket; they do not require user approval. The
+		// PolicyBlock branch above still enforces hard limits.
+		if payload.Trusted {
+			return nil
+		}
 		if strings.TrimSpace(payload.ApprovalID) == "" {
 			return fmt.Errorf("command requires approval")
 		}
@@ -661,6 +673,7 @@ func (p executeCommandPayload) toAgentExecPayload() agentexec.ExecuteCommandPayl
 		TargetType:    normalizedCommandTargetType(p.TargetType),
 		TargetID:      strings.TrimSpace(p.TargetID),
 		Timeout:       p.Timeout,
+		Trusted:       p.Trusted,
 	}
 }
 

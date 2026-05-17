@@ -201,6 +201,12 @@ func (s *Server) authorizeCommandPayload(cmd ExecuteCommandPayload) error {
 	case PolicyBlock:
 		return fmt.Errorf("command blocked by policy")
 	case PolicyRequireApproval:
+		// Trusted internal subsystems (e.g. servicediscovery deep scans) carry
+		// a hardcoded command catalog and never accept user-supplied commands,
+		// so the user-driven approval gate does not apply to them.
+		if cmd.Trusted {
+			return nil
+		}
 		if cmd.ApprovalID == "" {
 			return fmt.Errorf("command requires approval")
 		}
@@ -853,7 +859,7 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 	if err := s.authorizeCommandPayload(cmd); err != nil {
 		return nil, err
 	}
-	if s.commandPolicy != nil && s.commandPolicy.Evaluate(cmd.Command) == PolicyRequireApproval && cmd.ApprovalGrant == nil && len(ac.approvalGrantKey) > 0 {
+	if !cmd.Trusted && s.commandPolicy != nil && s.commandPolicy.Evaluate(cmd.Command) == PolicyRequireApproval && cmd.ApprovalGrant == nil && len(ac.approvalGrantKey) > 0 {
 		grant, grantErr := NewCommandApprovalGrant(ac.approvalGrantKey, agentID, cmd, time.Now(), DefaultApprovalGrantTTL)
 		if grantErr != nil {
 			return nil, fmt.Errorf("failed to issue approval grant: %w", grantErr)

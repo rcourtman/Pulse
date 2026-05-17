@@ -1139,6 +1139,18 @@ runtime must carry that approval identifier into the final
 `agentexec.ExecuteCommandPayload` so the host agent can re-check the shared
 command policy locally and fail closed on blocked or still-unapproved commands
 instead of treating control-plane approval as an implicit bypass.
+Discovery deep scans are the one runtime that does not flow through the
+approval boundary. `internal/ai/discovery_adapter.go` is the only call site
+allowed to mark an `agentexec.ExecuteCommandPayload` as `Trusted`. The
+catalog of probes lives in `internal/servicediscovery/commands.go`, is
+read-only by construction (`cat`, `ps`, `ss`, `find` under known config
+roots) and is wrapped in `docker exec`, `pct exec`, or `qm guest exec`
+without ever interpolating caller-supplied strings. Both the server-side
+`agentexec` authorize path and the agent-side `hostagent` authorize path
+must honor that `Trusted` flag by bypassing the approval requirement,
+while still enforcing `PolicyBlock`. AI tool calls, Patrol fixes, and
+Assistant remediation must continue to flow through the governed approval
+record path and must never set `Trusted` on their payloads.
 The same action-audit boundary now also requires persisted action records to
 carry a normalized plan and preflight: action id, request id, capability,
 approval policy, dry-run availability, safety checks, verification steps, and

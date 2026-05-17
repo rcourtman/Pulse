@@ -264,3 +264,24 @@ func TestDiscoveryCommandAdapter_ExecuteCommandSuccess(t *testing.T) {
 		t.Fatal(asyncErr)
 	}
 }
+
+func TestNormalizeDiscoveryExecuteCommandPayload_SetsTrusted(t *testing.T) {
+	// Discovery probes are wrapped in `docker exec ...` (or pct/qm exec) and
+	// would otherwise hit the agentexec command-policy approval gate, which
+	// returns "command requires approval" because Discovery has no
+	// user-driven ApprovalID. The Trusted flag is the contract the adapter
+	// uses to opt those internal Pulse-source probes out of the approval
+	// gate on both the server and agent sides while leaving PolicyBlock
+	// intact. This test pins that contract.
+	ctx := context.Background()
+	out := normalizeDiscoveryExecuteCommandPayload(ctx, servicediscovery.ExecuteCommandPayload{
+		RequestID:  "req-trusted",
+		Command:    "docker exec pbs sh -c 'cat /etc/os-release'",
+		TargetType: "agent",
+		TargetID:   "agent-1",
+		Timeout:    5,
+	})
+	if !out.Trusted {
+		t.Fatal("normalizeDiscoveryExecuteCommandPayload must set Trusted=true on outgoing agentexec payload")
+	}
+}

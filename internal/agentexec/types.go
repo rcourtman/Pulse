@@ -97,6 +97,13 @@ type ExecuteCommandPayload struct {
 	TargetType    string                `json:"target_type"`         // "agent", "container", "vm"
 	TargetID      string                `json:"target_id,omitempty"` // VMID for container/VM
 	Timeout       int                   `json:"timeout,omitempty"`   // seconds, 0 = default
+	// Trusted marks a payload as originating from a Pulse-internal subsystem
+	// whose command catalog is hardcoded and vetted (e.g. servicediscovery
+	// deep scans wrap read-only inspections in `docker exec`). When set, the
+	// server's command policy approval gate is bypassed for this command.
+	// This field must only be set by trusted internal call sites — never
+	// from a deserialised HTTP body or any user-driven path.
+	Trusted bool `json:"trusted,omitempty"`
 }
 
 // ReadFilePayload is sent by server to request file content

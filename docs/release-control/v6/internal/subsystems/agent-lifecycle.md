@@ -980,6 +980,17 @@ profile and assignment columns, but embedded table framing must route through
     source flow, and any later unified-agent augmentation on an API-backed
     platform must remain an optional secondary path instead of silently
     becoming the required bootstrap.
+17. Preserve the on-agent command-policy approval gate in
+    `internal/hostagent/commands.go` and `internal/agentexec/server.go`.
+    Both ends may honor a `Trusted` flag on `ExecuteCommandPayload` to
+    bypass the `PolicyRequireApproval` branch, but only when the payload
+    is constructed by a vetted Pulse-internal call site that ships its
+    own hardcoded command catalog (today only the servicediscovery deep
+    scanner via `internal/ai/discovery_adapter.go`). `PolicyBlock` must
+    still apply to trusted payloads, and `Trusted` must never be set
+    from a deserialised HTTP body, a user-supplied command string, an
+    AI tool call, or a governed approval consumer — those callers must
+    continue to carry an `ApprovalID` and approval grant.
 
 ## Current State
 
@@ -2867,7 +2878,13 @@ installed command-execution capability, but it must re-evaluate
 `internal/agentexec/policy.go` immediately before `sh -c`, reject
 `PolicyBlock` commands regardless of caller, and require a consumed approval
 identifier before executing any `PolicyRequireApproval` command so a missed
-control-plane gate cannot silently turn into host-level RCE.
+control-plane gate cannot silently turn into host-level RCE. The single
+exception is commands marked `Trusted` in the wire payload: those originate
+from a vetted Pulse-internal subsystem whose command catalog is hardcoded
+in Pulse source (today only the servicediscovery deep scanner, which wraps
+read-only inspections in `docker exec`). `PolicyBlock` still applies to
+trusted payloads. The `Trusted` field must never be set by a code path that
+deserialises user input or accepts a caller-supplied command string.
 That same copied install transport must also normalize canonical base URLs
 before composing installer asset paths: when operators enter a trailing-slash
 Pulse URL, shell and PowerShell install commands must trim it before appending
