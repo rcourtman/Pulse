@@ -183,6 +183,7 @@ export const resolveDiscoveryTargetForWorkload = (
     | 'node'
     | 'vmid'
     | 'id'
+    | 'containerId'
   >,
 ): ResourceDiscoveryTarget | null => {
   const explicit = guest.discoveryTarget;
@@ -243,6 +244,7 @@ export const getDiscoveryResourceTypeForWorkload = (
     | 'node'
     | 'vmid'
     | 'id'
+    | 'containerId'
   >,
 ): DiscoveryResourceType | null =>
   (resolveDiscoveryTargetForWorkload(guest)?.resourceType as DiscoveryResourceType | undefined) ??
@@ -262,6 +264,7 @@ export const hasDiscoverySupportForWorkload = (
     | 'node'
     | 'vmid'
     | 'id'
+    | 'containerId'
   >,
 ): boolean => Boolean(resolveDiscoveryTargetForWorkload(guest));
 
