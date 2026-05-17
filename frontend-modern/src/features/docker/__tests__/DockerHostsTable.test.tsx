@@ -87,6 +87,8 @@ describe('DockerHostsTable', () => {
     ));
 
     expect(screen.getByRole('columnheader', { name: 'Version' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'System' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Swarm role' })).not.toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Runtime' })).not.toBeInTheDocument();
     expect(screen.getByText('27.5.1')).toBeInTheDocument();
     expect(screen.queryByText('Docker')).not.toBeInTheDocument();
@@ -95,6 +97,100 @@ describe('DockerHostsTable', () => {
     expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute('data-total', '8000');
     expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-mode', 'vertical-bars');
     expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-disks', '2');
+  });
+
+  it('identifies the host system separately from the container runtime', () => {
+    render(() => (
+      <DockerHostsTable
+        resources={[
+          makeDockerHost({
+            name: 'tower',
+            agent: {
+              hostProfile: 'unraid',
+              osName: 'Unraid OS',
+              osVersion: '6.12.10',
+            },
+          }),
+          makeDockerHost({
+            id: 'agent:qnap-01',
+            name: 'qnap-01',
+            agent: {
+              platform: 'linux',
+              osName: 'QuTS hero',
+              osVersion: '5.2',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getAllByText('Unraid 6.12.10').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('QNAP 5.2').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Docker / Podman')).not.toBeInTheDocument();
+  });
+
+  it('shows Swarm role only for hosts with active Swarm evidence', () => {
+    render(() => (
+      <DockerHostsTable
+        resources={[
+          makeDockerHost({
+            docker: {
+              runtimeVersion: '27.5.1',
+              containerCount: 12,
+              swarm: {
+                nodeId: 'node-1',
+                nodeRole: 'manager',
+                localState: 'active',
+              },
+            } as NonNullable<Resource['docker']> & {
+              runtimeVersion?: string;
+              containerCount?: number;
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByRole('columnheader', { name: 'Swarm role' })).toBeInTheDocument();
+    expect(screen.getByText('Manager')).toBeInTheDocument();
+  });
+
+  it('does not show inactive standalone Swarm metadata as a host role', () => {
+    render(() => (
+      <DockerHostsTable
+        resources={[
+          makeDockerHost({
+            docker: {
+              runtimeVersion: '27.5.1',
+              containerCount: 12,
+              swarm: {
+                nodeRole: 'worker',
+                localState: 'inactive',
+                scope: 'node',
+              },
+            } as NonNullable<Resource['docker']> & {
+              runtimeVersion?: string;
+              containerCount?: number;
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.queryByRole('columnheader', { name: 'Swarm role' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Worker')).not.toBeInTheDocument();
   });
 
   it('uses percent-only memory and aggregate disk bars when capacity details are missing', () => {

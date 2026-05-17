@@ -117,6 +117,11 @@ cross-source deduplication.
 
 ## Shared Boundaries
 
+Docker platform navigation is a unified-resource consumer boundary: Docker
+subtabs may be shown only from canonical resource evidence (`app-container` for
+containers, `docker-service` for Swarm services), and inactive standalone
+Swarm metadata must not be interpreted as host-role or service-surface proof.
+
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `performance-and-scalability`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx` shared with `performance-and-scalability`: the infrastructure summary surface is both a canonical unified-resource consumer and a fleet-scale summary chart hot-path boundary.
 3. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts` shared with `performance-and-scalability`: infrastructure summary chart matching, focused-summary view derivation, and metric-series shaping are both a canonical unified-resource consumer surface and a fleet-scale summary chart hot-path boundary.
@@ -1764,6 +1769,17 @@ Unsupported secondary tabs now also use the same terse availability notices
 (`PMG resources only.`, `Kubernetes clusters only.`, `Docker runtimes with
 Swarm only.`) instead of explanatory sentences, so mismatch fallback state
 stays readable without turning support surfaces into inline documentation.
+Docker platform subtabs now follow canonical resource evidence as well:
+`Containers` is visible only when Docker/Podman app-container resources exist,
+and `Swarm services` is visible only when canonical `docker-service` resources
+exist. Inactive standalone Docker Swarm metadata is not a tab, host role, or
+service-surface signal.
+The frontend Docker facet contract covers both host runtime telemetry and
+Swarm service projection. Host resources may expose runtime/version, OS,
+temperature, uptime, container counts, update state, command metadata, and
+Swarm local-state/control evidence through `ResourceDockerMeta`; Docker
+platform pages must consume those canonical fields rather than keeping
+page-local host-runtime shape aliases.
 The same facet bundle now also returns grouped recent-change counts by
 canonical change kind, so the detail drawer can surface the distribution of
 state transitions, restarts, config updates, and anomalies without

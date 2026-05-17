@@ -10,7 +10,12 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import { DockerHostsTable } from './DockerHostsTable';
 import { DockerServicesTable } from './DockerServicesTable';
-import { DOCKER_TAB_SPECS, buildDockerPageModel, type DockerPageTabId } from './dockerPageModel';
+import {
+  DOCKER_TAB_SPECS,
+  buildDockerPageModel,
+  buildVisibleDockerTabSpecs,
+  type DockerPageTabId,
+} from './dockerPageModel';
 
 const DOCKER_RESOURCE_QUERY = 'type=agent,docker-host,app-container,docker-service';
 const DOCKER_PLATFORM_FILTER = 'docker';
@@ -25,16 +30,21 @@ export function DockerPageSurface() {
     cacheKey: 'docker-workspace',
     initialHydration: 'prefer-ws-then-rest',
   });
+  const model = createMemo(() => buildDockerPageModel(resources()));
+  const visibleTabs = createMemo(() => buildVisibleDockerTabSpecs(model()));
+  const visibleTabIds = createMemo(
+    () => new Set<DockerPageTabId>(visibleTabs().map((tab) => tab.id)),
+  );
   const activeTab = createMemo<DockerPageTabId>(() => {
     const segment = location.pathname.split('/').filter(Boolean)[1] as DockerPageTabId | undefined;
-    return segment && VALID_TABS.has(segment) ? segment : 'overview';
+    if (!segment || !VALID_TABS.has(segment)) return 'overview';
+    return visibleTabIds().has(segment) ? segment : 'overview';
   });
-  const model = createMemo(() => buildDockerPageModel(resources()));
 
   return (
     <div data-testid="docker-page" class="space-y-3">
       <PlatformSectionTabs
-        tabs={DOCKER_TAB_SPECS}
+        tabs={visibleTabs()}
         active={activeTab()}
         ariaLabel="Docker sections"
       />

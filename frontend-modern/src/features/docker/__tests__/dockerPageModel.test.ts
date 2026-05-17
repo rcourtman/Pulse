@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
-import { DOCKER_TAB_SPECS, buildDockerPageModel } from '../dockerPageModel';
+import {
+  DOCKER_TAB_SPECS,
+  buildDockerPageModel,
+  buildVisibleDockerTabSpecs,
+  hasDockerSwarmEvidence,
+} from '../dockerPageModel';
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource => ({
   name: resource.id,
@@ -56,5 +61,65 @@ describe('dockerPageModel', () => {
     ]);
     expect(model.hosts).toEqual([]);
     expect(model.resources).toEqual([]);
+  });
+
+  it('shows Docker subtabs only when canonical resource evidence exists', () => {
+    expect(
+      buildVisibleDockerTabSpecs(
+        buildDockerPageModel([makeResource({ id: 'docker-host-1', type: 'agent' })]),
+      ).map((tab) => tab.id),
+    ).toEqual(['overview']);
+
+    expect(
+      buildVisibleDockerTabSpecs(
+        buildDockerPageModel([
+          makeResource({ id: 'docker-host-1', type: 'agent' }),
+          makeResource({ id: 'ctr-1', type: 'app-container' }),
+        ]),
+      ).map((tab) => tab.id),
+    ).toEqual(['overview', 'containers']);
+
+    expect(
+      buildVisibleDockerTabSpecs(
+        buildDockerPageModel([
+          makeResource({ id: 'docker-host-1', type: 'agent' }),
+          makeResource({ id: 'svc-1', type: 'docker-service' }),
+        ]),
+      ).map((tab) => tab.id),
+    ).toEqual(['overview', 'services']);
+  });
+
+  it('does not treat standalone inactive Docker Swarm metadata as Swarm evidence', () => {
+    expect(
+      hasDockerSwarmEvidence(
+        makeResource({
+          id: 'docker-host-1',
+          type: 'agent',
+          docker: {
+            swarm: {
+              nodeRole: 'worker',
+              localState: 'inactive',
+              scope: 'node',
+            },
+          },
+        }),
+      ),
+    ).toBe(false);
+
+    expect(
+      hasDockerSwarmEvidence(
+        makeResource({
+          id: 'docker-host-1',
+          type: 'agent',
+          docker: {
+            swarm: {
+              nodeId: 'node-1',
+              nodeRole: 'manager',
+              localState: 'active',
+            },
+          },
+        }),
+      ),
+    ).toBe(true);
   });
 });

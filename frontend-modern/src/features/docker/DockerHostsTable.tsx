@@ -1,4 +1,4 @@
-import { For, Show, type Component, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCard } from '@/components/shared/TableCard';
@@ -18,6 +18,10 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import { normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
+  getInfrastructureSystemIdentityBadges,
+  type ResourceBadge,
+} from '@/utils/resourceBadgePresentation';
+import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_CARD_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
@@ -32,6 +36,7 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Disk } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import { hasDockerSwarmEvidence } from './dockerPageModel';
 
 // Docker / Podman hosts are container hosts, not generic Pulse Agents.
 // The operator columns that matter are runtime version, container count,
@@ -93,6 +98,13 @@ const aggregateDiskFor = (host: Resource): Disk | undefined => {
   return { total, used, free, usage };
 };
 
+const RUNTIME_ONLY_SYSTEM_LABELS = new Set(['docker', 'docker / podman', 'podman']);
+
+const hostSystemBadgeFor = (host: Resource): ResourceBadge | undefined =>
+  getInfrastructureSystemIdentityBadges(host).find(
+    (badge) => !RUNTIME_ONLY_SYSTEM_LABELS.has(badge.label.trim().toLowerCase()),
+  );
+
 export const DockerHostsTable: Component<{
   resources: Resource[];
   emptyIcon: JSX.Element;
@@ -106,6 +118,7 @@ export const DockerHostsTable: Component<{
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterPlatformResources,
   });
+  const showSwarmColumn = createMemo(() => props.resources.some(hasDockerSwarmEvidence));
 
   return (
     <Show
@@ -145,28 +158,42 @@ export const DockerHostsTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title={props.title ?? 'Hosts'} />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[960px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1080px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={getPlatformTableHeadClass()}>Host</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} w-[40%] md:w-auto`}>
+                    Host
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    System
+                  </TableHead>
                   <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
                     Version
                   </TableHead>
                   <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
                     Containers
                   </TableHead>
-                  <TableHead class={getPlatformTableHeadClass('right')}>CPU</TableHead>
-                  <TableHead class={getPlatformTableHeadClass('right')}>Memory</TableHead>
-                  <TableHead class={getPlatformTableHeadClass('right')}>Disk</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} w-[20%] md:w-auto`}>
+                    CPU
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} w-[20%] md:w-auto`}>
+                    <span class="md:hidden">Mem</span>
+                    <span class="hidden md:inline">Memory</span>
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} w-[20%] md:w-auto`}>
+                    Disk
+                  </TableHead>
                   <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
                     Uptime
                   </TableHead>
                   <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
                     Temp
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
-                    Swarm role
-                  </TableHead>
+                  <Show when={showSwarmColumn()}>
+                    <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                      Swarm role
+                    </TableHead>
+                  </Show>
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
@@ -184,9 +211,11 @@ export const DockerHostsTable: Component<{
                           })
                         | undefined;
                     const name = () => asTrimmedString(host.name) || host.id;
+                    const systemBadge = () => hostSystemBadgeFor(host);
                     const version = () => asTrimmedString(docker()?.runtimeVersion) || '—';
                     const containerCount = () => docker()?.containerCount ?? 0;
                     const swarmRole = () => {
+                      if (!hasDockerSwarmEvidence(host)) return '—';
                       const role = asTrimmedString(docker()?.swarm?.nodeRole);
                       return role ? role.charAt(0).toUpperCase() + role.slice(1) : '—';
                     };
@@ -205,7 +234,7 @@ export const DockerHostsTable: Component<{
                       aggregateDisk() !== undefined || (disks()?.length ?? 0) > 0;
                     return (
                       <TableRow class="text-[11px] sm:text-xs">
-                        <TableCell class={getPlatformTableCellClass()}>
+                        <TableCell class={`${getPlatformTableCellClass()} w-[40%] md:w-auto`}>
                           <div class="flex min-w-0 items-center gap-2">
                             <StatusDot
                               size="sm"
@@ -217,6 +246,33 @@ export const DockerHostsTable: Component<{
                               {name()}
                             </span>
                           </div>
+                          <Show when={systemBadge()}>
+                            {(badge) => (
+                              <span
+                                class="mt-0.5 block truncate pl-5 text-[9px] text-muted sm:text-[10px] md:hidden"
+                                title={badge().title ?? badge().label}
+                              >
+                                {badge().label}
+                              </span>
+                            )}
+                          </Show>
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                        >
+                          <Show
+                            when={systemBadge()}
+                            fallback={<span class="text-muted">—</span>}
+                          >
+                            {(badge) => (
+                              <span
+                                class={badge().classes}
+                                title={badge().title ?? badge().label}
+                              >
+                                {badge().label}
+                              </span>
+                            )}
+                          </Show>
                         </TableCell>
                         <TableCell
                           class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
@@ -228,7 +284,9 @@ export const DockerHostsTable: Component<{
                         >
                           {containerCount()}
                         </TableCell>
-                        <TableCell class={getPlatformTableCellClass('right')}>
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                        >
                           <ResponsiveMetricCell
                             class="w-full"
                             value={cpuPercent() ?? 0}
@@ -238,7 +296,9 @@ export const DockerHostsTable: Component<{
                             showMobile={false}
                           />
                         </TableCell>
-                        <TableCell class={getPlatformTableCellClass('right')}>
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                        >
                           <Show
                             when={canRenderMetrics() && hasMemoryMetric()}
                             fallback={metricFallback()}
@@ -250,7 +310,9 @@ export const DockerHostsTable: Component<{
                             />
                           </Show>
                         </TableCell>
-                        <TableCell class={getPlatformTableCellClass('right')}>
+                        <TableCell
+                          class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                        >
                           <Show
                             when={canRenderMetrics() && hasDiskMetric()}
                             fallback={metricFallback()}
@@ -272,11 +334,13 @@ export const DockerHostsTable: Component<{
                         >
                           {formatTemperature(host.temperature ?? docker()?.temperature)}
                         </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
-                        >
-                          {swarmRole()}
-                        </TableCell>
+                        <Show when={showSwarmColumn()}>
+                          <TableCell
+                            class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                          >
+                            {swarmRole()}
+                          </TableCell>
+                        </Show>
                       </TableRow>
                     );
                   }}

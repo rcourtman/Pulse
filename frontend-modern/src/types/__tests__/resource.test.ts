@@ -12,6 +12,7 @@ import {
   getDiskPercent,
   type ResourceChangeKind,
   type ResourceAgentUnraidDisk,
+  type ResourceDockerMeta,
   type ResourcePhysicalDiskMeta,
   type ResourceProxmoxMeta,
   type ResourceVMwareMeta,
@@ -127,6 +128,40 @@ describe('Resource Type Guards', () => {
 });
 
 describe('Resource Helper Functions', () => {
+  describe('ResourceDockerMeta', () => {
+    it('accepts Docker host runtime and Swarm evidence in the canonical resource contract', () => {
+      const docker: ResourceDockerMeta = {
+        hostname: 'tower',
+        runtime: 'docker',
+        runtimeVersion: '27.5.1',
+        dockerVersion: '27.5.1',
+        os: 'Unraid OS',
+        kernelVersion: 'Linux 6.1.106-Unraid',
+        architecture: 'x86_64',
+        agentVersion: '6.0.0',
+        uptimeSeconds: 13_046_400,
+        temperature: 51.9,
+        containerCount: 12,
+        updatesAvailableCount: 2,
+        updatesLastCheckedAt: '2026-05-17T18:00:00Z',
+        command: { restartContainer: true },
+        swarm: {
+          clusterId: 'swarm-1',
+          clusterName: 'homelab',
+          nodeId: 'node-1',
+          nodeRole: 'manager',
+          localState: 'active',
+          controlAvailable: true,
+        },
+      };
+
+      expect(docker.runtimeVersion).toBe('27.5.1');
+      expect(docker.containerCount).toBe(12);
+      expect(docker.swarm?.localState).toBe('active');
+      expect(docker.swarm?.controlAvailable).toBe(true);
+    });
+  });
+
   describe('ResourceAgentUnraidDisk', () => {
     it('accepts native Unraid disk metadata in the resource contract', () => {
       const disk: ResourceAgentUnraidDisk = {

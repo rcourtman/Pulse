@@ -526,16 +526,27 @@ export interface ResourceProxmoxMeta {
   kernelVersion?: string;
 }
 
-// Docker Swarm service projection emitted by the canonical adapter for
-// `docker-service` resources. Surfaced on the Docker platform-page Swarm
-// services table where the generic infrastructure table's CPU / Memory /
-// Disk / Disk I/O / Uptime / Temperature columns are conceptually N/A
-// (services are cluster-scoped declarations, not running processes);
-// image, mode, replica counts, and ports are the operator columns.
+// Docker runtime and Swarm service projection emitted by the canonical
+// adapter. Host resources use the runtime fields on the Docker platform
+// hosts table; `docker-service` resources use the service fields on the
+// Swarm services table.
 export interface ResourceDockerMeta {
   serviceId?: string;
   hostSourceId?: string;
   hostname?: string;
+  temperature?: number;
+  runtime?: string;
+  runtimeVersion?: string;
+  dockerVersion?: string;
+  os?: string;
+  kernelVersion?: string;
+  architecture?: string;
+  agentVersion?: string;
+  uptimeSeconds?: number;
+  containerCount?: number;
+  updatesAvailableCount?: number;
+  updatesLastCheckedAt?: string;
+  command?: Record<string, unknown>;
   image?: string;
   mode?: string;
   desiredTasks?: number;
@@ -552,7 +563,10 @@ export interface ResourceDockerMeta {
     clusterName?: string;
     nodeId?: string;
     nodeRole?: string;
+    localState?: string;
+    controlAvailable?: boolean;
     scope?: string;
+    error?: string;
   };
 }
 
