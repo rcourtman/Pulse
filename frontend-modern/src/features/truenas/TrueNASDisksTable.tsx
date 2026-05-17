@@ -1,6 +1,4 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
-import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
-import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
@@ -17,6 +15,8 @@ import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_CARD_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformTableToolbar,
   PlatformTableEmptyState,
   filterPlatformResources,
   getPlatformTableCellClass,
@@ -31,13 +31,6 @@ import type { Resource } from '@/types/resource';
 // are model, serial, type, size, health, temperature, and wearout.
 // This bespoke table surfaces those from the canonical `physicalDisk`
 // payload already attached to each row.
-
-const STATUS_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
-  { value: 'all', label: 'All' },
-  { value: 'online', label: 'Healthy' },
-  { value: 'degraded', label: 'Degraded' },
-  { value: 'offline', label: 'Offline' },
-];
 
 const formatBytes = (bytes: number | undefined): string => {
   if (!bytes || bytes <= 0) return '—';
@@ -99,21 +92,17 @@ export const TrueNASDisksTable: Component<{
     >
       <div class="space-y-3">
         <Show when={props.showToolbar !== false}>
-          <div class="flex flex-wrap items-center gap-2">
-            <div class="min-w-[200px] flex-1 sm:max-w-xs">
-              <SearchInput value={search} onChange={setSearch} placeholder="Search disks" />
-            </div>
-            <FilterButtonGroup
-              options={STATUS_FILTER_OPTIONS}
-              value={status()}
-              onChange={setStatus}
-            />
-            <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-              <Show when={visible() !== total()} fallback={<>{total()} disks</>}>
-                {visible()} of {total()} disks
-              </Show>
-            </span>
-          </div>
+          <PlatformTableToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search disks"
+            status={status()}
+            onStatusChange={setStatus}
+            statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+            visible={visible()}
+            total={total()}
+            rowNoun="disks"
+          />
         </Show>
 
         <Show

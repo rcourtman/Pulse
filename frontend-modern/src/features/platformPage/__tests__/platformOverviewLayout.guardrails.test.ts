@@ -29,6 +29,18 @@ const platformTableSources = [
   vsphereDatastoresTableSource,
 ];
 
+const platformToolbarTableSources = [
+  dockerHostsTableSource,
+  dockerServicesTableSource,
+  kubernetesClustersTableSource,
+  kubernetesNodesTableSource,
+  kubernetesDeploymentsTableSource,
+  truenasSystemsTableSource,
+  truenasDisksTableSource,
+  vsphereHostsTableSource,
+  vsphereDatastoresTableSource,
+];
+
 const overviewSurfaceSources = [
   proxmoxPageSurfaceSource,
   dockerPageSurfaceSource,
@@ -44,6 +56,8 @@ describe('platform overview layout guardrails', () => {
     expect(sharedPlatformPageSource).toContain('PLATFORM_TABLE_BODY_CLASS');
     expect(sharedPlatformPageSource).toContain('getPlatformTableHeadClass');
     expect(sharedPlatformPageSource).toContain('getPlatformTableCellClass');
+    expect(sharedPlatformPageSource).toContain('PlatformTableToolbar');
+    expect(sharedPlatformPageSource).toContain('PLATFORM_HEALTH_FILTER_OPTIONS');
 
     for (const source of platformTableSources) {
       expect(source).toContain('TableCard');
@@ -53,6 +67,13 @@ describe('platform overview layout guardrails', () => {
       expect(source).toContain('PLATFORM_TABLE_BODY_CLASS');
       expect(source).toContain('getPlatformTableHeadClass');
       expect(source).toContain('getPlatformTableCellClass');
+    }
+
+    for (const source of platformToolbarTableSources) {
+      expect(source).toContain('PlatformTableToolbar');
+      expect(source).toContain('PLATFORM_HEALTH_FILTER_OPTIONS');
+      expect(source).not.toContain("from '@/components/shared/SearchInput'");
+      expect(source).not.toContain("from '@/components/shared/FilterButtonGroup'");
     }
   });
 

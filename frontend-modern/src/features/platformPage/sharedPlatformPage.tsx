@@ -109,9 +109,16 @@ export function PlatformErrorState(props: {
 // 'running' vs 'online', 'stopped' vs 'offline') collapse to one chip set.
 export type PlatformResourceStatusFilter = 'all' | 'online' | 'degraded' | 'offline';
 
-const PLATFORM_STATUS_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
+export const PLATFORM_STATUS_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
   { value: 'all', label: 'All' },
   { value: 'online', label: 'Online' },
+  { value: 'degraded', label: 'Degraded' },
+  { value: 'offline', label: 'Offline' },
+];
+
+export const PLATFORM_HEALTH_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
+  { value: 'all', label: 'All' },
+  { value: 'online', label: 'Healthy' },
   { value: 'degraded', label: 'Degraded' },
   { value: 'offline', label: 'Offline' },
 ];
@@ -167,13 +174,56 @@ export const filterPlatformResources = (
 // Compact operator-facing counter shown at the right of the toolbar so
 // users can read total / matching at a glance, mirroring v5's dense
 // dashboard counters without spawning a card grid.
-const PlatformResourceCounter: Component<{ visible: number; total: number }> = (props) => (
+const PlatformResourceCounter: Component<{ visible: number; total: number; rowNoun: string }> = (
+  props,
+) => (
   <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-    <Show when={props.visible !== props.total} fallback={<>{props.total} rows</>}>
-      {props.visible} of {props.total} rows
+    <Show
+      when={props.visible !== props.total}
+      fallback={
+        <>
+          {props.total} {props.rowNoun}
+        </>
+      }
+    >
+      {props.visible} of {props.total} {props.rowNoun}
     </Show>
   </span>
 );
+
+export function PlatformTableToolbar<T extends string | number>(props: {
+  search: () => string;
+  onSearchChange: (value: string) => void;
+  searchPlaceholder: string;
+  status: T;
+  onStatusChange: (value: T) => void;
+  statusOptions: FilterOption<T>[];
+  visible: number;
+  total: number;
+  rowNoun: string;
+}) {
+  return (
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="min-w-[200px] flex-1 sm:max-w-xs">
+        <SearchInput
+          value={props.search}
+          onChange={props.onSearchChange}
+          placeholder={props.searchPlaceholder}
+        />
+      </div>
+      <FilterButtonGroup
+        options={props.statusOptions}
+        value={props.status}
+        onChange={props.onStatusChange}
+      />
+      <PlatformResourceCounter
+        visible={props.visible}
+        total={props.total}
+        rowNoun={props.rowNoun}
+      />
+    </div>
+  );
+}
 
 export const PlatformResourceTable: Component<{
   resources: Resource[];
@@ -206,21 +256,17 @@ export const PlatformResourceTable: Component<{
       }
     >
       <div class="space-y-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="min-w-[180px] flex-1 sm:max-w-xs">
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder={props.searchPlaceholder ?? 'Search rows'}
-            />
-          </div>
-          <FilterButtonGroup
-            options={PLATFORM_STATUS_FILTER_OPTIONS}
-            value={status()}
-            onChange={setStatus}
-          />
-          <PlatformResourceCounter visible={visibleCount()} total={totalCount()} />
-        </div>
+        <PlatformTableToolbar
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder={props.searchPlaceholder ?? 'Search rows'}
+          status={status()}
+          onStatusChange={setStatus}
+          statusOptions={PLATFORM_STATUS_FILTER_OPTIONS}
+          visible={visibleCount()}
+          total={totalCount()}
+          rowNoun="rows"
+        />
         <Show
           when={filteredResources().length > 0}
           fallback={

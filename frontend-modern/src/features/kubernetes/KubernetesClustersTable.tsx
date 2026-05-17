@@ -1,6 +1,4 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
-import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
-import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
@@ -18,6 +16,8 @@ import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_CARD_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformTableToolbar,
   PlatformTableEmptyState,
   filterPlatformResources,
   getPlatformTableCellClass,
@@ -35,13 +35,6 @@ import type { Resource } from '@/types/resource';
 // deployments. This bespoke table surfaces those alongside the canonical
 // CPU/Memory utilisation. It reuses the same shared primitives every
 // other platform-page table uses.
-
-const STATUS_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
-  { value: 'all', label: 'All' },
-  { value: 'online', label: 'Healthy' },
-  { value: 'degraded', label: 'Degraded' },
-  { value: 'offline', label: 'Offline' },
-];
 
 const formatPercent = (percent?: number): JSX.Element => {
   if (typeof percent !== 'number' || Number.isNaN(percent))
@@ -118,21 +111,17 @@ export const KubernetesClustersTable: Component<{
     >
       <div class="space-y-3">
         <Show when={props.showToolbar !== false}>
-          <div class="flex flex-wrap items-center gap-2">
-            <div class="min-w-[200px] flex-1 sm:max-w-xs">
-              <SearchInput value={search} onChange={setSearch} placeholder="Search clusters" />
-            </div>
-            <FilterButtonGroup
-              options={STATUS_FILTER_OPTIONS}
-              value={status()}
-              onChange={setStatus}
-            />
-            <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-              <Show when={visible() !== total()} fallback={<>{total()} clusters</>}>
-                {visible()} of {total()} clusters
-              </Show>
-            </span>
-          </div>
+          <PlatformTableToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search clusters"
+            status={status()}
+            onStatusChange={setStatus}
+            statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+            visible={visible()}
+            total={total()}
+            rowNoun="clusters"
+          />
         </Show>
 
         <Show

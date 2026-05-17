@@ -1,6 +1,4 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
-import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
-import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
@@ -18,6 +16,8 @@ import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_CARD_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformTableToolbar,
   PlatformTableEmptyState,
   filterPlatformResources,
   getPlatformTableCellClass,
@@ -34,13 +34,6 @@ import type { Resource } from '@/types/resource';
 // table reuses canonical shared primitives (Card, Table, SearchInput,
 // FilterButtonGroup, StatusDot) but surfaces operator columns that the
 // data actually backs: image, mode, replica counts, ports, host.
-
-const STATUS_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
-  { value: 'all', label: 'All' },
-  { value: 'online', label: 'Healthy' },
-  { value: 'degraded', label: 'Degraded' },
-  { value: 'offline', label: 'Offline' },
-];
 
 const formatPorts = (ports: Resource['docker'] extends infer T ? T : never): string => {
   const entries =
@@ -97,25 +90,17 @@ export const DockerServicesTable: Component<{
     >
       <div class="space-y-3">
         <Show when={props.showToolbar !== false}>
-          <div class="flex flex-wrap items-center gap-2">
-            <div class="min-w-[200px] flex-1 sm:max-w-xs">
-              <SearchInput
-                value={search}
-                onChange={setSearch}
-                placeholder="Search Swarm services"
-              />
-            </div>
-            <FilterButtonGroup
-              options={STATUS_FILTER_OPTIONS}
-              value={status()}
-              onChange={setStatus}
-            />
-            <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-              <Show when={visible() !== total()} fallback={<>{total()} services</>}>
-                {visible()} of {total()} services
-              </Show>
-            </span>
-          </div>
+          <PlatformTableToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search Swarm services"
+            status={status()}
+            onStatusChange={setStatus}
+            statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+            visible={visible()}
+            total={total()}
+            rowNoun="services"
+          />
         </Show>
 
         <Show

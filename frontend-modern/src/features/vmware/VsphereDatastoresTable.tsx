@@ -1,6 +1,4 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
-import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
-import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
@@ -19,6 +17,8 @@ import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_CARD_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformTableToolbar,
   PlatformTableEmptyState,
   getPlatformTableCellClass,
   getPlatformTableHeadClass,
@@ -37,13 +37,6 @@ import type { Resource } from '@/types/resource';
 // access, maintenance mode, vCenter.
 
 type DatastoreStatusFilter = 'all' | 'online' | 'degraded' | 'offline';
-
-const STATUS_FILTER_OPTIONS: FilterOption<DatastoreStatusFilter>[] = [
-  { value: 'all', label: 'All' },
-  { value: 'online', label: 'Online' },
-  { value: 'degraded', label: 'Degraded' },
-  { value: 'offline', label: 'Offline' },
-];
 
 function indicatorFor(resource: Resource): {
   variant: StatusIndicatorVariant;
@@ -183,25 +176,17 @@ export const VsphereDatastoresTable: Component<{
     >
       <div class="space-y-3">
         <Show when={props.showToolbar !== false}>
-          <div class="flex flex-wrap items-center gap-2">
-            <div class="min-w-[200px] flex-1 sm:max-w-xs">
-              <SearchInput
-                value={search}
-                onChange={setSearch}
-                placeholder="Search datastores, datacenters, hosts"
-              />
-            </div>
-            <FilterButtonGroup
-              options={STATUS_FILTER_OPTIONS}
-              value={status()}
-              onChange={setStatus}
-            />
-            <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-              <Show when={visible() !== total()} fallback={<>{total()} datastores</>}>
-                {visible()} of {total()} datastores
-              </Show>
-            </span>
-          </div>
+          <PlatformTableToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search datastores, datacenters, hosts"
+            status={status()}
+            onStatusChange={setStatus}
+            statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+            visible={visible()}
+            total={total()}
+            rowNoun="datastores"
+          />
         </Show>
 
         <Show
