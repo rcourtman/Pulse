@@ -1277,30 +1277,41 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                   </div>
                                 </Show>
 
-                                <footer class="mt-2 flex items-center justify-between gap-2 border-t border-border-subtle pt-2">
-                                  <div class="flex flex-wrap items-center gap-1.5">
-                                    <span
-                                      class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${row.statusClassName}`}
-                                    >
-                                      {row.statusLabel}
-                                    </span>
-                                    <Show when={row.agentUpdateCount > 0}>
-                                      <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-                                        {row.agentUpdateCount === 1
-                                          ? 'Agent update'
-                                          : `${row.agentUpdateCount} agent updates`}
+                                <footer class="mt-2 border-t border-border-subtle pt-2">
+                                  <div class="flex items-center justify-between gap-2">
+                                    <div class="flex flex-wrap items-center gap-1.5">
+                                      <span
+                                        class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${row.statusClassName}`}
+                                      >
+                                        {row.statusLabel}
                                       </span>
+                                      <Show when={row.agentUpdateCount > 0}>
+                                        <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                                          {row.agentUpdateCount === 1
+                                            ? 'Agent update'
+                                            : `${row.agentUpdateCount} agent updates`}
+                                        </span>
+                                      </Show>
+                                      <span
+                                        class="text-[12px] text-muted/90"
+                                        title={
+                                          row.isCluster
+                                            ? 'Oldest activity across cluster API and member agents'
+                                            : undefined
+                                        }
+                                      >
+                                        {row.lastActivityText}
+                                      </span>
+                                    </div>
+                                    <Show when={!props.readOnly && rowInteractive(row)}>
+                                      <button
+                                        type="button"
+                                        onClick={() => props.onOpenConnection?.(row)}
+                                        class={`${inlineButtonClass} flex-shrink-0`}
+                                      >
+                                        Manage
+                                      </button>
                                     </Show>
-                                    <span
-                                      class="text-[12px] text-muted/90"
-                                      title={
-                                        row.isCluster
-                                          ? 'Oldest activity across cluster API and member agents'
-                                          : undefined
-                                      }
-                                    >
-                                      {row.lastActivityText}
-                                    </span>
                                   </div>
                                   <Show when={row.problem}>
                                     {(problem) => (
@@ -1315,15 +1326,6 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         {problem().label}
                                       </div>
                                     )}
-                                  </Show>
-                                  <Show when={!props.readOnly && rowInteractive(row)}>
-                                    <button
-                                      type="button"
-                                      onClick={() => props.onOpenConnection?.(row)}
-                                      class={`${inlineButtonClass} flex-shrink-0`}
-                                    >
-                                      Manage
-                                    </button>
                                   </Show>
                                 </footer>
 
