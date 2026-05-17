@@ -141,32 +141,32 @@ func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node stri
 
 	// Helper to migrate a legacy ID to the new format
 	migrate := func(legacyID string) *GuestMetadata {
-		s.mu.RLock()
-		legacyMeta := s.metadata[legacyID]
-		s.mu.RUnlock()
+		s.mu.Lock()
+		defer s.mu.Unlock()
 
-		if legacyMeta != nil {
-			log.Info().
-				Str("legacyID", legacyID).
-				Str("newID", guestID).
-				Msg("Migrating guest metadata from legacy ID format")
-
-			s.mu.Lock()
-			// Move to new ID
-			s.metadata[guestID] = legacyMeta
-			legacyMeta.ID = guestID
-			delete(s.metadata, legacyID)
-			// Save asynchronously
-			go func() {
-				if err := s.save(); err != nil {
-					log.Error().Err(err).Msg("Failed to save guest metadata after migration")
-				}
-			}()
-			s.mu.Unlock()
-
-			return legacyMeta
+		if meta, exists := s.metadata[guestID]; exists {
+			return meta
 		}
-		return nil
+
+		legacyMeta := s.metadata[legacyID]
+		if legacyMeta == nil {
+			return nil
+		}
+
+		log.Info().
+			Str("legacyID", legacyID).
+			Str("newID", guestID).
+			Msg("Migrating guest metadata from legacy ID format")
+
+		// Move to new ID
+		s.metadata[guestID] = legacyMeta
+		legacyMeta.ID = guestID
+		delete(s.metadata, legacyID)
+		if err := s.save(); err != nil {
+			log.Error().Err(err).Msg("Failed to save guest metadata after migration")
+		}
+
+		return legacyMeta
 	}
 
 	// Try legacy format 1: instance-node-vmid (most specific)
