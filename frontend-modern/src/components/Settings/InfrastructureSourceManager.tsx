@@ -652,19 +652,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
           <Table class="w-full min-w-[820px] table-fixed text-sm">
             <TableHeader class="bg-surface-alt/60">
               <TableRow>
-                <TableHead class="w-[22%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[20%]">
+                <TableHead class="w-[36%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[34%]">
                   System
                 </TableHead>
-                <TableHead class="w-[7.5rem] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
-                  Source
-                </TableHead>
-                <TableHead class="w-[21%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[20%]">
-                  Endpoint
-                </TableHead>
-                <TableHead class="w-[18%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[22%]">
+                <TableHead class="w-[32%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[34%]">
                   Coverage
                 </TableHead>
-                <TableHead class="w-[16%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[15%]">
+                <TableHead class="w-[24%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[22%]">
                   Status
                 </TableHead>
                 <Show when={actionColumnVisible()}>
@@ -700,7 +694,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                               when={actionColumnVisible()}
                               fallback={
                                 <TableRow class={groupRowClass()}>
-                                  <TableCell colspan={5} class={getGroupedTableRowCellClass()}>
+                                  <TableCell colspan={3} class={getGroupedTableRowCellClass()}>
                                     <div class="flex min-w-0 items-center gap-2">
                                       <span>{group.label}</span>
                                     </div>
@@ -709,7 +703,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                               }
                             >
                               <TableRow class={groupRowClass()}>
-                                <TableCell colspan={6} class={getGroupedTableRowCellClass()}>
+                                <TableCell colspan={4} class={getGroupedTableRowCellClass()}>
                                   <div class="flex items-center justify-between gap-2 whitespace-nowrap">
                                     <span>{group.label}</span>
                                     <Show
@@ -764,9 +758,6 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             {row.identitySubtitle}
                                           </div>
                                         </Show>
-                                      </TableCell>
-
-                                      <TableCell class="px-3 py-1 align-top">
                                         {(() => {
                                           const presentation = infrastructureSourcePresentation(
                                             row.source,
@@ -774,28 +765,24 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                           const title =
                                             agentMethodTitleFor(row) ?? presentation.title;
                                           return (
-                                            <span
-                                              class={`${presentation.badgeClassName} whitespace-nowrap`}
-                                              title={title}
-                                            >
-                                              {presentation.label}
-                                            </span>
+                                            <div class="mt-1 flex min-w-0 items-center gap-1.5">
+                                              <span
+                                                class={`${presentation.badgeClassName} flex-shrink-0 whitespace-nowrap`}
+                                                title={title}
+                                              >
+                                                {presentation.label}
+                                              </span>
+                                              <Show when={row.host}>
+                                                <span
+                                                  class="min-w-0 truncate text-[11px] text-muted"
+                                                  title={row.host}
+                                                >
+                                                  {row.host}
+                                                </span>
+                                              </Show>
+                                            </div>
                                           );
                                         })()}
-                                      </TableCell>
-
-                                      <TableCell class="px-3 py-1 align-top">
-                                        <Show
-                                          when={row.host}
-                                          fallback={<span class="text-xs text-muted" aria-hidden="true">—</span>}
-                                        >
-                                          <div
-                                            class="truncate whitespace-nowrap text-[12px] text-muted"
-                                            title={row.host}
-                                          >
-                                            {row.host}
-                                          </div>
-                                        </Show>
                                       </TableCell>
 
                                       <TableCell class="px-3 py-1 align-top">
@@ -903,7 +890,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                     <Show when={row.lastErrorMessage}>
                                       <TableRow class="border-b border-border-subtle">
                                         <TableCell
-                                          colspan={actionColumnVisible() ? 6 : 5}
+                                          colspan={actionColumnVisible() ? 4 : 3}
                                           class="bg-surface px-3 pb-1.5 pt-0"
                                         >
                                           <div
@@ -939,33 +926,24 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                     <div class="mt-0.5 text-[11px] text-muted">
                                                       {member.subtitle}
                                                     </div>
+                                                    <div class="mt-1 flex min-w-0 items-center gap-1.5">
+                                                      <span
+                                                        class={`${memberPresentation.badgeClassName} flex-shrink-0 whitespace-nowrap`}
+                                                        title={memberSourceTitle}
+                                                      >
+                                                        {memberPresentation.label}
+                                                      </span>
+                                                      <Show when={member.host}>
+                                                        <span
+                                                          class="min-w-0 truncate text-[11px] text-muted"
+                                                          title={member.host}
+                                                        >
+                                                          {member.host}
+                                                        </span>
+                                                      </Show>
+                                                    </div>
                                                   </div>
                                                 </div>
-                                              </TableCell>
-
-                                              <TableCell class="px-3 py-1 align-top">
-                                                <span
-                                                  class={`${memberPresentation.badgeClassName} whitespace-nowrap`}
-                                                  title={memberSourceTitle}
-                                                >
-                                                  {memberPresentation.label}
-                                                </span>
-                                              </TableCell>
-
-                                              <TableCell class="px-3 py-1 align-top">
-                                                <Show
-                                                  when={member.host}
-                                                  fallback={
-                                                    <span class="text-xs text-muted" aria-hidden="true">—</span>
-                                                  }
-                                                >
-                                                  <div
-                                                    class="truncate whitespace-nowrap text-[12px] text-muted"
-                                                    title={member.host}
-                                                  >
-                                                    {member.host}
-                                                  </div>
-                                                </Show>
                                               </TableCell>
 
                                               <TableCell class="px-3 py-1 align-top">
@@ -1119,7 +1097,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
               <Show when={!hasAnyConfigured() && !hasAnyDiscovered()}>
                 <TableRow>
                   <TableCell
-                    colspan={actionColumnVisible() ? 6 : 5}
+                    colspan={actionColumnVisible() ? 4 : 3}
                     class="px-4 py-8 text-center text-sm text-muted"
                   >
                     {emptyStateContent()}
