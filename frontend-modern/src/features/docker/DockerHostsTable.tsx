@@ -1,7 +1,10 @@
 import { For, Show, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
+import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
+import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import {
   Table,
   TableBody,
@@ -12,6 +15,8 @@ import {
 } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { normalizeDiskArray } from '@/utils/format';
+import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_CARD_CLASS,
@@ -25,22 +30,17 @@ import {
   getPlatformTableHeadClass,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
+import type { Disk } from '@/types/api';
 import type { Resource } from '@/types/resource';
 
 // Docker / Podman hosts are container hosts, not generic Pulse Agents.
-// The operator columns that matter are runtime (Docker vs Podman),
-// runtime version, container count, and Swarm role, alongside the
+// The operator columns that matter are runtime version, container count,
+// and Swarm role, alongside the
 // usual CPU / Memory / Disk / Uptime / Temperature from the agent
 // telemetry. The generic infrastructure table renders the metrics fine
 // but omits the runtime context that distinguishes a Docker host from
 // any other agent. This bespoke table reuses canonical shared
 // primitives and surfaces the Docker-native columns.
-
-const formatPercent = (percent?: number): JSX.Element => {
-  if (typeof percent !== 'number' || Number.isNaN(percent))
-    return <span class="text-muted">—</span>;
-  return <span class="tabular-nums">{percent.toFixed(1)}%</span>;
-};
 
 const formatUptime = (seconds: number | undefined): string => {
   if (!seconds || seconds <= 0) return '—';
@@ -57,11 +57,40 @@ const formatTemperature = (celsius: number | undefined): JSX.Element => {
   return <span class="tabular-nums">{celsius.toFixed(1)}°C</span>;
 };
 
-const runtimeLabel = (runtime: string | undefined): string => {
-  const normalized = (runtime || '').trim().toLowerCase();
-  if (normalized === 'docker') return 'Docker';
-  if (normalized === 'podman') return 'Podman';
-  return runtime || '—';
+const metricFallback = () => (
+  <div class="flex justify-center">
+    <span class="text-xs text-muted" aria-hidden="true">
+      —
+    </span>
+  </div>
+);
+
+const finiteMetric = (value: number | undefined): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+const percentFromMetric = (metric: Resource['cpu'] | undefined): number | undefined =>
+  finiteMetric(metric?.current);
+
+const memoryTotalFor = (host: Resource): number =>
+  finiteMetric(host.memory?.total) ?? finiteMetric(host.agent?.memory?.total) ?? 0;
+
+const memoryUsedFor = (host: Resource): number =>
+  finiteMetric(host.memory?.used) ?? finiteMetric(host.agent?.memory?.used) ?? 0;
+
+const memoryPercentOnlyFor = (host: Resource): number | undefined => {
+  if (memoryTotalFor(host) > 0) return undefined;
+  return finiteMetric(host.memory?.current) ?? finiteMetric(host.agent?.memory?.usage);
+};
+
+const aggregateDiskFor = (host: Resource): Disk | undefined => {
+  if (!host.disk) return undefined;
+  const total = finiteMetric(host.disk.total) ?? 0;
+  const used = finiteMetric(host.disk.used) ?? 0;
+  const free = finiteMetric(host.disk.free) ?? (total > 0 ? Math.max(0, total - used) : 0);
+  const usage =
+    total > 0 && used > 0 ? (used / total) * 100 : (finiteMetric(host.disk.current) ?? 0);
+  if (total <= 0 && usage <= 0) return undefined;
+  return { total, used, free, usage };
 };
 
 export const DockerHostsTable: Component<{
@@ -116,13 +145,10 @@ export const DockerHostsTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title={props.title ?? 'Hosts'} />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1040px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[960px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   <TableHead class={getPlatformTableHeadClass()}>Host</TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
-                    Runtime
-                  </TableHead>
                   <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
                     Version
                   </TableHead>
@@ -158,7 +184,6 @@ export const DockerHostsTable: Component<{
                           })
                         | undefined;
                     const name = () => asTrimmedString(host.name) || host.id;
-                    const runtime = () => runtimeLabel(docker()?.runtime);
                     const version = () => asTrimmedString(docker()?.runtimeVersion) || '—';
                     const containerCount = () => docker()?.containerCount ?? 0;
                     const swarmRole = () => {
@@ -166,6 +191,18 @@ export const DockerHostsTable: Component<{
                       return role ? role.charAt(0).toUpperCase() + role.slice(1) : '—';
                     };
                     const indicator = () => getSimpleStatusIndicator(host.status);
+                    const canRenderMetrics = () => indicator().variant !== 'danger';
+                    const metricsKey = () => buildMetricKeyForUnifiedResource(host);
+                    const cpuPercent = () => percentFromMetric(host.cpu);
+                    const memoryUsed = () => memoryUsedFor(host);
+                    const memoryTotal = () => memoryTotalFor(host);
+                    const memoryPercentOnly = () => memoryPercentOnlyFor(host);
+                    const hasMemoryMetric = () =>
+                      memoryTotal() > 0 || memoryPercentOnly() !== undefined;
+                    const aggregateDisk = () => aggregateDiskFor(host);
+                    const disks = () => normalizeDiskArray(host.agent?.disks);
+                    const hasDiskMetric = () =>
+                      aggregateDisk() !== undefined || (disks()?.length ?? 0) > 0;
                     return (
                       <TableRow class="text-[11px] sm:text-xs">
                         <TableCell class={getPlatformTableCellClass()}>
@@ -182,11 +219,6 @@ export const DockerHostsTable: Component<{
                           </div>
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
-                        >
-                          {runtime()}
-                        </TableCell>
-                        <TableCell
                           class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
                         >
                           {version()}
@@ -196,20 +228,39 @@ export const DockerHostsTable: Component<{
                         >
                           {containerCount()}
                         </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} text-base-content`}
-                        >
-                          {formatPercent(host.cpu?.current)}
+                        <TableCell class={getPlatformTableCellClass('right')}>
+                          <ResponsiveMetricCell
+                            class="w-full"
+                            value={cpuPercent() ?? 0}
+                            type="cpu"
+                            resourceId={metricsKey()}
+                            isRunning={canRenderMetrics() && cpuPercent() !== undefined}
+                            showMobile={false}
+                          />
                         </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} text-base-content`}
-                        >
-                          {formatPercent(host.memory?.current)}
+                        <TableCell class={getPlatformTableCellClass('right')}>
+                          <Show
+                            when={canRenderMetrics() && hasMemoryMetric()}
+                            fallback={metricFallback()}
+                          >
+                            <StackedMemoryBar
+                              used={memoryUsed()}
+                              total={memoryTotal()}
+                              percentOnly={memoryPercentOnly()}
+                            />
+                          </Show>
                         </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} text-base-content`}
-                        >
-                          {formatPercent(host.disk?.current)}
+                        <TableCell class={getPlatformTableCellClass('right')}>
+                          <Show
+                            when={canRenderMetrics() && hasDiskMetric()}
+                            fallback={metricFallback()}
+                          >
+                            <StackedDiskBar
+                              mode={(disks()?.length ?? 0) > 1 ? 'vertical-bars' : undefined}
+                              disks={disks()}
+                              aggregateDisk={aggregateDisk()}
+                            />
+                          </Show>
                         </TableCell>
                         <TableCell
                           class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}

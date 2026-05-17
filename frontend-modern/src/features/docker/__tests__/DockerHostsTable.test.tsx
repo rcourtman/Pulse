@@ -1,0 +1,123 @@
+import { cleanup, render, screen } from '@solidjs/testing-library';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import type { Disk } from '@/types/api';
+import type { Resource } from '@/types/resource';
+import { DockerHostsTable } from '../DockerHostsTable';
+
+vi.mock('@/components/shared/responsive', () => ({
+  ResponsiveMetricCell: (props: { type: string; isRunning?: boolean; resourceId?: string }) => (
+    <div
+      data-testid={`responsive-${props.type}-metric`}
+      data-resource-id={props.resourceId ?? ''}
+      data-running={String(props.isRunning)}
+    />
+  ),
+}));
+
+vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
+  StackedMemoryBar: (props: { used: number; total: number; percentOnly?: number }) => (
+    <div
+      data-testid="stacked-memory-bar"
+      data-used={String(props.used)}
+      data-total={String(props.total)}
+      data-percent-only={String(props.percentOnly ?? '')}
+    />
+  ),
+}));
+
+vi.mock('@/components/Workloads/StackedDiskBar', () => ({
+  StackedDiskBar: (props: { disks?: Disk[]; aggregateDisk?: Disk; mode?: string }) => (
+    <div
+      data-testid="stacked-disk-bar"
+      data-mode={props.mode ?? ''}
+      data-disks={String(props.disks?.length ?? 0)}
+      data-aggregate-usage={String(props.aggregateDisk?.usage ?? '')}
+    />
+  ),
+}));
+
+const makeDockerHost = (overrides: Partial<Resource> = {}): Resource => ({
+  id: 'agent:docker-01',
+  name: 'docker-01',
+  displayName: 'docker-01',
+  platformId: 'homelab',
+  platformType: 'docker',
+  sourceType: 'agent',
+  status: 'degraded',
+  type: 'agent',
+  lastSeen: 1_700_000_000_000,
+  cpu: { current: 42 },
+  memory: { total: 8_000, used: 3_200, free: 4_800, current: 40 },
+  disk: { total: 20_000, used: 12_500, free: 7_500, current: 62.5 },
+  agent: {
+    disks: [
+      { device: '/dev/sda1', mountpoint: '/', total: 10_000, used: 6_000, free: 4_000 },
+      {
+        device: '/dev/sdb1',
+        mountpoint: '/var/lib/docker',
+        total: 10_000,
+        used: 6_500,
+        free: 3_500,
+      },
+    ],
+  },
+  docker: {
+    runtimeVersion: '27.5.1',
+    containerCount: 12,
+  } as NonNullable<Resource['docker']> & { runtimeVersion?: string; containerCount?: number },
+  ...overrides,
+});
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+describe('DockerHostsTable', () => {
+  it('renders Docker hosts with a single-line Version column and shared metric bars', () => {
+    render(() => (
+      <DockerHostsTable
+        resources={[makeDockerHost()]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByRole('columnheader', { name: 'Version' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Runtime' })).not.toBeInTheDocument();
+    expect(screen.getByText('27.5.1')).toBeInTheDocument();
+    expect(screen.queryByText('Docker')).not.toBeInTheDocument();
+    expect(screen.getByTestId('responsive-cpu-metric')).toHaveAttribute('data-running', 'true');
+    expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute('data-used', '3200');
+    expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute('data-total', '8000');
+    expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-mode', 'vertical-bars');
+    expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-disks', '2');
+  });
+
+  it('uses percent-only memory and aggregate disk bars when capacity details are missing', () => {
+    render(() => (
+      <DockerHostsTable
+        resources={[
+          makeDockerHost({
+            status: 'online',
+            memory: { current: 55 },
+            disk: { current: 71 },
+            agent: undefined,
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute('data-total', '0');
+    expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute('data-percent-only', '55');
+    expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-disks', '0');
+    expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-aggregate-usage', '71');
+  });
+});
