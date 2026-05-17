@@ -17,10 +17,23 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
             content,
         )
         self.assertIn("Investigation Context", content)
+        self.assertIn("the configured LLM owns diagnosis", content)
+        self.assertIn(
+            "Pulse supplies context, tools, safety gates, approval state, and audit trails",
+            content,
+        )
+        self.assertIn("Pulse does not convert them into Pulse-authored findings", content)
         self.assertNotIn("successful remediations (incident memory)", content)
         self.assertNotIn("**Incident memory**", content)
         self.assertNotIn("**Incident Memory**", content)
         self.assertNotIn("incident memory, investigation orchestration", content)
+        self.assertNotIn("learns what's normal", content)
+        self.assertNotIn("multi-layered intelligence platform", content)
+        self.assertNotIn("capacity predictions", content)
+        self.assertNotIn("Deterministic Signal Detection", content)
+        self.assertNotIn("active_alert", content)
+        self.assertNotIn("auto-recovery", content)
+        self.assertNotRegex(content, r"(?i)understands resources before you ask")
 
 
 if __name__ == "__main__":

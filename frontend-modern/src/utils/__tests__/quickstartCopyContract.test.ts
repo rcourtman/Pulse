@@ -57,4 +57,20 @@ describe('quickstart copy contract', () => {
     expect(security).toContain('Relay, Pro, legacy Pro+, or Cloud license');
     expect(publicSecurity).toContain('Relay, Pro, legacy Pro+, or Cloud license');
   });
+
+  it('keeps public AI docs aligned with model-owned Patrol and Assistant reasoning', () => {
+    const ai = readRepoFile('docs/AI.md');
+
+    expect(ai).toContain('the configured LLM owns diagnosis');
+    expect(ai).toContain('Pulse supplies context, tools, safety gates, approval state, and audit trails');
+    expect(ai).toContain('Pulse does not convert them into Pulse-authored findings');
+
+    expect(ai).not.toContain("learns what's normal");
+    expect(ai).not.toContain('multi-layered intelligence platform');
+    expect(ai).not.toContain('capacity predictions');
+    expect(ai).not.toContain('Deterministic Signal Detection');
+    expect(ai).not.toContain('active_alert');
+    expect(ai).not.toContain('auto-recovery');
+    expect(ai).not.toMatch(/understands resources before you ask/i);
+  });
 });

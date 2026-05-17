@@ -110,6 +110,12 @@ runtime cost control, and shared AI transport surfaces.
 9. Add or change public AI overview wording through `docs/AI.md`; it may
    describe Assistant and Patrol capabilities, but it must not revive legacy
    commercial shorthand such as `incident memory` as a current product promise.
+   The public overview must also preserve the model-owned AI boundary: Pulse
+   Assistant and Patrol provide governed context, tools, safety gates,
+   approval state, and audit trails, while the configured LLM owns diagnosis,
+   prioritization, remediation reasoning, and tool choice. Public copy must not
+   present Pulse code as the intelligence engine, a prompt-keyword router, a
+   learned operational-meaning engine, or a deterministic finding author.
 10. Platform-first top-level pages registered in
     `frontend-modern/src/App.tsx` and the platform tab list in
     `frontend-modern/src/AppLayout.tsx` must keep the AI launcher chrome
@@ -214,7 +220,10 @@ runtime cost control, and shared AI transport surfaces.
    proxy for retired hosted-model or AI quickstart activation.
    The public AI overview must likewise use productized context language such
    as alert history, Patrol runs, and resource timelines instead of presenting
-   `incident memory` as a standalone feature.
+   `incident memory` as a standalone feature. It must also describe Patrol
+   baselines, trends, correlations, forecasts, and deterministic signals as
+   model-bound evidence/context rather than Pulse-authored intelligence or
+   fallback finding creation.
 10. Keep discovery-analysis prompt bounds and response budgets aligned across
    `internal/ai/service.go` and the shared service-discovery prompt builders:
    the runtime must reserve enough output tokens for structured discovery JSON,

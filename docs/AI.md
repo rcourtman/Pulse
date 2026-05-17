@@ -6,40 +6,39 @@ Pulse Patrol is available to everyone on the Community plan with BYOK (your own 
 
 ## Overview
 
-Pulse includes two AI-powered systems:
+Pulse includes two model-powered systems:
 
 1. **Pulse Assistant** — An interactive chat interface for ad-hoc troubleshooting, investigations, and infrastructure control.
-2. **Pulse Patrol** — A scheduled, context-aware analysis service that continuously monitors your infrastructure, learns what's normal, predicts issues, and generates actionable findings.
+2. **Pulse Patrol** — A scheduled, context-aware model workflow that gathers infrastructure evidence, exposes governed tools, and asks your configured LLM to report actionable findings.
 
-Both systems are built on the same tool-driven architecture where the LLM acts as a proposer and Go code enforces safety gates.
+Both systems are built on the same tool-driven architecture: the configured LLM owns diagnosis, prioritization, remediation reasoning, and tool choice; Pulse supplies context, tools, safety gates, approval state, and audit trails.
 
 ### Not Just Another Chatbot
 
-Pulse Assistant is a **protocol-driven, safety-gated agentic system** that:
+Pulse Assistant is a **protocol-driven, safety-gated LLM tool surface** that:
 
-- **Proactively gathers context** — understands resources before you ask (context prefetcher)
-- **Learns within sessions** — extracts and caches facts to avoid redundant queries (knowledge accumulator)
+- **Provides governed context** — attaches explicit resource mentions and recent session facts without rewriting user intent
+- **Caches session facts** — extracts bounded tool facts to avoid redundant queries during the current conversation
 - **Enforces workflow invariants** — FSM prevents dangerous state transitions
 - **Supports parallel tool execution** — efficient batch operations with concurrency control
 - **Detects and prevents hallucinations** — phantom execution detection
-- **Auto-recovers from errors** — structured error envelopes enable self-correction
+- **Returns structured tool errors** — the model can recover from clear, machine-readable failures
 
 📖 **For a deep technical dive into the Assistant architecture, see [architecture/pulse-assistant-deep-dive.md](architecture/pulse-assistant-deep-dive.md).**
 
 ### Not Just Another Alerting System
 
-Pulse Patrol is a **multi-layered intelligence platform** that:
+Pulse Patrol is a **scheduled model-owned operations loop** that:
 
-- **Learns** what's normal for your environment (baseline engine)
-- **Predicts** issues before they become critical (pattern detection + forecasting)
-- **Correlates** events across your entire infrastructure (root cause analysis)
-- **Uses prior context** from alert history, Patrol runs, and resource timelines
-- **Investigates** issues autonomously when configured (investigation orchestrator)
-- **Verifies** fixes and tracks remediation effectiveness (verification loops)
+- **Assembles evidence** from metrics, storage, backups, discovery, alerts, and resource timelines
+- **Provides statistical context** such as baselines, trend summaries, capacity estimates, and event relationships
+- **Lets the configured LLM reason** over that evidence and decide whether to call tools or report findings
+- **Routes governed actions** through approval, entitlement, policy, verification, and audit boundaries
+- **Preserves operator feedback** as context for future model runs without converting it into Pulse-authored fixes
 
 All while running entirely on your infrastructure with BYOK for complete privacy.
 
-📖 **For a deep technical dive into the intelligence subsystems, see [architecture/pulse-patrol-deep-dive.md](architecture/pulse-patrol-deep-dive.md).**
+📖 **For a deep technical dive into the Patrol runtime, see [architecture/pulse-patrol-deep-dive.md](architecture/pulse-patrol-deep-dive.md).**
 
 See [architecture/pulse-assistant.md](architecture/pulse-assistant.md) for the original safety architecture documentation.
 
@@ -47,7 +46,7 @@ See [architecture/pulse-assistant.md](architecture/pulse-assistant.md) for the o
 
 ## Pulse Patrol
 
-Patrol is a scheduled analysis pipeline that builds a rich, system-wide snapshot and produces actionable findings.
+Patrol is a scheduled model workflow that builds a rich, system-wide snapshot and gives your configured LLM the tools it needs to produce actionable findings.
 
 ### How Patrol Works
 
@@ -55,19 +54,24 @@ Patrol is a scheduled analysis pipeline that builds a rich, system-wide snapshot
 Scheduled/Event Trigger
         │
         ▼
-buildSeedContext()  ── infrastructure snapshot
+buildSeedContext()  ── infrastructure evidence and policy context
         │
         ▼
 LLM analysis (with tools) ← pulse_storage, pulse_metrics, pulse_alerts, etc.
         │
         ▼
-DetectSignals() ── deterministic signal detection from tool outputs
+patrol_report_finding() / patrol_resolve_finding() ── model-owned finding lifecycle calls
+        │
+        ├── DetectSignals() ── deterministic evidence extraction from tool outputs
+        │       │
+        │       ▼
+        │   Evaluation pass ── focused LLM review of unmatched evidence
         │
         ▼
-createFinding() ── validated, deduplicated findings stored
+model-reported findings ── validated, deduplicated, stored
         │
         ▼ (if configured)
-MaybeInvestigateFinding() ── automatic investigation + remediation
+MaybeInvestigateFinding() ── model investigation + governed remediation
 ```
 
 ### What Patrol Sees
@@ -77,8 +81,8 @@ Every patrol run passes the LLM comprehensive context about your environment:
 | Data Category | What's Included |
 |---------------|-----------------|
 | **Proxmox Nodes** | Status, CPU%, memory%, uptime, 24h/7d trend analysis |
-| **VMs & Containers** | Full metrics, backup status, OCI images, historical trends, anomaly flags |
-| **Storage Pools** | Usage %, capacity predictions, type (ZFS/LVM/Ceph), growth rates |
+| **VMs & Containers** | Full metrics, backup status, OCI images, historical trends, anomaly evidence |
+| **Storage Pools** | Usage %, capacity estimates, type (ZFS/LVM/Ceph), growth rates |
 | **Docker/Podman** | Container counts, health states, unhealthy container lists |
 | **Kubernetes** | Nodes, pods, deployments, services, DaemonSets, StatefulSets, namespaces |
 | **TrueNAS** | Pools, datasets, disk health, SMART status, replication, alerts |
@@ -86,22 +90,22 @@ Every patrol run passes the LLM comprehensive context about your environment:
 | **Ceph** | Cluster health, OSD states, PG status |
 | **Agent Hosts** | Load averages, memory, disk, RAID status, temperatures |
 
-### Enriched Context
+### Model-Bound Context
 
-Beyond raw metrics, Patrol enriches the context with intelligence:
+Beyond raw metrics, Patrol prepares structured evidence for the model:
 
-- **Trend analysis** — 24h and 7d patterns showing `growing`, `stable`, `declining`, or `volatile` behavior
-- **Learned baselines** — Z-score anomaly detection based on what's *normal for your environment*
-- **Capacity predictions** — "Storage pool will be full in 12 days at current growth rate"
+- **Trend summaries** — 24h and 7d samples showing `growing`, `stable`, `declining`, or `volatile` behavior
+- **Baseline evidence** — Z-score anomaly evidence from historical metrics
+- **Capacity estimates** — "Storage pool reaches 95% in about 12 days at current growth rate"
 - **Infrastructure changes** — Detected config changes, VM migrations, new deployments
-- **Resource correlations** — Pattern detection across related resources
+- **Resource relationships** — Related events and topology context
 - **User notes** — Your annotations explaining expected behavior
 - **Dismissed findings** — Respects your feedback and suppressed alerts
 - **Investigation context** — Uses prior alert context, Patrol run history, and resource timelines
 
-### Deterministic Signal Detection
+### Deterministic Evidence Extraction
 
-Patrol doesn't rely solely on LLM judgment. It parses tool call outputs and fires deterministic signals for known problems:
+Patrol parses tool outputs for concrete evidence such as backup failures, storage pressure, and disk health failures. These signals are not final findings by themselves: unmatched signals are sent to a focused LLM evaluation pass, and if the model still declines to report them, Pulse does not convert them into Pulse-authored findings.
 
 | Signal Type | Trigger | Default Threshold |
 |------------|---------|-------------------|
@@ -111,7 +115,6 @@ Patrol doesn't rely solely on LLM judgment. It parses tool call outputs and fire
 | `high_disk` | Storage pool usage | 75% (warning), 95% (critical) |
 | `backup_failed` | Recent backup task with error status | Within 48h |
 | `backup_stale` | No backup completed for VM/CT | 48+ hours |
-| `active_alert` | Critical/warning alert in list | N/A |
 
 Thresholds can be configured via alert settings to match user-defined values.
 
@@ -119,15 +122,13 @@ Thresholds can be configured via alert settings to match user-defined values.
 
 | Issue | Severity | Example |
 |-------|----------|---------|
-| **Node offline** | Critical | Proxmox node not responding |
-| **Disk approaching capacity** | Warning/Critical | Storage at 85%+, or growing toward full |
+| **Disk approaching capacity** | Warning/Critical | Storage growing toward full with concrete time-to-threshold evidence |
 | **Backup failures** | Warning | PBS job failed, no backup in 48+ hours |
-| **Service down** | Critical | Docker container crashed, agent offline |
-| **High resource usage** | Warning | Sustained memory >90%, CPU >85% |
 | **Storage issues** | Critical | PBS datastore errors, ZFS pool degraded |
 | **Ceph problems** | Warning/Critical | Degraded OSDs, unhealthy PGs |
 | **Kubernetes issues** | Warning | Pods stuck in Pending/CrashLoopBackOff |
 | **SMART failures** | Critical | Disk health check failed |
+| **Alert-triggered investigations** | Pro / Cloud | A fired alert prompts the model to gather surrounding context and explain likely cause |
 
 ### What Patrol Ignores (by design)
 
@@ -138,6 +139,7 @@ Patrol is **intentionally conservative** to avoid noise:
 - Stopped VMs/containers that were intentionally stopped
 - Brief spikes that resolve on their own
 - Anything that doesn't require human action
+- Conditions already fully covered by the normal alert lifecycle unless the model finds additional context that changes the operator decision
 
 > **Philosophy**: If a finding wouldn't be worth waking someone up at 3am, Patrol won't create it.
 
@@ -356,28 +358,24 @@ Patrol can also be triggered by:
 
 ---
 
-## AI Intelligence Layer
+## Model Context Layer
 
-Pulse includes a unified intelligence system that aggregates data from all AI subsystems:
+Pulse includes a model-context layer that aggregates evidence from AI runtime subsystems:
 
 ### Components
 
 | Component | Purpose |
 |-----------|---------|
-| **Baseline Engine** | Learns normal behavior, detects anomalies via z-score |
-| **Pattern Detector** | Identifies recurring issues and trends |
-| **Correlation Engine** | Links related issues across resources |
+| **Baseline Store** | Maintains statistical metric summaries and anomaly evidence |
+| **Pattern Store** | Records recurring event evidence and trend context |
+| **Correlation Store** | Links related events and resource relationships for model context |
 | **Investigation Context** | Uses alert history, Patrol runs, and resource timelines |
-| **Knowledge Store** | Persists user annotations and learned preferences |
-| **Forecast Engine** | Predicts capacity issues and resource exhaustion |
+| **Knowledge Store** | Persists user annotations and model-safe context |
+| **Forecast Service** | Estimates capacity trajectories from historical samples |
 
 ### Health Scoring
 
-Each resource receives a health score (A–F) based on:
-- Current metrics vs baseline
-- Active findings and alerts
-- Recent incidents
-- Trend direction (improving/stable/declining)
+The Patrol UI can show an operational score (A-F) based on active findings, Patrol coverage, runtime errors, and structured evidence. This score is a presentation aid, not a replacement for model diagnosis.
 
 ---
 
@@ -438,10 +436,10 @@ Patrol runs on your server and only sends the minimal context needed for analysi
 
 ## Why Patrol Is Different From Traditional Alerts
 
-Alerts are threshold-based and narrow. Patrol is context-based and cross-system.
+Alerts are threshold-based and narrow. Patrol gives the selected model a broader, tool-backed operating picture.
 
 - **Alerts**: "Disk > 90%"
-- **Patrol**: "ZFS pool is 86% but trending +4%/day; projected to hit 95% within a week. Largest consumer is datastore X. Recommend prune or expand."
+- **Patrol**: "The model sees ZFS pool usage, growth rate, datastore consumers, backup context, and governed tools, then decides whether that evidence warrants a finding or action recommendation."
 
 ---
 
@@ -470,8 +468,8 @@ Pulse tracks token usage and costs:
 
 ### Deep Dives (Recommended for Technical Audiences)
 
-- **[Pulse Assistant Deep Dive](architecture/pulse-assistant-deep-dive.md)** — Complete technical breakdown of the agentic architecture: context prefetching, knowledge accumulation, FSM enforcement, parallel execution, phantom detection, auto-recovery
-- **[Pulse Patrol Deep Dive](architecture/pulse-patrol-deep-dive.md)** — Full intelligence layer documentation: baseline learning, pattern detection, forecasting, correlation analysis, investigation context, investigation orchestration
+- **[Pulse Assistant Deep Dive](architecture/pulse-assistant-deep-dive.md)** — Complete technical breakdown of the model-owned tool surface: explicit context, session fact caching, FSM enforcement, parallel execution, phantom detection, structured errors
+- **[Pulse Patrol Deep Dive](architecture/pulse-patrol-deep-dive.md)** — Patrol runtime documentation: evidence assembly, deterministic signal extraction, model evaluation, investigation context, investigation orchestration
 
 ### Reference Documentation
 
