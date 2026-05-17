@@ -823,6 +823,52 @@ const commandPolicySignal = (state: ConnectionFleetCommandPolicy): FleetGovernan
   }
 };
 
+// Builds a plain-English chip when an attached Pulse Agent isn't reporting,
+// to be rendered alongside a primary connection that *is* healthy. Avoids
+// the prior pattern of stacking server-side terms ("Adapter degraded",
+// liveness "Stale") that didn't tell the user which collection path failed.
+export const agentAttachmentSignal = (
+  agent: Connection,
+): FleetGovernanceSignal | null => {
+  switch (agent.state) {
+    case 'stale': {
+      const ago = lastActivityTextFromLastSeen(agent.lastSeen);
+      const suffix = ago && ago !== 'No activity yet' && ago !== 'Unknown' ? ` · ${ago}` : '';
+      return {
+        key: 'agent-attachment',
+        label: `Agent offline${suffix}`,
+        detail:
+          agent.stateReason ||
+          'The Pulse Agent on this host has not reported recently. Proxmox API metrics are unaffected.',
+        tone: 'warning',
+      };
+    }
+    case 'unreachable':
+      return {
+        key: 'agent-attachment',
+        label: 'Agent unreachable',
+        detail: agent.stateReason || 'Pulse cannot currently reach the agent on this host.',
+        tone: 'critical',
+      };
+    case 'unauthorized':
+      return {
+        key: 'agent-attachment',
+        label: 'Agent unauthorized',
+        detail: agent.stateReason || 'The Pulse Agent token is being rejected.',
+        tone: 'critical',
+      };
+    case 'pending':
+      return {
+        key: 'agent-attachment',
+        label: 'Agent pending first report',
+        detail: agent.stateReason || 'The Pulse Agent has not reported yet.',
+        tone: 'warning',
+      };
+    default:
+      return null;
+  }
+};
+
 export const fleetGovernanceSignalsForConnection = (
   connection: Connection,
 ): FleetGovernanceSignal[] => {
@@ -844,13 +890,6 @@ export const visibleFleetGovernanceSignals = (
   signals: readonly FleetGovernanceSignal[],
 ): FleetGovernanceSignal[] => {
   const hasPassiveAgentConfigConfirmation = signals.some(isPassiveAgentConfigConfirmationSignal);
-  // A row can flatten signals from multiple connections (e.g. a PVE primary
-  // and its paired agent). Treat liveness as attention if any contributor
-  // is non-OK, otherwise an active PVE primary masks a stale agent.
-  const livenessIsAttention = signals.some(
-    (signal) =>
-      signal.key === 'liveness' && (signal.tone === 'warning' || signal.tone === 'critical'),
-  );
   const visibleSignals = signals.filter((signal) => {
     if (isPassiveAgentConfigConfirmationSignal(signal)) return false;
     if (isPassiveAgentRolloutConfirmationFallbackSignal(signal, hasPassiveAgentConfigConfirmation))
@@ -858,10 +897,11 @@ export const visibleFleetGovernanceSignals = (
     // Liveness duplicates the row's status badge column; skip it here so a
     // stale connection doesn't get "Stale" rendered twice.
     if (signal.key === 'liveness') return false;
-    // Adapter health degrades automatically when an agent stops heartbeating.
-    // When liveness is already raising attention, "Adapter degraded" is the
-    // same root cause restated, not an independent reading.
-    if (signal.key === 'adapter' && livenessIsAttention) return false;
+    // "Adapter degraded" is internal collection-health terminology that
+    // doesn't name a user-actionable problem. The agent-attachment chip
+    // names the specific failure ("Agent offline · 4h ago") when it
+    // matters; everything else this signal raised was redundant noise.
+    if (signal.key === 'adapter') return false;
     // Default-disabled remote control is the unconfigured state on every
     // fresh agent. Surface only when policy is actively wrong
     // (blocked/mismatched/pending/unknown). The Manage drawer is the right

@@ -10,12 +10,14 @@ import {
   type ConnectionType,
 } from '@/api/connections';
 import {
+  agentAttachmentSignal,
   connectionAgentEndpointDisplay,
   connectionAgentIdentitySummary,
   connectionLastActivityText,
   fleetGovernanceSignalsForConnection,
   lastActivityTextFromLastSeen,
   surfaceLabel,
+  type FleetGovernanceSignal,
   type InfrastructureSourceKind,
   type InfrastructureSystemMemberRow,
   type InfrastructureSystemRow,
@@ -133,14 +135,29 @@ const subtitleFor = (connections: readonly Connection[], primaryConnection: Conn
   return `via ${productLabel}`;
 };
 
+// A connection is "contributing" if it is currently delivering data — not
+// merely configured. Otherwise the source badge claims "API + Agent" when
+// the agent has been silent for hours, which directly contradicts the
+// "Agent offline" chip on the same row.
+const isContributing = (connection: Connection): boolean =>
+  connection.state === 'active' || connection.state === 'paused';
+
 const sourceFor = (connections: readonly Connection[]): InfrastructureSourceKind => {
-  const hasPlatformAPI = connections.some((connection) => PLATFORM_API_TYPES.has(connection.type));
-  const hasPulseAgent = connections.some((connection) => connection.type === 'agent');
-  const hasAvailabilityProbe = connections.some((connection) => connection.type === 'availability');
+  const contributors = connections.filter(isContributing);
+  const hasPlatformAPI = contributors.some((connection) => PLATFORM_API_TYPES.has(connection.type));
+  const hasPulseAgent = contributors.some((connection) => connection.type === 'agent');
+  const hasAvailabilityProbe = contributors.some(
+    (connection) => connection.type === 'availability',
+  );
   if (hasPlatformAPI && hasPulseAgent) return 'both';
   if (hasPlatformAPI) return 'api';
   if (hasPulseAgent) return 'agent';
   if (hasAvailabilityProbe) return 'probe';
+  // Fall back to configured presence when no path is currently active, so
+  // the row still names what was set up even if everything is offline.
+  if (connections.some((connection) => PLATFORM_API_TYPES.has(connection.type))) return 'api';
+  if (connections.some((connection) => connection.type === 'agent')) return 'agent';
+  if (connections.some((connection) => connection.type === 'availability')) return 'probe';
   return 'unknown';
 };
 
@@ -262,14 +279,22 @@ const buildMemberRow = (
   const agentConnection = member.agentConnectionId
     ? connectionsByID.get(member.agentConnectionId)
     : undefined;
-  const source: InfrastructureSourceKind = agentConnection ? 'agent' : 'api';
-  const state = moreSevereState(member.state, agentConnection?.state);
+  // Cluster members always have an implicit API path via the cluster's
+  // primary connection. When a paired agent is also contributing, both
+  // sources apply; otherwise the row is API-only.
+  const source: InfrastructureSourceKind =
+    agentConnection && isContributing(agentConnection) ? 'both' : 'api';
+  // Member status reflects the Proxmox-side view of the node. An optional
+  // paired agent being silent is reported as a separate "Agent offline" chip
+  // so the headline state doesn't make a working node look down.
+  const state = member.state;
   const presentation = STATE_PRESENTATION[state] ?? STATE_PRESENTATION.pending;
-  const lastSeen =
-    agentConnection && state === agentConnection.state
-      ? agentConnection.lastSeen
-      : (member.lastSeen ?? agentConnection?.lastSeen);
-  const fleetSignals = agentConnection ? fleetGovernanceSignalsForConnection(agentConnection) : [];
+  const lastSeen = member.lastSeen ?? agentConnection?.lastSeen;
+  const attachmentSignal = agentConnection ? agentAttachmentSignal(agentConnection) : null;
+  const fleetSignals: FleetGovernanceSignal[] = [
+    ...(attachmentSignal ? [attachmentSignal] : []),
+    ...(agentConnection ? fleetGovernanceSignalsForConnection(agentConnection) : []),
+  ];
 
   return {
     id: member.id,
@@ -345,9 +370,27 @@ const buildRow = (
           connection.id === primaryConnection.id || !memberAgentConnectionIds.has(connection.id),
       )
     : componentConnections;
-  const fleetSignals = rowFleetSignalConnections.flatMap((connection) =>
-    fleetGovernanceSignalsForConnection(connection),
-  );
+  // For non-agent primaries (PVE, PBS, etc.), surface a clearly-named chip
+  // when an attached agent is not reporting. We avoid double-injecting the
+  // chip for cluster member agents — those are tracked on the member rows.
+  const attachmentSignals: FleetGovernanceSignal[] =
+    primaryConnection.type === 'agent'
+      ? []
+      : rowFleetSignalConnections
+          .filter(
+            (connection) =>
+              connection.id !== primaryConnection.id &&
+              connection.type === 'agent' &&
+              !memberAgentConnectionIds.has(connection.id),
+          )
+          .map((connection) => agentAttachmentSignal(connection))
+          .filter((signal): signal is FleetGovernanceSignal => Boolean(signal));
+  const fleetSignals: FleetGovernanceSignal[] = [
+    ...attachmentSignals,
+    ...rowFleetSignalConnections.flatMap((connection) =>
+      fleetGovernanceSignalsForConnection(connection),
+    ),
+  ];
 
   return {
     id: primaryConnection.id,
@@ -404,26 +447,15 @@ const systemToRow = (
 
   const isCluster =
     system.type === 'pve' && Boolean(system.clusterName?.trim()) && members.length > 0;
-  // Roll up the row's status across every component the system pulls in:
-  // the primary, any cluster members and their agents, and any cluster- or
-  // host-level attached agents. Without this, a row whose PVE API is healthy
-  // but whose paired agent is stale reads "Active" with no surfaced problem.
-  const memberAgents = rawMembers
-    .map((member) =>
-      member.agentConnectionId ? connectionsByID.get(member.agentConnectionId) : undefined,
-    )
-    .filter((connection): connection is Connection => Boolean(connection));
-  const attachedComponents = componentConnections.filter(
-    (connection) => connection.id !== primaryConnection.id,
-  );
-  const hasAttachments = memberAgents.length > 0 || attachedComponents.length > 0;
+  // Clusters roll up across members so a single unreachable node surfaces on
+  // the parent row. We deliberately exclude attached *agents* here: a stale
+  // agent means optional host telemetry is missing, not that the system has
+  // stopped reporting. That gets its own named chip below.
   let rollup: ClusterRollup | undefined;
-  if (isCluster || hasAttachments) {
+  if (isCluster) {
     const states: ConnectionState[] = [
       primaryConnection.state,
       ...rawMembers.map((member) => member.state),
-      ...memberAgents.map((connection) => connection.state),
-      ...attachedComponents.map((connection) => connection.state),
     ];
     const worstState = states.reduce<ConnectionState>(
       (acc, state) => moreSevereState(acc, state),
@@ -432,8 +464,6 @@ const systemToRow = (
     const lastSeens: Array<string | null | undefined> = [
       primaryConnection.lastSeen,
       ...rawMembers.map((member) => member.lastSeen),
-      ...memberAgents.map((connection) => connection.lastSeen),
-      ...attachedComponents.map((connection) => connection.lastSeen),
     ];
     rollup = { state: worstState, lastSeen: oldestTimestamp(lastSeens) };
   }
@@ -530,12 +560,49 @@ export const useConnectionsLedger = (): ConnectionsLedger => {
     }
 
     const byID = new Map(allConnections.map((connection) => [connection.id, connection]));
+    // A loose Pulse Agent that runs on a host that is already a cluster
+    // member duplicates the same physical machine in two table rows (once
+    // via Proxmox API, once via the agent). Collect every cluster-member
+    // host name and alias so we can drop the redundant standalone row.
+    const clusterMemberHosts = new Set<string>();
+    for (const system of systems) {
+      if (system.type !== 'pve' || !system.clusterName?.trim()) continue;
+      for (const member of system.members ?? []) {
+        const name = member.name?.trim().toLowerCase();
+        if (name) clusterMemberHosts.add(name);
+        for (const alias of member.hostAliases ?? []) {
+          const value = alias?.trim().toLowerCase();
+          if (value) clusterMemberHosts.add(value);
+        }
+      }
+    }
     const groupedRows = systems
-      .map((system) =>
-        cacheRow(activeCacheKeys, `system:${system.id}`, systemRowSignature(system, byID), () =>
-          systemToRow(system, byID),
-        ),
-      )
+      .map((system) => {
+        // Skip a standalone-agent system if its host is already represented
+        // as a cluster member elsewhere on the page.
+        if (system.type === 'agent' && (system.components?.length ?? 0) <= 1) {
+          const primary = byID.get(system.id);
+          const candidates = [
+            primary?.name,
+            primary?.address,
+            primary?.agentIdentity?.hostname,
+            ...(primary?.hostAliases ?? []),
+          ];
+          if (
+            candidates.some(
+              (value) => value && clusterMemberHosts.has(value.trim().toLowerCase()),
+            )
+          ) {
+            return null;
+          }
+        }
+        return cacheRow(
+          activeCacheKeys,
+          `system:${system.id}`,
+          systemRowSignature(system, byID),
+          () => systemToRow(system, byID),
+        );
+      })
       .filter((row): row is InfrastructureSystemRow => Boolean(row));
 
     if (groupedRows.length === 0) {
