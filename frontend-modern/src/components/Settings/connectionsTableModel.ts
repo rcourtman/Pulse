@@ -1008,7 +1008,12 @@ export const primaryRowProblem = (
   signals: readonly FleetGovernanceSignal[],
 ): InfrastructureRowProblem | undefined => {
   const critical = signals.find((signal) => signal.tone === 'critical');
-  const candidate = critical ?? signals.find((signal) => signal.tone === 'warning');
-  if (!candidate) return undefined;
-  return { label: candidate.label, detail: candidate.detail, tone: candidate.tone };
+  if (critical) {
+    return { label: critical.label, detail: critical.detail, tone: 'critical' };
+  }
+  const warning = signals.find((signal) => signal.tone === 'warning');
+  if (warning) {
+    return { label: warning.label, detail: warning.detail, tone: 'warning' };
+  }
+  return undefined;
 };
