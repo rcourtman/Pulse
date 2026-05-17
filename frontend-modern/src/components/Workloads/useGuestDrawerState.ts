@@ -1,8 +1,12 @@
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createEffect, createMemo, createResource, createSignal } from 'solid-js';
 
+import { getDiscovery } from '@/api/discovery';
 import type { HistoryTimeRange } from '@/api/charts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
-import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
+import {
+  getDiscoveryIdentifiedSummary,
+  getDiscoveryLoadingState,
+} from '@/utils/discoveryPresentation';
 import type { DisplayMetricType } from '@/utils/metricThresholds';
 import {
   getCanonicalWorkloadId,
@@ -84,6 +88,29 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     getWebInterfaceTargetLabelForWorkload(props.guest),
   );
 
+  // Load the existing discovery record (if any) so the Overview can surface
+  // the identified service alongside CPU/agent/OS metadata. This is a passive
+  // read — no scan is triggered. The discovery sub-tab continues to own
+  // manual scan triggering and progress UI.
+  const discoverySourceKey = createMemo(() => {
+    const type = discoveryResourceType();
+    const agent = discoveryAgentId();
+    const resource = discoveryResourceId();
+    if (!type || !agent || !resource) return null;
+    return { type, agent, resource } as const;
+  });
+  const [discoveryRecord] = createResource(discoverySourceKey, async (key) => {
+    if (!key) return null;
+    try {
+      return await getDiscovery(key.type, key.agent, key.resource);
+    } catch {
+      return null;
+    }
+  });
+  const discoveryIdentifiedSummary = createMemo(() =>
+    getDiscoveryIdentifiedSummary(discoveryRecord()),
+  );
+
   const switchTab = (tab: GuestDrawerTab) => {
     setActiveTab(tab);
   };
@@ -103,6 +130,7 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     agentTitle,
     backupPresentation,
     discoveryAgentId,
+    discoveryIdentifiedSummary,
     discoveryLoadingState: getDiscoveryLoadingState(),
     discoveryResourceId,
     discoveryResourceType,

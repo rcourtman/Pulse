@@ -1362,6 +1362,15 @@ AI runtime.
     entitlement. Cloud interest links from self-hosted plan surfaces must hand
     off to Pulse Account/public Cloud ownership rather than route to an
     in-product Cloud trial/signup page.
+37. Keep the identified-service reducer on `discoveryPresentation.ts`. Any
+    surface that wants to label a workload with the AI-identified service
+    (drawer overview card, future row chips, MCP capability payloads) must
+    consume `getDiscoveryIdentifiedSummary` rather than re-implement the
+    empty/low-signal gate. The helper returns null when the stored record
+    has no useful identification — mirroring the Discovery tab's
+    `hasValidDiscovery` — so the same record either renders in all
+    surfaces or hides in all surfaces, preventing "Unknown" rows or
+    zero-confidence noise from drifting into peripheral UI.
 
 ## Current State
 
@@ -3099,6 +3108,15 @@ the shared command-execution and `agent:exec` token-scope links; discovery
 surfaces may explain those states, but the visible links must remain
 `Settings → Infrastructure` and `Settings → API Access` through that helper,
 not inline legacy labels or old settings paths.
+That same presentation owner also packages the identified-service summary
+consumed by surfaces outside the Discovery sub-tab.
+`getDiscoveryIdentifiedSummary` is the canonical reducer that turns a stored
+`ResourceDiscovery` into the compact card payload (service name, category,
+confidence percent, port and path counts, cli access hint). New surfaces that
+want to label a workload with its identified service must read through that
+helper rather than re-implementing the empty/low-signal gate, so the
+Discovery tab and out-of-tab surfaces collapse the same records and avoid
+surfacing "Unknown" rows or zero-confidence noise.
 That same settings-shell boundary now also owns the shared settings
 presentation helpers that those panels consume. `frontend-modern/src/utils/systemSettingsPresentation.ts`
 is the canonical owner for shared system-settings presets, summaries, and

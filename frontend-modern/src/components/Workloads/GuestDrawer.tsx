@@ -12,6 +12,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     agentTitle,
     backupPresentation,
     discoveryAgentId,
+    discoveryIdentifiedSummary,
     discoveryLoadingState,
     discoveryResourceId,
     discoveryResourceType,
@@ -115,6 +116,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           customUrl={props.customUrl}
           backupPresentation={backupPresentation()}
           diskThresholds={diskThresholds()}
+          discoveryIdentifiedSummary={discoveryIdentifiedSummary()}
           webInterfaceTargetLabel={webInterfaceTargetLabel()}
         />
       </div>

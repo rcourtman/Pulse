@@ -49,6 +49,18 @@ vi.mock('../Discovery/DiscoveryTab', () => ({
   ),
 }));
 
+const discoveryApiMocks = vi.hoisted(() => ({
+  getDiscovery: vi.fn(async () => null),
+}));
+
+vi.mock('@/api/discovery', async () => {
+  const actual = await vi.importActual<typeof import('@/api/discovery')>('@/api/discovery');
+  return {
+    ...actual,
+    getDiscovery: discoveryApiMocks.getDiscovery,
+  };
+});
+
 vi.mock('@/components/shared/WebInterfaceUrlField', () => ({
   WebInterfaceUrlField: (props: {
     metadataKind: string;
@@ -167,6 +179,45 @@ describe('GuestDrawer', () => {
       const panels = container.querySelectorAll('[style*="overflow-anchor"]');
       expect(panels[0]).not.toHaveClass('hidden');
       expect(panels[1]).toHaveClass('hidden');
+    });
+
+    it('renders the Identified Service overview card when a populated discovery record exists', async () => {
+      discoveryApiMocks.getDiscovery.mockResolvedValueOnce({
+        id: 'vm:node1:100',
+        resource_type: 'vm',
+        resource_id: '100',
+        target_id: 'node1',
+        service_name: 'Homepage Dashboard',
+        service_type: 'homepage',
+        category: 'web_server',
+        confidence: 0.95,
+        cli_access: 'docker exec -it homepage /bin/sh',
+        ports: [],
+        facts: [],
+        config_paths: ['/opt/homepage/config'],
+        data_paths: [],
+        log_paths: [],
+      });
+
+      render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Identified Service')).toBeInTheDocument();
+      });
+      expect(screen.getByText('Homepage Dashboard')).toBeInTheDocument();
+      expect(screen.getByText('web_server')).toBeInTheDocument();
+      expect(screen.getByText('95%')).toBeInTheDocument();
+      expect(screen.getByText('docker exec -it homepage /bin/sh')).toBeInTheDocument();
+    });
+
+    it('hides the Identified Service card when the discovery record is null or empty', async () => {
+      discoveryApiMocks.getDiscovery.mockResolvedValueOnce(null);
+      render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
+      // Allow the resource to resolve and a render cycle to happen.
+      await waitFor(() => {
+        expect(discoveryApiMocks.getDiscovery).toHaveBeenCalled();
+      });
+      expect(screen.queryByText('Identified Service')).toBeNull();
     });
 
     it('switches to Discovery tab on click', async () => {
@@ -684,14 +735,17 @@ describe('GuestDrawer', () => {
             type: 'app-container',
             platformType: 'docker',
             dockerHostId: 'dh-1',
-            id: 'container-abc',
+            containerId: 'container-abc-runtime-id',
+            id: 'app-container-synthetic-hash',
           })}
           onClose={vi.fn()}
         />
       ));
       expect(screen.getByTestId('disc-resource-type').textContent).toBe('app-container');
       expect(screen.getByTestId('disc-agent-id').textContent).toBe('dh-1');
-      expect(screen.getByTestId('disc-resource-id').textContent).toBe('container-abc');
+      // Discovery routes by the Docker-native containerId, not the canonical
+      // synthetic workload id, so the agent can resolve `docker exec <id>`.
+      expect(screen.getByTestId('disc-resource-id').textContent).toBe('container-abc-runtime-id');
     });
 
     it('does not render DiscoveryTab for TrueNAS app-containers without explicit discovery support', () => {

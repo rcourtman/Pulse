@@ -1,6 +1,7 @@
 import { For, Show } from 'solid-js';
 
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
+import type { DiscoveryIdentifiedSummary } from '@/utils/discoveryPresentation';
 import { formatBytes, formatUptime } from '@/utils/format';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 
@@ -31,6 +32,7 @@ interface GuestDrawerOverviewProps {
     dateLabel: string;
   } | null;
   diskThresholds?: MetricDisplayThresholds | null;
+  discoveryIdentifiedSummary?: DiscoveryIdentifiedSummary | null;
   webInterfaceTargetLabel: string;
 }
 
@@ -38,6 +40,56 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
   return (
     <div>
       <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
+        <Show when={props.discoveryIdentifiedSummary}>
+          {(summary) => (
+            <div class="rounded border border-border bg-surface p-3 shadow-sm">
+              <div class="flex items-center justify-between gap-2 mb-2">
+                <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content">
+                  Identified Service
+                </h3>
+                <span class="text-[10px] font-medium text-muted">
+                  {summary().confidencePercent}
+                </span>
+              </div>
+              <div class="space-y-1.5 text-[11px]">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-muted">Service</span>
+                  <span
+                    class="font-medium text-base-content truncate ml-2"
+                    title={summary().serviceName}
+                  >
+                    {summary().serviceName}
+                  </span>
+                </div>
+                <Show when={summary().category}>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">Category</span>
+                    <span class="font-medium text-base-content truncate ml-2">
+                      {summary().category}
+                    </span>
+                  </div>
+                </Show>
+                <Show when={summary().portCount > 0}>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">Ports</span>
+                    <span class="font-medium text-base-content">{summary().portCount}</span>
+                  </div>
+                </Show>
+                <Show when={summary().cliAccess}>
+                  <div
+                    class="text-[10px] text-muted truncate font-mono"
+                    title={summary().cliAccess}
+                  >
+                    {summary().cliAccess}
+                  </div>
+                </Show>
+                <p class="text-[10px] text-muted pt-1">
+                  Full details in the Discovery tab.
+                </p>
+              </div>
+            </div>
+          )}
+        </Show>
         <div class="rounded border border-border bg-surface p-3 shadow-sm">
           <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
             System

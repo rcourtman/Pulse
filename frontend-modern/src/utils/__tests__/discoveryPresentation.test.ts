@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getDiscoveryApiAccessSettingsTarget,
   getDiscoveryCommandSettingsTarget,
+  getDiscoveryIdentifiedSummary,
   getDiscoveryInitialEmptyState,
   getDiscoveryLoadingState,
   getDiscoveryNoConnectedAgentMessage,
@@ -15,6 +16,7 @@ import {
   getDiscoverySuggestedURLFallback,
   getDiscoveryURLSuggestionSourceLabel,
 } from '@/utils/discoveryPresentation';
+import type { ResourceDiscovery } from '@/types/discovery';
 
 describe('discoveryPresentation', () => {
   it('returns canonical proxmox profile labels', () => {
@@ -140,5 +142,59 @@ describe('discoveryPresentation', () => {
       guidance:
         'Example: 192.168.1.0/24, 10.0.0.0/24. Smaller ranges finish faster and reduce timeout risk.',
     });
+  });
+
+  it('compacts a populated discovery record into the identified-service summary', () => {
+    const record: ResourceDiscovery = {
+      id: 'system-container:delly:141',
+      resource_type: 'system-container',
+      resource_id: '141',
+      target_id: 'delly',
+      service_name: 'Homepage Dashboard',
+      service_type: 'homepage',
+      category: 'web_server',
+      confidence: 0.95,
+      cli_access: 'docker exec -it homepage /bin/sh',
+      ports: [{ port: 3000, protocol: 'tcp', process: 'next-server', address: '0.0.0.0' }] as unknown as ResourceDiscovery['ports'],
+      facts: [{ key: 'os', value: 'Debian 12', source: 'os_release', category: 'security', confidence: 1, discovered_at: '' }] as unknown as ResourceDiscovery['facts'],
+      config_paths: ['/opt/homepage/config'],
+      data_paths: ['/opt/homepage/config'],
+      log_paths: ['/var/log/syslog', '/var/log/daemon.log'],
+      discovered_at: '2026-05-17T09:49:19.049058+01:00',
+    } as ResourceDiscovery;
+    expect(getDiscoveryIdentifiedSummary(record)).toEqual({
+      serviceName: 'Homepage Dashboard',
+      serviceType: 'homepage',
+      category: 'web_server',
+      confidence: 0.95,
+      confidencePercent: '95%',
+      cliAccess: 'docker exec -it homepage /bin/sh',
+      portCount: 1,
+      configPathCount: 1,
+      dataPathCount: 1,
+      logPathCount: 2,
+      discoveredAt: '2026-05-17T09:49:19.049058+01:00',
+    });
+  });
+
+  it('collapses empty / low-signal discovery records to null so out-of-tab surfaces hide cleanly', () => {
+    expect(getDiscoveryIdentifiedSummary(null)).toBeNull();
+    expect(getDiscoveryIdentifiedSummary(undefined)).toBeNull();
+    // Empty record: no service name, confidence zero, no ports / facts / paths / cli.
+    expect(
+      getDiscoveryIdentifiedSummary({
+        id: 'docker:agent:container',
+        resource_type: 'docker',
+        resource_id: 'container',
+        target_id: 'agent',
+        service_name: 'Unknown',
+        confidence: 0,
+        ports: [],
+        facts: [],
+        config_paths: [],
+        data_paths: [],
+        log_paths: [],
+      } as ResourceDiscovery),
+    ).toBeNull();
   });
 });

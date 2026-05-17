@@ -1,7 +1,61 @@
+import type { ResourceDiscovery } from '@/types/discovery';
 import {
   getInfrastructureSettingsLocationLabel,
   getInfrastructureSettingsTarget,
 } from '@/utils/infrastructureSettingsPresentation';
+
+export interface DiscoveryIdentifiedSummary {
+  serviceName: string;
+  serviceType?: string;
+  category?: string;
+  confidence: number;
+  confidencePercent: string;
+  cliAccess?: string;
+  portCount: number;
+  configPathCount: number;
+  dataPathCount: number;
+  logPathCount: number;
+  discoveredAt?: string;
+}
+
+// getDiscoveryIdentifiedSummary returns a compact presentation object for
+// surfaces outside the Discovery sub-tab (e.g. the workload drawer overview)
+// to label a resource with its identified service. Returns null when the
+// stored record has no meaningful identification — the gate mirrors
+// hasValidDiscovery in useDiscoveryTabState so the same record either
+// renders in both surfaces or neither.
+export function getDiscoveryIdentifiedSummary(
+  discovery: ResourceDiscovery | null | undefined,
+): DiscoveryIdentifiedSummary | null {
+  if (!discovery) return null;
+  const serviceName = (discovery.service_name || '').trim();
+  const hasName = serviceName.length > 0 && serviceName.toLowerCase() !== 'unknown';
+  const confidence = typeof discovery.confidence === 'number' ? discovery.confidence : 0;
+  const hasConfidence = confidence > 0;
+  const portCount = Array.isArray(discovery.ports) ? discovery.ports.length : 0;
+  const configPathCount = Array.isArray(discovery.config_paths) ? discovery.config_paths.length : 0;
+  const dataPathCount = Array.isArray(discovery.data_paths) ? discovery.data_paths.length : 0;
+  const logPathCount = Array.isArray(discovery.log_paths) ? discovery.log_paths.length : 0;
+  const hasFacts = Array.isArray(discovery.facts) && discovery.facts.length > 0;
+  const hasCli = typeof discovery.cli_access === 'string' && discovery.cli_access.trim().length > 0;
+  const hasPaths = configPathCount + dataPathCount + logPathCount > 0;
+  if (!hasName && !hasConfidence && portCount === 0 && !hasFacts && !hasPaths && !hasCli) {
+    return null;
+  }
+  return {
+    serviceName: hasName ? serviceName : 'Unidentified service',
+    serviceType: discovery.service_type?.trim() || undefined,
+    category: discovery.category?.trim() || undefined,
+    confidence,
+    confidencePercent: `${Math.round(confidence * 100)}%`,
+    cliAccess: hasCli ? discovery.cli_access?.trim() : undefined,
+    portCount,
+    configPathCount,
+    dataPathCount,
+    logPathCount,
+    discoveredAt: discovery.discovered_at || undefined,
+  };
+}
 
 export function getDiscoveryURLSuggestionSourceLabel(code?: string | null): string {
   switch ((code || '').trim()) {
