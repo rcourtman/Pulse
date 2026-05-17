@@ -701,7 +701,6 @@
         "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx",
         "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx",
         "frontend-modern/src/components/Settings/ConnectionEditor/useConnectionEditor.ts",
-        "frontend-modern/src/components/Settings/ConnectionsTable.tsx",
         "frontend-modern/src/components/Settings/connectionsTableModel.ts",
         "frontend-modern/src/components/Settings/DiscoverySettingsForm.tsx",
         "frontend-modern/src/components/Settings/discoverySettingsModel.ts",
@@ -1026,13 +1025,11 @@
             "label": "systems ledger lifecycle proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/components/Settings/ConnectionsTable.tsx",
               "frontend-modern/src/components/Settings/connectionsTableModel.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Settings/__tests__/ConnectionsTable.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"
             ]

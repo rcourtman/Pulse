@@ -35,7 +35,6 @@ import infrastructureSourcePickerSource from '../InfrastructureSourcePicker.tsx?
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
 import useConnectionsLedgerSource from '../useConnectionsLedger.ts?raw';
 import agentProfileSettingsSource from '../agentProfileSettings.ts?raw';
-import connectionsTableSource from '../ConnectionsTable.tsx?raw';
 import monitoredSystemImpactPreviewSource from '../MonitoredSystemImpactPreview.tsx?raw';
 import connectionEditorSource from '../ConnectionEditor/ConnectionEditor.tsx?raw';
 import addressProbeStepSource from '../ConnectionEditor/AddressProbeStep.tsx?raw';
@@ -537,6 +536,7 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain('<InfrastructureSourceManager');
     expect(infrastructureWorkspaceSource).toContain('<InfrastructureSourcePicker');
     expect(infrastructureWorkspaceSource).not.toContain('<ConnectionsTable rows={rows} />');
+    expect(infrastructureWorkspaceSource).not.toContain("from './ConnectionsTable'");
     expect(infrastructureWorkspaceSource).toContain('flex h-full min-h-0 flex-col');
     expect(infrastructureWorkspaceSource).toContain('showSlotHeader={false}');
     expect(infrastructureWorkspaceSource).toContain(
@@ -619,7 +619,7 @@ describe('settings architecture guardrails', () => {
     expect(connectionEditorSource).toContain(
       "from '@/utils/infrastructureOnboardingPresentation';",
     );
-    expect(connectionsTableSource).toContain(
+    expect(infrastructureSourceManagerSource).toContain(
       "from '@/utils/infrastructureOnboardingPresentation';",
     );
     expect(connectionEditorSource).toContain('<AddressProbeStep');

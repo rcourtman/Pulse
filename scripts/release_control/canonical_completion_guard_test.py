@@ -40,7 +40,6 @@ PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES = [
 ]
 
 CONNECTIONS_LEDGER_WORKSPACE_EXACT_FILES = [
-    "frontend-modern/src/components/Settings/__tests__/ConnectionsTable.test.tsx",
     "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
     "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
 ]
@@ -2037,11 +2036,6 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": CONNECTIONS_LEDGER_WORKSPACE_EXACT_FILES,
                 }
             ],
-        )
-
-    def test_connections_table_change_requires_agent_lifecycle(self):
-        self._assert_systems_ledger_change_requires_agent_lifecycle(
-            "frontend-modern/src/components/Settings/ConnectionsTable.tsx"
         )
 
     def test_connections_table_model_change_requires_agent_lifecycle(self):

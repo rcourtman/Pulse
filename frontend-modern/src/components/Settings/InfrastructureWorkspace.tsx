@@ -7,7 +7,6 @@ import { copyToClipboard } from '@/utils/clipboard';
 import { notificationStore } from '@/stores/notifications';
 import { Dialog } from '@/components/shared/Dialog';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
-import type { AgentUninstallCommands } from './ConnectionsTable';
 import { ConnectionEditor } from './ConnectionEditor/ConnectionEditor';
 import { NodeCredentialSlot } from './ConnectionEditor/CredentialSlots/NodeCredentialSlot';
 import { AvailabilityTargetSlot } from './ConnectionEditor/CredentialSlots/AvailabilityTargetSlot';
@@ -59,6 +58,11 @@ import {
 export type InfrastructureWorkspaceProps = InfrastructurePlatformSettingsProps;
 
 type ManagedAddTypeStep = Exclude<InfrastructureAddStep, 'detect'>;
+
+interface AgentUninstallCommands {
+  linux: string;
+  windows: string;
+}
 
 const ADD_STEP_TO_TYPE: Record<ManagedAddTypeStep, ConnectionType> = {
   agent: 'agent',

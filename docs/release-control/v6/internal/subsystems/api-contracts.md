@@ -1355,7 +1355,7 @@ the canonical monitored-system blocked payload.
     `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`
     together with
     `frontend-modern/src/components/Settings/useConnectionsLedger.ts` and
-    `frontend-modern/src/components/Settings/ConnectionsTable.tsx`
+    `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx`
     must preserve the transport distinction between machine-managed surfaces
     (`agent`, `docker`, `kubernetes`) and platform-connections-managed
     surfaces (`proxmox`, `pbs`, `pmg`, `truenas`) instead of collapsing them
@@ -4468,7 +4468,7 @@ connected-infrastructure distinction between machine-managed and
 platform-connections-managed reporting. `frontend-modern/src/types/api.ts`,
 `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`,
 `frontend-modern/src/components/Settings/useConnectionsLedger.ts`, and
-`frontend-modern/src/components/Settings/ConnectionsTable.tsx`
+`frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx`
 must treat `truenas` as a canonical connected-infrastructure surface kind
 alongside `proxmox`, `pbs`, and `pmg`, and the settings reporting/install
 surfaces must keep those platform-managed rows navigable back to platform

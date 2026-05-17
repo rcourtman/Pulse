@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { Connection } from '@/api/connections';
+import type { Connection, ConnectionAgentIdentity } from '@/api/connections';
 import {
+  connectionAgentIdentitySummary,
   fleetGovernanceSignalsForConnection,
   visibleFleetGovernanceSignals,
   type FleetGovernanceSignal,
@@ -209,5 +210,49 @@ describe('visibleFleetGovernanceSignals', () => {
     );
 
     expect(visibleFleetGovernanceSignals(rawSignals).map((signal) => signal.label)).toEqual([]);
+  });
+});
+
+describe('connectionAgentIdentitySummary', () => {
+  const withAgentIdentity = (
+    agentIdentity: Partial<ConnectionAgentIdentity> | undefined,
+  ): Connection =>
+    connectionFixture({ agentIdentity: agentIdentity as ConnectionAgentIdentity | undefined });
+
+  it('uses osName platform identity over the broader agent platform family', () => {
+    const summary = connectionAgentIdentitySummary(
+      withAgentIdentity({
+        platform: 'debian',
+        osName: 'Proxmox VE',
+        osVersion: '9.1.9',
+      }),
+    );
+    expect(summary).toBe('Proxmox VE 9.1.9');
+  });
+
+  it('uses Unraid osName over Linux platform family', () => {
+    const summary = connectionAgentIdentitySummary(
+      withAgentIdentity({
+        platform: 'linux',
+        osName: 'Unraid',
+        osVersion: '7.2.2',
+      }),
+    );
+    expect(summary).toBe('Unraid 7.2.2');
+  });
+
+  it('falls back to prettified platform when osName is missing', () => {
+    const summary = connectionAgentIdentitySummary(
+      withAgentIdentity({
+        platform: 'linux',
+        osVersion: '6.1.0',
+      }),
+    );
+    expect(summary).toBe('Linux 6.1.0');
+  });
+
+  it('returns null when no agent identity is present', () => {
+    const summary = connectionAgentIdentitySummary(withAgentIdentity(undefined));
+    expect(summary).toBeNull();
   });
 });

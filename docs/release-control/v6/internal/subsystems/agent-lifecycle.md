@@ -33,7 +33,6 @@ management, and fleet control surfaces.
 11. `frontend-modern/src/components/Settings/agentProfileSettings.ts`
 12. `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts`
 13. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`
-13. `frontend-modern/src/components/Settings/ConnectionsTable.tsx`
 14. `frontend-modern/src/components/Settings/connectionsTableModel.ts`
 15. `frontend-modern/src/components/Settings/useConnectionsLedger.ts`
 16. `frontend-modern/src/components/Settings/useConnectionRowActions.ts`
@@ -551,7 +550,7 @@ profile and assignment columns, but embedded table framing must route through
    Approval-gated command execution must expose stable rejection reasons for
    invalid approval grants so fleet operators can distinguish missing, expired,
    mismatched, and signature-invalid grants through agent metrics.
-9. Add or change profile management, the extracted agent profiles runtime owner, the agent profile settings catalog, the infrastructure source-manager landing, the pure unified-agent inventory/install model, the connections-ledger workspace shell, the unified ConnectionEditor and its per-type credential slots, route model, shared install section owner, the shared direct-node/discovery infrastructure settings owners plus their model, shared frontend install-command assembly, Proxmox setup/install API transport, TrueNAS platform-connection management, VMware platform-connection management, the shared monitored-system impact preview shell for those platform connections, setup-completion install handoff transport, deploy-fallback manual install transport, and fleet-control presentation through `frontend-modern/src/api/agentProfiles.ts`, `frontend-modern/src/api/nodes.ts`, `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`, `frontend-modern/src/components/Settings/agentProfileSettings.ts`, `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts`, `frontend-modern/src/components/Settings/ConnectionsTable.tsx`, `frontend-modern/src/components/Settings/connectionsTableModel.ts`, `frontend-modern/src/components/Settings/useConnectionsLedger.ts`, `frontend-modern/src/components/Settings/useConnectionRowActions.ts`, `frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/useConnectionEditor.ts`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`, `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`, `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx`, `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`, `frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx`, `frontend-modern/src/components/Settings/platformConnectionsModel.ts`, `frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts`, `frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts`, `frontend-modern/src/components/Settings/proxmoxSettingsModel.ts`, `frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx`, `frontend-modern/src/components/Settings/SettingsSectionNav.tsx`, `frontend-modern/src/components/Settings/infrastructureSettingsModel.ts`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`, `frontend-modern/src/components/Settings/nodeModalModel.ts`, `frontend-modern/src/components/Settings/useNodeModalState.ts`, `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`, and `frontend-modern/src/utils/agentInstallCommand.ts`. Phase 9 retired the legacy reporting/inventory surface (InfrastructureOperationsController, InfrastructureInventorySection, InfrastructureActiveRowDetails, InfrastructureIgnoredRowDetails, InfrastructureStopMonitoringDialog, useInfrastructureReportingState) and the per-type shells (PlatformConnectionsWorkspace, ProxmoxSettingsPanel, ProxmoxDirectWorkspace, ProxmoxConfiguredNodesTable, ProxmoxDirectConnectionsCard, ProxmoxDiscoveryResultsCard, ProxmoxDeleteNodeDialog, ProxmoxNodeModalStack, NodeModal shell, TrueNASSettingsPanel, VMwareSettingsPanel, useProxmoxDirectWorkspaceState); lifecycle extensions must route through the unified aggregator ledger, source-manager cards, and ConnectionEditor credential slots rather than reintroducing those retired surfaces.
+9. Add or change profile management, the extracted agent profiles runtime owner, the agent profile settings catalog, the infrastructure source-manager landing, the pure unified-agent inventory/install model, the connections-ledger workspace shell, the unified ConnectionEditor and its per-type credential slots, route model, shared install section owner, the shared direct-node/discovery infrastructure settings owners plus their model, shared frontend install-command assembly, Proxmox setup/install API transport, TrueNAS platform-connection management, VMware platform-connection management, the shared monitored-system impact preview shell for those platform connections, setup-completion install handoff transport, deploy-fallback manual install transport, and fleet-control presentation through `frontend-modern/src/api/agentProfiles.ts`, `frontend-modern/src/api/nodes.ts`, `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`, `frontend-modern/src/components/Settings/agentProfileSettings.ts`, `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts`, `frontend-modern/src/components/Settings/connectionsTableModel.ts`, `frontend-modern/src/components/Settings/useConnectionsLedger.ts`, `frontend-modern/src/components/Settings/useConnectionRowActions.ts`, `frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/useConnectionEditor.ts`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`, `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`, `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx`, `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`, `frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx`, `frontend-modern/src/components/Settings/platformConnectionsModel.ts`, `frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts`, `frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts`, `frontend-modern/src/components/Settings/proxmoxSettingsModel.ts`, `frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx`, `frontend-modern/src/components/Settings/SettingsSectionNav.tsx`, `frontend-modern/src/components/Settings/infrastructureSettingsModel.ts`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`, `frontend-modern/src/components/Settings/nodeModalModel.ts`, `frontend-modern/src/components/Settings/useNodeModalState.ts`, `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`, and `frontend-modern/src/utils/agentInstallCommand.ts`. Phase 9 retired the legacy reporting/inventory surface (InfrastructureOperationsController, InfrastructureInventorySection, InfrastructureActiveRowDetails, InfrastructureIgnoredRowDetails, InfrastructureStopMonitoringDialog, useInfrastructureReportingState) and the per-type shells (PlatformConnectionsWorkspace, ProxmoxSettingsPanel, ProxmoxDirectWorkspace, ProxmoxConfiguredNodesTable, ProxmoxDirectConnectionsCard, ProxmoxDiscoveryResultsCard, ProxmoxDeleteNodeDialog, ProxmoxNodeModalStack, NodeModal shell, TrueNASSettingsPanel, VMwareSettingsPanel, useProxmoxDirectWorkspaceState); lifecycle extensions must route through the unified aggregator ledger, source-manager cards, and ConnectionEditor credential slots rather than reintroducing those retired surfaces.
    Those lifecycle-owned settings hooks may consume websocket state only through `frontend-modern/src/contexts/appRuntime.ts`; they must not import `frontend-modern/src/App.tsx` or recreate root-shell providers.
    Discovery configuration is part of that same lifecycle-owned workspace boundary. `InfrastructureSourceManager.tsx` must open one canonical discovery editor through `InfrastructureDiscoverySettingsDialog.tsx`, `DiscoverySettingsForm.tsx`, and `discoverySettingsModel.ts`, while the System/Network shell stays limited to network-boundary controls instead of reintroducing a second editable discovery surface. That same workspace boundary now owns the infrastructure source-management toolbar too: the landing page exposes `Add infrastructure`, `Run discovery`, and `Discovery settings` as first-viewport toolbar actions inside the source manager, while governed source rows expose per-source add actions such as `Install Pulse Agent` from the shared catalog. `Run discovery` must remain a visible text command for manual scans rather than an icon-only affordance. `Detect address` remains inside the single add-flow source picker/probe path rather than a duplicate toolbar action. The same landing boundary may surface setup confidence from the unified rows and discovered candidates, including connected-system count, API coverage, agent coverage, sources that still need an agent, and discovery review state, without creating a second inventory model or provider-specific summary fetch. Source groups must stay in the governed source catalog order instead of re-sorting by current row count, row-level lifecycle entry points must use `Manage` language, and locked agent-install states must show a compact command inventory without raw token placeholders or disabled copy commands until a token exists. Network discovery settings remain safety-critical: automatic scanning must surface the shared-network/subnet warning before operators save scan mode changes. The AI settings manual workload refresh at `/api/discovery/run` is a discovery/API refresh sweep, not an enrollment or source-admission path; lifecycle surfaces may observe the refreshed candidates but must not reinterpret it as agent install authority. Agent command-execution handoff copy belongs to that same install surface: `InfrastructureInstallerSection.tsx` may expose the Pulse command-execution toggle for Patrol, but the label must describe Patrol remediation rather than reviving `Patrol auto-fix` or implying a paid monitoring-volume gate.
    Setup-completion handoff belongs to that same single add-flow boundary. The first-run completion screen must keep credentials as the first surfaced object, then present one compact next-step surface that sends operators to Add infrastructure or directly to the Agent handoff; source-choice explanation may live inside that surface, but lifecycle work must not reintroduce a separate setup-wizard tour, duplicate CTA section, or inline install-command owner before the canonical infrastructure workspace.
@@ -756,12 +755,12 @@ profile and assignment columns, but embedded table framing must route through
     connection list with headers and row actions) into the credential
     slot, because that previously showed the ledger-of-other-systems in
     the middle of entering one system's credentials. The configured
-    connections table reads exclusively from the unified aggregator: the
-    `ConnectionsTable` rows are produced by
+    systems ledger reads exclusively from the unified aggregator: the
+    `InfrastructureSourceManager` rows are produced by
     `frontend-modern/src/components/Settings/useConnectionsLedger.ts`,
     which polls `GET /api/connections` and maps the aggregator-derived
     state (active/paused/unauthorized/unreachable/stale/pending) and
-    active scope keys into the table's display. `InfrastructureWorkspace`
+    active scope keys into the source-manager display. `InfrastructureWorkspace`
     must not reconstruct per-type health, scope, or last-seen columns
     from any retired reporting-local state for configured connection
     rows; the aggregator is the only configured-connections source of
@@ -771,16 +770,15 @@ profile and assignment columns, but embedded table framing must route through
     carries canonical host aliases, the settings shell must suppress any
     duplicate discovery candidate for that same platform instead of asking the
     operator to review the same machine twice under a hostname row and an
-    IP-only candidate row. Per-row Edit, Pause/Resume, and Remove actions live directly
-    on the `ConnectionsTable` row — wired through
+    IP-only candidate row. Per-row Manage actions live directly on the
+    `InfrastructureSourceManager` row and open the governed edit/detail flow;
     `frontend-modern/src/components/Settings/useConnectionRowActions.ts`
-    which owns pause/remove API dispatch, two-click remove confirm, and
-    per-id action error presentation. Last-error detail is rendered
+    owns the pause/remove API dispatch, two-click remove confirm, and
+    per-id action error presentation inside that flow. Last-error detail is rendered
     inline on the row when `connection.lastError` is non-null, not
-    hidden behind a click-through. Remove-confirm on an agent row
-    reveals the Linux + Windows uninstall commands as an inline
-    expansion so the operator can copy and run them before the final
-    confirm; that expansion replaces the legacy
+    hidden behind a click-through. Remove-confirm on an agent detail flow
+    reveals the Linux + Windows uninstall commands so the operator can copy
+    and run them before the final confirm; that expansion replaces the legacy
     `InfrastructureActiveRowDetails` surface-breakdown drawer. The
     ledger must never reintroduce a separate detail page or `Dialog`
     drawer for viewing a connection's aggregator fields — everything is
@@ -890,13 +888,11 @@ profile and assignment columns, but embedded table framing must route through
    `/settings/infrastructure`, suppress the add-system entry point, and hide
    configuration-only sections so presentation-policy restrictions still
    hold. That top ledger must also stay readable inside the governed settings
-   shell at ordinary desktop widths: when the settings rail leaves the table
-   without room for the full six-column ledger, `ConnectionsTable.tsx` must
-   collapse collection and last-activity into row metadata instead of forcing
-   horizontal scrolling just to reach primary controls. The dedicated
-   collection and last-activity columns may return only once the workspace has
-   enough width to show the full ledger without clipping headers or row
-   actions.
+   shell at ordinary desktop widths: `InfrastructureSourceManager.tsx` must
+   keep the compact row/card presentation readable without forcing horizontal
+   scrolling just to reach primary controls. Dedicated collection and
+   last-activity columns may return only once the workspace has enough width
+   to show the full ledger without clipping headers or row actions.
 10. Keep post-install lifecycle completion explicit inside
     `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
     and `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`.
@@ -1478,7 +1474,7 @@ platform surfaces as platform-connection-managed capabilities, not host-managed
 agent extensions. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`,
 `frontend-modern/src/components/Settings/useConnectionsLedger.ts`,
 `frontend-modern/src/components/Settings/useConnectionRowActions.ts`, and
-`frontend-modern/src/components/Settings/ConnectionsTable.tsx` must keep
+`frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx` must keep
 Proxmox, PBS, PMG, and TrueNAS on the shared Infrastructure API-backed path,
 while only machine-installed agent, Docker, and Kubernetes surfaces
 participate in host stop-monitoring scope, uninstall commands, and upgrade
@@ -1673,16 +1669,16 @@ When those lifecycle-adjacent calls fail validation, adjacent automation should
 rely on the API-owned error codes rather than message-text heuristics, because
 the backend contract owns the reporting validation classification.
 The API-backed platform onboarding surface now lives inside the shared
-Infrastructure workspace. `ConnectionsTable.tsx`,
+Infrastructure workspace. `InfrastructureSourceManager.tsx`,
 `connectionsTableModel.ts`, `InfrastructureWorkspace.tsx`,
 `infrastructureWorkspaceModel.ts`, `InfrastructureInstallerSection.tsx`,
 `platformConnectionsModel.ts`, `useInfrastructureSettingsState.ts`,
 `useTrueNASSettingsPanelState.ts`, `useVMwareSettingsPanelState.ts`,
 `proxmoxSettingsModel.ts`, `useInfrastructureConfiguredNodesState.ts`, and
 `useInfrastructureDiscoveryRuntimeState.ts` own the fallback
-install/direct/reporting operator flow, with `ConnectionsTable.tsx` plus
-`connectionsTableModel.ts` as the canonical top-level infrastructure ledger
-and the governed add/edit modals as the API-backed add/edit surface.
+install/direct/reporting operator flow, with `InfrastructureSourceManager.tsx`
+plus `connectionsTableModel.ts` as the canonical top-level infrastructure
+ledger and the governed add/edit modals as the API-backed add/edit surface.
 Operator-facing setup copy should use `Add infrastructure` and source-strategy
 language for the shared Infrastructure onboarding path
 (`/settings/infrastructure?add=pick`) rather than reviving the standalone
@@ -1708,9 +1704,8 @@ between landing, picker, detect flow, add form, and edit form belongs to
 explicit actions inside `InfrastructureWorkspace.tsx`, not extra sidebar
 entries or body-replacing workspace subtabs.
 That same landing/table contract now also owns collection-method phrasing.
-`connectionsTableModel.ts`, `useConnectionsLedger.ts`,
-`InfrastructureSourceManager.tsx`, and `ConnectionsTable.tsx` must present the
-same plain-language subtitle (`via platform API`, `via Pulse Agent`, or `via
+`connectionsTableModel.ts`, `useConnectionsLedger.ts`, and
+`InfrastructureSourceManager.tsx` must present the same plain-language subtitle (`via platform API`, `via Pulse Agent`, or `via
 platform API and Pulse Agent`) from the shared ledger contract instead of
 shipping badge-only heuristics that operators have to decode visually.
 That same lifecycle-owned platform onboarding boundary must keep API-backed

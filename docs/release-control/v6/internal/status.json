@@ -2393,7 +2393,6 @@
             "src/utils/__tests__/resourceStateAdapters.test.ts",
             "src/stores/__tests__/websocket-unified.test.ts",
             "src/stores/__tests__/websocket-resilience.test.ts",
-            "src/components/Settings/__tests__/ConnectionsTable.test.tsx",
             "src/components/Settings/__tests__/connectionsTableModel.test.ts",
             "src/components/Settings/__tests__/InfrastructureSourceManager.test.tsx",
             "src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
@@ -2417,11 +2416,6 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/status.json",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "frontend-modern/src/components/Settings/__tests__/ConnectionsTable.test.tsx",
           "kind": "file"
         },
         {
@@ -4500,11 +4494,6 @@
         },
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/components/Settings/__tests__/ConnectionsTable.test.tsx",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
           "path": "frontend-modern/src/components/Settings/__tests__/connectionsTableModel.test.ts",
           "kind": "file"
         },
@@ -5332,11 +5321,6 @@
         {
           "repo": "pulse",
           "path": "frontend-modern/src/api/connections.ts",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "frontend-modern/src/components/Settings/__tests__/ConnectionsTable.test.tsx",
           "kind": "file"
         },
         {
