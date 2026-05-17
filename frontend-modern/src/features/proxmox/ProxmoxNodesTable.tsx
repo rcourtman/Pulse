@@ -165,7 +165,11 @@ const ProxmoxHostDiskSubRow: Component<{
 
   const diskIdx = () => subProps.visibleColumns.findIndex((c) => c.id === 'disk');
   const leadingColumns = () => subProps.visibleColumns.slice(0, diskIdx());
-  const trailingSpan = () => subProps.visibleColumns.length - diskIdx();
+  const remainingAfterDisk = () => subProps.visibleColumns.length - diskIdx();
+  // Span the Disk column plus up to two right neighbours so the row has room
+  // for label/bar/percent/size without bleeding all the way to Cluster.
+  const detailSpan = () => Math.min(remainingAfterDisk(), 3);
+  const trailingColumns = () => subProps.visibleColumns.slice(diskIdx() + detailSpan());
 
   return (
     <TableRow class="text-[11px] bg-surface-alt/30">
@@ -176,12 +180,15 @@ const ProxmoxHostDiskSubRow: Component<{
       </For>
       <TableCell
         class={`${getPlatformTableCellClass('left')} text-muted`}
-        colspan={trailingSpan()}
+        colspan={detailSpan()}
       >
-        <div class="flex items-center gap-3 min-w-0" title={`${fullPath()}: ${formatPercent(percent())} (${usedLabel()} / ${totalLabel()})`}>
+        <div
+          class="flex items-center gap-2 min-w-0"
+          title={`${fullPath()}: ${formatPercent(percent())} (${usedLabel()} / ${totalLabel()})`}
+        >
           <span class="text-muted/70 select-none">└</span>
-          <span class="font-mono text-base-content truncate max-w-[140px]">{label()}</span>
-          <div class="relative flex-1 min-w-[60px] h-2 rounded bg-surface-hover overflow-hidden">
+          <span class="font-mono text-base-content truncate max-w-[80px]">{label()}</span>
+          <div class="relative h-2 w-20 shrink-0 rounded bg-surface-hover overflow-hidden">
             <div
               class="absolute inset-y-0 left-0 rounded"
               style={{ width: `${fillPercent()}%`, background: color() }}
@@ -195,6 +202,11 @@ const ProxmoxHostDiskSubRow: Component<{
           </span>
         </div>
       </TableCell>
+      <For each={trailingColumns()}>
+        {(column) => (
+          <TableCell class={getPlatformTableCellClass(column.align)}>&nbsp;</TableCell>
+        )}
+      </For>
     </TableRow>
   );
 };
