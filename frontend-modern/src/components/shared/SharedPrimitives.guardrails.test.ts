@@ -1478,7 +1478,10 @@ describe('shared primitive guardrails', () => {
       "import { SearchInput } from '@/components/shared/SearchInput';",
     );
     expect(filterBarSource).toContain(
-      "import { FilterMobileToggleButton } from '@/components/shared/FilterToolbar';",
+      "import { FilterActionButton, FilterMobileToggleButton } from '@/components/shared/FilterToolbar';",
+    );
+    expect(filterBarSource).toContain(
+      "import { FilterButtonGroup } from '@/components/shared/FilterButtonGroup';",
     );
     expect(filterBarSource).toContain("import { AddFilterMenu } from './AddFilterMenu';");
     expect(filterBarSource).toContain("import { FilterChip } from './FilterChip';");
@@ -1611,15 +1614,18 @@ describe('shared primitive guardrails', () => {
     expect(recoveryHistorySectionSource).not.toContain('moreFiltersOpen');
     expect(recoveryHistorySectionSource).not.toContain('historyFiltersOpen');
 
-    // WorkloadsFilter — Type/Status/Node/Platform/Namespace/Runtime are all
-    // catalog chips. The xl-breakpoint segmented↔select swap retires here.
+    // WorkloadsFilter — Type/Status stay in the shared FilterBar catalog but
+    // render as inline primary controls; Node/Platform/Namespace/Runtime
+    // remain menu-backed catalog filters. The xl-breakpoint
+    // segmented↔select swap retires here.
     expect(workloadsFilterSource).toContain(
-      "import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';",
+      "import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';",
     );
     expect(workloadsFilterSource).toContain('<FilterBar');
     expect(workloadsFilterSource).toContain('ariaLabel="Workloads filters"');
     expect(workloadsFilterSource).toContain("id: 'workloads-type'");
     expect(workloadsFilterSource).toContain("id: 'workloads-status'");
+    expect(workloadsFilterSource).toContain('inline: true');
     expect(workloadsFilterSource).toContain('viewOptionsTrailing={');
     expect(workloadsFilterSource).toContain('GroupedTableModeSegmentedControl');
     expect(workloadsFilterSource).toContain('ChartVisibilityToggleButton');
@@ -1633,8 +1639,9 @@ describe('shared primitive guardrails', () => {
 
     // StoragePageControls — Subtabs sit above the FilterBar; sort key/sort
     // direction live in viewOptionsTrailing as raw view-options (not chips).
-    // Per-view catalog filters (Group by, Source, Status on Pools; Role/Group
-    // on Physical Disks) flow through the FilterBar catalog. The legacy
+    // Per-view catalog filters (inline Group by and Status plus menu-backed
+    // Source on Pools; Role/Group on Physical Disks) flow through the FilterBar
+    // catalog. The legacy
     // 3-layer indirection (StoragePageControls → StorageControls →
     // StorageFilter) collapses to one component.
     expect(storagePageControlsSource).toContain(

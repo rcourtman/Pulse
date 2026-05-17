@@ -1,8 +1,16 @@
 import type { Accessor, JSX } from 'solid-js';
+import type { FilterButtonGroupOptionTone } from '@/components/shared/filterButtonGroupModel';
 
 export interface FilterSelectOption {
   value: string;
   label: string;
+  ariaLabel?: string;
+  title?: string;
+  compactLabel?: string;
+  leading?: JSX.Element;
+  visualLabel?: JSX.Element;
+  icon?: (props: { class?: string }) => JSX.Element;
+  tone?: FilterButtonGroupOptionTone;
   count?: number;
 }
 
@@ -12,6 +20,11 @@ export interface FilterDef {
   id: string;
   label: string;
   group?: FilterGroupKey;
+  /**
+   * Primary filters with a small, fixed option set can opt into an inline
+   * segmented control instead of forcing operators through the add-filter menu.
+   */
+  inline?: boolean;
   options: Accessor<FilterSelectOption[]>;
   value: Accessor<string>;
   setValue: (value: string) => void;
@@ -48,8 +61,7 @@ export interface FilterBarProps {
   savedViewsKey?: string;
 }
 
-export const isFilterSet = (filter: FilterDef): boolean =>
-  filter.value() !== filter.defaultValue;
+export const isFilterSet = (filter: FilterDef): boolean => filter.value() !== filter.defaultValue;
 
 export const clearFilter = (filter: FilterDef): void => {
   filter.setValue(filter.defaultValue);

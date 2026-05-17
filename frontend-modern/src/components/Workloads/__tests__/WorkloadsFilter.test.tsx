@@ -68,6 +68,14 @@ const openAddFilterMenu = () => {
   fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
 };
 
+const inlineFilterGroup = (label: string) => screen.getByRole('group', { name: label });
+
+const pickInlineFilter = (filterLabel: string, optionLabel: string) => {
+  fireEvent.click(
+    within(inlineFilterGroup(filterLabel)).getByRole('button', { name: optionLabel }),
+  );
+};
+
 const pickFromMenu = (menuItem: string, optionLabel: string) => {
   openAddFilterMenu();
   fireEvent.click(screen.getByRole('menuitem', { name: menuItem }));
@@ -91,11 +99,11 @@ describe('WorkloadsFilter', () => {
       expect(screen.getByTestId('search-input')).toBeInTheDocument();
     });
 
-    it('exposes Type and Status filters via the "+ Filter" menu', () => {
+    it('exposes Type and Status as one-click inline controls', () => {
       render(() => <WorkloadsFilter {...makeProps()} />);
-      openAddFilterMenu();
-      expect(screen.getByRole('menuitem', { name: 'Type' })).toBeInTheDocument();
-      expect(screen.getByRole('menuitem', { name: 'Status' })).toBeInTheDocument();
+      expect(inlineFilterGroup('Type')).toBeInTheDocument();
+      expect(inlineFilterGroup('Status')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Filter' })).not.toBeInTheDocument();
     });
 
     it('renders Grouped and List view-option buttons', () => {
@@ -105,27 +113,29 @@ describe('WorkloadsFilter', () => {
     });
 
     it('maps legacy container view modes onto the canonical "Containers" type chip', () => {
-      render(() =>
-        <WorkloadsFilter {...makeProps({ viewMode: vi.fn(() => 'app-container' as const) })} />,
-      );
-      expect(screen.getByRole('button', { name: /^Type: Containers/ })).toBeInTheDocument();
+      render(() => (
+        <WorkloadsFilter {...makeProps({ viewMode: vi.fn(() => 'app-container' as const) })} />
+      ));
+      expect(
+        within(inlineFilterGroup('Type')).getByRole('button', { name: 'Containers' }),
+      ).toHaveAttribute('aria-pressed', 'true');
     });
   });
 
   describe('type filter', () => {
-    it('calls setViewMode when a different type is picked from the menu', () => {
+    it('calls setViewMode when a different inline type is selected', () => {
       const setViewMode = vi.fn();
       render(() => <WorkloadsFilter {...makeProps({ setViewMode })} />);
-      pickFromMenu('Type', 'VMs');
+      pickInlineFilter('Type', 'VMs');
       expect(setViewMode).toHaveBeenCalledWith('vm');
     });
   });
 
   describe('status filter', () => {
-    it('calls setStatusMode when a different status is picked from the menu', () => {
+    it('calls setStatusMode when a different inline status is selected', () => {
       const setStatusMode = vi.fn();
       render(() => <WorkloadsFilter {...makeProps({ setStatusMode })} />);
-      pickFromMenu('Status', 'Running');
+      pickInlineFilter('Status', 'Running');
       expect(setStatusMode).toHaveBeenCalledWith('running');
     });
   });
@@ -140,11 +150,11 @@ describe('WorkloadsFilter', () => {
 
     it('calls setGroupingMode("grouped") when the Grouped view-option is clicked', () => {
       const setGroupingMode = vi.fn();
-      render(() =>
+      render(() => (
         <WorkloadsFilter
           {...makeProps({ groupingMode: vi.fn(() => 'flat' as const), setGroupingMode })}
-        />,
-      );
+        />
+      ));
       fireEvent.click(screen.getByRole('button', { name: 'Grouped' }));
       expect(setGroupingMode).toHaveBeenCalledWith('grouped');
     });
@@ -157,35 +167,31 @@ describe('WorkloadsFilter', () => {
     });
 
     it('renders when search is non-empty', () => {
-      render(() =>
-        <WorkloadsFilter {...makeProps({ search: vi.fn(() => 'foo') })} />,
-      );
+      render(() => <WorkloadsFilter {...makeProps({ search: vi.fn(() => 'foo') })} />);
       expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
     });
 
     it('renders when viewMode is not the default', () => {
-      render(() =>
-        <WorkloadsFilter {...makeProps({ viewMode: vi.fn(() => 'vm' as const) })} />,
-      );
+      render(() => <WorkloadsFilter {...makeProps({ viewMode: vi.fn(() => 'vm' as const) })} />);
       expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
     });
 
     it('renders when statusMode is not the default', () => {
-      render(() =>
-        <WorkloadsFilter {...makeProps({ statusMode: vi.fn(() => 'running' as const) })} />,
-      );
+      render(() => (
+        <WorkloadsFilter {...makeProps({ statusMode: vi.fn(() => 'running' as const) })} />
+      ));
       expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
     });
 
     it('renders when groupingMode is "flat"', () => {
-      render(() =>
-        <WorkloadsFilter {...makeProps({ groupingMode: vi.fn(() => 'flat' as const) })} />,
-      );
+      render(() => (
+        <WorkloadsFilter {...makeProps({ groupingMode: vi.fn(() => 'flat' as const) })} />
+      ));
       expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
     });
 
     it('renders when a host filter is active', () => {
-      render(() =>
+      render(() => (
         <WorkloadsFilter
           {...makeProps({
             hostFilter: {
@@ -197,13 +203,13 @@ describe('WorkloadsFilter', () => {
               onChange: vi.fn(),
             },
           })}
-        />,
-      );
+        />
+      ));
       expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
     });
 
     it('renders when a container runtime filter is active', () => {
-      render(() =>
+      render(() => (
         <WorkloadsFilter
           {...makeProps({
             viewMode: vi.fn(() => 'container' as const),
@@ -216,8 +222,8 @@ describe('WorkloadsFilter', () => {
               onChange: vi.fn(),
             },
           })}
-        />,
-      );
+        />
+      ));
       expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
     });
 
@@ -233,7 +239,7 @@ describe('WorkloadsFilter', () => {
       const namespaceOnChange = vi.fn();
       const runtimeOnChange = vi.fn();
 
-      render(() =>
+      render(() => (
         <WorkloadsFilter
           {...makeProps({
             search: vi.fn(() => 'foo'),
@@ -276,8 +282,8 @@ describe('WorkloadsFilter', () => {
               onChange: runtimeOnChange,
             },
           })}
-        />,
-      );
+        />
+      ));
 
       fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
 
@@ -296,7 +302,7 @@ describe('WorkloadsFilter', () => {
 
   describe('host filter', () => {
     it('appears in the "+ Filter" menu when hostFilter prop is provided', () => {
-      render(() =>
+      render(() => (
         <WorkloadsFilter
           {...makeProps({
             hostFilter: {
@@ -308,21 +314,20 @@ describe('WorkloadsFilter', () => {
               onChange: vi.fn(),
             },
           })}
-        />,
-      );
+        />
+      ));
       openAddFilterMenu();
       expect(screen.getByRole('menuitem', { name: 'Agent' })).toBeInTheDocument();
     });
 
     it('does not appear when hostFilter prop is absent', () => {
       render(() => <WorkloadsFilter {...makeProps()} />);
-      openAddFilterMenu();
-      expect(screen.queryByRole('menuitem', { name: 'Agent' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Filter' })).not.toBeInTheDocument();
     });
 
     it('calls onChange when host selection changes via chip popover', () => {
       const onChange = vi.fn();
-      render(() =>
+      render(() => (
         <WorkloadsFilter
           {...makeProps({
             hostFilter: {
@@ -334,14 +339,14 @@ describe('WorkloadsFilter', () => {
               onChange,
             },
           })}
-        />,
-      );
+        />
+      ));
       pickFromMenu('Agent', 'pve1');
       expect(onChange).toHaveBeenCalledWith('pve1');
     });
 
     it('uses a custom label when hostFilter.label is provided', () => {
-      render(() =>
+      render(() => (
         <WorkloadsFilter
           {...makeProps({
             hostFilter: {
@@ -351,8 +356,8 @@ describe('WorkloadsFilter', () => {
               onChange: vi.fn(),
             },
           })}
-        />,
-      );
+        />
+      ));
       openAddFilterMenu();
       expect(screen.getByRole('menuitem', { name: 'K8s cluster' })).toBeInTheDocument();
     });
@@ -360,7 +365,7 @@ describe('WorkloadsFilter', () => {
 
   describe('platform filter', () => {
     it('appears in the menu when platformFilter prop is provided', () => {
-      render(() =>
+      render(() => (
         <WorkloadsFilter
           {...makeProps({
             platformFilter: {
@@ -372,15 +377,15 @@ describe('WorkloadsFilter', () => {
               onChange: vi.fn(),
             },
           })}
-        />,
-      );
+        />
+      ));
       openAddFilterMenu();
       expect(screen.getByRole('menuitem', { name: 'Platform' })).toBeInTheDocument();
     });
 
     it('calls onChange when platform selection changes via chip popover', () => {
       const onChange = vi.fn();
-      render(() =>
+      render(() => (
         <WorkloadsFilter
           {...makeProps({
             platformFilter: {
@@ -392,8 +397,8 @@ describe('WorkloadsFilter', () => {
               onChange,
             },
           })}
-        />,
-      );
+        />
+      ));
       pickFromMenu('Platform', 'Proxmox');
       expect(onChange).toHaveBeenCalledWith('proxmox');
     });
@@ -401,7 +406,7 @@ describe('WorkloadsFilter', () => {
 
   describe('namespace filter', () => {
     it('appears in the menu when namespaceFilter prop is provided', () => {
-      render(() =>
+      render(() => (
         <WorkloadsFilter
           {...makeProps({
             namespaceFilter: {
@@ -413,15 +418,15 @@ describe('WorkloadsFilter', () => {
               onChange: vi.fn(),
             },
           })}
-        />,
-      );
+        />
+      ));
       openAddFilterMenu();
       expect(screen.getByRole('menuitem', { name: 'Namespace' })).toBeInTheDocument();
     });
 
     it('calls onChange when namespace selection changes via chip popover', () => {
       const onChange = vi.fn();
-      render(() =>
+      render(() => (
         <WorkloadsFilter
           {...makeProps({
             namespaceFilter: {
@@ -433,8 +438,8 @@ describe('WorkloadsFilter', () => {
               onChange,
             },
           })}
-        />,
-      );
+        />
+      ));
       pickFromMenu('Namespace', 'default');
       expect(onChange).toHaveBeenCalledWith('default');
     });
@@ -471,13 +476,12 @@ describe('WorkloadsFilter', () => {
         },
       });
       render(() => <WorkloadsFilter {...props} />);
-      openAddFilterMenu();
-      expect(screen.queryByRole('menuitem', { name: 'Runtime' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Filter' })).not.toBeInTheDocument();
     });
 
     it('calls onChange when runtime selection changes via chip popover', () => {
       const onChange = vi.fn();
-      render(() =>
+      render(() => (
         <WorkloadsFilter
           {...makeProps({
             viewMode: vi.fn(() => 'container' as const),
@@ -490,8 +494,8 @@ describe('WorkloadsFilter', () => {
               onChange,
             },
           })}
-        />,
-      );
+        />
+      ));
       pickFromMenu('Runtime', 'docker');
       expect(onChange).toHaveBeenCalledWith('docker');
     });
@@ -499,33 +503,33 @@ describe('WorkloadsFilter', () => {
 
   describe('charts toggle', () => {
     it('renders the Charts button when onChartsToggle is provided', () => {
-      render(() =>
+      render(() => (
         <WorkloadsFilter
           {...makeProps({
             chartsCollapsed: vi.fn(() => false),
             onChartsToggle: vi.fn(),
           })}
-        />,
-      );
+        />
+      ));
       expect(screen.getByRole('button', { name: 'Hide charts' })).toBeInTheDocument();
     });
 
     it('labels the Charts button as a show action when charts are collapsed', () => {
-      render(() =>
+      render(() => (
         <WorkloadsFilter
           {...makeProps({
             chartsCollapsed: vi.fn(() => true),
             onChartsToggle: vi.fn(),
           })}
-        />,
-      );
+        />
+      ));
       expect(screen.getByRole('button', { name: 'Show charts' })).toBeInTheDocument();
     });
   });
 
   describe('column picker', () => {
     it('renders ColumnPicker when columnVisibility is provided', () => {
-      render(() =>
+      render(() => (
         <WorkloadsFilter
           {...makeProps({
             columnVisibility: {
@@ -535,8 +539,8 @@ describe('WorkloadsFilter', () => {
               onColumnReset: vi.fn(),
             },
           })}
-        />,
-      );
+        />
+      ));
       expect(screen.getByTestId('column-picker')).toBeInTheDocument();
     });
 

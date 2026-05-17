@@ -52,7 +52,7 @@ export const MetricDisplayModeSegmentedControl: Component<
             label: (
               <>
                 <ActivityIcon class="h-3 w-3" />
-                Sparklines
+                Trends
               </>
             ),
           },
@@ -61,7 +61,6 @@ export const MetricDisplayModeSegmentedControl: Component<
       <Show when={local.value === 'sparklines' && local.range && local.onRangeChange}>
         <FilterSegmentedControl
           aria-label="Sparkline range"
-          label="Range"
           value={local.range!}
           onChange={(value) => local.onRangeChange?.(value as WorkloadTableMetricHistoryRange)}
           options={WORKLOAD_TABLE_HISTORY_RANGES.map((range) => ({

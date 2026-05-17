@@ -1,7 +1,10 @@
 import { Component, Show, createMemo } from 'solid-js';
+import BoxIcon from 'lucide-solid/icons/box';
+import BoxesIcon from 'lucide-solid/icons/boxes';
+import MonitorIcon from 'lucide-solid/icons/monitor';
 import XIcon from 'lucide-solid/icons/x';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
-import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
+import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
 import { ChartVisibilityToggleButton, FilterActionButton } from '@/components/shared/FilterToolbar';
 import { GroupedTableModeSegmentedControl } from '@/components/shared/GroupedTableModeSegmentedControl';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -20,11 +23,67 @@ import {
 } from './workloadsFilterModel';
 import { WORKLOAD_STATUS_FILTER_OPTIONS, WORKLOAD_TYPE_OPTIONS } from './workloadFilterConfigModel';
 
+const PROXMOX_PLATFORM_FILTER = 'proxmox-pve';
+
+const statusDot = (className: string) => <span class={`h-2 w-2 rounded-full ${className}`} />;
+
 export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
   const { isMobile } = useBreakpoint();
 
   const typeValue = () =>
     isContainerWorkloadViewMode(props.viewMode()) ? 'container' : props.viewMode();
+
+  const isProxmoxScope = () =>
+    (props.forcedPlatform ?? '').trim().toLowerCase() === PROXMOX_PLATFORM_FILTER;
+
+  const workloadTypeOptions = (): FilterSelectOption[] =>
+    (isProxmoxScope()
+      ? WORKLOAD_TYPE_OPTIONS.filter((option) =>
+          option.value === 'all' || option.value === 'vm' || option.value === 'container',
+        ).map((option) =>
+          option.value === 'container' ? { ...option, label: 'LXCs' } : option,
+        )
+      : WORKLOAD_TYPE_OPTIONS
+    ).map((option) => ({
+      value: option.value,
+      label: option.label,
+      icon:
+        option.value === 'vm'
+          ? MonitorIcon
+          : option.value === 'container'
+            ? BoxIcon
+            : option.value === 'pod'
+              ? BoxesIcon
+              : undefined,
+      tone:
+        option.value === 'vm'
+          ? 'info'
+          : option.value === 'container'
+            ? 'success'
+            : undefined,
+    }));
+
+  const workloadStatusOptions = (): FilterSelectOption[] =>
+    WORKLOAD_STATUS_FILTER_OPTIONS.map((option) => ({
+      value: option.value,
+      label: option.label,
+      leading:
+        option.value === 'running'
+          ? statusDot('bg-emerald-500')
+          : option.value === 'degraded'
+            ? statusDot('bg-amber-500')
+            : option.value === 'stopped'
+              ? statusDot('bg-red-500')
+              : undefined,
+      tone:
+        option.value === 'running'
+          ? 'success'
+          : option.value === 'degraded'
+            ? 'warning'
+            : option.value === 'stopped'
+              ? 'danger'
+              : undefined,
+    }));
 
   const showRuntimeFilter = () =>
     isContainerWorkloadViewMode(props.viewMode()) && Boolean(props.containerRuntimeFilter);
@@ -60,27 +119,21 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
         id: 'workloads-type',
         label: 'Type',
         group: 'properties',
+        inline: true,
         value: typeValue,
         setValue: (value: string) => props.setViewMode(value as ViewMode),
         defaultValue: DEFAULT_WORKLOADS_VIEW_MODE,
-        options: () =>
-          WORKLOAD_TYPE_OPTIONS.map((option) => ({
-            value: option.value,
-            label: option.label,
-          })),
+        options: workloadTypeOptions,
       },
       {
         id: 'workloads-status',
         label: 'Status',
         group: 'status',
+        inline: true,
         value: props.statusMode,
         setValue: (value: string) => props.setStatusMode(value as WorkloadsStatusMode),
         defaultValue: DEFAULT_WORKLOADS_STATUS_MODE,
-        options: () =>
-          WORKLOAD_STATUS_FILTER_OPTIONS.map((option) => ({
-            value: option.value,
-            label: option.label,
-          })),
+        options: workloadStatusOptions,
       },
     ];
 
@@ -144,7 +197,6 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
       role="group"
       ariaLabel="Workloads filters"
       isMobile={isMobile}
-      savedViewsKey="workloads"
       search={{
         value: props.search,
         setValue: props.setSearch,
@@ -166,6 +218,10 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
               Clear selection
             </FilterActionButton>
           </Show>
+          <GroupedTableModeSegmentedControl
+            value={props.groupingMode()}
+            onChange={props.setGroupingMode}
+          />
           <Show when={props.metricDisplayMode && props.setMetricDisplayMode}>
             <MetricDisplayModeSegmentedControl
               value={props.metricDisplayMode!()}
@@ -174,10 +230,6 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
               onRangeChange={props.setMetricHistoryRange}
             />
           </Show>
-          <GroupedTableModeSegmentedControl
-            value={props.groupingMode()}
-            onChange={props.setGroupingMode}
-          />
           <Show when={props.onChartsToggle}>
             <ChartVisibilityToggleButton
               collapsed={props.chartsCollapsed?.() ?? false}

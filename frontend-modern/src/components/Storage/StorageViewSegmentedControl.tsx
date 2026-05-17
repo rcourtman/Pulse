@@ -20,7 +20,6 @@ export const StorageViewSegmentedControl: Component<StorageViewSegmentedControlP
       {...divProps}
       role={divProps.role ?? 'group'}
       aria-label={divProps['aria-label'] ?? 'Storage table view'}
-      label="View"
       value={local.value}
       onChange={(value) => local.onChange(value as StorageView)}
       options={[

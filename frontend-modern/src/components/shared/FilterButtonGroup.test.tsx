@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Sun from 'lucide-solid/icons/sun';
 import { FilterButtonGroup } from './FilterButtonGroup';
@@ -30,6 +30,8 @@ describe('FilterButtonGroup', () => {
     expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupButtonClass');
     expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupCompactLabel');
     expect(filterButtonGroupModelSource).toContain("prominent: 'grid grid-cols-1 gap-2'");
+    expect(filterButtonGroupModelSource).toContain('compact:');
+    expect(filterButtonGroupModelSource).toContain('inline-flex items-center gap-1');
   });
 
   it('renders the active option as pressed and routes selection changes', () => {
@@ -121,5 +123,49 @@ describe('FilterButtonGroup', () => {
     expect(activeButton.className).toContain('border-blue-500');
     expect(inactiveButton.className).toContain('border-border');
     expect(inactiveButton.className).not.toContain('text-muted');
+  });
+
+  it('supports compact labelled groups for inline filter bars', () => {
+    render(() => (
+      <FilterButtonGroup
+        ariaLabel="Type"
+        options={[
+          { value: 'all', label: 'All' },
+          { value: 'vm', label: 'VMs' },
+        ]}
+        value="all"
+        onChange={() => undefined}
+        variant="compact"
+      />
+    ));
+
+    const group = screen.getByRole('group', { name: 'Type' });
+    const activeButton = within(group).getByRole('button', { name: 'All' });
+    const inactiveButton = within(group).getByRole('button', { name: 'VMs' });
+
+    expect(activeButton.className).toContain('text-base-content');
+    expect(activeButton.className).toContain('shadow-sm');
+    expect(inactiveButton.className).toContain('text-muted');
+  });
+
+  it('keeps visual icon labels on one compact line', () => {
+    render(() => (
+      <FilterButtonGroup
+        ariaLabel="Display mode"
+        options={[
+          { value: 'grouped', label: 'Grouped', visualLabel: <>Grouped</> },
+          { value: 'flat', label: 'List', visualLabel: <>List</> },
+        ]}
+        value="grouped"
+        onChange={() => undefined}
+        variant="compact"
+      />
+    ));
+
+    const activeButton = screen.getByRole('button', { name: 'Grouped' });
+    const visualLabel = activeButton.querySelector('span');
+
+    expect(visualLabel).toHaveClass('inline-flex');
+    expect(visualLabel).toHaveClass('whitespace-nowrap');
   });
 });

@@ -20,7 +20,7 @@ describe('MetricDisplayModeSegmentedControl', () => {
     ));
 
     expect(screen.getByText('Bars')).toBeInTheDocument();
-    expect(screen.getByText('Sparklines')).toBeInTheDocument();
+    expect(screen.getByText('Trends')).toBeInTheDocument();
     expect(screen.queryByText('Range')).toBeNull();
   });
 
@@ -35,7 +35,7 @@ describe('MetricDisplayModeSegmentedControl', () => {
       />
     ));
 
-    expect(screen.getByText('Range')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Sparkline range' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '1h' })).toHaveAttribute('aria-pressed', 'true');
 
     await fireEvent.click(screen.getByRole('button', { name: '24h' }));

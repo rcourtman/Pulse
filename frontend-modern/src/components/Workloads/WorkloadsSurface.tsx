@@ -119,6 +119,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
               setMetricDisplayMode={state.setWorkloadMetricDisplayMode}
               metricHistoryRange={state.workloadMetricHistoryRange}
               setMetricHistoryRange={state.setWorkloadMetricHistoryRange}
+              forcedPlatform={props.forcedPlatform}
               pinnedSelectionActive={() =>
                 Boolean(state.selectedGuestId() || state.focusedSummaryWorkloadGroupId())
               }

@@ -1997,6 +1997,10 @@ owns variant resolution plus disabled selection/change runtime, and
 variant class catalog, compact-label policy, and segmented button class
 selection. Future filter-button-group work should extend those owners instead
 of pushing label truncation or segmented variant policy back into the shell.
+Filter-toolbar segmented controls must delegate to this primitive rather than
+calling `segmentedButtonClass` directly, and icon+text labels must render as
+one inline-flex button label so compact bars keep the v5 single-line control
+language across Type/Status, grouped/list, bars/trends, columns, and reset.
 The shared selection-card primitive now follows that same owner split.
 `frontend-modern/src/components/shared/SelectionCardGroup.tsx` stays the render
 shell, `frontend-modern/src/components/shared/useSelectionCardGroupState.ts`
@@ -2129,6 +2133,13 @@ the `viewOptionsTrailing` slot and are not chips. Recovery is event-first and
 does not use equal workspace subtabs for protected rollups versus event
 history; Storage subtabs (Pools / Physical Disks) sit above the bar as
 navigation, not filters.
+Primary filters with small, stable option sets should stay one-click controls
+inside that same `FilterDef[]` catalog by setting `inline: true`; `FilterBar`
+renders those as unlabeled compact segmented controls in the same second-row
+rail as view options, matching the v5 filter-bar pattern, and keeps longer or
+dynamic scope filters in the menu/chip path. Feature surfaces must not fork
+local filter rows or bury high-frequency Type, Status, or Group-by filters
+behind an extra menu just to regain one-click behavior.
 Pages that have not yet migrated (the alert-history filter card,
 Kubernetes deployments drawer) keep using `PageControls` and
 `LabeledFilterSelect`, but new resource-list filter surfaces should reach for

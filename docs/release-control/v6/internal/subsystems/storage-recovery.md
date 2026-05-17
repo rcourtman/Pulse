@@ -148,8 +148,7 @@ bypass the API fail-closed execution gate.
    concrete backup/snapshot/replication evidence. Both surfaces still opt into
    shared saved views (`savedViewsKey="recovery-protected"` and
    `"recovery-events"`) so operators can save and recall named filter combos
-   through the shared `SavedViewsMenu`. The same pattern applies to Storage
-   (`savedViewsKey="storage"`).
+   through the shared `SavedViewsMenu`.
    Recovery must not restore the retired top-level RecoverySummary metric card
    strip. Aggregate recovery counts, success/failure mix, and selected-day
    context belong inside the Recovery activity and event-history surfaces that
@@ -204,14 +203,18 @@ bypass the API fail-closed execution gate.
    protected-item, and recovery-outcome readiness claims belong on the Storage
    and Recovery surfaces or their shared summary components, not in a restored
    dashboard panel cluster or Assistant brief.
-   Storage filters now compose the shared chip-based `FilterBar` shell
+   Storage filters now compose the shared `FilterBar` shell
    through `frontend-modern/src/components/Storage/StoragePageControls.tsx`.
    The legacy three-layer indirection
    (`StoragePageControls` → `StorageControls` → `StorageFilter`) and the
    bare unlabelled Node `<select>` retired with the migration; Node, Source,
    Status, Group by, and the disk-role / disk-group filters all enter the
-   `FilterDef[]` catalog. Subtabs (Pools / Physical Disks) sit above the bar
-   as navigation, not filters. Storage summary chart visibility remains a
+   `FilterDef[]` catalog. Low-cardinality Group by and Status filters render
+   as unlabeled inline primary controls from that catalog in the same compact
+   second-row rail as sort, charts, and reset, while Node, Source, Role, and
+   Group remain menu/chip filters because their option sets are scope- or
+   data-driven. Subtabs (Pools / Physical Disks) sit above the bar as
+   navigation, not filters. Storage summary chart visibility remains a
    page-level display preference, but it now rides the shared
    `FilterBar.viewOptionsTrailing` slot together with the sort key/direction
    controls. The charts toggle must read as an explicit `Show charts` /

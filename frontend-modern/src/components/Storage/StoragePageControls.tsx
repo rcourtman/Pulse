@@ -75,6 +75,9 @@ type StoragePageControlsProps = {
 };
 
 const VIEW_TABS = STORAGE_VIEW_OPTIONS as { value: string; label: string }[];
+const storageStatusDot = (className: string) => (
+  <span class={`h-2 w-2 rounded-full ${className}`} />
+);
 
 type StorageViewSwitcherProps = {
   view: () => StorageView;
@@ -147,6 +150,7 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
         id: 'storage-group-by',
         label: 'Group by',
         group: 'properties',
+        inline: true,
         value: () => props.storageFilterGroupBy(),
         setValue: (value: string) => props.setGroupBy(value as StorageGroupKey),
         defaultValue: DEFAULT_STORAGE_GROUP_KEY,
@@ -177,6 +181,7 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
         id: 'storage-status',
         label: 'Status',
         group: 'status',
+        inline: true,
         value: () => props.statusFilter(),
         setValue: (value: string) => props.setStatusFilter(value as StorageStatusFilterValue),
         defaultValue: DEFAULT_STORAGE_STATUS_FILTER as StorageStatusFilterValue,
@@ -184,6 +189,26 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
           STORAGE_STATUS_FILTER_OPTIONS.map((option) => ({
             value: option.value as string,
             label: option.label,
+            leading:
+              option.value === 'available'
+                ? storageStatusDot('bg-emerald-500')
+                : option.value === 'warning' || option.value === 'attention'
+                  ? storageStatusDot('bg-amber-500')
+                  : option.value === 'critical'
+                    ? storageStatusDot('bg-red-500')
+                    : option.value === 'offline' || option.value === 'unknown'
+                      ? storageStatusDot('bg-slate-400')
+                      : undefined,
+            tone:
+              option.value === 'available'
+                ? 'success'
+                : option.value === 'warning' || option.value === 'attention'
+                  ? 'warning'
+                  : option.value === 'critical'
+                    ? 'danger'
+                    : option.value === 'offline' || option.value === 'unknown'
+                      ? 'muted'
+                      : undefined,
           })),
       });
     } else {
@@ -243,7 +268,6 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
           role="group"
           ariaLabel="Storage filters"
           isMobile={isMobile}
-          savedViewsKey="storage"
           search={{
             value: props.search,
             setValue: props.setSearch,

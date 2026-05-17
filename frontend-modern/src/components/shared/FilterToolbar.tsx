@@ -1,7 +1,7 @@
 import { Component, For, JSX, Show, createEffect, onCleanup, splitProps } from 'solid-js';
 import BarChartIcon from 'lucide-solid/icons/bar-chart';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
-import { segmentedButtonClass } from '@/utils/segmentedButton';
+import { FilterButtonGroup, type FilterOption } from './FilterButtonGroup';
 
 export const filterToolbarShellClass = '';
 export const filterToolbarRowClass = 'flex flex-wrap items-center gap-2 text-xs text-muted';
@@ -12,9 +12,9 @@ export const filterGroupClass =
 export const filterLabelClass =
   'px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted';
 export const filterActionButtonClass =
-  'inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover';
+  'inline-flex items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1 text-xs font-medium text-muted ring-1 ring-border-subtle transition-colors hover:bg-surface hover:text-base-content';
 export const filterActionButtonActiveClass =
-  'border-blue-200 bg-surface text-base-content ring-1 ring-blue-200 dark:border-blue-900 dark:ring-blue-900';
+  'bg-surface text-base-content shadow-sm';
 export const filterSelectClass =
   'rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500';
 export const filterDividerClass = 'hidden h-5 w-px bg-surface-hover sm:block';
@@ -187,6 +187,7 @@ export interface FilterSegmentOption {
   label: JSX.Element;
   title?: string;
   ariaLabel?: string;
+  leading?: JSX.Element;
   disabled?: boolean;
 }
 
@@ -206,24 +207,30 @@ interface FilterSegmentedControlProps extends Omit<JSX.HTMLAttributes<HTMLDivEle
 
 export const FilterSegmentedControl: Component<FilterSegmentedControlProps> = (props) => {
   const [local, divProps] = splitProps(props, ['value', 'onChange', 'options', 'label', 'class']);
+  const options = (): FilterOption<string>[] =>
+    local.options.map((option) => ({
+      value: option.value,
+      label:
+        option.ariaLabel ??
+        (typeof option.label === 'string' ? option.label : option.title ?? option.value),
+      visualLabel: option.label,
+      leading: option.leading,
+      title: option.title,
+      ariaLabel: option.ariaLabel,
+      disabled: option.disabled,
+    }));
+
   return (
-    <FilterGroup {...divProps} class={local.class} label={local.label}>
-      <For each={local.options}>
-        {(option) => (
-          <button
-            type="button"
-            onClick={() => local.onChange(option.value)}
-            aria-pressed={local.value === option.value}
-            aria-label={option.ariaLabel}
-            title={option.title}
-            disabled={option.disabled}
-            class={segmentedButtonClass(local.value === option.value)}
-          >
-            {option.label}
-          </button>
-        )}
-      </For>
-    </FilterGroup>
+    <FilterButtonGroup
+      {...divProps}
+      class={local.class}
+      label={local.label}
+      value={local.value}
+      onChange={local.onChange}
+      ariaLabel={divProps['aria-label'] as string | undefined}
+      variant="compact"
+      options={options()}
+    />
   );
 };
 

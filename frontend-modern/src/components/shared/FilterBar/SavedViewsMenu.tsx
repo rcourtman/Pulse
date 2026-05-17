@@ -2,6 +2,7 @@ import { Component, For, Show, createEffect, createSignal, onCleanup } from 'sol
 import BookmarkIcon from 'lucide-solid/icons/bookmark';
 import PlusIcon from 'lucide-solid/icons/plus';
 import XIcon from 'lucide-solid/icons/x';
+import { filterActionButtonClass } from '@/components/shared/FilterToolbar';
 import { useSavedViews, type SavedView } from './useSavedViews';
 
 interface SavedViewsMenuProps {
@@ -74,7 +75,7 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
         aria-haspopup="menu"
         aria-expanded={open()}
         aria-label="Saved views"
-        class="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-xs text-muted transition-colors hover:bg-surface-hover hover:text-base-content"
+        class={filterActionButtonClass}
       >
         <BookmarkIcon class="h-3 w-3" />
         Saved

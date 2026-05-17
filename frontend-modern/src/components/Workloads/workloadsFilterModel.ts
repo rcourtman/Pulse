@@ -55,6 +55,7 @@ export interface WorkloadsFilterProps {
   searchTrailing?: JSX.Element;
   utilityActions?: JSX.Element;
   mobileTrailing?: JSX.Element;
+  forcedPlatform?: string;
 }
 
 export interface CountActiveWorkloadsFiltersOptions {

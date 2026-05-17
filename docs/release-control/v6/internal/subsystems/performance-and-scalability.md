@@ -264,7 +264,7 @@ regression protection.
     duplicate hot-path type matching.
 16. Extend grouped workload derivation, summary fallbacks, and grouped/windowed table presentation through `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`, extend viewport-driven grouped table synchronization through `frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts`, and extend node parent mapping through `frontend-modern/src/components/Workloads/workloadTopology.ts`, rather than rebuilding grouped selectors, summary snapshot math, scroll listeners, or topology lookups inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
 17. Extend workload control defaults, persistent view preferences, keyboard reset behavior, column-visibility ownership, and tag-search flow through `frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts` and `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` rather than rebuilding sort/search/grouping state, reset drift, or column-toggle plumbing inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
-18. Extend workload filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` (defaults, `countActiveWorkloadsFilters`, `hasActiveWorkloadsFilters`) rather than rebuilding filter-local state inside `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`. Workloads filter presentation now composes the chip-based shared `FilterBar` (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a per-page `FilterDef[]` catalog rather than the legacy `PageControls` structured control deck. The xl segmented↔select swap retired with the migration; type-ahead in the "+ Filter" menu and chip popovers covers the power-user speed that the segmented controls used to give. View options (grouped/list, charts, columns) sit in the shared `viewOptionsTrailing` slot.
+18. Extend workload filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` (defaults, `countActiveWorkloadsFilters`, `hasActiveWorkloadsFilters`) rather than rebuilding filter-local state inside `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`. Workloads filter presentation now composes the shared `FilterBar` (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a per-page `FilterDef[]` catalog rather than the legacy `PageControls` structured control deck. High-frequency Type and Status filters stay in that catalog but render as inline compact segmented controls (`inline: true`), while longer or dynamic scope filters continue through the "+ Filter" menu and chip popovers. View options (grouped/list, charts, columns) sit in the shared `viewOptionsTrailing` slot.
 19. Extend threshold-slider value-position math, title/label derivation, and drag scroll-lock runtime through `frontend-modern/src/components/Workloads/thresholdSliderModel.ts` and `frontend-modern/src/components/Workloads/useThresholdSliderState.ts` rather than rebuilding slider-local state and pointer lifecycle inside `frontend-modern/src/components/Workloads/ThresholdSlider.tsx`
 20. Extend stacked disk-bar capacity math, segment/tooltip derivation, and resize-observer runtime through `frontend-modern/src/components/Workloads/stackedDiskBarModel.ts` and `frontend-modern/src/components/Workloads/useStackedDiskBarState.ts` rather than rebuilding disk-bar-local state, mode branching, and tooltip shaping inside `frontend-modern/src/components/Workloads/StackedDiskBar.tsx`. Compact multi-disk rows default to same-height per-disk lanes so each filesystem has its own visible usage bar without implying the whole host disk state is one max or aggregate percentage; explicit `mode="stacked"` remains the capacity-contribution stack for callers that intentionally need that presentation, while tooltips continue to carry the full per-disk breakdown.
 21. Extend stacked memory-bar capacity math, balloon/swap derivation, and resize-observer runtime through `frontend-modern/src/components/Workloads/stackedMemoryBarModel.ts` and `frontend-modern/src/components/Workloads/useStackedMemoryBarState.ts` rather than rebuilding memory-bar-local state, tooltip shaping, and label-fit logic inside `frontend-modern/src/components/Workloads/StackedMemoryBar.tsx`
@@ -1128,9 +1128,7 @@ usage math, threshold-color routing, and fallback handling must extend
 through those owners instead of accreting back into the shell.
 The Workloads filter now follows that same ownership rule: the shell
 stays in `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`, which
-composes the shared `FilterBar` chip primitive (with `savedViewsKey="workloads"`
-so operators can save and recall named filter combos through the shared
-`SavedViewsMenu`), while toolbar defaults,
+composes the shared `FilterBar` primitive, while toolbar defaults,
 active-filter counting, and reset semantics live in
 `frontend-modern/src/components/Workloads/workloadsFilterModel.ts`. The legacy
 `useWorkloadsFilterState.ts` hook retired with the FilterBar migration; its
@@ -1146,7 +1144,11 @@ that clips trailing actions. The workload shell now routes table display
 actions such as grouped/list mode and chart visibility through the shared
 `FilterBar.viewOptionsTrailing` slot, leaving filter chips as primary toolbar
 children so the display-action cluster wraps together with Columns and the
-"+ Filter" menu across narrow desktop widths. Workload chart visibility is a display preference, not
+"+ Filter" menu across narrow desktop widths. On platform-first embedded
+surfaces such as Proxmox, the visible filter rail follows the v5 pattern:
+full-width search, then unlabeled compact Type/Status, grouped/list,
+bars/trends, Columns, and Reset controls from the shared segmented/action
+primitives rather than page-local button styling. Workload chart visibility is a display preference, not
 an in-summary collapse affordance: the toolbar action must expose explicit
 `Show charts` / `Hide charts` pressed state, and hiding charts must remove the
 summary section rather than leaving an empty collapsed summary band on screen.
@@ -1158,7 +1160,12 @@ into the shell.
 Workload type option labels are part of that filter-config model ownership:
 `WorkloadsFilter.tsx` must render the exported workload type option catalog
 instead of embedding its own `System containers` / `App containers` wording in
-the shell.
+the shell, with platform-first presentation allowed to narrow or relabel that
+catalog only when the owning platform scope makes the broader v6 options
+inapplicable (for example Proxmox rendering the container option as `LXCs`).
+The Type and Status filters must remain one-click inline `FilterBar` controls
+because they are the high-frequency workload narrowing path; dynamic scope
+filters such as node, platform, namespace, and runtime stay menu-backed.
 The dashboard threshold slider now follows that same pattern: the shell stays
 in `frontend-modern/src/components/Workloads/ThresholdSlider.tsx`, while
 metric-type text and fill presentation live in

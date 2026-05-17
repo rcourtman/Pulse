@@ -85,6 +85,11 @@ const setStorageFilter = (filterLabel: string, optionLabel: string) => {
     fireEvent.click(within(listbox).getByRole('option', { name: optionLabel }));
     return;
   }
+  const inlineGroup = screen.queryByRole('group', { name: filterLabel });
+  if (inlineGroup) {
+    fireEvent.click(within(inlineGroup).getByRole('button', { name: optionLabel }));
+    return;
+  }
   fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
   fireEvent.click(screen.getByRole('menuitem', { name: filterLabel }));
   const menu = screen.getByRole('menu');
@@ -100,6 +105,14 @@ const queryStorageChip = (label: string): HTMLButtonElement | null => {
     if (text.startsWith(`${label}:`)) return trigger;
   }
   return null;
+};
+
+const expectStorageInlineFilter = (filterLabel: string, optionLabel: string) => {
+  const group = screen.getByRole('group', { name: filterLabel });
+  expect(within(group).getByRole('button', { name: optionLabel })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
 };
 
 const getStorageChipOptions = async (label: string): Promise<string[]> => {
@@ -772,16 +785,17 @@ describe('Storage', () => {
       'aria-selected',
       'true',
     );
-    // Filter state surfaces as chips on the FilterBar; sort stays as a
-    // labelled select in the view-options trailing slot.
+    // Menu filter state surfaces as chips on the FilterBar; primary filters
+    // stay visible as inline controls. Sort remains a labelled select in the
+    // view-options trailing slot.
     expect(queryStorageChip('Node')).toHaveTextContent('Node:pve2');
     expect((screen.getByLabelText('Sort by') as HTMLSelectElement).value).toBe('usage');
 
     // Grouping controls are only shown on the Pools view.
     fireEvent.click(screen.getByRole('tab', { name: 'Storage' }));
-    expect(queryStorageChip('Group by')).toHaveTextContent('Group by:By status');
+    expectStorageInlineFilter('Group by', 'By status');
     expect(queryStorageChip('Source')).toHaveTextContent('Source:PVE');
-    expect(queryStorageChip('Status')).toHaveTextContent('Status:Warning');
+    expectStorageInlineFilter('Status', 'Warning');
 
     setStorageFilter('Group by', 'By type');
 

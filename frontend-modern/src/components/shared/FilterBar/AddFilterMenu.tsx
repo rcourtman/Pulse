@@ -11,6 +11,7 @@ import {
 import PlusIcon from 'lucide-solid/icons/plus';
 import ArrowLeftIcon from 'lucide-solid/icons/arrow-left';
 import SearchIcon from 'lucide-solid/icons/search';
+import { filterActionButtonClass } from '@/components/shared/FilterToolbar';
 import {
   isFilterSet,
   type FilterDef,
@@ -211,7 +212,7 @@ export const AddFilterMenu: Component<AddFilterMenuProps> = (props) => {
         disabled={isDisabled()}
         aria-haspopup="menu"
         aria-expanded={open()}
-        class="inline-flex items-center gap-1 rounded-md border border-dashed border-border px-2 py-0.5 text-xs text-muted transition-colors hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted"
+        class={`${filterActionButtonClass} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted`}
       >
         <PlusIcon class="h-3 w-3" />
         Filter
