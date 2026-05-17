@@ -130,9 +130,9 @@ describe('StackedDiskBar', () => {
     });
   });
 
-  // ── Multiple disks (stacked mode) ──────────────────────────────────────
+  // ── Multiple disks (pressure summary mode) ─────────────────────────────
 
-  describe('stacked mode (multiple disks, default mode)', () => {
+  describe('pressure summary mode (multiple disks, default mode)', () => {
     const disk1 = makeDisk({
       used: 21474836480, // 20 GiB
       total: 53687091200, // 50 GiB
@@ -146,10 +146,12 @@ describe('StackedDiskBar', () => {
       device: '/dev/sdb1',
     });
 
-    it('renders stacked segments for multiple disks', () => {
+    it('renders a single max-pressure bar for multiple disks by default', () => {
       const { container } = render(() => <StackedDiskBar disks={[disk1, disk2]} />);
       const segments = getStackedSegments(container);
-      expect(segments.length).toBe(2);
+      expect(segments.length).toBe(0);
+      const bar = getSingleBarFill(container);
+      expect(bar).toBeInTheDocument();
     });
 
     it('shows disk count badge', () => {
@@ -157,16 +159,53 @@ describe('StackedDiskBar', () => {
       expect(screen.getByText('[2]')).toBeInTheDocument();
     });
 
+    it('summarizes the highest-filled disk instead of diluting it by aggregate capacity', () => {
+      // disk1: 20 / 50 GiB = 40%
+      // disk2: 50 / 100 GiB = 50%
+      render(() => <StackedDiskBar disks={[disk1, disk2]} />);
+      expect(screen.getByText('50%')).toBeInTheDocument();
+    });
+
+    it('sets the bar fill width to the highest individual disk pressure', () => {
+      const { container } = render(() => <StackedDiskBar disks={[disk1, disk2]} />);
+      const bar = getSingleBarFill(container);
+      expect(bar).toBeInTheDocument();
+      expect(bar).toHaveAttribute('width', '50');
+    });
+  });
+
+  // ── Explicit stacked mode ──────────────────────────────────────────────
+
+  describe('explicit stacked mode', () => {
+    const disk1 = makeDisk({
+      used: 21474836480, // 20 GiB
+      total: 53687091200, // 50 GiB
+      mountpoint: '/boot',
+      device: '/dev/sda1',
+    });
+    const disk2 = makeDisk({
+      used: 53687091200, // 50 GiB
+      total: 107374182400, // 100 GiB
+      mountpoint: '/data',
+      device: '/dev/sdb1',
+    });
+
+    it('renders stacked segments when explicitly requested', () => {
+      const { container } = render(() => <StackedDiskBar disks={[disk1, disk2]} mode="stacked" />);
+      const segments = getStackedSegments(container);
+      expect(segments.length).toBe(2);
+    });
+
     it('calculates overall percent across all disks', () => {
       // Total capacity: 50 GiB + 100 GiB = 150 GiB
       // Total used: 20 GiB + 50 GiB = 70 GiB
       // Overall: 70 / 150 = 46.67%  → 47%
-      render(() => <StackedDiskBar disks={[disk1, disk2]} />);
+      render(() => <StackedDiskBar disks={[disk1, disk2]} mode="stacked" />);
       expect(screen.getByText('47%')).toBeInTheDocument();
     });
 
     it('sets segment widths proportional to total capacity', () => {
-      const { container } = render(() => <StackedDiskBar disks={[disk1, disk2]} />);
+      const { container } = render(() => <StackedDiskBar disks={[disk1, disk2]} mode="stacked" />);
       const segments = getStackedSegments(container);
       // Total capacity = 150 GiB
       // disk1 used = 20 GiB → 20/150 ≈ 13.33%
@@ -178,7 +217,7 @@ describe('StackedDiskBar', () => {
     });
 
     it('adds separators between stacked segments', () => {
-      const { container } = render(() => <StackedDiskBar disks={[disk1, disk2]} />);
+      const { container } = render(() => <StackedDiskBar disks={[disk1, disk2]} mode="stacked" />);
       expect(container.querySelectorAll('line')).toHaveLength(1);
     });
   });
@@ -236,14 +275,18 @@ describe('StackedDiskBar', () => {
       const { container } = render(() => (
         <StackedDiskBar disks={[disk1, disk2, disk3]} mode="mini" />
       ));
-      const columns = container.querySelectorAll('.flex.min-w-0.flex-1.flex-col.items-stretch.gap-0\\.5');
+      const columns = container.querySelectorAll(
+        '.flex.min-w-0.flex-1.flex-col.items-stretch.gap-0\\.5',
+      );
       expect(columns).toHaveLength(3);
     });
 
     it('clamps mini bar fill width to exactly 100% when used exceeds total', () => {
       const disk = makeDisk({ used: 200000000000, total: 107374182400, mountpoint: '/full' });
       const { container } = render(() => <StackedDiskBar disks={[disk]} mode="mini" />);
-      const miniBars = container.querySelectorAll<SVGRectElement>('rect[data-stacked-disk-fill="mini"]');
+      const miniBars = container.querySelectorAll<SVGRectElement>(
+        'rect[data-stacked-disk-fill="mini"]',
+      );
       const barFill = miniBars[miniBars.length - 1];
       expect(barFill).toHaveAttribute('width', '100');
     });
@@ -349,7 +392,9 @@ describe('StackedDiskBar', () => {
         total: 107374182400,
         mountpoint: '/warn',
       });
-      const { container } = render(() => <StackedDiskBar disks={[normalDisk, warningDisk]} />);
+      const { container } = render(() => (
+        <StackedDiskBar disks={[normalDisk, warningDisk]} mode="stacked" />
+      ));
       const segments = getStackedSegments(container);
       expect(segments.length).toBe(2);
       // First segment: normal → palette color (green)
@@ -369,7 +414,9 @@ describe('StackedDiskBar', () => {
         total: 107374182400,
         mountpoint: '/full',
       });
-      const { container } = render(() => <StackedDiskBar disks={[normalDisk, criticalDisk]} />);
+      const { container } = render(() => (
+        <StackedDiskBar disks={[normalDisk, criticalDisk]} mode="stacked" />
+      ));
       const segments = getStackedSegments(container);
       expect(segments.length).toBe(2);
       // First segment: normal → palette color
@@ -406,7 +453,7 @@ describe('StackedDiskBar', () => {
     it('handles zero total in stacked mode without NaN segments', () => {
       const disk1 = makeDisk({ used: 0, total: 0 });
       const disk2 = makeDisk({ used: 0, total: 0 });
-      const { container } = render(() => <StackedDiskBar disks={[disk1, disk2]} />);
+      const { container } = render(() => <StackedDiskBar disks={[disk1, disk2]} mode="stacked" />);
       const segments = getStackedSegments(container);
       // With zero total capacity, segments() returns [] early
       expect(segments.length).toBe(0);

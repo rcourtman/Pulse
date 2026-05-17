@@ -13,7 +13,7 @@ import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 export interface StackedDiskBarProps {
   disks?: Disk[];
   aggregateDisk?: Disk;
-  mode?: 'stacked' | 'aggregate' | 'mini';
+  mode?: 'stacked' | 'aggregate' | 'mini' | 'pressure';
   anomaly?: AnomalyReport | null;
   thresholds?: MetricDisplayThresholds | null;
 }
@@ -43,6 +43,8 @@ export interface StackedDiskMiniDisk {
 export interface StackedDiskMaxInfo {
   label: string;
   percent: number;
+  total: number;
+  used: number;
 }
 
 export interface StackedDiskBarPresentation {
@@ -81,7 +83,13 @@ const SEGMENT_COLORS = [
 ];
 
 function getDiskUsagePercent(disk: Disk): number {
-  return disk.total > 0 ? (disk.used / disk.total) * 100 : 0;
+  if (disk.total > 0) {
+    return (disk.used / disk.total) * 100;
+  }
+  if (Number.isFinite(disk.usage)) {
+    return disk.usage <= 1 ? disk.usage * 100 : disk.usage;
+  }
+  return 0;
 }
 
 function getDiskLabel(disk: Disk, index: number): string {
@@ -157,6 +165,8 @@ function getMaxDiskInfo(disks: Disk[]): StackedDiskMaxInfo | null {
       maxInfo = {
         label: getDiskLabel(disk, index),
         percent,
+        total: disk.total,
+        used: disk.used,
       };
     }
   }
@@ -172,23 +182,38 @@ export function buildStackedDiskBarPresentation(
   const hasMultipleDisks = disks.length > 1;
   const aggregateMode = props.mode === 'aggregate';
   const miniMode = props.mode === 'mini';
-  const useStackedSegments = hasMultipleDisks && !aggregateMode && !miniMode;
+  const explicitStackedMode = props.mode === 'stacked';
+  const pressureMode = hasMultipleDisks && !aggregateMode && !miniMode && !explicitStackedMode;
+  const useStackedSegments = hasMultipleDisks && explicitStackedMode;
   const totalCapacity = hasDisks
     ? disks.reduce((sum, disk) => sum + (disk.total || 0), 0)
     : (props.aggregateDisk?.total ?? 0);
   const totalUsed = hasDisks
     ? disks.reduce((sum, disk) => sum + (disk.used || 0), 0)
     : (props.aggregateDisk?.used ?? 0);
-  const overallPercent = totalCapacity > 0 ? (totalUsed / totalCapacity) * 100 : 0;
-  const barPercent = Math.min(overallPercent, 100);
+  const overallPercent =
+    totalCapacity > 0
+      ? (totalUsed / totalCapacity) * 100
+      : props.aggregateDisk
+        ? getDiskUsagePercent(props.aggregateDisk)
+        : 0;
   const anomalyRatio = formatAnomalyRatio(props.anomaly) ?? '';
   const maxInfo = getMaxDiskInfo(disks);
-  const maxLabelShort = maxInfo ? `max ${formatPercent(maxInfo.percent)}` : '';
+  const displayPercentValue = pressureMode && maxInfo ? maxInfo.percent : overallPercent;
+  const barPercent = Math.min(displayPercentValue, 100);
+  const maxLabelShort = maxInfo
+    ? pressureMode
+      ? 'max'
+      : `max ${formatPercent(maxInfo.percent)}`
+    : '';
   const maxLabelFull = maxInfo ? `Max ${formatPercent(maxInfo.percent)} (${maxInfo.label})` : '';
-  const displayLabel = formatPercent(overallPercent);
-  const displaySublabel = `${formatBytes(totalUsed)}/${formatBytes(totalCapacity)}`;
+  const displayLabel = formatPercent(displayPercentValue);
+  const displaySublabel =
+    pressureMode && maxInfo
+      ? `${formatBytes(maxInfo.used)}/${formatBytes(maxInfo.total)}`
+      : `${formatBytes(totalUsed)}/${formatBytes(totalCapacity)}`;
   const showMaxLabel =
-    aggregateMode &&
+    (aggregateMode || pressureMode) &&
     hasMultipleDisks &&
     maxLabelShort.length > 0 &&
     containerWidth >= estimateTextWidth(`${displayLabel} ${maxLabelShort}`);
@@ -198,7 +223,7 @@ export function buildStackedDiskBarPresentation(
       `${displayLabel}${showMaxLabel ? ` ${maxLabelShort}` : ''} (${displaySublabel})`,
     );
   const barColor =
-    aggregateMode && hasMultipleDisks && maxInfo
+    (aggregateMode || pressureMode) && hasMultipleDisks && maxInfo
       ? getMetricColorRgba(maxInfo.percent, 'disk', props.thresholds)
       : getMetricColorRgba(overallPercent, 'disk', props.thresholds);
   const segments =
@@ -243,7 +268,7 @@ export function buildStackedDiskBarPresentation(
         ? 'metric-text w-full'
         : 'metric-text w-full h-4 flex items-center justify-center',
     displayLabel,
-    displayPercentValue: overallPercent,
+    displayPercentValue,
     displaySublabel,
     hasDisks,
     hasMultipleDisks,
@@ -252,7 +277,7 @@ export function buildStackedDiskBarPresentation(
     miniDisks,
     miniMode,
     segments,
-    showDiskCount: useStackedSegments,
+    showDiskCount: hasMultipleDisks && !aggregateMode && !miniMode,
     showMaxLabel,
     showSublabel,
     tooltipContent,
