@@ -308,6 +308,7 @@ describe('getDiscoveryResourceTypeForWorkload', () => {
       type: 'app-container',
       platformType: 'docker',
       dockerHostId: 'docker-host-1',
+      containerId: 'container-grafana-abc',
       id: 'app-container:docker-host-1:grafana',
     };
     expect(getDiscoveryResourceTypeForWorkload(guest)).toBe('app-container');

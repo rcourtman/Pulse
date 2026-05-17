@@ -204,7 +204,10 @@ export const resolveDiscoveryTargetForWorkload = (
   if (type === 'app-container') {
     if (!isDockerManagedAppContainer(guest)) return null;
     const agentId = (guest.dockerHostId || '').trim();
-    const resourceId = (guest.id || '').trim();
+    // Discovery shells out to `docker exec <id> ...` on the agent host, so we
+    // need the Docker-native container id (or name), not the synthetic
+    // canonical workload id used for UI routing.
+    const resourceId = (guest.containerId || '').trim();
     return agentId && resourceId ? { resourceType: 'app-container', agentId, resourceId } : null;
   }
   if (type === 'pod') {

@@ -221,9 +221,7 @@ describe('workloadTopology', () => {
       });
 
       expect(getDiscoveryHostIdForWorkload(docker)).toBe('docker-host-1');
-      expect(getDiscoveryResourceIdForWorkload(docker)).toBe(
-        'app-container:docker-host-1:container-abc123',
-      );
+      expect(getDiscoveryResourceIdForWorkload(docker)).toBe('container-abc123');
       expect(getDiscoveryHostIdForWorkload(truenas)).toBe('');
       expect(getDiscoveryResourceIdForWorkload(truenas)).toBe('');
       expect(getDiscoveryHostIdForWorkload(truenasWithExplicitDiscovery)).toBe('truenas-helper');
