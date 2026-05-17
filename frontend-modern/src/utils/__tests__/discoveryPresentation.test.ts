@@ -194,7 +194,7 @@ describe('discoveryPresentation', () => {
         config_paths: [],
         data_paths: [],
         log_paths: [],
-      } as ResourceDiscovery),
+      } as unknown as ResourceDiscovery),
     ).toBeNull();
   });
 });

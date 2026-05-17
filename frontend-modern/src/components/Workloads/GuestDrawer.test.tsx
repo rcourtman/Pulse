@@ -50,7 +50,10 @@ vi.mock('../Discovery/DiscoveryTab', () => ({
 }));
 
 const discoveryApiMocks = vi.hoisted(() => ({
-  getDiscovery: vi.fn(async () => null),
+  getDiscovery: vi.fn(
+    async (..._args: unknown[]): Promise<import('@/types/discovery').ResourceDiscovery | null> =>
+      null,
+  ),
 }));
 
 vi.mock('@/api/discovery', async () => {
@@ -197,7 +200,7 @@ describe('GuestDrawer', () => {
         config_paths: ['/opt/homepage/config'],
         data_paths: [],
         log_paths: [],
-      });
+      } as unknown as import('@/types/discovery').ResourceDiscovery);
 
       render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
 
