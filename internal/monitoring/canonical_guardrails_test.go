@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
 var bannedSnapshotResourceAccessPatterns = []struct {
@@ -70,6 +71,17 @@ func TestNoGetStateResourceArrayRegression(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestStandaloneInactiveDockerSwarmMetadataIsNotCapabilityEvidence(t *testing.T) {
+	got := convertDockerSwarmInfo(&agentsdocker.SwarmInfo{
+		NodeRole:   "worker",
+		LocalState: "inactive",
+		Scope:      "node",
+	})
+	if got != nil {
+		t.Fatalf("expected inactive standalone Docker Swarm metadata to be omitted, got %+v", got)
 	}
 }
 

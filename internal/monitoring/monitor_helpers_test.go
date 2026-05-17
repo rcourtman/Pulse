@@ -263,6 +263,17 @@ func TestConvertDockerSwarmInfo_Nil(t *testing.T) {
 	}
 }
 
+func TestConvertDockerSwarmInfo_StandaloneInactive(t *testing.T) {
+	result := convertDockerSwarmInfo(&agentsdocker.SwarmInfo{
+		NodeRole:   "worker",
+		LocalState: "inactive",
+		Scope:      "node",
+	})
+	if result != nil {
+		t.Fatalf("standalone inactive Docker Swarm metadata should be ignored, got %+v", result)
+	}
+}
+
 func TestConvertDockerSwarmInfo_Conversion(t *testing.T) {
 	src := &agentsdocker.SwarmInfo{
 		NodeID:           "node-1",

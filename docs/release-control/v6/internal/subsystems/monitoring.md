@@ -579,6 +579,10 @@ That same monitoring boundary now also owns Docker Swarm runtime truth at the
 collection seam. `internal/dockeragent/swarm.go` is the canonical manager-side
 filter for live Swarm services and tasks, so monitoring consumers do not ingest
 historical shutdown tasks as if they were still part of the active runtime.
+Standalone Docker daemons report `Swarm.LocalNodeState=inactive`; that is not
+Swarm capability evidence and must be normalized away before agent reports,
+monitoring ingest, or unified-resource consumers can surface Swarm roles,
+services, tasks, tabs, or alerts.
 
 Storage export is now derived from canonical `ReadState.StoragePools()`
 instead of `GetState().Storage`; `models.Storage` is treated as a boundary

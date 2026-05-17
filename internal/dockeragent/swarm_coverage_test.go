@@ -295,7 +295,21 @@ func TestCollectSwarmData(t *testing.T) {
 		}
 	})
 
-	t.Run("inactive swarm returns info only", func(t *testing.T) {
+	t.Run("standalone inactive swarm returns nil", func(t *testing.T) {
+		agent := &Agent{supportsSwarm: true, cfg: Config{SwarmScope: swarmScopeNode}}
+		info := systemtypes.Info{
+			Swarm: swarmtypes.Info{
+				LocalNodeState: swarmtypes.LocalNodeStateInactive,
+			},
+		}
+
+		services, tasks, swarmInfo := agent.collectSwarmData(context.Background(), info, nil)
+		if services != nil || tasks != nil || swarmInfo != nil {
+			t.Fatal("expected standalone inactive swarm state to be ignored")
+		}
+	})
+
+	t.Run("pending swarm returns info only", func(t *testing.T) {
 		agent := &Agent{supportsSwarm: true, cfg: Config{SwarmScope: swarmScopeNode}}
 		info := systemtypes.Info{
 			Swarm: swarmtypes.Info{
@@ -306,7 +320,7 @@ func TestCollectSwarmData(t *testing.T) {
 
 		services, tasks, swarmInfo := agent.collectSwarmData(context.Background(), info, nil)
 		if services != nil || tasks != nil {
-			t.Fatal("expected nil services/tasks for inactive swarm")
+			t.Fatal("expected nil services/tasks for pending swarm")
 		}
 		if swarmInfo == nil || swarmInfo.NodeID != "node1" {
 			t.Fatal("expected swarm info to be returned")

@@ -116,6 +116,27 @@ func TestResourceFromDockerHostIncludesTemperature(t *testing.T) {
 	}
 }
 
+func TestResourceFromDockerHostOmitsStandaloneInactiveSwarm(t *testing.T) {
+	host := models.DockerHost{
+		ID:       "docker-1",
+		Hostname: "docker-1",
+		Status:   "online",
+		Swarm: &models.DockerSwarmInfo{
+			NodeRole:   "worker",
+			LocalState: "inactive",
+			Scope:      "node",
+		},
+	}
+
+	resource, _ := resourceFromDockerHost(host)
+	if resource.Docker == nil {
+		t.Fatal("expected docker payload")
+	}
+	if resource.Docker.Swarm != nil {
+		t.Fatalf("standalone inactive Docker Swarm metadata should be omitted, got %+v", resource.Docker.Swarm)
+	}
+}
+
 func TestResourceFromDockerContainerIncludesContainerID(t *testing.T) {
 	container := models.DockerContainer{
 		ID:            "aurora-3-abcdef123456",

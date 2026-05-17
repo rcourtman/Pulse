@@ -218,6 +218,27 @@ func TestNoDirectStateAccessForMigratedResources(t *testing.T) {
 	}
 }
 
+func TestDockerSwarmEvidenceGuardStaysInAdapter(t *testing.T) {
+	data, err := os.ReadFile("adapters.go")
+	if err != nil {
+		t.Fatalf("failed to read adapters.go: %v", err)
+	}
+	source := string(data)
+
+	requiredSnippets := []string{
+		"func hasReportableDockerSwarmInfo(info *models.DockerSwarmInfo) bool",
+		`state == "inactive"`,
+		"func convertSwarm(info *models.DockerSwarmInfo) *DockerSwarmInfo",
+		"if !hasReportableDockerSwarmInfo(info) {",
+		"return nil",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("adapters.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestAPIResourcesKeepsOwnedSupplementalGapFillAndVMwareAlias(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "api", "resources.go"))
 	if err != nil {

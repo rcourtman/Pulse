@@ -2305,8 +2305,28 @@ func convertDisks(disks []models.Disk) []DiskInfo {
 	return out
 }
 
-func convertSwarm(info *models.DockerSwarmInfo) *DockerSwarmInfo {
+func hasReportableDockerSwarmInfo(info *models.DockerSwarmInfo) bool {
 	if info == nil {
+		return false
+	}
+	state := strings.ToLower(strings.TrimSpace(info.LocalState))
+	if state == "inactive" {
+		return info.ControlAvailable ||
+			strings.TrimSpace(info.ClusterID) != "" ||
+			strings.TrimSpace(info.ClusterName) != "" ||
+			strings.TrimSpace(info.Error) != ""
+	}
+
+	return strings.TrimSpace(info.NodeID) != "" ||
+		state != "" ||
+		info.ControlAvailable ||
+		strings.TrimSpace(info.ClusterID) != "" ||
+		strings.TrimSpace(info.ClusterName) != "" ||
+		strings.TrimSpace(info.Error) != ""
+}
+
+func convertSwarm(info *models.DockerSwarmInfo) *DockerSwarmInfo {
+	if !hasReportableDockerSwarmInfo(info) {
 		return nil
 	}
 	return &DockerSwarmInfo{

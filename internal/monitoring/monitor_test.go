@@ -1831,9 +1831,18 @@ func TestConvertDockerSwarmInfo(t *testing.T) {
 			expected: nil,
 		},
 		{
-			name:     "empty struct returns empty struct",
+			name:     "empty struct returns nil",
 			input:    &agentsdocker.SwarmInfo{},
-			expected: &models.DockerSwarmInfo{},
+			expected: nil,
+		},
+		{
+			name: "standalone inactive state returns nil",
+			input: &agentsdocker.SwarmInfo{
+				NodeRole:   "worker",
+				LocalState: "inactive",
+				Scope:      "node",
+			},
+			expected: nil,
 		},
 		{
 			name: "all fields populated",

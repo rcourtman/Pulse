@@ -307,8 +307,28 @@ func normalizeAgentVersion(version string) string {
 	return "v" + version
 }
 
-func convertDockerSwarmInfo(info *agentsdocker.SwarmInfo) *models.DockerSwarmInfo {
+func hasReportableAgentDockerSwarmInfo(info *agentsdocker.SwarmInfo) bool {
 	if info == nil {
+		return false
+	}
+	state := strings.ToLower(strings.TrimSpace(info.LocalState))
+	if state == "inactive" {
+		return info.ControlAvailable ||
+			strings.TrimSpace(info.ClusterID) != "" ||
+			strings.TrimSpace(info.ClusterName) != "" ||
+			strings.TrimSpace(info.Error) != ""
+	}
+
+	return strings.TrimSpace(info.NodeID) != "" ||
+		state != "" ||
+		info.ControlAvailable ||
+		strings.TrimSpace(info.ClusterID) != "" ||
+		strings.TrimSpace(info.ClusterName) != "" ||
+		strings.TrimSpace(info.Error) != ""
+}
+
+func convertDockerSwarmInfo(info *agentsdocker.SwarmInfo) *models.DockerSwarmInfo {
+	if !hasReportableAgentDockerSwarmInfo(info) {
 		return nil
 	}
 

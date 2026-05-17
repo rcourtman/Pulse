@@ -97,6 +97,11 @@ management, and fleet control surfaces.
 
 ## Shared Boundaries
 
+`internal/dockeragent/` is lifecycle-adjacent for agent binary/update trust,
+but Docker runtime capability truth is monitoring-owned. Lifecycle consumers
+must not reinterpret standalone `Swarm.LocalNodeState=inactive` metadata as
+agent enrollment, install, command, or fleet-control authority.
+
 1. `frontend-modern/src/api/agentProfiles.ts` shared with `api-contracts`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/api/nodes.ts` shared with `api-contracts`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.
 3. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx` shared with `api-contracts`: the inline node credential slot is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.

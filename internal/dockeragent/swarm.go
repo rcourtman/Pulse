@@ -46,12 +46,32 @@ func (a *Agent) resolvedSwarmScope(info systemtypes.Info) string {
 	}
 }
 
+func hasReportableSwarmInfo(info systemtypes.Info) bool {
+	swarm := info.Swarm
+	state := strings.ToLower(strings.TrimSpace(string(swarm.LocalNodeState)))
+	if state == string(swarmtypes.LocalNodeStateInactive) {
+		return swarm.ControlAvailable ||
+			strings.TrimSpace(swarm.Error) != "" ||
+			(swarm.Cluster != nil &&
+				(strings.TrimSpace(swarm.Cluster.ID) != "" ||
+					strings.TrimSpace(swarm.Cluster.Spec.Annotations.Name) != ""))
+	}
+
+	return swarm.NodeID != "" ||
+		state != "" ||
+		swarm.ControlAvailable ||
+		strings.TrimSpace(swarm.Error) != "" ||
+		(swarm.Cluster != nil &&
+			(strings.TrimSpace(swarm.Cluster.ID) != "" ||
+				strings.TrimSpace(swarm.Cluster.Spec.Annotations.Name) != ""))
+}
+
 func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, containers []agentsdocker.Container) ([]agentsdocker.Service, []agentsdocker.Task, *agentsdocker.SwarmInfo) {
 	if !a.supportsSwarm {
 		return nil, nil, nil
 	}
 
-	if info.Swarm.NodeID == "" && string(info.Swarm.LocalNodeState) == "" && strings.TrimSpace(info.Swarm.Error) == "" {
+	if !hasReportableSwarmInfo(info) {
 		return nil, nil, nil
 	}
 
