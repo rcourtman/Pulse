@@ -200,6 +200,38 @@ func TestFSM_WriteBlockedInVerifyingWithoutRead(t *testing.T) {
 	}
 }
 
+func TestFSM_VerificationGateDoesNotWaiveAfterRepeatedWriteBlocks(t *testing.T) {
+	fsm := NewSessionFSM()
+	fsm.OnToolSuccess(ToolKindResolve, "pulse_query")
+	fsm.OnToolSuccess(ToolKindWrite, "pulse_control")
+
+	for i := 0; i < 5; i++ {
+		err := fsm.CanExecuteTool(ToolKindWrite, "pulse_docker")
+		if err == nil {
+			t.Fatalf("write attempt %d should stay blocked until a verification read", i+1)
+		}
+		if fsm.State != StateVerifying {
+			t.Fatalf("write attempt %d changed state to %s", i+1, fsm.State)
+		}
+		if fsm.ReadAfterWrite {
+			t.Fatalf("write attempt %d should not mark verification as complete", i+1)
+		}
+	}
+	if fsm.ConsecutiveVerifyBlocks != 5 {
+		t.Fatalf("expected repeated blocks to be counted for telemetry, got %d", fsm.ConsecutiveVerifyBlocks)
+	}
+
+	fsm.OnToolSuccess(ToolKindRead, "pulse_metrics")
+	if fsm.ConsecutiveVerifyBlocks != 0 {
+		t.Fatalf("verification read should reset repeated block counter, got %d", fsm.ConsecutiveVerifyBlocks)
+	}
+	fsm.CompleteVerification()
+
+	if err := fsm.CanExecuteTool(ToolKindWrite, "pulse_docker"); err != nil {
+		t.Fatalf("write should be allowed after verification evidence, got %v", err)
+	}
+}
+
 func TestFSM_Reset(t *testing.T) {
 	fsm := NewSessionFSM()
 

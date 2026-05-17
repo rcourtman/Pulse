@@ -69,7 +69,8 @@ type SessionFSM struct {
 	ReadAfterWrite bool `json:"read_after_write"`
 
 	// ConsecutiveVerifyBlocks counts consecutive write attempts blocked in VERIFYING.
-	// After 3 blocks without a successful read, verification is waived to prevent stuck models.
+	// Repeated model attempts are telemetry only; they must never waive the
+	// post-write verification requirement.
 	ConsecutiveVerifyBlocks int `json:"consecutive_verify_blocks,omitempty"`
 
 	// LastWriteTool records the last write tool for debugging/telemetry
@@ -185,14 +186,6 @@ func (fsm *SessionFSM) CanExecuteTool(kind ToolKind, toolName string) error {
 		// In VERIFYING, state-changing tools wait for current verification evidence.
 		if kind == ToolKindWrite {
 			fsm.ConsecutiveVerifyBlocks++
-			if fsm.ConsecutiveVerifyBlocks >= 3 {
-				// Model is stuck - waive verification to prevent infinite blocking.
-				// Transition back to READING so the write can proceed normally.
-				fsm.State = StateReading
-				fsm.ConsecutiveVerifyBlocks = 0
-				fsm.ReadAfterWrite = false
-				return nil // Allow this write to proceed
-			}
 			return &FSMBlockedError{
 				State:       fsm.State,
 				ToolName:    toolName,

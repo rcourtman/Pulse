@@ -2806,20 +2806,37 @@ func (s *Service) injectRecentSessionContext(sessionID string, messages []Messag
 		return
 	}
 
+	s.mu.RLock()
+	resourceProvider := s.unifiedResourceProvider
+	s.mu.RUnlock()
+
 	var lines []string
 	primaryName := ""
 	primaryResourceID := ""
 	primaryTarget := ""
 	primaryKind := ""
 	primaryAdapter := ""
+	primaryAllowsRoutingHint := true
 	for _, resourceID := range recentIDs {
 		res, ok := resolvedCtx.GetResourceByID(resourceID)
 		if !ok || res == nil {
 			continue
 		}
+		policy, aiSafeSummary := recentSessionResourceGovernance(resourceProvider, resourceID, res)
 		label := res.Name
 		if label == "" {
 			label = resourceID
+		}
+		if policy != nil || strings.TrimSpace(aiSafeSummary) != "" {
+			if safeLabel := unifiedresources.ResourcePolicyLabel(label, aiSafeSummary, policy); safeLabel != "" {
+				label = safeLabel
+			} else {
+				label = unifiedresources.ResourcePolicyRedactedValue(label, policy,
+					unifiedresources.ResourceRedactionAlias,
+					unifiedresources.ResourceRedactionHostname,
+					unifiedresources.ResourceRedactionPlatformID,
+				)
+			}
 		}
 		kind := res.Kind
 		if kind == "" {
@@ -2828,6 +2845,13 @@ func (s *Service) injectRecentSessionContext(sessionID string, messages []Messag
 		location := res.Node
 		if location == "" {
 			location = res.Scope.HostName
+		}
+		if policy != nil && location != "" {
+			location = unifiedresources.ResourcePolicyRedactedValue(location, policy,
+				unifiedresources.ResourceRedactionHostname,
+				unifiedresources.ResourceRedactionAlias,
+				unifiedresources.ResourceRedactionPlatformID,
+			)
 		}
 		if kind != "" && location != "" {
 			label = fmt.Sprintf("%s (%s on %s)", label, kind, location)
@@ -2841,6 +2865,7 @@ func (s *Service) injectRecentSessionContext(sessionID string, messages []Messag
 			primaryTarget = res.TargetHost
 			primaryKind = kind
 			primaryAdapter = res.Adapter
+			primaryAllowsRoutingHint = policy == nil
 			if primaryName == "" {
 				primaryName = label
 			}
@@ -2858,10 +2883,12 @@ func (s *Service) injectRecentSessionContext(sessionID string, messages []Messag
 	if primaryName == "" {
 		primaryName = primary
 	}
-	readHint := readRoutingHintForResolvedResource(primaryKind, primaryAdapter, primaryTarget, primaryName, primaryResourceID)
-	targetHint := readHint.targetFact()
-	if targetHint != "" {
-		lines[0] = lines[0] + "; " + targetHint
+	if primaryAllowsRoutingHint {
+		readHint := readRoutingHintForResolvedResource(primaryKind, primaryAdapter, primaryTarget, primaryName, primaryResourceID)
+		targetHint := readHint.targetFact()
+		if targetHint != "" {
+			lines[0] = lines[0] + "; " + targetHint
+		}
 	}
 
 	log.Debug().
@@ -2879,6 +2906,40 @@ func (s *Service) injectRecentSessionContext(sessionID string, messages []Messag
 
 	context := "Session context from earlier Assistant turns. Use only if relevant to the user's message; otherwise ignore it or ask a clarifying question.\n" + strings.Join(lines, "\n")
 	messages[lastIdx].Content = context + "\n\n---\nUser message:\n" + messages[lastIdx].Content
+}
+
+func recentSessionResourceGovernance(provider tools.UnifiedResourceProvider, resourceID string, res *ResolvedResource) (*unifiedresources.ResourcePolicy, string) {
+	if provider == nil || res == nil {
+		return nil, ""
+	}
+	resourceType := res.Kind
+	if resourceType == "" {
+		resourceType = res.ResourceType
+	}
+	node := res.Node
+	if node == "" {
+		node = res.Scope.HostName
+	}
+	resource, ok := tools.CanonicalHandoffUnifiedResource(provider, firstNonEmptyRecentString(resourceID, res.ResourceID, res.ProviderUID), res.Name, resourceType, node)
+	if !ok && res.ResourceID != "" && res.ResourceID != resourceID {
+		resource, ok = tools.CanonicalHandoffUnifiedResource(provider, res.ResourceID, res.Name, resourceType, node)
+	}
+	if !ok && res.ProviderUID != "" {
+		resource, ok = tools.CanonicalHandoffUnifiedResource(provider, res.ProviderUID, res.Name, resourceType, node)
+	}
+	if !ok {
+		return nil, ""
+	}
+	return unifiedresources.CanonicalGovernanceMetadata(&resource)
+}
+
+func firstNonEmptyRecentString(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func (s *Service) toolsForExecutionMode(autonomousMode bool, patrolMode bool) []providers.Tool {

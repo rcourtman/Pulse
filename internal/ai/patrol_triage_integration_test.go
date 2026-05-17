@@ -141,8 +141,14 @@ func TestGetPatrolSystemPromptForTriage(t *testing.T) {
 	}, nil)
 
 	prompt := ps.getPatrolSystemPromptForTriage()
-	if !strings.Contains(prompt, "Deterministic triage has already scanned all resources") {
+	if !strings.Contains(prompt, "Pulse has assembled deterministic evidence before this turn") {
 		t.Fatalf("expected triage preamble in prompt, got:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "prioritized context, not as a final diagnosis") {
+		t.Fatalf("expected triage prompt to preserve model-owned assessment boundary, got:\n%s", prompt)
+	}
+	if strings.Contains(prompt, "Triage already verified") || strings.Contains(prompt, "Focus your turns exclusively") {
+		t.Fatalf("triage prompt must not present deterministic pre-pass as a Pulse-authored judgment boundary, got:\n%s", prompt)
 	}
 	if !strings.Contains(prompt, "## Investigation Tools") || !strings.Contains(prompt, "pulse_query") {
 		t.Fatalf("expected tool descriptions from base prompt, got:\n%s", prompt)

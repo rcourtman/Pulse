@@ -148,6 +148,17 @@ runtime cost control, and shared AI transport surfaces.
    repeated model attempts must not waive post-write verification or allow a
    new state-changing tool before the model has supplied current verification
    evidence through an allowed read/resolve path.
+   Assistant restored-session and recent-session context is also model-bound
+   context, not an identity-policy bypass: when the referenced unified resource
+   is governed or redacted, backend context builders must use the resource
+   policy label or redacted value, suppress exact location/routing metadata
+   such as `target_host`, and avoid exposing raw provider IDs, aliases, IPs, or
+   hostnames to the model unless policy allows them.
+   Patrol deterministic triage signals are prioritized evidence seeds for the
+   configured model; they must not be described as a Pulse-authored final
+   diagnosis, proof that unflagged resources are healthy, or a reason to
+   prohibit the model from choosing governed tools for adjacent evidence
+   relevant to its own findings.
    Patrol runtime failures are part of that runtime contract: provider, model,
    tool-calling, auth, quota, rate-limit, context-window, and connectivity
    failures must be classified in `internal/ai/` before they reach operators,

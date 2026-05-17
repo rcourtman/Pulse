@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestInjectRecentSessionContext_InjectsNeutralResourceFacts(t *testing.T) {
@@ -59,6 +61,62 @@ func TestInjectRecentSessionContext_InjectsNeutralResourceFacts(t *testing.T) {
 	}
 	if !strings.Contains(content, "User message:\nshow its logs") {
 		t.Fatalf("expected original user message to remain neutral, got: %s", content)
+	}
+}
+
+func TestInjectRecentSessionContext_RedactsGovernedResourceFacts(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+	session, err := store.Create()
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	provider := handoffUnifiedProvider{resources: map[unifiedresources.ResourceType][]unifiedresources.Resource{
+		unifiedresources.ResourceTypeVM: {{
+			ID:     "vm-100",
+			Type:   unifiedresources.ResourceTypeVM,
+			Name:   "finance-vm",
+			Status: unifiedresources.StatusWarning,
+			Tags:   []string{"pii"},
+			Canonical: &unifiedresources.CanonicalIdentity{
+				DisplayName: "finance-vm",
+				Hostname:    "finance-vm",
+				PlatformID:  "vm-100",
+				Aliases:     []string{"finance-payroll"},
+			},
+			Identity: unifiedresources.ResourceIdentity{
+				Hostnames:   []string{"finance-vm"},
+				IPAddresses: []string{"10.0.0.40"},
+			},
+			Proxmox: &unifiedresources.ProxmoxData{NodeName: "pve-secret"},
+		}},
+	}}
+
+	resolved := store.GetResolvedContext(session.ID)
+	resolved.AddResourceWithExplicitAccess("finance-vm", &ResolvedResource{
+		ResourceID:   "vm:pve-secret:vm-100",
+		Name:         "finance-vm",
+		Kind:         "vm",
+		ResourceType: "vm",
+		Node:         "pve-secret",
+		TargetHost:   "pve-secret",
+	})
+
+	messages := []Message{{Role: "user", Content: "what happened?"}}
+	service := &Service{unifiedResourceProvider: provider}
+	service.injectRecentSessionContext(session.ID, messages, store)
+
+	content := messages[0].Content
+	if !strings.Contains(content, "virtual machine resource; status warning; local-only context") {
+		t.Fatalf("expected governed safe summary in recent context, got: %s", content)
+	}
+	for _, forbidden := range []string{"finance-vm", "vm-100", "pve-secret", "finance-payroll", "10.0.0.40", "target_host="} {
+		if strings.Contains(content, forbidden) {
+			t.Fatalf("recent context leaked governed resource fact %q: %s", forbidden, content)
+		}
 	}
 }
 

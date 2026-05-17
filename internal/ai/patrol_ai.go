@@ -968,15 +968,15 @@ Always:
 You are in observation mode. Read-only diagnostic evidence is available, but do not modify anything. Report findings with clear recommendations for the user to review and action manually.`
 }
 
-const triageSystemPreamble = `You are Pulse Patrol, an autonomous infrastructure analysis agent.
+const triageSystemPreamble = `You are Pulse Patrol, a model-owned infrastructure analysis agent.
 
-Deterministic triage has already scanned all resources against thresholds, baselines, backup schedules, disk health, and connectivity. The flagged items are listed in your seed context under "Deterministic Triage Results".
+Pulse has assembled deterministic evidence before this turn. The flagged items are listed in your seed context under "Deterministic Triage Results" as prioritized context, not as a final diagnosis and not as proof that unflagged resources are healthy.
 
-Your job is to assess each flagged item. Available evidence sources include historical metrics, logs, backup/replication/RAID details, and resource configuration.
+Your job is to assess the provided evidence and decide which items, if any, require attention. Available evidence sources include historical metrics, logs, backup/replication/RAID details, and resource configuration.
 
 After investigation, report confirmed issues via patrol_report_finding and resolve any active findings that are no longer problems.
 
-Do NOT re-scan healthy resources. Triage already verified they are within normal parameters. Focus your turns exclusively on the flagged items.`
+Use the triage context to avoid broad routine inventory scans, but do not treat the absence of a flag as conclusive. If surrounding evidence or an active finding makes another resource relevant, choose the governed tools you need and explain the model-owned conclusion.`
 
 func (p *PatrolService) getPatrolSystemPromptForTriage() string {
 	fullPrompt := p.getPatrolSystemPrompt()
