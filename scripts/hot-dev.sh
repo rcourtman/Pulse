@@ -17,6 +17,10 @@
 #   PULSE_DATA_DIR=/path         Override data directory
 #   PULSE_DEV_API_PORT=7655      Backend API port (default: 7655)
 #   FRONTEND_DEV_PORT=5173       Frontend dev server port (default: 5173)
+#   HOT_DEV_BACKEND_HEALTH_STARTUP_GRACE_SECONDS=180
+#                                   Backend /api/health grace after starts/restarts
+#   HOT_DEV_BACKEND_UNHEALTHY_THRESHOLD=2
+#                                   Consecutive failed /api/health probes before restart
 #
 # Pro Features Mode:
 #   When pulse-enterprise repo exists and HOT_DEV_USE_PRO is not "false",
@@ -243,6 +247,7 @@ EXTRA_CLEANUP_PORT=$((PULSE_DEV_API_PORT + 1))
 HOT_DEV_RESTART_SENTINEL="${ROOT_DIR}/tmp/hot-dev.restart"
 HOT_DEV_VERIFY_LOCK="${HOT_DEV_VERIFY_LOCK_FILE:-${ROOT_DIR}/tmp/hot-dev.verify.lock}"
 HOT_DEV_BUILD_LOCK="${HOT_DEV_BUILD_LOCK_FILE:-${ROOT_DIR}/tmp/hot-dev.build.lock}"
+HOT_DEV_SELF_BUILD_IGNORE_UNTIL_FILE="${HOT_DEV_SELF_BUILD_IGNORE_UNTIL_FILE:-${ROOT_DIR}/tmp/hot-dev.self-build-ignore-until}"
 HOT_DEV_WATCHER_STARTUP_GRACE_SECONDS="${HOT_DEV_WATCHER_STARTUP_GRACE_SECONDS:-5}"
 EMBEDDED_FRONTEND_DIR="${ROOT_DIR}/internal/api/frontend-modern"
 EMBEDDED_FRONTEND_DIST_DIR="${EMBEDDED_FRONTEND_DIR}/dist"
@@ -326,6 +331,8 @@ kill_port "${EXTRA_CLEANUP_PORT}"
 # Truncate debug log
 mkdir -p "$(dirname "${BACKEND_DEBUG_LOG}")"
 :> "${BACKEND_DEBUG_LOG}"
+BACKEND_STARTED_AT_FILE="${HOT_DEV_BACKEND_STARTED_AT_FILE:-${ROOT_DIR}/tmp/hot-dev.backend.started-at}"
+mkdir -p "$(dirname "${BACKEND_STARTED_AT_FILE}")"
 
 sleep 2
 
@@ -491,7 +498,12 @@ if [[ ${PRO_BUILD_SUCCESS:-false} == "true" ]]; then
 fi
 
 STARTED_BACKEND_PID=""
+mark_backend_startup_grace() {
+    date +%s > "${BACKEND_STARTED_AT_FILE}"
+}
+
 start_backend_process() {
+    mark_backend_startup_grace
     LOG_LEVEL="${LOG_LEVEL:-debug}" \
     FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
     PORT="${PULSE_DEV_API_PORT:-7655}" \
@@ -522,15 +534,32 @@ fi
 # Restarts Pulse if it dies unexpectedly (not from file watcher rebuild),
 # enforces single-instance, and detects the alive-but-unresponsive state
 # (process exists but /api/health is not serving) which a process-only check
-# blind-spots. Two consecutive 5s misses on /api/health -> kill and restart.
+# blind-spots. After backend startup grace, consecutive misses on /api/health
+# -> kill and restart.
 log_info "Starting backend health monitor..."
 (
     UNHEALTHY_STREAK=0
-    UNHEALTHY_THRESHOLD=2
+    UNHEALTHY_THRESHOLD="${HOT_DEV_BACKEND_UNHEALTHY_THRESHOLD:-2}"
+    BACKEND_HEALTH_STARTUP_GRACE_SECONDS="${HOT_DEV_BACKEND_HEALTH_STARTUP_GRACE_SECONDS:-180}"
+
+    [[ "${UNHEALTHY_THRESHOLD}" =~ ^[1-9][0-9]*$ ]] || UNHEALTHY_THRESHOLD=2
+    [[ "${BACKEND_HEALTH_STARTUP_GRACE_SECONDS}" =~ ^[0-9]+$ ]] || BACKEND_HEALTH_STARTUP_GRACE_SECONDS=180
 
     backend_serving() {
         curl -sf -o /dev/null --max-time 3 \
             "http://127.0.0.1:${PULSE_DEV_API_PORT:-7655}/api/health" 2>/dev/null
+    }
+
+    backend_in_startup_grace() {
+        local backend_started_at
+        local now
+
+        [[ -r "${BACKEND_STARTED_AT_FILE}" ]] || return 1
+        backend_started_at="$(<"${BACKEND_STARTED_AT_FILE}")"
+        [[ "${backend_started_at}" =~ ^[0-9]+$ ]] || return 1
+
+        now="$(date +%s)"
+        (( now - backend_started_at < BACKEND_HEALTH_STARTUP_GRACE_SECONDS ))
     }
 
     while true; do
@@ -538,6 +567,11 @@ log_info "Starting backend health monitor..."
         PULSE_COUNT="$(hot_dev_pulse_process_count)"
 
         if [[ "$PULSE_COUNT" -eq 0 ]]; then
+            if backend_in_startup_grace; then
+                UNHEALTHY_STREAK=0
+                log_warn "⚠️  Pulse process not running yet during backend startup grace (${BACKEND_HEALTH_STARTUP_GRACE_SECONDS}s)"
+                continue
+            fi
             log_warn "⚠️  Pulse died unexpectedly, restarting..."
             start_backend_process
             NEW_PID="${STARTED_BACKEND_PID}"
@@ -562,6 +596,11 @@ log_info "Starting backend health monitor..."
             fi
             UNHEALTHY_STREAK=0
         elif ! backend_serving; then
+            if backend_in_startup_grace; then
+                UNHEALTHY_STREAK=0
+                log_warn "⚠️  Pulse /api/health not serving yet during backend startup grace (${BACKEND_HEALTH_STARTUP_GRACE_SECONDS}s)"
+                continue
+            fi
             UNHEALTHY_STREAK=$((UNHEALTHY_STREAK + 1))
             log_warn "⚠️  Pulse alive but /api/health unresponsive (streak ${UNHEALTHY_STREAK}/${UNHEALTHY_THRESHOLD})"
             if [[ "$UNHEALTHY_STREAK" -ge "$UNHEALTHY_THRESHOLD" ]]; then
@@ -607,15 +646,27 @@ log_info "Starting backend file watcher..."
         local now
         now=$(date +%s)
         SELF_BUILD_IGNORE_UNTIL=$((now + 5))
+        mkdir -p "$(dirname "${HOT_DEV_SELF_BUILD_IGNORE_UNTIL_FILE}")"
+        printf '%s\n' "${SELF_BUILD_IGNORE_UNTIL}" > "${HOT_DEV_SELF_BUILD_IGNORE_UNTIL_FILE}"
     }
 
     manual_build_event_suppressed() {
+        local now
+        local shared_ignore_until
+
         if build_lock_active; then
             return 0
         fi
 
-        local now
         now=$(date +%s)
+        shared_ignore_until=""
+        if [[ -r "${HOT_DEV_SELF_BUILD_IGNORE_UNTIL_FILE}" ]]; then
+            shared_ignore_until="$(<"${HOT_DEV_SELF_BUILD_IGNORE_UNTIL_FILE}")"
+        fi
+        if [[ "${shared_ignore_until}" =~ ^[0-9]+$ ]] && (( now < shared_ignore_until )); then
+            return 0
+        fi
+
         (( now < SELF_BUILD_IGNORE_UNTIL ))
     }
 
@@ -701,6 +752,7 @@ log_info "Starting backend file watcher..."
             return
         fi
         LAST_RESTART_TIME=$now
+        mark_backend_startup_grace
         mark_self_build_output
 
         log_info "Restarting backend..."
@@ -740,6 +792,11 @@ log_info "Starting backend file watcher..."
     rebuild_backend() {
         local changed_file=$1
 
+        if build_lock_active; then
+            log_info "Managed build already in progress; skipping duplicate rebuild event."
+            return
+        fi
+
         # Debounce: skip if we rebuilt less than 2 seconds ago (batch saves)
         local now
         now=$(date +%s)
@@ -760,8 +817,8 @@ log_info "Starting backend file watcher..."
         # Use the same build logic as the initial build.
         if build_backend_binary; then
             mark_self_build_output
-            clear_build_lock
             restart_backend
+            clear_build_lock
         else
             clear_build_lock
             log_error "✗ Build failed; keeping the current backend process running."

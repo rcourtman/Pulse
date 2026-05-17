@@ -651,7 +651,7 @@ test_makefile_routes_managed_runtime_through_npm() {
 
 test_hot_dev_script_advertises_foreground_escape_hatch() {
   local output
-  output="$(sed -n '1,30p' "${HOT_DEV}")"
+  output="$(sed -n '1,40p' "${HOT_DEV}")"
 
   assert_contains "hot-dev header identifies foreground escape hatch" "${output}" "hot-dev.sh - Foreground Pulse dev runtime escape hatch"
   assert_contains "hot-dev usage points to managed runtime first" "${output}" "npm run dev                             # Canonical managed dev runtime"
@@ -669,7 +669,9 @@ test_hot_dev_script_ignores_test_only_backend_churn() {
   assert_contains "hot-dev fswatch covers the embedded frontend parent dir" "${output}" '"${ROOT_DIR}/pulse" "${HOT_DEV_RESTART_SENTINEL}" "${EMBEDDED_FRONTEND_DIR}"'
   assert_contains "hot-dev fswatch only treats the pulse binary path as a manual build trigger" "${output}" 'elif [[ "$changed_file" == "${ROOT_DIR}/pulse" ]]; then'
   assert_contains "hot-dev watcher declares a managed build lock path" "${output}" 'HOT_DEV_BUILD_LOCK="${HOT_DEV_BUILD_LOCK_FILE:-${ROOT_DIR}/tmp/hot-dev.build.lock}"'
+  assert_contains "hot-dev watcher declares shared self-build suppression marker" "${output}" 'HOT_DEV_SELF_BUILD_IGNORE_UNTIL_FILE="${HOT_DEV_SELF_BUILD_IGNORE_UNTIL_FILE:-${ROOT_DIR}/tmp/hot-dev.self-build-ignore-until}"'
   assert_contains "hot-dev watcher suppresses manual binary restarts while a managed build is active" "${output}" 'if build_lock_active; then'
+  assert_contains "hot-dev watcher shares self-build suppression across watcher streams" "${output}" 'printf '\''%s\n'\'' "${SELF_BUILD_IGNORE_UNTIL}" > "${HOT_DEV_SELF_BUILD_IGNORE_UNTIL_FILE}"'
   assert_contains "hot-dev watcher suppresses self-build binary restart loops" "${output}" 'if manual_build_event_suppressed; then'
   assert_contains "hot-dev watcher suppresses startup self-build pulse events" "${output}" 'SELF_BUILD_IGNORE_UNTIL=$((WATCHER_READY_AT + HOT_DEV_WATCHER_STARTUP_GRACE_SECONDS + 5))'
   assert_contains "hot-dev watcher seeds the startup pulse marker" "${output}" 'LAST_PULSE_BINARY_MARKER="$(file_event_marker "${ROOT_DIR}/pulse" || true)"'
@@ -680,7 +682,11 @@ test_hot_dev_health_monitor_probes_api_health() {
   local output
   output="$(cat "${HOT_DEV}")"
 
-  assert_contains "hot-dev health monitor declares an unhealthy streak threshold" "${output}" 'UNHEALTHY_THRESHOLD=2'
+  assert_contains "hot-dev health monitor declares a configurable unhealthy streak threshold" "${output}" 'UNHEALTHY_THRESHOLD="${HOT_DEV_BACKEND_UNHEALTHY_THRESHOLD:-2}"'
+  assert_contains "hot-dev health monitor declares backend startup grace" "${output}" 'BACKEND_HEALTH_STARTUP_GRACE_SECONDS="${HOT_DEV_BACKEND_HEALTH_STARTUP_GRACE_SECONDS:-180}"'
+  assert_contains "hot-dev health monitor tracks backend restart time through a shared marker" "${output}" 'BACKEND_STARTED_AT_FILE="${HOT_DEV_BACKEND_STARTED_AT_FILE:-${ROOT_DIR}/tmp/hot-dev.backend.started-at}"'
+  assert_contains "hot-dev managed restarts mark backend startup grace before killing" "${output}" 'mark_backend_startup_grace'
+  assert_contains "hot-dev health monitor checks startup grace before killing a live backend" "${output}" 'backend_in_startup_grace'
   assert_contains "hot-dev health monitor probes /api/health on the dev backend port" "${output}" '"http://127.0.0.1:${PULSE_DEV_API_PORT:-7655}/api/health"'
   assert_contains "hot-dev health monitor restarts on alive-but-unresponsive state" "${output}" 'elif ! backend_serving; then'
   assert_contains "hot-dev health monitor kills unresponsive Pulse before restart" "${output}" 'Killing unresponsive Pulse and restarting'
@@ -698,6 +704,7 @@ test_hot_dev_script_marks_managed_rebuild_output_before_build() {
 
   assert_contains "hot-dev rebuild path suppresses self-build binary churn" "${rebuild_block}" 'mark_self_build_output'
   assert_contains "hot-dev rebuild path raises the managed build lock" "${rebuild_block}" 'set_build_lock'
+  assert_contains "hot-dev rebuild path skips duplicate watcher rebuilds" "${rebuild_block}" 'if build_lock_active; then'
   assert_contains "hot-dev rebuild path clears the managed build lock" "${rebuild_block}" 'clear_build_lock'
 
   mark_line="$(printf '%s\n' "${rebuild_block}" | awk '/mark_self_build_output/ { print NR; exit }')"
