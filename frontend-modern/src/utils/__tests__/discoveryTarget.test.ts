@@ -4,6 +4,7 @@ import {
   getAgentDiscoveryResourceId,
   isAgentDiscoveryResourceType,
   isAppContainerDiscoveryResourceType,
+  toDiscoveryAPIResourceType,
 } from '@/utils/discoveryTarget';
 
 describe('discoveryTarget utils', () => {
@@ -20,6 +21,16 @@ describe('discoveryTarget utils', () => {
     expect(canonicalDiscoveryResourceType('app-container')).toBe('app-container');
     expect(canonicalDiscoveryResourceType('k8s')).toBe('pod');
     expect(canonicalDiscoveryResourceType('pod')).toBe('pod');
+  });
+
+  it('translates frontend canonical types to discovery API vocabulary', () => {
+    expect(toDiscoveryAPIResourceType('app-container')).toBe('docker');
+    expect(toDiscoveryAPIResourceType('docker')).toBe('docker');
+    expect(toDiscoveryAPIResourceType('pod')).toBe('k8s');
+    expect(toDiscoveryAPIResourceType('k8s')).toBe('k8s');
+    expect(toDiscoveryAPIResourceType('vm')).toBe('vm');
+    expect(toDiscoveryAPIResourceType('system-container')).toBe('system-container');
+    expect(toDiscoveryAPIResourceType('agent')).toBe('agent');
   });
 
   it('prefers resourceId for agent-like discovery targets', () => {

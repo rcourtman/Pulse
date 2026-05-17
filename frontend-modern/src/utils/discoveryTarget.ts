@@ -21,6 +21,7 @@ export const toDiscoveryAPIResourceType = (resourceType: unknown): string | unde
   const canonical = canonicalDiscoveryResourceType(resourceType);
   if (!canonical) return undefined;
   if (canonical === 'pod') return 'k8s';
+  if (canonical === 'app-container') return 'docker';
   return canonical;
 };
 
