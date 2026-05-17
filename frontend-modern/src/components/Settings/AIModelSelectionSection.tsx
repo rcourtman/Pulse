@@ -171,6 +171,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
   const sharedModelOptions = () => selectableModels(state.form.model);
   const chatModelOptions = () => selectableModels(state.form.chatModel);
   const patrolModelOptions = () => selectableModels(state.form.patrolModel);
+  const discoveryModelOptions = () => selectableModels(state.form.discoveryModel);
   const pickerButtonClass = () =>
     `${controlClass()} flex items-center gap-2 justify-between text-left disabled:cursor-not-allowed disabled:opacity-60`;
   const pickerLabelClass = 'min-w-0 flex-1 truncate text-left font-normal';
@@ -284,7 +285,8 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
           </p>
         </Show>
         <p class="text-[11px] text-muted mt-1">
-          Used by both Pulse Assistant and Patrol unless you set a section-specific override below.
+          Used by Pulse Assistant, Patrol, and Discovery unless you set a section-specific override
+          below.
         </p>
       </div>
 
@@ -311,7 +313,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
             <span class="text-sm font-medium text-base-content">
               {AI_SETTINGS_MODEL_OVERRIDES_TITLE}
             </span>
-            <Show when={state.form.chatModel || state.form.patrolModel}>
+            <Show when={state.form.chatModel || state.form.patrolModel || state.form.discoveryModel}>
               <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
                 Customized
               </span>
@@ -334,8 +336,8 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
         <Show when={state.showAdvancedModels()}>
           <div class="px-3 py-3 bg-surface border-t border-border space-y-3">
             <p class="text-xs text-muted">
-              Override the shared default for Pulse Assistant or Patrol. Leave empty to use the
-              shared default model.
+              Override the shared default for Pulse Assistant, Patrol, or Discovery. Leave empty to
+              use the shared default model.
             </p>
             <div>
               <label class="block text-xs font-medium text-muted mb-0.5">
@@ -420,6 +422,48 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
                 />
               </Show>
               <PatrolPreflightControl state={state} />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-muted mb-0.5">
+                Discovery Model
+              </label>
+              <p class="text-[11px] text-muted mb-1">
+                Used for one-shot service identification on a single resource — a cheaper model
+                like Haiku is usually sufficient.
+              </p>
+              <Show
+                when={discoveryModelOptions().length > 0}
+                fallback={
+                  <input
+                    type="text"
+                    value={state.form.discoveryModel}
+                    onInput={(e) => state.setForm('discoveryModel', e.currentTarget.value)}
+                    placeholder="Use shared default model"
+                    aria-label="Discovery model identifier"
+                    class={controlClass()}
+                    disabled={state.saving()}
+                  />
+                }
+              >
+                <AIModelPicker
+                  models={discoveryModelOptions()}
+                  selectedModel={state.form.discoveryModel}
+                  onModelSelect={(modelId) => state.setForm('discoveryModel', modelId)}
+                  defaultOption={{
+                    label: 'Use shared default',
+                    description: sharedDefaultDescription(),
+                  }}
+                  emptySelectionLabel="Use shared default"
+                  title="Select Discovery model"
+                  searchPlaceholder="Search configured provider models"
+                  customModelDescription="Custom provider:model ID"
+                  disabled={state.saving()}
+                  align="left"
+                  buttonClass={pickerButtonClass()}
+                  buttonLabelClass={pickerLabelClass}
+                  dropdownClass={pickerDropdownClass}
+                />
+              </Show>
             </div>
           </div>
         </Show>

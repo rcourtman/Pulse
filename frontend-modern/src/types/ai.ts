@@ -36,6 +36,7 @@ export interface AISettings {
   model: string;
   chat_model?: string; // Model for interactive chat (empty = use default)
   patrol_model?: string; // Model for background patrol (empty = use default)
+  discovery_model?: string; // Model for infrastructure discovery (empty = use default)
   auto_fix_model?: string; // Model for safe remediation workflows (empty = use patrol model)
   configured: boolean; // true if AI is ready to use
   custom_context: string; // user-provided infrastructure context
@@ -106,6 +107,7 @@ export interface AISettingsUpdateRequest {
   // Model overrides for different use cases
   chat_model?: string; // Model for interactive chat
   patrol_model?: string; // Model for background patrol
+  discovery_model?: string; // Model for infrastructure discovery
   auto_fix_model?: string; // Model for safe remediation workflows
   // Patrol settings for token efficiency
   patrol_interval_minutes?: number; // Custom interval in minutes (0 = disabled, minimum 10)

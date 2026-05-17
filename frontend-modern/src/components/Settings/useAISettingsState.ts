@@ -290,6 +290,7 @@ export const useAISettingsState = () => {
     model: '',
     chatModel: '',
     patrolModel: '',
+    discoveryModel: '',
     autoFixModel: '',
     authMethod: 'api_key' as AuthMethod,
     patrolIntervalMinutes: 360,
@@ -363,6 +364,7 @@ export const useAISettingsState = () => {
         model: '',
         chatModel: '',
         patrolModel: '',
+        discoveryModel: '',
         autoFixModel: '',
         authMethod: 'api_key',
         patrolIntervalMinutes: 360,
@@ -390,6 +392,7 @@ export const useAISettingsState = () => {
       model: data.model || '',
       chatModel: data.chat_model || '',
       patrolModel: data.patrol_model || '',
+      discoveryModel: data.discovery_model || '',
       autoFixModel: data.auto_fix_model || '',
       authMethod: data.auth_method || 'api_key',
       patrolIntervalMinutes: data.patrol_interval_minutes ?? 360,
@@ -718,7 +721,7 @@ export const useAISettingsState = () => {
         error,
         payload,
         providerHealth,
-        models: [form.model, form.chatModel, form.patrolModel, form.autoFixModel],
+        models: [form.model, form.chatModel, form.patrolModel, form.discoveryModel, form.autoFixModel],
       });
       notificationStore.error(
         getAISettingsSaveProviderFailureMessage(
@@ -867,6 +870,9 @@ export const useAISettingsState = () => {
       if (form.patrolModel !== (settings()?.patrol_model || '')) {
         payload.patrol_model = form.patrolModel;
       }
+      if (form.discoveryModel !== (settings()?.discovery_model || '')) {
+        payload.discovery_model = form.discoveryModel;
+      }
       if (form.autoFixModel !== (settings()?.auto_fix_model || '')) {
         payload.auto_fix_model = form.autoFixModel;
       }
@@ -948,7 +954,7 @@ export const useAISettingsState = () => {
         error,
         payload,
         providerHealth,
-        models: [selectedModel, form.chatModel, form.patrolModel, form.autoFixModel],
+        models: [selectedModel, form.chatModel, form.patrolModel, form.discoveryModel, form.autoFixModel],
       });
       notificationStore.error(
         getAISettingsSaveProviderFailureMessage(

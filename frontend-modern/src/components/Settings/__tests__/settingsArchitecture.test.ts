@@ -482,6 +482,15 @@ describe('settings architecture guardrails', () => {
     expect(aiModelSelectionSectionSource).not.toContain('<select');
     expect(aiModelSelectionSectionSource).not.toContain('<optgroup');
 
+    expect(aiModelSelectionSectionSource).toContain('Pulse Assistant Model');
+    expect(aiModelSelectionSectionSource).toContain('Patrol Verification Model');
+    expect(aiModelSelectionSectionSource).toContain('Discovery Model');
+    expect(aiModelSelectionSectionSource).toContain('chatModelOptions');
+    expect(aiModelSelectionSectionSource).toContain('patrolModelOptions');
+    expect(aiModelSelectionSectionSource).toContain('discoveryModelOptions');
+    expect(aiSettingsStateSource).toContain('discoveryModel:');
+    expect(aiSettingsStateSource).toContain('payload.discovery_model = form.discoveryModel');
+
     expect(aiSettingsModelSource).toContain('AIProviderTestResult');
     expect(aiSettingsModelSource).toContain('AISettings as AISettingsType');
     expect(aiSettingsModelSource).toContain('export type AIAvailableModel = ModelInfo;');

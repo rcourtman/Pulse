@@ -918,8 +918,12 @@ AI runtime.
     labeled as Pulse Assistant controls, while Patrol schedule and autonomy
     continue to live on Patrol-owned surfaces rather than drifting back into
     the shared settings shell. Shared/default model choices may remain on the
-    combined shell only when Assistant and Patrol overrides are presented as
-    explicit per-surface overrides instead of a generic advanced AI bucket.
+    combined shell only when Assistant, Patrol, and Discovery overrides are
+    presented as explicit per-surface overrides instead of a generic advanced
+    AI bucket. Each per-surface override must fall back to the shared default
+    when left empty rather than silently using a hard-coded backend default,
+    so the shared shell stays the single place an operator picks the model
+    for any of the three surfaces.
     The shared shell must not show Pro-only autonomous execution as a default
     free-user control when upgrade prompts are suppressed; it may surface that
     option only when the entitlement is present, commercial prompts are

@@ -20,7 +20,7 @@ const AI_OAUTH_ERROR_MESSAGES: Record<string, string> = {
 export const AI_SETTINGS_PANEL_TITLE = 'Assistant & Patrol';
 export const AI_SETTINGS_PANEL_DESCRIPTION =
   'Configure providers and models for Pulse Assistant and Patrol.';
-export const AI_SETTINGS_MODEL_OVERRIDES_TITLE = 'Assistant & Patrol Model Overrides';
+export const AI_SETTINGS_MODEL_OVERRIDES_TITLE = 'Model Overrides';
 export const AI_SETTINGS_ASSISTANT_SESSIONS_TITLE = 'Pulse Assistant Sessions';
 export const AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE = 'Pulse Assistant Permissions';
 export const AI_SETTINGS_LOAD_MODELS_ERROR = 'Unable to load models.';

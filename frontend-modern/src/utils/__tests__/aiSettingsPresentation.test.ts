@@ -32,7 +32,7 @@ describe('aiSettingsPresentation', () => {
     expect(AI_SETTINGS_PANEL_DESCRIPTION).toBe(
       'Configure providers and models for Pulse Assistant and Patrol.',
     );
-    expect(AI_SETTINGS_MODEL_OVERRIDES_TITLE).toBe('Assistant & Patrol Model Overrides');
+    expect(AI_SETTINGS_MODEL_OVERRIDES_TITLE).toBe('Model Overrides');
     expect(AI_SETTINGS_ASSISTANT_SESSIONS_TITLE).toBe('Pulse Assistant Sessions');
     expect(AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE).toBe('Pulse Assistant Permissions');
     expect(getAISettingsWorkloadDiscoveryHelpContent()).toEqual({
