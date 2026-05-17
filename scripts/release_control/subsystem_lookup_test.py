@@ -4577,6 +4577,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "host-type-migration-boundary-audit",
                 "mixed-private-infrastructure-operations-direction",
                 "platform-admission-first-lab-ready-stage",
+                "platform-page-membership-overlap-v1",
                 "platform-support-model-v1",
                 "vmware-vsphere-vcenter-first-admission-model",
                 "vmware-vsphere-vcenter-support-claim-ratchet",

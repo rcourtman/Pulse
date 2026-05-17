@@ -7030,6 +7030,27 @@
         "L20",
         "L23"
       ]
+    },
+    {
+      "id": "platform-page-membership-overlap-v1",
+      "summary": "Pulse v6 primary IA remains platform-first rather than a generic mixed systems page: a single physical or agent-backed system may appear on multiple platform pages when it participates in multiple platform contracts, and each page must show only the workloads and native resources relevant to that platform. Host identity stays separate from runtime membership, so an Unraid server that reports Docker containers can appear on the container-runtime page while still reading as an Unraid-profiled host rather than a generic Docker server.",
+      "kind": "architecture",
+      "decided_at": "2026-05-17",
+      "subsystem_ids": [
+        "agent-lifecycle",
+        "ai-runtime",
+        "alerts",
+        "api-contracts",
+        "monitoring",
+        "storage-recovery",
+        "unified-resources"
+      ],
+      "lane_ids": [
+        "L6",
+        "L13",
+        "L15",
+        "L16"
+      ]
     }
   ]
 }
