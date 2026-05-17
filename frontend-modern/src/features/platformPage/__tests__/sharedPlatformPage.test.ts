@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { createRoot } from 'solid-js';
 import type { Resource } from '@/types/resource';
-import { filterPlatformResources } from '../sharedPlatformPage';
+import {
+  createPlatformTableFilterState,
+  filterPlatformResources,
+  type PlatformResourceStatusFilter,
+} from '../sharedPlatformPage';
 
 const makeResource = (
   partial: Partial<Resource> & Pick<Resource, 'id' | 'type' | 'status'>,
@@ -64,5 +69,35 @@ describe('filterPlatformResources', () => {
   it('combines search and status filters', () => {
     const filtered = filterPlatformResources(resources, 'host', 'degraded');
     expect(filtered.map((r) => r.id).sort()).toEqual(['host-charlie', 'host-foxtrot'].sort());
+  });
+
+  it('centralizes provider table filter state and row counts', () => {
+    createRoot((dispose) => {
+      try {
+        const state = createPlatformTableFilterState({
+          resources: () => resources,
+          initialStatus: 'all' as PlatformResourceStatusFilter,
+          filter: filterPlatformResources,
+        });
+
+        expect(state.total()).toBe(resources.length);
+        expect(state.visible()).toBe(resources.length);
+
+        state.setSearch('gpu');
+        expect(state.filtered().map((r) => r.id)).toEqual(['host-with-tag']);
+        expect(state.visible()).toBe(1);
+
+        state.setSearch('host');
+        state.setStatus('offline');
+        expect(
+          state
+            .filtered()
+            .map((r) => r.id)
+            .sort(),
+        ).toEqual(['host-delta', 'host-echo']);
+      } finally {
+        dispose();
+      }
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
@@ -19,6 +19,7 @@ import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableToolbar,
   PlatformTableEmptyState,
+  createPlatformTableFilterState,
   filterPlatformResources,
   getPlatformTableCellClass,
   getPlatformTableHeadClass,
@@ -72,12 +73,11 @@ export const VsphereHostsTable: Component<{
   title?: string;
   showToolbar?: boolean;
 }> = (props) => {
-  const [search, setSearch] = createSignal('');
-  const [status, setStatus] = createSignal<PlatformResourceStatusFilter>('all');
-
-  const filtered = createMemo(() => filterPlatformResources(props.hosts, search(), status()));
-  const visible = createMemo(() => filtered().length);
-  const total = createMemo(() => props.hosts.length);
+  const tableState = createPlatformTableFilterState({
+    resources: () => props.hosts,
+    initialStatus: 'all' as PlatformResourceStatusFilter,
+    filter: filterPlatformResources,
+  });
 
   const vmCountByHost = createMemo(() => {
     const map = new Map<string, number>();
@@ -104,20 +104,20 @@ export const VsphereHostsTable: Component<{
       <div class="space-y-3">
         <Show when={props.showToolbar !== false}>
           <PlatformTableToolbar
-            search={search}
-            onSearchChange={setSearch}
+            search={tableState.search}
+            onSearchChange={tableState.setSearch}
             searchPlaceholder="Search ESXi hosts"
-            status={status()}
-            onStatusChange={setStatus}
+            status={tableState.status()}
+            onStatusChange={tableState.setStatus}
             statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
-            visible={visible()}
-            total={total()}
+            visible={tableState.visible()}
+            total={tableState.total()}
             rowNoun="hosts"
           />
         </Show>
 
         <Show
-          when={filtered().length > 0}
+          when={tableState.filtered().length > 0}
           fallback={
             <PlatformTableEmptyState
               icon={props.emptyIcon}
@@ -153,7 +153,7 @@ export const VsphereHostsTable: Component<{
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                <For each={filtered()}>
+                <For each={tableState.filtered()}>
                   {(host) => {
                     const meta = () => host.vmware;
                     const name = () => asTrimmedString(host.name) || host.id;

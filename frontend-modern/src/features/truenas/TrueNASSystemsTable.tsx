@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
@@ -19,6 +19,7 @@ import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableToolbar,
   PlatformTableEmptyState,
+  createPlatformTableFilterState,
   filterPlatformResources,
   getPlatformTableCellClass,
   getPlatformTableHeadClass,
@@ -80,12 +81,11 @@ export const TrueNASSystemsTable: Component<{
   title?: string;
   showToolbar?: boolean;
 }> = (props) => {
-  const [search, setSearch] = createSignal('');
-  const [status, setStatus] = createSignal<PlatformResourceStatusFilter>('all');
-
-  const filtered = createMemo(() => filterPlatformResources(props.systems, search(), status()));
-  const visible = createMemo(() => filtered().length);
-  const total = createMemo(() => props.systems.length);
+  const tableState = createPlatformTableFilterState({
+    resources: () => props.systems,
+    initialStatus: 'all' as PlatformResourceStatusFilter,
+    filter: filterPlatformResources,
+  });
 
   // Single-system canonical mock is the common case today; counts span
   // the full TrueNAS resource scope per row. When multi-system support
@@ -117,20 +117,20 @@ export const TrueNASSystemsTable: Component<{
       <div class="space-y-3">
         <Show when={props.showToolbar !== false}>
           <PlatformTableToolbar
-            search={search}
-            onSearchChange={setSearch}
+            search={tableState.search}
+            onSearchChange={tableState.setSearch}
             searchPlaceholder="Search TrueNAS systems"
-            status={status()}
-            onStatusChange={setStatus}
+            status={tableState.status()}
+            onStatusChange={tableState.setStatus}
             statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
-            visible={visible()}
-            total={total()}
+            visible={tableState.visible()}
+            total={tableState.total()}
             rowNoun="systems"
           />
         </Show>
 
         <Show
-          when={filtered().length > 0}
+          when={tableState.filtered().length > 0}
           fallback={
             <PlatformTableEmptyState
               icon={props.emptyIcon}
@@ -172,7 +172,7 @@ export const TrueNASSystemsTable: Component<{
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                <For each={filtered()}>
+                <For each={tableState.filtered()}>
                   {(system) => {
                     const name = () => asTrimmedString(system.name) || system.id;
                     const version = () => asTrimmedString(system.agent?.osVersion) || '—';

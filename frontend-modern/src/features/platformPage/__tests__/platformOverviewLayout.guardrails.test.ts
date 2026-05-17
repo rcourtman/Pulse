@@ -57,6 +57,7 @@ describe('platform overview layout guardrails', () => {
     expect(sharedPlatformPageSource).toContain('getPlatformTableHeadClass');
     expect(sharedPlatformPageSource).toContain('getPlatformTableCellClass');
     expect(sharedPlatformPageSource).toContain('PlatformTableToolbar');
+    expect(sharedPlatformPageSource).toContain('createPlatformTableFilterState');
     expect(sharedPlatformPageSource).toContain('PLATFORM_HEALTH_FILTER_OPTIONS');
 
     for (const source of platformTableSources) {
@@ -71,9 +72,11 @@ describe('platform overview layout guardrails', () => {
 
     for (const source of platformToolbarTableSources) {
       expect(source).toContain('PlatformTableToolbar');
+      expect(source).toContain('createPlatformTableFilterState');
       expect(source).toContain('PLATFORM_HEALTH_FILTER_OPTIONS');
       expect(source).not.toContain("from '@/components/shared/SearchInput'");
       expect(source).not.toContain("from '@/components/shared/FilterButtonGroup'");
+      expect(source).not.toContain('createSignal');
     }
   });
 

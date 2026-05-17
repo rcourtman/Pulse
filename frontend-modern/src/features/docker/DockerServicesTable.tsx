@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import { For, Show, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
@@ -19,6 +19,7 @@ import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableToolbar,
   PlatformTableEmptyState,
+  createPlatformTableFilterState,
   filterPlatformResources,
   getPlatformTableCellClass,
   getPlatformTableHeadClass,
@@ -70,12 +71,11 @@ export const DockerServicesTable: Component<{
   title?: string;
   showToolbar?: boolean;
 }> = (props) => {
-  const [search, setSearch] = createSignal('');
-  const [status, setStatus] = createSignal<PlatformResourceStatusFilter>('all');
-
-  const filtered = createMemo(() => filterPlatformResources(props.resources, search(), status()));
-  const visible = createMemo(() => filtered().length);
-  const total = createMemo(() => props.resources.length);
+  const tableState = createPlatformTableFilterState({
+    resources: () => props.resources,
+    initialStatus: 'all' as PlatformResourceStatusFilter,
+    filter: filterPlatformResources,
+  });
 
   return (
     <Show
@@ -91,20 +91,20 @@ export const DockerServicesTable: Component<{
       <div class="space-y-3">
         <Show when={props.showToolbar !== false}>
           <PlatformTableToolbar
-            search={search}
-            onSearchChange={setSearch}
+            search={tableState.search}
+            onSearchChange={tableState.setSearch}
             searchPlaceholder="Search Swarm services"
-            status={status()}
-            onStatusChange={setStatus}
+            status={tableState.status()}
+            onStatusChange={tableState.setStatus}
             statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
-            visible={visible()}
-            total={total()}
+            visible={tableState.visible()}
+            total={tableState.total()}
             rowNoun="services"
           />
         </Show>
 
         <Show
-          when={filtered().length > 0}
+          when={tableState.filtered().length > 0}
           fallback={
             <PlatformTableEmptyState
               icon={props.emptyIcon}
@@ -136,7 +136,7 @@ export const DockerServicesTable: Component<{
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                <For each={filtered()}>
+                <For each={tableState.filtered()}>
                   {(service) => {
                     const name = () => asTrimmedString(service.name) || service.id;
                     const image = () => asTrimmedString(service.docker?.image) || '—';

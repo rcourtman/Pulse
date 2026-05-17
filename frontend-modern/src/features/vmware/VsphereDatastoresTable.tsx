@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import { For, Show, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
@@ -20,6 +20,7 @@ import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableToolbar,
   PlatformTableEmptyState,
+  createPlatformTableFilterState,
   getPlatformTableCellClass,
   getPlatformTableHeadClass,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -135,37 +136,34 @@ export const VsphereDatastoresTable: Component<{
   title?: string;
   showToolbar?: boolean;
 }> = (props) => {
-  const [search, setSearch] = createSignal('');
-  const [status, setStatus] = createSignal<DatastoreStatusFilter>('all');
-
-  const filtered = createMemo(() => {
-    const term = search().trim().toLowerCase();
-    const want = status();
-    return props.resources.filter((row) => {
-      if (want !== 'all' && classify(row) !== want) return false;
-      if (!term) return true;
-      const haystack = [
-        row.name,
-        row.displayName,
-        row.vmware?.datacenterName,
-        row.vmware?.datastoreType,
-        row.vmware?.connectionName,
-        row.vmware?.vcenterHost,
-        ...(row.storage?.nodes ?? []),
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      return haystack.includes(term);
-    });
+  const tableState = createPlatformTableFilterState<DatastoreStatusFilter>({
+    resources: () => props.resources,
+    initialStatus: 'all',
+    filter: (resources, search, status) => {
+      const term = search.trim().toLowerCase();
+      return resources.filter((row) => {
+        if (status !== 'all' && classify(row) !== status) return false;
+        if (!term) return true;
+        const haystack = [
+          row.name,
+          row.displayName,
+          row.vmware?.datacenterName,
+          row.vmware?.datastoreType,
+          row.vmware?.connectionName,
+          row.vmware?.vcenterHost,
+          ...(row.storage?.nodes ?? []),
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(term);
+      });
+    },
   });
-
-  const total = createMemo(() => props.resources.length);
-  const visible = createMemo(() => filtered().length);
 
   return (
     <Show
-      when={total() > 0}
+      when={tableState.total() > 0}
       fallback={
         <PlatformTableEmptyState
           icon={props.emptyIcon}
@@ -177,20 +175,20 @@ export const VsphereDatastoresTable: Component<{
       <div class="space-y-3">
         <Show when={props.showToolbar !== false}>
           <PlatformTableToolbar
-            search={search}
-            onSearchChange={setSearch}
+            search={tableState.search}
+            onSearchChange={tableState.setSearch}
             searchPlaceholder="Search datastores, datacenters, hosts"
-            status={status()}
-            onStatusChange={setStatus}
+            status={tableState.status()}
+            onStatusChange={tableState.setStatus}
             statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
-            visible={visible()}
-            total={total()}
+            visible={tableState.visible()}
+            total={tableState.total()}
             rowNoun="datastores"
           />
         </Show>
 
         <Show
-          when={filtered().length > 0}
+          when={tableState.filtered().length > 0}
           fallback={
             <PlatformTableEmptyState
               icon={props.emptyIcon}
@@ -223,7 +221,7 @@ export const VsphereDatastoresTable: Component<{
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                <For each={filtered()}>
+                <For each={tableState.filtered()}>
                   {(row) => {
                     const ind = indicatorFor(row);
                     const name = asTrimmedString(row.name) || row.id;

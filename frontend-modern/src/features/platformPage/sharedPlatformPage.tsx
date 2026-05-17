@@ -171,6 +171,28 @@ export const filterPlatformResources = (
   return result;
 };
 
+export function createPlatformTableFilterState<Status extends string | number>(props: {
+  resources: () => Resource[];
+  initialStatus: Status;
+  filter: (resources: Resource[], search: string, status: Status) => Resource[];
+}) {
+  const [search, setSearch] = createSignal('');
+  const [status, setStatus] = createSignal<Status>(props.initialStatus);
+  const filtered = createMemo(() => props.filter(props.resources(), search(), status()));
+  const visible = createMemo(() => filtered().length);
+  const total = createMemo(() => props.resources().length);
+
+  return {
+    search,
+    setSearch,
+    status,
+    setStatus,
+    filtered,
+    visible,
+    total,
+  };
+}
+
 // Compact operator-facing counter shown at the right of the toolbar so
 // users can read total / matching at a glance, mirroring v5's dense
 // dashboard counters without spawning a card grid.
@@ -234,15 +256,11 @@ export const PlatformResourceTable: Component<{
   searchPlaceholder?: string;
 }> = (props) => {
   const [expandedResourceId, setExpandedResourceId] = createSignal<string | null>(null);
-  const [search, setSearch] = createSignal('');
-  const [status, setStatus] = createSignal<PlatformResourceStatusFilter>('all');
-
-  const filteredResources = createMemo(() =>
-    filterPlatformResources(props.resources, search(), status()),
-  );
-
-  const visibleCount = createMemo(() => filteredResources().length);
-  const totalCount = createMemo(() => props.resources.length);
+  const tableState = createPlatformTableFilterState({
+    resources: () => props.resources,
+    initialStatus: 'all' as PlatformResourceStatusFilter,
+    filter: filterPlatformResources,
+  });
 
   return (
     <Show
@@ -257,18 +275,18 @@ export const PlatformResourceTable: Component<{
     >
       <div class="space-y-3">
         <PlatformTableToolbar
-          search={search}
-          onSearchChange={setSearch}
+          search={tableState.search}
+          onSearchChange={tableState.setSearch}
           searchPlaceholder={props.searchPlaceholder ?? 'Search rows'}
-          status={status()}
-          onStatusChange={setStatus}
+          status={tableState.status()}
+          onStatusChange={tableState.setStatus}
           statusOptions={PLATFORM_STATUS_FILTER_OPTIONS}
-          visible={visibleCount()}
-          total={totalCount()}
+          visible={tableState.visible()}
+          total={tableState.total()}
           rowNoun="rows"
         />
         <Show
-          when={filteredResources().length > 0}
+          when={tableState.filtered().length > 0}
           fallback={
             <PlatformTableEmptyState
               icon={props.emptyIcon}
@@ -278,7 +296,7 @@ export const PlatformResourceTable: Component<{
           }
         >
           <UnifiedResourceTable
-            resources={filteredResources()}
+            resources={tableState.filtered()}
             expandedResourceId={expandedResourceId()}
             onExpandedResourceChange={setExpandedResourceId}
             groupingMode={props.groupingMode ?? 'grouped'}
