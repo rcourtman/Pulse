@@ -16,6 +16,7 @@ import {
   connectionLastActivityText,
   fleetGovernanceSignalsForConnection,
   lastActivityTextFromLastSeen,
+  primaryRowProblem,
   surfaceLabel,
   type FleetGovernanceSignal,
   type InfrastructureSourceKind,
@@ -296,6 +297,7 @@ const buildMemberRow = (
     ...(agentConnection ? fleetGovernanceSignalsForConnection(agentConnection) : []),
   ];
 
+  const fleetHighlights = visibleFleetGovernanceSignals(fleetSignals);
   return {
     id: member.id,
     name,
@@ -308,7 +310,8 @@ const buildMemberRow = (
     statusClassName: presentation.badgeClass,
     lastActivityText: lastActivityTextFromLastSeen(lastSeen),
     fleetSignals,
-    fleetHighlights: visibleFleetGovernanceSignals(fleetSignals),
+    fleetHighlights,
+    problem: primaryRowProblem(fleetHighlights),
     primary: Boolean(member.primary),
     agentConnection,
   };
@@ -392,6 +395,7 @@ const buildRow = (
     ),
   ];
 
+  const fleetHighlights = visibleFleetGovernanceSignals(fleetSignals);
   return {
     id: primaryConnection.id,
     ownerType,
@@ -409,7 +413,8 @@ const buildRow = (
       : connectionLastActivityText(primaryConnection),
     lastErrorMessage,
     fleetSignals,
-    fleetHighlights: visibleFleetGovernanceSignals(fleetSignals),
+    fleetHighlights,
+    problem: primaryRowProblem(fleetHighlights),
     enabled: primaryConnection.enabled,
     canEdit: EDITABLE_CONNECTION_TYPES.includes(primaryConnection.type),
     canPause: primaryConnection.capabilities.supportsPause,

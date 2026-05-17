@@ -24,7 +24,6 @@ import {
 } from '@/components/shared/groupedTableRowPresentation';
 import {
   connectionAgentVersionPresentation,
-  fleetSignalClassName,
   infrastructureSourcePresentation,
   surfaceLabel,
   type FleetGovernanceSignal,
@@ -372,8 +371,16 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   );
   const connectedSystemCount = createMemo(() => props.rows().length);
   const discoveredCandidateCount = createMemo(() => props.discoveredNodes().length);
+  // Scoped to Proxmox VE: PBS/PMG/TrueNAS/etc. are fully covered by their
+  // own API and don't benefit from a paired agent in the way PVE hosts do
+  // (where the agent adds temps, SMART, host identity). Counting them here
+  // would create "Needs agent" pressure for systems that need nothing.
   const apiOnlySystems = createMemo(() =>
-    props.rows().filter((row) => rowHasApiCoverage(row) && !rowHasAgentCoverage(row)),
+    props
+      .rows()
+      .filter(
+        (row) => row.ownerType === 'pve' && rowHasApiCoverage(row) && !rowHasAgentCoverage(row),
+      ),
   );
   const apiOnlySystemCount = createMemo(() => apiOnlySystems().length);
   // Names list keeps the descriptive 'Install agents' hint actionable: when
@@ -854,18 +861,20 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             {row.lastActivityText}
                                           </span>
                                         </div>
-                                        <div class="mt-1 flex flex-wrap items-center gap-1">
-                                          <For each={row.fleetHighlights}>
-                                            {(signal) => (
-                                              <span
-                                                class={fleetSignalClassName(signal.tone)}
-                                                title={signal.detail}
-                                              >
-                                                {signal.label}
-                                              </span>
-                                            )}
-                                          </For>
-                                        </div>
+                                        <Show when={row.problem}>
+                                          {(problem) => (
+                                            <div
+                                              class={`mt-1 text-[11px] italic ${
+                                                problem().tone === 'critical'
+                                                  ? 'text-rose-700 dark:text-rose-300'
+                                                  : 'text-amber-700 dark:text-amber-300'
+                                              }`}
+                                              title={problem().detail}
+                                            >
+                                              {problem().label}
+                                            </div>
+                                          )}
+                                        </Show>
                                       </TableCell>
 
                                       <Show when={actionColumnVisible()}>
@@ -877,13 +886,16 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             }
                                           >
                                             <div class="flex flex-col items-end gap-1">
-                                              {/* Row-level install-agent shortcut: the
-                                                  apiOnly attention state lands directly on
-                                                  the affected system instead of the user
-                                                  reading a global callout and figuring out
-                                                  which row it referred to. */}
+                                              {/* Row-level install-agent shortcut, scoped to
+                                                  Proxmox VE: the agent adds node-local
+                                                  telemetry (temps, SMART, host identity)
+                                                  that the PVE API doesn't expose. PBS and
+                                                  other API-only sources are fully covered
+                                                  without an agent, so we don't nudge for
+                                                  one there. */}
                                               <Show
                                                 when={
+                                                  row.ownerType === 'pve' &&
                                                   rowHasApiCoverage(row) &&
                                                   !rowHasAgentCoverage(row) &&
                                                   Boolean(props.onAddSource)
@@ -1007,18 +1019,20 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                     {member.lastActivityText}
                                                   </span>
                                                 </div>
-                                                <div class="mt-1 flex flex-wrap items-center gap-1">
-                                                  <For each={member.fleetHighlights}>
-                                                    {(signal) => (
-                                                      <span
-                                                        class={fleetSignalClassName(signal.tone)}
-                                                        title={signal.detail}
-                                                      >
-                                                        {signal.label}
-                                                      </span>
-                                                    )}
-                                                  </For>
-                                                </div>
+                                                <Show when={member.problem}>
+                                                  {(problem) => (
+                                                    <div
+                                                      class={`mt-1 text-[11px] italic ${
+                                                        problem().tone === 'critical'
+                                                          ? 'text-rose-700 dark:text-rose-300'
+                                                          : 'text-amber-700 dark:text-amber-300'
+                                                      }`}
+                                                      title={problem().detail}
+                                                    >
+                                                      {problem().label}
+                                                    </div>
+                                                  )}
+                                                </Show>
                                               </TableCell>
 
                                               <Show when={actionColumnVisible()}>
@@ -1286,17 +1300,21 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                 <span class="text-[12px] text-muted/90">
                                                   {member.lastActivityText}
                                                 </span>
-                                                <For each={member.fleetHighlights}>
-                                                  {(signal) => (
-                                                    <span
-                                                      class={fleetSignalClassName(signal.tone)}
-                                                      title={signal.detail}
-                                                    >
-                                                      {signal.label}
-                                                    </span>
-                                                  )}
-                                                </For>
                                               </div>
+                                              <Show when={member.problem}>
+                                                {(problem) => (
+                                                  <div
+                                                    class={`mt-1 text-[11px] italic ${
+                                                      problem().tone === 'critical'
+                                                        ? 'text-rose-700 dark:text-rose-300'
+                                                        : 'text-amber-700 dark:text-amber-300'
+                                                    }`}
+                                                    title={problem().detail}
+                                                  >
+                                                    {problem().label}
+                                                  </div>
+                                                )}
+                                              </Show>
                                             </div>
                                           );
                                         }}
@@ -1329,17 +1347,21 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                     >
                                       {row.lastActivityText}
                                     </span>
-                                    <For each={row.fleetHighlights}>
-                                      {(signal) => (
-                                        <span
-                                          class={fleetSignalClassName(signal.tone)}
-                                          title={signal.detail}
-                                        >
-                                          {signal.label}
-                                        </span>
-                                      )}
-                                    </For>
                                   </div>
+                                  <Show when={row.problem}>
+                                    {(problem) => (
+                                      <div
+                                        class={`mt-1 text-[11px] italic ${
+                                          problem().tone === 'critical'
+                                            ? 'text-rose-700 dark:text-rose-300'
+                                            : 'text-amber-700 dark:text-amber-300'
+                                        }`}
+                                        title={problem().detail}
+                                      >
+                                        {problem().label}
+                                      </div>
+                                    )}
+                                  </Show>
                                   <Show when={!props.readOnly && rowInteractive(row)}>
                                     <button
                                       type="button"

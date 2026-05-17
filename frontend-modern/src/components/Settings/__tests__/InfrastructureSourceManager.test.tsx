@@ -1,10 +1,11 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InfrastructureSourceManager } from '../InfrastructureSourceManager';
-import type {
-  FleetGovernanceSignal,
-  InfrastructureSystemMemberRow,
-  InfrastructureSystemRow,
+import {
+  primaryRowProblem,
+  type FleetGovernanceSignal,
+  type InfrastructureSystemMemberRow,
+  type InfrastructureSystemRow,
 } from '../connectionsTableModel';
 import type { Connection } from '@/api/connections';
 
@@ -38,6 +39,7 @@ const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSy
   const fleetSignals = overrides.fleetSignals ?? [
     signal({ key: 'liveness', label: 'Live', tone: 'ok' }),
   ];
+  const fleetHighlights = overrides.fleetHighlights ?? [signal({})];
   return {
     id: connection.id,
     ownerType: connection.type,
@@ -51,7 +53,8 @@ const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSy
     agentUpdateCount: 0,
     lastActivityText: '5s ago',
     fleetSignals,
-    fleetHighlights: overrides.fleetHighlights ?? [signal({})],
+    fleetHighlights,
+    problem: overrides.problem ?? primaryRowProblem(fleetHighlights),
     enabled: connection.enabled,
     canEdit: false,
     canPause: false,
@@ -67,21 +70,25 @@ const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSy
 
 const member = (
   overrides: Partial<InfrastructureSystemMemberRow> = {},
-): InfrastructureSystemMemberRow => ({
-  id: overrides.id ?? 'member-1',
-  name: overrides.name ?? 'member-1',
-  subtitle: overrides.subtitle ?? 'Cluster member',
-  source: overrides.source ?? 'agent',
-  host: overrides.host ?? 'https://member-1:8006',
-  coverageLabels: overrides.coverageLabels ?? ['Host telemetry'],
-  statusLabel: overrides.statusLabel ?? 'Active',
-  statusClassName: overrides.statusClassName ?? 'bg-green-100 text-green-800',
-  lastActivityText: overrides.lastActivityText ?? '5s ago',
-  fleetSignals: overrides.fleetSignals ?? [],
-  fleetHighlights: overrides.fleetHighlights ?? [],
-  primary: overrides.primary ?? false,
-  agentConnection: overrides.agentConnection,
-});
+): InfrastructureSystemMemberRow => {
+  const fleetHighlights = overrides.fleetHighlights ?? [];
+  return {
+    id: overrides.id ?? 'member-1',
+    name: overrides.name ?? 'member-1',
+    subtitle: overrides.subtitle ?? 'Cluster member',
+    source: overrides.source ?? 'agent',
+    host: overrides.host ?? 'https://member-1:8006',
+    coverageLabels: overrides.coverageLabels ?? ['Host telemetry'],
+    statusLabel: overrides.statusLabel ?? 'Active',
+    statusClassName: overrides.statusClassName ?? 'bg-green-100 text-green-800',
+    lastActivityText: overrides.lastActivityText ?? '5s ago',
+    fleetSignals: overrides.fleetSignals ?? [],
+    fleetHighlights,
+    problem: overrides.problem ?? primaryRowProblem(fleetHighlights),
+    primary: overrides.primary ?? false,
+    agentConnection: overrides.agentConnection,
+  };
+};
 
 describe('InfrastructureSourceManager setup summary', () => {
   afterEach(() => cleanup());
@@ -156,8 +163,11 @@ describe('InfrastructureSourceManager setup summary', () => {
     expect(screen.getByText('Needs attention')).toBeInTheDocument();
     expect(screen.getByText('Needs agent')).toBeInTheDocument();
     expect(screen.queryByText('Fleet governance')).toBeNull();
+    // The row now surfaces a single plain-English problem line under its
+    // status badge instead of a chip-per-signal stack. Info-toned signals
+    // (e.g. "Remote control enabled") aren't problems and don't render.
     expect(screen.getByText('Credentials invalid')).toBeInTheDocument();
-    expect(screen.getByText('Remote control enabled')).toBeInTheDocument();
+    expect(screen.queryByText('Remote control enabled')).toBeNull();
   });
 
   it('does not count hidden passive agent config handshakes as setup attention', () => {
@@ -251,7 +261,11 @@ describe('InfrastructureSourceManager setup summary', () => {
     ));
 
     expect(screen.getByText('Needs attention').nextElementSibling?.textContent).toBe('1 system');
-    expect(screen.getByText('Fleet OK')).toBeInTheDocument();
+    // "Fleet OK" is no longer rendered as a synthetic ok-chip; an empty
+    // problem line is the absence of trouble. The cluster-member row
+    // surfaces its single actionable problem ("Config drift") with the
+    // detail attached as a tooltip.
+    expect(screen.queryByText('Fleet OK')).toBeNull();
     expect(screen.getByText('Config drift')).toHaveAttribute(
       'title',
       'Desired and applied fingerprints differ.',

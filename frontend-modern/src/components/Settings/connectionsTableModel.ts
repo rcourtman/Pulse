@@ -945,6 +945,16 @@ const isPassiveAgentRolloutConfirmationFallbackSignal = (
   );
 };
 
+// A row-level operational problem expressed as one plain-English sentence
+// — rendered below the status badge instead of as a parallel coloured chip.
+// `fleetHighlights` is retained on the row model for downstream consumers
+// (Manage drawer, audit views) that need the full structured signal list.
+export interface InfrastructureRowProblem {
+  label: string;
+  detail: string;
+  tone: 'warning' | 'critical';
+}
+
 export interface InfrastructureSystemMemberRow {
   id: string;
   name: string;
@@ -958,6 +968,7 @@ export interface InfrastructureSystemMemberRow {
   lastActivityText: string;
   fleetSignals: FleetGovernanceSignal[];
   fleetHighlights: FleetGovernanceSignal[];
+  problem?: InfrastructureRowProblem;
   primary: boolean;
   agentConnection?: Connection;
 }
@@ -978,6 +989,7 @@ export interface InfrastructureSystemRow {
   lastErrorMessage?: string;
   fleetSignals: FleetGovernanceSignal[];
   fleetHighlights: FleetGovernanceSignal[];
+  problem?: InfrastructureRowProblem;
   enabled: boolean;
   canEdit: boolean;
   canPause: boolean;
@@ -988,3 +1000,15 @@ export interface InfrastructureSystemRow {
   members: InfrastructureSystemMemberRow[];
   connection: Connection;
 }
+
+// Pick the single most important problem to surface in the row's status
+// column. Critical beats warning; otherwise first wins — the upstream
+// builder has already prioritised highlights (attention before info).
+export const primaryRowProblem = (
+  signals: readonly FleetGovernanceSignal[],
+): InfrastructureRowProblem | undefined => {
+  const critical = signals.find((signal) => signal.tone === 'critical');
+  const candidate = critical ?? signals.find((signal) => signal.tone === 'warning');
+  if (!candidate) return undefined;
+  return { label: candidate.label, detail: candidate.detail, tone: candidate.tone };
+};
