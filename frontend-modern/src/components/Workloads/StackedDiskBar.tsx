@@ -199,12 +199,12 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
             <For each={presentation().verticalBars}>
               {(bar) => (
                 <div
-                  class="relative h-full w-[5px] shrink-0 overflow-hidden rounded-sm bg-surface-hover"
+                  class="group/disk relative h-full w-[5px] shrink-0 cursor-help overflow-hidden rounded-sm bg-surface-hover ring-1 ring-transparent transition-[transform,box-shadow,ring-color] duration-100 hover:scale-y-[1.08] hover:ring-base-content/30"
                   title={bar.title}
                 >
                   <div
                     data-stacked-disk-fill="vertical"
-                    class="absolute bottom-0 left-0 right-0 rounded-sm"
+                    class="absolute bottom-0 left-0 right-0 rounded-sm brightness-100 transition-[filter] duration-100 group-hover/disk:brightness-125"
                     style={{ height: `${bar.fillPercent}%`, background: bar.color }}
                   />
                 </div>

@@ -46,7 +46,7 @@ const HOST_COLUMN_DESKTOP_WIDTHS: Record<ProxmoxHostTableColumnId, number> = {
   uptime: 7,
   cpu: 13,
   memory: 13,
-  disk: 15,
+  disk: 7,
   temp: 7,
   vms: 5,
   cts: 5,
@@ -58,16 +58,16 @@ const HOST_COLUMN_RESPONSIVE_WEIGHTS: Record<
   Partial<Record<ProxmoxHostTableColumnId, number>>
 > = {
   mobile: {
-    node: 38,
-    cpu: 20,
-    memory: 21,
-    disk: 21,
+    node: 44,
+    cpu: 23,
+    memory: 23,
+    disk: 10,
   },
   tablet: {
-    node: 26,
-    cpu: 17,
-    memory: 17,
-    disk: 19,
+    node: 30,
+    cpu: 19,
+    memory: 19,
+    disk: 11,
     temp: 8,
     vms: 6,
     cts: 6,
