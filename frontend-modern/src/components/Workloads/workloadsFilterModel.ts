@@ -2,6 +2,8 @@ import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import type { ViewMode, WorkloadGuest } from '@/types/workloads';
 import type { JSX } from 'solid-js';
 
+import type { WorkloadTableMetricHistoryRange } from './workloadMetricHistoryModel';
+
 export type WorkloadsStatusMode = 'all' | 'running' | 'degraded' | 'stopped';
 export type WorkloadsGroupingMode = 'grouped' | 'flat';
 export type WorkloadsMetricDisplayMode = 'bars' | 'sparklines';
@@ -44,6 +46,12 @@ export interface WorkloadsFilterProps {
   containerRuntimeFilter?: WorkloadsToolbarFilterConfig;
   chartsCollapsed?: () => boolean;
   onChartsToggle?: () => void;
+  metricDisplayMode?: () => WorkloadsMetricDisplayMode;
+  setMetricDisplayMode?: (value: WorkloadsMetricDisplayMode) => void;
+  metricHistoryRange?: () => WorkloadTableMetricHistoryRange;
+  setMetricHistoryRange?: (value: WorkloadTableMetricHistoryRange) => void;
+  pinnedSelectionActive?: () => boolean;
+  onClearPinnedSelection?: () => void;
   searchTrailing?: JSX.Element;
   utilityActions?: JSX.Element;
   mobileTrailing?: JSX.Element;

@@ -2,7 +2,6 @@ import { For, Show, createMemo, type Accessor, type Component, type JSX } from '
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCard } from '@/components/shared/TableCard';
-import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline';
@@ -155,7 +154,6 @@ export const ProxmoxNodesTable: Component<{
       }
     >
       <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-        <TableCardHeader title="Hosts" />
         <Table class={`${getProxmoxHostTableMinWidthClass(layoutMode())} table-fixed text-xs`}>
           <colgroup>
             <For each={visibleColumns()}>

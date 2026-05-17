@@ -349,8 +349,6 @@ describe('shared primitive guardrails', () => {
     expect(summaryTableCardHeaderSource).toContain("from './TableCardHeader'");
     expect(summaryTableCardHeaderSource).not.toContain('border-b border-border bg-surface-hover');
     for (const source of [
-      workloadsTableSource,
-      proxmoxNodesTableSource,
       unifiedResourceHostTableCardSource,
       unifiedResourceServiceInfrastructureCardSource,
       storageContentCardSource,
@@ -613,7 +611,6 @@ describe('shared primitive guardrails', () => {
       unifiedResourceHostTableCardSource,
       recoveryHistorySectionSource,
       recoveryProtectedInventorySectionSource,
-      workloadsTableSource,
       storageContentCardSource,
     ]) {
       expect(source).toContain('TableCardHeader');

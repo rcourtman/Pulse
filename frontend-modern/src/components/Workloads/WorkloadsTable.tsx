@@ -1,12 +1,10 @@
 import { For } from 'solid-js';
 
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
-import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { Table } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
 
 import { getGuestColumnWidthStyle } from './guestRowModel';
-import { MetricDisplayModeSegmentedControl } from './MetricDisplayModeSegmentedControl';
 import type { WorkloadsState } from './useWorkloadsState';
 import { WorkloadPanel } from './WorkloadPanel';
 import { WorkloadTableHeader } from './WorkloadTableHeader';
@@ -28,7 +26,6 @@ type WorkloadsTableProps = Pick<
   | 'handleTagClick'
   | 'activeSummaryWorkloadGroupScope'
   | 'activeSummaryWorkloadId'
-  | 'clearPinnedSummaryScope'
   | 'focusedSummaryWorkloadGroupScope'
   | 'focusedSummaryWorkloadGroupId'
   | 'hoveredSummaryWorkloadGroupScope'
@@ -52,19 +49,13 @@ type WorkloadsTableProps = Pick<
   | 'windowedGroupedGuests'
   | 'workloadIOEmphasis'
   | 'workloadMetricDisplayMode'
-  | 'workloadMetricHistoryRange'
   | 'workloadMetricHistory'
   | 'workloadTableLayoutMode'
   | 'workloadTableVisibleColumnIds'
   | 'workloadTableVisibleColumns'
-  | 'setWorkloadMetricDisplayMode'
-  | 'setWorkloadMetricHistoryRange'
 >;
 
 export function WorkloadsTable(props: WorkloadsTableProps) {
-  const showClearSelection = () =>
-    Boolean(props.selectedGuestId() || props.focusedSummaryWorkloadGroupId());
-
   return (
     <ComponentErrorBoundary name="Guest Table">
       <TableCard
@@ -73,19 +64,6 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
         data-summary-clear-surface
         data-testid="workloads-table-surface"
       >
-        <TableCardHeader
-          title="Workloads"
-          actions={
-            <MetricDisplayModeSegmentedControl
-              value={props.workloadMetricDisplayMode()}
-              onChange={props.setWorkloadMetricDisplayMode}
-              range={props.workloadMetricHistoryRange()}
-              onRangeChange={props.setWorkloadMetricHistoryRange}
-            />
-          }
-          showClearAction={showClearSelection()}
-          onClear={props.clearPinnedSummaryScope}
-        />
         <Table
           wrapperRef={props.setTableWrapperRef}
           class={`workload-table min-w-full table-fixed ${props.isMobile() ? 'workload-table--mobile' : 'workload-table--desktop'}`}

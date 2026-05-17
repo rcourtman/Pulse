@@ -10,7 +10,7 @@ export type TableCardHeaderProps = {
 };
 
 export const TABLE_CARD_HEADER_CLASS =
-  'flex items-center gap-3 border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted';
+  'flex items-center gap-3 border-b border-border bg-surface-hover px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted';
 
 export const TABLE_CARD_HEADER_CLEAR_BUTTON_CLASS = [
   'ml-auto inline-flex items-center rounded-sm text-[11px] font-medium normal-case tracking-normal text-muted transition-colors',

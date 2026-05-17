@@ -978,18 +978,18 @@ describe('Workloads performance contract', () => {
       expect(workloadsSource).toContain('setTableRootRef={state.setTableRootRef}');
       expect(workloadsSource).toContain('data-testid="workloads-interaction-surface"');
       expect(workloadsSource).toContain('data-summary-clear-ignore');
-      expect(workloadsSource).toContain('clearPinnedSummaryScope={state.clearPinnedSummaryScope}');
+      expect(workloadsSource).toContain('onClearPinnedSelection={state.clearPinnedSummaryScope}');
       expect(workloadsWorkloadTableSource).toContain('data-summary-clear-surface');
       expect(workloadsWorkloadTableSource).toContain('data-testid="workloads-table-surface"');
       expect(workloadsWorkloadTableSource).toContain('TableCard');
-      expect(workloadsWorkloadTableSource).toContain('TableCardHeader');
-      expect(workloadsWorkloadTableSource).toContain('workloadMetricHistoryRange');
+      expect(workloadsFilterSource).toContain('MetricDisplayModeSegmentedControl');
+      expect(workloadsFilterSource).toContain('metricHistoryRange');
       expect(metricDisplayModeSegmentedControlSource).toContain(
         'WORKLOAD_TABLE_HISTORY_RANGES.map',
       );
       expect(metricDisplayModeSegmentedControlSource).toContain('aria-label="Sparkline range"');
-      expect(workloadsWorkloadTableSource).toContain('showClearSelection');
-      expect(workloadsWorkloadTableSource).toContain('clearPinnedSummaryScope');
+      expect(workloadsFilterSource).toContain('pinnedSelectionActive');
+      expect(workloadsFilterSource).toContain('Clear selection');
       expect(workloadsFilterSource).not.toContain('const [filtersOpen, setFiltersOpen] =');
       expect(workloadsFilterSource).not.toContain("props.setSortKey('name')");
       expect(workloadsFilterSource).toContain('searchTrailing={props.searchTrailing}');

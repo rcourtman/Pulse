@@ -1,12 +1,14 @@
 import { Component, Show, createMemo } from 'solid-js';
+import XIcon from 'lucide-solid/icons/x';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
-import { ChartVisibilityToggleButton } from '@/components/shared/FilterToolbar';
+import { ChartVisibilityToggleButton, FilterActionButton } from '@/components/shared/FilterToolbar';
 import { GroupedTableModeSegmentedControl } from '@/components/shared/GroupedTableModeSegmentedControl';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { isContainerWorkloadViewMode } from '@/utils/workloads';
 import type { ViewMode } from '@/types/workloads';
+import { MetricDisplayModeSegmentedControl } from './MetricDisplayModeSegmentedControl';
 import type { WorkloadsFilterProps, WorkloadsStatusMode } from './workloadsFilterModel';
 import {
   DEFAULT_WORKLOADS_GROUPING_MODE,
@@ -154,6 +156,24 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
       filters={buildFilters()}
       viewOptionsTrailing={
         <>
+          <Show when={props.pinnedSelectionActive?.() && props.onClearPinnedSelection}>
+            <FilterActionButton
+              aria-label="Clear pinned selection"
+              title="Clear pinned selection"
+              onClick={() => props.onClearPinnedSelection?.()}
+            >
+              <XIcon class="h-3 w-3" />
+              Clear selection
+            </FilterActionButton>
+          </Show>
+          <Show when={props.metricDisplayMode && props.setMetricDisplayMode}>
+            <MetricDisplayModeSegmentedControl
+              value={props.metricDisplayMode!()}
+              onChange={props.setMetricDisplayMode!}
+              range={props.metricHistoryRange?.()}
+              onRangeChange={props.setMetricHistoryRange}
+            />
+          </Show>
           <GroupedTableModeSegmentedControl
             value={props.groupingMode()}
             onChange={props.setGroupingMode}

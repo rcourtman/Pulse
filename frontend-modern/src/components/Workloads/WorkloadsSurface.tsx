@@ -115,6 +115,14 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
               hostFilter={state.hostFilterConfig()}
               namespaceFilter={state.namespaceFilterConfig()}
               platformFilter={state.platformFilterConfig()}
+              metricDisplayMode={state.workloadMetricDisplayMode}
+              setMetricDisplayMode={state.setWorkloadMetricDisplayMode}
+              metricHistoryRange={state.workloadMetricHistoryRange}
+              setMetricHistoryRange={state.setWorkloadMetricHistoryRange}
+              pinnedSelectionActive={() =>
+                Boolean(state.selectedGuestId() || state.focusedSummaryWorkloadGroupId())
+              }
+              onClearPinnedSelection={state.clearPinnedSummaryScope}
             />
           </div>
         </Show>
@@ -130,7 +138,6 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
             activeAlerts={state.activeAlerts}
             alertsEnabled={state.alertsEnabled}
             bottomSpacerHeight={state.bottomSpacerHeight}
-            clearPinnedSummaryScope={state.clearPinnedSummaryScope}
             compactGroupHeaders={state.compactGroupHeaders}
             getGroupLabel={state.getGroupLabel}
             groupedGuests={state.groupedGuests}
@@ -166,13 +173,10 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
             windowedGroupedGuests={state.windowedGroupedGuests}
             workloadIOEmphasis={state.workloadIOEmphasis}
             workloadMetricDisplayMode={state.workloadMetricDisplayMode}
-            workloadMetricHistoryRange={state.workloadMetricHistoryRange}
             workloadMetricHistory={state.workloadMetricHistory}
             workloadTableLayoutMode={state.workloadTableLayoutMode}
             workloadTableVisibleColumnIds={state.workloadTableVisibleColumnIds}
             workloadTableVisibleColumns={state.workloadTableVisibleColumns}
-            setWorkloadMetricDisplayMode={state.setWorkloadMetricDisplayMode}
-            setWorkloadMetricHistoryRange={state.setWorkloadMetricHistoryRange}
           />
         </Show>
         <Show
