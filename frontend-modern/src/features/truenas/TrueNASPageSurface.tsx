@@ -92,7 +92,7 @@ export function TrueNASPageSurface() {
                 <StorageSurface
                   embedded
                   tableOnly
-                  showFilterToolbar
+                  forcedView="pools"
                   forcedSourceFilter={TRUENAS_PLATFORM_FILTER}
                 />
                 <Show when={model().disks.length > 0}>

@@ -68,6 +68,7 @@ describe('platform overview layout guardrails', () => {
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesDeploymentsTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASSystemsTable');
     expect(truenasPageSurfaceSource).toContain('<StorageSurface');
+    expect(truenasPageSurfaceSource).toContain('forcedView="pools"');
     expect(truenasPageSurfaceSource).toContain('<TrueNASDisksTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereHostsTable');
     expect(vmwarePageSurfaceSource).toContain('<WorkloadsSurface');
