@@ -17,7 +17,8 @@ import {
 } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
-import { normalizeDiskArray } from '@/utils/format';
+import { formatBytes, formatPercent, normalizeDiskArray } from '@/utils/format';
+import { getMetricColorRgba } from '@/utils/metricThresholds';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { useWorkloadTableMetricHistory } from '@/components/Workloads/useWorkloadTableMetricHistory';
 import { getWorkloadTableLayoutMode } from '@/components/Workloads/guestRowModel';
@@ -118,6 +119,86 @@ const formatPercentLabel = (value: number | null | undefined): string => {
   return `${Math.round(Math.max(0, normalized))}%`;
 };
 
+const getDiskUsagePercent = (disk: Disk): number => {
+  if (disk.total > 0) return (disk.used / disk.total) * 100;
+  if (Number.isFinite(disk.usage)) return disk.usage <= 1 ? disk.usage * 100 : disk.usage;
+  return 0;
+};
+
+const getDiskShortLabel = (disk: Disk, index: number): string => {
+  const raw = (disk.mountpoint || disk.device || `Disk ${index + 1}`).trim();
+  if (raw.startsWith('/dev/')) return raw.slice('/dev/'.length);
+  if (raw === '/') return '/';
+  if (raw.startsWith('/')) {
+    const parts = raw.split('/').filter(Boolean);
+    if (parts.length > 0) return parts[parts.length - 1];
+  }
+  return raw;
+};
+
+const getWorstDiskPercent = (disks: Disk[]): number => {
+  let worst = 0;
+  for (const disk of disks) {
+    const pct = getDiskUsagePercent(disk);
+    if (pct > worst) worst = pct;
+  }
+  return worst;
+};
+
+const DISK_COUNT_BADGE_BASE =
+  'inline-flex items-center gap-1.5 rounded-md bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content';
+
+const ProxmoxHostDiskSubRow: Component<{
+  disk: Disk;
+  index: number;
+  visibleColumns: ProxmoxHostTableColumn[];
+}> = (subProps) => {
+  const percent = () => getDiskUsagePercent(subProps.disk);
+  const fillPercent = () => Math.min(percent(), 100);
+  const color = () => getMetricColorRgba(percent(), 'disk');
+  const label = () => getDiskShortLabel(subProps.disk, subProps.index);
+  const fullPath = () =>
+    subProps.disk.mountpoint || subProps.disk.device || `Disk ${subProps.index + 1}`;
+  const usedLabel = () => formatBytes(subProps.disk.used);
+  const totalLabel = () =>
+    subProps.disk.total > 0 ? formatBytes(subProps.disk.total) : '—';
+
+  const diskIdx = () => subProps.visibleColumns.findIndex((c) => c.id === 'disk');
+  const leadingColumns = () => subProps.visibleColumns.slice(0, diskIdx());
+  const trailingSpan = () => subProps.visibleColumns.length - diskIdx();
+
+  return (
+    <TableRow class="text-[11px] bg-surface-alt/30">
+      <For each={leadingColumns()}>
+        {(column) => (
+          <TableCell class={getPlatformTableCellClass(column.align)}>&nbsp;</TableCell>
+        )}
+      </For>
+      <TableCell
+        class={`${getPlatformTableCellClass('left')} text-muted`}
+        colspan={trailingSpan()}
+      >
+        <div class="flex items-center gap-3 min-w-0" title={`${fullPath()}: ${formatPercent(percent())} (${usedLabel()} / ${totalLabel()})`}>
+          <span class="text-muted/70 select-none">└</span>
+          <span class="font-mono text-base-content truncate max-w-[140px]">{label()}</span>
+          <div class="relative flex-1 min-w-[60px] h-2 rounded bg-surface-hover overflow-hidden">
+            <div
+              class="absolute inset-y-0 left-0 rounded"
+              style={{ width: `${fillPercent()}%`, background: color() }}
+            />
+          </div>
+          <span class="tabular-nums text-base-content w-[36px] text-right">
+            {formatPercent(percent())}
+          </span>
+          <span class="tabular-nums text-muted whitespace-nowrap">
+            {usedLabel()} / {totalLabel()}
+          </span>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+};
+
 export const ProxmoxNodesTable: Component<{
   nodes: Resource[];
   guests: Resource[];
@@ -205,6 +286,7 @@ export const ProxmoxNodesTable: Component<{
                     ? node.memory.current
                     : undefined;
                 const diskPercent = () => node.disk?.current ?? 0;
+                const diskList = (): Disk[] => normalizeDiskArray(node.agent?.disks) ?? [];
                 const aggregateDisk = (): Disk | undefined =>
                   node.disk
                     ? ({
@@ -333,10 +415,32 @@ export const ProxmoxNodesTable: Component<{
                                   </div>
                                 }
                               >
-                                <StackedDiskBar
-                                  disks={normalizeDiskArray(node.agent?.disks)}
-                                  aggregateDisk={aggregateDisk()}
-                                />
+                                <Show
+                                  when={diskList().length > 1}
+                                  fallback={
+                                    <StackedDiskBar
+                                      disks={diskList()}
+                                      aggregateDisk={aggregateDisk()}
+                                    />
+                                  }
+                                >
+                                  <span
+                                    class={DISK_COUNT_BADGE_BASE}
+                                    title={`${diskList().length} disks — worst ${formatPercent(getWorstDiskPercent(diskList()))}`}
+                                  >
+                                    <span
+                                      class="inline-block h-2 w-2 rounded-full"
+                                      style={{
+                                        background: getMetricColorRgba(
+                                          getWorstDiskPercent(diskList()),
+                                          'disk',
+                                        ),
+                                      }}
+                                      aria-hidden="true"
+                                    />
+                                    {diskList().length} disks
+                                  </span>
+                                </Show>
                               </Show>
                             }
                           >
@@ -392,9 +496,22 @@ export const ProxmoxNodesTable: Component<{
                 };
 
                 return (
-                  <TableRow class="text-[11px] sm:text-xs">
-                    <For each={visibleColumns()}>{(column) => renderColumnCell(column)}</For>
-                  </TableRow>
+                  <>
+                    <TableRow class="text-[11px] sm:text-xs">
+                      <For each={visibleColumns()}>{(column) => renderColumnCell(column)}</For>
+                    </TableRow>
+                    <Show when={!isSparklineMode() && isOnline() && diskList().length > 1}>
+                      <For each={diskList()}>
+                        {(disk, index) => (
+                          <ProxmoxHostDiskSubRow
+                            disk={disk}
+                            index={index()}
+                            visibleColumns={visibleColumns()}
+                          />
+                        )}
+                      </For>
+                    </Show>
+                  </>
                 );
               }}
             </For>
