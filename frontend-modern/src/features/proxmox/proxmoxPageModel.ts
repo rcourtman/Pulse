@@ -213,6 +213,30 @@ const hasReplicationSignal = (change: ResourceChange): boolean => {
   return haystack.includes('replication') || haystack.includes('replica');
 };
 
+const hasBackupSignal = (resource: Resource): boolean => {
+  if (getResourceLastBackup(resource) !== null) return true;
+  const haystack = [
+    resource.id,
+    resource.name,
+    resource.displayName,
+    ...(resource.tags ?? []),
+    ...(resource.recentChanges ?? []).flatMap((change) => [
+      change.id,
+      change.kind,
+      change.sourceAdapter,
+      change.reason,
+      ...(change.relatedResources ?? []),
+    ]),
+  ]
+    .filter((value): value is string => typeof value === 'string')
+    .join(' ')
+    .toLowerCase();
+
+  return (
+    haystack.includes('backup') || haystack.includes('snapshot') || haystack.includes('vzdump')
+  );
+};
+
 function buildReplicationChanges(resources: Resource[]): ProxmoxReplicationChange[] {
   return resources
     .flatMap((resource) =>
@@ -345,4 +369,26 @@ export function buildProxmoxPageModel(resources: Resource[]): ProxmoxPageModel {
       alertCount,
     },
   };
+}
+
+export function buildVisibleProxmoxTabSpecs(model: ProxmoxPageModel): ProxmoxTabSpec[] {
+  const visible = new Set<ProxmoxPageTabId>(['overview']);
+
+  if (model.storage.length > 0 || model.physicalDisks.length > 0) {
+    visible.add('storage');
+  }
+  if (model.replicationChanges.length > 0) {
+    visible.add('replication');
+  }
+  if (model.resources.some(hasBackupSignal) || model.pbs.length > 0) {
+    visible.add('backups');
+  }
+  if (model.ceph.length > 0) {
+    visible.add('ceph');
+  }
+  if (model.pmg.length > 0) {
+    visible.add('mail');
+  }
+
+  return PROXMOX_TAB_SPECS.filter((tab) => visible.has(tab.id));
 }

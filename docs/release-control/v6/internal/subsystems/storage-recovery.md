@@ -214,7 +214,13 @@ bypass the API fail-closed execution gate.
    second-row rail as sort, charts, and reset, while Node, Source, Role, and
    Group remain menu/chip filters because their option sets are scope- or
    data-driven. Subtabs (Pools / Physical Disks) sit above the bar as
-   navigation, not filters. Storage summary chart visibility remains a
+   navigation, not filters. Platform-page storage and recovery section tabs
+   are still capability-gated navigation: Proxmox Storage,
+   Backups, Ceph, Replication, and adjacent recovery sections may appear only
+   when the platform page model has matching storage, backup, Ceph,
+   replication, or provider evidence. Empty capability tabs must not remain as
+   disabled placeholders on platform pages.
+   Storage summary chart visibility remains a
    page-level display preference, but it now rides the shared
    `FilterBar.viewOptionsTrailing` slot together with the sort key/direction
    controls. The charts toggle must read as an explicit `Show charts` /

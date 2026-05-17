@@ -28,6 +28,7 @@ import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PROXMOX_TAB_SPECS,
   buildProxmoxPageModel,
+  buildVisibleProxmoxTabSpecs,
   type ProxmoxPageTabId,
 } from './proxmoxPageModel';
 
@@ -53,11 +54,16 @@ export function ProxmoxPageSurface() {
     cacheKey: 'proxmox-workspace',
     initialHydration: 'prefer-ws-then-rest',
   });
+  const model = createMemo(() => buildProxmoxPageModel(resources()));
+  const visibleTabs = createMemo(() => buildVisibleProxmoxTabSpecs(model()));
+  const visibleTabIds = createMemo(
+    () => new Set<ProxmoxPageTabId>(visibleTabs().map((tab) => tab.id)),
+  );
   const activeTab = createMemo<ProxmoxPageTabId>(() => {
     const segment = location.pathname.split('/').filter(Boolean)[1] as ProxmoxPageTabId | undefined;
-    return segment && VALID_TABS.has(segment) ? segment : 'overview';
+    if (!segment || !VALID_TABS.has(segment)) return 'overview';
+    return visibleTabIds().has(segment) ? segment : 'overview';
   });
-  const model = createMemo(() => buildProxmoxPageModel(resources()));
 
   // The hosts table at the top and the embedded WorkloadsSurface below share
   // the bars/sparklines toggle (and the sparkline history range that ships
@@ -85,11 +91,7 @@ export function ProxmoxPageSurface() {
 
   return (
     <div data-testid="proxmox-page" class="space-y-3">
-      <PlatformSectionTabs
-        tabs={PROXMOX_TAB_SPECS}
-        active={activeTab()}
-        ariaLabel="Proxmox sections"
-      />
+      <PlatformSectionTabs tabs={visibleTabs()} active={activeTab()} ariaLabel="Proxmox sections" />
 
       <Show
         when={!loading() || model().resources.length > 0}

@@ -4,7 +4,6 @@ import { useLocation, useNavigate } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { buildProxmoxPath } from '@/routing/resourceLinks';
 
 const NotFound: Component = () => {
   const location = useLocation();
@@ -24,9 +23,9 @@ const NotFound: Component = () => {
               <button
                 type="button"
                 class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
-                onClick={() => navigate(buildProxmoxPath())}
+                onClick={() => navigate('/')}
               >
-                Go to Proxmox
+                Go to workspace
               </button>
             </div>
           }

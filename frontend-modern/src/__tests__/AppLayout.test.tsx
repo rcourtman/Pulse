@@ -2,6 +2,7 @@ import { cleanup, render, screen, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { State } from '@/types/api';
+import type { Resource } from '@/types/resource';
 import { AppLayout } from '@/AppLayout';
 import { aiChatStore } from '@/stores/aiChat';
 
@@ -20,7 +21,21 @@ describe('AppLayout navigation icons', () => {
     cleanup();
   });
 
-  const renderLayout = () =>
+  const makeResource = (overrides: Partial<Resource>): Resource =>
+    ({
+      id: overrides.id ?? 'resource-1',
+      name: overrides.name ?? overrides.id ?? 'resource-1',
+      displayName: overrides.displayName ?? overrides.name ?? overrides.id ?? 'resource-1',
+      type: overrides.type ?? 'agent',
+      platformId: overrides.platformId ?? 'platform-1',
+      platformType: overrides.platformType ?? 'agent',
+      sourceType: overrides.sourceType ?? 'api',
+      status: overrides.status ?? 'online',
+      lastSeen: overrides.lastSeen ?? 1_700_000_000_000,
+      ...overrides,
+    }) as Resource;
+
+  const renderLayout = (resources: Resource[] = []) =>
     render(() => (
       <Router>
         <Route
@@ -49,6 +64,7 @@ describe('AppLayout navigation icons', () => {
               state={() =>
                 ({
                   activeAlerts: [{ id: 'alert-1', level: 'warning', acknowledged: false }],
+                  resources,
                 }) as unknown as State
               }
               tokenScopes={() => ['settings:read']}
@@ -97,6 +113,34 @@ describe('AppLayout navigation icons', () => {
     expect(mobilePatrolTab.querySelector('svg')).toBeTruthy();
 
     expect(container).toHaveTextContent('Infrastructure body');
+  });
+
+  it('hides platform tabs without supported infrastructure evidence', () => {
+    renderLayout([
+      makeResource({ id: 'pve-1', type: 'agent', platformType: 'proxmox-pve' }),
+      makeResource({ id: 'docker-1', type: 'docker-host', platformType: 'docker' }),
+      makeResource({ id: 'vcenter-1', type: 'vm', platformType: 'vmware-vsphere' }),
+    ]);
+
+    const desktopNav = screen.getByRole('tablist', { name: 'Primary navigation' });
+    const infrastructureGroup = desktopNav.querySelector('[aria-label="Infrastructure"]');
+    expect(infrastructureGroup).toBeTruthy();
+
+    expect(
+      within(infrastructureGroup as HTMLElement).getByRole('tab', { name: 'Proxmox' }),
+    ).toBeTruthy();
+    expect(
+      within(infrastructureGroup as HTMLElement).getByRole('tab', { name: 'Docker' }),
+    ).toBeTruthy();
+    expect(
+      within(infrastructureGroup as HTMLElement).queryByRole('tab', { name: 'Kubernetes' }),
+    ).toBeNull();
+    expect(
+      within(infrastructureGroup as HTMLElement).queryByRole('tab', { name: 'TrueNAS' }),
+    ).toBeNull();
+    expect(
+      within(infrastructureGroup as HTMLElement).queryByRole('tab', { name: 'vSphere' }),
+    ).toBeNull();
   });
 
   it('keeps connected brand motion on the logo while the wordmark stays static', () => {

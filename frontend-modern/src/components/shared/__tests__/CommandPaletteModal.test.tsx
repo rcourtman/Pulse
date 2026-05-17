@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
+import type { Resource } from '@/types/resource';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
+import { buildPrimaryPlatformNavigationVisibility } from '@/features/platformNavigation/platformNavigationModel';
 
 const navigateMock = vi.fn();
 
@@ -17,6 +19,26 @@ vi.mock('@/components/shared/Dialog', () => ({
 }));
 
 import { CommandPaletteModal } from '@/components/shared/CommandPaletteModal';
+
+const makeResource = (overrides: Partial<Resource>): Resource =>
+  ({
+    id: overrides.id ?? 'resource-1',
+    name: overrides.name ?? overrides.id ?? 'resource-1',
+    displayName: overrides.displayName ?? overrides.name ?? overrides.id ?? 'resource-1',
+    type: overrides.type ?? 'agent',
+    platformId: overrides.platformId ?? 'platform-1',
+    platformType: overrides.platformType ?? 'agent',
+    sourceType: overrides.sourceType ?? 'api',
+    status: overrides.status ?? 'online',
+    lastSeen: overrides.lastSeen ?? 1_700_000_000_000,
+    ...overrides,
+  }) as Resource;
+
+const platformVisibility = () =>
+  buildPrimaryPlatformNavigationVisibility([
+    makeResource({ id: 'pve-1', type: 'agent', platformType: 'proxmox-pve' }),
+    makeResource({ id: 'k8s-1', type: 'k8s-cluster', platformType: 'kubernetes' }),
+  ]);
 
 describe('CommandPaletteModal', () => {
   afterEach(() => {
@@ -58,7 +80,13 @@ describe('CommandPaletteModal', () => {
   });
 
   it('renders the platform entries and the dedicated Kubernetes pods command', () => {
-    render(() => <CommandPaletteModal isOpen={true} onClose={vi.fn()} />);
+    render(() => (
+      <CommandPaletteModal
+        isOpen={true}
+        onClose={vi.fn()}
+        platformVisibility={platformVisibility}
+      />
+    ));
 
     expect(screen.getByText('Go to Proxmox')).toBeInTheDocument();
     expect(screen.getByText('Go to Kubernetes Pods')).toBeInTheDocument();
@@ -67,7 +95,13 @@ describe('CommandPaletteModal', () => {
 
   it('navigates to the Kubernetes pods sub-tab', async () => {
     const onClose = vi.fn();
-    render(() => <CommandPaletteModal isOpen={true} onClose={onClose} />);
+    render(() => (
+      <CommandPaletteModal
+        isOpen={true}
+        onClose={onClose}
+        platformVisibility={platformVisibility}
+      />
+    ));
 
     await fireEvent.click(screen.getByText('Go to Kubernetes Pods'));
 
@@ -77,7 +111,13 @@ describe('CommandPaletteModal', () => {
 
   it('uses the shared search input and keeps Enter selection behavior', async () => {
     const onClose = vi.fn();
-    render(() => <CommandPaletteModal isOpen={true} onClose={onClose} />);
+    render(() => (
+      <CommandPaletteModal
+        isOpen={true}
+        onClose={onClose}
+        platformVisibility={platformVisibility}
+      />
+    ));
 
     const input = screen.getByPlaceholderText('Type a command or search...');
     await fireEvent.input(input, { target: { value: 'kubernetes pods' } });
@@ -85,5 +125,26 @@ describe('CommandPaletteModal', () => {
 
     expect(navigateMock).toHaveBeenCalledWith('/kubernetes/pods');
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides platform commands without supported infrastructure evidence', () => {
+    render(() => (
+      <CommandPaletteModal
+        isOpen={true}
+        onClose={vi.fn()}
+        platformVisibility={() =>
+          buildPrimaryPlatformNavigationVisibility([
+            makeResource({ id: 'pve-1', type: 'agent', platformType: 'proxmox-pve' }),
+            makeResource({ id: 'vmware-1', type: 'vm', platformType: 'vmware-vsphere' }),
+          ])
+        }
+      />
+    ));
+
+    expect(screen.getByText('Go to Proxmox')).toBeInTheDocument();
+    expect(screen.queryByText('Go to Docker')).not.toBeInTheDocument();
+    expect(screen.queryByText('Go to Kubernetes')).not.toBeInTheDocument();
+    expect(screen.queryByText('Go to TrueNAS')).not.toBeInTheDocument();
+    expect(screen.queryByText('Go to vSphere')).not.toBeInTheDocument();
   });
 });

@@ -7,6 +7,11 @@ import {
   buildTrueNASPath,
   buildVmwarePath,
 } from '@/routing/resourceLinks';
+import {
+  createEmptyPlatformNavigationVisibility,
+  filterPlatformNavigationShortcuts,
+  type PlatformNavigationVisibility,
+} from '@/features/platformNavigation/platformNavigationModel';
 import { focusActiveTypeToSearch } from '@/hooks/useTypeToSearch';
 
 type KeyboardShortcutsOptions = {
@@ -20,6 +25,7 @@ type KeyboardShortcutsOptions = {
   onCloseCommandPalette?: () => void;
   onToggleCommandPalette?: () => void;
   onFocusSearch?: () => boolean | void;
+  platformVisibility?: Accessor<PlatformNavigationVisibility>;
 };
 
 const isEditableTarget = (target: EventTarget | null): boolean => {
@@ -76,12 +82,20 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
   };
 
   const getRoutes = (): Record<string, string> => {
+    const platformVisibility =
+      options.platformVisibility?.() ?? createEmptyPlatformNavigationVisibility();
+    const platformRoutes = filterPlatformNavigationShortcuts(
+      {
+        proxmox: { key: 'p', route: buildProxmoxPath() },
+        docker: { key: 'd', route: buildDockerPath() },
+        kubernetes: { key: 'k', route: buildKubernetesPath() },
+        truenas: { key: 'n', route: buildTrueNASPath() },
+        vmware: { key: 'v', route: buildVmwarePath() },
+      },
+      platformVisibility,
+    );
     return {
-      p: buildProxmoxPath(),
-      d: buildDockerPath(),
-      k: buildKubernetesPath(),
-      n: buildTrueNASPath(),
-      v: buildVmwarePath(),
+      ...platformRoutes,
       a: '/alerts',
       r: '/patrol',
       t: '/settings',

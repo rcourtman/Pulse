@@ -490,14 +490,14 @@ or other self-hosted uncapped continuity plans.
     (Proxmox, Docker, Kubernetes, TrueNAS, vSphere) using the canonical path
     constants from `frontend-modern/src/routing/resourceLinks.ts`. The
     `PlatformTab` list in `AppLayout.tsx` must enumerate exactly those
-    supported families and must keep `alwaysShow: true` for every supported
-    family so first-run operators can discover what Pulse monitors; the
-    `enabled` and `live` flags are derived from canonical resource presence
-    in `state.resources` so unconnected platforms render in a disabled tone
-    and surface their own empty-state setup affordances inside the platform
-    page itself rather than being hidden from nav. Infrastructure, Workloads,
-    Storage, and Recovery are not duplicated as equal primary tabs in that
-    list; their tables are reused inside the platform pages via embedded
+    supported families, but product navigation is support-and-evidence gated:
+    `enabled`, `live`, and inclusion in the rendered primary navigation derive
+    from the governed support manifest plus canonical resource evidence in
+    `state.resources`. Admitted-only, presentation-only, unsupported, or
+    absent platform families must not render as disabled placeholders in the
+    paid or hosted app shell. Infrastructure, Workloads, Storage, and Recovery
+    are not duplicated as equal primary tabs in that list; their tables are
+    reused inside the platform pages via embedded
     `tableOnly` surfaces, and their routes remain wired in `App.tsx` purely
     for deep-link compatibility. Each platform page must remain chrome-only:
     routing plus sub-tab navigation that embeds the canonical

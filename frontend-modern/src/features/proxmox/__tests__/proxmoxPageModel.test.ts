@@ -3,6 +3,7 @@ import type { Resource } from '@/types/resource';
 import {
   PROXMOX_TAB_SPECS,
   buildProxmoxPageModel,
+  buildVisibleProxmoxTabSpecs,
   getResourceVersion,
   resolveProxmoxPlatformScope,
 } from '../proxmoxPageModel';
@@ -119,6 +120,35 @@ describe('proxmoxPageModel', () => {
       change: expect.objectContaining({ id: 'replication-1' }),
     });
     expect(model.resources.map((resource) => resource.id)).not.toContain('docker-host');
+    expect(buildVisibleProxmoxTabSpecs(model).map((tab) => tab.id)).toEqual([
+      'overview',
+      'storage',
+      'replication',
+      'backups',
+      'ceph',
+      'mail',
+    ]);
+  });
+
+  it('hides Proxmox sub-tabs when the connected estate has no matching resource evidence', () => {
+    const model = buildProxmoxPageModel([
+      makeResource({
+        id: 'pve-node-1',
+        type: 'agent',
+        displayName: 'pve-node-1',
+        proxmox: { nodeName: 'pve-node-1', clusterName: 'alpha' },
+      }),
+      makeResource({
+        id: 'vm-101',
+        type: 'vm',
+        displayName: 'database',
+        parentName: 'pve-node-1',
+        status: 'running',
+        proxmox: { vmid: 101, nodeName: 'pve-node-1' },
+      }),
+    ]);
+
+    expect(buildVisibleProxmoxTabSpecs(model).map((tab) => tab.id)).toEqual(['overview']);
   });
 
   it('resolves Proxmox suite scope from canonical platform hints', () => {

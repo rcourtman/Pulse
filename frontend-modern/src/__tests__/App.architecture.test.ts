@@ -73,6 +73,11 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain("id: 'vmware',");
     // Platform-first primary nav: Infrastructure / Workloads / Storage /
     // Recovery are not duplicated as equal primary PlatformTab entries.
+    expect(appSource).toContain('getDefaultWorkspaceRoute');
+    expect(appSource).toContain('platformNavigationResolved');
+    expect(appSource).toContain('buildPrimaryPlatformNavigationVisibility');
+    expect(appLayoutSource).toContain('buildPrimaryPlatformNavigationVisibility');
+    expect(appLayoutSource).toContain('primaryPlatformNavigationIsVisible');
     expect(appLayoutSource).not.toContain("id: 'infrastructure',");
     expect(appLayoutSource).not.toContain("id: 'workloads',");
     expect(appLayoutSource).not.toContain('buildStorageRecoveryTabSpecs(');

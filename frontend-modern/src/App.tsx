@@ -11,13 +11,25 @@ import { DemoBanner } from './components/DemoBanner';
 import { GitHubStarBanner } from './components/GitHubStarBanner';
 // Modals are only mounted when opened, so their code can stay out of the
 // entry bundle until first use (same pattern as AIChat below).
-const KeyboardShortcutsModal = lazy(() => import('./components/shared/KeyboardShortcutsModal').then((m) => ({ default: m.KeyboardShortcutsModal })));
-const CommandPaletteModal = lazy(() => import('./components/shared/CommandPaletteModal').then((m) => ({ default: m.CommandPaletteModal })));
+const KeyboardShortcutsModal = lazy(() =>
+  import('./components/shared/KeyboardShortcutsModal').then((m) => ({
+    default: m.KeyboardShortcutsModal,
+  })),
+);
+const CommandPaletteModal = lazy(() =>
+  import('./components/shared/CommandPaletteModal').then((m) => ({
+    default: m.CommandPaletteModal,
+  })),
+);
 import { dialogStackHasBlockingDialog } from './components/shared/useDialogState';
 import { createTooltipSystem } from './components/shared/Tooltip';
-const TokenRevealDialog = lazy(() => import('./components/TokenRevealDialog').then((m) => ({ default: m.TokenRevealDialog })));
+const TokenRevealDialog = lazy(() =>
+  import('./components/TokenRevealDialog').then((m) => ({ default: m.TokenRevealDialog })),
+);
 import { tokenRevealStore } from './stores/tokenReveal';
-const UpdateProgressModal = lazy(() => import('./components/UpdateProgressModal').then((m) => ({ default: m.UpdateProgressModal })));
+const UpdateProgressModal = lazy(() =>
+  import('./components/UpdateProgressModal').then((m) => ({ default: m.UpdateProgressModal })),
+);
 import { UpdatesAPI, type UpdateStatus } from './api/updates';
 // AIChat is the side-panel chat UI plus its store deps (markdown rendering,
 // tool-call formatting, prompt scaffolding). Lazy-load behind aiChatStore.isOpen
@@ -33,6 +45,11 @@ import {
   PROXMOX_PATH,
   TRUENAS_PATH,
   VMWARE_PATH,
+  buildDockerPath,
+  buildKubernetesPath,
+  buildProxmoxPath,
+  buildTrueNASPath,
+  buildVmwarePath,
 } from './routing/resourceLinks';
 import { APP_SHELL_ROUTE_PRELOAD_PATHS, preloadRouteModule } from '@/routing/routePreload';
 import { AppLayout } from '@/AppLayout';
@@ -43,6 +60,12 @@ import {
   readPendingAppShellRestoreTop,
 } from '@/utils/appShellScrollRestoration';
 import { DarkModeContext, WebSocketContext, useWebSocket } from '@/contexts/appRuntime';
+import {
+  buildPrimaryPlatformNavigationVisibility,
+  selectFirstVisiblePrimaryPlatformNavigationId,
+  type PlatformNavigationVisibility,
+  type PrimaryPlatformNavId,
+} from '@/features/platformNavigation/platformNavigationModel';
 
 function isPublicRoutePath(pathname: string): boolean {
   // Public routes must be viewable without authentication.
@@ -71,6 +94,23 @@ const SetupCompletionPreviewPage = lazy(() =>
   })),
 );
 const ROOT_PATROL_PATH = PATROL_PATH;
+
+const PRIMARY_PLATFORM_ROUTE_BY_ID: Record<PrimaryPlatformNavId, string> = {
+  proxmox: buildProxmoxPath(),
+  docker: buildDockerPath(),
+  kubernetes: buildKubernetesPath(),
+  truenas: buildTrueNASPath(),
+  vmware: buildVmwarePath(),
+};
+
+function getDefaultWorkspaceRoute(
+  visibility: PlatformNavigationVisibility,
+  hasSettingsAccess: boolean,
+): string {
+  const platformId = selectFirstVisiblePrimaryPlatformNavigationId(visibility);
+  if (platformId) return PRIMARY_PLATFORM_ROUTE_BY_ID[platformId];
+  return hasSettingsAccess ? '/settings/infrastructure' : '/alerts';
+}
 
 async function preloadAppShellRoutes() {
   await Promise.all(
@@ -208,8 +248,22 @@ function App() {
     const [pendingAppShellRestoreTop, setPendingAppShellRestoreTop] = createSignal<number | null>(
       null,
     );
+    const navigate = useNavigate();
     const location = useLocation();
     const isPublicRoute = createMemo(() => isPublicRoutePath(location.pathname));
+    const platformNavigationVisibility = createMemo(() =>
+      buildPrimaryPlatformNavigationVisibility(runtime.state().resources || []),
+    );
+    const platformNavigationResolved = createMemo(() => {
+      const store = runtime.enhancedStore();
+      return Boolean(store?.initialDataReceived?.());
+    });
+    const hasSettingsAccess = createMemo(() => {
+      const scopes = runtime.securityStatus()?.tokenScopes;
+      return (
+        !scopes || scopes.length === 0 || scopes.includes('*') || scopes.includes('settings:read')
+      );
+    });
     let appShellRoutePreloadCleanup: (() => void) | undefined;
     let appShellRoutesPreloadScheduled = false;
 
@@ -220,6 +274,16 @@ function App() {
       if (pendingRestoreTop !== null) {
         setPendingAppShellRestoreTop(pendingRestoreTop);
       }
+    });
+
+    createEffect(() => {
+      if (runtime.isLoading() || runtime.needsAuth() || isPublicRoute()) return;
+      const normalizedPath = location.pathname.replace(/\/+$/, '') || '/';
+      if (normalizedPath !== '/' && normalizedPath !== '/login') return;
+      if (!platformNavigationResolved()) return;
+      navigate(getDefaultWorkspaceRoute(platformNavigationVisibility(), hasSettingsAccess()), {
+        replace: true,
+      });
     });
 
     createEffect(() => {
@@ -306,6 +370,7 @@ function App() {
 
     useKeyboardShortcuts({
       enabled: () => !runtime.needsAuth(),
+      platformVisibility: platformNavigationVisibility,
       isShortcutsOpen: shortcutsOpen,
       isCommandPaletteOpen: commandPaletteOpen,
       onToggleShortcuts: () => {
@@ -422,12 +487,14 @@ function App() {
                         <KeyboardShortcutsModal
                           isOpen={shortcutsOpen()}
                           onClose={() => setShortcutsOpen(false)}
+                          platformVisibility={platformNavigationVisibility}
                         />
                       </Show>
                       <Show when={commandPaletteOpen()}>
                         <CommandPaletteModal
                           isOpen={commandPaletteOpen()}
                           onClose={() => setCommandPaletteOpen(false)}
+                          platformVisibility={platformNavigationVisibility}
                         />
                       </Show>
                       <Show when={tokenRevealStore.state() !== null}>

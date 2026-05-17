@@ -14,10 +14,7 @@ import {
   type CommandPaletteModalProps,
 } from './commandPaletteModel';
 
-export type {
-  CommandPaletteModalCommand,
-  CommandPaletteModalProps,
-} from './commandPaletteModel';
+export type { CommandPaletteModalCommand, CommandPaletteModalProps } from './commandPaletteModel';
 
 export function useCommandPaletteState(props: CommandPaletteModalProps) {
   const navigate = useNavigate();
@@ -34,13 +31,12 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
         trueNasPath: buildTrueNASPath(),
         vmwarePath: buildVmwarePath(),
       },
+      platformVisibility: props.platformVisibility(),
       navigate,
     }),
   );
 
-  const filteredCommands = createMemo(() =>
-    filterCommandPaletteCommands(commands(), query()),
-  );
+  const filteredCommands = createMemo(() => filterCommandPaletteCommands(commands(), query()));
 
   const handleSelect = (command: CommandPaletteModalCommand) => {
     command.action();

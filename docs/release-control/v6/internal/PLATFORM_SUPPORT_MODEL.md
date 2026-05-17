@@ -38,6 +38,14 @@ through platform-by-platform improvisation.
    A profile may describe supported Pulse Agent deployment on a specific host
    or appliance family, but it does not promote that family into
    `PLATFORM_TYPE_KEYS` or first-class platform status.
+9. Product navigation is support-and-evidence gated.
+   First-class platform navigation, command/search destinations, keyboard
+   shortcuts, landing fallbacks, and platform-section tabs must derive from
+   this support model plus current runtime resource or capability evidence.
+   Supported surfaces must appear when evidence proves the platform or
+   capability is present. Admitted-only, presentation-only, unsupported, or
+   absent capability surfaces must be hidden rather than kept as disabled
+   placeholders.
 
 ## Platform Categories
 

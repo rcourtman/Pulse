@@ -944,11 +944,13 @@ AI runtime.
     primitives live under `frontend-modern/src/features/platformPage/` so the
     chrome stays reusable across families.
     `frontend-modern/src/AppLayout.tsx` may extend the `PlatformTab` list with
-    new family entries; those entries must keep `alwaysShow: true` for
-    supported families so first-run operators discover the full platform set,
-    while `enabled` and `live` derive from the family's canonical resource
-    presence in `state.resources` so unconnected platforms render in a
-    disabled tone with the platform page's own empty-state setup affordance.
+    new family entries, but primary navigation is a support-and-evidence-gated
+    surface: rendered platform tabs, command/search destinations, keyboard
+    shortcuts, and authenticated landing fallbacks must derive from the
+    governed support manifest plus current runtime resource evidence.
+    Supported platform families appear when evidence proves they are present;
+    admitted-only, presentation-only, unsupported, or absent families stay
+    hidden rather than rendering as disabled placeholders.
     The `MOBILE_NAV_PLATFORM_PRIORITY` ordering in
     `frontend-modern/src/components/shared/mobileNavBarModel.ts` mirrors
     that platform-first set so mobile and desktop primary navigation stay
@@ -1383,9 +1385,10 @@ replaced with `nav-proxmox`, `nav-docker`, `nav-kubernetes`, `nav-truenas`,
 `nav-kubernetes-pods` entry that lands on `/kubernetes/pods`. The shell
 preload set and `getActiveTabForPath` matcher no longer recognize the legacy
 top-level routes. New palette commands and shortcut chords must therefore
-anchor on canonical platform routes; do not reintroduce a top-level
-Infrastructure / Workloads / Storage / Recovery entry by reanimating the
-legacy paths.
+anchor on canonical platform routes and must flow through the same platform
+visibility model as primary navigation; do not reintroduce hidden platform
+families or top-level Infrastructure / Workloads / Storage / Recovery entries
+by reanimating the legacy paths.
 
 The shared table chrome now allows `TableCardHeader` to expose a right-aligned
 action slot, currently used by the Workloads/Proxmox metric display control.
