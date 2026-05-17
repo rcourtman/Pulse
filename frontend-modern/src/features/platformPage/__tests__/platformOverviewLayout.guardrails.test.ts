@@ -7,6 +7,7 @@ import kubernetesDeploymentsTableSource from '@/features/kubernetes/KubernetesDe
 import kubernetesNodesTableSource from '@/features/kubernetes/KubernetesNodesTable.tsx?raw';
 import kubernetesPageSurfaceSource from '@/features/kubernetes/KubernetesPageSurface.tsx?raw';
 import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?raw';
+import proxmoxPageSurfaceSource from '@/features/proxmox/ProxmoxPageSurface.tsx?raw';
 import sharedPlatformPageSource from '@/features/platformPage/sharedPlatformPage.tsx?raw';
 import truenasDisksTableSource from '@/features/truenas/TrueNASDisksTable.tsx?raw';
 import truenasPageSurfaceSource from '@/features/truenas/TrueNASPageSurface.tsx?raw';
@@ -29,6 +30,7 @@ const platformTableSources = [
 ];
 
 const overviewSurfaceSources = [
+  proxmoxPageSurfaceSource,
   dockerPageSurfaceSource,
   kubernetesPageSurfaceSource,
   truenasPageSurfaceSource,
@@ -57,9 +59,13 @@ describe('platform overview layout guardrails', () => {
   it('keeps provider overview pages in the parent-table plus child-inventory stack', () => {
     for (const source of overviewSurfaceSources) {
       expect(source).toContain('<div class="space-y-4">');
-      expect(source).toContain('showToolbar={false}');
+      expect(source).toContain('<PlatformSectionTabs');
+      expect(source).toContain('PlatformTableEmptyState');
+      expect(source).toContain('PlatformErrorState');
     }
 
+    expect(proxmoxPageSurfaceSource).toContain('<ProxmoxNodesTable');
+    expect(proxmoxPageSurfaceSource).toContain('<WorkloadsSurface');
     expect(dockerPageSurfaceSource).toContain('<DockerHostsTable');
     expect(dockerPageSurfaceSource).toContain('<WorkloadsSurface');
     expect(dockerPageSurfaceSource).toContain('<DockerServicesTable');
@@ -73,6 +79,17 @@ describe('platform overview layout guardrails', () => {
     expect(vmwarePageSurfaceSource).toContain('<VsphereHostsTable');
     expect(vmwarePageSurfaceSource).toContain('<WorkloadsSurface');
     expect(vmwarePageSurfaceSource).toContain('<VsphereDatastoresTable');
+  });
+
+  it('keeps secondary overview tables from rendering duplicate standalone toolbars', () => {
+    for (const source of [
+      dockerPageSurfaceSource,
+      kubernetesPageSurfaceSource,
+      truenasPageSurfaceSource,
+      vmwarePageSurfaceSource,
+    ]) {
+      expect(source).toContain('showToolbar={false}');
+    }
   });
 
   it('keeps mobile host tables focused on useful operational columns', () => {

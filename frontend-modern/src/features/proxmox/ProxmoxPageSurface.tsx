@@ -1,6 +1,5 @@
-import { A, useLocation } from '@solidjs/router';
-import TriangleAlertIcon from 'lucide-solid/icons/triangle-alert';
-import { For, Show, createMemo } from 'solid-js';
+import { useLocation } from '@solidjs/router';
+import { Show, createMemo } from 'solid-js';
 import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
 import {
@@ -13,10 +12,13 @@ import {
   type WorkloadTableMetricHistoryRange,
 } from '@/components/Workloads/workloadMetricHistoryModel';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
-import { EmptyState } from '@/components/shared/EmptyState';
-import { TableCard } from '@/components/shared/TableCard';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import {
+  PlatformErrorState,
+  PlatformSectionTabs,
+  PlatformTableEmptyState,
+} from '@/features/platformPage/sharedPlatformPage';
 import { ProxmoxBackupsTable } from './ProxmoxBackupsTable';
 import { ProxmoxCephTable } from './ProxmoxCephTable';
 import { ProxmoxMailGatewayTable } from './ProxmoxMailGatewayTable';
@@ -42,44 +44,7 @@ const PROXMOX_RESOURCE_QUERY =
 const PROXMOX_PLATFORM_FILTER = 'proxmox-pve';
 const VALID_TABS = new Set<ProxmoxPageTabId>(PROXMOX_TAB_SPECS.map((tab) => tab.id));
 
-function ProxmoxSectionTabs(props: { active: ProxmoxPageTabId }) {
-  return (
-    <nav
-      class="flex flex-wrap items-center gap-1 border-b border-border"
-      aria-label="Proxmox sections"
-    >
-      <For each={PROXMOX_TAB_SPECS}>
-        {(tab) => (
-          <A
-            href={tab.path}
-            class={`inline-flex min-h-10 items-center border-b-2 px-3 text-sm font-medium transition-colors ${
-              props.active === tab.id
-                ? 'border-blue-500 text-blue-600 dark:text-blue-300'
-                : 'border-transparent text-muted hover:border-border hover:text-base-content'
-            }`}
-            aria-current={props.active === tab.id ? 'page' : undefined}
-          >
-            {tab.label}
-          </A>
-        )}
-      </For>
-    </nav>
-  );
-}
-
-function ProxmoxTableEmptyState(props: { title: string; description: string }) {
-  return (
-    <TableCard>
-      <div class="p-6">
-        <EmptyState
-          icon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
-          title={props.title}
-          description={props.description}
-        />
-      </div>
-    </TableCard>
-  );
-}
+const proxmoxIcon = () => <ProxmoxIcon class="h-6 w-6 text-slate-400" />;
 
 export function ProxmoxPageSurface() {
   const location = useLocation();
@@ -100,15 +65,14 @@ export function ProxmoxPageSurface() {
   // segmented control in the workloads filter drive both tables; the surface
   // accepts these as overrides so it skips its own internal persistent
   // signal and tracks the shared state directly.
-  const [metricDisplayMode, setMetricDisplayMode] =
-    usePersistentSignal<WorkloadsMetricDisplayMode>(
-      STORAGE_KEYS.WORKLOADS_METRIC_DISPLAY_MODE,
-      DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
-      {
-        deserialize: (raw) =>
-          raw === 'bars' || raw === 'sparklines' ? raw : DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
-      },
-    );
+  const [metricDisplayMode, setMetricDisplayMode] = usePersistentSignal<WorkloadsMetricDisplayMode>(
+    STORAGE_KEYS.WORKLOADS_METRIC_DISPLAY_MODE,
+    DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
+    {
+      deserialize: (raw) =>
+        raw === 'bars' || raw === 'sparklines' ? raw : DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
+    },
+  );
   const [metricHistoryRange, setMetricHistoryRange] =
     usePersistentSignal<WorkloadTableMetricHistoryRange>(
       STORAGE_KEYS.WORKLOADS_METRIC_HISTORY_RANGE,
@@ -121,12 +85,17 @@ export function ProxmoxPageSurface() {
 
   return (
     <div data-testid="proxmox-page" class="space-y-3">
-      <ProxmoxSectionTabs active={activeTab()} />
+      <PlatformSectionTabs
+        tabs={PROXMOX_TAB_SPECS}
+        active={activeTab()}
+        ariaLabel="Proxmox sections"
+      />
 
       <Show
         when={!loading() || model().resources.length > 0}
         fallback={
-          <ProxmoxTableEmptyState
+          <PlatformTableEmptyState
+            icon={proxmoxIcon()}
             title="Loading Proxmox resources"
             description="Pulse is loading the Proxmox resource snapshot."
           />
@@ -135,30 +104,18 @@ export function ProxmoxPageSurface() {
         <Show
           when={!error()}
           fallback={
-            <TableCard>
-              <div class="p-6">
-                <EmptyState
-                  icon={<TriangleAlertIcon class="h-6 w-6 text-slate-400" />}
-                  title="Could not load Proxmox resources"
-                  description="Refresh the resource snapshot or check the API connection state."
-                  actions={
-                    <button
-                      type="button"
-                      onClick={() => void refetch()}
-                      class="inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover"
-                    >
-                      Refresh
-                    </button>
-                  }
-                />
-              </div>
-            </TableCard>
+            <PlatformErrorState
+              title="Could not load Proxmox resources"
+              description="Refresh the resource snapshot or check the API connection state."
+              onRefresh={() => void refetch()}
+            />
           }
         >
           <Show
             when={model().resources.length > 0}
             fallback={
-              <ProxmoxTableEmptyState
+              <PlatformTableEmptyState
+                icon={proxmoxIcon()}
                 title="No Proxmox resources"
                 description="Add Proxmox VE, Proxmox Backup Server, or Proxmox Mail Gateway in Settings to populate this platform page."
               />
@@ -209,9 +166,7 @@ export function ProxmoxPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'backups'}>
-              <ProxmoxBackupsTable
-                emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
-              />
+              <ProxmoxBackupsTable emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />} />
             </Show>
             <Show when={activeTab() === 'ceph'}>
               <ProxmoxCephTable

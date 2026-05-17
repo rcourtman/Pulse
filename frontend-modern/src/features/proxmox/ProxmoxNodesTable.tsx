@@ -1,5 +1,4 @@
 import { For, Show, createMemo, type Accessor, type Component, type JSX } from 'solid-js';
-import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCard } from '@/components/shared/TableCard';
@@ -27,6 +26,7 @@ import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_CARD_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformTableEmptyState,
   getPlatformTableCellClass,
   getPlatformTableHeadClass,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -147,15 +147,11 @@ export const ProxmoxNodesTable: Component<{
     <Show
       when={props.nodes.length > 0}
       fallback={
-        <TableCard>
-          <div class="p-6">
-            <EmptyState
-              icon={props.emptyIcon}
-              title={props.emptyTitle}
-              description={props.emptyDescription}
-            />
-          </div>
-        </TableCard>
+        <PlatformTableEmptyState
+          icon={props.emptyIcon}
+          title={props.emptyTitle}
+          description={props.emptyDescription}
+        />
       }
     >
       <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
