@@ -10,7 +10,7 @@ import {
   type ConnectionType,
 } from '@/api/connections';
 import {
-  agentAttachmentSignal,
+  agentAttachmentProblem,
   connectionAgentEndpointDisplay,
   connectionAgentIdentitySummary,
   connectionLastActivityText,
@@ -18,7 +18,7 @@ import {
   lastActivityTextFromLastSeen,
   primaryRowProblem,
   surfaceLabel,
-  type FleetGovernanceSignal,
+  type InfrastructureRowProblem,
   type InfrastructureSourceKind,
   type InfrastructureSystemMemberRow,
   type InfrastructureSystemRow,
@@ -291,13 +291,14 @@ const buildMemberRow = (
   const state = member.state;
   const presentation = STATE_PRESENTATION[state] ?? STATE_PRESENTATION.pending;
   const lastSeen = member.lastSeen ?? agentConnection?.lastSeen;
-  const attachmentSignal = agentConnection ? agentAttachmentSignal(agentConnection) : null;
-  const fleetSignals: FleetGovernanceSignal[] = [
-    ...(attachmentSignal ? [attachmentSignal] : []),
-    ...(agentConnection ? fleetGovernanceSignalsForConnection(agentConnection) : []),
-  ];
-
+  const fleetSignals = agentConnection ? fleetGovernanceSignalsForConnection(agentConnection) : [];
   const fleetHighlights = visibleFleetGovernanceSignals(fleetSignals);
+  // Attachment problems (agent offline/unreachable/etc.) are derived from
+  // connection state directly; everything else (credentials, config, rollout)
+  // still rolls up from the prioritised highlight list.
+  const problem =
+    (agentConnection && agentAttachmentProblem(agentConnection)) ??
+    primaryRowProblem(fleetHighlights);
   return {
     id: member.id,
     name,
@@ -311,7 +312,7 @@ const buildMemberRow = (
     lastActivityText: lastActivityTextFromLastSeen(lastSeen),
     fleetSignals,
     fleetHighlights,
-    problem: primaryRowProblem(fleetHighlights),
+    problem,
     primary: Boolean(member.primary),
     agentConnection,
   };
@@ -373,12 +374,15 @@ const buildRow = (
           connection.id === primaryConnection.id || !memberAgentConnectionIds.has(connection.id),
       )
     : componentConnections;
-  // For non-agent primaries (PVE, PBS, etc.), surface a clearly-named chip
-  // when an attached agent is not reporting. We avoid double-injecting the
-  // chip for cluster member agents — those are tracked on the member rows.
-  const attachmentSignals: FleetGovernanceSignal[] =
+  const fleetSignals = rowFleetSignalConnections.flatMap((connection) =>
+    fleetGovernanceSignalsForConnection(connection),
+  );
+  // For non-agent primaries (PVE, PBS, etc.), surface the first unhealthy
+  // attached-agent connection as the row's problem line. Cluster member
+  // agents are tracked on the member rows, not duplicated here.
+  const attachmentProblem: InfrastructureRowProblem | undefined =
     primaryConnection.type === 'agent'
-      ? []
+      ? undefined
       : rowFleetSignalConnections
           .filter(
             (connection) =>
@@ -386,14 +390,8 @@ const buildRow = (
               connection.type === 'agent' &&
               !memberAgentConnectionIds.has(connection.id),
           )
-          .map((connection) => agentAttachmentSignal(connection))
-          .filter((signal): signal is FleetGovernanceSignal => Boolean(signal));
-  const fleetSignals: FleetGovernanceSignal[] = [
-    ...attachmentSignals,
-    ...rowFleetSignalConnections.flatMap((connection) =>
-      fleetGovernanceSignalsForConnection(connection),
-    ),
-  ];
+          .map((connection) => agentAttachmentProblem(connection))
+          .find((problem): problem is InfrastructureRowProblem => Boolean(problem));
 
   const fleetHighlights = visibleFleetGovernanceSignals(fleetSignals);
   return {
@@ -414,7 +412,7 @@ const buildRow = (
     lastErrorMessage,
     fleetSignals,
     fleetHighlights,
-    problem: primaryRowProblem(fleetHighlights),
+    problem: attachmentProblem ?? primaryRowProblem(fleetHighlights),
     enabled: primaryConnection.enabled,
     canEdit: EDITABLE_CONNECTION_TYPES.includes(primaryConnection.type),
     canPause: primaryConnection.capabilities.supportsPause,

@@ -26,7 +26,6 @@ import {
   connectionAgentVersionPresentation,
   infrastructureSourcePresentation,
   surfaceLabel,
-  type FleetGovernanceSignal,
   type InfrastructureSystemRow,
 } from './connectionsTableModel';
 import type { DiscoveredServer, DiscoveryScanStatus } from './infrastructureSettingsModel';
@@ -183,24 +182,6 @@ const rowHasAgentCoverage = (row: InfrastructureSystemRow): boolean =>
   row.attachedConnections.some((connection) => connection.type === 'agent') ||
   row.members.some(
     (member) => member.source === 'agent' || member.source === 'both' || member.agentConnection,
-  );
-
-const rowFleetSignals = (row: InfrastructureSystemRow): FleetGovernanceSignal[] => [
-  ...row.fleetSignals,
-  ...row.members.flatMap((member) => member.fleetSignals),
-];
-
-const rowHasFleetTone = (
-  row: InfrastructureSystemRow,
-  predicate: (signal: FleetGovernanceSignal) => boolean,
-): boolean => rowFleetSignals(row).some(predicate);
-
-const rowHasVisibleFleetTone = (
-  row: InfrastructureSystemRow,
-  predicate: (signal: FleetGovernanceSignal) => boolean,
-): boolean =>
-  [...row.fleetHighlights, ...row.members.flatMap((member) => member.fleetHighlights)].some(
-    predicate,
   );
 
 const agentHostProfileRouteStep = (
@@ -393,24 +374,19 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     if (names.length === 2) return `${names[0]} and ${names[1]}`;
     return null;
   });
+  // Counters read directly off the row state the user sees: a row is live
+  // when its status is "Active" and needs attention when its derived
+  // problem (or any member's) is non-empty. Going via signal predicates
+  // duplicated the rollup logic and could disagree with what was rendered.
   const liveFleetSystemCount = createMemo(
-    () =>
-      props
-        .rows()
-        .filter((row) =>
-          rowHasFleetTone(row, (signal) => signal.key === 'liveness' && signal.tone === 'ok'),
-        ).length,
+    () => props.rows().filter((row) => row.statusLabel === 'Active').length,
   );
   const fleetAttentionSystemCount = createMemo(
     () =>
       props
         .rows()
-        .filter((row) =>
-          rowHasVisibleFleetTone(
-            row,
-            (signal) => signal.tone === 'warning' || signal.tone === 'critical',
-          ),
-        ).length,
+        .filter((row) => Boolean(row.problem) || row.members.some((member) => member.problem))
+        .length,
   );
   const discoveryReadinessLabel = createMemo(() => {
     if (props.discoveryScanStatus().scanning) return 'Scanning now';

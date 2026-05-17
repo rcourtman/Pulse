@@ -246,8 +246,7 @@ export type FleetGovernanceSignalKey =
   | 'credential-health'
   | 'updates'
   | 'remote-control'
-  | 'command-policy'
-  | 'agent-attachment';
+  | 'command-policy';
 
 export type FleetGovernanceSignalTone = 'ok' | 'info' | 'warning' | 'critical' | 'muted';
 
@@ -824,19 +823,18 @@ const commandPolicySignal = (state: ConnectionFleetCommandPolicy): FleetGovernan
   }
 };
 
-// Builds a plain-English chip when an attached Pulse Agent isn't reporting,
-// to be rendered alongside a primary connection that *is* healthy. Avoids
-// the prior pattern of stacking server-side terms ("Adapter degraded",
-// liveness "Stale") that didn't tell the user which collection path failed.
-export const agentAttachmentSignal = (
+// Builds the row-level problem line when an attached Pulse Agent isn't
+// reporting. Derived directly from connection state — not laundered
+// through the fleet-signal pipeline — so the row builder owns the user
+// story for "API works, agent doesn't" without a synthesized chip hack.
+export const agentAttachmentProblem = (
   agent: Connection,
-): FleetGovernanceSignal | null => {
+): InfrastructureRowProblem | undefined => {
   switch (agent.state) {
     case 'stale': {
       const ago = lastActivityTextFromLastSeen(agent.lastSeen);
       const suffix = ago && ago !== 'No activity yet' && ago !== 'Unknown' ? ` · ${ago}` : '';
       return {
-        key: 'agent-attachment',
         label: `Agent offline${suffix}`,
         detail:
           agent.stateReason ||
@@ -846,27 +844,24 @@ export const agentAttachmentSignal = (
     }
     case 'unreachable':
       return {
-        key: 'agent-attachment',
         label: 'Agent unreachable',
         detail: agent.stateReason || 'Pulse cannot currently reach the agent on this host.',
         tone: 'critical',
       };
     case 'unauthorized':
       return {
-        key: 'agent-attachment',
         label: 'Agent unauthorized',
         detail: agent.stateReason || 'The Pulse Agent token is being rejected.',
         tone: 'critical',
       };
     case 'pending':
       return {
-        key: 'agent-attachment',
         label: 'Agent pending first report',
         detail: agent.stateReason || 'The Pulse Agent has not reported yet.',
         tone: 'warning',
       };
     default:
-      return null;
+      return undefined;
   }
 };
 
