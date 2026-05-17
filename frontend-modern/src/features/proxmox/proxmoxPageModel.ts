@@ -1,5 +1,6 @@
 import type { Resource, ResourceMetric, ResourceType } from '@/types/resource';
 import type { ResourceChange } from '@/types/resource';
+import { formatProxmoxVersion } from '@/utils/proxmoxVersion';
 
 export type ProxmoxPageTabId = 'overview' | 'storage' | 'replication' | 'backups' | 'ceph' | 'mail';
 
@@ -228,13 +229,20 @@ function buildReplicationChanges(resources: Resource[]): ProxmoxReplicationChang
 }
 
 export function getResourceVersion(resource: Resource): string {
+  const pveVersion = formatProxmoxVersion(resource.proxmox?.pveVersion);
+  if (pveVersion) return pveVersion;
+  const platformProxmox = getPlatformData(resource).proxmox;
+  if (isRecord(platformProxmox) && typeof platformProxmox.pveVersion === 'string') {
+    const version = formatProxmoxVersion(platformProxmox.pveVersion);
+    if (version) return version;
+  }
   if (resource.pbs?.version) return resource.pbs.version;
   const platformPbs = getPlatformData(resource).pbs;
   if (isRecord(platformPbs) && typeof platformPbs.version === 'string') return platformPbs.version;
   const platformPmg = getPlatformData(resource).pmg;
   if (isRecord(platformPmg) && typeof platformPmg.version === 'string') return platformPmg.version;
   if (resource.agent?.osName?.toLowerCase().includes('proxmox') && resource.agent.osVersion) {
-    return resource.agent.osVersion;
+    return formatProxmoxVersion(resource.agent.osVersion) || resource.agent.osVersion;
   }
   return '';
 }

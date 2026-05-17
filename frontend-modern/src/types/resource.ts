@@ -522,6 +522,8 @@ export interface ResourceProxmoxMeta {
   balloon?: number;
   isOci?: boolean;
   osTemplate?: string;
+  pveVersion?: string;
+  kernelVersion?: string;
 }
 
 // Docker Swarm service projection emitted by the canonical adapter for

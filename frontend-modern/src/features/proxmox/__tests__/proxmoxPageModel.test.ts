@@ -3,6 +3,7 @@ import type { Resource } from '@/types/resource';
 import {
   PROXMOX_TAB_SPECS,
   buildProxmoxPageModel,
+  getResourceVersion,
   resolveProxmoxPlatformScope,
 } from '../proxmoxPageModel';
 
@@ -132,5 +133,29 @@ describe('proxmoxPageModel', () => {
         makeResource({ id: 'pve-source', type: 'agent', sources: ['proxmox'] }),
       ),
     ).toBe('proxmox-pve');
+  });
+
+  it('surfaces compact PVE versions from canonical Proxmox resource metadata', () => {
+    expect(
+      getResourceVersion(
+        makeResource({
+          id: 'pve-node',
+          type: 'agent',
+          proxmox: { pveVersion: 'pve-manager/9.1.9/ee7bad0a3d1546c9' },
+        }),
+      ),
+    ).toBe('9.1.9');
+
+    expect(
+      getResourceVersion(
+        makeResource({
+          id: 'pve-node-platform-data',
+          type: 'agent',
+          platformData: {
+            proxmox: { pveVersion: 'pve-manager/8.3.3/bbba1c53a1a65b24' },
+          },
+        }),
+      ),
+    ).toBe('8.3.3');
   });
 });

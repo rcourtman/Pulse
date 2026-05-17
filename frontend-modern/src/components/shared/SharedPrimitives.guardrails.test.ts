@@ -136,6 +136,7 @@ import swarmServicesDrawerSource from '@/components/Docker/SwarmServicesDrawer.t
 import k8sDeploymentsDrawerSource from '@/components/Kubernetes/K8sDeploymentsDrawer.tsx?raw';
 import k8sNamespacesDrawerSource from '@/components/Kubernetes/K8sNamespacesDrawer.tsx?raw';
 import nodeGroupHeaderSource from '@/components/shared/NodeGroupHeader.tsx?raw';
+import proxmoxVersionSource from '@/utils/proxmoxVersion.ts?raw';
 import storageGroupRowSource from '@/components/Storage/StorageGroupRow.tsx?raw';
 import storageGroupPresentationSource from '@/features/storageBackups/groupPresentation.ts?raw';
 import storagePoolRowSource from '@/components/Storage/StoragePoolRow.tsx?raw';
@@ -545,6 +546,16 @@ describe('shared primitive guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('getGroupedTableRowCellClass');
     expect(infrastructureSourceManagerSource).not.toContain('bg-base hover:bg-base');
     expect(unifiedResourceHostTableCardSource).toContain('data-summary-group-member-active');
+  });
+
+  it('routes Proxmox node version presentation through the shared formatter', () => {
+    expect(nodeGroupHeaderSource).toContain("from '@/utils/proxmoxVersion'");
+    expect(nodeGroupHeaderSource).toContain('formatProxmoxVersion(props.node.pveVersion)');
+    expect(nodeGroupHeaderSource).not.toContain('pve-manager\\/');
+
+    expect(proxmoxVersionSource).toContain('formatProxmoxVersion');
+    expect(proxmoxVersionSource).toContain('pve-manager\\/');
+    expect(proxmoxVersionSource).toContain('unknown');
   });
 
   it('keeps product table scroll frames on the shared table shell', () => {

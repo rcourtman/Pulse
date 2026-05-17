@@ -730,6 +730,11 @@ AI runtime.
    `pveVersion` or a Pulse Agent report whose OS identity resolves to Unraid or
    Proxmox VE. They must omit the version rather than showing unrelated
    collector OS versions, such as Debian 12, beside an API-backed PVE badge.
+   Shared row primitives that render Proxmox node identity, including
+   `frontend-modern/src/components/shared/NodeGroupHeader.tsx`, must route raw
+   PVE manager payloads through
+   `frontend-modern/src/utils/proxmoxVersion.ts` rather than inlining
+   page-local parsing or falling back to unrelated agent OS versions.
    System title metadata must apply the same identity rule: once the primary
    system badge names a platform with its version, source/method context may
    still add collection labels such as Pulse Agent, but it must not repeat the
@@ -1389,6 +1394,9 @@ cards or page-local toolbar wrappers inside `TableCard`. Proxmox host grouping
 also extends the shared `NodeGroupHeader` row pattern: host metrics may align
 with workload table columns, but the shared primitive owns the header/table
 shell boundary rather than platform pages copying their own card headers.
+Compact PVE version text in that header must come from the shared Proxmox
+version formatter so raw `pve-manager/...` payloads and platform-page host
+version cells stay consistent.
 Mobile navigation now recognizes `proxmox` as a first-class platform tab in
 the shared priority model so app-shell ordering remains centralized.
 

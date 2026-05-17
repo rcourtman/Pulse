@@ -5,6 +5,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { getNodeStatusIndicator } from '@/utils/status';
 import { formatUptime } from '@/utils/format';
 import { formatTemperature, getCpuTemperature, getTemperatureTextClass } from '@/utils/temperature';
+import { formatProxmoxVersion } from '@/utils/proxmoxVersion';
 import {
   GROUPED_TABLE_ROW_BADGE_CLASS,
   getGroupedTableRowCellClass,
@@ -31,15 +32,7 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
   const nodeUrl = () => props.node.guestURL || props.node.host || `https://${props.node.name}:8006`;
   const displayName = () => getNodeDisplayName(props.node);
   const showActualName = () => hasAlternateDisplayName(props.node);
-  const pveVersion = () => {
-    const version = (props.node.pveVersion || '').trim();
-    if (!version || version.toLowerCase() === 'unknown') return '';
-    return (
-      version.match(/pve-manager\/([^/\s]+)/i)?.[1] ||
-      version.match(/\d+(?:\.\d+)+/)?.[0] ||
-      version
-    );
-  };
+  const pveVersion = () => formatProxmoxVersion(props.node.pveVersion);
   const cpuTemperature = () => getCpuTemperature(props.node.temperature);
   const hasNodeFacts = () =>
     Boolean(pveVersion()) ||

@@ -957,9 +957,10 @@ host-profile token projection and must resolve to a governed profile id before
 they reach platform filters, source IDs, or top-level resource identity.
 Frontend resource identity presenters may append a runtime version to a
 displayed system badge only when that version is sourced from the same canonical
-platform or host-profile identity, such as PVE `pveVersion`, PBS `version`, or
-an agent OS report that resolves to Unraid or Proxmox VE. They must not attach
-a collector OS version to a different API-backed platform identity.
+platform or host-profile identity, such as PVE `ResourceProxmoxMeta.pveVersion`
+or `platformData.proxmox.pveVersion`, PBS `version`, or an agent OS report that
+resolves to Unraid or Proxmox VE. They must not attach a collector OS version to
+a different API-backed platform identity.
 Agent-backed storage resources follow the same distinction: `StorageMeta.platform`
 may carry appliance presentation context such as `unraid` so the operator can see
 what system owns the array, but realtime `platformType` and source filters must
@@ -1958,9 +1959,9 @@ monitoring and API export paths can derive `models.Storage` from unified views
 without depending on legacy snapshot ownership.
 
 Canonical Proxmox node metadata now carries node-only boundary fields such as
-guest URL, connection health, temperature details, and pending-update metadata
-so monitoring can derive `models.Node` from unified views without depending on
-legacy snapshot ownership.
+guest URL, connection health, PVE/kernel version identity, temperature details,
+and pending-update metadata so monitoring can derive `models.Node` from unified
+views without depending on legacy snapshot ownership.
 
 Canonical host-agent metadata now carries host-only runtime fields such as CPU
 count, load average, machine/report identity, command capability, exclude

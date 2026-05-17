@@ -182,9 +182,13 @@ describe('Resource Helper Functions', () => {
         nodeName: 'pve-a',
         instance: 'cluster-a',
         pool: 'prod-vms',
+        pveVersion: 'pve-manager/9.1.9/ee7bad0a3d1546c9',
+        kernelVersion: 'Linux 6.8.12-10-pve',
       };
 
       expect(proxmox.pool).toBe('prod-vms');
+      expect(proxmox.pveVersion).toBe('pve-manager/9.1.9/ee7bad0a3d1546c9');
+      expect(proxmox.kernelVersion).toBe('Linux 6.8.12-10-pve');
     });
   });
 
