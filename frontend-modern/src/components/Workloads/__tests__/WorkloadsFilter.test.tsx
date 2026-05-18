@@ -120,6 +120,20 @@ describe('WorkloadsFilter', () => {
         within(inlineFilterGroup('Type')).getByRole('button', { name: 'Containers' }),
       ).toHaveAttribute('aria-pressed', 'true');
     });
+
+    it('can suppress the Type filter for platform-owned workload type scopes', () => {
+      render(() => (
+        <WorkloadsFilter
+          {...makeProps({
+            viewMode: vi.fn(() => 'app-container' as const),
+            suppressTypeFilter: true,
+          })}
+        />
+      ));
+      expect(screen.queryByRole('group', { name: 'Type' })).not.toBeInTheDocument();
+      expect(inlineFilterGroup('Status')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
+    });
   });
 
   describe('type filter', () => {
@@ -174,6 +188,18 @@ describe('WorkloadsFilter', () => {
     it('renders when viewMode is not the default', () => {
       render(() => <WorkloadsFilter {...makeProps({ viewMode: vi.fn(() => 'vm' as const) })} />);
       expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
+    });
+
+    it('does not count a suppressed platform-owned viewMode as an active filter', () => {
+      render(() => (
+        <WorkloadsFilter
+          {...makeProps({
+            viewMode: vi.fn(() => 'app-container' as const),
+            suppressTypeFilter: true,
+          })}
+        />
+      ));
+      expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
     });
 
     it('renders when statusMode is not the default', () => {
@@ -297,6 +323,32 @@ describe('WorkloadsFilter', () => {
       expect(platformOnChange).toHaveBeenCalledWith('');
       expect(namespaceOnChange).toHaveBeenCalledWith('');
       expect(runtimeOnChange).toHaveBeenCalledWith('');
+    });
+
+    it('does not reset a suppressed platform-owned viewMode when clearing other filters', () => {
+      const setViewMode = vi.fn();
+      const setSearch = vi.fn();
+      const setSortKey = vi.fn();
+
+      render(() => (
+        <WorkloadsFilter
+          {...makeProps({
+            defaultSortKey: 'name',
+            search: vi.fn(() => 'nginx'),
+            setSearch,
+            setSortKey,
+            setViewMode,
+            viewMode: vi.fn(() => 'app-container' as const),
+            suppressTypeFilter: true,
+          })}
+        />
+      ));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
+
+      expect(setSearch).toHaveBeenCalledWith('');
+      expect(setSortKey).toHaveBeenCalledWith('name');
+      expect(setViewMode).not.toHaveBeenCalled();
     });
   });
 

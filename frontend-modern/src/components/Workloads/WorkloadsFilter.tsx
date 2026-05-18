@@ -91,7 +91,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
   const showClearAll = createMemo(() =>
     hasActiveWorkloadsFilters({
       search: props.search(),
-      viewMode: props.viewMode(),
+      viewMode: props.suppressTypeFilter ? DEFAULT_WORKLOADS_VIEW_MODE : props.viewMode(),
       statusMode: props.statusMode(),
       groupingMode: props.groupingMode(),
       hostFilterValue: props.hostFilter?.value,
@@ -102,9 +102,11 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
 
   const handleClearAll = () => {
     props.setSearch('');
-    props.setSortKey(DEFAULT_WORKLOADS_SORT_KEY);
+    props.setSortKey(props.defaultSortKey ?? DEFAULT_WORKLOADS_SORT_KEY);
     props.setSortDirection(DEFAULT_WORKLOADS_SORT_DIRECTION);
-    props.setViewMode(DEFAULT_WORKLOADS_VIEW_MODE);
+    if (!props.suppressTypeFilter) {
+      props.setViewMode(DEFAULT_WORKLOADS_VIEW_MODE);
+    }
     props.setStatusMode(DEFAULT_WORKLOADS_STATUS_MODE);
     props.setGroupingMode(DEFAULT_WORKLOADS_GROUPING_MODE);
     props.hostFilter?.onChange('');
@@ -114,8 +116,10 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
   };
 
   const buildFilters = (): FilterDef[] => {
-    const filters: FilterDef[] = [
-      {
+    const filters: FilterDef[] = [];
+
+    if (!props.suppressTypeFilter) {
+      filters.push({
         id: 'workloads-type',
         label: 'Type',
         group: 'properties',
@@ -124,7 +128,10 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
         setValue: (value: string) => props.setViewMode(value as ViewMode),
         defaultValue: DEFAULT_WORKLOADS_VIEW_MODE,
         options: workloadTypeOptions,
-      },
+      });
+    }
+
+    filters.push(
       {
         id: 'workloads-status',
         label: 'Status',
@@ -135,7 +142,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
         defaultValue: DEFAULT_WORKLOADS_STATUS_MODE,
         options: workloadStatusOptions,
       },
-    ];
+    );
 
     const hostFilter = props.hostFilter;
     if (hostFilter) {

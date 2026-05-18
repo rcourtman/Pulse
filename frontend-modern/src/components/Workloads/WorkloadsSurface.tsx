@@ -99,6 +99,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
               setStatusMode={state.setStatusMode}
               groupingMode={state.groupingMode}
               setGroupingMode={state.setGroupingMode}
+              defaultSortKey={props.defaultSortKey}
               setSortKey={state.setSortKey}
               setSortDirection={state.setSortDirection}
               onBeforeAutoFocus={state.handleBeforeAutoFocus}
@@ -115,6 +116,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
               hostFilter={state.hostFilterConfig()}
               namespaceFilter={state.namespaceFilterConfig()}
               platformFilter={state.platformFilterConfig()}
+              suppressTypeFilter={props.forcedViewMode !== undefined}
               metricDisplayMode={state.workloadMetricDisplayMode}
               setMetricDisplayMode={state.setWorkloadMetricDisplayMode}
               metricHistoryRange={state.workloadMetricHistoryRange}

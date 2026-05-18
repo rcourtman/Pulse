@@ -19,9 +19,12 @@ import {
 
 const DOCKER_RESOURCE_QUERY = 'type=agent,docker-host,app-container,docker-service';
 const DOCKER_PLATFORM_FILTER = 'docker';
-const DOCKER_WORKLOAD_COLUMN_SCOPE = 'docker';
-const DOCKER_WORKLOAD_DEFAULT_HIDDEN_COLUMNS = ['disk'];
+const DOCKER_WORKLOAD_FORCED_VIEW_MODE = 'app-container';
+const DOCKER_WORKLOAD_DEFAULT_SORT_KEY = 'name';
+const DOCKER_WORKLOAD_COLUMN_SCOPE = 'docker-runtime-containers';
+const DOCKER_WORKLOAD_DEFAULT_HIDDEN_COLUMNS = ['disk', 'tags'];
 const DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES = {
+  context: 'Host',
   disk: 'Writable layer',
 } as const;
 const VALID_TABS = new Set<DockerPageTabId>(DOCKER_TAB_SPECS.map((tab) => tab.id));
@@ -103,6 +106,8 @@ export function DockerPageSurface() {
                   showFilterToolbar
                   suppressPlatformFilter
                   forcedPlatform={DOCKER_PLATFORM_FILTER}
+                  forcedViewMode={DOCKER_WORKLOAD_FORCED_VIEW_MODE}
+                  defaultSortKey={DOCKER_WORKLOAD_DEFAULT_SORT_KEY}
                   columnVisibilityStorageScope={DOCKER_WORKLOAD_COLUMN_SCOPE}
                   additionalDefaultHiddenColumnIds={DOCKER_WORKLOAD_DEFAULT_HIDDEN_COLUMNS}
                   columnLabelOverrides={DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES}
@@ -130,6 +135,8 @@ export function DockerPageSurface() {
                 showFilterToolbar
                 suppressPlatformFilter
                 forcedPlatform={DOCKER_PLATFORM_FILTER}
+                forcedViewMode={DOCKER_WORKLOAD_FORCED_VIEW_MODE}
+                defaultSortKey={DOCKER_WORKLOAD_DEFAULT_SORT_KEY}
                 columnVisibilityStorageScope={DOCKER_WORKLOAD_COLUMN_SCOPE}
                 additionalDefaultHiddenColumnIds={DOCKER_WORKLOAD_DEFAULT_HIDDEN_COLUMNS}
                 columnLabelOverrides={DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES}

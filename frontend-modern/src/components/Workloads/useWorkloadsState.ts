@@ -3,7 +3,7 @@ import { useNavigate } from '@solidjs/router';
 import { ConnectionsAPI, type ConnectionsListResponse } from '@/api/connections';
 import type { VM, Container, Node } from '@/types/api';
 import type { Resource } from '@/types/resource';
-import type { WorkloadGuest } from '@/types/workloads';
+import type { ViewMode, WorkloadGuest } from '@/types/workloads';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
@@ -62,7 +62,9 @@ export interface WorkloadsSurfaceProps {
   embedded?: boolean;
   tableOnly?: boolean;
   forcedPlatform?: string;
+  forcedViewMode?: ViewMode;
   forcedGroupingMode?: WorkloadsGroupingMode;
+  defaultSortKey?: WorkloadsSortKey;
   // When the surface is mounted inside a platform-first page, the page owns
   // platform scope through `forcedPlatform`. Setting `showFilterToolbar`
   // keeps the operator-facing WorkloadsFilter visible alongside the table
@@ -176,6 +178,11 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     showFilters,
     setShowFilters,
   });
+  const effectiveViewMode = createMemo<ViewMode>(() => props.forcedViewMode ?? viewMode());
+  const setEffectiveViewMode = (value: ViewMode): void => {
+    if (props.forcedViewMode) return;
+    setViewMode(value);
+  };
 
   const {
     columnVisibility,
@@ -210,6 +217,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     setWorkloadsSummaryCollapsed,
     setWorkloadsSummaryRange,
   } = useWorkloadsControlsState({
+    defaultSortKey: props.defaultSortKey,
     forcedGroupingMode: props.forcedGroupingMode,
     metricDisplayMode: props.metricDisplayMode,
     onMetricDisplayModeChange: props.onMetricDisplayModeChange,
@@ -220,7 +228,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     columnLabelOverrides: props.columnLabelOverrides,
     setShowFilters,
     showFilters,
-    viewMode,
+    viewMode: effectiveViewMode,
   });
 
   const infrastructureNodes = createMemo<Node[]>(() => {
@@ -316,7 +324,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   const filteredGuests = createMemo(() => {
     const params: FilterWorkloadsParams = {
       guests: allGuests(),
-      viewMode: viewMode(),
+      viewMode: effectiveViewMode(),
       statusMode: statusMode(),
       searchTerm: search().trim(),
       selectedNode: selectedNode(),
@@ -477,7 +485,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     setTableBodyRef,
     setTableRootRef,
     setTableWrapperRef,
-    setViewMode,
+    setViewMode: setEffectiveViewMode,
     setWorkloadMetricDisplayMode,
     setWorkloadMetricHistoryRange,
     setWorkloadsSummaryCollapsed,
@@ -491,7 +499,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     topSpacerHeight,
     totalColumns,
     totalStats,
-    viewMode,
+    viewMode: effectiveViewMode,
     visibleColumns,
     visibleGroupKeys,
     windowedGroupedGuests,
