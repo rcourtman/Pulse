@@ -322,7 +322,7 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     toggleable: true,
     sortKey: 'diskIo',
   },
-  { id: 'update', label: 'Update', width: '60px', toggleable: true },
+  { id: 'update', label: 'Update', width: '86px', toggleable: true },
 ];
 
 const GUEST_COLUMN_BY_ID = new Map(GUEST_COLUMNS.map((column) => [column.id, column] as const));
@@ -375,7 +375,7 @@ const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
     image: 18,
     namespace: 11,
     context: 13,
-    update: 6,
+    update: 9,
   },
 };
 

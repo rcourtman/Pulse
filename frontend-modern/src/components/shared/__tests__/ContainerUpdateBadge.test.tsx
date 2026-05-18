@@ -119,7 +119,7 @@ describe('ContainerUpdateBadge', () => {
       />
     ));
 
-    expect(screen.getByText('Failed')).toBeInTheDocument();
+    expect(screen.getByText('Check failed')).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });

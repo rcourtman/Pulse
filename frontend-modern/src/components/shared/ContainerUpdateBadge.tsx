@@ -111,7 +111,7 @@ export const ContainerUpdateBadge: Component<ContainerUpdateBadgeProps> = (props
             onMouseLeave={() => hideTooltip()}
           >
             <ErrorIndicatorIcon class="w-3 h-3" />
-            <span>{props.compact ? 'Failed' : 'Check failed'}</span>
+            <span>Check failed</span>
           </span>
         </Match>
         <Match when={props.showCurrent && hasContainerUpdateCurrent(props.updateStatus)}>

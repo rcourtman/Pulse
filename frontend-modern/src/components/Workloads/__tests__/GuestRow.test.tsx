@@ -868,6 +868,7 @@ describe('GUEST_COLUMNS', () => {
     const typeColumn = GUEST_COLUMNS.find((column) => column.id === 'type');
     const netIoColumn = GUEST_COLUMNS.find((column) => column.id === 'netIo');
     const diskIoColumn = GUEST_COLUMNS.find((column) => column.id === 'diskIo');
+    const updateColumn = GUEST_COLUMNS.find((column) => column.id === 'update');
 
     expect(nameColumn?.width).toBe('200px');
     expect(nameColumn?.minWidth).toBe('180px');
@@ -877,6 +878,7 @@ describe('GUEST_COLUMNS', () => {
     expect(netIoColumn?.minWidth).toBe('170px');
     expect(diskIoColumn?.width).toBe('170px');
     expect(diskIoColumn?.minWidth).toBe('170px');
+    expect(updateColumn?.width).toBe('86px');
   });
 
   it('derives mobile overrides from the canonical guest column model', () => {
@@ -942,6 +944,24 @@ describe('GUEST_COLUMNS', () => {
     expect(compactPodColumnIds).toEqual(['name', 'cpu', 'memory', 'image', 'namespace', 'context']);
     expect(getGuestColumnWidthStyle('name', false, 'compact', compactPodColumnIds)).toEqual({
       width: '27.3684%',
+    });
+  });
+
+  it('gives Docker update status enough compact width for check-result labels', () => {
+    const compactDockerRuntimeColumnIds = [
+      'name',
+      'cpu',
+      'memory',
+      'uptime',
+      'image',
+      'context',
+      'update',
+    ];
+
+    expect(
+      getGuestColumnWidthStyle('update', false, 'compact', compactDockerRuntimeColumnIds),
+    ).toEqual({
+      width: '8.9109%',
     });
   });
 
