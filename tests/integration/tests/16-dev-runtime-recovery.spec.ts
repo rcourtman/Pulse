@@ -59,7 +59,9 @@ test.describe.serial('Managed dev runtime recovery', () => {
     await expect(page).toHaveURL(/\/settings\/infrastructure\?add=pick$/);
     await expect(page.getByRole('dialog', { name: 'Add infrastructure' })).toBeVisible();
 
-    const setupToken = String(readRuntimeState()?.primaryAPIToken || '').trim();
+    const runtimeState = readRuntimeState();
+    const setupToken = String(runtimeState?.primaryAPIToken || '').trim();
+    expect(String(runtimeState?.baseURL || '').trim().length).toBeGreaterThan(0);
     expect(
       setupToken.length,
       'expected first-session helper to persist the handoff API token to runtime state',

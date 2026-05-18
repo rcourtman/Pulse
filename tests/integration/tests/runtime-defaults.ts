@@ -13,7 +13,7 @@ const trim = (value: unknown): string => String(value ?? '').trim();
 const firstNonEmpty = (...values: readonly unknown[]): string =>
   values.map(trim).find((value) => value !== '') || '';
 
-const repoRootFromEnv = (env: NodeJS.ProcessEnv = process.env): string =>
+export const repoRootFromEnv = (env: NodeJS.ProcessEnv = process.env): string =>
   trim(env.PULSE_E2E_REPO_ROOT) || path.resolve(__dirname, '..', '..', '..');
 
 const managedHotDevPidPath = (env: NodeJS.ProcessEnv = process.env): string =>

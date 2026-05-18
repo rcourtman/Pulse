@@ -9,6 +9,8 @@ const truthy = (value) =>
   ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
 
 const trim = (value) => String(value || '').trim();
+const HOT_DEV_DEFAULT_AUTH_USER = 'admin';
+const HOT_DEV_DEFAULT_AUTH_HASH = '$2a$12$J/Vu6FlBUJDTK.VAkysjB.AnvFOcijDbETyumhCB.nJVes5gvpiI6';
 
 function repoRootFromEnv(env = process.env) {
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -33,6 +35,63 @@ function hotDevBackendURL(env = process.env) {
   const host = trim(env.PULSE_DEV_API_HOST) || '127.0.0.1';
   const port = trim(env.PULSE_DEV_API_PORT) || '7655';
   return `http://${host}:${port}`;
+}
+
+function hotDevRuntimeEnvPath(env = process.env) {
+  return path.join(repoRootFromEnv(env), 'tmp', 'dev-config', '.env');
+}
+
+function unquoteDotEnvValue(value) {
+  const trimmed = trim(value);
+  if (
+    (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
+    (trimmed.startsWith('"') && trimmed.endsWith('"'))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function readHotDevRuntimeAuth(env = process.env) {
+  try {
+    const contents = fs.readFileSync(hotDevRuntimeEnvPath(env), 'utf8');
+    const auth = {};
+    for (const line of contents.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) {
+        continue;
+      }
+      const separator = trimmed.indexOf('=');
+      if (separator === -1) {
+        continue;
+      }
+      auth[trimmed.slice(0, separator).trim()] = unquoteDotEnvValue(
+        trimmed.slice(separator + 1),
+      );
+    }
+    return {
+      user: trim(auth.PULSE_AUTH_USER),
+      pass: trim(auth.PULSE_AUTH_PASS),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function hotDevDesiredRuntimeAuth(env = process.env) {
+  return {
+    user: trim(env.HOT_DEV_AUTH_USER) || HOT_DEV_DEFAULT_AUTH_USER,
+    pass: trim(env.HOT_DEV_AUTH_PASS) || HOT_DEV_DEFAULT_AUTH_HASH,
+  };
+}
+
+function managedRuntimeAuthMatchesDesired(env = process.env) {
+  const currentAuth = readHotDevRuntimeAuth(env);
+  if (!currentAuth) {
+    return false;
+  }
+  const desiredAuth = hotDevDesiredRuntimeAuth(env);
+  return currentAuth.user === desiredAuth.user && currentAuth.pass === desiredAuth.pass;
 }
 
 function sleep(ms) {
@@ -91,7 +150,10 @@ export function shouldRestartManagedDevRuntimeForVerification({
   env = process.env,
   wasRunning,
 }) {
-  return Boolean(wasRunning) && managedVerifyLockActive(env);
+  if (!wasRunning) {
+    return false;
+  }
+  return managedVerifyLockActive(env) || !managedRuntimeAuthMatchesDesired(env);
 }
 
 async function managedRuntimeStatusOutput(env = process.env) {
@@ -184,7 +246,7 @@ async function ensureHealthyStatus(env = process.env) {
 
 async function waitForStableManagedRuntime({
   env = process.env,
-  timeoutMs = 60_000,
+  timeoutMs = 180_000,
   sampleIntervalMs = 2_000,
   requiredStableSamples = 2,
 } = {}) {

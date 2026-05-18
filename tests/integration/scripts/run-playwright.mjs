@@ -14,11 +14,14 @@ const repoRoot = path.resolve(__dirname, '..', '..');
 function buildRunScopedEnv(env = process.env) {
   const configuredRuntimeStatePath = String(env.PULSE_E2E_RUNTIME_STATE_PATH || '').trim();
   const configuredRunId = String(env.PULSE_E2E_RUN_ID || '').trim();
+  const configuredVerifyLockPath = String(env.HOT_DEV_VERIFY_LOCK_FILE || '').trim();
   if (configuredRuntimeStatePath !== '') {
     return {
       ...env,
       PULSE_E2E_RUN_ID:
         configuredRunId || path.basename(configuredRuntimeStatePath).replace(/\.[^.]+$/, ''),
+      HOT_DEV_VERIFY_LOCK_FILE:
+        configuredVerifyLockPath || path.join(repoRoot, 'tmp', 'hot-dev.verify.lock'),
     };
   }
 
@@ -27,6 +30,8 @@ function buildRunScopedEnv(env = process.env) {
     ...env,
     PULSE_E2E_RUN_ID: String(env.PULSE_E2E_RUN_ID || runId).trim(),
     PULSE_E2E_RUNTIME_STATE_PATH: path.join(repoRoot, 'tmp', `${runId}.runtime-state.json`),
+    HOT_DEV_VERIFY_LOCK_FILE:
+      configuredVerifyLockPath || path.join(repoRoot, 'tmp', 'hot-dev.verify.lock'),
   };
 }
 
