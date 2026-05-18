@@ -44,6 +44,12 @@ const getUsedPercent = (used?: number | null, total?: number | null): string => 
   return formatPercent((used / total) * 100);
 };
 
+const getNumericField = (value: unknown, field: string): number | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const fieldValue = (value as Record<string, unknown>)[field];
+  return typeof fieldValue === 'number' ? fieldValue : undefined;
+};
+
 const formatLastSeenRow = (
   value: string | number | null | undefined,
 ): DockerOverviewRow | null => {
@@ -206,10 +212,10 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
       if (typeof memory.free === 'number') {
         rows.push({ label: 'Free', value: formatBytes(memory.free) });
       }
-    } else if (typeof memory.current === 'number') {
-      rows.push({ label: 'Usage', value: formatPercent(memory.current) });
-    } else if (typeof (memory as { usage?: number }).usage === 'number') {
-      rows.push({ label: 'Usage', value: formatPercent((memory as { usage?: number }).usage) });
+    } else if (typeof getNumericField(memory, 'current') === 'number') {
+      rows.push({ label: 'Usage', value: formatPercent(getNumericField(memory, 'current')) });
+    } else if (typeof getNumericField(memory, 'usage') === 'number') {
+      rows.push({ label: 'Usage', value: formatPercent(getNumericField(memory, 'usage')) });
     }
     return rows;
   };
@@ -237,7 +243,7 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
     const rows: DockerOverviewRow[] = [];
     rows.push({
       label: 'Connection',
-      value: formatStatus(agent()?.connectionState || props.host.status),
+      value: formatStatus(props.host.status),
     });
     rows.push({
       label: 'Agent ID',
