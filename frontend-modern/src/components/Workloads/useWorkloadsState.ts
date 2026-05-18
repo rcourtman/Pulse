@@ -86,6 +86,11 @@ export interface WorkloadsSurfaceProps {
   onMetricDisplayModeChange?: (value: WorkloadsMetricDisplayMode) => void;
   metricHistoryRange?: Accessor<WorkloadTableMetricHistoryRange>;
   onMetricHistoryRangeChange?: (value: WorkloadTableMetricHistoryRange) => void;
+  // Platform pages can scope column preferences when a shared workload type
+  // needs different defaults or labels on that platform-owned page.
+  columnVisibilityStorageScope?: string;
+  additionalDefaultHiddenColumnIds?: string[];
+  columnLabelOverrides?: Partial<Record<string, string>>;
 }
 
 export type WorkloadSortKey = WorkloadsSortKey;
@@ -210,6 +215,9 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     onMetricDisplayModeChange: props.onMetricDisplayModeChange,
     metricHistoryRange: props.metricHistoryRange,
     onMetricHistoryRangeChange: props.onMetricHistoryRangeChange,
+    columnVisibilityStorageScope: props.columnVisibilityStorageScope,
+    additionalDefaultHiddenColumnIds: props.additionalDefaultHiddenColumnIds,
+    columnLabelOverrides: props.columnLabelOverrides,
     setShowFilters,
     showFilters,
     viewMode,

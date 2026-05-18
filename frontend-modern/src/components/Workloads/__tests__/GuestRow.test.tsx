@@ -918,14 +918,15 @@ describe('GUEST_COLUMNS', () => {
     expect(getWorkloadTableLayoutMode(1440)).toBe('wide');
   });
 
-  it('non-toggleable columns include core metrics', () => {
+  it('keeps CPU and memory fixed while allowing disk to be platform-scoped', () => {
     const nonToggleable = GUEST_COLUMNS.filter((c) => !c.toggleable);
     const ids = nonToggleable.map((c) => c.id);
     expect(ids).toContain('name');
     expect(ids).toContain('cpu');
     expect(ids).toContain('memory');
-    expect(ids).toContain('disk');
+    expect(ids).not.toContain('disk');
     expect(ids).not.toContain('type');
+    expect(GUEST_COLUMNS.find((c) => c.id === 'disk')?.toggleable).toBe(true);
   });
 });
 

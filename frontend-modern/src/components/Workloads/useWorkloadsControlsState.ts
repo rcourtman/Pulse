@@ -41,6 +41,9 @@ interface WorkloadsControlsStateOptions {
   onMetricDisplayModeChange?: (value: WorkloadsMetricDisplayMode) => void;
   metricHistoryRange?: Accessor<WorkloadTableMetricHistoryRange>;
   onMetricHistoryRangeChange?: (value: WorkloadTableMetricHistoryRange) => void;
+  columnVisibilityStorageScope?: string;
+  additionalDefaultHiddenColumnIds?: string[];
+  columnLabelOverrides?: Partial<Record<string, string>>;
   setShowFilters: (value: boolean | ((current: boolean) => boolean)) => void;
   showFilters: Accessor<boolean>;
   viewMode: Accessor<ViewMode>;
@@ -142,10 +145,20 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     return base;
   });
 
+  const workloadColumns = GUEST_COLUMNS.map((column) => {
+    const label = options.columnLabelOverrides?.[column.id]?.trim();
+    return label ? { ...column, label } : column;
+  });
+  const columnStorageKey = options.columnVisibilityStorageScope?.trim()
+    ? `${STORAGE_KEYS.WORKLOADS_HIDDEN_COLUMNS}:${options.columnVisibilityStorageScope.trim()}`
+    : STORAGE_KEYS.WORKLOADS_HIDDEN_COLUMNS;
+  const defaultHiddenColumnIds = Array.from(
+    new Set(['os', 'ip', ...(options.additionalDefaultHiddenColumnIds ?? [])]),
+  );
   const columnVisibility = useColumnVisibility(
-    STORAGE_KEYS.WORKLOADS_HIDDEN_COLUMNS,
-    GUEST_COLUMNS,
-    ['os', 'ip'],
+    columnStorageKey,
+    workloadColumns,
+    defaultHiddenColumnIds,
     relevantColumns,
   );
 

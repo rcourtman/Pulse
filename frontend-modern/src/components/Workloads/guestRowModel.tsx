@@ -166,7 +166,7 @@ export const GUEST_COLUMNS: ColumnDef[] = [
   { id: 'vmid', label: 'ID', width: '45px', sortKey: 'vmid' },
   { id: 'cpu', label: 'CPU', width: '140px', sortKey: 'cpu' },
   { id: 'memory', label: 'Mem', width: '140px', sortKey: 'memory' },
-  { id: 'disk', label: 'Disk', width: '140px', sortKey: 'disk' },
+  { id: 'disk', label: 'Disk', width: '140px', toggleable: true, sortKey: 'disk' },
   {
     id: 'ip',
     label: 'IP',

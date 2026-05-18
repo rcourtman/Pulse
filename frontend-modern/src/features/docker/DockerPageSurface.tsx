@@ -19,6 +19,11 @@ import {
 
 const DOCKER_RESOURCE_QUERY = 'type=agent,docker-host,app-container,docker-service';
 const DOCKER_PLATFORM_FILTER = 'docker';
+const DOCKER_WORKLOAD_COLUMN_SCOPE = 'docker';
+const DOCKER_WORKLOAD_DEFAULT_HIDDEN_COLUMNS = ['disk'];
+const DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES = {
+  disk: 'Writable layer',
+} as const;
 const VALID_TABS = new Set<DockerPageTabId>(DOCKER_TAB_SPECS.map((tab) => tab.id));
 
 const dockerIcon = () => <ContainerIcon class="h-6 w-6 text-slate-400" />;
@@ -98,6 +103,9 @@ export function DockerPageSurface() {
                   showFilterToolbar
                   suppressPlatformFilter
                   forcedPlatform={DOCKER_PLATFORM_FILTER}
+                  columnVisibilityStorageScope={DOCKER_WORKLOAD_COLUMN_SCOPE}
+                  additionalDefaultHiddenColumnIds={DOCKER_WORKLOAD_DEFAULT_HIDDEN_COLUMNS}
+                  columnLabelOverrides={DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES}
                   compactGroupHeaders
                 />
                 <Show when={model().services.length > 0}>
@@ -122,6 +130,9 @@ export function DockerPageSurface() {
                 showFilterToolbar
                 suppressPlatformFilter
                 forcedPlatform={DOCKER_PLATFORM_FILTER}
+                columnVisibilityStorageScope={DOCKER_WORKLOAD_COLUMN_SCOPE}
+                additionalDefaultHiddenColumnIds={DOCKER_WORKLOAD_DEFAULT_HIDDEN_COLUMNS}
+                columnLabelOverrides={DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES}
               />
             </Show>
             <Show when={activeTab() === 'services'}>
