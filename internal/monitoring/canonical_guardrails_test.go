@@ -696,6 +696,37 @@ func TestProxmoxGuestDiskInventoryPrefersCanonicalLinkedHostAgentSource(t *testi
 	}
 }
 
+func TestProxmoxGuestDockerInventoryUsesCanonicalReportIngestPath(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"docker_detection.go": {
+			"type DockerInventoryCollector interface {",
+			"func (m *Monitor) CollectProxmoxGuestDockerInventory(ctx context.Context, containers []models.Container) {",
+			"m.hasOnlineHostAgentForContainer(ct.ID)",
+			"m.ApplyDockerReport(report, nil)",
+			`docker ps -a --no-trunc --format 'CONTAINER\\t{{json .ID}}`,
+			`docker stats --no-stream --no-trunc --format 'STAT\\t{{json .ID}}`,
+			"ParseProxmoxGuestDockerInventoryVMIDs",
+		},
+		"monitor_pve_guest_poll.go": {
+			"m.CollectProxmoxGuestDockerInventory(ctx, allContainers)",
+			"m.state.UpdateContainersForInstance(instanceName, allContainers)",
+		},
+	}
+
+	for file, snippets := range requiredSnippets {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
+		}
+	}
+}
+
 func TestBackupOrphanDetectionUsesCanonicalInventoryReadinessScope(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		"monitor.go": {

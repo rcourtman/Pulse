@@ -752,6 +752,13 @@ the canonical monitored-system blocked payload.
     as compatibility input into that same canonical `agent-<hostname>`
     binding, and unbound agent-exec tokens must fail closed instead of being
     treated as global command authority.
+    Proxmox-side LXC Docker detection and inventory wiring in
+    `internal/api/router.go` shares that agent-exec transport boundary:
+    router startup may configure the monitoring checker or collector only when
+    explicit server env opt-in is present, must route execution through the
+    authenticated Proxmox node agent, and must keep inventory collection behind
+    the monitoring-owned minimal Docker summary contract rather than exposing
+    a new public API payload shape.
 21. Keep hosted billing-state quickstart grants retired from new shared API flows: `internal/api/hosted_entitlement_refresh.go`, hosted signup, and trial-state construction must not auto-grant or refresh quickstart inventory for new workspaces, while low-level billing-state readers may still preserve historical fields that already exist on disk.
 22. Keep hosted AI settings bootstrap on the shared API contract as a retired path: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`, `internal/api/ai_handler.go`, and `internal/api/contract_test.go` must treat a missing `ai.enc` in hosted mode as an unconfigured BYOK/local-provider state, not as a machine-owned `quickstart:pulse-hosted` bootstrap condition. Hosted tenant reads may inherit billing state for commercial authorization, but they must not create quickstart-backed AI config or call the quickstart bootstrap upstream route.
 23. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface: `internal/api/ai_handler.go`, `internal/api/ai_handlers.go`, `internal/api/router_routes_ai_relay.go`, and `internal/api/contract_test.go` must turn the governed approvals-list API into the canonical empty-list payload as soon as settings-driven AI enablement succeeds, rather than leaving that surface on `503 Approval store not initialized` until some separate startup-only side effect happens.

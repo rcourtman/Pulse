@@ -91,14 +91,24 @@ func TestLoad_ProxmoxGuestDockerDetectionEnvOptIn(t *testing.T) {
 	cfg, err := Load()
 	require.NoError(t, err)
 	assert.False(t, cfg.EnableProxmoxGuestDockerDetection)
+	assert.False(t, cfg.EnableProxmoxGuestDockerInventory)
+	assert.Empty(t, cfg.ProxmoxGuestDockerInventoryVMIDs)
 	assert.False(t, cfg.EnvOverrides["PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION"])
+	assert.False(t, cfg.EnvOverrides["PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY"])
+	assert.False(t, cfg.EnvOverrides["PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS"])
 
 	t.Setenv("PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION", "true")
+	t.Setenv("PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY", "true")
+	t.Setenv("PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS", "101,102")
 
 	cfg, err = Load()
 	require.NoError(t, err)
 	assert.True(t, cfg.EnableProxmoxGuestDockerDetection)
+	assert.True(t, cfg.EnableProxmoxGuestDockerInventory)
+	assert.Equal(t, "101,102", cfg.ProxmoxGuestDockerInventoryVMIDs)
 	assert.True(t, cfg.EnvOverrides["PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION"])
+	assert.True(t, cfg.EnvOverrides["PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY"])
+	assert.True(t, cfg.EnvOverrides["PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS"])
 }
 
 func TestLoad_MetricsStorageEnvOverrides(t *testing.T) {

@@ -173,6 +173,10 @@ regression protection.
    process version once, but they must not add per-request release lookups,
    filesystem walks, or other heavy work just to compute whether an attached
    agent is current.
+   Proxmox-side LXC Docker collector wiring in `internal/api/router.go` follows
+   the same startup-only router rule: env opt-in may configure monitoring-owned
+   checker/collector callbacks, but normal protected request setup must not run
+   `pct`, scan LXC guests, or collect Docker inventory.
    Container runtime migration token minting follows that same rule: adding
    server-derived owner metadata in `internal/api/router.go` must reuse the
    already-authenticated request context or caller token and must not add

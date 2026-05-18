@@ -2,11 +2,13 @@ package monitoring
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
 // mockDockerChecker is a test implementation of DockerChecker
@@ -314,6 +316,198 @@ func TestAgentDockerChecker_ParsesOutput(t *testing.T) {
 				t.Errorf("Expected hasDocker=%v, got %v", tt.wantDocker, hasDocker)
 			}
 		})
+	}
+}
+
+func TestAgentDockerInventoryCollector_MinimalCommandAndReport(t *testing.T) {
+	var gotCommand string
+	collector := NewAgentDockerInventoryCollector(func(ctx context.Context, hostname string, command string, timeout int) (string, int, error) {
+		gotCommand = command
+		return strings.Join([]string{
+			proxmoxGuestDockerInventoryMarker,
+			"HOSTNAME\tct-web",
+			"UNAME\tLinux 6.8.12-9-pve x86_64",
+			"CPUS\t2",
+			"MEMTOTAL\t1073741824",
+			"VERSION\t\"26.1.4\"",
+			"CONTAINER\t\"abcdef123456\"\t\"web\"\t\"nginx:latest\"\t\"running\"\t\"Up 2 hours\"\t\"0.0.0.0:8080->80/tcp, 443/tcp\"\t\"2 hours ago\"",
+			"STAT\t\"abcdef123456\"\t\"web\"\t\"0.50%\"\t\"64MiB / 1GiB\"\t\"6.25%\"\t\"1.2kB / 3.4MB\"\t\"5MB / 6MB\"",
+			"",
+		}, "\n"), 0, nil
+	}, AgentDockerInventoryCollectorOptions{})
+
+	report, ok, err := collector.CollectDockerInventory(context.Background(), models.Container{
+		ID:     "pve-a:node-a:101",
+		VMID:   101,
+		Name:   "web-lxc",
+		Node:   "node-a",
+		Status: "running",
+	})
+	if err != nil {
+		t.Fatalf("CollectDockerInventory returned error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected inventory report to be collected")
+	}
+	if !strings.Contains(gotCommand, "pct exec 101 -- sh -c") {
+		t.Fatalf("expected pct exec command for VMID 101, got %q", gotCommand)
+	}
+	for _, forbidden := range []string{"docker inspect", "docker exec", "docker top", "printenv", ".Labels", ".Mounts", ".Command"} {
+		if strings.Contains(gotCommand, forbidden) {
+			t.Fatalf("inventory command must not collect %s; command=%q", forbidden, gotCommand)
+		}
+	}
+
+	if report.Agent.ID != "proxmox-lxc-docker:pve-a:node-a:101" {
+		t.Fatalf("Agent.ID = %q", report.Agent.ID)
+	}
+	if report.Host.Hostname != "ct-web" {
+		t.Fatalf("Host.Hostname = %q", report.Host.Hostname)
+	}
+	if report.Host.Name != "web-lxc (LXC 101)" {
+		t.Fatalf("Host.Name = %q", report.Host.Name)
+	}
+	if report.Host.DockerVersion != "26.1.4" || report.Host.TotalCPU != 2 || report.Host.TotalMemoryBytes != 1073741824 {
+		t.Fatalf("unexpected host info: %#v", report.Host)
+	}
+	if len(report.Containers) != 1 {
+		t.Fatalf("expected 1 container, got %d", len(report.Containers))
+	}
+	ct := report.Containers[0]
+	if ct.ID != "abcdef123456" || ct.Name != "web" || ct.Image != "nginx:latest" || ct.State != "running" {
+		t.Fatalf("unexpected container payload: %#v", ct)
+	}
+	if ct.UptimeSeconds != 7200 {
+		t.Fatalf("UptimeSeconds = %d, want 7200", ct.UptimeSeconds)
+	}
+	if ct.CPUPercent != 0.5 || ct.MemoryUsageBytes != 64*1024*1024 || ct.MemoryLimitBytes != 1024*1024*1024 || ct.MemoryPercent != 6.25 {
+		t.Fatalf("unexpected stats payload: %#v", ct)
+	}
+	if ct.NetworkRXBytes != 1200 || ct.NetworkTXBytes != 3400000 {
+		t.Fatalf("unexpected network IO: rx=%d tx=%d", ct.NetworkRXBytes, ct.NetworkTXBytes)
+	}
+	if ct.BlockIO == nil || ct.BlockIO.ReadBytes != 5000000 || ct.BlockIO.WriteBytes != 6000000 {
+		t.Fatalf("unexpected block IO: %#v", ct.BlockIO)
+	}
+	if len(ct.Ports) != 2 || ct.Ports[0].PrivatePort != 80 || ct.Ports[0].PublicPort != 8080 || ct.Ports[1].PrivatePort != 443 {
+		t.Fatalf("unexpected ports: %#v", ct.Ports)
+	}
+}
+
+func TestAgentDockerInventoryCollector_AllowlistSkipsUnlistedVMID(t *testing.T) {
+	called := false
+	collector := NewAgentDockerInventoryCollector(func(ctx context.Context, hostname string, command string, timeout int) (string, int, error) {
+		called = true
+		return "", 0, nil
+	}, AgentDockerInventoryCollectorOptions{
+		AllowedVMIDs: map[int]struct{}{102: {}},
+	})
+
+	_, ok, err := collector.CollectDockerInventory(context.Background(), models.Container{VMID: 101, Node: "node-a"})
+	if err != nil {
+		t.Fatalf("CollectDockerInventory returned error: %v", err)
+	}
+	if ok {
+		t.Fatal("expected unlisted VMID to be skipped")
+	}
+	if called {
+		t.Fatal("collector should not execute a command for an unlisted VMID")
+	}
+}
+
+type mockDockerInventoryCollector struct {
+	mu      sync.Mutex
+	calls   []int
+	reports map[int]agentsdocker.Report
+}
+
+func (m *mockDockerInventoryCollector) CollectDockerInventory(ctx context.Context, container models.Container) (agentsdocker.Report, bool, error) {
+	m.mu.Lock()
+	m.calls = append(m.calls, container.VMID)
+	m.mu.Unlock()
+	report, ok := m.reports[container.VMID]
+	return report, ok, nil
+}
+
+func TestMonitorCollectProxmoxGuestDockerInventory_AppliesDockerReport(t *testing.T) {
+	monitor := newTestMonitor(t)
+	collector := &mockDockerInventoryCollector{
+		reports: map[int]agentsdocker.Report{
+			101: {
+				Agent: agentsdocker.AgentInfo{ID: "proxmox-lxc-docker:pve-a:node-a:101", Type: "unified", IntervalSeconds: 30},
+				Host: agentsdocker.HostInfo{
+					Hostname:       "ct-web",
+					Name:           "web-lxc (LXC 101)",
+					Runtime:        "docker",
+					DockerVersion:  "26.1.4",
+					RuntimeVersion: "26.1.4",
+				},
+				Containers: []agentsdocker.Container{{
+					ID:     "docker-1",
+					Name:   "web",
+					Image:  "nginx:latest",
+					State:  "running",
+					Status: "Up 1 minute",
+				}},
+				Timestamp: time.Now().UTC(),
+			},
+		},
+	}
+	monitor.SetDockerInventoryCollector(collector)
+
+	monitor.CollectProxmoxGuestDockerInventory(context.Background(), []models.Container{
+		{ID: "pve-a:node-a:101", VMID: 101, Name: "web-lxc", Node: "node-a", Status: "running", HasDocker: true},
+		{ID: "pve-a:node-a:102", VMID: 102, Name: "plain-lxc", Node: "node-a", Status: "running", HasDocker: false},
+	})
+
+	if len(collector.calls) != 1 || collector.calls[0] != 101 {
+		t.Fatalf("collector calls = %#v, want [101]", collector.calls)
+	}
+	hosts := monitor.state.GetDockerHosts()
+	if len(hosts) != 1 {
+		t.Fatalf("expected 1 Docker host, got %d", len(hosts))
+	}
+	if hosts[0].ID != "proxmox-lxc-docker:pve-a:node-a:101" {
+		t.Fatalf("Docker host ID = %q", hosts[0].ID)
+	}
+	if len(hosts[0].Containers) != 1 || hosts[0].Containers[0].Name != "web" {
+		t.Fatalf("unexpected Docker containers: %#v", hosts[0].Containers)
+	}
+}
+
+func TestMonitorCollectProxmoxGuestDockerInventory_SkipsLinkedGuestLocalAgent(t *testing.T) {
+	monitor := newTestMonitor(t)
+	monitor.state.UpsertHost(models.Host{
+		ID:                "host-agent-101",
+		Hostname:          "web-lxc",
+		Status:            "online",
+		LinkedContainerID: "pve-a:node-a:101",
+	})
+	collector := &mockDockerInventoryCollector{reports: map[int]agentsdocker.Report{}}
+	monitor.SetDockerInventoryCollector(collector)
+
+	monitor.CollectProxmoxGuestDockerInventory(context.Background(), []models.Container{
+		{ID: "pve-a:node-a:101", VMID: 101, Name: "web-lxc", Node: "node-a", Status: "running", HasDocker: true},
+	})
+
+	if len(collector.calls) != 0 {
+		t.Fatalf("collector should not run for a container with a linked online host agent, got calls %#v", collector.calls)
+	}
+}
+
+func TestParseProxmoxGuestDockerInventoryVMIDs(t *testing.T) {
+	allowed, invalid := ParseProxmoxGuestDockerInventoryVMIDs("101, 102, nope, -1, 101")
+	if len(invalid) != 2 || invalid[0] != "nope" || invalid[1] != "-1" {
+		t.Fatalf("invalid entries = %#v", invalid)
+	}
+	if _, ok := allowed[101]; !ok {
+		t.Fatal("expected VMID 101 in allowlist")
+	}
+	if _, ok := allowed[102]; !ok {
+		t.Fatal("expected VMID 102 in allowlist")
+	}
+	if len(allowed) != 2 {
+		t.Fatalf("allowed = %#v", allowed)
 	}
 }
 

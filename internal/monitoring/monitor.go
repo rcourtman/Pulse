@@ -996,7 +996,8 @@ type Monitor struct {
 	recoveryManager          *recoverymanager.Manager // Optional recovery store manager for backup rollups
 	mockMetricsCancel        context.CancelFunc
 	mockMetricsWg            sync.WaitGroup
-	dockerChecker            DockerChecker // Optional Docker checker for LXC containers
+	dockerChecker            DockerChecker            // Optional Docker checker for LXC containers
+	dockerInventoryCollector DockerInventoryCollector // Optional Docker inventory collector for LXC containers
 	// Agent profile cache to avoid disk I/O on every report (refs #1094)
 	agentProfileCacheMu sync.RWMutex
 	agentProfileCache   *agentProfileCacheEntry

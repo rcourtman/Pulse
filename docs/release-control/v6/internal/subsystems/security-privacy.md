@@ -140,7 +140,7 @@ controls as normal product settings.
    auth-env reloads, hosted entitlement refresh origins, and
    pinned-fingerprint TLS clients keep one fail-closed security floor.
 9. Change operator-facing Resource Privacy/Data Handling posture through `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` and `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` together so resource classification, handling-boundary, redaction copy, and the route-backed/hidden-sidebar presentation stay governed as a trust surface.
-10. Change inside-guest runtime collection boundaries through `docs/AGENT_SECURITY.md`, `docs/UNIFIED_AGENT.md`, `cmd/pulse-agent/main.go`, `internal/api/router.go`, and `internal/config/config.go` together. Docker / Podman inventory inside a VM or LXC must stay guest-agent or explicitly reported runtime data, Proxmox-side guest probing must remain opt-in and socket-presence-only, and local Unified Agent Docker / Podman disables must not be reversed by remote profile configuration.
+10. Change inside-guest runtime collection boundaries through `docs/AGENT_SECURITY.md`, `docs/UNIFIED_AGENT.md`, `cmd/pulse-agent/main.go`, `internal/api/router.go`, and `internal/config/config.go` together. Docker / Podman inventory inside a VM or LXC may come from a guest-agent or explicitly reported guest data; LXC Docker inventory may also be collected by a Proxmox host agent only through explicit server opt-in, with optional VMID allowlisting and a minimal summary command set that avoids `docker inspect`, environment, mount, file, command, and process collection. Local Unified Agent Docker / Podman disables must not be reversed by remote profile configuration.
 
 ## Forbidden Paths
 
@@ -176,11 +176,13 @@ controls as normal product settings.
     migration must be explicit and compatible rather than silently substituting
     email or display claims as durable principals.
 12. Keep inside-guest runtime visibility explicit: Pulse may show Docker /
-    Podman workloads from a VM or LXC only when a guest-local agent or another
-    explicit Docker / Podman reporting path supplies that inventory. Proxmox
-    node-side checks may only provide an opt-in socket-presence hint and must
-    not enumerate guest containers, images, environment values, files, or
-    process details.
+    Podman workloads from a VM or LXC when a guest-local agent or another
+    explicit guest reporting path supplies that inventory. Pulse may
+    additionally show LXC Docker workloads from a Proxmox host agent only when
+    the server has explicitly enabled LXC Docker inventory collection; that
+    path must remain read-only, VMID-allowlistable, and limited to Docker
+    host/container summary fields plus aggregate stats, with no
+    `docker inspect`, environment, mount, file, command, or process collection.
 
 ## Current State
 

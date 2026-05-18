@@ -330,6 +330,11 @@ bypass the API fail-closed execution gate.
    transport with storage/recovery. Storage and recovery consumers must
    preserve the API-owned Docker / Podman agent or host wording for management
    responses and must not introduce recovery-local container-runtime labels.
+   Proxmox-side LXC Docker inventory wiring may also pass through
+   `internal/api/router.go`, but storage and recovery may consume the resulting
+   app-container/resource context only as workload inventory. It must not be
+   reinterpreted as backup freshness, restore coverage, or storage protection
+   evidence for the LXC guest.
    That same adjacent API/security boundary owns CSRF replacement-token
    concurrency for browser mutations. Storage and recovery forms may benefit
    from the shared retry behavior when parallel requests receive replacement

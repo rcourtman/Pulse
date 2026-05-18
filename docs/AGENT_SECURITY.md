@@ -52,19 +52,27 @@ answers your monitoring question:
 |---|---|---|
 | PVE/PBS/PMG inventory, node status, VM/container status, storage usage, and normal Proxmox API metrics | Add the Proxmox connection with a read-only or narrowly scoped API token | No |
 | VM guest disk and memory details through QEMU Guest Agent | Use Proxmox API permissions such as `VM.GuestAgent.Audit` and `VM.GuestAgent.FileRead` where supported | No host agent for the Proxmox node |
-| Docker/Podman containers inside a VM or LXC | Install the agent inside that VM/LXC with Docker/Podman monitoring enabled | Usually requires root or Docker socket-equivalent access |
+| Docker/Podman containers inside a VM or LXC through guest-local reporting | Install the agent inside that VM/LXC with Docker/Podman monitoring enabled, or use another explicit guest access/reporting path | Usually requires root or Docker socket-equivalent access |
+| Docker containers inside an LXC from a Proxmox host agent | Start Pulse with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true`; optionally limit guests with `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102` | Requires a root/equivalent Pulse agent on the Proxmox node and explicit server opt-in |
 | Host SMART, temperatures, local ZFS/Ceph/mdadm detail, arbitrary mount reads, and full host telemetry | Install the agent on that host | Yes, for the supported full-telemetry profile |
 | Kubernetes node/pod monitoring from a cluster | Use the Kubernetes agent/DaemonSet profile | Depends on whether host metrics are enabled |
 
 Inside-guest runtime visibility is explicit. Installing the agent inside a VM or
 LXC authorizes that guest-local agent to report Docker/Podman monitoring data
-according to its local module flags. A Proxmox node agent does not collect
-container inventory from guests through `pct exec`; at most, Pulse can perform a
-socket-presence hint for LXC guests, and that hint is disabled unless the server
-is started with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION=true`. That probe
-only checks for `/var/run/docker.sock` so Pulse can label the guest as a likely
-Docker host; full Docker page inventory still requires an agent inside the guest
-or another explicit Docker/Podman reporting path.
+according to its local module flags. A Proxmox node agent can also collect
+Docker container inventory from LXC guests through `pct exec`, but only when the
+server is started with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true`.
+Inventory collection is disabled by default, can be VMID-allowlisted, and is
+limited to the Docker page summary path: Docker host/runtime version, container
+ID, name, image, state/status, ports, and aggregate `docker stats` counters.
+It does not run `docker inspect` and does not collect guest environment values,
+mount sources, container commands, files, or process details. The lighter
+socket-presence hint remains separately available through
+`PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION=true`.
+
+For VMs, a Proxmox host agent still cannot see Docker/Podman inventory without
+guest cooperation such as a guest-local Pulse agent, QEMU guest-agent mediated
+integration, SSH, or an explicitly exposed Docker/Podman reporting endpoint.
 
 If Proxmox API data is enough for your use case, prefer API-only monitoring and
 do not install a host agent just because the installer exists. Install agents

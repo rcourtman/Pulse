@@ -49,6 +49,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 
 	// Check Docker presence for containers that need it (new, restarted, started)
 	allContainers = m.CheckContainersForDocker(ctx, allContainers)
+	m.CollectProxmoxGuestDockerInventory(ctx, allContainers)
 
 	m.state.UpdateContainersForInstance(instanceName, allContainers)
 

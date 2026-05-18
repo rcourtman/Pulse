@@ -203,6 +203,8 @@ type Config struct {
 	HideLocalLogin                    bool             `envconfig:"PULSE_AUTH_HIDE_LOCAL_LOGIN" default:"false"`
 	DisableDockerUpdateActions        bool             `envconfig:"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS" default:"false"`                  // Hide Docker update buttons (read-only mode for containers)
 	EnableProxmoxGuestDockerDetection bool             `envconfig:"PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION" default:"false" json:"-"` // Allow Proxmox-side pct exec probes that only detect Docker socket presence inside LXC guests
+	EnableProxmoxGuestDockerInventory bool             `envconfig:"PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY" default:"false" json:"-"` // Allow Proxmox-side pct exec collection of minimal Docker inventory from LXC guests
+	ProxmoxGuestDockerInventoryVMIDs  string           `envconfig:"PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS" default:"" json:"-"`       // Optional comma-separated Proxmox VMID allowlist for LXC Docker inventory
 	TelemetryEnabled                  bool             `envconfig:"PULSE_TELEMETRY" default:"true"`                                       // Anonymous outbound usage telemetry enabled by default (install ID, version, resource counts, feature flags — opt out any time)
 	MultiTenantEnabled                bool             `envconfig:"PULSE_MULTI_TENANT_ENABLED" default:"false"`                           // Enable multi-tenant support
 	MetricsToken                      string           `envconfig:"PULSE_METRICS_TOKEN" default:"" json:"-"`                              // Bearer token for /metrics endpoint (empty = unauthenticated)
@@ -1081,6 +1083,24 @@ func load(initLogging bool) (*Config, error) {
 				Str("value", guestDockerDetectionStr).
 				Msg("Invalid PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION value, ignoring")
 		}
+	}
+
+	if guestDockerInventoryStr := utils.GetenvTrim("PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY"); guestDockerInventoryStr != "" {
+		if enabled, err := strconv.ParseBool(guestDockerInventoryStr); err == nil {
+			cfg.EnableProxmoxGuestDockerInventory = enabled
+			cfg.EnvOverrides["PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY"] = true
+			log.Info().Bool("enabled", enabled).Msg("Overriding Proxmox guest Docker inventory setting from environment")
+		} else {
+			log.Warn().
+				Str("value", guestDockerInventoryStr).
+				Msg("Invalid PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY value, ignoring")
+		}
+	}
+
+	if guestDockerInventoryVMIDs := utils.GetenvTrim("PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS"); guestDockerInventoryVMIDs != "" {
+		cfg.ProxmoxGuestDockerInventoryVMIDs = guestDockerInventoryVMIDs
+		cfg.EnvOverrides["PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS"] = true
+		log.Info().Str("vmids", guestDockerInventoryVMIDs).Msg("Overriding Proxmox guest Docker inventory VMID allowlist from environment")
 	}
 
 	if telemetryStr := utils.GetenvTrim("PULSE_TELEMETRY"); telemetryStr != "" {

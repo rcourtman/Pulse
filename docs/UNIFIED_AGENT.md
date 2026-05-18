@@ -5,8 +5,12 @@ Install it on standalone hosts and on machines where Pulse needs full node-local
 For API-backed platforms, start with the platform connection first and add the agent only where local telemetry is needed.
 
 For Proxmox, install the agent only where you need telemetry that the Proxmox
-API cannot provide, such as inside-guest Docker/Podman visibility, host SMART
-and temperature data, local ZFS/Ceph/mdadm detail, or arbitrary mount reads.
+API cannot provide, such as host SMART and temperature data, local
+ZFS/Ceph/mdadm detail, arbitrary mount reads, or inside-guest runtime
+visibility. Docker containers inside LXCs can be reported by a Proxmox host
+agent when the server has explicitly enabled the privacy-bounded LXC inventory
+mode; Docker/Podman inside VMs still needs a guest-local agent or another
+explicit guest reporting path.
 Basic Proxmox inventory and utilization can use a read-only or narrowly scoped
 Proxmox API token instead. Settings uses that API inventory path as the
 default for new PVE/PBS setup. See [Agent Security](AGENT_SECURITY.md) for

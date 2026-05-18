@@ -1304,12 +1304,16 @@ func (r *Router) configureProxmoxGuestDockerDetection(m *monitoring.Monitor) {
 	if r == nil || m == nil {
 		return
 	}
-	if r.config == nil || !r.config.EnableProxmoxGuestDockerDetection {
+	inventoryEnabled := r.config != nil && r.config.EnableProxmoxGuestDockerInventory
+	detectionEnabled := r.config != nil && (r.config.EnableProxmoxGuestDockerDetection || inventoryEnabled)
+	if !detectionEnabled {
 		m.SetDockerChecker(nil)
+		m.SetDockerInventoryCollector(nil)
 		return
 	}
 	if r.agentExecServer == nil {
 		m.SetDockerChecker(nil)
+		m.SetDockerInventoryCollector(nil)
 		return
 	}
 
@@ -1322,6 +1326,7 @@ func (r *Router) configureProxmoxGuestDockerDetection(m *monitoring.Monitor) {
 			RequestID: fmt.Sprintf("docker-check-%d", time.Now().UnixNano()),
 			Command:   command,
 			Timeout:   timeout,
+			Trusted:   true,
 		})
 		if err != nil {
 			return "", -1, err
@@ -1331,7 +1336,23 @@ func (r *Router) configureProxmoxGuestDockerDetection(m *monitoring.Monitor) {
 
 	checker := monitoring.NewAgentDockerChecker(execFunc)
 	m.SetDockerChecker(checker)
-	log.Info().Msg("[Router] Proxmox guest Docker detector configured for explicit LXC socket hinting")
+	if inventoryEnabled {
+		allowedVMIDs, invalidVMIDs := monitoring.ParseProxmoxGuestDockerInventoryVMIDs(r.config.ProxmoxGuestDockerInventoryVMIDs)
+		if len(invalidVMIDs) > 0 {
+			log.Warn().
+				Strs("invalidVmids", invalidVMIDs).
+				Msg("[Router] Ignoring invalid Proxmox guest Docker inventory VMID allowlist entries")
+		}
+		m.SetDockerInventoryCollector(monitoring.NewAgentDockerInventoryCollector(execFunc, monitoring.AgentDockerInventoryCollectorOptions{
+			AllowedVMIDs: allowedVMIDs,
+		}))
+		log.Info().
+			Int("allowedVmids", len(allowedVMIDs)).
+			Msg("[Router] Proxmox guest Docker collector configured for explicit LXC inventory")
+	} else {
+		m.SetDockerInventoryCollector(nil)
+		log.Info().Msg("[Router] Proxmox guest Docker detector configured for explicit LXC socket hinting")
+	}
 }
 
 func (r *Router) defaultReadState() unifiedresources.ReadState {

@@ -54,6 +54,7 @@ truth for live infrastructure data.
 30. `internal/monitoring/mock_chart_history.go`
 31. `internal/monitoring/availability_poller.go`
 32. `internal/monitoring/scheduler.go`
+33. `internal/monitoring/docker_detection.go`
 
 ## Shared Boundaries
 
@@ -91,6 +92,14 @@ truth for live infrastructure data.
    `/api/state` and websocket broadcasts must coalesce transient split host
    resources before serialization so a single Proxmox node with a reporting
    host agent remains one hybrid top-level system across rebuild ticks.
+14. Add or change Proxmox-side LXC Docker detection or inventory through
+   `internal/monitoring/docker_detection.go`,
+   `internal/monitoring/monitor_pve_guest_poll.go`, and monitoring guardrails
+   together. Socket detection may only annotate LXC guests after explicit
+   server opt-in. LXC Docker inventory may only emit Docker-agent-compatible
+   reports into `ApplyDockerReport`, must skip guests with a linked online
+   guest-local host agent, and must keep the command set to minimal read-only
+   Docker summary and aggregate stats collection.
 
 ## Forbidden Paths
 
@@ -120,6 +129,11 @@ truth for live infrastructure data.
    treat those blank-state grouping rows as role metadata rather than projecting
    operator-visible `UNKNOWN` failures unless the bucket or one of its children
    carries an actual degraded state or error count.
+7. Keep Proxmox-side LXC Docker inventory privacy bounded. The monitoring path
+   may collect Docker host/runtime summary, container ID/name/image/state/status,
+   ports, and aggregate `docker stats` counters, but it must not run
+   `docker inspect` or collect guest environment values, mount sources, files,
+   container commands, or process details.
 
 ## Current State
 

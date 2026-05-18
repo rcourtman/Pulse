@@ -102,8 +102,10 @@ but Docker runtime capability truth is monitoring-owned. Lifecycle consumers
 must not reinterpret standalone `Swarm.LocalNodeState=inactive` metadata as
 agent enrollment, install, command, or fleet-control authority.
 Inside-guest Docker / Podman visibility is also a privacy boundary: full
-VM/LXC Docker inventory must come from a guest-local agent or another explicit
-Docker / Podman reporting path, not from Proxmox node-side guest scraping. A
+Docker / Podman inventory may come from a guest-local agent or another explicit
+guest reporting path. LXC Docker inventory may also come from the Proxmox host
+agent, but only through the explicit, server-side opt-in inventory mode that
+uses minimal Docker summary commands rather than unbounded guest scraping. A
 local `--enable-docker=false` or `PULSE_ENABLE_DOCKER=false` remains a hard
 Unified Agent opt-out that auto-detection and remote profile settings cannot
 reverse.

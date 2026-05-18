@@ -3396,7 +3396,7 @@
     },
     {
       "id": "RA30",
-      "summary": "Inside-guest runtime visibility is explicit and privacy-bounded: Pulse may show Docker/Podman workloads from a VM or LXC only when a guest-local agent or another explicit Docker/Podman reporting path reports them. Proxmox-side guest probing must stay opt-in, limited to Docker socket presence hints, and must not collect guest container inventory, images, environment values, files, or process details. A local Unified Agent Docker/Podman disable must remain a hard opt-out that remote profiles and auto-detection cannot reverse.",
+      "summary": "Inside-guest runtime visibility is explicit and privacy-bounded: Pulse may show Docker/Podman workloads from a VM or LXC when a guest-local agent or another explicit guest reporting path reports them. Pulse may additionally show Docker workloads from LXC guests through a Proxmox host agent only when explicit LXC Docker inventory opt-in is enabled; that path must stay read-only, VMID-allowlistable, and limited to Docker host/container summary plus aggregate stats without docker inspect, environment values, mounts, files, commands, or process details. A local Unified Agent Docker/Podman disable must remain a hard opt-out that remote profiles and auto-detection cannot reverse.",
       "kind": "trust-gate",
       "blocking_level": "repo-ready",
       "proof_type": "automated",
@@ -3422,14 +3422,15 @@
           ]
         },
         {
-          "id": "proxmox-guest-docker-detection-opt-in-tests",
+          "id": "proxmox-guest-docker-collection-opt-in-tests",
           "run": [
             "go",
             "test",
+            "./internal/monitoring",
             "./internal/api",
             "./internal/config",
             "-run",
-            "TestContract_ProxmoxGuestDockerDetectionRequiresExplicitOptIn|TestLoad_EnvOverrides_ProxmoxGuestDockerDetectionOptIn|TestLoad_ProxmoxGuestDockerDetectionEnvOptIn",
+            "TestProxmoxGuestDockerInventoryUsesCanonicalReportIngestPath|TestAgentDockerInventoryCollector|TestMonitorCollectProxmoxGuestDockerInventory|TestParseProxmoxGuestDockerInventoryVMIDs|TestContract_ProxmoxGuestDockerDetectionRequiresExplicitOptIn|TestLoad_EnvOverrides_ProxmoxGuestDockerDetectionOptIn|TestLoad_ProxmoxGuestDockerDetectionEnvOptIn",
             "-count=1"
           ]
         }
@@ -3472,7 +3473,27 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/api-contracts.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/monitoring.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/performance-and-scalability.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/security-privacy.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/storage-recovery.md",
           "kind": "file"
         },
         {
@@ -3503,6 +3524,31 @@
         {
           "repo": "pulse",
           "path": "internal/config/config_load_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/canonical_guardrails_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/docker_detection.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/docker_detection_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/monitor.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/monitor_pve_guest_poll.go",
           "kind": "file"
         }
       ]
