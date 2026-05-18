@@ -171,7 +171,7 @@ func (c *Client) GetSystemInfo(ctx context.Context) (*SystemInfo, error) {
 		Hostname:         strings.TrimSpace(response.Hostname),
 		Version:          strings.TrimSpace(response.Version),
 		Build:            build,
-		UptimeSeconds:    response.UptimeSeconds,
+		UptimeSeconds:    response.UptimeSeconds.Int64(),
 		Healthy:          true,
 		MachineID:        machineID,
 		CPUCount:         cpuCount,
@@ -2868,15 +2868,15 @@ func normalizeFingerprint(fingerprint string) (string, error) {
 }
 
 type systemInfoResponse struct {
-	Hostname      string            `json:"hostname"`
-	Version       string            `json:"version"`
-	BuildTime     textResponseField `json:"buildtime"`
-	UptimeSeconds int64             `json:"uptime_seconds"`
-	SystemSerial  string            `json:"system_serial"`
-	SystemVendor  string            `json:"system_manufacturer"`
-	Cores         int               `json:"cores"`
-	PhysicalCores int               `json:"physical_cores"`
-	Physmem       int64             `json:"physmem"`
+	Hostname      string             `json:"hostname"`
+	Version       string             `json:"version"`
+	BuildTime     textResponseField  `json:"buildtime"`
+	UptimeSeconds int64ResponseField `json:"uptime_seconds"`
+	SystemSerial  string             `json:"system_serial"`
+	SystemVendor  string             `json:"system_manufacturer"`
+	Cores         int                `json:"cores"`
+	PhysicalCores int                `json:"physical_cores"`
+	Physmem       int64              `json:"physmem"`
 }
 
 type textResponseField string
@@ -2891,6 +2891,26 @@ func (f *textResponseField) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*f = textResponseField(value)
+	return nil
+}
+
+type int64ResponseField int64
+
+func (f int64ResponseField) Int64() int64 {
+	return int64(f)
+}
+
+func (f *int64ResponseField) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		*f = 0
+		return nil
+	}
+	value, err := parseInt64FromAny(trimmed)
+	if err != nil {
+		return fmt.Errorf("parse int64 response field: %w", err)
+	}
+	*f = int64ResponseField(value)
 	return nil
 }
 

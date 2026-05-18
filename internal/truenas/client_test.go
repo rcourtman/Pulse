@@ -190,6 +190,24 @@ func TestGetSystemInfoAcceptsStructuredBuildTime(t *testing.T) {
 	}
 }
 
+func TestGetSystemInfoAcceptsFractionalUptimeSeconds(t *testing.T) {
+	server := newMockServer(t, map[string]apiResponse{
+		"/api/v2.0/system/info": {
+			body: `{"hostname":"nas","version":"TrueNAS-SCALE-25.10.3.1","buildtime":{"$date":"2026-05-14T18:24:01+02:00"},"uptime_seconds":360144.629139547}`,
+		},
+	}, nil)
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "test-key"})
+	system, err := client.GetSystemInfo(context.Background())
+	if err != nil {
+		t.Fatalf("GetSystemInfo() error = %v", err)
+	}
+	if system.UptimeSeconds != 360144 {
+		t.Fatalf("UptimeSeconds = %d, want truncated fractional uptime", system.UptimeSeconds)
+	}
+}
+
 func TestTestConnectionSuccessAndFailure(t *testing.T) {
 	successServer := newMockServer(t, map[string]apiResponse{
 		"/api/v2.0/system/info": {body: `{"hostname":"nas","version":"v","buildtime":"b","uptime_seconds":1}`},
