@@ -55,6 +55,7 @@ regression protection.
 30. `frontend-modern/src/components/Workloads/useStackedMemoryBarState.ts`
 31. `frontend-modern/src/components/Workloads/MetricBar.tsx`
 32. `frontend-modern/src/components/Workloads/metricBarModel.ts`
+32. `frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx`
 33. `frontend-modern/src/components/Workloads/useMetricBarState.ts`
 34. `frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx`
 35. `frontend-modern/src/components/Workloads/enhancedCpuBarModel.ts`
@@ -77,6 +78,7 @@ regression protection.
 51. `frontend-modern/src/components/Workloads/workloadSelectionModel.ts`
 52. `frontend-modern/src/components/Workloads/workloadRouteModel.ts`
 53. `frontend-modern/src/components/Workloads/workloadFilterConfigModel.ts`
+53. `frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts`
 54. `frontend-modern/src/components/Workloads/workloadRouteStateModel.ts`
 55. `frontend-modern/src/components/Workloads/workloadUrlSyncModel.ts`
 56. `frontend-modern/src/components/Workloads/useWorkloadFilterOptions.ts`
@@ -114,6 +116,8 @@ regression protection.
 89. `frontend-modern/src/components/Workloads/__tests__/useStackedMemoryBarState.test.tsx`
 90. `frontend-modern/src/components/Workloads/__tests__/DiskList.test.tsx`
 91. `frontend-modern/src/components/Workloads/__tests__/GuestRow.test.tsx`
+91. `frontend-modern/src/components/Workloads/__tests__/MetricMiniSparkline.test.tsx`
+91. `frontend-modern/src/components/Workloads/__tests__/workloadMetricHistoryModel.test.ts`
 92. `frontend-modern/src/components/Workloads/GuestDrawer.test.tsx`
 93. `frontend-modern/src/components/Workloads/__tests__/useGroupedTableWindowing.test.ts`
 94. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`

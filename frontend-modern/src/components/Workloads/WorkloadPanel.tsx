@@ -120,12 +120,16 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
     valueLabel: string,
     title: string,
     unit = '%',
+    valueLabelMode: 'inline' | 'tooltip' | 'hidden' = 'inline',
+    formatValue?: (value: number) => string,
   ) => (
     <MetricMiniSparkline
       series={props.workloadMetricHistory.getNodeMetricSeries(node, metric)}
       valueLabel={valueLabel}
+      valueLabelMode={valueLabelMode}
       title={title}
       unit={unit}
+      formatValue={formatValue}
     />
   );
 
@@ -203,6 +207,9 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
             'cpu',
             formatMetricPercent(node.cpu),
             `${node.name} CPU history`,
+            '%',
+            'inline',
+            formatMetricPercent,
           );
         }
         return (
@@ -223,6 +230,9 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
             'memory',
             formatMetricPercent(getUsedPercent(node.memory?.used, node.memory?.total)),
             `${node.name} memory history`,
+            '%',
+            'inline',
+            formatMetricPercent,
           );
         }
         return (
@@ -244,6 +254,9 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
             'disk',
             formatMetricPercent(node.disk?.usage),
             `${node.name} disk usage history`,
+            '%',
+            'inline',
+            formatMetricPercent,
           );
         }
         return (
@@ -296,6 +309,8 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
             `${formatSpeed(node.networkIn ?? 0)} / ${formatSpeed(node.networkOut ?? 0)}`,
             `${node.name} network I/O history`,
             'B/s',
+            'tooltip',
+            formatSpeed,
           );
         }
         return renderGroupNodeRatePair(
@@ -314,6 +329,8 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
             `${formatSpeed(node.diskRead ?? 0)} / ${formatSpeed(node.diskWrite ?? 0)}`,
             `${node.name} disk I/O history`,
             'B/s',
+            'tooltip',
+            formatSpeed,
           );
         }
         return renderGroupNodeRatePair(

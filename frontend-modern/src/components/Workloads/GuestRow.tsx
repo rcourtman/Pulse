@@ -115,12 +115,16 @@ export function GuestRow(props: GuestRowProps) {
     valueLabel: string,
     title: string,
     unit = '%',
+    valueLabelMode: 'inline' | 'tooltip' | 'hidden' = 'inline',
+    formatValue?: (value: number) => string,
   ) => (
     <MetricMiniSparkline
       series={props.metricHistory?.getGuestMetricSeries(props.guest, metric) ?? []}
       valueLabel={valueLabel}
+      valueLabelMode={valueLabelMode}
       title={title}
       unit={unit}
+      formatValue={formatValue}
     />
   );
 
@@ -304,6 +308,9 @@ export function GuestRow(props: GuestRowProps) {
                 'cpu',
                 formatMetricPercent(cpuPercent()),
                 `${props.guest.name} CPU history`,
+                '%',
+                'inline',
+                formatMetricPercent,
               )}
             </Show>
           </td>
@@ -340,6 +347,9 @@ export function GuestRow(props: GuestRowProps) {
                   ),
                 ),
                 `${props.guest.name} memory history`,
+                '%',
+                'inline',
+                formatMetricPercent,
               )}
             </Show>
           </td>
@@ -353,6 +363,9 @@ export function GuestRow(props: GuestRowProps) {
                 'disk',
                 hasDiskUsage() ? formatMetricPercent(props.guest.disk?.usage) : '—',
                 `${props.guest.name} disk usage history`,
+                '%',
+                'inline',
+                formatMetricPercent,
               )}
             </Show>
             <Show when={!isSparklineMode()}>
@@ -608,6 +621,8 @@ export function GuestRow(props: GuestRowProps) {
                 isRunning() ? `${formatSpeed(networkIn())} / ${formatSpeed(networkOut())}` : '—',
                 `${props.guest.name} network I/O history`,
                 'B/s',
+                'tooltip',
+                formatSpeed,
               )}
             </Show>
             <Show when={!isSparklineMode()}>
@@ -659,6 +674,8 @@ export function GuestRow(props: GuestRowProps) {
                 isRunning() ? `${formatSpeed(diskRead())} / ${formatSpeed(diskWrite())}` : '—',
                 `${props.guest.name} disk I/O history`,
                 'B/s',
+                'tooltip',
+                formatSpeed,
               )}
             </Show>
             <Show when={!isSparklineMode()}>

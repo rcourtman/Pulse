@@ -26,6 +26,26 @@ export interface MetricMiniSparklineScale {
   maxValue: number;
 }
 
+export interface MetricMiniSparklineTimeRange {
+  minTimestamp: number;
+  maxTimestamp: number;
+}
+
+export interface MetricMiniSparklineHoverEntry {
+  id: string;
+  label: string;
+  color: string;
+  value: number;
+  timestamp: number;
+}
+
+export interface MetricMiniSparklineHoverState {
+  cursorX: number;
+  cursorRatio: number;
+  timestamp: number;
+  entries: MetricMiniSparklineHoverEntry[];
+}
+
 const CPU_COLOR = '#8b5cf6';
 const MEMORY_COLOR = '#f59e0b';
 const DISK_COLOR = '#10b981';
@@ -273,19 +293,45 @@ export const getMetricMiniSparklineScale = (
   };
 };
 
+export const getMetricMiniSparklineTimeRange = (
+  series: readonly WorkloadMetricSparklineSeries[],
+): MetricMiniSparklineTimeRange | null => {
+  let minTimestamp = Number.POSITIVE_INFINITY;
+  let maxTimestamp = Number.NEGATIVE_INFINITY;
+
+  for (const item of series) {
+    for (const point of item.points) {
+      if (!Number.isFinite(point.timestamp) || !Number.isFinite(point.value)) continue;
+      minTimestamp = Math.min(minTimestamp, point.timestamp);
+      maxTimestamp = Math.max(maxTimestamp, point.timestamp);
+    }
+  }
+
+  if (!Number.isFinite(minTimestamp) || !Number.isFinite(maxTimestamp)) return null;
+  if (maxTimestamp <= minTimestamp) return null;
+  return { minTimestamp, maxTimestamp };
+};
+
 export const buildMetricMiniSparklinePath = (
   points: readonly MetricPoint[],
   scale: MetricMiniSparklineScale,
   width = 96,
   height = 18,
+  timeRange?: MetricMiniSparklineTimeRange | null,
 ): string => {
-  const renderable = points.filter(
-    (point) => Number.isFinite(point.timestamp) && Number.isFinite(point.value),
-  );
+  const renderable = points
+    .filter((point) => Number.isFinite(point.timestamp) && Number.isFinite(point.value))
+    .sort((a, b) => a.timestamp - b.timestamp);
   if (renderable.length < 2) return '';
 
-  const minTimestamp = renderable[0].timestamp;
-  const maxTimestamp = renderable[renderable.length - 1].timestamp;
+  const fallbackRange = {
+    minTimestamp: renderable[0].timestamp,
+    maxTimestamp: renderable[renderable.length - 1].timestamp,
+  };
+  const activeRange =
+    timeRange && timeRange.maxTimestamp > timeRange.minTimestamp ? timeRange : fallbackRange;
+  const minTimestamp = activeRange.minTimestamp;
+  const maxTimestamp = activeRange.maxTimestamp;
   const timeSpan = Math.max(1, maxTimestamp - minTimestamp);
   const valueSpan = Math.max(1, scale.maxValue - scale.minValue);
   const xPadding = 1;
@@ -302,3 +348,82 @@ export const buildMetricMiniSparklinePath = (
     })
     .join(' ');
 };
+
+const findNearestMetricMiniSparklinePoint = (
+  points: readonly MetricPoint[],
+  targetTimestamp: number,
+): MetricPoint | null => {
+  const renderable = points
+    .filter((point) => Number.isFinite(point.timestamp) && Number.isFinite(point.value))
+    .sort((a, b) => a.timestamp - b.timestamp);
+  if (renderable.length === 0) return null;
+
+  let low = 0;
+  let high = renderable.length - 1;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (renderable[mid].timestamp < targetTimestamp) low = mid + 1;
+    else high = mid;
+  }
+
+  const candidate = renderable[low];
+  const previous = low > 0 ? renderable[low - 1] : candidate;
+  return Math.abs(previous.timestamp - targetTimestamp) <=
+    Math.abs(candidate.timestamp - targetTimestamp)
+    ? previous
+    : candidate;
+};
+
+export const computeMetricMiniSparklineHoverState = (
+  series: readonly WorkloadMetricSparklineSeries[],
+  cursorX: number,
+  width: number,
+): MetricMiniSparklineHoverState | null => {
+  const timeRange = getMetricMiniSparklineTimeRange(series);
+  if (!timeRange || !Number.isFinite(width) || width <= 0) return null;
+
+  const clampedCursorX = Math.max(0, Math.min(cursorX, width));
+  const cursorRatio = clampedCursorX / width;
+  const targetTimestamp =
+    timeRange.minTimestamp + cursorRatio * (timeRange.maxTimestamp - timeRange.minTimestamp);
+  const entries: MetricMiniSparklineHoverEntry[] = [];
+  let nearestTimestamp = targetTimestamp;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  for (const item of series) {
+    const point = findNearestMetricMiniSparklinePoint(item.points, targetTimestamp);
+    if (!point) continue;
+
+    const distance = Math.abs(point.timestamp - targetTimestamp);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestTimestamp = point.timestamp;
+    }
+
+    entries.push({
+      id: item.id,
+      label: item.label,
+      color: item.color,
+      value: point.value,
+      timestamp: point.timestamp,
+    });
+  }
+
+  if (entries.length === 0) return null;
+  return {
+    cursorX: clampedCursorX,
+    cursorRatio,
+    entries,
+    timestamp: nearestTimestamp,
+  };
+};
+
+export const formatMetricMiniSparklineHoverTime = (timestamp: number): string =>
+  new Date(timestamp).toLocaleString([], {
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });

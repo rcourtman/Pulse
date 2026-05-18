@@ -249,6 +249,36 @@ describe('GuestRow', () => {
       expect(screen.queryByTestId('disk-bar')).toBeNull();
     });
 
+    it('keeps Net I/O and Disk I/O live labels out of sparkline table cells', () => {
+      renderGuestRow({
+        guest: makeGuest({ name: 'spark-io-vm', networkIn: 1024, networkOut: 2048 }),
+        visibleColumnIds: ['name', 'netIo', 'diskIo'],
+        metricDisplayMode: 'sparklines',
+        metricHistory: {
+          getGuestMetricSeries: (_guest, metric) => [
+            {
+              id: metric,
+              label: metric,
+              color: '#8b5cf6',
+              points: [
+                { timestamp: 1, value: 10 },
+                { timestamp: 2, value: 25 },
+              ],
+            },
+          ],
+          getNodeMetricSeries: () => [],
+        },
+      });
+
+      const sparklines = screen.getAllByTestId('metric-mini-sparkline');
+      expect(sparklines).toHaveLength(2);
+      expect(sparklines.map((sparkline) => sparkline.dataset.valueLabelMode)).toEqual([
+        'tooltip',
+        'tooltip',
+      ]);
+      expect(screen.queryByText('1.00 KB/s / 2.00 KB/s')).toBeNull();
+    });
+
     it('shows dash when disk data is unavailable', () => {
       renderGuestRow({
         guest: makeGuest({ disk: { total: 0, used: 0, free: 0, usage: 0 } }),

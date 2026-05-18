@@ -5,8 +5,10 @@ import type { WorkloadGuest } from '@/types/workloads';
 
 import {
   buildMetricMiniSparklinePath,
+  computeMetricMiniSparklineHoverState,
   findChartDataForCandidates,
   getMetricMiniSparklineScale,
+  getMetricMiniSparklineTimeRange,
   getMetricSparklineSeriesFromChartData,
   getNodeChartKeyCandidates,
   getWorkloadChartKeyCandidates,
@@ -109,5 +111,43 @@ describe('workloadMetricHistoryModel', () => {
         scale,
       ),
     ).toBe('M1.00,16.00 L48.00,9.00 L95.00,2.00');
+  });
+
+  it('uses a shared time range and resolves nearest hover values for paired I/O sparklines', () => {
+    const series = [
+      {
+        id: 'netin',
+        label: 'In',
+        color: '#10b981',
+        points: [
+          { timestamp: 1_000, value: 10 },
+          { timestamp: 2_000, value: 20 },
+          { timestamp: 3_000, value: 30 },
+        ],
+      },
+      {
+        id: 'netout',
+        label: 'Out',
+        color: '#fb923c',
+        points: [
+          { timestamp: 2_000, value: 200 },
+          { timestamp: 3_000, value: 300 },
+        ],
+      },
+    ];
+    const timeRange = getMetricMiniSparklineTimeRange(series);
+    const scale = getMetricMiniSparklineScale(series, 'B/s');
+
+    expect(timeRange).toEqual({ minTimestamp: 1_000, maxTimestamp: 3_000 });
+    expect(buildMetricMiniSparklinePath(series[1].points, scale, 96, 18, timeRange)).toMatch(
+      /^M48\.00,/,
+    );
+
+    const hover = computeMetricMiniSparklineHoverState(series, 48, 96);
+    expect(hover?.timestamp).toBe(2_000);
+    expect(hover?.entries.map((entry) => [entry.label, entry.value])).toEqual([
+      ['In', 20],
+      ['Out', 200],
+    ]);
   });
 });
