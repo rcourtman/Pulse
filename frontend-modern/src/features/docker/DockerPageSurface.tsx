@@ -13,6 +13,7 @@ import { DockerServicesTable } from './DockerServicesTable';
 import {
   DOCKER_TAB_SPECS,
   buildDockerPageModel,
+  buildDockerContainerDefaultHiddenColumnIds,
   buildVisibleDockerTabSpecs,
   type DockerPageTabId,
 } from './dockerPageModel';
@@ -22,7 +23,6 @@ const DOCKER_PLATFORM_FILTER = 'docker';
 const DOCKER_WORKLOAD_FORCED_VIEW_MODE = 'app-container';
 const DOCKER_WORKLOAD_DEFAULT_SORT_KEY = 'name';
 const DOCKER_WORKLOAD_COLUMN_SCOPE = 'docker-runtime-containers';
-const DOCKER_WORKLOAD_DEFAULT_HIDDEN_COLUMNS = ['disk', 'tags'];
 const DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES = {
   context: 'Host',
   disk: 'Writable layer',
@@ -39,6 +39,9 @@ export function DockerPageSurface() {
     initialHydration: 'prefer-ws-then-rest',
   });
   const model = createMemo(() => buildDockerPageModel(resources()));
+  const dockerWorkloadDefaultHiddenColumns = createMemo(() =>
+    buildDockerContainerDefaultHiddenColumnIds(model().containers),
+  );
   const visibleTabs = createMemo(() => buildVisibleDockerTabSpecs(model()));
   const visibleTabIds = createMemo(
     () => new Set<DockerPageTabId>(visibleTabs().map((tab) => tab.id)),
@@ -109,7 +112,7 @@ export function DockerPageSurface() {
                   forcedViewMode={DOCKER_WORKLOAD_FORCED_VIEW_MODE}
                   defaultSortKey={DOCKER_WORKLOAD_DEFAULT_SORT_KEY}
                   columnVisibilityStorageScope={DOCKER_WORKLOAD_COLUMN_SCOPE}
-                  additionalDefaultHiddenColumnIds={DOCKER_WORKLOAD_DEFAULT_HIDDEN_COLUMNS}
+                  additionalDefaultHiddenColumnIds={dockerWorkloadDefaultHiddenColumns()}
                   columnLabelOverrides={DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES}
                   compactGroupHeaders
                 />
@@ -138,7 +141,7 @@ export function DockerPageSurface() {
                 forcedViewMode={DOCKER_WORKLOAD_FORCED_VIEW_MODE}
                 defaultSortKey={DOCKER_WORKLOAD_DEFAULT_SORT_KEY}
                 columnVisibilityStorageScope={DOCKER_WORKLOAD_COLUMN_SCOPE}
-                additionalDefaultHiddenColumnIds={DOCKER_WORKLOAD_DEFAULT_HIDDEN_COLUMNS}
+                additionalDefaultHiddenColumnIds={dockerWorkloadDefaultHiddenColumns()}
                 columnLabelOverrides={DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES}
               />
             </Show>

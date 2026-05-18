@@ -56,6 +56,32 @@ export type DockerPageModel = {
   services: Resource[];
 };
 
+const DOCKER_CONTAINER_BASE_DEFAULT_HIDDEN_COLUMNS = ['disk', 'tags'] as const;
+
+const hasFiniteMetric = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+export function buildDockerContainerDefaultHiddenColumnIds(
+  containers: readonly Resource[],
+): string[] {
+  const hasNetworkIOTelemetry = containers.some(
+    (container) =>
+      hasFiniteMetric(container.network?.rxBytes) ||
+      hasFiniteMetric(container.network?.txBytes),
+  );
+  const hasDiskIOTelemetry = containers.some(
+    (container) =>
+      hasFiniteMetric(container.diskIO?.readRate) ||
+      hasFiniteMetric(container.diskIO?.writeRate),
+  );
+
+  return [
+    ...DOCKER_CONTAINER_BASE_DEFAULT_HIDDEN_COLUMNS,
+    ...(hasNetworkIOTelemetry ? [] : ['netIo']),
+    ...(hasDiskIOTelemetry ? [] : ['diskIo']),
+  ];
+}
+
 export function buildDockerPageModel(resources: Resource[]): DockerPageModel {
   const dockerResources = resources.filter(
     (resource) =>

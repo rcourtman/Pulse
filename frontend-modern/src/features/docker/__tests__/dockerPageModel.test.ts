@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
   DOCKER_TAB_SPECS,
+  buildDockerContainerDefaultHiddenColumnIds,
   buildDockerPageModel,
   buildVisibleDockerTabSpecs,
   hasDockerSwarmEvidence,
@@ -87,6 +88,49 @@ describe('dockerPageModel', () => {
         ]),
       ).map((tab) => tab.id),
     ).toEqual(['overview', 'services']);
+  });
+
+  it('hides Docker container I/O columns by default when the snapshot has no I/O telemetry', () => {
+    expect(
+      buildDockerContainerDefaultHiddenColumnIds([
+        makeResource({ id: 'ctr-1', type: 'app-container' }),
+      ]),
+    ).toEqual(['disk', 'tags', 'netIo', 'diskIo']);
+  });
+
+  it('keeps Docker container I/O columns default-visible once telemetry exists', () => {
+    expect(
+      buildDockerContainerDefaultHiddenColumnIds([
+        makeResource({
+          id: 'ctr-1',
+          type: 'app-container',
+          network: { rxBytes: 0, txBytes: 0 },
+          diskIO: { readRate: 0, writeRate: 0 },
+        }),
+      ]),
+    ).toEqual(['disk', 'tags']);
+  });
+
+  it('decides Docker container network and disk I/O defaults independently', () => {
+    expect(
+      buildDockerContainerDefaultHiddenColumnIds([
+        makeResource({
+          id: 'ctr-1',
+          type: 'app-container',
+          network: { rxBytes: 128, txBytes: 64 },
+        }),
+      ]),
+    ).toEqual(['disk', 'tags', 'diskIo']);
+
+    expect(
+      buildDockerContainerDefaultHiddenColumnIds([
+        makeResource({
+          id: 'ctr-2',
+          type: 'app-container',
+          diskIO: { readRate: 128, writeRate: 64 },
+        }),
+      ]),
+    ).toEqual(['disk', 'tags', 'netIo']);
   });
 
   it('does not treat standalone inactive Docker Swarm metadata as Swarm evidence', () => {

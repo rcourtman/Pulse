@@ -269,10 +269,13 @@ regression protection.
     container surfaces must force the `app-container` column profile, suppress
     the mixed-workload Type filter, hide writable-layer `disk` and generic
     `tags` by default, label the optional writable-layer toggle as
-    `Writable layer`, label container context as `Host`, and keep `diskIo`
-    visible as the default container disk signal; non-Docker Workloads surfaces
-    keep the global `disk` default unless they declare their own scoped
-    contract.
+    `Writable layer`, and label container context as `Host`. `netIo` and
+    `diskIo` are valid Docker runtime container columns, but they must only be
+    default-visible when the current Docker resource snapshot includes
+    corresponding network or block-I/O telemetry; otherwise they stay available
+    as column-picker options without creating blank default columns.
+    Non-Docker Workloads surfaces keep the global `disk` default unless they
+    declare their own scoped contract.
 18. Extend workload filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` (defaults, `countActiveWorkloadsFilters`, `hasActiveWorkloadsFilters`) rather than rebuilding filter-local state inside `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`. Workloads filter presentation now composes the shared `FilterBar` (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a per-page `FilterDef[]` catalog rather than the legacy `PageControls` structured control deck. High-frequency Type and Status filters stay in that catalog but render as inline compact segmented controls (`inline: true`), while longer or dynamic scope filters continue through the "+ Filter" menu and chip popovers. View options (grouped/list, charts, columns) sit in the shared `viewOptionsTrailing` slot.
 19. Extend threshold-slider value-position math, title/label derivation, and drag scroll-lock runtime through `frontend-modern/src/components/Workloads/thresholdSliderModel.ts` and `frontend-modern/src/components/Workloads/useThresholdSliderState.ts` rather than rebuilding slider-local state and pointer lifecycle inside `frontend-modern/src/components/Workloads/ThresholdSlider.tsx`
 20. Extend stacked disk-bar capacity math, segment/tooltip derivation, and resize-observer runtime through `frontend-modern/src/components/Workloads/stackedDiskBarModel.ts` and `frontend-modern/src/components/Workloads/useStackedDiskBarState.ts` rather than rebuilding disk-bar-local state, mode branching, and tooltip shaping inside `frontend-modern/src/components/Workloads/StackedDiskBar.tsx`. Compact multi-disk rows default to same-height per-disk lanes so each filesystem has its own visible usage bar without implying the whole host disk state is one max or aggregate percentage; explicit `mode="stacked"` remains the capacity-contribution stack for callers that intentionally need that presentation, while tooltips continue to carry the full per-disk breakdown.
