@@ -1,10 +1,18 @@
 import { For, Show } from 'solid-js';
 
-import type { Disk } from '@/types/api';
+import {
+  DrawerDiskListCard,
+  buildDrawerDiskListItems,
+  type DrawerDiskListItem,
+} from '@/components/Workloads/DrawerDiskListCard';
 import type { Resource } from '@/types/resource';
-import { formatBytes, formatRelativeTime, formatSpeed, formatUptime } from '@/utils/format';
-import { normalizeDiskArray } from '@/utils/format';
-import { getMetricColorRgba, getMetricTextColorClass } from '@/utils/metricThresholds';
+import {
+  formatBytes,
+  formatRelativeTime,
+  formatSpeed,
+  formatUptime,
+  normalizeDiskArray,
+} from '@/utils/format';
 import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
 
 import { hasDockerSwarmEvidence } from './dockerPageModel';
@@ -69,88 +77,6 @@ const formatLastSeenRow = (
 
 const titleCase = (value: string): string =>
   value.length === 0 ? value : value.charAt(0).toUpperCase() + value.slice(1);
-
-interface DiskListItem {
-  key: string;
-  label: string;
-  device: string;
-  percent: number;
-  used: number;
-  total: number;
-  color: string;
-  textClass: string;
-}
-
-const getDiskUsagePercent = (disk: Disk): number => {
-  if (disk.total > 0 && Number.isFinite(disk.used)) {
-    return (disk.used / disk.total) * 100;
-  }
-  if (Number.isFinite(disk.usage)) {
-    return disk.usage <= 1 ? disk.usage * 100 : disk.usage;
-  }
-  return 0;
-};
-
-const getDiskLabel = (disk: Disk, index: number): string =>
-  disk.mountpoint || disk.device || `Disk ${index + 1}`;
-
-const buildDiskListItems = (disks: Disk[]): DiskListItem[] =>
-  disks.map((disk, index) => {
-    const percent = getDiskUsagePercent(disk);
-    return {
-      key: `${disk.device ?? ''}|${disk.mountpoint ?? ''}|${index}`,
-      label: getDiskLabel(disk, index),
-      device: disk.device ?? '',
-      percent,
-      used: disk.used ?? 0,
-      total: disk.total ?? 0,
-      color: getMetricColorRgba(percent, 'disk'),
-      textClass: getMetricTextColorClass(percent, 'disk'),
-    };
-  });
-
-const DiskListCard = (props: { disks: DiskListItem[] }) => (
-  <div
-    class={`${DOCKER_OVERVIEW_CARD_CLASS} basis-[calc(50%-0.75rem)] grow-[2]`}
-    data-testid="docker-host-drawer-disks"
-  >
-    <h3 class="mb-2 text-[11px] font-medium uppercase tracking-wide text-base-content">
-      Storage
-    </h3>
-    <div class="space-y-2 text-[11px]">
-      <For each={props.disks}>
-        {(disk) => (
-          <div class="space-y-1">
-            <div class="flex items-baseline justify-between gap-2 min-w-0">
-              <span
-                class="truncate font-medium text-base-content"
-                title={disk.device ? `${disk.label} · ${disk.device}` : disk.label}
-              >
-                {disk.label}
-              </span>
-              <span class={`shrink-0 tabular-nums ${disk.textClass}`}>
-                {`${Math.round(disk.percent)}%`}
-                <span class="ml-1 text-muted">
-                  ({formatBytes(disk.used)}
-                  <Show when={disk.total > 0}> / {formatBytes(disk.total)}</Show>)
-                </span>
-              </span>
-            </div>
-            <div class="relative h-1.5 w-full overflow-hidden rounded bg-surface-hover">
-              <div
-                class="absolute inset-y-0 left-0 rounded"
-                style={{
-                  width: `${Math.max(0, Math.min(100, disk.percent))}%`,
-                  background: disk.color,
-                }}
-              />
-            </div>
-          </div>
-        )}
-      </For>
-    </div>
-  </div>
-);
 
 const DetailCard = (props: { title: string; rows: DockerOverviewRow[] }) => (
   <Show when={props.rows.length > 0}>
@@ -358,10 +284,10 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
     return rows;
   };
 
-  const perDiskItems = (): DiskListItem[] => {
+  const perDiskItems = (): DrawerDiskListItem[] => {
     const disks = normalizeDiskArray(agent()?.disks) ?? [];
     if (disks.length < 2) return [];
-    return buildDiskListItems(disks);
+    return buildDrawerDiskListItems(disks);
   };
 
   return (
@@ -374,7 +300,7 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
         when={perDiskItems().length > 0}
         fallback={<DetailCard title="Storage" rows={storageRows()} />}
       >
-        <DiskListCard disks={perDiskItems()} />
+        <DrawerDiskListCard disks={perDiskItems()} testId="docker-host-drawer-disks" />
       </Show>
       <DetailCard title="Telemetry" rows={telemetryRows()} />
     </div>

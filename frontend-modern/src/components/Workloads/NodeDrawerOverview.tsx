@@ -1,12 +1,15 @@
 import { For, Show } from 'solid-js';
 
-import type { Node, Temperature } from '@/types/api';
-import { formatBytes, formatRelativeTime, formatSpeed, formatUptime } from '@/utils/format';
+import type { Disk, Node, Temperature } from '@/types/api';
+import { formatBytes, formatRelativeTime, formatSpeed, formatUptime, normalizeDiskArray } from '@/utils/format';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { formatTemperature, getCpuTemperature, getTemperatureTextClass } from '@/utils/temperature';
 
+import { DrawerDiskListCard, buildDrawerDiskListItems } from './DrawerDiskListCard';
+
 interface NodeDrawerOverviewProps {
   node: Node;
+  disks?: Disk[];
 }
 
 interface NodeOverviewRow {
@@ -292,13 +295,24 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
     },
   ];
 
+  const perDiskItems = () => {
+    const disks = normalizeDiskArray(props.disks) ?? [];
+    if (disks.length < 2) return [];
+    return buildDrawerDiskListItems(disks);
+  };
+
   return (
     <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
       <DetailCard title="System" rows={systemRows()} />
       <DetailCard title="Platform" rows={platformRows()} />
       <DetailCard title="Hardware" rows={hardwareRows()} />
       <DetailCard title="Memory" rows={memoryRows()} />
-      <DetailCard title="Storage" rows={storageRows()} />
+      <Show
+        when={perDiskItems().length > 0}
+        fallback={<DetailCard title="Storage" rows={storageRows()} />}
+      >
+        <DrawerDiskListCard disks={perDiskItems()} testId="node-drawer-disks" />
+      </Show>
       <DetailCard title="Telemetry" rows={telemetryRows()} />
       <DetailCard title="Thermals" rows={getThermalRows(props.node.temperature)} />
     </div>

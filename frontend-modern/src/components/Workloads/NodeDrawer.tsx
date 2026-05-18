@@ -1,7 +1,7 @@
 import { Show, createMemo, createSignal, type Component } from 'solid-js';
 
 import type { HistoryTimeRange } from '@/api/charts';
-import type { Node } from '@/types/api';
+import type { Disk, Node } from '@/types/api';
 import { getNodeDisplayName } from '@/utils/nodes';
 
 import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from './GuestDrawerHistory';
@@ -15,6 +15,7 @@ import {
 
 interface NodeDrawerProps {
   node: Node;
+  disks?: Disk[];
 }
 
 type NodeDrawerTab = 'overview' | 'history';
@@ -69,7 +70,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
       </div>
 
       <Show when={activeTab() === 'overview'}>
-        <NodeDrawerOverview node={props.node} />
+        <NodeDrawerOverview node={props.node} disks={props.disks} />
       </Show>
 
       <Show when={activeTab() === 'history'}>
