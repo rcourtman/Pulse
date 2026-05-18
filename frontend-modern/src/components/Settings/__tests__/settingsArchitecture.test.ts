@@ -11,7 +11,9 @@ import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
 import dockerRuntimeSettingsCardSource from '../DockerRuntimeSettingsCard.tsx?raw';
 import settingsHeaderMetaSource from '../settingsHeaderMeta.ts?raw';
 import settingsNavCatalogSource from '../settingsNavCatalog.ts?raw';
+import settingsNavVisibilitySource from '../settingsNavVisibility.ts?raw';
 import settingsNavigationHookSource from '../useSettingsNavigation.ts?raw';
+import settingsAccessSource from '../useSettingsAccess.ts?raw';
 import aiSettingsStateSource from '../useAISettingsState.ts?raw';
 import settingsPanelRegistryContextSource from '../settingsPanelRegistryContext.tsx?raw';
 import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
@@ -211,7 +213,10 @@ describe('settings architecture guardrails', () => {
     expect(auditWebhookPanelSource).toContain('paidRuntimeRequired: paidRuntimeRequired()');
     expect(auditWebhookPanelSource).not.toContain('Audit Webhooks (Pro)');
     expect(reportingPanelSource).toContain('if (!catalog || !state || showUpgradePrompts())');
-    expect(reportingPanelSource).toContain('title: catalog.title');
+    expect(reportingPanelSource).toContain('title: `${state.title} unavailable`');
+    expect(reportingPanelSource).toContain(
+      'Reporting is locked for this session. The report builder appears when advanced reporting is available.',
+    );
     expect(reportingPanelSource).not.toContain('Advanced Reporting (Pro)');
     expect(aiRuntimeControlsSectionSource).toContain('showAutonomousControlOption');
     expect(aiRuntimeControlsSectionSource).toContain("state.form.controlLevel === 'autonomous'");
@@ -225,6 +230,16 @@ describe('settings architecture guardrails', () => {
     expect(aiRuntimeControlsSectionSource).not.toContain(
       'Pulse Assistant executes without approval',
     );
+  });
+
+  it('keeps panel-owned gated settings routes separate from sidebar visibility', () => {
+    expect(settingsNavVisibilitySource).toContain('const PANEL_OWNED_FEATURE_GATE_TABS');
+    expect(settingsNavVisibilitySource).toContain('shouldBlockSettingsRouteItem');
+    expect(settingsNavVisibilitySource).toContain('!PANEL_OWNED_FEATURE_GATE_TABS.has(tab)');
+    expect(settingsAccessSource).toContain('const routeTabGroups = createMemo');
+    expect(settingsAccessSource).toContain('const navTabGroups = createMemo');
+    expect(settingsAccessSource).toContain('!shouldBlockSettingsRouteItem');
+    expect(settingsAccessSource).toContain('!shouldHideSettingsNavItem');
   });
 
   it('keeps Assistant and Patrol provider diagnostics backend-owned in settings state', () => {

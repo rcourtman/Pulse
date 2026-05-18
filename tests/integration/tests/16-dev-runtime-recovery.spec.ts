@@ -59,8 +59,9 @@ test.describe.serial('Managed dev runtime recovery', () => {
     await expect(page).toHaveURL(/\/settings\/infrastructure\?add=pick$/);
     await expect(page.getByRole('dialog', { name: 'Add infrastructure' })).toBeVisible();
 
+    const setupToken = String(readRuntimeState()?.primaryAPIToken || '').trim();
     expect(
-      String(readRuntimeState()?.primaryAPIToken || '').trim().length,
+      setupToken.length,
       'expected first-session helper to persist the handoff API token to runtime state',
     ).toBeGreaterThan(0);
 
@@ -69,6 +70,7 @@ test.describe.serial('Managed dev runtime recovery', () => {
     });
     await ensureAuthenticated(page);
     await expect(page).not.toHaveURL(/\/dashboard(?:[/?#]|$)/);
+    expect(String(readRuntimeState()?.primaryAPIToken || '').trim()).toBe(setupToken);
   });
 
   test('browser shell distinguishes stream-only reconnect from total backend loss', async ({

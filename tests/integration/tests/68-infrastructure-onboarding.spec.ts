@@ -452,7 +452,7 @@ test.describe("Infrastructure onboarding", () => {
     await page
       .getByRole("button", { name: "install Pulse Agent instead", exact: true })
       .click();
-    await page.waitForURL(/\/settings\/infrastructure\?add=agent$/, {
+    await page.waitForURL(/\/settings\/infrastructure\?add=linux-host$/, {
       timeout: 15_000,
     });
     await expect(

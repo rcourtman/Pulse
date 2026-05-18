@@ -119,7 +119,7 @@ describe('SetupCompletionPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Install Pulse Agent' }));
 
-    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure?add=agent');
+    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure?add=linux-host');
   });
 
   it('downloads credentials that point operators to the unified source picker instead of inline commands', async () => {

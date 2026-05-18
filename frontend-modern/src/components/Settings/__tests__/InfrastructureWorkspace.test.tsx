@@ -336,7 +336,7 @@ describe('InfrastructureWorkspace', () => {
     // Row-level 'Install agent' replaced the global 'Install agents'
     // recommendation button; same routing target.
     fireEvent.click(screen.getAllByRole('button', { name: /^Install agent$/i })[0]);
-    expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure?add=agent', {
+    expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure?add=linux-host', {
       scroll: false,
     });
 

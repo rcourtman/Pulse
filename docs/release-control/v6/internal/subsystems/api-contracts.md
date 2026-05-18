@@ -181,6 +181,10 @@ checks, merge tenants, or become the source of truth for telemetry freshness.
 22. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts` shared with `agent-lifecycle`: the direct-node infrastructure settings state hook is both an agent lifecycle control surface and a shared Proxmox node API contract boundary.
 23. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts` shared with `agent-lifecycle`: the infrastructure discovery runtime state hook is both an agent lifecycle control surface and a shared discovery/settings API contract boundary.
     That same shared boundary also owns settings-route polling scope for discovery payloads: the `/api/discover` refresh loop and websocket-backed discovery status hydration may run only while the operator is on the infrastructure connections workspace under `/settings/infrastructure/platforms*`, not on the systems ledger or install workspace.
+    Discovery refreshes and scan results are route-scoped state updates. If the
+    settings route unmounts while a request is in flight, the hook must drop the
+    result and avoid surfacing stale background errors into the next settings
+    panel.
     It also owns the explicit manual-scan contract for `/api/discover`: when
     the operator runs discovery from the infrastructure manager, the hook must
     consume the immediate POST response body as the next source of truth for
@@ -190,6 +194,11 @@ checks, merge tenants, or become the source of truth for telemetry freshness.
     `lastResultAt` state so discovery review rows do not depend on transport-
     specific timestamp shapes.
 24. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx` shared with `agent-lifecycle`: the infrastructure install state hook is both an agent fleet lifecycle control surface and an API token, lookup, and install transport contract boundary.
+    Setup-completion handoff token creation is valid only while the active
+    infrastructure add step is an installer route (`agent`, `linux-host`,
+    `unraid`, `docker`, or `kubernetes`). Mounting the infrastructure workspace
+    for unrelated settings panels must not auto-create install tokens from a
+    stale setup handoff.
 25. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `agent-lifecycle`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
 26. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `agent-lifecycle`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 27. `frontend-modern/src/constants/apiScopes.ts` shared with `security-privacy`: the API token scope catalog is both a security/privacy token-management trust surface and a canonical API token payload boundary.

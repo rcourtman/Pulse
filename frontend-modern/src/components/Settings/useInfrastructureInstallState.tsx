@@ -1,5 +1,5 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
-import { useNavigate } from '@solidjs/router';
+import { useLocation, useNavigate } from '@solidjs/router';
 import { MonitoringAPI } from '@/api/monitoring';
 import { SecurityAPI, type APITokenRecord } from '@/api/security';
 import { notificationStore } from '@/stores/notifications';
@@ -19,6 +19,8 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
   buildInfrastructureOnboardingPath,
   buildInfrastructureWorkspacePath,
+  deriveAddStepFromLocation,
+  type InfrastructurePanelStep,
 } from './infrastructureWorkspaceModel';
 import {
   buildUnixAgentInstallCommand,
@@ -42,6 +44,13 @@ export interface InfrastructureInstallStateOptions {
 }
 
 const FIRST_HOST_AUTODETECT_POLL_MS = 3000;
+const SETUP_HANDOFF_INSTALL_STEPS = new Set<InfrastructurePanelStep>([
+  'agent',
+  'linux-host',
+  'unraid',
+  'docker',
+  'kubernetes',
+]);
 
 const isActiveInfrastructureItem = (item: ConnectedInfrastructureItem) => item.status === 'active';
 
@@ -73,6 +82,7 @@ const toLookupResponseFromInfrastructureItem = (
 export const useInfrastructureInstallState = (
   options: InfrastructureInstallStateOptions = {},
 ) => {
+  const location = useLocation();
   const navigate = useNavigate();
 
   let hasLoggedSecurityStatusError = false;
@@ -101,6 +111,11 @@ export const useInfrastructureInstallState = (
   const [setupHandoffAutoTokenPending, setSetupHandoffAutoTokenPending] = createSignal(false);
   const [setupHandoffAutoTokenFailed, setSetupHandoffAutoTokenFailed] = createSignal(false);
   const [setupHandoffAutoTokenAttempted, setSetupHandoffAutoTokenAttempted] = createSignal(false);
+  let disposed = false;
+
+  onCleanup(() => {
+    disposed = true;
+  });
 
   createEffect(() => {
     if (requiresToken()) {
@@ -138,8 +153,14 @@ export const useInfrastructureInstallState = (
     const fetchSecurityStatus = async () => {
       try {
         const data = await SecurityAPI.getStatus();
+        if (disposed) {
+          return;
+        }
         setSecurityStatus(data);
       } catch (err) {
+        if (disposed) {
+          return;
+        }
         if (!hasLoggedSecurityStatusError) {
           hasLoggedSecurityStatusError = true;
           logger.error('Failed to load security status', err);
@@ -191,7 +212,7 @@ ${handoff.apiToken}
 
 Canonical install workspace:
 ----------------------------
-${baseUrl.replace(/\/$/, '')}${buildInfrastructureOnboardingPath('agent')}
+${baseUrl.replace(/\/$/, '')}${buildInfrastructureOnboardingPath('linux-host')}
 
 Pulse prepares the first-host install token from setup so you can move straight to the generated Unified Agent install commands.
 `;
@@ -217,6 +238,10 @@ Pulse prepares the first-host install token from setup so you can move straight 
 
   const hasToken = () => Boolean(currentToken());
   const commandsUnlocked = () => (requiresToken() ? hasToken() : hasToken() || confirmedNoToken());
+  const setupHandoffInstallStepActive = () => {
+    const step = deriveAddStepFromLocation(location.pathname, location.search);
+    return step !== null && SETUP_HANDOFF_INSTALL_STEPS.has(step);
+  };
 
   const acknowledgeNoToken = () => {
     if (requiresToken()) {
@@ -245,6 +270,9 @@ Pulse prepares the first-host install token from setup so you can move straight 
       ];
       const { token, record } = await SecurityAPI.createToken(desiredName, scopes);
 
+      if (disposed) {
+        return;
+      }
       setCurrentToken(token);
       setLatestRecord(record);
       setLatestTokenSource(source);
@@ -258,6 +286,9 @@ Pulse prepares the first-host install token from setup so you can move straight 
         );
       }
     } catch (err) {
+      if (disposed) {
+        return;
+      }
       logger.error('Failed to generate agent token', err);
       if (source === 'setup_handoff') {
         setSetupHandoffAutoTokenFailed(true);
@@ -268,6 +299,9 @@ Pulse prepares the first-host install token from setup so you can move straight 
         );
       }
     } finally {
+      if (disposed) {
+        return;
+      }
       setIsGeneratingToken(false);
       if (source === 'setup_handoff') {
         setSetupHandoffAutoTokenPending(false);
@@ -291,6 +325,7 @@ Pulse prepares the first-host install token from setup so you can move straight 
   createEffect(() => {
     const shouldAutoCreateInstallToken =
       Boolean(setupHandoff()) &&
+      setupHandoffInstallStepActive() &&
       securityStatus() !== null &&
       requiresToken() &&
       !currentToken() &&

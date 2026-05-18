@@ -1,10 +1,10 @@
 import { test, expect } from "@playwright/test";
 import {
-  ensureAuthenticated,
   ensureFirstRunExperience,
   navigateToSettings,
   apiRequest,
   trackBrowserRequests,
+  waitForPulseReady,
 } from "./helpers";
 
 /**
@@ -70,7 +70,7 @@ test.describe.serial("First-session experience", () => {
     await expect(page).toHaveURL(/\/settings\/infrastructure$/);
   });
 
-  test("wizard completion can hand off directly to Pulse Agent install", async ({
+  test("wizard completion can hand off to Pulse Agent install", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -80,19 +80,19 @@ test.describe.serial("First-session experience", () => {
 
     await ensureFirstRunExperience(page, { completionTarget: "agent" });
 
-    await expect(page).toHaveURL(/\/settings\/infrastructure\?add=agent$/);
+    await expect(page).toHaveURL(/\/settings\/infrastructure\?add=linux-host$/);
     await expect(
       page.getByText("Connected systems", { exact: true }),
     ).toBeVisible();
-    const agentDialog = page.getByRole("dialog", { name: "Add Pulse Agent" });
+    const agentDialog = page.getByRole("dialog", {
+      name: "Add Linux, macOS, Windows host",
+    });
     await expect(agentDialog).toBeVisible();
     await expect(
       agentDialog.getByRole("heading", { name: "Install on a host" }),
     ).toBeVisible();
     await expect(
-      agentDialog.getByText(
-        "This is the Pulse Agent handoff from first-run setup inside Add infrastructure.",
-      ),
+      agentDialog.getByRole("button", { name: "Generate token" }),
     ).toBeVisible();
   });
 
@@ -102,7 +102,7 @@ test.describe.serial("First-session experience", () => {
       "Desktop-only first-session coverage",
     );
 
-    await ensureAuthenticated(page);
+    await ensureFirstRunExperience(page, { completionTarget: "none" });
 
     // The Settings tab is rendered as a div[role="tab"] in the top utility bar.
     const settingsTab = page
@@ -123,7 +123,7 @@ test.describe.serial("First-session experience", () => {
       "Desktop-only first-session coverage",
     );
 
-    await ensureAuthenticated(page);
+    await ensureFirstRunExperience(page, { completionTarget: "none" });
     await navigateToSettings(page);
 
     // The settings sidebar (div[aria-label="Settings navigation"]) lists category
@@ -152,7 +152,9 @@ test.describe.serial("First-session experience", () => {
       "Desktop-only first-session coverage",
     );
 
-    await ensureAuthenticated(page);
+    await ensureFirstRunExperience(page, { completionTarget: "none" });
+    await page.waitForLoadState("domcontentloaded");
+    await page.waitForTimeout(750);
 
     // Visit a selection of key settings routes and verify the page renders
     // without console errors or blank screens.
@@ -177,6 +179,7 @@ test.describe.serial("First-session experience", () => {
         consoleErrors.length = 0;
         aiRequests.clear();
 
+        await waitForPulseReady(page);
         await page.goto(route, { waitUntil: "domcontentloaded" });
         await page.waitForURL(/\/settings/, { timeout: 10_000 });
         await expect(page.locator("#root")).toBeVisible();
@@ -229,7 +232,7 @@ test.describe.serial("First-session experience", () => {
       "Desktop-only first-session coverage",
     );
 
-    await ensureAuthenticated(page);
+    await ensureFirstRunExperience(page, { completionTarget: "none" });
 
     // Query runtime capabilities to check feature access per-route without
     // depending on billing-only entitlements.
@@ -250,17 +253,26 @@ test.describe.serial("First-session experience", () => {
     // tier-based — e.g. a "relay" tier has the relay feature but not
     // advanced_reporting or audit_logging.
     const gatedRoutes = [
-      { route: "/operations/reporting", feature: "advanced_reporting" },
-      { route: "/settings/security-webhooks", feature: "audit_logging" },
-      { route: "/settings/system-relay", feature: "relay" },
+      {
+        route: "/operations/reporting",
+        expectedURL: /\/settings\/support\/reporting/,
+        feature: "advanced_reporting",
+      },
+      {
+        route: "/settings/security-webhooks",
+        expectedURL: /\/settings\/security-webhooks/,
+        feature: "audit_logging",
+      },
+      {
+        route: "/settings/system-relay",
+        expectedURL: /\/settings\/system-relay/,
+        feature: "relay",
+      },
     ] as const;
 
     try {
-      for (const { route, feature } of gatedRoutes) {
+      for (const { route, expectedURL, feature } of gatedRoutes) {
         const hasFeature = features.has(feature);
-        const routePattern = route.startsWith("/operations/")
-          ? /\/operations/
-          : /\/settings/;
 
         if (!hasFeature) {
           // Install a MutationObserver via addInitScript BEFORE navigating so it
@@ -296,7 +308,7 @@ test.describe.serial("First-session experience", () => {
           });
 
           await page.goto(route, { waitUntil: "domcontentloaded" });
-          await page.waitForURL(routePattern, { timeout: 10_000 });
+          await page.waitForURL(expectedURL, { timeout: 10_000 });
           await expect(page.locator("#root")).toBeVisible();
 
           // Wait for the page to settle, then read the observer result.
@@ -313,7 +325,7 @@ test.describe.serial("First-session experience", () => {
           // Paywall indicator should be visible.
           const paywallIndicator = page
             .locator(
-              "text=/Upgrade|Pro Feature|Requires Pro|Requires Relay|Start.*Trial/i",
+              "text=/Upgrade|Pro Feature|Requires Pro|Requires Relay|Start.*Trial|Advanced Reporting|Audit Logging|Audit Webhooks|Pulse Relay/i",
             )
             .first();
           const isPaywallVisible = await paywallIndicator
@@ -325,7 +337,7 @@ test.describe.serial("First-session experience", () => {
           ).toBeTruthy();
         } else {
           await page.goto(route, { waitUntil: "domcontentloaded" });
-          await page.waitForURL(routePattern, { timeout: 10_000 });
+          await page.waitForURL(expectedURL, { timeout: 10_000 });
           await expect(page.locator("#root")).toBeVisible();
 
           // Licensed for this feature — the full panel content should render.
@@ -357,18 +369,15 @@ test.describe.serial("First-session experience", () => {
       "Desktop-only first-session coverage",
     );
 
-    await ensureAuthenticated(page);
+    await ensureFirstRunExperience(page, { completionTarget: "none" });
     await page.goto("/settings/system-pro", { waitUntil: "domcontentloaded" });
     await page.waitForURL(/\/settings/, { timeout: 10_000 });
 
-    // The Pro panel should always render — either showing license details
-    // (if licensed) or the activation/trial UI (if on free tier).
-    // Scope assertions to content that is specific to the license panel,
-    // not the sidebar label "Pulse Pro".
+    // The self-hosted plan panel should always render with plan/recovery
+    // content. Scope assertions to main content, not the settings sidebar.
     const licenseContent = page
-      .locator(
-        "text=/Current License|Activate|License Key|Start.*Trial|Subscription|Free Tier/i",
-      )
+      .getByRole("main")
+      .getByText(/Current plan|Existing purchases|Use existing key|activation key/i)
       .first();
     await expect(
       licenseContent,

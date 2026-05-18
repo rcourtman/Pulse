@@ -37,7 +37,7 @@ const SOURCE_STRATEGY_OPTIONS = [
 ] as const;
 
 const ADD_INFRASTRUCTURE_PATH = buildInfrastructureOnboardingPath('pick');
-const AGENT_INSTALL_PATH = buildInfrastructureOnboardingPath('agent');
+const AGENT_INSTALL_PATH = buildInfrastructureOnboardingPath('linux-host');
 const INFRASTRUCTURE_WORKSPACE_PATH = buildInfrastructureWorkspacePath();
 
 export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {

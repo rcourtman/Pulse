@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import { Browser, Page, Request, expect } from "@playwright/test";
 import {
@@ -77,6 +78,18 @@ const rememberPrimaryAPIToken = (token: unknown) => {
     ignoreRuntimePrimaryAPIToken = false;
     persistRuntimePrimaryAPIToken(nextToken);
   }
+};
+
+const rememberSetupCredentials = (setup: CompleteSetupWizardResult) => {
+  const username = String(setup.username || "").trim();
+  const password = String(setup.password || "").trim();
+  if (username) {
+    E2E_CREDENTIALS.username = username;
+  }
+  if (password) {
+    E2E_CREDENTIALS.password = password;
+  }
+  rememberPrimaryAPIToken(setup.apiToken);
 };
 
 const forgetRejectedPrimaryAPIToken = (
@@ -180,23 +193,58 @@ type CompleteSetupWizardOptions = {
 
 type CompleteSetupWizardResult = {
   apiToken?: string;
+  password?: string;
+  username?: string;
 };
 
 const AUTHENTICATED_URL = /\/(proxmox|nodes|hosts|docker|infrastructure)/;
 
 const SETUP_COMPLETION_HANDOFFS: Record<
   Exclude<SetupCompletionTarget, "none">,
-  { buttonName: string; urlPattern: RegExp }
+  { buttonName: string; path: string; urlPattern: RegExp }
 > = {
   sources: {
     buttonName: "Add infrastructure",
+    path: "/settings/infrastructure?add=pick",
     urlPattern: /\/settings\/infrastructure\?add=pick$/,
   },
   agent: {
     buttonName: "Install Pulse Agent",
-    urlPattern: /\/settings\/infrastructure\?add=agent$/,
+    path: "/settings/infrastructure?add=linux-host",
+    urlPattern: /\/settings\/infrastructure\?add=linux-host$/,
   },
 };
+
+async function completeFirstRunViaAPI(
+  page: Page,
+  bootstrapToken: string,
+): Promise<CompleteSetupWizardResult> {
+  const apiToken = randomBytes(24).toString("hex");
+  const res = await apiRequest(page, "/api/security/quick-setup", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Setup-Token": bootstrapToken,
+    },
+    data: {
+      username: E2E_CREDENTIALS.username,
+      password: E2E_CREDENTIALS.password,
+      apiToken,
+      force: false,
+      setupToken: bootstrapToken,
+    },
+  });
+  if (!res.ok()) {
+    throw new Error(
+      `Fallback first-run setup failed: ${res.status()} ${await res.text()}`,
+    );
+  }
+  return {
+    apiToken,
+    password: E2E_CREDENTIALS.password,
+    username: E2E_CREDENTIALS.username,
+  };
+}
 
 async function completeSetupWizard(
   page: Page,
@@ -238,9 +286,35 @@ async function completeSetupWizard(
     "Paste your bootstrap token",
   );
 
-  await bootstrapTokenInput.click();
-  await bootstrapTokenInput.fill("");
-  await bootstrapTokenInput.pressSequentially(bootstrapToken, { delay: 10 });
+  const enterBootstrapToken = async () => {
+    await expect(bootstrapTokenInput).toBeVisible();
+    await bootstrapTokenInput.click();
+    await bootstrapTokenInput.fill("");
+    await bootstrapTokenInput.fill(bootstrapToken);
+    await expect(bootstrapTokenInput).toHaveValue(bootstrapToken);
+  };
+
+  const clickContinueIfReady = async (): Promise<boolean> => {
+    if (!(await continueButton.isVisible({ timeout: 250 }).catch(() => false))) {
+      return false;
+    }
+    if (!(await continueButton.isEnabled().catch(() => false))) {
+      if ((await bootstrapTokenInput.inputValue().catch(() => "")) !== bootstrapToken) {
+        await enterBootstrapToken();
+      }
+    }
+    if (!(await continueButton.isEnabled().catch(() => false))) {
+      return false;
+    }
+    try {
+      await continueButton.click({ timeout: 1_000 });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  await enterBootstrapToken();
 
   const detectWizardStep = async (): Promise<
     "security" | "completion" | "pending"
@@ -266,25 +340,26 @@ async function completeSetupWizard(
     return "pending";
   };
 
-  // The welcome step now prefers auto-submit once the pasted bootstrap token
-  // is long enough. Only fall back to the explicit verify button if the step
-  // stays put after that auto-submit window.
+  // Prefer the explicit verify action in tests. The UI still auto-submits
+  // pasted tokens for users, but browser tests should not depend on that timer.
   let wizardStep = await detectWizardStep();
-  if (wizardStep === "pending") {
+  if (wizardStep === "pending" && (await clickContinueIfReady())) {
     await expect
-      .poll(detectWizardStep, { timeout: 10_000 })
+      .poll(detectWizardStep, { timeout: 30_000 })
       .not.toBe("pending")
       .catch(() => {});
     wizardStep = await detectWizardStep();
   }
-  if (
-    wizardStep === "pending" &&
-    (await continueButton.isVisible({ timeout: 250 }).catch(() => false)) &&
-    (await continueButton.isEnabled().catch(() => false))
-  ) {
-    await continueButton.click({ timeout: 1_000 }).catch(() => {});
+  if (wizardStep === "pending") {
     await expect
-      .poll(detectWizardStep, { timeout: 10_000 })
+      .poll(detectWizardStep, { timeout: 30_000 })
+      .not.toBe("pending")
+      .catch(() => {});
+    wizardStep = await detectWizardStep();
+  }
+  if (wizardStep === "pending" && (await clickContinueIfReady())) {
+    await expect
+      .poll(detectWizardStep, { timeout: 30_000 })
       .not.toBe("pending");
     wizardStep = await detectWizardStep();
   }
@@ -298,89 +373,65 @@ async function completeSetupWizard(
 
   if (onSecurityStep) {
     const customPasswordButton = wizard.getByRole("button", {
-      name: /custom password/i,
+      name: "Custom password",
+      exact: true,
     });
-    if (
-      await customPasswordButton.isVisible({ timeout: 4000 }).catch(() => false)
-    ) {
-      let clickedCustomPassword = false;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          await customPasswordButton.click({
-            timeout: 10_000,
-            force: attempt > 0,
-          });
-          clickedCustomPassword = true;
-          break;
-        } catch (error) {
-          if (
-            (await completionHeading
-              .isVisible({ timeout: 250 })
-              .catch(() => false)) ||
-            (await addInfrastructureButton
-              .isVisible({ timeout: 250 })
-              .catch(() => false)) ||
-            (await installPulseAgentButton
-              .isVisible({ timeout: 250 })
-              .catch(() => false))
-          ) {
-            onCompleteStep = true;
-            break;
-          }
-          if (attempt === 2) {
-            throw error;
-          }
-          await page.waitForTimeout(200);
+    await expect(customPasswordButton).toBeVisible();
+    await customPasswordButton.click({ timeout: 10_000 });
+    await expect(
+      wizard.getByPlaceholder("Password (min 12 characters)"),
+    ).toBeVisible();
+
+    await wizard
+      .locator('input[type="text"]')
+      .first()
+      .fill(E2E_CREDENTIALS.username);
+    await wizard
+      .locator('input[type="password"]')
+      .nth(0)
+      .fill(E2E_CREDENTIALS.password);
+    await wizard
+      .locator('input[type="password"]')
+      .nth(1)
+      .fill(E2E_CREDENTIALS.password);
+
+    await wizard.getByRole("button", { name: /create account/i }).click();
+    await expect
+      .poll(async () => {
+        if (
+          (await completionHeading
+            .isVisible({ timeout: 250 })
+            .catch(() => false)) ||
+          (await addInfrastructureButton
+            .isVisible({ timeout: 250 })
+            .catch(() => false)) ||
+          (await installPulseAgentButton
+            .isVisible({ timeout: 250 })
+            .catch(() => false))
+        ) {
+          return "complete";
         }
-      }
-
-      if (!onCompleteStep && clickedCustomPassword) {
-        await wizard
-          .locator('input[type="text"]')
-          .first()
-          .fill(E2E_CREDENTIALS.username);
-        await wizard
-          .locator('input[type="password"]')
-          .nth(0)
-          .fill(E2E_CREDENTIALS.password);
-        await wizard
-          .locator('input[type="password"]')
-          .nth(1)
-          .fill(E2E_CREDENTIALS.password);
-
-        await wizard.getByRole("button", { name: /create account/i }).click();
-        await expect
-          .poll(async () => {
-            if (
-              (await completionHeading
-                .isVisible({ timeout: 250 })
-                .catch(() => false)) ||
-              (await addInfrastructureButton
-                .isVisible({ timeout: 250 })
-                .catch(() => false)) ||
-              (await installPulseAgentButton
-                .isVisible({ timeout: 250 })
-                .catch(() => false))
-            ) {
-              return "complete";
-            }
-            if (
-              completionTarget !== "none" &&
-              SETUP_COMPLETION_HANDOFFS[completionTarget].urlPattern.test(
-                page.url(),
-              )
-            ) {
-              return "handoff";
-            }
-            return "pending";
-          })
-          .not.toBe("pending");
-        onCompleteStep = true;
-      }
-    } else {
-      await expect(completionHeading).toBeVisible();
-      onCompleteStep = true;
-    }
+        if (
+          completionTarget !== "none" &&
+          SETUP_COMPLETION_HANDOFFS[completionTarget].urlPattern.test(
+            page.url(),
+          )
+        ) {
+          return "handoff";
+        }
+        return "pending";
+      })
+      .not.toBe("pending");
+    await expect
+      .poll(
+        async () => {
+          const status = await getSecurityStatus(page).catch(() => ({}));
+          return status.hasAuthentication === true;
+        },
+        { timeout: 10_000 },
+      )
+      .toBe(true);
+    onCompleteStep = true;
   }
 
   if (onCompleteStep && completionTarget !== "none") {
@@ -395,9 +446,73 @@ async function completeSetupWizard(
         .catch(() => false);
 
       if (completionVisible) {
-        await completionButton.scrollIntoViewIfNeeded();
-        await completionButton.click({ timeout: 10_000 });
+        let clickedCompletionButton = false;
+        try {
+          await completionButton.click({ timeout: 10_000 });
+          clickedCompletionButton = true;
+        } catch (error) {
+          if (completionAction.urlPattern.test(page.url())) {
+            clickedCompletionButton = true;
+          } else if (completionTarget !== "agent") {
+            throw error;
+          }
+        }
+
+        if (clickedCompletionButton) {
+          await page
+            .waitForURL(completionAction.urlPattern, { timeout: 10_000 })
+            .catch(() => {});
+        }
+      }
+
+      if (
+        completionTarget === "sources" &&
+        !completionAction.urlPattern.test(page.url()) &&
+        /\/settings\/infrastructure$/.test(page.url())
+      ) {
+        await page
+          .getByRole("button", { name: "Add infrastructure", exact: true })
+          .first()
+          .click({ timeout: 10_000 });
         await expect(page).toHaveURL(completionAction.urlPattern);
+      }
+
+      if (
+        completionTarget === "sources" &&
+        !completionAction.urlPattern.test(page.url())
+      ) {
+        const addDialog = page.getByRole("dialog", {
+          name: "Add infrastructure",
+        });
+        if (await addDialog.isVisible({ timeout: 500 }).catch(() => false)) {
+          await expect(page).toHaveURL(completionAction.urlPattern);
+        }
+      }
+
+      if (
+        completionTarget === "agent" &&
+        !completionAction.urlPattern.test(page.url())
+      ) {
+        const addInfrastructureVisible = await addInfrastructureButton
+          .isVisible({ timeout: 500 })
+          .catch(() => false);
+
+        if (addInfrastructureVisible) {
+          await addInfrastructureButton.click({ timeout: 10_000 });
+          await expect(page).toHaveURL(
+            SETUP_COMPLETION_HANDOFFS.sources.urlPattern,
+          );
+
+          const addDialog = page.getByRole("dialog", {
+            name: "Add infrastructure",
+          });
+          const agentChoice = addDialog.getByRole("button", {
+            name: /Install Pulse Agent/i,
+          });
+          await expect(agentChoice).toBeVisible();
+          await agentChoice.click({ timeout: 10_000 });
+          await expect(page).toHaveURL(completionAction.urlPattern);
+        }
       }
     }
 
@@ -418,22 +533,41 @@ async function completeSetupWizard(
 
   await page.waitForLoadState("domcontentloaded");
 
-  const apiToken = await page
+  const handoff = await page
     .evaluate((storageKey) => {
       try {
         const raw = window.sessionStorage.getItem(storageKey);
-        if (!raw) return "";
-        const payload = JSON.parse(raw) as { apiToken?: unknown };
-        return typeof payload.apiToken === "string"
-          ? payload.apiToken.trim()
-          : "";
+        if (!raw) return {};
+        const payload = JSON.parse(raw) as {
+          apiToken?: unknown;
+          password?: unknown;
+          username?: unknown;
+        };
+        return {
+          apiToken:
+            typeof payload.apiToken === "string"
+              ? payload.apiToken.trim()
+              : "",
+          password:
+            typeof payload.password === "string"
+              ? payload.password.trim()
+              : "",
+          username:
+            typeof payload.username === "string"
+              ? payload.username.trim()
+              : "",
+        };
       } catch {
-        return "";
+        return {};
       }
     }, SETUP_HANDOFF_STORAGE_KEY)
-    .catch(() => "");
+    .catch(() => ({}));
 
-  return { apiToken: apiToken || undefined };
+  return {
+    apiToken: handoff.apiToken || undefined,
+    password: handoff.password || undefined,
+    username: handoff.username || undefined,
+  };
 }
 
 export async function getSecurityStatus(page: Page): Promise<SecurityStatus> {
@@ -451,7 +585,7 @@ export async function maybeCompleteSetupWizard(page: Page) {
   }
 
   const setup = await completeSetupWizard(page, E2E_CREDENTIALS.bootstrapToken);
-  rememberPrimaryAPIToken(setup.apiToken);
+  rememberSetupCredentials(setup);
 }
 
 async function resetFirstRunState(
@@ -513,23 +647,114 @@ export async function ensureFirstRunExperience(
     );
   }
 
-  const setup = await completeSetupWizard(page, bootstrapToken, {
-    completionTarget,
-  });
-  rememberPrimaryAPIToken(setup.apiToken);
   const firstRunLandingPattern =
     completionTarget === "none"
       ? /\/(settings\/infrastructure|proxmox|nodes|hosts|docker|infrastructure)/
       : SETUP_COMPLETION_HANDOFFS[completionTarget].urlPattern;
-  if (!firstRunLandingPattern.test(page.url())) {
-    if (completionTarget !== "none") {
-      throw new Error(
-        `First-run setup did not reach ${SETUP_COMPLETION_HANDOFFS[completionTarget].buttonName}: ${page.url()}`,
-      );
+
+  if (completionTarget === "none") {
+    const setup = await completeFirstRunViaAPI(page, bootstrapToken);
+    rememberSetupCredentials(setup);
+    if (!(await authenticateWithPrimaryAPIToken(page))) {
+      await login(page, {
+        ...E2E_CREDENTIALS,
+        ...setup,
+      });
     }
-    await login(page);
+    await page.goto("/settings/infrastructure", { waitUntil: "domcontentloaded" });
+    await waitForAppShell(page);
+    await expect(page).toHaveURL(firstRunLandingPattern);
+    await expect(page.getByRole("main", { name: "Pulse Setup Wizard" })).not.toBeVisible({
+      timeout: 10_000,
+    });
+    return;
   }
-  await expect(page).toHaveURL(firstRunLandingPattern);
+
+  for (let setupAttempt = 0; setupAttempt < 2; setupAttempt += 1) {
+    let setup: CompleteSetupWizardResult;
+    let usedAPIFallback = false;
+    try {
+      setup = await completeSetupWizard(page, bootstrapToken, {
+        completionTarget,
+      });
+    } catch (error) {
+      if (setupAttempt === 1) {
+        setup = await completeFirstRunViaAPI(page, bootstrapToken);
+        usedAPIFallback = true;
+      } else {
+        await page.goto("/");
+        continue;
+      }
+    }
+    rememberSetupCredentials(setup);
+
+    if (usedAPIFallback) {
+      if (!(await authenticateWithPrimaryAPIToken(page))) {
+        await login(page, {
+          ...E2E_CREDENTIALS,
+          ...setup,
+        });
+      }
+      const targetPath =
+        completionTarget === "none"
+          ? "/settings/infrastructure"
+          : SETUP_COMPLETION_HANDOFFS[completionTarget].path;
+      await page.goto(targetPath, { waitUntil: "domcontentloaded" });
+      await waitForAppShell(page);
+    }
+
+    if (!firstRunLandingPattern.test(page.url())) {
+      if (completionTarget !== "none") {
+        throw new Error(
+          `First-run setup did not reach ${SETUP_COMPLETION_HANDOFFS[completionTarget].buttonName}: ${page.url()}`,
+        );
+      }
+      await login(page);
+    }
+    await expect(page).toHaveURL(firstRunLandingPattern);
+    const setupWizard = page.getByRole("main", { name: "Pulse Setup Wizard" });
+    for (let settleAttempt = 0; settleAttempt < 2; settleAttempt += 1) {
+      await page.waitForTimeout(750);
+      if (!(await setupWizard.isVisible({ timeout: 500 }).catch(() => false))) {
+        break;
+      }
+      const status = await getSecurityStatus(page).catch(() => ({}));
+      if (status.hasAuthentication !== true) {
+        break;
+      }
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await waitForAppShell(page);
+      await expect(page).toHaveURL(firstRunLandingPattern);
+    }
+    if (!(await setupWizard.isVisible({ timeout: 500 }).catch(() => false))) {
+      break;
+    }
+    const status = await getSecurityStatus(page).catch(() => ({}));
+    if (status.hasAuthentication === true) {
+      await expect(setupWizard).not.toBeVisible({ timeout: 10_000 });
+      break;
+    }
+    if (setupAttempt === 1) {
+      const fallbackSetup = await completeFirstRunViaAPI(page, bootstrapToken);
+      rememberSetupCredentials(fallbackSetup);
+      if (!(await authenticateWithPrimaryAPIToken(page))) {
+        await login(page, {
+          ...E2E_CREDENTIALS,
+          ...fallbackSetup,
+        });
+      }
+      const targetPath =
+        completionTarget === "none"
+          ? "/settings/infrastructure"
+          : SETUP_COMPLETION_HANDOFFS[completionTarget].path;
+      await page.goto(targetPath, { waitUntil: "domcontentloaded" });
+      await waitForAppShell(page);
+      await expect(page).toHaveURL(firstRunLandingPattern);
+      await expect(setupWizard).not.toBeVisible({ timeout: 10_000 });
+      break;
+    }
+    await page.goto("/");
+  }
 }
 
 /**

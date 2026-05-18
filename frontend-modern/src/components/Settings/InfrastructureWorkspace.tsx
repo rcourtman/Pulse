@@ -979,7 +979,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                   <ConnectionEditor
                     mode="add"
                     onBackToCatalog={() => openAddFlow('pick')}
-                    onSelectAgentRoute={() => openAddFlow('agent')}
+                    onSelectAgentRoute={() => openAddFlow('linux-host')}
                     onSelectCandidate={openAddFlowFromProbe}
                     onClose={closeAddFlow}
                     onSaved={handleAddSaved}

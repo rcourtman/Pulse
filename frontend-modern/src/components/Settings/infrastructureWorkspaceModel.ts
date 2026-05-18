@@ -60,7 +60,7 @@ export function buildInfrastructureOnboardingPath(step: InfrastructurePanelStep 
 }
 
 export function deriveAddStepFromLegacyPath(pathname: string): InfrastructurePanelStep | null {
-  if (matchesPathPrefix(pathname, LEGACY_INSTALL_PATH)) return 'agent';
+  if (matchesPathPrefix(pathname, LEGACY_INSTALL_PATH)) return 'linux-host';
   if (matchesExactPath(pathname, LEGACY_PLATFORMS_PATH)) return 'pick';
   return null;
 }

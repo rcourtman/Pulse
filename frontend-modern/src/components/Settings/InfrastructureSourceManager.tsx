@@ -340,6 +340,14 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     props.onAddSource?.(group.actionType);
   };
 
+  const handleInstallAgentShortcut = () => {
+    if (props.onAddSourceStep) {
+      props.onAddSourceStep('linux-host');
+      return;
+    }
+    props.onAddSource?.('agent');
+  };
+
   const hasAnyConfigured = createMemo(() => props.rows().length > 0);
   const hasAnyDiscovered = createMemo(() => props.discoveredNodes().length > 0);
 
@@ -415,14 +423,14 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       };
     }
 
-    if (apiOnlySystemCount() > 0 && props.onAddSource) {
+    if (apiOnlySystemCount() > 0 && (props.onAddSourceStep || props.onAddSource)) {
       const namesText = apiOnlySystemNamesText();
       const target = namesText ?? formatCount(apiOnlySystemCount(), 'API-backed system');
       return {
         kind: 'agent',
         label: 'Install agents',
         detail: `Install Pulse Agent on ${target} when you want node-local telemetry such as temperatures, SMART data, and host identity.`,
-        onClick: () => props.onAddSource?.('agent'),
+        onClick: handleInstallAgentShortcut,
       };
     }
 
@@ -861,12 +869,12 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                   row.ownerType === 'pve' &&
                                                   rowHasApiCoverage(row) &&
                                                   !rowHasAgentCoverage(row) &&
-                                                  Boolean(props.onAddSource)
+                                                  Boolean(props.onAddSourceStep || props.onAddSource)
                                                 }
                                               >
                                                 <button
                                                   type="button"
-                                                  onClick={() => props.onAddSource?.('agent')}
+                                                  onClick={handleInstallAgentShortcut}
                                                   class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/30"
                                                   title="Install Pulse Agent on this system to add node-local telemetry (temperatures, SMART, host identity)."
                                                 >

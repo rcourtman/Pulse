@@ -12,6 +12,7 @@ const presentationPolicyIsDemoModeMock = vi.fn();
 const presentationPolicyIsReadOnlyMock = vi.fn();
 const sessionPresentationPolicyResolvedMock = vi.fn();
 const shouldHideSettingsNavItemMock = vi.fn();
+const shouldBlockSettingsRouteItemMock = vi.fn();
 
 vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
@@ -34,6 +35,7 @@ vi.mock('@/stores/sessionPresentationPolicy', () => ({
 }));
 
 vi.mock('../settingsNavVisibility', () => ({
+  shouldBlockSettingsRouteItem: (...args: unknown[]) => shouldBlockSettingsRouteItemMock(...args),
   shouldHideSettingsNavItem: (...args: unknown[]) => shouldHideSettingsNavItemMock(...args),
 }));
 
@@ -70,6 +72,7 @@ describe('useSettingsAccess', () => {
     presentationPolicyIsReadOnlyMock.mockReset();
     sessionPresentationPolicyResolvedMock.mockReset();
     shouldHideSettingsNavItemMock.mockReset();
+    shouldBlockSettingsRouteItemMock.mockReset();
 
     hasFeatureMock.mockImplementation((feature: string) => feature === 'multi_tenant');
     runtimeCapabilitiesLoadedMock.mockReturnValue(true);
@@ -82,6 +85,7 @@ describe('useSettingsAccess', () => {
     shouldHideSettingsNavItemMock.mockImplementation(
       (tab: string) => tab === 'organization-access',
     );
+    shouldBlockSettingsRouteItemMock.mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -101,11 +105,29 @@ describe('useSettingsAccess', () => {
   it('falls back to the default tab when the current route is no longer allowed', async () => {
     const setActiveTabSpy = vi.fn();
     hasFeatureMock.mockReturnValue(false);
+    shouldBlockSettingsRouteItemMock.mockImplementation(
+      (tab: string) => tab === 'organization-access',
+    );
 
     renderHarness(setActiveTabSpy);
 
     await waitFor(() => {
       expect(setActiveTabSpy).toHaveBeenCalledWith('infrastructure-systems');
+    });
+  });
+
+  it('keeps direct feature-gated routes active when the panel owns the locked state', async () => {
+    const setActiveTabSpy = vi.fn();
+    hasFeatureMock.mockReturnValue(false);
+    shouldHideSettingsNavItemMock.mockImplementation(
+      (tab: string) => tab === 'support-reporting',
+    );
+    shouldBlockSettingsRouteItemMock.mockReturnValue(false);
+
+    renderHarness(setActiveTabSpy, 'support-reporting');
+
+    await waitFor(() => {
+      expect(setActiveTabSpy).not.toHaveBeenCalled();
     });
   });
 });

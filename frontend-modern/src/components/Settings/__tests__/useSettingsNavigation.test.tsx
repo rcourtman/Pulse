@@ -100,7 +100,7 @@ describe('useSettingsNavigation', () => {
     renderHarness('/settings/infrastructure/install');
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=agent', {
+      expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=linux-host', {
         replace: true,
         scroll: false,
       });

@@ -19,7 +19,7 @@ import { DEFAULT_SETTINGS_TAB, type SettingsTab } from './settingsNavigationMode
 import { tabFeatureRequirements } from './settingsFeatureGates';
 import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
 import { getSettingsNavItem, SETTINGS_NAV_GROUPS } from './settingsNavCatalog';
-import { shouldHideSettingsNavItem } from './settingsNavVisibility';
+import { shouldBlockSettingsRouteItem, shouldHideSettingsNavItem } from './settingsNavVisibility';
 
 interface UseSettingsAccessParams {
   activeTab: Accessor<SettingsTab>;
@@ -75,36 +75,48 @@ export function useSettingsAccess({
     return presentationPolicyIsReadOnly();
   });
 
-  const accessibleTabGroups = createMemo(() => {
+  const routeAccessContext = createMemo(() => {
     const hostedModeEnabled = isHostedModeEnabled();
     const settingsCapabilities = securityStatus()?.settingsCapabilities ?? null;
     const settingsCapabilitiesResolved = securityStatus() !== null;
 
-    return SETTINGS_NAV_GROUPS.map((group) => ({
-      ...group,
-      items: group.items.filter(
-        (item) =>
-          !shouldHideSettingsNavItem(item.id, {
-            hasFeature,
-            runtimeCapabilitiesLoaded,
-            presentationPolicyHidesCommercial: commercialSurfacesHidden(),
-            presentationPolicyIsDemoMode: demoMode(),
-            presentationPolicyIsReadOnly: readOnly(),
-            presentationPolicyHidesOrganizations: organizationSurfacesHidden(),
-            presentationPolicyResolved: presentationPolicyResolved(),
-            hostedModeEnabled,
-            settingsCapabilities,
-            settingsCapabilitiesResolved,
-            isRuntimeCapabilityBlocked,
-          }),
-      ),
-    })).filter((group) => group.items.length > 0);
+    return {
+      hasFeature,
+      runtimeCapabilitiesLoaded,
+      presentationPolicyHidesCommercial: commercialSurfacesHidden(),
+      presentationPolicyIsDemoMode: demoMode(),
+      presentationPolicyIsReadOnly: readOnly(),
+      presentationPolicyHidesOrganizations: organizationSurfacesHidden(),
+      presentationPolicyResolved: presentationPolicyResolved(),
+      hostedModeEnabled,
+      settingsCapabilities,
+      settingsCapabilitiesResolved,
+      isRuntimeCapabilityBlocked,
+    };
   });
 
-  const flatTabs = createMemo(() => accessibleTabGroups().flatMap((group) => group.items));
+  const routeTabGroups = createMemo(() =>
+    SETTINGS_NAV_GROUPS.map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => !shouldBlockSettingsRouteItem(item.id, routeAccessContext()),
+      ),
+    })).filter((group) => group.items.length > 0),
+  );
+
+  const navTabGroups = createMemo(() =>
+    SETTINGS_NAV_GROUPS.map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => !shouldHideSettingsNavItem(item.id, routeAccessContext()),
+      ),
+    })).filter((group) => group.items.length > 0),
+  );
+
+  const flatTabs = createMemo(() => routeTabGroups().flatMap((group) => group.items));
 
   const visibleTabGroups = createMemo(() =>
-    accessibleTabGroups()
+    navTabGroups()
       .map((group) => ({
         ...group,
         items: group.items.filter((item) => !item.hideFromSidebar),
@@ -135,7 +147,9 @@ export function useSettingsAccess({
   createEffect(() => {
     const current = activeTab();
     const currentItem = getSettingsNavItem(current);
-    const requiresFeatureResolution = Boolean(tabFeatureRequirements[current]?.length);
+    const requiresFeatureResolution = Boolean(
+      tabFeatureRequirements[current]?.length || currentItem?.features?.length,
+    );
     const requiresCapabilityResolution = Boolean(currentItem?.requiredCapability);
     const requiresPresentationPolicyResolution = Boolean(
       currentItem?.hideWhenCommercialHidden ||
@@ -152,47 +166,8 @@ export function useSettingsAccess({
     }
 
     if (!flatTabs().some((tab) => tab.id === current)) {
-      const currentRouteStillAllowed = (() => {
-        if (!currentItem) {
-          return false;
-        }
-
-        if (currentItem.hostedOnly && !isHostedModeEnabled()) {
-          return false;
-        }
-
-        if (currentItem.hideWhenOrganizationHidden && organizationSurfacesHidden()) {
-          return false;
-        }
-        if (currentItem.hideWhenCommercialHidden && commercialSurfacesHidden()) {
-          return false;
-        }
-        if (currentItem.hideWhenDemoMode && demoMode()) {
-          return false;
-        }
-        if (currentItem.hideWhenReadOnly && readOnly()) {
-          return false;
-        }
-
-        const settingsCapabilities = securityStatus()?.settingsCapabilities ?? null;
-        const settingsCapabilitiesResolved = securityStatus() !== null;
-        if (
-          currentItem.requiredCapability &&
-          settingsCapabilitiesResolved &&
-          settingsCapabilities?.[currentItem.requiredCapability] !== true
-        ) {
-          return false;
-        }
-
-        if (currentItem.hideWhenUnavailable) {
-          const requiredFeatures = currentItem.features ?? [];
-          if (!requiredFeatures.every((feature) => hasFeature(feature))) {
-            return false;
-          }
-        }
-
-        return true;
-      })();
+      const currentRouteStillAllowed =
+        currentItem && !shouldBlockSettingsRouteItem(current, routeAccessContext());
 
       if (currentRouteStillAllowed) {
         return;

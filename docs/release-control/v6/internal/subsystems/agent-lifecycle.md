@@ -209,6 +209,11 @@ installer: Unraid, Docker, Kubernetes, and generic host choices may share the
 same unified agent installer, but their visible title, recommendation copy,
 preferred install profile, and first command section must match the selected
 system instead of falling back to an all-platform generic agent screen.
+The generic host installer route is `?add=linux-host`: setup completion,
+Proxmox "Install agent" shortcuts, detect-flow agent handoffs, and first-run
+test helpers must target that typed route so the operator sees the standalone
+Linux/macOS/Windows host context. The older `?add=agent` value may remain a
+compatibility input, but it is not the canonical destination for new handoffs.
 Agent runtime normalization must use that same governed host-profile manifest:
 profile identity tokens and runtime platform fallback values such as
 `unraid` -> `linux` are generated into the runtime resolver instead of being

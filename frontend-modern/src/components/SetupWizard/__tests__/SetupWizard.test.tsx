@@ -19,7 +19,7 @@ vi.mock('../steps/SecurityStep', () => ({
 
 vi.mock('../SetupCompletionPanel', () => ({
   SetupCompletionPanel: (props: { onComplete: (nextPath?: string) => void }) => (
-    <button onClick={() => props.onComplete('/settings/infrastructure?add=agent')}>
+    <button onClick={() => props.onComplete('/settings/infrastructure?add=linux-host')}>
       Completion finish
     </button>
   ),
@@ -63,6 +63,6 @@ describe('SetupWizard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Completion finish' }));
 
-    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure?add=agent');
+    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure?add=linux-host');
   });
 });

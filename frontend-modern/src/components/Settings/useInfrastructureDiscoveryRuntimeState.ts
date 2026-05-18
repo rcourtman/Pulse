@@ -81,6 +81,11 @@ export const useInfrastructureDiscoveryRuntimeState = ({
   const [discoveryScanStatus, setDiscoveryScanStatus] = createSignal<DiscoveryScanStatus>({
     scanning: false,
   });
+  let disposed = false;
+
+  onCleanup(() => {
+    disposed = true;
+  });
 
   const normalizeDiscoveryTimestamp = (value: unknown): number | undefined => {
     if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
@@ -168,8 +173,14 @@ export const useInfrastructureDiscoveryRuntimeState = ({
       if (!response.ok) {
         return;
       }
+      if (disposed) {
+        return;
+      }
 
       const data = await response.json();
+      if (disposed) {
+        return;
+      }
       const responseTimestamp = normalizeDiscoveryTimestamp(data?.timestamp ?? data?.updated);
       if (Array.isArray(data.servers)) {
         updateDiscoveredNodesFromServers(data.servers as RawDiscoveredServer[]);
@@ -190,7 +201,10 @@ export const useInfrastructureDiscoveryRuntimeState = ({
         errors: Array.isArray(data?.errors) && data.errors.length > 0 ? data.errors : undefined,
       }));
     } catch (error) {
-      logger.error('Failed to load discovered nodes', error);
+      if (disposed) {
+        return;
+      }
+      logger.warn('Failed to load discovered nodes', error);
     }
   };
 
@@ -214,6 +228,9 @@ export const useInfrastructureDiscoveryRuntimeState = ({
         },
         body: JSON.stringify({ subnet: discoverySubnet() || 'auto' }),
       });
+      if (disposed) {
+        return;
+      }
 
       if (!response.ok) {
         const message = await response.text();
@@ -221,6 +238,9 @@ export const useInfrastructureDiscoveryRuntimeState = ({
       }
 
       const data = await response.json().catch(() => null);
+      if (disposed) {
+        return;
+      }
       const responseTimestamp = normalizeDiscoveryTimestamp(
         data && typeof data === 'object'
           ? (data as { timestamp?: unknown; updated?: unknown }).timestamp ??
@@ -247,6 +267,9 @@ export const useInfrastructureDiscoveryRuntimeState = ({
         notificationStore.success('Discovery scan complete', 2000);
       }
     } catch (error) {
+      if (disposed) {
+        return;
+      }
       logger.error('Failed to start discovery scan', error);
       notificationStore.error(getDiscoveryScanStartErrorMessage());
       setDiscoveryScanStatus((previous) => ({

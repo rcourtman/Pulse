@@ -34,6 +34,15 @@ function missingFeaturesArePaidRuntimeBlocked(
   );
 }
 
+const PANEL_OWNED_FEATURE_GATE_TABS = new Set<SettingsTab>([
+  'system-relay',
+  'support-reporting',
+  'security-roles',
+  'security-users',
+  'security-audit',
+  'security-webhooks',
+]);
+
 export function shouldHideSettingsNavItem(
   tab: SettingsTab,
   context: SettingsNavVisibilityContext,
@@ -94,6 +103,79 @@ export function shouldHideSettingsNavItem(
   }
 
   if (item.hideWhenUnavailable && !hasRequiredFeatures(tab, context.hasFeature)) {
+    if (missingFeaturesArePaidRuntimeBlocked(tab, context)) {
+      return false;
+    }
+    return true;
+  }
+
+  return false;
+}
+
+export function shouldBlockSettingsRouteItem(
+  tab: SettingsTab,
+  context: SettingsNavVisibilityContext,
+): boolean {
+  const item = getSettingsNavItem(tab);
+  if (!item) return false;
+
+  if (item.hostedOnly && !context.hostedModeEnabled) {
+    return true;
+  }
+
+  if (item.hideWhenOrganizationHidden) {
+    if (context.presentationPolicyResolved === false) {
+      return true;
+    }
+
+    if (context.presentationPolicyHidesOrganizations) {
+      return true;
+    }
+  }
+
+  if (item.hideWhenCommercialHidden) {
+    if (context.presentationPolicyResolved === false) {
+      return true;
+    }
+
+    if (context.presentationPolicyHidesCommercial) {
+      return true;
+    }
+  }
+
+  if (item.hideWhenDemoMode) {
+    if (context.presentationPolicyResolved === false) {
+      return true;
+    }
+
+    if (context.presentationPolicyIsDemoMode) {
+      return true;
+    }
+  }
+
+  if (item.hideWhenReadOnly) {
+    if (context.presentationPolicyResolved === false) {
+      return true;
+    }
+
+    if (context.presentationPolicyIsReadOnly) {
+      return true;
+    }
+  }
+
+  if (
+    item.requiredCapability &&
+    context.settingsCapabilitiesResolved &&
+    context.settingsCapabilities?.[item.requiredCapability] !== true
+  ) {
+    return true;
+  }
+
+  if (
+    item.hideWhenUnavailable &&
+    !PANEL_OWNED_FEATURE_GATE_TABS.has(tab) &&
+    !hasRequiredFeatures(tab, context.hasFeature)
+  ) {
     if (missingFeaturesArePaidRuntimeBlocked(tab, context)) {
       return false;
     }

@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { deriveTabFromPath, settingsTabPath, type SettingsTab } from '../settingsNavigationModel';
 import { getTabLockReason, isTabLocked } from '../settingsFeatureGates';
 import { getSettingsNavItem } from '../settingsNavCatalog';
-import { shouldHideSettingsNavItem } from '../settingsNavVisibility';
+import {
+  shouldBlockSettingsRouteItem,
+  shouldHideSettingsNavItem,
+} from '../settingsNavVisibility';
 import { getSettingsTabSaveBehavior } from '../settingsTabSaveBehavior';
 
 const canonicalTabPaths = {
@@ -177,6 +180,38 @@ describe('settingsNavigation integration scaffold', () => {
         hostedModeEnabled: false,
       }),
     ).toBe(false);
+  });
+
+  it('keeps direct panel-owned feature gates routeable even when hidden from navigation', () => {
+    for (const tab of [
+      'system-relay',
+      'support-reporting',
+      'security-roles',
+      'security-users',
+      'security-audit',
+      'security-webhooks',
+    ] as SettingsTab[]) {
+      expect(
+        shouldHideSettingsNavItem(tab, {
+          hasFeature: hasFeatures([]),
+          runtimeCapabilitiesLoaded: () => true,
+          presentationPolicyResolved: true,
+          presentationPolicyIsDemoMode: false,
+          hostedModeEnabled: false,
+          settingsCapabilitiesResolved: false,
+        }),
+      ).toBe(true);
+      expect(
+        shouldBlockSettingsRouteItem(tab, {
+          hasFeature: hasFeatures([]),
+          runtimeCapabilitiesLoaded: () => true,
+          presentationPolicyResolved: true,
+          presentationPolicyIsDemoMode: false,
+          hostedModeEnabled: false,
+          settingsCapabilitiesResolved: false,
+        }),
+      ).toBe(false);
+    }
   });
 
   it('hides support tabs in demo mode and before demo policy resolves', () => {

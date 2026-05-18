@@ -1719,10 +1719,11 @@ That same catalog load must also remain retryable after transient failure.
 `useReportingPanelState.ts` may memoize or dedupe in-flight work, but it must
 not permanently latch a failed first fetch and force operators to reload the
 entire settings page before the reporting shell can recover.
-That same catalog-owned contract also includes the locked teaser copy itself:
-`ReportingPanel.tsx` may style or place the paywall content, but the locked
-title and description must come from the parsed reporting catalog instead of
-hardcoded component strings.
+That same contract also includes the locked teaser copy itself. The reporting
+catalog owns report-builder identity once the feature is available, but a locked
+session must render neutral feature-gate copy from the reporting panel state so
+Community users do not see enabled report-builder language before advanced
+reporting is available.
 That same reporting catalog also owns the enabled-shell guidance callout that
 explains when to use performance reports versus VM inventory export.
 `ReportingPanel.tsx` may choose the presentation primitive, but the callout
@@ -2611,6 +2612,12 @@ across canonical deep links such as
 collapse into the shared `infrastructure-operations` tab, the selected
 platform state must still be derived from the path instead of silently
 falling back to `pve` on reload or remount.
+That same settings access boundary must keep route eligibility separate from
+sidebar visibility. Panel-owned feature gates such as Relay, Reporting, RBAC,
+Audit Log, and Audit Webhooks may be hidden from the navigation on Community
+installs, but their direct settings routes must stay routeable so the owning
+panel can render its locked, non-flashing state instead of being bounced to the
+default Infrastructure tab.
 `useSettingsShellState.ts` owns shell-local sidebar/search/password-modal
 state, and `settingsTabSaveBehavior.ts` owns settings tab save-behavior lookup,
 `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx` owns

@@ -9,7 +9,7 @@ describe('SetupCompletionPanel guardrails', () => {
       "const ADD_INFRASTRUCTURE_PATH = buildInfrastructureOnboardingPath('pick');",
     );
     expect(setupCompletionPanelSource).toContain(
-      "const AGENT_INSTALL_PATH = buildInfrastructureOnboardingPath('agent');",
+      "const AGENT_INSTALL_PATH = buildInfrastructureOnboardingPath('linux-host');",
     );
     expect(setupCompletionPanelSource).toContain(
       'const INFRASTRUCTURE_WORKSPACE_PATH = buildInfrastructureWorkspacePath();',

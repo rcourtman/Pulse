@@ -171,8 +171,12 @@ describe('ReportingPanel', () => {
 
     render(() => <ReportingPanel />);
 
-    expect(screen.getAllByText('Detailed Reporting').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Canonical reporting surfaces').length).toBeGreaterThan(0);
+    expect(screen.getByText('Advanced Reporting unavailable')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Reporting is locked for this session. The report builder appears when advanced reporting is available.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Advanced Reporting (Pro)')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
   });

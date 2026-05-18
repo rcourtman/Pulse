@@ -73,8 +73,9 @@ export function ReportingPanel() {
       return state;
     }
     return {
-      title: catalog.title,
-      description: catalog.description,
+      title: `${state.title} unavailable`,
+      description:
+        'Reporting is locked for this session. The report builder appears when advanced reporting is available.',
     };
   };
   const guidance = () => reportingCatalog()?.guidance ?? null;

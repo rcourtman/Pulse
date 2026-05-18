@@ -275,6 +275,18 @@ describe('infrastructure operations model', () => {
     expect(installStateSource).not.toContain("navigate('/dashboard')");
   });
 
+  it('only auto-creates setup handoff install tokens on installer routes', async () => {
+    const installStateSource = await import('../useInfrastructureInstallState.tsx?raw').then(
+      (mod) => (mod as { default: string }).default,
+    );
+
+    expect(installStateSource).toContain('const SETUP_HANDOFF_INSTALL_STEPS');
+    expect(installStateSource).toContain(
+      'deriveAddStepFromLocation(location.pathname, location.search)',
+    );
+    expect(installStateSource).toContain('setupHandoffInstallStepActive() &&');
+  });
+
   it('keeps infrastructure install and operations surfaces free of retired commercial telemetry wrappers', () => {
     for (const source of [
       infrastructureOperationsModelSource,
