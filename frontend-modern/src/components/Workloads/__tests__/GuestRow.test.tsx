@@ -800,7 +800,7 @@ describe('GuestRow', () => {
 describe('GUEST_COLUMNS', () => {
   it('has the expected number of columns', () => {
     // name, type, info, vmid, cpu, memory, disk, ip, uptime, node,
-    // image, namespace, context, backup, tags, update, os, netIo, diskIo
+    // image, namespace, context, backup, tags, os, netIo, diskIo, update
     expect(GUEST_COLUMNS.length).toBe(19);
   });
 
@@ -810,7 +810,13 @@ describe('GUEST_COLUMNS', () => {
 
   it('does not expose a trailing link column', () => {
     expect(GUEST_COLUMNS.map((column) => column.id)).not.toContain('link');
-    expect(GUEST_COLUMNS[GUEST_COLUMNS.length - 1].id).toBe('diskIo');
+    expect(GUEST_COLUMNS[GUEST_COLUMNS.length - 1].id).toBe('update');
+  });
+
+  it('keeps Docker I/O and update headers aligned with the rendered row cells', () => {
+    const columnIds = GUEST_COLUMNS.map((column) => column.id);
+    const dockerTailStart = columnIds.indexOf('netIo');
+    expect(columnIds.slice(dockerTailStart)).toEqual(['netIo', 'diskIo', 'update']);
   });
 
   it('marks toggleable columns correctly', () => {

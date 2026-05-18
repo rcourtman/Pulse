@@ -305,7 +305,6 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     width: '60px',
     toggleable: true,
   },
-  { id: 'update', label: 'Update', width: '60px', toggleable: true },
   { id: 'os', label: 'OS', width: '45px', toggleable: true },
   {
     id: 'netIo',
@@ -323,6 +322,7 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     toggleable: true,
     sortKey: 'diskIo',
   },
+  { id: 'update', label: 'Update', width: '60px', toggleable: true },
 ];
 
 const GUEST_COLUMN_BY_ID = new Map(GUEST_COLUMNS.map((column) => [column.id, column] as const));

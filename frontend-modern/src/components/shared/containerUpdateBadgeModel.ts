@@ -3,6 +3,7 @@ import type { DockerContainerUpdateStatus } from '@/types/api';
 export interface ContainerUpdateBadgeProps {
   updateStatus?: DockerContainerUpdateStatus;
   compact?: boolean;
+  showCurrent?: boolean;
 }
 
 export interface UpdateIconProps {
@@ -41,10 +42,23 @@ export function hasContainerUpdateError(updateStatus?: DockerContainerUpdateStat
   return Boolean(updateStatus?.error);
 }
 
+export function hasContainerUpdateCurrent(updateStatus?: DockerContainerUpdateStatus): boolean {
+  return updateStatus?.updateAvailable === false && !hasContainerUpdateError(updateStatus);
+}
+
 export function getContainerUpdateErrorTooltip(
   updateStatus?: DockerContainerUpdateStatus,
 ): string {
   return `Update check failed: ${updateStatus?.error || 'Unknown error'}`;
+}
+
+export function getContainerUpdateCurrentTooltip(
+  updateStatus?: DockerContainerUpdateStatus,
+): string {
+  if (!updateStatus?.currentDigest) return 'Image is current';
+
+  const current = getDigestPreview(updateStatus.currentDigest, 12);
+  return `Image is current\nDigest: ${current}...`;
 }
 
 export function getContainerUpdateBadgeTooltip(

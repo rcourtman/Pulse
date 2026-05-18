@@ -2,10 +2,12 @@ import { Component, Match, Show, Switch } from 'solid-js';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import {
   getContainerUpdateBadgeTooltip,
+  getContainerUpdateCurrentTooltip,
   getContainerUpdateErrorTooltip,
   getUpdateButtonClass,
   getUpdateIconTooltip,
   hasContainerUpdate,
+  hasContainerUpdateCurrent,
   hasContainerUpdateError,
   type ContainerUpdateBadgeProps,
   type UpdateButtonProps,
@@ -64,52 +66,74 @@ const XIcon: Component<{ class?: string }> = (props) => (
 );
 
 /**
- * ContainerUpdateBadge displays a visual indicator when a container image has an update available.
- * Uses a blue color scheme to differentiate from health/status badges.
+ * ContainerUpdateBadge displays Docker image update check results.
+ * Update-available states use a blue color scheme to differentiate from health/status badges.
  */
 export const ContainerUpdateBadge: Component<ContainerUpdateBadgeProps> = (props) => {
   return (
-    <Show when={hasContainerUpdate(props.updateStatus) || hasContainerUpdateError(props.updateStatus)}>
-      <Show
-        when={hasContainerUpdate(props.updateStatus)}
-        fallback={
-          <Show when={hasContainerUpdateError(props.updateStatus)}>
-            <span
-              class="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium bg-surface-alt text-muted cursor-help"
-              onMouseEnter={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                showTooltip(getContainerUpdateErrorTooltip(props.updateStatus), rect.left + rect.width / 2, rect.top, {
-                  align: 'center',
-                  direction: 'up',
-                });
-              }}
-              onMouseLeave={() => hideTooltip()}
-            >
-              <ErrorIndicatorIcon class="w-3 h-3" />
-              <Show when={!props.compact}>
-                <span>Check failed</span>
-              </Show>
-            </span>
-          </Show>
-        }
-      >
-        <span
-          class="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-help"
-          onMouseEnter={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            showTooltip(getContainerUpdateBadgeTooltip(props.updateStatus), rect.left + rect.width / 2, rect.top, {
-              align: 'center',
-              direction: 'up',
-            });
-          }}
-          onMouseLeave={() => hideTooltip()}
-        >
-          <UpdateArrowIcon class="w-3 h-3" />
-          <Show when={!props.compact}>
-            <span>Update</span>
-          </Show>
-        </span>
-      </Show>
+    <Show
+      when={
+        hasContainerUpdate(props.updateStatus) ||
+        hasContainerUpdateError(props.updateStatus) ||
+        (props.showCurrent && hasContainerUpdateCurrent(props.updateStatus))
+      }
+    >
+      <Switch>
+        <Match when={hasContainerUpdate(props.updateStatus)}>
+          <span
+            class="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-help"
+            onMouseEnter={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              showTooltip(getContainerUpdateBadgeTooltip(props.updateStatus), rect.left + rect.width / 2, rect.top, {
+                align: 'center',
+                direction: 'up',
+              });
+            }}
+            onMouseLeave={() => hideTooltip()}
+          >
+            <UpdateArrowIcon class="w-3 h-3" />
+            <Show when={!props.compact}>
+              <span>Update</span>
+            </Show>
+          </span>
+        </Match>
+        <Match when={hasContainerUpdateError(props.updateStatus)}>
+          <span
+            class="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium bg-surface-alt text-muted cursor-help"
+            aria-label={getContainerUpdateErrorTooltip(props.updateStatus)}
+            onMouseEnter={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              showTooltip(getContainerUpdateErrorTooltip(props.updateStatus), rect.left + rect.width / 2, rect.top, {
+                align: 'center',
+                direction: 'up',
+              });
+            }}
+            onMouseLeave={() => hideTooltip()}
+          >
+            <ErrorIndicatorIcon class="w-3 h-3" />
+            <span>{props.compact ? 'Failed' : 'Check failed'}</span>
+          </span>
+        </Match>
+        <Match when={props.showCurrent && hasContainerUpdateCurrent(props.updateStatus)}>
+          <span
+            class="inline-flex items-center justify-center gap-1 rounded-full bg-surface-alt px-1.5 py-0.5 text-[11px] font-medium text-muted cursor-help"
+            aria-label={getContainerUpdateCurrentTooltip(props.updateStatus)}
+            onMouseEnter={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              showTooltip(getContainerUpdateCurrentTooltip(props.updateStatus), rect.left + rect.width / 2, rect.top, {
+                align: 'center',
+                direction: 'up',
+              });
+            }}
+            onMouseLeave={() => hideTooltip()}
+          >
+            <Show when={!props.compact}>
+              <CheckIcon class="w-3 h-3" />
+            </Show>
+            <span>Current</span>
+          </span>
+        </Match>
+      </Switch>
     </Show>
   );
 };
@@ -151,70 +175,74 @@ export const UpdateIcon: Component<UpdateIconProps> = (props) => {
  */
 export const UpdateButton: Component<UpdateButtonProps> = (props) => {
   const state = useContainerUpdateButtonState(props);
+  const shouldRenderReadOnlyStatus = () =>
+    state.currentState() === 'idle' &&
+    (hasContainerUpdateError(props.updateStatus) ||
+      hasContainerUpdateCurrent(props.updateStatus) ||
+      (state.settingsLoaded() && state.shouldHideButton()));
 
   return (
     <Show when={state.hasUpdate()}>
-      <Show when={state.settingsLoaded() && state.shouldHideButton()}>
-        <ContainerUpdateBadge updateStatus={props.updateStatus} compact={props.compact} />
-      </Show>
-
-      <Show when={!state.settingsLoaded() || !state.shouldHideButton()}>
-        <div class="inline-flex items-center gap-1" data-prevent-toggle>
-          <button
-            type="button"
-            class={getUpdateButtonClass(state.currentState())}
-            onClick={state.handleClick}
-            onMouseDown={(e) => {
-              e.stopPropagation();
-            }}
-            disabled={state.isButtonDisabled()}
-            aria-label={state.buttonTooltip() || state.buttonLabel()}
-            data-prevent-toggle
-            onMouseEnter={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              showTooltip(state.buttonTooltip(), rect.left + rect.width / 2, rect.top, {
-                align: 'center',
-                direction: 'up',
-              });
-            }}
-            onMouseLeave={() => hideTooltip()}
-          >
-            <Show when={!state.settingsLoaded()}>
-              <UpdateArrowIcon class="w-3 h-3 animate-pulse opacity-50" />
-            </Show>
-            <Show when={state.settingsLoaded()}>
-              <Switch>
-                <Match when={state.currentState() === 'updating'}>
-                  <SpinnerIcon class="w-3 h-3 animate-spin" />
-                </Match>
-                <Match when={state.currentState() === 'success'}>
-                  <CheckIcon class="w-3 h-3" />
-                </Match>
-                <Match when={state.currentState() === 'error'}>
-                  <XIcon class="w-3 h-3" />
-                </Match>
-                <Match when={state.currentState() === 'idle' || state.currentState() === 'confirming'}>
-                  <UpdateArrowIcon class="w-3 h-3" />
-                </Match>
-              </Switch>
-            </Show>
-            <Show when={!props.compact}>
-              <span class={!state.settingsLoaded() ? 'opacity-50' : ''}>
-                {state.buttonLabel()}
-              </span>
-            </Show>
-          </button>
-          <Show when={state.settingsLoaded() && state.currentState() === 'confirming'}>
+      <Show
+        when={shouldRenderReadOnlyStatus()}
+        fallback={
+          <div class="inline-flex items-center gap-1" data-prevent-toggle>
             <button
               type="button"
-              class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-surface-alt text-muted hover:bg-surface-hover transition-colors"
-              onClick={state.handleCancel}
-              title="Cancel"
+              class={getUpdateButtonClass(state.currentState())}
+              onClick={state.handleClick}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+              }}
+              disabled={state.isButtonDisabled()}
+              aria-label={state.buttonTooltip() || state.buttonLabel()}
+              data-prevent-toggle
+              onMouseEnter={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                showTooltip(state.buttonTooltip(), rect.left + rect.width / 2, rect.top, {
+                  align: 'center',
+                  direction: 'up',
+                });
+              }}
+              onMouseLeave={() => hideTooltip()}
             >
-              <XIcon class="w-3 h-3" />
+              <Show when={!state.settingsLoaded()}>
+                <UpdateArrowIcon class="w-3 h-3 animate-pulse opacity-50" />
+              </Show>
+              <Show when={state.settingsLoaded()}>
+                <Switch>
+                  <Match when={state.currentState() === 'updating'}>
+                    <SpinnerIcon class="w-3 h-3 animate-spin" />
+                  </Match>
+                  <Match when={state.currentState() === 'success'}>
+                    <CheckIcon class="w-3 h-3" />
+                  </Match>
+                  <Match when={state.currentState() === 'error'}>
+                    <XIcon class="w-3 h-3" />
+                  </Match>
+                  <Match when={state.currentState() === 'idle' || state.currentState() === 'confirming'}>
+                    <UpdateArrowIcon class="w-3 h-3" />
+                  </Match>
+                </Switch>
+              </Show>
+              <Show when={!props.compact}>
+                <span class={!state.settingsLoaded() ? 'opacity-50' : ''}>{state.buttonLabel()}</span>
+              </Show>
             </button>
-          </Show>
-        </div>
+            <Show when={state.settingsLoaded() && state.currentState() === 'confirming'}>
+              <button
+                type="button"
+                class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-surface-alt text-muted hover:bg-surface-hover transition-colors"
+                onClick={state.handleCancel}
+                title="Cancel"
+              >
+                <XIcon class="w-3 h-3" />
+              </button>
+            </Show>
+          </div>
+        }
+      >
+        <ContainerUpdateBadge updateStatus={props.updateStatus} compact={props.compact} showCurrent={true} />
       </Show>
     </Show>
   );

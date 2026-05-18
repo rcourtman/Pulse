@@ -13,6 +13,8 @@ import {
   getUpdateButtonLabel,
   getUpdateButtonTooltip,
   hasContainerUpdate,
+  hasContainerUpdateCurrent,
+  hasContainerUpdateError,
   type UpdateButtonProps,
   type UpdateState,
 } from './containerUpdateBadgeModel';
@@ -57,7 +59,11 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
     }
   });
 
-  const hasUpdate = () => hasContainerUpdate(props.updateStatus) || currentState() !== 'idle';
+  const hasUpdate = () =>
+    hasContainerUpdate(props.updateStatus) ||
+    hasContainerUpdateError(props.updateStatus) ||
+    hasContainerUpdateCurrent(props.updateStatus) ||
+    currentState() !== 'idle';
   const isButtonDisabled = () => currentState() === 'updating' || !settingsLoaded();
   const buttonTooltip = () =>
     !settingsLoaded()
