@@ -118,7 +118,7 @@ health/metrics endpoint over the network. Use `--health-addr ""` or
 Auto-detection behavior:
 
 - **Host metrics**: Enabled by default.
-- **Docker/Podman**: Enabled automatically by the agent if Docker/Podman is detected and `PULSE_ENABLE_DOCKER` was not explicitly set.
+- **Docker/Podman**: Enabled automatically by the agent if Docker/Podman is detected and `PULSE_ENABLE_DOCKER` was not explicitly set. A local `--enable-docker=false` or `PULSE_ENABLE_DOCKER=false` is a hard opt-out and is not re-enabled by auto-detection or remote profile config.
 - **Kubernetes**: Enabled automatically by the installer when a kubeconfig is detected and `PULSE_ENABLE_KUBERNETES` was not explicitly set.
 - **Proxmox**: Enabled automatically by the installer when Proxmox is detected. Type auto-detects `pve` vs `pbs` if not specified.
 
@@ -127,6 +127,20 @@ To disable auto-detection, explicitly set the relevant flags or env vars, for ex
 - `--enable-docker=false` or `PULSE_ENABLE_DOCKER=false`
 - `--enable-kubernetes=false` or `PULSE_ENABLE_KUBERNETES=false`
 - `--enable-proxmox=false` or `PULSE_ENABLE_PROXMOX=false`
+
+### Inside-Guest Runtime Boundaries
+
+Docker/Podman inside a VM or LXC is monitored from inside that guest. Install the
+Unified Agent in the guest when you want full Docker host, container, service,
+and task inventory on the Docker page.
+
+Pulse does not use a Proxmox node agent to collect guest container inventory by
+default. The optional Proxmox-side LXC Docker hint is off unless the Pulse server
+is started with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION=true`. That hint
+uses `pct exec` only to check whether `/var/run/docker.sock` exists in a running
+LXC; it does not enumerate containers, images, environment variables, files, or
+processes. Use it only when operators are comfortable with Proxmox-side guest
+probing for placement hints.
 
 ## Installation Options
 

@@ -194,18 +194,19 @@ type Config struct {
 	LogCompress bool   `envconfig:"LOG_COMPRESS" default:"true"`
 
 	// Security settings
-	APIToken                   string
-	APITokens                  []APITokenRecord `json:"-"`
-	AuthUser                   string           `envconfig:"PULSE_AUTH_USER"`
-	AuthPass                   string           `envconfig:"PULSE_AUTH_PASS"`
-	DemoMode                   bool             `envconfig:"DEMO_MODE" default:"false"` // Read-only demo mode
-	AllowedOrigins             string           `envconfig:"ALLOWED_ORIGINS" default:"*"`
-	HideLocalLogin             bool             `envconfig:"PULSE_AUTH_HIDE_LOCAL_LOGIN" default:"false"`
-	DisableDockerUpdateActions bool             `envconfig:"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS" default:"false"` // Hide Docker update buttons (read-only mode for containers)
-	TelemetryEnabled           bool             `envconfig:"PULSE_TELEMETRY" default:"true"`                      // Anonymous outbound usage telemetry enabled by default (install ID, version, resource counts, feature flags — opt out any time)
-	MultiTenantEnabled         bool             `envconfig:"PULSE_MULTI_TENANT_ENABLED" default:"false"`          // Enable multi-tenant support
-	MetricsToken               string           `envconfig:"PULSE_METRICS_TOKEN" default:"" json:"-"`             // Bearer token for /metrics endpoint (empty = unauthenticated)
-	ProTrialSignupURL          string           `envconfig:"PULSE_PRO_TRIAL_SIGNUP_URL" default:""`               // Legacy hosted commercial base URL used for entitlement refresh compatibility
+	APIToken                          string
+	APITokens                         []APITokenRecord `json:"-"`
+	AuthUser                          string           `envconfig:"PULSE_AUTH_USER"`
+	AuthPass                          string           `envconfig:"PULSE_AUTH_PASS"`
+	DemoMode                          bool             `envconfig:"DEMO_MODE" default:"false"` // Read-only demo mode
+	AllowedOrigins                    string           `envconfig:"ALLOWED_ORIGINS" default:"*"`
+	HideLocalLogin                    bool             `envconfig:"PULSE_AUTH_HIDE_LOCAL_LOGIN" default:"false"`
+	DisableDockerUpdateActions        bool             `envconfig:"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS" default:"false"`                  // Hide Docker update buttons (read-only mode for containers)
+	EnableProxmoxGuestDockerDetection bool             `envconfig:"PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION" default:"false" json:"-"` // Allow Proxmox-side pct exec probes that only detect Docker socket presence inside LXC guests
+	TelemetryEnabled                  bool             `envconfig:"PULSE_TELEMETRY" default:"true"`                                       // Anonymous outbound usage telemetry enabled by default (install ID, version, resource counts, feature flags — opt out any time)
+	MultiTenantEnabled                bool             `envconfig:"PULSE_MULTI_TENANT_ENABLED" default:"false"`                           // Enable multi-tenant support
+	MetricsToken                      string           `envconfig:"PULSE_METRICS_TOKEN" default:"" json:"-"`                              // Bearer token for /metrics endpoint (empty = unauthenticated)
+	ProTrialSignupURL                 string           `envconfig:"PULSE_PRO_TRIAL_SIGNUP_URL" default:""`                                // Legacy hosted commercial base URL used for entitlement refresh compatibility
 
 	// Proxy authentication settings
 	ProxyAuthSecret        string `envconfig:"PROXY_AUTH_SECRET"`
@@ -1067,6 +1068,18 @@ func load(initLogging bool) (*Config, error) {
 			log.Warn().
 				Str("value", disableDockerUpdateActionsStr).
 				Msg("Invalid PULSE_DISABLE_DOCKER_UPDATE_ACTIONS value, ignoring")
+		}
+	}
+
+	if guestDockerDetectionStr := utils.GetenvTrim("PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION"); guestDockerDetectionStr != "" {
+		if enabled, err := strconv.ParseBool(guestDockerDetectionStr); err == nil {
+			cfg.EnableProxmoxGuestDockerDetection = enabled
+			cfg.EnvOverrides["PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION"] = true
+			log.Info().Bool("enabled", enabled).Msg("Overriding Proxmox guest Docker detection setting from environment")
+		} else {
+			log.Warn().
+				Str("value", guestDockerDetectionStr).
+				Msg("Invalid PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION value, ignoring")
 		}
 	}
 

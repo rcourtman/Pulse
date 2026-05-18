@@ -56,6 +56,16 @@ answers your monitoring question:
 | Host SMART, temperatures, local ZFS/Ceph/mdadm detail, arbitrary mount reads, and full host telemetry | Install the agent on that host | Yes, for the supported full-telemetry profile |
 | Kubernetes node/pod monitoring from a cluster | Use the Kubernetes agent/DaemonSet profile | Depends on whether host metrics are enabled |
 
+Inside-guest runtime visibility is explicit. Installing the agent inside a VM or
+LXC authorizes that guest-local agent to report Docker/Podman monitoring data
+according to its local module flags. A Proxmox node agent does not collect
+container inventory from guests through `pct exec`; at most, Pulse can perform a
+socket-presence hint for LXC guests, and that hint is disabled unless the server
+is started with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION=true`. That probe
+only checks for `/var/run/docker.sock` so Pulse can label the guest as a likely
+Docker host; full Docker page inventory still requires an agent inside the guest
+or another explicit Docker/Podman reporting path.
+
 If Proxmox API data is enough for your use case, prefer API-only monitoring and
 do not install a host agent just because the installer exists. Install agents
 where you need data that Proxmox cannot provide through its API, or where the

@@ -18,6 +18,7 @@ func TestLoad_EnvOverrides_Comprehensive(t *testing.T) {
 		"ENABLE_TEMPERATURE_MONITORING",
 		"PULSE_AUTH_HIDE_LOCAL_LOGIN",
 		"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS",
+		"PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION",
 		"ENABLE_BACKUP_POLLING",
 		"ADAPTIVE_POLLING_ENABLED",
 		"ADAPTIVE_POLLING_BASE_INTERVAL",
@@ -40,6 +41,7 @@ func TestLoad_EnvOverrides_Comprehensive(t *testing.T) {
 	t.Setenv("ENABLE_TEMPERATURE_MONITORING", "false")
 	t.Setenv("PULSE_AUTH_HIDE_LOCAL_LOGIN", "true")
 	t.Setenv("PULSE_DISABLE_DOCKER_UPDATE_ACTIONS", "true")
+	t.Setenv("PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION", "true")
 	t.Setenv("ENABLE_BACKUP_POLLING", "false")
 	t.Setenv("ADAPTIVE_POLLING_ENABLED", "true")
 	t.Setenv("ADAPTIVE_POLLING_BASE_INTERVAL", "20s")
@@ -57,6 +59,8 @@ func TestLoad_EnvOverrides_Comprehensive(t *testing.T) {
 	assert.False(t, cfg.TemperatureMonitoringEnabled)
 	assert.True(t, cfg.HideLocalLogin)
 	assert.True(t, cfg.DisableDockerUpdateActions)
+	assert.True(t, cfg.EnableProxmoxGuestDockerDetection)
+	assert.True(t, cfg.EnvOverrides["PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION"])
 	assert.False(t, cfg.EnableBackupPolling)
 	assert.True(t, cfg.AdaptivePollingEnabled)
 	assert.Equal(t, 20*time.Second, cfg.AdaptivePollingBaseInterval)
@@ -164,6 +168,37 @@ func TestLoad_EnvOverrides_DockerUpdateActionsCanonicalOnly(t *testing.T) {
 		assert.False(t, cfg.DisableDockerUpdateActions)
 		assert.False(t, cfg.EnvOverrides["disableDockerUpdateActions"])
 		assert.False(t, cfg.EnvOverrides["PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"])
+	})
+}
+
+func TestLoad_EnvOverrides_ProxmoxGuestDockerDetectionOptIn(t *testing.T) {
+	t.Run("defaults disabled", func(t *testing.T) {
+		t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.False(t, cfg.EnableProxmoxGuestDockerDetection)
+		assert.False(t, cfg.EnvOverrides["PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION"])
+	})
+
+	t.Run("canonical env var", func(t *testing.T) {
+		t.Setenv("PULSE_DATA_DIR", t.TempDir())
+		t.Setenv("PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION", "true")
+
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.True(t, cfg.EnableProxmoxGuestDockerDetection)
+		assert.True(t, cfg.EnvOverrides["PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION"])
+	})
+
+	t.Run("invalid value ignored", func(t *testing.T) {
+		t.Setenv("PULSE_DATA_DIR", t.TempDir())
+		t.Setenv("PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION", "maybe")
+
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.False(t, cfg.EnableProxmoxGuestDockerDetection)
+		assert.False(t, cfg.EnvOverrides["PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION"])
 	})
 }
 

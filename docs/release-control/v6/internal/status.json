@@ -3393,6 +3393,119 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA30",
+      "summary": "Inside-guest runtime visibility is explicit and privacy-bounded: Pulse may show Docker/Podman workloads from a VM or LXC only when a guest-local agent or another explicit Docker/Podman reporting path reports them. Proxmox-side guest probing must stay opt-in, limited to Docker socket presence hints, and must not collect guest container inventory, images, environment values, files, or process details. A local Unified Agent Docker/Podman disable must remain a hard opt-out that remote profiles and auto-detection cannot reverse.",
+      "kind": "trust-gate",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L14",
+        "L16"
+      ],
+      "subsystem_ids": [
+        "agent-lifecycle",
+        "security-privacy"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "agent-docker-privacy-opt-out-tests",
+          "run": [
+            "go",
+            "test",
+            "./cmd/pulse-agent",
+            "-run",
+            "TestApplyRemoteSettingsHonorsLocalDockerOptOut|TestDockerAutoDetectHonorsExplicitDisable|TestLoadConfig_Comprehensive",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "proxmox-guest-docker-detection-opt-in-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/api",
+            "./internal/config",
+            "-run",
+            "TestContract_ProxmoxGuestDockerDetectionRequiresExplicitOptIn|TestLoad_EnvOverrides_ProxmoxGuestDockerDetectionOptIn|TestLoad_ProxmoxGuestDockerDetectionEnvOptIn",
+            "-count=1"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "cmd/pulse-agent/main.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "cmd/pulse-agent/main_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/AGENT_SECURITY.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/CENTRALIZED_MANAGEMENT.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/CONFIGURATION.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/status.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/security-privacy.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/UNIFIED_AGENT.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/contract_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/router.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/config/config.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/config/config_env_overrides_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/config/config_load_test.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {

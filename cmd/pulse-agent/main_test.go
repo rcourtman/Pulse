@@ -288,6 +288,29 @@ func TestApplyRemoteSettings(t *testing.T) {
 	}
 }
 
+func TestApplyRemoteSettingsHonorsLocalDockerOptOut(t *testing.T) {
+	logger := zerolog.New(io.Discard)
+	cfg := &Config{
+		EnableDocker:             false,
+		DockerConfigured:         true,
+		DockerExplicitlyDisabled: true,
+	}
+
+	applyRemoteSettings(cfg, map[string]interface{}{
+		"enable_docker": true,
+	}, &logger)
+
+	if cfg.EnableDocker {
+		t.Fatal("remote config must not enable Docker / Podman after a local explicit disable")
+	}
+	if !cfg.DockerConfigured {
+		t.Fatal("expected DockerConfigured to remain true")
+	}
+	if !cfg.DockerExplicitlyDisabled {
+		t.Fatal("expected DockerExplicitlyDisabled to remain true")
+	}
+}
+
 func TestApplyRemoteSettingsIntervalFloat(t *testing.T) {
 	logger := zerolog.New(io.Discard)
 	cfg := &Config{}
@@ -1285,6 +1308,37 @@ func TestRun(t *testing.T) {
 	})
 }
 
+func TestDockerAutoDetectHonorsExplicitDisable(t *testing.T) {
+	origDocker := newDockerAgent
+	origLook := lookPath
+	defer func() {
+		newDockerAgent = origDocker
+		lookPath = origLook
+	}()
+
+	var dockerAgentCalls int32
+	newDockerAgent = func(cfg dockeragent.Config) (RunnableCloser, error) {
+		atomic.AddInt32(&dockerAgentCalls, 1)
+		return &mockRunnableCloser{}, nil
+	}
+	lookPath = func(path string) (string, error) {
+		if path == "docker" {
+			return "/usr/bin/docker", nil
+		}
+		return "", os.ErrNotExist
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err := run(ctx, []string{"-enable-host=false", "-enable-docker=false", "-enable-kubernetes=false", "-health-addr", ""}, func(s string) string { return "" })
+	if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
+		t.Fatalf("run returned unexpected error: %v", err)
+	}
+	if got := atomic.LoadInt32(&dockerAgentCalls); got != 0 {
+		t.Fatalf("Docker / Podman agent initialized despite explicit disable, calls=%d", got)
+	}
+}
+
 func TestCleanupDockerAgent_Nil(t *testing.T) {
 	cleanupDockerAgent(nil, nil)
 }
@@ -1610,6 +1664,9 @@ func TestLoadConfig_Comprehensive(t *testing.T) {
 				if !cfg.DockerConfigured {
 					t.Error("DockerConfigured should be true when flag is set")
 				}
+				if cfg.DockerExplicitlyDisabled {
+					t.Error("DockerExplicitlyDisabled should be false when flag enables Docker")
+				}
 			},
 		},
 		{
@@ -1648,6 +1705,60 @@ func TestLoadConfig_Comprehensive(t *testing.T) {
 				if !cfg.DockerConfigured {
 					t.Error("DockerConfigured should be true when env is set")
 				}
+				if cfg.DockerExplicitlyDisabled {
+					t.Error("DockerExplicitlyDisabled should be false when env enables Docker")
+				}
+			},
+		},
+		{
+			name: "docker explicitly disabled by flag",
+			args: []string{"-token", "T", "-enable-docker=false"},
+			validate: func(t *testing.T, cfg Config) {
+				if !cfg.DockerConfigured {
+					t.Error("DockerConfigured should be true when Docker flag is set")
+				}
+				if !cfg.DockerExplicitlyDisabled {
+					t.Error("DockerExplicitlyDisabled should be true when flag disables Docker")
+				}
+				if cfg.EnableDocker {
+					t.Error("EnableDocker should be false when flag disables Docker")
+				}
+			},
+		},
+		{
+			name: "docker explicitly disabled by env",
+			args: []string{"-token", "T"},
+			env: map[string]string{
+				"PULSE_ENABLE_DOCKER": "false",
+			},
+			validate: func(t *testing.T, cfg Config) {
+				if !cfg.DockerConfigured {
+					t.Error("DockerConfigured should be true when Docker env is set")
+				}
+				if !cfg.DockerExplicitlyDisabled {
+					t.Error("DockerExplicitlyDisabled should be true when env disables Docker")
+				}
+				if cfg.EnableDocker {
+					t.Error("EnableDocker should be false when env disables Docker")
+				}
+			},
+		},
+		{
+			name: "docker env disable overridden by enabling flag",
+			args: []string{"-token", "T", "-enable-docker=true"},
+			env: map[string]string{
+				"PULSE_ENABLE_DOCKER": "false",
+			},
+			validate: func(t *testing.T, cfg Config) {
+				if !cfg.DockerConfigured {
+					t.Error("DockerConfigured should be true when Docker env or flag is set")
+				}
+				if cfg.DockerExplicitlyDisabled {
+					t.Error("DockerExplicitlyDisabled should be false when explicit flag enables Docker")
+				}
+				if !cfg.EnableDocker {
+					t.Error("EnableDocker should be true when flag enables Docker")
+				}
 			},
 		},
 		{
@@ -1659,6 +1770,9 @@ func TestLoadConfig_Comprehensive(t *testing.T) {
 				}
 				if cfg.EnableDocker {
 					t.Error("EnableDocker should be false by default")
+				}
+				if cfg.DockerExplicitlyDisabled {
+					t.Error("DockerExplicitlyDisabled should be false when Docker is unconfigured")
 				}
 				if cfg.HealthAddr != "127.0.0.1:9191" {
 					t.Errorf("HealthAddr: got %q, want loopback default", cfg.HealthAddr)

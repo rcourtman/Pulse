@@ -667,12 +667,13 @@ type Config struct {
 	Logger             *zerolog.Logger
 
 	// Module flags
-	EnableHost       bool
-	EnableDocker     bool
-	DockerConfigured bool
-	EnableKubernetes bool
-	EnableProxmox    bool
-	ProxmoxType      string // "pve", "pbs", or "" for auto-detect
+	EnableHost               bool
+	EnableDocker             bool
+	DockerConfigured         bool
+	DockerExplicitlyDisabled bool
+	EnableKubernetes         bool
+	EnableProxmox            bool
+	ProxmoxType              string // "pve", "pbs", or "" for auto-detect
 
 	// Auto-update
 	DisableAutoUpdate         bool
@@ -901,12 +902,22 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	kubeExcludeNamespaces := gatherCSV(envKubeExcludeNamespaces, kubeExcludeNamespaceFlags)
 	diskExclude := gatherCSV(envDiskExclude, diskExcludeFlags)
 
-	// Check if Docker was explicitly configured via fs or env
+	// Check if Docker was explicitly configured via fs or env. An explicit
+	// local disable is a privacy boundary and cannot be reversed by remote
+	// profile config or auto-detection.
 	dockerConfigured := envEnableDocker != ""
+	dockerExplicitlyDisabled := envEnableDocker != "" && !utils.ParseBool(envEnableDocker)
 	if !dockerConfigured {
 		fs.Visit(func(f *flag.Flag) {
 			if f.Name == "enable-docker" {
 				dockerConfigured = true
+				dockerExplicitlyDisabled = !*enableDockerFlag
+			}
+		})
+	} else {
+		fs.Visit(func(f *flag.Flag) {
+			if f.Name == "enable-docker" {
+				dockerExplicitlyDisabled = !*enableDockerFlag
 			}
 		})
 	}
@@ -927,6 +938,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		EnableHost:                *enableHostFlag,
 		EnableDocker:              *enableDockerFlag,
 		DockerConfigured:          dockerConfigured,
+		DockerExplicitlyDisabled:  dockerExplicitlyDisabled,
 		EnableKubernetes:          *enableKubernetesFlag,
 		EnableProxmox:             *enableProxmoxFlag,
 		ProxmoxType:               strings.TrimSpace(*proxmoxTypeFlag),
@@ -1264,6 +1276,11 @@ func applyRemoteSettings(cfg *Config, settings map[string]interface{}, logger *z
 			}
 		case "enable_docker":
 			if b, ok := v.(bool); ok {
+				if b && cfg.DockerExplicitlyDisabled {
+					cfg.DockerConfigured = true
+					logger.Info().Msg("Remote config: enable_docker ignored because Docker / Podman monitoring is locally disabled")
+					continue
+				}
 				cfg.EnableDocker = b
 				cfg.DockerConfigured = true
 				logger.Info().Bool("val", b).Msg("Remote config: enable_docker")

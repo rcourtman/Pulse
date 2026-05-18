@@ -10,6 +10,7 @@
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
   "dependency_subsystem_ids": [
+    "agent-lifecycle",
     "api-contracts"
   ]
 }
@@ -139,6 +140,7 @@ controls as normal product settings.
    auth-env reloads, hosted entitlement refresh origins, and
    pinned-fingerprint TLS clients keep one fail-closed security floor.
 9. Change operator-facing Resource Privacy/Data Handling posture through `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` and `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` together so resource classification, handling-boundary, redaction copy, and the route-backed/hidden-sidebar presentation stay governed as a trust surface.
+10. Change inside-guest runtime collection boundaries through `docs/AGENT_SECURITY.md`, `docs/UNIFIED_AGENT.md`, `cmd/pulse-agent/main.go`, `internal/api/router.go`, and `internal/config/config.go` together. Docker / Podman inventory inside a VM or LXC must stay guest-agent or explicitly reported runtime data, Proxmox-side guest probing must remain opt-in and socket-presence-only, and local Unified Agent Docker / Podman disables must not be reversed by remote profile configuration.
 
 ## Forbidden Paths
 
@@ -173,6 +175,12 @@ controls as normal product settings.
     use stable Pulse user/account/tenant IDs where they exist; SSO subject
     migration must be explicit and compatible rather than silently substituting
     email or display claims as durable principals.
+12. Keep inside-guest runtime visibility explicit: Pulse may show Docker /
+    Podman workloads from a VM or LXC only when a guest-local agent or another
+    explicit Docker / Podman reporting path supplies that inventory. Proxmox
+    node-side checks may only provide an opt-in socket-presence hint and must
+    not enumerate guest containers, images, environment values, files, or
+    process details.
 
 ## Current State
 

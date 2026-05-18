@@ -276,6 +276,7 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 | `DNS_CACHE_TIMEOUT` | Cache TTL for DNS lookups | `5m` |
 | `MAX_POLL_TIMEOUT` | Maximum time per polling cycle | `3m` |
 | `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Hide Docker update buttons (read-only mode) | `false` |
+| `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION` | Allow Proxmox-side LXC Docker socket hinting with `pct exec`; full Docker inventory still requires an agent inside the guest | `false` |
 | `PULSE_TELEMETRY` | Anonymous outbound usage telemetry ([details](PRIVACY.md)); set `false` to disable | `true` |
 
 ### Logging Overrides

@@ -8,7 +8,7 @@ Profiles are managed in the UI: **Settings → Unified Agents → Agent Profiles
 
 -   **Agent Profile**: A named collection of configuration settings (e.g., "Production Servers", "Debug Mode").
 -   **Assignment**: A link between a specific Agent ID and an Agent Profile.
--   **Precedence**: Server-side profile settings override local agent flags/environment for supported keys.
+-   **Precedence**: Server-side profile settings override local agent flags/environment for supported keys, except for explicit local privacy opt-outs.
 
 ## Supported Configuration Keys
 
@@ -33,7 +33,7 @@ The following settings can be controlled remotely via profiles:
 
 Notes:
 - `interval` accepts a duration string. If you send a JSON number, it is interpreted as seconds.
-- Docker auto-detection can still enable Docker monitoring if the agent is not explicitly configured. To force-disable Docker, set `PULSE_ENABLE_DOCKER=false` or install with `--enable-docker=false` on the host.
+- Docker auto-detection can still enable Docker monitoring if the agent is not explicitly configured. To force-disable Docker, set `PULSE_ENABLE_DOCKER=false` or install with `--enable-docker=false` on the host. That local disable also blocks remote profiles from turning Docker/Podman monitoring back on.
 - `commandsEnabled` (AI command execution) is controlled separately per agent in **Settings → Unified Agents** and is applied live on report. It is not part of profile settings.
 
 ## API Usage

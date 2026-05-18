@@ -574,6 +574,9 @@ func (r *Router) setupRoutes() {
 		}
 		return false
 	})
+	if r.monitor != nil {
+		r.configureProxmoxGuestDockerDetection(r.monitor)
+	}
 
 	// Deploy store and handlers for cluster agent deployment
 	deployStore, deployErr := deploy.Open(filepath.Join(r.config.DataPath, "deploy.db"))
@@ -1293,30 +1296,42 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 			r.aiHandler.SetReadState(r.defaultReadState())
 		}
 
-		// Set up Docker detector for automatic Docker detection in LXC containers
-		if r.agentExecServer != nil {
-			// Create a command executor function that wraps the agent exec server
-			execFunc := func(ctx context.Context, hostname string, command string, timeout int) (string, int, error) {
-				agentID, found := r.agentExecServer.GetAgentForHost(hostname)
-				if !found {
-					return "", -1, fmt.Errorf("no agent connected for host %s", hostname)
-				}
-				result, err := r.agentExecServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
-					RequestID: fmt.Sprintf("docker-check-%d", time.Now().UnixNano()),
-					Command:   command,
-					Timeout:   timeout,
-				})
-				if err != nil {
-					return "", -1, err
-				}
-				return result.Stdout + result.Stderr, result.ExitCode, nil
-			}
-
-			checker := monitoring.NewAgentDockerChecker(execFunc)
-			m.SetDockerChecker(checker)
-			log.Info().Msg("[Router] Docker detector configured for automatic LXC Docker detection")
-		}
+		r.configureProxmoxGuestDockerDetection(m)
 	}
+}
+
+func (r *Router) configureProxmoxGuestDockerDetection(m *monitoring.Monitor) {
+	if r == nil || m == nil {
+		return
+	}
+	if r.config == nil || !r.config.EnableProxmoxGuestDockerDetection {
+		m.SetDockerChecker(nil)
+		return
+	}
+	if r.agentExecServer == nil {
+		m.SetDockerChecker(nil)
+		return
+	}
+
+	execFunc := func(ctx context.Context, hostname string, command string, timeout int) (string, int, error) {
+		agentID, found := r.agentExecServer.GetAgentForHost(hostname)
+		if !found {
+			return "", -1, fmt.Errorf("no agent connected for host %s", hostname)
+		}
+		result, err := r.agentExecServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
+			RequestID: fmt.Sprintf("docker-check-%d", time.Now().UnixNano()),
+			Command:   command,
+			Timeout:   timeout,
+		})
+		if err != nil {
+			return "", -1, err
+		}
+		return result.Stdout + result.Stderr, result.ExitCode, nil
+	}
+
+	checker := monitoring.NewAgentDockerChecker(execFunc)
+	m.SetDockerChecker(checker)
+	log.Info().Msg("[Router] Proxmox guest Docker detector configured for explicit LXC socket hinting")
 }
 
 func (r *Router) defaultReadState() unifiedresources.ReadState {

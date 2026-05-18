@@ -14365,3 +14365,46 @@ func TestContract_ResourceOperatorStateUrlCanonicalIDWinsOverBody(t *testing.T) 
 		t.Errorf("body-supplied canonical_id must not have been persisted; GET vm:999 returned %d", rec2.Code)
 	}
 }
+
+// TestContract_ProxmoxGuestDockerDetectionRequiresExplicitOptIn pins the
+// privacy boundary for Proxmox-side LXC Docker socket hinting. Router startup
+// may wire a Docker checker only when the server has the explicit opt-in config;
+// otherwise full guest runtime inventory must come from a guest-local agent or
+// another explicit Docker reporting path.
+func TestContract_ProxmoxGuestDockerDetectionRequiresExplicitOptIn(t *testing.T) {
+	t.Run("disabled without explicit opt-in", func(t *testing.T) {
+		monitor := &monitoring.Monitor{}
+		router := &Router{
+			config: &config.Config{
+				EnableProxmoxGuestDockerDetection: false,
+			},
+			agentExecServer: agentexec.NewServer(func(token string, agentID string, hostname string) bool {
+				return false
+			}),
+		}
+
+		router.configureProxmoxGuestDockerDetection(monitor)
+
+		if got := monitor.GetDockerChecker(); got != nil {
+			t.Fatalf("expected Proxmox guest Docker checker to stay disabled without explicit opt-in, got %T", got)
+		}
+	})
+
+	t.Run("enabled only with explicit opt-in", func(t *testing.T) {
+		monitor := &monitoring.Monitor{}
+		router := &Router{
+			config: &config.Config{
+				EnableProxmoxGuestDockerDetection: true,
+			},
+			agentExecServer: agentexec.NewServer(func(token string, agentID string, hostname string) bool {
+				return false
+			}),
+		}
+
+		router.configureProxmoxGuestDockerDetection(monitor)
+
+		if got := monitor.GetDockerChecker(); got == nil {
+			t.Fatal("expected Proxmox guest Docker checker after explicit opt-in")
+		}
+	})
+}

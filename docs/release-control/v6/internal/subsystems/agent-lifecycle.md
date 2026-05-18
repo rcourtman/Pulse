@@ -101,6 +101,12 @@ management, and fleet control surfaces.
 but Docker runtime capability truth is monitoring-owned. Lifecycle consumers
 must not reinterpret standalone `Swarm.LocalNodeState=inactive` metadata as
 agent enrollment, install, command, or fleet-control authority.
+Inside-guest Docker / Podman visibility is also a privacy boundary: full
+VM/LXC Docker inventory must come from a guest-local agent or another explicit
+Docker / Podman reporting path, not from Proxmox node-side guest scraping. A
+local `--enable-docker=false` or `PULSE_ENABLE_DOCKER=false` remains a hard
+Unified Agent opt-out that auto-detection and remote profile settings cannot
+reverse.
 
 1. `frontend-modern/src/api/agentProfiles.ts` shared with `api-contracts`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/api/nodes.ts` shared with `api-contracts`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.
@@ -550,6 +556,10 @@ profile and assignment columns, but embedded table framing must route through
    help text and inline comments must describe the module and runtime as
    Docker / Podman rather than exposing the generic container-runtime family
    label.
+   The CLI entrypoint also owns the local Docker / Podman privacy opt-out:
+   when `--enable-docker=false` or `PULSE_ENABLE_DOCKER=false` is set on
+   the host, auto-detection and remote config must not start the Docker /
+   Podman module.
 8. Add or change installer flags, persisted service arguments, or upgrade-safe re-entry behavior through `scripts/install.sh` and `scripts/install.ps1`.
    Persistence-sensitive NAS targets must keep one canonical continuity model here: installer-owned bootstraps may use flash-backed or immutable-root launch hooks only as thin trampolines, while the durable wrapper, state, and reboot-surviving binary copy stay in the governed persistent state directory that updater continuity also refreshes.
    Approval-gated command execution must expose stable rejection reasons for

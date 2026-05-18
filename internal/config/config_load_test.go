@@ -85,6 +85,22 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	assert.Equal(t, "admin", cfg.AuthUser)
 }
 
+func TestLoad_ProxmoxGuestDockerDetectionEnvOptIn(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.False(t, cfg.EnableProxmoxGuestDockerDetection)
+	assert.False(t, cfg.EnvOverrides["PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION"])
+
+	t.Setenv("PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION", "true")
+
+	cfg, err = Load()
+	require.NoError(t, err)
+	assert.True(t, cfg.EnableProxmoxGuestDockerDetection)
+	assert.True(t, cfg.EnvOverrides["PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION"])
+}
+
 func TestLoad_MetricsStorageEnvOverrides(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	t.Setenv("PULSE_METRICS_DB_PATH", "/dev/shm/pulse/metrics.db")
