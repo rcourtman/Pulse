@@ -43,6 +43,7 @@ type WorkloadPanelProps = Pick<
   | 'groupedWindowing'
   | 'guestMetadata'
   | 'guestParentNodeMap'
+  | 'groupNodeDrawerMode'
   | 'groupingMode'
   | 'handleCustomUrlUpdate'
   | 'handleTagClick'
@@ -380,14 +381,17 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
           );
           const shouldShowNodeDrawer = createMemo(
             () =>
+              props.groupNodeDrawerMode() === 'inline' &&
               Boolean(node()) &&
               props.focusedSummaryWorkloadGroupId() === groupKey() &&
               props.selectedGuestId() === null,
           );
+          const canOpenNodeDrawer = () => props.groupNodeDrawerMode() === 'inline';
           const handleGroupHoverChange = (next: SummarySeriesGroupScope | null) => {
             props.setHoveredWorkloadGroupScope(next);
           };
           const handleGroupFocusToggle = () => {
+            if (!canOpenNodeDrawer()) return;
             const scope = groupSummaryScope();
             const selectedGuestId = props.selectedGuestId();
             const nextFocusedScope =
@@ -445,7 +449,9 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                     node={node()!}
                     renderAs="tr"
                     colspan={props.totalColumns()}
-                    columns={props.compactGroupHeaders() ? undefined : props.workloadTableVisibleColumns()}
+                    columns={
+                      props.compactGroupHeaders() ? undefined : props.workloadTableVisibleColumns()
+                    }
                     columnCellClass={
                       props.compactGroupHeaders() ? undefined : getGroupNodeColumnCellClass
                     }
@@ -456,15 +462,23 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                       !props.compactGroupHeaders() &&
                       !props.workloadTableVisibleColumnIds().includes('info')
                     }
-                    trClass="cursor-pointer select-none duration-150"
+                    trClass={
+                      canOpenNodeDrawer()
+                        ? 'cursor-pointer select-none duration-150'
+                        : 'select-none duration-150'
+                    }
                     trProps={{
-                      'aria-expanded': shouldShowNodeDrawer() ? 'true' : 'false',
+                      'aria-expanded': canOpenNodeDrawer()
+                        ? shouldShowNodeDrawer()
+                          ? 'true'
+                          : 'false'
+                        : undefined,
                       'data-summary-group-id': groupKey(),
                       'data-summary-group-series-count': String(
                         groupSummaryScope()?.seriesIds.length ?? 0,
                       ),
                       'data-summary-row-active': isSummaryGroupHighlighted() ? 'true' : 'false',
-                      onClick: handleGroupFocusToggle,
+                      onClick: canOpenNodeDrawer() ? handleGroupFocusToggle : undefined,
                       ...groupRowInteraction,
                     }}
                   />

@@ -1,7 +1,16 @@
-import { For, Show, createMemo, type Accessor, type Component, type JSX } from 'solid-js';
+import {
+  For,
+  Show,
+  createMemo,
+  createSignal,
+  type Accessor,
+  type Component,
+  type JSX,
+} from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCard } from '@/components/shared/TableCard';
+import { NodeDrawer } from '@/components/Workloads/NodeDrawer';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline';
@@ -33,6 +42,7 @@ import { type WorkloadsMetricDisplayMode } from '@/components/Workloads/workload
 import { type WorkloadTableMetricHistoryRange } from '@/components/Workloads/workloadMetricHistoryModel';
 import type { Disk, Node as LegacyNode } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import { nodeFromResource } from '@/utils/resourceStateAdapters';
 import {
   getResourceClusterLabel,
   getResourceNodeName,
@@ -128,6 +138,7 @@ export const ProxmoxNodesTable: Component<{
   emptyDescription: string;
 }> = (props) => {
   const breakpoint = useBreakpoint();
+  const [selectedNodeId, setSelectedNodeId] = createSignal<string | null>(null);
   const layoutMode = createMemo(() => getWorkloadTableLayoutMode(breakpoint.width()));
   const visibleColumns = createMemo(() => getProxmoxHostVisibleColumnsForLayout(layoutMode()));
   const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
@@ -183,6 +194,18 @@ export const ProxmoxNodesTable: Component<{
             <For each={props.nodes}>
               {(node) => {
                 const name = () => asTrimmedString(node.name) || node.id;
+                const drawerNode = () => nodeFromResource(node);
+                const detailRowId = () => `proxmox-host-drawer-${node.id}`;
+                const isSelected = () => selectedNodeId() === node.id;
+                const toggleNodeDrawer = () =>
+                  setSelectedNodeId((current) => (current === node.id ? null : node.id));
+                const handleActivationKey: JSX.EventHandler<HTMLTableRowElement, KeyboardEvent> = (
+                  event,
+                ) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return;
+                  event.preventDefault();
+                  toggleNodeDrawer();
+                };
                 const version = () => asTrimmedString(getResourceVersion(node));
                 const cluster = () => getResourceClusterLabel(node);
                 const counts = () => countGuestsForNode(props.guests, getResourceNodeName(node));
@@ -397,9 +420,42 @@ export const ProxmoxNodesTable: Component<{
                 };
 
                 return (
-                  <TableRow class="text-[11px] sm:text-xs">
-                    <For each={visibleColumns()}>{(column) => renderColumnCell(column)}</For>
-                  </TableRow>
+                  <>
+                    <TableRow
+                      class={`cursor-pointer text-[11px] outline-none sm:text-xs ${
+                        isSelected() ? 'bg-surface-hover' : ''
+                      } focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface`}
+                      aria-controls={isSelected() ? detailRowId() : undefined}
+                      aria-expanded={isSelected() ? 'true' : 'false'}
+                      data-proxmox-host-row={node.id}
+                      onClick={toggleNodeDrawer}
+                      onKeyDown={handleActivationKey}
+                      tabIndex={0}
+                    >
+                      <For each={visibleColumns()}>{(column) => renderColumnCell(column)}</For>
+                    </TableRow>
+                    <Show when={isSelected() && drawerNode()}>
+                      {(selectedNode) => (
+                        <TableRow data-inline-node-detail-for={node.id}>
+                          <TableCell
+                            id={detailRowId()}
+                            colspan={visibleColumns().length}
+                            class="p-0 border-b border-border bg-surface-alt"
+                          >
+                            <div
+                              class="px-2 py-3 sm:px-4 sm:py-4"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <NodeDrawer
+                                node={selectedNode()}
+                                disks={normalizeDiskArray(node.agent?.disks)}
+                              />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Show>
+                  </>
                 );
               }}
             </For>

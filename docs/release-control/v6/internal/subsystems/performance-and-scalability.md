@@ -309,7 +309,10 @@ regression protection.
     `WorkloadPanel` owns the mutually exclusive host/guest drawer handoff:
     clicking a grouped host row while a guest drawer is open must clear the
     selected guest and keep/focus the host summary group so the node drawer can
-    replace the guest drawer.
+    replace the guest drawer. Platform pages that render a dedicated host
+    table above an embedded Workloads table may disable the grouped host drawer
+    through the explicit Workloads surface option, but standalone Workloads
+    must keep the inline grouped-row drawer as the default.
     Compact icon headers inside `WorkloadTableHeader.tsx` may stay visually
     dense for responsive workload tables, but the icon must be decorative and
     the column label must remain present through an `sr-only` label so the

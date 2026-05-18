@@ -20,6 +20,7 @@ type WorkloadsTableProps = Pick<
   | 'groupedWindowing'
   | 'guestMetadata'
   | 'guestParentNodeMap'
+  | 'groupNodeDrawerMode'
   | 'groupingMode'
   | 'handleCustomUrlUpdate'
   | 'handleSort'
@@ -103,6 +104,7 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             groupedWindowing={props.groupedWindowing}
             guestMetadata={props.guestMetadata}
             guestParentNodeMap={props.guestParentNodeMap}
+            groupNodeDrawerMode={props.groupNodeDrawerMode}
             groupingMode={props.groupingMode}
             handleCustomUrlUpdate={props.handleCustomUrlUpdate}
             handleTagClick={props.handleTagClick}

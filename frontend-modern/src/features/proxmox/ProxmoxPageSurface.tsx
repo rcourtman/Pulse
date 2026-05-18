@@ -145,6 +145,7 @@ export function ProxmoxPageSurface() {
                   suppressPlatformFilter
                   forcedPlatform={PROXMOX_PLATFORM_FILTER}
                   compactGroupHeaders
+                  groupNodeDrawerMode="disabled"
                   metricDisplayMode={metricDisplayMode}
                   onMetricDisplayModeChange={setMetricDisplayMode}
                   metricHistoryRange={metricHistoryRange}

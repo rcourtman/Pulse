@@ -14,6 +14,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
     if (!Number.isFinite(parsed)) return '0';
     return String(Math.max(0, Math.min(parsed, 100)));
   };
+  const invertPercent = (value: number) => String(100 - Math.max(0, Math.min(value, 100)));
 
   return (
     <div ref={state.setContainerRef} class={presentation().containerClass}>
@@ -204,9 +205,25 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                 >
                   <div
                     data-stacked-disk-fill="vertical"
-                    class="absolute bottom-0 left-0 right-0 rounded-sm brightness-100 transition-[filter] duration-100 group-hover/disk:brightness-125"
-                    style={{ height: `${bar.fillPercent}%`, background: bar.color }}
-                  />
+                    class="absolute inset-0 rounded-sm brightness-100 transition-[filter] duration-100 group-hover/disk:brightness-125"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="absolute inset-0 h-full w-full"
+                      viewBox="0 0 100 100"
+                      preserveAspectRatio="none"
+                    >
+                      <rect
+                        class="metric-fill-geometry"
+                        x="0"
+                        y={invertPercent(bar.fillPercent)}
+                        width="100"
+                        height={clampPercent(bar.fillPercent)}
+                        rx="2"
+                        fill={bar.color}
+                      />
+                    </svg>
+                  </div>
                 </div>
               )}
             </For>

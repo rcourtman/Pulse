@@ -147,6 +147,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
             groupedWindowing={state.groupedWindowing}
             guestMetadata={state.guestMetadata}
             guestParentNodeMap={state.guestParentNodeMap}
+            groupNodeDrawerMode={state.groupNodeDrawerMode}
             groupingMode={state.groupingMode}
             handleCustomUrlUpdate={state.handleCustomUrlUpdate}
             handleSort={state.handleSort}

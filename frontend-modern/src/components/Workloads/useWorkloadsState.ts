@@ -79,6 +79,10 @@ export interface WorkloadsSurfaceProps {
   // `compactGroupHeaders` strips those stats from the NodeGroupHeader rows
   // in grouped mode so the section dividers don't duplicate the info.
   compactGroupHeaders?: boolean;
+  // Default Workloads behavior owns grouped host row drawers inline. Platform
+  // pages with a dedicated host table can disable that drawer so host details
+  // open from the host-owned table instead of the embedded guest table.
+  groupNodeDrawerMode?: 'inline' | 'disabled';
   // When a platform page owns the metric display mode + sparkline range
   // (so the same toggle drives both the page's hosts table and this
   // embedded workloads surface), pass the accessors + change handlers.
@@ -454,9 +458,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     navigate,
     nodeByInstance,
     namespaceFilterConfig,
-    platformFilterConfig: props.suppressPlatformFilter
-      ? () => undefined
-      : platformFilterConfig,
+    platformFilterConfig: props.suppressPlatformFilter ? () => undefined : platformFilterConfig,
     platformOptions,
     reconnect,
     reconnectSurface,
@@ -522,6 +524,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     ws,
     groupingMode,
     compactGroupHeaders: () => props.compactGroupHeaders === true,
+    groupNodeDrawerMode: () => props.groupNodeDrawerMode ?? 'inline',
   } as const;
 }
 

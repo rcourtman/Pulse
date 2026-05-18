@@ -370,7 +370,9 @@ describe('Workloads platform-page embed contract', () => {
     expect(stateSource).toContain(
       'onMetricDisplayModeChange?: (value: WorkloadsMetricDisplayMode) => void;',
     );
-    expect(stateSource).toContain('metricHistoryRange?: Accessor<WorkloadTableMetricHistoryRange>;');
+    expect(stateSource).toContain(
+      'metricHistoryRange?: Accessor<WorkloadTableMetricHistoryRange>;',
+    );
     expect(stateSource).toContain(
       'onMetricHistoryRangeChange?: (value: WorkloadTableMetricHistoryRange) => void;',
     );
@@ -381,17 +383,12 @@ describe('Workloads platform-page embed contract', () => {
     // The controls layer must short-circuit to the page-provided accessor +
     // change handler when supplied; the internal persistent signal stays as
     // the fallback so standalone usage keeps working.
-    expect(controlsSource).toContain(
-      'options.metricDisplayMode ?? internalMetricDisplayMode',
-    );
+    expect(controlsSource).toContain('options.metricDisplayMode ?? internalMetricDisplayMode');
     expect(controlsSource).toContain('options.onMetricDisplayModeChange');
-    expect(controlsSource).toContain(
-      'options.metricHistoryRange ?? internalMetricHistoryRange',
-    );
+    expect(controlsSource).toContain('options.metricHistoryRange ?? internalMetricHistoryRange');
 
-    const proxmoxSource = (
-      await import('../../../features/proxmox/ProxmoxPageSurface.tsx?raw')
-    ).default;
+    const proxmoxSource = (await import('../../../features/proxmox/ProxmoxPageSurface.tsx?raw'))
+      .default;
     expect(proxmoxSource).toContain('STORAGE_KEYS.WORKLOADS_METRIC_DISPLAY_MODE');
     expect(proxmoxSource).toContain('STORAGE_KEYS.WORKLOADS_METRIC_HISTORY_RANGE');
     expect(proxmoxSource).toContain('metricDisplayMode={metricDisplayMode}');
@@ -399,9 +396,8 @@ describe('Workloads platform-page embed contract', () => {
     expect(proxmoxSource).toContain('metricHistoryRange={metricHistoryRange}');
     expect(proxmoxSource).toContain('onMetricHistoryRangeChange={setMetricHistoryRange}');
 
-    const nodesTableSource = (
-      await import('../../../features/proxmox/ProxmoxNodesTable.tsx?raw')
-    ).default;
+    const nodesTableSource = (await import('../../../features/proxmox/ProxmoxNodesTable.tsx?raw'))
+      .default;
     expect(nodesTableSource).toContain('useWorkloadTableMetricHistory');
     expect(nodesTableSource).toContain('MetricMiniSparkline');
     expect(nodesTableSource).toContain('isSparklineMode');
@@ -410,9 +406,7 @@ describe('Workloads platform-page embed contract', () => {
   it('exposes compactGroupHeaders so platform pages can strip duplicate host stats from group rows', async () => {
     const stateSource = (await import('../useWorkloadsState.ts?raw')).default;
     expect(stateSource).toContain('compactGroupHeaders?: boolean;');
-    expect(stateSource).toContain(
-      'compactGroupHeaders: () => props.compactGroupHeaders === true,',
-    );
+    expect(stateSource).toContain('compactGroupHeaders: () => props.compactGroupHeaders === true,');
 
     const tableSource = (await import('../WorkloadsTable.tsx?raw')).default;
     expect(tableSource).toContain(`| 'compactGroupHeaders'`);
@@ -430,10 +424,35 @@ describe('Workloads platform-page embed contract', () => {
     );
     expect(panelSource).toContain('!props.compactGroupHeaders() &&');
 
-    const proxmoxSource = (
-      await import('../../../features/proxmox/ProxmoxPageSurface.tsx?raw')
-    ).default;
+    const proxmoxSource = (await import('../../../features/proxmox/ProxmoxPageSurface.tsx?raw'))
+      .default;
     expect(proxmoxSource).toContain('compactGroupHeaders');
+  });
+
+  it('lets platform pages move grouped host drawers to a dedicated host table owner', async () => {
+    const stateSource = (await import('../useWorkloadsState.ts?raw')).default;
+    expect(stateSource).toContain("groupNodeDrawerMode?: 'inline' | 'disabled';");
+    expect(stateSource).toContain(
+      "groupNodeDrawerMode: () => props.groupNodeDrawerMode ?? 'inline',",
+    );
+
+    const tableSource = (await import('../WorkloadsTable.tsx?raw')).default;
+    expect(tableSource).toContain(`| 'groupNodeDrawerMode'`);
+    expect(tableSource).toContain('groupNodeDrawerMode={props.groupNodeDrawerMode}');
+
+    const panelSource = (await import('../WorkloadPanel.tsx?raw')).default;
+    expect(panelSource).toContain("props.groupNodeDrawerMode() === 'inline'");
+    expect(panelSource).toContain(
+      'onClick: canOpenNodeDrawer() ? handleGroupFocusToggle : undefined',
+    );
+
+    const proxmoxPageSource = (await import('../../../features/proxmox/ProxmoxPageSurface.tsx?raw'))
+      .default;
+    const proxmoxNodesSource = (await import('../../../features/proxmox/ProxmoxNodesTable.tsx?raw'))
+      .default;
+    expect(proxmoxPageSource).toContain('groupNodeDrawerMode="disabled"');
+    expect(proxmoxNodesSource).toContain('NodeDrawer');
+    expect(proxmoxNodesSource).toContain('data-inline-node-detail-for={node.id}');
   });
 });
 
