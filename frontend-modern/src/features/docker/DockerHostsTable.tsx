@@ -1,5 +1,6 @@
-import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { DockerHostDrawer } from './DockerHostDrawer';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
@@ -119,6 +120,8 @@ export const DockerHostsTable: Component<{
     filter: filterPlatformResources,
   });
   const showSwarmColumn = createMemo(() => props.resources.some(hasDockerSwarmEvidence));
+  const [selectedHostId, setSelectedHostId] = createSignal<string | null>(null);
+  const drawerColspan = createMemo(() => (showSwarmColumn() ? 10 : 9));
 
   return (
     <Show
@@ -232,8 +235,31 @@ export const DockerHostsTable: Component<{
                     const disks = () => normalizeDiskArray(host.agent?.disks);
                     const hasDiskMetric = () =>
                       aggregateDisk() !== undefined || (disks()?.length ?? 0) > 0;
+                    const detailRowId = () => `docker-host-drawer-${host.id}`;
+                    const isSelected = () => selectedHostId() === host.id;
+                    const toggleDrawer = () =>
+                      setSelectedHostId((current) => (current === host.id ? null : host.id));
+                    const handleActivationKey: JSX.EventHandler<
+                      HTMLTableRowElement,
+                      KeyboardEvent
+                    > = (event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') return;
+                      event.preventDefault();
+                      toggleDrawer();
+                    };
                     return (
-                      <TableRow class="text-[11px] sm:text-xs">
+                      <>
+                      <TableRow
+                        class={`cursor-pointer text-[11px] outline-none sm:text-xs ${
+                          isSelected() ? 'bg-surface-hover' : ''
+                        } focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface`}
+                        aria-controls={isSelected() ? detailRowId() : undefined}
+                        aria-expanded={isSelected() ? 'true' : 'false'}
+                        data-docker-host-row={host.id}
+                        onClick={toggleDrawer}
+                        onKeyDown={handleActivationKey}
+                        tabIndex={0}
+                      >
                         <TableCell class={`${getPlatformTableCellClass()} w-[40%] md:w-auto`}>
                           <div class="flex min-w-0 items-center gap-2">
                             <StatusDot
@@ -342,6 +368,23 @@ export const DockerHostsTable: Component<{
                           </TableCell>
                         </Show>
                       </TableRow>
+                      <Show when={isSelected()}>
+                        <TableRow data-inline-docker-host-detail-for={host.id}>
+                          <TableCell
+                            id={detailRowId()}
+                            colspan={drawerColspan()}
+                            class="p-0 border-b border-border bg-surface-alt"
+                          >
+                            <div
+                              class="px-2 py-3 sm:px-4 sm:py-4"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <DockerHostDrawer host={host} />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      </Show>
+                      </>
                     );
                   }}
                 </For>
