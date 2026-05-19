@@ -302,6 +302,28 @@ func (m *Monitor) CollectProxmoxGuestDockerInventory(ctx context.Context, contai
 
 			enrichGuestDockerReportFromContainer(&report, container)
 
+			// Refuse to overwrite a known-populated host with an empty
+			// container list. docker ps -a inside an LXC occasionally
+			// returns zero containers for a single poll (during
+			// watchtower-driven container recreate cycles, or while the
+			// daemon is restarting), which would otherwise wipe every
+			// row for that host on every connected WebSocket client
+			// until the next successful poll restores it. A host that
+			// genuinely has no containers still applies on first sight,
+			// and a host transitioning to zero containers will catch
+			// up as soon as we hit the existing offline grace window.
+			if len(report.Containers) == 0 && m.dockerHostHasContainers(report.Agent.ID) {
+				log.Debug().
+					Str("container", container.Name).
+					Int("vmid", container.VMID).
+					Str("agentID", report.Agent.ID).
+					Msg("Skipping Proxmox LXC Docker inventory apply: report has zero containers but host previously had containers (transient docker ps state)")
+				mu.Lock()
+				skipped++
+				mu.Unlock()
+				return
+			}
+
 			if _, err := m.ApplyDockerReport(report, nil); err != nil {
 				log.Warn().
 					Err(err).
@@ -340,6 +362,25 @@ func (m *Monitor) hasOnlineHostAgentForContainer(containerID string) bool {
 	for _, host := range m.state.GetHosts() {
 		if strings.TrimSpace(host.LinkedContainerID) == containerID && strings.EqualFold(strings.TrimSpace(host.Status), "online") {
 			return true
+		}
+	}
+	return false
+}
+
+// dockerHostHasContainers reports whether the docker host identified by the
+// given agent ID (or canonical host ID alias) currently has at least one
+// container tracked in state. Used by CollectProxmoxGuestDockerInventory to
+// detect the "previously populated, now reporting zero" pattern that comes
+// from transient docker ps blips inside an LXC and would otherwise wipe
+// container rows for every WebSocket client.
+func (m *Monitor) dockerHostHasContainers(agentID string) bool {
+	agentID = strings.TrimSpace(agentID)
+	if m == nil || m.state == nil || agentID == "" {
+		return false
+	}
+	for _, host := range m.state.GetDockerHosts() {
+		if host.ID == agentID || strings.TrimSpace(host.AgentID) == agentID {
+			return len(host.Containers) > 0
 		}
 	}
 	return false

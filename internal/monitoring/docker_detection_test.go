@@ -596,6 +596,104 @@ func TestMonitorCollectProxmoxGuestDockerInventory_AppliesDockerReport(t *testin
 	}
 }
 
+func TestMonitorCollectProxmoxGuestDockerInventory_RefusesEmptyOverwriteOfPopulatedHost(t *testing.T) {
+	monitor := newTestMonitor(t)
+
+	// First poll populates the docker host with one container.
+	collector := &mockDockerInventoryCollector{
+		reports: map[int]agentsdocker.Report{
+			101: {
+				Agent: agentsdocker.AgentInfo{ID: "proxmox-lxc-docker:pve-a:node-a:101", Type: "unified", IntervalSeconds: 30},
+				Host: agentsdocker.HostInfo{
+					Hostname:       "ct-web",
+					Name:           "web-lxc",
+					Runtime:        "docker",
+					DockerVersion:  "26.1.4",
+					RuntimeVersion: "26.1.4",
+				},
+				Containers: []agentsdocker.Container{{
+					ID:     "docker-1",
+					Name:   "web",
+					Image:  "nginx:latest",
+					State:  "running",
+					Status: "Up 1 minute",
+				}},
+				Timestamp: time.Now().UTC(),
+			},
+		},
+	}
+	monitor.SetDockerInventoryCollector(collector)
+
+	monitor.CollectProxmoxGuestDockerInventory(context.Background(), []models.Container{
+		{ID: "pve-a:node-a:101", VMID: 101, Name: "web-lxc", Node: "node-a", Status: "running", HasDocker: true},
+	})
+
+	hosts := monitor.state.GetDockerHosts()
+	if len(hosts) != 1 || len(hosts[0].Containers) != 1 {
+		t.Fatalf("setup failed: expected 1 host with 1 container, got %d hosts", len(hosts))
+	}
+
+	// Second poll returns the same host but with zero containers — the
+	// transient `docker ps` blip we want to ignore so the UI does not
+	// flash empty until the next successful poll.
+	collector.reports[101] = agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{ID: "proxmox-lxc-docker:pve-a:node-a:101", Type: "unified", IntervalSeconds: 30},
+		Host: agentsdocker.HostInfo{
+			Hostname:       "ct-web",
+			Name:           "web-lxc",
+			Runtime:        "docker",
+			DockerVersion:  "26.1.4",
+			RuntimeVersion: "26.1.4",
+		},
+		Containers: nil,
+		Timestamp:  time.Now().UTC(),
+	}
+
+	monitor.CollectProxmoxGuestDockerInventory(context.Background(), []models.Container{
+		{ID: "pve-a:node-a:101", VMID: 101, Name: "web-lxc", Node: "node-a", Status: "running", HasDocker: true},
+	})
+
+	hosts = monitor.state.GetDockerHosts()
+	if len(hosts) != 1 {
+		t.Fatalf("docker host disappeared after empty report")
+	}
+	if len(hosts[0].Containers) != 1 || hosts[0].Containers[0].Name != "web" {
+		t.Fatalf("empty inventory report wiped the previously-populated container list: %#v", hosts[0].Containers)
+	}
+}
+
+func TestMonitorCollectProxmoxGuestDockerInventory_AppliesFirstZeroContainerReport(t *testing.T) {
+	monitor := newTestMonitor(t)
+	collector := &mockDockerInventoryCollector{
+		reports: map[int]agentsdocker.Report{
+			101: {
+				Agent: agentsdocker.AgentInfo{ID: "proxmox-lxc-docker:pve-a:node-a:101", Type: "unified", IntervalSeconds: 30},
+				Host: agentsdocker.HostInfo{
+					Hostname:      "ct-web",
+					Name:          "web-lxc",
+					Runtime:       "docker",
+					DockerVersion: "26.1.4",
+				},
+				Containers: nil,
+				Timestamp:  time.Now().UTC(),
+			},
+		},
+	}
+	monitor.SetDockerInventoryCollector(collector)
+
+	monitor.CollectProxmoxGuestDockerInventory(context.Background(), []models.Container{
+		{ID: "pve-a:node-a:101", VMID: 101, Name: "web-lxc", Node: "node-a", Status: "running", HasDocker: true},
+	})
+
+	hosts := monitor.state.GetDockerHosts()
+	if len(hosts) != 1 {
+		t.Fatalf("expected the host to be created from the first (empty) report, got %d hosts", len(hosts))
+	}
+	if len(hosts[0].Containers) != 0 {
+		t.Fatalf("expected zero containers on a freshly-seen empty host, got %d", len(hosts[0].Containers))
+	}
+}
+
 func TestMonitorCollectProxmoxGuestDockerInventory_SkipsLinkedGuestLocalAgent(t *testing.T) {
 	monitor := newTestMonitor(t)
 	monitor.state.UpsertHost(models.Host{
