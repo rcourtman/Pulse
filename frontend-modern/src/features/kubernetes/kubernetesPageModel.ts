@@ -1,11 +1,16 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import type { Resource, ResourceType } from '@/types/resource';
 
-// Kubernetes services are not surfaced by the canonical unified resource
-// model today (no ResourceTypeK8sService projection on the backend), so the
-// Services sub-tab is intentionally absent from the page until that gap is
-// closed in the canonical adapter.
-export type KubernetesPageTabId = 'overview' | 'nodes' | 'pods' | 'deployments';
+// The Overview tab mirrors Proxmox / Docker: cluster + nodes table on top,
+// embedded WorkloadsSurface (pods) underneath, deployments table beneath
+// that when the cluster reports any. The standalone Nodes / Pods /
+// Deployments tabs that used to live here were pure duplicates of the
+// Overview stack, so they're intentionally absent — the Workloads filter
+// inside Overview owns search/grouping for pods. Services are not surfaced
+// by the canonical unified resource model today (no ResourceTypeK8sService
+// projection on the backend), so a Services tab is similarly absent until
+// that gap is closed in the canonical adapter.
+export type KubernetesPageTabId = 'overview';
 
 export type KubernetesTabSpec = {
   id: KubernetesPageTabId;
@@ -14,10 +19,7 @@ export type KubernetesTabSpec = {
 };
 
 export const KUBERNETES_TAB_SPECS: readonly KubernetesTabSpec[] = [
-  { id: 'overview', label: 'Clusters', path: '/kubernetes/overview' },
-  { id: 'nodes', label: 'Nodes', path: '/kubernetes/nodes' },
-  { id: 'pods', label: 'Pods', path: '/kubernetes/pods' },
-  { id: 'deployments', label: 'Deployments', path: '/kubernetes/deployments' },
+  { id: 'overview', label: 'Overview', path: '/kubernetes/overview' },
 ] as const;
 
 const KUBERNETES_RESOURCE_TYPES = new Set<ResourceType>([

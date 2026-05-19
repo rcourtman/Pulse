@@ -1,4 +1,3 @@
-import { useLocation } from '@solidjs/router';
 import ShipWheelIcon from 'lucide-solid/icons/ship-wheel';
 import { Show, createMemo } from 'solid-js';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
@@ -11,33 +10,22 @@ import {
 import { KubernetesClustersTable } from './KubernetesClustersTable';
 import { KubernetesDeploymentsTable } from './KubernetesDeploymentsTable';
 import { KubernetesNodesTable } from './KubernetesNodesTable';
-import {
-  KUBERNETES_TAB_SPECS,
-  buildKubernetesPageModel,
-  type KubernetesPageTabId,
-} from './kubernetesPageModel';
+import { KUBERNETES_TAB_SPECS, buildKubernetesPageModel } from './kubernetesPageModel';
 
 // Include `agent` rows so K8s nodes that the backend registry merged onto
 // the linked agent host (sources=['agent','kubernetes']) still appear in the
-// Nodes tab; the page model filters them down to those tagged kubernetes.
+// Nodes section of the Overview stack; the page model filters them down to
+// those tagged kubernetes.
 const KUBERNETES_RESOURCE_QUERY = 'type=k8s-cluster,k8s-node,pod,k8s-deployment,agent';
 const KUBERNETES_PLATFORM_FILTER = 'kubernetes';
-const VALID_TABS = new Set<KubernetesPageTabId>(KUBERNETES_TAB_SPECS.map((tab) => tab.id));
 
 const k8sIcon = () => <ShipWheelIcon class="h-6 w-6 text-slate-400" />;
 
 export function KubernetesPageSurface() {
-  const location = useLocation();
   const { resources, loading, error, refetch } = useUnifiedResources({
     query: KUBERNETES_RESOURCE_QUERY,
     cacheKey: 'kubernetes-workspace',
     initialHydration: 'prefer-ws-then-rest',
-  });
-  const activeTab = createMemo<KubernetesPageTabId>(() => {
-    const segment = location.pathname.split('/').filter(Boolean)[1] as
-      | KubernetesPageTabId
-      | undefined;
-    return segment && VALID_TABS.has(segment) ? segment : 'overview';
   });
   const model = createMemo(() => buildKubernetesPageModel(resources()));
 
@@ -45,7 +33,7 @@ export function KubernetesPageSurface() {
     <div data-testid="kubernetes-page" class="space-y-3">
       <PlatformSectionTabs
         tabs={KUBERNETES_TAB_SPECS}
-        active={activeTab()}
+        active="overview"
         ariaLabel="Kubernetes sections"
       />
 
@@ -79,55 +67,22 @@ export function KubernetesPageSurface() {
               />
             }
           >
-            <Show when={activeTab() === 'overview'}>
-              <div class="space-y-4">
-                <KubernetesClustersTable
-                  clusters={model().clusters}
-                  scope={model().resources}
-                  emptyIcon={k8sIcon()}
-                  emptyTitle="No clusters reported"
-                  emptyDescription="Kubernetes clusters appear here once at least one agent reports cluster context."
-                  showToolbar={false}
-                />
-                <KubernetesNodesTable
-                  resources={model().nodes}
-                  emptyIcon={k8sIcon()}
-                  emptyTitle="No nodes reported"
-                  emptyDescription="Kubernetes nodes appear here as soon as the agent enumerates them."
-                  showToolbar={false}
-                />
-                <WorkloadsSurface
-                  vms={[]}
-                  containers={[]}
-                  nodes={[]}
-                  useWorkloads
-                  embedded
-                  tableOnly
-                  showFilterToolbar
-                  suppressPlatformFilter
-                  forcedPlatform={KUBERNETES_PLATFORM_FILTER}
-                  compactGroupHeaders
-                />
-                <Show when={model().deployments.length > 0}>
-                  <KubernetesDeploymentsTable
-                    resources={model().deployments}
-                    emptyIcon={k8sIcon()}
-                    emptyTitle="No deployments reported"
-                    emptyDescription="Deployments appear here once the cluster reports them."
-                    showToolbar={false}
-                  />
-                </Show>
-              </div>
-            </Show>
-            <Show when={activeTab() === 'nodes'}>
+            <div class="space-y-4">
+              <KubernetesClustersTable
+                clusters={model().clusters}
+                scope={model().resources}
+                emptyIcon={k8sIcon()}
+                emptyTitle="No clusters reported"
+                emptyDescription="Kubernetes clusters appear here once at least one agent reports cluster context."
+                showToolbar={false}
+              />
               <KubernetesNodesTable
                 resources={model().nodes}
                 emptyIcon={k8sIcon()}
                 emptyTitle="No nodes reported"
                 emptyDescription="Kubernetes nodes appear here as soon as the agent enumerates them."
+                showToolbar={false}
               />
-            </Show>
-            <Show when={activeTab() === 'pods'}>
               <WorkloadsSurface
                 vms={[]}
                 containers={[]}
@@ -138,16 +93,18 @@ export function KubernetesPageSurface() {
                 showFilterToolbar
                 suppressPlatformFilter
                 forcedPlatform={KUBERNETES_PLATFORM_FILTER}
+                compactGroupHeaders
               />
-            </Show>
-            <Show when={activeTab() === 'deployments'}>
-              <KubernetesDeploymentsTable
-                resources={model().deployments}
-                emptyIcon={k8sIcon()}
-                emptyTitle="No deployments reported"
-                emptyDescription="Deployments appear here once the cluster reports them."
-              />
-            </Show>
+              <Show when={model().deployments.length > 0}>
+                <KubernetesDeploymentsTable
+                  resources={model().deployments}
+                  emptyIcon={k8sIcon()}
+                  emptyTitle="No deployments reported"
+                  emptyDescription="Deployments appear here once the cluster reports them."
+                  showToolbar={false}
+                />
+              </Show>
+            </div>
           </Show>
         </Show>
       </Show>

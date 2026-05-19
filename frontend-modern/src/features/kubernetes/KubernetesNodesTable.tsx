@@ -1,7 +1,9 @@
 import { For, Show, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
+import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import {
   Table,
   TableBody,
@@ -12,6 +14,7 @@ import {
 } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_CARD_CLASS,
@@ -35,13 +38,20 @@ import type { Resource } from '@/types/resource';
 // the agent metrics fine but omits the K8s context that matters to the
 // cluster operator. This bespoke table reuses canonical shared
 // primitives and surfaces the Kubelet-native columns alongside the
-// usual CPU/Memory utilisation.
+// canonical bar treatment (ResponsiveMetricCell / StackedMemoryBar) so
+// the Overview stack reads as one consistent surface alongside the
+// Docker / Proxmox / vSphere host tables.
 
-const formatPercent = (percent?: number): JSX.Element => {
-  if (typeof percent !== 'number' || Number.isNaN(percent))
-    return <span class="text-muted">—</span>;
-  return <span class="tabular-nums">{percent.toFixed(1)}%</span>;
-};
+const finiteMetric = (value: number | undefined): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+const metricFallback = () => (
+  <div class="flex justify-center">
+    <span class="text-xs text-muted" aria-hidden="true">
+      —
+    </span>
+  </div>
+);
 
 const formatUptime = (seconds: number | undefined): string => {
   if (!seconds || seconds <= 0) return '—';
@@ -171,6 +181,15 @@ export const KubernetesNodesTable: Component<{
                       return capacityLabel();
                     };
                     const indicator = () => getSimpleStatusIndicator(node.status);
+                    const metricsKey = () => buildMetricKeyForUnifiedResource(node);
+                    const cpuPercent = () => finiteMetric(node.cpu?.current);
+                    const memoryTotal = () => finiteMetric(node.memory?.total) ?? 0;
+                    const memoryUsed = () => finiteMetric(node.memory?.used) ?? 0;
+                    const memoryPercentOnly = () =>
+                      memoryTotal() > 0 ? undefined : finiteMetric(node.memory?.current);
+                    const hasMemoryMetric = () =>
+                      memoryTotal() > 0 || memoryPercentOnly() !== undefined;
+                    const canRenderMetrics = () => indicator().variant !== 'muted';
                     return (
                       <TableRow class="text-[11px] sm:text-xs">
                         <TableCell class={getPlatformTableCellClass()}>
@@ -209,14 +228,30 @@ export const KubernetesNodesTable: Component<{
                           </span>
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                          class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
                         >
-                          {formatPercent(node.cpu?.current)}
+                          <ResponsiveMetricCell
+                            class="w-full"
+                            value={cpuPercent() ?? 0}
+                            type="cpu"
+                            resourceId={metricsKey()}
+                            isRunning={canRenderMetrics() && cpuPercent() !== undefined}
+                            showMobile={false}
+                          />
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                          class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
                         >
-                          {formatPercent(node.memory?.current)}
+                          <Show
+                            when={canRenderMetrics() && hasMemoryMetric()}
+                            fallback={metricFallback()}
+                          >
+                            <StackedMemoryBar
+                              used={memoryUsed()}
+                              total={memoryTotal()}
+                              percentOnly={memoryPercentOnly()}
+                            />
+                          </Show>
                         </TableCell>
                         <TableCell
                           class={`${getPlatformTableCellClass('right')} text-base-content tabular-nums`}

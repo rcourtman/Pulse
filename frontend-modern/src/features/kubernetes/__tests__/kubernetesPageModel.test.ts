@@ -15,13 +15,8 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
 });
 
 describe('kubernetesPageModel', () => {
-  it('declares the Kubernetes section set, omitting Services until the canonical projection exists', () => {
-    expect(KUBERNETES_TAB_SPECS.map((tab) => tab.id)).toEqual([
-      'overview',
-      'nodes',
-      'pods',
-      'deployments',
-    ]);
+  it('declares the Kubernetes section set as a single Overview tab', () => {
+    expect(KUBERNETES_TAB_SPECS.map((tab) => tab.id)).toEqual(['overview']);
   });
 
   it('buckets clusters, nodes, pods, and deployments', () => {
