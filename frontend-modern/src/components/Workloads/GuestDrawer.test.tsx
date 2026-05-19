@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor, within } from '@solidjs/testing-library';
+import { Suspense } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Memory, Disk, GuestNetworkInterface } from '@/types/api';
+import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
@@ -118,6 +120,8 @@ const makeHistoryPoints = (base: number) => [
 ];
 
 beforeEach(() => {
+  resetCreateNonSuspendingQueryCacheForTest();
+  discoveryApiMocks.getDiscovery.mockResolvedValue(null);
   chartsApiMocks.getMetricsHistory.mockResolvedValue({
     resourceType: 'vm',
     resourceId: 'inst1:node1:100',
@@ -216,11 +220,28 @@ describe('GuestDrawer', () => {
     it('hides the Identified Service card when the discovery record is null or empty', async () => {
       discoveryApiMocks.getDiscovery.mockResolvedValueOnce(null);
       render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
-      // Allow the resource to resolve and a render cycle to happen.
       await waitFor(() => {
         expect(discoveryApiMocks.getDiscovery).toHaveBeenCalled();
       });
       expect(screen.queryByText('Identified Service')).toBeNull();
+    });
+
+    it('keeps the passive discovery lookup out of the parent Suspense fallback', () => {
+      discoveryApiMocks.getDiscovery.mockImplementationOnce(
+        () =>
+          new Promise<import('@/types/discovery').ResourceDiscovery | null>(() => undefined),
+      );
+
+      render(() => (
+        <Suspense fallback={<div data-testid="parent-suspense-fallback">Loading page</div>}>
+          <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />
+        </Suspense>
+      ));
+
+      expect(screen.queryByTestId('parent-suspense-fallback')).toBeNull();
+      expect(screen.getByText('Overview')).toBeInTheDocument();
+      expect(screen.getByText('History')).toBeInTheDocument();
+      expect(screen.getByText('Discovery')).toBeInTheDocument();
     });
 
     it('switches to Discovery tab on click', async () => {

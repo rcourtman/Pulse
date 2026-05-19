@@ -1,8 +1,10 @@
-import { createEffect, createMemo, createResource, createSignal } from 'solid-js';
+import { createEffect, createMemo, createSignal } from 'solid-js';
 
 import { getDiscovery } from '@/api/discovery';
 import type { HistoryTimeRange } from '@/api/charts';
+import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+import type { ResourceDiscovery, ResourceType as DiscoveryResourceType } from '@/types/discovery';
 import {
   getDiscoveryIdentifiedSummary,
   getDiscoveryLoadingState,
@@ -35,6 +37,12 @@ import {
   type GuestDrawerProps,
   type GuestDrawerTab,
 } from './guestDrawerModel';
+
+interface GuestDiscoverySourceKey {
+  type: DiscoveryResourceType;
+  agent: string;
+  resource: string;
+}
 
 export function useGuestDrawerState(props: GuestDrawerProps) {
   const alertsActivation = useAlertsActivation();
@@ -97,18 +105,22 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     const agent = discoveryAgentId();
     const resource = discoveryResourceId();
     if (!type || !agent || !resource) return null;
-    return { type, agent, resource } as const;
+    return { type, agent, resource } as GuestDiscoverySourceKey;
   });
-  const [discoveryRecord] = createResource(discoverySourceKey, async (key) => {
-    if (!key) return null;
-    try {
-      return await getDiscovery(key.type, key.agent, key.resource);
-    } catch {
-      return null;
-    }
+  const discoveryRecord = createNonSuspendingQuery<ResourceDiscovery | null, GuestDiscoverySourceKey>({
+    source: discoverySourceKey,
+    initialValue: null,
+    cacheKey: (key) => `guest-drawer-discovery:${key.type}:${key.agent}:${key.resource}`,
+    fetcher: async (key) => {
+      try {
+        return await getDiscovery(key.type, key.agent, key.resource);
+      } catch {
+        return null;
+      }
+    },
   });
   const discoveryIdentifiedSummary = createMemo(() =>
-    getDiscoveryIdentifiedSummary(discoveryRecord()),
+    getDiscoveryIdentifiedSummary(discoveryRecord.value()),
   );
 
   const switchTab = (tab: GuestDrawerTab) => {
