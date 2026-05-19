@@ -1,8 +1,8 @@
 import { useLocation } from '@solidjs/router';
 import CpuIcon from 'lucide-solid/icons/cpu';
 import { Show, createMemo } from 'solid-js';
+import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
-import { VsphereDatastoresTable } from './VsphereDatastoresTable';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
@@ -94,36 +94,15 @@ export function VmwarePageSurface() {
                   forcedPlatform={VMWARE_PLATFORM_FILTER}
                   compactGroupHeaders
                 />
-                <Show when={model().datastores.length > 0}>
-                  <VsphereDatastoresTable
-                    resources={model().datastores}
-                    emptyIcon={vmwareIcon()}
-                    emptyTitle="No vSphere datastores"
-                    emptyDescription="Datastores appear here once a vCenter connection enumerates them."
-                    showToolbar={false}
-                  />
-                </Show>
               </div>
             </Show>
-            <Show when={activeTab() === 'vms'}>
-              <WorkloadsSurface
-                vms={[]}
-                containers={[]}
-                nodes={[]}
-                useWorkloads
+            <Show when={activeTab() === 'storage'}>
+              <StorageSurface
                 embedded
                 tableOnly
                 showFilterToolbar
-                suppressPlatformFilter
-                forcedPlatform={VMWARE_PLATFORM_FILTER}
-              />
-            </Show>
-            <Show when={activeTab() === 'storage'}>
-              <VsphereDatastoresTable
-                resources={model().datastores}
-                emptyIcon={vmwareIcon()}
-                emptyTitle="No vSphere datastores"
-                emptyDescription="Datastores appear here once a vCenter connection enumerates them."
+                forcedSourceFilter={VMWARE_PLATFORM_FILTER}
+                forcedView="pools"
               />
             </Show>
           </Show>

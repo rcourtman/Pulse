@@ -1,7 +1,9 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
+import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import {
   Table,
   TableBody,
@@ -12,6 +14,7 @@ import {
 } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_CARD_CLASS,
@@ -34,14 +37,21 @@ import type { Resource } from '@/types/resource';
 // operator: datacenter, cluster, power state, connection state,
 // datastore count, and VM count alongside CPU / Memory utilisation.
 // This bespoke table reuses canonical shared primitives and surfaces
-// those ESXi-native columns. Per-host VM count is computed from the
-// page scope client-side (no extra API calls).
+// those ESXi-native columns — matching the Docker / Proxmox bar
+// treatment so the Overview stack reads as one consistent surface.
+// Per-host VM count is computed from the page scope client-side (no
+// extra API calls).
 
-const formatPercent = (percent?: number): JSX.Element => {
-  if (typeof percent !== 'number' || Number.isNaN(percent))
-    return <span class="text-muted">—</span>;
-  return <span class="tabular-nums">{percent.toFixed(1)}%</span>;
-};
+const finiteMetric = (value: number | undefined): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+const metricFallback = () => (
+  <div class="flex justify-center">
+    <span class="text-xs text-muted" aria-hidden="true">
+      —
+    </span>
+  </div>
+);
 
 const powerStateVariant = (
   state: string | undefined,
@@ -165,6 +175,15 @@ export const VsphereHostsTable: Component<{
                     const vmCount = () =>
                       vmCountByHost().get(asTrimmedString(meta()?.managedObjectId) || '') ?? 0;
                     const indicator = () => getSimpleStatusIndicator(host.status);
+                    const metricsKey = () => buildMetricKeyForUnifiedResource(host);
+                    const cpuPercent = () => finiteMetric(host.cpu?.current);
+                    const memoryTotal = () => finiteMetric(host.memory?.total) ?? 0;
+                    const memoryUsed = () => finiteMetric(host.memory?.used) ?? 0;
+                    const memoryPercentOnly = () =>
+                      memoryTotal() > 0 ? undefined : finiteMetric(host.memory?.current);
+                    const hasMemoryMetric = () =>
+                      memoryTotal() > 0 || memoryPercentOnly() !== undefined;
+                    const canRenderMetrics = () => indicator().variant !== 'muted';
                     return (
                       <TableRow class="text-[11px] sm:text-xs">
                         <TableCell class={getPlatformTableCellClass()}>
@@ -204,14 +223,30 @@ export const VsphereHostsTable: Component<{
                           </div>
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                          class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
                         >
-                          {formatPercent(host.cpu?.current)}
+                          <ResponsiveMetricCell
+                            class="w-full"
+                            value={cpuPercent() ?? 0}
+                            type="cpu"
+                            resourceId={metricsKey()}
+                            isRunning={canRenderMetrics() && cpuPercent() !== undefined}
+                            showMobile={false}
+                          />
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                          class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
                         >
-                          {formatPercent(host.memory?.current)}
+                          <Show
+                            when={canRenderMetrics() && hasMemoryMetric()}
+                            fallback={metricFallback()}
+                          >
+                            <StackedMemoryBar
+                              used={memoryUsed()}
+                              total={memoryTotal()}
+                              percentOnly={memoryPercentOnly()}
+                            />
+                          </Show>
                         </TableCell>
                         <TableCell
                           class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}

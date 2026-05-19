@@ -58,7 +58,7 @@ describe('resource link routing contract', () => {
 
     expect(VMWARE_PATH).toBe('/vmware');
     expect(buildVmwarePath()).toBe('/vmware/overview');
-    expect(buildVmwarePath('vms')).toBe('/vmware/vms');
+    expect(buildVmwarePath('storage')).toBe('/vmware/storage');
   });
 
   it('builds and parses workloads query params', () => {

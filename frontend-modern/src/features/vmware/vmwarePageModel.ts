@@ -1,7 +1,7 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import type { Resource, ResourceType } from '@/types/resource';
 
-export type VmwarePageTabId = 'overview' | 'vms' | 'storage';
+export type VmwarePageTabId = 'overview' | 'storage';
 
 export type VmwareTabSpec = {
   id: VmwarePageTabId;
@@ -9,9 +9,12 @@ export type VmwareTabSpec = {
   path: string;
 };
 
+// The Overview tab mirrors Proxmox: hosts on top, embedded WorkloadsSurface
+// (VMs) underneath grouped by host. A dedicated `vms` tab would just remount
+// the same WorkloadsSurface, so it's intentionally absent — the Workloads
+// filter inside Overview owns search/grouping for VMs.
 export const VMWARE_TAB_SPECS: readonly VmwareTabSpec[] = [
-  { id: 'overview', label: 'Hosts', path: '/vmware/overview' },
-  { id: 'vms', label: 'Virtual machines', path: '/vmware/vms' },
+  { id: 'overview', label: 'Overview', path: '/vmware/overview' },
   { id: 'storage', label: 'Storage', path: '/vmware/storage' },
 ] as const;
 

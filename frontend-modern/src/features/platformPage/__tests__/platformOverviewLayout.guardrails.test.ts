@@ -13,7 +13,6 @@ import truenasDisksTableSource from '@/features/truenas/TrueNASDisksTable.tsx?ra
 import truenasPageSurfaceSource from '@/features/truenas/TrueNASPageSurface.tsx?raw';
 import truenasSystemsTableSource from '@/features/truenas/TrueNASSystemsTable.tsx?raw';
 import vmwarePageSurfaceSource from '@/features/vmware/VmwarePageSurface.tsx?raw';
-import vsphereDatastoresTableSource from '@/features/vmware/VsphereDatastoresTable.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
 
 const platformTableSources = [
@@ -26,7 +25,6 @@ const platformTableSources = [
   truenasSystemsTableSource,
   truenasDisksTableSource,
   vsphereHostsTableSource,
-  vsphereDatastoresTableSource,
 ];
 
 const platformToolbarTableSources = [
@@ -38,7 +36,6 @@ const platformToolbarTableSources = [
   truenasSystemsTableSource,
   truenasDisksTableSource,
   vsphereHostsTableSource,
-  vsphereDatastoresTableSource,
 ];
 
 const overviewSurfaceSources = [
@@ -102,7 +99,8 @@ describe('platform overview layout guardrails', () => {
     expect(truenasPageSurfaceSource).toContain('<TrueNASDisksTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereHostsTable');
     expect(vmwarePageSurfaceSource).toContain('<WorkloadsSurface');
-    expect(vmwarePageSurfaceSource).toContain('<VsphereDatastoresTable');
+    expect(vmwarePageSurfaceSource).toContain('<StorageSurface');
+    expect(vmwarePageSurfaceSource).toContain('forcedView="pools"');
   });
 
   it('keeps secondary overview tables from rendering duplicate standalone toolbars', () => {

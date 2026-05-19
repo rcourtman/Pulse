@@ -15,7 +15,7 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
 
 describe('vmwarePageModel', () => {
   it('declares the vSphere section set', () => {
-    expect(VMWARE_TAB_SPECS.map((tab) => tab.id)).toEqual(['overview', 'vms', 'storage']);
+    expect(VMWARE_TAB_SPECS.map((tab) => tab.id)).toEqual(['overview', 'storage']);
   });
 
   it('buckets vSphere hosts and VMs and ignores non-vSphere resources', () => {
