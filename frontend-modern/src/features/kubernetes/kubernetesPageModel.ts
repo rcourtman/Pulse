@@ -1,15 +1,19 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import type { Resource, ResourceType } from '@/types/resource';
 
-// The Overview tab mirrors Proxmox / Docker: cluster + nodes table on top,
-// embedded WorkloadsSurface (pods) underneath, deployments table beneath
-// that when the cluster reports any. The standalone Nodes / Pods /
-// Deployments tabs that used to live here were pure duplicates of the
-// Overview stack, so they're intentionally absent — the Workloads filter
-// inside Overview owns search/grouping for pods. Services are not surfaced
-// by the canonical unified resource model today (no ResourceTypeK8sService
-// projection on the backend), so a Services tab is similarly absent until
-// that gap is closed in the canonical adapter.
+// The Overview tab stacks the K8s object graph from logical aggregate down
+// to runtime detail: clusters → nodes → deployments → pods. Deployments
+// (desired state) sit above pods (the actual runtime result) so a reader
+// scanning for "did my rollout converge?" hits Ready/Available before
+// scrolling into the per-pod list. The deployments table is gated on the
+// cluster reporting any; when it's empty the pods section follows nodes
+// directly. The standalone Nodes / Pods / Deployments tabs that used to
+// live here were pure duplicates of the Overview stack, so they're
+// intentionally absent — the Workloads filter inside Overview owns
+// search/grouping for pods. Services are not surfaced by the canonical
+// unified resource model today (no ResourceTypeK8sService projection on
+// the backend), so a Services tab is similarly absent until that gap is
+// closed in the canonical adapter.
 export type KubernetesPageTabId = 'overview';
 
 export type KubernetesTabSpec = {

@@ -189,6 +189,15 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
         emptyDescription="Kubernetes nodes appear here as soon as the agent enumerates them."
         showToolbar={false}
       />
+      <Show when={props.model().deployments.length > 0}>
+        <KubernetesDeploymentsTable
+          resources={filteredDeployments()}
+          emptyIcon={k8sIcon()}
+          emptyTitle="No deployments reported"
+          emptyDescription="Deployments appear here once the cluster reports them."
+          showToolbar={false}
+        />
+      </Show>
       <WorkloadsSurface
         state={workloadsState}
         vms={[]}
@@ -201,15 +210,6 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
         forcedViewMode={KUBERNETES_WORKLOAD_FORCED_VIEW_MODE}
         compactGroupHeaders
       />
-      <Show when={props.model().deployments.length > 0}>
-        <KubernetesDeploymentsTable
-          resources={filteredDeployments()}
-          emptyIcon={k8sIcon()}
-          emptyTitle="No deployments reported"
-          emptyDescription="Deployments appear here once the cluster reports them."
-          showToolbar={false}
-        />
-      </Show>
     </div>
   );
 }
