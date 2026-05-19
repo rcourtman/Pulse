@@ -1,21 +1,16 @@
-import { useLocation } from '@solidjs/router';
 import ContainerIcon from 'lucide-solid/icons/container';
 import { Show, createMemo } from 'solid-js';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
-  PlatformSectionTabs,
   PlatformTableEmptyState,
 } from '@/features/platformPage/sharedPlatformPage';
 import { DockerHostsTable } from './DockerHostsTable';
 import { DockerServicesTable } from './DockerServicesTable';
 import {
-  DOCKER_TAB_SPECS,
   buildDockerPageModel,
   buildDockerContainerDefaultHiddenColumnIds,
-  buildVisibleDockerTabSpecs,
-  type DockerPageTabId,
 } from './dockerPageModel';
 
 const DOCKER_RESOURCE_QUERY = 'type=agent,docker-host,app-container,docker-service';
@@ -27,12 +22,10 @@ const DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES = {
   context: 'Host',
   disk: 'Writable layer',
 } as const;
-const VALID_TABS = new Set<DockerPageTabId>(DOCKER_TAB_SPECS.map((tab) => tab.id));
 
 const dockerIcon = () => <ContainerIcon class="h-6 w-6 text-slate-400" />;
 
 export function DockerPageSurface() {
-  const location = useLocation();
   const { resources, loading, error, refetch } = useUnifiedResources({
     query: DOCKER_RESOURCE_QUERY,
     cacheKey: 'docker-workspace',
@@ -42,24 +35,9 @@ export function DockerPageSurface() {
   const dockerWorkloadDefaultHiddenColumns = createMemo(() =>
     buildDockerContainerDefaultHiddenColumnIds(model().containers),
   );
-  const visibleTabs = createMemo(() => buildVisibleDockerTabSpecs(model()));
-  const visibleTabIds = createMemo(
-    () => new Set<DockerPageTabId>(visibleTabs().map((tab) => tab.id)),
-  );
-  const activeTab = createMemo<DockerPageTabId>(() => {
-    const segment = location.pathname.split('/').filter(Boolean)[1] as DockerPageTabId | undefined;
-    if (!segment || !VALID_TABS.has(segment)) return 'overview';
-    return visibleTabIds().has(segment) ? segment : 'overview';
-  });
 
   return (
     <div data-testid="docker-page" class="space-y-3">
-      <PlatformSectionTabs
-        tabs={visibleTabs()}
-        active={activeTab()}
-        ariaLabel="Docker sections"
-      />
-
       <Show
         when={!loading() || model().resources.length > 0}
         fallback={
@@ -90,44 +68,14 @@ export function DockerPageSurface() {
               />
             }
           >
-            <Show when={activeTab() === 'overview'}>
-              <div class="space-y-4">
-                <DockerHostsTable
-                  resources={model().hosts}
-                  emptyIcon={dockerIcon()}
-                  emptyTitle="No Docker hosts"
-                  emptyDescription="Container hosts appear here once a Pulse agent registers them."
-                  showToolbar={false}
-                />
-                <WorkloadsSurface
-                  vms={[]}
-                  containers={[]}
-                  nodes={[]}
-                  useWorkloads
-                  embedded
-                  tableOnly
-                  showFilterToolbar
-                  suppressPlatformFilter
-                  forcedPlatform={DOCKER_PLATFORM_FILTER}
-                  forcedViewMode={DOCKER_WORKLOAD_FORCED_VIEW_MODE}
-                  defaultSortKey={DOCKER_WORKLOAD_DEFAULT_SORT_KEY}
-                  columnVisibilityStorageScope={DOCKER_WORKLOAD_COLUMN_SCOPE}
-                  additionalDefaultHiddenColumnIds={dockerWorkloadDefaultHiddenColumns()}
-                  columnLabelOverrides={DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES}
-                  compactGroupHeaders
-                />
-                <Show when={model().services.length > 0}>
-                  <DockerServicesTable
-                    resources={model().services}
-                    emptyIcon={dockerIcon()}
-                    emptyTitle="No Swarm services"
-                    emptyDescription="Docker Swarm services appear here when a Swarm manager reports them."
-                    showToolbar={false}
-                  />
-                </Show>
-              </div>
-            </Show>
-            <Show when={activeTab() === 'containers'}>
+            <div class="space-y-4">
+              <DockerHostsTable
+                resources={model().hosts}
+                emptyIcon={dockerIcon()}
+                emptyTitle="No Docker hosts"
+                emptyDescription="Container hosts appear here once a Pulse agent registers them."
+                showToolbar={false}
+              />
               <WorkloadsSurface
                 vms={[]}
                 containers={[]}
@@ -143,16 +91,18 @@ export function DockerPageSurface() {
                 columnVisibilityStorageScope={DOCKER_WORKLOAD_COLUMN_SCOPE}
                 additionalDefaultHiddenColumnIds={dockerWorkloadDefaultHiddenColumns()}
                 columnLabelOverrides={DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES}
+                compactGroupHeaders
               />
-            </Show>
-            <Show when={activeTab() === 'services'}>
-              <DockerServicesTable
-                resources={model().services}
-                emptyIcon={dockerIcon()}
-                emptyTitle="No Swarm services"
-                emptyDescription="Docker Swarm services appear here when a Swarm manager reports them."
-              />
-            </Show>
+              <Show when={model().services.length > 0}>
+                <DockerServicesTable
+                  resources={model().services}
+                  emptyIcon={dockerIcon()}
+                  emptyTitle="No Swarm services"
+                  emptyDescription="Docker Swarm services appear here when a Swarm manager reports them."
+                  showToolbar={false}
+                />
+              </Show>
+            </div>
           </Show>
         </Show>
       </Show>

@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
-  DOCKER_TAB_SPECS,
   buildDockerContainerDefaultHiddenColumnIds,
   buildDockerPageModel,
-  buildVisibleDockerTabSpecs,
   hasDockerSwarmEvidence,
 } from '../dockerPageModel';
 
@@ -20,14 +18,6 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
 });
 
 describe('dockerPageModel', () => {
-  it('declares the Docker section set with hosts, containers, and Swarm services', () => {
-    expect(DOCKER_TAB_SPECS.map((tab) => tab.id)).toEqual([
-      'overview',
-      'containers',
-      'services',
-    ]);
-  });
-
   it('buckets Docker hosts, containers, and Swarm services from canonical resources', () => {
     const model = buildDockerPageModel([
       makeResource({ id: 'docker-host-1', type: 'agent' }),
@@ -62,32 +52,6 @@ describe('dockerPageModel', () => {
     ]);
     expect(model.hosts).toEqual([]);
     expect(model.resources).toEqual([]);
-  });
-
-  it('shows Docker subtabs only when canonical resource evidence exists', () => {
-    expect(
-      buildVisibleDockerTabSpecs(
-        buildDockerPageModel([makeResource({ id: 'docker-host-1', type: 'agent' })]),
-      ).map((tab) => tab.id),
-    ).toEqual(['overview']);
-
-    expect(
-      buildVisibleDockerTabSpecs(
-        buildDockerPageModel([
-          makeResource({ id: 'docker-host-1', type: 'agent' }),
-          makeResource({ id: 'ctr-1', type: 'app-container' }),
-        ]),
-      ).map((tab) => tab.id),
-    ).toEqual(['overview', 'containers']);
-
-    expect(
-      buildVisibleDockerTabSpecs(
-        buildDockerPageModel([
-          makeResource({ id: 'docker-host-1', type: 'agent' }),
-          makeResource({ id: 'svc-1', type: 'docker-service' }),
-        ]),
-      ).map((tab) => tab.id),
-    ).toEqual(['overview', 'services']);
   });
 
   it('hides Docker container I/O columns by default when the snapshot has no I/O telemetry', () => {

@@ -52,14 +52,6 @@ type PlatformPageCase = {
 
 const PLATFORM_PAGES: readonly PlatformPageCase[] = [
   {
-    id: 'docker',
-    rootPath: '/docker',
-    testId: 'docker-page',
-    ariaLabel: 'Docker sections',
-    tabPaths: ['/docker/overview', '/docker/containers', '/docker/services'],
-    populatedTabPaths: ['/docker/overview', '/docker/containers', '/docker/services'],
-  },
-  {
     id: 'kubernetes',
     rootPath: '/kubernetes',
     testId: 'kubernetes-page',
@@ -165,6 +157,20 @@ test.describe('Platform pages shell', () => {
     });
   }
 
+  test('docker page renders as a single unified surface without sub-tabs', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop shell smoke');
+
+    await stubEmptyResources(page);
+    await page.goto('/docker/overview', { waitUntil: 'domcontentloaded' });
+
+    const pageRoot = page.getByTestId('docker-page');
+    await expect(pageRoot).toBeVisible({ timeout: 30_000 });
+
+    await expect(page.getByRole('navigation', { name: 'Docker sections' })).toHaveCount(0);
+  });
+
   test('every platform sub-tab exposes v5-style operator controls', async ({
     page,
   }, testInfo) => {
@@ -178,8 +184,6 @@ test.describe('Platform pages shell', () => {
     // own canonical FilterBar via `showFilterToolbar`.
     const cases: ReadonlyArray<{ path: string; testId: string }> = [
       { path: '/docker/overview', testId: 'docker-page' },
-      { path: '/docker/containers', testId: 'docker-page' },
-      { path: '/docker/services', testId: 'docker-page' },
       { path: '/kubernetes/overview', testId: 'kubernetes-page' },
       { path: '/kubernetes/nodes', testId: 'kubernetes-page' },
       { path: '/kubernetes/pods', testId: 'kubernetes-page' },
