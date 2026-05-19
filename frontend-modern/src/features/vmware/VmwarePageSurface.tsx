@@ -1,8 +1,10 @@
 import { useLocation } from '@solidjs/router';
 import CpuIcon from 'lucide-solid/icons/cpu';
-import { Show, createMemo } from 'solid-js';
+import { Show, createMemo, type Accessor } from 'solid-js';
 import StorageSurface from '@/components/Storage/Storage';
+import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
+import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
 import type { WorkloadsStatusOption } from '@/components/Workloads/workloadsFilterModel';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
@@ -11,7 +13,12 @@ import {
   PlatformTableEmptyState,
 } from '@/features/platformPage/sharedPlatformPage';
 import { VsphereHostsTable } from './VsphereHostsTable';
-import { VMWARE_TAB_SPECS, buildVmwarePageModel, type VmwarePageTabId } from './vmwarePageModel';
+import {
+  VMWARE_TAB_SPECS,
+  buildVmwarePageModel,
+  type VmwarePageModel,
+  type VmwarePageTabId,
+} from './vmwarePageModel';
 
 // `datastore` is not a first-class type token at the API boundary; vSphere
 // datastores are emitted as canonical `storage` rows. Including it
@@ -80,34 +87,7 @@ export function VmwarePageSurface() {
             }
           >
             <Show when={activeTab() === 'overview'}>
-              <div class="space-y-4">
-                <VsphereHostsTable
-                  hosts={model().hosts}
-                  scope={model().resources}
-                  emptyIcon={vmwareIcon()}
-                  emptyTitle="No vSphere hosts"
-                  emptyDescription="Hosts appear here once the vCenter connection enumerates them."
-                  showToolbar={false}
-                />
-                <WorkloadsSurface
-                  vms={[]}
-                  containers={[]}
-                  nodes={[]}
-                  useWorkloads
-                  embedded
-                  tableOnly
-                  showFilterToolbar
-                  suppressPlatformFilter
-                  allowEmbeddedScopeFilters
-                  forcedPlatform={VMWARE_PLATFORM_FILTER}
-                  forcedViewMode="vm"
-                  filterAriaLabel="vSphere VM filters"
-                  filterSearchPlaceholder="Search vSphere VMs by name, VM ID, host, or status"
-                  filterSearchEmptyMessage="Recent vSphere VM searches appear here."
-                  filterStatusOptions={VMWARE_VM_STATUS_OPTIONS}
-                  compactGroupHeaders
-                />
-              </div>
+              <VmwareOverview model={model} />
             </Show>
             <Show when={activeTab() === 'storage'}>
               <StorageSurface
@@ -124,6 +104,97 @@ export function VmwarePageSurface() {
           </Show>
         </Show>
       </Show>
+    </div>
+  );
+}
+
+interface VmwareOverviewProps {
+  model: Accessor<VmwarePageModel>;
+}
+
+function VmwareOverview(props: VmwareOverviewProps) {
+  const workloadsState = useWorkloadsState({
+    vms: [],
+    containers: [],
+    nodes: [],
+    useWorkloads: true,
+    embedded: true,
+    tableOnly: true,
+    forcedPlatform: VMWARE_PLATFORM_FILTER,
+    forcedViewMode: 'vm',
+    showFilterToolbar: true,
+    suppressPlatformFilter: true,
+    allowEmbeddedScopeFilters: true,
+    compactGroupHeaders: true,
+  });
+  const showSharedFilterToolbar = createMemo(
+    () =>
+      workloadsState.surfaceConnected() &&
+      workloadsState.surfaceInitialDataReceived() &&
+      workloadsState.allGuests().length > 0,
+  );
+
+  return (
+    <div class="space-y-4">
+      <Show when={showSharedFilterToolbar()}>
+        <div data-summary-clear-ignore>
+          <WorkloadsFilter
+            search={workloadsState.search}
+            setSearch={workloadsState.setSearch}
+            viewMode={workloadsState.viewMode}
+            setViewMode={workloadsState.setViewMode}
+            statusMode={workloadsState.statusMode}
+            setStatusMode={workloadsState.setStatusMode}
+            groupingMode={workloadsState.groupingMode}
+            setGroupingMode={workloadsState.setGroupingMode}
+            setSortKey={workloadsState.setSortKey}
+            setSortDirection={workloadsState.setSortDirection}
+            onBeforeAutoFocus={workloadsState.handleBeforeAutoFocus}
+            ariaLabel="vSphere VM filters"
+            searchPlaceholder="Search vSphere VMs by name, VM ID, host, or status"
+            searchEmptyMessage="Recent vSphere VM searches appear here."
+            statusOptions={VMWARE_VM_STATUS_OPTIONS}
+            columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
+            containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
+            hostFilter={workloadsState.hostFilterConfig()}
+            namespaceFilter={workloadsState.namespaceFilterConfig()}
+            platformFilter={undefined}
+            suppressTypeFilter
+            metricDisplayMode={workloadsState.workloadMetricDisplayMode}
+            setMetricDisplayMode={workloadsState.setWorkloadMetricDisplayMode}
+            metricHistoryRange={workloadsState.workloadMetricHistoryRange}
+            setMetricHistoryRange={workloadsState.setWorkloadMetricHistoryRange}
+            forcedPlatform={VMWARE_PLATFORM_FILTER}
+            pinnedSelectionActive={() =>
+              Boolean(
+                workloadsState.selectedGuestId() ||
+                  workloadsState.focusedSummaryWorkloadGroupId(),
+              )
+            }
+            onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}
+          />
+        </div>
+      </Show>
+      <VsphereHostsTable
+        hosts={props.model().hosts}
+        scope={props.model().resources}
+        emptyIcon={vmwareIcon()}
+        emptyTitle="No vSphere hosts"
+        emptyDescription="Hosts appear here once the vCenter connection enumerates them."
+        showToolbar={false}
+      />
+      <WorkloadsSurface
+        state={workloadsState}
+        vms={[]}
+        containers={[]}
+        nodes={[]}
+        useWorkloads
+        embedded
+        tableOnly
+        forcedPlatform={VMWARE_PLATFORM_FILTER}
+        forcedViewMode="vm"
+        compactGroupHeaders
+      />
     </div>
   );
 }

@@ -1,7 +1,9 @@
 import { useLocation } from '@solidjs/router';
-import { Show, createMemo } from 'solid-js';
+import { Show, createMemo, type Accessor } from 'solid-js';
 import StorageSurface from '@/components/Storage/Storage';
+import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
+import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
 import {
   DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
   type WorkloadsStatusOption,
@@ -30,6 +32,7 @@ import {
   PROXMOX_TAB_SPECS,
   buildProxmoxPageModel,
   buildVisibleProxmoxTabSpecs,
+  type ProxmoxPageModel,
   type ProxmoxPageTabId,
 } from './proxmoxPageModel';
 
@@ -132,42 +135,13 @@ export function ProxmoxPageSurface() {
             }
           >
             <Show when={activeTab() === 'overview'}>
-              <div class="space-y-4">
-                <ProxmoxNodesTable
-                  nodes={model().pveNodes}
-                  guests={model().guests}
-                  metricDisplayMode={metricDisplayMode}
-                  metricHistoryRange={metricHistoryRange}
-                  emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
-                  emptyTitle="No Proxmox VE nodes"
-                  emptyDescription="Proxmox VE nodes appear here once a PVE host reports inventory."
-                />
-                <WorkloadsSurface
-                  vms={[]}
-                  containers={[]}
-                  nodes={[]}
-                  useWorkloads
-                  embedded
-                  tableOnly
-                  showFilterToolbar
-                  suppressPlatformFilter
-                  allowEmbeddedScopeFilters
-                  forcedPlatform={PROXMOX_PLATFORM_FILTER}
-                  statusModeStorageScope={PROXMOX_WORKLOAD_STATUS_STORAGE_SCOPE}
-                  filterAriaLabel="Proxmox workload filters"
-                  filterSearchPlaceholder="Search VMs and LXCs by name, VMID, node, or status"
-                  filterSearchEmptyMessage="Recent Proxmox workload searches appear here."
-                  filterStatusOptions={PROXMOX_WORKLOAD_STATUS_OPTIONS}
-                  compactGroupHeaders
-                  groupNodeDrawerMode="disabled"
-                  metricDisplayMode={metricDisplayMode}
-                  onMetricDisplayModeChange={setMetricDisplayMode}
-                  metricHistoryRange={metricHistoryRange}
-                  onMetricHistoryRangeChange={setMetricHistoryRange}
-                  emptyStateTitle="No Proxmox workloads"
-                  emptyStateDescription="Proxmox VMs and LXCs appear here when inventory is available."
-                />
-              </div>
+              <ProxmoxOverview
+                model={model}
+                metricDisplayMode={metricDisplayMode}
+                setMetricDisplayMode={setMetricDisplayMode}
+                metricHistoryRange={metricHistoryRange}
+                setMetricHistoryRange={setMetricHistoryRange}
+              />
             </Show>
             <Show when={activeTab() === 'storage'}>
               <StorageSurface
@@ -208,6 +182,108 @@ export function ProxmoxPageSurface() {
           </Show>
         </Show>
       </Show>
+    </div>
+  );
+}
+
+interface ProxmoxOverviewProps {
+  model: Accessor<ProxmoxPageModel>;
+  metricDisplayMode: Accessor<WorkloadsMetricDisplayMode>;
+  setMetricDisplayMode: (value: WorkloadsMetricDisplayMode) => void;
+  metricHistoryRange: Accessor<WorkloadTableMetricHistoryRange>;
+  setMetricHistoryRange: (value: WorkloadTableMetricHistoryRange) => void;
+}
+
+function ProxmoxOverview(props: ProxmoxOverviewProps) {
+  const workloadsState = useWorkloadsState({
+    vms: [],
+    containers: [],
+    nodes: [],
+    useWorkloads: true,
+    embedded: true,
+    tableOnly: true,
+    forcedPlatform: PROXMOX_PLATFORM_FILTER,
+    showFilterToolbar: true,
+    suppressPlatformFilter: true,
+    allowEmbeddedScopeFilters: true,
+    statusModeStorageScope: PROXMOX_WORKLOAD_STATUS_STORAGE_SCOPE,
+    compactGroupHeaders: true,
+    groupNodeDrawerMode: 'disabled',
+    metricDisplayMode: props.metricDisplayMode,
+    onMetricDisplayModeChange: props.setMetricDisplayMode,
+    metricHistoryRange: props.metricHistoryRange,
+    onMetricHistoryRangeChange: props.setMetricHistoryRange,
+  });
+  const showSharedFilterToolbar = createMemo(
+    () =>
+      workloadsState.surfaceConnected() &&
+      workloadsState.surfaceInitialDataReceived() &&
+      workloadsState.allGuests().length > 0,
+  );
+
+  return (
+    <div class="space-y-4">
+      <Show when={showSharedFilterToolbar()}>
+        <div data-summary-clear-ignore>
+          <WorkloadsFilter
+            search={workloadsState.search}
+            setSearch={workloadsState.setSearch}
+            viewMode={workloadsState.viewMode}
+            setViewMode={workloadsState.setViewMode}
+            statusMode={workloadsState.statusMode}
+            setStatusMode={workloadsState.setStatusMode}
+            groupingMode={workloadsState.groupingMode}
+            setGroupingMode={workloadsState.setGroupingMode}
+            setSortKey={workloadsState.setSortKey}
+            setSortDirection={workloadsState.setSortDirection}
+            onBeforeAutoFocus={workloadsState.handleBeforeAutoFocus}
+            ariaLabel="Proxmox workload filters"
+            searchPlaceholder="Search VMs and LXCs by name, VMID, node, or status"
+            searchEmptyMessage="Recent Proxmox workload searches appear here."
+            statusOptions={PROXMOX_WORKLOAD_STATUS_OPTIONS}
+            columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
+            containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
+            hostFilter={workloadsState.hostFilterConfig()}
+            namespaceFilter={workloadsState.namespaceFilterConfig()}
+            platformFilter={undefined}
+            metricDisplayMode={workloadsState.workloadMetricDisplayMode}
+            setMetricDisplayMode={workloadsState.setWorkloadMetricDisplayMode}
+            metricHistoryRange={workloadsState.workloadMetricHistoryRange}
+            setMetricHistoryRange={workloadsState.setWorkloadMetricHistoryRange}
+            forcedPlatform={PROXMOX_PLATFORM_FILTER}
+            pinnedSelectionActive={() =>
+              Boolean(
+                workloadsState.selectedGuestId() ||
+                  workloadsState.focusedSummaryWorkloadGroupId(),
+              )
+            }
+            onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}
+          />
+        </div>
+      </Show>
+      <ProxmoxNodesTable
+        nodes={props.model().pveNodes}
+        guests={props.model().guests}
+        metricDisplayMode={props.metricDisplayMode}
+        metricHistoryRange={props.metricHistoryRange}
+        emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="Proxmox VE nodes appear here once a PVE host reports inventory."
+      />
+      <WorkloadsSurface
+        state={workloadsState}
+        vms={[]}
+        containers={[]}
+        nodes={[]}
+        useWorkloads
+        embedded
+        tableOnly
+        forcedPlatform={PROXMOX_PLATFORM_FILTER}
+        compactGroupHeaders
+        groupNodeDrawerMode="disabled"
+        emptyStateTitle="No Proxmox workloads"
+        emptyStateDescription="Proxmox VMs and LXCs appear here when inventory is available."
+      />
     </div>
   );
 }

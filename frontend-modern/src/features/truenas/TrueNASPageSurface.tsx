@@ -1,8 +1,10 @@
 import { useLocation } from '@solidjs/router';
 import DatabaseIcon from 'lucide-solid/icons/database';
-import { Show, createMemo } from 'solid-js';
+import { Show, createMemo, type Accessor } from 'solid-js';
 import StorageSurface from '@/components/Storage/Storage';
+import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
+import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
 import type { WorkloadsStatusOption } from '@/components/Workloads/workloadsFilterModel';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
@@ -14,6 +16,7 @@ import { TrueNASSystemsTable } from './TrueNASSystemsTable';
 import {
   TRUENAS_TAB_SPECS,
   buildTrueNASPageModel,
+  type TrueNASPageModel,
   type TrueNASPageTabId,
 } from './truenasPageModel';
 
@@ -86,36 +89,7 @@ export function TrueNASPageSurface() {
             }
           >
             <Show when={activeTab() === 'overview'}>
-              <div class="space-y-4">
-                <TrueNASSystemsTable
-                  systems={model().systems}
-                  scope={model().resources}
-                  emptyIcon={truenasIcon()}
-                  emptyTitle="No TrueNAS systems"
-                  emptyDescription="TrueNAS systems appear here once a TrueNAS connection reports its top-level appliance."
-                  showToolbar={false}
-                />
-                <Show when={model().apps.length > 0}>
-                  <WorkloadsSurface
-                    vms={[]}
-                    containers={[]}
-                    nodes={[]}
-                    useWorkloads
-                    embedded
-                    tableOnly
-                    showFilterToolbar
-                    suppressPlatformFilter
-                    allowEmbeddedScopeFilters
-                    forcedPlatform={TRUENAS_PLATFORM_FILTER}
-                    forcedViewMode="app-container"
-                    filterAriaLabel="TrueNAS app filters"
-                    filterSearchPlaceholder="Search TrueNAS apps by name, image, namespace, or system"
-                    filterSearchEmptyMessage="Recent TrueNAS app searches appear here."
-                    filterStatusOptions={TRUENAS_APP_STATUS_OPTIONS}
-                    compactGroupHeaders
-                  />
-                </Show>
-              </div>
+              <TrueNASOverview model={model} />
             </Show>
             <Show when={activeTab() === 'storage'}>
               <StorageSurface
@@ -130,6 +104,100 @@ export function TrueNASPageSurface() {
             </Show>
           </Show>
         </Show>
+      </Show>
+    </div>
+  );
+}
+
+interface TrueNASOverviewProps {
+  model: Accessor<TrueNASPageModel>;
+}
+
+function TrueNASOverview(props: TrueNASOverviewProps) {
+  const workloadsState = useWorkloadsState({
+    vms: [],
+    containers: [],
+    nodes: [],
+    useWorkloads: true,
+    embedded: true,
+    tableOnly: true,
+    forcedPlatform: TRUENAS_PLATFORM_FILTER,
+    forcedViewMode: 'app-container',
+    showFilterToolbar: true,
+    suppressPlatformFilter: true,
+    allowEmbeddedScopeFilters: true,
+    compactGroupHeaders: true,
+  });
+  const showSharedFilterToolbar = createMemo(
+    () =>
+      props.model().apps.length > 0 &&
+      workloadsState.surfaceConnected() &&
+      workloadsState.surfaceInitialDataReceived() &&
+      workloadsState.allGuests().length > 0,
+  );
+
+  return (
+    <div class="space-y-4">
+      <Show when={showSharedFilterToolbar()}>
+        <div data-summary-clear-ignore>
+          <WorkloadsFilter
+            search={workloadsState.search}
+            setSearch={workloadsState.setSearch}
+            viewMode={workloadsState.viewMode}
+            setViewMode={workloadsState.setViewMode}
+            statusMode={workloadsState.statusMode}
+            setStatusMode={workloadsState.setStatusMode}
+            groupingMode={workloadsState.groupingMode}
+            setGroupingMode={workloadsState.setGroupingMode}
+            setSortKey={workloadsState.setSortKey}
+            setSortDirection={workloadsState.setSortDirection}
+            onBeforeAutoFocus={workloadsState.handleBeforeAutoFocus}
+            ariaLabel="TrueNAS app filters"
+            searchPlaceholder="Search TrueNAS apps by name, image, namespace, or system"
+            searchEmptyMessage="Recent TrueNAS app searches appear here."
+            statusOptions={TRUENAS_APP_STATUS_OPTIONS}
+            columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
+            containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
+            hostFilter={workloadsState.hostFilterConfig()}
+            namespaceFilter={workloadsState.namespaceFilterConfig()}
+            platformFilter={undefined}
+            suppressTypeFilter
+            metricDisplayMode={workloadsState.workloadMetricDisplayMode}
+            setMetricDisplayMode={workloadsState.setWorkloadMetricDisplayMode}
+            metricHistoryRange={workloadsState.workloadMetricHistoryRange}
+            setMetricHistoryRange={workloadsState.setWorkloadMetricHistoryRange}
+            forcedPlatform={TRUENAS_PLATFORM_FILTER}
+            pinnedSelectionActive={() =>
+              Boolean(
+                workloadsState.selectedGuestId() ||
+                  workloadsState.focusedSummaryWorkloadGroupId(),
+              )
+            }
+            onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}
+          />
+        </div>
+      </Show>
+      <TrueNASSystemsTable
+        systems={props.model().systems}
+        scope={props.model().resources}
+        emptyIcon={truenasIcon()}
+        emptyTitle="No TrueNAS systems"
+        emptyDescription="TrueNAS systems appear here once a TrueNAS connection reports its top-level appliance."
+        showToolbar={false}
+      />
+      <Show when={props.model().apps.length > 0}>
+        <WorkloadsSurface
+          state={workloadsState}
+          vms={[]}
+          containers={[]}
+          nodes={[]}
+          useWorkloads
+          embedded
+          tableOnly
+          forcedPlatform={TRUENAS_PLATFORM_FILTER}
+          forcedViewMode="app-container"
+          compactGroupHeaders
+        />
       </Show>
     </div>
   );
