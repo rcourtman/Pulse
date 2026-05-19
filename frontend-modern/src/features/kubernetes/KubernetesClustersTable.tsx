@@ -25,6 +25,12 @@ import {
   getPlatformTableHeadClass,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
+import {
+  PlatformResourceDetailTableRow,
+  createPlatformResourceDetailState,
+  createPlatformResourceLabelResolver,
+  getPlatformResourceDetailRowClass,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
 
 // Kubernetes clusters are control-plane aggregates, not single processes —
@@ -60,6 +66,8 @@ export const KubernetesClustersTable: Component<{
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterPlatformResources,
   });
+  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-cluster-drawer' });
+  const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
 
   const countsByCluster = createMemo(() => {
     const map = new Map<string, { nodes: number; pods: number; deployments: number }>();
@@ -173,57 +181,80 @@ export const KubernetesClustersTable: Component<{
                         deployments: 0,
                       };
                     const indicator = () => getSimpleStatusIndicator(cluster.status);
+                    const detailRowId = () => drawer.detailRowId(cluster);
+                    const isExpanded = () => drawer.isExpanded(cluster);
                     return (
-                      <TableRow class="text-[11px] sm:text-xs">
-                        <TableCell class={getPlatformTableCellClass()}>
-                          <div class="flex min-w-0 items-center gap-2">
-                            <StatusDot
-                              size="sm"
-                              variant={indicator().variant}
-                              title={cluster.status || 'unknown'}
-                              ariaHidden
-                            />
-                            <span class="truncate font-semibold text-base-content" title={name()}>
-                              {name()}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                      <>
+                        <TableRow
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          aria-controls={isExpanded() ? detailRowId() : undefined}
+                          aria-expanded={isExpanded() ? 'true' : 'false'}
+                          data-kubernetes-cluster-row={cluster.id}
+                          onClick={() => drawer.toggle(cluster)}
+                          onKeyDown={drawer.handleActivationKey(cluster)}
+                          tabIndex={0}
                         >
-                          {context()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
-                        >
-                          {version()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} text-base-content tabular-nums`}
-                        >
-                          {counts().nodes}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
-                        >
-                          {counts().pods}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
-                        >
-                          {counts().deployments}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} text-base-content`}
-                        >
-                          {formatPercent(cluster.cpu?.current)}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} text-base-content`}
-                        >
-                          {formatPercent(cluster.memory?.current)}
-                        </TableCell>
-                      </TableRow>
+                          <TableCell class={getPlatformTableCellClass()}>
+                            <div class="flex min-w-0 items-center gap-2">
+                              <StatusDot
+                                size="sm"
+                                variant={indicator().variant}
+                                title={cluster.status || 'unknown'}
+                                ariaHidden
+                              />
+                              <span
+                                class="truncate font-semibold text-base-content"
+                                title={name()}
+                              >
+                                {name()}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                          >
+                            {context()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                          >
+                            {version()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} text-base-content tabular-nums`}
+                          >
+                            {counts().nodes}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                          >
+                            {counts().pods}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                          >
+                            {counts().deployments}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} text-base-content`}
+                          >
+                            {formatPercent(cluster.cpu?.current)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} text-base-content`}
+                          >
+                            {formatPercent(cluster.memory?.current)}
+                          </TableCell>
+                        </TableRow>
+                        <PlatformResourceDetailTableRow
+                          resource={cluster}
+                          open={isExpanded()}
+                          detailRowId={detailRowId()}
+                          colSpan={8}
+                          resolveResourceLabel={resolveResourceLabel}
+                          onClose={() => drawer.close(cluster)}
+                        />
+                      </>
                     );
                   }}
                 </For>

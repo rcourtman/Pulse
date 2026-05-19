@@ -28,6 +28,12 @@ import {
   getPlatformTableHeadClass,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
+import {
+  PlatformResourceDetailTableRow,
+  createPlatformResourceDetailState,
+  createPlatformResourceLabelResolver,
+  getPlatformResourceDetailRowClass,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
 
 // TrueNAS systems are storage appliances, not generic compute hosts.
@@ -100,6 +106,8 @@ export const TrueNASSystemsTable: Component<{
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterPlatformResources,
   });
+  const drawer = createPlatformResourceDetailState({ idPrefix: 'truenas-system-drawer' });
+  const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
 
   // Single-system canonical mock is the common case today; counts span
   // the full TrueNAS resource scope per row. When multi-system support
@@ -217,89 +225,109 @@ export const TrueNASSystemsTable: Component<{
                     const hasMemoryMetric = () =>
                       memoryTotal() > 0 || memoryPercentOnly() !== undefined;
                     const canRenderMetrics = () => indicator().variant !== 'muted';
+                    const detailRowId = () => drawer.detailRowId(system);
+                    const isExpanded = () => drawer.isExpanded(system);
                     return (
-                      <TableRow class="text-[11px] sm:text-xs">
-                        <TableCell class={getPlatformTableCellClass()}>
-                          <div class="flex min-w-0 items-center gap-2">
-                            <StatusDot
-                              size="sm"
-                              variant={indicator().variant}
-                              title={system.status || 'unknown'}
-                              ariaHidden
-                            />
-                            <span class="truncate font-semibold text-base-content" title={name()}>
-                              {name()}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                      <>
+                        <TableRow
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          aria-controls={isExpanded() ? detailRowId() : undefined}
+                          aria-expanded={isExpanded() ? 'true' : 'false'}
+                          data-truenas-system-row={system.id}
+                          onClick={() => drawer.toggle(system)}
+                          onKeyDown={drawer.handleActivationKey(system)}
+                          tabIndex={0}
                         >
-                          {version()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
-                        >
-                          {formatUptime(system.uptime)}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
-                        >
-                          <ResponsiveMetricCell
-                            class="w-full"
-                            value={cpuPercent() ?? 0}
-                            type="cpu"
-                            resourceId={metricsKey()}
-                            isRunning={canRenderMetrics() && cpuPercent() !== undefined}
-                            showMobile={false}
-                          />
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
-                        >
-                          <Show
-                            when={canRenderMetrics() && hasMemoryMetric()}
-                            fallback={metricFallback()}
+                          <TableCell class={getPlatformTableCellClass()}>
+                            <div class="flex min-w-0 items-center gap-2">
+                              <StatusDot
+                                size="sm"
+                                variant={indicator().variant}
+                                title={system.status || 'unknown'}
+                                ariaHidden
+                              />
+                              <span class="truncate font-semibold text-base-content" title={name()}>
+                                {name()}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
                           >
-                            <StackedMemoryBar
-                              used={memoryUsed()}
-                              total={memoryTotal()}
-                              percentOnly={memoryPercentOnly()}
+                            {version()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                          >
+                            {formatUptime(system.uptime)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                          >
+                            <ResponsiveMetricCell
+                              class="w-full"
+                              value={cpuPercent() ?? 0}
+                              type="cpu"
+                              resourceId={metricsKey()}
+                              isRunning={canRenderMetrics() && cpuPercent() !== undefined}
+                              showMobile={false}
                             />
-                          </Show>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} text-base-content`}
-                        >
-                          <span class="md:hidden">{formatPercent(storagePercent())}</span>
-                          <span class="hidden md:inline">{storageFullLabel()}</span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
-                        >
-                          {formatTemperature(system.temperature)}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
-                        >
-                          {c.pools}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
-                        >
-                          {c.datasets}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
-                        >
-                          {c.disks}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
-                        >
-                          {c.apps}
-                        </TableCell>
-                      </TableRow>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                          >
+                            <Show
+                              when={canRenderMetrics() && hasMemoryMetric()}
+                              fallback={metricFallback()}
+                            >
+                              <StackedMemoryBar
+                                used={memoryUsed()}
+                                total={memoryTotal()}
+                                percentOnly={memoryPercentOnly()}
+                              />
+                            </Show>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} text-base-content`}
+                          >
+                            <span class="md:hidden">{formatPercent(storagePercent())}</span>
+                            <span class="hidden md:inline">{storageFullLabel()}</span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                          >
+                            {formatTemperature(system.temperature)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                          >
+                            {c.pools}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                          >
+                            {c.datasets}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                          >
+                            {c.disks}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                          >
+                            {c.apps}
+                          </TableCell>
+                        </TableRow>
+                        <PlatformResourceDetailTableRow
+                          resource={system}
+                          open={isExpanded()}
+                          detailRowId={detailRowId()}
+                          colSpan={11}
+                          resolveResourceLabel={resolveResourceLabel}
+                          onClose={() => drawer.close(system)}
+                        />
+                      </>
                     );
                   }}
                 </For>

@@ -28,6 +28,12 @@ import {
   getPlatformTableHeadClass,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
+import {
+  PlatformResourceDetailTableRow,
+  createPlatformResourceDetailState,
+  createPlatformResourceLabelResolver,
+  getPlatformResourceDetailRowClass,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
 
 // Kubernetes nodes carry richer Kubelet/runtime metadata than a generic
@@ -93,6 +99,8 @@ export const KubernetesNodesTable: Component<{
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterPlatformResources,
   });
+  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-node-drawer' });
+  const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
   return (
     <Show
@@ -190,81 +198,101 @@ export const KubernetesNodesTable: Component<{
                     const hasMemoryMetric = () =>
                       memoryTotal() > 0 || memoryPercentOnly() !== undefined;
                     const canRenderMetrics = () => indicator().variant !== 'muted';
+                    const detailRowId = () => drawer.detailRowId(node);
+                    const isExpanded = () => drawer.isExpanded(node);
                     return (
-                      <TableRow class="text-[11px] sm:text-xs">
-                        <TableCell class={getPlatformTableCellClass()}>
-                          <div class="flex min-w-0 items-center gap-2">
-                            <StatusDot
-                              size="sm"
-                              variant={indicator().variant}
-                              title={node.status || 'unknown'}
-                              ariaHidden
-                            />
-                            <span class="truncate font-semibold text-base-content" title={name()}>
-                              {name()}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                      <>
+                        <TableRow
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          aria-controls={isExpanded() ? detailRowId() : undefined}
+                          aria-expanded={isExpanded() ? 'true' : 'false'}
+                          data-kubernetes-node-row={node.id}
+                          onClick={() => drawer.toggle(node)}
+                          onKeyDown={drawer.handleActivationKey(node)}
+                          tabIndex={0}
                         >
-                          {cluster()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
-                        >
-                          {formatRoles(meta()?.roles)}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
-                        >
-                          {kubelet()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
-                        >
-                          <span class="truncate inline-block max-w-[10rem]" title={runtime()}>
-                            {runtime()}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
-                        >
-                          <ResponsiveMetricCell
-                            class="w-full"
-                            value={cpuPercent() ?? 0}
-                            type="cpu"
-                            resourceId={metricsKey()}
-                            isRunning={canRenderMetrics() && cpuPercent() !== undefined}
-                            showMobile={false}
-                          />
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
-                        >
-                          <Show
-                            when={canRenderMetrics() && hasMemoryMetric()}
-                            fallback={metricFallback()}
+                          <TableCell class={getPlatformTableCellClass()}>
+                            <div class="flex min-w-0 items-center gap-2">
+                              <StatusDot
+                                size="sm"
+                                variant={indicator().variant}
+                                title={node.status || 'unknown'}
+                                ariaHidden
+                              />
+                              <span class="truncate font-semibold text-base-content" title={name()}>
+                                {name()}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
                           >
-                            <StackedMemoryBar
-                              used={memoryUsed()}
-                              total={memoryTotal()}
-                              percentOnly={memoryPercentOnly()}
+                            {cluster()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                          >
+                            {formatRoles(meta()?.roles)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                          >
+                            {kubelet()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                          >
+                            <span class="truncate inline-block max-w-[10rem]" title={runtime()}>
+                              {runtime()}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                          >
+                            <ResponsiveMetricCell
+                              class="w-full"
+                              value={cpuPercent() ?? 0}
+                              type="cpu"
+                              resourceId={metricsKey()}
+                              isRunning={canRenderMetrics() && cpuPercent() !== undefined}
+                              showMobile={false}
                             />
-                          </Show>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} text-base-content tabular-nums`}
-                        >
-                          <span class="md:hidden">{compactCapacityLabel()}</span>
-                          <span class="hidden md:inline">{capacityLabel()}</span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
-                        >
-                          {formatUptime(node.uptime)}
-                        </TableCell>
-                      </TableRow>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                          >
+                            <Show
+                              when={canRenderMetrics() && hasMemoryMetric()}
+                              fallback={metricFallback()}
+                            >
+                              <StackedMemoryBar
+                                used={memoryUsed()}
+                                total={memoryTotal()}
+                                percentOnly={memoryPercentOnly()}
+                              />
+                            </Show>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} text-base-content tabular-nums`}
+                          >
+                            <span class="md:hidden">{compactCapacityLabel()}</span>
+                            <span class="hidden md:inline">{capacityLabel()}</span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                          >
+                            {formatUptime(node.uptime)}
+                          </TableCell>
+                        </TableRow>
+                        <PlatformResourceDetailTableRow
+                          resource={node}
+                          open={isExpanded()}
+                          detailRowId={detailRowId()}
+                          colSpan={9}
+                          resolveResourceLabel={resolveResourceLabel}
+                          onClose={() => drawer.close(node)}
+                        />
+                      </>
                     );
                   }}
                 </For>

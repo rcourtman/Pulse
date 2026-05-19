@@ -28,6 +28,12 @@ import {
   getPlatformTableHeadClass,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
+import {
+  PlatformResourceDetailTableRow,
+  createPlatformResourceDetailState,
+  createPlatformResourceLabelResolver,
+  getPlatformResourceDetailRowClass,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
 
 // vSphere ESXi hosts are virtualization hypervisors managed by vCenter,
@@ -88,6 +94,8 @@ export const VsphereHostsTable: Component<{
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterPlatformResources,
   });
+  const drawer = createPlatformResourceDetailState({ idPrefix: 'vsphere-host-drawer' });
+  const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
 
   const vmCountByHost = createMemo(() => {
     const map = new Map<string, number>();
@@ -184,88 +192,108 @@ export const VsphereHostsTable: Component<{
                     const hasMemoryMetric = () =>
                       memoryTotal() > 0 || memoryPercentOnly() !== undefined;
                     const canRenderMetrics = () => indicator().variant !== 'muted';
+                    const detailRowId = () => drawer.detailRowId(host);
+                    const isExpanded = () => drawer.isExpanded(host);
                     return (
-                      <TableRow class="text-[11px] sm:text-xs">
-                        <TableCell class={getPlatformTableCellClass()}>
-                          <div class="flex min-w-0 items-center gap-2">
-                            <StatusDot
-                              size="sm"
-                              variant={indicator().variant}
-                              title={host.status || 'unknown'}
-                              ariaHidden
-                            />
-                            <span class="truncate font-semibold text-base-content" title={name()}>
-                              {name()}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                      <>
+                        <TableRow
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          aria-controls={isExpanded() ? detailRowId() : undefined}
+                          aria-expanded={isExpanded() ? 'true' : 'false'}
+                          data-vsphere-host-row={host.id}
+                          onClick={() => drawer.toggle(host)}
+                          onKeyDown={drawer.handleActivationKey(host)}
+                          tabIndex={0}
                         >
-                          {datacenter()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
-                        >
-                          {cluster()}
-                        </TableCell>
-                        <TableCell class={`${getPlatformTableCellClass()} hidden md:table-cell`}>
-                          <div class="flex items-center gap-2">
-                            <StatusDot
-                              size="sm"
-                              variant={powerStateVariant(meta()?.powerState)}
-                              title={meta()?.powerState || 'unknown'}
-                              ariaHidden
-                            />
-                            <span class="text-base-content">
-                              {formatPowerState(meta()?.powerState)}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
-                        >
-                          <ResponsiveMetricCell
-                            class="w-full"
-                            value={cpuPercent() ?? 0}
-                            type="cpu"
-                            resourceId={metricsKey()}
-                            isRunning={canRenderMetrics() && cpuPercent() !== undefined}
-                            showMobile={false}
-                          />
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
-                        >
-                          <Show
-                            when={canRenderMetrics() && hasMemoryMetric()}
-                            fallback={metricFallback()}
+                          <TableCell class={getPlatformTableCellClass()}>
+                            <div class="flex min-w-0 items-center gap-2">
+                              <StatusDot
+                                size="sm"
+                                variant={indicator().variant}
+                                title={host.status || 'unknown'}
+                                ariaHidden
+                              />
+                              <span class="truncate font-semibold text-base-content" title={name()}>
+                                {name()}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
                           >
-                            <StackedMemoryBar
-                              used={memoryUsed()}
-                              total={memoryTotal()}
-                              percentOnly={memoryPercentOnly()}
+                            {datacenter()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                          >
+                            {cluster()}
+                          </TableCell>
+                          <TableCell class={`${getPlatformTableCellClass()} hidden md:table-cell`}>
+                            <div class="flex items-center gap-2">
+                              <StatusDot
+                                size="sm"
+                                variant={powerStateVariant(meta()?.powerState)}
+                                title={meta()?.powerState || 'unknown'}
+                                ariaHidden
+                              />
+                              <span class="text-base-content">
+                                {formatPowerState(meta()?.powerState)}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                          >
+                            <ResponsiveMetricCell
+                              class="w-full"
+                              value={cpuPercent() ?? 0}
+                              type="cpu"
+                              resourceId={metricsKey()}
+                              isRunning={canRenderMetrics() && cpuPercent() !== undefined}
+                              showMobile={false}
                             />
-                          </Show>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
-                        >
-                          {datastoreCount()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} text-base-content tabular-nums`}
-                        >
-                          {vmCount()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
-                        >
-                          <span class="inline-block max-w-[12rem] truncate" title={vcenter()}>
-                            {vcenter()}
-                          </span>
-                        </TableCell>
-                      </TableRow>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                          >
+                            <Show
+                              when={canRenderMetrics() && hasMemoryMetric()}
+                              fallback={metricFallback()}
+                            >
+                              <StackedMemoryBar
+                                used={memoryUsed()}
+                                total={memoryTotal()}
+                                percentOnly={memoryPercentOnly()}
+                              />
+                            </Show>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                          >
+                            {datastoreCount()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} text-base-content tabular-nums`}
+                          >
+                            {vmCount()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                          >
+                            <span class="inline-block max-w-[12rem] truncate" title={vcenter()}>
+                              {vcenter()}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                        <PlatformResourceDetailTableRow
+                          resource={host}
+                          open={isExpanded()}
+                          detailRowId={detailRowId()}
+                          colSpan={9}
+                          resolveResourceLabel={resolveResourceLabel}
+                          onClose={() => drawer.close(host)}
+                        />
+                      </>
                     );
                   }}
                 </For>
