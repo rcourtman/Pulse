@@ -129,15 +129,9 @@ export const getInfrastructureAgentHostProfileSupportText = (): string =>
 
 export const getInfrastructureGovernanceBadgeLabel = (
   governanceState: PlatformGovernanceState,
-  readinessStage: PlatformReadinessStage,
+  _readinessStage: PlatformReadinessStage,
 ): string | null => {
   if (governanceState === 'supported') return null;
-  if (governanceState === 'admitted') {
-    // "Early support" is friendlier than the internal "First lab ready"
-    // governance term: it tells a user the platform works but has had
-    // limited production exposure, without surfacing lane-stage jargon.
-    return readinessStage === 'first-lab-ready' ? 'Early support' : 'Admitted';
-  }
   if (governanceState === 'presentation-only') return 'Presentation only';
   return null;
 };
@@ -539,9 +533,10 @@ export const getInfrastructureSupportSummaryBadges = (): {
     ...getInfrastructureApiProductsByGovernanceState('supported').map((product) => product.label),
     ...INFRASTRUCTURE_AGENT_DISCOVERY_LABELS,
   ],
-  currentAdmissionPath: getInfrastructureApiProductsByGovernanceState('admitted').map(
-    (product) => product.label,
-  ),
+  // No platforms currently sit in the admitted staging area; the type is
+  // narrowed to the live governance states, so the admission-path summary
+  // is empty until a future platform is admitted-but-not-yet-supported.
+  currentAdmissionPath: [],
   installPath: [...INFRASTRUCTURE_AGENT_HOST_LABELS, ...INFRASTRUCTURE_AGENT_DISCOVERY_LABELS],
 });
 

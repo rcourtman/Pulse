@@ -99,9 +99,6 @@ describe('infrastructureOnboardingPresentation', () => {
       'Network endpoint',
     ]);
 
-    expect(
-      getInfrastructureApiProductsByGovernanceState('admitted').map((product) => product.label),
-    ).toEqual([]);
     expect(getInfrastructureGovernanceBadgeLabel('supported', 'supported')).toBeNull();
   });
 
