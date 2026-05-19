@@ -762,7 +762,7 @@ describe('frontend resource type boundaries', () => {
     expect(workloadsWorkloadRouteStateSource).toContain('useWorkloadFilterOptions');
     expect(workloadsWorkloadFilterOptionsSource).toContain("from './workloadFilterConfigModel'");
     expect(workloadsWorkloadFilterOptionsSource).toContain(
-      'buildWorkloadNodeOptions(options.allGuests())',
+      'buildWorkloadNodeOptions(platformScopedGuests())',
     );
     expect(workloadsWorkloadFilterOptionsSource).not.toContain(
       'const onContextChange = (value: string) =>',
@@ -1018,7 +1018,7 @@ describe('frontend resource type boundaries', () => {
     expect(guestDrawerSource).toContain('useGuestDrawerState');
     expect(guestDrawerSource).toContain('GuestDrawerOverview');
     expect(guestDrawerStateSource).toContain('getCanonicalWorkloadId');
-    expect(guestDrawerStateSource).toContain("from '@/routing/resourceLinks'");
+    expect(guestDrawerStateSource).not.toContain("from '@/routing/resourceLinks'");
     expect(guestDrawerStateSource).not.toContain('./infrastructureLink');
     expect(guestDrawerStateSource).toContain('guestOsSummary');
     expect(guestDrawerSource).not.toContain('const guestId = () => {');
@@ -2702,7 +2702,7 @@ describe('frontend resource type boundaries', () => {
     expect(commandPaletteModalSource).not.toContain('buildInfrastructurePath');
     expect(commandPaletteStateSource).toContain('useNavigate');
     expect(commandPaletteStateSource).toContain('createSignal');
-    expect(commandPaletteStateSource).toContain('buildInfrastructurePath');
+    expect(commandPaletteStateSource).not.toContain('buildInfrastructurePath');
     expect(commandPaletteModelSource).toContain('buildCommandPaletteCommands');
     expect(commandPaletteModelSource).toContain('normalizeCommandPaletteQuery');
     expect(commandPaletteModelSource).toContain('filterCommandPaletteCommands');

@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import type { WorkloadGuest } from '@/types/workloads';
-import { ROUTE_STATE_REPLACE_OPTIONS } from '@/utils/routeStateNavigation';
 
 import { resolveWorkloadResourceSelection } from '../workloadSelectionModel';
 import { useWorkloadSelectionState } from '../useWorkloadSelectionState';
@@ -101,7 +100,7 @@ describe('useWorkloadSelectionState', () => {
     });
   });
 
-  it('writes workload row selection back into the route state without dropping filters', () => {
+  it('opens workload row selection locally without route navigation', () => {
     locationSearch = '?type=app-container&platform=truenas&agent=truenas-main';
     const [filteredGuests] = createSignal<WorkloadGuest[]>([]);
 
@@ -115,13 +114,11 @@ describe('useWorkloadSelectionState', () => {
     result.setSelectedGuestId('app-container:truenas-main:nextcloud');
     vi.runAllTimers();
 
-    expect(navigateSpy).toHaveBeenCalledWith(
-      '/workloads?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
-      ROUTE_STATE_REPLACE_OPTIONS,
-    );
+    expect(result.selectedGuestId()).toBe('app-container:truenas-main:nextcloud');
+    expect(navigateSpy).not.toHaveBeenCalled();
   });
 
-  it('clears pinned workload scope back to page state without mutating route filters', () => {
+  it('clears pinned workload scope locally without mutating route filters', () => {
     locationSearch =
       '?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud&summaryGroup=docker-host%3Atruenas-main';
     const [filteredGuests] = createSignal<WorkloadGuest[]>([]);
@@ -147,10 +144,9 @@ describe('useWorkloadSelectionState', () => {
     result.clearPinnedSummaryScope();
     vi.runAllTimers();
 
-    expect(navigateSpy).toHaveBeenCalledWith(
-      '/workloads?type=app-container&platform=truenas&agent=truenas-main',
-      ROUTE_STATE_REPLACE_OPTIONS,
-    );
+    expect(result.selectedGuestId()).toBeNull();
+    expect(result.focusedSummaryWorkloadGroupId()).toBeNull();
+    expect(navigateSpy).not.toHaveBeenCalled();
   });
 
   it('routes Escape through workload scope clearing and additional page reset work', () => {
@@ -171,10 +167,7 @@ describe('useWorkloadSelectionState', () => {
     vi.runAllTimers();
 
     expect(clearAdditionalPageStateOnEscape).toHaveBeenCalledTimes(1);
-    expect(navigateSpy).toHaveBeenCalledWith(
-      '/workloads?type=app-container&platform=truenas&agent=truenas-main',
-      ROUTE_STATE_REPLACE_OPTIONS,
-    );
+    expect(navigateSpy).not.toHaveBeenCalled();
   });
 
   it('preserves the nearest scrollable ancestor when row focus changes locally', () => {
@@ -211,10 +204,8 @@ describe('useWorkloadSelectionState', () => {
 
     vi.runAllTimers();
 
-    expect(navigateSpy).toHaveBeenCalledWith(
-      '/workloads?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
-      ROUTE_STATE_REPLACE_OPTIONS,
-    );
+    expect(result.selectedGuestId()).toBe('app-container:truenas-main:nextcloud');
+    expect(navigateSpy).not.toHaveBeenCalled();
   });
 
   it('shows a deliberate jump affordance when a hovered workload row is off-screen', () => {
@@ -436,7 +427,7 @@ describe('useWorkloadSelectionState', () => {
     expect(result.focusedSummaryWorkloadGroupId()).toBe('cluster-a');
   });
 
-  it('clears row focus without leaving behind an inferred agent filter', () => {
+  it('clears row focus locally without leaving behind an inferred agent filter', () => {
     locationSearch = '?resource=cluster-a:node-1:101';
     const [filteredGuests] = createSignal<WorkloadGuest[]>([]);
 
@@ -452,6 +443,7 @@ describe('useWorkloadSelectionState', () => {
     result.setSelectedGuestId(null);
     vi.runAllTimers();
 
-    expect(navigateSpy).toHaveBeenCalledWith('/workloads', ROUTE_STATE_REPLACE_OPTIONS);
+    expect(result.selectedGuestId()).toBeNull();
+    expect(navigateSpy).not.toHaveBeenCalled();
   });
 });

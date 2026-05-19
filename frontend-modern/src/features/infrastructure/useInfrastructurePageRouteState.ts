@@ -145,28 +145,16 @@ export function useInfrastructurePageRouteState(options: InfrastructurePageRoute
 
     const nextSource = selectedSource();
     const nextQuery = searchQuery().trim();
-    const currentLinkedResource = parsed.resource;
-    const selectedResourceId = expandedResourceId();
-    const shouldPreserveIncomingResource =
-      !selectedResourceId && Boolean(currentLinkedResource) && !initialLoadComplete();
-    const nextResource = shouldPreserveIncomingResource
-      ? currentLinkedResource
-      : (selectedResourceId ?? '');
-    const nextSummaryGroup = focusedResourceGroupId() ?? '';
 
     const managedPath = buildInfrastructurePath({
       source: nextSource || null,
       query: nextQuery || null,
-      resource: nextResource || null,
-      summaryGroup: nextSummaryGroup || null,
     });
     const managedUrl = new URL(managedPath, 'http://pulse.local');
     const currentParams = new URLSearchParams(location.search);
     const nextParams = new URLSearchParams(location.search);
     nextParams.delete(INFRASTRUCTURE_QUERY_PARAMS.source);
     nextParams.delete(INFRASTRUCTURE_QUERY_PARAMS.query);
-    nextParams.delete(INFRASTRUCTURE_QUERY_PARAMS.resource);
-    nextParams.delete(INFRASTRUCTURE_QUERY_PARAMS.summaryGroup);
     managedUrl.searchParams.forEach((value, key) => {
       nextParams.set(key, value);
     });

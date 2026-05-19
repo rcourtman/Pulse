@@ -1,5 +1,5 @@
-import { useLocation, useNavigate } from '@solidjs/router';
-import { createEffect, createMemo, createSignal, onCleanup, untrack, type Accessor } from 'solid-js';
+import { useLocation } from '@solidjs/router';
+import { createEffect, createMemo, createSignal, type Accessor } from 'solid-js';
 
 import { preserveScrollableAncestorVerticalOffset } from '@/components/shared/contextualFocus';
 import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
@@ -9,12 +9,10 @@ import {
 } from '@/components/shared/summaryCardInteraction';
 import type { WorkloadGuest } from '@/types/workloads';
 import { capturePendingAppShellRestoreTop } from '@/utils/appShellScrollRestoration';
-import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
 import {
   workloadsHasHoveredWorkload,
   workloadsHasVisibleWorkloadGroupScope,
   resolveWorkloadResourceSelection,
-  resolveWorkloadsSelectionNavigateTarget,
 } from './workloadSelectionModel';
 
 interface UseWorkloadsSelectionStateOptions {
@@ -25,11 +23,6 @@ interface UseWorkloadsSelectionStateOptions {
 
 export function useWorkloadSelectionState(options: UseWorkloadsSelectionStateOptions) {
   const location = useLocation();
-  const navigate = useNavigate();
-  const routeStateNavigate = createRouteStateNavigateScheduler(
-    navigate,
-    () => `${untrack(() => location.pathname)}${untrack(() => location.search)}`,
-  );
 
   const [selectedGuestId, setSelectedGuestIdRaw] = createSignal<string | null>(null);
   const [selectedWorkloadGroupId, setSelectedWorkloadGroupIdRaw] = createSignal<string | null>(null);
@@ -57,15 +50,6 @@ export function useWorkloadSelectionState(options: UseWorkloadsSelectionStateOpt
       setSelectedGuestIdRaw(null);
       setSelectedWorkloadGroupIdRaw(null);
     });
-    const nextPath = resolveWorkloadsSelectionNavigateTarget({
-      pathname: location.pathname,
-      search: location.search,
-      resourceId: null,
-      summaryGroupId: null,
-    });
-    if (nextPath) {
-      routeStateNavigate.schedule(nextPath);
-    }
   };
 
   const summaryInteraction = useSummaryPageInteractionState({
@@ -111,15 +95,6 @@ export function useWorkloadSelectionState(options: UseWorkloadsSelectionStateOpt
       setSelectedGuestIdRaw(id);
       setSelectedWorkloadGroupIdRaw(nextGroupScope?.id ?? null);
     });
-    const nextPath = resolveWorkloadsSelectionNavigateTarget({
-      pathname: location.pathname,
-      search: location.search,
-      resourceId: id,
-      summaryGroupId: nextGroupScope?.id ?? null,
-    });
-    if (nextPath) {
-      routeStateNavigate.schedule(nextPath);
-    }
   };
 
   const setFocusedWorkloadGroupScopeState = (scope: SummarySeriesGroupScope | null) => {
@@ -132,19 +107,7 @@ export function useWorkloadSelectionState(options: UseWorkloadsSelectionStateOpt
   };
 
   const setFocusedWorkloadGroupScope = (scope: SummarySeriesGroupScope | null) => {
-    const nextGroupId = scope?.id ?? null;
-    const nextSelectedGuestId =
-      scope && !isSummarySeriesInGroupScope(scope, selectedGuestId()) ? null : selectedGuestId();
     setFocusedWorkloadGroupScopeState(scope);
-    const nextPath = resolveWorkloadsSelectionNavigateTarget({
-      pathname: location.pathname,
-      search: location.search,
-      resourceId: nextSelectedGuestId,
-      summaryGroupId: nextGroupId,
-    });
-    if (nextPath) {
-      routeStateNavigate.schedule(nextPath);
-    }
   };
 
   createEffect(() => {
@@ -217,10 +180,6 @@ export function useWorkloadSelectionState(options: UseWorkloadsSelectionStateOpt
     if (!isSummarySeriesInGroupScope(groupScope, selectedId)) {
       setSelectedGuestId(null);
     }
-  });
-
-  onCleanup(() => {
-    routeStateNavigate.cleanup();
   });
 
   return {

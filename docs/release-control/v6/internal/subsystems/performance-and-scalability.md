@@ -245,6 +245,13 @@ regression protection.
    mounted, report errors out of band, and must not rely on Solid
    `createResource` in a way that can bubble into the route-level Suspense
    fallback or the setup/welcome shell.
+   Workload row drawer expansion, local row focus, and summary group pinning
+   are local interaction state. Inbound Workloads deep links may hydrate
+   `resource` and `summaryGroup` into the focused row or group, but opening,
+   closing, or clearing an inline drawer must not write those params back to
+   route state, schedule router navigation, or trip the app-shell fallback.
+   URL synchronization for Workloads stays limited to filter-owned scope in
+   `frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts`.
    The Workloads page may show a bounded partial-inventory banner when a
    configured workload-capable source is unauthorized, unreachable, stale,
    pending, or paused, but it must not fabricate VM/container rows from host

@@ -5,7 +5,6 @@ import type { WorkloadGuest } from '@/types/workloads';
 import {
   workloadsHasHoveredWorkload,
   resolveWorkloadResourceSelection,
-  resolveWorkloadsSelectionNavigateTarget,
 } from '../workloadSelectionModel';
 
 describe('workloadSelectionModel', () => {
@@ -51,57 +50,10 @@ describe('workloadSelectionModel', () => {
     expect(workloadsHasHoveredWorkload(guests, 'cluster-a:node-1:102')).toBe(false);
   });
 
-  it('builds route-backed workload selection targets without dropping other filters', () => {
-    expect(
-      resolveWorkloadsSelectionNavigateTarget({
-        pathname: '/workloads',
-        search: '?type=app-container&platform=truenas&agent=truenas-main',
-        resourceId: 'app-container:truenas-main:nextcloud',
-        summaryGroupId: null,
-      }),
-    ).toBe(
-      '/workloads?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
-    );
-
-    expect(
-      resolveWorkloadsSelectionNavigateTarget({
-        pathname: '/workloads',
-        search:
-          '?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
-        resourceId: null,
-        summaryGroupId: null,
-      }),
-    ).toBe('/workloads?type=app-container&platform=truenas&agent=truenas-main');
-
-    expect(
-      resolveWorkloadsSelectionNavigateTarget({
-        pathname: '/workloads',
-        search:
-          '?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
-        resourceId: 'app-container:truenas-main:nextcloud',
-        summaryGroupId: null,
-      }),
-    ).toBeNull();
-
-    expect(
-      resolveWorkloadsSelectionNavigateTarget({
-        pathname: '/workloads',
-        search: '?type=app-container&platform=truenas&agent=truenas-main',
-        resourceId: null,
-        summaryGroupId: 'docker-host:truenas-main',
-      }),
-    ).toBe(
-      '/workloads?type=app-container&platform=truenas&agent=truenas-main&summaryGroup=docker-host%3Atruenas-main',
-    );
-
-    expect(
-      resolveWorkloadsSelectionNavigateTarget({
-        pathname: '/workloads',
-        search:
-          '?type=app-container&platform=truenas&agent=truenas-main&summaryGroup=docker-host%3Atruenas-main',
-        resourceId: null,
-        summaryGroupId: 'docker-host:truenas-main',
-      }),
-    ).toBeNull();
+  it('resolves summary group deep links separately from local row expansion', () => {
+    expect(resolveWorkloadResourceSelection('?summaryGroup=docker-host%3Atruenas-main')).toEqual({
+      resourceId: null,
+      summaryGroupId: 'docker-host:truenas-main',
+    });
   });
 });

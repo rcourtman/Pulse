@@ -196,6 +196,12 @@ Swarm capability surfaces.
    accessible group label, while Proxmox, Kubernetes, and other platform
    clusters stay reserved for actual resource identity, filters, and detail
    surfaces.
+   Infrastructure row drawer expansion and summary group focus are local table
+   interaction state. Inbound infrastructure deep links may hydrate `resource`
+   and `summaryGroup` into the focused resource or group, but local expansion,
+   closing, and clearing must not rewrite those params or navigate. Route sync
+   for this surface is limited to filter-owned `source` and `q` state so
+   unified-resource rows open inline without refreshing the page shell.
    Cluster group headers may use a compact `Cluster` type chip when the group
    name itself is only an estate label, but `unifiedResourceTableStateModel.ts`
    must suppress that chip when the visible group name already ends in

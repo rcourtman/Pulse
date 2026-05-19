@@ -238,6 +238,10 @@ Feature surfaces under `frontend-modern/src/features/` may own product-specific
 assessment semantics, but they must keep those semantics in their governed
 presentation helpers and render them inside the shared neutral Pulse surface
 language rather than introducing page-local verdict bands or nested cards.
+Feature-owned table drawers use shared disclosure and inline-detail primitives
+as local interaction state. Unless a surface has a separately governed deep-link
+write contract, opening or closing a row drawer must preserve the current
+document and URL instead of writing route state or reloading the page shell.
 
 Shared filter/search primitives may provide the common shell, keyboard behavior,
 history, and reset mechanics, but the owning page or table must supply
