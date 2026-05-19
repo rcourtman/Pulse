@@ -344,6 +344,68 @@ func TestResourceRegistry_IngestResourcesRebuildsSourceMappingsForMetricsTargets
 	}
 }
 
+func TestResourceRegistry_IngestResourcesSeedsHostScopedDockerContainerMappings(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 5, 19, 14, 0, 0, 0, time.UTC)
+	host105 := "proxmox-lxc-docker:pve-a:node-a:105"
+	host141 := "proxmox-lxc-docker:pve-a:node-a:141"
+
+	rr.IngestResources([]Resource{
+		{
+			ID:       "docker-container-frigate-105",
+			Type:     ResourceTypeAppContainer,
+			Name:     "frigate",
+			Status:   StatusOnline,
+			LastSeen: now,
+			Sources:  []DataSource{SourceDocker},
+			Docker: &DockerData{
+				HostSourceID:   host105,
+				ContainerID:    "frigate",
+				DisplayName:    "frigate",
+				Runtime:        "docker",
+				ContainerState: "running",
+			},
+		},
+		{
+			ID:       "docker-container-frigate-141",
+			Type:     ResourceTypeAppContainer,
+			Name:     "frigate",
+			Status:   StatusOnline,
+			LastSeen: now,
+			Sources:  []DataSource{SourceDocker},
+			Docker: &DockerData{
+				HostSourceID:   host141,
+				ContainerID:    "frigate",
+				DisplayName:    "frigate",
+				Runtime:        "docker",
+				ContainerState: "running",
+			},
+		},
+	})
+
+	resources := rr.ListByType(ResourceTypeAppContainer)
+	if len(resources) != 2 {
+		t.Fatalf("expected seeded resources to preserve two host-scoped containers, got %d", len(resources))
+	}
+
+	assertSourceTarget := func(resourceID, wantSourceID string) {
+		t.Helper()
+		for _, target := range rr.SourceTargets(resourceID) {
+			if target.Source == SourceDocker && target.SourceID == wantSourceID {
+				wantCandidateID := SourceSpecificID(ResourceTypeAppContainer, SourceDocker, wantSourceID)
+				if target.CandidateID != wantCandidateID {
+					t.Fatalf("resource %q docker candidate ID = %q, want %q", resourceID, target.CandidateID, wantCandidateID)
+				}
+				return
+			}
+		}
+		t.Fatalf("resource %q missing docker source target %q; got %+v", resourceID, wantSourceID, rr.SourceTargets(resourceID))
+	}
+
+	assertSourceTarget("docker-container-frigate-105", host105+"/container/frigate")
+	assertSourceTarget("docker-container-frigate-141", host141+"/container/frigate")
+}
+
 func TestResourceRegistry_IngestResourcesDerivesClusterWorkloadParentFromSeededProxmoxNode(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)

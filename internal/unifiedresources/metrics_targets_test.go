@@ -154,6 +154,31 @@ func TestBuildMetricsTarget_CanonicalizesSourceIDWhitespace(t *testing.T) {
 	}
 }
 
+func TestBuildMetricsTarget_DockerAppContainerUsesRawContainerID(t *testing.T) {
+	target := BuildMetricsTarget(
+		Resource{
+			Type: ResourceTypeAppContainer,
+			Docker: &DockerData{
+				ContainerID: "frigate",
+			},
+		},
+		[]SourceTarget{{
+			Source:   SourceDocker,
+			SourceID: "proxmox-lxc-docker:pve-a:node-a:105/container/frigate",
+		}},
+	)
+
+	if target == nil {
+		t.Fatal("BuildMetricsTarget() returned nil")
+	}
+	if target.ResourceType != "app-container" {
+		t.Fatalf("ResourceType = %q, want app-container", target.ResourceType)
+	}
+	if target.ResourceID != "frigate" {
+		t.Fatalf("ResourceID = %q, want raw docker container ID", target.ResourceID)
+	}
+}
+
 func TestBuildMetricsTarget_UsesCanonicalTargetsForVMwareWorkloadAndStorage(t *testing.T) {
 	tests := []struct {
 		name          string
