@@ -472,7 +472,7 @@ func buildProxmoxGuestDockerInventoryCommand(vmid int) string {
 		"if ! test -S /var/run/docker.sock; then printf 'NO_DOCKER\\n'; exit 0; fi",
 		"version=\"$(docker version --format '{{json .Server.Version}}' 2>/dev/null || true)\"",
 		"if [ -n \"$version\" ]; then printf 'VERSION\\t%s\\n' \"$version\"; fi",
-		"docker ps -a --no-trunc --format 'CONTAINER\\t{{json .ID}}\\t{{json .Names}}\\t{{json .Image}}\\t{{json .State}}\\t{{json .Status}}\\t{{json .Ports}}\\t{{json .RunningFor}}' 2>/dev/null || true",
+		"if docker ps -a --no-trunc --format 'CONTAINER\\t{{json .ID}}\\t{{json .Names}}\\t{{json .Image}}\\t{{json .State}}\\t{{json .Status}}\\t{{json .Ports}}\\t{{json .RunningFor}}' 2>/dev/null; then printf 'PS_OK\\n'; fi",
 		"ids=\"$(docker ps -aq --no-trunc 2>/dev/null)\"",
 		"if [ -n \"$ids\" ]; then docker stats --no-stream --no-trunc --format 'STAT\\t{{json .ID}}\\t{{json .Name}}\\t{{json .CPUPerc}}\\t{{json .MemUsage}}\\t{{json .MemPerc}}\\t{{json .NetIO}}\\t{{json .BlockIO}}' $ids 2>/dev/null || true; fi",
 	}, "\n")
@@ -502,6 +502,7 @@ func parseProxmoxGuestDockerInventory(output string, container models.Container,
 	containers := make([]agentsdocker.Container, 0)
 	containerIndex := make(map[string]int)
 	noDocker := false
+	psOK := false
 
 	for _, rawLine := range strings.Split(output, "\n") {
 		line := strings.TrimRight(rawLine, "\r")
@@ -510,6 +511,10 @@ func parseProxmoxGuestDockerInventory(output string, container models.Container,
 		}
 		if line == "NO_DOCKER" {
 			noDocker = true
+			continue
+		}
+		if line == "PS_OK" {
+			psOK = true
 			continue
 		}
 
@@ -572,6 +577,9 @@ func parseProxmoxGuestDockerInventory(output string, container models.Container,
 
 	if noDocker && len(containers) == 0 && hostInfo.DockerVersion == "" {
 		return agentsdocker.Report{}, false, nil
+	}
+	if !noDocker && !psOK {
+		return agentsdocker.Report{}, false, fmt.Errorf("docker ps did not complete (no PS_OK marker); refusing to apply partial inventory for %q", strings.TrimSpace(container.Name))
 	}
 	if timestamp.IsZero() {
 		timestamp = time.Now().UTC()

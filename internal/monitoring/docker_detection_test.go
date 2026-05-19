@@ -331,6 +331,7 @@ func TestAgentDockerInventoryCollector_MinimalCommandAndReport(t *testing.T) {
 			"MEMTOTAL\t1073741824",
 			"VERSION\t\"26.1.4\"",
 			"CONTAINER\t\"abcdef123456\"\t\"web\"\t\"nginx:latest\"\t\"running\"\t\"Up 2 hours\"\t\"0.0.0.0:8080->80/tcp, 443/tcp\"\t\"2 hours ago\"",
+			"PS_OK",
 			"STAT\t\"abcdef123456\"\t\"web\"\t\"0.50%\"\t\"64MiB / 1GiB\"\t\"6.25%\"\t\"1.2kB / 3.4MB\"\t\"5MB / 6MB\"",
 			"",
 		}, "\n"), 0, nil
@@ -391,6 +392,66 @@ func TestAgentDockerInventoryCollector_MinimalCommandAndReport(t *testing.T) {
 	}
 	if len(ct.Ports) != 2 || ct.Ports[0].PrivatePort != 80 || ct.Ports[0].PublicPort != 8080 || ct.Ports[1].PrivatePort != 443 {
 		t.Fatalf("unexpected ports: %#v", ct.Ports)
+	}
+}
+
+func TestAgentDockerInventoryCollector_PartialOutputRefusesApply(t *testing.T) {
+	collector := NewAgentDockerInventoryCollector(func(ctx context.Context, hostname string, command string, timeout int) (string, int, error) {
+		return strings.Join([]string{
+			proxmoxGuestDockerInventoryMarker,
+			"HOSTNAME\tct-web",
+			"UNAME\tLinux 6.8.12-9-pve x86_64",
+			"CPUS\t2",
+			"MEMTOTAL\t1073741824",
+			"VERSION\t\"26.1.4\"",
+			"",
+		}, "\n"), 0, nil
+	}, AgentDockerInventoryCollectorOptions{})
+
+	_, ok, err := collector.CollectDockerInventory(context.Background(), models.Container{
+		ID:     "pve-a:node-a:101",
+		VMID:   101,
+		Name:   "web-lxc",
+		Node:   "node-a",
+		Status: "running",
+	})
+	if err == nil {
+		t.Fatal("expected an error when docker ps marker is missing")
+	}
+	if ok {
+		t.Fatal("partial inventory output (no PS_OK) must not produce an applicable report")
+	}
+}
+
+func TestAgentDockerInventoryCollector_PSOKWithZeroContainersApplies(t *testing.T) {
+	collector := NewAgentDockerInventoryCollector(func(ctx context.Context, hostname string, command string, timeout int) (string, int, error) {
+		return strings.Join([]string{
+			proxmoxGuestDockerInventoryMarker,
+			"HOSTNAME\tct-web",
+			"UNAME\tLinux 6.8.12-9-pve x86_64",
+			"CPUS\t2",
+			"MEMTOTAL\t1073741824",
+			"VERSION\t\"26.1.4\"",
+			"PS_OK",
+			"",
+		}, "\n"), 0, nil
+	}, AgentDockerInventoryCollectorOptions{})
+
+	report, ok, err := collector.CollectDockerInventory(context.Background(), models.Container{
+		ID:     "pve-a:node-a:101",
+		VMID:   101,
+		Name:   "web-lxc",
+		Node:   "node-a",
+		Status: "running",
+	})
+	if err != nil {
+		t.Fatalf("CollectDockerInventory returned error: %v", err)
+	}
+	if !ok {
+		t.Fatal("zero-container result with PS_OK must be applied (host genuinely has no containers)")
+	}
+	if len(report.Containers) != 0 {
+		t.Fatalf("expected zero containers, got %d", len(report.Containers))
 	}
 }
 
