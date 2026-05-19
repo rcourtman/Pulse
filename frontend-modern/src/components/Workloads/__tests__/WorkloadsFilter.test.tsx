@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, within } from '@solidjs/testing-library';
 import { WorkloadsFilter } from '../WorkloadsFilter';
 import {
-  DEFAULT_WORKLOADS_GROUPING_MODE,
   DEFAULT_WORKLOADS_SORT_DIRECTION,
   DEFAULT_WORKLOADS_SORT_KEY,
   DEFAULT_WORKLOADS_STATUS_MODE,
@@ -209,11 +208,11 @@ describe('WorkloadsFilter', () => {
       expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
     });
 
-    it('renders when groupingMode is "flat"', () => {
+    it('does not render when only groupingMode is "flat" (view option, not a filter)', () => {
       render(() => (
         <WorkloadsFilter {...makeProps({ groupingMode: vi.fn(() => 'flat' as const) })} />
       ));
-      expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
     });
 
     it('renders when a host filter is active', () => {
@@ -318,7 +317,7 @@ describe('WorkloadsFilter', () => {
       expect(setSortDirection).toHaveBeenCalledWith(DEFAULT_WORKLOADS_SORT_DIRECTION);
       expect(setViewMode).toHaveBeenCalledWith(DEFAULT_WORKLOADS_VIEW_MODE);
       expect(setStatusMode).toHaveBeenCalledWith(DEFAULT_WORKLOADS_STATUS_MODE);
-      expect(setGroupingMode).toHaveBeenCalledWith(DEFAULT_WORKLOADS_GROUPING_MODE);
+      expect(setGroupingMode).not.toHaveBeenCalled();
       expect(hostOnChange).toHaveBeenCalledWith('');
       expect(platformOnChange).toHaveBeenCalledWith('');
       expect(namespaceOnChange).toHaveBeenCalledWith('');

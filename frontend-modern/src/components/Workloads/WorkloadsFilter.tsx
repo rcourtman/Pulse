@@ -14,7 +14,6 @@ import type { ViewMode } from '@/types/workloads';
 import { MetricDisplayModeSegmentedControl } from './MetricDisplayModeSegmentedControl';
 import type { WorkloadsFilterProps, WorkloadsStatusMode } from './workloadsFilterModel';
 import {
-  DEFAULT_WORKLOADS_GROUPING_MODE,
   DEFAULT_WORKLOADS_SORT_DIRECTION,
   DEFAULT_WORKLOADS_SORT_KEY,
   DEFAULT_WORKLOADS_STATUS_MODE,
@@ -93,7 +92,6 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
       search: props.search(),
       viewMode: props.suppressTypeFilter ? DEFAULT_WORKLOADS_VIEW_MODE : props.viewMode(),
       statusMode: props.statusMode(),
-      groupingMode: props.groupingMode(),
       hostFilterValue: props.hostFilter?.value,
       platformFilterValue: props.platformFilter?.value,
       namespaceFilterValue: props.namespaceFilter?.value,
@@ -108,7 +106,6 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
       props.setViewMode(DEFAULT_WORKLOADS_VIEW_MODE);
     }
     props.setStatusMode(DEFAULT_WORKLOADS_STATUS_MODE);
-    props.setGroupingMode(DEFAULT_WORKLOADS_GROUPING_MODE);
     props.hostFilter?.onChange('');
     props.platformFilter?.onChange('');
     props.namespaceFilter?.onChange('');

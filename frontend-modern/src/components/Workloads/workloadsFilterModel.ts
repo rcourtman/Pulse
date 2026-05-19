@@ -69,9 +69,7 @@ export interface CountActiveWorkloadsFiltersOptions {
   namespaceFilterValue?: string;
 }
 
-export interface HasActiveWorkloadsFiltersOptions extends CountActiveWorkloadsFiltersOptions {
-  groupingMode: WorkloadsGroupingMode;
-}
+export type HasActiveWorkloadsFiltersOptions = CountActiveWorkloadsFiltersOptions;
 
 export const DEFAULT_WORKLOADS_SORT_KEY: WorkloadsSortKey = 'type';
 export const DEFAULT_WORKLOADS_SORT_DIRECTION = 'asc';
@@ -96,5 +94,4 @@ export const countActiveWorkloadsFilters = (
 };
 
 export const hasActiveWorkloadsFilters = (options: HasActiveWorkloadsFiltersOptions): boolean =>
-  countActiveWorkloadsFilters(options) > 0 ||
-  options.groupingMode !== DEFAULT_WORKLOADS_GROUPING_MODE;
+  countActiveWorkloadsFilters(options) > 0;
