@@ -339,6 +339,12 @@ func pmgInstanceExists(graph FixtureGraph, want string) bool {
 
 func allHostsOnline(graph FixtureGraph) bool {
 	for _, host := range graph.State.Hosts {
+		if strings.ToLower(strings.TrimSpace(host.Hostname)) == "pve5" {
+			if host.Status != "offline" {
+				return false
+			}
+			continue
+		}
 		if host.Status != "online" {
 			return false
 		}

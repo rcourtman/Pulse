@@ -151,13 +151,14 @@ func TestMockCoverageMatchesCurrentSupportedPlatformSet(t *testing.T) {
 	supported := manifestPlatformsByState(t, manifest, "supported")
 
 	checkers := map[string]func(*testing.T, FixtureGraph){
-		"agent":       assertAgentMockCoverage,
-		"docker":      assertDockerMockCoverage,
-		"kubernetes":  assertKubernetesMockCoverage,
-		"proxmox-pbs": assertProxmoxPBSMockCoverage,
-		"proxmox-pmg": assertProxmoxPMGMockCoverage,
-		"proxmox-pve": assertProxmoxPVEMockCoverage,
-		"truenas":     assertTrueNASMockCoverage,
+		"agent":          assertAgentMockCoverage,
+		"docker":         assertDockerMockCoverage,
+		"kubernetes":     assertKubernetesMockCoverage,
+		"proxmox-pbs":    assertProxmoxPBSMockCoverage,
+		"proxmox-pmg":    assertProxmoxPMGMockCoverage,
+		"proxmox-pve":    assertProxmoxPVEMockCoverage,
+		"truenas":        assertTrueNASMockCoverage,
+		"vmware-vsphere": assertVMwareMockCoverage,
 	}
 
 	if diff := diffPlatformSets(supported, sortedPlatformKeys(checkers)); diff != "" {
@@ -455,6 +456,20 @@ func assertTrueNASMockCoverage(t *testing.T, graph FixtureGraph) {
 	}
 	if fixture.Systems == 0 || fixture.StoragePools == 0 || fixture.Apps == 0 || fixture.Disks == 0 {
 		t.Fatalf("expected truenas mock connection fixture to describe canonical inventory, got %+v", fixture)
+	}
+}
+
+func assertVMwareMockCoverage(t *testing.T, graph FixtureGraph) {
+	t.Helper()
+
+	if len(graph.PlatformFixtures.VMware.Hosts) == 0 {
+		t.Fatal("expected VMware mock fixtures to include hosts")
+	}
+	if len(graph.PlatformFixtures.VMware.VMs) == 0 {
+		t.Fatal("expected VMware mock fixtures to include VMs")
+	}
+	if len(graph.PlatformFixtures.VMware.Datastores) == 0 {
+		t.Fatal("expected VMware mock fixtures to include datastores")
 	}
 }
 

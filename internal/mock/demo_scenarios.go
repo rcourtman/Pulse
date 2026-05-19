@@ -65,7 +65,7 @@ var demoVMProfiles = []demoWorkloadProfile{
 	{Name: "orders-api-01", Tags: []string{"production", "api", "critical"}, BackupAge: 3 * time.Hour},
 	{Name: "orders-api-02", Tags: []string{"production", "api", "critical"}, BackupAge: 4 * time.Hour},
 	{Name: "postgres-primary-01", Tags: []string{"production", "database", "critical"}, BackupAge: 90 * time.Minute},
-	{Name: "postgres-replica-01", Tags: []string{"production", "database", "replica"}, BackupAge: 2 * time.Hour},
+	{Name: "postgres-replica-01", Tags: []string{"production", "database", "replica"}, BackupAge: 2 * time.Hour, ForceState: "stopped"},
 	{Name: "redis-cache-01", Tags: []string{"production", "cache", "latency-sensitive"}, BackupAge: 12 * time.Hour},
 	{Name: "observability-core-01", Tags: []string{"monitoring", "platform", "production"}, BackupAge: 10 * time.Hour},
 	{Name: "ci-runner-01", Tags: []string{"ci", "platform", "shared-services"}, BackupAge: 18 * time.Hour},
@@ -86,7 +86,7 @@ var demoContainerProfiles = []demoWorkloadProfile{
 	{Name: "grafana-agent-01", Tags: []string{"monitoring", "agent", "platform"}, BackupAge: 11 * time.Hour},
 	{Name: "artifact-cache-01", Tags: []string{"ci", "cache", "platform"}, BackupAge: 19 * time.Hour},
 	{Name: "backup-orchestrator-01", Tags: []string{"backup", "platform", "worker"}, BackupAge: 45 * time.Minute},
-	{Name: "dev-portal-01", Tags: []string{"development", "web", "internal"}, BackupAge: 20 * time.Hour},
+	{Name: "dev-portal-01", Tags: []string{"development", "web", "internal"}, BackupAge: 20 * time.Hour, ForceState: "stopped"},
 }
 
 var demoDockerHostProfiles = []demoDockerHostProfile{
@@ -286,6 +286,20 @@ func applyDemoNodeScenario(state *models.StateSnapshot) {
 		if i < len(nodeDisplayNames) {
 			state.Nodes[i].DisplayName = nodeDisplayNames[i]
 		}
+		if state.Nodes[i].Name == "pve5" {
+			state.Nodes[i].Status = "offline"
+			state.Nodes[i].CPU = 0
+			state.Nodes[i].Memory.Used = 0
+			state.Nodes[i].Memory.Usage = 0
+			state.Nodes[i].Memory.Free = state.Nodes[i].Memory.Total
+			state.Nodes[i].Memory.SwapUsed = 0
+			state.Nodes[i].Disk.Used = 0
+			state.Nodes[i].Disk.Free = state.Nodes[i].Disk.Total
+			state.Nodes[i].Disk.Usage = -1
+			state.Nodes[i].Uptime = 0
+			state.Nodes[i].LoadAverage = []float64{0.0, 0.0, 0.0}
+			state.Nodes[i].ConnectionHealth = "offline"
+		}
 	}
 
 	hostsByID := make(map[string]*models.Host, len(state.Hosts))
@@ -324,6 +338,26 @@ func applyDemoWorkloadScenario(workloads []models.VM, profiles []demoWorkloadPro
 		workloads[i].Instance = scenarioClusterAlias(workloads[i].Instance)
 		workloads[i].Tags = mergeScenarioTags(workloads[i].Tags, profile.Tags)
 		workloads[i].Status = normalizeWorkloadState(profile.ForceState, "running")
+		if workloads[i].Node == "pve5" {
+			workloads[i].Status = "stopped"
+		}
+		if workloads[i].Status == "stopped" {
+			workloads[i].CPU = 0
+			workloads[i].Memory.Used = 0
+			workloads[i].Memory.Usage = 0
+			workloads[i].Memory.Free = workloads[i].Memory.Total
+			workloads[i].Memory.SwapUsed = 0
+			workloads[i].Disk.Used = 0
+			workloads[i].Disk.Usage = -1
+			workloads[i].Disk.Free = workloads[i].Disk.Total
+			workloads[i].NetworkIn = 0
+			workloads[i].NetworkOut = 0
+			workloads[i].DiskRead = 0
+			workloads[i].DiskWrite = 0
+			workloads[i].Uptime = 0
+			workloads[i].IPAddresses = nil
+			workloads[i].NetworkInterfaces = nil
+		}
 		if !now.IsZero() && profile.BackupAge > 0 {
 			workloads[i].LastBackup = now.Add(-profile.BackupAge)
 		}
@@ -346,6 +380,26 @@ func applyDemoContainerScenario(workloads []models.Container, profiles []demoWor
 		workloads[i].Instance = scenarioClusterAlias(workloads[i].Instance)
 		workloads[i].Tags = mergeScenarioTags(workloads[i].Tags, profile.Tags)
 		workloads[i].Status = normalizeWorkloadState(profile.ForceState, "running")
+		if workloads[i].Node == "pve5" {
+			workloads[i].Status = "stopped"
+		}
+		if workloads[i].Status == "stopped" {
+			workloads[i].CPU = 0
+			workloads[i].Memory.Used = 0
+			workloads[i].Memory.Usage = 0
+			workloads[i].Memory.Free = workloads[i].Memory.Total
+			workloads[i].Memory.SwapUsed = 0
+			workloads[i].Disk.Used = 0
+			workloads[i].Disk.Usage = -1
+			workloads[i].Disk.Free = workloads[i].Disk.Total
+			workloads[i].NetworkIn = 0
+			workloads[i].NetworkOut = 0
+			workloads[i].DiskRead = 0
+			workloads[i].DiskWrite = 0
+			workloads[i].Uptime = 0
+			workloads[i].IPAddresses = nil
+			workloads[i].NetworkInterfaces = nil
+		}
 		if !now.IsZero() && profile.BackupAge > 0 {
 			workloads[i].LastBackup = now.Add(-profile.BackupAge)
 		}
@@ -526,6 +580,25 @@ func applyDemoHostScenario(state *models.StateSnapshot, now time.Time) {
 		host.Status = "online"
 		if strings.TrimSpace(host.DisplayName) == "" {
 			host.DisplayName = humanizeHostDisplayName(host.Hostname)
+		}
+		if strings.ToLower(strings.TrimSpace(host.Hostname)) == "pve5" {
+			host.Status = "offline"
+			host.CPUUsage = 0
+			host.Memory.Used = 0
+			host.Memory.Usage = 0
+			host.Memory.Free = host.Memory.Total
+			host.Memory.SwapUsed = 0
+			host.LoadAverage = []float64{0.0, 0.0, 0.0}
+			host.UptimeSeconds = 0
+			host.NetInRate = 0
+			host.NetOutRate = 0
+			host.DiskReadRate = 0
+			host.DiskWriteRate = 0
+			for j := range host.Disks {
+				host.Disks[j].Used = 0
+				host.Disks[j].Free = host.Disks[j].Total
+				host.Disks[j].Usage = -1
+			}
 		}
 		if now.IsZero() {
 			continue
