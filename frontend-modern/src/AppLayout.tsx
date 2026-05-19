@@ -105,7 +105,7 @@ export function ConnectionStatusBadge(props: {
     if (status().kind === 'reconnecting') {
       return 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1 px-2';
     }
-    return 'disconnected bg-surface-hover text-base-content min-w-6 h-6 group-hover:px-3';
+    return 'disconnected bg-surface-hover text-base-content py-1 px-2';
   };
   const indicatorClass = () => {
     if (status().tone === 'healthy') {
