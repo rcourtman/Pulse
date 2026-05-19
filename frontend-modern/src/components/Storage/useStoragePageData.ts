@@ -1,6 +1,7 @@
 import { Accessor, createMemo } from 'solid-js';
 import { buildStorageRecords } from '@/features/storageBackups/storageAdapters';
 import type { StorageHealthFilter } from '@/features/storageBackups/models';
+import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
 import {
   buildPhysicalDiskGroupFilterOptions,
   buildPhysicalDiskRoleFilterOptions,
@@ -32,6 +33,7 @@ type UseStoragePageDataOptions = {
   selectedNodeId: Accessor<string>;
   sortKey: Accessor<StorageSortKey>;
   sortDirection: Accessor<'asc' | 'desc'>;
+  storageGrowthBySeriesId?: Accessor<ReadonlyMap<string, StorageCapacityDeltaPresentation>>;
   groupBy: Accessor<StorageGroupKey>;
 };
 
@@ -69,6 +71,7 @@ export const useStoragePageData = (options: UseStoragePageDataOptions) => {
     nodeOptions,
     sortKey: options.sortKey,
     sortDirection: options.sortDirection,
+    storageGrowthBySeriesId: options.storageGrowthBySeriesId,
     groupBy: options.groupBy,
   });
 

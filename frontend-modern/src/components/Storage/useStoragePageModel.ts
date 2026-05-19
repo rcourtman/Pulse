@@ -105,6 +105,26 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     location,
     navigate,
   });
+  const storageSummaryCharts = useStorageSummaryCharts({
+    timeRange: summaryTimeRange,
+    nodeId: selectedNodeId,
+    caller: 'useStoragePageModel',
+  });
+  const storageGrowthRangeLabel = createMemo(
+    () => SUMMARY_TIME_RANGE_LABEL[summaryTimeRange()] ?? summaryTimeRange(),
+  );
+  const storageGrowthColumnLabel = createMemo(() => `Growth (${storageGrowthRangeLabel()})`);
+  const storageGrowthBySeriesId = createMemo(() => {
+    const growth = new Map<string, ReturnType<typeof buildStorageCapacityDeltaPresentation>>();
+    const pools = storageSummaryCharts.data()?.pools ?? {};
+    for (const [seriesId, pool] of Object.entries(pools)) {
+      growth.set(
+        seriesId,
+        buildStorageCapacityDeltaPresentation(pool.used ?? [], storageGrowthRangeLabel()),
+      );
+    }
+    return growth;
+  });
 
   const {
     records,
@@ -133,6 +153,7 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     selectedNodeId,
     sortKey,
     sortDirection,
+    storageGrowthBySeriesId,
     groupBy,
   });
 
@@ -152,12 +173,6 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     void storageRecoveryResources.refetch();
     reconnect();
   };
-  const storageSummaryCharts = useStorageSummaryCharts({
-    timeRange: summaryTimeRange,
-    nodeId: selectedNodeId,
-    caller: 'useStoragePageModel',
-  });
-
   const {
     expandedGroups,
     expandedPoolId,
@@ -180,21 +195,6 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
       ids.set(disk.id, resolvePhysicalDiskMetricResourceId(disk));
     }
     return ids;
-  });
-  const storageGrowthRangeLabel = createMemo(
-    () => SUMMARY_TIME_RANGE_LABEL[summaryTimeRange()] ?? summaryTimeRange(),
-  );
-  const storageGrowthColumnLabel = createMemo(() => `Growth (${storageGrowthRangeLabel()})`);
-  const storageGrowthBySeriesId = createMemo(() => {
-    const growth = new Map<string, ReturnType<typeof buildStorageCapacityDeltaPresentation>>();
-    const pools = storageSummaryCharts.data()?.pools ?? {};
-    for (const [seriesId, pool] of Object.entries(pools)) {
-      growth.set(
-        seriesId,
-        buildStorageCapacityDeltaPresentation(pool.used ?? [], storageGrowthRangeLabel()),
-      );
-    }
-    return growth;
   });
   const hoveredStorageResourceId = createMemo(() => {
     const hoveredId = hoveredStorageRowId();

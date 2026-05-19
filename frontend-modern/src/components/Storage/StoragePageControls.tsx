@@ -26,6 +26,7 @@ import {
   DEFAULT_STORAGE_SORT_OPTIONS,
   DEFAULT_STORAGE_SOURCE_FILTER,
   DEFAULT_STORAGE_STATUS_FILTER,
+  getDefaultStorageSortDirection,
   hasActiveStorageFilters,
   normalizeStorageSortKey,
   STORAGE_GROUP_BY_OPTIONS,
@@ -129,6 +130,15 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
     props.setDiskRoleFilter?.(DEFAULT_PHYSICAL_DISK_FACET_FILTER);
     props.setDiskGroupFilter?.(DEFAULT_PHYSICAL_DISK_FACET_FILTER);
     props.setSelectedNodeId(DEFAULT_STORAGE_SELECTED_NODE_ID);
+  };
+
+  const handleSortKeyChange = (value: string) => {
+    const nextSortKey = normalizeStorageSortKey(value) as StorageSortKey;
+    const previousSortKey = props.sortKey();
+    props.setSortKey(nextSortKey);
+    if (nextSortKey !== previousSortKey) {
+      props.setSortDirection(getDefaultStorageSortDirection(nextSortKey));
+    }
   };
 
   const buildFilters = (): FilterDef[] => {
@@ -286,11 +296,7 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
               <div class={STORAGE_FILTER_SORT_WRAP_CLASS}>
                 <select
                   value={props.sortKey()}
-                  onChange={(event) =>
-                    props.setSortKey(
-                      normalizeStorageSortKey(event.currentTarget.value) as StorageSortKey,
-                    )
-                  }
+                  onChange={(event) => handleSortKeyChange(event.currentTarget.value)}
                   disabled={sortDisabled()}
                   aria-label="Sort by"
                   class={STORAGE_FILTER_SORT_SELECT_CLASS}

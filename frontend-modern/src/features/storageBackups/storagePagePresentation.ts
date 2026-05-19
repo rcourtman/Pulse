@@ -1,6 +1,7 @@
 import { formatBytes, formatPercent } from '@/utils/format';
 import type { StorageRecord } from './models';
 import type { CephSummaryStats } from './cephSummaryPresentation';
+import type { StorageSortKey } from './storageModelCore';
 
 export type StoragePageBannerKind =
   | 'reconnecting'
@@ -16,6 +17,7 @@ export type StorageViewOption = {
 export type StoragePoolTableColumn = {
   label: string;
   compactLabel: string;
+  sortKey: StorageSortKey;
   className: string;
   colClassName: string;
 };
@@ -34,48 +36,56 @@ export const getStoragePoolTableColumns = (
   {
     label: 'Storage',
     compactLabel: 'Storage',
+    sortKey: 'name',
     className: `${STORAGE_POOL_TABLE_HEADER_CLASS} w-[34%] sm:w-[26%] md:w-[23%] xl:w-[18%]`,
     colClassName: 'w-[34%] sm:w-[26%] md:w-[23%] xl:w-[18%]',
   },
   {
     label: 'State',
     compactLabel: 'State',
+    sortKey: 'state',
     className: `${STORAGE_POOL_TABLE_HEADER_CLASS} w-[24%] sm:w-[20%] md:w-[17%] xl:w-[14%]`,
     colClassName: 'w-[24%] sm:w-[20%] md:w-[17%] xl:w-[14%]',
   },
   {
     label: 'Source',
     compactLabel: 'Src',
+    sortKey: 'source',
     className: `${STORAGE_POOL_TABLE_HEADER_CLASS} w-[13%] sm:w-[10%] md:w-[8%]`,
     colClassName: 'w-[13%] sm:w-[10%] md:w-[8%]',
   },
   {
     label: 'Type',
     compactLabel: 'Type',
+    sortKey: 'type',
     className: `${STORAGE_POOL_TABLE_HEADER_CLASS} hidden xl:table-cell xl:w-[8%]`,
     colClassName: 'hidden xl:table-column xl:w-[8%]',
   },
   {
     label: 'Host',
     compactLabel: 'Host',
+    sortKey: 'host',
     className: `${STORAGE_POOL_TABLE_HEADER_CLASS} hidden sm:table-cell sm:w-[13%] md:w-[12%] xl:w-[10%]`,
     colClassName: 'hidden sm:table-column sm:w-[13%] md:w-[12%] xl:w-[10%]',
   },
   {
     label: 'Protection',
     compactLabel: 'Prot',
+    sortKey: 'protection',
     className: `${STORAGE_POOL_TABLE_HEADER_CLASS} hidden sm:table-cell sm:w-[15%] md:w-[15%] xl:w-[13%]`,
     colClassName: 'hidden sm:table-column sm:w-[15%] md:w-[15%] xl:w-[13%]',
   },
   {
     label: 'Usage',
     compactLabel: 'Used',
+    sortKey: 'usage',
     className: `${STORAGE_POOL_TABLE_HEADER_CLASS} w-[29%] sm:w-[16%] md:w-[25%] xl:w-[18%]`,
     colClassName: 'w-[29%] sm:w-[16%] md:w-[25%] xl:w-[18%]',
   },
   {
     label: growthColumnLabel,
     compactLabel: growthColumnLabel.replace(/^Growth\s*\((.+)\)$/i, '$1'),
+    sortKey: 'growth',
     className: `${STORAGE_POOL_TABLE_HEADER_CLASS} hidden xl:table-cell xl:w-[11%]`,
     colClassName: 'hidden xl:table-column xl:w-[11%]',
   },

@@ -1,5 +1,6 @@
 import { Accessor, createMemo } from 'solid-js';
 import type { StorageHealthFilter, StorageRecord } from '@/features/storageBackups/models';
+import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
 import {
   buildStorageSourceOptions,
   filterStorageRecords,
@@ -31,6 +32,7 @@ type UseStorageModelOptions = {
   nodeOptions: Accessor<StorageNodeOption[]>;
   sortKey: Accessor<StorageSortKey>;
   sortDirection: Accessor<'asc' | 'desc'>;
+  storageGrowthBySeriesId?: Accessor<ReadonlyMap<string, StorageCapacityDeltaPresentation>>;
   groupBy: Accessor<StorageGroupKey>;
 };
 
@@ -51,7 +53,10 @@ export const useStorageModel = (options: UseStorageModelOptions) => {
   });
 
   const sortedRecords = createMemo(() =>
-    sortStorageRecords(filteredRecords(), options.sortKey(), options.sortDirection()),
+    sortStorageRecords(filteredRecords(), options.sortKey(), options.sortDirection(), {
+      growthBySeriesId:
+        options.sortKey() === 'growth' ? options.storageGrowthBySeriesId?.() : undefined,
+    }),
   );
 
   const groupedRecords = createMemo<StorageGroupedRecords[]>(() =>

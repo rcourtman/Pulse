@@ -235,6 +235,10 @@ const Storage: Component<StorageProps> = (props) => {
           search={search}
           groupedRecords={groupedRecords}
           groupBy={groupBy}
+          sortKey={sortKey}
+          setSortKey={setSortKey}
+          sortDirection={sortDirection}
+          setSortDirection={setSortDirection}
           expandedGroups={expandedGroups}
           toggleGroup={toggleGroup}
           expandedPoolId={expandedPoolId}

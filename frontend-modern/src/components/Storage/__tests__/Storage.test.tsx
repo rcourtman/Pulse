@@ -733,10 +733,14 @@ describe('Storage', () => {
         .some((element) => element.getAttribute('title') === 'Pool redundancy is reduced.'),
     ).toBe(true);
 
-    fireEvent.change(screen.getByLabelText('Sort by'), {
-      target: { value: 'usage' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Sort direction' }));
+    const usageHeader = screen.getByRole('columnheader', { name: 'Usage' });
+    fireEvent.click(within(usageHeader).getByRole('button', { name: 'Sort Usage column' }));
+    expect(usageHeader).toHaveAttribute('aria-sort', 'descending');
+    expect((screen.getByLabelText('Sort by') as HTMLSelectElement).value).toBe('usage');
+
+    fireEvent.click(
+      within(usageHeader).getByRole('button', { name: 'Sort Usage column ascending' }),
+    );
 
     await waitFor(() => {
       const orderedRowIds = Array.from(document.querySelectorAll('tr[data-row-id]')).map((row) =>

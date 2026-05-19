@@ -242,6 +242,11 @@ Feature-owned table drawers use shared disclosure and inline-detail primitives
 as local interaction state. Unless a surface has a separately governed deep-link
 write contract, opening or closing a row drawer must preserve the current
 document and URL instead of writing route state or reloading the page shell.
+Feature-owned sortable table headers must render real button controls inside
+the shared `TableHead` primitive and expose column state through `aria-sort`;
+the feature owner may define the sort keys and data comparator, but the header
+interaction must update that canonical owner state rather than forking
+table-local sort state or making header labels look clickable while inert.
 
 Shared filter/search primitives may provide the common shell, keyboard behavior,
 history, and reset mechanics, but the owning page or table must supply

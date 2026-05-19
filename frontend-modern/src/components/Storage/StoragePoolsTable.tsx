@@ -1,4 +1,7 @@
 import { Component, For, Index, Show } from 'solid-js';
+import ArrowDownIcon from 'lucide-solid/icons/arrow-down';
+import ArrowUpIcon from 'lucide-solid/icons/arrow-up';
+import ArrowUpDownIcon from 'lucide-solid/icons/arrow-up-down';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
 import {
   getStoragePoolTableColumns,
@@ -16,7 +19,8 @@ import type { StorageAlertRowState } from '@/features/storageBackups/storageAler
 import type { Resource } from '@/types/resource';
 import { StorageGroupRow } from './StorageGroupRow';
 import { StoragePoolRow } from './StoragePoolRow';
-import type { StorageGroupedRecords, StorageGroupKey } from './useStorageModel';
+import { getDefaultStorageSortDirection } from './storagePageState';
+import type { StorageGroupedRecords, StorageGroupKey, StorageSortKey } from './useStorageModel';
 import { useStoragePoolsTableModel } from './useStoragePoolsTableModel';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import { resolveSummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
@@ -25,6 +29,10 @@ import { buildStorageSummaryGroupScope } from './storageSummaryGroups';
 type StoragePoolsTableProps = {
   groupedRecords: StorageGroupedRecords[];
   groupBy: StorageGroupKey;
+  sortKey: StorageSortKey;
+  setSortKey: (value: StorageSortKey) => void;
+  sortDirection: 'asc' | 'desc';
+  setSortDirection: (value: 'asc' | 'desc') => void;
   expandedGroups: Set<string>;
   toggleGroup: (key: string) => void;
   expandedPoolId: string | null;
@@ -46,6 +54,30 @@ type StoragePoolsTableProps = {
   onHoverChange?: (recordId: string | null) => void;
 };
 
+const STORAGE_POOL_HEADER_SORT_BUTTON_CLASS =
+  'inline-flex min-w-0 max-w-full items-center gap-1 rounded-sm text-left outline-none transition-colors hover:text-base-content focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface';
+const STORAGE_POOL_HEADER_SORT_ICON_CLASS = 'h-3 w-3 shrink-0';
+
+const getNextStorageColumnSortDirection = (
+  currentSortKey: StorageSortKey,
+  currentSortDirection: 'asc' | 'desc',
+  columnSortKey: StorageSortKey,
+): 'asc' | 'desc' => {
+  if (currentSortKey !== columnSortKey) {
+    return getDefaultStorageSortDirection(columnSortKey);
+  }
+  return currentSortDirection === 'asc' ? 'desc' : 'asc';
+};
+
+const getStorageColumnSortButtonLabel = (
+  label: string,
+  isSorted: boolean,
+  direction: 'asc' | 'desc',
+): string => {
+  if (!isSorted) return `Sort ${label} column`;
+  return `Sort ${label} column ${direction === 'asc' ? 'descending' : 'ascending'}`;
+};
+
 export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
   const model = useStoragePoolsTableModel({
     groupedRecords: () => props.groupedRecords,
@@ -57,6 +89,13 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
     getRecordAlertState: props.getRecordAlertState,
     setExpandedPoolId: props.setExpandedPoolId,
   });
+
+  const handleSort = (sortKey: StorageSortKey) => {
+    props.setSortDirection(
+      getNextStorageColumnSortDirection(props.sortKey, props.sortDirection, sortKey),
+    );
+    props.setSortKey(sortKey);
+  };
 
   return (
     <Show
@@ -81,14 +120,57 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                     <TableHead
                       class={column.className}
                       aria-label={column.label}
+                      aria-sort={
+                        props.sortKey === column.sortKey
+                          ? props.sortDirection === 'asc'
+                            ? 'ascending'
+                            : 'descending'
+                          : undefined
+                      }
                       title={column.label}
                     >
-                      <span aria-hidden="true" class="hidden xl:inline">
-                        {column.label}
-                      </span>
-                      <span aria-hidden="true" class="xl:hidden">
-                        {column.compactLabel}
-                      </span>
+                      <button
+                        type="button"
+                        class={STORAGE_POOL_HEADER_SORT_BUTTON_CLASS}
+                        onClick={() => handleSort(column.sortKey)}
+                        aria-label={getStorageColumnSortButtonLabel(
+                          column.label,
+                          props.sortKey === column.sortKey,
+                          props.sortDirection,
+                        )}
+                        title={getStorageColumnSortButtonLabel(
+                          column.label,
+                          props.sortKey === column.sortKey,
+                          props.sortDirection,
+                        )}
+                      >
+                        <span class="hidden min-w-0 truncate xl:inline">{column.label}</span>
+                        <span class="min-w-0 truncate xl:hidden">{column.compactLabel}</span>
+                        <Show
+                          when={props.sortKey === column.sortKey}
+                          fallback={
+                            <ArrowUpDownIcon
+                              aria-hidden="true"
+                              class={`${STORAGE_POOL_HEADER_SORT_ICON_CLASS} text-muted/70`}
+                            />
+                          }
+                        >
+                          <Show
+                            when={props.sortDirection === 'asc'}
+                            fallback={
+                              <ArrowDownIcon
+                                aria-hidden="true"
+                                class={`${STORAGE_POOL_HEADER_SORT_ICON_CLASS} text-base-content`}
+                              />
+                            }
+                          >
+                            <ArrowUpIcon
+                              aria-hidden="true"
+                              class={`${STORAGE_POOL_HEADER_SORT_ICON_CLASS} text-base-content`}
+                            />
+                          </Show>
+                        </Show>
+                      </button>
                     </TableHead>
                   )}
                 </For>

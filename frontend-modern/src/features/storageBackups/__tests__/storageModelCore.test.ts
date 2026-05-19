@@ -120,6 +120,76 @@ describe('storageModelCore', () => {
     });
   });
 
+  it('sorts storage records by the visible pool-table columns', () => {
+    const alpha = makeRecord({
+      id: 'storage-alpha',
+      name: 'Alpha',
+      platformLabel: 'Zeta source',
+      topologyLabel: 'Dataset',
+      hostLabel: 'node-b',
+      protectionLabel: 'Mirror',
+      details: { status: 'online', type: 'dir' },
+      capacity: { totalBytes: 100, usedBytes: 20, freeBytes: 80, usagePercent: 20 },
+    });
+    const beta = makeRecord({
+      id: 'storage-beta',
+      name: 'Beta',
+      platformLabel: 'Alpha source',
+      topologyLabel: 'Block',
+      hostLabel: 'node-a',
+      protectionLabel: 'Raidz',
+      details: { status: 'degraded', type: 'zfspool' },
+      capacity: { totalBytes: 100, usedBytes: 80, freeBytes: 20, usagePercent: 80 },
+    });
+    const gamma = makeRecord({
+      id: 'storage-gamma',
+      name: 'Gamma',
+      platformLabel: 'Beta source',
+      topologyLabel: 'File',
+      hostLabel: 'node-c',
+      protectionLabel: 'Archive',
+      details: { status: 'unknown', type: 'nfs' },
+      capacity: { totalBytes: 0, usedBytes: 0, freeBytes: 0, usagePercent: 0 },
+    });
+    const records = [alpha, beta, gamma];
+    const growthBySeriesId = new Map([
+      [
+        'storage-alpha',
+        { deltaBytes: 200, label: '+200 B', title: 'Growth', toneClass: 'text-muted' },
+      ],
+      [
+        'storage-beta',
+        { deltaBytes: 800, label: '+800 B', title: 'Growth', toneClass: 'text-muted' },
+      ],
+    ]);
+
+    expect(sortStorageRecords(records, 'source', 'asc').map((record) => record.id)).toEqual([
+      'storage-beta',
+      'storage-gamma',
+      'storage-alpha',
+    ]);
+    expect(sortStorageRecords(records, 'host', 'asc').map((record) => record.id)).toEqual([
+      'storage-beta',
+      'storage-alpha',
+      'storage-gamma',
+    ]);
+    expect(sortStorageRecords(records, 'state', 'asc').map((record) => record.id)).toEqual([
+      'storage-beta',
+      'storage-alpha',
+      'storage-gamma',
+    ]);
+    expect(sortStorageRecords(records, 'protection', 'desc').map((record) => record.id)).toEqual([
+      'storage-beta',
+      'storage-alpha',
+      'storage-gamma',
+    ]);
+    expect(
+      sortStorageRecords(records, 'growth', 'desc', { growthBySeriesId }).map(
+        (record) => record.id,
+      ),
+    ).toEqual(['storage-beta', 'storage-alpha', 'storage-gamma']);
+  });
+
   it('does not synthesize an empty group when filters remove every storage record', () => {
     expect(groupStorageRecords([], 'none')).toEqual([]);
     expect(groupStorageRecords([], 'status')).toEqual([]);

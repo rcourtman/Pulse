@@ -59,9 +59,14 @@ export type StoragePageNodeOption = {
 
 export const DEFAULT_STORAGE_SORT_OPTIONS: Array<{ value: StorageSortKey; label: string }> = [
   { value: 'priority', label: 'Priority' },
-  { value: 'name', label: 'Name' },
+  { value: 'name', label: 'Storage' },
+  { value: 'state', label: 'State' },
+  { value: 'source', label: 'Source' },
   { value: 'usage', label: 'Usage %' },
   { value: 'type', label: 'Type' },
+  { value: 'host', label: 'Host' },
+  { value: 'protection', label: 'Protection' },
+  { value: 'growth', label: 'Growth' },
 ];
 
 export const STORAGE_STATUS_FILTER_OPTIONS: StorageOption[] = [
@@ -117,13 +122,23 @@ export const normalizeStorageSortKey = (value: string): StorageSortKey => {
   if (
     normalized === 'priority' ||
     normalized === 'name' ||
+    normalized === 'state' ||
+    normalized === 'source' ||
     normalized === 'usage' ||
-    normalized === 'type'
+    normalized === 'type' ||
+    normalized === 'host' ||
+    normalized === 'protection' ||
+    normalized === 'growth'
   ) {
     return normalized;
   }
   return 'priority';
 };
+
+export const getDefaultStorageSortDirection = (
+  sortKey: StorageSortKey,
+): 'asc' | 'desc' =>
+  sortKey === 'priority' || sortKey === 'usage' || sortKey === 'growth' ? 'desc' : 'asc';
 
 export const normalizeStorageGroupKey = (value: string): StorageGroupKey => {
   const normalized = normalizeStorageRouteToken(value);

@@ -21,6 +21,7 @@ import {
   DEFAULT_STORAGE_STATUS_FILTER,
   DEFAULT_STORAGE_VIEW,
   filterStorageDiskNodeOptions,
+  getDefaultStorageSortDirection,
   getStorageFilterGroupBy,
   getStorageNodeFilterLabel,
   getStorageStatusFilterValue,
@@ -103,7 +104,11 @@ describe('storagePageState', () => {
     expect(normalizeStorageHealthFilter('needs-attention')).toBe('attention');
     expect(normalizeStorageSortKey(' usage ')).toBe('usage');
     expect(normalizeStorageSortKey('usage')).toBe('usage');
+    expect(normalizeStorageSortKey(' state ')).toBe('state');
+    expect(normalizeStorageSortKey('growth')).toBe('growth');
     expect(normalizeStorageSortKey('weird')).toBe('priority');
+    expect(getDefaultStorageSortDirection('name')).toBe('asc');
+    expect(getDefaultStorageSortDirection('usage')).toBe('desc');
     expect(normalizeStorageGroupKey(' status ')).toBe('status');
     expect(normalizeStorageGroupKey('status')).toBe('status');
     expect(normalizeStorageGroupKey('weird')).toBe('none');
@@ -131,8 +136,13 @@ describe('storagePageState', () => {
     expect(DEFAULT_STORAGE_SORT_OPTIONS.map((option) => option.value)).toEqual([
       'priority',
       'name',
+      'state',
+      'source',
       'usage',
       'type',
+      'host',
+      'protection',
+      'growth',
     ]);
     expect(STORAGE_STATUS_FILTER_OPTIONS.map((option) => option.value)).toEqual([
       'all',

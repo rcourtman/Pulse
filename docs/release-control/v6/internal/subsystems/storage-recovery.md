@@ -230,6 +230,14 @@ bypass the API fail-closed execution gate.
    render the storage empty state instead of a synthetic empty "All" group.
    Subtabs (Pools / Physical Disks) sit above the bar as navigation, not
    filters.
+   Storage pool table header sorting is storage/recovery-owned and must bind
+   visible pool columns to the canonical storage sort state instead of
+   introducing platform-local or table-local sort state. Header clicks must
+   update the same `sort` / `order` model as the toolbar select, expose
+   `aria-sort` on the active column, and cover displayed pool columns
+   including state, source, type, host, protection, usage, and growth. Growth
+   sorting may consume summary delta data, but non-growth sorts must not track
+   chart delta maps or re-render row order when chart data refreshes.
    Platform-page storage and recovery section tabs
    are still capability-gated navigation: Proxmox Storage,
    Backups, Ceph, Replication, and adjacent recovery sections may appear only

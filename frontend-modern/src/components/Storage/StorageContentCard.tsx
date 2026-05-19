@@ -7,7 +7,7 @@ import { STORAGE_CONTENT_CARD_BODY_CLASS } from '@/features/storageBackups/stora
 import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
 import type { Resource } from '@/types/resource';
 import type { StorageHealthFilter } from '@/features/storageBackups/models';
-import type { StorageGroupKey, StorageGroupedRecords } from './useStorageModel';
+import type { StorageGroupKey, StorageGroupedRecords, StorageSortKey } from './useStorageModel';
 import type { StorageAlertRowState } from '@/features/storageBackups/storageAlertState';
 import type { StorageView } from './storagePageState';
 import { useStorageContentCardModel } from './useStorageContentCardModel';
@@ -25,6 +25,10 @@ type StorageContentCardProps = {
   search: () => string;
   groupedRecords: () => StorageGroupedRecords[];
   groupBy: () => StorageGroupKey;
+  sortKey: () => StorageSortKey;
+  setSortKey: (value: StorageSortKey) => void;
+  sortDirection: () => 'asc' | 'desc';
+  setSortDirection: (value: 'asc' | 'desc') => void;
   expandedGroups: () => Set<string>;
   toggleGroup: (key: string) => void;
   expandedPoolId: () => string | null;
@@ -93,6 +97,10 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
         <StoragePoolsTable
           groupedRecords={props.groupedRecords()}
           groupBy={props.groupBy()}
+          sortKey={props.sortKey()}
+          setSortKey={props.setSortKey}
+          sortDirection={props.sortDirection()}
+          setSortDirection={props.setSortDirection}
           expandedGroups={props.expandedGroups()}
           toggleGroup={props.toggleGroup}
           expandedPoolId={props.expandedPoolId()}
