@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   dedupeResourceBadges,
+  getContainerRuntimeBadgeForRuntime,
   getInfrastructurePlatformBadges,
   getInfrastructureSystemIdentityBadges,
   getInfrastructureSystemIdentitySortLabel,
@@ -31,6 +32,22 @@ describe('resourceBadgePresentation', () => {
     expect(getPlatformBadge('proxmox-pbs')?.label).toBe('PBS');
     expect(getPlatformBadge('docker')?.label).toBe('Docker / Podman');
     expect(getPlatformBadge('availability')?.label).toBe('Availability');
+  });
+
+  it('returns canonical runtime badge tones for Docker and Podman identities', () => {
+    const dockerBadge = getContainerRuntimeBadgeForRuntime('docker');
+    const podmanBadge = getContainerRuntimeBadgeForRuntime('podman');
+
+    expect(dockerBadge).toMatchObject({
+      label: 'Docker',
+      title: 'Runtime: Docker',
+    });
+    expect(dockerBadge?.classes).toContain('bg-sky-100');
+    expect(podmanBadge).toMatchObject({
+      label: 'Podman',
+      title: 'Runtime: Podman',
+    });
+    expect(podmanBadge?.classes).toContain('bg-violet-100');
   });
 
   it('returns source badges for infrastructure source types', () => {

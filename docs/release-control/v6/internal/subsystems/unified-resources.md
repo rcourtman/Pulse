@@ -969,6 +969,11 @@ platform or host-profile identity, such as PVE `ResourceProxmoxMeta.pveVersion`
 or `platformData.proxmox.pveVersion`, PBS `version`, or an agent OS report that
 resolves to Unraid or Proxmox VE. They must not attach a collector OS version to
 a different API-backed platform identity.
+Container runtime badges follow that same shared identity boundary:
+`frontend-modern/src/utils/resourceBadgePresentation.ts` owns the runtime badge
+label and tone mapping for Docker, Podman, and unknown runtimes, and consumers
+must render those badges from the shared helper instead of rebuilding local
+runtime chips or page-specific colour classes.
 Agent-backed storage resources follow the same distinction: `StorageMeta.platform`
 may carry appliance presentation context such as `unraid` so the operator can see
 what system owns the array, but realtime `platformType` and source filters must

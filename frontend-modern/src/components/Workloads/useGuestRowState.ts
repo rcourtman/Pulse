@@ -8,6 +8,7 @@ import type { DisplayMetricType } from '@/utils/metricThresholds';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { getGuestPowerIndicator, isGuestRunning } from '@/utils/status';
 import { getShortImageName, formatBytes } from '@/utils/format';
+import { getContainerRuntimeBadgeForRuntime } from '@/utils/resourceBadgePresentation';
 import {
   getCanonicalWorkloadId,
   getWorkloadMetricsKind,
@@ -114,14 +115,9 @@ export function useGuestRowState(props: GuestRowProps) {
     return type === 'vm' || type === 'system-container';
   });
 
-  const appContainerRuntimeLabel = createMemo<string | null>(() => {
+  const appContainerRuntimeBadge = createMemo(() => {
     if (workloadType() !== 'app-container') return null;
-    const runtime = (props.guest.containerRuntime || '').trim();
-    const normalized = runtime.toLowerCase();
-    if (normalized === 'docker') return 'Docker';
-    if (normalized === 'podman') return 'Podman';
-    if (runtime) return runtime;
-    return null;
+    return getContainerRuntimeBadgeForRuntime(props.guest.containerRuntime);
   });
 
   const isOCIContainer = createMemo(() => {
@@ -272,7 +268,7 @@ export function useGuestRowState(props: GuestRowProps) {
   );
 
   return {
-    appContainerRuntimeLabel,
+    appContainerRuntimeBadge,
     cpuAnomaly,
     cpuThresholds,
     customUrl,

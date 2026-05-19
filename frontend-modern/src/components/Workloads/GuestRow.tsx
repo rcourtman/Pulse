@@ -42,7 +42,7 @@ import { getGuestColumnStyle } from './guestRowModel';
 export function GuestRow(props: GuestRowProps) {
   const {
     agentVersion,
-    appContainerRuntimeLabel,
+    appContainerRuntimeBadge,
     clusterName,
     contextLabel,
     cpuAnomaly,
@@ -238,19 +238,16 @@ export function GuestRow(props: GuestRowProps) {
           <td class="px-1.5 sm:px-2 py-0.5 align-middle" data-workload-col="runtime">
             <div class="flex justify-center">
               <Show
-                when={appContainerRuntimeLabel()}
+                when={appContainerRuntimeBadge()}
                 fallback={
                   <span class="text-xs text-slate-400" aria-hidden="true">
                     —
                   </span>
                 }
               >
-                {(label) => (
-                  <span
-                    class="rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted whitespace-nowrap"
-                    title={`${label()} runtime`}
-                  >
-                    {label()}
+                {(badge) => (
+                  <span class={badge().classes} title={badge().title}>
+                    {badge().label}
                   </span>
                 )}
               </Show>

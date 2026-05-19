@@ -638,7 +638,9 @@ describe('GuestRow', () => {
         }),
         visibleColumnIds: ['name', 'runtime', 'image'],
       });
-      expect(screen.getByText('Docker')).toBeTruthy();
+      const runtimeBadge = screen.getByText('Docker');
+      expect(runtimeBadge).toBeTruthy();
+      expect(runtimeBadge.className).toContain('bg-sky-100');
     });
 
     it('renders Podman runtime chip in the runtime column for Podman-managed app-containers', () => {
@@ -651,7 +653,9 @@ describe('GuestRow', () => {
         }),
         visibleColumnIds: ['name', 'runtime', 'image'],
       });
-      expect(screen.getByText('Podman')).toBeTruthy();
+      const runtimeBadge = screen.getByText('Podman');
+      expect(runtimeBadge).toBeTruthy();
+      expect(runtimeBadge.className).toContain('bg-violet-100');
     });
 
     it('does not render a runtime chip when runtime and platform are both unknown', () => {

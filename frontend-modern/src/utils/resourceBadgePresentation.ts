@@ -9,7 +9,11 @@ import {
   getAgentHostProfileManifestEntry,
   getSourcePlatformManifestEntry,
 } from '@/utils/platformSupportManifest';
-import { normalizeSourcePlatformKey, type KnownSourcePlatform } from '@/utils/sourcePlatforms';
+import {
+  getSourcePlatformPresentation,
+  normalizeSourcePlatformKey,
+  type KnownSourcePlatform,
+} from '@/utils/sourcePlatforms';
 import { getSourceTypePresentation } from '@/utils/sourceTypePresentation';
 import {
   canonicalResourceTypeForDisplay,
@@ -28,6 +32,9 @@ const baseBadge =
 
 const typeClasses = 'bg-surface-alt text-base-content';
 const availabilityBadgeClasses = 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300';
+const dockerRuntimeBadgeClasses = 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-400';
+const podmanRuntimeBadgeClasses =
+  'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300';
 
 const PRIMARY_SYSTEM_SOURCE_PRIORITY: KnownSourcePlatform[] = [
   'proxmox-pve',
@@ -581,9 +588,10 @@ const proxmoxLxcDockerBadge = (resource: Resource): ResourceBadge | null => {
   return {
     label: 'LXC',
     classes: `${baseBadge} ${getWorkloadTypePresentation('system-container').className}`,
-    title: vmid !== null
-      ? `Docker running inside Proxmox LXC ${vmid}`
-      : 'Docker running inside a Proxmox LXC',
+    title:
+      vmid !== null
+        ? `Docker running inside Proxmox LXC ${vmid}`
+        : 'Docker running inside a Proxmox LXC',
   };
 };
 
@@ -689,6 +697,33 @@ export function getInfrastructureSystemTitleBadges(
   ]);
 }
 
+const getContainerRuntimeLabel = (runtime?: string | null): string => {
+  const raw = (runtime || '').trim();
+  const normalized = raw.toLowerCase();
+  if (normalized === 'docker') return 'Docker';
+  if (normalized === 'podman') return 'Podman';
+  return raw;
+};
+
+const getContainerRuntimeTone = (label: string): string => {
+  const normalized = label.trim().toLowerCase();
+  if (normalized === 'docker') {
+    return getSourcePlatformPresentation('docker')?.tone ?? dockerRuntimeBadgeClasses;
+  }
+  if (normalized === 'podman') return podmanRuntimeBadgeClasses;
+  return typeClasses;
+};
+
+export function getContainerRuntimeBadgeForRuntime(runtime?: string | null): ResourceBadge | null {
+  const label = getContainerRuntimeLabel(runtime);
+  if (!label) return null;
+  return {
+    label,
+    classes: `${baseBadge} ${getContainerRuntimeTone(label)}`,
+    title: `Runtime: ${label}`,
+  };
+}
+
 export function getContainerRuntimeBadge(
   platformType?: PlatformType,
   platformData?: Record<string, unknown> | null,
@@ -696,15 +731,5 @@ export function getContainerRuntimeBadge(
   if (platformType !== 'docker' || !platformData) return null;
 
   const docker = (platformData as { docker?: { runtime?: string } } | undefined)?.docker;
-  const raw = (docker?.runtime || '').trim();
-  if (!raw) return null;
-
-  const normalized = raw.toLowerCase();
-  const label = normalized === 'podman' ? 'Podman' : normalized === 'docker' ? 'Docker' : raw;
-
-  return {
-    label,
-    classes: `${baseBadge} ${typeClasses}`,
-    title: `Runtime: ${label}`,
-  };
+  return getContainerRuntimeBadgeForRuntime(docker?.runtime);
 }

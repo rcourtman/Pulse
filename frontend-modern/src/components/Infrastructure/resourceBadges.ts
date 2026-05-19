@@ -1,6 +1,7 @@
 export type { ResourceBadge } from '@/utils/resourceBadgePresentation';
 export {
   getContainerRuntimeBadge,
+  getContainerRuntimeBadgeForRuntime,
   getInfrastructureSystemIdentityBadges,
   getInfrastructureSystemIdentitySortLabel,
   getInfrastructurePlatformBadges,
