@@ -101,9 +101,9 @@ describe('getShortImageName', () => {
     expect(getShortImageName('nginx:latest')).toBe('nginx:latest');
   });
 
-  it('returns last two components for registry URLs', () => {
-    expect(getShortImageName('ghcr.io/owner/image:tag')).toBe('owner/image:tag');
-    expect(getShortImageName('docker.io/library/nginx:latest')).toBe('library/nginx:latest');
+  it('returns image leaf and tag for registry URLs', () => {
+    expect(getShortImageName('ghcr.io/owner/image:tag')).toBe('image:tag');
+    expect(getShortImageName('docker.io/library/nginx:latest')).toBe('nginx:latest');
   });
 
   it('strips sha256 digest', () => {
@@ -111,7 +111,7 @@ describe('getShortImageName', () => {
   });
 
   it('handles complex registry paths', () => {
-    expect(getShortImageName('registry.example.com/foo/bar/myapp:v1.0')).toBe('bar/myapp:v1.0');
+    expect(getShortImageName('registry.example.com/foo/bar/myapp:v1.0')).toBe('myapp:v1.0');
   });
 });
 

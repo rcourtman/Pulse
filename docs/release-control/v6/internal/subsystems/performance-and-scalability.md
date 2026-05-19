@@ -263,6 +263,10 @@ regression protection.
     Docker, Podman, and future container runtimes keep the same identity tones
     across Workloads, Docker, and infrastructure surfaces without adding
     per-row styling branches to the hot path.
+    App-container image cells must use the shared compact image formatter to
+    show the image leaf plus tag/version while preserving the full registry and
+    namespace reference in tooltip/detail metadata; table rows should optimize
+    for container/version scanning, not registry path inspection.
 11. Extend workload drawer derivations and runtime wiring through `frontend-modern/src/components/Workloads/guestDrawerModel.ts` and `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`, and extend drawer overview rendering through `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`, rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
     Drawer history charts belong to `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`.
     History cards must let the plot area stretch to the card height instead of

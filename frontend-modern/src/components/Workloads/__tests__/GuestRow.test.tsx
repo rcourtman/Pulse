@@ -593,12 +593,13 @@ describe('GuestRow', () => {
         guest: makeGuest({
           type: 'app-container',
           workloadType: 'app-container',
-          image: 'nginx:latest',
+          image: 'ghcr.io/library/nginx:latest',
         }),
         visibleColumnIds: ['name', 'image'],
       });
-      // getShortImageName truncates the image
-      expect(screen.getByText('nginx:latest')).toBeTruthy();
+      const image = screen.getByText('nginx:latest');
+      expect(image).toBeTruthy();
+      expect(image.getAttribute('title')).toBe('ghcr.io/library/nginx:latest');
     });
 
     it('shows update button for app-container guests', () => {
@@ -1203,8 +1204,7 @@ describe('info merged column', () => {
       }),
       visibleColumnIds: ['name', 'info'],
     });
-    // getShortImageName('library/nginx:latest') returns 'library/nginx:latest' (last 2 parts)
-    expect(screen.getByText('library/nginx:latest')).toBeTruthy();
+    expect(screen.getByText('nginx:latest')).toBeTruthy();
   });
 
   it('shows namespace for pod workloads in info column', () => {
