@@ -7,6 +7,8 @@ import {
   filterWorkloads,
   getDiskUsagePercent,
   getWorkloadGroupKey,
+  getWorkloadGroupLabel,
+  buildWorkloadSummaryGroupScopeMap,
   groupWorkloads,
 } from '@/components/Workloads/workloadSelectors';
 import { workloadNodeScopeId } from '@/components/Workloads/workloadTopology';
@@ -467,6 +469,53 @@ describe('workloadSelectors', () => {
       expect(getWorkloadGroupKey(vm)).toBe('inst-a-node-a');
       expect(getWorkloadGroupKey(docker)).toBe('app-container:docker-edge');
       expect(getWorkloadGroupKey(k8s)).toBe('pod:worker-2');
+    });
+  });
+
+  describe('getWorkloadGroupLabel', () => {
+    it('uses host identity badges instead of workload plural labels when provided', () => {
+      const guests = [
+        makeGuest(1, {
+          type: 'app-container',
+          workloadType: 'app-container',
+          contextLabel: 'frigate',
+        }),
+      ];
+
+      expect(getWorkloadGroupLabel('app-container:frigate', guests)).toEqual({
+        name: 'frigate',
+        type: 'Containers',
+      });
+      expect(getWorkloadGroupLabel('app-container:frigate', guests, null, 'LXC')).toEqual({
+        name: 'frigate',
+        type: 'LXC',
+      });
+    });
+
+    it('passes group identity badges into summary group scope labels', () => {
+      const guests = [
+        makeGuest(1, {
+          id: 'container-1',
+          name: 'frigate',
+          type: 'app-container',
+          workloadType: 'app-container',
+          contextLabel: 'frigate-host',
+        }),
+      ];
+
+      const scopes = buildWorkloadSummaryGroupScopeMap({
+        guests,
+        nodes: [],
+        groupingMode: 'grouped',
+        sortComparator: null,
+        groupLabelBadges: {
+          'app-container:frigate-host': { label: 'LXC' },
+        },
+      });
+
+      expect(scopes.get('app-container:frigate-host')?.label).toBe(
+        'frigate-host · LXC (1 workload)',
+      );
     });
   });
 

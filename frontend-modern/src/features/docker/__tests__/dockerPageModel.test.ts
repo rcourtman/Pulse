@@ -3,6 +3,8 @@ import type { Resource } from '@/types/resource';
 import {
   buildDockerContainerDefaultHiddenColumnIds,
   buildDockerPageModel,
+  buildDockerWorkloadGroupLabelBadges,
+  getDockerHostSystemBadge,
   hasDockerSwarmEvidence,
 } from '../dockerPageModel';
 
@@ -95,6 +97,30 @@ describe('dockerPageModel', () => {
         }),
       ]),
     ).toEqual(['disk', 'tags', 'netIo']);
+  });
+
+  it('builds host-identity badges for Docker workload group rows', () => {
+    const lxcHost = makeResource({
+      id: 'proxmox-lxc-docker:pve:101',
+      type: 'agent',
+      name: 'frigate',
+      displayName: 'Frigate host',
+      docker: { hostSourceId: 'proxmox-lxc-docker:pve:101' },
+    });
+    const genericDockerHost = makeResource({
+      id: 'docker-host-1',
+      type: 'agent',
+      name: 'plain-docker',
+    });
+
+    expect(getDockerHostSystemBadge(lxcHost)?.label).toBe('LXC');
+    expect(getDockerHostSystemBadge(genericDockerHost)).toBeUndefined();
+
+    const badges = buildDockerWorkloadGroupLabelBadges([lxcHost, genericDockerHost]);
+    expect(badges['app-container:frigate']?.label).toBe('LXC');
+    expect(badges['app-container:Frigate host']?.label).toBe('LXC');
+    expect(badges['app-container:proxmox-lxc-docker:pve:101']?.label).toBe('LXC');
+    expect(badges['app-container:plain-docker']).toBeUndefined();
   });
 
   it('does not treat standalone inactive Docker Swarm metadata as Swarm evidence', () => {

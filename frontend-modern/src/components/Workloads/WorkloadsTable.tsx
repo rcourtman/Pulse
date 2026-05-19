@@ -18,6 +18,7 @@ type WorkloadsTableProps = Pick<
   | 'getGroupLabel'
   | 'groupedGuests'
   | 'groupedWindowing'
+  | 'groupLabelBadges'
   | 'guestMetadata'
   | 'guestParentNodeMap'
   | 'groupNodeDrawerMode'
@@ -102,6 +103,7 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             getGroupLabel={props.getGroupLabel}
             groupedGuests={props.groupedGuests}
             groupedWindowing={props.groupedWindowing}
+            groupLabelBadges={props.groupLabelBadges}
             guestMetadata={props.guestMetadata}
             guestParentNodeMap={props.guestParentNodeMap}
             groupNodeDrawerMode={props.groupNodeDrawerMode}

@@ -267,13 +267,15 @@ export const getWorkloadGroupLabel = (
   groupKey: string,
   guests: WorkloadGuest[],
   groupNodeName?: string | null,
+  groupTypeLabel?: string | null,
 ): { type: string; name: string } => {
   const normalizedGroupKey = guests.length > 0 ? getWorkloadGroupKey(guests[0]) : groupKey;
   const [prefix, ...rest] = normalizedGroupKey.split(':');
   const context = rest.length > 0 ? rest.join(':') : normalizedGroupKey;
   const normalizedNodeName = (groupNodeName || '').trim();
+  const normalizedGroupTypeLabel = (groupTypeLabel || '').trim();
   if (normalizedNodeName) {
-    return { type: '', name: normalizedNodeName };
+    return { type: normalizedGroupTypeLabel, name: normalizedNodeName };
   }
   if (
     prefix === 'app-container' ||
@@ -281,7 +283,10 @@ export const getWorkloadGroupLabel = (
     prefix === 'vm' ||
     prefix === 'system-container'
   ) {
-    return { type: getWorkloadTypePresentation(prefix).pluralLabel, name: context };
+    return {
+      type: normalizedGroupTypeLabel || getWorkloadTypePresentation(prefix).pluralLabel,
+      name: context,
+    };
   }
   const first = guests[0];
   if (first) {
@@ -352,11 +357,13 @@ export const buildWorkloadSummaryGroupScopeMap = ({
   nodes,
   groupingMode,
   sortComparator,
+  groupLabelBadges,
 }: {
   guests: WorkloadGuest[];
   nodes: Node[];
   groupingMode: 'grouped' | 'flat';
   sortComparator: ((a: WorkloadGuest, b: WorkloadGuest) => number) | null;
+  groupLabelBadges?: Record<string, { label: string }>;
 }): Map<string, SummarySeriesGroupScope> => {
   if (groupingMode !== 'grouped') {
     return new Map<string, SummarySeriesGroupScope>();
@@ -367,10 +374,16 @@ export const buildWorkloadSummaryGroupScopeMap = ({
   const scopes = new Map<string, SummarySeriesGroupScope>();
   for (const [groupKey, groupGuests] of Object.entries(grouped)) {
     const node = nodeByInstance[groupKey];
+    const badge = groupLabelBadges?.[groupKey] ?? groupLabelBadges?.[groupKey.toLowerCase()];
     const scope = buildWorkloadSummaryGroupScope(
       groupKey,
       groupGuests,
-      getWorkloadGroupLabel(groupKey, groupGuests, node ? getNodeDisplayName(node) : null),
+      getWorkloadGroupLabel(
+        groupKey,
+        groupGuests,
+        node ? getNodeDisplayName(node) : null,
+        badge?.label,
+      ),
     );
     if (scope) {
       scopes.set(scope.id, scope);

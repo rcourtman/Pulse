@@ -13,10 +13,7 @@ import {
   computeWorkloadStats,
   computeWorkloadIOEmphasis,
 } from './workloadSelectors';
-import {
-  buildNodeByInstance,
-  buildGuestParentNodeMap,
-} from './workloadTopology';
+import { buildNodeByInstance, buildGuestParentNodeMap } from './workloadTopology';
 import { useWorkloadViewportSync } from './useWorkloadViewportSync';
 import { useGroupedTableWindowing } from './useGroupedTableWindowing';
 
@@ -41,11 +38,10 @@ interface WorkloadsWorkloadDerivedStateOptions {
   selectedGuestId: Accessor<string | null>;
   revealedGuestId: Accessor<string | null>;
   tableBodyRef: Accessor<HTMLTableSectionElement | null>;
+  groupLabelBadges?: Accessor<Record<string, { label: string }>>;
 }
 
-export function useWorkloadsDerivedState(
-  options: WorkloadsWorkloadDerivedStateOptions,
-) {
+export function useWorkloadsDerivedState(options: WorkloadsWorkloadDerivedStateOptions) {
   const filteredGuests = createMemo<WorkloadGuest[]>(() => options.filteredGuests() ?? []);
 
   const workloadsSummaryVisibleIds = createMemo<string[]>(() =>
@@ -120,15 +116,18 @@ export function useWorkloadsDerivedState(
     guests: WorkloadGuest[],
   ): { type: string; name: string } => {
     const node = nodeByInstance()[groupKey];
-    return getWorkloadGroupLabel(groupKey, guests, node ? getNodeDisplayName(node) : null);
+    const badges = options.groupLabelBadges?.() ?? {};
+    const badge = badges[groupKey] ?? badges[groupKey.toLowerCase()];
+    return getWorkloadGroupLabel(
+      groupKey,
+      guests,
+      node ? getNodeDisplayName(node) : null,
+      badge?.label,
+    );
   };
 
   const groupedGuests = createMemo(() =>
-    groupWorkloads(
-      filteredGuests(),
-      options.groupingMode(),
-      options.guestSortComparator(),
-    ),
+    groupWorkloads(filteredGuests(), options.groupingMode(), options.guestSortComparator()),
   );
 
   const sortedGroupKeys = createMemo(() => {
@@ -222,10 +221,7 @@ export function useWorkloadsDerivedState(
 
   const bottomSpacerHeight = createMemo(() =>
     groupedWindowing.isWindowed()
-      ? Math.max(
-          0,
-          (filteredGuests().length - groupedWindowing.endIndex()) * 32,
-        )
+      ? Math.max(0, (filteredGuests().length - groupedWindowing.endIndex()) * 32)
       : 0,
   );
 

@@ -233,6 +233,31 @@ export function GuestRow(props: GuestRowProps) {
           </div>
         </td>
 
+        {/* Runtime */}
+        <Show when={isColVisible('runtime')}>
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle" data-workload-col="runtime">
+            <div class="flex justify-center">
+              <Show
+                when={appContainerRuntimeLabel()}
+                fallback={
+                  <span class="text-xs text-slate-400" aria-hidden="true">
+                    —
+                  </span>
+                }
+              >
+                {(label) => (
+                  <span
+                    class="rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted whitespace-nowrap"
+                    title={`${label()} runtime`}
+                  >
+                    {label()}
+                  </span>
+                )}
+              </Show>
+            </div>
+          </td>
+        </Show>
+
         {/* Type */}
         <Show when={isColVisible('type')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
@@ -473,14 +498,6 @@ export function GuestRow(props: GuestRowProps) {
                 <span class="text-xs text-muted truncate max-w-[140px]" title={dockerImage()}>
                   {getShortImageName(dockerImage())}
                 </span>
-                <Show when={appContainerRuntimeLabel()}>
-                  <span
-                    class="rounded border border-border bg-surface-alt px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted whitespace-nowrap"
-                    title={`${appContainerRuntimeLabel()} runtime`}
-                  >
-                    {appContainerRuntimeLabel()}
-                  </span>
-                </Show>
               </Show>
             </div>
           </td>

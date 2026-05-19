@@ -37,6 +37,7 @@ describe('useWorkloadsControlsState', () => {
         expect(visibleColumnIds).not.toContain('type');
         expect(visibleColumnIds).not.toContain('info');
         expect(visibleColumnIds).not.toContain('backup');
+        expect(visibleColumnIds).toContain('runtime');
         expect(visibleColumnIds).toContain('image');
         expect(visibleColumnIds).toContain('context');
         expect(visibleColumnIds).toContain('update');
@@ -64,7 +65,9 @@ describe('useWorkloadsControlsState', () => {
           setShowFilters,
         });
 
-        const globalDiskColumn = globalState.visibleColumns().find((column) => column.id === 'disk');
+        const globalDiskColumn = globalState
+          .visibleColumns()
+          .find((column) => column.id === 'disk');
         expect(globalDiskColumn?.label).toBe('Disk');
         expect(globalDiskColumn).toBeTruthy();
       } finally {

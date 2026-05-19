@@ -24,6 +24,7 @@ const WORKLOAD_TABLE_LAYOUT_ORDER: Record<WorkloadTableLayoutMode, number> = {
 
 const WORKLOAD_COLUMN_MIN_LAYOUT: Record<string, WorkloadTableLayoutMode> = {
   name: 'mobile',
+  runtime: 'tablet',
   cpu: 'mobile',
   memory: 'mobile',
   disk: 'mobile',
@@ -160,6 +161,14 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     minWidth: '180px',
     maxWidth: '220px',
     sortKey: 'name',
+  },
+  {
+    id: 'runtime',
+    label: 'Runtime',
+    width: '84px',
+    minWidth: '74px',
+    maxWidth: '96px',
+    toggleable: true,
   },
   createVisibleCanonicalTypeColumn(),
   { id: 'info', label: 'Info', width: '100px' },
@@ -355,6 +364,7 @@ const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
   },
   tablet: {
     name: 30,
+    runtime: 9,
     type: 8,
     info: 8,
     vmid: 8,
@@ -364,6 +374,7 @@ const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
   },
   compact: {
     name: 26,
+    runtime: 8,
     type: 7,
     info: 7,
     vmid: 7,
@@ -518,6 +529,7 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
   ]),
   container: new Set([
     'name',
+    'runtime',
     'type',
     'info',
     'cpu',
@@ -537,6 +549,7 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
   ]),
   'app-container': new Set([
     'name',
+    'runtime',
     'cpu',
     'memory',
     'disk',

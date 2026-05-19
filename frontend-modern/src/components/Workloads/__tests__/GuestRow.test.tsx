@@ -614,7 +614,7 @@ describe('GuestRow', () => {
       expect(screen.getByTestId('update-button')).toBeTruthy();
     });
 
-    it('renders Docker runtime chip next to image for Docker-managed app-containers', () => {
+    it('keeps the image column scoped to the image name', () => {
       renderGuestRow({
         guest: makeGuest({
           type: 'app-container',
@@ -624,10 +624,24 @@ describe('GuestRow', () => {
         }),
         visibleColumnIds: ['name', 'image'],
       });
+      expect(screen.getByText('nginx:latest')).toBeTruthy();
+      expect(screen.queryByText('Docker')).toBeNull();
+    });
+
+    it('renders Docker runtime chip in the runtime column for Docker-managed app-containers', () => {
+      renderGuestRow({
+        guest: makeGuest({
+          type: 'app-container',
+          workloadType: 'app-container',
+          image: 'nginx:latest',
+          containerRuntime: 'docker',
+        }),
+        visibleColumnIds: ['name', 'runtime', 'image'],
+      });
       expect(screen.getByText('Docker')).toBeTruthy();
     });
 
-    it('renders Podman runtime chip next to image for Podman-managed app-containers', () => {
+    it('renders Podman runtime chip in the runtime column for Podman-managed app-containers', () => {
       renderGuestRow({
         guest: makeGuest({
           type: 'app-container',
@@ -635,22 +649,9 @@ describe('GuestRow', () => {
           image: 'nginx:latest',
           containerRuntime: 'podman',
         }),
-        visibleColumnIds: ['name', 'image'],
+        visibleColumnIds: ['name', 'runtime', 'image'],
       });
       expect(screen.getByText('Podman')).toBeTruthy();
-    });
-
-    it('renders TrueNAS runtime chip for TrueNAS app-containers without explicit runtime', () => {
-      renderGuestRow({
-        guest: makeGuest({
-          type: 'app-container',
-          workloadType: 'app-container',
-          image: 'nginx:latest',
-          platformType: 'truenas',
-        }),
-        visibleColumnIds: ['name', 'image'],
-      });
-      expect(screen.getByText('TrueNAS')).toBeTruthy();
     });
 
     it('does not render a runtime chip when runtime and platform are both unknown', () => {
@@ -660,10 +661,22 @@ describe('GuestRow', () => {
           workloadType: 'app-container',
           image: 'nginx:latest',
         }),
-        visibleColumnIds: ['name', 'image'],
+        visibleColumnIds: ['name', 'runtime', 'image'],
       });
       expect(screen.queryByText('Docker')).toBeNull();
       expect(screen.queryByText('Podman')).toBeNull();
+    });
+
+    it('does not treat the owning platform as container runtime metadata', () => {
+      renderGuestRow({
+        guest: makeGuest({
+          type: 'app-container',
+          workloadType: 'app-container',
+          image: 'nginx:latest',
+          platformType: 'truenas',
+        }),
+        visibleColumnIds: ['name', 'runtime', 'image'],
+      });
       expect(screen.queryByText('TrueNAS')).toBeNull();
     });
   });
@@ -829,9 +842,9 @@ describe('GuestRow', () => {
 
 describe('GUEST_COLUMNS', () => {
   it('has the expected number of columns', () => {
-    // name, type, info, vmid, cpu, memory, disk, ip, uptime, node,
+    // name, runtime, type, info, vmid, cpu, memory, disk, ip, uptime, node,
     // image, namespace, context, backup, tags, os, netIo, diskIo, update
-    expect(GUEST_COLUMNS.length).toBe(19);
+    expect(GUEST_COLUMNS.length).toBe(20);
   });
 
   it('has name as the first column', () => {
@@ -845,6 +858,7 @@ describe('GUEST_COLUMNS', () => {
 
   it('keeps Docker I/O and update headers aligned with the rendered row cells', () => {
     const columnIds = GUEST_COLUMNS.map((column) => column.id);
+    expect(columnIds.slice(0, 2)).toEqual(['name', 'runtime']);
     const dockerTailStart = columnIds.indexOf('netIo');
     expect(columnIds.slice(dockerTailStart)).toEqual(['netIo', 'diskIo', 'update']);
   });
@@ -853,6 +867,7 @@ describe('GUEST_COLUMNS', () => {
     const toggleable = GUEST_COLUMNS.filter((c) => c.toggleable);
     const toggleableIds = toggleable.map((c) => c.id);
     expect(toggleableIds).toContain('type');
+    expect(toggleableIds).toContain('runtime');
     expect(toggleableIds).toContain('ip');
     expect(toggleableIds).toContain('uptime');
     expect(toggleableIds).toContain('node');
@@ -865,6 +880,7 @@ describe('GUEST_COLUMNS', () => {
 
   it('keeps the Type and I/O column width contract aligned with the desktop table layout', () => {
     const nameColumn = GUEST_COLUMNS.find((column) => column.id === 'name');
+    const runtimeColumn = GUEST_COLUMNS.find((column) => column.id === 'runtime');
     const typeColumn = GUEST_COLUMNS.find((column) => column.id === 'type');
     const netIoColumn = GUEST_COLUMNS.find((column) => column.id === 'netIo');
     const diskIoColumn = GUEST_COLUMNS.find((column) => column.id === 'diskIo');
@@ -873,6 +889,7 @@ describe('GUEST_COLUMNS', () => {
     expect(nameColumn?.width).toBe('200px');
     expect(nameColumn?.minWidth).toBe('180px');
     expect(nameColumn?.maxWidth).toBe('220px');
+    expect(runtimeColumn?.width).toBe('84px');
     expect(typeColumn?.width).toBe('60px');
     expect(netIoColumn?.width).toBe('170px');
     expect(netIoColumn?.minWidth).toBe('170px');
@@ -950,6 +967,7 @@ describe('GUEST_COLUMNS', () => {
   it('gives Docker update status enough compact width for check-result labels', () => {
     const compactDockerRuntimeColumnIds = [
       'name',
+      'runtime',
       'cpu',
       'memory',
       'uptime',
@@ -961,7 +979,7 @@ describe('GUEST_COLUMNS', () => {
     expect(
       getGuestColumnWidthStyle('update', false, 'compact', compactDockerRuntimeColumnIds),
     ).toEqual({
-      width: '8.9109%',
+      width: '8.2569%',
     });
   });
 
@@ -1009,6 +1027,7 @@ describe('VIEW_MODE_COLUMNS', () => {
   });
 
   it('app-container mode includes image and context', () => {
+    expect(VIEW_MODE_COLUMNS['app-container']!.has('runtime')).toBe(true);
     expect(VIEW_MODE_COLUMNS['app-container']!.has('image')).toBe(true);
     expect(VIEW_MODE_COLUMNS['app-container']!.has('context')).toBe(true);
   });

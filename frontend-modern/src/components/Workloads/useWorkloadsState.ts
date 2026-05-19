@@ -97,9 +97,16 @@ export interface WorkloadsSurfaceProps {
   columnVisibilityStorageScope?: string;
   additionalDefaultHiddenColumnIds?: string[];
   columnLabelOverrides?: Partial<Record<string, string>>;
+  groupLabelBadges?: Record<string, WorkloadGroupLabelBadge>;
 }
 
 export type WorkloadSortKey = WorkloadsSortKey;
+
+export interface WorkloadGroupLabelBadge {
+  label: string;
+  classes: string;
+  title?: string;
+}
 
 export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   const navigate = useNavigate();
@@ -340,12 +347,16 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     };
     return filterWorkloads(params);
   });
+  const groupLabelBadges = createMemo<Record<string, WorkloadGroupLabelBadge>>(
+    () => props.groupLabelBadges ?? {},
+  );
   const summaryGroupScopes = createMemo(() =>
     buildWorkloadSummaryGroupScopeMap({
       guests: filteredGuests(),
       nodes: infrastructureNodes(),
       groupingMode: groupingMode(),
       sortComparator: guestSortComparator(),
+      groupLabelBadges: groupLabelBadges(),
     }),
   );
 
@@ -407,6 +418,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     revealedGuestId,
     selectedGuestId,
     tableBodyRef,
+    groupLabelBadges,
   });
 
   return {
@@ -525,6 +537,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     groupingMode,
     compactGroupHeaders: () => props.compactGroupHeaders === true,
     groupNodeDrawerMode: () => props.groupNodeDrawerMode ?? 'inline',
+    groupLabelBadges,
   } as const;
 }
 

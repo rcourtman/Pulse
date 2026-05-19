@@ -19,10 +19,6 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import { normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
-  getInfrastructureSystemIdentityBadges,
-  type ResourceBadge,
-} from '@/utils/resourceBadgePresentation';
-import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_CARD_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
@@ -37,7 +33,7 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Disk } from '@/types/api';
 import type { Resource } from '@/types/resource';
-import { hasDockerSwarmEvidence } from './dockerPageModel';
+import { getDockerHostSystemBadge, hasDockerSwarmEvidence } from './dockerPageModel';
 
 // Docker / Podman hosts are container hosts, not generic Pulse Agents.
 // The operator columns that matter are runtime version, container count,
@@ -98,13 +94,6 @@ const aggregateDiskFor = (host: Resource): Disk | undefined => {
   if (total <= 0 && usage <= 0) return undefined;
   return { total, used, free, usage };
 };
-
-const RUNTIME_ONLY_SYSTEM_LABELS = new Set(['docker', 'docker / podman', 'podman']);
-
-const hostSystemBadgeFor = (host: Resource): ResourceBadge | undefined =>
-  getInfrastructureSystemIdentityBadges(host).find(
-    (badge) => !RUNTIME_ONLY_SYSTEM_LABELS.has(badge.label.trim().toLowerCase()),
-  );
 
 export const DockerHostsTable: Component<{
   resources: Resource[];
@@ -214,7 +203,7 @@ export const DockerHostsTable: Component<{
                           })
                         | undefined;
                     const name = () => asTrimmedString(host.name) || host.id;
-                    const systemBadge = () => hostSystemBadgeFor(host);
+                    const systemBadge = () => getDockerHostSystemBadge(host);
                     const version = () => asTrimmedString(docker()?.runtimeVersion) || '—';
                     const containerCount = () => docker()?.containerCount ?? 0;
                     const swarmRole = () => {
@@ -249,141 +238,138 @@ export const DockerHostsTable: Component<{
                     };
                     return (
                       <>
-                      <TableRow
-                        class={`cursor-pointer text-[11px] outline-none sm:text-xs ${
-                          isSelected() ? 'bg-surface-hover' : ''
-                        } focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface`}
-                        aria-controls={isSelected() ? detailRowId() : undefined}
-                        aria-expanded={isSelected() ? 'true' : 'false'}
-                        data-docker-host-row={host.id}
-                        onClick={toggleDrawer}
-                        onKeyDown={handleActivationKey}
-                        tabIndex={0}
-                      >
-                        <TableCell class={`${getPlatformTableCellClass()} w-[40%] md:w-auto`}>
-                          <div class="flex min-w-0 items-center gap-2">
-                            <StatusDot
-                              size="sm"
-                              variant={indicator().variant}
-                              title={host.status || 'unknown'}
-                              ariaHidden
-                            />
-                            <span class="truncate font-semibold text-base-content" title={name()}>
-                              {name()}
-                            </span>
-                          </div>
-                          <Show when={systemBadge()}>
-                            {(badge) => (
-                              <span
-                                class="mt-0.5 block truncate pl-5 text-[9px] text-muted sm:text-[10px] md:hidden"
-                                title={badge().title ?? badge().label}
-                              >
-                                {badge().label}
+                        <TableRow
+                          class={`cursor-pointer text-[11px] outline-none sm:text-xs ${
+                            isSelected() ? 'bg-surface-hover' : ''
+                          } focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface`}
+                          aria-controls={isSelected() ? detailRowId() : undefined}
+                          aria-expanded={isSelected() ? 'true' : 'false'}
+                          data-docker-host-row={host.id}
+                          onClick={toggleDrawer}
+                          onKeyDown={handleActivationKey}
+                          tabIndex={0}
+                        >
+                          <TableCell class={`${getPlatformTableCellClass()} w-[40%] md:w-auto`}>
+                            <div class="flex min-w-0 items-center gap-2">
+                              <StatusDot
+                                size="sm"
+                                variant={indicator().variant}
+                                title={host.status || 'unknown'}
+                                ariaHidden
+                              />
+                              <span class="truncate font-semibold text-base-content" title={name()}>
+                                {name()}
                               </span>
-                            )}
-                          </Show>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
-                        >
-                          <Show
-                            when={systemBadge()}
-                            fallback={<span class="text-muted">—</span>}
-                          >
-                            {(badge) => (
-                              <span
-                                class={badge().classes}
-                                title={badge().title ?? badge().label}
-                              >
-                                {badge().label}
-                              </span>
-                            )}
-                          </Show>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
-                        >
-                          {version()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
-                        >
-                          {containerCount()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
-                        >
-                          <ResponsiveMetricCell
-                            class="w-full"
-                            value={cpuPercent() ?? 0}
-                            type="cpu"
-                            resourceId={metricsKey()}
-                            isRunning={canRenderMetrics() && cpuPercent() !== undefined}
-                            showMobile={false}
-                          />
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
-                        >
-                          <Show
-                            when={canRenderMetrics() && hasMemoryMetric()}
-                            fallback={metricFallback()}
-                          >
-                            <StackedMemoryBar
-                              used={memoryUsed()}
-                              total={memoryTotal()}
-                              percentOnly={memoryPercentOnly()}
-                            />
-                          </Show>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
-                        >
-                          <Show
-                            when={canRenderMetrics() && hasDiskMetric()}
-                            fallback={metricFallback()}
-                          >
-                            <StackedDiskBar
-                              mode={(disks()?.length ?? 0) > 1 ? 'vertical-bars' : undefined}
-                              disks={disks()}
-                              aggregateDisk={aggregateDisk()}
-                            />
-                          </Show>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
-                        >
-                          {formatUptime(host.uptime ?? docker()?.uptimeSeconds)}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
-                        >
-                          {formatTemperature(host.temperature ?? docker()?.temperature)}
-                        </TableCell>
-                        <Show when={showSwarmColumn()}>
+                            </div>
+                            <Show when={systemBadge()}>
+                              {(badge) => (
+                                <span
+                                  class="mt-0.5 block truncate pl-5 text-[9px] text-muted sm:text-[10px] md:hidden"
+                                  title={badge().title ?? badge().label}
+                                >
+                                  {badge().label}
+                                </span>
+                              )}
+                            </Show>
+                          </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
                           >
-                            {swarmRole()}
+                            <Show when={systemBadge()} fallback={<span class="text-muted">—</span>}>
+                              {(badge) => (
+                                <span
+                                  class={badge().classes}
+                                  title={badge().title ?? badge().label}
+                                >
+                                  {badge().label}
+                                </span>
+                              )}
+                            </Show>
                           </TableCell>
-                        </Show>
-                      </TableRow>
-                      <Show when={isSelected()}>
-                        <TableRow data-inline-docker-host-detail-for={host.id}>
                           <TableCell
-                            id={detailRowId()}
-                            colspan={drawerColspan()}
-                            class="p-0 border-b border-border bg-surface-alt"
+                            class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
                           >
-                            <div
-                              class="px-2 py-3 sm:px-4 sm:py-4"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              <DockerHostDrawer host={host} />
-                            </div>
+                            {version()}
                           </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                          >
+                            {containerCount()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                          >
+                            <ResponsiveMetricCell
+                              class="w-full"
+                              value={cpuPercent() ?? 0}
+                              type="cpu"
+                              resourceId={metricsKey()}
+                              isRunning={canRenderMetrics() && cpuPercent() !== undefined}
+                              showMobile={false}
+                            />
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                          >
+                            <Show
+                              when={canRenderMetrics() && hasMemoryMetric()}
+                              fallback={metricFallback()}
+                            >
+                              <StackedMemoryBar
+                                used={memoryUsed()}
+                                total={memoryTotal()}
+                                percentOnly={memoryPercentOnly()}
+                              />
+                            </Show>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                          >
+                            <Show
+                              when={canRenderMetrics() && hasDiskMetric()}
+                              fallback={metricFallback()}
+                            >
+                              <StackedDiskBar
+                                mode={(disks()?.length ?? 0) > 1 ? 'vertical-bars' : undefined}
+                                disks={disks()}
+                                aggregateDisk={aggregateDisk()}
+                              />
+                            </Show>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                          >
+                            {formatUptime(host.uptime ?? docker()?.uptimeSeconds)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                          >
+                            {formatTemperature(host.temperature ?? docker()?.temperature)}
+                          </TableCell>
+                          <Show when={showSwarmColumn()}>
+                            <TableCell
+                              class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                            >
+                              {swarmRole()}
+                            </TableCell>
+                          </Show>
                         </TableRow>
-                      </Show>
+                        <Show when={isSelected()}>
+                          <TableRow data-inline-docker-host-detail-for={host.id}>
+                            <TableCell
+                              id={detailRowId()}
+                              colspan={drawerColspan()}
+                              class="p-0 border-b border-border bg-surface-alt"
+                            >
+                              <div
+                                class="px-2 py-3 sm:px-4 sm:py-4"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <DockerHostDrawer host={host} />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        </Show>
                       </>
                     );
                   }}

@@ -281,10 +281,14 @@ regression protection.
     Platform-owned Workloads surfaces may scope column visibility preferences
     when a shared workload metric has platform-specific meaning. Docker
     container surfaces must force the `app-container` column profile, suppress
-    the mixed-workload Type filter, hide writable-layer `disk` and generic
-    `tags` by default, label the optional writable-layer toggle as
-    `Writable layer`, and label container context as `Host`. `netIo` and
-    `diskIo` are valid Docker runtime container columns, but they must only be
+    the mixed-workload Type filter, show runtime identity in a dedicated
+    `Runtime` column immediately after `Name`, keep container image references
+    image-only, hide writable-layer `disk` and generic `tags` by default, label
+    the optional writable-layer toggle as `Writable layer`, and label container
+    context as `Host`. Grouped Docker platform rows represent the host boundary,
+    so platform-owned host identity badges such as `LXC` or `Unraid` belong on
+    the group row instead of the workload plural label. `netIo` and `diskIo`
+    are valid Docker runtime container columns, but they must only be
     default-visible when the current Docker resource snapshot includes
     corresponding network or block-I/O telemetry; otherwise they stay available
     as column-picker options without creating blank default columns.

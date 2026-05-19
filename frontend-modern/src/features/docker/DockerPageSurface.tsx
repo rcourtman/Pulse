@@ -11,6 +11,7 @@ import { DockerServicesTable } from './DockerServicesTable';
 import {
   buildDockerPageModel,
   buildDockerContainerDefaultHiddenColumnIds,
+  buildDockerWorkloadGroupLabelBadges,
 } from './dockerPageModel';
 
 const DOCKER_RESOURCE_QUERY = 'type=agent,docker-host,app-container,docker-service';
@@ -34,6 +35,9 @@ export function DockerPageSurface() {
   const model = createMemo(() => buildDockerPageModel(resources()));
   const dockerWorkloadDefaultHiddenColumns = createMemo(() =>
     buildDockerContainerDefaultHiddenColumnIds(model().containers),
+  );
+  const dockerWorkloadGroupLabelBadges = createMemo(() =>
+    buildDockerWorkloadGroupLabelBadges(model().hosts),
   );
 
   return (
@@ -91,6 +95,7 @@ export function DockerPageSurface() {
                 columnVisibilityStorageScope={DOCKER_WORKLOAD_COLUMN_SCOPE}
                 additionalDefaultHiddenColumnIds={dockerWorkloadDefaultHiddenColumns()}
                 columnLabelOverrides={DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES}
+                groupLabelBadges={dockerWorkloadGroupLabelBadges()}
                 compactGroupHeaders
               />
               <Show when={model().services.length > 0}>

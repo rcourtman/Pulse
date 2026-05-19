@@ -145,6 +145,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
             getGroupLabel={state.getGroupLabel}
             groupedGuests={state.groupedGuests}
             groupedWindowing={state.groupedWindowing}
+            groupLabelBadges={state.groupLabelBadges}
             guestMetadata={state.guestMetadata}
             guestParentNodeMap={state.guestParentNodeMap}
             groupNodeDrawerMode={state.groupNodeDrawerMode}

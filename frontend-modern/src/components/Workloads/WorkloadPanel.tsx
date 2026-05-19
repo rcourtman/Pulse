@@ -41,6 +41,7 @@ type WorkloadPanelProps = Pick<
   | 'getGroupLabel'
   | 'groupedGuests'
   | 'groupedWindowing'
+  | 'groupLabelBadges'
   | 'guestMetadata'
   | 'guestParentNodeMap'
   | 'groupNodeDrawerMode'
@@ -432,11 +433,17 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                       >
                         {(() => {
                           const label = props.getGroupLabel(groupKey(), fullGroupGuests());
+                          const badges = props.groupLabelBadges();
+                          const badge = badges[groupKey()] ?? badges[groupKey().toLowerCase()];
+                          const badgeLabel = badge?.label || label.type;
+                          const badgeClass = badge?.classes || GROUPED_TABLE_ROW_BADGE_CLASS;
                           return (
                             <div class="flex items-center gap-3">
                               <span>{label.name}</span>
-                              <Show when={label.type}>
-                                <span class={GROUPED_TABLE_ROW_BADGE_CLASS}>{label.type}</span>
+                              <Show when={badgeLabel}>
+                                <span class={badgeClass} title={badge?.title ?? badgeLabel}>
+                                  {badgeLabel}
+                                </span>
                               </Show>
                             </div>
                           );

@@ -121,8 +121,6 @@ export function useGuestRowState(props: GuestRowProps) {
     if (normalized === 'docker') return 'Docker';
     if (normalized === 'podman') return 'Podman';
     if (runtime) return runtime;
-    const platform = (props.guest.platformType || '').trim().toLowerCase();
-    if (platform === 'truenas') return 'TrueNAS';
     return null;
   });
 
