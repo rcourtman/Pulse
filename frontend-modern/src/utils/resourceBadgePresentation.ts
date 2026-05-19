@@ -578,9 +578,8 @@ const proxmoxLxcDockerBadge = (resource: Resource): ResourceBadge | null => {
   if (typeof resource.docker?.hostSourceId !== 'string') return null;
   if (!resource.docker.hostSourceId.startsWith(LXC_DOCKER_HOST_PREFIX)) return null;
   const vmid = proxmoxLxcDockerVmid(resource);
-  const label = vmid !== null ? `LXC ${vmid}` : 'LXC';
   return {
-    label,
+    label: 'LXC',
     classes: `${baseBadge} ${getWorkloadTypePresentation('system-container').className}`,
     title: vmid !== null
       ? `Docker running inside Proxmox LXC ${vmid}`

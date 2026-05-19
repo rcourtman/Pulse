@@ -377,7 +377,7 @@ describe('resourceBadgePresentation', () => {
     expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('PVE');
   });
 
-  it('renders Proxmox LXC Docker hosts with an LXC badge derived from the host source id', () => {
+  it('renders Proxmox LXC Docker hosts with a canonical LXC badge and surfaces the VMID in the tooltip', () => {
     const lxcDockerHost = makeResource({
       type: 'docker-host',
       platformType: 'docker',
@@ -390,11 +390,11 @@ describe('resourceBadgePresentation', () => {
     } as Partial<Resource>);
 
     const badges = getInfrastructureSystemIdentityBadges(lxcDockerHost);
-    expect(badges.map((b) => b.label)).toEqual(['LXC 141']);
+    expect(badges.map((b) => b.label)).toEqual(['LXC']);
     expect(badges[0]?.title).toBe('Docker running inside Proxmox LXC 141');
   });
 
-  it('falls back to a bare LXC badge when the VMID cannot be parsed from the host source id', () => {
+  it('keeps the canonical LXC label even when the VMID cannot be parsed from the host source id', () => {
     const lxcDockerHost = makeResource({
       type: 'docker-host',
       platformType: 'docker',
@@ -406,9 +406,9 @@ describe('resourceBadgePresentation', () => {
       },
     } as Partial<Resource>);
 
-    expect(getInfrastructureSystemIdentityBadges(lxcDockerHost).map((b) => b.label)).toEqual([
-      'LXC',
-    ]);
+    const badges = getInfrastructureSystemIdentityBadges(lxcDockerHost);
+    expect(badges.map((b) => b.label)).toEqual(['LXC']);
+    expect(badges[0]?.title).toBe('Docker running inside a Proxmox LXC');
   });
 
   it('uses probe protocol identity for agentless network endpoints', () => {
