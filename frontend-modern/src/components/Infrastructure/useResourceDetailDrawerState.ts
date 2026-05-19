@@ -4,12 +4,14 @@ import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStor
 import { useResourceDetailDrawerDockerActionsState } from './useResourceDetailDrawerDockerActionsState';
 import { useResourceDetailDrawerHistoryState } from './useResourceDetailDrawerHistoryState';
 import { useResourceDetailDrawerDerivedState } from './useResourceDetailDrawerDerivedState';
+import type { ResourceDetailDrawerPresentation } from './resourceDetailDrawerPresentation';
 
 type DrawerTab = 'overview' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
 
 export interface UseResourceDetailDrawerStateOptions {
   resource: Resource;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
+  presentation?: ResourceDetailDrawerPresentation;
 }
 
 export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerStateOptions) => {
@@ -29,7 +31,10 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   const [showPmgMailFlowDetail, setShowPmgMailFlowDetail] = createSignal(false);
   const [k8sDeploymentsPrefillNamespace, setK8sDeploymentsPrefillNamespace] = createSignal('');
 
-  const history = useResourceDetailDrawerHistoryState({ resource });
+  const history = useResourceDetailDrawerHistoryState({
+    resource,
+    enableRemoteHistory: options.presentation !== 'table-row',
+  });
   const derived = useResourceDetailDrawerDerivedState({
     resource,
     resolveResourceLabel: resolveResourceLabelInput,

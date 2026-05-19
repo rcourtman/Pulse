@@ -50,10 +50,12 @@ import { formatInteger } from './resourceDetailMappers';
 import { buildPbsJobHealthEvidenceModel } from './resourceDetailDrawerServiceModel';
 import { ResourceDetailDrawerSupportDisclosure as SupportDisclosure } from './ResourceDetailDrawerSupportDisclosure';
 import type { UseResourceDetailDrawerStateResult } from './useResourceDetailDrawerState';
+import type { ResourceDetailDrawerPresentation } from './resourceDetailDrawerPresentation';
 
 interface ResourceDetailDrawerOverviewTabProps {
   resource: Resource;
   drawer: UseResourceDetailDrawerStateResult;
+  presentation?: ResourceDetailDrawerPresentation;
 }
 
 const hasMetadataEntries = (value?: Record<string, unknown> | null): boolean =>
@@ -118,6 +120,20 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
   const { resource, drawer } = props;
   const showPlatformId = shouldShowResourcePlatformId(resource);
   const pbsJobHealthEvidence = () => buildPbsJobHealthEvidenceModel(drawer.pbsData());
+  const compactTableRow = () => props.presentation === 'table-row';
+  const shouldRenderChangeHistorySection = () =>
+    !compactTableRow() ||
+    drawer.hasTimelineFilters() ||
+    drawer.sortedResourceTimeline().length > 0 ||
+    drawer.resourceTimelineCount() > 0 ||
+    Boolean(drawer.facetBundleError());
+  const shouldRenderOperationalGovernanceSections = () => !compactTableRow();
+  const shouldRenderActionHistorySection = () =>
+    drawer.actionAuditAvailable() &&
+    (!compactTableRow() ||
+      drawer.sortedActionAudits().length > 0 ||
+      drawer.actionAuditCount() > 0 ||
+      Boolean(drawer.actionAuditError()));
 
   return (
     <div class="space-y-3">
@@ -323,239 +339,243 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
       </div>
 
       <div data-testid="resource-secondary-sections" class="space-y-3">
-        <div
-          data-testid="resource-change-history-section"
-          class="w-full rounded border border-border bg-surface p-3 shadow-sm"
-        >
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
-                Change history
-              </div>
-              <Show when={drawer.resourceTimelineCount() > 0}>
-                <div class="mt-1">
-                  <ResourceFacetSummary
-                    recentChanges={drawer.historyRecentChanges()}
-                    counts={drawer.historyFacetCounts()}
-                  />
-                </div>
-              </Show>
-            </div>
-            <div class="text-right text-[10px] text-muted">
-              <div>{drawer.historyLoadingLabel()}</div>
-              <div class="mt-1 flex flex-wrap justify-end gap-2">
-                <Show when={drawer.hasTimelineFilters()}>
-                  <div class="text-blue-700 dark:text-blue-300">Change filters active</div>
-                </Show>
-                <Show
-                  when={!drawer.showHistoryFilters() && !drawer.hasTimelineFilters()}
-                  fallback={
-                    <Show when={drawer.showHistoryFilters() && !drawer.hasTimelineFilters()}>
-                      <button
-                        type="button"
-                        class="rounded-md border border-border bg-surface-hover px-2.5 py-1 text-[10px] font-semibold text-base-content hover:bg-surface"
-                        onClick={() => drawer.setShowHistoryFilters(false)}
-                      >
-                        Hide filters
-                      </button>
-                    </Show>
-                  }
-                >
-                  <button
-                    type="button"
-                    class="rounded-md border border-border bg-surface-hover px-2.5 py-1 text-[10px] font-semibold text-base-content hover:bg-surface"
-                    onClick={() => drawer.setShowHistoryFilters(true)}
-                  >
-                    Filter history
-                  </button>
-                </Show>
-              </div>
-            </div>
-          </div>
-          <Show when={drawer.showHistoryFilters() || drawer.hasTimelineFilters()}>
-            <div class="mt-3 space-y-2">
-              <label class="space-y-1 text-[10px]">
-                <span class="text-muted">Change kind</span>
-                <select
-                  class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
-                  value={drawer.timelineKindFilter()}
-                  onChange={(event) =>
-                    drawer.setTimelineKindFilter(
-                      (event.currentTarget.value || '') as ResourceChangeKind | '',
-                    )
-                  }
-                >
-                  <For each={timelineKindOptions}>
-                    {(option) => <option value={option.value}>{option.label}</option>}
-                  </For>
-                </select>
-              </label>
-              <label class="space-y-1 text-[10px]">
-                <span class="text-muted">Source type</span>
-                <select
-                  class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
-                  value={drawer.timelineSourceTypeFilter()}
-                  onChange={(event) =>
-                    drawer.setTimelineSourceTypeFilter(
-                      (event.currentTarget.value || '') as ResourceChangeSourceType | '',
-                    )
-                  }
-                >
-                  <For each={timelineSourceTypeOptions}>
-                    {(option) => <option value={option.value}>{option.label}</option>}
-                  </For>
-                </select>
-              </label>
-              <label class="space-y-1 text-[10px]">
-                <span class="text-muted">Source adapter</span>
-                <select
-                  class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
-                  value={drawer.timelineSourceAdapterFilter()}
-                  onChange={(event) =>
-                    drawer.setTimelineSourceAdapterFilter(
-                      (event.currentTarget.value || '') as ResourceChangeSourceAdapter | '',
-                    )
-                  }
-                >
-                  <For each={timelineSourceAdapterOptions}>
-                    {(option) => <option value={option.value}>{option.label}</option>}
-                  </For>
-                </select>
-              </label>
-
-              <Show when={drawer.hasTimelineFilters()}>
-                <div class="flex justify-end">
-                  <button
-                    type="button"
-                    class="rounded-md border border-border bg-surface-hover px-2.5 py-1 text-[10px] font-semibold text-base-content hover:bg-surface"
-                    onClick={() => {
-                      drawer.setTimelineKindFilter('');
-                      drawer.setTimelineSourceTypeFilter('');
-                      drawer.setTimelineSourceAdapterFilter('');
-                      drawer.setShowHistoryFilters(false);
-                    }}
-                  >
-                    Clear filters
-                  </button>
-                </div>
-              </Show>
-            </div>
-          </Show>
-
-          <Show when={drawer.facetBundleError()}>
-            <div class="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-700 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
-              <div class="flex items-start justify-between gap-2">
-                <span>{drawer.facetBundleError()}</span>
-                <button
-                  type="button"
-                  class="shrink-0 font-medium text-amber-700 underline dark:text-amber-200"
-                  onClick={() => drawer.refetchHistoryFacets()}
-                >
-                  Retry
-                </button>
-              </div>
-            </div>
-          </Show>
-
-          <Show
-            when={drawer.sortedResourceTimeline().length > 0}
-            fallback={
-              <div class="mt-3 rounded border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
-                No events yet.
-              </div>
-            }
+        <Show when={shouldRenderChangeHistorySection()}>
+          <div
+            data-testid="resource-change-history-section"
+            class="w-full rounded border border-border bg-surface p-3 shadow-sm"
           >
-            <div class="mt-3 space-y-2">
-              <For each={drawer.sortedResourceTimeline()}>
-                {(change) => {
-                  const kindPresentation = getResourceChangeKindPresentation(change.kind);
-                  const sourceTypePresentation = getResourceChangeSourceTypePresentation(
-                    change.sourceType,
-                  );
-                  const sourceAdapterPresentation = change.sourceAdapter
-                    ? getResourceChangeSourceAdapterPresentation(change.sourceAdapter)
-                    : null;
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
+                  Change history
+                </div>
+                <Show when={drawer.resourceTimelineCount() > 0}>
+                  <div class="mt-1">
+                    <ResourceFacetSummary
+                      recentChanges={drawer.historyRecentChanges()}
+                      counts={drawer.historyFacetCounts()}
+                    />
+                  </div>
+                </Show>
+              </div>
+              <div class="text-right text-[10px] text-muted">
+                <div>{drawer.historyLoadingLabel()}</div>
+                <div class="mt-1 flex flex-wrap justify-end gap-2">
+                  <Show when={drawer.hasTimelineFilters()}>
+                    <div class="text-blue-700 dark:text-blue-300">Change filters active</div>
+                  </Show>
+                  <Show
+                    when={!drawer.showHistoryFilters() && !drawer.hasTimelineFilters()}
+                    fallback={
+                      <Show when={drawer.showHistoryFilters() && !drawer.hasTimelineFilters()}>
+                        <button
+                          type="button"
+                          class="rounded-md border border-border bg-surface-hover px-2.5 py-1 text-[10px] font-semibold text-base-content hover:bg-surface"
+                          onClick={() => drawer.setShowHistoryFilters(false)}
+                        >
+                          Hide filters
+                        </button>
+                      </Show>
+                    }
+                  >
+                    <button
+                      type="button"
+                      class="rounded-md border border-border bg-surface-hover px-2.5 py-1 text-[10px] font-semibold text-base-content hover:bg-surface"
+                      onClick={() => drawer.setShowHistoryFilters(true)}
+                    >
+                      Filter history
+                    </button>
+                  </Show>
+                </div>
+              </div>
+            </div>
+            <Show when={drawer.showHistoryFilters() || drawer.hasTimelineFilters()}>
+              <div class="mt-3 space-y-2">
+                <label class="space-y-1 text-[10px]">
+                  <span class="text-muted">Change kind</span>
+                  <select
+                    class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                    value={drawer.timelineKindFilter()}
+                    onChange={(event) =>
+                      drawer.setTimelineKindFilter(
+                        (event.currentTarget.value || '') as ResourceChangeKind | '',
+                      )
+                    }
+                  >
+                    <For each={timelineKindOptions}>
+                      {(option) => <option value={option.value}>{option.label}</option>}
+                    </For>
+                  </select>
+                </label>
+                <label class="space-y-1 text-[10px]">
+                  <span class="text-muted">Source type</span>
+                  <select
+                    class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                    value={drawer.timelineSourceTypeFilter()}
+                    onChange={(event) =>
+                      drawer.setTimelineSourceTypeFilter(
+                        (event.currentTarget.value || '') as ResourceChangeSourceType | '',
+                      )
+                    }
+                  >
+                    <For each={timelineSourceTypeOptions}>
+                      {(option) => <option value={option.value}>{option.label}</option>}
+                    </For>
+                  </select>
+                </label>
+                <label class="space-y-1 text-[10px]">
+                  <span class="text-muted">Source adapter</span>
+                  <select
+                    class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                    value={drawer.timelineSourceAdapterFilter()}
+                    onChange={(event) =>
+                      drawer.setTimelineSourceAdapterFilter(
+                        (event.currentTarget.value || '') as ResourceChangeSourceAdapter | '',
+                      )
+                    }
+                  >
+                    <For each={timelineSourceAdapterOptions}>
+                      {(option) => <option value={option.value}>{option.label}</option>}
+                    </For>
+                  </select>
+                </label>
 
-                  return (
-                    <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
-                      <div class="flex items-start justify-between gap-3">
-                        <div class="min-w-0">
-                          <div class="font-medium text-base-content">{kindPresentation.label}</div>
-                          <div class="mt-0.5 text-muted">
-                            {formatRelativeTime(change.observedAt)}
-                            <Show when={change.occurredAt}>
-                              <span class="mx-1">•</span>
-                              <span>Occurred {formatRelativeTime(change.occurredAt)}</span>
-                            </Show>
+                <Show when={drawer.hasTimelineFilters()}>
+                  <div class="flex justify-end">
+                    <button
+                      type="button"
+                      class="rounded-md border border-border bg-surface-hover px-2.5 py-1 text-[10px] font-semibold text-base-content hover:bg-surface"
+                      onClick={() => {
+                        drawer.setTimelineKindFilter('');
+                        drawer.setTimelineSourceTypeFilter('');
+                        drawer.setTimelineSourceAdapterFilter('');
+                        drawer.setShowHistoryFilters(false);
+                      }}
+                    >
+                      Clear filters
+                    </button>
+                  </div>
+                </Show>
+              </div>
+            </Show>
+
+            <Show when={drawer.facetBundleError()}>
+              <div class="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-700 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
+                <div class="flex items-start justify-between gap-2">
+                  <span>{drawer.facetBundleError()}</span>
+                  <button
+                    type="button"
+                    class="shrink-0 font-medium text-amber-700 underline dark:text-amber-200"
+                    onClick={() => drawer.refetchHistoryFacets()}
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            </Show>
+
+            <Show
+              when={drawer.sortedResourceTimeline().length > 0}
+              fallback={
+                <div class="mt-3 rounded border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
+                  No events yet.
+                </div>
+              }
+            >
+              <div class="mt-3 space-y-2">
+                <For each={drawer.sortedResourceTimeline()}>
+                  {(change) => {
+                    const kindPresentation = getResourceChangeKindPresentation(change.kind);
+                    const sourceTypePresentation = getResourceChangeSourceTypePresentation(
+                      change.sourceType,
+                    );
+                    const sourceAdapterPresentation = change.sourceAdapter
+                      ? getResourceChangeSourceAdapterPresentation(change.sourceAdapter)
+                      : null;
+
+                    return (
+                      <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
+                        <div class="flex items-start justify-between gap-3">
+                          <div class="min-w-0">
+                            <div class="font-medium text-base-content">
+                              {kindPresentation.label}
+                            </div>
+                            <div class="mt-0.5 text-muted">
+                              {formatRelativeTime(change.observedAt)}
+                              <Show when={change.occurredAt}>
+                                <span class="mx-1">•</span>
+                                <span>Occurred {formatRelativeTime(change.occurredAt)}</span>
+                              </Show>
+                            </div>
                           </div>
+                          <span class="text-muted">{sourceTypePresentation.label}</span>
                         </div>
-                        <span class="text-muted">{sourceTypePresentation.label}</span>
-                      </div>
-                      <div class="mt-1 space-y-1">
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Confidence</span>
-                          <span class="font-medium text-base-content">
-                            {formatConfidenceLabel(change.confidence)}
-                          </span>
-                        </div>
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Adapter</span>
-                          <span class="font-medium text-base-content">
-                            {sourceAdapterPresentation?.label || '—'}
-                          </span>
-                        </div>
-                        <Show when={change.actor}>
+                        <div class="mt-1 space-y-1">
                           <div class="flex items-center justify-between gap-2">
-                            <span class="text-muted">Actor</span>
-                            <span class="font-medium text-base-content">{change.actor}</span>
-                          </div>
-                        </Show>
-                        <Show when={change.from || change.to}>
-                          <div class="flex items-center justify-between gap-2">
-                            <span class="text-muted">Transition</span>
+                            <span class="text-muted">Confidence</span>
                             <span class="font-medium text-base-content">
-                              {change.from || '—'} → {change.to || '—'}
+                              {formatConfidenceLabel(change.confidence)}
                             </span>
                           </div>
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-muted">Adapter</span>
+                            <span class="font-medium text-base-content">
+                              {sourceAdapterPresentation?.label || '—'}
+                            </span>
+                          </div>
+                          <Show when={change.actor}>
+                            <div class="flex items-center justify-between gap-2">
+                              <span class="text-muted">Actor</span>
+                              <span class="font-medium text-base-content">{change.actor}</span>
+                            </div>
+                          </Show>
+                          <Show when={change.from || change.to}>
+                            <div class="flex items-center justify-between gap-2">
+                              <span class="text-muted">Transition</span>
+                              <span class="font-medium text-base-content">
+                                {change.from || '—'} → {change.to || '—'}
+                              </span>
+                            </div>
+                          </Show>
+                        </div>
+                        <Show when={change.reason}>
+                          <div class="mt-1 rounded border border-border bg-base px-2 py-1 text-[10px] text-base-content">
+                            {change.reason}
+                          </div>
+                        </Show>
+                        <Show when={hasMetadataEntries(change.metadata)}>
+                          <details class="mt-1 rounded border border-border bg-base px-2 py-1">
+                            <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
+                              Metadata
+                            </summary>
+                            <pre class="mt-2 overflow-auto whitespace-pre-wrap break-words text-[10px] text-base-content">
+                              {JSON.stringify(change.metadata ?? {}, null, 2)}
+                            </pre>
+                          </details>
+                        </Show>
+                        <Show when={change.relatedResources && change.relatedResources.length > 0}>
+                          <div class="mt-1 flex flex-wrap items-center gap-1 text-muted">
+                            <span>Related:</span>
+                            <For each={change.relatedResources ?? []}>
+                              {(relatedResource) => {
+                                const label = drawer.resolveResourceLabel(relatedResource);
+                                return (
+                                  <span class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-base-content">
+                                    {label}
+                                  </span>
+                                );
+                              }}
+                            </For>
+                          </div>
                         </Show>
                       </div>
-                      <Show when={change.reason}>
-                        <div class="mt-1 rounded border border-border bg-base px-2 py-1 text-[10px] text-base-content">
-                          {change.reason}
-                        </div>
-                      </Show>
-                      <Show when={hasMetadataEntries(change.metadata)}>
-                        <details class="mt-1 rounded border border-border bg-base px-2 py-1">
-                          <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
-                            Metadata
-                          </summary>
-                          <pre class="mt-2 overflow-auto whitespace-pre-wrap break-words text-[10px] text-base-content">
-                            {JSON.stringify(change.metadata ?? {}, null, 2)}
-                          </pre>
-                        </details>
-                      </Show>
-                      <Show when={change.relatedResources && change.relatedResources.length > 0}>
-                        <div class="mt-1 flex flex-wrap items-center gap-1 text-muted">
-                          <span>Related:</span>
-                          <For each={change.relatedResources ?? []}>
-                            {(relatedResource) => {
-                              const label = drawer.resolveResourceLabel(relatedResource);
-                              return (
-                                <span class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-base-content">
-                                  {label}
-                                </span>
-                              );
-                            }}
-                          </For>
-                        </div>
-                      </Show>
-                    </div>
-                  );
-                }}
-              </For>
-            </div>
-          </Show>
-        </div>
+                    );
+                  }}
+                </For>
+              </div>
+            </Show>
+          </div>
+        </Show>
 
         <Show when={drawer.hasCorrelationContext()}>
           <ResourceCorrelationSummary
@@ -575,7 +595,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             the "what overrides has the operator set" and "what actions
             has Pulse taken" stories read together. The section is
             self-fetching keyed on the canonical resource id. */}
-        <Show when={resource.id}>
+        <Show when={shouldRenderOperationalGovernanceSections() && resource.id}>
           <ResourceOperatorStateSection resourceId={resource.id} />
         </Show>
 
@@ -584,11 +604,11 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             the maintenance window above is the one who needs to read
             the verification result here. Self-fetching component;
             empty state hides gracefully when no reports exist. */}
-        <Show when={resource.id}>
+        <Show when={shouldRenderOperationalGovernanceSections() && resource.id}>
           <MaintenanceVerificationSection resourceId={resource.id} />
         </Show>
 
-        <Show when={drawer.actionAuditAvailable()}>
+        <Show when={shouldRenderActionHistorySection()}>
           <ResourceActionHistory
             audits={drawer.sortedActionAudits()}
             count={drawer.actionAuditCount()}

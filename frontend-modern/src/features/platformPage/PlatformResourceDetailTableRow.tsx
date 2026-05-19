@@ -84,6 +84,7 @@ export const PlatformResourceDetailTableRow: Component<{
         <div class="px-2 py-3 sm:px-4 sm:py-4" onClick={(event) => event.stopPropagation()}>
           <ResourceDetailDrawer
             resource={props.resource}
+            presentation="table-row"
             resolveResourceLabel={props.resolveResourceLabel}
             onClose={props.onClose}
           />

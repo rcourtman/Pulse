@@ -10,10 +10,15 @@ import { SwarmServicesDrawer } from '@/components/Docker/SwarmServicesDrawer';
 import { ResourceDetailDrawerDebugTab } from './ResourceDetailDrawerDebugTab';
 import { ResourceDetailDrawerOverviewTab } from './ResourceDetailDrawerOverviewTab';
 import { useResourceDetailDrawerState } from './useResourceDetailDrawerState';
+import {
+  DEFAULT_RESOURCE_DETAIL_DRAWER_PRESENTATION,
+  type ResourceDetailDrawerPresentation,
+} from './resourceDetailDrawerPresentation';
 
 interface ResourceDetailDrawerProps {
   resource: Resource;
   onClose?: () => void;
+  presentation?: ResourceDetailDrawerPresentation;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
 }
 
@@ -38,8 +43,10 @@ export const getSpecializedTabAvailabilityMessage = (tab: SpecializedDrawerTab):
 };
 
 const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
+  const presentation = () => props.presentation ?? DEFAULT_RESOURCE_DETAIL_DRAWER_PRESENTATION;
   const drawer = useResourceDetailDrawerState({
     resource: props.resource,
+    presentation: presentation(),
     resolveResourceLabel: props.resolveResourceLabel,
   });
   const headingId = () => `resource-detail-drawer-heading-${props.resource.id}`;
@@ -127,7 +134,11 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         class={drawer.activeTab() === 'overview' ? '' : 'hidden'}
         style={{ 'overflow-anchor': 'none' }}
       >
-        <ResourceDetailDrawerOverviewTab resource={props.resource} drawer={drawer} />
+        <ResourceDetailDrawerOverviewTab
+          resource={props.resource}
+          drawer={drawer}
+          presentation={presentation()}
+        />
       </div>
 
       {/* PMG Mail Tab */}
@@ -257,6 +268,7 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
     <DrawerContent
       resource={props.resource}
       onClose={props.onClose}
+      presentation={props.presentation}
       resolveResourceLabel={props.resolveResourceLabel}
     />
   );

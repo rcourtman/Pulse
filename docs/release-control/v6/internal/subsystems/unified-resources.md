@@ -114,6 +114,7 @@ cross-source deduplication.
 90. `internal/unifiedresources/kubernetes_metric_ids.go`
 91. `internal/unifiedresources/policy_posture.go`
 92. `internal/unifiedresources/clone.go`
+93. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerPresentation.ts`
 
 ## Shared Boundaries
 
@@ -202,6 +203,14 @@ Swarm capability surfaces.
    closing, and clearing must not rewrite those params or navigate. Route sync
    for this surface is limited to filter-owned `source` and `q` state so
    unified-resource rows open inline without refreshing the page shell.
+   Resource detail drawers must declare their presentation context explicitly.
+   The default full presentation owns the canonical resource-change,
+   operator-override, maintenance-verification, and action-audit surfaces. The
+   `table-row` presentation is reserved for inline platform and resource table
+   expansion: it presents current-state and identity details from the local
+   resource payload, may show preloaded change data when present, and must not
+   start remote history, intelligence, or action-audit reads only to render
+   empty advanced governance panels inside a table row.
    Cluster group headers may use a compact `Cluster` type chip when the group
    name itself is only an estate label, but `unifiedResourceTableStateModel.ts`
    must suppress that chip when the visible group name already ends in

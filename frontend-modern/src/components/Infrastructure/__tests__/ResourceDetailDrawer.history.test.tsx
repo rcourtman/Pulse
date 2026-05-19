@@ -320,6 +320,40 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getByText('Current state')).toBeInTheDocument();
   });
 
+  it('keeps table-row presentation focused on local resource details', async () => {
+    facetBundleMock.getFacetBundle.mockClear();
+    aiIntelligenceMock.getResourceIntelligence.mockClear();
+    actionAuditMock.listActionAudits.mockClear();
+
+    render(() => (
+      <ResourceDetailDrawer
+        resource={baseResource({
+          id: 'agent:truenas-main',
+          name: 'truenas-main',
+          displayName: 'truenas-main',
+          platformId: 'truenas-main',
+          platformType: 'truenas',
+          recentChanges: [],
+        })}
+        presentation="table-row"
+      />
+    ));
+
+    await Promise.resolve();
+
+    expect(screen.getByText('Current state')).toBeInTheDocument();
+    expect(screen.getByText('Identity')).toBeInTheDocument();
+    expect(screen.queryByText('Change history')).not.toBeInTheDocument();
+    expect(screen.queryByText('Operator overrides')).not.toBeInTheDocument();
+    expect(screen.queryByText('Maintenance verification')).not.toBeInTheDocument();
+    expect(screen.queryByText('Action history')).not.toBeInTheDocument();
+    expect(screen.queryByText('Refreshing changes...')).not.toBeInTheDocument();
+    expect(screen.queryByText('No events yet.')).not.toBeInTheDocument();
+    expect(facetBundleMock.getFacetBundle).not.toHaveBeenCalled();
+    expect(aiIntelligenceMock.getResourceIntelligence).not.toHaveBeenCalled();
+    expect(actionAuditMock.listActionAudits).not.toHaveBeenCalled();
+  });
+
   it('keeps compact timeline summary chips in overview while showing one embedded change history section', async () => {
     facetBundleMock.getFacetBundle.mockResolvedValueOnce({
       capabilities: [

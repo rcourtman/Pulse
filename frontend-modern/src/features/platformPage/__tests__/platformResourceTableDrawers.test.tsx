@@ -8,8 +8,16 @@ import { TrueNASSystemsTable } from '@/features/truenas/TrueNASSystemsTable';
 import { VsphereHostsTable } from '@/features/vmware/VsphereHostsTable';
 
 vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
-  ResourceDetailDrawer: (props: { resource: { id: string }; onClose?: () => void }) => (
-    <div data-testid="resource-detail-drawer" data-resource-id={props.resource.id}>
+  ResourceDetailDrawer: (props: {
+    resource: { id: string };
+    presentation?: string;
+    onClose?: () => void;
+  }) => (
+    <div
+      data-testid="resource-detail-drawer"
+      data-resource-id={props.resource.id}
+      data-presentation={props.presentation ?? 'full'}
+    >
       <button type="button" aria-label="Close resource drawer" onClick={() => props.onClose?.()} />
     </div>
   ),
@@ -53,6 +61,10 @@ const expectRowOpensResourceDrawer = async (row: HTMLTableRowElement, resourceId
   expect(screen.getByTestId('resource-detail-drawer')).toHaveAttribute(
     'data-resource-id',
     resourceId,
+  );
+  expect(screen.getByTestId('resource-detail-drawer')).toHaveAttribute(
+    'data-presentation',
+    'table-row',
   );
 
   await fireEvent.click(screen.getByRole('button', { name: 'Close resource drawer' }));
