@@ -12,6 +12,13 @@ export type RuntimeState = {
 const trim = (value: unknown): string => String(value ?? '').trim();
 const firstNonEmpty = (...values: readonly unknown[]): string =>
   values.map(trim).find((value) => value !== '') || '';
+const browserHostForBind = (host: unknown): string => {
+  const normalized = trim(host).toLowerCase().replace(/^\[/, '').replace(/\]$/, '');
+  if (normalized === '' || normalized === '0.0.0.0' || normalized === '::') {
+    return '127.0.0.1';
+  }
+  return trim(host);
+};
 
 export const repoRootFromEnv = (env: NodeJS.ProcessEnv = process.env): string =>
   trim(env.PULSE_E2E_REPO_ROOT) || path.resolve(__dirname, '..', '..', '..');
@@ -58,7 +65,7 @@ export const managedDevBrowserBaseURL = (
       return null;
     }
     process.kill(pid, 0);
-    const host = trim(env.FRONTEND_DEV_HOST) || '127.0.0.1';
+    const host = browserHostForBind(env.FRONTEND_DEV_HOST || '127.0.0.1');
     const port = trim(env.FRONTEND_DEV_PORT) || '5173';
     return `http://${host}:${port}`;
   } catch {

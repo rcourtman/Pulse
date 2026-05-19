@@ -9,6 +9,13 @@ const truthy = (value) =>
   ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
 
 const trim = (value) => String(value || '').trim();
+const browserHostForBind = (host) => {
+  const normalized = trim(host).toLowerCase().replace(/^\[/, '').replace(/\]$/, '');
+  if (normalized === '' || normalized === '0.0.0.0' || normalized === '::') {
+    return '127.0.0.1';
+  }
+  return trim(host);
+};
 const HOT_DEV_DEFAULT_AUTH_USER = 'admin';
 const HOT_DEV_DEFAULT_AUTH_HASH = '$2a$12$J/Vu6FlBUJDTK.VAkysjB.AnvFOcijDbETyumhCB.nJVes5gvpiI6';
 
@@ -26,7 +33,7 @@ function managedVerifyLockPath(env = process.env) {
 }
 
 function hotDevBrowserURL(env = process.env) {
-  const host = trim(env.FRONTEND_DEV_HOST) || '127.0.0.1';
+  const host = browserHostForBind(env.FRONTEND_DEV_HOST || '127.0.0.1');
   const port = trim(env.FRONTEND_DEV_PORT) || '5173';
   return `http://${host}:${port}`;
 }

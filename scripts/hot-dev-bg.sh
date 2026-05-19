@@ -16,16 +16,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/hot-dev-runtime.sh"
+
 PID_FILE="${HOT_DEV_BG_PID_FILE:-${ROOT_DIR}/tmp/hot-dev.bg.pid}"
 LOG_FILE="${HOT_DEV_BG_LOG_FILE:-${ROOT_DIR}/tmp/hot-dev.bg.log}"
 HOT_DEV_VERIFY_LOCK="${HOT_DEV_VERIFY_LOCK_FILE:-${ROOT_DIR}/tmp/hot-dev.verify.lock}"
 
-FRONTEND_DEV_HOST="${FRONTEND_DEV_HOST:-127.0.0.1}"
-FRONTEND_DEV_PORT="${FRONTEND_DEV_PORT:-5173}"
-PULSE_DEV_API_HOST="${PULSE_DEV_API_HOST:-127.0.0.1}"
-PULSE_DEV_API_PORT="${PULSE_DEV_API_PORT:-7655}"
-PULSE_DEV_API_URL="${PULSE_DEV_API_URL:-http://${PULSE_DEV_API_HOST}:${PULSE_DEV_API_PORT}}"
-PULSE_DEV_WS_URL="${PULSE_DEV_WS_URL:-ws://${PULSE_DEV_API_HOST}:${PULSE_DEV_API_PORT}}"
+hot_dev_configure_network_defaults
+
 MACOS_HOT_DEV_LABEL="com.pulse.hot-dev"
 
 log() {
@@ -541,6 +540,7 @@ PY
 
 start_bg() {
   local takeover="${1:-false}"
+  local browser_url lan_browser_url
   require_python
   mkdir -p "$(dirname "${PID_FILE}")"
   touch "${LOG_FILE}"
@@ -598,7 +598,12 @@ start_bg() {
     log "Check logs with: npm run dev:logs"
   fi
 
-  log "Browser entrypoint: http://127.0.0.1:${FRONTEND_DEV_PORT}"
+  browser_url="$(hot_dev_local_browser_url "${FRONTEND_DEV_HOST}" "${FRONTEND_DEV_PORT}")"
+  lan_browser_url="$(hot_dev_lan_browser_url "${FRONTEND_DEV_HOST}" "${FRONTEND_DEV_PORT}" "${LAN_IP}")"
+  log "Browser entrypoint: ${browser_url}"
+  if [[ -n "${lan_browser_url}" ]]; then
+    log "LAN browser entrypoint: ${lan_browser_url}"
+  fi
   log "Managed backend:  http://127.0.0.1:${PULSE_DEV_API_PORT}"
   log "Logs: ${LOG_FILE}"
 }
@@ -654,8 +659,9 @@ status_bg() {
     log "Backend port ${PULSE_DEV_API_PORT} is not listening"
   fi
 
-  local browser_url frontend_url proxy_health_url backend_health_url
-  browser_url="http://127.0.0.1:${FRONTEND_DEV_PORT}"
+  local browser_url lan_browser_url frontend_url proxy_health_url backend_health_url
+  browser_url="$(hot_dev_local_browser_url "${FRONTEND_DEV_HOST}" "${FRONTEND_DEV_PORT}")"
+  lan_browser_url="$(hot_dev_lan_browser_url "${FRONTEND_DEV_HOST}" "${FRONTEND_DEV_PORT}" "${LAN_IP}")"
   frontend_url="${browser_url}/"
   proxy_health_url="${browser_url}/api/health"
   backend_health_url="http://127.0.0.1:${PULSE_DEV_API_PORT}/api/health"
@@ -665,6 +671,9 @@ status_bg() {
   proxy_code="$(http_status_code "${proxy_health_url}")"
   backend_code="$(http_status_code "${backend_health_url}")"
   log "Browser entrypoint: ${browser_url}"
+  if [[ -n "${lan_browser_url}" ]]; then
+    log "LAN browser entrypoint: ${lan_browser_url}"
+  fi
   log "Frontend shell HTTP: ${frontend_code}"
   log "Frontend proxy /api/health: ${proxy_code}"
   log "Backend /api/health: ${backend_code}"

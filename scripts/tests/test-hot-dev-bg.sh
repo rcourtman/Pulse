@@ -210,6 +210,27 @@ EOF
   assert_contains "default verify proof keeps chromium project pin" "${output}" "--project=chromium"
 }
 
+test_managed_wrapper_defaults_to_lan_capable_frontend() {
+  local output
+  output="$(
+    LAN_IP=192.168.50.10 \
+    ALL_IPS="192.168.50.10" \
+    HOT_DEV_BG_PATH="${HOT_DEV_BG}" \
+    bash -lc '
+      source "${HOT_DEV_BG_PATH}"
+      printf "frontend_host=%s\n" "${FRONTEND_DEV_HOST}"
+      printf "api_host=%s\n" "${PULSE_DEV_API_HOST}"
+      printf "browser=%s\n" "$(hot_dev_local_browser_url "${FRONTEND_DEV_HOST}" "${FRONTEND_DEV_PORT}")"
+      printf "lan_browser=%s\n" "$(hot_dev_lan_browser_url "${FRONTEND_DEV_HOST}" "${FRONTEND_DEV_PORT}" "${LAN_IP}")"
+    '
+  )"
+
+  assert_contains "managed wrapper exposes Vite on all interfaces by default" "${output}" "frontend_host=0.0.0.0"
+  assert_contains "managed wrapper uses the shared LAN API default" "${output}" "api_host=192.168.50.10"
+  assert_contains "managed wrapper keeps local browser entrypoint on loopback" "${output}" "browser=http://127.0.0.1:5173"
+  assert_contains "managed wrapper advertises a LAN browser entrypoint" "${output}" "lan_browser=http://192.168.50.10:5173"
+}
+
 test_verify_bg_holds_runtime_lock_for_proof_duration() {
   local output
   output="$(
@@ -358,6 +379,8 @@ test_start_bg_reports_browser_entrypoint() {
       source "${HOT_DEV_BG_PATH}"
       PID_FILE="'"${test_dir}"'/hot-dev-bg.pid"
       LOG_FILE="'"${test_dir}"'/hot-dev-bg.log"
+      LAN_IP=192.168.50.10
+      FRONTEND_DEV_HOST=0.0.0.0
       FRONTEND_DEV_PORT=5173
       PULSE_DEV_API_PORT=7655
       has_unmanaged_listeners(){ return 1; }
@@ -370,6 +393,7 @@ test_start_bg_reports_browser_entrypoint() {
 
   assert_contains "start reports managed runtime supervisor pid" "${output}" "Started managed runtime supervisor (pid: 4242)"
   assert_contains "start reports browser entrypoint" "${output}" "Browser entrypoint: http://127.0.0.1:5173"
+  assert_contains "start reports LAN browser entrypoint" "${output}" "LAN browser entrypoint: http://192.168.50.10:5173"
   assert_contains "start reports managed backend" "${output}" "Managed backend:  http://127.0.0.1:7655"
   assert_not_contains "start no longer reports generic frontend url" "${output}" "Frontend: http://127.0.0.1:5173"
 }
@@ -760,6 +784,8 @@ test_hot_dev_bg_script_advertises_managed_entrypoint() {
 
   assert_contains "hot-dev-bg usage points to managed runtime first" "${output}" "npm run dev                             # Canonical managed dev runtime"
   assert_contains "hot-dev-bg documents direct launcher as troubleshooting only" "${output}" "./scripts/hot-dev-bg.sh <command>       # Direct troubleshooting only"
+  assert_contains "hot-dev-bg sources shared runtime helpers" "${output}" 'source "${SCRIPT_DIR}/lib/hot-dev-runtime.sh"'
+  assert_contains "hot-dev-bg uses shared network defaults" "${output}" "hot_dev_configure_network_defaults"
   assert_contains "hot-dev-bg routes log guidance to managed wrapper" "${output}" "Check logs with: npm run dev:logs"
   assert_contains "hot-dev-bg routes verify guidance to managed wrapper" "${output}" "Rerun with: npm run dev:verify"
   assert_contains "hot-dev-bg routes launchd supervision guidance to managed wrapper" "${output}" "Rerun with: npm run dev"
@@ -1247,6 +1273,7 @@ main() {
   test_cli_parses_takeover_flag
   test_verify_command_injects_managed_runtime_env
   test_default_verify_command_runs_runtime_and_layout_proofs
+  test_managed_wrapper_defaults_to_lan_capable_frontend
   test_verify_bg_holds_runtime_lock_for_proof_duration
   test_managed_dev_runtime_restarts_existing_session_for_verification
   test_takeover_avoids_killing_current_shell_lineage

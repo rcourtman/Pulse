@@ -153,13 +153,21 @@ sync_runtime_auth_env_overrides() {
 }
 
 show_startup_banner() {
+    local local_frontend_url lan_frontend_url
+    local_frontend_url="$(hot_dev_local_browser_url "${FRONTEND_DEV_HOST}" "${FRONTEND_DEV_PORT}")"
+    lan_frontend_url="$(hot_dev_lan_browser_url "${FRONTEND_DEV_HOST}" "${FRONTEND_DEV_PORT}" "${LAN_IP}")"
+
     cat <<BANNER
 =========================================
 Starting HOT-RELOAD development mode
 =========================================
 
-Frontend: http://${FRONTEND_DEV_HOST}:${FRONTEND_DEV_PORT} (Local)
-          http://${LAN_IP}:${FRONTEND_DEV_PORT} (LAN)
+Frontend: ${local_frontend_url} (Local)
+BANNER
+    if [[ -n "${lan_frontend_url}" ]]; then
+        printf '          %s (LAN)\n' "${lan_frontend_url}"
+    fi
+    cat <<BANNER
 Backend API: ${PULSE_DEV_API_URL}
 
 Dev Credentials: $(hot_dev_auth_banner_line "${PULSE_AUTH_USER:-}" "${PULSE_AUTH_PASS:-}")
@@ -179,69 +187,7 @@ load_env_file "${ROOT_DIR}/.env"
 load_env_file "${ROOT_DIR}/.env.local"
 load_env_file "${ROOT_DIR}/.env.dev"
 
-FRONTEND_PORT=${FRONTEND_PORT:-${PORT:-5173}}
-PORT=${PORT:-${FRONTEND_PORT}}
-
-# Detect LAN IP
-if [[ -z ${LAN_IP:-} ]]; then
-    if command -v hostname >/dev/null 2>&1 && hostname -I >/dev/null 2>&1; then
-        LAN_IP=$(hostname -I | awk '{print $1}')
-    fi
-    if [[ -z ${LAN_IP:-} ]]; then
-        LAN_IP=$(ipconfig getifaddr en0 2>/dev/null || echo "")
-    fi
-    if [[ -z ${LAN_IP:-} ]]; then
-        LAN_IP="0.0.0.0"
-    fi
-fi
-
-FRONTEND_DEV_HOST=${FRONTEND_DEV_HOST:-0.0.0.0}
-FRONTEND_DEV_PORT=${FRONTEND_DEV_PORT:-${FRONTEND_PORT}}
-PULSE_DEV_API_HOST=${PULSE_DEV_API_HOST:-${LAN_IP}}
-PULSE_DEV_API_PORT=${PULSE_DEV_API_PORT:-7655}
-
-if [[ -z ${PULSE_DEV_API_URL:-} ]]; then
-    PULSE_DEV_API_URL="http://${PULSE_DEV_API_HOST}:${PULSE_DEV_API_PORT}"
-fi
-
-if [[ -z ${PULSE_DEV_WS_URL:-} ]]; then
-    if [[ ${PULSE_DEV_API_URL} == http://* ]]; then
-        PULSE_DEV_WS_URL="ws://${PULSE_DEV_API_URL#http://}"
-    elif [[ ${PULSE_DEV_API_URL} == https://* ]]; then
-        PULSE_DEV_WS_URL="wss://${PULSE_DEV_API_URL#https://}"
-    else
-        PULSE_DEV_WS_URL=${PULSE_DEV_API_URL}
-    fi
-fi
-
-# Set specific allowed origin for CORS with credentials
-# Use the frontend dev URL so cross-port SSE requests work with auth cookies
-# Added localhost and 127.0.0.1 by default for flexibility (both 7655 and 5173)
-ALLOWED_ORIGINS="http://${PULSE_DEV_API_HOST:-127.0.0.1}:${FRONTEND_DEV_PORT:-7655}"
-ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://localhost:${FRONTEND_DEV_PORT:-7655},http://127.0.0.1:${FRONTEND_DEV_PORT:-7655}"
-ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://localhost:5173,http://127.0.0.1:5173"
-
-# Detect and add all system IPs (V4)
-if [[ "$(uname -s)" == "Darwin" ]]; then
-    # macOS: get IPs from ifconfig
-    ALL_IPS=$(ifconfig 2>/dev/null | grep "inet " | awk '{print $2}' | grep -v "^127\.")
-else
-    # Linux: use hostname -I
-    ALL_IPS=$(hostname -I 2>/dev/null || echo "")
-fi
-for ip in $ALL_IPS; do
-    if [[ "${ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        if [[ "${ip}" != "127.0.0.1" ]]; then
-            ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://${ip}:${FRONTEND_DEV_PORT:-7655}"
-            ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://${ip}:5173"
-        fi
-    fi
-done
-
-export FRONTEND_PORT PORT
-export FRONTEND_DEV_HOST FRONTEND_DEV_PORT
-export PULSE_DEV_API_HOST PULSE_DEV_API_PORT PULSE_DEV_API_URL PULSE_DEV_WS_URL
-export ALLOWED_ORIGINS
+hot_dev_configure_network_defaults
 
 EXTRA_CLEANUP_PORT=$((PULSE_DEV_API_PORT + 1))
 HOT_DEV_RESTART_SENTINEL="${ROOT_DIR}/tmp/hot-dev.restart"

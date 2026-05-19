@@ -80,3 +80,21 @@ test('managedDevBrowserBaseURL keeps the configured host and port when a managed
     fs.rmSync(repoRoot, { recursive: true, force: true });
   }
 });
+
+test('managedDevBrowserBaseURL maps wildcard bind hosts to a local browser URL', () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pulse-managed-dev-runtime-'));
+  fs.mkdirSync(path.join(repoRoot, 'tmp'), { recursive: true });
+  fs.writeFileSync(path.join(repoRoot, 'tmp', 'hot-dev.bg.pid'), `${process.pid}\n`);
+
+  try {
+    const resolved = managedDevBrowserBaseURL({
+      FRONTEND_DEV_HOST: '0.0.0.0',
+      FRONTEND_DEV_PORT: '5173',
+      PULSE_E2E_REPO_ROOT: repoRoot,
+    });
+
+    assert.equal(resolved, 'http://127.0.0.1:5173');
+  } finally {
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
