@@ -600,6 +600,7 @@ describe('GuestRow', () => {
       const image = screen.getByText('nginx:latest');
       expect(image).toBeTruthy();
       expect(image.getAttribute('title')).toBe('ghcr.io/library/nginx:latest');
+      expect(image.closest('td')?.querySelector('div')?.className).toContain('justify-start');
     });
 
     it('shows update button for app-container guests', () => {

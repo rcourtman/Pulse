@@ -24,6 +24,7 @@ export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
         <For each={props.workloadTableVisibleColumns()}>
           {(col) => {
             const isFirst = () => col.id === props.visibleColumns()[0]?.id;
+            const isLeftAlignedTextColumn = () => isFirst() || col.id === 'image';
             const sortKeyForCol = col.sortKey as WorkloadSortKey | undefined;
             const isSortable = !!sortKeyForCol;
             const isSorted = () => sortKeyForCol && props.sortKey() === sortKeyForCol;
@@ -31,7 +32,7 @@ export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
             return (
               <TableHead
                 class={`py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
- ${isFirst() ? 'pl-2 sm:pl-3 pr-1.5 sm:pr-2 text-left' : 'px-1.5 sm:px-2 text-center'} align-middle
+ ${isFirst() ? 'pl-2 sm:pl-3 pr-1.5 sm:pr-2' : 'px-1.5 sm:px-2'} ${isLeftAlignedTextColumn() ? 'text-left' : 'text-center'} align-middle
  ${isSortable ? 'cursor-pointer hover:bg-surface-hover' : ''}`}
                 data-workload-col={col.id}
                 style={getGuestColumnStyle(
@@ -44,7 +45,7 @@ export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
                 title={col.icon ? col.label : undefined}
               >
                 <div
-                  class={`flex min-h-[14px] items-center gap-0.5 ${isFirst() ? 'justify-start' : 'justify-center'}`}
+                  class={`flex min-h-[14px] items-center gap-0.5 ${isLeftAlignedTextColumn() ? 'justify-start' : 'justify-center'}`}
                 >
                   {col.icon ? (
                     <>

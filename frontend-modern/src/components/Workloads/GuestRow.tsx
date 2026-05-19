@@ -483,7 +483,7 @@ export function GuestRow(props: GuestRowProps) {
         {/* Image */}
         <Show when={isColVisible('image')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <div class="flex items-center justify-center gap-1.5">
+            <div class="flex items-center justify-start gap-1.5">
               <Show
                 when={workloadType() === 'app-container' && dockerImage()}
                 fallback={
