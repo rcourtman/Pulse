@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
@@ -951,6 +952,31 @@ func (h *ConfigHandlers) handleAutoUnregister(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// nodesConfigFingerprint computes a deterministic SHA-256 fingerprint of the
+// PVE / PBS / PMG instance lists that would be persisted by SaveNodesConfig.
+// Used by handleCanonicalAutoRegister to detect no-op re-registrations: when
+// an already-known agent re-announces itself the auto-register handler still
+// runs the full add-then-consolidate path, which produces the exact same
+// persisted state. Writing+reloading on those no-ops triggers a full monitor
+// rebuild that briefly empties the resource store, producing a visible
+// flicker for every connected WebSocket client. Comparing fingerprints lets
+// us short-circuit and skip both the save and the reload.
+func nodesConfigFingerprint(pve []config.PVEInstance, pbs []config.PBSInstance, pmg []config.PMGInstance) string {
+	payload := struct {
+		PVE []config.PVEInstance `json:"pve"`
+		PBS []config.PBSInstance `json:"pbs"`
+		PMG []config.PMGInstance `json:"pmg"`
+	}{pve, pbs, pmg}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		// Fall back to a non-comparable sentinel so callers treat this as
+		// "changed" and persist+reload defensively.
+		return fmt.Sprintf("fingerprint-error:%d:%d:%d:%v", len(pve), len(pbs), len(pmg), err)
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
 // HandleAutoRegister receives token details from the setup script and auto-configures the node
 func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -1211,6 +1237,14 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 		Str("tokenID", fullTokenID).
 		Str("source", registrationSource).
 		Msg("Using caller-supplied token for canonical /api/auto-register completion")
+
+	// Snapshot the pre-mutation persisted-state fingerprint so we can detect
+	// no-op auto-registrations and skip the SaveNodesConfig + monitor reload
+	// that would otherwise wipe the live resource store for every connected
+	// client. See nodesConfigFingerprint for the full rationale.
+	preCfg := h.getConfig(r.Context())
+	beforeFingerprint := nodesConfigFingerprint(preCfg.PVEInstances, preCfg.PBSInstances, preCfg.PMGInstances)
+
 	// Add the node to configuration
 	created := false
 	if req.Type == "pve" {
@@ -1369,10 +1403,21 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 
 	// Save configuration
 	h.normalizePVEConfigState(r.Context())
-	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
-		log.Error().Err(err).Msg("Failed to save auto-registered node")
-		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
-		return
+	postCfg := h.getConfig(r.Context())
+	afterFingerprint := nodesConfigFingerprint(postCfg.PVEInstances, postCfg.PBSInstances, postCfg.PMGInstances)
+	configChanged := beforeFingerprint != afterFingerprint
+
+	if configChanged {
+		if err := h.getPersistence(r.Context()).SaveNodesConfig(postCfg.PVEInstances, postCfg.PBSInstances, postCfg.PMGInstances); err != nil {
+			log.Error().Err(err).Msg("Failed to save auto-registered node")
+			http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		log.Debug().
+			Str("host", host).
+			Str("type", req.Type).
+			Msg("Auto-register resulted in no persisted-config change; skipping SaveNodesConfig and monitor reload")
 	}
 
 	actualName := h.findInstanceNameByHost(r.Context(), req.Type, host)
@@ -1381,8 +1426,11 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 	}
 	h.markAutoRegistered(req.Type, actualName)
 
-	// Reload monitor
-	if h.reloadFunc != nil {
+	// Reload monitor only when the persisted state actually changed. A full
+	// reload stops the multi-tenant monitor and rebuilds it from scratch,
+	// which momentarily empties the WebSocket-visible resource store; for
+	// no-op re-registrations there is nothing for the monitor to pick up.
+	if configChanged && h.reloadFunc != nil {
 		go func() {
 			if err := h.reloadFunc(); err != nil {
 				log.Error().Err(err).Msg("Failed to reload monitor after auto-registration")

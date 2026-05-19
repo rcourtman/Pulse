@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
@@ -574,6 +575,150 @@ func TestHandleCanonicalAutoRegisterConsolidatesStandaloneOverlapIntoClusterInMe
 	}
 	if cluster.Source != "script" {
 		t.Fatalf("source = %q, want script", cluster.Source)
+	}
+}
+
+func TestHandleCanonicalAutoRegisterNoOpReRegistrationSkipsMonitorReload(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	server := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// Start with a cluster that already has minipc as an endpoint; the first
+	// auto-register call below promotes the caller's token onto the cluster
+	// and is a legitimate state change. The second identical call simulates
+	// the periodic agent heartbeat that was producing the UI flicker, and
+	// must short-circuit before SaveNodesConfig + monitor reload.
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:        "delly",
+				ClusterName: "delly",
+				IsCluster:   true,
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{NodeName: "minipc", Host: server.URL},
+				},
+			},
+		},
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+	reloadCalls := 0
+	handler.reloadFunc = func() error {
+		reloadCalls++
+		return nil
+	}
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       server.URL,
+		ServerName: "minipc",
+		TokenID:    "pulse-monitor@pve!pulse-cluster-node",
+		TokenValue: "cluster-token",
+		Source:     "agent",
+	}
+
+	// First call: warms up the cluster's host/token/source/etc. from the
+	// caller's payload. This is a real state change so a reload IS expected.
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
+	rec := httptest.NewRecorder()
+	handler.handleCanonicalAutoRegister(rec, req, &reqBody, "127.0.0.1")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("warm-up call status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	// Allow the warm-up reload goroutine to run before resetting the counter.
+	time.Sleep(50 * time.Millisecond)
+	if reloadCalls == 0 {
+		t.Fatalf("expected the first state-changing auto-register to call reloadFunc, got %d", reloadCalls)
+	}
+	reloadCalls = 0
+
+	// Second call with the identical payload: this is the no-op scenario
+	// the fix targets. No persisted-config delta → no save → no reload.
+	req2 := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
+	rec2 := httptest.NewRecorder()
+	handler.handleCanonicalAutoRegister(rec2, req2, &reqBody, "127.0.0.1")
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("no-op call status = %d, want 200: %s", rec2.Code, rec2.Body.String())
+	}
+
+	// Wait long enough for a scheduled reload goroutine to surface if one
+	// was queued. Reload is fired via `go func()` so a tight assert race is
+	// unsafe; this gives it a generous slice of wall time to fail loudly.
+	time.Sleep(150 * time.Millisecond)
+
+	if reloadCalls != 0 {
+		t.Fatalf("no-op auto-register triggered %d monitor reload(s); expected zero so the WebSocket-visible resource store is not wiped", reloadCalls)
+	}
+}
+
+func TestHandleCanonicalAutoRegisterStateChangingRegistrationStillReloads(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	server := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// Initial state: a cluster with a stale token. The auto-register payload
+	// carries a fresh token that must be persisted, so SaveNodesConfig and the
+	// monitor reload should still fire.
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:        "delly",
+				ClusterName: "delly",
+				IsCluster:   true,
+				TokenName:   "pulse-monitor@pve!pulse-cluster-node",
+				TokenValue:  "stale-token",
+				Source:      "script",
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{NodeName: "minipc", Host: server.URL},
+				},
+			},
+		},
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+	reloadCalls := make(chan struct{}, 1)
+	handler.reloadFunc = func() error {
+		select {
+		case reloadCalls <- struct{}{}:
+		default:
+		}
+		return nil
+	}
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       server.URL,
+		ServerName: "minipc",
+		TokenID:    "pulse-monitor@pve!pulse-cluster-node",
+		TokenValue: "fresh-token",
+		Source:     "agent",
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
+	rec := httptest.NewRecorder()
+
+	handler.handleCanonicalAutoRegister(rec, req, &reqBody, "127.0.0.1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	select {
+	case <-reloadCalls:
+	case <-time.After(time.Second):
+		t.Fatal("expected a monitor reload after a real token rotation, none observed")
 	}
 }
 
