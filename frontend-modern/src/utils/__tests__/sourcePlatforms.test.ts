@@ -140,8 +140,8 @@ describe('sourcePlatforms', () => {
   });
 
   describe('governed platform support projection', () => {
-    it('keeps admitted VMware on the first-lab-ready support floor', () => {
-      expect(getSourcePlatformReadinessStage('vmware')).toBe('first-lab-ready');
+    it('keeps VMware on the supported vCenter-backed floor', () => {
+      expect(getSourcePlatformReadinessStage('vmware')).toBe('supported');
       expect(getSourcePlatformCanonicalProjections('vmware')).toEqual(['agent', 'vm', 'storage']);
       expect(getSourcePlatformSupportFloor('vmware')).toMatchObject({
         setup: 'supported',

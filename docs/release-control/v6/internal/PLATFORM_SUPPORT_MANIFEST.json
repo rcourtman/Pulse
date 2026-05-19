@@ -7,7 +7,8 @@
     "proxmox-pbs",
     "proxmox-pmg",
     "docker",
-    "kubernetes"
+    "kubernetes",
+    "vmware-vsphere"
   ],
   "agent_host_profiles": [
     {
@@ -279,8 +280,8 @@
     {
       "id": "vmware-vsphere",
       "family": "VMware",
-      "governance_state": "admitted",
-      "readiness_stage": "first-lab-ready",
+      "governance_state": "supported",
+      "readiness_stage": "supported",
       "primary_mode": "api-backed",
       "onboarding_paths": [
         "platform-connections"

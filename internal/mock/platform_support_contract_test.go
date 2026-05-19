@@ -171,44 +171,41 @@ func TestMockCoverageMatchesCurrentSupportedPlatformSet(t *testing.T) {
 	}
 }
 
-func TestVMwareFixturesRemainAdmittedButNotSupported(t *testing.T) {
+func TestVMwareFixturesRemainSupportedAtPhase1Floor(t *testing.T) {
 	model := loadPlatformSupportModel(t)
 	manifest := loadPlatformSupportManifest(t)
 	supported := manifestPlatformsByState(t, manifest, "supported")
 	admitted := manifestPlatformsByState(t, manifest, "admitted")
 	presentationOnly := manifestPlatformsByState(t, manifest, "presentation-only")
 
-	if containsPlatform(supported, "vmware-vsphere") {
-		t.Fatal("vmware-vsphere must not appear in the current supported platform set before live proof admits it")
+	if !containsPlatform(supported, "vmware-vsphere") {
+		t.Fatal("vmware-vsphere must appear in the current supported platform set after promotion from first-lab-ready")
 	}
-	if !containsPlatform(admitted, "vmware-vsphere") {
-		t.Fatal("expected vmware-vsphere to remain admitted while it is outside the supported platform set")
+	if containsPlatform(admitted, "vmware-vsphere") {
+		t.Fatal("vmware-vsphere must not remain in the admitted set after promotion to supported")
 	}
 	if containsPlatform(presentationOnly, "vmware-vsphere") {
-		t.Fatal("vmware-vsphere must not regress into presentation-only vocabulary once admitted")
+		t.Fatal("vmware-vsphere must not regress into presentation-only vocabulary once supported")
 	}
 	if !strings.Contains(model, "| `vmware-vsphere` |") {
-		t.Fatal("expected platform support model to keep the vmware-vsphere admission row")
+		t.Fatal("expected platform support model to keep the vmware-vsphere support row")
 	}
 	vmwareOnboardingPaths, ok := manifestPlatformOnboardingPaths(manifest)["vmware-vsphere"]
 	if !ok {
 		t.Fatal("expected vmware-vsphere onboarding-path manifest entry")
 	}
 	if diff := diffPlatformSets([]string{"platform-connections"}, vmwareOnboardingPaths); diff != "" {
-		t.Fatalf("vmware-vsphere onboarding path drifted from the admission model:\n%s", diff)
-	}
-	if !strings.Contains(model, "| `vmware-vsphere` | platform connections to `vCenter` only |") {
-		t.Fatal("expected platform support model to keep the vmware-vsphere platform-connections admission floor")
+		t.Fatalf("vmware-vsphere onboarding path drifted from the support model:\n%s", diff)
 	}
 	vmwareManifest := requireManifestPlatform(t, manifest, "vmware-vsphere")
-	if vmwareManifest.ReadinessStage != "first-lab-ready" {
-		t.Fatalf("vmware readiness stage = %q, want first-lab-ready", vmwareManifest.ReadinessStage)
+	if vmwareManifest.ReadinessStage != "supported" {
+		t.Fatalf("vmware readiness stage = %q, want supported", vmwareManifest.ReadinessStage)
 	}
 	if vmwareManifest.PrimaryMode != "api-backed" {
 		t.Fatalf("vmware primary mode = %q, want api-backed", vmwareManifest.PrimaryMode)
 	}
 	if diff := diffPlatformSets([]string{"agent", "storage", "vm"}, vmwareManifest.CanonicalProjections); diff != "" {
-		t.Fatalf("vmware canonical projections drifted from the admission model:\n%s", diff)
+		t.Fatalf("vmware canonical projections drifted from the support model:\n%s", diff)
 	}
 	if got := vmwareManifest.SupportFloor["recovery"]; got != "n/a" {
 		t.Fatalf("vmware recovery support floor = %q, want n/a", got)
@@ -531,6 +528,10 @@ func parsePlatformListSection(t *testing.T, model string, heading string) []stri
 
 	var platforms []string
 	inSection := false
+	// The admitted-platform section is allowed to be empty once the last
+	// admitted platform graduates to supported; every other section must
+	// declare at least one platform.
+	allowEmpty := strings.Contains(heading, "Admitted platforms")
 
 	for _, raw := range strings.Split(model, "\n") {
 		line := strings.TrimSpace(raw)
@@ -541,6 +542,9 @@ func parsePlatformListSection(t *testing.T, model string, heading string) []stri
 		case !inSection:
 			continue
 		case strings.HasPrefix(line, "### ") || strings.HasPrefix(line, "## "):
+			if allowEmpty {
+				return allowEmptyPlatformList(platforms)
+			}
 			return requireNonEmptyPlatformList(t, platforms, heading)
 		}
 
@@ -550,6 +554,9 @@ func parsePlatformListSection(t *testing.T, model string, heading string) []stri
 		}
 	}
 
+	if allowEmpty {
+		return allowEmptyPlatformList(platforms)
+	}
 	return requireNonEmptyPlatformList(t, platforms, heading)
 }
 
@@ -630,6 +637,9 @@ func manifestPlatformsByState(
 		}
 	}
 
+	if governanceState == "admitted" {
+		return allowEmptyPlatformList(platforms)
+	}
 	return requireNonEmptyPlatformList(t, platforms, fmt.Sprintf("manifest platforms with state %s", governanceState))
 }
 
@@ -929,6 +939,14 @@ func requireNonEmptyPlatformList(t *testing.T, platforms []string, label string)
 		t.Fatalf("expected %s to declare at least one platform", label)
 	}
 	return unique
+}
+
+// allowEmptyPlatformList mirrors requireNonEmptyPlatformList but tolerates an
+// empty result. Used for governance sets that can legitimately be empty
+// (e.g. the admitted-platform staging area after the last admitted platform
+// has been promoted to supported).
+func allowEmptyPlatformList(platforms []string) []string {
+	return uniqueSortedPlatforms(platforms)
 }
 
 func requireNonEmptyPlatformFieldMap(

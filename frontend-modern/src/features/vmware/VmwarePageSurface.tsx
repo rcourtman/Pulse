@@ -68,7 +68,7 @@ export function VmwarePageSurface() {
               <PlatformTableEmptyState
                 icon={vmwareIcon()}
                 title="No vSphere hosts"
-                description="VMware vSphere is in first-lab-ready readiness. Add a vCenter connection in Settings to populate this page."
+                description="Add a vCenter connection in Settings to populate this page."
               />
             }
           >

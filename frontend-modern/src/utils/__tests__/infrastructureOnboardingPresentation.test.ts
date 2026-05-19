@@ -17,12 +17,12 @@ import {
 } from '@/utils/infrastructureOnboardingPresentation';
 
 describe('infrastructureOnboardingPresentation', () => {
-  it('keeps VMware on the admitted vCenter-only path', () => {
+  it('keeps VMware on the supported vCenter path', () => {
     const vmware = getInfrastructureOnboardingProductPresentation('vmware');
 
     expect(vmware.label).toBe('VMware vCenter');
-    expect(vmware.governanceState).toBe('admitted');
-    expect(vmware.readinessStage).toBe('first-lab-ready');
+    expect(vmware.governanceState).toBe('supported');
+    expect(vmware.readinessStage).toBe('supported');
     expect(vmware.primaryMode).toBe('api-backed');
     expect(vmware.canonicalProjections).toEqual(['agent', 'vm', 'storage']);
     expect(vmware.supportFloor).toMatchObject({
@@ -87,10 +87,11 @@ describe('infrastructureOnboardingPresentation', () => {
     expect(INFRASTRUCTURE_ONBOARDING_PATHS.agent.title).toBe('Install Pulse Agent');
   });
 
-  it('keeps supported API products separate from the admitted VMware path', () => {
+  it('lists all supported API products alongside vSphere now that VMware is promoted', () => {
     expect(
       getInfrastructureApiProductsByGovernanceState('supported').map((product) => product.label),
     ).toEqual([
+      'VMware vCenter',
       'TrueNAS SCALE',
       'Proxmox VE',
       'Proxmox Backup Server',
@@ -100,13 +101,7 @@ describe('infrastructureOnboardingPresentation', () => {
 
     expect(
       getInfrastructureApiProductsByGovernanceState('admitted').map((product) => product.label),
-    ).toEqual(['VMware vCenter']);
-    expect(
-      getInfrastructureGovernanceBadgeLabel(
-        getInfrastructureOnboardingProductPresentation('vmware').governanceState,
-        getInfrastructureOnboardingProductPresentation('vmware').readinessStage,
-      ),
-    ).toBe('Early support');
+    ).toEqual([]);
     expect(getInfrastructureGovernanceBadgeLabel('supported', 'supported')).toBeNull();
   });
 
@@ -209,6 +204,7 @@ describe('infrastructureOnboardingPresentation', () => {
 
     expect(getInfrastructureSupportSummaryBadges()).toMatchObject({
       supportedToday: [
+        'VMware vCenter',
         'TrueNAS SCALE',
         'Proxmox VE',
         'Proxmox Backup Server',
@@ -218,7 +214,7 @@ describe('infrastructureOnboardingPresentation', () => {
         'Docker',
         'Kubernetes',
       ],
-      currentAdmissionPath: ['VMware vCenter'],
+      currentAdmissionPath: [],
       installPath: expect.arrayContaining([
         'Linux',
         'FreeBSD',

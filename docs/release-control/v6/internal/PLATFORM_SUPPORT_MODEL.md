@@ -242,10 +242,11 @@ Rules:
 5. `proxmox-pbs`
 6. `proxmox-pmg`
 7. `truenas`
+8. `vmware-vsphere`
 
 ### Admitted platforms (not yet supported)
 
-1. `vmware-vsphere`
+(none)
 
 ### Presentation-only platform vocabulary
 
@@ -285,7 +286,7 @@ Support floor fields are recorded in this order: `setup`, `visibility`,
 | `proxmox-pbs` | `supported` | `supported` | `api-backed` | `platform-connections` | `pbs`, `storage` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
 | `proxmox-pmg` | `supported` | `supported` | `api-backed` | `platform-connections` | `pmg` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=n/a`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
 | `truenas` | `supported` | `supported` | `api-backed` | `platform-connections` | `agent`, `app-container`, `storage`, `physical-disk` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
-| `vmware-vsphere` | `admitted` | `first-lab-ready` | `api-backed` | `platform-connections` | `agent`, `vm`, `storage` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
+| `vmware-vsphere` | `supported` | `supported` | `api-backed` | `platform-connections` | `agent`, `vm`, `storage` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
 
 Presentation-only platform vocabulary uses `governance=presentation-only`,
 `readiness=presentation-only`, `primary_mode=presentation-only`, no onboarding
@@ -343,17 +344,19 @@ platform fallbacks that are not declared in this document.
 | `proxmox-pve` | Proxmox            | api-backed   | host agent may augment into hybrid | `agent`, `vm`, `system-container`, `storage`, `ceph`, `physical-disk` |
 | `proxmox-pbs` | Proxmox            | api-backed   | host agent may augment into hybrid | `pbs`, `storage`                                                      |
 | `proxmox-pmg` | Proxmox            | api-backed   | none today                         | `pmg`                                                                 |
-| `truenas`     | TrueNAS            | api-backed   | host agent may augment into hybrid | `agent`, `app-container`, `storage`, `physical-disk`                  |
+| `truenas`        | TrueNAS            | api-backed   | host agent may augment into hybrid | `agent`, `app-container`, `storage`, `physical-disk`                  |
+| `vmware-vsphere` | VMware             | api-backed   | host or guest agent later, not phase 1 | `agent`, `vm`, `storage`                                          |
 
-| Platform      | Setup                                  | Visibility | Workloads | Storage   | Recovery  | Alerts    | Assistant read | Assistant control |
-| ------------- | -------------------------------------- | ---------- | --------- | --------- | --------- | --------- | -------------- | ----------------- |
-| `agent`       | install workspace                      | supported  | `n/a`     | supported | `n/a`     | supported | supported      | supported         |
-| `docker`      | install workspace / runtime enablement | supported  | supported | `n/a`     | `n/a`     | supported | supported      | supported         |
-| `kubernetes`  | install workspace / runtime enablement | supported  | supported | `n/a`     | supported | supported | supported      | supported         |
-| `proxmox-pve` | platform connections                   | supported  | supported | supported | supported | supported | supported      | augmentation-only |
-| `proxmox-pbs` | platform connections                   | supported  | `n/a`     | supported | supported | supported | supported      | read-only         |
-| `proxmox-pmg` | platform connections                   | supported  | `n/a`     | `n/a`     | `n/a`     | supported | supported      | read-only         |
-| `truenas`     | platform connections                   | supported  | supported | supported | supported | supported | supported      | supported         |
+| Platform         | Setup                                  | Visibility | Workloads | Storage   | Recovery  | Alerts    | Assistant read | Assistant control |
+| ---------------- | -------------------------------------- | ---------- | --------- | --------- | --------- | --------- | -------------- | ----------------- |
+| `agent`          | install workspace                      | supported  | `n/a`     | supported | `n/a`     | supported | supported      | supported         |
+| `docker`         | install workspace / runtime enablement | supported  | supported | `n/a`     | `n/a`     | supported | supported      | supported         |
+| `kubernetes`     | install workspace / runtime enablement | supported  | supported | `n/a`     | supported | supported | supported      | supported         |
+| `proxmox-pve`    | platform connections                   | supported  | supported | supported | supported | supported | supported      | augmentation-only |
+| `proxmox-pbs`    | platform connections                   | supported  | `n/a`     | supported | supported | supported | supported      | read-only         |
+| `proxmox-pmg`    | platform connections                   | supported  | `n/a`     | `n/a`     | `n/a`     | supported | supported      | read-only         |
+| `truenas`        | platform connections                   | supported  | supported | supported | supported | supported | supported      | supported         |
+| `vmware-vsphere` | platform connections                   | supported  | supported | supported | `n/a`     | supported | supported      | read-only         |
 
 ## Current Inconsistencies To Treat Explicitly
 
