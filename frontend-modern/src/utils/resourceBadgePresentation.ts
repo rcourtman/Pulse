@@ -15,6 +15,7 @@ import {
   canonicalResourceTypeForDisplay,
   getResourceTypePresentation,
 } from '@/utils/resourceTypePresentation';
+import { getWorkloadTypePresentation } from '@/utils/workloadTypePresentation';
 
 export interface ResourceBadge {
   label: string;
@@ -580,7 +581,7 @@ const proxmoxLxcDockerBadge = (resource: Resource): ResourceBadge | null => {
   const label = vmid !== null ? `LXC ${vmid}` : 'LXC';
   return {
     label,
-    classes: `${baseBadge} bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300`,
+    classes: `${baseBadge} ${getWorkloadTypePresentation('system-container').className}`,
     title: vmid !== null
       ? `Docker running inside Proxmox LXC ${vmid}`
       : 'Docker running inside a Proxmox LXC',
