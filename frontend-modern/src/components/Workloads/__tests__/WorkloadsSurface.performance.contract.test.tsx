@@ -1030,8 +1030,17 @@ describe('Workloads performance contract', () => {
       expect(workloadPanelSource).toContain('buildWorkloadSummaryGroupScope');
       expect(workloadPanelSource).toContain('data-summary-group-id');
       expect(workloadPanelSource).toContain('setHoveredWorkloadGroupScope');
+      expect(workloadPanelSource).toContain('getGroupedTableRowClass');
       expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
       expect(workloadPanelSource).toContain('getGroupedTableRowCellClass');
+      expect(workloadPanelSource).toContain('? getInteractiveGroupedTableRowClass()');
+      expect(workloadPanelSource).toContain(': getGroupedTableRowClass()');
+      expect(workloadPanelSource).toContain(
+        'onClick={canOpenNodeDrawer() ? handleGroupFocusToggle : undefined}',
+      );
+      expect(workloadPanelSource).toContain(
+        '{...(canOpenNodeDrawer() ? groupRowInteraction : {})}',
+      );
       expect(workloadPanelSource).not.toContain('cursor-pointer bg-surface-alt');
       expect(workloadsWorkloadTableSource).not.toContain(
         'createMemo(() => getCanonicalWorkloadId(guest()))',

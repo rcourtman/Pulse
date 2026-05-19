@@ -43,6 +43,7 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
       <div class="mb-1 flex items-center justify-between gap-3 border-b border-border px-1">
         <div class="flex items-center gap-6">
           <button
+            type="button"
             onClick={() => setActiveTab('overview')}
             class={`pb-2 text-sm font-medium transition-colors relative ${
               activeTab() === 'overview' ? 'text-blue-600 dark:text-blue-400' : ' hover:text-muted'
@@ -54,6 +55,7 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
             )}
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('history')}
             class={`pb-2 text-sm font-medium transition-colors relative ${
               activeTab() === 'history' ? 'text-blue-600 dark:text-blue-400' : ' hover:text-muted'

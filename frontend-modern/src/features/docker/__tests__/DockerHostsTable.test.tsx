@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Disk } from '@/types/api';
@@ -97,6 +97,32 @@ describe('DockerHostsTable', () => {
     expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute('data-total', '8000');
     expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-mode', 'vertical-bars');
     expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-disks', '2');
+  });
+
+  it('opens host details inline without route navigation or submit-style drawer controls', () => {
+    window.history.pushState({}, '', '/docker/overview');
+
+    render(() => (
+      <DockerHostsTable
+        resources={[makeDockerHost()]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    const hostRow = screen.getByText('docker-01').closest('tr');
+    expect(hostRow).not.toBeNull();
+
+    fireEvent.click(hostRow!);
+
+    expect(hostRow).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('docker-host-drawer')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/docker/overview');
+    expect(window.location.search).toBe('');
+    expect(screen.getByRole('button', { name: 'Overview' })).toHaveAttribute('type', 'button');
+    expect(screen.getByRole('button', { name: 'History' })).toHaveAttribute('type', 'button');
   });
 
   it('identifies the host system separately from the container runtime', () => {

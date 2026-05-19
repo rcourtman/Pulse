@@ -8,6 +8,7 @@ import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import {
   GROUPED_TABLE_ROW_BADGE_CLASS,
   getGroupedTableRowCellClass,
+  getGroupedTableRowClass,
   getInteractiveGroupedTableRowClass,
 } from '@/components/shared/groupedTableRowPresentation';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
@@ -418,14 +419,18 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                   when={node()}
                   fallback={
                     <TableRow
-                      class={getInteractiveGroupedTableRowClass()}
+                      class={
+                        canOpenNodeDrawer()
+                          ? getInteractiveGroupedTableRowClass()
+                          : getGroupedTableRowClass()
+                      }
                       data-summary-group-id={groupKey()}
                       data-summary-group-series-count={String(
                         groupSummaryScope()?.seriesIds.length ?? 0,
                       )}
                       data-summary-row-active={isSummaryGroupHighlighted() ? 'true' : 'false'}
-                      onClick={handleGroupFocusToggle}
-                      {...groupRowInteraction}
+                      onClick={canOpenNodeDrawer() ? handleGroupFocusToggle : undefined}
+                      {...(canOpenNodeDrawer() ? groupRowInteraction : {})}
                     >
                       <TableCell
                         colspan={props.totalColumns()}
@@ -486,7 +491,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                       ),
                       'data-summary-row-active': isSummaryGroupHighlighted() ? 'true' : 'false',
                       onClick: canOpenNodeDrawer() ? handleGroupFocusToggle : undefined,
-                      ...groupRowInteraction,
+                      ...(canOpenNodeDrawer() ? groupRowInteraction : {}),
                     }}
                   />
                 </Show>

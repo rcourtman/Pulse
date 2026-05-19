@@ -68,6 +68,7 @@ export function DockerPageSurface() {
     columnLabelOverrides: DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES,
     groupLabelBadges: dockerWorkloadGroupLabelBadges(),
     compactGroupHeaders: true,
+    groupNodeDrawerMode: 'disabled',
   });
   const pageFilters = createMemo(() => ({
     containerRuntime: workloadsState.containerRuntime().trim() || null,
@@ -178,6 +179,7 @@ export function DockerPageSurface() {
                 tableOnly
                 forcedPlatform={DOCKER_PLATFORM_FILTER}
                 forcedViewMode={DOCKER_WORKLOAD_FORCED_VIEW_MODE}
+                groupNodeDrawerMode="disabled"
                 emptyStateTitle="No Docker or Podman containers"
                 emptyStateDescription="Containers appear here when a Docker or Podman host reports workload inventory."
               />
