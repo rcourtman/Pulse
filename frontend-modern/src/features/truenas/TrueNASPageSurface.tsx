@@ -128,27 +128,6 @@ export function TrueNASPageSurface() {
                 forcedSourceFilter={TRUENAS_PLATFORM_FILTER}
               />
             </Show>
-            <Show when={activeTab() === 'disks'}>
-              <TrueNASDisksTable
-                resources={model().disks}
-                emptyIcon={truenasIcon()}
-                emptyTitle="No TrueNAS disks reported"
-                emptyDescription="Physical disks appear here once a TrueNAS connection enumerates them."
-              />
-            </Show>
-            <Show when={activeTab() === 'apps'}>
-              <WorkloadsSurface
-                vms={[]}
-                containers={[]}
-                nodes={[]}
-                useWorkloads
-                embedded
-                tableOnly
-                showFilterToolbar
-                suppressPlatformFilter
-                forcedPlatform={TRUENAS_PLATFORM_FILTER}
-              />
-            </Show>
           </Show>
         </Show>
       </Show>

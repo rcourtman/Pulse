@@ -14,13 +14,8 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
 });
 
 describe('truenasPageModel', () => {
-  it('declares the TrueNAS section set with Systems, Storage, Disks, and Apps', () => {
-    expect(TRUENAS_TAB_SPECS.map((tab) => tab.id)).toEqual([
-      'overview',
-      'storage',
-      'disks',
-      'apps',
-    ]);
+  it('declares the TrueNAS section set as Overview + Storage', () => {
+    expect(TRUENAS_TAB_SPECS.map((tab) => tab.id)).toEqual(['overview', 'storage']);
   });
 
   it('buckets systems, disks, apps, storage while ignoring non-TrueNAS resources', () => {

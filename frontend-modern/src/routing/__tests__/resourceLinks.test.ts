@@ -54,7 +54,7 @@ describe('resource link routing contract', () => {
 
     expect(TRUENAS_PATH).toBe('/truenas');
     expect(buildTrueNASPath()).toBe('/truenas/overview');
-    expect(buildTrueNASPath('apps')).toBe('/truenas/apps');
+    expect(buildTrueNASPath('storage')).toBe('/truenas/storage');
 
     expect(VMWARE_PATH).toBe('/vmware');
     expect(buildVmwarePath()).toBe('/vmware/overview');

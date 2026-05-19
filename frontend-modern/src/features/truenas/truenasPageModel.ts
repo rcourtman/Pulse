@@ -1,7 +1,7 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import type { Resource, ResourceType } from '@/types/resource';
 
-export type TrueNASPageTabId = 'overview' | 'storage' | 'disks' | 'apps';
+export type TrueNASPageTabId = 'overview' | 'storage';
 
 export type TrueNASTabSpec = {
   id: TrueNASPageTabId;
@@ -9,11 +9,15 @@ export type TrueNASTabSpec = {
   path: string;
 };
 
+// The Overview tab mirrors Proxmox / vSphere: systems table on top with the
+// pools-only StorageSurface, physical disks, and apps stacked beneath. The
+// standalone Disks and Apps tabs that used to live here were pure
+// duplicates — the Workloads filter inside Overview owns app
+// search/grouping, and the Storage tab provides the full StorageSurface
+// (pools + disks toggle, with toolbar) for richer storage exploration.
 export const TRUENAS_TAB_SPECS: readonly TrueNASTabSpec[] = [
-  { id: 'overview', label: 'Systems', path: '/truenas/overview' },
+  { id: 'overview', label: 'Overview', path: '/truenas/overview' },
   { id: 'storage', label: 'Storage', path: '/truenas/storage' },
-  { id: 'disks', label: 'Disks', path: '/truenas/disks' },
-  { id: 'apps', label: 'Apps', path: '/truenas/apps' },
 ] as const;
 
 const TRUENAS_RESOURCE_TYPES = new Set<ResourceType>([

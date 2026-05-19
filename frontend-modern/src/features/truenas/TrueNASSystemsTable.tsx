@@ -1,7 +1,9 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
+import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import {
   Table,
   TableBody,
@@ -12,6 +14,7 @@ import {
 } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_CARD_CLASS,
@@ -69,6 +72,17 @@ const formatTemperature = (celsius: number | undefined): JSX.Element => {
   if (typeof celsius !== 'number' || celsius <= 0) return <span class="text-muted">—</span>;
   return <span class="tabular-nums">{celsius.toFixed(1)}°C</span>;
 };
+
+const finiteMetric = (value: number | undefined): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+const metricFallback = () => (
+  <div class="flex justify-center">
+    <span class="text-xs text-muted" aria-hidden="true">
+      —
+    </span>
+  </div>
+);
 
 export const TrueNASSystemsTable: Component<{
   systems: Resource[];
@@ -194,6 +208,15 @@ export const TrueNASSystemsTable: Component<{
                         ? `${formatBytes(system.disk.used)} / ${formatBytes(system.disk.total)}`
                         : formatPercent(storagePercent());
                     const c = counts();
+                    const metricsKey = () => buildMetricKeyForUnifiedResource(system);
+                    const cpuPercent = () => finiteMetric(system.cpu?.current);
+                    const memoryTotal = () => finiteMetric(system.memory?.total) ?? 0;
+                    const memoryUsed = () => finiteMetric(system.memory?.used) ?? 0;
+                    const memoryPercentOnly = () =>
+                      memoryTotal() > 0 ? undefined : finiteMetric(system.memory?.current);
+                    const hasMemoryMetric = () =>
+                      memoryTotal() > 0 || memoryPercentOnly() !== undefined;
+                    const canRenderMetrics = () => indicator().variant !== 'muted';
                     return (
                       <TableRow class="text-[11px] sm:text-xs">
                         <TableCell class={getPlatformTableCellClass()}>
@@ -220,14 +243,30 @@ export const TrueNASSystemsTable: Component<{
                           {formatUptime(system.uptime)}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                          class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
                         >
-                          {formatPercent(system.cpu?.current)}
+                          <ResponsiveMetricCell
+                            class="w-full"
+                            value={cpuPercent() ?? 0}
+                            type="cpu"
+                            resourceId={metricsKey()}
+                            isRunning={canRenderMetrics() && cpuPercent() !== undefined}
+                            showMobile={false}
+                          />
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                          class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
                         >
-                          {formatPercent(system.memory?.current)}
+                          <Show
+                            when={canRenderMetrics() && hasMemoryMetric()}
+                            fallback={metricFallback()}
+                          >
+                            <StackedMemoryBar
+                              used={memoryUsed()}
+                              total={memoryTotal()}
+                              percentOnly={memoryPercentOnly()}
+                            />
+                          </Show>
                         </TableCell>
                         <TableCell
                           class={`${getPlatformTableCellClass('right')} text-base-content`}
