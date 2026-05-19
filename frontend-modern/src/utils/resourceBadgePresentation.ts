@@ -560,7 +560,39 @@ const getStorageSystemIdentityBadge = (
   );
 };
 
+const LXC_DOCKER_HOST_PREFIX = 'proxmox-lxc-docker:';
+
+const proxmoxLxcDockerVmid = (resource: Resource): number | null => {
+  const sourceId = resource.docker?.hostSourceId;
+  if (typeof sourceId !== 'string' || !sourceId.startsWith(LXC_DOCKER_HOST_PREFIX)) {
+    return null;
+  }
+  const tail = sourceId.slice(LXC_DOCKER_HOST_PREFIX.length);
+  const lastSegment = tail.split(':').pop() ?? '';
+  const parsed = Number(lastSegment);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const proxmoxLxcDockerBadge = (resource: Resource): ResourceBadge | null => {
+  if (typeof resource.docker?.hostSourceId !== 'string') return null;
+  if (!resource.docker.hostSourceId.startsWith(LXC_DOCKER_HOST_PREFIX)) return null;
+  const vmid = proxmoxLxcDockerVmid(resource);
+  const label = vmid !== null ? `LXC ${vmid}` : 'LXC';
+  return {
+    label,
+    classes: `${baseBadge} bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300`,
+    title: vmid !== null
+      ? `Docker running inside Proxmox LXC ${vmid}`
+      : 'Docker running inside a Proxmox LXC',
+  };
+};
+
 export function getInfrastructureSystemIdentityBadges(resource: Resource): ResourceBadge[] {
+  const lxcDockerBadge = proxmoxLxcDockerBadge(resource);
+  if (lxcDockerBadge) {
+    return [lxcDockerBadge];
+  }
+
   const platformData = getPlatformDataRecord(resource) as
     | (Record<string, unknown> & { sources?: string[] })
     | undefined;

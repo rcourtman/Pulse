@@ -300,6 +300,8 @@ func (m *Monitor) CollectProxmoxGuestDockerInventory(ctx context.Context, contai
 				return
 			}
 
+			enrichGuestDockerReportFromContainer(&report, container)
+
 			if _, err := m.ApplyDockerReport(report, nil); err != nil {
 				log.Warn().
 					Err(err).
@@ -611,13 +613,54 @@ func proxmoxGuestDockerAgentID(container models.Container) string {
 
 func proxmoxGuestDockerDisplayName(container models.Container) string {
 	name := strings.TrimSpace(container.Name)
-	if name == "" {
-		name = fmt.Sprintf("LXC %d", container.VMID)
+	if name != "" {
+		return name
 	}
-	if container.VMID > 0 {
-		return fmt.Sprintf("%s (LXC %d)", name, container.VMID)
+	return fmt.Sprintf("LXC %d", container.VMID)
+}
+
+// enrichGuestDockerReportFromContainer copies CPU / memory / disk telemetry
+// from the underlying Proxmox LXC into the Docker host info before the report
+// is applied. The Docker inventory script collects only sizing metadata
+// (CPU count, MEMTOTAL); the LXC's live resource usage is already polled via
+// the PVE cluster/resources endpoint, so the Docker host row should show
+// what the rest of Pulse already knows about that guest. Only zero-valued
+// fields are populated so values reported by the inventory script itself
+// (when present in future revisions) still take precedence.
+func enrichGuestDockerReportFromContainer(report *agentsdocker.Report, container models.Container) {
+	if report == nil {
+		return
 	}
-	return name
+	if report.Host.CPUUsagePercent == 0 && container.CPU > 0 {
+		report.Host.CPUUsagePercent = container.CPU * 100
+	}
+	if report.Host.Memory.TotalBytes == 0 && container.Memory.Total > 0 {
+		report.Host.Memory.TotalBytes = container.Memory.Total
+	}
+	if report.Host.Memory.UsedBytes == 0 && container.Memory.Used > 0 {
+		report.Host.Memory.UsedBytes = container.Memory.Used
+	}
+	if report.Host.Memory.FreeBytes == 0 && container.Memory.Free > 0 {
+		report.Host.Memory.FreeBytes = container.Memory.Free
+	}
+	if report.Host.Memory.Usage == 0 && container.Memory.Usage > 0 {
+		report.Host.Memory.Usage = container.Memory.Usage
+	}
+	if report.Host.TotalMemoryBytes == 0 && container.Memory.Total > 0 {
+		report.Host.TotalMemoryBytes = container.Memory.Total
+	}
+	if len(report.Host.Disks) == 0 && container.Disk.Total > 0 {
+		report.Host.Disks = []agentsdocker.Disk{{
+			Mountpoint: "/",
+			TotalBytes: container.Disk.Total,
+			UsedBytes:  container.Disk.Used,
+			FreeBytes:  container.Disk.Free,
+			Usage:      container.Disk.Usage,
+		}}
+	}
+	if report.Host.UptimeSeconds == 0 && container.Uptime > 0 {
+		report.Host.UptimeSeconds = container.Uptime
+	}
 }
 
 func applyUnameToDockerHostInfo(uname string, host *agentsdocker.HostInfo) {

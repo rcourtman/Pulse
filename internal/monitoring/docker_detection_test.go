@@ -365,7 +365,7 @@ func TestAgentDockerInventoryCollector_MinimalCommandAndReport(t *testing.T) {
 	if report.Host.Hostname != "ct-web" {
 		t.Fatalf("Host.Hostname = %q", report.Host.Hostname)
 	}
-	if report.Host.Name != "web-lxc (LXC 101)" {
+	if report.Host.Name != "web-lxc" {
 		t.Fatalf("Host.Name = %q", report.Host.Name)
 	}
 	if report.Host.DockerVersion != "26.1.4" || report.Host.TotalCPU != 2 || report.Host.TotalMemoryBytes != 1073741824 {
@@ -455,6 +455,66 @@ func TestAgentDockerInventoryCollector_PSOKWithZeroContainersApplies(t *testing.
 	}
 }
 
+func TestEnrichGuestDockerReportFromContainer_FillsMissingHostMetrics(t *testing.T) {
+	report := agentsdocker.Report{
+		Host: agentsdocker.HostInfo{
+			Hostname:         "web-lxc",
+			TotalCPU:         4,
+			TotalMemoryBytes: 4 * 1024 * 1024 * 1024,
+		},
+	}
+	container := models.Container{
+		VMID:   141,
+		Name:   "homepage-docker",
+		CPU:    0.42,
+		Uptime: 86400,
+		Memory: models.Memory{Total: 4 * 1024 * 1024 * 1024, Used: 1 * 1024 * 1024 * 1024, Free: 3 * 1024 * 1024 * 1024, Usage: 25},
+		Disk:   models.Disk{Total: 8 * 1024 * 1024 * 1024, Used: 2 * 1024 * 1024 * 1024, Free: 6 * 1024 * 1024 * 1024, Usage: 25},
+	}
+
+	enrichGuestDockerReportFromContainer(&report, container)
+
+	if report.Host.CPUUsagePercent != 42 {
+		t.Fatalf("CPUUsagePercent = %v, want 42", report.Host.CPUUsagePercent)
+	}
+	if report.Host.Memory.UsedBytes != 1*1024*1024*1024 || report.Host.Memory.TotalBytes != 4*1024*1024*1024 || report.Host.Memory.Usage != 25 {
+		t.Fatalf("Memory enrichment failed: %#v", report.Host.Memory)
+	}
+	if len(report.Host.Disks) != 1 || report.Host.Disks[0].Mountpoint != "/" || report.Host.Disks[0].UsedBytes != 2*1024*1024*1024 {
+		t.Fatalf("Disks enrichment failed: %#v", report.Host.Disks)
+	}
+	if report.Host.UptimeSeconds != 86400 {
+		t.Fatalf("UptimeSeconds = %d, want 86400", report.Host.UptimeSeconds)
+	}
+}
+
+func TestEnrichGuestDockerReportFromContainer_DoesNotOverrideReportedValues(t *testing.T) {
+	report := agentsdocker.Report{
+		Host: agentsdocker.HostInfo{
+			CPUUsagePercent: 7,
+			Memory:          agentsdocker.MemoryMetric{TotalBytes: 1, UsedBytes: 1, Usage: 99},
+			Disks:           []agentsdocker.Disk{{Mountpoint: "/data", TotalBytes: 1}},
+		},
+	}
+	container := models.Container{
+		CPU:    0.5,
+		Memory: models.Memory{Total: 1000, Used: 500, Usage: 50},
+		Disk:   models.Disk{Total: 1000, Used: 500, Usage: 50},
+	}
+
+	enrichGuestDockerReportFromContainer(&report, container)
+
+	if report.Host.CPUUsagePercent != 7 {
+		t.Fatalf("CPUUsagePercent overwritten: %v", report.Host.CPUUsagePercent)
+	}
+	if report.Host.Memory.UsedBytes != 1 || report.Host.Memory.Usage != 99 {
+		t.Fatalf("Memory overwritten: %#v", report.Host.Memory)
+	}
+	if len(report.Host.Disks) != 1 || report.Host.Disks[0].Mountpoint != "/data" {
+		t.Fatalf("Disks overwritten: %#v", report.Host.Disks)
+	}
+}
+
 func TestAgentDockerInventoryCollector_AllowlistSkipsUnlistedVMID(t *testing.T) {
 	called := false
 	collector := NewAgentDockerInventoryCollector(func(ctx context.Context, hostname string, command string, timeout int) (string, int, error) {
@@ -498,7 +558,7 @@ func TestMonitorCollectProxmoxGuestDockerInventory_AppliesDockerReport(t *testin
 				Agent: agentsdocker.AgentInfo{ID: "proxmox-lxc-docker:pve-a:node-a:101", Type: "unified", IntervalSeconds: 30},
 				Host: agentsdocker.HostInfo{
 					Hostname:       "ct-web",
-					Name:           "web-lxc (LXC 101)",
+					Name:           "web-lxc",
 					Runtime:        "docker",
 					DockerVersion:  "26.1.4",
 					RuntimeVersion: "26.1.4",
