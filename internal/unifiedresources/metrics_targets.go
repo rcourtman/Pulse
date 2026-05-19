@@ -50,7 +50,19 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 		}
 	case ResourceTypeAppContainer:
 		if st, ok := bySource[SourceDocker]; ok {
-			return &MetricsTarget{ResourceType: "app-container", ResourceID: st.SourceID}
+			// The bySource source key for docker containers is now
+			// host-scoped (see dockerContainerSourceID), but metrics
+			// writes still key by the raw container ID. Prefer the
+			// container ID surfaced on the canonical resource so the
+			// metrics target the API hands out resolves the same
+			// records the metrics store writes.
+			targetID := st.SourceID
+			if resource.Docker != nil {
+				if ctID := strings.TrimSpace(resource.Docker.ContainerID); ctID != "" {
+					targetID = ctID
+				}
+			}
+			return &MetricsTarget{ResourceType: "app-container", ResourceID: targetID}
 		}
 		if st, ok := bySource[SourceTrueNAS]; ok {
 			if resourceID := canonicalAppContainerMetricID(st.SourceID); resourceID != "" {

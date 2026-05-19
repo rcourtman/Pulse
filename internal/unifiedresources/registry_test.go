@@ -3607,3 +3607,69 @@ func TestResourceRegistry_WorkloadsIncludeCanonicalAppContainers(t *testing.T) {
 		t.Fatalf("expected app-container workload for Nextcloud, got %q", got)
 	}
 }
+
+// TestRegistryIngestKeepsDockerContainersScopedToTheirHost pins the fix for the
+// "frigate@141" host re-attribution flicker on the Docker page. The bug was
+// that app-container source keys did not include the docker host, so any
+// scenario producing a colliding container source ID (a docker ps that
+// briefly returns an empty ID and parseDockerInventoryContainerLine falls
+// back to the container name, a future short-ID truncation, daemon-side
+// identifier reset across recreate cycles, ...) routed two containers
+// reported by different hosts to the same registry resource. mergeInto
+// then overwrote one host's Docker payload with the other's, flipping
+// HostSourceID and ParentID on every projection rebuild until the colliding
+// inputs diverged again.
+func TestRegistryIngestKeepsDockerContainersScopedToTheirHost(t *testing.T) {
+	rr := NewRegistry(nil)
+	// Two distinct docker hosts each reporting a container whose docker
+	// source ID happens to collide (here: both fell back to the "frigate"
+	// name because their docker ps lines were missing an ID).
+	rr.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{
+			{
+				ID:       "proxmox-lxc-docker:pve-a:node-a:105",
+				Hostname: "frigate.lab",
+				Status:   "online",
+				Containers: []models.DockerContainer{{
+					ID:    "frigate",
+					Name:  "frigate",
+					State: "running",
+				}},
+			},
+			{
+				ID:       "proxmox-lxc-docker:pve-a:node-a:141",
+				Hostname: "homepage-docker.lab",
+				Status:   "online",
+				Containers: []models.DockerContainer{{
+					ID:    "frigate",
+					Name:  "frigate",
+					State: "running",
+				}},
+			},
+		},
+	})
+
+	resources := rr.ListByType(ResourceTypeAppContainer)
+	if len(resources) != 2 {
+		t.Fatalf("expected two distinct docker container resources (one per host); got %d", len(resources))
+	}
+
+	hostsSeen := make(map[string]struct{}, len(resources))
+	for _, resource := range resources {
+		if resource.Docker == nil {
+			t.Fatalf("docker container resource missing Docker payload: %#v", resource)
+		}
+		if resource.Name != "frigate" {
+			t.Fatalf("unexpected container name: %q", resource.Name)
+		}
+		hostsSeen[strings.TrimSpace(resource.Docker.HostSourceID)] = struct{}{}
+	}
+	for _, want := range []string{
+		"proxmox-lxc-docker:pve-a:node-a:105",
+		"proxmox-lxc-docker:pve-a:node-a:141",
+	} {
+		if _, ok := hostsSeen[want]; !ok {
+			t.Fatalf("expected a container attributed to host %q; got hosts %v", want, hostsSeen)
+		}
+	}
+}

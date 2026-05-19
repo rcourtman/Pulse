@@ -425,7 +425,22 @@ func (rr *ResourceRegistry) seedSourceIDForResourceLocked(resource *Resource, so
 		case ResourceTypeAgent:
 			return strings.TrimSpace(resource.Docker.HostSourceID)
 		case ResourceTypeAppContainer:
-			return strings.TrimSpace(resource.Docker.ContainerID)
+			// Match the host-scoped key shape produced by
+			// ingestDockerContainer so records-path ingests resolve to
+			// the same registry entries as inventory-path ingests.
+			hostSourceID := strings.TrimSpace(resource.Docker.HostSourceID)
+			containerID := strings.TrimSpace(resource.Docker.ContainerID)
+			if hostSourceID == "" {
+				return containerID
+			}
+			if containerID == "" {
+				name := strings.TrimSpace(resource.Name)
+				if name == "" {
+					return ""
+				}
+				containerID = "name:" + name
+			}
+			return hostSourceID + "/container/" + containerID
 		case ResourceTypeDockerService:
 			clusterKey := dockerSwarmClusterKeyFromMeta(resource.Docker.Swarm)
 			if clusterKey == "" {
@@ -1008,7 +1023,35 @@ func (rr *ResourceRegistry) ingestDockerContainer(ct models.DockerContainer, hos
 	if parentID, ok := rr.bySource[SourceDocker][host.ID]; ok {
 		resource.ParentID = &parentID
 	}
-	rr.ingest(SourceDocker, ct.ID, resource, identity)
+	// Scope the source key to the docker host so that two containers
+	// reported by different docker hosts can never collapse into a
+	// single registry entry. Without host scoping, anything that
+	// produces a colliding container source ID (a docker ps that
+	// briefly returns an empty ID and falls back to the container
+	// name in parseDockerInventoryContainerLine, a future short-ID
+	// truncation, or a daemon-side identifier reset across recreate
+	// cycles) would route both containers to the same resource ID,
+	// and mergeInto would overwrite the Docker payload — including
+	// HostSourceID and ParentID — with whichever ingest ran second.
+	// That race surfaced as the "frigate@141" host re-attribution
+	// flicker on the Docker page.
+	rr.ingest(SourceDocker, dockerContainerSourceID(host, ct), resource, identity)
+}
+
+// dockerContainerSourceID produces a stable per-(host, container) key for
+// the bySource[SourceDocker] mapping. The hashed resource ID derives from
+// this same string via sourceSpecificID, so it must remain stable across
+// projection rebuilds for a given container under a given docker host.
+func dockerContainerSourceID(host models.DockerHost, ct models.DockerContainer) string {
+	hostID := strings.TrimSpace(host.ID)
+	ctID := strings.TrimSpace(ct.ID)
+	if hostID == "" {
+		return ctID
+	}
+	if ctID == "" {
+		ctID = "name:" + strings.TrimSpace(ct.Name)
+	}
+	return hostID + "/container/" + ctID
 }
 
 func (rr *ResourceRegistry) ingestDockerService(service models.DockerService, host models.DockerHost) {
