@@ -53,7 +53,7 @@ export interface FilterBarProps {
   onClearAll?: () => void;
   showClearAll?: Accessor<boolean>;
   /**
-   * When set, render a "Saved views" menu next to "+ Filter" that persists
+   * When set, render a "Saved views" menu next to the Filter selector that persists
    * named filter combinations (URL query strings) to localStorage under
    * `pulse:filterbar:saved-views:<savedViewsKey>`. Pages opt in per surface
    * because the saved-view storage scope follows the page's URL state model.

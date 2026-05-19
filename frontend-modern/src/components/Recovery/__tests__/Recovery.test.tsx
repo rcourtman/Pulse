@@ -130,6 +130,45 @@ type RecoveryPointsResponse = {
   meta: { page: number; limit: number; total: number; totalPages: number };
 };
 
+const getAddFilterSelect = (container?: HTMLElement): HTMLSelectElement =>
+  (container ? within(container) : screen).getByRole('combobox', {
+    name: 'Filter',
+  }) as HTMLSelectElement;
+
+const getAddFilterOption = (
+  filterLabel: string,
+  optionLabel: string,
+  container?: HTMLElement,
+): HTMLOptionElement =>
+  within(getAddFilterSelect(container)).getByRole('option', {
+    name: `${filterLabel}: ${optionLabel}`,
+  }) as HTMLOptionElement;
+
+const findAddFilterOption = async (
+  filterLabel: string,
+  optionLabel: string,
+  container?: HTMLElement,
+): Promise<HTMLOptionElement> => {
+  let option: HTMLOptionElement | undefined;
+  await waitFor(() => {
+    option = getAddFilterOption(filterLabel, optionLabel, container);
+    expect(option).toBeInTheDocument();
+  });
+  return option!;
+};
+
+const selectAddFilterOption = async (
+  filterLabel: string,
+  optionLabel: string,
+  container?: HTMLElement,
+) => {
+  const option = await findAddFilterOption(filterLabel, optionLabel, container);
+  const select = getAddFilterSelect(container);
+  fireEvent.change(select, {
+    target: { value: option.value },
+  });
+};
+
 const requestParam = (url: URL, key: string) => String(url.searchParams.get(key) || '').trim();
 
 const matchesTextQuery = (haystackParts: unknown[], query: string): boolean => {
@@ -446,7 +485,7 @@ describe('Recovery', () => {
     expect(historySearch.closest('div.relative')?.className).toContain('w-full');
     expect(screen.getByText(/Showing 1 - 2 of 2 recovery points/i)).toBeInTheDocument();
     expect(within(historyControls).queryByText(/day group/i)).not.toBeInTheDocument();
-    expect(within(historyControls).getByRole('button', { name: 'Filter' })).toBeInTheDocument();
+    expect(within(historyControls).getByRole('combobox', { name: 'Filter' })).toBeInTheDocument();
     const rangeControls = screen.getByRole('group', { name: 'Recovery activity range' });
     expect(within(rangeControls).getByRole('button', { name: '7d' })).toBeInTheDocument();
     expect(within(rangeControls).getByRole('button', { name: '30d' })).toBeInTheDocument();
@@ -719,14 +758,8 @@ describe('Recovery', () => {
       fireEvent.click(screen.getByText('tank/legacy'));
       // The legacy `providers: ['truenas']` payload should normalize into the
       // canonical "TrueNAS" platform label on whichever surface renders it
-      // (events table badge, "+ Filter > Platform" menu, or active chip).
-      const eventsControls = await screen.findByRole('group', {
-        name: /recovery events controls/i,
-      });
-      fireEvent.click(within(eventsControls).getByRole('button', { name: 'Filter' }));
-      fireEvent.click(await screen.findByRole('menuitem', { name: 'Platform' }));
-      const platformMenu = await screen.findByRole('menu');
-      expect(within(platformMenu).getByRole('button', { name: 'TrueNAS' })).toBeInTheDocument();
+      // (events table badge, direct Filter selector, or active chip).
+      expect(screen.getAllByText('TrueNAS').length).toBeGreaterThan(0);
     } finally {
       rollupsPayload.pop();
       delete pointsByRollupId['ext:legacy-provider-rollup'];
@@ -808,14 +841,11 @@ describe('Recovery', () => {
       expect(
         within(inventoryTable).queryByText('Cluster', { exact: true }),
       ).not.toBeInTheDocument();
-      // Open the inventory FilterBar's "+ Filter > Item Type" submenu and
-      // assert the canonical K8s Cluster wording without the generic alias.
-      fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
-      fireEvent.click(await screen.findByRole('menuitem', { name: 'Item Type' }));
-      const itemTypeMenu = await screen.findByRole('menu');
-      expect(within(itemTypeMenu).getByRole('button', { name: 'K8s Cluster' })).toBeInTheDocument();
+      // Assert the inventory FilterBar's direct item-type vocabulary without
+      // the generic alias.
+      expect(await findAddFilterOption('Item Type', 'K8s Cluster')).toBeInTheDocument();
       expect(
-        within(itemTypeMenu).queryByRole('button', { name: 'Cluster' }),
+        within(getAddFilterSelect()).queryByRole('option', { name: 'Item Type: Cluster' }),
       ).not.toBeInTheDocument();
     } finally {
       rollupsPayload.pop();
@@ -1135,10 +1165,7 @@ describe('Recovery', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
     expect(await screen.findByText('VM 123')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Platform' }));
-    const platformMenu = await screen.findByRole('menu');
-    fireEvent.click(within(platformMenu).getByRole('button', { name: 'TrueNAS' }));
+    await selectAddFilterOption('Platform', 'TrueNAS');
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
@@ -1211,10 +1238,7 @@ describe('Recovery', () => {
     expect(await screen.findByText('VM 123')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Platform' }));
-    const platformMenu = await screen.findByRole('menu');
-    fireEvent.click(within(platformMenu).getByRole('button', { name: 'TrueNAS' }));
+    await selectAddFilterOption('Platform', 'TrueNAS');
 
     const clearAllButton = await screen.findByRole('button', { name: 'Clear all' });
     fireEvent.click(clearAllButton);
@@ -1290,15 +1314,15 @@ describe('Recovery', () => {
     render(() => <Recovery />);
 
     const controls = await screen.findByRole('group', { name: /recovery events controls/i });
-    // Both the "+ Filter" trigger and the Columns picker live inside the
+    // Both the direct Filter selector and the Columns picker live inside the
     // events controls group; the item filter trigger is also grouped here.
-    expect(within(controls).getByRole('button', { name: 'Filter' })).toBeInTheDocument();
+    expect(within(controls).getByRole('combobox', { name: 'Filter' })).toBeInTheDocument();
     expect(within(controls).getByRole('button', { name: /columns/i })).toBeInTheDocument();
     expect(
       within(controls).getByTestId('recovery-history-item-filter-trigger'),
     ).toBeInTheDocument();
     // Recovery events opted into shared saved views — the bookmark menu
-    // sits next to "+ Filter" and persists named filter combos under the
+    // sits next to Filter and persists named filter combos under the
     // canonical localStorage key.
     expect(within(controls).getByRole('button', { name: 'Saved views' })).toBeInTheDocument();
   });
@@ -1339,17 +1363,16 @@ describe('Recovery', () => {
 
   it('keeps recovery filter surfaces on canonical platform vocabulary', async () => {
     render(() => <Recovery />);
+    expect(await screen.findByText('VM 123')).toBeInTheDocument();
 
-    // Events FilterBar surfaces "Platform" via the "+ Filter" menu rather
-    // than as a labelled select, so assert the menu vocabulary instead.
-    fireEvent.click(await screen.findByRole('button', { name: 'Filter' }));
-    expect(await screen.findByRole('menuitem', { name: 'Platform' })).toBeInTheDocument();
+    // Events FilterBar surfaces "Platform" via the direct Filter selector, so
+    // assert the selector vocabulary instead.
+    expect(await findAddFilterOption('Platform', 'PVE')).toBeInTheDocument();
     expect(screen.queryByText('All Providers')).not.toBeInTheDocument();
-    fireEvent.keyDown(document, { key: 'Escape' });
 
     fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Filter' }));
-    expect(await screen.findByRole('menuitem', { name: 'Platform' })).toBeInTheDocument();
+    expect(await screen.findByText('tank/apps')).toBeInTheDocument();
+    expect(await findAddFilterOption('Platform', 'PVE')).toBeInTheDocument();
     expect(screen.queryByText('All Providers')).not.toBeInTheDocument();
   });
 
@@ -1358,10 +1381,7 @@ describe('Recovery', () => {
 
     expect(await screen.findByText('VM 123')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Item Type' }));
-    const itemTypeMenu = await screen.findByRole('menu');
-    fireEvent.click(within(itemTypeMenu).getByRole('button', { name: 'Dataset' }));
+    await selectAddFilterOption('Item Type', 'Dataset');
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
@@ -1470,10 +1490,7 @@ describe('Recovery', () => {
     render(() => <Recovery />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Protection coverage' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Filter' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Protection state' }));
-    const stateMenu = await screen.findByRole('menu');
-    fireEvent.click(within(stateMenu).getByRole('button', { name: 'Never succeeded' }));
+    await selectAddFilterOption('Protection state', 'Never succeeded');
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
@@ -1634,11 +1651,7 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    fireEvent.click(await screen.findByRole('button', { name: /^filter$/i }));
-
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Cluster / Site' }));
-    const clusterMenu = await screen.findByRole('menu');
-    fireEvent.click(within(clusterMenu).getByRole('button', { name: 'dev-cluster' }));
+    await selectAddFilterOption('Cluster / Site', 'dev-cluster');
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
@@ -1716,16 +1729,8 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    fireEvent.click(await screen.findByRole('button', { name: /^filter$/i }));
-
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Host / Agent' }));
-    const hostMenu = await screen.findByRole('menu');
-    fireEvent.click(within(hostMenu).getByRole('button', { name: 'node-agent-1' }));
-
-    fireEvent.click(await screen.findByRole('button', { name: /^filter$/i }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Namespace / Group' }));
-    const namespaceMenu = await screen.findByRole('menu');
-    fireEvent.click(within(namespaceMenu).getByRole('button', { name: 'tenant-a' }));
+    await selectAddFilterOption('Host / Agent', 'node-agent-1');
+    await selectAddFilterOption('Namespace / Group', 'tenant-a');
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
@@ -1813,10 +1818,7 @@ describe('Recovery', () => {
 
     await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
 
-    fireEvent.click(screen.getByRole('button', { name: /^filter$/i }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Cluster / Site' }));
-    const clusterMenu = await screen.findByRole('menu');
-    fireEvent.click(within(clusterMenu).getByRole('button', { name: 'dev-cluster' }));
+    await selectAddFilterOption('Cluster / Site', 'dev-cluster');
 
     await waitFor(() => {
       const urls = apiFetchMock.mock.calls.map((call) => String(call[0] || ''));

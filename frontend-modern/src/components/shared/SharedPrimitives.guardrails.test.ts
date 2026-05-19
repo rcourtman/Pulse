@@ -1500,9 +1500,9 @@ describe('shared primitive guardrails', () => {
     expect(filterChipSource).toContain('onClick={() => clearFilter(props.filter)}');
     expect(filterChipSource).toContain("event.key === 'Escape'");
     expect(filterChipSource).not.toContain('MutationObserver');
-    // Type-ahead parity with AddFilterMenu: chip popover has its own search
-    // input + arrow nav + Enter-to-commit, with activeIndex seeded on the
-    // currently-selected value so Enter without typing is a no-op.
+    // Chip popovers keep their own value search for already-active filters,
+    // with activeIndex seeded on the currently-selected value so Enter without
+    // typing is a no-op.
     expect(filterChipSource).toContain('aria-label={`Filter ${props.filter.label} values`}');
     expect(filterChipSource).toContain('filteredOptions');
     expect(filterChipSource).toContain('handleSearchKeyDown');
@@ -1514,27 +1514,26 @@ describe('shared primitive guardrails', () => {
 
     expect(addFilterMenuSource).toContain('isFilterSet,');
     expect(addFilterMenuSource).toContain('type FilterDef,');
+    expect(addFilterMenuSource).toContain('type FilterSelectOption,');
     expect(addFilterMenuSource).toContain("from './filterCatalog';");
     expect(addFilterMenuSource).toContain('availableFilters');
     expect(addFilterMenuSource).toContain('option.value !== filter.defaultValue');
     expect(addFilterMenuSource).toContain('GROUP_ORDER');
-    expect(addFilterMenuSource).toContain('aria-haspopup="menu"');
+    expect(addFilterMenuSource).toContain('filterGroupClass');
+    expect(addFilterMenuSource).toContain('filterSelectClass');
+    expect(addFilterMenuSource).toContain('aria-label="Filter"');
     expect(addFilterMenuSource).not.toContain('LabeledFilterSelect');
-    // Type-ahead: a search input narrows the visible filter (or value) list
-    // and Enter commits the active item, so power users can pick a filter
-    // with one click + a few keystrokes instead of three clicks.
-    expect(addFilterMenuSource).toContain(
-      "aria-label={activeFilter() ? 'Search values' : 'Search filters'}",
-    );
-    expect(addFilterMenuSource).toContain('filteredGroupedAvailable');
-    expect(addFilterMenuSource).toContain('flatVisibleFilters');
-    expect(addFilterMenuSource).toContain('filteredOptions');
-    expect(addFilterMenuSource).toContain('handleSearchKeyDown');
-    expect(addFilterMenuSource).toContain("event.key === 'ArrowDown'");
-    expect(addFilterMenuSource).toContain("event.key === 'ArrowUp'");
-    expect(addFilterMenuSource).toContain("event.key === 'Enter'");
-    expect(addFilterMenuSource).toContain('commitActive');
-    expect(addFilterMenuSource).toContain('queueMicrotask(() => searchInputRef?.focus())');
+    // Add-filter selection is intentionally direct: the shared primitive
+    // exposes a single native select grouped by filter category instead of a
+    // nested searchable filter picker, while active chips still own value
+    // refinement after a filter has been applied.
+    expect(addFilterMenuSource).toContain('selectableGroups');
+    expect(addFilterMenuSource).toContain('selectableByToken');
+    expect(addFilterMenuSource).toContain('<optgroup label={GROUP_LABELS[group.key]}>');
+    expect(addFilterMenuSource).toContain('{filter.filter.label}: {option.option.label}');
+    expect(addFilterMenuSource).toContain('selected.filter.setValue(selected.option.value)');
+    expect(addFilterMenuSource).not.toContain('Search filters');
+    expect(addFilterMenuSource).not.toContain('Search values');
 
     // Saved views: per-page named filter combos persist to
     // localStorage under `pulse:filterbar:saved-views:<key>`. The hook owns
@@ -1616,13 +1615,13 @@ describe('shared primitive guardrails', () => {
 
     // WorkloadsFilter — Type/Status stay in the shared FilterBar catalog but
     // render as inline primary controls; Node/Platform/Namespace/Runtime
-    // remain menu-backed catalog filters. The xl-breakpoint
+    // remain selector-backed catalog filters. The xl-breakpoint
     // segmented↔select swap retires here.
     expect(workloadsFilterSource).toContain(
       "import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';",
     );
     expect(workloadsFilterSource).toContain('<FilterBar');
-    expect(workloadsFilterSource).toContain('ariaLabel="Workloads filters"');
+    expect(workloadsFilterSource).toContain("ariaLabel={props.ariaLabel ?? 'Workloads filters'}");
     expect(workloadsFilterSource).toContain("id: 'workloads-type'");
     expect(workloadsFilterSource).toContain("id: 'workloads-status'");
     expect(workloadsFilterSource).toContain('inline: true');
@@ -1649,7 +1648,9 @@ describe('shared primitive guardrails', () => {
     );
     expect(storagePageControlsSource).toContain('<FilterBar');
     expect(storagePageControlsSource).toContain('<Subtabs');
-    expect(storagePageControlsSource).toContain('ariaLabel="Storage filters"');
+    expect(storagePageControlsSource).toContain(
+      "ariaLabel={props.filterAriaLabel ?? 'Storage filters'}",
+    );
     expect(storagePageControlsSource).toContain("id: 'storage-node'");
     expect(storagePageControlsSource).toContain("id: 'storage-group-by'");
     expect(storagePageControlsSource).toContain("id: 'storage-source'");

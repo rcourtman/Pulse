@@ -249,9 +249,13 @@ domain-specific visible copy, scope filters, status labels, and searchable
 field coverage. Platform pages must not surface generic "rows/resources"
 search affordances when the visible table is actually pods, VMs, datastores,
 apps, mail gateways, storage pools, backup jobs, or another product-owned
-object model. Platform-owned filter menus must also exclude facet options from
-other platform scopes, even when the underlying shared surface is mounted from
-the same Workloads or Storage component.
+object model. Add-filter controls that sit beside a page-level search box must
+prefer direct selectable filter values over a second nested search affordance;
+a page that needs filter-value search must keep that search inside the active
+filter chip or an explicit page-owned advanced selector. Platform-owned filter
+selectors must also exclude facet options from other platform scopes, even when
+the underlying shared surface is mounted from the same Workloads or Storage
+component.
 Patrol's primary assessment strip is descriptive only; it must not render a
 Patrol-authored recommended next step, suggested prompt chips, or a secondary
 action band inside the assessment shell. If the same assessment opens

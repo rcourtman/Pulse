@@ -90,10 +90,11 @@ const setStorageFilter = (filterLabel: string, optionLabel: string) => {
     fireEvent.click(within(inlineGroup).getByRole('button', { name: optionLabel }));
     return;
   }
-  fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
-  fireEvent.click(screen.getByRole('menuitem', { name: filterLabel }));
-  const menu = screen.getByRole('menu');
-  fireEvent.click(within(menu).getByRole('button', { name: optionLabel }));
+  const addFilter = screen.getByRole('combobox', { name: 'Filter' });
+  const option = within(addFilter).getByRole('option', {
+    name: `${filterLabel}: ${optionLabel}`,
+  }) as HTMLOptionElement;
+  fireEvent.change(addFilter, { target: { value: option.value } });
 };
 
 const queryStorageChip = (label: string): HTMLButtonElement | null => {
@@ -1789,14 +1790,13 @@ describe('Storage', () => {
 
     fireEvent.click(screen.getAllByRole('tab', { name: 'Physical Disks' })[0]!);
 
-    // The "+ Filter > Node" submenu lists nodes that have disk resources.
+    // The direct Filter selector lists nodes that have disk resources.
     // Hosts without disk resources (e.g. 'mini') are filtered out.
-    fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Node' }));
-    const nodeMenu = screen.getByRole('menu');
-    const optionLabels = Array.from(nodeMenu.querySelectorAll<HTMLButtonElement>('button'))
-      .map((button) => (button.textContent || '').trim())
-      .filter((text) => text.length > 0 && !text.startsWith('Node'));
+    const addFilter = screen.getByRole('combobox', { name: 'Filter' });
+    const optionLabels = Array.from(addFilter.querySelectorAll<HTMLOptionElement>('option'))
+      .map((option) => (option.textContent || '').trim())
+      .filter((text) => text.startsWith('Node: '))
+      .map((text) => text.replace(/^Node: /, ''));
     expect(optionLabels).toContain('pve1');
     expect(optionLabels).not.toContain('mini');
   });

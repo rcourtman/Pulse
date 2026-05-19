@@ -63,11 +63,14 @@ function makeProps(overrides: Partial<WorkloadsFilterProps> = {}): WorkloadsFilt
   };
 }
 
-const openAddFilterMenu = () => {
-  fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
-};
-
 const inlineFilterGroup = (label: string) => screen.getByRole('group', { name: label });
+
+const addFilterSelect = () => screen.getByRole('combobox', { name: 'Filter' });
+
+const addFilterOption = (filterLabel: string, optionLabel: string) =>
+  within(addFilterSelect()).getByRole('option', {
+    name: `${filterLabel}: ${optionLabel}`,
+  }) as HTMLOptionElement;
 
 const pickInlineFilter = (filterLabel: string, optionLabel: string) => {
   fireEvent.click(
@@ -76,10 +79,9 @@ const pickInlineFilter = (filterLabel: string, optionLabel: string) => {
 };
 
 const pickFromMenu = (menuItem: string, optionLabel: string) => {
-  openAddFilterMenu();
-  fireEvent.click(screen.getByRole('menuitem', { name: menuItem }));
-  const menu = screen.getByRole('menu');
-  fireEvent.click(within(menu).getByRole('button', { name: optionLabel }));
+  fireEvent.change(addFilterSelect(), {
+    target: { value: addFilterOption(menuItem, optionLabel).value },
+  });
 };
 
 describe('WorkloadsFilter', () => {
@@ -126,7 +128,7 @@ describe('WorkloadsFilter', () => {
       render(() => <WorkloadsFilter {...makeProps()} />);
       expect(inlineFilterGroup('Type')).toBeInTheDocument();
       expect(inlineFilterGroup('Status')).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Filter' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('combobox', { name: 'Filter' })).not.toBeInTheDocument();
     });
 
     it('renders Grouped and List view-option buttons', () => {
@@ -376,7 +378,7 @@ describe('WorkloadsFilter', () => {
   });
 
   describe('host filter', () => {
-    it('appears in the "+ Filter" menu when hostFilter prop is provided', () => {
+    it('appears in the direct Filter selector when hostFilter prop is provided', () => {
       render(() => (
         <WorkloadsFilter
           {...makeProps({
@@ -391,16 +393,15 @@ describe('WorkloadsFilter', () => {
           })}
         />
       ));
-      openAddFilterMenu();
-      expect(screen.getByRole('menuitem', { name: 'Agent' })).toBeInTheDocument();
+      expect(addFilterOption('Agent', 'pve1')).toBeInTheDocument();
     });
 
     it('does not appear when hostFilter prop is absent', () => {
       render(() => <WorkloadsFilter {...makeProps()} />);
-      expect(screen.queryByRole('button', { name: 'Filter' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('combobox', { name: 'Filter' })).not.toBeInTheDocument();
     });
 
-    it('calls onChange when host selection changes via chip popover', () => {
+    it('calls onChange when host selection changes through the direct selector', () => {
       const onChange = vi.fn();
       render(() => (
         <WorkloadsFilter
@@ -427,19 +428,21 @@ describe('WorkloadsFilter', () => {
             hostFilter: {
               label: 'K8s cluster',
               value: '',
-              options: [{ value: '', label: 'All clusters' }],
+              options: [
+                { value: '', label: 'All clusters' },
+                { value: 'prod', label: 'prod' },
+              ],
               onChange: vi.fn(),
             },
           })}
         />
       ));
-      openAddFilterMenu();
-      expect(screen.getByRole('menuitem', { name: 'K8s cluster' })).toBeInTheDocument();
+      expect(addFilterOption('K8s cluster', 'prod')).toBeInTheDocument();
     });
   });
 
   describe('platform filter', () => {
-    it('appears in the menu when platformFilter prop is provided', () => {
+    it('appears in the direct Filter selector when platformFilter prop is provided', () => {
       render(() => (
         <WorkloadsFilter
           {...makeProps({
@@ -454,11 +457,10 @@ describe('WorkloadsFilter', () => {
           })}
         />
       ));
-      openAddFilterMenu();
-      expect(screen.getByRole('menuitem', { name: 'Platform' })).toBeInTheDocument();
+      expect(addFilterOption('Platform', 'Proxmox')).toBeInTheDocument();
     });
 
-    it('calls onChange when platform selection changes via chip popover', () => {
+    it('calls onChange when platform selection changes through the direct selector', () => {
       const onChange = vi.fn();
       render(() => (
         <WorkloadsFilter
@@ -480,7 +482,7 @@ describe('WorkloadsFilter', () => {
   });
 
   describe('namespace filter', () => {
-    it('appears in the menu when namespaceFilter prop is provided', () => {
+    it('appears in the direct Filter selector when namespaceFilter prop is provided', () => {
       render(() => (
         <WorkloadsFilter
           {...makeProps({
@@ -495,11 +497,10 @@ describe('WorkloadsFilter', () => {
           })}
         />
       ));
-      openAddFilterMenu();
-      expect(screen.getByRole('menuitem', { name: 'Namespace' })).toBeInTheDocument();
+      expect(addFilterOption('Namespace', 'default')).toBeInTheDocument();
     });
 
-    it('calls onChange when namespace selection changes via chip popover', () => {
+    it('calls onChange when namespace selection changes through the direct selector', () => {
       const onChange = vi.fn();
       render(() => (
         <WorkloadsFilter
@@ -521,7 +522,7 @@ describe('WorkloadsFilter', () => {
   });
 
   describe('container runtime filter', () => {
-    it('appears in the menu only when viewMode is a container variant and containerRuntimeFilter is provided', () => {
+    it('appears in the direct selector only when viewMode is a container variant and containerRuntimeFilter is provided', () => {
       const props = makeProps({
         viewMode: vi.fn(() => 'container' as const),
         containerRuntimeFilter: {
@@ -534,8 +535,7 @@ describe('WorkloadsFilter', () => {
         },
       });
       render(() => <WorkloadsFilter {...props} />);
-      openAddFilterMenu();
-      expect(screen.getByRole('menuitem', { name: 'Runtime' })).toBeInTheDocument();
+      expect(addFilterOption('Runtime', 'docker')).toBeInTheDocument();
     });
 
     it('does not appear when viewMode is not a container variant', () => {
@@ -551,10 +551,10 @@ describe('WorkloadsFilter', () => {
         },
       });
       render(() => <WorkloadsFilter {...props} />);
-      expect(screen.queryByRole('button', { name: 'Filter' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('combobox', { name: 'Filter' })).not.toBeInTheDocument();
     });
 
-    it('calls onChange when runtime selection changes via chip popover', () => {
+    it('calls onChange when runtime selection changes through the direct selector', () => {
       const onChange = vi.fn();
       render(() => (
         <WorkloadsFilter

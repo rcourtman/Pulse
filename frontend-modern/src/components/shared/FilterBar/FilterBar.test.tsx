@@ -56,9 +56,11 @@ describe('FilterBar', () => {
     fireEvent.click(within(typeGroup).getByRole('button', { name: 'VMs' }));
 
     expect(setType).toHaveBeenCalledWith('vm');
-    fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
-    expect(screen.queryByRole('menuitem', { name: 'Type' })).not.toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Node' })).toBeInTheDocument();
+    const filterSelect = screen.getByRole('combobox', { name: 'Filter' });
+    expect(
+      within(filterSelect).queryByRole('option', { name: 'Type: VMs' }),
+    ).not.toBeInTheDocument();
+    expect(within(filterSelect).getByRole('option', { name: 'Node: pve1' })).toBeInTheDocument();
   });
 
   it('hides the add-filter trigger when every filter is inline', () => {
@@ -67,7 +69,7 @@ describe('FilterBar', () => {
     ));
 
     expect(screen.getByRole('group', { name: 'Type' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Filter' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Filter' })).not.toBeInTheDocument();
   });
 
   it('shows clear-all beside inline controls when only inline filters are active', () => {
