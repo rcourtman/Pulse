@@ -227,6 +227,10 @@ regression protection.
    `platformData.sources` hints, and must not reconstruct platform identity by
    scanning sibling resources or making row-time API calls.
 5. Extend workload hot-path filter, sort, grouping, and stats math through `frontend-modern/src/components/Workloads/workloadSelectors.ts`, and extend workload identity, discovery routing, and node-topology helpers through `frontend-modern/src/components/Workloads/workloadTopology.ts`, rather than duplicating selector or topology logic in `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
+   Platform-owned Workloads surfaces may force a platform scope, but that
+   scope must be applied before deriving host, Kubernetes context/namespace,
+   and container runtime facet options so embedded pages do not pay for or
+   display unrelated platform options.
    Workloads source-health messaging must derive from the canonical
    `/api/connections` ledger through
    `frontend-modern/src/components/Workloads/workloadInventorySourceIssues.ts`.

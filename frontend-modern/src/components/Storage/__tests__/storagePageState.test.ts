@@ -34,6 +34,7 @@ import {
   STORAGE_GROUP_BY_OPTIONS,
   normalizeStorageView,
   readStorageRouteValue,
+  storageResourceMatchesSourceFilter,
   syncExpandedStorageGroups,
   toggleExpandedStorageGroup,
   toStorageHealthFilterValue,
@@ -175,6 +176,18 @@ describe('storagePageState', () => {
       { value: 'node-1', label: 'pve1' },
       { value: 'node-2', label: 'pve2' },
     ]);
+  });
+
+  it('matches storage node resources to the active source scope', () => {
+    const node = makeNode({
+      platformType: undefined,
+      sourceType: 'api',
+      platformData: { sources: ['proxmox-pve', 'agent'] },
+    });
+
+    expect(storageResourceMatchesSourceFilter(node, 'all')).toBe(true);
+    expect(storageResourceMatchesSourceFilter(node, 'proxmox-pve')).toBe(true);
+    expect(storageResourceMatchesSourceFilter(node, 'truenas')).toBe(false);
   });
 
   it('keeps expanded storage groups canonical across data refreshes', () => {

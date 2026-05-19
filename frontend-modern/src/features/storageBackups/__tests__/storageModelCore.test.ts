@@ -119,4 +119,9 @@ describe('storageModelCore', () => {
       usagePercent: 40,
     });
   });
+
+  it('does not synthesize an empty group when filters remove every storage record', () => {
+    expect(groupStorageRecords([], 'none')).toEqual([]);
+    expect(groupStorageRecords([], 'status')).toEqual([]);
+  });
 });

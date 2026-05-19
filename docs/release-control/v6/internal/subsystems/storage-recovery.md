@@ -224,8 +224,12 @@ bypass the API fail-closed execution gate.
    filter aria labels, search placeholders, and empty-search copy for the
    visible storage model (for example Proxmox storage, TrueNAS pools and
    datasets, or vSphere datastores) while preserving the canonical
-   `FilterDef[]` route-state contract in `StoragePageControls`. Subtabs
-   (Pools / Physical Disks) sit above the bar as navigation, not filters.
+   `FilterDef[]` route-state contract in `StoragePageControls`. Forced source
+   storage surfaces must derive Node facet options from nodes that match the
+   same canonical source scope, and empty filtered storage record sets must
+   render the storage empty state instead of a synthetic empty "All" group.
+   Subtabs (Pools / Physical Disks) sit above the bar as navigation, not
+   filters.
    Platform-page storage and recovery section tabs
    are still capability-gated navigation: Proxmox Storage,
    Backups, Ceph, Replication, and adjacent recovery sections may appear only

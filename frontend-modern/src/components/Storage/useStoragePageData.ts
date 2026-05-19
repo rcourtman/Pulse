@@ -14,6 +14,7 @@ import {
   buildStorageNodeOnlineByLabel,
   buildStorageNodeOptions,
   filterStorageDiskNodeOptions,
+  storageResourceMatchesSourceFilter,
 } from './storagePageState';
 import { type StorageGroupKey, type StorageSortKey, useStorageModel } from './useStorageModel';
 
@@ -45,13 +46,19 @@ export const useStoragePageData = (options: UseStoragePageDataOptions) => {
     alertsEnabled: options.alertsEnabled,
   });
 
-  const nodeOptions = createMemo(() => buildStorageNodeOptions(options.nodes()));
+  const sourceScopedNodes = createMemo(() =>
+    options
+      .nodes()
+      .filter((node) => storageResourceMatchesSourceFilter(node, options.sourceFilter())),
+  );
+
+  const nodeOptions = createMemo(() => buildStorageNodeOptions(sourceScopedNodes()));
 
   const diskNodeOptions = createMemo(() =>
     filterStorageDiskNodeOptions(nodeOptions(), options.physicalDisks()),
   );
 
-  const nodeOnlineByLabel = createMemo(() => buildStorageNodeOnlineByLabel(options.nodes()));
+  const nodeOnlineByLabel = createMemo(() => buildStorageNodeOnlineByLabel(sourceScopedNodes()));
 
   const { sourceOptions, filteredRecords, groupedRecords } = useStorageModel({
     records,

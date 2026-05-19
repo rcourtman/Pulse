@@ -1,6 +1,7 @@
 import { createMemo, type Accessor } from 'solid-js';
 
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
+import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import type { WorkloadsToolbarFilterConfig } from './workloadsFilterModel';
 import {
   buildWorkloadsContainerRuntimeOptions,
@@ -21,6 +22,7 @@ interface WorkloadsWorkloadFilterOptionsOptions {
   isWorkloadsRoute: Accessor<boolean>;
   allowEmbeddedScopeFilters: Accessor<boolean>;
   viewMode: Accessor<ViewMode>;
+  platformScope?: Accessor<string | null | undefined>;
   containerRuntime: Accessor<string>;
   selectedPlatform: Accessor<string | null>;
   selectedNode: Accessor<string | null>;
@@ -34,21 +36,33 @@ interface WorkloadsWorkloadFilterOptionsOptions {
 }
 
 export function useWorkloadFilterOptions(options: WorkloadsWorkloadFilterOptionsOptions) {
-  const workloadNodeOptions = createMemo(() => buildWorkloadNodeOptions(options.allGuests()));
+  const platformScopedGuests = createMemo(() => {
+    const normalizedScope = normalizeSourcePlatformQueryValue(options.platformScope?.() || '');
+    if (!normalizedScope || normalizedScope === 'all') {
+      return options.allGuests();
+    }
+    return options
+      .allGuests()
+      .filter(
+        (guest) => normalizeSourcePlatformQueryValue(guest.platformType || '') === normalizedScope,
+      );
+  });
+
+  const workloadNodeOptions = createMemo(() => buildWorkloadNodeOptions(platformScopedGuests()));
 
   const kubernetesContextOptions = createMemo(() =>
-    buildWorkloadsKubernetesContextOptions(options.allGuests()),
+    buildWorkloadsKubernetesContextOptions(platformScopedGuests()),
   );
 
   const kubernetesNamespaceOptions = createMemo(() =>
     buildWorkloadsKubernetesNamespaceOptions(
-      options.allGuests(),
+      platformScopedGuests(),
       options.selectedKubernetesContext(),
     ),
   );
 
   const containerRuntimeOptions = createMemo(() =>
-    buildWorkloadsContainerRuntimeOptions(options.allGuests()),
+    buildWorkloadsContainerRuntimeOptions(platformScopedGuests()),
   );
 
   const platformOptions = createMemo(() =>

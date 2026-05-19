@@ -358,6 +358,23 @@ export const buildStorageNodeOptions = (nodes: Resource[]): StoragePageNodeOptio
     aliases: getResourceIdentityAliases(node),
   }));
 
+export const storageResourceMatchesSourceFilter = (
+  resource: Resource,
+  sourceFilter: string,
+): boolean => {
+  const selectedSource = normalizeSourcePlatformQueryValue(sourceFilter);
+  if (!selectedSource || selectedSource === DEFAULT_STORAGE_SOURCE_FILTER) return true;
+
+  const platformData = resource.platformData as { sources?: unknown } | undefined;
+  const sources = Array.isArray(platformData?.sources)
+    ? platformData.sources.filter((source): source is string => typeof source === 'string')
+    : [];
+  const candidates = [resource.platformType, resource.sourceType, ...sources];
+  return candidates.some(
+    (candidate) => normalizeSourcePlatformQueryValue(candidate || '') === selectedSource,
+  );
+};
+
 export const filterStorageDiskNodeOptions = (
   nodeOptions: StoragePageNodeOption[],
   physicalDisks: Resource[],

@@ -194,6 +194,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   } = useWorkloadRouteState({
     allGuests,
     allowEmbeddedScopeFilters: props.allowEmbeddedScopeFilters,
+    forcedPlatform: props.forcedPlatform,
     forcedViewMode: props.forcedViewMode,
     showFilters,
     setShowFilters,

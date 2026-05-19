@@ -235,6 +235,38 @@ describe('useWorkloads', () => {
             image: 'ix-nextcloud:latest',
           },
         },
+        {
+          ...sampleResource,
+          id: 'vmware-vm-crm',
+          name: 'crm-app-01',
+          status: undefined,
+          sources: ['vmware'],
+          parentName: 'esxi-01',
+          proxmox: undefined,
+          vmware: {
+            managedObjectId: 'vm-101',
+            runtimeHostName: 'esxi-01',
+            clusterName: 'Compute-A',
+            connectionName: 'Production vCenter',
+            powerState: 'poweredOn',
+          },
+        },
+        {
+          ...sampleResource,
+          id: 'vmware-vm-legacy',
+          name: 'legacy-app-01',
+          status: undefined,
+          sources: ['vmware'],
+          parentName: 'esxi-02',
+          proxmox: undefined,
+          vmware: {
+            managedObjectId: 'vm-102',
+            runtimeHostName: 'esxi-02',
+            clusterName: 'Compute-A',
+            connectionName: 'Production vCenter',
+            powerState: 'poweredOff',
+          },
+        },
       ],
       meta: { totalPages: 1 },
     });
@@ -248,7 +280,7 @@ describe('useWorkloads', () => {
     });
 
     await flushAsync();
-    await waitForWorkloadCount(() => result!.workloads().length, 4);
+    await waitForWorkloadCount(() => result!.workloads().length, 6);
 
     const byName = new Map(result!.workloads().map((workload) => [workload.name, workload]));
     expect(byName.get('vm-101')?.platformType).toBe('proxmox-pve');
@@ -258,6 +290,11 @@ describe('useWorkloads', () => {
     expect(byName.get('nextcloud')?.id).toBe('app-container:truenas-main:nextcloud');
     expect(byName.get('nextcloud')?.containerId).toBe('nextcloud-ctr');
     expect(byName.get('nextcloud')?.dockerHostId).toBeUndefined();
+    expect(byName.get('crm-app-01')?.platformType).toBe('vmware-vsphere');
+    expect(byName.get('crm-app-01')?.node).toBe('esxi-01');
+    expect(byName.get('crm-app-01')?.instance).toBe('Compute-A');
+    expect(byName.get('crm-app-01')?.status).toBe('running');
+    expect(byName.get('legacy-app-01')?.status).toBe('stopped');
 
     dispose();
   });

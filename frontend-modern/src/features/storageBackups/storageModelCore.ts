@@ -184,6 +184,10 @@ export const groupStorageRecords = (
   records: StorageRecord[],
   groupBy: StorageGroupKey,
 ): StorageGroupedRecords[] => {
+  if (records.length === 0) {
+    return [];
+  }
+
   if (groupBy === 'none') {
     return [{ key: 'All', items: records, stats: getStorageRecordStats(records) }];
   }

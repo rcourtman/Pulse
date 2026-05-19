@@ -13,6 +13,7 @@ import { useWorkloadUrlSync } from './useWorkloadUrlSync';
 export interface WorkloadRouteStateOptions {
   allGuests: Accessor<WorkloadGuest[]>;
   allowEmbeddedScopeFilters?: boolean;
+  forcedPlatform?: string;
   forcedViewMode?: ViewMode;
   showFilters: Accessor<boolean>;
   setShowFilters: Setter<boolean>;
@@ -42,6 +43,7 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
     },
   );
   const filterViewMode = () => options.forcedViewMode ?? viewMode();
+  const filterPlatformScope = () => options.forcedPlatform?.trim() || selectedPlatform();
 
   const handleNodeSelect = (nodeId: string | null, nodeType: 'pve' | 'pbs' | 'pmg' | null) => {
     const selection = resolveWorkloadsWorkloadNodeSelection({
@@ -96,6 +98,7 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
     isWorkloadsRoute,
     allowEmbeddedScopeFilters: () => options.allowEmbeddedScopeFilters === true,
     viewMode: filterViewMode,
+    platformScope: filterPlatformScope,
     containerRuntime,
     selectedPlatform,
     selectedNode,

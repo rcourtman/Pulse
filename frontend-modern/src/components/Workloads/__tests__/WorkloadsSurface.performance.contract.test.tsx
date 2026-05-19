@@ -851,7 +851,7 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadRouteStateSource).toContain('isWorkloadsRoute,');
       expect(workloadsWorkloadFilterOptionsSource).toContain("from './workloadFilterConfigModel'");
       expect(workloadsWorkloadFilterOptionsSource).toContain(
-        'buildWorkloadNodeOptions(options.allGuests())',
+        'buildWorkloadNodeOptions(platformScopedGuests())',
       );
       expect(workloadsWorkloadFilterOptionsSource).not.toContain(
         'const onContextChange = (value: string) =>',

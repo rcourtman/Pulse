@@ -129,6 +129,14 @@ type APIResource = {
     image?: string;
     uptimeSeconds?: number;
   };
+  vmware?: {
+    connectionName?: string;
+    datacenterName?: string;
+    clusterName?: string;
+    runtimeHostName?: string;
+    managedObjectId?: string;
+    powerState?: string;
+  };
   discoveryTarget?: {
     resourceType?: string;
     agentId?: string;
@@ -237,7 +245,13 @@ const normalizeWorkloadStatus = (status?: string | null): string => {
   const normalized = (status || '').trim().toLowerCase();
   if (!normalized) return 'unknown';
   if (normalized === 'online' || normalized === 'healthy') return 'running';
+  if (normalized === 'poweredon' || normalized === 'powered_on' || normalized === 'powered-on') {
+    return 'running';
+  }
   if (normalized === 'offline') return 'stopped';
+  if (normalized === 'poweredoff' || normalized === 'powered_off' || normalized === 'powered-off') {
+    return 'stopped';
+  }
   return normalized;
 };
 
@@ -330,10 +344,27 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
   });
 
   const name = (resource.name || resource.id || '').toString().trim();
-  const node = resource.node ?? resource.proxmox?.nodeName ?? resource.kubernetes?.nodeName ?? '';
+  const vmwareNode =
+    platformType === 'vmware-vsphere'
+      ? (resource.vmware?.runtimeHostName ?? resource.parentName)
+      : undefined;
+  const vmwareInstance =
+    platformType === 'vmware-vsphere'
+      ? (resource.vmware?.clusterName ??
+        resource.vmware?.datacenterName ??
+        resource.vmware?.connectionName)
+      : undefined;
+  const node =
+    vmwareNode ??
+    resource.node ??
+    resource.proxmox?.nodeName ??
+    resource.kubernetes?.nodeName ??
+    resource.parentName ??
+    '';
   const kubernetesContext = getPreferredResourceKubernetesContext(resource);
   const preferredClusterName = getPreferredResourceClusterName(resource);
   const instance =
+    vmwareInstance ??
     resource.instance ??
     resource.proxmox?.instance ??
     kubernetesContext ??
@@ -394,7 +425,9 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     name: name || resource.id,
     node,
     instance,
-    status: normalizeWorkloadStatus(resource.status),
+    status: normalizeWorkloadStatus(
+      resource.status || (platformType === 'vmware-vsphere' ? resource.vmware?.powerState : null),
+    ),
     type:
       workloadType === 'vm'
         ? 'vm'
