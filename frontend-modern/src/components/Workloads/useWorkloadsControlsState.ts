@@ -34,6 +34,7 @@ import {
 interface WorkloadsControlsStateOptions {
   forcedGroupingMode?: WorkloadsGroupingMode;
   defaultSortKey?: WorkloadsSortKey;
+  statusModeStorageScope?: string;
   // When a platform page owns the metric display mode (e.g. Proxmox
   // overview shares it across a top hosts table and the embedded workloads
   // surface), pass the accessor + change handler so the controls track the
@@ -56,9 +57,13 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
   const isMobile = createMemo(() => workloadTableLayoutMode() === 'mobile');
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
+  const statusModeStorageKey = (() => {
+    const scope = (options.statusModeStorageScope || '').trim();
+    return scope ? `workloadsStatusMode:${scope}` : 'workloadsStatusMode';
+  })();
 
   const [statusMode, setStatusMode] = usePersistentSignal<WorkloadsStatusMode>(
-    'workloadsStatusMode',
+    statusModeStorageKey,
     DEFAULT_WORKLOADS_STATUS_MODE,
     {
       deserialize: (raw) =>

@@ -28,6 +28,7 @@ export const WORKLOAD_STATUS_FILTER_OPTIONS: Array<{ value: WorkloadsStatusMode;
 
 interface WorkloadsContainerRuntimeFilterConfigOptions {
   isWorkloadsRoute: boolean;
+  allowEmbeddedScopeFilters?: boolean;
   viewMode: ViewMode;
   containerRuntime: string;
   runtimeOptions: string[];
@@ -36,12 +37,13 @@ interface WorkloadsContainerRuntimeFilterConfigOptions {
 
 export const buildWorkloadsContainerRuntimeFilterConfig = ({
   isWorkloadsRoute,
+  allowEmbeddedScopeFilters,
   viewMode,
   containerRuntime,
   runtimeOptions,
   onChange,
 }: WorkloadsContainerRuntimeFilterConfigOptions): WorkloadsToolbarFilterConfig | undefined => {
-  if (!isWorkloadsRoute) return undefined;
+  if (!isWorkloadsRoute && !allowEmbeddedScopeFilters) return undefined;
   if (!isContainerWorkloadViewMode(viewMode)) return undefined;
   if (runtimeOptions.length === 0) return undefined;
 
@@ -59,6 +61,7 @@ export const buildWorkloadsContainerRuntimeFilterConfig = ({
 
 interface WorkloadsPlatformFilterConfigOptions {
   isWorkloadsRoute: boolean;
+  allowEmbeddedScopeFilters?: boolean;
   selectedPlatform: string | null;
   platformOptions: WorkloadsToolbarFilterConfig['options'];
   onChange: (value: string) => void;
@@ -88,11 +91,12 @@ export const buildWorkloadsPlatformFilterOptions = (
 
 export const buildWorkloadsPlatformFilterConfig = ({
   isWorkloadsRoute,
+  allowEmbeddedScopeFilters,
   selectedPlatform,
   platformOptions,
   onChange,
 }: WorkloadsPlatformFilterConfigOptions): WorkloadsToolbarFilterConfig | undefined => {
-  if (!isWorkloadsRoute) return undefined;
+  if (!isWorkloadsRoute && !allowEmbeddedScopeFilters) return undefined;
   if (platformOptions.length === 0) return undefined;
   if (platformOptions.length === 1 && !(selectedPlatform || '').trim()) return undefined;
 
@@ -107,6 +111,7 @@ export const buildWorkloadsPlatformFilterConfig = ({
 
 interface WorkloadsHostFilterConfigOptions {
   isWorkloadsRoute: boolean;
+  allowEmbeddedScopeFilters?: boolean;
   viewMode: ViewMode;
   selectedKubernetesContext: string | null;
   kubernetesContextOptions: string[];
@@ -118,6 +123,7 @@ interface WorkloadsHostFilterConfigOptions {
 
 export const buildWorkloadsHostFilterConfig = ({
   isWorkloadsRoute,
+  allowEmbeddedScopeFilters,
   viewMode,
   selectedKubernetesContext,
   kubernetesContextOptions,
@@ -126,7 +132,7 @@ export const buildWorkloadsHostFilterConfig = ({
   onContextChange,
   onNodeChange,
 }: WorkloadsHostFilterConfigOptions): WorkloadsToolbarFilterConfig | undefined => {
-  if (!isWorkloadsRoute) return undefined;
+  if (!isWorkloadsRoute && !allowEmbeddedScopeFilters) return undefined;
 
   if (viewMode === 'pod') {
     return {
@@ -152,6 +158,7 @@ export const buildWorkloadsHostFilterConfig = ({
 
 interface WorkloadsNamespaceFilterConfigOptions {
   isWorkloadsRoute: boolean;
+  allowEmbeddedScopeFilters?: boolean;
   viewMode: ViewMode;
   selectedNamespace: string | null;
   namespaceOptions: string[];
@@ -160,12 +167,13 @@ interface WorkloadsNamespaceFilterConfigOptions {
 
 export const buildWorkloadsNamespaceFilterConfig = ({
   isWorkloadsRoute,
+  allowEmbeddedScopeFilters,
   viewMode,
   selectedNamespace,
   namespaceOptions,
   onChange,
 }: WorkloadsNamespaceFilterConfigOptions): WorkloadsToolbarFilterConfig | undefined => {
-  if (!isWorkloadsRoute) return undefined;
+  if (!isWorkloadsRoute && !allowEmbeddedScopeFilters) return undefined;
   if (viewMode !== 'pod') return undefined;
   if (namespaceOptions.length === 0) return undefined;
 

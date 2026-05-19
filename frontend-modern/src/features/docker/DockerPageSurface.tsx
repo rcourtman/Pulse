@@ -1,6 +1,8 @@
 import ContainerIcon from 'lucide-solid/icons/container';
 import { Show, createMemo } from 'solid-js';
+import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
+import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
@@ -12,6 +14,8 @@ import {
   buildDockerPageModel,
   buildDockerContainerDefaultHiddenColumnIds,
   buildDockerWorkloadGroupLabelBadges,
+  filterDockerHosts,
+  filterDockerServices,
 } from './dockerPageModel';
 
 const DOCKER_RESOURCE_QUERY = 'type=agent,docker-host,app-container,docker-service';
@@ -38,6 +42,42 @@ export function DockerPageSurface() {
   );
   const dockerWorkloadGroupLabelBadges = createMemo(() =>
     buildDockerWorkloadGroupLabelBadges(model().hosts),
+  );
+  const workloadsState = useWorkloadsState({
+    vms: [],
+    containers: [],
+    nodes: [],
+    useWorkloads: true,
+    embedded: true,
+    tableOnly: true,
+    forcedPlatform: DOCKER_PLATFORM_FILTER,
+    forcedViewMode: DOCKER_WORKLOAD_FORCED_VIEW_MODE,
+    defaultSortKey: DOCKER_WORKLOAD_DEFAULT_SORT_KEY,
+    showFilterToolbar: true,
+    suppressPlatformFilter: true,
+    allowEmbeddedScopeFilters: true,
+    columnVisibilityStorageScope: DOCKER_WORKLOAD_COLUMN_SCOPE,
+    additionalDefaultHiddenColumnIds: dockerWorkloadDefaultHiddenColumns(),
+    columnLabelOverrides: DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES,
+    groupLabelBadges: dockerWorkloadGroupLabelBadges(),
+    compactGroupHeaders: true,
+  });
+  const pageFilters = createMemo(() => ({
+    containerRuntime: workloadsState.containerRuntime().trim() || null,
+    searchTerm: workloadsState.search().trim() || null,
+    selectedHostScope: workloadsState.selectedNode(),
+    statusMode: workloadsState.statusMode(),
+  }));
+  const filteredHosts = createMemo(() => filterDockerHosts(model().hosts, pageFilters()));
+  const filteredServices = createMemo(() => filterDockerServices(model().services, pageFilters()));
+  const showSharedFilterToolbar = createMemo(
+    () =>
+      workloadsState.surfaceConnected() &&
+      workloadsState.surfaceInitialDataReceived() &&
+      workloadsState.allGuests().length > 0,
+  );
+  const showServicesSection = createMemo(
+    () => pageFilters().containerRuntime?.toLowerCase() !== 'podman' && model().services.length > 0,
   );
 
   return (
@@ -73,34 +113,67 @@ export function DockerPageSurface() {
             }
           >
             <div class="space-y-4">
+              <Show when={showSharedFilterToolbar()}>
+                <div data-summary-clear-ignore>
+                  <WorkloadsFilter
+                    search={workloadsState.search}
+                    setSearch={workloadsState.setSearch}
+                    viewMode={workloadsState.viewMode}
+                    setViewMode={workloadsState.setViewMode}
+                    statusMode={workloadsState.statusMode}
+                    setStatusMode={workloadsState.setStatusMode}
+                    groupingMode={workloadsState.groupingMode}
+                    setGroupingMode={workloadsState.setGroupingMode}
+                    defaultSortKey={DOCKER_WORKLOAD_DEFAULT_SORT_KEY}
+                    setSortKey={workloadsState.setSortKey}
+                    setSortDirection={workloadsState.setSortDirection}
+                    onBeforeAutoFocus={workloadsState.handleBeforeAutoFocus}
+                    columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
+                    containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
+                    hostFilter={workloadsState.hostFilterConfig()}
+                    platformFilter={undefined}
+                    namespaceFilter={undefined}
+                    suppressTypeFilter
+                    metricDisplayMode={workloadsState.workloadMetricDisplayMode}
+                    setMetricDisplayMode={workloadsState.setWorkloadMetricDisplayMode}
+                    metricHistoryRange={workloadsState.workloadMetricHistoryRange}
+                    setMetricHistoryRange={workloadsState.setWorkloadMetricHistoryRange}
+                    forcedPlatform={DOCKER_PLATFORM_FILTER}
+                    pinnedSelectionActive={() =>
+                      Boolean(
+                        workloadsState.selectedGuestId() ||
+                        workloadsState.focusedSummaryWorkloadGroupId(),
+                      )
+                    }
+                    onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}
+                  />
+                </div>
+              </Show>
               <DockerHostsTable
-                resources={model().hosts}
+                resources={filteredHosts()}
+                sourceCount={model().hosts.length}
                 emptyIcon={dockerIcon()}
-                emptyTitle="No Docker hosts"
+                emptyTitle="No Docker or Podman hosts"
                 emptyDescription="Container hosts appear here once a Pulse agent registers them."
                 showToolbar={false}
               />
               <WorkloadsSurface
+                state={workloadsState}
                 vms={[]}
                 containers={[]}
                 nodes={[]}
                 useWorkloads
                 embedded
                 tableOnly
-                showFilterToolbar
-                suppressPlatformFilter
                 forcedPlatform={DOCKER_PLATFORM_FILTER}
                 forcedViewMode={DOCKER_WORKLOAD_FORCED_VIEW_MODE}
-                defaultSortKey={DOCKER_WORKLOAD_DEFAULT_SORT_KEY}
-                columnVisibilityStorageScope={DOCKER_WORKLOAD_COLUMN_SCOPE}
-                additionalDefaultHiddenColumnIds={dockerWorkloadDefaultHiddenColumns()}
-                columnLabelOverrides={DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES}
-                groupLabelBadges={dockerWorkloadGroupLabelBadges()}
-                compactGroupHeaders
+                emptyStateTitle="No Docker or Podman containers"
+                emptyStateDescription="Containers appear here when a Docker or Podman host reports workload inventory."
               />
-              <Show when={model().services.length > 0}>
+              <Show when={showServicesSection()}>
                 <DockerServicesTable
-                  resources={model().services}
+                  resources={filteredServices()}
+                  sourceCount={model().services.length}
                   emptyIcon={dockerIcon()}
                   emptyTitle="No Swarm services"
                   emptyDescription="Docker Swarm services appear here when a Swarm manager reports them."

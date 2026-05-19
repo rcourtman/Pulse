@@ -10,10 +10,21 @@ import { StickySummarySection } from '@/components/shared/StickySummarySection';
 import { WorkloadsStateCards } from './WorkloadsStateCards';
 import { WorkloadsStatsStrip } from './WorkloadsStatsStrip';
 import { WorkloadsTable } from './WorkloadsTable';
-import { useWorkloadsState, type WorkloadsSurfaceProps } from './useWorkloadsState';
+import {
+  useWorkloadsState,
+  type WorkloadsState,
+  type WorkloadsSurfaceProps,
+} from './useWorkloadsState';
+export type { WorkloadsSurfaceProps } from './useWorkloadsState';
 
-export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
-  const state = useWorkloadsState(props);
+interface WorkloadsSurfaceComponentProps extends WorkloadsSurfaceProps {
+  emptyStateDescription?: string;
+  emptyStateTitle?: string;
+  state?: WorkloadsState;
+}
+
+export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
+  const state = props.state ?? useWorkloadsState(props);
 
   return (
     <div ref={state.setClearSurfaceRootRef} class="space-y-3" data-testid="workloads-page">
@@ -195,8 +206,11 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
           <TableCard>
             <div class="p-6">
               <EmptyState
-                title="No Proxmox workloads"
-                description="Proxmox VMs and containers appear here when inventory is available."
+                title={props.emptyStateTitle ?? 'No workloads'}
+                description={
+                  props.emptyStateDescription ??
+                  'Workloads appear here when inventory is available.'
+                }
               />
             </div>
           </TableCard>

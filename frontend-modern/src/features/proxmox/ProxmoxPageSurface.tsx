@@ -43,6 +43,7 @@ const PROXMOX_RESOURCE_QUERY =
   'type=agent,vm,system-container,oci-container,storage,physical_disk,ceph,pbs,pmg';
 
 const PROXMOX_PLATFORM_FILTER = 'proxmox-pve';
+const PROXMOX_WORKLOAD_STATUS_STORAGE_SCOPE = 'proxmox';
 const VALID_TABS = new Set<ProxmoxPageTabId>(PROXMOX_TAB_SPECS.map((tab) => tab.id));
 
 const proxmoxIcon = () => <ProxmoxIcon class="h-6 w-6 text-slate-400" />;
@@ -143,13 +144,17 @@ export function ProxmoxPageSurface() {
                   tableOnly
                   showFilterToolbar
                   suppressPlatformFilter
+                  allowEmbeddedScopeFilters
                   forcedPlatform={PROXMOX_PLATFORM_FILTER}
+                  statusModeStorageScope={PROXMOX_WORKLOAD_STATUS_STORAGE_SCOPE}
                   compactGroupHeaders
                   groupNodeDrawerMode="disabled"
                   metricDisplayMode={metricDisplayMode}
                   onMetricDisplayModeChange={setMetricDisplayMode}
                   metricHistoryRange={metricHistoryRange}
                   onMetricHistoryRangeChange={setMetricHistoryRange}
+                  emptyStateTitle="No Proxmox workloads"
+                  emptyStateDescription="Proxmox VMs and LXCs appear here when inventory is available."
                 />
               </div>
             </Show>

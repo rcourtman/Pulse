@@ -57,6 +57,24 @@ describe('workloadFilterConfigModel', () => {
         onChange,
       }),
     ).toBeUndefined();
+
+    expect(
+      buildWorkloadsContainerRuntimeFilterConfig({
+        isWorkloadsRoute: false,
+        allowEmbeddedScopeFilters: true,
+        viewMode: 'container',
+        containerRuntime: 'podman',
+        runtimeOptions: ['docker', 'podman'],
+        onChange,
+      }),
+    ).toMatchObject({
+      value: 'podman',
+      options: [
+        { value: '', label: WORKLOADS_CONTAINER_RUNTIME_ALL_OPTION_LABEL },
+        { value: 'docker', label: 'docker' },
+        { value: 'podman', label: 'podman' },
+      ],
+    });
   });
 
   it('builds host filter config from pod or node scope as appropriate', () => {

@@ -12,6 +12,7 @@ import { useWorkloadUrlSync } from './useWorkloadUrlSync';
 
 export interface WorkloadRouteStateOptions {
   allGuests: Accessor<WorkloadGuest[]>;
+  allowEmbeddedScopeFilters?: boolean;
   showFilters: Accessor<boolean>;
   setShowFilters: Setter<boolean>;
 }
@@ -22,9 +23,9 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
   const [selectedKubernetesContext, setSelectedKubernetesContext] = createSignal<string | null>(
     null,
   );
-  const [selectedKubernetesNamespace, setSelectedKubernetesNamespace] = createSignal<
-    string | null
-  >(null);
+  const [selectedKubernetesNamespace, setSelectedKubernetesNamespace] = createSignal<string | null>(
+    null,
+  );
   const [selectedHostHint, setSelectedHostHint] = createSignal<string | null>(null);
 
   const [viewMode, setViewMode] = usePersistentSignal<ViewMode>('workloadsViewMode', 'all', {
@@ -91,6 +92,7 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
   const filterOptions = useWorkloadFilterOptions({
     allGuests: options.allGuests,
     isWorkloadsRoute,
+    allowEmbeddedScopeFilters: () => options.allowEmbeddedScopeFilters === true,
     viewMode,
     containerRuntime,
     selectedPlatform,

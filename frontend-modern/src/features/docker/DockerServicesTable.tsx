@@ -65,6 +65,7 @@ const replicaCount = (value: number | undefined): JSX.Element => (
 
 export const DockerServicesTable: Component<{
   resources: Resource[];
+  sourceCount?: number;
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
@@ -77,14 +78,22 @@ export const DockerServicesTable: Component<{
     filter: filterPlatformResources,
   });
 
+  const hasFilteredSourceRows = () => (props.sourceCount ?? props.resources.length) > 0;
+
   return (
     <Show
       when={props.resources.length > 0}
       fallback={
         <PlatformTableEmptyState
           icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
+          title={
+            hasFilteredSourceRows() ? 'No Swarm services match current filters' : props.emptyTitle
+          }
+          description={
+            hasFilteredSourceRows()
+              ? 'Adjust the shared Docker page filters to see more services.'
+              : props.emptyDescription
+          }
         />
       }
     >

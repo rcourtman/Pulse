@@ -97,6 +97,7 @@ const aggregateDiskFor = (host: Resource): Disk | undefined => {
 
 export const DockerHostsTable: Component<{
   resources: Resource[];
+  sourceCount?: number;
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
@@ -112,14 +113,20 @@ export const DockerHostsTable: Component<{
   const [selectedHostId, setSelectedHostId] = createSignal<string | null>(null);
   const drawerColspan = createMemo(() => (showSwarmColumn() ? 10 : 9));
 
+  const hasFilteredSourceRows = () => (props.sourceCount ?? props.resources.length) > 0;
+
   return (
     <Show
       when={props.resources.length > 0}
       fallback={
         <PlatformTableEmptyState
           icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
+          title={hasFilteredSourceRows() ? 'No hosts match current filters' : props.emptyTitle}
+          description={
+            hasFilteredSourceRows()
+              ? 'Adjust the shared Docker page filters to see more hosts.'
+              : props.emptyDescription
+          }
         />
       }
     >

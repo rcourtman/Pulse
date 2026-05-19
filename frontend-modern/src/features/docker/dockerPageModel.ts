@@ -1,9 +1,11 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import type { Resource, ResourceType } from '@/types/resource';
+import type { WorkloadsStatusMode } from '@/components/Workloads/workloadsFilterModel';
 import {
   getInfrastructureSystemIdentityBadges,
   type ResourceBadge,
 } from '@/utils/resourceBadgePresentation';
+import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES } from '@/utils/status';
 
 const DOCKER_HOST_TYPES = new Set<ResourceType>(['agent', 'docker-host']);
 const DOCKER_CONTAINER_TYPES = new Set<ResourceType>(['app-container']);
@@ -44,6 +46,13 @@ export type DockerPageModel = {
   containers: Resource[];
   services: Resource[];
 };
+
+export interface DockerPageFilters {
+  containerRuntime?: string | null;
+  searchTerm?: string | null;
+  selectedHostScope?: string | null;
+  statusMode?: WorkloadsStatusMode;
+}
 
 const DOCKER_CONTAINER_BASE_DEFAULT_HIDDEN_COLUMNS = ['disk', 'tags'] as const;
 
@@ -141,4 +150,124 @@ export function buildDockerPageModel(resources: Resource[]): DockerPageModel {
     containers,
     services,
   };
+}
+
+const resourceSearchCandidates = (resource: Resource): Array<string | undefined> => [
+  resource.name,
+  resource.displayName,
+  resource.id,
+  resource.parentName,
+  resource.agent?.hostname,
+  resource.docker?.hostname,
+  resource.identity?.hostname,
+  resource.canonicalIdentity?.displayName,
+  resource.canonicalIdentity?.hostname,
+  resource.canonicalIdentity?.primaryId,
+  ...(resource.canonicalIdentity?.aliases ?? []),
+  ...(resource.tags ?? []),
+];
+
+const matchesSearch = (resource: Resource, searchTerm: string): boolean => {
+  const needle = searchTerm.trim().toLowerCase();
+  if (!needle) return true;
+  return resourceSearchCandidates(resource)
+    .filter((value): value is string => typeof value === 'string')
+    .some((value) => value.toLowerCase().includes(needle));
+};
+
+const matchesStatusMode = (
+  resource: Resource,
+  statusMode: WorkloadsStatusMode | undefined,
+): boolean => {
+  if (!statusMode || statusMode === 'all') return true;
+  const normalizedStatus = (resource.status || '').trim().toLowerCase();
+  if (statusMode === 'running') {
+    return normalizedStatus === 'running' || normalizedStatus === 'online';
+  }
+  if (statusMode === 'degraded') {
+    return (
+      DEGRADED_HEALTH_STATUSES.has(normalizedStatus) ||
+      (normalizedStatus !== 'running' &&
+        normalizedStatus !== 'online' &&
+        !OFFLINE_HEALTH_STATUSES.has(normalizedStatus))
+    );
+  }
+  return OFFLINE_HEALTH_STATUSES.has(normalizedStatus);
+};
+
+const matchesContainerRuntime = (
+  resource: Resource,
+  containerRuntime: string | null | undefined,
+): boolean => {
+  const normalizedRuntime = (containerRuntime || '').trim().toLowerCase();
+  if (!normalizedRuntime) return true;
+  return (resource.docker?.runtime || '').trim().toLowerCase() === normalizedRuntime;
+};
+
+const matchesHostScope = (
+  resource: Resource,
+  selectedHostScope: string | null | undefined,
+): boolean => {
+  const normalizedScope = (selectedHostScope || '').trim().toLowerCase();
+  if (!normalizedScope) return true;
+
+  const candidates = [
+    resource.id,
+    resource.name,
+    resource.displayName,
+    resource.docker?.hostSourceId,
+    resource.docker?.hostname,
+    resource.agent?.hostname,
+    resource.identity?.hostname,
+    resource.canonicalIdentity?.displayName,
+    resource.canonicalIdentity?.hostname,
+    resource.canonicalIdentity?.primaryId,
+    ...(resource.canonicalIdentity?.aliases ?? []),
+  ]
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim().toLowerCase())
+    .filter((value) => value.length > 0);
+
+  return candidates.includes(normalizedScope);
+};
+
+export function filterDockerHosts(
+  resources: readonly Resource[],
+  filters: DockerPageFilters,
+): Resource[] {
+  return resources.filter(
+    (resource) =>
+      matchesSearch(resource, filters.searchTerm || '') &&
+      matchesStatusMode(resource, filters.statusMode) &&
+      matchesContainerRuntime(resource, filters.containerRuntime) &&
+      matchesHostScope(resource, filters.selectedHostScope),
+  );
+}
+
+const serviceSearchCandidates = (resource: Resource): Array<string | undefined> => [
+  ...resourceSearchCandidates(resource),
+  resource.docker?.image,
+  resource.docker?.mode,
+];
+
+export function filterDockerServices(
+  resources: readonly Resource[],
+  filters: DockerPageFilters,
+): Resource[] {
+  const normalizedRuntime = (filters.containerRuntime || '').trim().toLowerCase();
+  if (normalizedRuntime === 'podman') {
+    return [];
+  }
+
+  return resources.filter(
+    (resource) =>
+      serviceSearchCandidates(resource)
+        .filter((value): value is string => typeof value === 'string')
+        .some((value) => {
+          const needle = (filters.searchTerm || '').trim().toLowerCase();
+          return needle.length === 0 ? true : value.toLowerCase().includes(needle);
+        }) &&
+      matchesStatusMode(resource, filters.statusMode) &&
+      matchesHostScope(resource, filters.selectedHostScope),
+  );
 }

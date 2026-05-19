@@ -1,22 +1,64 @@
 import { describe, expect, it } from 'vitest';
+
 import type { Resource } from '@/types/resource';
 import {
   buildDockerContainerDefaultHiddenColumnIds,
   buildDockerPageModel,
   buildDockerWorkloadGroupLabelBadges,
+  filterDockerHosts,
+  filterDockerServices,
   getDockerHostSystemBadge,
   hasDockerSwarmEvidence,
 } from '../dockerPageModel';
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource => ({
-  name: resource.id,
-  displayName: resource.id,
-  platformId: 'lab',
+  ...resource,
+  name: resource.name ?? resource.id,
+  displayName: resource.displayName ?? resource.id,
+  platformId: resource.platformId ?? 'lab',
+  platformType: resource.platformType ?? 'docker',
+  sourceType: resource.sourceType ?? 'agent',
+  status: resource.status ?? 'online',
+  lastSeen: resource.lastSeen ?? 1_700_000_000_000,
+});
+
+const makeDockerHost = (overrides: Partial<Resource> = {}): Resource => ({
+  id: 'agent:docker-01',
+  name: 'docker-01',
+  displayName: 'Docker 01',
+  platformId: 'homelab',
   platformType: 'docker',
   sourceType: 'agent',
   status: 'online',
+  type: 'agent',
   lastSeen: 1_700_000_000_000,
-  ...resource,
+  docker: {
+    runtime: 'docker',
+    hostname: 'docker-01',
+  },
+  agent: {
+    hostname: 'docker-01',
+  },
+  ...overrides,
+});
+
+const makeDockerService = (overrides: Partial<Resource> = {}): Resource => ({
+  id: 'docker-service:svc-01',
+  name: 'api',
+  displayName: 'api',
+  platformId: 'homelab',
+  platformType: 'docker',
+  sourceType: 'api',
+  status: 'online',
+  type: 'docker-service',
+  lastSeen: 1_700_000_000_000,
+  docker: {
+    hostname: 'docker-01',
+    hostSourceId: 'agent:docker-01',
+    image: 'ghcr.io/pulse/api:latest',
+    mode: 'replicated',
+  },
+  ...overrides,
 });
 
 describe('dockerPageModel', () => {
@@ -36,10 +78,10 @@ describe('dockerPageModel', () => {
       }),
     ]);
 
-    expect(model.hosts.map((r) => r.id)).toEqual(['docker-host-1']);
-    expect(model.containers.map((r) => r.id)).toEqual(['ctr-1']);
-    expect(model.services.map((r) => r.id)).toEqual(['svc-1']);
-    expect(model.resources.map((r) => r.id).sort()).toEqual(
+    expect(model.hosts.map((resource) => resource.id)).toEqual(['docker-host-1']);
+    expect(model.containers.map((resource) => resource.id)).toEqual(['ctr-1']);
+    expect(model.services.map((resource) => resource.id)).toEqual(['svc-1']);
+    expect(model.resources.map((resource) => resource.id).sort()).toEqual(
       ['ctr-1', 'docker-host-1', 'svc-1'].sort(),
     );
   });
@@ -155,5 +197,67 @@ describe('dockerPageModel', () => {
         }),
       ),
     ).toBe(true);
+  });
+
+  it('filters Docker hosts by runtime, status, search, and selected host scope', () => {
+    const hosts = [
+      makeDockerHost(),
+      makeDockerHost({
+        id: 'agent:podman-01',
+        name: 'podman-01',
+        displayName: 'Podman 01',
+        status: 'offline',
+        docker: {
+          runtime: 'podman',
+          hostname: 'podman-01',
+        },
+        agent: {
+          hostname: 'podman-01',
+        },
+      }),
+    ];
+
+    expect(filterDockerHosts(hosts, { containerRuntime: 'podman' }).map((host) => host.id)).toEqual(
+      ['agent:podman-01'],
+    );
+    expect(filterDockerHosts(hosts, { statusMode: 'stopped' }).map((host) => host.id)).toEqual([
+      'agent:podman-01',
+    ]);
+    expect(filterDockerHosts(hosts, { searchTerm: 'docker 01' }).map((host) => host.id)).toEqual([
+      'agent:docker-01',
+    ]);
+    expect(
+      filterDockerHosts(hosts, { selectedHostScope: 'agent:podman-01' }).map((host) => host.id),
+    ).toEqual(['agent:podman-01']);
+  });
+
+  it('filters Docker services with the shared page filters and hides them for Podman runtime scope', () => {
+    const services = [
+      makeDockerService(),
+      makeDockerService({
+        id: 'docker-service:svc-02',
+        name: 'worker',
+        status: 'degraded',
+        docker: {
+          hostname: 'docker-02',
+          hostSourceId: 'agent:docker-02',
+          image: 'ghcr.io/pulse/worker:latest',
+          mode: 'global',
+        },
+      }),
+    ];
+
+    expect(filterDockerServices(services, { containerRuntime: 'podman' })).toEqual([]);
+    expect(
+      filterDockerServices(services, { statusMode: 'degraded' }).map((service) => service.id),
+    ).toEqual(['docker-service:svc-02']);
+    expect(
+      filterDockerServices(services, { selectedHostScope: 'agent:docker-01' }).map(
+        (service) => service.id,
+      ),
+    ).toEqual(['docker-service:svc-01']);
+    expect(
+      filterDockerServices(services, { searchTerm: 'worker' }).map((service) => service.id),
+    ).toEqual(['docker-service:svc-02']);
   });
 });

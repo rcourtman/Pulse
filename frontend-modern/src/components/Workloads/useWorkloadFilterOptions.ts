@@ -19,6 +19,7 @@ import {
 interface WorkloadsWorkloadFilterOptionsOptions {
   allGuests: Accessor<WorkloadGuest[]>;
   isWorkloadsRoute: Accessor<boolean>;
+  allowEmbeddedScopeFilters: Accessor<boolean>;
   viewMode: Accessor<ViewMode>;
   containerRuntime: Accessor<string>;
   selectedPlatform: Accessor<string | null>;
@@ -32,12 +33,8 @@ interface WorkloadsWorkloadFilterOptionsOptions {
   setSelectedKubernetesNamespace: (value: string | null) => void;
 }
 
-export function useWorkloadFilterOptions(
-  options: WorkloadsWorkloadFilterOptionsOptions,
-) {
-  const workloadNodeOptions = createMemo(() =>
-    buildWorkloadNodeOptions(options.allGuests()),
-  );
+export function useWorkloadFilterOptions(options: WorkloadsWorkloadFilterOptionsOptions) {
+  const workloadNodeOptions = createMemo(() => buildWorkloadNodeOptions(options.allGuests()));
 
   const kubernetesContextOptions = createMemo(() =>
     buildWorkloadsKubernetesContextOptions(options.allGuests()),
@@ -61,6 +58,7 @@ export function useWorkloadFilterOptions(
   const containerRuntimeFilterConfig = createMemo<WorkloadsToolbarFilterConfig | undefined>(() =>
     buildWorkloadsContainerRuntimeFilterConfig({
       isWorkloadsRoute: options.isWorkloadsRoute(),
+      allowEmbeddedScopeFilters: options.allowEmbeddedScopeFilters(),
       viewMode: options.viewMode(),
       containerRuntime: options.containerRuntime(),
       runtimeOptions: containerRuntimeOptions(),
@@ -71,6 +69,7 @@ export function useWorkloadFilterOptions(
   const platformFilterConfig = createMemo<WorkloadsToolbarFilterConfig | undefined>(() =>
     buildWorkloadsPlatformFilterConfig({
       isWorkloadsRoute: options.isWorkloadsRoute(),
+      allowEmbeddedScopeFilters: options.allowEmbeddedScopeFilters(),
       selectedPlatform: options.selectedPlatform(),
       platformOptions: platformOptions(),
       onChange: (value) => options.setSelectedPlatform(value || null),
@@ -80,6 +79,7 @@ export function useWorkloadFilterOptions(
   const hostFilterConfig = createMemo<WorkloadsToolbarFilterConfig | undefined>(() =>
     buildWorkloadsHostFilterConfig({
       isWorkloadsRoute: options.isWorkloadsRoute(),
+      allowEmbeddedScopeFilters: options.allowEmbeddedScopeFilters(),
       viewMode: options.viewMode(),
       selectedKubernetesContext: options.selectedKubernetesContext(),
       kubernetesContextOptions: kubernetesContextOptions(),
@@ -93,6 +93,7 @@ export function useWorkloadFilterOptions(
   const namespaceFilterConfig = createMemo<WorkloadsToolbarFilterConfig | undefined>(() =>
     buildWorkloadsNamespaceFilterConfig({
       isWorkloadsRoute: options.isWorkloadsRoute(),
+      allowEmbeddedScopeFilters: options.allowEmbeddedScopeFilters(),
       viewMode: options.viewMode(),
       selectedNamespace: options.selectedKubernetesNamespace(),
       namespaceOptions: kubernetesNamespaceOptions(),

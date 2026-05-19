@@ -73,6 +73,8 @@ export interface WorkloadsSurfaceProps {
   // filter row since the platform is already fixed by the owning page.
   showFilterToolbar?: boolean;
   suppressPlatformFilter?: boolean;
+  allowEmbeddedScopeFilters?: boolean;
+  statusModeStorageScope?: string;
   // Platform pages that render their own hosts table above the embedded
   // workloads surface (e.g. Proxmox overview) own the per-host CPU / Memory
   // / Disk / Temperature / uptime / version stats. Setting
@@ -186,6 +188,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     containerRuntimeOptions,
   } = useWorkloadRouteState({
     allGuests,
+    allowEmbeddedScopeFilters: props.allowEmbeddedScopeFilters,
     showFilters,
     setShowFilters,
   });
@@ -230,6 +233,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   } = useWorkloadsControlsState({
     defaultSortKey: props.defaultSortKey,
     forcedGroupingMode: props.forcedGroupingMode,
+    statusModeStorageScope: props.statusModeStorageScope,
     metricDisplayMode: props.metricDisplayMode,
     onMetricDisplayModeChange: props.onMetricDisplayModeChange,
     metricHistoryRange: props.metricHistoryRange,
