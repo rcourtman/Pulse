@@ -63,6 +63,7 @@ controls as normal product settings.
 35. `scripts/telemetry_adoption_report.py`
 36. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
 37. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
+38. `internal/api/agent_exec_token_binding.go`
 
 ## Shared Boundaries
 
@@ -321,6 +322,13 @@ the visible API-token manager: agent install command tokens, deploy bootstrap
 tokens, enrollment runtime tokens, container runtime migration tokens, and
 first-run/regenerated admin tokens must use the same shared server-side owner
 setter rather than carrying owner identity in caller-controlled metadata.
+That same command-token trust boundary also owns first-use binding for
+Proxmox install-command tokens. `internal/api/agent_exec_token_binding.go` may
+persist `bound_agent_id`, `bound_hostname`, and `bound_at` only for
+Pulse-minted PVE/PBS install-command tokens when the command agent first
+registers. Generic unbound `agent:exec` tokens, or tokens already bound to a
+different hostname or agent ID, must fail closed so command execution cannot
+cross hosts through reusable bearer credentials.
 Telemetry/privacy disclosures now also route through the shipped frontend docs
 boundary: `frontend-modern/src/utils/docsLinks.ts` is the canonical frontend
 owner for privacy-document URLs, while `frontend-modern/public/docs/PRIVACY.md`

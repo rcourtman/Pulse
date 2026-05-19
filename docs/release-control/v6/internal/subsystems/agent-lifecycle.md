@@ -94,6 +94,7 @@ management, and fleet control surfaces.
 67. `internal/hostagent/proxmox_setup.go`
 68. `internal/remoteconfig/client.go`
 69. `internal/agenttls/config.go`
+70. `internal/api/agent_exec_token_binding.go`
 
 ## Shared Boundaries
 
@@ -360,6 +361,13 @@ profile and assignment columns, but embedded table framing must route through
    owner identity from the API-authenticated caller through the shared
    server-side token owner helper; bootstrap deploy metadata may bind cluster,
    job, target, and expected node, but not the human owner.
+   Command-agent WebSocket identity follows the same lifecycle/auth split:
+   install-command tokens that enable command execution may be minted before
+   the final agent ID is known, but only Pulse-minted PVE/PBS install-command
+   tokens may bind on first `/api/agent/ws` registration. That first-use bind
+   must persist the registering agent ID and hostname and become authoritative
+   for later command registration attempts; generic unbound `agent:exec`
+   tokens are not lifecycle credentials and must fail closed.
    The canonical durable-principal vocabulary for those shared auth routes is
    recorded in `docs/release-control/v6/internal/IDENTITY_INVARIANTS.md`; agent
    lifecycle work may consume that identity but must not define a parallel

@@ -177,6 +177,12 @@ regression protection.
    the same startup-only router rule: env opt-in may configure monitoring-owned
    checker/collector callbacks, but normal protected request setup must not run
    `pct`, scan LXC guests, or collect Docker inventory.
+   Agent command-token validation follows the same bounded router rule:
+   `internal/api/agent_exec_token_binding.go` may validate against the
+   in-memory API token registry and persist a single first-use binding for a
+   governed Proxmox install-command token, but it must not add guest scans,
+   monitor refreshes, broad persistence walks, or external calls to command
+   WebSocket registration.
    Container runtime migration token minting follows that same rule: adding
    server-derived owner metadata in `internal/api/router.go` must reuse the
    already-authenticated request context or caller token and must not add

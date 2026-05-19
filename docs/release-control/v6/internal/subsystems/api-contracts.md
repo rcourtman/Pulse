@@ -103,6 +103,7 @@ product API routes free of maintainer commercial analytics.
 68. `frontend-modern/src/api/ai.ts`
 69. `frontend-modern/src/api/aiChat.ts`
 70. `frontend-modern/src/api/patrol.ts`
+71. `internal/api/agent_exec_token_binding.go`
 
 ## Shared Boundaries
 
@@ -447,6 +448,15 @@ the canonical monitored-system blocked payload.
     prompt injection, so API payload builders may pass structured product
     context without turning raw resource identity into user-authored text or
     disclosure authority.
+3d. Route command-agent WebSocket registration token semantics through
+    `internal/api/agent_exec_token_binding.go`, `internal/api/router.go`, and
+    `internal/api/contract_test.go` together. `agent:exec` tokens must already
+    be bound to the registering agent ID or hostname before `/api/agent/ws`
+    accepts command registration. The only first-use exception is a
+    Pulse-minted PVE/PBS install-command token carrying the governed install
+    metadata; that token may bind once to the first command agent ID and
+    hostname that registers, and a later different agent or hostname must be
+    rejected. Generic unbound `agent:exec` tokens remain fail-closed.
 4. Route unified resource sensitivity, routing, and `aiSafeSummary` payload changes through `internal/api/resources.go`, `internal/api/contract_test.go`, and the canonical frontend resource consumer proofs together; resource governance metadata must not ship as an API-only or frontend-only heuristic
    That same resource payload contract owns `aggregations.policyPosture` on
    `/api/resources` and `/api/resources/stats`. The aggregation must be derived

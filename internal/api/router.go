@@ -521,59 +521,7 @@ func (r *Router) setupRoutes() {
 	r.systemSettingsHandler = NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.mtMonitor, r.monitor, r.reloadSystemSettings, r.reloadFunc)
 
 	// Agent execution server for AI tool use
-	r.agentExecServer = agentexec.NewServer(func(token string, agentID string, hostname string) bool {
-		// Validate agent tokens using the API tokens system with scope check
-		if r.config == nil {
-			return false
-		}
-		// Check the new API tokens system with scope validation
-		if record, ok := r.config.ValidateAPIToken(token); ok {
-			// SECURITY: Require agent:exec scope for WebSocket connections
-			if !record.HasScope(config.ScopeAgentExec) {
-				log.Warn().
-					Str("token_id", record.ID).
-					Msg("Agent exec token missing required scope: agent:exec")
-				return false
-			}
-
-			boundID := strings.TrimSpace(record.Metadata["bound_agent_id"])
-			boundHost := strings.TrimSpace(record.Metadata["bound_hostname"])
-			if boundID == "" && boundHost == "" {
-				log.Warn().
-					Str("token_id", record.ID).
-					Msg("Agent exec token missing binding metadata")
-				return false
-			}
-
-			// Hostname binding is authoritative: enrollment-minted tokens carry
-			// bound_hostname, and the agent's runtime agentID is derived locally
-			// (/etc/machine-id or override) rather than from a server-canonical
-			// form. Matching on hostname preserves the trust boundary ("the
-			// bearer is running on the bound host") and is robust to the agent
-			// reporting an agentID the server could not have predicted at
-			// mint time.
-			if boundHost != "" && strings.EqualFold(boundHost, strings.TrimSpace(hostname)) {
-				return true
-			}
-
-			// Fall back to bound_agent_id equality for tokens minted through
-			// paths that set it directly. Pre-enroll tokens and tokens rotated
-			// by tests/contract suites use this form.
-			if boundID != "" && boundID == agentID {
-				return true
-			}
-
-			log.Warn().
-				Str("token_id", record.ID).
-				Str("bound_id", boundID).
-				Str("bound_hostname", boundHost).
-				Str("requested_id", agentID).
-				Str("requested_hostname", strings.TrimSpace(hostname)).
-				Msg("Agent token mismatch: token is not bound to the registering agent")
-			return false
-		}
-		return false
-	})
+	r.agentExecServer = agentexec.NewServer(r.validateAgentExecToken)
 	if r.monitor != nil {
 		r.configureProxmoxGuestDockerDetection(r.monitor)
 	}

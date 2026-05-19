@@ -11431,6 +11431,80 @@ func TestContract_AgentExecWebSocketAcceptsLegacyHostnameBinding(t *testing.T) {
 	}
 }
 
+func TestContract_AgentExecWebSocketBindsProxmoxInstallTokenOnFirstUse(t *testing.T) {
+	rawToken := "contract-agent-proxmox-install-token.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentExec, config.ScopeAgentReport}, map[string]string{
+		"install_type": "pve",
+		"issued_via":   agentInstallIssuedViaConfig,
+	})
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ts := newIPv4HTTPServer(t, router.Handler())
+	defer ts.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL)+"/api/agent/ws", wsHeadersForHTTP(t, ts.URL))
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+
+	regMsg, err := agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  "agent-delly",
+		Hostname: "delly",
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    rawToken,
+	})
+	if err != nil {
+		conn.Close()
+		t.Fatalf("NewMessage: %v", err)
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
+		conn.Close()
+		t.Fatalf("WriteJSON: %v", err)
+	}
+	reg := readRegisteredPayload(t, conn)
+	conn.Close()
+	if !reg.Success {
+		t.Fatalf("expected Pulse-minted Proxmox install token to bind on first command registration, got %q", reg.Message)
+	}
+
+	config.Mu.Lock()
+	if got := cfg.APITokens[0].Metadata["bound_hostname"]; got != "delly" {
+		config.Mu.Unlock()
+		t.Fatalf("bound_hostname = %q, want delly", got)
+	}
+	if got := cfg.APITokens[0].Metadata["bound_agent_id"]; got != "agent-delly" {
+		config.Mu.Unlock()
+		t.Fatalf("bound_agent_id = %q, want agent-delly", got)
+	}
+	config.Mu.Unlock()
+
+	conn, _, err = websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL)+"/api/agent/ws", wsHeadersForHTTP(t, ts.URL))
+	if err != nil {
+		t.Fatalf("Dial rebound: %v", err)
+	}
+	defer conn.Close()
+
+	regMsg, err = agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  "agent-other",
+		Hostname: "other-host",
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    rawToken,
+	})
+	if err != nil {
+		t.Fatalf("NewMessage rebound: %v", err)
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
+		t.Fatalf("WriteJSON rebound: %v", err)
+	}
+	reg = readRegisteredPayload(t, conn)
+	if reg.Success {
+		t.Fatalf("expected first-use-bound Proxmox install token to reject a different command agent")
+	}
+}
+
 func TestContract_AdminBypassFailsClosedOutsideDevMode(t *testing.T) {
 	t.Setenv("ALLOW_ADMIN_BYPASS", "1")
 	t.Setenv("PULSE_DEV", "")

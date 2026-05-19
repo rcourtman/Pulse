@@ -42,6 +42,12 @@ When enabled, commands still flow through Pulse's command policy and approval
 surfaces instead of silently turning every agent into an unrestricted remote
 shell.
 
+Agent command tokens must be bound to a host or agent identity before command
+registration is accepted. Proxmox install-command tokens are the only first-use
+exception: because the server mints them before the installer knows the final
+hostname, Pulse binds them to the first command agent that registers with that
+token. Generic unbound `agent:exec` tokens still fail closed.
+
 ## Proxmox Deployment Choices
 
 You do not need a Pulse agent on every Proxmox-related host just to see basic
@@ -59,9 +65,10 @@ answers your monitoring question:
 
 Inside-guest runtime visibility is explicit. Installing the agent inside a VM or
 LXC authorizes that guest-local agent to report Docker/Podman monitoring data
-according to its local module flags. A Proxmox node agent can also collect
-Docker container inventory from LXC guests through `pct exec`, but only when the
-server is started with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true`.
+according to its local module flags. A Proxmox node agent does not look inside
+LXCs by default. It can collect Docker container inventory from LXC guests
+through `pct exec`, but only when the server is started with
+`PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true`.
 Inventory collection is disabled by default, can be VMID-allowlisted, and is
 limited to the Docker page summary path: Docker host/runtime version, container
 ID, name, image, state/status, ports, and aggregate `docker stats` counters.

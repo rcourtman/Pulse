@@ -138,13 +138,15 @@ Docker/Podman inside a VM or LXC is monitored from inside that guest. Install th
 Unified Agent in the guest when you want full Docker host, container, service,
 and task inventory on the Docker page.
 
-Pulse does not use a Proxmox node agent to collect guest container inventory by
-default. The optional Proxmox-side LXC Docker hint is off unless the Pulse server
-is started with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION=true`. That hint
-uses `pct exec` only to check whether `/var/run/docker.sock` exists in a running
-LXC; it does not enumerate containers, images, environment variables, files, or
-processes. Use it only when operators are comfortable with Proxmox-side guest
-probing for placement hints.
+Pulse does not use a Proxmox node agent to look inside LXCs by default. The
+optional Proxmox-side LXC Docker hint is off unless the Pulse server is started
+with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION=true`. That hint uses
+`pct exec` only to check whether `/var/run/docker.sock` exists in a running LXC;
+it does not enumerate containers, images, environment variables, files, or
+processes. The stronger Proxmox-side LXC Docker inventory path is separately
+disabled unless the server is started with
+`PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true`. Use either path only when
+operators are comfortable with Proxmox-side guest probing.
 
 ## Installation Options
 

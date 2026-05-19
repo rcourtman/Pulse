@@ -65,6 +65,13 @@ state.
 
 ## Extension Points
 
+Shared command-agent token binding in `internal/api/agent_exec_token_binding.go`
+is API-owned adjacent infrastructure. Storage- and recovery-adjacent setup or
+diagnostics flows may observe the API-owned `bound_agent_id`,
+`bound_hostname`, and `bound_at` metadata, but they must not rebind generic
+`agent:exec` tokens or treat a Proxmox install-command token as recoverable for
+another host after the first command registration identity has been persisted.
+
 Generated Proxmox setup-script, runtime host-agent setup, and installer
 auto-registration changes that affect backup visibility permissions are
 storage/recovery-adjacent: optional PVE `/storage` grants must remain effective

@@ -674,6 +674,98 @@ func TestSecurityTokens_AgentExecRejectsUnboundToken(t *testing.T) {
 	conn.Close()
 }
 
+func TestSecurityTokens_ProxmoxInstallExecTokenBindsOnFirstCommandRegistration(t *testing.T) {
+	rawToken := "agent-install-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentExec, config.ScopeAgentReport}, map[string]string{
+		"install_type": "pve",
+		"issued_via":   agentInstallIssuedViaConfig,
+	})
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ts := newIPv4HTTPServer(t, router.Handler())
+	defer ts.Close()
+
+	wsURL := wsURLForHTTP(ts.URL) + "/api/agent/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, ts.URL))
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	regMsg, err := agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  "machine-id-agent",
+		Hostname: "delly",
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    rawToken,
+	})
+	if err != nil {
+		conn.Close()
+		t.Fatalf("NewMessage: %v", err)
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
+		conn.Close()
+		t.Fatalf("WriteJSON: %v", err)
+	}
+	reg := readRegisteredPayload(t, conn)
+	if !reg.Success {
+		conn.Close()
+		t.Fatalf("expected Pulse-minted Proxmox install token to bind on first command registration, got %q", reg.Message)
+	}
+	conn.Close()
+
+	config.Mu.Lock()
+	if got := cfg.APITokens[0].Metadata["bound_hostname"]; got != "delly" {
+		config.Mu.Unlock()
+		t.Fatalf("bound_hostname = %q, want delly", got)
+	}
+	if got := cfg.APITokens[0].Metadata["bound_agent_id"]; got != "machine-id-agent" {
+		config.Mu.Unlock()
+		t.Fatalf("bound_agent_id = %q, want machine-id-agent", got)
+	}
+	if got := cfg.APITokens[0].Metadata["bound_at"]; got == "" {
+		config.Mu.Unlock()
+		t.Fatalf("bound_at was not recorded")
+	}
+	config.Mu.Unlock()
+
+	persisted, err := config.NewConfigPersistence(cfg.DataPath).LoadAPITokens()
+	if err != nil {
+		t.Fatalf("LoadAPITokens: %v", err)
+	}
+	if len(persisted) != 1 {
+		t.Fatalf("persisted token count = %d, want 1", len(persisted))
+	}
+	if got := persisted[0].Metadata["bound_hostname"]; got != "delly" {
+		t.Fatalf("persisted bound_hostname = %q, want delly", got)
+	}
+
+	conn, _, err = websocket.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, ts.URL))
+	if err != nil {
+		t.Fatalf("Dial attacker: %v", err)
+	}
+	regMsg, err = agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  "attacker-id",
+		Hostname: "other-host",
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    rawToken,
+	})
+	if err != nil {
+		conn.Close()
+		t.Fatalf("NewMessage attacker: %v", err)
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
+		conn.Close()
+		t.Fatalf("WriteJSON attacker: %v", err)
+	}
+	reg = readRegisteredPayload(t, conn)
+	if reg.Success {
+		conn.Close()
+		t.Fatalf("expected first-use-bound install token to reject a different host")
+	}
+	conn.Close()
+}
+
 func TestSecurityTokens_AgentExecRequiresAgentExecScope(t *testing.T) {
 	rawToken := "agent-scope-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAIChat}, nil)

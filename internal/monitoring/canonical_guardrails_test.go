@@ -727,6 +727,42 @@ func TestProxmoxGuestDockerInventoryUsesCanonicalReportIngestPath(t *testing.T) 
 	}
 }
 
+func TestProxmoxGuestDockerLXCProbingRequiresExplicitOptIn(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"../config/config.go": {
+			"EnableProxmoxGuestDockerDetection bool",
+			`envconfig:"PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION" default:"false"`,
+			"EnableProxmoxGuestDockerInventory bool",
+			`envconfig:"PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY" default:"false"`,
+		},
+		"../api/router.go": {
+			"inventoryEnabled := r.config != nil && r.config.EnableProxmoxGuestDockerInventory",
+			"detectionEnabled := r.config != nil && (r.config.EnableProxmoxGuestDockerDetection || inventoryEnabled)",
+			"m.SetDockerChecker(nil)",
+			"m.SetDockerInventoryCollector(nil)",
+			"if inventoryEnabled {",
+		},
+		"../../docs/UNIFIED_AGENT.md": {
+			"Pulse does not use a Proxmox node agent to look inside LXCs by default.",
+			"`PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION=true`",
+			"`PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true`",
+		},
+	}
+
+	for file, snippets := range requiredSnippets {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
+		}
+	}
+}
+
 func TestBackupOrphanDetectionUsesCanonicalInventoryReadinessScope(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		"monitor.go": {
