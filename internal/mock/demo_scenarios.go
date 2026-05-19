@@ -416,9 +416,19 @@ func applyDemoDockerScenario(state *models.StateSnapshot, now time.Time) {
 	sort.Slice(state.DockerHosts, func(i, j int) bool {
 		return state.DockerHosts[i].ID < state.DockerHosts[j].ID
 	})
+	// One docker host index is forced offline so the demo Docker page exposes a
+	// disconnected host with its containers shown as exited rather than running.
+	const offlineDockerIndex = 2
 	for i := range state.DockerHosts {
-		hostProfile := demoDockerHostProfiles[i%len(demoDockerHostProfiles)]
 		host := &state.DockerHosts[i]
+		if i == offlineDockerIndex {
+			host.Hostname = "field-office-edge-01"
+			host.DisplayName = "Field Office Edge 01"
+			host.Status = "offline"
+			host.Containers = applyDemoOfflineDockerContainers(host.Containers, now)
+			continue
+		}
+		hostProfile := demoDockerHostProfiles[i%len(demoDockerHostProfiles)]
 		host.Hostname = hostProfile.Hostname
 		host.DisplayName = hostProfile.DisplayName
 		host.Status = "online"
@@ -434,6 +444,35 @@ func applyDemoDockerScenario(state *models.StateSnapshot, now time.Time) {
 			host.Status = "degraded"
 		}
 	}
+}
+
+func applyDemoOfflineDockerContainers(containers []models.DockerContainer, now time.Time) []models.DockerContainer {
+	sort.Slice(containers, func(i, j int) bool {
+		return containers[i].ID < containers[j].ID
+	})
+	offlineProfiles := []demoDockerContainerProfile{
+		{Name: "branch-portal", Image: "ghcr.io/pulse-demo/branch-portal:2026.04", Tags: []string{"edge", "web", "branch-office"}},
+		{Name: "branch-syncthing", Image: "linuxserver/syncthing:1.27.10", Tags: []string{"sync", "edge", "branch-office"}},
+		{Name: "branch-vpn", Image: "wireguard:1.0.20210914", Tags: []string{"vpn", "edge", "branch-office"}},
+	}
+	finished := now
+	if finished.IsZero() {
+		finished = time.Now()
+	}
+	finished = finished.Add(-18 * time.Minute)
+	for i := range containers {
+		profile := offlineProfiles[i%len(offlineProfiles)]
+		containers[i].Name = profile.Name
+		containers[i].Image = profile.Image
+		containers[i].Labels = mergeScenarioLabelSet(containers[i].Labels, profile.Tags)
+		containers[i].State = "exited"
+		containers[i].Status = "Exited (137) 18 minutes ago"
+		containers[i].Health = ""
+		containers[i].StartedAt = nil
+		finishedAt := finished
+		containers[i].FinishedAt = &finishedAt
+	}
+	return containers
 }
 
 func applyDemoDockerContainerProfiles(
@@ -482,12 +521,19 @@ func applyDemoKubernetesScenario(state *models.StateSnapshot, now time.Time) {
 		cluster.DisplayName = "Production"
 		cluster.Status = "online"
 
+		// The last cluster simulates a worker outage: nodes that resolve to the
+		// `prod-euw1-k8s-03` profile are reported NotReady, which cascades to a
+		// degraded host status in syncMockKubernetesNodeHosts.
+		offlineWorkerProfile := ""
+		if clusterIndex == len(state.KubernetesClusters)-1 {
+			offlineWorkerProfile = "prod-euw1-k8s-03"
+		}
 		nodeNameMap := make(map[string]string, len(cluster.Nodes))
 		for i := range cluster.Nodes {
 			profile := demoKubernetesNodeProfiles[i%len(demoKubernetesNodeProfiles)]
 			oldName := cluster.Nodes[i].Name
 			cluster.Nodes[i].Name = profile.Name
-			cluster.Nodes[i].Ready = true
+			cluster.Nodes[i].Ready = profile.Name != offlineWorkerProfile
 			cluster.Nodes[i].Unschedulable = false
 			cluster.Nodes[i].Roles = append([]string(nil), profile.Roles...)
 			nodeNameMap[oldName] = profile.Name
@@ -581,7 +627,8 @@ func applyDemoHostScenario(state *models.StateSnapshot, now time.Time) {
 		if strings.TrimSpace(host.DisplayName) == "" {
 			host.DisplayName = humanizeHostDisplayName(host.Hostname)
 		}
-		if strings.ToLower(strings.TrimSpace(host.Hostname)) == "pve5" {
+		hostname := strings.ToLower(strings.TrimSpace(host.Hostname))
+		if hostname == "pve5" || hostname == "prod-euw1-k8s-03" {
 			host.Status = "offline"
 			host.CPUUsage = 0
 			host.Memory.Used = 0
@@ -624,8 +671,15 @@ func applyDemoStorageScenario(state *models.StateSnapshot, now time.Time) {
 
 	for i := range state.PBSInstances {
 		state.PBSInstances[i].Name = []string{"backup-vault", "dr-vault"}[minInt(i, 1)]
-		state.PBSInstances[i].Status = "online"
-		state.PBSInstances[i].ConnectionHealth = "healthy"
+		if i == 1 {
+			// dr-vault simulates a degraded secondary so the PBS page shows a
+			// non-healthy instance alongside the healthy primary.
+			state.PBSInstances[i].Status = "degraded"
+			state.PBSInstances[i].ConnectionHealth = "degraded"
+		} else {
+			state.PBSInstances[i].Status = "online"
+			state.PBSInstances[i].ConnectionHealth = "healthy"
+		}
 		state.PBSInstances[i].LastSeen = demoRecentSeenAt(now, "pbs", state.PBSInstances[i].ID, state.PBSInstances[i].Name)
 		if len(state.PBSInstances[i].Datastores) > 0 {
 			datastoreNames := []string{"primary-vault", "offsite-vault", "replica-vault"}
@@ -641,11 +695,15 @@ func applyDemoStorageScenario(state *models.StateSnapshot, now time.Time) {
 	for i := range state.PMGInstances {
 		if i == 0 {
 			state.PMGInstances[i].Name = "mail-gateway-eu"
+			state.PMGInstances[i].Status = "online"
+			state.PMGInstances[i].ConnectionHealth = "healthy"
 		} else {
+			// mail-gateway-us simulates a degraded edge gateway so the PMG page
+			// shows a non-healthy instance alongside the healthy primary.
 			state.PMGInstances[i].Name = "mail-gateway-us"
+			state.PMGInstances[i].Status = "degraded"
+			state.PMGInstances[i].ConnectionHealth = "degraded"
 		}
-		state.PMGInstances[i].Status = "online"
-		state.PMGInstances[i].ConnectionHealth = "healthy"
 		state.PMGInstances[i].LastSeen = demoRecentSeenAt(now, "pmg", state.PMGInstances[i].ID, state.PMGInstances[i].Name)
 	}
 }

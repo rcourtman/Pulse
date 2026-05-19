@@ -171,23 +171,23 @@ func TestFixtureGraphUpdateMetricsRestoresStableDemoInfrastructurePosture(t *tes
 
 	graph.UpdateMetrics(cfg, later)
 
-	if !allHostsOnline(graph) {
-		t.Fatal("expected demo host agents to restore online status after metric refresh")
+	if !hostsMatchCuratedPosture(graph) {
+		t.Fatal("expected demo host agents to restore curated posture (pve5 + prod-euw1-k8s-03 offline) after metric refresh")
 	}
-	if !allDockerHostsOnline(graph) {
-		t.Fatal("expected curated docker hosts to restore online status after metric refresh")
+	if !dockerHostsMatchCuratedPosture(graph) {
+		t.Fatal("expected curated docker hosts to restore posture (one offline) after metric refresh")
 	}
 	if !allKubernetesClustersOnline(graph) {
 		t.Fatal("expected curated kubernetes clusters to restore online status after metric refresh")
 	}
-	if !allKubernetesNodesReady(graph) {
-		t.Fatal("expected curated kubernetes nodes to restore ready status after metric refresh")
+	if !kubernetesNodesMatchCuratedPosture(graph) {
+		t.Fatal("expected curated kubernetes nodes to restore posture (prod-euw1-k8s-03 NotReady in offline cluster) after metric refresh")
 	}
-	if !allPBSInstancesOnlineHealthy(graph) {
-		t.Fatal("expected curated PBS posture to restore healthy online status after metric refresh")
+	if !pbsInstancesMatchCuratedPosture(graph) {
+		t.Fatal("expected curated PBS posture (dr-vault degraded, backup-vault online) to restore after metric refresh")
 	}
-	if !allPMGInstancesOnlineHealthy(graph) {
-		t.Fatal("expected curated PMG posture to restore healthy online status after metric refresh")
+	if !pmgInstancesMatchCuratedPosture(graph) {
+		t.Fatal("expected curated PMG posture (mail-gateway-us degraded, mail-gateway-eu online) to restore after metric refresh")
 	}
 	if !connectionHealthMatchesCuratedDemoState(graph) {
 		t.Fatal("expected connection-health map to match the final curated demo state after metric refresh")
@@ -337,9 +337,10 @@ func pmgInstanceExists(graph FixtureGraph, want string) bool {
 	return false
 }
 
-func allHostsOnline(graph FixtureGraph) bool {
+func hostsMatchCuratedPosture(graph FixtureGraph) bool {
 	for _, host := range graph.State.Hosts {
-		if strings.ToLower(strings.TrimSpace(host.Hostname)) == "pve5" {
+		hostname := strings.ToLower(strings.TrimSpace(host.Hostname))
+		if hostname == "pve5" || hostname == "prod-euw1-k8s-03" {
 			if host.Status != "offline" {
 				return false
 			}
@@ -352,9 +353,16 @@ func allHostsOnline(graph FixtureGraph) bool {
 	return true
 }
 
-func allDockerHostsOnline(graph FixtureGraph) bool {
-	for _, host := range graph.State.DockerHosts {
-		if host.Status != "online" {
+func dockerHostsMatchCuratedPosture(graph FixtureGraph) bool {
+	const offlineDockerIndex = 2
+	for i, host := range graph.State.DockerHosts {
+		if i == offlineDockerIndex {
+			if host.Status != "offline" {
+				return false
+			}
+			continue
+		}
+		if host.Status != "online" && host.Status != "degraded" {
 			return false
 		}
 	}
@@ -370,9 +378,14 @@ func allKubernetesClustersOnline(graph FixtureGraph) bool {
 	return true
 }
 
-func allKubernetesNodesReady(graph FixtureGraph) bool {
+func kubernetesNodesMatchCuratedPosture(graph FixtureGraph) bool {
 	for _, cluster := range graph.State.KubernetesClusters {
 		for _, node := range cluster.Nodes {
+			if node.Name == "prod-euw1-k8s-03" {
+				// At least one cluster reports this profile as NotReady to
+				// drive the demo Linux-host outage; others can be Ready.
+				continue
+			}
 			if !node.Ready || node.Unschedulable {
 				return false
 			}
@@ -381,8 +394,14 @@ func allKubernetesNodesReady(graph FixtureGraph) bool {
 	return true
 }
 
-func allPBSInstancesOnlineHealthy(graph FixtureGraph) bool {
-	for _, instance := range graph.State.PBSInstances {
+func pbsInstancesMatchCuratedPosture(graph FixtureGraph) bool {
+	for i, instance := range graph.State.PBSInstances {
+		if i == 1 {
+			if instance.Status != "degraded" || instance.ConnectionHealth != "degraded" {
+				return false
+			}
+			continue
+		}
 		if instance.Status != "online" || instance.ConnectionHealth != "healthy" {
 			return false
 		}
@@ -390,8 +409,14 @@ func allPBSInstancesOnlineHealthy(graph FixtureGraph) bool {
 	return true
 }
 
-func allPMGInstancesOnlineHealthy(graph FixtureGraph) bool {
-	for _, instance := range graph.State.PMGInstances {
+func pmgInstancesMatchCuratedPosture(graph FixtureGraph) bool {
+	for i, instance := range graph.State.PMGInstances {
+		if i == 1 {
+			if instance.Status != "degraded" || instance.ConnectionHealth != "degraded" {
+				return false
+			}
+			continue
+		}
 		if instance.Status != "online" || instance.ConnectionHealth != "healthy" {
 			return false
 		}

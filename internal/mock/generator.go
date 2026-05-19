@@ -4467,8 +4467,9 @@ func generatePBSInstances() []models.PBSInstance {
 		},
 	}
 
-	// Add a secondary PBS if we have enough nodes
-	if rand.Float64() > 0.4 {
+	// Always seed a secondary PBS so the demo PBS page can render a multi-instance posture
+	// with one healthy and one degraded vault.
+	{
 		pbsInstances = append(pbsInstances, models.PBSInstance{
 			ID:          "pbs-secondary",
 			Name:        "pbs-secondary",
@@ -4727,7 +4728,9 @@ func generatePMGInstances() []models.PMGInstance {
 
 	instances := []models.PMGInstance{primary}
 
-	if rand.Float64() > 0.65 {
+	// Always seed a secondary PMG so the demo PMG page can render a multi-instance posture
+	// with one healthy and one degraded gateway.
+	{
 		backupNow := now.Add(-6 * time.Hour)
 		secondaryStats := mailStats
 		secondaryStats.CountTotal *= 0.6
