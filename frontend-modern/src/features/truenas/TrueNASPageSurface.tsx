@@ -3,6 +3,7 @@ import DatabaseIcon from 'lucide-solid/icons/database';
 import { Show, createMemo } from 'solid-js';
 import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
+import type { WorkloadsStatusOption } from '@/components/Workloads/workloadsFilterModel';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
@@ -24,6 +25,12 @@ import {
 const TRUENAS_RESOURCE_QUERY = 'type=agent,app-container,storage,physical_disk';
 const TRUENAS_PLATFORM_FILTER = 'truenas';
 const VALID_TABS = new Set<TrueNASPageTabId>(TRUENAS_TAB_SPECS.map((tab) => tab.id));
+const TRUENAS_APP_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
+  { value: 'all', label: 'All' },
+  { value: 'running', label: 'Running' },
+  { value: 'degraded', label: 'Attention' },
+  { value: 'stopped', label: 'Stopped' },
+];
 
 const truenasIcon = () => <DatabaseIcon class="h-6 w-6 text-slate-400" />;
 
@@ -98,7 +105,13 @@ export function TrueNASPageSurface() {
                     tableOnly
                     showFilterToolbar
                     suppressPlatformFilter
+                    allowEmbeddedScopeFilters
                     forcedPlatform={TRUENAS_PLATFORM_FILTER}
+                    forcedViewMode="app-container"
+                    filterAriaLabel="TrueNAS app filters"
+                    filterSearchPlaceholder="Search TrueNAS apps by name, image, namespace, or system"
+                    filterSearchEmptyMessage="Recent TrueNAS app searches appear here."
+                    filterStatusOptions={TRUENAS_APP_STATUS_OPTIONS}
                     compactGroupHeaders
                   />
                 </Show>
@@ -110,6 +123,9 @@ export function TrueNASPageSurface() {
                 tableOnly
                 showFilterToolbar
                 forcedSourceFilter={TRUENAS_PLATFORM_FILTER}
+                filterAriaLabel="TrueNAS storage filters"
+                filterSearchPlaceholder="Search TrueNAS pools, datasets, disks, or nodes"
+                filterSearchEmptyMessage="Recent TrueNAS storage searches appear here."
               />
             </Show>
           </Show>

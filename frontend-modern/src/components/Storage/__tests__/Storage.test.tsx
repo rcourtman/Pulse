@@ -1884,6 +1884,38 @@ describe('Storage', () => {
     );
   });
 
+  it('passes platform-owned filter copy into embedded storage controls', () => {
+    mockLocationPath = '/vmware/storage';
+    hookResources = [
+      buildStorageResource('vsphere-datastore', 'vsan-prod', 'esxi-01', {
+        platformType: 'vmware-vsphere',
+        parentName: 'esxi-01',
+        storage: {
+          type: 'datastore',
+          topology: 'datastore',
+          nodes: ['esxi-01'],
+        },
+      }),
+    ];
+
+    render(() => (
+      <Storage
+        embedded
+        tableOnly
+        showFilterToolbar
+        forcedSourceFilter="vmware-vsphere"
+        filterAriaLabel="vSphere datastore filters"
+        filterSearchPlaceholder="Search vSphere datastores by name, host, or capacity group"
+        filterSearchEmptyMessage="Recent vSphere datastore searches appear here."
+      />
+    ));
+
+    expect(screen.getByRole('group', { name: 'vSphere datastore filters' })).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText('Search vSphere datastores by name, host, or capacity group'),
+    ).toBeInTheDocument();
+  });
+
   it('supports Proxmox platform table embedding without standalone page chrome', async () => {
     mockLocationPath = '/proxmox/storage';
     hookResources = [

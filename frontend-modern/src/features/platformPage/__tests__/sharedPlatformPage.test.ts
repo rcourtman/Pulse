@@ -66,6 +66,34 @@ describe('filterPlatformResources', () => {
     ]);
   });
 
+  it('searches platform-native metadata used by bespoke tables', () => {
+    const nativeRows: Resource[] = [
+      makeResource({
+        id: 'docker-host',
+        type: 'agent',
+        status: 'online',
+        docker: { runtimeVersion: '24.0.7', swarm: { nodeRole: 'manager' } },
+      }),
+      makeResource({
+        id: 'k8s-deploy',
+        type: 'k8s-deployment',
+        status: 'online',
+        kubernetes: {
+          clusterName: 'prod-cluster',
+          namespace: 'payments',
+          containerRuntimeVersion: 'containerd://1.7',
+        },
+      }),
+    ];
+
+    expect(filterPlatformResources(nativeRows, 'manager', 'all').map((r) => r.id)).toEqual([
+      'docker-host',
+    ]);
+    expect(filterPlatformResources(nativeRows, 'payments', 'all').map((r) => r.id)).toEqual([
+      'k8s-deploy',
+    ]);
+  });
+
   it('combines search and status filters', () => {
     const filtered = filterPlatformResources(resources, 'host', 'degraded');
     expect(filtered.map((r) => r.id).sort()).toEqual(['host-charlie', 'host-foxtrot'].sort());

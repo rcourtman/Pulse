@@ -9,6 +9,11 @@ export type WorkloadsGroupingMode = 'grouped' | 'flat';
 export type WorkloadsMetricDisplayMode = 'bars' | 'sparklines';
 export type WorkloadsSortKey = keyof WorkloadGuest | 'diskIo' | 'netIo';
 
+export interface WorkloadsStatusOption {
+  value: WorkloadsStatusMode;
+  label: string;
+}
+
 export interface WorkloadsFilterSelectOption {
   value: string;
   label: string;
@@ -35,6 +40,10 @@ export interface WorkloadsFilterProps {
   setSortKey: (value: WorkloadsSortKey) => void;
   setSortDirection: (value: 'asc' | 'desc') => void;
   onBeforeAutoFocus?: () => boolean;
+  ariaLabel?: string;
+  searchPlaceholder?: string;
+  searchEmptyMessage?: string;
+  statusOptions?: readonly WorkloadsStatusOption[];
   columnVisibility?: {
     availableColumns: ColumnDef[];
     isColumnHidden: (id: string) => boolean;
@@ -67,6 +76,7 @@ export interface CountActiveWorkloadsFiltersOptions {
   hostFilterValue?: string;
   platformFilterValue?: string;
   namespaceFilterValue?: string;
+  containerRuntimeFilterValue?: string;
 }
 
 export type HasActiveWorkloadsFiltersOptions = CountActiveWorkloadsFiltersOptions;
@@ -89,6 +99,7 @@ export const countActiveWorkloadsFilters = (
   if ((options.hostFilterValue ?? '') !== '') count++;
   if ((options.platformFilterValue ?? '') !== '') count++;
   if ((options.namespaceFilterValue ?? '') !== '') count++;
+  if ((options.containerRuntimeFilterValue ?? '') !== '') count++;
 
   return count;
 };

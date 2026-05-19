@@ -26,6 +26,9 @@ type StorageProps = {
   // page already locks source scope through `forcedSourceFilter`.
   showFilterToolbar?: boolean;
   suppressSourceFilter?: boolean;
+  filterAriaLabel?: string;
+  filterSearchPlaceholder?: string;
+  filterSearchEmptyMessage?: string;
 };
 
 const Storage: Component<StorageProps> = (props) => {
@@ -186,6 +189,9 @@ const Storage: Component<StorageProps> = (props) => {
               setView={setView}
               search={search}
               setSearch={setSearch}
+              filterAriaLabel={props.filterAriaLabel}
+              searchPlaceholder={props.filterSearchPlaceholder}
+              searchEmptyMessage={props.filterSearchEmptyMessage}
               groupBy={groupBy}
               setGroupBy={setGroupBy}
               sortKey={sortKey}

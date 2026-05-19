@@ -11,6 +11,8 @@ const mockWorkloadsSurface = vi.fn((props: WorkloadsSurfaceProps) => (
     data-forced-platform={props.forcedPlatform}
     data-forced-view-mode={props.forcedViewMode}
     data-column-scope={props.columnVisibilityStorageScope}
+    data-allow-scope-filters={String(props.allowEmbeddedScopeFilters)}
+    data-filter-placeholder={props.filterSearchPlaceholder}
   />
 ));
 
@@ -75,6 +77,14 @@ describe('KubernetesPageSurface contract', () => {
     expect(screen.getByTestId('kubernetes-workloads-surface')).toHaveAttribute(
       'data-column-scope',
       'kubernetes-pods',
+    );
+    expect(screen.getByTestId('kubernetes-workloads-surface')).toHaveAttribute(
+      'data-allow-scope-filters',
+      'true',
+    );
+    expect(screen.getByTestId('kubernetes-workloads-surface')).toHaveAttribute(
+      'data-filter-placeholder',
+      'Search pods by name, namespace, image, cluster, or node',
     );
   });
 });

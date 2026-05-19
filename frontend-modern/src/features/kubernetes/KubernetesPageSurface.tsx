@@ -1,6 +1,7 @@
 import ShipWheelIcon from 'lucide-solid/icons/ship-wheel';
 import { Show, createMemo } from 'solid-js';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
+import type { WorkloadsStatusOption } from '@/components/Workloads/workloadsFilterModel';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
@@ -20,6 +21,12 @@ const KUBERNETES_RESOURCE_QUERY = 'type=k8s-cluster,k8s-node,pod,k8s-deployment,
 const KUBERNETES_PLATFORM_FILTER = 'kubernetes';
 const KUBERNETES_WORKLOAD_FORCED_VIEW_MODE = 'pod';
 const KUBERNETES_WORKLOAD_COLUMN_SCOPE = 'kubernetes-pods';
+const KUBERNETES_POD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
+  { value: 'all', label: 'All' },
+  { value: 'running', label: 'Running' },
+  { value: 'degraded', label: 'Needs attention' },
+  { value: 'stopped', label: 'Not running' },
+];
 
 const k8sIcon = () => <ShipWheelIcon class="h-6 w-6 text-slate-400" />;
 
@@ -94,8 +101,13 @@ export function KubernetesPageSurface() {
                 tableOnly
                 showFilterToolbar
                 suppressPlatformFilter
+                allowEmbeddedScopeFilters
                 forcedPlatform={KUBERNETES_PLATFORM_FILTER}
                 forcedViewMode={KUBERNETES_WORKLOAD_FORCED_VIEW_MODE}
+                filterAriaLabel="Kubernetes pod filters"
+                filterSearchPlaceholder="Search pods by name, namespace, image, cluster, or node"
+                filterSearchEmptyMessage="Recent Kubernetes pod searches appear here."
+                filterStatusOptions={KUBERNETES_POD_STATUS_OPTIONS}
                 columnVisibilityStorageScope={KUBERNETES_WORKLOAD_COLUMN_SCOPE}
                 compactGroupHeaders
               />

@@ -42,6 +42,9 @@ type StoragePageControlsProps = {
   setView: (value: StorageView) => void;
   search: () => string;
   setSearch: (value: string) => void;
+  filterAriaLabel?: string;
+  searchPlaceholder?: string;
+  searchEmptyMessage?: string;
   searchTrailing?: JSX.Element;
   groupBy: () => StorageGroupKey;
   setGroupBy: (value: StorageGroupKey) => void;
@@ -266,14 +269,15 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
 
         <FilterBar
           role="group"
-          ariaLabel="Storage filters"
+          ariaLabel={props.filterAriaLabel ?? 'Storage filters'}
           isMobile={isMobile}
           search={{
             value: props.search,
             setValue: props.setSearch,
-            placeholder: 'Search storage... (e.g., local, nfs, node:pve1)',
+            placeholder:
+              props.searchPlaceholder ?? 'Search storage by pool, dataset, node, or device',
             historyKey: STORAGE_KEYS.STORAGE_SEARCH_HISTORY,
-            emptyMessage: 'Your recent storage searches will show here.',
+            emptyMessage: props.searchEmptyMessage ?? 'Recent storage searches appear here.',
           }}
           searchTrailing={props.searchTrailing}
           filters={buildFilters()}

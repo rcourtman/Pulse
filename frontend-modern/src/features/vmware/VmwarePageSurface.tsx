@@ -3,6 +3,7 @@ import CpuIcon from 'lucide-solid/icons/cpu';
 import { Show, createMemo } from 'solid-js';
 import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
+import type { WorkloadsStatusOption } from '@/components/Workloads/workloadsFilterModel';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
@@ -18,6 +19,12 @@ import { VMWARE_TAB_SPECS, buildVmwarePageModel, type VmwarePageTabId } from './
 const VMWARE_RESOURCE_QUERY = 'type=agent,vm,storage';
 const VMWARE_PLATFORM_FILTER = 'vmware-vsphere';
 const VALID_TABS = new Set<VmwarePageTabId>(VMWARE_TAB_SPECS.map((tab) => tab.id));
+const VMWARE_VM_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
+  { value: 'all', label: 'All' },
+  { value: 'running', label: 'Powered on' },
+  { value: 'degraded', label: 'Attention' },
+  { value: 'stopped', label: 'Powered off' },
+];
 
 const vmwareIcon = () => <CpuIcon class="h-6 w-6 text-slate-400" />;
 
@@ -91,7 +98,13 @@ export function VmwarePageSurface() {
                   tableOnly
                   showFilterToolbar
                   suppressPlatformFilter
+                  allowEmbeddedScopeFilters
                   forcedPlatform={VMWARE_PLATFORM_FILTER}
+                  forcedViewMode="vm"
+                  filterAriaLabel="vSphere VM filters"
+                  filterSearchPlaceholder="Search vSphere VMs by name, VM ID, host, or status"
+                  filterSearchEmptyMessage="Recent vSphere VM searches appear here."
+                  filterStatusOptions={VMWARE_VM_STATUS_OPTIONS}
                   compactGroupHeaders
                 />
               </div>
@@ -103,6 +116,9 @@ export function VmwarePageSurface() {
                 showFilterToolbar
                 forcedSourceFilter={VMWARE_PLATFORM_FILTER}
                 forcedView="pools"
+                filterAriaLabel="vSphere datastore filters"
+                filterSearchPlaceholder="Search vSphere datastores by name, host, or capacity group"
+                filterSearchEmptyMessage="Recent vSphere datastore searches appear here."
               />
             </Show>
           </Show>

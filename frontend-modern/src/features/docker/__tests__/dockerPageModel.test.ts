@@ -226,6 +226,9 @@ describe('dockerPageModel', () => {
     expect(filterDockerHosts(hosts, { searchTerm: 'docker 01' }).map((host) => host.id)).toEqual([
       'agent:docker-01',
     ]);
+    expect(filterDockerHosts(hosts, { searchTerm: 'podman' }).map((host) => host.id)).toEqual([
+      'agent:podman-01',
+    ]);
     expect(
       filterDockerHosts(hosts, { selectedHostScope: 'agent:podman-01' }).map((host) => host.id),
     ).toEqual(['agent:podman-01']);

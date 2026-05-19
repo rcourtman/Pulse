@@ -114,6 +114,10 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
               setSortKey={state.setSortKey}
               setSortDirection={state.setSortDirection}
               onBeforeAutoFocus={state.handleBeforeAutoFocus}
+              ariaLabel={props.filterAriaLabel}
+              searchPlaceholder={props.filterSearchPlaceholder}
+              searchEmptyMessage={props.filterSearchEmptyMessage}
+              statusOptions={props.filterStatusOptions}
               columnVisibility={state.workloadsFilterColumnVisibility()}
               chartsCollapsed={
                 state.isWorkloadsRoute() ? state.workloadsSummaryCollapsed : undefined

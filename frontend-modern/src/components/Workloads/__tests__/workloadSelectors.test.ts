@@ -146,6 +146,55 @@ describe('workloadSelectors', () => {
       expect(combined.map((g) => g.name)).toEqual(['alpha-api']);
     });
 
+    it('searches workload-native fields shown by platform pages', () => {
+      const guests = [
+        makeGuest(1, {
+          name: 'api-pod',
+          type: 'pod',
+          workloadType: 'pod',
+          image: 'registry.local/api:v2',
+          namespace: 'payments',
+          contextLabel: 'prod-cluster',
+          node: 'worker-a',
+          status: 'running',
+        }),
+        makeGuest(2, {
+          name: 'worker-container',
+          type: 'app-container',
+          workloadType: 'app-container',
+          image: 'redis:7',
+          containerRuntime: 'podman',
+          contextLabel: 'edge-docker-host',
+          platformType: 'docker',
+          status: 'running',
+        }),
+      ];
+
+      expect(
+        filterWorkloads({
+          guests,
+          viewMode: 'pod',
+          statusMode: 'all',
+          searchTerm: 'payments',
+          selectedNode: null,
+          selectedHostHint: null,
+          selectedKubernetesContext: null,
+        }).map((g) => g.name),
+      ).toEqual(['api-pod']);
+
+      expect(
+        filterWorkloads({
+          guests,
+          viewMode: 'app-container',
+          statusMode: 'all',
+          searchTerm: 'podman',
+          selectedNode: null,
+          selectedHostHint: null,
+          selectedKubernetesContext: null,
+        }).map((g) => g.name),
+      ).toEqual(['worker-container']);
+    });
+
     it('filters k8s by selected context key and filters non-k8s by host hint', () => {
       const guests = [
         makeGuest(1, {

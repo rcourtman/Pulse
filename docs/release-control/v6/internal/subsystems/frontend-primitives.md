@@ -238,6 +238,14 @@ Feature surfaces under `frontend-modern/src/features/` may own product-specific
 assessment semantics, but they must keep those semantics in their governed
 presentation helpers and render them inside the shared neutral Pulse surface
 language rather than introducing page-local verdict bands or nested cards.
+
+Shared filter/search primitives may provide the common shell, keyboard behavior,
+history, and reset mechanics, but the owning page or table must supply
+domain-specific visible copy, scope filters, status labels, and searchable
+field coverage. Platform pages must not surface generic "rows/resources"
+search affordances when the visible table is actually pods, VMs, datastores,
+apps, mail gateways, storage pools, backup jobs, or another product-owned
+object model.
 Patrol's primary assessment strip is descriptive only; it must not render a
 Patrol-authored recommended next step, suggested prompt chips, or a secondary
 action band inside the assessment shell. If the same assessment opens

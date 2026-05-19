@@ -49,6 +49,36 @@ type SortDirection = 'asc' | 'desc';
 
 type SortValue = string | number | boolean | null | undefined;
 
+const workloadSearchCandidates = (guest: WorkloadGuest): Array<string | number | undefined> => [
+  guest.name,
+  guest.id,
+  guest.displayId,
+  guest.vmid,
+  guest.node,
+  guest.status,
+  guest.image,
+  guest.namespace,
+  guest.contextLabel,
+  guest.clusterName,
+  guest.instance,
+  guest.platformType,
+  guest.workloadType,
+  guest.containerRuntime,
+  guest.containerId,
+  guest.dockerHostId,
+  guest.kubernetesAgentId,
+];
+
+const matchesWorkloadTextSearch = (guest: WorkloadGuest, term: string): boolean => {
+  const needle = term.trim().toLowerCase();
+  if (!needle) return true;
+  return workloadSearchCandidates(guest)
+    .filter(
+      (value): value is string | number => typeof value === 'string' || typeof value === 'number',
+    )
+    .some((value) => String(value).toLowerCase().includes(needle));
+};
+
 export const filterWorkloads = ({
   guests: allGuests,
   viewMode,
@@ -155,13 +185,7 @@ export const filterWorkloads = ({
 
     if (textSearches.length > 0) {
       guests = guests.filter((g) =>
-        textSearches.some(
-          (term) =>
-            g.name.toLowerCase().includes(term) ||
-            g.vmid.toString().includes(term) ||
-            g.node.toLowerCase().includes(term) ||
-            g.status.toLowerCase().includes(term),
-        ),
+        textSearches.some((term) => matchesWorkloadTextSearch(g, term)),
       );
     }
   }

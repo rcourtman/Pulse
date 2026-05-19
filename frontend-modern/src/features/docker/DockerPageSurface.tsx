@@ -2,6 +2,7 @@ import ContainerIcon from 'lucide-solid/icons/container';
 import { Show, createMemo } from 'solid-js';
 import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
+import type { WorkloadsStatusOption } from '@/components/Workloads/workloadsFilterModel';
 import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
@@ -27,6 +28,12 @@ const DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES = {
   context: 'Host',
   disk: 'Writable layer',
 } as const;
+const DOCKER_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
+  { value: 'all', label: 'All' },
+  { value: 'running', label: 'Running' },
+  { value: 'degraded', label: 'Attention' },
+  { value: 'stopped', label: 'Stopped' },
+];
 
 const dockerIcon = () => <ContainerIcon class="h-6 w-6 text-slate-400" />;
 
@@ -128,6 +135,10 @@ export function DockerPageSurface() {
                     setSortKey={workloadsState.setSortKey}
                     setSortDirection={workloadsState.setSortDirection}
                     onBeforeAutoFocus={workloadsState.handleBeforeAutoFocus}
+                    ariaLabel="Docker workload filters"
+                    searchPlaceholder="Search containers by name, image, host, or runtime"
+                    searchEmptyMessage="Recent Docker container searches appear here."
+                    statusOptions={DOCKER_WORKLOAD_STATUS_OPTIONS}
                     columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
                     containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
                     hostFilter={workloadsState.hostFilterConfig()}

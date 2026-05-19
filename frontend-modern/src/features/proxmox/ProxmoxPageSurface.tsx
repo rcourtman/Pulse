@@ -4,6 +4,7 @@ import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
 import {
   DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
+  type WorkloadsStatusOption,
   type WorkloadsMetricDisplayMode,
 } from '@/components/Workloads/workloadsFilterModel';
 import {
@@ -45,6 +46,12 @@ const PROXMOX_RESOURCE_QUERY =
 const PROXMOX_PLATFORM_FILTER = 'proxmox-pve';
 const PROXMOX_WORKLOAD_STATUS_STORAGE_SCOPE = 'proxmox';
 const VALID_TABS = new Set<ProxmoxPageTabId>(PROXMOX_TAB_SPECS.map((tab) => tab.id));
+const PROXMOX_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
+  { value: 'all', label: 'All' },
+  { value: 'running', label: 'Running' },
+  { value: 'degraded', label: 'Attention' },
+  { value: 'stopped', label: 'Stopped' },
+];
 
 const proxmoxIcon = () => <ProxmoxIcon class="h-6 w-6 text-slate-400" />;
 
@@ -147,6 +154,10 @@ export function ProxmoxPageSurface() {
                   allowEmbeddedScopeFilters
                   forcedPlatform={PROXMOX_PLATFORM_FILTER}
                   statusModeStorageScope={PROXMOX_WORKLOAD_STATUS_STORAGE_SCOPE}
+                  filterAriaLabel="Proxmox workload filters"
+                  filterSearchPlaceholder="Search VMs and LXCs by name, VMID, node, or status"
+                  filterSearchEmptyMessage="Recent Proxmox workload searches appear here."
+                  filterStatusOptions={PROXMOX_WORKLOAD_STATUS_OPTIONS}
                   compactGroupHeaders
                   groupNodeDrawerMode="disabled"
                   metricDisplayMode={metricDisplayMode}
@@ -164,6 +175,9 @@ export function ProxmoxPageSurface() {
                 tableOnly
                 showFilterToolbar
                 forcedSourceFilter={PROXMOX_PLATFORM_FILTER}
+                filterAriaLabel="Proxmox storage filters"
+                filterSearchPlaceholder="Search Proxmox storage by pool, datastore, node, or device"
+                filterSearchEmptyMessage="Recent Proxmox storage searches appear here."
               />
             </Show>
             <Show when={activeTab() === 'replication'}>

@@ -220,8 +220,13 @@ bypass the API fail-closed execution gate.
    as unlabeled inline primary controls from that catalog in the same compact
    second-row rail as sort, charts, and reset, while Node, Source, Role, and
    Group remain menu/chip filters because their option sets are scope- or
-   data-driven. Subtabs (Pools / Physical Disks) sit above the bar as
-   navigation, not filters. Platform-page storage and recovery section tabs
+   data-driven. Embedded platform storage surfaces must provide page-owned
+   filter aria labels, search placeholders, and empty-search copy for the
+   visible storage model (for example Proxmox storage, TrueNAS pools and
+   datasets, or vSphere datastores) while preserving the canonical
+   `FilterDef[]` route-state contract in `StoragePageControls`. Subtabs
+   (Pools / Physical Disks) sit above the bar as navigation, not filters.
+   Platform-page storage and recovery section tabs
    are still capability-gated navigation: Proxmox Storage,
    Backups, Ceph, Replication, and adjacent recovery sections may appear only
    when the platform page model has matching storage, backup, Ceph,

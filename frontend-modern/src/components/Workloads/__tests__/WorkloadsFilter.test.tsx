@@ -98,6 +98,30 @@ describe('WorkloadsFilter', () => {
       expect(screen.getByTestId('search-input')).toBeInTheDocument();
     });
 
+    it('accepts page-owned search copy and status labels', () => {
+      render(() => (
+        <WorkloadsFilter
+          {...makeProps({
+            searchPlaceholder: 'Search pods by namespace or image',
+            statusOptions: [
+              { value: 'all', label: 'All' },
+              { value: 'running', label: 'Running' },
+              { value: 'degraded', label: 'Needs attention' },
+              { value: 'stopped', label: 'Not running' },
+            ],
+          })}
+        />
+      ));
+
+      expect(screen.getByPlaceholderText('Search pods by namespace or image')).toBeInTheDocument();
+      expect(
+        within(inlineFilterGroup('Status')).getByRole('button', { name: 'Needs attention' }),
+      ).toBeInTheDocument();
+      expect(
+        within(inlineFilterGroup('Status')).getByRole('button', { name: 'Not running' }),
+      ).toBeInTheDocument();
+    });
+
     it('exposes Type and Status as one-click inline controls', () => {
       render(() => <WorkloadsFilter {...makeProps()} />);
       expect(inlineFilterGroup('Type')).toBeInTheDocument();

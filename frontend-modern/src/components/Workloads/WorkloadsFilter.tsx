@@ -37,11 +37,10 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
 
   const workloadTypeOptions = (): FilterSelectOption[] =>
     (isProxmoxScope()
-      ? WORKLOAD_TYPE_OPTIONS.filter((option) =>
-          option.value === 'all' || option.value === 'vm' || option.value === 'container',
-        ).map((option) =>
-          option.value === 'container' ? { ...option, label: 'LXCs' } : option,
-        )
+      ? WORKLOAD_TYPE_OPTIONS.filter(
+          (option) =>
+            option.value === 'all' || option.value === 'vm' || option.value === 'container',
+        ).map((option) => (option.value === 'container' ? { ...option, label: 'LXCs' } : option))
       : WORKLOAD_TYPE_OPTIONS
     ).map((option) => ({
       value: option.value,
@@ -54,16 +53,11 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
             : option.value === 'pod'
               ? BoxesIcon
               : undefined,
-      tone:
-        option.value === 'vm'
-          ? 'info'
-          : option.value === 'container'
-            ? 'success'
-            : undefined,
+      tone: option.value === 'vm' ? 'info' : option.value === 'container' ? 'success' : undefined,
     }));
 
   const workloadStatusOptions = (): FilterSelectOption[] =>
-    WORKLOAD_STATUS_FILTER_OPTIONS.map((option) => ({
+    (props.statusOptions ?? WORKLOAD_STATUS_FILTER_OPTIONS).map((option) => ({
       value: option.value,
       label: option.label,
       leading:
@@ -95,6 +89,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
       hostFilterValue: props.hostFilter?.value,
       platformFilterValue: props.platformFilter?.value,
       namespaceFilterValue: props.namespaceFilter?.value,
+      containerRuntimeFilterValue: props.containerRuntimeFilter?.value,
     }),
   );
 
@@ -128,18 +123,16 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
       });
     }
 
-    filters.push(
-      {
-        id: 'workloads-status',
-        label: 'Status',
-        group: 'status',
-        inline: true,
-        value: props.statusMode,
-        setValue: (value: string) => props.setStatusMode(value as WorkloadsStatusMode),
-        defaultValue: DEFAULT_WORKLOADS_STATUS_MODE,
-        options: workloadStatusOptions,
-      },
-    );
+    filters.push({
+      id: 'workloads-status',
+      label: 'Status',
+      group: 'status',
+      inline: true,
+      value: props.statusMode,
+      setValue: (value: string) => props.setStatusMode(value as WorkloadsStatusMode),
+      defaultValue: DEFAULT_WORKLOADS_STATUS_MODE,
+      options: workloadStatusOptions,
+    });
 
     const hostFilter = props.hostFilter;
     if (hostFilter) {
@@ -199,13 +192,14 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
   return (
     <FilterBar
       role="group"
-      ariaLabel="Workloads filters"
+      ariaLabel={props.ariaLabel ?? 'Workloads filters'}
       isMobile={isMobile}
       search={{
         value: props.search,
         setValue: props.setSearch,
-        placeholder: 'Search or filter...',
+        placeholder: props.searchPlaceholder ?? 'Search workloads by name, ID, node, or image',
         historyKey: STORAGE_KEYS.WORKLOADS_SEARCH_HISTORY,
+        emptyMessage: props.searchEmptyMessage ?? 'Recent workload searches appear here.',
         onBeforeAutoFocus: props.onBeforeAutoFocus,
       }}
       searchTrailing={props.searchTrailing}

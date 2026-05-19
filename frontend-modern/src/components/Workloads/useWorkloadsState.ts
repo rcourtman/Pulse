@@ -29,6 +29,7 @@ import {
 import {
   type WorkloadsGroupingMode,
   type WorkloadsMetricDisplayMode,
+  type WorkloadsStatusOption,
   type WorkloadsSortKey,
 } from './workloadsFilterModel';
 import { type WorkloadTableMetricHistoryRange } from './workloadMetricHistoryModel';
@@ -65,6 +66,10 @@ export interface WorkloadsSurfaceProps {
   forcedViewMode?: ViewMode;
   forcedGroupingMode?: WorkloadsGroupingMode;
   defaultSortKey?: WorkloadsSortKey;
+  filterAriaLabel?: string;
+  filterSearchPlaceholder?: string;
+  filterSearchEmptyMessage?: string;
+  filterStatusOptions?: readonly WorkloadsStatusOption[];
   // When the surface is mounted inside a platform-first page, the page owns
   // platform scope through `forcedPlatform`. Setting `showFilterToolbar`
   // keeps the operator-facing WorkloadsFilter visible alongside the table
@@ -189,6 +194,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   } = useWorkloadRouteState({
     allGuests,
     allowEmbeddedScopeFilters: props.allowEmbeddedScopeFilters,
+    forcedViewMode: props.forcedViewMode,
     showFilters,
     setShowFilters,
   });
