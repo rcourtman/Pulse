@@ -9,12 +9,10 @@ export type TrueNASTabSpec = {
   path: string;
 };
 
-// The Overview tab mirrors Proxmox / vSphere: systems table on top with the
-// pools-only StorageSurface, physical disks, and apps stacked beneath. The
-// standalone Disks and Apps tabs that used to live here were pure
-// duplicates — the Workloads filter inside Overview owns app
-// search/grouping, and the Storage tab provides the full StorageSurface
-// (pools + disks toggle, with toolbar) for richer storage exploration.
+// The Overview tab is intentionally narrow: appliance systems first, then apps
+// when present. Storage inventory, pool topology, and physical disks all live
+// on the Storage tab so operators have one canonical storage surface instead
+// of a duplicated overview snapshot plus a richer storage page.
 export const TRUENAS_TAB_SPECS: readonly TrueNASTabSpec[] = [
   { id: 'overview', label: 'Overview', path: '/truenas/overview' },
   { id: 'storage', label: 'Storage', path: '/truenas/storage' },
@@ -35,7 +33,6 @@ const isTrueNASPlatform = (resource: Resource): boolean =>
 export type TrueNASPageModel = {
   resources: Resource[];
   systems: Resource[];
-  disks: Resource[];
   apps: Resource[];
 };
 
@@ -46,12 +43,9 @@ export function buildTrueNASPageModel(resources: Resource[]): TrueNASPageModel {
 
   const systems = trueNasResources.filter((resource) => resource.type === 'agent');
   const apps = trueNasResources.filter((resource) => resource.type === 'app-container');
-  const disks = trueNasResources.filter((resource) => resource.type === 'physical_disk');
-
   return {
     resources: trueNasResources,
     systems,
-    disks,
     apps,
   };
 }

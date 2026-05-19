@@ -9,7 +9,6 @@ import {
   PlatformSectionTabs,
   PlatformTableEmptyState,
 } from '@/features/platformPage/sharedPlatformPage';
-import { TrueNASDisksTable } from './TrueNASDisksTable';
 import { TrueNASSystemsTable } from './TrueNASSystemsTable';
 import {
   TRUENAS_TAB_SPECS,
@@ -89,21 +88,6 @@ export function TrueNASPageSurface() {
                   emptyDescription="TrueNAS systems appear here once a TrueNAS connection reports its top-level appliance."
                   showToolbar={false}
                 />
-                <StorageSurface
-                  embedded
-                  tableOnly
-                  forcedView="pools"
-                  forcedSourceFilter={TRUENAS_PLATFORM_FILTER}
-                />
-                <Show when={model().disks.length > 0}>
-                  <TrueNASDisksTable
-                    resources={model().disks}
-                    emptyIcon={truenasIcon()}
-                    emptyTitle="No TrueNAS disks reported"
-                    emptyDescription="Physical disks appear here once a TrueNAS connection enumerates them."
-                    showToolbar={false}
-                  />
-                </Show>
                 <Show when={model().apps.length > 0}>
                   <WorkloadsSurface
                     vms={[]}

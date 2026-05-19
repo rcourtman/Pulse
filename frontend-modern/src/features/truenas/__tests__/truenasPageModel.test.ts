@@ -18,7 +18,7 @@ describe('truenasPageModel', () => {
     expect(TRUENAS_TAB_SPECS.map((tab) => tab.id)).toEqual(['overview', 'storage']);
   });
 
-  it('buckets systems, disks, apps, storage while ignoring non-TrueNAS resources', () => {
+  it('buckets systems and apps while keeping storage inventory in scope for shared surfaces', () => {
     const model = buildTrueNASPageModel([
       makeResource({ id: 'truenas-system', type: 'agent' }),
       makeResource({ id: 'truenas-app', type: 'app-container' }),
@@ -29,7 +29,6 @@ describe('truenasPageModel', () => {
     ]);
 
     expect(model.systems.map((r) => r.id)).toEqual(['truenas-system']);
-    expect(model.disks.map((r) => r.id)).toEqual(['truenas-disk']);
     expect(model.apps.map((r) => r.id)).toEqual(['truenas-app']);
     expect(model.resources.map((r) => r.id).sort()).toEqual(
       ['truenas-app', 'truenas-disk', 'truenas-pool', 'truenas-system'].sort(),
