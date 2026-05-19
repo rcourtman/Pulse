@@ -7,6 +7,7 @@ import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
 import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
 import type { WorkloadsStatusOption } from '@/components/Workloads/workloadsFilterModel';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import { resourceMatchesSearch } from '@/utils/resourceSearchMatch';
 import {
   PlatformErrorState,
   PlatformSectionTabs,
@@ -133,6 +134,11 @@ function VmwareOverview(props: VmwareOverviewProps) {
       workloadsState.surfaceInitialDataReceived() &&
       workloadsState.allGuests().length > 0,
   );
+  const filteredHosts = createMemo(() => {
+    const term = workloadsState.search().trim();
+    if (!term) return props.model().hosts;
+    return props.model().hosts.filter((host) => resourceMatchesSearch(host, term));
+  });
 
   return (
     <div class="space-y-4">
@@ -176,7 +182,7 @@ function VmwareOverview(props: VmwareOverviewProps) {
         </div>
       </Show>
       <VsphereHostsTable
-        hosts={props.model().hosts}
+        hosts={filteredHosts()}
         scope={props.model().resources}
         emptyIcon={vmwareIcon()}
         emptyTitle="No vSphere hosts"

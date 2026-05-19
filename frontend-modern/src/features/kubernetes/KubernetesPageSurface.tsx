@@ -5,6 +5,7 @@ import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
 import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
 import type { WorkloadsStatusOption } from '@/components/Workloads/workloadsFilterModel';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import { resourceMatchesSearch } from '@/utils/resourceSearchMatch';
 import {
   PlatformErrorState,
   PlatformSectionTabs,
@@ -116,6 +117,21 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
       workloadsState.surfaceInitialDataReceived() &&
       workloadsState.allGuests().length > 0,
   );
+  const searchTerm = createMemo(() => workloadsState.search().trim());
+  const filteredClusters = createMemo(() => {
+    if (!searchTerm()) return props.model().clusters;
+    return props.model().clusters.filter((cluster) => resourceMatchesSearch(cluster, searchTerm()));
+  });
+  const filteredNodes = createMemo(() => {
+    if (!searchTerm()) return props.model().nodes;
+    return props.model().nodes.filter((node) => resourceMatchesSearch(node, searchTerm()));
+  });
+  const filteredDeployments = createMemo(() => {
+    if (!searchTerm()) return props.model().deployments;
+    return props.model().deployments.filter((deployment) =>
+      resourceMatchesSearch(deployment, searchTerm()),
+    );
+  });
 
   return (
     <div class="space-y-4">
@@ -159,7 +175,7 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
         </div>
       </Show>
       <KubernetesClustersTable
-        clusters={props.model().clusters}
+        clusters={filteredClusters()}
         scope={props.model().resources}
         emptyIcon={k8sIcon()}
         emptyTitle="No clusters reported"
@@ -167,7 +183,7 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
         showToolbar={false}
       />
       <KubernetesNodesTable
-        resources={props.model().nodes}
+        resources={filteredNodes()}
         emptyIcon={k8sIcon()}
         emptyTitle="No nodes reported"
         emptyDescription="Kubernetes nodes appear here as soon as the agent enumerates them."
@@ -187,7 +203,7 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
       />
       <Show when={props.model().deployments.length > 0}>
         <KubernetesDeploymentsTable
-          resources={props.model().deployments}
+          resources={filteredDeployments()}
           emptyIcon={k8sIcon()}
           emptyTitle="No deployments reported"
           emptyDescription="Deployments appear here once the cluster reports them."

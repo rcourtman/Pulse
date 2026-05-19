@@ -17,6 +17,7 @@ import {
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { resourceMatchesSearch } from '@/utils/resourceSearchMatch';
 import {
   PlatformErrorState,
   PlatformSectionTabs,
@@ -220,6 +221,11 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
       workloadsState.surfaceInitialDataReceived() &&
       workloadsState.allGuests().length > 0,
   );
+  const filteredNodes = createMemo(() => {
+    const term = workloadsState.search();
+    if (!term.trim()) return props.model().pveNodes;
+    return props.model().pveNodes.filter((node) => resourceMatchesSearch(node, term));
+  });
 
   return (
     <div class="space-y-4">
@@ -262,7 +268,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
         </div>
       </Show>
       <ProxmoxNodesTable
-        nodes={props.model().pveNodes}
+        nodes={filteredNodes()}
         guests={props.model().guests}
         metricDisplayMode={props.metricDisplayMode}
         metricHistoryRange={props.metricHistoryRange}

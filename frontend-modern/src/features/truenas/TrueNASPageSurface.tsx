@@ -7,6 +7,7 @@ import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
 import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
 import type { WorkloadsStatusOption } from '@/components/Workloads/workloadsFilterModel';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import { resourceMatchesSearch } from '@/utils/resourceSearchMatch';
 import {
   PlatformErrorState,
   PlatformSectionTabs,
@@ -135,6 +136,11 @@ function TrueNASOverview(props: TrueNASOverviewProps) {
       workloadsState.surfaceInitialDataReceived() &&
       workloadsState.allGuests().length > 0,
   );
+  const filteredSystems = createMemo(() => {
+    const term = workloadsState.search().trim();
+    if (!term) return props.model().systems;
+    return props.model().systems.filter((system) => resourceMatchesSearch(system, term));
+  });
 
   return (
     <div class="space-y-4">
@@ -178,7 +184,7 @@ function TrueNASOverview(props: TrueNASOverviewProps) {
         </div>
       </Show>
       <TrueNASSystemsTable
-        systems={props.model().systems}
+        systems={filteredSystems()}
         scope={props.model().resources}
         emptyIcon={truenasIcon()}
         emptyTitle="No TrueNAS systems"
