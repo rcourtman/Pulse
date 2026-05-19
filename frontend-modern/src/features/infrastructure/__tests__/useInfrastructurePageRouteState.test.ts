@@ -98,6 +98,16 @@ describe('useInfrastructurePageRouteState', () => {
     expect(navigateSpy).not.toHaveBeenCalled();
   });
 
+  it('keeps local summary group focus off the route navigation path', () => {
+    const { result } = setup();
+
+    result.setFocusedResourceGroupId('docker-host:agent-2');
+    vi.runAllTimers();
+
+    expect(result.focusedResourceGroupId()).toBe('docker-host:agent-2');
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
   it('keeps infrastructure filters route-backed', () => {
     const { setSelectedSource } = setup();
 

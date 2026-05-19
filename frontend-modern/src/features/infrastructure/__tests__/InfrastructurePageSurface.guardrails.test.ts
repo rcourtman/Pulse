@@ -123,6 +123,14 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageRouteStateSource).toContain('createRouteStateNavigateScheduler');
     expect(infrastructurePageRouteStateSource).not.toContain('replaceSamePathRouteState');
     expect(infrastructurePageRouteStateSource).not.toContain('createRouteStateSearchSignal');
+    expect(infrastructurePageRouteStateSource).not.toContain(
+      'nextParams.delete(INFRASTRUCTURE_QUERY_PARAMS.resource)',
+    );
+    expect(infrastructurePageRouteStateSource).not.toContain(
+      'nextParams.delete(INFRASTRUCTURE_QUERY_PARAMS.summaryGroup)',
+    );
+    expect(infrastructurePageRouteStateSource).not.toContain('resource: nextResource');
+    expect(infrastructurePageRouteStateSource).not.toContain('summaryGroup: nextSummaryGroup');
   });
 
   it('routes the page filter section through the chip-based FilterBar primitive', () => {

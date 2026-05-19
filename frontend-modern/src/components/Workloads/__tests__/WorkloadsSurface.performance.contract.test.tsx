@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, waitFor } from '@solidjs/testing-library';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { WorkloadsSurface } from '../WorkloadsSurface';
@@ -85,6 +85,7 @@ let mockInfrastructureResources: Resource[] = [];
 let mockUnifiedResourcesQuery = '';
 let setMockWorkloadsSignal: ((next: Array<Record<string, unknown>>) => void) | null = null;
 const workloadsRefetchMock = vi.fn();
+const navigateSpy = vi.fn();
 let guestRowMountCount = 0;
 let guestRowUnmountCount = 0;
 let wsConnected = true;
@@ -110,7 +111,7 @@ vi.mock('@solidjs/router', async () => {
   return {
     ...actual,
     useLocation: () => ({ pathname: '/workloads', search: mockLocationSearch }),
-    useNavigate: () => vi.fn(),
+    useNavigate: () => navigateSpy,
   };
 });
 
@@ -251,7 +252,11 @@ vi.mock('../GuestRow', () => {
       docker: new Set(['name', 'status']),
       k8s: new Set(['name', 'status']),
     },
-    GuestRow: (props: { guest: { name: string } }) => {
+    GuestRow: (props: {
+      guest: { id?: string; name: string };
+      isExpanded?: boolean;
+      onClick?: () => void;
+    }) => {
       onMount(() => {
         guestRowMountCount += 1;
       });
@@ -259,8 +264,21 @@ vi.mock('../GuestRow', () => {
         guestRowUnmountCount += 1;
       });
       return (
-        <tr data-testid={`guest-row-${props.guest.name}`}>
-          <td>{props.guest.name}</td>
+        <tr data-guest-id={props.guest.id} data-testid={`guest-row-${props.guest.name}`}>
+          <td>
+            <button
+              type="button"
+              data-testid={`guest-row-toggle-${props.guest.name}`}
+              aria-expanded={props.isExpanded === true ? 'true' : 'false'}
+              onClick={(event) => {
+                event.stopPropagation();
+                props.onClick?.();
+              }}
+            >
+              Toggle {props.guest.name}
+            </button>
+            <span>{props.guest.name}</span>
+          </td>
           <td>running</td>
         </tr>
       );
@@ -467,6 +485,7 @@ describe('Workloads performance contract', () => {
     setMockWorkloadsSignal = null;
     setWsConnectedSignal = null;
     workloadsRefetchMock.mockReset();
+    navigateSpy.mockReset();
     connectionsApiMocks.list.mockReset();
     connectionsApiMocks.list.mockResolvedValue({ connections: [], systems: [] });
     guestRowMountCount = 0;
@@ -546,6 +565,41 @@ describe('Workloads performance contract', () => {
 
       expect(document.body).not.toHaveTextContent('Loading view...');
       expect(document.body).not.toHaveTextContent('Loading...');
+    });
+
+    it('opens workload row drawers inline without route navigation', async () => {
+      mockLocationSearch = '?type=all&agent=docker-main';
+      const routeSearchBeforeOpen = mockLocationSearch;
+      mockWorkloads = [
+        makeGuest(1, {
+          id: 'app-container:docker-main:drawer-regression',
+          instance: 'docker-main',
+          name: 'drawer-regression',
+          node: 'docker-main',
+          type: 'app-container',
+          workloadType: 'app-container',
+        }),
+      ];
+
+      const { getByTestId } = render(() => (
+        <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
+      ));
+
+      await waitFor(() => {
+        expect(getByTestId('guest-row-drawer-regression')).toBeInTheDocument();
+      });
+
+      fireEvent.click(getByTestId('guest-row-toggle-drawer-regression'));
+
+      await waitFor(() => {
+        expect(getByTestId('guest-drawer')).toBeInTheDocument();
+      });
+      expect(getByTestId('guest-row-toggle-drawer-regression')).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+      expect(navigateSpy).not.toHaveBeenCalled();
+      expect(mockLocationSearch).toBe(routeSearchBeforeOpen);
     });
 
     it('does not label an empty workload resource list as missing infrastructure when sources exist', async () => {
@@ -952,11 +1006,15 @@ describe('Workloads performance contract', () => {
       );
       expect(workloadsSelectionStateSource).toContain('setHandledResourceId(null)');
       expect(workloadsSelectionStateSource).toContain("from './workloadSelectionModel'");
+      expect(workloadsSelectionStateSource).not.toContain('useNavigate');
+      expect(workloadsSelectionStateSource).not.toContain('createRouteStateNavigateScheduler');
+      expect(workloadsSelectionStateSource).not.toContain('resolveWorkloadsSelectionNavigateTarget');
       expect(workloadsSelectionStateSource).not.toContain('parseWorkloadsLinkSearch');
       expect(workloadsSelectionStateSource).not.toContain('getCanonicalWorkloadId');
       expect(workloadSelectionModelSource).toContain('parseWorkloadsLinkSearch(search)');
       expect(workloadSelectionModelSource).toContain('getCanonicalWorkloadId');
       expect(workloadSelectionModelSource).toContain('resolveWorkloadResourceSelection');
+      expect(workloadSelectionModelSource).not.toContain('resolveWorkloadsSelectionNavigateTarget');
       expect(workloadSelectionModelSource).toContain('workloadsHasHoveredWorkload');
       expect(groupedTableWindowingSource).toContain('DEFAULT_WINDOW_SIZE');
       expect(groupedTableWindowingSource).toContain('DEFAULT_ENABLE_THRESHOLD');
