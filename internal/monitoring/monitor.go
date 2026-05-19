@@ -5667,13 +5667,15 @@ func monitorFrontendStatus(resource unifiedresources.Resource, resourceType stri
 		if resource.Kubernetes != nil {
 			phase := strings.ToLower(strings.TrimSpace(resource.Kubernetes.PodPhase))
 			switch phase {
-			case "running":
-				return "running"
 			case "pending", "unknown":
 				return "degraded"
 			case "succeeded", "failed":
 				return "stopped"
 			}
+			// Phase=Running is not enough — a pod can have Phase=Running with
+			// CrashLoopBackOff containers, which statusFromKubernetesPod
+			// correctly classifies as StatusWarning. Fall through to the
+			// unified-status mapping below so that surfaces as "degraded".
 		}
 	}
 

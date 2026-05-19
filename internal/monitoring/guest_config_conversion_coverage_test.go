@@ -438,6 +438,29 @@ func TestMonitorFrontendAndMetricHelpers(t *testing.T) {
 				want: "stopped",
 			},
 			{
+				// CrashLoopBackOff: phase stays "Running" but containers are
+				// unready, so statusFromKubernetesPod returns StatusWarning.
+				// The frontend mapping must surface that as "degraded" rather
+				// than reporting the pod as healthy on the strength of phase
+				// alone.
+				name:         "pod warning running degraded",
+				resourceType: "pod",
+				resource: unifiedresources.Resource{
+					Status:     unifiedresources.StatusWarning,
+					Kubernetes: &unifiedresources.K8sData{PodPhase: "running"},
+				},
+				want: "degraded",
+			},
+			{
+				name:         "pod online running running",
+				resourceType: "pod",
+				resource: unifiedresources.Resource{
+					Status:     unifiedresources.StatusOnline,
+					Kubernetes: &unifiedresources.K8sData{PodPhase: "running"},
+				},
+				want: "running",
+			},
+			{
 				name:         "workload online running fallback",
 				resourceType: "system-container",
 				resource:     unifiedresources.Resource{Status: unifiedresources.StatusOnline},
