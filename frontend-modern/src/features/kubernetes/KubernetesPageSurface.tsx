@@ -18,6 +18,8 @@ import { KUBERNETES_TAB_SPECS, buildKubernetesPageModel } from './kubernetesPage
 // those tagged kubernetes.
 const KUBERNETES_RESOURCE_QUERY = 'type=k8s-cluster,k8s-node,pod,k8s-deployment,agent';
 const KUBERNETES_PLATFORM_FILTER = 'kubernetes';
+const KUBERNETES_WORKLOAD_FORCED_VIEW_MODE = 'pod';
+const KUBERNETES_WORKLOAD_COLUMN_SCOPE = 'kubernetes-pods';
 
 const k8sIcon = () => <ShipWheelIcon class="h-6 w-6 text-slate-400" />;
 
@@ -93,6 +95,8 @@ export function KubernetesPageSurface() {
                 showFilterToolbar
                 suppressPlatformFilter
                 forcedPlatform={KUBERNETES_PLATFORM_FILTER}
+                forcedViewMode={KUBERNETES_WORKLOAD_FORCED_VIEW_MODE}
+                columnVisibilityStorageScope={KUBERNETES_WORKLOAD_COLUMN_SCOPE}
                 compactGroupHeaders
               />
               <Show when={model().deployments.length > 0}>
