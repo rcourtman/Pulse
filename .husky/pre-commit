@@ -67,10 +67,23 @@ staged_files_match() {
     printf '%s\n' "$STAGED_FILES" | grep -qE "$1"
 }
 
-# Governance checks — only run when governance files are present (skipped on fresh clones).
-# Governance files live in docs/release-control/v6/internal/ which is not tracked in the
-# public repo; contributors without that directory get standard linting only.
-if [ -f "docs/release-control/v6/internal/status.json" ]; then
+# Governance checks gating.
+# Run the full governance audit + Go test suite only when:
+#   (a) the internal governance directory is present (skipped on fresh public-repo clones), AND
+#   (b) the staged changes actually touch governance-relevant paths.
+# A pure frontend-only commit then skips the multi-minute Go test and Python
+# helper unit tests entirely. This matters when multiple agent harnesses
+# (Codex, Claude Code, Anti-Gravity) are committing in parallel against the
+# same tree; previously every commit serialized behind ~15-20 minutes of
+# audits regardless of what was actually staged.
+#
+# Governance-relevant paths: anything under docs/release-control/, the
+# release_control Python scripts, the repoctl Go package the audits live in,
+# any Go file (the Go test reads governance JSON via Go code), the module
+# manifests, the VERSION marker, and the husky hooks themselves (so changes
+# to this file still get validated).
+GOVERNANCE_PATHS='^docs/release-control/|^scripts/release_control/|^internal/repoctl/|\.go$|^go\.(mod|sum|work|work\.sum)$|^VERSION$|^\.husky/'
+if [ -f "docs/release-control/v6/internal/status.json" ] && staged_files_match "$GOVERNANCE_PATHS"; then
 
 echo "Running governance stage guard..."
 python3 scripts/release_control/governance_stage_guard.py
@@ -117,8 +130,10 @@ python3 scripts/release_control/subsystem_contracts_test.py
 python3 scripts/release_control/subsystem_lookup_test.py
 unset PULSE_READ_STAGED_GOVERNANCE
 
+elif [ -f "docs/release-control/v6/internal/status.json" ]; then
+echo "Skipping governance checks (no staged governance, Go, repoctl, or hook changes)."
 else
-echo "Governance files not present — skipping governance checks."
+echo "Governance files not present, skipping governance checks."
 fi
 
 
