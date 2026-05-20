@@ -7,7 +7,9 @@ import kubernetesDeploymentsTableSource from '@/features/kubernetes/KubernetesDe
 import kubernetesNodesTableSource from '@/features/kubernetes/KubernetesNodesTable.tsx?raw';
 import kubernetesPageSurfaceSource from '@/features/kubernetes/KubernetesPageSurface.tsx?raw';
 import proxmoxBackupsTableSource from '@/features/proxmox/ProxmoxBackupsTable.tsx?raw';
+import proxmoxCephClusterDrawerSource from '@/features/proxmox/ProxmoxCephClusterDrawer.tsx?raw';
 import proxmoxCephTableSource from '@/features/proxmox/ProxmoxCephTable.tsx?raw';
+import proxmoxMailGatewayDrawerSource from '@/features/proxmox/ProxmoxMailGatewayDrawer.tsx?raw';
 import proxmoxMailGatewayTableSource from '@/features/proxmox/ProxmoxMailGatewayTable.tsx?raw';
 import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?raw';
 import proxmoxPageSurfaceSource from '@/features/proxmox/ProxmoxPageSurface.tsx?raw';
@@ -60,6 +62,11 @@ const proxmoxBespokeTableSources = [
   proxmoxReplicationTableSource,
 ];
 
+const proxmoxInlineDetailTableSources = [
+  proxmoxCephClusterDrawerSource,
+  proxmoxMailGatewayDrawerSource,
+];
+
 describe('platform overview layout guardrails', () => {
   it('keeps platform inventory tables on the shared dense table styling contract', () => {
     expect(sharedPlatformPageSource).toContain('PLATFORM_TABLE_CARD_CLASS');
@@ -108,6 +115,20 @@ describe('platform overview layout guardrails', () => {
       expect(source).toContain('PlatformTableToolbar');
       expect(source).not.toContain("from '@/components/shared/SearchInput'");
       expect(source).not.toContain("from '@/components/shared/FilterButtonGroup'");
+    }
+  });
+
+  it('keeps Proxmox inline detail tables on shared platform table primitives', () => {
+    for (const source of proxmoxInlineDetailTableSources) {
+      expect(source).toContain("from '@/components/shared/Table'");
+      expect(source).toContain('PLATFORM_TABLE_HEADER_ROW_CLASS');
+      expect(source).toContain('PLATFORM_TABLE_BODY_CLASS');
+      expect(source).toContain('getPlatformTableHeadClassForKind');
+      expect(source).toContain('getPlatformTableCellClassForKind');
+      expect(source).not.toContain('<table');
+      expect(source).not.toContain('<thead');
+      expect(source).not.toContain('<tbody');
+      expect(source).not.toContain('divide-y divide-border-subtle');
     }
   });
 

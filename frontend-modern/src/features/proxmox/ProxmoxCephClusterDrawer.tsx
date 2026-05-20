@@ -3,6 +3,20 @@ import XIcon from 'lucide-solid/icons/x';
 import { Card } from '@/components/shared/Card';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { StatusDot } from '@/components/shared/StatusDot';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/shared/Table';
+import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
+} from '@/features/platformPage/sharedPlatformPage';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { formatBytes } from '@/utils/format';
 import { getMetricColorClass } from '@/utils/metricThresholds';
@@ -48,11 +62,7 @@ function capacityToneFor(percent: number): string {
   return getMetricColorClass(percent, 'disk');
 }
 
-function CapacityBar(props: {
-  used: number;
-  total: number;
-  percent: number;
-}) {
+function CapacityBar(props: { used: number; total: number; percent: number }) {
   const clamped = Math.max(0, Math.min(100, props.percent));
   return (
     <ProgressBar
@@ -127,12 +137,7 @@ export const ProxmoxCephClusterDrawer: Component<{
         </button>
       </header>
 
-      <CapacityBar
-        used={usedCapacity()}
-        total={totalCapacity()}
-        percent={usagePercent()}
-      />
-
+      <CapacityBar used={usedCapacity()} total={totalCapacity()} percent={usagePercent()} />
 
       <div class="grid gap-3 lg:grid-cols-2">
         <Card padding="md">
@@ -146,40 +151,58 @@ export const ProxmoxCephClusterDrawer: Component<{
             when={pools().length > 0}
             fallback={<p class="text-xs text-muted">No pools reported.</p>}
           >
-            <table class="w-full text-xs">
-              <thead class="text-[10px] uppercase tracking-wide text-muted">
-                <tr>
-                  <th class="pb-2 text-left font-medium">Pool</th>
-                  <th class="pb-2 text-right font-medium">Objects</th>
-                  <th class="pb-2 text-right font-medium">Stored</th>
-                  <th class="pb-2 text-right font-medium">Avail</th>
-                  <th class="pb-2 text-right font-medium">Used</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-border-subtle">
+            <Table class="text-xs">
+              <TableHeader>
+                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                  <TableHead class={getPlatformTableHeadClassForKind('name')}>Pool</TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Objects
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Stored
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Avail
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Used
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                 <For each={pools()}>
                   {(pool) => (
-                    <tr>
-                      <td class="py-2 font-medium text-base-content">{pool.name || '—'}</td>
-                      <td class="py-2 text-right text-base-content tabular-nums">
+                    <TableRow>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('name')} font-medium text-base-content`}
+                      >
+                        {pool.name || '—'}
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                      >
                         {pool.objects.toLocaleString()}
-                      </td>
-                      <td class="py-2 text-right text-base-content tabular-nums">
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                      >
                         {formatBytes(pool.storedBytes)}
-                      </td>
-                      <td class="py-2 text-right text-muted tabular-nums">
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted tabular-nums`}
+                      >
                         {formatBytes(pool.availableBytes)}
-                      </td>
-                      <td class="py-2 text-right">
+                      </TableCell>
+                      <TableCell class={getPlatformTableCellClassForKind('numeric-value')}>
                         <div class="flex items-center justify-end">
                           <PoolUsageBar percent={pool.percentUsed} />
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )}
                 </For>
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </Show>
         </Card>
 
@@ -194,38 +217,59 @@ export const ProxmoxCephClusterDrawer: Component<{
             when={services().length > 0}
             fallback={<p class="text-xs text-muted">No services reported.</p>}
           >
-            <table class="w-full text-xs">
-              <thead class="text-[10px] uppercase tracking-wide text-muted">
-                <tr>
-                  <th class="pb-2 text-left font-medium">Service</th>
-                  <th class="pb-2 text-left font-medium">Status</th>
-                  <th class="pb-2 text-right font-medium">Running</th>
-                  <th class="pb-2 text-right font-medium">Total</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-border-subtle">
+            <Table class="text-xs">
+              <TableHeader>
+                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                  <TableHead class={getPlatformTableHeadClassForKind('name')}>Service</TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Status</TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Running
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Total
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                 <For each={services()}>
                   {(svc) => {
                     const cls = classifyService(svc);
                     return (
-                      <tr>
-                        <td class="py-2 font-mono text-[11px] font-semibold text-base-content uppercase">
+                      <TableRow>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('name')} font-mono text-[11px] font-semibold text-base-content uppercase`}
+                        >
                           {svc.type}
-                        </td>
-                        <td class="py-2">
+                        </TableCell>
+                        <TableCell class={getPlatformTableCellClassForKind('text')}>
                           <div class="flex items-center gap-2">
-                            <StatusDot size="sm" variant={cls.variant} title={cls.label} ariaHidden />
-                            <span class="text-[11px] font-medium text-base-content">{cls.label}</span>
+                            <StatusDot
+                              size="sm"
+                              variant={cls.variant}
+                              title={cls.label}
+                              ariaHidden
+                            />
+                            <span class="text-[11px] font-medium text-base-content">
+                              {cls.label}
+                            </span>
                           </div>
-                        </td>
-                        <td class="py-2 text-right text-base-content tabular-nums">{svc.running}</td>
-                        <td class="py-2 text-right text-muted tabular-nums">{svc.total}</td>
-                      </tr>
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                        >
+                          {svc.running}
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted tabular-nums`}
+                        >
+                          {svc.total}
+                        </TableCell>
+                      </TableRow>
                     );
                   }}
                 </For>
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </Show>
         </Card>
       </div>

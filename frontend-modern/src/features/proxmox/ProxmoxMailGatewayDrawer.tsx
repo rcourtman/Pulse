@@ -1,23 +1,26 @@
-import {
-  For,
-  Show,
-  createMemo,
-  createResource,
-  type Component,
-} from 'solid-js';
+import { For, Show, createMemo, createResource, type Component } from 'solid-js';
 import XIcon from 'lucide-solid/icons/x';
 import { Card } from '@/components/shared/Card';
 import { StatusDot } from '@/components/shared/StatusDot';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/shared/Table';
+import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
+} from '@/features/platformPage/sharedPlatformPage';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { formatBytes } from '@/utils/format';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { apiFetch } from '@/utils/apiClient';
-import type {
-  PMGInstance,
-  PMGNodeStatus,
-  PMGQueueStatus,
-  PMGSpamBucket,
-} from '@/types/api';
+import type { PMGInstance, PMGNodeStatus, PMGQueueStatus, PMGSpamBucket } from '@/types/api';
 import type { Resource } from '@/types/resource';
 
 // Inline drawer for a single Proxmox Mail Gateway instance. Drops the
@@ -113,9 +116,7 @@ function StackedBar(props: { segments: StackedSegment[]; ariaLabel: string }) {
     <div class="space-y-2">
       <Show
         when={total() > 0}
-        fallback={
-          <div class="relative h-2.5 w-full overflow-hidden rounded-full bg-surface-alt" />
-        }
+        fallback={<div class="relative h-2.5 w-full overflow-hidden rounded-full bg-surface-alt" />}
       >
         <div
           class="relative flex h-2.5 w-full overflow-hidden rounded-full bg-surface-alt"
@@ -162,15 +163,9 @@ function StackedBar(props: { segments: StackedSegment[]; ariaLabel: string }) {
 // metric severity palette: 0 = clean = normal, mid-score = warning,
 // high-score = critical.
 function SpamHistogram(props: { buckets: PMGSpamBucket[] }) {
-  const maxCount = createMemo(() =>
-    Math.max(0, ...props.buckets.map((b) => Math.max(0, b.count))),
-  );
+  const maxCount = createMemo(() => Math.max(0, ...props.buckets.map((b) => Math.max(0, b.count))));
   return (
-    <div
-      class="flex items-end gap-1 h-16"
-      role="img"
-      aria-label="Spam score distribution"
-    >
+    <div class="flex items-end gap-1 h-16" role="img" aria-label="Spam score distribution">
       <For each={props.buckets}>
         {(bucket) => {
           const heightPct = maxCount() > 0 ? (bucket.count / maxCount()) * 100 : 0;
@@ -219,15 +214,9 @@ function InOutBar(props: {
         class="relative flex h-4 w-full overflow-hidden rounded bg-surface-hover"
         title={`In ${format(props.inValue)} · Out ${format(props.outValue)}`}
       >
-        <div
-          class="relative bg-blue-500/60"
-          style={{ width: `${inWidth}%` }}
-        />
+        <div class="relative bg-blue-500/60" style={{ width: `${inWidth}%` }} />
         <div class="w-px bg-surface" />
-        <div
-          class="relative bg-purple-500/60"
-          style={{ width: `${outWidth}%` }}
-        />
+        <div class="relative bg-purple-500/60" style={{ width: `${outWidth}%` }} />
         <span class="pointer-events-none absolute inset-0 flex items-center justify-between px-1.5 text-[10px] font-semibold text-base-content leading-none tabular-nums">
           <span>In {format(props.inValue)}</span>
           <span>Out {format(props.outValue)}</span>
@@ -245,10 +234,7 @@ export const ProxmoxMailGatewayDrawer: Component<{
     const meta = props.instanceRow.pmg;
     return asTrimmedString(meta?.instanceId) || props.instanceRow.id;
   };
-  const [instance, { refetch }] = createResource<PMGInstance | null, string>(
-    id,
-    fetchPMGInstance,
-  );
+  const [instance, { refetch }] = createResource<PMGInstance | null, string>(id, fetchPMGInstance);
 
   const stats = createMemo(() => instance()?.mailStats);
   const quarantine = createMemo(() => instance()?.quarantine);
@@ -268,9 +254,7 @@ export const ProxmoxMailGatewayDrawer: Component<{
     asTrimmedString(props.instanceRow.name) ||
     props.instanceRow.id;
   const version = () =>
-    asTrimmedString(instance()?.version) ||
-    asTrimmedString(props.instanceRow.pmg?.version) ||
-    '—';
+    asTrimmedString(instance()?.version) || asTrimmedString(props.instanceRow.pmg?.version) || '—';
   const hostname = () => asTrimmedString(instance()?.host);
 
   const inboundSegments = createMemo<StackedSegment[]>(() => {
@@ -487,25 +471,33 @@ export const ProxmoxMailGatewayDrawer: Component<{
                 when={nodes().length > 0}
                 fallback={<p class="text-xs text-muted">No cluster nodes reported.</p>}
               >
-                <table class="w-full text-xs">
-                  <thead class="text-[10px] uppercase tracking-wide text-muted">
-                    <tr>
-                      <th class="pb-2 text-left font-medium">Node</th>
-                      <th class="pb-2 text-left font-medium">Role</th>
-                      <th class="pb-2 text-right font-medium">Uptime</th>
-                      <th class="pb-2 text-right font-medium">Load</th>
-                      <th class="pb-2 text-right font-medium">Queue</th>
-                      <th class="pb-2 text-right font-medium">Oldest</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-border-subtle">
+                <Table class="text-xs">
+                  <TableHeader>
+                    <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                      <TableHead class={getPlatformTableHeadClassForKind('name')}>Node</TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Role</TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Uptime
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Load
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Queue
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Oldest
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                     <For each={nodes()}>
                       {(node) => {
                         const cls = classifyNode(node);
                         const queue = queueCell(node.queueStatus);
                         return (
-                          <tr>
-                            <td class="py-2">
+                          <TableRow>
+                            <TableCell class={getPlatformTableCellClassForKind('name')}>
                               <div class="flex items-center gap-2">
                                 <StatusDot
                                   size="sm"
@@ -517,17 +509,25 @@ export const ProxmoxMailGatewayDrawer: Component<{
                                   {node.name || '—'}
                                 </span>
                               </div>
-                            </td>
-                            <td class="py-2 text-base-content text-[11px]">
+                            </TableCell>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content text-[11px]`}
+                            >
                               {asTrimmedString(node.role) || '—'}
-                            </td>
-                            <td class="py-2 text-right text-base-content">
+                            </TableCell>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            >
                               {formatUptime(node.uptime)}
-                            </td>
-                            <td class="py-2 text-right text-base-content tabular-nums text-[11px]">
+                            </TableCell>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums text-[11px]`}
+                            >
                               {asTrimmedString(node.loadAvg) || '—'}
-                            </td>
-                            <td class="py-2 text-right tabular-nums">
+                            </TableCell>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} tabular-nums`}
+                            >
                               <span class="text-base-content font-semibold">{queue.count}</span>
                               <span
                                 class="ml-1 text-muted text-[10px] font-mono"
@@ -535,18 +535,20 @@ export const ProxmoxMailGatewayDrawer: Component<{
                               >
                                 {queue.label}
                               </span>
-                            </td>
-                            <td class="py-2 text-right text-base-content">
+                            </TableCell>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            >
                               {node.queueStatus?.oldestAge
                                 ? formatAge(node.queueStatus.oldestAge)
                                 : '—'}
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         );
                       }}
                     </For>
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </Show>
             </Card>
 
@@ -555,51 +557,66 @@ export const ProxmoxMailGatewayDrawer: Component<{
                 <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
                   Top domains
                 </h4>
-                <span class="text-[10px] text-muted tabular-nums">
-                  top {topDomains().length}
-                </span>
+                <span class="text-[10px] text-muted tabular-nums">top {topDomains().length}</span>
               </div>
               <Show
                 when={topDomains().length > 0}
                 fallback={<p class="text-xs text-muted">No domain stats reported.</p>}
               >
-                <table class="w-full text-xs">
-                  <thead class="text-[10px] uppercase tracking-wide text-muted">
-                    <tr>
-                      <th class="pb-2 text-left font-medium">Domain</th>
-                      <th class="pb-2 text-right font-medium">Mail</th>
-                      <th class="pb-2 text-right font-medium">Spam</th>
-                      <th class="pb-2 text-right font-medium">Virus</th>
-                      <th class="pb-2 text-right font-medium">Bytes</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-border-subtle">
+                <Table class="text-xs">
+                  <TableHeader>
+                    <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                      <TableHead class={getPlatformTableHeadClassForKind('name')}>Domain</TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Mail
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Spam
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Virus
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Bytes
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                     <For each={topDomains()}>
                       {(domain) => (
-                        <tr>
-                          <td
-                            class="py-2 font-mono text-[11px] text-base-content truncate max-w-[14rem]"
-                            title={domain.domain}
+                        <TableRow>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('name')} font-mono text-[11px] text-base-content`}
                           >
-                            {domain.domain || '—'}
-                          </td>
-                          <td class="py-2 text-right text-base-content tabular-nums">
+                            <span class="inline-block max-w-[14rem] truncate" title={domain.domain}>
+                              {domain.domain || '—'}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                          >
                             {formatNumber(domain.mailCount)}
-                          </td>
-                          <td class="py-2 text-right text-base-content tabular-nums">
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                          >
                             {formatNumber(domain.spamCount)}
-                          </td>
-                          <td class="py-2 text-right text-base-content tabular-nums">
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                          >
                             {formatNumber(domain.virusCount)}
-                          </td>
-                          <td class="py-2 text-right text-muted tabular-nums">
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted tabular-nums`}
+                          >
                             {domain.bytes && domain.bytes > 0 ? formatBytes(domain.bytes) : '—'}
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       )}
                     </For>
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </Show>
             </Card>
 
