@@ -539,8 +539,8 @@ describe('WorkloadsFilter', () => {
       });
       render(() => <WorkloadsFilter {...props} />);
       const runtimeGroup = inlineFilterGroup('Runtime');
-      expect(within(runtimeGroup).getByRole('button', { name: 'docker' })).toBeInTheDocument();
-      expect(within(runtimeGroup).getByRole('button', { name: 'podman' })).toBeInTheDocument();
+      expect(within(runtimeGroup).getByRole('button', { name: 'Docker' })).toBeInTheDocument();
+      expect(within(runtimeGroup).getByRole('button', { name: 'Podman' })).toBeInTheDocument();
     });
 
     it('does not render when viewMode is not a container variant', () => {
@@ -578,7 +578,7 @@ describe('WorkloadsFilter', () => {
           })}
         />
       ));
-      pickInlineFilter('Runtime', 'docker');
+      pickInlineFilter('Runtime', 'Docker');
       expect(onChange).toHaveBeenCalledWith('docker');
     });
   });

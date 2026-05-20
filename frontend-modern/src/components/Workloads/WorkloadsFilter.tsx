@@ -1,4 +1,4 @@
-import { Component, Show, createMemo } from 'solid-js';
+import { Component, JSX, Show, createMemo } from 'solid-js';
 import BoxIcon from 'lucide-solid/icons/box';
 import BoxesIcon from 'lucide-solid/icons/boxes';
 import MonitorIcon from 'lucide-solid/icons/monitor';
@@ -76,6 +76,26 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
             : option.value === 'stopped'
               ? 'danger'
               : undefined,
+    }));
+
+  const runtimeChipLabel = (value: string): string => {
+    if (value === '') return 'All';
+    if (value === 'docker') return 'Docker';
+    if (value === 'podman') return 'Podman';
+    return value;
+  };
+
+  const runtimeChipDot = (value: string): JSX.Element | undefined => {
+    if (value === 'docker') return statusDot('bg-sky-500');
+    if (value === 'podman') return statusDot('bg-violet-500');
+    return undefined;
+  };
+
+  const workloadRuntimeOptions = (sourceOptions: FilterSelectOption[]): FilterSelectOption[] =>
+    sourceOptions.map((option) => ({
+      ...option,
+      label: runtimeChipLabel(option.value),
+      leading: runtimeChipDot(option.value),
     }));
 
   const showRuntimeFilter = () =>
@@ -183,7 +203,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
         value: () => runtimeFilter.value,
         setValue: runtimeFilter.onChange,
         defaultValue: '',
-        options: () => runtimeFilter.options,
+        options: () => workloadRuntimeOptions(runtimeFilter.options),
       });
     }
 
