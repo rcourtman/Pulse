@@ -128,7 +128,7 @@ function getShortDiskLabel(label: string): string {
 }
 
 function estimateInlineTextWidth(text: string): number {
-  return text.length * 4.6 + 4;
+  return text.length * 5.4 + 4;
 }
 
 function getInlineDiskText(shortLabel: string, percentLabel: string, slotWidth: number): string {
@@ -136,11 +136,11 @@ function getInlineDiskText(shortLabel: string, percentLabel: string, slotWidth: 
   if (slotWidth <= 0 || estimateInlineTextWidth(fullText) <= slotWidth) {
     return fullText;
   }
-  if (estimateInlineTextWidth(shortLabel) <= slotWidth) {
-    return shortLabel;
-  }
   if (estimateInlineTextWidth(percentLabel) <= slotWidth) {
     return percentLabel;
+  }
+  if (estimateInlineTextWidth(shortLabel) <= slotWidth) {
+    return shortLabel;
   }
   return '';
 }

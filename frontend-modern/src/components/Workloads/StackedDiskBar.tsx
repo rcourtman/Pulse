@@ -178,7 +178,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                           fill={disk.color}
                         />
                       </svg>
-                      <span class="absolute inset-0 flex min-w-0 items-center justify-center overflow-hidden px-px text-center text-[8px] font-semibold leading-none text-base-content">
+                      <span class="absolute inset-0 flex min-w-0 items-center justify-center overflow-hidden px-px text-center text-[9px] font-semibold leading-none text-base-content">
                         <span class="min-w-0 truncate">{disk.inlineText}</span>
                       </span>
                     </div>
