@@ -8,7 +8,6 @@ import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { resourceMatchesSearch } from '@/utils/resourceSearchMatch';
 import {
   PlatformErrorState,
-  PlatformPageHeader,
   PlatformSectionTabs,
   PlatformTableEmptyState,
   PlatformTableLoadingState,
@@ -49,10 +48,6 @@ export function KubernetesPageSurface() {
 
   return (
     <div data-testid="kubernetes-page" class="space-y-3">
-      <PlatformPageHeader
-        title="Kubernetes"
-        description="Inspect Kubernetes clusters, nodes, deployments, and pods."
-      />
       <PlatformSectionTabs
         tabs={KUBERNETES_TAB_SPECS}
         active="overview"

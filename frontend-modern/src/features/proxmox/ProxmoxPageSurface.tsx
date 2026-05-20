@@ -20,7 +20,6 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 import { resourceMatchesSearch } from '@/utils/resourceSearchMatch';
 import {
   PlatformErrorState,
-  PlatformPageHeader,
   PlatformSectionTabs,
   PlatformTableEmptyState,
   PlatformTableLoadingState,
@@ -105,10 +104,6 @@ export function ProxmoxPageSurface() {
 
   return (
     <div data-testid="proxmox-page" class="space-y-3">
-      <PlatformPageHeader
-        title="Proxmox"
-        description="Inspect Proxmox VE, Backup Server, Mail Gateway, storage, replication, and backups."
-      />
       <PlatformSectionTabs tabs={visibleTabs()} active={activeTab()} ariaLabel="Proxmox sections" />
 
       <Show

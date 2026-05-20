@@ -1,9 +1,7 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { describe, expect, it } from 'vitest';
 import { createRoot } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import {
-  PlatformPageHeader,
   createPlatformTableFilterState,
   filterPlatformResources,
   type PlatformResourceStatusFilter,
@@ -129,25 +127,5 @@ describe('filterPlatformResources', () => {
         dispose();
       }
     });
-  });
-});
-
-describe('PlatformPageHeader', () => {
-  afterEach(() => {
-    cleanup();
-  });
-
-  it('renders a canonical page heading and description for platform surfaces', () => {
-    render(() =>
-      PlatformPageHeader({
-        title: 'Docker',
-        description: 'Inspect Docker and Podman hosts, containers, and Swarm services.',
-      }),
-    );
-
-    expect(screen.getByRole('heading', { level: 1, name: 'Docker' })).toBeInTheDocument();
-    expect(
-      screen.getByText('Inspect Docker and Podman hosts, containers, and Swarm services.'),
-    ).toBeInTheDocument();
   });
 });

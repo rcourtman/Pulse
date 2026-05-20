@@ -7,7 +7,6 @@ import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
-  PlatformPageHeader,
   PlatformSectionTabs,
   PlatformTableEmptyState,
   PlatformTableLoadingState,
@@ -94,10 +93,6 @@ export function DockerPageSurface() {
 
   return (
     <div data-testid="docker-page" class="space-y-3">
-      <PlatformPageHeader
-        title="Docker"
-        description="Inspect Docker and Podman hosts, containers, and Swarm services."
-      />
       <PlatformSectionTabs tabs={DOCKER_TAB_SPECS} active="overview" ariaLabel="Docker sections" />
 
       <Show
