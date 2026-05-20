@@ -7,6 +7,7 @@ import {
 export interface DiscoveryIdentifiedSummary {
   serviceName: string;
   serviceType?: string;
+  serviceVersion?: string;
   category?: string;
   confidence: number;
   confidencePercent: string;
@@ -16,12 +17,28 @@ export interface DiscoveryIdentifiedSummary {
   dataPathCount: number;
   logPathCount: number;
   discoveredAt?: string;
+  observedAt?: string;
+  sourceLabel: string;
+  suggestedUrl?: string;
+  suggestedUrlReasonText?: string;
+  suggestedUrlReasonTitle?: string;
+  suggestedUrlDiagnostic?: string;
+  hasEndpointCandidate: boolean;
 }
+
+const OBSERVED_SOURCE_LABEL = 'Observed by Discovery';
+
+const toSentence = (text?: string | null): string => {
+  const trimmed = (text || '').trim();
+  if (!trimmed) return '';
+  const first = trimmed.charAt(0);
+  return first.toUpperCase() + trimmed.slice(1);
+};
 
 // getDiscoveryIdentifiedSummary returns a compact presentation object for
 // surfaces outside the Discovery sub-tab (e.g. the workload drawer overview)
-// to label a resource with its identified service. Returns null when the
-// stored record has no meaningful identification — the gate mirrors
+// to label a resource with its identified service and endpoint candidates.
+// Returns null when the stored record has no meaningful observed context — the gate mirrors
 // hasValidDiscovery in useDiscoveryTabState so the same record either
 // renders in both surfaces or neither.
 export function getDiscoveryIdentifiedSummary(
@@ -39,12 +56,27 @@ export function getDiscoveryIdentifiedSummary(
   const hasFacts = Array.isArray(discovery.facts) && discovery.facts.length > 0;
   const hasCli = typeof discovery.cli_access === 'string' && discovery.cli_access.trim().length > 0;
   const hasPaths = configPathCount + dataPathCount + logPathCount > 0;
-  if (!hasName && !hasConfidence && portCount === 0 && !hasFacts && !hasPaths && !hasCli) {
+  const suggestedUrl = normalizeDiscoverySuggestedUrl(discovery.suggested_url);
+  const hasEndpointCandidate =
+    Boolean(suggestedUrl) ||
+    (typeof discovery.suggested_url_diagnostic === 'string' &&
+      discovery.suggested_url_diagnostic.trim().length > 0);
+  if (
+    !hasName &&
+    !hasConfidence &&
+    portCount === 0 &&
+    !hasFacts &&
+    !hasPaths &&
+    !hasCli &&
+    !hasEndpointCandidate
+  ) {
     return null;
   }
+  const suggestedUrlReason = getDiscoverySuggestedURLReason(discovery);
   return {
     serviceName: hasName ? serviceName : 'Unidentified service',
     serviceType: discovery.service_type?.trim() || undefined,
+    serviceVersion: discovery.service_version?.trim() || undefined,
     category: discovery.category?.trim() || undefined,
     confidence,
     confidencePercent: `${Math.round(confidence * 100)}%`,
@@ -54,7 +86,23 @@ export function getDiscoveryIdentifiedSummary(
     dataPathCount,
     logPathCount,
     discoveredAt: discovery.discovered_at || undefined,
+    observedAt: discovery.updated_at || discovery.discovered_at || undefined,
+    sourceLabel: OBSERVED_SOURCE_LABEL,
+    suggestedUrl,
+    suggestedUrlReasonText: suggestedUrlReason.text || undefined,
+    suggestedUrlReasonTitle: suggestedUrlReason.title || undefined,
+    suggestedUrlDiagnostic: discovery.suggested_url_diagnostic?.trim() || undefined,
+    hasEndpointCandidate,
   };
+}
+
+export function getDiscoveryObservedSourceLabel(): string {
+  return OBSERVED_SOURCE_LABEL;
+}
+
+export function normalizeDiscoverySuggestedUrl(value?: string | null): string | undefined {
+  const trimmed = (value || '').trim();
+  return trimmed || undefined;
 }
 
 export function getDiscoveryURLSuggestionSourceLabel(code?: string | null): string {
@@ -80,6 +128,26 @@ export function getDiscoveryURLSuggestionSourceLabel(code?: string | null): stri
   }
 }
 
+export function getDiscoverySuggestedURLReason(
+  discovery?: {
+    suggested_url_source_code?: string | null;
+    suggested_url_source_detail?: string | null;
+  } | null,
+) {
+  if (!discovery) {
+    return { text: '', title: '' } as const;
+  }
+  const detail = toSentence(discovery.suggested_url_source_detail);
+  const label = getDiscoveryURLSuggestionSourceLabel(discovery.suggested_url_source_code);
+  const title = discovery.suggested_url_source_detail
+    ? `${label}: ${discovery.suggested_url_source_detail}`
+    : label;
+  return {
+    text: detail || (discovery.suggested_url_source_code ? label : ''),
+    title,
+  } as const;
+}
+
 export function getDiscoveryAnalysisProviderBadgeClass(isLocal?: boolean | null): string {
   return isLocal
     ? 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
@@ -88,6 +156,26 @@ export function getDiscoveryAnalysisProviderBadgeClass(isLocal?: boolean | null)
 
 export function getDiscoveryCategoryBadgeClass(): string {
   return 'inline-block rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-200';
+}
+
+export function getDiscoverySuggestedURLCardClass(): string {
+  return 'rounded border border-blue-200 bg-blue-50 p-3 shadow-sm dark:border-blue-800 dark:bg-blue-900';
+}
+
+export function getDiscoverySuggestedURLHeadingClass(): string {
+  return 'text-[11px] font-medium uppercase tracking-wide text-blue-800 dark:text-blue-200 mb-1';
+}
+
+export function getDiscoverySuggestedURLTextClass(): string {
+  return 'text-blue-700 dark:text-blue-300';
+}
+
+export function getDiscoverySuggestedURLCodeClass(): string {
+  return 'min-w-0 flex-1 rounded bg-blue-100 px-2 py-1.5 text-xs text-blue-800 dark:bg-blue-950 dark:text-blue-100 font-mono break-all';
+}
+
+export function getDiscoverySuggestedURLActionClass(): string {
+  return 'inline-flex min-h-8 min-w-8 shrink-0 items-center justify-center rounded border border-blue-200 bg-blue-100 text-blue-700 transition-colors hover:bg-blue-200 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-200 dark:hover:bg-blue-900';
 }
 
 export function getDiscoveryInitialEmptyState(loading: boolean) {

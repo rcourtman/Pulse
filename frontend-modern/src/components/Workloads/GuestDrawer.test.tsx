@@ -71,11 +71,17 @@ vi.mock('@/components/shared/WebInterfaceUrlField', () => ({
     metadataKind: string;
     metadataId: string;
     targetLabel: string;
+    suggestedUrl?: string;
+    suggestedUrlReasonText?: string;
+    suggestedUrlDiagnostic?: string;
   }) => (
     <div data-testid="web-interface-url-field">
       <span data-testid="url-kind">{props.metadataKind}</span>
       <span data-testid="url-id">{props.metadataId}</span>
       <span data-testid="url-label">{props.targetLabel}</span>
+      <span data-testid="url-suggested">{props.suggestedUrl ?? ''}</span>
+      <span data-testid="url-suggested-reason">{props.suggestedUrlReasonText ?? ''}</span>
+      <span data-testid="url-suggested-diagnostic">{props.suggestedUrlDiagnostic ?? ''}</span>
     </div>
   ),
 }));
@@ -196,6 +202,7 @@ describe('GuestDrawer', () => {
         target_id: 'node1',
         service_name: 'Homepage Dashboard',
         service_type: 'homepage',
+        service_version: '0.9.0',
         category: 'web_server',
         confidence: 0.95,
         cli_access: 'docker exec -it homepage /bin/sh',
@@ -204,6 +211,10 @@ describe('GuestDrawer', () => {
         config_paths: ['/opt/homepage/config'],
         data_paths: [],
         log_paths: [],
+        updated_at: '2026-05-18T09:49:19.049058+01:00',
+        suggested_url: 'http://192.0.2.10:3000',
+        suggested_url_source_code: 'web_port_inference',
+        suggested_url_source_detail: 'detected 3000/tcp',
       } as unknown as import('@/types/discovery').ResourceDiscovery);
 
       render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
@@ -213,8 +224,12 @@ describe('GuestDrawer', () => {
       });
       expect(screen.getByText('Homepage Dashboard')).toBeInTheDocument();
       expect(screen.getByText('web_server')).toBeInTheDocument();
+      expect(screen.getByText('0.9.0')).toBeInTheDocument();
       expect(screen.getByText('95%')).toBeInTheDocument();
+      expect(screen.getAllByText('http://192.0.2.10:3000').length).toBeGreaterThan(0);
       expect(screen.getByText('docker exec -it homepage /bin/sh')).toBeInTheDocument();
+      expect(screen.getByTestId('url-suggested')).toHaveTextContent('http://192.0.2.10:3000');
+      expect(screen.getByTestId('url-suggested-reason')).toHaveTextContent('Detected 3000/tcp');
     });
 
     it('hides the Identified Service card when the discovery record is null or empty', async () => {
@@ -228,8 +243,7 @@ describe('GuestDrawer', () => {
 
     it('keeps the passive discovery lookup out of the parent Suspense fallback', () => {
       discoveryApiMocks.getDiscovery.mockImplementationOnce(
-        () =>
-          new Promise<import('@/types/discovery').ResourceDiscovery | null>(() => undefined),
+        () => new Promise<import('@/types/discovery').ResourceDiscovery | null>(() => undefined),
       );
 
       render(() => (

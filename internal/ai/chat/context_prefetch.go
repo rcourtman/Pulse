@@ -696,6 +696,12 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 
 			// Add discovery info if available
 			if hasDiscovery {
+				if discovery.ServiceVersion != "" {
+					sb.WriteString(fmt.Sprintf("Service version: %s\n", discovery.ServiceVersion))
+				}
+				if discovery.SuggestedURL != "" {
+					sb.WriteString(fmt.Sprintf("Suggested web URL: %s\n", discovery.SuggestedURL))
+				}
 				if len(discovery.ConfigPaths) > 0 {
 					sb.WriteString(fmt.Sprintf("Config paths: %v\n", discovery.ConfigPaths))
 				}
@@ -748,6 +754,12 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 					sb.WriteString(fmt.Sprintf(" (%s)", discovery.ServiceName))
 				}
 				sb.WriteString("\n")
+			}
+			if discovery.ServiceVersion != "" {
+				sb.WriteString(fmt.Sprintf("Service version: %s\n", discovery.ServiceVersion))
+			}
+			if discovery.SuggestedURL != "" {
+				sb.WriteString(fmt.Sprintf("Suggested web URL: %s\n", discovery.SuggestedURL))
 			}
 
 			// File paths - these are the verified paths to use

@@ -8,12 +8,16 @@ import {
   getDiscoveryNoConnectedAgentMessage,
   getNetworkDiscoveryModePresentation,
   getDiscoveryNotesEmptyState,
+  getDiscoveryObservedSourceLabel,
   getNetworkDiscoveryPriorityNotice,
   getNetworkDiscoverySectionPresentation,
   getNetworkDiscoverySubnetPresentation,
   getDiscoveryAnalysisProviderBadgeClass,
   getDiscoveryCategoryBadgeClass,
+  getDiscoverySuggestedURLActionClass,
+  getDiscoverySuggestedURLCardClass,
   getDiscoverySuggestedURLFallback,
+  getDiscoverySuggestedURLReason,
   getDiscoveryURLSuggestionSourceLabel,
 } from '@/utils/discoveryPresentation';
 import type { ResourceDiscovery } from '@/types/discovery';
@@ -34,6 +38,16 @@ describe('discoveryPresentation', () => {
   it('falls back to the generic discovery heuristic label', () => {
     expect(getDiscoveryURLSuggestionSourceLabel('')).toBe('Discovery heuristic');
     expect(getDiscoveryURLSuggestionSourceLabel('unknown-code')).toBe('Discovery heuristic');
+    expect(getDiscoverySuggestedURLReason(null)).toEqual({ text: '', title: '' });
+    expect(
+      getDiscoverySuggestedURLReason({
+        suggested_url_source_code: 'web_port_inference',
+        suggested_url_source_detail: 'detected port 8080/tcp',
+      }),
+    ).toEqual({
+      text: 'Detected port 8080/tcp',
+      title: 'Detected web port: detected port 8080/tcp',
+    });
   });
 
   it('returns canonical analysis provider badge classes', () => {
@@ -44,6 +58,8 @@ describe('discoveryPresentation', () => {
   it('returns a canonical discovery category badge class', () => {
     expect(getDiscoveryCategoryBadgeClass()).toContain('bg-blue-100');
     expect(getDiscoveryCategoryBadgeClass()).toContain('text-blue-700');
+    expect(getDiscoverySuggestedURLCardClass()).toContain('bg-blue-50');
+    expect(getDiscoverySuggestedURLActionClass()).toContain('text-blue-700');
   });
 
   it('returns canonical discovery empty-state copy', () => {
@@ -152,19 +168,36 @@ describe('discoveryPresentation', () => {
       target_id: 'delly',
       service_name: 'Homepage Dashboard',
       service_type: 'homepage',
+      service_version: '0.9.0',
       category: 'web_server',
       confidence: 0.95,
       cli_access: 'docker exec -it homepage /bin/sh',
-      ports: [{ port: 3000, protocol: 'tcp', process: 'next-server', address: '0.0.0.0' }] as unknown as ResourceDiscovery['ports'],
-      facts: [{ key: 'os', value: 'Debian 12', source: 'os_release', category: 'security', confidence: 1, discovered_at: '' }] as unknown as ResourceDiscovery['facts'],
+      ports: [
+        { port: 3000, protocol: 'tcp', process: 'next-server', address: '0.0.0.0' },
+      ] as unknown as ResourceDiscovery['ports'],
+      facts: [
+        {
+          key: 'os',
+          value: 'Debian 12',
+          source: 'os_release',
+          category: 'security',
+          confidence: 1,
+          discovered_at: '',
+        },
+      ] as unknown as ResourceDiscovery['facts'],
       config_paths: ['/opt/homepage/config'],
       data_paths: ['/opt/homepage/config'],
       log_paths: ['/var/log/syslog', '/var/log/daemon.log'],
       discovered_at: '2026-05-17T09:49:19.049058+01:00',
+      updated_at: '2026-05-18T09:49:19.049058+01:00',
+      suggested_url: 'http://192.0.2.10:3000',
+      suggested_url_source_code: 'web_port_inference',
+      suggested_url_source_detail: 'detected 3000/tcp',
     } as ResourceDiscovery;
     expect(getDiscoveryIdentifiedSummary(record)).toEqual({
       serviceName: 'Homepage Dashboard',
       serviceType: 'homepage',
+      serviceVersion: '0.9.0',
       category: 'web_server',
       confidence: 0.95,
       confidencePercent: '95%',
@@ -174,6 +207,36 @@ describe('discoveryPresentation', () => {
       dataPathCount: 1,
       logPathCount: 2,
       discoveredAt: '2026-05-17T09:49:19.049058+01:00',
+      observedAt: '2026-05-18T09:49:19.049058+01:00',
+      sourceLabel: getDiscoveryObservedSourceLabel(),
+      suggestedUrl: 'http://192.0.2.10:3000',
+      suggestedUrlReasonText: 'Detected 3000/tcp',
+      suggestedUrlReasonTitle: 'Detected web port: detected 3000/tcp',
+      suggestedUrlDiagnostic: undefined,
+      hasEndpointCandidate: true,
+    });
+  });
+
+  it('treats an endpoint-only discovery record as useful out-of-tab context', () => {
+    expect(
+      getDiscoveryIdentifiedSummary({
+        id: 'docker:agent:container',
+        resource_type: 'docker',
+        resource_id: 'container',
+        target_id: 'agent',
+        service_name: 'Unknown',
+        confidence: 0,
+        ports: [],
+        facts: [],
+        config_paths: [],
+        data_paths: [],
+        log_paths: [],
+        suggested_url: 'http://192.0.2.10:8123',
+      } as unknown as ResourceDiscovery),
+    ).toMatchObject({
+      serviceName: 'Unidentified service',
+      suggestedUrl: 'http://192.0.2.10:8123',
+      hasEndpointCandidate: true,
     });
   });
 

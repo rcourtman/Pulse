@@ -1394,6 +1394,12 @@ AI runtime.
     `hasValidDiscovery` — so the same record either renders in all
     surfaces or hides in all surfaces, preventing "Unknown" rows or
     zero-confidence noise from drifting into peripheral UI.
+    Discovery is an opt-in observed-context layer, not an automatic row-link
+    owner. The reducer must carry provenance, observed time, service version,
+    endpoint candidates, and URL-source copy so drawer surfaces can show
+    "Observed by Discovery" context and pass suggested URLs into the shared
+    web-interface field. Persisted/manual web-interface metadata remains the
+    only row-link source until the operator explicitly adopts a suggested URL.
 
 ## Current State
 
@@ -3142,11 +3148,16 @@ That same presentation owner also packages the identified-service summary
 consumed by surfaces outside the Discovery sub-tab.
 `getDiscoveryIdentifiedSummary` is the canonical reducer that turns a stored
 `ResourceDiscovery` into the compact card payload (service name, category,
-confidence percent, port and path counts, cli access hint). New surfaces that
-want to label a workload with its identified service must read through that
+confidence percent, port and path counts, cli access hint, service version,
+observed timestamp, provenance label, and suggested web-interface URL
+metadata). New surfaces that want to label a workload with its identified
+service or offer a Discovery-sourced endpoint candidate must read through that
 helper rather than re-implementing the empty/low-signal gate, so the
 Discovery tab and out-of-tab surfaces collapse the same records and avoid
-surfacing "Unknown" rows or zero-confidence noise.
+surfacing "Unknown" rows or zero-confidence noise. Manual/persisted
+web-interface URLs still win: Discovery suggestions may be copied, opened, or
+adopted through the shared `WebInterfaceUrlField`, but they must not silently
+replace metadata or make row-name links active until the operator saves them.
 That same settings-shell boundary now also owns the shared settings
 presentation helpers that those panels consume. `frontend-modern/src/utils/systemSettingsPresentation.ts`
 is the canonical owner for shared system-settings presets, summaries, and

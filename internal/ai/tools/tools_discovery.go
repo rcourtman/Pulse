@@ -464,6 +464,10 @@ func buildDiscoveryToolResponse(req discoveryResourceRequest, discovery *Resourc
 		"updated_at":      discovery.UpdatedAt,
 	}
 
+	if discovery.SuggestedURL != "" {
+		response["suggested_url"] = discovery.SuggestedURL
+	}
+
 	// Add log paths if we have them (from fallback or discovery)
 	if len(responseLogPaths) > 0 {
 		response["log_paths"] = responseLogPaths

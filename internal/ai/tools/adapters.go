@@ -898,6 +898,7 @@ type DiscoverySourceData struct {
 	LogPaths       []string
 	Ports          []DiscoverySourcePort
 	DockerMounts   []DiscoverySourceDockerMount // Docker bind mounts (for LXCs/VMs running Docker)
+	SuggestedURL   string
 	UserNotes      string
 	Confidence     float64
 	AIReasoning    string

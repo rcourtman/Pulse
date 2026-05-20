@@ -3143,7 +3143,8 @@ describe('frontend resource type boundaries', () => {
     expect(unifiedResourceTableViewportSyncSource).toContain('getBoundingClientRect');
     expect(unifiedResourceTableViewportSyncSource).toContain('hostWindowing.onScroll');
     expect(unifiedResourceTableViewportSyncSource).not.toContain('scrollIntoView');
-    expect(discoveryTabSource).toContain('getDiscoveryURLSuggestionSourceLabel');
+    expect(discoveryTabSource).toContain('getDiscoverySuggestedURLReason');
+    expect(discoveryTabSource).toContain('getDiscoveryObservedSourceLabel');
     expect(discoveryTabSource).toContain('getDiscoveryAnalysisProviderBadgeClass');
     expect(discoveryTabSource).toContain('getDiscoveryCategoryBadgeClass');
     expect(discoveryTabSource).toContain('getDiscoveryInitialEmptyState');
@@ -3164,6 +3165,16 @@ describe('frontend resource type boundaries', () => {
     expect(discoveryTabSource).not.toContain('const getURLSuggestionSourceLabel =');
     expect(discoveryPresentationSource).toContain(
       'export function getDiscoveryURLSuggestionSourceLabel',
+    );
+    expect(discoveryPresentationSource).toContain('export function getDiscoverySuggestedURLReason');
+    expect(discoveryPresentationSource).toContain(
+      'export function getDiscoveryObservedSourceLabel',
+    );
+    expect(discoveryPresentationSource).toContain(
+      'export function getDiscoverySuggestedURLCardClass',
+    );
+    expect(discoveryPresentationSource).toContain(
+      'export function getDiscoverySuggestedURLActionClass',
     );
     expect(discoveryTabSource).not.toContain('bg-blue-100 text-blue-700');
     expect(discoveryTabSource).not.toContain('bg-green-100 text-green-700');

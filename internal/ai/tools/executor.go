@@ -391,6 +391,7 @@ type ResourceDiscoveryInfo struct {
 	LogPaths       []string            `json:"log_paths,omitempty"` // Log file paths or commands (e.g., journalctl)
 	Ports          []DiscoveryPortInfo `json:"ports"`
 	BindMounts     []DiscoveryMount    `json:"bind_mounts,omitempty"` // For Docker: host->container path mappings
+	SuggestedURL   string              `json:"suggested_url,omitempty"`
 	UserNotes      string              `json:"user_notes,omitempty"`
 	Confidence     float64             `json:"confidence"`
 	AIReasoning    string              `json:"ai_reasoning,omitempty"`

@@ -336,6 +336,7 @@ func TestExecuteGetDiscovery_CanonicalAppContainerUsesDockerProviderType(t *test
 			ResourceID:   "abc123",
 			TargetID:     "agent-1",
 			Hostname:     "docker-host-1",
+			SuggestedURL: "http://192.0.2.10:8080",
 		},
 	}
 	exec := NewPulseToolExecutor(ExecutorConfig{DiscoveryProvider: provider})
@@ -354,6 +355,7 @@ func TestExecuteGetDiscovery_CanonicalAppContainerUsesDockerProviderType(t *test
 	var payload map[string]interface{}
 	assert.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
 	assert.Equal(t, "app-container", payload["resource_type"])
+	assert.Equal(t, "http://192.0.2.10:8080", payload["suggested_url"])
 }
 
 func TestExecuteRunDiscovery_ForcesFreshDiscovery(t *testing.T) {

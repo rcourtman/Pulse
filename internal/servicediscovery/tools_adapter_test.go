@@ -54,6 +54,7 @@ func TestToolsAdapter_GetDiscovery(t *testing.T) {
 		Ports: []PortInfo{
 			{Port: 80, Protocol: "tcp", Process: "nginx", Address: "0.0.0.0"},
 		},
+		SuggestedURL: "http://localhost",
 		DockerMounts: []DockerBindMount{
 			{ContainerName: "nginx", Source: "/host/data", Destination: "/container/data", Type: "bind", ReadOnly: true},
 		},
@@ -71,6 +72,7 @@ func TestToolsAdapter_GetDiscovery(t *testing.T) {
 		assert.Equal(t, discovery.TargetID, result.TargetID)
 		assert.Empty(t, result.AgentID)
 		assert.Equal(t, discovery.ServiceName, result.ServiceName)
+		assert.Equal(t, discovery.SuggestedURL, result.SuggestedURL)
 
 		// Check facts conversion
 		require.Len(t, result.Facts, 1)

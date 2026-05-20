@@ -1,5 +1,6 @@
 import { For, Show } from 'solid-js';
 
+import { formatDiscoveryAge } from '@/api/discovery';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import type { DiscoveryIdentifiedSummary } from '@/utils/discoveryPresentation';
 import { formatBytes, formatUptime } from '@/utils/format';
@@ -69,6 +70,28 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                     </span>
                   </div>
                 </Show>
+                <Show when={summary().serviceVersion}>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">Version</span>
+                    <span
+                      class="font-medium text-base-content truncate ml-2"
+                      title={summary().serviceVersion}
+                    >
+                      {summary().serviceVersion}
+                    </span>
+                  </div>
+                </Show>
+                <Show when={summary().suggestedUrl}>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">Endpoint</span>
+                    <span
+                      class="font-medium text-base-content truncate ml-2"
+                      title={summary().suggestedUrl}
+                    >
+                      {summary().suggestedUrl}
+                    </span>
+                  </div>
+                </Show>
                 <Show when={summary().portCount > 0}>
                   <div class="flex items-center justify-between gap-2">
                     <span class="text-muted">Ports</span>
@@ -83,9 +106,12 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                     {summary().cliAccess}
                   </div>
                 </Show>
-                <p class="text-[10px] text-muted pt-1">
-                  Full details in the Discovery tab.
-                </p>
+                <div class="flex flex-wrap gap-1 pt-1 text-[10px] text-muted">
+                  <span>{summary().sourceLabel}</span>
+                  <Show when={summary().observedAt}>
+                    <span>· {formatDiscoveryAge(summary().observedAt!)}</span>
+                  </Show>
+                </div>
               </div>
             </div>
           )}
@@ -297,6 +323,10 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
           targetLabel={props.webInterfaceTargetLabel}
           customUrl={props.customUrl}
           onCustomUrlChange={(url) => props.onCustomUrlChange?.(props.guestId, url)}
+          suggestedUrl={props.discoveryIdentifiedSummary?.suggestedUrl}
+          suggestedUrlReasonText={props.discoveryIdentifiedSummary?.suggestedUrlReasonText}
+          suggestedUrlReasonTitle={props.discoveryIdentifiedSummary?.suggestedUrlReasonTitle}
+          suggestedUrlDiagnostic={props.discoveryIdentifiedSummary?.suggestedUrlDiagnostic}
         />
       </div>
     </div>

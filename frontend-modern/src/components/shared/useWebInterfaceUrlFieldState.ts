@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import { AgentMetadataAPI } from '@/api/agentMetadata';
+import { copyToClipboard } from '@/utils/clipboard';
 import {
   getWebInterfaceSuggestedUrlFallback,
   getWebInterfaceTargetLabel,
@@ -17,7 +18,9 @@ export function useWebInterfaceUrlFieldState(props: WebInterfaceUrlFieldProps) {
   const [urlSaving, setUrlSaving] = createSignal(false);
   const [urlError, setUrlError] = createSignal<string | null>(null);
   const [urlSuccess, setUrlSuccess] = createSignal<string | null>(null);
+  const [copiedUrlValue, setCopiedUrlValue] = createSignal('');
   let urlSuccessTimer: ReturnType<typeof setTimeout> | undefined;
+  let copyFeedbackTimer: ReturnType<typeof setTimeout> | undefined;
 
   const metadataId = createMemo(() => normalizeWebInterfaceUrl(props.metadataId));
   const targetLabel = createMemo(() =>
@@ -49,8 +52,15 @@ export function useWebInterfaceUrlFieldState(props: WebInterfaceUrlFieldProps) {
     urlSuccessTimer = undefined;
   };
 
+  const clearCopyFeedbackTimer = () => {
+    if (!copyFeedbackTimer) return;
+    clearTimeout(copyFeedbackTimer);
+    copyFeedbackTimer = undefined;
+  };
+
   onCleanup(() => {
     clearUrlSuccessTimer();
+    clearCopyFeedbackTimer();
   });
 
   const setUrlSuccessMessage = (message: string) => {
@@ -155,8 +165,24 @@ export function useWebInterfaceUrlFieldState(props: WebInterfaceUrlFieldProps) {
     }
   };
 
+  const handleCopyUrl = async (value?: string | null) => {
+    const trimmed = normalizeWebInterfaceUrl(value);
+    if (!trimmed) return;
+    const copied = await copyToClipboard(trimmed);
+    if (!copied) return;
+
+    clearCopyFeedbackTimer();
+    setCopiedUrlValue(trimmed);
+    copyFeedbackTimer = setTimeout(() => {
+      setCopiedUrlValue('');
+      copyFeedbackTimer = undefined;
+    }, 2000);
+  };
+
   return {
+    copiedUrlValue,
     currentCustomUrl,
+    handleCopyUrl,
     handleDeleteUrl,
     handleSaveUrl,
     metadataId,

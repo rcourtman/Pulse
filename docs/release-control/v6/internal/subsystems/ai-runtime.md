@@ -1160,6 +1160,14 @@ single-resource discovery, and `pulse_discovery` refreshes before any
 `discovery_interval_hours: 0` is the only manual-command-scan mode: recurring
 scans stay stopped, but explicit admin-triggered refreshes may use the
 hardcoded trusted catalog.
+The value boundary for keeping Discovery is observed workload context:
+Assistant and Patrol may consume normalized service name, version, endpoint,
+port, config path, data path, log path, bind-mount, confidence, and user-note
+fields through `pulse_discovery` or scoped prefetch. Raw command output remains
+debug/admin material and must not become the primary Assistant context. When a
+Discovery record includes a suggested web URL, the tool response and prefetch
+summary may include that URL as observed context, but it must be treated as a
+candidate rather than an operator-approved management URL.
 The same action-audit boundary now also requires persisted action records to
 carry a normalized plan and preflight: action id, request id, capability,
 approval policy, dry-run availability, safety checks, verification steps, and

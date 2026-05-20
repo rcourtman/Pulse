@@ -1,4 +1,7 @@
 import { Component, For, Show, createMemo } from 'solid-js';
+import CheckIcon from 'lucide-solid/icons/check';
+import CopyIcon from 'lucide-solid/icons/copy';
+import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import type { ResourceType } from '../../types/discovery';
 import {
   formatDiscoveryAge,
@@ -13,8 +16,14 @@ import {
   getDiscoveryAnalysisProviderBadgeClass,
   getDiscoveryCategoryBadgeClass,
   getDiscoveryCommandSettingsTarget,
+  getDiscoveryObservedSourceLabel,
+  getDiscoverySuggestedURLReason,
   getDiscoverySuggestedURLFallback,
-  getDiscoveryURLSuggestionSourceLabel,
+  getDiscoverySuggestedURLActionClass,
+  getDiscoverySuggestedURLCardClass,
+  getDiscoverySuggestedURLCodeClass,
+  getDiscoverySuggestedURLHeadingClass,
+  getDiscoverySuggestedURLTextClass,
 } from '@/utils/discoveryPresentation';
 import {
   DISCOVERY_ANALYSIS_EXPLANATION,
@@ -33,20 +42,63 @@ interface DiscoveryTabProps {
   showManualRunAction?: boolean;
 }
 
-const toSentence = (text?: string): string => {
-  const trimmed = (text || '').trim();
-  if (!trimmed) return '';
-  const first = trimmed.charAt(0);
-  return first.toUpperCase() + trimmed.slice(1);
+interface CopyValueButtonProps {
+  value?: string | null;
+  copiedValue: () => string;
+  onCopy: (value?: string | null) => void | Promise<void>;
+  label: string;
+  class?: string;
+}
+
+const CopyValueButton: Component<CopyValueButtonProps> = (props) => {
+  const trimmedValue = () => (props.value || '').trim();
+  const copied = () => Boolean(trimmedValue()) && props.copiedValue() === trimmedValue();
+
+  return (
+    <button
+      type="button"
+      class={
+        props.class ||
+        'inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded border border-border bg-surface px-2 text-muted transition-colors hover:bg-surface-hover hover:text-base-content'
+      }
+      onClick={() => void props.onCopy(trimmedValue())}
+      disabled={!trimmedValue()}
+      title={props.label}
+      aria-label={props.label}
+    >
+      <Show when={copied()} fallback={<CopyIcon class="h-3.5 w-3.5" />}>
+        <CheckIcon class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+      </Show>
+    </button>
+  );
 };
+
+interface CopyableCodeRowProps extends CopyValueButtonProps {
+  value: string;
+}
+
+const CopyableCodeRow: Component<CopyableCodeRowProps> = (props) => (
+  <div class="flex items-start gap-2 rounded bg-surface-alt px-2 py-1.5">
+    <code class="min-w-0 flex-1 break-all font-mono text-xs text-base-content">{props.value}</code>
+    <CopyValueButton
+      value={props.value}
+      copiedValue={props.copiedValue}
+      onCopy={props.onCopy}
+      label={props.label}
+      class="inline-flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded text-muted transition-colors hover:bg-surface-hover hover:text-base-content"
+    />
+  </div>
+);
 
 export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
   const {
     canTriggerDiscovery,
     connectedAgents,
+    copiedDiscoveryValue,
     discovery,
     discoveryInfo,
     editingNotes,
+    handleCopyDiscoveryValue,
     handleSaveNotes,
     handleTriggerDiscovery,
     hasConnectedAgent,
@@ -73,22 +125,13 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
   const suggestedURLReasonText = createMemo(() => {
     const current = discovery();
     if (!current) return '';
-    const detail = toSentence(current.suggested_url_source_detail);
-    if (detail) return detail;
-    if (current.suggested_url_source_code) {
-      return getDiscoveryURLSuggestionSourceLabel(current.suggested_url_source_code);
-    }
-    return '';
+    return getDiscoverySuggestedURLReason(current).text;
   });
 
   const suggestedURLReasonTitle = createMemo(() => {
     const current = discovery();
     if (!current) return '';
-    const label = getDiscoveryURLSuggestionSourceLabel(current.suggested_url_source_code);
-    if (current.suggested_url_source_detail) {
-      return `${label}: ${current.suggested_url_source_detail}`;
-    }
-    return label;
+    return getDiscoverySuggestedURLReason(current).title;
   });
 
   const confidenceInfo = createMemo(() => {
@@ -622,7 +665,16 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                     {d().service_name || 'Unknown Service'}
                   </h3>
                   <Show when={d().service_version}>
-                    <p class="text-xs text-muted mt-0.5">Version {d().service_version}</p>
+                    <div class="mt-1 flex items-center gap-2">
+                      <span class="text-xs text-muted">Version {d().service_version}</span>
+                      <CopyValueButton
+                        value={d().service_version}
+                        copiedValue={copiedDiscoveryValue}
+                        onCopy={handleCopyDiscoveryValue}
+                        label="Copy service version"
+                        class="inline-flex min-h-5 min-w-5 shrink-0 items-center justify-center rounded text-muted transition-colors hover:bg-surface-hover hover:text-base-content"
+                      />
+                    </div>
                   </Show>
                 </div>
                 <Show when={d().category && d().category !== 'unknown'}>
@@ -637,13 +689,24 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                   {confidenceInfo()!.label} ({Math.round((d().confidence || 0) * 100)}%)
                 </p>
               </Show>
+              <div class="mt-3 flex flex-wrap gap-2 text-[10px] text-muted">
+                <span class="rounded border border-border bg-surface-alt px-2 py-0.5">
+                  {getDiscoveryObservedSourceLabel()}
+                </span>
+                <Show when={d().updated_at}>
+                  <span class="rounded border border-border bg-surface-alt px-2 py-0.5">
+                    Last observed {formatDiscoveryAge(d().updated_at)}
+                  </span>
+                </Show>
+                <span class="rounded border border-border bg-surface-alt px-2 py-0.5">
+                  Available to Pulse Assistant
+                </span>
+              </div>
             </div>
 
             <Show when={d().suggested_url || d().suggested_url_diagnostic}>
-              <div class="rounded border border-blue-200 bg-blue-50 p-3 shadow-sm dark:border-blue-800 dark:bg-blue-900">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-blue-800 dark:text-blue-200 mb-1">
-                  Web Interface Suggestion
-                </div>
+              <div class={getDiscoverySuggestedURLCardClass()}>
+                <div class={getDiscoverySuggestedURLHeadingClass()}>Web Interface Suggestion</div>
                 <Show
                   when={d().suggested_url}
                   fallback={
@@ -657,17 +720,34 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 >
                   <Show when={suggestedURLReasonText()}>
                     <p
-                      class="mb-1 text-[10px] text-blue-700 dark:text-blue-300"
+                      class={`mb-1 text-[10px] ${getDiscoverySuggestedURLTextClass()}`}
                       title={suggestedURLReasonTitle()}
                     >
                       Why this URL: {suggestedURLReasonText()}
                     </p>
                   </Show>
-                  <code class="block rounded px-2 py-1 text-xs text-blue-800 dark:text-blue-100 font-mono break-all">
-                    {d().suggested_url}
-                  </code>
-                  <p class="mt-1.5 text-[11px] text-blue-700 dark:text-blue-300">
-                    Save this URL from the Overview tab in the Web Interface URL field.
+                  <div class="flex items-start gap-2">
+                    <code class={getDiscoverySuggestedURLCodeClass()}>{d().suggested_url}</code>
+                    <a
+                      href={d().suggested_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class={getDiscoverySuggestedURLActionClass()}
+                      title="Open suggested URL"
+                      aria-label="Open suggested URL"
+                    >
+                      <ExternalLinkIcon class="h-3.5 w-3.5" />
+                    </a>
+                    <CopyValueButton
+                      value={d().suggested_url}
+                      copiedValue={copiedDiscoveryValue}
+                      onCopy={handleCopyDiscoveryValue}
+                      label="Copy suggested URL"
+                      class={getDiscoverySuggestedURLActionClass()}
+                    />
+                  </div>
+                  <p class={`mt-1.5 text-[11px] ${getDiscoverySuggestedURLTextClass()}`}>
+                    Save it in the Web Interface URL field before Pulse uses it as a link.
                   </p>
                 </Show>
               </div>
@@ -679,9 +759,12 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
                   CLI Access
                 </div>
-                <code class="block bg-surface-alt rounded px-2 py-1.5 text-xs text-base-content font-mono overflow-x-auto">
-                  {d().cli_access}
-                </code>
+                <CopyableCodeRow
+                  value={d().cli_access}
+                  copiedValue={copiedDiscoveryValue}
+                  onCopy={handleCopyDiscoveryValue}
+                  label="Copy CLI access"
+                />
               </div>
             </Show>
 
@@ -701,7 +784,14 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                     </div>
                     <div class="space-y-1">
                       <For each={d().config_paths}>
-                        {(path) => <code class="block text-xs text-muted font-mono">{path}</code>}
+                        {(path) => (
+                          <CopyableCodeRow
+                            value={path}
+                            copiedValue={copiedDiscoveryValue}
+                            onCopy={handleCopyDiscoveryValue}
+                            label="Copy config path"
+                          />
+                        )}
                       </For>
                     </div>
                   </div>
@@ -713,7 +803,14 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                     </div>
                     <div class="space-y-1">
                       <For each={d().data_paths}>
-                        {(path) => <code class="block text-xs text-muted font-mono">{path}</code>}
+                        {(path) => (
+                          <CopyableCodeRow
+                            value={path}
+                            copiedValue={copiedDiscoveryValue}
+                            onCopy={handleCopyDiscoveryValue}
+                            label="Copy data path"
+                          />
+                        )}
                       </For>
                     </div>
                   </div>
@@ -725,7 +822,14 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                     </div>
                     <div class="space-y-1">
                       <For each={d().log_paths}>
-                        {(path) => <code class="block text-xs text-muted font-mono">{path}</code>}
+                        {(path) => (
+                          <CopyableCodeRow
+                            value={path}
+                            copiedValue={copiedDiscoveryValue}
+                            onCopy={handleCopyDiscoveryValue}
+                            label="Copy log path"
+                          />
+                        )}
                       </For>
                     </div>
                   </div>
@@ -742,12 +846,28 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 <div class="flex flex-wrap gap-1">
                   <For each={d().ports}>
                     {(port) => (
-                      <span class="inline-block rounded px-1.5 py-0.5 text-[10px]">
-                        {port.port}/{port.protocol}
+                      <button
+                        type="button"
+                        class="inline-flex items-center gap-1 rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-base-content transition-colors hover:bg-surface-hover"
+                        onClick={() =>
+                          void handleCopyDiscoveryValue(`${port.port}/${port.protocol}`)
+                        }
+                        title="Copy port"
+                        aria-label={`Copy ${port.port}/${port.protocol}`}
+                      >
+                        <span>
+                          {port.port}/{port.protocol}
+                        </span>
                         <Show when={port.process}>
-                          <span class="text-muted ml-1">({port.process})</span>
+                          <span class="text-muted">({port.process})</span>
                         </Show>
-                      </span>
+                        <Show
+                          when={copiedDiscoveryValue() === `${port.port}/${port.protocol}`}
+                          fallback={<CopyIcon class="h-3 w-3 text-muted" />}
+                        >
+                          <CheckIcon class="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                        </Show>
+                      </button>
                     )}
                   </For>
                 </div>
@@ -763,14 +883,20 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 <div class="space-y-1.5">
                   <For each={d().facts.slice(0, 8)}>
                     {(fact) => (
-                      <div class="flex items-center justify-between text-xs">
-                        <span class="text-muted">{fact.key}</span>
-                        <span
-                          class="font-medium text-base-content truncate ml-2 max-w-[60%]"
-                          title={fact.value}
-                        >
-                          {fact.value}
-                        </span>
+                      <div class="flex items-center justify-between gap-2 text-xs">
+                        <span class="min-w-0 text-muted truncate">{fact.key}</span>
+                        <div class="flex min-w-0 items-center gap-1.5">
+                          <span class="truncate font-medium text-base-content" title={fact.value}>
+                            {fact.value}
+                          </span>
+                          <CopyValueButton
+                            value={fact.value}
+                            copiedValue={copiedDiscoveryValue}
+                            onCopy={handleCopyDiscoveryValue}
+                            label={`Copy ${fact.key}`}
+                            class="inline-flex min-h-5 min-w-5 shrink-0 items-center justify-center rounded text-muted transition-colors hover:bg-surface-hover hover:text-base-content"
+                          />
+                        </div>
                       </div>
                     )}
                   </For>

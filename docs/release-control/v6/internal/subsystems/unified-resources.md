@@ -1688,6 +1688,14 @@ That access-side analysis surface still follows the same shell/runtime split as
 the rest of the drawer: `DiscoveryTab.tsx` owns presentation and disclosures,
 while `useDiscoveryTabState.ts` owns API fetches, websocket progress, and
 note/discovery mutations.
+Discovery endpoint candidates are support context, not authoritative resource
+links. Resource and workload drawers may pass observed Discovery URLs into the
+shared web-interface field with visible provenance, copy/open affordances, and
+an explicit adopt/save path, but row-name links and persisted metadata must
+continue to use the operator-saved web-interface URL. Version, config-path,
+port, and endpoint facts surfaced outside the Discovery sub-tab must be
+labelled as Discovery-observed so API-owned resource facts and command-derived
+facts remain distinguishable.
 Command-availability guidance inside that analysis surface must consume the
 shared `frontend-modern/src/utils/discoveryPresentation.ts` settings targets
 and scan-error copy instead of hard-coding legacy settings labels such as

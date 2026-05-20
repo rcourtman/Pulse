@@ -18,8 +18,13 @@ vi.mock('@/api/agentMetadata', () => ({
   },
 }));
 
+vi.mock('@/utils/clipboard', () => ({
+  copyToClipboard: vi.fn(async () => true),
+}));
+
 import { AgentMetadataAPI } from '@/api/agentMetadata';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
+import { copyToClipboard } from '@/utils/clipboard';
 
 describe('WebInterfaceUrlField', () => {
   afterEach(() => {
@@ -37,7 +42,10 @@ describe('WebInterfaceUrlField', () => {
     expect(webInterfaceUrlFieldStateSource).toContain('GuestMetadataAPI.getMetadata');
     expect(webInterfaceUrlFieldStateSource).toContain('AgentMetadataAPI.updateMetadata');
     expect(webInterfaceUrlFieldStateSource).toContain('createSignal');
-    expect(webInterfaceUrlFieldStateSource).toContain('export function useWebInterfaceUrlFieldState');
+    expect(webInterfaceUrlFieldStateSource).toContain('copyToClipboard');
+    expect(webInterfaceUrlFieldStateSource).toContain(
+      'export function useWebInterfaceUrlFieldState',
+    );
 
     expect(webInterfaceUrlFieldModelSource).toContain('validateWebInterfaceCustomUrl');
     expect(webInterfaceUrlFieldModelSource).toContain('getWebInterfaceSuggestedUrlFallback');
@@ -111,5 +119,35 @@ describe('WebInterfaceUrlField', () => {
 
     expect(await screen.findByText('No suggested URL available')).toBeInTheDocument();
     expect(screen.getByText('No management interface could be inferred.')).toBeInTheDocument();
+  });
+
+  it('offers discovered URL copy, open, and adopt actions without saving automatically', async () => {
+    render(() => (
+      <WebInterfaceUrlField
+        metadataKind="guest"
+        metadataId="guest-1"
+        customUrl=""
+        suggestedUrl="http://192.0.2.10:8123"
+        suggestedUrlReasonText="Detected web port"
+      />
+    ));
+
+    expect(await screen.findByText('Suggested URL')).toBeInTheDocument();
+    expect(screen.getByText('http://192.0.2.10:8123')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open suggested URL' })).toHaveAttribute(
+      'href',
+      'http://192.0.2.10:8123',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy suggested URL' }));
+    await waitFor(() => {
+      expect(copyToClipboard).toHaveBeenCalledWith('http://192.0.2.10:8123');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use this' }));
+    expect(AgentMetadataAPI.updateMetadata).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText('https://198.51.100.100:8080')).toHaveValue(
+      'http://192.0.2.10:8123',
+    );
   });
 });

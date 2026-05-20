@@ -16,8 +16,13 @@ vi.mock('@/api/discovery', () => {
   };
 });
 
+vi.mock('@/utils/clipboard', () => ({
+  copyToClipboard: vi.fn(async () => true),
+}));
+
 import * as discoveryApi from '@/api/discovery';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
+import { copyToClipboard } from '@/utils/clipboard';
 
 describe('DiscoveryTab', () => {
   afterEach(() => {
@@ -159,6 +164,9 @@ describe('DiscoveryTab', () => {
       discovered_at: '2026-04-15T00:00:00Z',
       updated_at: '2026-04-15T00:00:00Z',
       scan_duration: 12,
+      suggested_url: 'http://192.0.2.10:5432',
+      suggested_url_source_code: 'web_port_inference',
+      suggested_url_source_detail: 'detected 5432/tcp',
     });
 
     render(() => (
@@ -166,7 +174,17 @@ describe('DiscoveryTab', () => {
     ));
 
     expect(await screen.findByText('Analysis: Cloud (Anthropic)')).toBeInTheDocument();
+    expect(await screen.findByText('Observed by Discovery')).toBeInTheDocument();
+    expect(await screen.findByText('Available to Pulse Assistant')).toBeInTheDocument();
     expect(await screen.findByText('Analysis Reasoning')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open suggested URL' })).toHaveAttribute(
+      'href',
+      'http://192.0.2.10:5432',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Copy suggested URL' }));
+    await waitFor(() => {
+      expect(copyToClipboard).toHaveBeenCalledWith('http://192.0.2.10:5432');
+    });
     expect(
       await screen.findByText('Mapped open ports and running processes to a PostgreSQL service.'),
     ).toBeInTheDocument();

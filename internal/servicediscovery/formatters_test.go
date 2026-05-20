@@ -26,6 +26,7 @@ func TestFormattersAndTables(t *testing.T) {
 		ConfigPaths:    []string{"/etc/app/config.yml"},
 		DataPaths:      []string{"/var/lib/app"},
 		Ports:          []PortInfo{{Port: 80, Protocol: "tcp"}},
+		SuggestedURL:   "http://host1",
 		UserNotes:      "keepalive enabled",
 		Facts: []DiscoveryFact{
 			{Category: FactCategoryHardware, Key: "gpu", Value: "nvidia", Confidence: 0.9},
@@ -39,6 +40,9 @@ func TestFormattersAndTables(t *testing.T) {
 	}
 	if !strings.Contains(ctx, "docker exec") || !strings.Contains(ctx, "User Notes") {
 		t.Fatalf("missing expected fields in context")
+	}
+	if !strings.Contains(ctx, "Suggested Web URL") || !strings.Contains(ctx, "http://host1") {
+		t.Fatalf("missing suggested URL in context")
 	}
 
 	if FormatSingleForAIContext(nil) != "" {

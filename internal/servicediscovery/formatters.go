@@ -53,6 +53,10 @@ func formatSingleDiscovery(d *ResourceDiscovery) string {
 		sb.WriteString(fmt.Sprintf("- **Version:** %s\n", d.ServiceVersion))
 	}
 
+	if d.SuggestedURL != "" {
+		sb.WriteString(fmt.Sprintf("- **Suggested Web URL:** %s\n", d.SuggestedURL))
+	}
+
 	if d.Category != "" && d.Category != CategoryUnknown {
 		sb.WriteString(fmt.Sprintf("- **Category:** %s\n", d.Category))
 	}

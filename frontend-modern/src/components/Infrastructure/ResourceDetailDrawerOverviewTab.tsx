@@ -672,6 +672,17 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                         metadataId={config().metadataId}
                         targetLabel={config().targetLabel}
                         title="Web interface"
+                        discoveryLoading={drawer.discoveryLoading()}
+                        suggestedUrl={drawer.discoveryIdentifiedSummary()?.suggestedUrl}
+                        suggestedUrlReasonText={
+                          drawer.discoveryIdentifiedSummary()?.suggestedUrlReasonText
+                        }
+                        suggestedUrlReasonTitle={
+                          drawer.discoveryIdentifiedSummary()?.suggestedUrlReasonTitle
+                        }
+                        suggestedUrlDiagnostic={
+                          drawer.discoveryIdentifiedSummary()?.suggestedUrlDiagnostic
+                        }
                         embedded
                       />
 

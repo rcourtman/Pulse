@@ -1574,3 +1574,10 @@ type, agent id, resource id) rather than re-implementing target
 resolution, so workloads without canonical discovery ownership (e.g.
 TrueNAS app-containers without explicit `discoveryTarget`) skip the
 fetch cleanly.
+Observed service version, source labels, observed age, and suggested web
+URL candidates may be rendered from that same cached discovery summary,
+but they must not add a second discovery request, route-level Suspense
+dependency, row-time endpoint probe, or auto-save mutation. Suggested
+URLs remain copy/open/adopt affordances only; persisting them as a
+workload link stays a user action through the existing Web Interface URL
+field.

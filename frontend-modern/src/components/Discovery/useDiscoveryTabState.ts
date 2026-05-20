@@ -10,6 +10,7 @@ import {
 import { eventBus } from '@/stores/events';
 import type { DiscoveryProgress, ResourceType } from '@/types/discovery';
 import { getDiscoveryNoConnectedAgentMessage } from '@/utils/discoveryPresentation';
+import { copyToClipboard } from '@/utils/clipboard';
 import { toDiscoveryAPIResourceType } from '@/utils/discoveryTarget';
 
 export interface DiscoveryTabStateProps {
@@ -37,6 +38,8 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
   const [showCommandsPreview, setShowCommandsPreview] = createSignal(false);
   const [showExplanation, setShowExplanation] = createSignal(true);
   const [httpScanInProgress, setHttpScanInProgress] = createSignal(false);
+  const [copiedDiscoveryValue, setCopiedDiscoveryValue] = createSignal('');
+  let copyFeedbackTimer: ReturnType<typeof setTimeout> | undefined;
 
   const targetAgentId = createMemo(() => props.agentId || '');
   const discoverySourceKey = createMemo(
@@ -200,6 +203,30 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
     setEditingNotes(true);
   };
 
+  const clearCopyFeedbackTimer = () => {
+    if (copyFeedbackTimer === undefined) return;
+    clearTimeout(copyFeedbackTimer);
+    copyFeedbackTimer = undefined;
+  };
+
+  onCleanup(() => {
+    clearCopyFeedbackTimer();
+  });
+
+  const handleCopyDiscoveryValue = async (value?: string | null) => {
+    const text = (value || '').trim();
+    if (!text) return;
+    const copied = await copyToClipboard(text);
+    if (!copied) return;
+
+    clearCopyFeedbackTimer();
+    setCopiedDiscoveryValue(text);
+    copyFeedbackTimer = setTimeout(() => {
+      setCopiedDiscoveryValue('');
+      copyFeedbackTimer = undefined;
+    }, 2000);
+  };
+
   createEffect(() => {
     const unsubscribe = eventBus.on('ai_discovery_progress', (progress) => {
       if (!progress || progress.resource_id !== resourceId()) return;
@@ -247,9 +274,16 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
       (current.data_paths && current.data_paths.length > 0) ||
       (current.log_paths && current.log_paths.length > 0);
     const hasCliAccess = Boolean(current.cli_access);
+    const hasSuggestedUrl = Boolean(current.suggested_url || current.suggested_url_diagnostic);
 
     return Boolean(
-      hasServiceName || hasConfidence || hasPorts || hasFacts || hasPaths || hasCliAccess,
+      hasServiceName ||
+      hasConfidence ||
+      hasPorts ||
+      hasFacts ||
+      hasPaths ||
+      hasCliAccess ||
+      hasSuggestedUrl,
     );
   });
 
@@ -260,10 +294,12 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
   return {
     connectedAgents,
     canTriggerDiscovery,
+    copiedDiscoveryValue,
     discovery,
     discoveryInfo,
     editingNotes,
     handleSaveNotes,
+    handleCopyDiscoveryValue,
     handleTriggerDiscovery,
     hasConnectedAgent,
     hasValidDiscovery,

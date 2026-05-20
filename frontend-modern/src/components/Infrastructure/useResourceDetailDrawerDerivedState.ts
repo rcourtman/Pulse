@@ -1,4 +1,7 @@
 import { createMemo, type Accessor } from 'solid-js';
+import { getDiscovery } from '@/api/discovery';
+import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
+import type { ResourceDiscovery, ResourceType as DiscoveryResourceType } from '@/types/discovery';
 import type { Resource, ResourceRelationship } from '@/types/resource';
 import { requiresGovernedResourceDisplay } from '@/types/resource';
 import type { ResourceVMwareMeta } from '@/types/resource';
@@ -36,6 +39,7 @@ import {
   type PlatformData,
 } from '@/components/Infrastructure/resourceDetailMappers';
 import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
+import { getDiscoveryIdentifiedSummary } from '@/utils/discoveryPresentation';
 import {
   buildPbsActiveTasks,
   buildPbsVisibleJobBreakdown,
@@ -68,6 +72,12 @@ import {
 import { getResourceHealthIssuePresentation } from './resourceHealthPresentation';
 
 type DrawerTab = 'overview' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
+
+interface ResourceDrawerDiscoverySourceKey {
+  type: DiscoveryResourceType;
+  agent: string;
+  resource: string;
+}
 
 interface UseResourceDetailDrawerDerivedStateOptions {
   resource: Resource;
@@ -251,6 +261,33 @@ export const useResourceDetailDrawerDerivedState = (
   const hasMergedSources = createMemo(() => mergedSources().length > 1);
   const discoveryConfig = createMemo(() => toDiscoveryConfig(resource));
   const discoveryContextSummary = createMemo(() => buildDiscoveryContextSummary(discoveryConfig()));
+  const discoverySourceKey = createMemo(() => {
+    const config = discoveryConfig();
+    if (!config?.resourceType || !config.agentId || !config.resourceId) return null;
+    return {
+      type: config.resourceType,
+      agent: config.agentId,
+      resource: config.resourceId,
+    } as ResourceDrawerDiscoverySourceKey;
+  });
+  const discoveryRecord = createNonSuspendingQuery<
+    ResourceDiscovery | null,
+    ResourceDrawerDiscoverySourceKey
+  >({
+    source: discoverySourceKey,
+    initialValue: null,
+    cacheKey: (key) => `resource-detail-discovery:${key.type}:${key.agent}:${key.resource}`,
+    fetcher: async (key) => {
+      try {
+        return await getDiscovery(key.type, key.agent, key.resource);
+      } catch {
+        return null;
+      }
+    },
+  });
+  const discoveryIdentifiedSummary = createMemo(() =>
+    getDiscoveryIdentifiedSummary(discoveryRecord.value()),
+  );
 
   const hostDetailCards = createMemo(() =>
     buildHostDetailCards({
@@ -396,6 +433,8 @@ export const useResourceDetailDrawerDerivedState = (
     hasMergedSources,
     discoveryConfig,
     discoveryContextSummary,
+    discoveryIdentifiedSummary,
+    discoveryLoading: discoveryRecord.loading,
     accessSummary,
     hasAccessContext,
     hasHostDetails,
