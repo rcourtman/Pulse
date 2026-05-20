@@ -227,6 +227,12 @@ function formatDurationFromSeconds(seconds: number): string {
 // Backup files Size column (proportional to the largest archive in view)
 // and in the Recent tasks Duration column (proportional to 2x the median
 // duration so a typical task fills ~50% and outliers fill the bar).
+//
+// Layout invariant: the bar is positioned AFTER the value text in its
+// cell, and the cell uses `justify-end`. Because the bar has a fixed
+// width and is the rightmost element, every bar's left and right edges
+// land at the same x in every row, so they read as a proper comparison
+// chart instead of a row of free-floating segments.
 function InlineProgressBar(props: {
   valuePct: number;
   toneClass: string;
@@ -236,7 +242,7 @@ function InlineProgressBar(props: {
   const widthClass = props.width ?? 'w-16';
   return (
     <div
-      class={`${widthClass} h-1.5 overflow-hidden rounded-full bg-surface`}
+      class={`${widthClass} h-1.5 shrink-0 overflow-hidden rounded-full bg-surface`}
       role="img"
       aria-label={props.label}
       title={props.label}
@@ -1170,18 +1176,21 @@ export const ProxmoxBackupsTable: Component<{
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
                           >
                             <div class="flex items-center justify-end gap-2">
-                              <Show when={archiveSizeMaxBytes() > 0 && arc.size > 0}>
-                                <InlineProgressBar
-                                  valuePct={(arc.size / archiveSizeMaxBytes()) * 100}
-                                  toneClass={
-                                    arc.size / archiveSizeMaxBytes() >= 0.66
-                                      ? 'bg-blue-500'
-                                      : 'bg-blue-400'
-                                  }
-                                  label={`${formatBytes(arc.size)} (relative to largest file in view)`}
-                                />
-                              </Show>
                               <span>{formatBytes(arc.size)}</span>
+                              <InlineProgressBar
+                                valuePct={
+                                  archiveSizeMaxBytes() > 0
+                                    ? (arc.size / archiveSizeMaxBytes()) * 100
+                                    : 0
+                                }
+                                toneClass={
+                                  archiveSizeMaxBytes() > 0 &&
+                                  arc.size / archiveSizeMaxBytes() >= 0.66
+                                    ? 'bg-blue-500'
+                                    : 'bg-blue-400'
+                                }
+                                label={`${formatBytes(arc.size)} (relative to largest file in view)`}
+                              />
                             </div>
                           </TableCell>
                           <TableCell
@@ -1309,14 +1318,18 @@ export const ProxmoxBackupsTable: Component<{
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                             >
                               <div class="flex items-center justify-end gap-2">
-                                <Show when={taskDurationBaselineSeconds() > 0 && durationSec}>
-                                  <InlineProgressBar
-                                    valuePct={durationBarPct()}
-                                    toneClass={durationToneClass()}
-                                    label={`Duration ${formatDuration(task.startTime, task.endTime)} (median ${formatDurationFromSeconds(taskDurationBaselineSeconds())})`}
-                                  />
-                                </Show>
-                                <span>{formatDuration(task.startTime, task.endTime)}</span>
+                                <span class="tabular-nums">
+                                  {formatDuration(task.startTime, task.endTime)}
+                                </span>
+                                <InlineProgressBar
+                                  valuePct={
+                                    taskDurationBaselineSeconds() > 0 && durationSec
+                                      ? durationBarPct()
+                                      : 0
+                                  }
+                                  toneClass={durationToneClass()}
+                                  label={`Duration ${formatDuration(task.startTime, task.endTime)} (median ${formatDurationFromSeconds(taskDurationBaselineSeconds())})`}
+                                />
                               </div>
                             </TableCell>
                             <TableCell
