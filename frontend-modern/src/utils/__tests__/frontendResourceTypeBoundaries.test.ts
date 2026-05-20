@@ -3257,6 +3257,11 @@ describe('frontend resource type boundaries', () => {
     expect(pmgInstanceDrawerSource).toContain('PMG_DETAILS_LOADING_STATE_DESCRIPTION');
     expect(pmgInstanceDrawerSource).toContain('PMG_DETAILS_FAILURE_STATE_TITLE');
     expect(pmgInstanceDrawerSource).toMatch(/<Table(?:\s|>)/);
+    expect(pmgInstanceDrawerSource).toContain('PLATFORM_TABLE_HEADER_ROW_CLASS');
+    expect(pmgInstanceDrawerSource).toContain('PLATFORM_TABLE_BODY_CLASS');
+    expect(pmgInstanceDrawerSource).toContain('getPlatformTableHeadClassForKind');
+    expect(pmgInstanceDrawerSource).toContain('getPlatformTableCellClassForKind');
+    expect(pmgInstanceDrawerSource).not.toContain('divide-y divide-border-subtle');
     expect(pmgInstanceDrawerSource).not.toContain('<div class="mt-2 overflow-x-auto">');
     expect(mailGatewaySource).not.toContain('<div class="overflow-x-auto -mx-4 px-4">');
     expect(mailGatewaySource).not.toContain('wrapperClass="-mx-4 px-4"');

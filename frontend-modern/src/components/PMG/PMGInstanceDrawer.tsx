@@ -12,6 +12,12 @@ import {
   TableCell,
 } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
+import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
+} from '@/features/platformPage/sharedPlatformPage';
 import { formatBytes, formatRelativeTime } from '@/utils/format';
 import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
 import { asTrimmedString } from '@/utils/stringUtils';
@@ -201,8 +207,7 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
   );
 
   const headingId = () => `pmg-drawer-heading-${resourceId() || 'instance'}`;
-  const drawerLabel = () =>
-    asTrimmedString(props.resourceName) || resourceId() || 'PMG instance';
+  const drawerLabel = () => asTrimmedString(props.resourceName) || resourceId() || 'PMG instance';
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()}>
@@ -335,33 +340,56 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                   <div class="text-xs font-semibold text-base-content">
                     {drawerPresentation.nodesSectionTitle}
                   </div>
-                  <Table wrapperClass="mt-2" class="min-w-full text-xs">
-                    <TableHeader class="text-[10px] uppercase tracking-wide text-muted">
-                      <TableRow>
-                        <TableHead class="text-left py-2 pr-3">
+                  <Table
+                    wrapperClass="mt-2"
+                    class="min-w-full table-fixed text-xs md:min-w-[560px]"
+                  >
+                    <TableHeader>
+                      <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                        <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[34%]`}>
                           {drawerPresentation.nodeColumnLabel}
                         </TableHead>
-                        <TableHead class="text-left py-2 pr-3">
+                        <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[22%]`}>
                           {drawerPresentation.roleColumnLabel}
                         </TableHead>
-                        <TableHead class="text-left py-2 pr-3">
+                        <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[22%]`}>
                           {drawerPresentation.statusColumnLabel}
                         </TableHead>
-                        <TableHead class="text-right py-2 pl-3">
+                        <TableHead
+                          class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[22%]`}
+                        >
                           {drawerPresentation.queueColumnLabel}
                         </TableHead>
                       </TableRow>
                     </TableHeader>
-                    <TableBody class="divide-y divide-border-subtle">
+                    <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                       <For each={pmgData().nodes || []}>
                         {(node) => (
-                          <TableRow>
-                            <TableCell class="py-2 pr-3 font-medium text-base-content">
-                              {node.name}
+                          <TableRow class="text-[11px] sm:text-xs">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
+                            >
+                              <span class="block truncate" title={node.name}>
+                                {node.name}
+                              </span>
                             </TableCell>
-                            <TableCell class="py-2 pr-3 text-muted">{node.role || '—'}</TableCell>
-                            <TableCell class="py-2 pr-3 text-muted">{node.status || '—'}</TableCell>
-                            <TableCell class="py-2 pl-3 text-right text-muted">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-muted`}
+                            >
+                              <span class="block truncate" title={node.role || '—'}>
+                                {node.role || '—'}
+                              </span>
+                            </TableCell>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-muted`}
+                            >
+                              <span class="block truncate" title={node.status || '—'}>
+                                {node.status || '—'}
+                              </span>
+                            </TableCell>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted tabular-nums`}
+                            >
                               {formatCompact(node.queueStatus?.total ?? 0)}
                             </TableCell>
                           </TableRow>
@@ -386,25 +414,38 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                       inputClass="py-1 text-xs"
                     />
                   </div>
-                  <Table wrapperClass="mt-2" class="min-w-full text-xs">
-                    <TableHeader class="text-[10px] uppercase tracking-wide text-muted">
-                      <TableRow>
-                        <TableHead class="text-left py-2 pr-3">
+                  <Table
+                    wrapperClass="mt-2"
+                    class="min-w-full table-fixed text-xs md:min-w-[520px]"
+                  >
+                    <TableHeader>
+                      <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                        <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[45%]`}>
                           {drawerPresentation.domainColumnLabel}
                         </TableHead>
-                        <TableHead class="text-left py-2 pr-3">
+                        <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[55%]`}>
                           {drawerPresentation.commentColumnLabel}
                         </TableHead>
                       </TableRow>
                     </TableHeader>
-                    <TableBody class="divide-y divide-border-subtle">
+                    <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                       <For each={relayDomains()}>
                         {(row) => (
-                          <TableRow>
-                            <TableCell class="py-2 pr-3 font-medium text-base-content">
-                              {row.domain}
+                          <TableRow class="text-[11px] sm:text-xs">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
+                            >
+                              <span class="block truncate" title={row.domain}>
+                                {row.domain}
+                              </span>
                             </TableCell>
-                            <TableCell class="py-2 pr-3 text-muted">{row.comment || '—'}</TableCell>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-muted`}
+                            >
+                              <span class="block truncate" title={row.comment || '—'}>
+                                {row.comment || '—'}
+                              </span>
+                            </TableCell>
                           </TableRow>
                         )}
                       </For>
@@ -434,43 +475,66 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                       inputClass="py-1 text-xs"
                     />
                   </div>
-                  <Table wrapperClass="mt-2" class="min-w-full text-xs">
-                    <TableHeader class="text-[10px] uppercase tracking-wide text-muted">
-                      <TableRow>
-                        <TableHead class="text-left py-2 pr-3">
+                  <Table
+                    wrapperClass="mt-2"
+                    class="min-w-full table-fixed text-xs md:min-w-[720px]"
+                  >
+                    <TableHeader>
+                      <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                        <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[36%]`}>
                           {drawerPresentation.domainColumnLabel}
                         </TableHead>
-                        <TableHead class="text-right py-2 pl-3">
+                        <TableHead
+                          class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[16%]`}
+                        >
                           {drawerPresentation.mailColumnLabel}
                         </TableHead>
-                        <TableHead class="text-right py-2 pl-3">
+                        <TableHead
+                          class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[16%]`}
+                        >
                           {drawerPresentation.spamColumnLabel}
                         </TableHead>
-                        <TableHead class="text-right py-2 pl-3">
+                        <TableHead
+                          class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[16%]`}
+                        >
                           {drawerPresentation.virusColumnLabel}
                         </TableHead>
-                        <TableHead class="text-right py-2 pl-3">
+                        <TableHead
+                          class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[16%]`}
+                        >
                           {drawerPresentation.bytesColumnLabel}
                         </TableHead>
                       </TableRow>
                     </TableHeader>
-                    <TableBody class="divide-y divide-border-subtle">
+                    <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                       <For each={domainStats()}>
                         {(row) => (
-                          <TableRow>
-                            <TableCell class="py-2 pr-3 font-medium text-base-content">
-                              {row.domain}
+                          <TableRow class="text-[11px] sm:text-xs">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
+                            >
+                              <span class="block truncate" title={row.domain}>
+                                {row.domain}
+                              </span>
                             </TableCell>
-                            <TableCell class="py-2 pl-3 text-right text-muted">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted tabular-nums`}
+                            >
                               {formatCompact(row.mailCount)}
                             </TableCell>
-                            <TableCell class="py-2 pl-3 text-right text-muted">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted tabular-nums`}
+                            >
                               {formatCompact(row.spamCount)}
                             </TableCell>
-                            <TableCell class="py-2 pl-3 text-right text-muted">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted tabular-nums`}
+                            >
                               {formatCompact(row.virusCount)}
                             </TableCell>
-                            <TableCell class="py-2 pl-3 text-right text-muted">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted tabular-nums`}
+                            >
                               {row.bytes ? formatBytes(row.bytes) : '—'}
                             </TableCell>
                           </TableRow>
