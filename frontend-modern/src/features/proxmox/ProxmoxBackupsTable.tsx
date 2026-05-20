@@ -1651,13 +1651,22 @@ export const ProxmoxBackupsTable: Component<{
                           if (!durationSec || baseline <= 0) return 0;
                           return (durationSec / (baseline * 2)) * 100;
                         };
+                        // Canonical Pulse metric tones (60% alpha) — same palette
+                        // Storage and Ceph row bars use via getMetricColorClass.
+                        // Cap at `warning` (soft yellow) rather than going to red
+                        // for the worst case: a slow backup task is a perf
+                        // outlier, not a failure. Failure is already conveyed by
+                        // the Status column. Two tiers — normal / slow — keeps
+                        // the column calm instead of screaming red on every
+                        // long-running VM backup.
                         const durationToneClass = () => {
                           const baseline = taskDurationBaselineSeconds();
-                          if (!durationSec || baseline <= 0) return 'bg-slate-400';
+                          if (!durationSec || baseline <= 0)
+                            return 'bg-slate-500/30 dark:bg-slate-500/30';
                           const ratio = durationSec / baseline;
-                          if (ratio >= 2) return 'bg-amber-500';
-                          if (ratio >= 1.5) return 'bg-amber-400';
-                          return 'bg-emerald-500';
+                          if (ratio >= 1.5)
+                            return 'bg-metric-warning-bg dark:bg-metric-warning-bg';
+                          return 'bg-metric-normal-bg dark:bg-metric-normal-bg';
                         };
                         return (
                           <TableRow class="hover:bg-surface-hover">
