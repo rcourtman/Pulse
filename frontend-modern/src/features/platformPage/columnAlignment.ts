@@ -57,6 +57,31 @@ import type { PlatformTableCellAlign } from './sharedPlatformPage';
  * change automatically. `scripts/canonical-platform-audit.mjs` enforces
  * that platform tables use canonical alignments for well-known column
  * labels, so drift breaks pre-push.
+ *
+ * Recommended column ordering within a platform table:
+ *
+ *   1. Identity ('name') — always the first column.
+ *   2. Context / owner ('text') — Version, Datacenter, Cluster, Context,
+ *      Runtime, Kubelet, Image, Ports, vCenter, Roles, Power, Swarm role.
+ *      External management references (vCenter, swarm cluster name)
+ *      conventionally sit at the end of the row even though they share
+ *      the 'text' kind.
+ *   3. Resource usage bars ('metric-bar') — always rendered as the
+ *      contiguous block CPU → Memory → Disk/Storage in that order. Do
+ *      not interleave bars with other column kinds.
+ *   4. Diagnostic ('numeric-value') — Temperature.
+ *   5. Time ('numeric-value') — Uptime always sits between the bar
+ *      block (plus Temp) and the inventory counts. It is monitoring
+ *      state, not identity, so it does not belong near the front of
+ *      the row.
+ *   6. Inventory counts ('numeric-value') — Containers, VMs, CTs, Pods,
+ *      Pools, Datasets, Datastores, Disks, Apps, Desired / Updated /
+ *      Ready / Available, Capacity.
+ *
+ * Tables with bespoke columns (e.g. Kubernetes deployments, Docker
+ * services) can deviate from the inventory-counts order when their
+ * content demands it; the bar block contiguity and the Uptime-after-bars
+ * rule are the load-bearing parts of the convention.
  */
 export type PlatformTableColumnKind =
   | 'name'

@@ -179,9 +179,6 @@ export const TrueNASSystemsTable: Component<{
                   <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}>
                     Version
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}>
-                    Uptime
-                  </TableHead>
                   <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[11%]`}>
                     CPU
                   </TableHead>
@@ -193,6 +190,9 @@ export const TrueNASSystemsTable: Component<{
                   </TableHead>
                   <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}>
                     Temp
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}>
+                    Uptime
                   </TableHead>
                   <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}>
                     Pools
@@ -272,11 +272,6 @@ export const TrueNASSystemsTable: Component<{
                             {version()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
-                          >
-                            {formatUptime(system.uptime)}
-                          </TableCell>
-                          <TableCell
                             class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
                           >
                             <ResponsiveMetricCell
@@ -312,6 +307,11 @@ export const TrueNASSystemsTable: Component<{
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                           >
                             {formatTemperature(system.temperature)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                          >
+                            {formatUptime(system.uptime)}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}

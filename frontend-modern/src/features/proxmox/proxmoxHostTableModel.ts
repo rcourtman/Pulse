@@ -84,14 +84,18 @@ const HOST_COLUMN_RESPONSIVE_WEIGHTS: Record<
 
 const formatPercentage = (value: number): string => `${Number(value.toFixed(4))}%`;
 
+// Column order follows the canonical recommended ordering documented in
+// columnAlignment.ts: identity → context → bars (CPU/Memory/Disk
+// contiguous) → diagnostic (Temp) → time (Uptime) → inventory counts
+// → external owner reference at end.
 export const PROXMOX_HOST_TABLE_COLUMNS: ProxmoxHostTableColumn[] = [
   { id: 'node', label: 'Node', kind: 'name' },
   { id: 'version', label: 'Version', kind: 'text' },
-  { id: 'uptime', label: 'Uptime', kind: 'numeric-value' },
   { id: 'cpu', label: 'CPU', kind: 'metric-bar' },
   { id: 'memory', label: 'Memory', kind: 'metric-bar' },
   { id: 'disk', label: 'Disk', kind: 'metric-bar' },
   { id: 'temp', label: 'Temp', kind: 'numeric-value' },
+  { id: 'uptime', label: 'Uptime', kind: 'numeric-value' },
   { id: 'vms', label: 'VMs', kind: 'numeric-value' },
   { id: 'cts', label: 'CTs', kind: 'numeric-value' },
   { id: 'cluster', label: 'Cluster', kind: 'text' },

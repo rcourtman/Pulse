@@ -173,11 +173,11 @@ export const KubernetesNodesTable: Component<{
                   <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[11%]`}>
                     Memory
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[14%]`}>
-                    Capacity
-                  </TableHead>
                   <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}>
                     Uptime
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[14%]`}>
+                    Capacity
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -290,15 +290,15 @@ export const KubernetesNodesTable: Component<{
                             </Show>
                           </TableCell>
                           <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                          >
+                            {formatUptime(node.uptime)}
+                          </TableCell>
+                          <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
                           >
                             <span class="md:hidden">{compactCapacityLabel()}</span>
                             <span class="hidden md:inline">{capacityLabel()}</span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
-                          >
-                            {formatUptime(node.uptime)}
                           </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow
