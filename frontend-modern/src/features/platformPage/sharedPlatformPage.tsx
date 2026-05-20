@@ -7,10 +7,7 @@ import { SearchInput } from '@/components/shared/SearchInput';
 import { TableCard } from '@/components/shared/TableCard';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import type { Resource, ResourceStatus } from '@/types/resource';
-import {
-  getPlatformColumnAlign,
-  type PlatformTableColumnKind,
-} from './columnAlignment';
+import { getPlatformColumnAlign, type PlatformTableColumnKind } from './columnAlignment';
 
 export type PlatformTabSpec<TabId extends string> = {
   id: TabId;
@@ -56,6 +53,17 @@ export function PlatformTableEmptyState(props: {
     <TableCard>
       <div class="p-6">
         <EmptyState icon={props.icon} title={props.title} description={props.description} />
+      </div>
+    </TableCard>
+  );
+}
+
+export function PlatformTableLoadingState(props: { title: string; description: string }) {
+  return (
+    <TableCard>
+      <div class="px-3 py-2 text-xs text-muted" role="status">
+        <span class="font-medium text-base-content">{props.title}</span>{' '}
+        <span class="ml-2">{props.description}</span>
       </div>
     </TableCard>
   );

@@ -60,6 +60,7 @@ describe('platform overview layout guardrails', () => {
     expect(sharedPlatformPageSource).toContain('getPlatformTableHeadClass');
     expect(sharedPlatformPageSource).toContain('getPlatformTableCellClass');
     expect(sharedPlatformPageSource).toContain('PlatformTableToolbar');
+    expect(sharedPlatformPageSource).toContain('PlatformTableLoadingState');
     expect(sharedPlatformPageSource).toContain('createPlatformTableFilterState');
     expect(sharedPlatformPageSource).toContain('PLATFORM_HEALTH_FILTER_OPTIONS');
 
@@ -103,6 +104,7 @@ describe('platform overview layout guardrails', () => {
     for (const source of overviewSurfaceSources) {
       expect(source).toContain('<div class="space-y-4">');
       expect(source).toContain('<PlatformSectionTabs');
+      expect(source).toContain('<PlatformTableLoadingState');
       expect(source).toContain('PlatformTableEmptyState');
       expect(source).toContain('PlatformErrorState');
     }

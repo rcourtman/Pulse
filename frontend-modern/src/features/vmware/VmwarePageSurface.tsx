@@ -12,6 +12,7 @@ import {
   PlatformErrorState,
   PlatformSectionTabs,
   PlatformTableEmptyState,
+  PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
 import { VsphereHostsTable } from './VsphereHostsTable';
 import {
@@ -60,8 +61,7 @@ export function VmwarePageSurface() {
       <Show
         when={!loading() || model().resources.length > 0}
         fallback={
-          <PlatformTableEmptyState
-            icon={vmwareIcon()}
+          <PlatformTableLoadingState
             title="Loading VMware resources"
             description="Pulse is loading the VMware vSphere resource snapshot."
           />
@@ -172,8 +172,7 @@ function VmwareOverview(props: VmwareOverviewProps) {
             forcedPlatform={VMWARE_PLATFORM_FILTER}
             pinnedSelectionActive={() =>
               Boolean(
-                workloadsState.selectedGuestId() ||
-                  workloadsState.focusedSummaryWorkloadGroupId(),
+                workloadsState.selectedGuestId() || workloadsState.focusedSummaryWorkloadGroupId(),
               )
             }
             onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}

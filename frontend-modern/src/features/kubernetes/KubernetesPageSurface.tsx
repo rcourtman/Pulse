@@ -10,6 +10,7 @@ import {
   PlatformErrorState,
   PlatformSectionTabs,
   PlatformTableEmptyState,
+  PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
 import { KubernetesClustersTable } from './KubernetesClustersTable';
 import { KubernetesDeploymentsTable } from './KubernetesDeploymentsTable';
@@ -56,8 +57,7 @@ export function KubernetesPageSurface() {
       <Show
         when={!loading() || model().resources.length > 0}
         fallback={
-          <PlatformTableEmptyState
-            icon={k8sIcon()}
+          <PlatformTableLoadingState
             title="Loading Kubernetes resources"
             description="Pulse is loading the Kubernetes resource snapshot."
           />
@@ -128,9 +128,9 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
   });
   const filteredDeployments = createMemo(() => {
     if (!searchTerm()) return props.model().deployments;
-    return props.model().deployments.filter((deployment) =>
-      resourceMatchesSearch(deployment, searchTerm()),
-    );
+    return props
+      .model()
+      .deployments.filter((deployment) => resourceMatchesSearch(deployment, searchTerm()));
   });
 
   return (
@@ -166,8 +166,7 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
             forcedPlatform={KUBERNETES_PLATFORM_FILTER}
             pinnedSelectionActive={() =>
               Boolean(
-                workloadsState.selectedGuestId() ||
-                  workloadsState.focusedSummaryWorkloadGroupId(),
+                workloadsState.selectedGuestId() || workloadsState.focusedSummaryWorkloadGroupId(),
               )
             }
             onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}

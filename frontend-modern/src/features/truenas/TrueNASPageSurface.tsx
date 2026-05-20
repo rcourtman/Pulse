@@ -12,6 +12,7 @@ import {
   PlatformErrorState,
   PlatformSectionTabs,
   PlatformTableEmptyState,
+  PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
 import { TrueNASSystemsTable } from './TrueNASSystemsTable';
 import {
@@ -62,8 +63,7 @@ export function TrueNASPageSurface() {
       <Show
         when={!loading() || model().resources.length > 0}
         fallback={
-          <PlatformTableEmptyState
-            icon={truenasIcon()}
+          <PlatformTableLoadingState
             title="Loading TrueNAS resources"
             description="Pulse is loading the TrueNAS resource snapshot."
           />
@@ -175,8 +175,7 @@ function TrueNASOverview(props: TrueNASOverviewProps) {
             forcedPlatform={TRUENAS_PLATFORM_FILTER}
             pinnedSelectionActive={() =>
               Boolean(
-                workloadsState.selectedGuestId() ||
-                  workloadsState.focusedSummaryWorkloadGroupId(),
+                workloadsState.selectedGuestId() || workloadsState.focusedSummaryWorkloadGroupId(),
               )
             }
             onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}

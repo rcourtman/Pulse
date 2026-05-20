@@ -9,6 +9,7 @@ import {
   PlatformErrorState,
   PlatformSectionTabs,
   PlatformTableEmptyState,
+  PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
 import { DockerHostsTable } from './DockerHostsTable';
 import { DockerServicesTable } from './DockerServicesTable';
@@ -92,17 +93,12 @@ export function DockerPageSurface() {
 
   return (
     <div data-testid="docker-page" class="space-y-3">
-      <PlatformSectionTabs
-        tabs={DOCKER_TAB_SPECS}
-        active="overview"
-        ariaLabel="Docker sections"
-      />
+      <PlatformSectionTabs tabs={DOCKER_TAB_SPECS} active="overview" ariaLabel="Docker sections" />
 
       <Show
         when={!loading() || model().resources.length > 0}
         fallback={
-          <PlatformTableEmptyState
-            icon={dockerIcon()}
+          <PlatformTableLoadingState
             title="Loading Docker resources"
             description="Pulse is loading the Docker / Podman resource snapshot."
           />

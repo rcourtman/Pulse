@@ -22,6 +22,7 @@ import {
   PlatformErrorState,
   PlatformSectionTabs,
   PlatformTableEmptyState,
+  PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
 import { ProxmoxBackupsTable } from './ProxmoxBackupsTable';
 import { ProxmoxCephTable } from './ProxmoxCephTable';
@@ -108,8 +109,7 @@ export function ProxmoxPageSurface() {
       <Show
         when={!loading() || model().resources.length > 0}
         fallback={
-          <PlatformTableEmptyState
-            icon={proxmoxIcon()}
+          <PlatformTableLoadingState
             title="Loading Proxmox resources"
             description="Pulse is loading the Proxmox resource snapshot."
           />
@@ -259,8 +259,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
             forcedPlatform={PROXMOX_PLATFORM_FILTER}
             pinnedSelectionActive={() =>
               Boolean(
-                workloadsState.selectedGuestId() ||
-                  workloadsState.focusedSummaryWorkloadGroupId(),
+                workloadsState.selectedGuestId() || workloadsState.focusedSummaryWorkloadGroupId(),
               )
             }
             onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}

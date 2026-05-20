@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
 
 import type { WorkloadsSurfaceProps } from '@/components/Workloads/WorkloadsSurface';
 import { KubernetesPageSurface } from '../KubernetesPageSurface';
 
 const mockUseUnifiedResources = vi.fn();
+const mockUseWorkloadsState = vi.fn();
 const mockWorkloadsSurface = vi.fn((props: WorkloadsSurfaceProps) => (
   <div
     data-testid="kubernetes-workloads-surface"
@@ -20,6 +22,10 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
   useUnifiedResources: (...args: unknown[]) => mockUseUnifiedResources(...args),
 }));
 
+vi.mock('@/components/Workloads/useWorkloadsState', () => ({
+  useWorkloadsState: (...args: unknown[]) => mockUseWorkloadsState(...args),
+}));
+
 vi.mock('@/components/Workloads/WorkloadsSurface', () => ({
   WorkloadsSurface: (props: WorkloadsSurfaceProps) => mockWorkloadsSurface(props),
 }));
@@ -28,6 +34,7 @@ vi.mock('@/features/platformPage/sharedPlatformPage', () => ({
   PlatformErrorState: () => <div data-testid="platform-error-state" />,
   PlatformSectionTabs: () => <div data-testid="platform-section-tabs" />,
   PlatformTableEmptyState: () => <div data-testid="platform-table-empty-state" />,
+  PlatformTableLoadingState: () => <div data-testid="platform-table-loading-state" />,
 }));
 
 vi.mock('../KubernetesClustersTable', () => ({
@@ -63,8 +70,37 @@ describe('KubernetesPageSurface contract', () => {
       error: () => null,
       refetch: vi.fn(),
     });
+    mockUseWorkloadsState.mockReturnValue({
+      allGuests: () => [],
+      clearPinnedSummaryScope: vi.fn(),
+      containerRuntimeFilterConfig: () => undefined,
+      focusedSummaryWorkloadGroupId: () => null,
+      groupingMode: () => 'grouped',
+      handleBeforeAutoFocus: vi.fn(),
+      search: () => '',
+      selectedGuestId: () => null,
+      setGroupingMode: vi.fn(),
+      setMetricDisplayMode: vi.fn(),
+      setSearch: vi.fn(),
+      setSortDirection: vi.fn(),
+      setSortKey: vi.fn(),
+      setStatusMode: vi.fn(),
+      setViewMode: vi.fn(),
+      setWorkloadMetricHistoryRange: vi.fn(),
+      statusMode: () => 'all',
+      surfaceConnected: () => false,
+      surfaceInitialDataReceived: () => false,
+      viewMode: () => 'pod',
+      workloadMetricDisplayMode: () => 'bars',
+      workloadMetricHistoryRange: () => '1h',
+      workloadsFilterColumnVisibility: () => undefined,
+    });
 
-    render(() => <KubernetesPageSurface />);
+    render(() => (
+      <Router>
+        <Route path="/" component={KubernetesPageSurface} />
+      </Router>
+    ));
 
     expect(screen.getByTestId('kubernetes-workloads-surface')).toHaveAttribute(
       'data-forced-platform',
@@ -74,17 +110,13 @@ describe('KubernetesPageSurface contract', () => {
       'data-forced-view-mode',
       'pod',
     );
-    expect(screen.getByTestId('kubernetes-workloads-surface')).toHaveAttribute(
-      'data-column-scope',
-      'kubernetes-pods',
-    );
-    expect(screen.getByTestId('kubernetes-workloads-surface')).toHaveAttribute(
-      'data-allow-scope-filters',
-      'true',
-    );
-    expect(screen.getByTestId('kubernetes-workloads-surface')).toHaveAttribute(
-      'data-filter-placeholder',
-      'Search pods by name, namespace, image, cluster, or node',
+    expect(mockUseWorkloadsState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowEmbeddedScopeFilters: true,
+        columnVisibilityStorageScope: 'kubernetes-pods',
+        forcedPlatform: 'kubernetes',
+        forcedViewMode: 'pod',
+      }),
     );
   });
 });
