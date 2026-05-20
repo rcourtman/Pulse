@@ -27,8 +27,11 @@ import {
   SOURCE_PLATFORM_PRIMARY_MODE,
   SOURCE_PLATFORM_READINESS_STAGE,
   SOURCE_PLATFORM_STORAGE_FAMILY,
+  SOURCE_PLATFORM_SURFACE_KIND,
   SOURCE_PLATFORM_SUPPORT_FLOOR,
   SUPPORTED_PLATFORM_IDS,
+  SUPPORTED_OWNING_PLATFORM_IDS,
+  SUPPORTED_RUNTIME_LENS_IDS,
   type AgentHostProfileGovernanceState,
   type AgentHostProfileReadinessStage,
   type AgentHostProfileRuntimePlatform,
@@ -39,6 +42,7 @@ import {
   type GeneratedKnownSourcePlatform,
   type GeneratedSourcePlatformOnboardingPath,
   type GeneratedSourcePlatformManifestEntry,
+  type PlatformSurfaceKind,
   type PlatformPrimaryMode,
   type PlatformReadinessStage,
   type PlatformSupportFloor,
@@ -64,6 +68,7 @@ export type {
   PlatformSupportFloor,
   PlatformSupportFloorValue,
   PlatformGovernanceState,
+  PlatformSurfaceKind,
   SourcePlatformFamily,
   SourcePlatformStorageFamily,
 };
@@ -73,7 +78,9 @@ const entriesById = new Map<string, SourcePlatformManifestEntry>(
 );
 const entriesByDisplayToken = new Map<string, SourcePlatformManifestEntry>(
   SOURCE_PLATFORM_MANIFEST_ENTRIES.flatMap((platform) =>
-    platform.displayTokens.map((token) => [token.trim().toLowerCase(), platform] as const),
+    [platform.uiLabel, ...platform.displayTokens].map(
+      (token) => [token.trim().toLowerCase(), platform] as const,
+    ),
   ),
 );
 const agentHostProfileEntriesById = new Map<string, SourceAgentHostProfileManifestEntry>(
@@ -115,7 +122,10 @@ export {
   SOURCE_PLATFORM_PRIMARY_MODE,
   SOURCE_PLATFORM_READINESS_STAGE,
   SOURCE_PLATFORM_SUPPORT_FLOOR,
+  SOURCE_PLATFORM_SURFACE_KIND,
   SUPPORTED_PLATFORM_IDS,
+  SUPPORTED_OWNING_PLATFORM_IDS,
+  SUPPORTED_RUNTIME_LENS_IDS,
 };
 
 export const getSourcePlatformManifestEntry = (
@@ -170,6 +180,20 @@ export const getSourcePlatformReadinessStage = (
   if (!manifestPlatform) return null;
   return SOURCE_PLATFORM_READINESS_STAGE[manifestPlatform.id];
 };
+
+export const getSourcePlatformSurfaceKind = (
+  value: string | null | undefined,
+): PlatformSurfaceKind | null => {
+  const manifestPlatform = getSourcePlatformManifestEntry(value);
+  if (!manifestPlatform) return null;
+  return SOURCE_PLATFORM_SURFACE_KIND[manifestPlatform.id];
+};
+
+export const sourcePlatformIsRuntimeLens = (value: string | null | undefined): boolean =>
+  getSourcePlatformSurfaceKind(value) === 'runtime-lens';
+
+export const sourcePlatformIsOwningPlatform = (value: string | null | undefined): boolean =>
+  getSourcePlatformSurfaceKind(value) === 'platform';
 
 export const getSourcePlatformPrimaryMode = (
   value: string | null | undefined,

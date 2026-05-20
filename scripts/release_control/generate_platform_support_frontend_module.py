@@ -21,6 +21,7 @@ DEFAULT_GENERIC_PRESENTATION = {
 }
 VALID_GOVERNANCE_STATES = {"supported", "admitted", "presentation-only"}
 VALID_PRIMARY_MODES = {"api-backed", "agent-backed", "hybrid", "presentation-only"}
+VALID_PLATFORM_SURFACE_KINDS = {"platform", "runtime-lens", "presentation-only"}
 VALID_READINESS_STAGES = {"supported", "first-lab-ready", "presentation-only"}
 VALID_STORAGE_FAMILIES = {"onprem", "container", "virtualization", "cloud"}
 VALID_ONBOARDING_PATHS = {"install-workspace", "platform-connections"}
@@ -231,6 +232,14 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
                 f"expected platforms[{index}].governance_state to be one of "
                 f"{sorted(VALID_GOVERNANCE_STATES)}"
             )
+        surface_kind = require_string(
+            record.get("surface_kind"), f"platforms[{index}].surface_kind"
+        )
+        if surface_kind not in VALID_PLATFORM_SURFACE_KINDS:
+            raise ValueError(
+                f"expected platforms[{index}].surface_kind to be one of "
+                f"{sorted(VALID_PLATFORM_SURFACE_KINDS)}"
+            )
         storage_family = require_string(
             record.get("storage_family"), f"platforms[{index}].storage_family"
         )
@@ -280,6 +289,10 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
         if governance_state == "admitted" and readiness_stage == "supported":
             raise ValueError(f"admitted platform {platform_id} must not use readiness_stage supported")
         if governance_state == "presentation-only":
+            if surface_kind != "presentation-only":
+                raise ValueError(
+                    f"presentation-only platform {platform_id} must use surface_kind presentation-only"
+                )
             if readiness_stage != "presentation-only":
                 raise ValueError(
                     f"presentation-only platform {platform_id} must use readiness_stage presentation-only"
@@ -288,6 +301,10 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
                 raise ValueError(
                     f"presentation-only platform {platform_id} must use primary_mode presentation-only"
                 )
+        elif surface_kind == "presentation-only":
+            raise ValueError(
+                f"{governance_state} platform {platform_id} must not use surface_kind presentation-only"
+            )
 
         canonical_projections = unique_preserve_order(
             require_string_list(
@@ -328,6 +345,7 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
             {
                 "id": platform_id,
                 "family": require_string(record.get("family"), f"platforms[{index}].family"),
+                "surfaceKind": surface_kind,
                 "governanceState": governance_state,
                 "readinessStage": readiness_stage,
                 "primaryMode": primary_mode,
@@ -356,7 +374,19 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
             )
         ]
     )
-    supported_ids = [platform["id"] for platform in platforms if platform["governanceState"] == "supported"]
+    supported_ids = [
+        platform["id"] for platform in platforms if platform["governanceState"] == "supported"
+    ]
+    supported_owning_platform_ids = [
+        platform["id"]
+        for platform in platforms
+        if platform["governanceState"] == "supported" and platform["surfaceKind"] == "platform"
+    ]
+    supported_runtime_lens_ids = [
+        platform["id"]
+        for platform in platforms
+        if platform["governanceState"] == "supported" and platform["surfaceKind"] == "runtime-lens"
+    ]
     supported_id_set = set(supported_ids)
     for platform_id in default_order:
         if platform_id not in supported_id_set:
@@ -388,6 +418,9 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
     }
     readiness_stage_by_id = {
         platform["id"]: platform["readinessStage"] for platform in platforms
+    }
+    surface_kind_by_id = {
+        platform["id"]: platform["surfaceKind"] for platform in platforms
     }
     agent_host_profile_family_by_id = {
         profile["id"]: profile["family"] for profile in agent_host_profiles
@@ -458,6 +491,8 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
         "agentHostProfileIds": agent_host_profile_ids,
         "platforms": platforms,
         "supportedPlatformIds": supported_ids,
+        "supportedOwningPlatformIds": supported_owning_platform_ids,
+        "supportedRuntimeLensIds": supported_runtime_lens_ids,
         "admittedPlatformIds": admitted_ids,
         "presentationOnlyPlatformIds": presentation_only_ids,
         "platformTypeKeys": platform_type_keys,
@@ -474,6 +509,7 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
         "agentHostProfileStorageFamilyById": agent_host_profile_storage_family_by_id,
         "agentHostProfileRuntimePlatformById": agent_host_profile_runtime_platform_by_id,
         "familyById": family_by_id,
+        "surfaceKindById": surface_kind_by_id,
         "readinessStageById": readiness_stage_by_id,
         "primaryModeById": primary_mode_by_id,
         "canonicalProjectionsById": canonical_projections_by_id,
@@ -516,6 +552,8 @@ def render_module(normalized: dict[str, Any], manifest_hash: str) -> str:
         "  PLATFORM_SUPPORT_MANIFEST.agentHostProfiles;\n",
         render_const("AGENT_HOST_PROFILE_IDS", normalized["agentHostProfileIds"]),
         render_const("SUPPORTED_PLATFORM_IDS", normalized["supportedPlatformIds"]),
+        render_const("SUPPORTED_OWNING_PLATFORM_IDS", normalized["supportedOwningPlatformIds"]),
+        render_const("SUPPORTED_RUNTIME_LENS_IDS", normalized["supportedRuntimeLensIds"]),
         render_const("ADMITTED_PLATFORM_IDS", normalized["admittedPlatformIds"]),
         render_const("PRESENTATION_ONLY_PLATFORM_IDS", normalized["presentationOnlyPlatformIds"]),
         render_const("PLATFORM_TYPE_KEYS", normalized["platformTypeKeys"]),
@@ -557,6 +595,7 @@ def render_module(normalized: dict[str, Any], manifest_hash: str) -> str:
             normalized["agentHostProfileRuntimePlatformById"],
         ),
         render_const("SOURCE_PLATFORM_FAMILY", normalized["familyById"]),
+        render_const("SOURCE_PLATFORM_SURFACE_KIND", normalized["surfaceKindById"]),
         render_const("SOURCE_PLATFORM_READINESS_STAGE", normalized["readinessStageById"]),
         render_const("SOURCE_PLATFORM_PRIMARY_MODE", normalized["primaryModeById"]),
         render_const("SOURCE_PLATFORM_CANONICAL_PROJECTIONS", normalized["canonicalProjectionsById"]),
@@ -566,6 +605,8 @@ def render_module(normalized: dict[str, Any], manifest_hash: str) -> str:
         render_const("SOURCE_PLATFORM_STORAGE_FAMILY", normalized["storageFamilyById"]),
         "export type PlatformGovernanceState =\n"
         "  (typeof SOURCE_PLATFORM_MANIFEST_ENTRIES)[number]['governanceState'];\n",
+        "export type PlatformSurfaceKind =\n"
+        "  (typeof SOURCE_PLATFORM_MANIFEST_ENTRIES)[number]['surfaceKind'];\n",
         "export type PlatformReadinessStage =\n"
         "  (typeof SOURCE_PLATFORM_MANIFEST_ENTRIES)[number]['readinessStage'];\n",
         "export type PlatformPrimaryMode =\n"

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "default_infrastructure_source_order": [
     "agent",
     "truenas",
@@ -39,6 +39,7 @@
     {
       "id": "agent",
       "family": "Pulse-managed host",
+      "surface_kind": "platform",
       "governance_state": "supported",
       "readiness_stage": "supported",
       "primary_mode": "agent-backed",
@@ -71,6 +72,7 @@
     {
       "id": "docker",
       "family": "Container runtime",
+      "surface_kind": "runtime-lens",
       "governance_state": "supported",
       "readiness_stage": "supported",
       "primary_mode": "agent-backed",
@@ -105,6 +107,7 @@
     {
       "id": "kubernetes",
       "family": "Cluster runtime",
+      "surface_kind": "platform",
       "governance_state": "supported",
       "readiness_stage": "supported",
       "primary_mode": "agent-backed",
@@ -141,6 +144,7 @@
     {
       "id": "proxmox-pve",
       "family": "Proxmox",
+      "surface_kind": "platform",
       "governance_state": "supported",
       "readiness_stage": "supported",
       "primary_mode": "api-backed",
@@ -180,6 +184,7 @@
     {
       "id": "proxmox-pbs",
       "family": "Proxmox",
+      "surface_kind": "platform",
       "governance_state": "supported",
       "readiness_stage": "supported",
       "primary_mode": "api-backed",
@@ -214,6 +219,7 @@
     {
       "id": "proxmox-pmg",
       "family": "Proxmox",
+      "surface_kind": "platform",
       "governance_state": "supported",
       "readiness_stage": "supported",
       "primary_mode": "api-backed",
@@ -247,6 +253,7 @@
     {
       "id": "truenas",
       "family": "TrueNAS",
+      "surface_kind": "platform",
       "governance_state": "supported",
       "readiness_stage": "supported",
       "primary_mode": "api-backed",
@@ -280,6 +287,7 @@
     {
       "id": "vmware-vsphere",
       "family": "VMware",
+      "surface_kind": "platform",
       "governance_state": "supported",
       "readiness_stage": "supported",
       "primary_mode": "api-backed",
@@ -315,6 +323,7 @@
     {
       "id": "unraid",
       "family": "Unraid",
+      "surface_kind": "presentation-only",
       "governance_state": "presentation-only",
       "readiness_stage": "presentation-only",
       "primary_mode": "presentation-only",
@@ -341,6 +350,7 @@
     {
       "id": "synology-dsm",
       "family": "Synology",
+      "surface_kind": "presentation-only",
       "governance_state": "presentation-only",
       "readiness_stage": "presentation-only",
       "primary_mode": "presentation-only",
@@ -368,6 +378,7 @@
     {
       "id": "microsoft-hyperv",
       "family": "Hyper-V",
+      "surface_kind": "presentation-only",
       "governance_state": "presentation-only",
       "readiness_stage": "presentation-only",
       "primary_mode": "presentation-only",
@@ -396,6 +407,7 @@
     {
       "id": "aws",
       "family": "AWS",
+      "surface_kind": "presentation-only",
       "governance_state": "presentation-only",
       "readiness_stage": "presentation-only",
       "primary_mode": "presentation-only",
@@ -422,6 +434,7 @@
     {
       "id": "azure",
       "family": "Azure",
+      "surface_kind": "presentation-only",
       "governance_state": "presentation-only",
       "readiness_stage": "presentation-only",
       "primary_mode": "presentation-only",
@@ -448,6 +461,7 @@
     {
       "id": "gcp",
       "family": "GCP",
+      "surface_kind": "presentation-only",
       "governance_state": "presentation-only",
       "readiness_stage": "presentation-only",
       "primary_mode": "presentation-only",

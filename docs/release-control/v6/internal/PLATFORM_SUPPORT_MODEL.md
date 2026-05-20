@@ -256,13 +256,16 @@ Rules:
 ### First-class platforms
 
 1. `agent` for unified-agent hosts
-2. `docker`
-3. `kubernetes`
-4. `proxmox-pve`
-5. `proxmox-pbs`
-6. `proxmox-pmg`
-7. `truenas`
-8. `vmware-vsphere`
+2. `kubernetes`
+3. `proxmox-pve`
+4. `proxmox-pbs`
+5. `proxmox-pmg`
+6. `truenas`
+7. `vmware-vsphere`
+
+### Runtime lenses
+
+1. `docker`
 
 ### Admitted platforms (not yet supported)
 
@@ -297,28 +300,29 @@ Support floor fields are recorded in this order: `setup`, `visibility`,
 `workloads`, `storage`, `recovery`, `alerts`, `assistant_read`,
 `assistant_control`.
 
-| Platform | Governance | Readiness | Primary mode | Onboarding | Canonical projections | Support floor |
-| --- | --- | --- | --- | --- | --- | --- |
-| `agent` | `supported` | `supported` | `agent-backed` | `install-workspace` | `agent`, `storage`, `physical-disk` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=supported`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
-| `docker` | `supported` | `supported` | `agent-backed` | `install-workspace` | `agent`, `app-container`, `docker-service` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=n/a`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
-| `kubernetes` | `supported` | `supported` | `agent-backed` | `install-workspace` | `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=n/a`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
-| `proxmox-pve` | `supported` | `supported` | `api-backed` | `platform-connections` | `agent`, `vm`, `system-container`, `storage`, `ceph`, `physical-disk` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=augmentation-only` |
-| `proxmox-pbs` | `supported` | `supported` | `api-backed` | `platform-connections` | `pbs`, `storage` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
-| `proxmox-pmg` | `supported` | `supported` | `api-backed` | `platform-connections` | `pmg` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=n/a`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
-| `truenas` | `supported` | `supported` | `api-backed` | `platform-connections` | `agent`, `app-container`, `storage`, `physical-disk` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
-| `vmware-vsphere` | `supported` | `supported` | `api-backed` | `platform-connections` | `agent`, `vm`, `storage` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
+| Platform | Surface kind | Governance | Readiness | Primary mode | Onboarding | Canonical projections | Support floor |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `agent` | `platform` | `supported` | `supported` | `agent-backed` | `install-workspace` | `agent`, `storage`, `physical-disk` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=supported`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
+| `docker` | `runtime-lens` | `supported` | `supported` | `agent-backed` | `install-workspace` | `agent`, `app-container`, `docker-service` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=n/a`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
+| `kubernetes` | `platform` | `supported` | `supported` | `agent-backed` | `install-workspace` | `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=n/a`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
+| `proxmox-pve` | `platform` | `supported` | `supported` | `api-backed` | `platform-connections` | `agent`, `vm`, `system-container`, `storage`, `ceph`, `physical-disk` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=augmentation-only` |
+| `proxmox-pbs` | `platform` | `supported` | `supported` | `api-backed` | `platform-connections` | `pbs`, `storage` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
+| `proxmox-pmg` | `platform` | `supported` | `supported` | `api-backed` | `platform-connections` | `pmg` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=n/a`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
+| `truenas` | `platform` | `supported` | `supported` | `api-backed` | `platform-connections` | `agent`, `app-container`, `storage`, `physical-disk` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
+| `vmware-vsphere` | `platform` | `supported` | `supported` | `api-backed` | `platform-connections` | `agent`, `vm`, `storage` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
 
 Presentation-only platform vocabulary uses `governance=presentation-only`,
-`readiness=presentation-only`, `primary_mode=presentation-only`, no onboarding
-paths, no canonical projections, and `n/a` for every support-floor field.
+`surface_kind=presentation-only`, `readiness=presentation-only`,
+`primary_mode=presentation-only`, no onboarding paths, no canonical projections,
+and `n/a` for every support-floor field.
 
 ### Machine-readable projection
 
 `PLATFORM_SUPPORT_MANIFEST.json` is the machine-readable projection of the
 supported, admitted, and presentation-only platform vocabulary declared here,
 plus the canonical platform-family, readiness-stage, primary-mode,
-onboarding-path, projection, and support-floor classification for supported
-and admitted platforms, and the separate machine-readable agent host profile
+surface-kind, onboarding-path, projection, and support-floor classification for
+supported and admitted platforms, and the separate machine-readable agent host profile
 classification (including the runtime-platform fallback) for supported
 host/appliance profiles. Tests and shared frontend vocabulary may consume that
 manifest, and the tracked frontend projection in
@@ -327,8 +331,8 @@ tracked backend projection in
 `internal/platformsupport/manifest_generated.go` must be generated from it,
 but neither projection may introduce platform ids, host profile ids,
 governance states, families, readiness stages, primary modes, onboarding
-paths, projections, support-floor claims, host identity tokens, or runtime
-platform fallbacks that are not declared in this document.
+paths, projections, surface kinds, support-floor claims, host identity tokens,
+or runtime platform fallbacks that are not declared in this document.
 
 ### Runtime variants
 
@@ -356,16 +360,16 @@ platform fallbacks that are not declared in this document.
 
 ## Current Support Matrix
 
-| Platform      | Family             | Primary mode | Optional augmentation              | Canonical projections                                                 |
-| ------------- | ------------------ | ------------ | ---------------------------------- | --------------------------------------------------------------------- |
-| `agent`       | Pulse-managed host | agent-backed | none                               | `agent`, `storage`, `physical-disk`                                   |
-| `docker`      | container runtime  | agent-backed | none                               | `agent`, `app-container`, `docker-service`                            |
-| `kubernetes`  | cluster runtime    | agent-backed | none                               | `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`                    |
-| `proxmox-pve` | Proxmox            | api-backed   | host agent may augment into hybrid | `agent`, `vm`, `system-container`, `storage`, `ceph`, `physical-disk` |
-| `proxmox-pbs` | Proxmox            | api-backed   | host agent may augment into hybrid | `pbs`, `storage`                                                      |
-| `proxmox-pmg` | Proxmox            | api-backed   | none today                         | `pmg`                                                                 |
-| `truenas`        | TrueNAS            | api-backed   | host agent may augment into hybrid | `agent`, `app-container`, `storage`, `physical-disk`                  |
-| `vmware-vsphere` | VMware             | api-backed   | host or guest agent later, not phase 1 | `agent`, `vm`, `storage`                                          |
+| Platform         | Surface kind  | Family             | Primary mode | Optional augmentation                 | Canonical projections                                                 |
+| ---------------- | ------------- | ------------------ | ------------ | ------------------------------------- | --------------------------------------------------------------------- |
+| `agent`          | platform      | Pulse-managed host | agent-backed | none                                  | `agent`, `storage`, `physical-disk`                                   |
+| `docker`         | runtime-lens  | container runtime  | agent-backed | none                                  | `agent`, `app-container`, `docker-service`                            |
+| `kubernetes`     | platform      | cluster runtime    | agent-backed | none                                  | `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`                    |
+| `proxmox-pve`    | platform      | Proxmox            | api-backed   | host agent may augment into hybrid    | `agent`, `vm`, `system-container`, `storage`, `ceph`, `physical-disk` |
+| `proxmox-pbs`    | platform      | Proxmox            | api-backed   | host agent may augment into hybrid    | `pbs`, `storage`                                                      |
+| `proxmox-pmg`    | platform      | Proxmox            | api-backed   | none today                            | `pmg`                                                                 |
+| `truenas`        | platform      | TrueNAS            | api-backed   | host agent may augment into hybrid    | `agent`, `app-container`, `storage`, `physical-disk`                  |
+| `vmware-vsphere` | platform      | VMware             | api-backed   | host or guest agent later, not phase 1 | `agent`, `vm`, `storage`                                             |
 
 | Platform         | Setup                                  | Visibility | Workloads | Storage   | Recovery  | Alerts    | Assistant read | Assistant control |
 | ---------------- | -------------------------------------- | ---------- | --------- | --------- | --------- | --------- | -------------- | ----------------- |

@@ -19,6 +19,7 @@ var (
 	numberedPlatformListRE     = regexp.MustCompile("^\\d+\\.\\s+`([^`]+)`")
 	currentSupportMatrixRE     = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|")
 	currentSupportSetupRowRE   = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|\\s+([^|]+?)\\s+\\|")
+	currentSupportSurfaceRowRE = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|")
 	agentHostProfileTableRowRE = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+(.+?)\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|")
 )
 
@@ -42,6 +43,7 @@ type agentHostProfileManifestEntry struct {
 
 type platformSupportManifestEntry struct {
 	ID                   string            `json:"id"`
+	SurfaceKind          string            `json:"surface_kind"`
 	GovernanceState      string            `json:"governance_state"`
 	ReadinessStage       string            `json:"readiness_stage"`
 	PrimaryMode          string            `json:"primary_mode"`
@@ -59,18 +61,35 @@ func TestPlatformSupportManifestMatchesSupportModel(t *testing.T) {
 	model := loadPlatformSupportModel(t)
 	manifest := loadPlatformSupportManifest(t)
 
-	classified := parsePlatformListSection(t, model, "### First-class platforms")
+	firstClassPlatforms := parsePlatformListSection(t, model, "### First-class platforms")
+	runtimeLenses := parsePlatformListSection(t, model, "### Runtime lenses")
+	supportedSurfaces := uniqueSortedPlatforms(append(
+		append([]string(nil), firstClassPlatforms...),
+		runtimeLenses...,
+	))
 	admitted := parsePlatformListSection(t, model, "### Admitted platforms (not yet supported)")
 	presentationOnly := parsePlatformListSection(t, model, "### Presentation-only platform vocabulary")
 	agentHostProfiles := parseAgentHostProfileSection(t, model, "### Agent Host Profiles")
 	matrix := parseCurrentSupportMatrixPlatforms(t, model)
 
-	if diff := diffPlatformSets(classified, matrix); diff != "" {
+	if diff := diffPlatformSets(supportedSurfaces, matrix); diff != "" {
 		t.Fatalf("current supported platform definitions drifted between classification and support matrix:\n%s", diff)
 	}
 
-	if diff := diffPlatformSets(classified, manifestPlatformsByState(t, manifest, "supported")); diff != "" {
+	if diff := diffPlatformSets(supportedSurfaces, manifestPlatformsByState(t, manifest, "supported")); diff != "" {
 		t.Fatalf("supported platform manifest drifted from the canonical support model:\n%s", diff)
+	}
+	if diff := diffPlatformSets(
+		firstClassPlatforms,
+		manifestPlatformsBySurfaceKindAndState(t, manifest, "platform", "supported"),
+	); diff != "" {
+		t.Fatalf("supported platform surface-kind manifest drifted from the canonical support model:\n%s", diff)
+	}
+	if diff := diffPlatformSets(
+		runtimeLenses,
+		manifestPlatformsBySurfaceKindAndState(t, manifest, "runtime-lens", "supported"),
+	); diff != "" {
+		t.Fatalf("supported runtime-lens manifest drifted from the canonical support model:\n%s", diff)
 	}
 	if diff := diffPlatformSets(admitted, manifestPlatformsByState(t, manifest, "admitted")); diff != "" {
 		t.Fatalf("admitted platform manifest drifted from the canonical support model:\n%s", diff)
@@ -80,6 +99,18 @@ func TestPlatformSupportManifestMatchesSupportModel(t *testing.T) {
 		manifestPlatformsByState(t, manifest, "presentation-only"),
 	); diff != "" {
 		t.Fatalf("presentation-only platform manifest drifted from the canonical support model:\n%s", diff)
+	}
+	if diff := diffPlatformSets(
+		presentationOnly,
+		manifestPlatformsBySurfaceKindAndState(t, manifest, "presentation-only", "presentation-only"),
+	); diff != "" {
+		t.Fatalf("presentation-only surface-kind manifest drifted from the canonical support model:\n%s", diff)
+	}
+	if diff := diffPlatformFieldMap(
+		parseCurrentSupportRowSurfaceKinds(t, model),
+		manifestPlatformSurfaceKindsByState(t, manifest, "supported"),
+	); diff != "" {
+		t.Fatalf("supported surface-kind manifest drifted from the canonical support rows:\n%s", diff)
 	}
 	if diff := diffPlatformFieldMap(
 		parseCurrentSupportMatrixOnboardingPaths(t, model),
@@ -141,7 +172,7 @@ func TestPlatformSupportManifestMatchesSupportModel(t *testing.T) {
 	); diff != "" {
 		t.Fatalf("agent host profile storage-family drifted from the canonical support model:\n%s", diff)
 	}
-	if diff := diffPlatformSets(classified, manifest.DefaultInfrastructureSourceOrder); diff != "" {
+	if diff := diffPlatformSets(supportedSurfaces, manifest.DefaultInfrastructureSourceOrder); diff != "" {
 		t.Fatalf("default infrastructure source ordering drifted from the canonical supported platform set:\n%s", diff)
 	}
 }
@@ -632,6 +663,36 @@ func parseCurrentSupportMatrixOnboardingPaths(t *testing.T, model string) map[st
 	return requireNonEmptyPlatformFieldMap(t, rows, "current support matrix onboarding paths")
 }
 
+func parseCurrentSupportRowSurfaceKinds(t *testing.T, model string) map[string][]string {
+	t.Helper()
+
+	rows := make(map[string][]string)
+	inRows := false
+
+	for _, raw := range strings.Split(model, "\n") {
+		line := strings.TrimSpace(raw)
+		switch {
+		case line == "### Current support rows":
+			inRows = true
+			continue
+		case !inRows:
+			continue
+		case strings.HasPrefix(line, "### ") || strings.HasPrefix(line, "## "):
+			return requireNonEmptyPlatformFieldMap(t, rows, "current support row surface kinds")
+		case line == "" || strings.HasPrefix(line, "| ---") || strings.HasPrefix(line, "| Platform"):
+			continue
+		}
+
+		matches := currentSupportSurfaceRowRE.FindStringSubmatch(line)
+		if len(matches) != 3 {
+			continue
+		}
+		rows[matches[1]] = []string{matches[2]}
+	}
+
+	return requireNonEmptyPlatformFieldMap(t, rows, "current support row surface kinds")
+}
+
 func manifestPlatformsByState(
 	t *testing.T,
 	manifest platformSupportManifest,
@@ -656,6 +717,56 @@ func manifestPlatformsByState(
 		return allowEmptyPlatformList(platforms)
 	}
 	return requireNonEmptyPlatformList(t, platforms, fmt.Sprintf("manifest platforms with state %s", governanceState))
+}
+
+func manifestPlatformsBySurfaceKindAndState(
+	t *testing.T,
+	manifest platformSupportManifest,
+	surfaceKind string,
+	governanceState string,
+) []string {
+	t.Helper()
+
+	platforms := make([]string, 0)
+	for _, platform := range manifest.Platforms {
+		if platform.GovernanceState == governanceState && platform.SurfaceKind == surfaceKind {
+			platforms = append(platforms, platform.ID)
+		}
+	}
+
+	if governanceState == "admitted" {
+		return allowEmptyPlatformList(platforms)
+	}
+	return requireNonEmptyPlatformList(
+		t,
+		platforms,
+		fmt.Sprintf("manifest platforms with surface kind %s and state %s", surfaceKind, governanceState),
+	)
+}
+
+func manifestPlatformSurfaceKindsByState(
+	t *testing.T,
+	manifest platformSupportManifest,
+	governanceState string,
+) map[string][]string {
+	t.Helper()
+
+	rows := make(map[string][]string)
+	for _, platform := range manifest.Platforms {
+		if platform.GovernanceState != governanceState {
+			continue
+		}
+		if strings.TrimSpace(platform.SurfaceKind) == "" {
+			t.Fatalf("expected platform support manifest to classify surface kind for %s", platform.ID)
+		}
+		rows[platform.ID] = []string{platform.SurfaceKind}
+	}
+
+	return requireNonEmptyPlatformFieldMap(
+		t,
+		rows,
+		fmt.Sprintf("manifest surface kinds with state %s", governanceState),
+	)
 }
 
 func manifestPlatformOnboardingPathsByState(
@@ -1080,7 +1191,7 @@ func diffPlatformFieldMap(want map[string][]string, got map[string][]string) str
 			if diff := diffPlatformSets(wantValue, gotValue); diff != "" {
 				messages = append(
 					messages,
-					fmt.Sprintf("%s onboarding paths drifted:\n%s", platform, indentDiff(diff)),
+					fmt.Sprintf("%s field values drifted:\n%s", platform, indentDiff(diff)),
 				)
 			}
 		}

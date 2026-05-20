@@ -20,7 +20,12 @@ import {
   getAgentHostProfileRuntimePlatform,
   getSourcePlatformCanonicalProjections,
   getSourcePlatformReadinessStage,
+  getSourcePlatformSurfaceKind,
   getSourcePlatformSupportFloor,
+  sourcePlatformIsOwningPlatform,
+  sourcePlatformIsRuntimeLens,
+  SUPPORTED_OWNING_PLATFORM_IDS,
+  SUPPORTED_RUNTIME_LENS_IDS,
 } from '@/utils/platformSupportManifest';
 
 describe('sourcePlatforms', () => {
@@ -184,6 +189,15 @@ describe('sourcePlatforms', () => {
       expect(PLATFORM_TYPE_KEYS).not.toContain('unraid');
       expect(PRESENTATION_ONLY_PLATFORM_IDS).toContain('unraid');
     });
+
+    it('classifies Docker as a runtime lens instead of an owning platform', () => {
+      expect(getSourcePlatformSurfaceKind('docker')).toBe('runtime-lens');
+      expect(sourcePlatformIsRuntimeLens('Docker / Podman')).toBe(true);
+      expect(sourcePlatformIsOwningPlatform('docker')).toBe(false);
+      expect(SUPPORTED_RUNTIME_LENS_IDS).toEqual(['docker']);
+      expect(SUPPORTED_OWNING_PLATFORM_IDS).toContain('proxmox-pve');
+      expect(SUPPORTED_OWNING_PLATFORM_IDS).not.toContain('docker');
+    });
   });
 
   describe('resolvePlatformTypeFromSources', () => {
@@ -201,9 +215,9 @@ describe('sourcePlatforms', () => {
 
   describe('resolveResourcePlatformType', () => {
     it('prefers the resource platformType field when present', () => {
-      expect(
-        resolveResourcePlatformType({ platformType: 'proxmox-pve', sources: ['agent'] }),
-      ).toBe('proxmox-pve');
+      expect(resolveResourcePlatformType({ platformType: 'proxmox-pve', sources: ['agent'] })).toBe(
+        'proxmox-pve',
+      );
       expect(resolveResourcePlatformType({ platformType: 'docker', sources: [] })).toBe('docker');
     });
 
