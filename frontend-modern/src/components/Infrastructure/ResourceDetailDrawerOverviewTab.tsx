@@ -72,6 +72,19 @@ const vmwareRowToneClass = (tone?: 'default' | 'accent' | 'warning'): string => 
   }
 };
 
+const trueNASRowToneClass = (tone?: 'default' | 'accent' | 'warning' | 'success'): string => {
+  switch (tone) {
+    case 'accent':
+      return 'text-cyan-700 dark:text-cyan-300';
+    case 'warning':
+      return 'text-amber-700 dark:text-amber-300';
+    case 'success':
+      return 'text-emerald-700 dark:text-emerald-300';
+    default:
+      return 'text-base-content';
+  }
+};
+
 const pbsEvidenceBadgeClass = (tone: string): string => {
   switch (tone) {
     case 'danger':
@@ -622,6 +635,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
           when={
             drawer.hasServiceDetails() ||
             drawer.hasVMwareDetails() ||
+            drawer.hasTrueNASDetails() ||
             drawer.hasHostDetails() ||
             drawer.hasAccessContext() ||
             drawer.hasInvestigationContext()
@@ -631,6 +645,47 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             data-testid="resource-support-sections"
             class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(50%-0.375rem)] [&>*]:min-w-[260px] [&>*]:max-w-full [&>*]:overflow-hidden"
           >
+            <Show when={drawer.hasTrueNASDetails()}>
+              <SupportDisclosure
+                title="TrueNAS"
+                summary={drawer.trueNASDetailsSummary()}
+                expanded={drawer.showTrueNASDetails()}
+                onToggle={() => drawer.setShowTrueNASDetails((value) => !value)}
+                showLabel="Show TrueNAS"
+                hideLabel="Hide TrueNAS"
+                class="h-full"
+                contentClass="mt-3 space-y-3"
+                dataTestId="resource-truenas-details-section"
+              >
+                <div class="space-y-3">
+                  <For each={drawer.trueNASDetailSections()}>
+                    {(section) => (
+                      <div class="rounded border border-cyan-200 bg-cyan-50 p-3 dark:border-cyan-700 dark:bg-cyan-900">
+                        <div class="mb-2 text-[10px] font-medium uppercase tracking-wide text-cyan-700 dark:text-cyan-300">
+                          {section.label}
+                        </div>
+                        <div class="space-y-1.5 text-[11px]">
+                          <For each={section.rows}>
+                            {(row) => (
+                              <div class="flex items-center justify-between gap-2">
+                                <span class="text-muted">{row.label}</span>
+                                <span
+                                  class={`max-w-[60%] truncate text-right font-medium ${trueNASRowToneClass(row.tone)}`}
+                                  title={row.title ?? row.value}
+                                >
+                                  {row.value}
+                                </span>
+                              </div>
+                            )}
+                          </For>
+                        </div>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </SupportDisclosure>
+            </Show>
+
             <Show when={drawer.hasAccessContext()}>
               <SupportDisclosure
                 title="Access"

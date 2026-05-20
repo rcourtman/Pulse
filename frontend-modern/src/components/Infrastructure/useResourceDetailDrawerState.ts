@@ -27,6 +27,7 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   const [showHostDetails, setShowHostDetails] = createSignal(false);
   const [showServiceDetails, setShowServiceDetails] = createSignal(false);
   const [showVMwareDetails, setShowVMwareDetails] = createSignal(false);
+  const [showTrueNASDetails, setShowTrueNASDetails] = createSignal(false);
   const [showPbsJobDetail, setShowPbsJobDetail] = createSignal(false);
   const [showPmgMailFlowDetail, setShowPmgMailFlowDetail] = createSignal(false);
   const [k8sDeploymentsPrefillNamespace, setK8sDeploymentsPrefillNamespace] = createSignal('');
@@ -105,6 +106,8 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
     setShowServiceDetails,
     showVMwareDetails,
     setShowVMwareDetails,
+    showTrueNASDetails,
+    setShowTrueNASDetails,
     showPbsJobDetail,
     setShowPbsJobDetail,
     showPmgMailFlowDetail,

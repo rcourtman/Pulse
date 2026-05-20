@@ -69,6 +69,10 @@ import {
   buildVMwareDetailsSummary,
   buildVMwareDetailSections,
 } from './resourceDetailDrawerVmwareModel';
+import {
+  buildTrueNASDetailsSummary,
+  buildTrueNASDetailSections,
+} from './resourceDetailDrawerTrueNASModel';
 import { getResourceHealthIssuePresentation } from './resourceHealthPresentation';
 
 type DrawerTab = 'overview' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
@@ -319,6 +323,9 @@ export const useResourceDetailDrawerDerivedState = (
   const vmwareDetailsSummary = createMemo(() =>
     buildVMwareDetailsSummary(resource.type, vmwareData()),
   );
+  const trueNASDetailSections = createMemo(() => buildTrueNASDetailSections(resource));
+  const hasTrueNASDetails = createMemo(() => trueNASDetailSections().length > 0);
+  const trueNASDetailsSummary = createMemo(() => buildTrueNASDetailsSummary(resource));
 
   const relatedLinks = createMemo(() => buildRelatedLinks(resource, displayName()));
   const accessSummary = createMemo(() =>
@@ -444,6 +451,9 @@ export const useResourceDetailDrawerDerivedState = (
     hasVMwareDetails,
     vmwareDetailsSummary,
     vmwareDetailSections,
+    hasTrueNASDetails,
+    trueNASDetailsSummary,
+    trueNASDetailSections,
     relatedLinks,
     hasRuntimeOperationalContext,
     sourceSections,

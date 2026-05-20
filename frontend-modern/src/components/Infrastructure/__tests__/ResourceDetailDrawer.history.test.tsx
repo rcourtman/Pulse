@@ -15,6 +15,7 @@ import resourceDetailDrawerIdentityModelSource from '@/components/Infrastructure
 import resourceDetailDrawerOperationalModelSource from '@/components/Infrastructure/resourceDetailDrawerOperationalModel.ts?raw';
 import resourceDetailDrawerServiceModelSource from '@/components/Infrastructure/resourceDetailDrawerServiceModel.ts?raw';
 import resourceDetailDrawerVmwareModelSource from '@/components/Infrastructure/resourceDetailDrawerVmwareModel.ts?raw';
+import resourceDetailDrawerTrueNASModelSource from '@/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts?raw';
 import resourceDetailDrawerDockerActionsStateSource from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts?raw';
 import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
 import actionAuditApiSource from '@/api/actionAudit.ts?raw';
@@ -194,9 +195,7 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerDerivedStateSource).toContain('resource.relationships ?? []');
     expect(resourceActionHistorySource).toContain('getActionAuditRecordStatePresentation');
     expect(resourceActionHistorySource).toContain('getActionAuditResultPresentation');
-    expect(resourceActionHistorySource).toContain(
-      'getActionAuditVerificationOutcomePresentation',
-    );
+    expect(resourceActionHistorySource).toContain('getActionAuditVerificationOutcomePresentation');
     expect(resourceActionHistorySource).toContain('formatActionApprovalPolicyLabel');
     // The audit history must surface the broker's read-after-write
     // verification outcome alongside the dispatch result, not silently
@@ -228,6 +227,9 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerDerivedStateSource).toContain(
       "from './resourceDetailDrawerVmwareModel'",
     );
+    expect(resourceDetailDrawerDerivedStateSource).toContain(
+      "from './resourceDetailDrawerTrueNASModel'",
+    );
     expect(resourceDetailDrawerDiscoveryModelSource).toContain('export const toDiscoveryConfig');
     expect(resourceDetailDrawerIdentityModelSource).toContain(
       'export const buildResourceIdentityView',
@@ -243,6 +245,12 @@ describe('ResourceDetailDrawer change history section', () => {
     );
     expect(resourceDetailDrawerVmwareModelSource).toContain(
       'export const buildVMwareDetailsSummary',
+    );
+    expect(resourceDetailDrawerTrueNASModelSource).toContain(
+      'export const buildTrueNASDetailSections',
+    );
+    expect(resourceDetailDrawerTrueNASModelSource).toContain(
+      'export const buildTrueNASDetailsSummary',
     );
     expect(resourceDetailDrawerDerivedStateSource).not.toContain('buildWorkloadsHref');
     expect(resourceDetailDrawerDerivedStateSource).not.toContain('buildServiceDetailLinks');
