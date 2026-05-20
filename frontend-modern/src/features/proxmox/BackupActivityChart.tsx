@@ -25,11 +25,14 @@ import {
 
 import {
   BACKUP_ACTIVITY_RANGE_DAYS,
+  getBackupActivityAxisLabel,
   getBackupActivityColumnAriaLabel,
   getBackupActivityDayFilterStateLabel,
   getBackupActivityPointTotalLabel,
   getBackupActivitySegmentPresentation,
   getBackupActivityTooltipRows,
+  type BackupActivityMetricMode,
+  type BackupActivityNoun,
   type BackupActivityPoint,
   type BackupActivityRangeDays,
   type BackupActivitySegmentKind,
@@ -43,15 +46,22 @@ interface TooltipState {
   y: number;
 }
 
+export interface BackupActivityChartMetricToggle {
+  mode: Accessor<BackupActivityMetricMode>;
+  onChange: (mode: BackupActivityMetricMode) => void;
+}
+
 interface BackupActivityChartProps {
   title: string;
-  noun: 'archive' | 'task';
+  noun: BackupActivityNoun;
   segmentKinds: readonly BackupActivitySegmentKind[];
   range: Accessor<BackupActivityRangeDays>;
   onRangeChange: (days: BackupActivityRangeDays) => void;
   timeline: Accessor<BackupActivityTimeline>;
   selectedDateKey: Accessor<string | null>;
   onToggleDay: (key: string) => void;
+  metricMode?: Accessor<BackupActivityMetricMode>;
+  metricToggle?: BackupActivityChartMetricToggle;
 }
 
 export const BackupActivityChart: Component<BackupActivityChartProps> = (props) => {
@@ -60,6 +70,8 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
   const points = () => props.timeline().points;
   const axisMax = () => props.timeline().axisMax;
   const hasSelection = () => props.selectedDateKey() !== null;
+  const metricMode = (): BackupActivityMetricMode =>
+    props.metricMode?.() ?? props.metricToggle?.mode() ?? 'count';
 
   const axisTicks = () =>
     getRecoveryTimelineAxisTicks(points().length, false, props.timeline().labelEvery);
@@ -100,6 +112,33 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
           </For>
         </div>
         <div class="flex flex-wrap items-center gap-2 text-[11px]">
+          <Show when={props.metricToggle}>
+            <div
+              role="group"
+              aria-label="Activity metric"
+              class="inline-flex shrink-0 rounded border border-border bg-surface p-0.5"
+            >
+              <For each={['count', 'volume'] as const}>
+                {(mode) => {
+                  const selected = () => props.metricToggle?.mode() === mode;
+                  return (
+                    <button
+                      type="button"
+                      class={`rounded px-2 py-1 font-medium transition-colors ${
+                        selected()
+                          ? 'bg-surface-hover text-base-content'
+                          : 'text-muted hover:bg-surface-hover hover:text-base-content'
+                      }`}
+                      aria-pressed={selected() ? 'true' : 'false'}
+                      onClick={() => props.metricToggle?.onChange(mode)}
+                    >
+                      {mode === 'count' ? 'Count' : 'Volume'}
+                    </button>
+                  );
+                }}
+              </For>
+            </div>
+          </Show>
           <div
             role="group"
             aria-label="Activity range"
@@ -143,8 +182,8 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
             >
               <For each={[0, 1, 2]}>
                 {(step) => {
-                  const value = () => Math.round((axisMax() * (2 - step)) / 2);
-                  return <span>{value()}</span>;
+                  const value = () => (axisMax() * (2 - step)) / 2;
+                  return <span>{getBackupActivityAxisLabel(value(), metricMode())}</span>;
                 }}
               </For>
             </div>
@@ -179,6 +218,7 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                               total(),
                               isSelected(),
                               props.noun,
+                              metricMode(),
                             )}
                             aria-pressed={isSelected() ? 'true' : 'false'}
                             onClick={() => props.onToggleDay(point.key)}
@@ -279,7 +319,11 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                         {t().dateLabel}
                       </div>
                       <div class="mt-0.5 text-[10px] text-muted">
-                        {getBackupActivityPointTotalLabel(t().point.total, props.noun)}
+                        {getBackupActivityPointTotalLabel(
+                          t().point.total,
+                          props.noun,
+                          metricMode(),
+                        )}
                       </div>
                     </div>
                     <div class="shrink-0 rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[9px] font-medium text-muted">
@@ -290,7 +334,13 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                     </div>
                   </div>
                   <ul class="mt-1.5 space-y-1">
-                    <For each={getBackupActivityTooltipRows(t().point, props.segmentKinds)}>
+                    <For
+                      each={getBackupActivityTooltipRows(
+                        t().point,
+                        props.segmentKinds,
+                        metricMode(),
+                      )}
+                    >
                       {(row) => (
                         <li
                           class={`flex items-center justify-between gap-4 ${

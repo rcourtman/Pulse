@@ -27,7 +27,7 @@ describe('proxmoxBackupActivityPresentation', () => {
       ],
       (item) => item.ts,
       (item) => item.kind as BackupActivitySegmentKind,
-      now,
+      { now },
     );
 
     const todayPoint = timeline.points.find(
@@ -50,7 +50,7 @@ describe('proxmoxBackupActivityPresentation', () => {
     const point = {
       key: '2026-05-20',
       total: 4,
-      counts: { archive: 0, ok: 3, failed: 1, running: 0 },
+      counts: { archive: 0, ok: 3, failed: 1, running: 0, snapshot: 0 },
     };
 
     expect(getBackupActivityColumnAriaLabel('Wed 20 May', point.total, true, 'task')).toBe(
@@ -61,5 +61,25 @@ describe('proxmoxBackupActivityPresentation', () => {
       { kind: 'failed', label: 'Failed', value: '1 (25%)', muted: false },
       { kind: 'running', label: 'Running', value: '0', muted: true },
     ]);
+  });
+
+  it('accumulates bytes when a value accessor is supplied', () => {
+    const now = new Date(2026, 4, 20, 12);
+    const today = new Date(2026, 4, 20, 9).getTime();
+    const timeline = buildBackupActivityTimeline(
+      7,
+      [
+        { ts: today, size: 1_000_000_000 },
+        { ts: today, size: 500_000_000 },
+      ],
+      (item) => item.ts,
+      () => 'archive' as BackupActivitySegmentKind,
+      { now, getValue: (item) => item.size },
+    );
+    const todayPoint = timeline.points.find(
+      (point) => point.key === recoveryDateKeyFromTimestamp(today),
+    );
+    expect(todayPoint?.total).toBe(1_500_000_000);
+    expect(todayPoint?.counts.archive).toBe(1_500_000_000);
   });
 });

@@ -1,3 +1,4 @@
+import { formatBytes } from '@/utils/format';
 import {
   getRecoveryNiceAxisMax,
   recoveryDateKeyFromTimestamp,
@@ -11,7 +12,12 @@ export const BACKUP_ACTIVITY_RANGE_DAYS = [
   7, 30, 90, 365,
 ] as const satisfies readonly BackupActivityRangeDays[];
 
-export type BackupActivitySegmentKind = 'archive' | 'ok' | 'failed' | 'running';
+// `count` accumulates 1 per item per day (files, snapshots, tasks). `volume`
+// accumulates bytes per item per day (used by Backup files when the user
+// switches the chart from "how many files" to "how much space".)
+export type BackupActivityMetricMode = 'count' | 'volume';
+
+export type BackupActivitySegmentKind = 'archive' | 'ok' | 'failed' | 'running' | 'snapshot';
 
 interface BackupActivitySegmentPresentation {
   label: string;
@@ -40,6 +46,11 @@ const SEGMENT_PRESENTATION: Record<BackupActivitySegmentKind, BackupActivitySegm
     segmentClassName: 'bg-amber-500',
     swatchClassName: 'bg-amber-500',
   },
+  snapshot: {
+    label: 'Snapshots',
+    segmentClassName: 'bg-violet-500',
+    swatchClassName: 'bg-violet-500',
+  },
 };
 
 export function getBackupActivitySegmentPresentation(
@@ -61,7 +72,7 @@ export interface BackupActivityTimeline {
 }
 
 function emptyCounts(): Record<BackupActivitySegmentKind, number> {
-  return { archive: 0, ok: 0, failed: 0, running: 0 };
+  return { archive: 0, ok: 0, failed: 0, running: 0, snapshot: 0 };
 }
 
 function startOfLocalDayMs(date: Date): number {
@@ -75,8 +86,15 @@ export function buildBackupActivityTimeline<T>(
   items: readonly T[],
   getTimestampMs: (item: T) => number | undefined,
   classify: (item: T) => BackupActivitySegmentKind | null,
-  now: Date = new Date(),
+  options?: {
+    now?: Date;
+    // Per-item contribution to the bucket total. Defaults to 1 (count mode).
+    // For volume mode, pass `(item) => item.size ?? 0`.
+    getValue?: (item: T) => number;
+  },
 ): BackupActivityTimeline {
+  const now = options?.now ?? new Date();
+  const getValue = options?.getValue ?? (() => 1);
   const todayStart = startOfLocalDayMs(now);
   const windowStart = todayStart - (days - 1) * 24 * 60 * 60 * 1000;
 
@@ -97,11 +115,13 @@ export function buildBackupActivityTimeline<T>(
     if (ts >= todayStart + 24 * 60 * 60 * 1000) continue;
     const kind = classify(item);
     if (!kind) continue;
+    const value = getValue(item);
+    if (!Number.isFinite(value) || value <= 0) continue;
     const key = recoveryDateKeyFromTimestamp(ts);
     const bucket = buckets.get(key);
     if (!bucket) continue;
-    bucket.counts[kind] += 1;
-    bucket.total += 1;
+    bucket.counts[kind] += value;
+    bucket.total += value;
   }
 
   const points = orderedKeys.map((key) => buckets.get(key)!);
@@ -121,28 +141,44 @@ export interface BackupActivityTooltipRow {
   muted: boolean;
 }
 
+export type BackupActivityNoun = 'archive' | 'task' | 'snapshot';
+
+function formatActivityValue(value: number, mode: BackupActivityMetricMode): string {
+  if (mode === 'volume') return formatBytes(Math.max(0, value));
+  return String(Math.max(0, Math.round(value)));
+}
+
 export function getBackupActivityTooltipRows(
   point: BackupActivityPoint,
   kinds: readonly BackupActivitySegmentKind[],
+  mode: BackupActivityMetricMode = 'count',
 ): BackupActivityTooltipRow[] {
   const total = Math.max(0, point.total);
   return kinds.map((kind) => {
     const presentation = SEGMENT_PRESENTATION[kind];
     const count = Math.max(0, point.counts[kind] ?? 0);
     const percentage = total > 0 && count > 0 ? Math.round((count / total) * 100) : 0;
+    const formatted = formatActivityValue(count, mode);
     return {
       kind,
       label: presentation.label,
       count,
-      value: percentage > 0 ? `${count} (${percentage}%)` : String(count),
+      value: percentage > 0 && kinds.length > 1 ? `${formatted} (${percentage}%)` : formatted,
       segmentClassName: presentation.segmentClassName,
       muted: count === 0,
     };
   });
 }
 
-export function getBackupActivityPointTotalLabel(total: number, noun: 'archive' | 'task'): string {
-  const normalized = Math.max(0, total);
+export function getBackupActivityPointTotalLabel(
+  total: number,
+  noun: BackupActivityNoun,
+  mode: BackupActivityMetricMode = 'count',
+): string {
+  if (mode === 'volume') {
+    return formatBytes(Math.max(0, total));
+  }
+  const normalized = Math.max(0, Math.round(total));
   if (normalized === 1) return `1 ${noun}`;
   return `${normalized} ${noun}s`;
 }
@@ -151,10 +187,19 @@ export function getBackupActivityColumnAriaLabel(
   dateLabel: string,
   total: number,
   selected: boolean,
-  noun: 'archive' | 'task',
+  noun: BackupActivityNoun,
+  mode: BackupActivityMetricMode = 'count',
 ): string {
-  const countLabel = getBackupActivityPointTotalLabel(total, noun);
+  const countLabel = getBackupActivityPointTotalLabel(total, noun, mode);
   return selected ? `${dateLabel}: ${countLabel}, selected` : `${dateLabel}: ${countLabel}`;
+}
+
+export function getBackupActivityAxisLabel(
+  value: number,
+  mode: BackupActivityMetricMode,
+): string {
+  if (mode === 'volume') return formatBytes(Math.max(0, value));
+  return String(Math.max(0, Math.round(value)));
 }
 
 export { getRecoveryTimelineDayFilterStateLabel as getBackupActivityDayFilterStateLabel };

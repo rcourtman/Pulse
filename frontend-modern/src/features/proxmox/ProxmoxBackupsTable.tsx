@@ -10,6 +10,7 @@ import {
 import ArchiveIcon from 'lucide-solid/icons/archive';
 import CameraIcon from 'lucide-solid/icons/camera';
 import ActivityIcon from 'lucide-solid/icons/activity';
+import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
@@ -48,9 +49,22 @@ import type {
 import { BackupActivityChart } from './BackupActivityChart';
 import {
   buildBackupActivityTimeline,
+  type BackupActivityMetricMode,
   type BackupActivityRangeDays,
   type BackupActivitySegmentKind,
 } from './proxmoxBackupActivityPresentation';
+import {
+  buildArchiveCoverageSummary,
+  buildSnapshotCoverageSummary,
+  buildTaskOutcomeSummary,
+  classifyBackupAge,
+  computeMedianTaskDurationSeconds,
+  getBackupAgeBucketPresentation,
+  guestKey,
+  taskDurationSeconds,
+  type BackupAgeBucket,
+} from './proxmoxBackupSummaryPresentation';
+import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
 
 // Proxmox VE backups split into three meaningfully different surfaces:
 //   - Snapshots: qm/pct snapshots taken on the host (no external storage)
@@ -163,6 +177,70 @@ const TASK_STATUS_FILTERS: FilterOption<'all' | 'ok' | 'failed' | 'running'>[] =
   { value: 'running', label: 'Running', tone: 'info', leading: statusDot('bg-blue-500') },
 ];
 
+type SnapshotFilterValue = 'all' | 'recent' | 'stale' | 'with-ram';
+
+const SNAPSHOT_FILTERS: FilterOption<SnapshotFilterValue>[] = [
+  { value: 'all', label: 'All' },
+  {
+    value: 'recent',
+    label: 'Recent ≤7d',
+    tone: 'success',
+    leading: statusDot('bg-emerald-500'),
+  },
+  {
+    value: 'stale',
+    label: 'Stale >30d',
+    tone: 'warning',
+    leading: statusDot('bg-amber-500'),
+  },
+  {
+    value: 'with-ram',
+    label: 'With RAM',
+    tone: 'info',
+    leading: statusDot('bg-violet-500'),
+  },
+];
+
+function formatDurationFromSeconds(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '—';
+  const rounded = Math.round(seconds);
+  if (rounded < 60) return `${rounded}s`;
+  if (rounded < 3600) return `${Math.floor(rounded / 60)}m ${rounded % 60}s`;
+  const h = Math.floor(rounded / 3600);
+  const m = Math.floor((rounded % 3600) / 60);
+  return `${h}h ${m}m`;
+}
+
+// Compact, table-row-sized horizontal usage bar. Used inline in the
+// Backup files Size column (proportional to the largest archive in view)
+// and in the Recent tasks Duration column (proportional to 2x the median
+// duration so a typical task fills ~50% and outliers fill the bar).
+function InlineProgressBar(props: {
+  valuePct: number;
+  toneClass: string;
+  width?: string;
+  label?: string;
+}) {
+  const widthClass = props.width ?? 'w-16';
+  return (
+    <div
+      class={`${widthClass} h-1.5 overflow-hidden rounded-full bg-surface`}
+      role="img"
+      aria-label={props.label}
+      title={props.label}
+    >
+      <div
+        class={`h-full ${props.toneClass}`}
+        style={{ width: `${Math.max(0, Math.min(100, props.valuePct))}%` }}
+      />
+    </div>
+  );
+}
+
+function snapshotAgeBucket(snap: GuestSnapshot, now: number): BackupAgeBucket {
+  return classifyBackupAge(snap.time, now);
+}
+
 export const ProxmoxBackupsTable: Component<{
   emptyIcon: JSX.Element;
 }> = (props) => {
@@ -173,14 +251,32 @@ export const ProxmoxBackupsTable: Component<{
     'all' | 'protected' | 'verified' | 'unverified'
   >('all');
   const [taskFilter, setTaskFilter] = createSignal<'all' | 'ok' | 'failed' | 'running'>('all');
+  const [snapshotFilter, setSnapshotFilter] = createSignal<SnapshotFilterValue>('all');
   const [chartRange, setChartRange] = createSignal<BackupActivityRangeDays>(30);
   const [selectedDateKey, setSelectedDateKey] = createSignal<string | null>(null);
+  const [archiveMetricMode, setArchiveMetricMode] = createSignal<BackupActivityMetricMode>('count');
+  const [expandedGuests, setExpandedGuests] = createSignal<ReadonlySet<string>>(new Set<string>());
   const toggleDay = (key: string) =>
     setSelectedDateKey((current) => (current === key ? null : key));
+  const toggleGuestExpansion = (key: string) =>
+    setExpandedGuests((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   const snapshots = createMemo<GuestSnapshot[]>(() => backups()?.guestSnapshots ?? []);
   const archives = createMemo<StorageBackup[]>(() => backups()?.storageBackups ?? []);
   const tasks = createMemo<BackupTask[]>(() => backups()?.backupTasks ?? []);
+  // Render-time `now` used for age bucketing. We snapshot once per render
+  // so all comparisons within a single render share a reference moment;
+  // not reactive to ticking time (good enough for sysadmin grouping).
+  const nowMs = createMemo(() => Date.now());
+
+  const snapshotCoverage = createMemo(() => buildSnapshotCoverageSummary(snapshots(), nowMs()));
+  const archiveCoverage = createMemo(() => buildArchiveCoverageSummary(archives(), nowMs()));
+  const taskOutcome = createMemo(() => buildTaskOutcomeSummary(tasks()));
 
   const archiveTimestampMs = (arc: StorageBackup): number | undefined => {
     const ms = Date.parse(arc.time ?? '');
@@ -188,6 +284,10 @@ export const ProxmoxBackupsTable: Component<{
   };
   const taskTimestampMs = (task: BackupTask): number | undefined => {
     const ms = Date.parse(task.startTime ?? '');
+    return Number.isFinite(ms) ? ms : undefined;
+  };
+  const snapshotTimestampMs = (snap: GuestSnapshot): number | undefined => {
+    const ms = Date.parse(snap.time ?? '');
     return Number.isFinite(ms) ? ms : undefined;
   };
   const classifyTaskSegment = (task: BackupTask): BackupActivitySegmentKind | null => {
@@ -204,6 +304,10 @@ export const ProxmoxBackupsTable: Component<{
       archives(),
       archiveTimestampMs,
       () => 'archive',
+      {
+        getValue:
+          archiveMetricMode() === 'volume' ? (arc) => (arc.size > 0 ? arc.size : 0) : undefined,
+      },
     ),
   );
   const taskTimeline = createMemo(() =>
@@ -214,20 +318,154 @@ export const ProxmoxBackupsTable: Component<{
       classifyTaskSegment,
     ),
   );
+  const snapshotTimeline = createMemo(() =>
+    buildBackupActivityTimeline<GuestSnapshot>(
+      chartRange(),
+      snapshots(),
+      snapshotTimestampMs,
+      () => 'snapshot',
+    ),
+  );
 
   const ARCHIVE_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = ['archive'];
   const TASK_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = ['ok', 'failed', 'running'];
+  const SNAPSHOT_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = ['snapshot'];
+
+  const snapshotMatchesSearch = (snap: GuestSnapshot, term: string): boolean => {
+    if (!term) return true;
+    return [snap.name, snap.node, snap.instance, snap.description, String(snap.vmid)]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(term);
+  };
 
   const filteredSnapshots = createMemo(() => {
     const term = search().trim().toLowerCase();
+    const dateKey = selectedDateKey();
     return snapshots().filter((snap) => {
+      if (dateKey) {
+        const ms = snapshotTimestampMs(snap);
+        if (ms === undefined || recoveryDateKeyFromTimestamp(ms) !== dateKey) return false;
+      }
+      return snapshotMatchesSearch(snap, term);
+    });
+  });
+
+  interface SnapshotGuestRow {
+    key: string;
+    type: string;
+    vmid: number;
+    instance: string;
+    node: string;
+    snapshots: GuestSnapshot[]; // newest first
+    count: number;
+    withRamCount: number;
+    newestMs: number | undefined;
+    totalBytes: number;
+    bucket: BackupAgeBucket;
+  }
+
+  const filteredSnapshotGuests = createMemo<SnapshotGuestRow[]>(() => {
+    const term = search().trim().toLowerCase();
+    const dateKey = selectedDateKey();
+    const filter = snapshotFilter();
+    const now = nowMs();
+    const byGuest = new Map<string, SnapshotGuestRow>();
+    for (const snap of snapshots()) {
+      const matchesSnapshot = snapshotMatchesSearch(snap, term);
+      if (!matchesSnapshot && !term) {
+        // no term means everything matches; fall through.
+      } else if (!matchesSnapshot && term) {
+        // guest stays out of the matched set unless its identifiers match;
+        // we re-evaluate that below if no snapshot inside matched.
+      }
+      const passesDate = (() => {
+        if (!dateKey) return true;
+        const ms = snapshotTimestampMs(snap);
+        return ms !== undefined && recoveryDateKeyFromTimestamp(ms) === dateKey;
+      })();
+      if (!passesDate) continue;
+      const key = guestKey(snap);
+      let row = byGuest.get(key);
+      if (!row) {
+        row = {
+          key,
+          type: snap.type,
+          vmid: snap.vmid,
+          instance: snap.instance,
+          node: snap.node,
+          snapshots: [],
+          count: 0,
+          withRamCount: 0,
+          newestMs: undefined,
+          totalBytes: 0,
+          bucket: 'ancient',
+        };
+        byGuest.set(key, row);
+      }
+      row.snapshots.push(snap);
+      row.count += 1;
+      if (snap.vmstate) row.withRamCount += 1;
+      if (typeof snap.sizeBytes === 'number' && snap.sizeBytes > 0) row.totalBytes += snap.sizeBytes;
+      const ms = snapshotTimestampMs(snap);
+      if (ms !== undefined && (row.newestMs === undefined || ms > row.newestMs)) {
+        row.newestMs = ms;
+      }
+    }
+    // Search-on-guest-identity: if the search term matches the guest's
+    // identifying fields (node/vmid/type), every snapshot under it is
+    // considered relevant even if individual snapshot text did not match.
+    const searchedByGuestIdentity = (row: SnapshotGuestRow): boolean => {
       if (!term) return true;
-      return [snap.name, snap.node, snap.instance, snap.description, String(snap.vmid)]
+      return [`${row.type} ${row.vmid}`, row.node, row.instance, String(row.vmid)]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
         .includes(term);
-    });
+    };
+    const rows: SnapshotGuestRow[] = [];
+    for (const row of byGuest.values()) {
+      const matchesByIdentity = searchedByGuestIdentity(row);
+      const snapshotsMatching = term
+        ? row.snapshots.filter((snap) => snapshotMatchesSearch(snap, term))
+        : row.snapshots;
+      if (!matchesByIdentity && snapshotsMatching.length === 0) continue;
+      const visibleSnapshots = matchesByIdentity ? row.snapshots : snapshotsMatching;
+      visibleSnapshots.sort((a, b) => {
+        const av = Date.parse(a.time);
+        const bv = Date.parse(b.time);
+        return (Number.isFinite(bv) ? bv : 0) - (Number.isFinite(av) ? av : 0);
+      });
+      const enriched: SnapshotGuestRow = {
+        ...row,
+        snapshots: visibleSnapshots,
+        count: visibleSnapshots.length,
+        withRamCount: visibleSnapshots.reduce((sum, s) => sum + (s.vmstate ? 1 : 0), 0),
+        totalBytes: visibleSnapshots.reduce(
+          (sum, s) => sum + (typeof s.sizeBytes === 'number' && s.sizeBytes > 0 ? s.sizeBytes : 0),
+          0,
+        ),
+        newestMs: visibleSnapshots.reduce<number | undefined>((newest, s) => {
+          const ms = snapshotTimestampMs(s);
+          if (ms === undefined) return newest;
+          if (newest === undefined) return ms;
+          return ms > newest ? ms : newest;
+        }, undefined),
+        bucket: classifyBackupAge(
+          visibleSnapshots[0] ? snapshotTimestampMs(visibleSnapshots[0]) : undefined,
+          now,
+        ),
+      };
+      if (filter === 'recent' && enriched.bucket !== 'recent') continue;
+      if (filter === 'stale' && enriched.bucket !== 'stale' && enriched.bucket !== 'ancient') {
+        continue;
+      }
+      if (filter === 'with-ram' && enriched.withRamCount === 0) continue;
+      rows.push(enriched);
+    }
+    rows.sort((a, b) => (b.newestMs ?? 0) - (a.newestMs ?? 0));
+    return rows;
   });
 
   const filteredArchives = createMemo(() => {
@@ -299,6 +537,28 @@ export const ProxmoxBackupsTable: Component<{
     }
   });
 
+  // Used to scale the inline duration bar on Recent tasks. A typical task
+  // sits at ~50% of the bar, outliers extend toward the right edge. The
+  // baseline is recomputed against the *filtered* set so the bar stays
+  // useful when the user narrows the view to a single guest.
+  const taskDurationBaselineSeconds = createMemo(() =>
+    computeMedianTaskDurationSeconds(filteredTasks()),
+  );
+
+  // The largest archive in the filtered set anchors the size bar.
+  const archiveSizeMaxBytes = createMemo(() => {
+    let max = 0;
+    for (const arc of filteredArchives()) {
+      if (arc.size > max) max = arc.size;
+    }
+    return max;
+  });
+
+  const visibleSnapshotGuestCount = createMemo(() => filteredSnapshotGuests().length);
+  const visibleSnapshotItemCount = createMemo(() =>
+    filteredSnapshotGuests().reduce((sum, row) => sum + row.count, 0),
+  );
+
   return (
     <Show
       when={!backups.error}
@@ -361,9 +621,65 @@ export const ProxmoxBackupsTable: Component<{
             </For>
           </div>
 
+          <Show when={tab() === 'snapshots' && snapshots().length > 0}>
+            <BackupActivityChart
+              title={
+                archiveMetricMode() === 'volume'
+                  ? 'Snapshots per day · GB captured'
+                  : 'Snapshots per day'
+              }
+              noun="snapshot"
+              segmentKinds={SNAPSHOT_SEGMENT_KINDS}
+              range={chartRange}
+              onRangeChange={setChartRange}
+              timeline={snapshotTimeline}
+              selectedDateKey={selectedDateKey}
+              onToggleDay={toggleDay}
+            />
+            <ProxmoxBackupsCoverageStrip
+              title="Snapshot coverage"
+              tail={
+                <span>
+                  {snapshotCoverage().totalGuests} guests · {snapshotCoverage().totalSnapshots}{' '}
+                  snapshots
+                  <Show when={snapshotCoverage().withRamGuests > 0}>
+                    {' · '}
+                    {snapshotCoverage().withRamGuests} with RAM
+                  </Show>
+                </span>
+              }
+              segments={[
+                {
+                  key: 'recent',
+                  value:
+                    snapshotCoverage().totalGuests -
+                    snapshotCoverage().staleGuests -
+                    snapshotCoverage().ancientGuests,
+                  label: 'recent (≤30d)',
+                  toneClass: getBackupAgeBucketPresentation('recent').swatchClass,
+                },
+                {
+                  key: 'stale',
+                  value: snapshotCoverage().staleGuests,
+                  label: 'stale (30–90d)',
+                  toneClass: getBackupAgeBucketPresentation('stale').swatchClass,
+                  muted: snapshotCoverage().staleGuests === 0,
+                },
+                {
+                  key: 'ancient',
+                  value: snapshotCoverage().ancientGuests,
+                  label: 'ancient (>90d)',
+                  toneClass: getBackupAgeBucketPresentation('ancient').swatchClass,
+                  muted: snapshotCoverage().ancientGuests === 0,
+                },
+              ]}
+            />
+          </Show>
           <Show when={tab() === 'archives'}>
             <BackupActivityChart
-              title="Backup files per day"
+              title={
+                archiveMetricMode() === 'volume' ? 'Backup volume per day' : 'Backup files per day'
+              }
               noun="archive"
               segmentKinds={ARCHIVE_SEGMENT_KINDS}
               range={chartRange}
@@ -371,7 +687,41 @@ export const ProxmoxBackupsTable: Component<{
               timeline={archiveTimeline}
               selectedDateKey={selectedDateKey}
               onToggleDay={toggleDay}
+              metricToggle={{ mode: archiveMetricMode, onChange: setArchiveMetricMode }}
             />
+            <Show when={archiveCoverage().totalGuests > 0}>
+              <ProxmoxBackupsCoverageStrip
+                title="Backup coverage"
+                tail={
+                  <span>
+                    {archiveCoverage().totalGuests} guests covered ·{' '}
+                    {formatBytes(archiveCoverage().totalBytes)} stored
+                  </span>
+                }
+                segments={[
+                  {
+                    key: 'current',
+                    value: archiveCoverage().currentGuests,
+                    label: 'current (≤7d)',
+                    toneClass: 'bg-emerald-500',
+                  },
+                  {
+                    key: 'stale',
+                    value: archiveCoverage().staleGuests,
+                    label: 'stale (7–30d)',
+                    toneClass: 'bg-amber-500',
+                    muted: archiveCoverage().staleGuests === 0,
+                  },
+                  {
+                    key: 'uncovered',
+                    value: archiveCoverage().uncoveredGuests,
+                    label: 'uncovered (>30d)',
+                    toneClass: 'bg-red-500',
+                    muted: archiveCoverage().uncoveredGuests === 0,
+                  },
+                ]}
+              />
+            </Show>
           </Show>
           <Show when={tab() === 'tasks'}>
             <BackupActivityChart
@@ -384,6 +734,43 @@ export const ProxmoxBackupsTable: Component<{
               selectedDateKey={selectedDateKey}
               onToggleDay={toggleDay}
             />
+            <Show when={taskOutcome().total > 0}>
+              <ProxmoxBackupsCoverageStrip
+                title="Task outcomes"
+                tail={
+                  <Show when={taskDurationBaselineSeconds() > 0}>
+                    <span>
+                      median duration{' '}
+                      <span class="font-mono tabular-nums text-base-content">
+                        {formatDurationFromSeconds(taskDurationBaselineSeconds())}
+                      </span>
+                    </span>
+                  </Show>
+                }
+                segments={[
+                  {
+                    key: 'ok',
+                    value: taskOutcome().ok,
+                    label: 'OK',
+                    toneClass: 'bg-emerald-500',
+                  },
+                  {
+                    key: 'failed',
+                    value: taskOutcome().failed,
+                    label: 'failed',
+                    toneClass: 'bg-red-500',
+                    muted: taskOutcome().failed === 0,
+                  },
+                  {
+                    key: 'running',
+                    value: taskOutcome().running,
+                    label: 'running',
+                    toneClass: 'bg-amber-500',
+                    muted: taskOutcome().running === 0,
+                  },
+                ]}
+              />
+            </Show>
           </Show>
 
           <div class="flex flex-wrap items-center gap-2">
@@ -400,6 +787,14 @@ export const ProxmoxBackupsTable: Component<{
                 }
               />
             </div>
+            <Show when={tab() === 'snapshots'}>
+              <FilterButtonGroup
+                variant="compact"
+                options={SNAPSHOT_FILTERS}
+                value={snapshotFilter()}
+                onChange={setSnapshotFilter}
+              />
+            </Show>
             <Show when={tab() === 'archives'}>
               <FilterButtonGroup
                 variant="compact"
@@ -416,7 +811,7 @@ export const ProxmoxBackupsTable: Component<{
                 onChange={setTaskFilter}
               />
             </Show>
-            <Show when={selectedDateKey() !== null && tab() !== 'snapshots'}>
+            <Show when={selectedDateKey() !== null}>
               <button
                 type="button"
                 onClick={() => setSelectedDateKey(null)}
@@ -434,17 +829,25 @@ export const ProxmoxBackupsTable: Component<{
             </Show>
             <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
               <Show
-                when={visibleForTab() !== totalForTab()}
-                fallback={<>{totalForTab()} entries</>}
+                when={tab() === 'snapshots'}
+                fallback={
+                  <Show
+                    when={visibleForTab() !== totalForTab()}
+                    fallback={<>{totalForTab()} entries</>}
+                  >
+                    {visibleForTab()} of {totalForTab()} entries
+                  </Show>
+                }
               >
-                {visibleForTab()} of {totalForTab()} entries
+                {visibleSnapshotGuestCount()} guests · {visibleSnapshotItemCount()} of{' '}
+                {snapshots().length} snapshots
               </Show>
             </span>
           </div>
 
           <Show when={tab() === 'snapshots'}>
             <Show
-              when={filteredSnapshots().length > 0}
+              when={filteredSnapshotGuests().length > 0}
               fallback={
                 <Card padding="lg">
                   <EmptyState
@@ -457,7 +860,7 @@ export const ProxmoxBackupsTable: Component<{
                     description={
                       snapshots().length === 0
                         ? TABS[0].emptyDescription
-                        : 'Adjust the search to see more snapshots.'
+                        : 'Adjust the search or filters to see more snapshots.'
                     }
                   />
                 </Card>
@@ -467,77 +870,178 @@ export const ProxmoxBackupsTable: Component<{
                 <Table class="min-w-[900px] text-xs">
                   <TableHeader>
                     <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                      <TableHead class={getPlatformTableHeadClassForKind('name')}>Name</TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Guest</TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('name')}>Guest</TableHead>
                       <TableHead class={getPlatformTableHeadClassForKind('text')}>Node</TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Parent</TableHead>
                       <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                        Captured
+                        Latest
                       </TableHead>
                       <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                        Size
+                        Snapshots
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Total size
                       </TableHead>
                       <TableHead class={getPlatformTableHeadClassForKind('text')}>RAM</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                    <For each={filteredSnapshots()}>
-                      {(snap) => (
-                        <TableRow class="hover:bg-surface-hover">
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
-                          >
-                            <div class="font-semibold">{snap.name || '—'}</div>
-                            <Show when={!!snap.description?.trim()}>
-                              <div
-                                class="text-[11px] text-muted truncate max-w-[20rem]"
-                                title={snap.description}
-                              >
-                                {snap.description}
-                              </div>
-                            </Show>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            {guestLabel(snap.type, snap.vmid)}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
-                          >
-                            {snap.node || '—'}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
-                          >
-                            {snap.parent?.trim() || '—'}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            {formatRelativeTime(snap.time, { compact: true })}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
-                          >
-                            <Show
-                              when={snap.sizeBytes && snap.sizeBytes > 0}
-                              fallback={<span class="text-muted">—</span>}
+                    <For each={filteredSnapshotGuests()}>
+                      {(row) => {
+                        const isExpanded = () => expandedGuests().has(row.key);
+                        const bucketPresentation = getBackupAgeBucketPresentation(row.bucket);
+                        return (
+                          <>
+                            <TableRow
+                              class="cursor-pointer hover:bg-surface-hover"
+                              onClick={() => toggleGuestExpansion(row.key)}
                             >
-                              {formatBytes(snap.sizeBytes ?? 0)}
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
+                              >
+                                <div class="flex items-center gap-2">
+                                  <ChevronRightIcon
+                                    class={`h-3.5 w-3.5 shrink-0 text-muted transition-transform ${
+                                      isExpanded() ? 'rotate-90' : ''
+                                    }`}
+                                    aria-hidden="true"
+                                  />
+                                  <span
+                                    class={`h-2 w-2 shrink-0 rounded-full ${bucketPresentation.swatchClass}`}
+                                    aria-hidden="true"
+                                    title={`Newest snapshot: ${bucketPresentation.label}`}
+                                  />
+                                  <span class="font-semibold">
+                                    {guestLabel(row.type, row.vmid)}
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
+                              >
+                                {row.node || '—'}
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                              >
+                                <Show
+                                  when={row.newestMs !== undefined}
+                                  fallback={<span class="text-muted">—</span>}
+                                >
+                                  {formatRelativeTime(row.newestMs, { compact: true })}
+                                </Show>
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                              >
+                                {row.count}
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                              >
+                                <Show
+                                  when={row.totalBytes > 0}
+                                  fallback={<span class="text-muted">—</span>}
+                                >
+                                  {formatBytes(row.totalBytes)}
+                                </Show>
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                              >
+                                <Show
+                                  when={row.withRamCount > 0}
+                                  fallback={<span class="text-muted">—</span>}
+                                >
+                                  <span class="inline-flex items-center rounded-sm bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-200">
+                                    {row.withRamCount} with RAM
+                                  </span>
+                                </Show>
+                              </TableCell>
+                            </TableRow>
+                            <Show when={isExpanded()}>
+                              <TableRow class="bg-surface-alt/40">
+                                <TableCell class="px-2 py-2" colspan={6}>
+                                  <div class="overflow-hidden rounded-md border border-border-subtle">
+                                    <table class="w-full text-[11px]">
+                                      <thead>
+                                        <tr class="bg-surface-alt text-muted">
+                                          <th class="px-2 py-1 text-left font-medium">Name</th>
+                                          <th class="px-2 py-1 text-left font-medium">Parent</th>
+                                          <th class="px-2 py-1 text-right font-medium">Captured</th>
+                                          <th class="px-2 py-1 text-right font-medium">Size</th>
+                                          <th class="px-2 py-1 text-left font-medium">RAM</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody class="divide-y divide-border-subtle">
+                                        <For each={row.snapshots}>
+                                          {(snap) => {
+                                            const bucket = snapshotAgeBucket(snap, nowMs());
+                                            const presentation = getBackupAgeBucketPresentation(
+                                              bucket,
+                                            );
+                                            return (
+                                              <tr class="hover:bg-surface-hover">
+                                                <td class="px-2 py-1">
+                                                  <div class="flex items-center gap-2">
+                                                    <span
+                                                      class={`h-1.5 w-1.5 shrink-0 rounded-full ${presentation.swatchClass}`}
+                                                      aria-hidden="true"
+                                                      title={`Age: ${presentation.label}`}
+                                                    />
+                                                    <div class="min-w-0">
+                                                      <div class="font-medium text-base-content">
+                                                        {snap.name || '—'}
+                                                      </div>
+                                                      <Show when={!!snap.description?.trim()}>
+                                                        <div
+                                                          class="truncate max-w-[24rem] text-[10px] text-muted"
+                                                          title={snap.description}
+                                                        >
+                                                          {snap.description}
+                                                        </div>
+                                                      </Show>
+                                                    </div>
+                                                  </div>
+                                                </td>
+                                                <td class="px-2 py-1 font-mono text-[10px] text-muted">
+                                                  {snap.parent?.trim() || '—'}
+                                                </td>
+                                                <td class="px-2 py-1 text-right text-base-content">
+                                                  {formatRelativeTime(snap.time, {
+                                                    compact: true,
+                                                  })}
+                                                </td>
+                                                <td class="px-2 py-1 text-right tabular-nums text-base-content">
+                                                  <Show
+                                                    when={snap.sizeBytes && snap.sizeBytes > 0}
+                                                    fallback={<span class="text-muted">—</span>}
+                                                  >
+                                                    {formatBytes(snap.sizeBytes ?? 0)}
+                                                  </Show>
+                                                </td>
+                                                <td class="px-2 py-1">
+                                                  <Show
+                                                    when={snap.vmstate}
+                                                    fallback={<span class="text-muted">—</span>}
+                                                  >
+                                                    <span class="inline-flex items-center rounded-sm bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-200">
+                                                      with RAM
+                                                    </span>
+                                                  </Show>
+                                                </td>
+                                              </tr>
+                                            );
+                                          }}
+                                        </For>
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
                             </Show>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <Show when={snap.vmstate} fallback={<span class="text-muted">—</span>}>
-                              <span class="inline-flex items-center rounded-sm bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                                with RAM
-                              </span>
-                            </Show>
-                          </TableCell>
-                        </TableRow>
-                      )}
+                          </>
+                        );
+                      }}
                     </For>
                   </TableBody>
                 </Table>
@@ -625,12 +1129,38 @@ export const ProxmoxBackupsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {formatRelativeTime(arc.time, { compact: true })}
+                            <div class="flex items-center justify-end gap-2">
+                              <span
+                                class={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                                  getBackupAgeBucketPresentation(classifyBackupAge(arc.time, nowMs()))
+                                    .swatchClass
+                                }`}
+                                aria-hidden="true"
+                                title={`Age: ${
+                                  getBackupAgeBucketPresentation(classifyBackupAge(arc.time, nowMs()))
+                                    .label
+                                }`}
+                              />
+                              <span>{formatRelativeTime(arc.time, { compact: true })}</span>
+                            </div>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
                           >
-                            {formatBytes(arc.size)}
+                            <div class="flex items-center justify-end gap-2">
+                              <Show when={archiveSizeMaxBytes() > 0 && arc.size > 0}>
+                                <InlineProgressBar
+                                  valuePct={(arc.size / archiveSizeMaxBytes()) * 100}
+                                  toneClass={
+                                    arc.size / archiveSizeMaxBytes() >= 0.66
+                                      ? 'bg-blue-500'
+                                      : 'bg-blue-400'
+                                  }
+                                  label={`${formatBytes(arc.size)} (relative to largest file in view)`}
+                                />
+                              </Show>
+                              <span>{formatBytes(arc.size)}</span>
+                            </div>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
@@ -702,13 +1232,30 @@ export const ProxmoxBackupsTable: Component<{
                       <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
                         Size
                       </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Error</TableHead>
+                      <Show when={taskOutcome().hasErrors}>
+                        <TableHead class={getPlatformTableHeadClassForKind('text')}>Error</TableHead>
+                      </Show>
                     </TableRow>
                   </TableHeader>
                   <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                     <For each={filteredTasks()}>
                       {(task) => {
                         const classify = classifyTaskStatus(task.status);
+                        const durationSec = taskDurationSeconds(task);
+                        // Anchor the bar so the median sits at ~50%.
+                        const durationBarPct = () => {
+                          const baseline = taskDurationBaselineSeconds();
+                          if (!durationSec || baseline <= 0) return 0;
+                          return (durationSec / (baseline * 2)) * 100;
+                        };
+                        const durationToneClass = () => {
+                          const baseline = taskDurationBaselineSeconds();
+                          if (!durationSec || baseline <= 0) return 'bg-slate-400';
+                          const ratio = durationSec / baseline;
+                          if (ratio >= 2) return 'bg-amber-500';
+                          if (ratio >= 1.5) return 'bg-amber-400';
+                          return 'bg-emerald-500';
+                        };
                         return (
                           <TableRow class="hover:bg-surface-hover">
                             <TableCell class={getPlatformTableCellClassForKind('text')}>
@@ -742,7 +1289,16 @@ export const ProxmoxBackupsTable: Component<{
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                             >
-                              {formatDuration(task.startTime, task.endTime)}
+                              <div class="flex items-center justify-end gap-2">
+                                <Show when={taskDurationBaselineSeconds() > 0 && durationSec}>
+                                  <InlineProgressBar
+                                    valuePct={durationBarPct()}
+                                    toneClass={durationToneClass()}
+                                    label={`Duration ${formatDuration(task.startTime, task.endTime)} (median ${formatDurationFromSeconds(taskDurationBaselineSeconds())})`}
+                                  />
+                                </Show>
+                                <span>{formatDuration(task.startTime, task.endTime)}</span>
+                              </div>
                             </TableCell>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
@@ -754,21 +1310,23 @@ export const ProxmoxBackupsTable: Component<{
                                 {formatBytes(task.size ?? 0)}
                               </Show>
                             </TableCell>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                            >
-                              <Show
-                                when={!!task.error?.trim()}
-                                fallback={<span class="text-muted">—</span>}
+                            <Show when={taskOutcome().hasErrors}>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                               >
-                                <span
-                                  class="inline-block max-w-[18rem] truncate text-red-600 dark:text-red-300"
-                                  title={task.error}
+                                <Show
+                                  when={!!task.error?.trim()}
+                                  fallback={<span class="text-muted">—</span>}
                                 >
-                                  {task.error}
-                                </span>
-                              </Show>
-                            </TableCell>
+                                  <span
+                                    class="inline-block max-w-[18rem] truncate text-red-600 dark:text-red-300"
+                                    title={task.error}
+                                  >
+                                    {task.error}
+                                  </span>
+                                </Show>
+                              </TableCell>
+                            </Show>
                           </TableRow>
                         );
                       }}
