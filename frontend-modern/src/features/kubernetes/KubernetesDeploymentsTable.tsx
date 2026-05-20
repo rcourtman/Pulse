@@ -94,21 +94,34 @@ export const KubernetesDeploymentsTable: Component<{
             <Table class="min-w-full table-fixed text-xs md:min-w-[820px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={getPlatformTableHeadClass()}>Deployment</TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                  {/*
+                    Desktop widths: Deployment, Namespace, and Cluster take
+                    the biggest shares because their content can be long.
+                    The four integer-count columns (Desired / Updated /
+                    Ready / Available) trim to what their headers plus
+                    1-2 digit values need. Mobile widths are unchanged.
+                  */}
+                  <TableHead class={`${getPlatformTableHeadClass()} md:w-[27%]`}>
+                    Deployment
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[21%]`}>
                     Namespace
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[16%]`}>
                     Cluster
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[9%]`}>
                     Desired
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[9%]`}>
                     Updated
                   </TableHead>
-                  <TableHead class={getPlatformTableHeadClass('right')}>Ready</TableHead>
-                  <TableHead class={getPlatformTableHeadClass('right')}>Available</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[9%]`}>
+                    Ready
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[9%]`}>
+                    Available
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>

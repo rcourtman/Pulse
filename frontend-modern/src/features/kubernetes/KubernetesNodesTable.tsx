@@ -143,23 +143,40 @@ export const KubernetesNodesTable: Component<{
             <Table class="min-w-full table-fixed text-xs md:min-w-[1000px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={getPlatformTableHeadClass()}>Node</TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                  {/*
+                    Desktop widths: Node gets headroom for cluster-style
+                    names, Runtime gets room for "containerd://1.7.20"
+                    -style values, Capacity gets room for "6 cores /
+                    51.0 GB" strings, CPU and Memory bars share an
+                    equal slice, and the short-text columns (Cluster,
+                    Roles, Kubelet, Uptime) trim accordingly. Mobile
+                    widths are unchanged.
+                  */}
+                  <TableHead class={`${getPlatformTableHeadClass()} md:w-[15%]`}>
+                    Node
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[10%]`}>
                     Cluster
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[10%]`}>
                     Roles
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[8%]`}>
                     Kubelet
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[15%]`}>
                     Runtime
                   </TableHead>
-                  <TableHead class={getPlatformTableHeadClass('right')}>CPU</TableHead>
-                  <TableHead class={getPlatformTableHeadClass('right')}>Memory</TableHead>
-                  <TableHead class={getPlatformTableHeadClass('right')}>Capacity</TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[11%]`}>
+                    CPU
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[11%]`}>
+                    Memory
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[14%]`}>
+                    Capacity
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[6%]`}>
                     Uptime
                   </TableHead>
                 </TableRow>
