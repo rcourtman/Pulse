@@ -1,4 +1,4 @@
-import { Component, Show, For, Accessor, Setter } from 'solid-js';
+import { Component, Show, For, Accessor, Setter, createUniqueId } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { HelpIcon } from '@/components/shared/HelpIcon';
@@ -47,6 +47,7 @@ export interface UpdatesSettingsPanelProps {
 }
 
 export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props) => {
+  const autoUpdateTitleId = `settings-updates-${createUniqueId()}-auto-update-title`;
   const latestVersion = () => props.updateInfo()?.latestVersion;
   const dockerImageTag = () => buildDockerImageTag(latestVersion());
   const systemdDownloadCommand = () => buildLinuxAmd64DownloadCommand(latestVersion());
@@ -88,11 +89,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
     }));
 
   return (
-    <SettingsPanel
-      title={UPDATES_PANEL_COPY.title}
-      noPadding
-      bodyClass="divide-y divide-border"
-    >
+    <SettingsPanel title={UPDATES_PANEL_COPY.title} noPadding bodyClass="divide-y divide-border">
       <div class="p-4 sm:p-6">
         <div class="space-y-4">
           {/* Version Status Section */}
@@ -296,9 +293,9 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                   </svg>
                 </div>
                 <div>
-                  <label class="text-sm font-medium text-base-content">
+                  <span id={autoUpdateTitleId} class="text-sm font-medium text-base-content">
                     {UPDATES_PANEL_COPY.autoUpdateTitle}
-                  </label>
+                  </span>
                   <p class="text-xs text-muted">{UPDATES_PANEL_COPY.autoUpdateDescription}</p>
                 </div>
               </div>
@@ -312,6 +309,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                     props.setHasUnsavedChanges(true);
                   }}
                   disabled={autoUpdateLocked()}
+                  aria-labelledby={autoUpdateTitleId}
                   class="sr-only peer"
                 />
                 <div class="w-11 h-6 bg-surface-alt peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>

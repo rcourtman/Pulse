@@ -39,6 +39,10 @@ describe('AlertAppriseDestinationsSection', () => {
   it('associates visible labels with CLI mode fields', () => {
     renderSection(makeConfig({ mode: 'cli' }));
 
+    expect(screen.getByRole('button', { name: 'Apprise notifications Enabled' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(screen.getByRole('combobox', { name: 'Delivery mode' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Delivery targets' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'CLI path' })).toBeInTheDocument();

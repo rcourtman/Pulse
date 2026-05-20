@@ -1,4 +1,4 @@
-import { Component, Show, For, Accessor, Setter } from 'solid-js';
+import { Component, Show, For, Accessor, Setter, createUniqueId } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -31,6 +31,8 @@ export interface RecoverySettingsPanelProps {
 }
 
 export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (props) => {
+  const backupPollingTitleId = `settings-recovery-${createUniqueId()}-backup-polling-title`;
+
   return (
     <SettingsPanel title="Recovery" noPadding bodyClass="divide-y divide-border">
       {/* Backup Polling Section */}
@@ -57,7 +59,9 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
             {/* Enable toggle */}
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p class="text-sm font-medium text-base-content">Enable backup polling</p>
+                <p id={backupPollingTitleId} class="text-sm font-medium text-base-content">
+                  Enable backup polling
+                </p>
                 <p class="text-xs text-muted">
                   Required for workload backup status, storage snapshots, and alerting.
                 </p>
@@ -68,6 +72,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                   class="sr-only peer"
                   checked={props.backupPollingEnabled()}
                   disabled={props.backupPollingEnvLocked()}
+                  aria-labelledby={backupPollingTitleId}
                   onChange={(e) => {
                     props.setBackupPollingEnabled(e.currentTarget.checked);
                     if (!props.backupPollingEnvLocked()) {

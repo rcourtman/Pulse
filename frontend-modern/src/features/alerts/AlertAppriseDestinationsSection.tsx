@@ -51,6 +51,7 @@ interface AlertAppriseDestinationsSectionProps {
 export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsSectionProps) {
   const fieldIdPrefix = `alert-apprise-${createUniqueId()}`;
   const fieldIds = {
+    title: `${fieldIdPrefix}-title`,
     targets: `${fieldIdPrefix}-targets`,
     cliPath: `${fieldIdPrefix}-cli-path`,
     serverUrl: `${fieldIdPrefix}-server-url`,
@@ -63,6 +64,7 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
 
   return (
     <SettingsPanel
+      titleId={fieldIds.title}
       title={ALERT_DESTINATIONS_APPRISE_PANEL_TITLE}
       description={ALERT_DESTINATIONS_APPRISE_PANEL_DESCRIPTION}
       action={
@@ -73,6 +75,7 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
               props.updateApprise({ enabled: event.currentTarget.checked });
               props.setHasUnsavedChanges(true);
             }}
+            ariaLabelledBy={fieldIds.title}
             label={
               <span class="text-xs font-medium text-muted">
                 {getAlertDestinationsStatusLabel(props.config.enabled)}

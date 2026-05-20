@@ -1,3 +1,5 @@
+import { createUniqueId } from 'solid-js';
+
 import { EmailProviderSelect } from '@/components/Alerts/EmailProviderSelect';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
@@ -17,8 +19,11 @@ interface AlertEmailDestinationsSectionProps {
 }
 
 export function AlertEmailDestinationsSection(props: AlertEmailDestinationsSectionProps) {
+  const titleId = `alert-email-destinations-${createUniqueId()}-title`;
+
   return (
     <SettingsPanel
+      titleId={titleId}
       title={ALERT_DESTINATIONS_EMAIL_PANEL_TITLE}
       description={ALERT_DESTINATIONS_EMAIL_PANEL_DESCRIPTION}
       action={
@@ -32,6 +37,7 @@ export function AlertEmailDestinationsSection(props: AlertEmailDestinationsSecti
             props.setHasUnsavedChanges(true);
           }}
           containerClass="sm:self-start"
+          ariaLabelledBy={titleId}
           label={
             <span class="text-xs font-medium text-muted">
               {getAlertDestinationsStatusLabel(props.config.enabled)}
