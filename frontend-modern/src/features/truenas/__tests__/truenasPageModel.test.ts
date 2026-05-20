@@ -23,8 +23,8 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
 });
 
 describe('truenasPageModel', () => {
-  it('declares the TrueNAS section set as Overview + Storage', () => {
-    expect(TRUENAS_TAB_SPECS.map((tab) => tab.id)).toEqual(['overview', 'storage']);
+  it('declares the TrueNAS section set as Overview + Storage + Protection', () => {
+    expect(TRUENAS_TAB_SPECS.map((tab) => tab.id)).toEqual(['overview', 'storage', 'protection']);
   });
 
   it('buckets systems and apps while keeping storage inventory in scope for shared surfaces', () => {

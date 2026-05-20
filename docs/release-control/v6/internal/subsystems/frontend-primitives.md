@@ -1432,6 +1432,13 @@ AI runtime.
 
 ## Current State
 
+Embedded Recovery workspace controls now use the shared filter-toolbar
+primitive boundary. Platform pages may choose a default Recovery workspace,
+such as TrueNAS opening on protection coverage, but the compact
+protection/events selector must use `FilterSegmentedControl` and the
+recovery-owned `useRecoverySurfaceState` owner rather than page-local tabs,
+nested cards, or independent protection/event state in the embedding surface.
+
 Cross-jump chip strips on alert and Patrol surfaces were retired on
 2026-05-16 alongside the platform-first migration. The
 `buildResolvedResourceSurfaceLinks` and `buildResourceSurfaceLinksForResource`

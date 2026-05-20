@@ -1154,15 +1154,20 @@ the embedded `StorageSurface` / `RecoverySurface` consumers rather than
 reintroducing top-level URL builders.
 
 Storage and Recovery can now be embedded by a platform page in table-only mode
-with a forced Proxmox source/platform filter. The embedded mode suppresses
-standalone page chrome, summary charts, and full filter chrome, but the
-Storage surface must keep the canonical Storage / Physical Disks view selector
-inside the table header unless the embedding explicitly locks a `forcedView`.
+with a forced platform source/filter. Proxmox uses that embedding for
+source-scoped storage and recovery history, while the TrueNAS Protection tab
+uses the same Recovery surface with a forced `truenas` platform filter and the
+protection-coverage workspace as its default entry point. The embedded mode
+suppresses standalone page chrome, summary charts, and full filter chrome, but
+the Storage surface must keep the canonical Storage / Physical Disks view
+selector inside the table header unless the embedding explicitly locks a
+`forcedView`, and the Recovery surface must keep protection/events workspace
+state in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`.
 The canonical route-backed filter state, fetch builders, table rendering, and
 storage/recovery vocabulary remain owned by the Storage and Recovery surfaces.
 Platform pages must compose those owners rather than cloning storage pools,
 physical disks, recovery events, or protected-inventory tables under
-Proxmox-specific data contracts.
+platform-specific data contracts.
 
 The investigation enrichment path reads operator-state from the
 in-memory provider already wired against the durable
@@ -3083,6 +3088,10 @@ cross-surface handoffs. Storage and recovery do not promise a TrueNAS-local
 onboarding path, restore/control plane, or separate diagnostic transport;
 backend-native app actions, logs, and config reads stay on the adjacent
 AI/runtime path and only feed refreshed canonical recovery/state afterward.
+The TrueNAS platform page may embed that same canonical recovery surface as a
+scoped Protection tab, but it must keep the `truenas` platform filter forced,
+reuse recovery-owned protection/event workspace state, and avoid growing a
+TrueNAS-only snapshot or replication table contract.
 VMware vSphere is the current admitted narrower phase-1 direction. Storage and
 recovery may consume vCenter-backed
 datastore inventory plus VM snapshot-tree visibility as shared storage and

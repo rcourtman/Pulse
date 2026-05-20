@@ -43,8 +43,12 @@ import { formatRelativeTime } from '@/utils/format';
 
 type ArtifactMode = RecoveryArtifactMode;
 type VerificationFilter = 'all' | 'verified' | 'unverified' | 'unknown';
-type RecoveryWorkspaceView = 'inventory' | 'events';
+export type RecoveryWorkspaceView = 'inventory' | 'events';
 export type ProtectedStateFilter = 'all' | RecoveryRollupInventoryStatus;
+
+type RecoverySurfaceStateOptions = {
+  defaultWorkspaceView?: RecoveryWorkspaceView;
+};
 
 const isRecoveryDateKey = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(value);
 const isRecoveryRangeDays = (value: string): value is '7' | '30' | '90' | '365' =>
@@ -113,9 +117,10 @@ const getRollupFreshnessLabel = (rollup: ProtectionRollup): string => {
   return 'No attempts recorded';
 };
 
-export function useRecoverySurfaceState() {
+export function useRecoverySurfaceState(options: RecoverySurfaceStateOptions = {}) {
   const navigate = useNavigate();
   const location = useLocation();
+  const defaultWorkspaceView = options.defaultWorkspaceView ?? 'events';
   const routeStateNavigate = createRouteStateNavigateScheduler(
     navigate,
     () => `${untrack(() => location.pathname)}${untrack(() => location.search || '')}`,
@@ -333,7 +338,9 @@ export function useRecoverySurfaceState() {
     const hasInventoryState = Boolean(
       normalizeRecoveryRouteValue(parsed.state) || legacyStaleState,
     );
-    const derivedDefaultView: RecoveryWorkspaceView = hasInventoryState ? 'inventory' : 'events';
+    const derivedDefaultView: RecoveryWorkspaceView = hasInventoryState
+      ? 'inventory'
+      : defaultWorkspaceView;
     const resolvedView = (nextView || derivedDefaultView) as RecoveryWorkspaceView;
     const visibleRollup = resolvedView === 'events' ? nextRollup : '';
     const visibleDay = resolvedView === 'events' ? nextDay : '';

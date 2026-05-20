@@ -8,8 +8,15 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { TableCard } from '@/components/shared/TableCard';
 import type { FilterSelectOption } from '@/components/shared/FilterBar';
+import {
+  FilterSegmentedControl,
+  type FilterSegmentOption,
+} from '@/components/shared/FilterToolbar';
 import { useRecoverySurfaceState } from '@/features/recovery/useRecoverySurfaceState';
-import type { ProtectedStateFilter } from '@/features/recovery/useRecoverySurfaceState';
+import type {
+  ProtectedStateFilter,
+  RecoveryWorkspaceView,
+} from '@/features/recovery/useRecoverySurfaceState';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
@@ -55,7 +62,14 @@ type RecoveryProps = {
   embedded?: boolean;
   tableOnly?: boolean;
   forcedPlatformFilter?: string;
+  defaultWorkspaceView?: RecoveryWorkspaceView;
+  showEmbeddedWorkspaceSwitcher?: boolean;
 };
+
+const RECOVERY_WORKSPACE_OPTIONS: FilterSegmentOption[] = [
+  { value: 'inventory', label: 'Protection', ariaLabel: 'Protection' },
+  { value: 'events', label: 'Events', ariaLabel: 'Events' },
+];
 
 const Recovery: Component<RecoveryProps> = (props) => {
   const kioskMode = useKioskMode();
@@ -113,7 +127,9 @@ const Recovery: Component<RecoveryProps> = (props) => {
     totalPages,
     verificationFilter,
     workspaceView,
-  } = useRecoverySurfaceState();
+  } = useRecoverySurfaceState({
+    defaultWorkspaceView: props.defaultWorkspaceView,
+  });
 
   createEffect(() => {
     const forcedPlatform = props.forcedPlatformFilter?.trim();
@@ -559,6 +575,14 @@ const Recovery: Component<RecoveryProps> = (props) => {
     });
   };
 
+  const setEmbeddedWorkspaceView = (value: string) => {
+    if (value === 'inventory') {
+      openCoverageView('all');
+      return;
+    }
+    openEventsView();
+  };
+
   const handleSelectRollup = (nextRollupId: string) => {
     batch(() => {
       setWorkspaceView('events');
@@ -616,6 +640,17 @@ const Recovery: Component<RecoveryProps> = (props) => {
       </Show>
 
       <div class="flex flex-col gap-2">
+        <Show when={props.embedded && props.showEmbeddedWorkspaceSwitcher}>
+          <div class="flex justify-end px-1">
+            <FilterSegmentedControl
+              aria-label="Recovery workspace"
+              value={workspaceView()}
+              onChange={setEmbeddedWorkspaceView}
+              options={RECOVERY_WORKSPACE_OPTIONS}
+            />
+          </div>
+        </Show>
+
         {(() => {
           return (
             <>

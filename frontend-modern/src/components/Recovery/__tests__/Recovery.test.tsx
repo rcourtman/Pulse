@@ -1217,6 +1217,53 @@ describe('Recovery', () => {
     expect(await screen.findByText(/Showing 1 - 1 of 1 recovery points/i)).toBeInTheDocument();
   });
 
+  it('supports platform protection embedding with a compact workspace switcher', async () => {
+    mockLocationPath = '/truenas/protection';
+
+    render(() => (
+      <Recovery
+        embedded
+        tableOnly
+        defaultWorkspaceView="inventory"
+        forcedPlatformFilter="truenas"
+        showEmbeddedWorkspaceSwitcher
+      />
+    ));
+
+    expect(
+      screen.queryByText(
+        'Review recovery activity, restore posture, and backup history across platforms.',
+      ),
+    ).not.toBeInTheDocument();
+
+    const workspaceControl = await screen.findByRole('group', { name: 'Recovery workspace' });
+    expect(within(workspaceControl).getByRole('button', { name: 'Protection' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(await screen.findByText('Protection coverage')).toBeInTheDocument();
+    expect(await screen.findByText('tank/apps')).toBeInTheDocument();
+
+    await waitFor(() => {
+      const urls = apiFetchMock.mock.calls.map((call) => String(call[0] || ''));
+      const hasRollups = urls.some(
+        (url) => url.includes('/api/recovery/rollups') && url.includes('platform=truenas'),
+      );
+      expect(hasRollups).toBe(true);
+    });
+
+    fireEvent.click(within(workspaceControl).getByRole('button', { name: 'Events' }));
+
+    expect(
+      await screen.findByRole('group', { name: /recovery events controls/i }),
+    ).toBeInTheDocument();
+    expect(within(workspaceControl).getByRole('button', { name: 'Events' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
   it('keeps route-owned recovery platform and node filters visible while options hydrate', async () => {
     mockLocationSearch = '?view=events&platform=truenas&node=tower';
     apiFetchMock.mockImplementation(() => new Promise(() => {}));

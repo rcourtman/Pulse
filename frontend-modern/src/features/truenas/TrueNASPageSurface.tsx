@@ -1,6 +1,7 @@
 import { useLocation } from '@solidjs/router';
 import DatabaseIcon from 'lucide-solid/icons/database';
 import { Show, createMemo, type Accessor } from 'solid-js';
+import RecoverySurface from '@/components/Recovery/Recovery';
 import StorageSurface from '@/components/Storage/Storage';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
@@ -94,6 +95,15 @@ export function TrueNASPageSurface() {
                 filterAriaLabel="TrueNAS storage filters"
                 filterSearchPlaceholder="Search TrueNAS pools, datasets, disks, or nodes"
                 filterSearchEmptyMessage="Recent TrueNAS storage searches appear here."
+              />
+            </Show>
+            <Show when={activeTab() === 'protection'}>
+              <RecoverySurface
+                embedded
+                tableOnly
+                defaultWorkspaceView="inventory"
+                forcedPlatformFilter={TRUENAS_PLATFORM_FILTER}
+                showEmbeddedWorkspaceSwitcher
               />
             </Show>
           </Show>

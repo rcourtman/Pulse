@@ -1,7 +1,7 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import type { Resource, ResourceType } from '@/types/resource';
 
-export type TrueNASPageTabId = 'overview' | 'storage';
+export type TrueNASPageTabId = 'overview' | 'storage' | 'protection';
 export type TrueNASAppStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
 export type TrueNASVMStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
 export type TrueNASShareStatusFilter = 'all' | 'active' | 'attention' | 'disabled';
@@ -14,12 +14,12 @@ export type TrueNASTabSpec = {
 
 // The Overview tab is intentionally narrow: appliance systems first, then
 // native workload inventory when present. Storage inventory, pool topology, and
-// physical disks all live on the Storage tab so operators have one canonical
-// storage surface instead of a duplicated overview snapshot plus a richer
-// storage page.
+// physical disks all live on the Storage tab, while snapshots and replication
+// live on the Protection tab through the canonical Recovery surface.
 export const TRUENAS_TAB_SPECS: readonly TrueNASTabSpec[] = [
   { id: 'overview', label: 'Overview', path: '/truenas/overview' },
   { id: 'storage', label: 'Storage', path: '/truenas/storage' },
+  { id: 'protection', label: 'Protection', path: '/truenas/protection' },
 ] as const;
 
 const TRUENAS_RESOURCE_TYPES = new Set<ResourceType>([

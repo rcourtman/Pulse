@@ -160,6 +160,9 @@ describe('platform overview layout guardrails', () => {
     expect(truenasPageSurfaceSource).toContain('<TrueNASVirtualMachinesTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASAppsTable');
     expect(truenasPageSurfaceSource).toContain('<StorageSurface');
+    expect(truenasPageSurfaceSource).toContain('<RecoverySurface');
+    expect(truenasPageSurfaceSource).toContain('defaultWorkspaceView="inventory"');
+    expect(truenasPageSurfaceSource).toContain('forcedPlatformFilter={TRUENAS_PLATFORM_FILTER}');
     expect(truenasPageSurfaceSource).toContain('suppressNodeFilter');
     expect(truenasPageSurfaceSource).not.toContain('forcedView="pools"');
     expect(truenasPageSurfaceSource).not.toContain('<WorkloadsSurface');
