@@ -513,6 +513,51 @@ func (c *Client) GetAlerts(ctx context.Context) ([]Alert, error) {
 	return alerts, nil
 }
 
+// GetVMs returns the best-effort native TrueNAS VM inventory. TrueNAS 25.04+
+// documents vm.query on the JSON-RPC API, with the legacy REST endpoint kept
+// as a compatibility fallback for existing client tests and older deployments.
+func (c *Client) GetVMs(ctx context.Context) ([]VirtualMachine, error) {
+	vms, err := c.getVMsRPC(ctx)
+	if err == nil {
+		return vms, nil
+	}
+	restVMs, restErr := c.getVMsREST(ctx)
+	if restErr != nil {
+		return nil, fmt.Errorf("fetch truenas vms via rpc and rest: rpc=%w rest=%v", err, restErr)
+	}
+	return restVMs, nil
+}
+
+func (c *Client) getVMsRPC(ctx context.Context) ([]VirtualMachine, error) {
+	conn, err := c.dialRPC(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	rpc := trueNASRPCClient{
+		conn:   conn,
+		nextID: 1,
+	}
+	if err := rpc.authenticate(ctx, c.config); err != nil {
+		return nil, err
+	}
+
+	var response []map[string]any
+	if err := rpc.call(ctx, "vm.query", []any{[]any{}, map[string]any{}}, &response); err != nil {
+		return nil, err
+	}
+	return parseVirtualMachines(response), nil
+}
+
+func (c *Client) getVMsREST(ctx context.Context) ([]VirtualMachine, error) {
+	var response []map[string]any
+	if err := c.getJSON(ctx, http.MethodGet, "/vm", &response); err != nil {
+		return nil, err
+	}
+	return parseVirtualMachines(response), nil
+}
+
 // GetApps returns the best-effort TrueNAS app inventory as canonical workload
 // candidates. The API surface varies across TrueNAS releases, so we parse the
 // documented app.query response shape loosely.
@@ -841,6 +886,7 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 
 	// Recovery artifacts are best-effort: do not fail monitoring if additional endpoints are unavailable.
 	apps, _ := c.GetApps(ctx)
+	vms, _ := c.GetVMs(ctx)
 	zfsSnapshots, _ := c.GetZFSSnapshots(ctx)
 	replicationTasks, _ := c.GetReplicationTasks(ctx)
 
@@ -852,6 +898,7 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 		Disks:            disks,
 		Alerts:           alerts,
 		Apps:             apps,
+		VMs:              vms,
 		ZFSSnapshots:     zfsSnapshots,
 		ReplicationTasks: replicationTasks,
 	}, nil
@@ -2409,6 +2456,132 @@ func readFloatAny(record map[string]any, keys ...string) float64 {
 		}
 	}
 	return 0
+}
+
+func parseVirtualMachines(entries []map[string]any) []VirtualMachine {
+	if len(entries) == 0 {
+		return nil
+	}
+	vms := make([]VirtualMachine, 0, len(entries))
+	for _, item := range entries {
+		if item == nil {
+			continue
+		}
+
+		status := readMapAny(item, "status")
+		deviceCounts := parseVMDeviceCounts(readSliceAny(item, "devices"))
+		memory := trueNASVMMemoryBytes(readInt64Any(item, "memory"))
+		minMemory := trueNASVMMemoryBytes(readInt64Any(item, "min_memory", "minMemory"))
+		id := strings.TrimSpace(readStringAny(item, "id"))
+		name := strings.TrimSpace(readStringAny(item, "name"))
+		if id == "" {
+			id = name
+		}
+		if name == "" {
+			name = id
+		}
+
+		vm := VirtualMachine{
+			ID:                    id,
+			Name:                  name,
+			Description:           strings.TrimSpace(readStringAny(item, "description")),
+			State:                 strings.TrimSpace(readStringAny(status, "state")),
+			DomainState:           strings.TrimSpace(readStringAny(status, "domain_state", "domainState")),
+			PID:                   readIntAny(status, "pid"),
+			VCPUs:                 readIntAny(item, "vcpus"),
+			Cores:                 readIntAny(item, "cores"),
+			Threads:               readIntAny(item, "threads"),
+			MemoryBytes:           memory,
+			MinMemoryBytes:        minMemory,
+			CPUMode:               strings.TrimSpace(readStringAny(item, "cpu_mode", "cpuMode")),
+			CPUModel:              strings.TrimSpace(readStringAny(item, "cpu_model", "cpuModel")),
+			Bootloader:            strings.TrimSpace(readStringAny(item, "bootloader")),
+			Autostart:             readBoolAny(item, "autostart"),
+			SuspendOnSnapshot:     readBoolAny(item, "suspend_on_snapshot", "suspendOnSnapshot"),
+			TrustedPlatformModule: readBoolAny(item, "trusted_platform_module", "trustedPlatformModule"),
+			SecureBoot:            readBoolAny(item, "enable_secure_boot", "enableSecureBoot"),
+			Time:                  strings.TrimSpace(readStringAny(item, "time")),
+			ArchType:              strings.TrimSpace(readStringAny(item, "arch_type", "archType")),
+			MachineType:           strings.TrimSpace(readStringAny(item, "machine_type", "machineType")),
+			UUID:                  strings.TrimSpace(readStringAny(item, "uuid")),
+			DisplayAvailable:      readBoolAny(item, "display_available", "displayAvailable"),
+			DeviceCount:           deviceCounts.total,
+			DiskCount:             deviceCounts.disks,
+			NICCount:              deviceCounts.nics,
+			DisplayCount:          deviceCounts.displays,
+			CDROMCount:            deviceCounts.cdroms,
+			USBCount:              deviceCounts.usbs,
+			PCICount:              deviceCounts.pcis,
+		}
+		if vm.State == "" {
+			vm.State = strings.TrimSpace(readStringAny(item, "state"))
+		}
+		if vm.DomainState == "" {
+			vm.DomainState = strings.TrimSpace(readStringAny(item, "domain_state", "domainState"))
+		}
+		if vm.DeviceCount == 0 {
+			vm.DeviceCount = readIntAny(item, "device_count", "deviceCount")
+		}
+
+		if vm.ID == "" && vm.Name == "" {
+			continue
+		}
+		vms = append(vms, vm)
+	}
+	if len(vms) == 0 {
+		return nil
+	}
+	return vms
+}
+
+type vmDeviceCounts struct {
+	total    int
+	disks    int
+	nics     int
+	displays int
+	cdroms   int
+	usbs     int
+	pcis     int
+}
+
+func parseVMDeviceCounts(entries []any) vmDeviceCounts {
+	counts := vmDeviceCounts{total: len(entries)}
+	for _, entry := range entries {
+		record, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		attributes := readMapAny(record, "attributes")
+		dtype := strings.ToUpper(strings.TrimSpace(readStringAny(attributes, "dtype")))
+		if dtype == "" {
+			dtype = strings.ToUpper(strings.TrimSpace(readStringAny(record, "dtype", "type")))
+		}
+		switch dtype {
+		case "DISK", "RAW":
+			counts.disks++
+		case "NIC":
+			counts.nics++
+		case "DISPLAY":
+			counts.displays++
+		case "CDROM":
+			counts.cdroms++
+		case "USB":
+			counts.usbs++
+		case "PCI":
+			counts.pcis++
+		}
+	}
+	return counts
+}
+
+func trueNASVMMemoryBytes(memory int64) int64 {
+	if memory <= 0 {
+		return 0
+	}
+	if memory >= 1<<30 {
+		return memory
+	}
+	return memory * 1024 * 1024
 }
 
 func parseAppPorts(entries []any) []AppPort {

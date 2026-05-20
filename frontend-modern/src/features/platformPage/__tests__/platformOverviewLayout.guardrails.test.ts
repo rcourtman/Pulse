@@ -17,6 +17,7 @@ import proxmoxReplicationTableSource from '@/features/proxmox/ProxmoxReplication
 import sharedPlatformPageSource from '@/features/platformPage/sharedPlatformPage.tsx?raw';
 import truenasPageSurfaceSource from '@/features/truenas/TrueNASPageSurface.tsx?raw';
 import truenasSystemsTableSource from '@/features/truenas/TrueNASSystemsTable.tsx?raw';
+import truenasVirtualMachinesTableSource from '@/features/truenas/TrueNASVirtualMachinesTable.tsx?raw';
 import vmwarePageSurfaceSource from '@/features/vmware/VmwarePageSurface.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
 
@@ -28,6 +29,7 @@ const platformTableSources = [
   kubernetesNodesTableSource,
   kubernetesDeploymentsTableSource,
   truenasSystemsTableSource,
+  truenasVirtualMachinesTableSource,
   vsphereHostsTableSource,
 ];
 
@@ -155,6 +157,7 @@ describe('platform overview layout guardrails', () => {
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesNodesTable');
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesDeploymentsTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASSystemsTable');
+    expect(truenasPageSurfaceSource).toContain('<TrueNASVirtualMachinesTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASAppsTable');
     expect(truenasPageSurfaceSource).toContain('<StorageSurface');
     expect(truenasPageSurfaceSource).toContain('suppressNodeFilter');

@@ -248,15 +248,94 @@ func TestFetchSnapshot(t *testing.T) {
 	if snapshot.System.Hostname != "truenas-main" {
 		t.Fatalf("unexpected snapshot system: %+v", snapshot.System)
 	}
-	if len(snapshot.Pools) != 1 || len(snapshot.Datasets) != 1 || len(snapshot.Disks) != 2 || len(snapshot.Alerts) != 1 || len(snapshot.Apps) != 1 {
-		t.Fatalf("unexpected snapshot counts: pools=%d datasets=%d disks=%d alerts=%d apps=%d",
-			len(snapshot.Pools), len(snapshot.Datasets), len(snapshot.Disks), len(snapshot.Alerts), len(snapshot.Apps))
+	if len(snapshot.Pools) != 1 || len(snapshot.Datasets) != 1 || len(snapshot.Disks) != 2 || len(snapshot.Alerts) != 1 || len(snapshot.Apps) != 1 || len(snapshot.VMs) != 1 {
+		t.Fatalf("unexpected snapshot counts: pools=%d datasets=%d disks=%d alerts=%d apps=%d vms=%d",
+			len(snapshot.Pools), len(snapshot.Datasets), len(snapshot.Disks), len(snapshot.Alerts), len(snapshot.Apps), len(snapshot.VMs))
 	}
 	if snapshot.Disks[0].Temperature != 34 || snapshot.Disks[1].Temperature != 49 {
 		t.Fatalf("unexpected snapshot disk temperatures: %+v", snapshot.Disks)
 	}
 	if snapshot.Apps[0].ID != "nextcloud" || snapshot.Apps[0].ContainerCount != 2 {
 		t.Fatalf("unexpected snapshot apps: %+v", snapshot.Apps)
+	}
+	if snapshot.VMs[0].Name != "windows-lab" || snapshot.VMs[0].MemoryBytes != 8*1024*1024*1024 {
+		t.Fatalf("unexpected snapshot vms: %+v", snapshot.VMs)
+	}
+}
+
+func TestGetVMsParsesNativeVMQueryShape(t *testing.T) {
+	server := newMockServerWithRPC(t, map[string]apiResponse{}, nil, func(t *testing.T, conn *websocket.Conn) {
+		authReq := readRPCRequest(t, conn)
+		if authReq.Method != "auth.login_with_api_key" {
+			t.Fatalf("expected api-key auth method, got %q", authReq.Method)
+		}
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		queryReq := readRPCRequest(t, conn)
+		if queryReq.Method != "vm.query" {
+			t.Fatalf("expected vm.query, got %q", queryReq.Method)
+		}
+		writeRPCResult(t, conn, queryReq.ID, []map[string]any{
+			{
+				"id":                      42,
+				"name":                    "windows-lab",
+				"description":             "Build test box",
+				"vcpus":                   4,
+				"cores":                   2,
+				"threads":                 2,
+				"memory":                  8192,
+				"min_memory":              4096,
+				"cpu_mode":                "HOST-PASSTHROUGH",
+				"cpu_model":               nil,
+				"bootloader":              "UEFI",
+				"autostart":               true,
+				"suspend_on_snapshot":     true,
+				"trusted_platform_module": true,
+				"enable_secure_boot":      true,
+				"time":                    "UTC",
+				"arch_type":               "x86_64",
+				"machine_type":            "q35",
+				"uuid":                    "vm-uuid-1",
+				"display_available":       true,
+				"status": map[string]any{
+					"state":        "RUNNING",
+					"pid":          1234,
+					"domain_state": "RUNNING",
+				},
+				"devices": []map[string]any{
+					{"id": 1, "attributes": map[string]any{"dtype": "DISK"}},
+					{"id": 2, "attributes": map[string]any{"dtype": "NIC"}},
+					{"id": 3, "attributes": map[string]any{"dtype": "DISPLAY"}},
+					{"id": 4, "attributes": map[string]any{"dtype": "CDROM"}},
+				},
+			},
+		})
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	vms, err := client.GetVMs(context.Background())
+	if err != nil {
+		t.Fatalf("GetVMs() error = %v", err)
+	}
+	if len(vms) != 1 {
+		t.Fatalf("expected 1 VM, got %d", len(vms))
+	}
+	vm := vms[0]
+	if vm.ID != "42" || vm.Name != "windows-lab" || vm.State != "RUNNING" || vm.DomainState != "RUNNING" {
+		t.Fatalf("unexpected VM identity/status: %+v", vm)
+	}
+	if vm.VCPUs != 4 || vm.Cores != 2 || vm.Threads != 2 {
+		t.Fatalf("unexpected VM CPU topology: %+v", vm)
+	}
+	if vm.MemoryBytes != 8*1024*1024*1024 || vm.MinMemoryBytes != 4*1024*1024*1024 {
+		t.Fatalf("unexpected VM memory: %+v", vm)
+	}
+	if !vm.Autostart || !vm.SuspendOnSnapshot || !vm.TrustedPlatformModule || !vm.SecureBoot {
+		t.Fatalf("expected VM boolean flags, got %+v", vm)
+	}
+	if vm.DeviceCount != 4 || vm.DiskCount != 1 || vm.NICCount != 1 || vm.DisplayCount != 1 || vm.CDROMCount != 1 {
+		t.Fatalf("unexpected VM device counts: %+v", vm)
 	}
 }
 
@@ -1170,6 +1249,9 @@ func defaultAPIResponses() map[string]apiResponse {
 		},
 		"/api/v2.0/app": {
 			body: `[{"id":"nextcloud","name":"Nextcloud","state":"RUNNING","version":"1.0.3","human_version":"29.0.7","upgrade_available":true,"image_updates_available":true,"notes":"Team cloud","active_workloads":{"containers":2,"used_host_ips":["0.0.0.0"],"used_ports":[{"container_port":443,"protocol":"tcp","host_ports":[{"host_port":30443,"host_ip":"0.0.0.0"}]}],"container_details":[{"id":"nextcloud-web-1","service_name":"nextcloud","image":"docker.io/library/nextcloud:29.0.7","state":"running","port_config":[{"container_port":443,"protocol":"tcp","host_ports":[{"host_port":30443,"host_ip":"0.0.0.0"}]}],"volume_mounts":[{"source":"/mnt/tank/apps/nextcloud","destination":"/var/www/html","mode":"rw","type":"bind"}]},{"id":"nextcloud-redis-1","service_name":"redis","image":"docker.io/library/redis:7.2","state":"running","port_config":[],"volume_mounts":[{"source":"ix-nextcloud-redis","destination":"/data","mode":"rw","type":"volume"}]}],"volumes":[{"source":"/mnt/tank/apps/nextcloud","destination":"/var/www/html","mode":"rw","type":"bind"},{"source":"ix-nextcloud-redis","destination":"/data","mode":"rw","type":"volume"}],"images":["docker.io/library/nextcloud:29.0.7","docker.io/library/redis:7.2"],"networks":[{"name":"ix-nextcloud_default","id":"net-1","labels":{"com.docker.compose.project":"nextcloud"}}]}}]`,
+		},
+		"/api/v2.0/vm": {
+			body: `[{"id":42,"name":"windows-lab","vcpus":4,"cores":2,"threads":2,"memory":8192,"bootloader":"UEFI","autostart":true,"status":{"state":"RUNNING","pid":1234,"domain_state":"RUNNING"},"devices":[{"id":1,"attributes":{"dtype":"DISK"}},{"id":2,"attributes":{"dtype":"NIC"}}]}]`,
 		},
 	}
 }

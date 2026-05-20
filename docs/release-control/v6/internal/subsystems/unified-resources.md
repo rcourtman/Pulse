@@ -1170,6 +1170,12 @@ lane-local workload UI. API-backed `app.stats` telemetry must now project onto
 that same canonical `app-container` contract as live metrics and metrics
 targets, using the shared `docker:<id>` in-memory key and `dockerContainer`
 history store path instead of adding a TrueNAS-local workload history lane.
+TrueNAS-managed virtual machines follow the same canonical workload rule. One
+TrueNAS VM from `vm.query` must project as one canonical `vm` resource under
+`SourceTrueNAS`, carrying native `TrueNASData.VM` metadata instead of inventing
+a `truenas-vm` resource type, borrowing Proxmox guest fields, or rendering a
+provider-local VM contract. Native VM lifecycle/control is read-only at this
+floor until a governed action path owns it.
 TrueNAS top-level systems now follow the same canonical host rule. One
 TrueNAS appliance must project as one canonical `agent` resource under
 `SourceTrueNAS`, carrying host-facing `AgentData` plus provider-specific
@@ -1193,10 +1199,10 @@ inventing a provider-local temperature payload or leaving TrueNAS host
 temperatures unavailable without the unified agent.
 AI discovery and query surfaces now follow the same rule. Assistant runtime
 paths such as `pulse_query` and unified AI context must expose TrueNAS-backed
-canonical `agent`, `app-container`, `storage`, and `physical-disk` resources
-through those shared contracts, filtering dataset-topology storage children
-out of any `storage-pool` presentation instead of inventing TrueNAS-local
-assistant types or mislabeling datasets as pools.
+canonical `agent`, `vm`, `app-container`, `storage`, and `physical-disk`
+resources through those shared contracts, filtering dataset-topology storage
+children out of any `storage-pool` presentation instead of inventing
+TrueNAS-local assistant types or mislabeling datasets as pools.
 That same canonical app-container rule now also governs diagnostics. Assistant
 runtime paths such as `pulse_read` must resolve API-backed TrueNAS apps
 through the shared canonical `app-container` identity and `resource_id`
@@ -1209,7 +1215,7 @@ and `resource_id` contract, then project native runtime/config shape through
 the shared app-container payload rather than forcing those resources through
 guest-config routing or inventing a TrueNAS-local config type.
 That projection contract is the product-definition floor for TrueNAS support:
-Pulse supports TrueNAS only when it lands on the shared `agent`,
+Pulse supports TrueNAS only when it lands on the shared `agent`, `vm`,
 `app-container`, `storage`, `physical-disk`, and recovery-linked resource
 shapes. The unified agent may augment a TrueNAS system later, but baseline
 support does not depend on it, and product surfaces must not reopen a parallel

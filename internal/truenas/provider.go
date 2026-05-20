@@ -457,7 +457,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 	systemRisk := unifiedresources.StorageRiskFromAssessment(systemAssessment)
 	_, protectionReduced, rebuildInProgress, protectionSummary, rebuildSummary := unifiedresources.StorageRiskSemantics(systemRisk)
 	systemIncidents, poolIncidents, diskIncidents := buildIncidentAssignments(snapshot)
-	records := make([]unifiedresources.IngestRecord, 0, 1+len(snapshot.Pools)+len(snapshot.Datasets)+len(snapshot.Apps)+len(snapshot.Disks))
+	records := make([]unifiedresources.IngestRecord, 0, 1+len(snapshot.Pools)+len(snapshot.Datasets)+len(snapshot.Apps)+len(snapshot.VMs)+len(snapshot.Disks))
 
 	totalCapacity, totalUsed := aggregatePoolUsage(snapshot.Pools)
 	systemAgent := agentDataFromTrueNASSystem(snapshot.System, systemRisk, protectionReduced, protectionSummary, rebuildInProgress, rebuildSummary)
@@ -634,6 +634,32 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 			},
 			Identity: unifiedresources.ResourceIdentity{
 				Hostnames: dedupeStrings([]string{appDisplayName(app)}),
+			},
+		})
+	}
+
+	for _, vm := range snapshot.VMs {
+		records = append(records, unifiedresources.IngestRecord{
+			SourceID:       virtualMachineSourceID(vm),
+			ParentSourceID: systemSourceID,
+			Resource: unifiedresources.Resource{
+				Type:      unifiedresources.ResourceTypeVM,
+				Name:      virtualMachineDisplayName(vm),
+				Status:    statusFromVirtualMachine(vm),
+				LastSeen:  collectedAt,
+				UpdatedAt: collectedAt,
+				TrueNAS: &unifiedresources.TrueNASData{
+					Hostname: strings.TrimSpace(snapshot.System.Hostname),
+					VM:       trueNASVMDataFromVirtualMachine(vm),
+				},
+				Tags: virtualMachineTags(vm),
+			},
+			Identity: unifiedresources.ResourceIdentity{
+				MachineID: strings.TrimSpace(vm.UUID),
+				Hostnames: dedupeStrings([]string{
+					strings.TrimSpace(snapshot.System.Hostname),
+					virtualMachineDisplayName(vm),
+				}),
 			},
 		})
 	}
@@ -1209,6 +1235,13 @@ func appSourceID(id string) string {
 	return "app:" + strings.TrimSpace(id)
 }
 
+func virtualMachineSourceID(vm VirtualMachine) string {
+	if id := strings.TrimSpace(vm.ID); id != "" {
+		return "vm:" + id
+	}
+	return "vm:" + virtualMachineDisplayName(vm)
+}
+
 func diskSourceID(name string) string {
 	return "disk:" + strings.TrimSpace(name)
 }
@@ -1225,6 +1258,13 @@ func appCanonicalID(app App) string {
 		return id
 	}
 	return appDisplayName(app)
+}
+
+func virtualMachineDisplayName(vm VirtualMachine) string {
+	if name := strings.TrimSpace(vm.Name); name != "" {
+		return name
+	}
+	return strings.TrimSpace(vm.ID)
 }
 
 func findAppInSnapshot(snapshot *FixtureSnapshot, appID string) (*App, error) {
@@ -1470,6 +1510,41 @@ func trueNASAppNetworksFromAppNetworks(networks []AppNetwork) []unifiedresources
 	return out
 }
 
+func trueNASVMDataFromVirtualMachine(vm VirtualMachine) *unifiedresources.TrueNASVM {
+	return &unifiedresources.TrueNASVM{
+		ID:                    strings.TrimSpace(vm.ID),
+		Name:                  strings.TrimSpace(vm.Name),
+		Description:           strings.TrimSpace(vm.Description),
+		State:                 strings.TrimSpace(vm.State),
+		DomainState:           strings.TrimSpace(vm.DomainState),
+		PID:                   vm.PID,
+		VCPUs:                 vm.VCPUs,
+		Cores:                 vm.Cores,
+		Threads:               vm.Threads,
+		MemoryBytes:           vm.MemoryBytes,
+		MinMemoryBytes:        vm.MinMemoryBytes,
+		CPUMode:               strings.TrimSpace(vm.CPUMode),
+		CPUModel:              strings.TrimSpace(vm.CPUModel),
+		Bootloader:            strings.TrimSpace(vm.Bootloader),
+		Autostart:             vm.Autostart,
+		SuspendOnSnapshot:     vm.SuspendOnSnapshot,
+		TrustedPlatformModule: vm.TrustedPlatformModule,
+		SecureBoot:            vm.SecureBoot,
+		Time:                  strings.TrimSpace(vm.Time),
+		ArchType:              strings.TrimSpace(vm.ArchType),
+		MachineType:           strings.TrimSpace(vm.MachineType),
+		UUID:                  strings.TrimSpace(vm.UUID),
+		DisplayAvailable:      vm.DisplayAvailable,
+		DeviceCount:           vm.DeviceCount,
+		DiskCount:             vm.DiskCount,
+		NICCount:              vm.NICCount,
+		DisplayCount:          vm.DisplayCount,
+		CDROMCount:            vm.CDROMCount,
+		USBCount:              vm.USBCount,
+		PCICount:              vm.PCICount,
+	}
+}
+
 func copyStringLabels(labels map[string]string) map[string]string {
 	if len(labels) == 0 {
 		return nil
@@ -1509,6 +1584,43 @@ func statusFromApp(app App) unifiedresources.ResourceStatus {
 	default:
 		return unifiedresources.StatusUnknown
 	}
+}
+
+func statusFromVirtualMachine(vm VirtualMachine) unifiedresources.ResourceStatus {
+	state := strings.ToUpper(strings.TrimSpace(vm.State))
+	if state == "" {
+		state = strings.ToUpper(strings.TrimSpace(vm.DomainState))
+	}
+	switch state {
+	case "RUNNING", "ACTIVE":
+		return unifiedresources.StatusOnline
+	case "STOPPED", "SHUTOFF", "SHUTDOWN", "POWEROFF":
+		return unifiedresources.StatusOffline
+	case "PAUSED", "SUSPENDED", "ERROR", "CRASHED", "PANICKED":
+		return unifiedresources.StatusWarning
+	default:
+		return unifiedresources.StatusUnknown
+	}
+}
+
+func virtualMachineTags(vm VirtualMachine) []string {
+	tags := []string{"truenas", "vm"}
+	if state := strings.ToLower(strings.TrimSpace(vm.State)); state != "" {
+		tags = append(tags, "state:"+state)
+	}
+	if bootloader := strings.ToLower(strings.TrimSpace(vm.Bootloader)); bootloader != "" {
+		tags = append(tags, "boot:"+bootloader)
+	}
+	if vm.Autostart {
+		tags = append(tags, "autostart")
+	}
+	if vm.TrustedPlatformModule {
+		tags = append(tags, "tpm")
+	}
+	if vm.SecureBoot {
+		tags = append(tags, "secure-boot")
+	}
+	return dedupeStrings(tags)
 }
 
 func truenasAppCapabilities() []unifiedresources.ResourceCapability {
@@ -1797,6 +1909,7 @@ func copyFixtureSnapshot(snapshot *FixtureSnapshot) *FixtureSnapshot {
 	copied.Disks = append([]Disk(nil), snapshot.Disks...)
 	copied.Alerts = append([]Alert(nil), snapshot.Alerts...)
 	copied.Apps = cloneApps(snapshot.Apps)
+	copied.VMs = append([]VirtualMachine(nil), snapshot.VMs...)
 	copied.ZFSSnapshots = append([]ZFSSnapshot(nil), snapshot.ZFSSnapshots...)
 	copied.ReplicationTasks = append([]ReplicationTask(nil), snapshot.ReplicationTasks...)
 	return &copied

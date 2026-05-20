@@ -358,6 +358,7 @@ func cloneTrueNASData(in *TrueNASData) *TrueNASData {
 	out := *in
 	out.StorageRisk = cloneStorageRisk(in.StorageRisk)
 	out.App = cloneTrueNASApp(in.App)
+	out.VM = cloneTrueNASVM(in.VM)
 	return &out
 }
 
@@ -414,6 +415,14 @@ func cloneTrueNASAppNetworks(in []TrueNASAppNetwork) []TrueNASAppNetwork {
 		out[i].Labels = cloneStringMap(in[i].Labels)
 	}
 	return out
+}
+
+func cloneTrueNASVM(in *TrueNASVM) *TrueNASVM {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
 }
 
 func cloneCPUInfo(in *CPUInfo) *CPUInfo {

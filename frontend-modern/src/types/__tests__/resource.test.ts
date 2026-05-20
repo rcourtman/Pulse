@@ -22,6 +22,7 @@ import {
 import {
   ADMITTED_PLATFORM_IDS,
   PRESENTATION_ONLY_PLATFORM_IDS,
+  SOURCE_PLATFORM_CANONICAL_PROJECTIONS,
   SUPPORTED_PLATFORM_IDS,
 } from '@/utils/platformSupportManifest.generated';
 import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
@@ -48,6 +49,16 @@ describe('Resource Type Guards', () => {
     for (const platform of PRESENTATION_ONLY_PLATFORM_IDS) {
       expect(PLATFORM_TYPES).not.toContain(platform as any);
     }
+  });
+
+  it('keeps TrueNAS native VM support in the governed platform projection', () => {
+    expect(SOURCE_PLATFORM_CANONICAL_PROJECTIONS.truenas).toEqual([
+      'agent',
+      'vm',
+      'app-container',
+      'storage',
+      'physical-disk',
+    ]);
   });
 
   describe('isInfrastructure', () => {

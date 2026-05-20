@@ -52,15 +52,15 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 	registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
 
 	resources := registry.List()
-	wantCount := 1 + len(fixtures.Pools) + len(fixtures.Datasets) + len(fixtures.Disks) + len(fixtures.Apps)
+	wantCount := 1 + len(fixtures.Pools) + len(fixtures.Datasets) + len(fixtures.Disks) + len(fixtures.Apps) + len(fixtures.VMs)
 	if len(resources) != wantCount {
 		t.Fatalf("expected %d resources, got %d", wantCount, len(resources))
 	}
 
 	system := requireResource(t, resources, unifiedresources.ResourceTypeAgent, fixtures.System.Hostname)
 	assertSourceTracking(t, *system, unifiedresources.SourceTrueNAS)
-	if system.ChildCount != len(fixtures.Pools)+len(fixtures.Apps) {
-		t.Fatalf("expected system child count %d, got %d", len(fixtures.Pools)+len(fixtures.Apps), system.ChildCount)
+	if system.ChildCount != len(fixtures.Pools)+len(fixtures.Apps)+len(fixtures.VMs) {
+		t.Fatalf("expected system child count %d, got %d", len(fixtures.Pools)+len(fixtures.Apps)+len(fixtures.VMs), system.ChildCount)
 	}
 	if system.TrueNAS == nil {
 		t.Fatal("expected TrueNAS metadata on system record")
@@ -170,6 +170,30 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 		t.Fatalf("expected Nextcloud network rates, got in=%v out=%v", app.Docker.NetInRate, app.Docker.NetOutRate)
 	}
 
+	vm := requireResource(t, resources, unifiedresources.ResourceTypeVM, "windows-lab")
+	assertSourceTracking(t, *vm, unifiedresources.SourceTrueNAS)
+	if vm.ParentID == nil || *vm.ParentID != system.ID {
+		t.Fatalf("expected VM parent %q, got %+v", system.ID, vm.ParentID)
+	}
+	if vm.TrueNAS == nil || vm.TrueNAS.VM == nil {
+		t.Fatal("expected native TrueNAS VM metadata on VM resource")
+	}
+	if vm.TrueNAS.VM.ID != "42" || vm.TrueNAS.VM.State != "RUNNING" {
+		t.Fatalf("unexpected native TrueNAS VM identity/state: %+v", vm.TrueNAS.VM)
+	}
+	if vm.TrueNAS.VM.VCPUs != 4 || vm.TrueNAS.VM.MemoryBytes != 8*1024*1024*1024 {
+		t.Fatalf("unexpected native TrueNAS VM compute metadata: %+v", vm.TrueNAS.VM)
+	}
+	if !vm.TrueNAS.VM.Autostart || !vm.TrueNAS.VM.SecureBoot || !vm.TrueNAS.VM.TrustedPlatformModule {
+		t.Fatalf("unexpected native TrueNAS VM flags: %+v", vm.TrueNAS.VM)
+	}
+	if vm.TrueNAS.VM.DiskCount != 1 || vm.TrueNAS.VM.NICCount != 1 || vm.TrueNAS.VM.DisplayCount != 1 {
+		t.Fatalf("unexpected native TrueNAS VM device counts: %+v", vm.TrueNAS.VM)
+	}
+	if vm.Status != unifiedresources.StatusOnline {
+		t.Fatalf("expected windows-lab status online, got %q", vm.Status)
+	}
+
 	disk := requireResource(t, resources, unifiedresources.ResourceTypePhysicalDisk, "sda")
 	assertSourceTracking(t, *disk, unifiedresources.SourceTrueNAS)
 	if disk.ParentID == nil || *disk.ParentID != pool.ID {
@@ -240,7 +264,7 @@ func TestTrueNASResourcesFlowThroughUnifiedTypesWithoutSpecialCasing(t *testing.
 			t.Fatalf("expected canonical render type, got truenas-specific type for %s", resource.ID)
 		}
 		switch resource.Type {
-		case unifiedresources.ResourceTypeAgent, unifiedresources.ResourceTypeStorage, unifiedresources.ResourceTypePhysicalDisk, unifiedresources.ResourceTypeAppContainer:
+		case unifiedresources.ResourceTypeAgent, unifiedresources.ResourceTypeStorage, unifiedresources.ResourceTypePhysicalDisk, unifiedresources.ResourceTypeAppContainer, unifiedresources.ResourceTypeVM:
 		default:
 			t.Fatalf("unexpected unified type for truenas fixture resource: %s (%s)", resource.Type, resource.ID)
 		}

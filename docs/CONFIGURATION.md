@@ -483,6 +483,8 @@ On your TrueNAS system:
 | Data | Where it appears |
 |---|---|
 | System info (CPU, memory, uptime) | Infrastructure page |
+| Virtual machines | TrueNAS Overview |
+| Apps | TrueNAS Overview |
 | ZFS Pools & datasets | Storage page |
 | Physical disks | Storage page |
 | ZFS Snapshots | Recovery page |

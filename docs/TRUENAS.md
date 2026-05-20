@@ -18,13 +18,15 @@ On your TrueNAS system:
 2. Click **Add** and create a new key.
 3. Copy the key value and paste it into Pulse.
 
-> **Tip**: A read-only key is sufficient for monitoring. Pulse does not write to TrueNAS.
+> **Tip**: A read-only key is sufficient for monitoring. Native app control actions require a key with the corresponding TrueNAS app permissions.
 
 ## What Gets Monitored
 
 | Data | Unified Page | Details |
 |---|---|---|
 | System info (hostname, version, uptime) | Infrastructure | CPU, memory, health status |
+| Virtual machines | TrueNAS Overview | State, CPU, memory, boot mode, devices, and security flags from the TrueNAS VM API |
+| Apps | TrueNAS Overview | Native app state, image/version, ports, volumes, networks, and runtime container details |
 | ZFS Pools | Storage | Total/used/free capacity, pool status (ONLINE/DEGRADED/FAULTED) |
 | ZFS Datasets | Storage | Used/available space, mount status, read-only flag |
 | Physical Disks | Storage | Model, serial, size, transport type, rotational flag |
@@ -37,6 +39,8 @@ On your TrueNAS system:
 TrueNAS resources are mapped into the unified resource model:
 
 - **TrueNAS host** → appears as a resource with `source: truenas` on the **Infrastructure** page.
+- **TrueNAS VMs** → appear as canonical `vm` workloads on the **TrueNAS** page.
+- **TrueNAS apps** → appear as canonical `app-container` workloads on the **TrueNAS** page.
 - **ZFS pools and datasets** → appear on the **Storage** page.
 - **ZFS snapshots and replication** → appear on the **Recovery** page as recovery points.
 - **TrueNAS alerts** → surfaced on the **Alerts** page alongside Proxmox and other platform alerts.

@@ -916,6 +916,14 @@ telemetry. `internal/truenas/client.go`, `internal/truenas/provider.go`, and
 canonical `app-container` metrics contract, and sync them into the existing
 guest metrics-history/store path. Pulse must not add a TrueNAS-only charts
 lane for that telemetry.
+That same monitoring boundary now also owns native TrueNAS VM inventory.
+`internal/truenas/client.go` must ingest `vm.query` through the official
+`/api/current` JSON-RPC websocket transport, `internal/truenas/provider.go`
+must project those rows as canonical `vm` resources under the top-level
+TrueNAS appliance, and frontend TrueNAS surfaces must read the typed
+`TrueNASData.VM` facet instead of inventing a provider-local VM table contract.
+Pulse must not treat TrueNAS VMs as Proxmox guests, Docker containers, or a
+separate `truenas-vm` resource type.
 That same monitoring boundary now also owns connected-infrastructure
 projection for API-backed platforms. `internal/monitoring/connected_infrastructure.go`
 must project TrueNAS into the canonical connected-infrastructure surface list,
@@ -984,10 +992,11 @@ contract. Pulse must not treat TrueNAS CPU temperature as an agent-only
 capability or invent a TrueNAS-local sensor payload.
 Taken together, this is the current monitoring-owned TrueNAS floor: one stored
 API connection can surface one canonical top-level system, shared host
-telemetry/history, app-container workloads, disk health/history, and
-per-connection poll health without requiring the unified agent. The same
-poller/provider path also owns assistant-driven app start/stop, logs, and
-config refresh for those canonical workloads. Pulse does not promise a
+telemetry/history, app-container workloads, native VM workloads, disk
+health/history, and per-connection poll health without requiring the unified
+agent. The same poller/provider path also owns assistant-driven app
+start/stop, logs, and config refresh for canonical app workloads. Pulse does
+not promise a
 separate TrueNAS runtime model, broader NAS administration, or agent-required
 bootstrap at this floor.
 That same monitoring boundary now also owns VMware signal enrichment on the

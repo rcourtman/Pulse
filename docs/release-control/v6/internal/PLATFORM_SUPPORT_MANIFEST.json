@@ -262,6 +262,7 @@
       ],
       "canonical_projections": [
         "agent",
+        "vm",
         "app-container",
         "storage",
         "physical-disk"

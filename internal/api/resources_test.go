@@ -3419,6 +3419,66 @@ func TestResourceListIncludesTrueNASAppsAsAppContainers(t *testing.T) {
 	}
 }
 
+func TestResourceListIncludesTrueNASVMsAsCanonicalWorkloads(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		truenas.SetFeatureEnabled(previous)
+	})
+
+	fixtures := truenas.DefaultFixtures()
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{LastUpdate: time.Now().UTC()}})
+	h.SetSupplementalRecordsProvider(unified.SourceTrueNAS, mockSupplementalRecordsProvider{
+		records:      truenas.NewProvider(fixtures).Records(),
+		ownedSources: []unified.DataSource{unified.SourceTrueNAS},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=vm&source=truenas", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) != len(fixtures.VMs) {
+		t.Fatalf("expected %d TrueNAS VM resources, got %d", len(fixtures.VMs), len(resp.Data))
+	}
+
+	var windows *unified.Resource
+	for i := range resp.Data {
+		resource := &resp.Data[i]
+		if resource.Name == "windows-lab" {
+			windows = resource
+			break
+		}
+	}
+	if windows == nil {
+		t.Fatalf("expected windows-lab in TrueNAS VM response, got %+v", resp.Data)
+	}
+	if !containsSource(windows.Sources, unified.SourceTrueNAS) {
+		t.Fatalf("expected TrueNAS source, got %+v", windows.Sources)
+	}
+	if windows.ParentName != "truenas-main" {
+		t.Fatalf("expected windows-lab parentName truenas-main, got %q", windows.ParentName)
+	}
+	if windows.TrueNAS == nil || windows.TrueNAS.VM == nil {
+		t.Fatalf("expected native VM payload on TrueNAS VM resource, got %+v", windows)
+	}
+	if windows.TrueNAS.VM.ID != "42" || windows.TrueNAS.VM.VCPUs != 4 || windows.TrueNAS.VM.MemoryBytes != 8*1024*1024*1024 {
+		t.Fatalf("unexpected native TrueNAS VM payload: %+v", windows.TrueNAS.VM)
+	}
+	if windows.MetricsTarget == nil || windows.MetricsTarget.ResourceType != "vm" || windows.MetricsTarget.ResourceID != "42" {
+		t.Fatalf("expected canonical TrueNAS VM metrics target 42, got %+v", windows.MetricsTarget)
+	}
+}
+
 func TestResourceListIncludesTrueNASSystemAsCanonicalHost(t *testing.T) {
 	previous := truenas.IsFeatureEnabled()
 	truenas.SetFeatureEnabled(true)

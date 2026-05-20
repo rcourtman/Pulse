@@ -3,6 +3,7 @@ import type { Resource, ResourceType } from '@/types/resource';
 
 export type TrueNASPageTabId = 'overview' | 'storage';
 export type TrueNASAppStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
+export type TrueNASVMStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
 
 export type TrueNASTabSpec = {
   id: TrueNASPageTabId;
@@ -10,10 +11,11 @@ export type TrueNASTabSpec = {
   path: string;
 };
 
-// The Overview tab is intentionally narrow: appliance systems first, then apps
-// when present. Storage inventory, pool topology, and physical disks all live
-// on the Storage tab so operators have one canonical storage surface instead
-// of a duplicated overview snapshot plus a richer storage page.
+// The Overview tab is intentionally narrow: appliance systems first, then
+// native workload inventory when present. Storage inventory, pool topology, and
+// physical disks all live on the Storage tab so operators have one canonical
+// storage surface instead of a duplicated overview snapshot plus a richer
+// storage page.
 export const TRUENAS_TAB_SPECS: readonly TrueNASTabSpec[] = [
   { id: 'overview', label: 'Overview', path: '/truenas/overview' },
   { id: 'storage', label: 'Storage', path: '/truenas/storage' },
@@ -21,6 +23,7 @@ export const TRUENAS_TAB_SPECS: readonly TrueNASTabSpec[] = [
 
 const TRUENAS_RESOURCE_TYPES = new Set<ResourceType>([
   'agent',
+  'vm',
   'app-container',
   'storage',
   'pool',
@@ -34,6 +37,7 @@ const isTrueNASPlatform = (resource: Resource): boolean =>
 export type TrueNASPageModel = {
   resources: Resource[];
   systems: Resource[];
+  vms: Resource[];
   apps: Resource[];
 };
 
@@ -43,10 +47,12 @@ export function buildTrueNASPageModel(resources: Resource[]): TrueNASPageModel {
   );
 
   const systems = trueNasResources.filter((resource) => resource.type === 'agent');
+  const vms = trueNasResources.filter((resource) => resource.type === 'vm');
   const apps = trueNasResources.filter((resource) => resource.type === 'app-container');
   return {
     resources: trueNasResources,
     systems,
+    vms,
     apps,
   };
 }
@@ -63,6 +69,21 @@ export function mapTrueNASAppStatus(resource: Resource): Exclude<TrueNASAppStatu
   if (resource.status === 'online' || resource.status === 'running') return 'running';
   if (resource.status === 'offline' || resource.status === 'stopped') return 'stopped';
   if (resource.status === 'degraded' || resource.status === 'paused') return 'attention';
+  return 'attention';
+}
+
+export function mapTrueNASVMStatus(resource: Resource): Exclude<TrueNASVMStatusFilter, 'all'> {
+  const state = normalize(resource.truenas?.vm?.state || resource.truenas?.vm?.domainState);
+  if (state === 'running' || state === 'active') return 'running';
+  if (state === 'stopped' || state === 'shutoff' || state === 'shutdown' || state === 'poweroff') {
+    return 'stopped';
+  }
+  if (state === 'paused' || state === 'suspended' || state === 'error' || state === 'crashed') {
+    return 'attention';
+  }
+
+  if (resource.status === 'online' || resource.status === 'running') return 'running';
+  if (resource.status === 'offline' || resource.status === 'stopped') return 'stopped';
   return 'attention';
 }
 
@@ -137,5 +158,47 @@ export function filterTrueNASApps(
     if (status !== 'all' && mapTrueNASAppStatus(app) !== status) return false;
     if (!needle) return true;
     return appSearchHaystack(app).includes(needle);
+  });
+}
+
+const vmSearchHaystack = (resource: Resource): string => {
+  const vm = resource.truenas?.vm;
+  return [
+    resource.name,
+    resource.displayName,
+    resource.id,
+    resource.parentName,
+    resource.platformId,
+    resource.platformType,
+    resource.truenas?.hostname,
+    vm?.id,
+    vm?.name,
+    vm?.description,
+    vm?.state,
+    vm?.domainState,
+    vm?.cpuMode,
+    vm?.cpuModel,
+    vm?.bootloader,
+    vm?.time,
+    vm?.archType,
+    vm?.machineType,
+    vm?.uuid,
+    ...(resource.tags ?? []),
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' ')
+    .toLowerCase();
+};
+
+export function filterTrueNASVMs(
+  vms: Resource[],
+  search: string,
+  status: TrueNASVMStatusFilter,
+): Resource[] {
+  const needle = normalize(search);
+  return vms.filter((vm) => {
+    if (status !== 'all' && mapTrueNASVMStatus(vm) !== status) return false;
+    if (!needle) return true;
+    return vmSearchHaystack(vm).includes(needle);
   });
 }

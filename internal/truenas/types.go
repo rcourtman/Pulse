@@ -11,6 +11,7 @@ type FixtureSnapshot struct {
 	Disks            []Disk
 	Alerts           []Alert
 	Apps             []App
+	VMs              []VirtualMachine
 	ZFSSnapshots     []ZFSSnapshot
 	ReplicationTasks []ReplicationTask
 }
@@ -214,6 +215,41 @@ type AppNetwork struct {
 	ID     string
 	Name   string
 	Labels map[string]string
+}
+
+// VirtualMachine mirrors the subset of TrueNAS VM fields needed for unified
+// workload mapping from vm.query.
+type VirtualMachine struct {
+	ID                    string
+	Name                  string
+	Description           string
+	State                 string
+	DomainState           string
+	PID                   int
+	VCPUs                 int
+	Cores                 int
+	Threads               int
+	MemoryBytes           int64
+	MinMemoryBytes        int64
+	CPUMode               string
+	CPUModel              string
+	Bootloader            string
+	Autostart             bool
+	SuspendOnSnapshot     bool
+	TrustedPlatformModule bool
+	SecureBoot            bool
+	Time                  string
+	ArchType              string
+	MachineType           string
+	UUID                  string
+	DisplayAvailable      bool
+	DeviceCount           int
+	DiskCount             int
+	NICCount              int
+	DisplayCount          int
+	CDROMCount            int
+	USBCount              int
+	PCICount              int
 }
 
 // ZFSSnapshot mirrors the subset of snapshot fields needed for recovery-point mapping.

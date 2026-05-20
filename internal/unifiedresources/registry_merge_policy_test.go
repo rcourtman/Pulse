@@ -165,6 +165,13 @@ func TestMergeTrueNASDataPreservesNativeAppFacetAsClone(t *testing.T) {
 				},
 			},
 		},
+		VM: &TrueNASVM{
+			ID:          "42",
+			Name:        "windows-lab",
+			State:       "RUNNING",
+			VCPUs:       4,
+			MemoryBytes: 8 * 1024 * 1024 * 1024,
+		},
 	}
 
 	merged := mergeTrueNASData(existing, incoming)
@@ -179,6 +186,12 @@ func TestMergeTrueNASDataPreservesNativeAppFacetAsClone(t *testing.T) {
 	}
 	if got := merged.App.ID; got != "nextcloud" {
 		t.Fatalf("app id = %q, want nextcloud", got)
+	}
+	if merged.VM == nil || merged.VM.ID != "42" || merged.VM.Name != "windows-lab" {
+		t.Fatalf("unexpected merged TrueNAS VM facet: %+v", merged.VM)
+	}
+	if merged.VM == incoming.VM {
+		t.Fatal("expected merged TrueNAS VM facet to be cloned")
 	}
 
 	incoming.App.Images[0] = "mutated:latest"

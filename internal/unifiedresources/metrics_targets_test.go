@@ -389,6 +389,27 @@ func TestBuildMetricsTarget_UsesCanonicalAgentMetricIDForTrueNAS(t *testing.T) {
 	}
 }
 
+func TestBuildMetricsTarget_UsesCanonicalVMMetricIDForTrueNAS(t *testing.T) {
+	target := BuildMetricsTarget(
+		Resource{
+			Type: ResourceTypeVM,
+		},
+		[]SourceTarget{{
+			Source:   SourceTrueNAS,
+			SourceID: " vm:42 ",
+		}},
+	)
+	if target == nil {
+		t.Fatal("BuildMetricsTarget() returned nil")
+	}
+	if target.ResourceType != "vm" {
+		t.Fatalf("ResourceType = %q, want vm", target.ResourceType)
+	}
+	if target.ResourceID != "42" {
+		t.Fatalf("ResourceID = %q, want 42", target.ResourceID)
+	}
+}
+
 func TestMetricsFromKubernetesDeployment_NilOutsideMockMode(t *testing.T) {
 	mockruntime.SetEnabled(false)
 	got := metricsFromKubernetesDeployment(

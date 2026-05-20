@@ -222,6 +222,11 @@ work extends shared components instead of creating new local variants.
 9. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
    It must expose the manifest `surface_kind` field so runtime lenses such as
    `docker` are not collapsed back into owning platform semantics.
+   It must also preserve canonical projection lists from the governed manifest
+   without page-local narrowing; for example, TrueNAS exposes both native
+   `vm` workloads and `app-container` workloads through the same generated
+   platform projection used by route helpers, badges, source filters, and
+   type unions.
 10. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
     That shared boundary must preserve `availability` as the agentless
     infrastructure source for `network-endpoint` resources and settings

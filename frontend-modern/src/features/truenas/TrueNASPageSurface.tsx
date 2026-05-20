@@ -11,6 +11,7 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import { TrueNASAppsTable } from './TrueNASAppsTable';
 import { TrueNASSystemsTable } from './TrueNASSystemsTable';
+import { TrueNASVirtualMachinesTable } from './TrueNASVirtualMachinesTable';
 import {
   TRUENAS_TAB_SPECS,
   buildTrueNASPageModel,
@@ -23,7 +24,7 @@ import {
 // first-class type tokens and including them triggers a 400 from
 // `/api/resources`. The page model still buckets by topology
 // client-side.
-const TRUENAS_RESOURCE_QUERY = 'type=agent,app-container,storage,physical_disk';
+const TRUENAS_RESOURCE_QUERY = 'type=agent,vm,app-container,storage,physical_disk';
 const TRUENAS_PLATFORM_FILTER = 'truenas';
 const VALID_TABS = new Set<TrueNASPageTabId>(TRUENAS_TAB_SPECS.map((tab) => tab.id));
 
@@ -116,6 +117,15 @@ function TrueNASOverview(props: TrueNASOverviewProps) {
         emptyDescription="TrueNAS systems appear here once a TrueNAS connection reports its top-level appliance."
         showToolbar={false}
       />
+      <Show when={props.model().vms.length > 0}>
+        <TrueNASVirtualMachinesTable
+          vms={props.model().vms}
+          scope={props.model().resources}
+          emptyIcon={truenasIcon()}
+          emptyTitle="No TrueNAS VMs"
+          emptyDescription="VMs appear here once the TrueNAS API reports vm.query inventory."
+        />
+      </Show>
       <Show when={props.model().apps.length > 0}>
         <TrueNASAppsTable
           apps={props.model().apps}

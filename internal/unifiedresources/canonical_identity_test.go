@@ -569,3 +569,45 @@ func TestRefreshCanonicalIdentityPreservesTrueNASAppContainerIdentity(t *testing
 		}
 	}
 }
+
+func TestRefreshCanonicalIdentityPreservesTrueNASVMIdentity(t *testing.T) {
+	resource := Resource{
+		ID:   "truenas-vm-windows-lab",
+		Type: ResourceTypeVM,
+		Name: "windows-lab",
+		TrueNAS: &TrueNASData{
+			Hostname: "truenas-a.local",
+			VM: &TrueNASVM{
+				ID:   "42",
+				Name: "windows-lab",
+				UUID: "vm-uuid-1",
+			},
+		},
+		MetricsTarget: &MetricsTarget{
+			ResourceType: string(ResourceTypeVM),
+			ResourceID:   "42",
+		},
+	}
+
+	if got := ContractResourceType(resource); got != ResourceTypeVM {
+		t.Fatalf("ContractResourceType = %q, want %q", got, ResourceTypeVM)
+	}
+
+	RefreshCanonicalIdentity(&resource)
+
+	if resource.Canonical == nil {
+		t.Fatalf("expected canonical identity")
+	}
+	if got := resource.Canonical.DisplayName; got != "windows-lab" {
+		t.Fatalf("displayName = %q, want windows-lab", got)
+	}
+	if got := resource.Canonical.Hostname; got != "truenas-a.local" {
+		t.Fatalf("hostname = %q, want truenas-a.local", got)
+	}
+	if got := resource.Canonical.PlatformID; got != "truenas-a.local" {
+		t.Fatalf("platformId = %q, want truenas-a.local", got)
+	}
+	if got := resource.Canonical.PrimaryID; got != "vm:42" {
+		t.Fatalf("primaryId = %q, want vm:42", got)
+	}
+}

@@ -44,6 +44,11 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 		if st, ok := bySource[SourceVMware]; ok {
 			return &MetricsTarget{ResourceType: "vm", ResourceID: st.SourceID}
 		}
+		if st, ok := bySource[SourceTrueNAS]; ok {
+			if resourceID := canonicalTrueNASVMMetricID(st.SourceID); resourceID != "" {
+				return &MetricsTarget{ResourceType: "vm", ResourceID: resourceID}
+			}
+		}
 	case ResourceTypeSystemContainer:
 		if st, ok := bySource[SourceProxmox]; ok {
 			return &MetricsTarget{ResourceType: "system-container", ResourceID: st.SourceID}
@@ -146,6 +151,12 @@ func CanonicalKubernetesPodMetricID(sourceID string) string {
 func canonicalAppContainerMetricID(sourceID string) string {
 	trimmed := strings.TrimSpace(sourceID)
 	trimmed = strings.TrimPrefix(trimmed, "app:")
+	return strings.TrimSpace(trimmed)
+}
+
+func canonicalTrueNASVMMetricID(sourceID string) string {
+	trimmed := strings.TrimSpace(sourceID)
+	trimmed = strings.TrimPrefix(trimmed, "vm:")
 	return strings.TrimSpace(trimmed)
 }
 

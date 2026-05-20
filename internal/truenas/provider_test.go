@@ -740,6 +740,64 @@ func TestRecordsIncludeTrueNASAppsAsCanonicalWorkloads(t *testing.T) {
 	}
 }
 
+func TestRecordsIncludeTrueNASVMsAsCanonicalWorkloads(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		SetFeatureEnabled(previous)
+	})
+
+	provider := NewProvider(DefaultFixtures())
+	records := provider.Records()
+	if len(records) == 0 {
+		t.Fatal("expected fixture records from provider")
+	}
+
+	var windows *unifiedresources.IngestRecord
+	var ubuntu *unifiedresources.IngestRecord
+	for i := range records {
+		record := &records[i]
+		if record.Resource.Type != unifiedresources.ResourceTypeVM {
+			continue
+		}
+		switch record.Resource.Name {
+		case "windows-lab":
+			windows = record
+		case "ubuntu-build":
+			ubuntu = record
+		}
+	}
+
+	if windows == nil || ubuntu == nil {
+		t.Fatalf("expected TrueNAS VM records for windows-lab and ubuntu-build")
+	}
+	if windows.ParentSourceID != "system:truenas-main" {
+		t.Fatalf("expected windows-lab parent system:truenas-main, got %q", windows.ParentSourceID)
+	}
+	if windows.Resource.TrueNAS == nil || windows.Resource.TrueNAS.VM == nil {
+		t.Fatal("expected windows-lab native TrueNAS VM metadata")
+	}
+	if windows.Resource.TrueNAS.VM.ID != "42" || windows.Resource.TrueNAS.VM.Name != "windows-lab" {
+		t.Fatalf("unexpected windows-lab native VM identity: %+v", windows.Resource.TrueNAS.VM)
+	}
+	if windows.Resource.TrueNAS.VM.VCPUs != 4 || windows.Resource.TrueNAS.VM.MemoryBytes != 8*1024*1024*1024 {
+		t.Fatalf("unexpected windows-lab native VM compute metadata: %+v", windows.Resource.TrueNAS.VM)
+	}
+	if !windows.Resource.TrueNAS.VM.Autostart || !windows.Resource.TrueNAS.VM.SecureBoot || !windows.Resource.TrueNAS.VM.TrustedPlatformModule {
+		t.Fatalf("expected windows-lab native VM flags, got %+v", windows.Resource.TrueNAS.VM)
+	}
+	if windows.Resource.Status != unifiedresources.StatusOnline {
+		t.Fatalf("expected windows-lab status online, got %q", windows.Resource.Status)
+	}
+
+	if ubuntu.Resource.Status != unifiedresources.StatusOffline {
+		t.Fatalf("expected ubuntu-build status offline, got %q", ubuntu.Resource.Status)
+	}
+	if ubuntu.Resource.TrueNAS == nil || ubuntu.Resource.TrueNAS.VM == nil || ubuntu.Resource.TrueNAS.VM.DomainState != "SHUTOFF" {
+		t.Fatalf("expected ubuntu-build native VM domain state, got %+v", ubuntu.Resource.TrueNAS)
+	}
+}
+
 func TestRecordsElevateOnlineDiskWhenTemperatureCritical(t *testing.T) {
 	previous := IsFeatureEnabled()
 	SetFeatureEnabled(true)

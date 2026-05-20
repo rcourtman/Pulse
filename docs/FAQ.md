@@ -45,7 +45,7 @@ See [VM Disk Monitoring](VM_DISK_MONITORING.md) for details.
 Yes! If Pulse detects Ceph storage, it automatically queries cluster health, OSD status, and pool usage. No extra config needed.
 
 ### Does Pulse monitor TrueNAS?
-Yes! Pulse v6 includes first-class TrueNAS SCALE/CORE integration. Add your TrueNAS server in **Settings → TrueNAS** with the URL and API key. Pulse monitors pools, datasets, disks, ZFS snapshots, replication tasks, and alerts. TrueNAS resources appear in the unified Infrastructure, Storage, and Recovery views.
+Yes. Pulse v6 includes first-class TrueNAS SCALE/CORE integration. Add your TrueNAS server in **Settings → TrueNAS** with the URL and API key. Pulse monitors the appliance, native VMs, apps, pools, datasets, disks, ZFS snapshots, replication tasks, and alerts. TrueNAS resources appear in the TrueNAS, Infrastructure, Storage, and Recovery views.
 
 ### Where did my pages go? (Unified Navigation)
 Pulse v6 organises the UI by **task** instead of **platform**:

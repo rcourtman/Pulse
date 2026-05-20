@@ -4,7 +4,9 @@ import {
   TRUENAS_TAB_SPECS,
   buildTrueNASPageModel,
   filterTrueNASApps,
+  filterTrueNASVMs,
   mapTrueNASAppStatus,
+  mapTrueNASVMStatus,
 } from '../truenasPageModel';
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource => ({
@@ -26,6 +28,7 @@ describe('truenasPageModel', () => {
   it('buckets systems and apps while keeping storage inventory in scope for shared surfaces', () => {
     const model = buildTrueNASPageModel([
       makeResource({ id: 'truenas-system', type: 'agent' }),
+      makeResource({ id: 'truenas-vm', type: 'vm' }),
       makeResource({ id: 'truenas-app', type: 'app-container' }),
       makeResource({ id: 'truenas-pool', type: 'pool' }),
       makeResource({ id: 'truenas-disk', type: 'physical_disk' }),
@@ -34,9 +37,10 @@ describe('truenasPageModel', () => {
     ]);
 
     expect(model.systems.map((r) => r.id)).toEqual(['truenas-system']);
+    expect(model.vms.map((r) => r.id)).toEqual(['truenas-vm']);
     expect(model.apps.map((r) => r.id)).toEqual(['truenas-app']);
     expect(model.resources.map((r) => r.id).sort()).toEqual(
-      ['truenas-app', 'truenas-disk', 'truenas-pool', 'truenas-system'].sort(),
+      ['truenas-app', 'truenas-disk', 'truenas-pool', 'truenas-system', 'truenas-vm'].sort(),
     );
   });
 
@@ -86,5 +90,46 @@ describe('truenasPageModel', () => {
     expect(
       filterTrueNASApps([nextcloud, adguard], 'adguardhome', 'stopped').map((r) => r.id),
     ).toEqual(['app-adguard']);
+  });
+
+  it('filters VMs using native TrueNAS vm.query metadata', () => {
+    const windows = makeResource({
+      id: 'vm-windows',
+      type: 'vm',
+      truenas: {
+        hostname: 'truenas-main',
+        vm: {
+          id: '42',
+          name: 'windows-lab',
+          description: 'Build validation workstation',
+          state: 'RUNNING',
+          bootloader: 'UEFI',
+          cpuMode: 'HOST-PASSTHROUGH',
+          uuid: 'vm-uuid-1',
+        },
+      },
+    });
+    const ubuntu = makeResource({
+      id: 'vm-ubuntu',
+      type: 'vm',
+      status: 'offline',
+      truenas: {
+        vm: {
+          id: '43',
+          name: 'ubuntu-build',
+          state: 'STOPPED',
+          machineType: 'q35',
+        },
+      },
+    });
+
+    expect(mapTrueNASVMStatus(windows)).toBe('running');
+    expect(mapTrueNASVMStatus(ubuntu)).toBe('stopped');
+    expect(filterTrueNASVMs([windows, ubuntu], 'passthrough', 'running').map((r) => r.id)).toEqual([
+      'vm-windows',
+    ]);
+    expect(filterTrueNASVMs([windows, ubuntu], 'q35', 'stopped').map((r) => r.id)).toEqual([
+      'vm-ubuntu',
+    ]);
   });
 });

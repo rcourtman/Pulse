@@ -651,6 +651,39 @@ export interface ResourceTrueNASAppMeta {
   stats?: ResourceTrueNASAppStats;
 }
 
+export interface ResourceTrueNASVMMeta {
+  id?: string;
+  name?: string;
+  description?: string;
+  state?: string;
+  domainState?: string;
+  pid?: number;
+  vcpus?: number;
+  cores?: number;
+  threads?: number;
+  memoryBytes?: number;
+  minMemoryBytes?: number;
+  cpuMode?: string;
+  cpuModel?: string;
+  bootloader?: string;
+  autostart?: boolean;
+  suspendOnSnapshot?: boolean;
+  trustedPlatformModule?: boolean;
+  secureBoot?: boolean;
+  time?: string;
+  archType?: string;
+  machineType?: string;
+  uuid?: string;
+  displayAvailable?: boolean;
+  deviceCount?: number;
+  diskCount?: number;
+  nicCount?: number;
+  displayCount?: number;
+  cdromCount?: number;
+  usbCount?: number;
+  pciCount?: number;
+}
+
 export interface ResourceTrueNASMeta {
   hostname?: string;
   version?: string;
@@ -663,6 +696,7 @@ export interface ResourceTrueNASMeta {
   rebuildInProgress?: boolean;
   rebuildSummary?: string;
   app?: ResourceTrueNASAppMeta;
+  vm?: ResourceTrueNASVMMeta;
 }
 
 export interface ResourceKubernetesMetricCapabilities {

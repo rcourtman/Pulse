@@ -1040,6 +1040,7 @@ type TrueNASData struct {
 	RebuildInProgress     bool         `json:"rebuildInProgress,omitempty"`
 	RebuildSummary        string       `json:"rebuildSummary,omitempty"`
 	App                   *TrueNASApp  `json:"app,omitempty"`
+	VM                    *TrueNASVM   `json:"vm,omitempty"`
 }
 
 // TrueNASApp contains app.query / active_workloads data for one TrueNAS app.
@@ -1106,6 +1107,40 @@ type TrueNASAppNetwork struct {
 	ID     string            `json:"id,omitempty"`
 	Name   string            `json:"name,omitempty"`
 	Labels map[string]string `json:"labels,omitempty"`
+}
+
+// TrueNASVM contains vm.query data for one TrueNAS virtual machine.
+type TrueNASVM struct {
+	ID                    string `json:"id,omitempty"`
+	Name                  string `json:"name,omitempty"`
+	Description           string `json:"description,omitempty"`
+	State                 string `json:"state,omitempty"`
+	DomainState           string `json:"domainState,omitempty"`
+	PID                   int    `json:"pid,omitempty"`
+	VCPUs                 int    `json:"vcpus,omitempty"`
+	Cores                 int    `json:"cores,omitempty"`
+	Threads               int    `json:"threads,omitempty"`
+	MemoryBytes           int64  `json:"memoryBytes,omitempty"`
+	MinMemoryBytes        int64  `json:"minMemoryBytes,omitempty"`
+	CPUMode               string `json:"cpuMode,omitempty"`
+	CPUModel              string `json:"cpuModel,omitempty"`
+	Bootloader            string `json:"bootloader,omitempty"`
+	Autostart             bool   `json:"autostart,omitempty"`
+	SuspendOnSnapshot     bool   `json:"suspendOnSnapshot,omitempty"`
+	TrustedPlatformModule bool   `json:"trustedPlatformModule,omitempty"`
+	SecureBoot            bool   `json:"secureBoot,omitempty"`
+	Time                  string `json:"time,omitempty"`
+	ArchType              string `json:"archType,omitempty"`
+	MachineType           string `json:"machineType,omitempty"`
+	UUID                  string `json:"uuid,omitempty"`
+	DisplayAvailable      bool   `json:"displayAvailable,omitempty"`
+	DeviceCount           int    `json:"deviceCount,omitempty"`
+	DiskCount             int    `json:"diskCount,omitempty"`
+	NICCount              int    `json:"nicCount,omitempty"`
+	DisplayCount          int    `json:"displayCount,omitempty"`
+	CDROMCount            int    `json:"cdromCount,omitempty"`
+	USBCount              int    `json:"usbCount,omitempty"`
+	PCICount              int    `json:"pciCount,omitempty"`
 }
 
 // AvailabilityData contains agentless endpoint probe metadata for a resource.
