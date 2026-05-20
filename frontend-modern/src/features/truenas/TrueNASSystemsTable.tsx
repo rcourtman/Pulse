@@ -166,29 +166,44 @@ export const TrueNASSystemsTable: Component<{
             <Table class="min-w-full table-fixed text-xs md:min-w-[1040px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={getPlatformTableHeadClass()}>System</TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                  {/*
+                    Desktop widths balance the bar-metric columns (CPU /
+                    Memory / Storage) against the short integer-count columns
+                    (Pools / Datasets / Disks / Apps) and give Version the
+                    room it needs for full "TrueNAS-SCALE-24.10.2"-style
+                    labels. Mobile widths are unchanged.
+                  */}
+                  <TableHead class={`${getPlatformTableHeadClass()} md:w-[14%]`}>
+                    System
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[14%]`}>
                     Version
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[6%]`}>
                     Uptime
                   </TableHead>
-                  <TableHead class={getPlatformTableHeadClass('right')}>CPU</TableHead>
-                  <TableHead class={getPlatformTableHeadClass('right')}>Memory</TableHead>
-                  <TableHead class={getPlatformTableHeadClass('right')}>Storage</TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[11%]`}>
+                    CPU
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[12%]`}>
+                    Memory
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[13%]`}>
+                    Storage
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[6%]`}>
                     Temp
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[6%]`}>
                     Pools
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[7%]`}>
                     Datasets
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[5%]`}>
                     Disks
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[5%]`}>
                     Apps
                   </TableHead>
                 </TableRow>
