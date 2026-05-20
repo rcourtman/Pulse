@@ -165,6 +165,32 @@ describe('dockerPageModel', () => {
     expect(badges['app-container:plain-docker']).toBeUndefined();
   });
 
+  it('surfaces the host OS family as the system badge for plain Docker hosts', () => {
+    const debianHost = makeResource({
+      id: 'docker-host-debian',
+      type: 'agent',
+      name: 'edge-apps-01',
+      docker: { os: 'Debian GNU/Linux 12 (bookworm)', kernelVersion: '6.8.12-1-amd64' },
+    });
+    const alpineHost = makeResource({
+      id: 'docker-host-alpine',
+      type: 'agent',
+      name: 'edge-apps-02',
+      docker: { os: 'Alpine Linux 3.19' },
+    });
+    const ubuntuHost = makeResource({
+      id: 'docker-host-ubuntu',
+      type: 'agent',
+      name: 'ops-services-01',
+      docker: { os: 'Ubuntu 24.04.1 LTS' },
+    });
+
+    expect(getDockerHostSystemBadge(debianHost)?.label).toBe('Debian');
+    expect(getDockerHostSystemBadge(debianHost)?.title).toBe('Debian GNU/Linux 12 (bookworm)');
+    expect(getDockerHostSystemBadge(alpineHost)?.label).toBe('Alpine');
+    expect(getDockerHostSystemBadge(ubuntuHost)?.label).toBe('Ubuntu');
+  });
+
   it('does not treat standalone inactive Docker Swarm metadata as Swarm evidence', () => {
     expect(
       hasDockerSwarmEvidence(

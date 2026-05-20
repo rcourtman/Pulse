@@ -371,6 +371,36 @@ const getHostOsLabel = (...values: string[]): string | null => {
   return null;
 };
 
+const getDockerHostOsIdentityBadge = (resource: Resource): ResourceBadge | null => {
+  const docker = resource.docker;
+  if (!docker) return null;
+  const osName = trimString(docker.os);
+  if (!osName) return null;
+
+  const knownSource = getKnownHostIdentitySource('', osName);
+  if (knownSource) {
+    const badge = getSourcePlatformBadge(knownSource);
+    if (badge) {
+      return {
+        label: badge.label,
+        classes: badge.classes,
+        title: titleFromParts(osName, badge.title) ?? badge.title,
+      };
+    }
+  }
+
+  const osLabel = getHostOsLabel(osName);
+  if (osLabel) {
+    return {
+      label: osLabel,
+      classes: `${baseBadge} ${typeClasses}`,
+      title: osName,
+    };
+  }
+
+  return null;
+};
+
 const getAgentSystemIdentityBadge = (resource: Resource): ResourceBadge | null => {
   const agent = getAgentRecord(resource);
   if (!agent) return null;
@@ -644,6 +674,11 @@ export function getInfrastructureSystemIdentityBadges(resource: Resource): Resou
 
   if (agentIdentityBadge) {
     return [agentIdentityBadge];
+  }
+
+  const dockerOsBadge = getDockerHostOsIdentityBadge(resource);
+  if (dockerOsBadge) {
+    return [dockerOsBadge];
   }
 
   if (
