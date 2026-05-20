@@ -2,6 +2,7 @@ import { createMemo, type Accessor } from 'solid-js';
 
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
+import { workloadMatchesPlatformScope } from '@/utils/workloads';
 import type { WorkloadsToolbarFilterConfig } from './workloadsFilterModel';
 import {
   buildWorkloadsContainerRuntimeOptions,
@@ -43,9 +44,7 @@ export function useWorkloadFilterOptions(options: WorkloadsWorkloadFilterOptions
     }
     return options
       .allGuests()
-      .filter(
-        (guest) => normalizeSourcePlatformQueryValue(guest.platformType || '') === normalizedScope,
-      );
+      .filter((guest) => workloadMatchesPlatformScope(guest, normalizedScope));
   });
 
   const workloadNodeOptions = createMemo(() => buildWorkloadNodeOptions(platformScopedGuests()));

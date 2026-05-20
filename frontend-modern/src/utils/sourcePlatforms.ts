@@ -79,6 +79,26 @@ export const normalizeSourcePlatformQueryValue = (value: string | null | undefin
   return normalizeSourcePlatformKey(normalized) || normalized;
 };
 
+export const normalizeSourcePlatformScopes = (
+  values?: readonly (string | null | undefined)[] | null,
+  fallbackPlatform?: string | null | undefined,
+): string[] => {
+  const scopes: string[] = [];
+  const seen = new Set<string>();
+  const add = (value: string | null | undefined): void => {
+    const normalized = normalizeSourcePlatformQueryValue(value);
+    if (!normalized || normalized === 'all' || seen.has(normalized)) return;
+    seen.add(normalized);
+    scopes.push(normalized);
+  };
+
+  values?.forEach(add);
+  if (scopes.length === 0) {
+    add(fallbackPlatform);
+  }
+  return scopes;
+};
+
 export const readSourcePlatformFlags = (sources?: string[]): SourcePlatformFlags => {
   const flags: SourcePlatformFlags = {
     hasAgent: false,

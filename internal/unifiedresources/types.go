@@ -23,6 +23,7 @@ type Resource struct {
 	Canonical       *CanonicalIdentity `json:"canonicalIdentity,omitempty"`
 	Policy          *ResourcePolicy    `json:"policy,omitempty"`
 	AISafeSummary   string             `json:"aiSafeSummary,omitempty"`
+	PlatformScopes  []string           `json:"platformScopes,omitempty"`
 
 	Sources      []DataSource                `json:"sources"`
 	SourceStatus map[DataSource]SourceStatus `json:"sourceStatus,omitempty"`

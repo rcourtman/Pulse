@@ -114,6 +114,12 @@ Storage/recovery remediation or restore-adjacent workflows may consume
 contract. This subsystem must not create a storage-local approval policy,
 stale-plan hash, blast-radius model, or execution protocol outside
 `internal/api/actions.go` and `internal/actionplanner/planner.go`.
+Storage/recovery surfaces may consume unified-resource `platformScopes` as
+read-only platform membership context, but they must not reinterpret runtime
+scope overlap as storage or recovery ownership. A Docker workload that also
+belongs to an owning platform remains governed by the resource, policy, and
+backup capability contracts exposed by unified resources and the shared API
+boundary.
 Successful action plans also remain API-owned audit facts before
 storage/recovery surfaces consume them: approval-required plans must persist
 as `pending_approval` with initial lifecycle evidence, and retry/idempotency

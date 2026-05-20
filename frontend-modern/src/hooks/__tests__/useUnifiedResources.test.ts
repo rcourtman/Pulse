@@ -452,6 +452,68 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('preserves backend platform scopes and falls back to source-derived membership', async () => {
+    apiFetchMock.mockResolvedValueOnce(
+      resourceResponse([
+        {
+          ...v2Resource,
+          id: 'docker-container-frigate-141',
+          type: 'app-container',
+          name: 'frigate',
+          sources: ['docker'],
+          platformScopes: ['proxmox-pve', 'docker'],
+          docker: {
+            hostSourceId: 'proxmox-lxc-docker:pve-a:node-a:141',
+            containerId: 'frigate',
+            runtime: 'docker',
+          },
+        },
+        {
+          ...v2Resource,
+          id: 'truenas-app-nextcloud',
+          type: 'app-container',
+          name: 'nextcloud',
+          sources: ['truenas'],
+          truenas: {
+            hostname: 'truenas-main',
+          },
+          docker: {
+            containerId: 'nextcloud',
+            runtime: 'docker',
+          },
+        },
+      ]),
+    );
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await waitForValue(
+      () => Boolean(result!.resources().find((resource) => resource.id === 'docker-container-frigate-141')),
+      true,
+    );
+
+    const dockerResource = result!.resources().find(
+      (resource) => resource.id === 'docker-container-frigate-141',
+    );
+    const truenasResource = result!.resources().find(
+      (resource) => resource.id === 'truenas-app-nextcloud',
+    );
+
+    expect(dockerResource?.platformScopes).toEqual(['proxmox-pve', 'docker']);
+    expect((dockerResource?.platformData as Record<string, unknown>)?.platformScopes).toEqual([
+      'proxmox-pve',
+      'docker',
+    ]);
+    expect(truenasResource?.platformScopes).toEqual(['truenas']);
+
+    dispose();
+  });
+
   it('skips unified resource hydration while disabled and resumes when enabled', async () => {
     let dispose = () => {};
     let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;

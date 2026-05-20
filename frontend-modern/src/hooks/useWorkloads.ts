@@ -1,13 +1,11 @@
-import {
-  onCleanup,
-  createEffect,
-  createSignal,
-  type Accessor,
-} from 'solid-js';
+import { onCleanup, createEffect, createSignal, type Accessor } from 'solid-js';
 import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
 import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
-import { resolvePlatformTypeFromSources } from '@/utils/sourcePlatforms';
+import {
+  normalizeSourcePlatformScopes,
+  resolvePlatformTypeFromSources,
+} from '@/utils/sourcePlatforms';
 import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { normalizeDiskArray } from '@/utils/format';
 import {
@@ -59,6 +57,7 @@ type APIResource = {
   status?: string;
   lastSeen?: string;
   sources?: string[];
+  platformScopes?: string[];
   identity?: {
     machineId?: string;
     hostnames?: string[];
@@ -336,6 +335,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
   const workloadType = resolveWorkloadType(resource.type);
   if (!workloadType) return null;
   const platformType = resolvePlatformTypeFromSources(resource.sources);
+  const platformScopes = normalizeSourcePlatformScopes(resource.platformScopes, platformType);
   const dockerManagedAppContainer = isDockerManagedAppContainer({
     workloadType,
     type: resource.type ?? '',
@@ -476,8 +476,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     lock: '',
     lastSeen: toIsoString(resource.lastSeen),
     isOci: workloadType === 'system-container' ? (resource.proxmox?.isOci ?? false) : false,
-    osTemplate:
-      workloadType === 'system-container' ? resource.proxmox?.osTemplate : undefined,
+    osTemplate: workloadType === 'system-container' ? resource.proxmox?.osTemplate : undefined,
     workloadType,
     displayId,
     containerId: appContainerRuntimeId || undefined,
@@ -512,6 +511,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     dockerHostId: dockerManagedAppContainer ? resource.docker?.hostSourceId : undefined,
     kubernetesAgentId: workloadType === 'pod' ? resource.kubernetes?.agentId : undefined,
     platformType,
+    platformScopes,
     discoveryTarget,
   };
 };
@@ -739,8 +739,7 @@ export function useWorkloads(enabled: Accessor<boolean> = () => true) {
       void loadWorkloads(nextOrgScope, {
         force: true,
         showLoading: nextCacheEntry.workloads.length === 0,
-      })
-        .catch(() => undefined);
+      }).catch(() => undefined);
     }
   });
   onCleanup(unsubscribeOrgSwitch);

@@ -32,6 +32,7 @@ import { getPreferredNormalizedPlatformId } from '@/utils/resourceIdentity';
 import { getExplicitResourceClusterName } from '@/utils/agentResources';
 import { mergeCanonicalResourceSnapshot } from '@/utils/resourceStateAdapters';
 import {
+  normalizeSourcePlatformScopes,
   resolvePlatformTypeFromSources,
   resolveSourceTypeFromSources,
 } from '@/utils/sourcePlatforms';
@@ -47,8 +48,7 @@ const UNIFIED_RESOURCES_CACHE_MAX_AGE_MS = 15_000;
 const UNIFIED_RESOURCES_WS_DEBOUNCE_MS = 800;
 const UNIFIED_RESOURCES_WS_MIN_REFETCH_INTERVAL_MS = 2_500;
 const UNIFIED_RESOURCES_WS_INITIAL_HYDRATION_WAIT_MS = 1_200;
-const UNIFIED_RESOURCES_WS_CANONICAL_REVALIDATE_DELAY_MS =
-  UNIFIED_RESOURCES_CACHE_MAX_AGE_MS + 250;
+const UNIFIED_RESOURCES_WS_CANONICAL_REVALIDATE_DELAY_MS = UNIFIED_RESOURCES_CACHE_MAX_AGE_MS + 250;
 
 type APIMetricValue = {
   value?: number;
@@ -140,6 +140,7 @@ type APIResource = {
   lastSeen?: string;
   parentName?: string;
   sources?: string[];
+  platformScopes?: string[];
   sourceStatus?: Record<string, { status: string; lastSeen: string; error?: string }>;
   identity?: {
     machineId?: string;
@@ -636,6 +637,7 @@ const toResource = (v2: APIResource): Resource => {
   const platformType =
     resolvePlatformTypeFromSources(sources) ||
     (resourceType === 'network-endpoint' ? 'availability' : 'agent');
+  const platformScopes = normalizeSourcePlatformScopes(v2.platformScopes, platformType);
 
   const discoveryResourceType = resolveDiscoveryResourceType(v2.discoveryTarget?.resourceType);
   const discoveryAgentId = v2.discoveryTarget?.agentId;
@@ -657,6 +659,7 @@ const toResource = (v2: APIResource): Resource => {
     displayName: name,
     platformId,
     platformType,
+    platformScopes,
     sourceType: resolveSourceTypeFromSources(sources),
     parentId: v2.parentId,
     parentName: v2.parentName,
@@ -738,6 +741,7 @@ const toResource = (v2: APIResource): Resource => {
     facetCounts: v2.facetCounts,
     platformData: {
       sources,
+      platformScopes,
       sourceStatus: v2.sourceStatus,
       proxmox: v2.proxmox,
       agent: v2.agent,
@@ -1195,8 +1199,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     }
   };
 
-  const shouldPreferWsInitialHydration = () =>
-    prefersWsInitialHydration && !cacheEntry.hasSnapshot;
+  const shouldPreferWsInitialHydration = () => prefersWsInitialHydration && !cacheEntry.hasSnapshot;
 
   const hasWsInitialHydrationSnapshot = () =>
     wsStore.connected() && wsStore.initialDataReceived() && Array.isArray(wsStore.state.resources);
@@ -1400,9 +1403,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
 
     scopeVersion += 1;
     const nextCacheEntry = seedUnifiedResourcesCacheFromAllResources(
-      getUnifiedResourcesCacheEntry(
-        buildScopedUnifiedResourcesCacheKey(cacheKey, nextOrgScope),
-      ),
+      getUnifiedResourcesCacheEntry(buildScopedUnifiedResourcesCacheKey(cacheKey, nextOrgScope)),
       cacheKey,
       query,
       nextOrgScope,

@@ -11,6 +11,7 @@ import {
   isContainerWorkloadViewMode,
   getCanonicalWorkloadId,
   resolveWorkloadType,
+  workloadMatchesPlatformScope,
   workloadMatchesViewMode,
 } from '@/utils/workloads';
 import { getWorkloadTypePresentation } from '@/utils/workloadTypePresentation';
@@ -62,6 +63,7 @@ const workloadSearchCandidates = (guest: WorkloadGuest): Array<string | number |
   guest.clusterName,
   guest.instance,
   guest.platformType,
+  guest.platformScopes?.join(' '),
   guest.workloadType,
   guest.containerRuntime,
   guest.containerId,
@@ -128,10 +130,8 @@ export const filterWorkloads = ({
   }
 
   const normalizedPlatform = normalizeSourcePlatformQueryValue(selectedPlatform);
-  if (normalizedPlatform) {
-    guests = guests.filter(
-      (g) => normalizeSourcePlatformQueryValue(g.platformType || '') === normalizedPlatform,
-    );
+  if (normalizedPlatform && normalizedPlatform !== 'all') {
+    guests = guests.filter((g) => workloadMatchesPlatformScope(g, normalizedPlatform));
   }
 
   const normalizedRuntime = (containerRuntime || '').trim().toLowerCase();

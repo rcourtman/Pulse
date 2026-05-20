@@ -6934,7 +6934,7 @@
     },
     {
       "id": "platform-support-model-v1",
-      "summary": "Pulse v6 platform support is governed by one canonical model: `docker` and `kubernetes` are first-class top-level platforms, first-class platforms declare primary ingestion, canonical resource projections, and support-floor surfaces, and runtime variants such as `podman` plus transport helpers are not top-level platforms.",
+      "summary": "Pulse v6 platform support is governed by one canonical model: owning platform surfaces declare primary ingestion, canonical resource projections, and support-floor surfaces; `docker` is a first-class container-runtime lens and workload surface rather than an exclusive owning platform; `kubernetes` remains a first-class orchestrator platform; runtime variants such as `podman` plus transport helpers are not top-level platforms.",
       "kind": "architecture",
       "decided_at": "2026-03-30",
       "subsystem_ids": [
@@ -7192,7 +7192,7 @@
     },
     {
       "id": "platform-page-membership-overlap-v1",
-      "summary": "Pulse v6 primary IA remains platform-first rather than a generic mixed systems page: a single physical or agent-backed system may appear on multiple platform pages when it participates in multiple platform contracts, and each page must show only the workloads and native resources relevant to that platform. Host identity stays separate from runtime membership, so an Unraid server that reports Docker containers can appear on the container-runtime page while still reading as an Unraid-profiled host rather than a generic Docker server.",
+      "summary": "Pulse v6 primary IA remains platform-first rather than a generic mixed systems page: a single physical or agent-backed system may appear on multiple platform pages when it participates in multiple platform contracts, and each page must show only the workloads and native resources relevant to that platform. Workload platform membership is a canonical resource contract, not a page-local platformType guess: Docker/Podman containers reported from a Proxmox host or LXC may appear in both the Proxmox Workloads table and the container-runtime lens, while TrueNAS apps that expose Docker-compatible runtime metadata remain TrueNAS-owned and do not become Docker-managed action targets. Host identity stays separate from runtime membership, so an Unraid server that reports Docker containers can appear on the container-runtime page while still reading as an Unraid-profiled host rather than a generic Docker server.",
       "kind": "architecture",
       "decided_at": "2026-05-17",
       "subsystem_ids": [

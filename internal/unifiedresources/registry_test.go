@@ -404,6 +404,19 @@ func TestResourceRegistry_IngestResourcesSeedsHostScopedDockerContainerMappings(
 
 	assertSourceTarget("docker-container-frigate-105", host105+"/container/frigate")
 	assertSourceTarget("docker-container-frigate-141", host141+"/container/frigate")
+
+	scopesByHost := make(map[string][]string, len(resources))
+	for _, resource := range resources {
+		if resource.Docker == nil {
+			t.Fatalf("docker container resource missing Docker payload: %#v", resource)
+		}
+		scopesByHost[resource.Docker.HostSourceID] = resource.PlatformScopes
+	}
+	for _, host := range []string{host105, host141} {
+		if got := scopesByHost[host]; !reflect.DeepEqual(got, []string{"proxmox-pve", "docker"}) {
+			t.Fatalf("host %q platform scopes = %#v, want proxmox-pve + docker", host, got)
+		}
+	}
 }
 
 func TestResourceRegistry_IngestResourcesDerivesClusterWorkloadParentFromSeededProxmoxNode(t *testing.T) {
@@ -3723,6 +3736,9 @@ func TestRegistryIngestKeepsDockerContainersScopedToTheirHost(t *testing.T) {
 		}
 		if resource.Name != "frigate" {
 			t.Fatalf("unexpected container name: %q", resource.Name)
+		}
+		if !reflect.DeepEqual(resource.PlatformScopes, []string{"proxmox-pve", "docker"}) {
+			t.Fatalf("platform scopes = %#v, want proxmox-pve + docker", resource.PlatformScopes)
 		}
 		hostsSeen[strings.TrimSpace(resource.Docker.HostSourceID)] = struct{}{}
 	}

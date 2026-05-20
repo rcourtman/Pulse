@@ -284,6 +284,43 @@ describe('resourceStateAdapters nodeFromResource', () => {
     });
   });
 
+  it('preserves canonical platform scopes across realtime resource merges', () => {
+    const existing = {
+      id: 'docker-container-frigate-141',
+      type: 'app-container',
+      name: 'frigate',
+      displayName: 'frigate',
+      platformId: 'frigate',
+      platformType: 'docker',
+      platformScopes: ['proxmox-pve', 'docker'],
+      sourceType: 'api',
+      sources: ['docker'],
+      status: 'online',
+      lastSeen: Date.now() - 1_000,
+      platformData: {
+        sources: ['docker'],
+        docker: {
+          hostSourceId: 'proxmox-lxc-docker:pve-a:node-a:141',
+          containerId: 'frigate',
+          runtime: 'docker',
+        },
+      },
+    } as Resource;
+
+    const [resource] = mergeCanonicalResourceSnapshot(
+      [
+        {
+          ...existing,
+          lastSeen: Date.now(),
+          platformScopes: undefined,
+        } as Resource,
+      ],
+      [existing],
+    );
+
+    expect(resource.platformScopes).toEqual(['proxmox-pve', 'docker']);
+  });
+
   it('canonicalizes agentless availability realtime resources as availability endpoints', () => {
     const [resource] = mergeCanonicalResourceSnapshot(
       [

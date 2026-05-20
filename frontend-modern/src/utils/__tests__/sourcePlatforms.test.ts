@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getSourcePlatformLabel,
   getSourcePlatformPresentation,
+  normalizeSourcePlatformScopes,
   readSourcePlatformFlags,
   normalizeSourcePlatformQueryValue,
   normalizeSourcePlatformKey,
@@ -82,6 +83,20 @@ describe('sourcePlatforms', () => {
       expect(normalizeSourcePlatformQueryValue(' all ')).toBe('all');
       expect(normalizeSourcePlatformQueryValue('custom-platform')).toBe('custom-platform');
       expect(normalizeSourcePlatformQueryValue('')).toBe('');
+    });
+  });
+
+  describe('normalizeSourcePlatformScopes', () => {
+    it('canonicalizes, dedupes, and ignores non-scope tokens', () => {
+      expect(
+        normalizeSourcePlatformScopes(['docker', 'pve', 'docker', ' all ', '', null], 'truenas'),
+      ).toEqual(['docker', 'proxmox-pve']);
+    });
+
+    it('falls back to the resolved platform when backend scopes are absent', () => {
+      expect(normalizeSourcePlatformScopes(undefined, 'truenas')).toEqual(['truenas']);
+      expect(normalizeSourcePlatformScopes([], 'proxmox')).toEqual(['proxmox-pve']);
+      expect(normalizeSourcePlatformScopes([], undefined)).toEqual([]);
     });
   });
 

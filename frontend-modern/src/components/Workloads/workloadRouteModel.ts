@@ -1,5 +1,6 @@
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import {
+  getWorkloadPlatformScopes,
   normalizeWorkloadViewModeParam,
   resolveWorkloadType,
   workloadMatchesViewMode,
@@ -112,7 +113,7 @@ export const buildWorkloadsPlatformOptions = (
   buildSourcePlatformOptions(
     guests
       .filter((guest) => workloadMatchesViewMode(resolveWorkloadType(guest), viewMode))
-      .map((guest) => guest.platformType || ''),
+      .flatMap((guest) => getWorkloadPlatformScopes(guest)),
   ).map((option) => ({
     value: option.key,
     label: option.label,

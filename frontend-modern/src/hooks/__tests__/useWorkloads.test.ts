@@ -237,6 +237,22 @@ describe('useWorkloads', () => {
         },
         {
           ...sampleResource,
+          id: 'docker-container-frigate-141',
+          type: 'app-container',
+          name: 'frigate',
+          status: 'running',
+          sources: ['docker'],
+          platformScopes: ['proxmox-pve', 'docker'],
+          parentName: 'homepage-docker.lab',
+          docker: {
+            containerId: 'frigate',
+            hostSourceId: 'proxmox-lxc-docker:pve-a:node-a:141',
+            runtime: 'docker',
+            image: 'ghcr.io/blakeblackshear/frigate:stable',
+          },
+        },
+        {
+          ...sampleResource,
           id: 'vmware-vm-crm',
           name: 'crm-app-01',
           status: undefined,
@@ -280,16 +296,20 @@ describe('useWorkloads', () => {
     });
 
     await flushAsync();
-    await waitForWorkloadCount(() => result!.workloads().length, 6);
+    await waitForWorkloadCount(() => result!.workloads().length, 7);
 
     const byName = new Map(result!.workloads().map((workload) => [workload.name, workload]));
     expect(byName.get('vm-101')?.platformType).toBe('proxmox-pve');
     expect(byName.get('vm-pbs')?.platformType).toBe('proxmox-pbs');
     expect(byName.get('vm-pmg')?.platformType).toBe('proxmox-pmg');
     expect(byName.get('nextcloud')?.platformType).toBe('truenas');
+    expect(byName.get('nextcloud')?.platformScopes).toEqual(['truenas']);
     expect(byName.get('nextcloud')?.id).toBe('app-container:truenas-main:nextcloud');
     expect(byName.get('nextcloud')?.containerId).toBe('nextcloud-ctr');
     expect(byName.get('nextcloud')?.dockerHostId).toBeUndefined();
+    expect(byName.get('frigate')?.platformType).toBe('docker');
+    expect(byName.get('frigate')?.platformScopes).toEqual(['proxmox-pve', 'docker']);
+    expect(byName.get('frigate')?.dockerHostId).toBe('proxmox-lxc-docker:pve-a:node-a:141');
     expect(byName.get('crm-app-01')?.platformType).toBe('vmware-vsphere');
     expect(byName.get('crm-app-01')?.node).toBe('esxi-01');
     expect(byName.get('crm-app-01')?.instance).toBe('Compute-A');

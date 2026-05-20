@@ -9,6 +9,10 @@ import type { Resource, ResourceDiscoveryTarget } from '@/types/resource';
 import type { MetricResourceKind } from '@/utils/metricsKeys';
 import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
 import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
+import {
+  normalizeSourcePlatformQueryValue,
+  normalizeSourcePlatformScopes,
+} from '@/utils/sourcePlatforms';
 
 /**
  * Resolve a raw type string (from API or backend) to a semantic WorkloadType.
@@ -71,6 +75,19 @@ export const workloadMatchesViewMode = (
   if (viewMode === 'all') return true;
   if (viewMode === 'container') return isContainerWorkloadType(workloadType);
   return workloadType === viewMode;
+};
+
+export const getWorkloadPlatformScopes = (
+  guest: Pick<WorkloadGuest, 'platformScopes' | 'platformType'>,
+): string[] => normalizeSourcePlatformScopes(guest.platformScopes, guest.platformType);
+
+export const workloadMatchesPlatformScope = (
+  guest: Pick<WorkloadGuest, 'platformScopes' | 'platformType'>,
+  platformScope?: string | null,
+): boolean => {
+  const normalizedScope = normalizeSourcePlatformQueryValue(platformScope);
+  if (!normalizedScope || normalizedScope === 'all') return true;
+  return getWorkloadPlatformScopes(guest).includes(normalizedScope);
 };
 
 export const resolveWorkloadType = (

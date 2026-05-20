@@ -31,6 +31,7 @@ import {
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
 import {
+  normalizeSourcePlatformScopes,
   normalizeSourcePlatformKey,
   resolvePlatformTypeFromSources,
   resolveSourceTypeFromSources,
@@ -91,6 +92,10 @@ const readStringArray = (value: unknown): string[] | undefined => {
     .filter((entry): entry is string => Boolean(entry));
   return normalized.length > 0 ? Array.from(new Set(normalized)) : undefined;
 };
+
+const readExplicitPlatformScopes = (resource: Resource): string[] | undefined =>
+  readStringArray(getResourceRecord(resource).platformScopes) ??
+  readStringArray(asRecord(resource.platformData)?.platformScopes);
 
 const normalizeSourceToken = (value: string): string =>
   normalizeSourcePlatformKey(value) || value.trim().toLowerCase();
@@ -546,7 +551,7 @@ const coalesceRealtimeResourceSnapshot = (resources: Resource[]): Resource[] => 
   const indexByHostKey = new Map<string, number>();
 
   for (const rawResource of resources) {
-    const resource = canonicalizeRealtimeResource(rawResource);
+    const resource = canonicalizeRealtimeResource(rawResource, { synthesizePlatformScopes: false });
     const hostKey = getHostResourceMergeKey(resource);
     if (!hostKey) {
       coalesced.push(resource);
@@ -587,18 +592,29 @@ const hasAvailabilityFacet = (
   );
 };
 
-export const canonicalizeRealtimeResource = (resource: Resource): Resource => {
+export const canonicalizeRealtimeResource = (
+  resource: Resource,
+  options: { synthesizePlatformScopes?: boolean } = {},
+): Resource => {
   const platformData = canonicalizeLegacyPlatformData(resource);
   const platformRecord = asRecord(platformData);
   const sources = getCanonicalSourceList(resource, platformData);
   const platformType =
     resolvePlatformTypeFromSources(sources) ||
     (hasAvailabilityFacet(resource, platformData) ? 'availability' : resource.platformType);
+  const explicitPlatformScopes = readExplicitPlatformScopes(resource);
+  const platformScopes =
+    explicitPlatformScopes !== undefined
+      ? normalizeSourcePlatformScopes(explicitPlatformScopes, platformType)
+      : options.synthesizePlatformScopes === false
+        ? undefined
+        : normalizeSourcePlatformScopes(undefined, platformType);
   const sourceType =
     sources && sources.length > 0 ? resolveSourceTypeFromSources(sources) : resource.sourceType;
   const normalizedBase = {
     ...resource,
     platformType,
+    platformScopes,
     sourceType,
     platformData,
   };
@@ -645,7 +661,7 @@ const mergeCanonicalSourceFacet = <T extends JsonRecord>(
 
 export const mergeCanonicalResource = (incoming: Resource, existing?: Resource): Resource => {
   if (!existing) {
-    return incoming;
+    return canonicalizeRealtimeResource(incoming);
   }
   const existingCanonical = canonicalizeRealtimeResource(existing);
   const incomingSources = getCanonicalSourceList(incoming, incoming.platformData);
@@ -653,6 +669,10 @@ export const mergeCanonicalResource = (incoming: Resource, existing?: Resource):
     ...existingCanonical,
     ...incoming,
     clusterId: incoming.clusterId ?? existingCanonical.clusterId,
+    platformScopes: normalizeSourcePlatformScopes(
+      incoming.platformScopes ?? existingCanonical.platformScopes,
+      incoming.platformType ?? existingCanonical.platformType,
+    ),
     discoveryTarget: incoming.discoveryTarget ?? existingCanonical.discoveryTarget,
     metricsTarget: incoming.metricsTarget ?? existingCanonical.metricsTarget,
     canonicalIdentity: mergeCanonicalIdentity(

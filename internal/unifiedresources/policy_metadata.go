@@ -93,6 +93,7 @@ func RefreshCanonicalMetadata(resource *Resource) {
 	}
 
 	RefreshCanonicalIdentity(resource)
+	RefreshPlatformScopes(resource)
 	RefreshPolicyMetadata(resource)
 }
 

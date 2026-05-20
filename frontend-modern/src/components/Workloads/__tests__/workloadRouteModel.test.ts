@@ -171,6 +171,7 @@ describe('workloadRouteModel', () => {
             type: 'app-container',
             workloadType: 'app-container',
             platformType: 'docker',
+            platformScopes: ['proxmox-pve', 'docker'],
           }),
           makeGuest({
             id: 'pod-a',
@@ -183,6 +184,7 @@ describe('workloadRouteModel', () => {
       ),
     ).toEqual([
       { value: 'truenas', label: 'TrueNAS' },
+      { value: 'proxmox-pve', label: 'PVE' },
       { value: 'docker', label: 'Docker / Podman' },
     ]);
   });

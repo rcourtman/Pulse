@@ -17,6 +17,9 @@ export type WorkloadGuest = (VM | Container) & {
   /** Cluster name from Proxmox (for badge display in workloads table). */
   clusterName?: string;
   platformType?: string;
+  // Canonical platform-page membership. A runtime workload may belong to more
+  // than one platform scope, e.g. Docker inside a Proxmox LXC.
+  platformScopes?: string[];
   // For app-container workloads, this is underlying runtime telemetry
   // ("docker", "podman", etc.), not the owning platform.
   containerRuntime?: string;

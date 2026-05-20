@@ -1,6 +1,9 @@
 package unifiedresources
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestRefreshCanonicalIdentityPrefersTargetsAndCanonicalHostData(t *testing.T) {
 	resource := Resource{
@@ -288,6 +291,29 @@ func TestRefreshCanonicalIdentityFeedsPolicyMetadata(t *testing.T) {
 		if got := resource.Policy.Routing.Redact[i]; got != want {
 			t.Fatalf("redaction[%d] = %q, want %q", i, got, want)
 		}
+	}
+}
+
+func TestRefreshCanonicalMetadataDerivesRuntimePlatformScopes(t *testing.T) {
+	resource := Resource{
+		ID:      "docker-container-frigate-141",
+		Type:    ResourceTypeAppContainer,
+		Name:    "frigate",
+		Sources: []DataSource{SourceDocker},
+		Docker: &DockerData{
+			HostSourceID: "proxmox-lxc-docker:pve-a:node-a:141",
+			ContainerID:  "frigate",
+			Runtime:      "docker",
+		},
+	}
+
+	RefreshCanonicalMetadata(&resource)
+
+	if resource.Canonical == nil {
+		t.Fatalf("expected canonical identity")
+	}
+	if got := resource.PlatformScopes; !reflect.DeepEqual(got, []string{"proxmox-pve", "docker"}) {
+		t.Fatalf("platform scopes = %#v, want proxmox-pve + docker", got)
 	}
 }
 

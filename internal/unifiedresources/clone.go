@@ -22,6 +22,7 @@ func cloneResource(in *Resource) Resource {
 	out := *in
 	out.DiscoveryTarget = cloneDiscoveryTarget(in.DiscoveryTarget)
 	out.MetricsTarget = cloneMetricsTarget(in.MetricsTarget)
+	out.PlatformScopes = cloneStringSlice(in.PlatformScopes)
 	out.Sources = cloneDataSourceSlice(in.Sources)
 	out.SourceStatus = cloneSourceStatusMap(in.SourceStatus)
 	out.Identity = cloneResourceIdentity(in.Identity)

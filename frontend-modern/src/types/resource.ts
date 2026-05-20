@@ -726,6 +726,7 @@ export interface Resource {
   // Platform/Source
   platformId: string;
   platformType: PlatformType;
+  platformScopes?: string[];
   sourceType: SourceType;
   sources?: string[];
 

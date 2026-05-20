@@ -155,6 +155,14 @@ Swarm capability surfaces.
     types, and the helper falls back through the existing source-platform
     normalization so client-side grouping behaves identically against mock
     fixtures and live backends.
+    `Resource.PlatformScopes` is the backend-owned platform page membership
+    contract for unified resources. It is derived by unified resources through
+    `RefreshPlatformScopes`, transported through `useUnifiedResources`,
+    `useWorkloads`, and `sourcePlatforms.ts`, and consumed by workload filters
+    without page-local reinterpretation. `platformType` remains the primary
+    display/source family; `platformScopes` is the overlap set used when a
+    runtime workload belongs to both Docker and an owning infrastructure
+    platform.
 17. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
     App-container Discovery targets are part of that shared payload contract.
     Backend resources must expose frontend-facing `resourceType=app-container`
@@ -1830,6 +1838,13 @@ temperature, uptime, container counts, update state, command metadata, and
 Swarm local-state/control evidence through `ResourceDockerMeta`; Docker
 platform pages must consume those canonical fields rather than keeping
 page-local host-runtime shape aliases.
+Canonical resources now also carry `platformScopes`, the normalized
+platform-page membership list consumed by workload filters. `platformType`
+remains the primary display/source family, while `platformScopes` captures
+overlap: Docker/Podman resources reported from a Proxmox LXC carry both
+`proxmox-pve` and `docker`, but TrueNAS app containers that reuse
+`DockerData` for runtime metadata remain scoped to `truenas` and must not be
+promoted to Docker-managed action targets.
 The same facet bundle now also returns grouped recent-change counts by
 canonical change kind, so the detail drawer can surface the distribution of
 state transitions, restarts, config updates, and anomalies without

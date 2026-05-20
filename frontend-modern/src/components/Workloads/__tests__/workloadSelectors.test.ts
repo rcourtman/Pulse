@@ -270,23 +270,34 @@ describe('workloadSelectors', () => {
       expect(withK8sContext.map((g) => g.name)).toEqual(['k8s-a']);
     });
 
-    it('filters workloads by canonical platform type', () => {
+    it('filters workloads by canonical platform scopes', () => {
       const guests = [
         makeGuest(1, {
           name: 'nextcloud',
           type: 'app-container',
           workloadType: 'app-container',
           platformType: 'truenas',
+          platformScopes: ['truenas'],
+          containerRuntime: 'docker',
         }),
         makeGuest(2, {
           name: 'grafana',
           type: 'app-container',
           workloadType: 'app-container',
           platformType: 'docker',
+          platformScopes: ['proxmox-pve', 'docker'],
+          containerRuntime: 'docker',
+        }),
+        makeGuest(3, {
+          name: 'vm-101',
+          type: 'vm',
+          workloadType: 'vm',
+          platformType: 'proxmox-pve',
+          platformScopes: ['proxmox-pve'],
         }),
       ];
 
-      const result = filterWorkloads({
+      const truenasResult = filterWorkloads({
         guests,
         viewMode: 'app-container',
         statusMode: 'all',
@@ -297,7 +308,33 @@ describe('workloadSelectors', () => {
         selectedKubernetesContext: null,
       });
 
-      expect(result.map((guest) => guest.name)).toEqual(['nextcloud']);
+      expect(truenasResult.map((guest) => guest.name)).toEqual(['nextcloud']);
+
+      const proxmoxResult = filterWorkloads({
+        guests,
+        viewMode: 'app-container',
+        statusMode: 'all',
+        searchTerm: '',
+        selectedNode: null,
+        selectedHostHint: null,
+        selectedPlatform: 'proxmox-pve',
+        selectedKubernetesContext: null,
+      });
+
+      expect(proxmoxResult.map((guest) => guest.name)).toEqual(['grafana']);
+
+      const dockerResult = filterWorkloads({
+        guests,
+        viewMode: 'app-container',
+        statusMode: 'all',
+        searchTerm: '',
+        selectedNode: null,
+        selectedHostHint: null,
+        selectedPlatform: 'docker',
+        selectedKubernetesContext: null,
+      });
+
+      expect(dockerResult.map((guest) => guest.name)).toEqual(['grafana']);
     });
 
     it('filters app containers by Docker host id from related-workload links', () => {

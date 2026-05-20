@@ -39,6 +39,7 @@ describe('useWorkloadFilterOptions', () => {
         type: 'app-container',
         workloadType: 'app-container',
         platformType: 'docker',
+        platformScopes: ['proxmox-pve', 'docker'],
         contextLabel: 'docker-prod-a',
         dockerHostId: 'docker-prod-a',
         containerRuntime: 'docker',
@@ -70,6 +71,7 @@ describe('useWorkloadFilterOptions', () => {
       string | null
     >(null);
     const [selectedNode] = createSignal<string | null>(null);
+    const [platformScope, setPlatformScope] = createSignal('docker');
 
     const { result } = renderHook(() =>
       useWorkloadFilterOptions({
@@ -77,7 +79,7 @@ describe('useWorkloadFilterOptions', () => {
         isWorkloadsRoute: () => false,
         allowEmbeddedScopeFilters: () => true,
         viewMode,
-        platformScope: () => 'docker',
+        platformScope,
         containerRuntime,
         selectedPlatform,
         selectedNode,
@@ -93,6 +95,14 @@ describe('useWorkloadFilterOptions', () => {
 
     expect(result.workloadNodeOptions()).toEqual([
       { value: 'docker-prod-a', label: 'docker-prod-a' },
+    ]);
+    expect(result.containerRuntimeOptions()).toEqual(['docker']);
+
+    setPlatformScope('proxmox-pve');
+
+    expect(result.workloadNodeOptions()).toEqual([
+      { value: 'docker-prod-a', label: 'docker-prod-a' },
+      { value: 'core-fabric-pve-prod-a', label: 'pve-prod-a' },
     ]);
     expect(result.containerRuntimeOptions()).toEqual(['docker']);
   });

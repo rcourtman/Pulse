@@ -158,6 +158,14 @@ regression protection.
 1. Add performance budgets through SLO or contract tests
 2. Add query-plan guardrails for DB-backed hot paths
 3. Optimize hot paths only when backed by benchmarks or proven query issues
+   Workload platform-scope filtering and option derivation are part of the
+   workload table hot path. Shared selectors in
+   `frontend-modern/src/components/Workloads/workloadSelectors.ts`,
+   `frontend-modern/src/components/Workloads/useWorkloadFilterOptions.ts`,
+   `frontend-modern/src/components/Workloads/workloadRouteModel.ts`, and
+   `frontend-modern/src/hooks/useWorkloads.ts` must consume canonical
+   `platformScopes`; page surfaces must not rebuild platform membership with
+   ad hoc source or runtime scans.
 4. Keep shared auth gating in `internal/api/router.go` cheap and local: pre-auth quick-setup and recovery routing may short-circuit on loopback/session/token checks, but they must not trigger chart, metrics, or broad persistence fan-out on the protected request hot path.
    The same rule applies to public setup-script lifecycle routes: `/api/auto-register`
    and `/api/auto-unregister` may bypass the global auth wall so their handlers can
