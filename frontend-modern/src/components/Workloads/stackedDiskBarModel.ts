@@ -169,9 +169,14 @@ function buildTooltipContent(
     inlineDiskMode: boolean;
     miniMode: boolean;
     thresholds?: MetricDisplayThresholds | null;
+    verticalBarsMode: boolean;
   },
 ): StackedDiskTooltipItem[] {
-  const useUsageColors = options.aggregateMode || options.inlineDiskMode || options.miniMode;
+  const useUsageColors =
+    options.aggregateMode ||
+    options.inlineDiskMode ||
+    options.miniMode ||
+    options.verticalBarsMode;
   if (disks.length > 0) {
     return disks.map((disk, index) => {
       const percentValue = getDiskUsagePercent(disk);
@@ -318,6 +323,7 @@ export function buildStackedDiskBarPresentation(
     inlineDiskMode,
     miniMode,
     thresholds: props.thresholds,
+    verticalBarsMode,
   });
 
   return {
