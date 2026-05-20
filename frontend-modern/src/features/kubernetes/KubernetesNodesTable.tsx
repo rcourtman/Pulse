@@ -140,7 +140,7 @@ export const KubernetesNodesTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title={props.title ?? 'Nodes'} />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1000px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1280px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   {/*

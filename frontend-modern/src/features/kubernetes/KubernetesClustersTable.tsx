@@ -21,8 +21,8 @@ import {
   PlatformTableEmptyState,
   createPlatformTableFilterState,
   filterPlatformResources,
-  getPlatformTableCellClass,
-  getPlatformTableHeadClass,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -144,25 +144,33 @@ export const KubernetesClustersTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title={props.title ?? 'Clusters'} />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[860px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1040px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={getPlatformTableHeadClass()}>Cluster</TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[17%]`}>
+                    Cluster
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[15%]`}>
                     Context
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}>
                     Version
                   </TableHead>
-                  <TableHead class={getPlatformTableHeadClass('right')}>Nodes</TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}>
+                    Nodes
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}>
                     Pods
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[12%]`}>
                     Deployments
                   </TableHead>
-                  <TableHead class={getPlatformTableHeadClass('right')}>CPU</TableHead>
-                  <TableHead class={getPlatformTableHeadClass('right')}>Memory</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[15%]`}>
+                    CPU
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[15%]`}>
+                    Memory
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
@@ -194,7 +202,7 @@ export const KubernetesClustersTable: Component<{
                           onKeyDown={drawer.handleActivationKey(cluster)}
                           tabIndex={0}
                         >
-                          <TableCell class={getPlatformTableCellClass()}>
+                          <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex min-w-0 items-center gap-2">
                               <StatusDot
                                 size="sm"
@@ -211,37 +219,37 @@ export const KubernetesClustersTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
                             {context()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
                           >
                             {version()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} text-base-content tabular-nums`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
                           >
                             {counts().nodes}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
                           >
                             {counts().pods}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
                           >
                             {counts().deployments}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}
                           >
                             {formatPercent(cluster.cpu?.current)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}
                           >
                             {formatPercent(cluster.memory?.current)}
                           </TableCell>

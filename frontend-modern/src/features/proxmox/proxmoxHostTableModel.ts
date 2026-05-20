@@ -122,5 +122,5 @@ export const getProxmoxHostColumnWidthStyle = (
 
 export const getProxmoxHostTableMinWidthClass = (
   layoutMode: WorkloadTableLayoutMode,
-): 'min-w-full' | 'min-w-[1080px]' =>
-  layoutMode === 'mobile' || layoutMode === 'tablet' ? 'min-w-full' : 'min-w-[1080px]';
+): 'min-w-full' | 'min-w-[1240px]' =>
+  layoutMode === 'mobile' || layoutMode === 'tablet' ? 'min-w-full' : 'min-w-[1240px]';

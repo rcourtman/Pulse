@@ -166,9 +166,9 @@ export const GUEST_COLUMNS: ColumnDef[] = [
   {
     id: 'runtime',
     label: 'Runtime',
-    width: '84px',
-    minWidth: '74px',
-    maxWidth: '96px',
+    width: '104px',
+    minWidth: '96px',
+    maxWidth: '112px',
     toggleable: true,
     kind: 'text',
   },
@@ -386,7 +386,7 @@ const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
   },
   compact: {
     name: 26,
-    runtime: 8,
+    runtime: 10,
     type: 7,
     info: 7,
     vmid: 7,
@@ -398,7 +398,7 @@ const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
     image: 18,
     namespace: 11,
     context: 13,
-    update: 9,
+    update: 10,
   },
 };
 

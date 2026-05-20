@@ -124,7 +124,7 @@ export const DockerServicesTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title={props.title ?? 'Swarm Services'} />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[900px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1080px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   {/*

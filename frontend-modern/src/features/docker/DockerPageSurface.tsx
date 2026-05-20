@@ -7,6 +7,7 @@ import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
+  PlatformSectionTabs,
   PlatformTableEmptyState,
 } from '@/features/platformPage/sharedPlatformPage';
 import { DockerHostsTable } from './DockerHostsTable';
@@ -34,6 +35,7 @@ const DOCKER_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
   { value: 'degraded', label: 'Attention' },
   { value: 'stopped', label: 'Stopped' },
 ];
+const DOCKER_TAB_SPECS = [{ id: 'overview', label: 'Overview', path: '/docker/overview' }] as const;
 
 const dockerIcon = () => <ContainerIcon class="h-6 w-6 text-slate-400" />;
 
@@ -90,6 +92,12 @@ export function DockerPageSurface() {
 
   return (
     <div data-testid="docker-page" class="space-y-3">
+      <PlatformSectionTabs
+        tabs={DOCKER_TAB_SPECS}
+        active="overview"
+        ariaLabel="Docker sections"
+      />
+
       <Show
         when={!loading() || model().resources.length > 0}
         fallback={

@@ -10,6 +10,7 @@ import {
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCard } from '@/components/shared/TableCard';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { NodeDrawer } from '@/components/Workloads/NodeDrawer';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
@@ -165,6 +166,7 @@ export const ProxmoxNodesTable: Component<{
       }
     >
       <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+        <TableCardHeader title="Nodes" />
         <Table class={`${getProxmoxHostTableMinWidthClass(layoutMode())} table-fixed text-xs`}>
           <colgroup>
             <For each={visibleColumns()}>

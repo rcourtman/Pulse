@@ -112,6 +112,18 @@ describe('PatrolIntelligenceSummary', () => {
     expect(screen.queryByTestId('patrol-recommended-next-step-action')).not.toBeInTheDocument();
     expect(screen.queryByTestId('patrol-summary-details-toggle')).not.toBeInTheDocument();
   });
+
+  it('does not leave the loading shell behind once patrol evidence has rendered', () => {
+    const patrolState = {
+      ...createPatrolState(),
+      initialSurfaceReady: () => false,
+      intelligenceSummary: () => null,
+    } satisfies PatrolIntelligenceState;
+
+    render(() => <PatrolIntelligenceSummary state={patrolState} />);
+
+    expect(screen.queryByTestId('patrol-summary-loading')).not.toBeInTheDocument();
+  });
 });
 
 function createPatrolState(): PatrolIntelligenceState {

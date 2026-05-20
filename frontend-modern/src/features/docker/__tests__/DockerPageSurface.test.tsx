@@ -30,6 +30,16 @@ vi.mock('@/components/Workloads/WorkloadsSurface', () => ({
   ),
 }));
 
+vi.mock('@/features/platformPage/sharedPlatformPage', async () => {
+  const actual = await vi.importActual<typeof import('@/features/platformPage/sharedPlatformPage')>(
+    '@/features/platformPage/sharedPlatformPage',
+  );
+  return {
+    ...actual,
+    PlatformSectionTabs: () => <div data-testid="docker-section-tabs" />,
+  };
+});
+
 const makeDockerHost = (overrides: Partial<Resource> = {}): Resource => ({
   id: 'agent:docker-01',
   name: 'docker-01',

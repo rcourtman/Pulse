@@ -73,8 +73,18 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       runtimeState === 'blocked' || runtimeState === 'disabled' || runtimeState === 'unavailable'
     );
   });
+  const hasLoadedPatrolEvidence = createMemo(
+    () =>
+      summaryStats().hasAnyPatrolFindings ||
+      (state.patrolRunHistory.value()?.length ?? 0) > 0 ||
+      Boolean(state.patrolStatus()),
+  );
   const showLoadingSummary = createMemo(
-    () => !showRuntimeSummary() && !state.intelligenceSummary() && !state.initialSurfaceReady(),
+    () =>
+      !showRuntimeSummary() &&
+      !state.intelligenceSummary() &&
+      !state.initialSurfaceReady() &&
+      !hasLoadedPatrolEvidence(),
   );
   const assessment = createMemo(() =>
     getPatrolAssessmentPresentation({

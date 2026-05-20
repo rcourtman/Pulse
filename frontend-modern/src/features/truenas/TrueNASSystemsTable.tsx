@@ -163,7 +163,7 @@ export const TrueNASSystemsTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title={props.title ?? 'Systems'} />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1040px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1300px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   {/*

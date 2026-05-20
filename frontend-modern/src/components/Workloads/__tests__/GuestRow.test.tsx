@@ -895,7 +895,9 @@ describe('GUEST_COLUMNS', () => {
     expect(nameColumn?.width).toBe('200px');
     expect(nameColumn?.minWidth).toBe('180px');
     expect(nameColumn?.maxWidth).toBe('220px');
-    expect(runtimeColumn?.width).toBe('84px');
+    expect(runtimeColumn?.width).toBe('104px');
+    expect(runtimeColumn?.minWidth).toBe('96px');
+    expect(runtimeColumn?.maxWidth).toBe('112px');
     expect(typeColumn?.width).toBe('60px');
     expect(netIoColumn?.width).toBe('170px');
     expect(netIoColumn?.minWidth).toBe('170px');
@@ -985,7 +987,7 @@ describe('GUEST_COLUMNS', () => {
     expect(
       getGuestColumnWidthStyle('update', false, 'compact', compactDockerRuntimeColumnIds),
     ).toEqual({
-      width: '8.2569%',
+      width: '8.9286%',
     });
   });
 

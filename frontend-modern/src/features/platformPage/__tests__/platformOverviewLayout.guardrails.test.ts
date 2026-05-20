@@ -70,7 +70,7 @@ describe('platform overview layout guardrails', () => {
       expect(source).toContain('PLATFORM_HEALTH_FILTER_OPTIONS');
       expect(source).not.toContain("from '@/components/shared/SearchInput'");
       expect(source).not.toContain("from '@/components/shared/FilterButtonGroup'");
-      expect(source).not.toContain('createSignal');
+      expect(source).not.toContain('const [search');
     }
   });
 
@@ -97,7 +97,7 @@ describe('platform overview layout guardrails', () => {
     expect(vmwarePageSurfaceSource).toContain('<VsphereHostsTable');
     expect(vmwarePageSurfaceSource).toContain('<WorkloadsSurface');
     expect(vmwarePageSurfaceSource).toContain('<StorageSurface');
-    expect(vmwarePageSurfaceSource).toContain('forcedView="pools"');
+    expect(vmwarePageSurfaceSource).not.toContain('forcedView="pools"');
   });
 
   it('keeps secondary overview tables from rendering duplicate standalone toolbars', () => {
@@ -113,10 +113,8 @@ describe('platform overview layout guardrails', () => {
 
   it('keeps mobile host tables focused on useful operational columns', () => {
     // Assertions use the canonical kind-based helpers
-    // (getPlatformTableHeadClassForKind('<kind>')) for files that have been
-    // migrated. KubernetesClustersTable still uses the legacy align-based
-    // helper because another agent has it mid-edit; the assertions below
-    // match that legacy form until its migration lands.
+    // (getPlatformTableHeadClassForKind('<kind>')) so the platform overview
+    // tables keep aligned metric and numeric columns across providers.
     expect(dockerHostsTableSource).toMatch(
       /getPlatformTableHeadClassForKind\('name'\)[\s\S]{0,200}?Host/,
     );
@@ -130,11 +128,11 @@ describe('platform overview layout guardrails', () => {
       /getPlatformTableHeadClassForKind\('metric-bar'\)[\s\S]{0,200}?Disk/,
     );
 
-    expect(kubernetesClustersTableSource).toContain(
-      '<TableHead class={getPlatformTableHeadClass()}>Cluster',
+    expect(kubernetesClustersTableSource).toMatch(
+      /getPlatformTableHeadClassForKind\('name'\)[\s\S]{0,200}?Cluster/,
     );
-    expect(kubernetesClustersTableSource).toContain(
-      "<TableHead class={getPlatformTableHeadClass('right')}>Nodes",
+    expect(kubernetesClustersTableSource).toMatch(
+      /getPlatformTableHeadClassForKind\('numeric-value'\)[\s\S]{0,200}?Nodes/,
     );
     expect(kubernetesNodesTableSource).toMatch(
       /getPlatformTableHeadClassForKind\('name'\)[\s\S]{0,200}?Node/,

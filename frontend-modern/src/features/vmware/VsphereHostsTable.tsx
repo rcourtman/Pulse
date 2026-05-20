@@ -146,7 +146,7 @@ export const VsphereHostsTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title={props.title ?? 'Hosts'} />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[960px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1240px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   {/*
