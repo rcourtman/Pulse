@@ -51,4 +51,15 @@ describe('Toggle', () => {
     expect(screen.getByText('Enabled')).toBeInTheDocument();
     expect(screen.getByText('Turns it on')).toBeInTheDocument();
   });
+
+  it('uses the visible label and description for the primitive button semantics', () => {
+    render(() => (
+      <Toggle checked={true} label={<span>Enabled</span>} description={<span>Turns it on</span>} />
+    ));
+
+    const button = screen.getByRole('button', { name: 'Enabled' });
+    expect(button).toHaveAttribute('aria-labelledby');
+    expect(button).toHaveAttribute('aria-describedby');
+    expect(button).toHaveAccessibleDescription('Turns it on');
+  });
 });
