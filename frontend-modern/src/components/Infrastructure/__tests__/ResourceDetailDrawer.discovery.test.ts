@@ -317,8 +317,8 @@ describe('resource drawer discovery promotion', () => {
         },
         {
           category: 'config',
-          key: 'missing_config',
-          value: 'nodes/delly/lxc/152.conf not found on host',
+          key: 'config_availability',
+          value: 'missing_node_config',
           source: 'all_commands',
           confidence: 1,
           discovered_at: '2026-05-19T00:00:00Z',

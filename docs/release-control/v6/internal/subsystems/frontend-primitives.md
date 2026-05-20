@@ -1399,7 +1399,8 @@ AI runtime.
     identified-service summary when the service name, category, version,
     paths, ports, facts, and suggested URL are all absent or placeholders,
     including generic workload types such as `service` or `container` and
-    diagnostic facts such as metadata-only status or missing-config errors.
+    diagnostic facts such as metadata-only status, config-availability
+    failures, or missing-config errors.
     Discovery is an opt-in observed-context layer, not an automatic row-link
     owner. The reducer must carry provenance, observed time, service version,
     endpoint candidates, and URL-source copy so drawer surfaces can show

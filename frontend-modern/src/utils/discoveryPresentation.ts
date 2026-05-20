@@ -79,7 +79,9 @@ const isMeaningfulDiscoveryFact = (fact: DiscoveryFact): boolean => {
   const source = normalizeDiscoveryToken(fact.source);
   if (!isMeaningfulDiscoveryText(fact.value)) return false;
   if (key === 'status' && source === 'metadata') return false;
+  if (key.includes('availability') && value.includes('missing')) return false;
   if (key.startsWith('missing') || key.endsWith('missing')) return false;
+  if (value.startsWith('missing ') || value.includes(' missing ')) return false;
   if (
     value.includes('does not exist') ||
     value.includes('not found') ||
