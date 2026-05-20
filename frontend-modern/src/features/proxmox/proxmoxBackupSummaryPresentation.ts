@@ -60,6 +60,46 @@ export function classifyBackupAge(
   return 'ancient';
 }
 
+// Per-tab row dot semantics that match each coverage strip's bucketing.
+// The shared 4-bucket classifyBackupAge is too granular: a 14-day archive
+// would land in `normal` (sky) in the row but `stale` (amber) in the
+// archive coverage strip, since archives have a 7-day SLA. These helpers
+// keep the row dot, strip segment, and strip label all reading the same
+// colour for the same data.
+
+export interface AgeSwatch {
+  label: string;
+  swatchClass: string;
+}
+
+export function classifyArchiveRowAge(
+  timestamp: string | number | undefined,
+  now: number = Date.now(),
+): AgeSwatch {
+  if (timestamp === undefined || timestamp === null)
+    return { label: 'uncovered (>30d)', swatchClass: 'bg-red-500' };
+  const ms = typeof timestamp === 'number' ? timestamp : Date.parse(timestamp);
+  if (!Number.isFinite(ms)) return { label: 'uncovered (>30d)', swatchClass: 'bg-red-500' };
+  const ageDays = (now - ms) / DAY_MS;
+  if (ageDays <= 7) return { label: 'current (≤7d)', swatchClass: 'bg-emerald-500' };
+  if (ageDays <= 30) return { label: 'stale (7–30d)', swatchClass: 'bg-amber-500' };
+  return { label: 'uncovered (>30d)', swatchClass: 'bg-red-500' };
+}
+
+export function classifySnapshotRowAge(
+  timestamp: string | number | undefined,
+  now: number = Date.now(),
+): AgeSwatch {
+  if (timestamp === undefined || timestamp === null)
+    return { label: 'ancient (>90d)', swatchClass: 'bg-red-500' };
+  const ms = typeof timestamp === 'number' ? timestamp : Date.parse(timestamp);
+  if (!Number.isFinite(ms)) return { label: 'ancient (>90d)', swatchClass: 'bg-red-500' };
+  const ageDays = (now - ms) / DAY_MS;
+  if (ageDays <= 30) return { label: 'recent (≤30d)', swatchClass: 'bg-emerald-500' };
+  if (ageDays <= 90) return { label: 'stale (30–90d)', swatchClass: 'bg-amber-500' };
+  return { label: 'ancient (>90d)', swatchClass: 'bg-red-500' };
+}
+
 export function guestKey(guest: { type?: string; instance?: string; vmid: number }): string {
   // instance disambiguates 100@cluster-a vs 100@cluster-b. type narrows
   // VM-100 vs CT-100, which can collide in the same instance.

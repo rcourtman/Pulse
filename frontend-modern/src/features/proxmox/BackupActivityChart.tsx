@@ -99,17 +99,19 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
       <div class="mb-2 flex flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between">
         <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
           <div class="font-semibold uppercase tracking-[0.18em] text-muted">{props.title}</div>
-          <For each={props.segmentKinds}>
-            {(kind) => {
-              const presentation = getBackupActivitySegmentPresentation(kind);
-              return (
-                <span class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
-                  <span class={`h-2.5 w-2.5 rounded ${presentation.swatchClassName}`} />
-                  {presentation.label}
-                </span>
-              );
-            }}
-          </For>
+          <Show when={props.segmentKinds.length > 1}>
+            <For each={props.segmentKinds}>
+              {(kind) => {
+                const presentation = getBackupActivitySegmentPresentation(kind);
+                return (
+                  <span class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
+                    <span class={`h-2.5 w-2.5 rounded ${presentation.swatchClassName}`} />
+                    {presentation.label}
+                  </span>
+                );
+              }}
+            </For>
+          </Show>
         </div>
         <div class="flex flex-wrap items-center gap-2 text-[11px]">
           <Show when={props.metricToggle}>

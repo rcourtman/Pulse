@@ -5,7 +5,9 @@ import {
   buildArchiveCoverageSummary,
   buildSnapshotCoverageSummary,
   buildTaskOutcomeSummary,
+  classifyArchiveRowAge,
   classifyBackupAge,
+  classifySnapshotRowAge,
   computeMedianTaskDurationSeconds,
   guestKey,
 } from '../proxmoxBackupSummaryPresentation';
@@ -202,6 +204,39 @@ describe('proxmoxBackupSummaryPresentation', () => {
         task({ startTime: '2026-05-20T01:00:00Z', endTime: '2026-05-20T01:02:00Z' }), // 120s
       ]);
       expect(median).toBe(60);
+    });
+  });
+
+  describe('classifyArchiveRowAge', () => {
+    const now = Date.parse('2026-05-20T12:00:00Z');
+
+    it('aligns row swatch with the archive coverage strip thresholds (≤7d / 7–30d / >30d)', () => {
+      expect(classifyArchiveRowAge(now - 1 * DAY_MS, now).swatchClass).toBe('bg-emerald-500');
+      expect(classifyArchiveRowAge(now - 7 * DAY_MS + 1000, now).swatchClass).toBe('bg-emerald-500');
+      expect(classifyArchiveRowAge(now - 14 * DAY_MS, now).swatchClass).toBe('bg-amber-500');
+      expect(classifyArchiveRowAge(now - 30 * DAY_MS + 1000, now).swatchClass).toBe('bg-amber-500');
+      expect(classifyArchiveRowAge(now - 40 * DAY_MS, now).swatchClass).toBe('bg-red-500');
+      expect(classifyArchiveRowAge(now - 200 * DAY_MS, now).swatchClass).toBe('bg-red-500');
+    });
+
+    it('treats undefined as the worst bucket so missing timestamps surface', () => {
+      expect(classifyArchiveRowAge(undefined, now).swatchClass).toBe('bg-red-500');
+    });
+  });
+
+  describe('classifySnapshotRowAge', () => {
+    const now = Date.parse('2026-05-20T12:00:00Z');
+
+    it('aligns row swatch with the snapshot coverage strip thresholds (≤30d / 30–90d / >90d)', () => {
+      expect(classifySnapshotRowAge(now - 1 * DAY_MS, now).swatchClass).toBe('bg-emerald-500');
+      expect(classifySnapshotRowAge(now - 30 * DAY_MS + 1000, now).swatchClass).toBe(
+        'bg-emerald-500',
+      );
+      expect(classifySnapshotRowAge(now - 60 * DAY_MS, now).swatchClass).toBe('bg-amber-500');
+      expect(classifySnapshotRowAge(now - 90 * DAY_MS + 1000, now).swatchClass).toBe(
+        'bg-amber-500',
+      );
+      expect(classifySnapshotRowAge(now - 100 * DAY_MS, now).swatchClass).toBe('bg-red-500');
     });
   });
 

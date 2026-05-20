@@ -57,12 +57,12 @@ import {
   buildArchiveCoverageSummary,
   buildSnapshotCoverageSummary,
   buildTaskOutcomeSummary,
-  classifyBackupAge,
+  classifyArchiveRowAge,
+  classifySnapshotRowAge,
   computeMedianTaskDurationSeconds,
   getBackupAgeBucketPresentation,
   guestKey,
   taskDurationSeconds,
-  type BackupAgeBucket,
 } from './proxmoxBackupSummaryPresentation';
 import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
 
@@ -183,7 +183,7 @@ const SNAPSHOT_FILTERS: FilterOption<SnapshotFilterValue>[] = [
   { value: 'all', label: 'All' },
   {
     value: 'recent',
-    label: 'Recent ≤7d',
+    label: 'Recent ≤30d',
     tone: 'success',
     leading: statusDot('bg-emerald-500'),
   },
@@ -237,9 +237,9 @@ function InlineProgressBar(props: {
   );
 }
 
-function snapshotAgeBucket(snap: GuestSnapshot, now: number): BackupAgeBucket {
-  return classifyBackupAge(snap.time, now);
-}
+// SLA-aligned row swatch helpers exposed for inner-table rendering — both
+// the guest row's leftmost dot and the per-snapshot inner row dot use the
+// same `classifySnapshotRowAge` so colours match the coverage strip.
 
 export const ProxmoxBackupsTable: Component<{
   emptyIcon: JSX.Element;
@@ -363,7 +363,11 @@ export const ProxmoxBackupsTable: Component<{
     withRamCount: number;
     newestMs: number | undefined;
     totalBytes: number;
-    bucket: BackupAgeBucket;
+    // Filter discriminator aligned with the snapshot coverage strip: any
+    // newest-snapshot age > 30d is treated as stale (covers strip's stale
+    // 30–90d and ancient >90d segments). Row-dot colours are derived
+    // independently from classifySnapshotRowAge in the JSX.
+    isStale: boolean;
   }
 
   const filteredSnapshotGuests = createMemo<SnapshotGuestRow[]>(() => {
@@ -400,7 +404,7 @@ export const ProxmoxBackupsTable: Component<{
           withRamCount: 0,
           newestMs: undefined,
           totalBytes: 0,
-          bucket: 'ancient',
+          isStale: true,
         };
         byGuest.set(key, row);
       }
@@ -452,15 +456,16 @@ export const ProxmoxBackupsTable: Component<{
           if (newest === undefined) return ms;
           return ms > newest ? ms : newest;
         }, undefined),
-        bucket: classifyBackupAge(
-          visibleSnapshots[0] ? snapshotTimestampMs(visibleSnapshots[0]) : undefined,
-          now,
-        ),
+        isStale: ((): boolean => {
+          const newest = visibleSnapshots[0]
+            ? snapshotTimestampMs(visibleSnapshots[0])
+            : undefined;
+          if (newest === undefined) return true;
+          return now - newest > 30 * 24 * 60 * 60 * 1000;
+        })(),
       };
-      if (filter === 'recent' && enriched.bucket !== 'recent') continue;
-      if (filter === 'stale' && enriched.bucket !== 'stale' && enriched.bucket !== 'ancient') {
-        continue;
-      }
+      if (filter === 'recent' && enriched.isStale) continue;
+      if (filter === 'stale' && !enriched.isStale) continue;
       if (filter === 'with-ram' && enriched.withRamCount === 0) continue;
       rows.push(enriched);
     }
@@ -555,9 +560,6 @@ export const ProxmoxBackupsTable: Component<{
   });
 
   const visibleSnapshotGuestCount = createMemo(() => filteredSnapshotGuests().length);
-  const visibleSnapshotItemCount = createMemo(() =>
-    filteredSnapshotGuests().reduce((sum, row) => sum + row.count, 0),
-  );
 
   return (
     <Show
@@ -623,11 +625,7 @@ export const ProxmoxBackupsTable: Component<{
 
           <Show when={tab() === 'snapshots' && snapshots().length > 0}>
             <BackupActivityChart
-              title={
-                archiveMetricMode() === 'volume'
-                  ? 'Snapshots per day · GB captured'
-                  : 'Snapshots per day'
-              }
+              title="Snapshots per day"
               noun="snapshot"
               segmentKinds={SNAPSHOT_SEGMENT_KINDS}
               range={chartRange}
@@ -694,7 +692,7 @@ export const ProxmoxBackupsTable: Component<{
                 title="Backup coverage"
                 tail={
                   <span>
-                    {archiveCoverage().totalGuests} guests covered ·{' '}
+                    {archiveCoverage().totalGuests} guests with archives ·{' '}
                     {formatBytes(archiveCoverage().totalBytes)} stored
                   </span>
                 }
@@ -839,8 +837,12 @@ export const ProxmoxBackupsTable: Component<{
                   </Show>
                 }
               >
-                {visibleSnapshotGuestCount()} guests · {visibleSnapshotItemCount()} of{' '}
-                {snapshots().length} snapshots
+                <Show
+                  when={visibleSnapshotGuestCount() !== snapshotCoverage().totalGuests}
+                  fallback={<>{snapshotCoverage().totalGuests} guests</>}
+                >
+                  {visibleSnapshotGuestCount()} of {snapshotCoverage().totalGuests} guests
+                </Show>
               </Show>
             </span>
           </div>
@@ -888,7 +890,7 @@ export const ProxmoxBackupsTable: Component<{
                     <For each={filteredSnapshotGuests()}>
                       {(row) => {
                         const isExpanded = () => expandedGuests().has(row.key);
-                        const bucketPresentation = getBackupAgeBucketPresentation(row.bucket);
+                        const rowAge = classifySnapshotRowAge(row.newestMs, nowMs());
                         return (
                           <>
                             <TableRow
@@ -906,9 +908,9 @@ export const ProxmoxBackupsTable: Component<{
                                     aria-hidden="true"
                                   />
                                   <span
-                                    class={`h-2 w-2 shrink-0 rounded-full ${bucketPresentation.swatchClass}`}
+                                    class={`h-2 w-2 shrink-0 rounded-full ${rowAge.swatchClass}`}
                                     aria-hidden="true"
-                                    title={`Newest snapshot: ${bucketPresentation.label}`}
+                                    title={`Newest snapshot: ${rowAge.label}`}
                                   />
                                   <span class="font-semibold">
                                     {guestLabel(row.type, row.vmid)}
@@ -961,7 +963,7 @@ export const ProxmoxBackupsTable: Component<{
                             <Show when={isExpanded()}>
                               <TableRow class="bg-surface-alt/40">
                                 <TableCell class="px-2 py-2" colspan={6}>
-                                  <div class="overflow-hidden rounded-md border border-border-subtle">
+                                  <div class="overflow-hidden">
                                     <table class="w-full text-[11px]">
                                       <thead>
                                         <tr class="bg-surface-alt text-muted">
@@ -975,18 +977,18 @@ export const ProxmoxBackupsTable: Component<{
                                       <tbody class="divide-y divide-border-subtle">
                                         <For each={row.snapshots}>
                                           {(snap) => {
-                                            const bucket = snapshotAgeBucket(snap, nowMs());
-                                            const presentation = getBackupAgeBucketPresentation(
-                                              bucket,
+                                            const age = classifySnapshotRowAge(
+                                              snap.time,
+                                              nowMs(),
                                             );
                                             return (
                                               <tr class="hover:bg-surface-hover">
                                                 <td class="px-2 py-1">
                                                   <div class="flex items-center gap-2">
                                                     <span
-                                                      class={`h-1.5 w-1.5 shrink-0 rounded-full ${presentation.swatchClass}`}
+                                                      class={`h-1.5 w-1.5 shrink-0 rounded-full ${age.swatchClass}`}
                                                       aria-hidden="true"
-                                                      title={`Age: ${presentation.label}`}
+                                                      title={`Age: ${age.label}`}
                                                     />
                                                     <div class="min-w-0">
                                                       <div class="font-medium text-base-content">
@@ -1130,17 +1132,16 @@ export const ProxmoxBackupsTable: Component<{
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             <div class="flex items-center justify-end gap-2">
-                              <span
-                                class={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                                  getBackupAgeBucketPresentation(classifyBackupAge(arc.time, nowMs()))
-                                    .swatchClass
-                                }`}
-                                aria-hidden="true"
-                                title={`Age: ${
-                                  getBackupAgeBucketPresentation(classifyBackupAge(arc.time, nowMs()))
-                                    .label
-                                }`}
-                              />
+                              {(() => {
+                                const age = classifyArchiveRowAge(arc.time, nowMs());
+                                return (
+                                  <span
+                                    class={`h-1.5 w-1.5 shrink-0 rounded-full ${age.swatchClass}`}
+                                    aria-hidden="true"
+                                    title={`Coverage: ${age.label}`}
+                                  />
+                                );
+                              })()}
                               <span>{formatRelativeTime(arc.time, { compact: true })}</span>
                             </div>
                           </TableCell>
@@ -1232,9 +1233,7 @@ export const ProxmoxBackupsTable: Component<{
                       <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
                         Size
                       </TableHead>
-                      <Show when={taskOutcome().hasErrors}>
-                        <TableHead class={getPlatformTableHeadClassForKind('text')}>Error</TableHead>
-                      </Show>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Error</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
@@ -1310,23 +1309,21 @@ export const ProxmoxBackupsTable: Component<{
                                 {formatBytes(task.size ?? 0)}
                               </Show>
                             </TableCell>
-                            <Show when={taskOutcome().hasErrors}>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            >
+                              <Show
+                                when={!!task.error?.trim()}
+                                fallback={<span class="text-muted">—</span>}
                               >
-                                <Show
-                                  when={!!task.error?.trim()}
-                                  fallback={<span class="text-muted">—</span>}
+                                <span
+                                  class="inline-block max-w-[18rem] truncate text-red-600 dark:text-red-300"
+                                  title={task.error}
                                 >
-                                  <span
-                                    class="inline-block max-w-[18rem] truncate text-red-600 dark:text-red-300"
-                                    title={task.error}
-                                  >
-                                    {task.error}
-                                  </span>
-                                </Show>
-                              </TableCell>
-                            </Show>
+                                  {task.error}
+                                </span>
+                              </Show>
+                            </TableCell>
                           </TableRow>
                         );
                       }}
