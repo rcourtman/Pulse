@@ -10,6 +10,7 @@ import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { resourceMatchesSearch } from '@/utils/resourceSearchMatch';
 import {
   PlatformErrorState,
+  PlatformPageHeader,
   PlatformSectionTabs,
   PlatformTableEmptyState,
   PlatformTableLoadingState,
@@ -52,6 +53,10 @@ export function VmwarePageSurface() {
 
   return (
     <div data-testid="vmware-page" class="space-y-3">
+      <PlatformPageHeader
+        title="vSphere"
+        description="Inspect vSphere hosts, virtual machines, and datastores."
+      />
       <PlatformSectionTabs
         tabs={VMWARE_TAB_SPECS}
         active={activeTab()}

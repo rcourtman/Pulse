@@ -32,6 +32,7 @@ vi.mock('@/components/Workloads/WorkloadsSurface', () => ({
 
 vi.mock('@/features/platformPage/sharedPlatformPage', () => ({
   PlatformErrorState: () => <div data-testid="platform-error-state" />,
+  PlatformPageHeader: () => <div data-testid="platform-page-header" />,
   PlatformSectionTabs: () => <div data-testid="platform-section-tabs" />,
   PlatformTableEmptyState: () => <div data-testid="platform-table-empty-state" />,
   PlatformTableLoadingState: () => <div data-testid="platform-table-loading-state" />,

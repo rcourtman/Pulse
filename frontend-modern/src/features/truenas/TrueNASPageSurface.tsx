@@ -10,6 +10,7 @@ import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { resourceMatchesSearch } from '@/utils/resourceSearchMatch';
 import {
   PlatformErrorState,
+  PlatformPageHeader,
   PlatformSectionTabs,
   PlatformTableEmptyState,
   PlatformTableLoadingState,
@@ -54,6 +55,10 @@ export function TrueNASPageSurface() {
 
   return (
     <div data-testid="truenas-page" class="space-y-3">
+      <PlatformPageHeader
+        title="TrueNAS"
+        description="Inspect TrueNAS systems, storage, and reported apps."
+      />
       <PlatformSectionTabs
         tabs={TRUENAS_TAB_SPECS}
         active={activeTab()}

@@ -3,6 +3,7 @@ import TriangleAlertIcon from 'lucide-solid/icons/triangle-alert';
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { TableCard } from '@/components/shared/TableCard';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
@@ -14,6 +15,10 @@ export type PlatformTabSpec<TabId extends string> = {
   label: string;
   path: string;
 };
+
+export function PlatformPageHeader(props: { title: string; description: string }) {
+  return <PageHeader title={props.title} description={props.description} />;
+}
 
 export function PlatformSectionTabs<TabId extends string>(props: {
   tabs: readonly PlatformTabSpec<TabId>[];
