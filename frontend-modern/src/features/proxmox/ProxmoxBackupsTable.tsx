@@ -4,12 +4,16 @@ import {
   createMemo,
   createResource,
   createSignal,
+  type Accessor,
   type Component,
   type JSX,
 } from 'solid-js';
 import ArchiveIcon from 'lucide-solid/icons/archive';
 import CameraIcon from 'lucide-solid/icons/camera';
 import ActivityIcon from 'lucide-solid/icons/activity';
+import ArrowDownIcon from 'lucide-solid/icons/arrow-down';
+import ArrowUpIcon from 'lucide-solid/icons/arrow-up';
+import ArrowUpDownIcon from 'lucide-solid/icons/arrow-up-down';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -259,6 +263,151 @@ function RowMetricBar(props: {
 // the guest row's leftmost dot and the per-snapshot inner row dot use the
 // same `classifySnapshotRowAge` so colours match the coverage strip.
 
+// Sortable column header — matches Storage's pattern (StoragePoolsTable.tsx).
+// Clicking an inactive column sorts it with the supplied default direction;
+// clicking the active column flips direction. Renders the idle / asc / desc
+// arrow trio so the affordance reads identically across the app.
+const SORT_BUTTON_CLASS =
+  'inline-flex min-w-0 max-w-full items-center gap-1 rounded-sm outline-none transition-colors hover:text-base-content focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface';
+const SORT_ICON_CLASS = 'h-3 w-3 shrink-0';
+
+function SortableHead<K extends string>(props: {
+  label: string;
+  sortKey: K;
+  currentSort: Accessor<K>;
+  direction: Accessor<'asc' | 'desc'>;
+  onSort: (key: K) => void;
+  align?: 'left' | 'right' | 'center';
+  headClass: string;
+}) {
+  const isActive = () => props.currentSort() === props.sortKey;
+  const buttonAlignClass = () => {
+    if (props.align === 'right') return 'justify-end';
+    if (props.align === 'center') return 'justify-center';
+    return 'justify-start';
+  };
+  const ariaLabel = () => {
+    if (!isActive()) return `Sort by ${props.label}`;
+    return `Sort by ${props.label} ${props.direction() === 'asc' ? 'descending' : 'ascending'}`;
+  };
+  return (
+    <TableHead
+      class={props.headClass}
+      aria-sort={
+        isActive() ? (props.direction() === 'asc' ? 'ascending' : 'descending') : undefined
+      }
+    >
+      <button
+        type="button"
+        class={`${SORT_BUTTON_CLASS} ${buttonAlignClass()} w-full`}
+        onClick={() => props.onSort(props.sortKey)}
+        aria-label={ariaLabel()}
+        title={ariaLabel()}
+      >
+        <span class="min-w-0 truncate">{props.label}</span>
+        <Show
+          when={isActive()}
+          fallback={
+            <ArrowUpDownIcon class={`${SORT_ICON_CLASS} text-muted/70`} aria-hidden="true" />
+          }
+        >
+          <Show
+            when={props.direction() === 'asc'}
+            fallback={
+              <ArrowDownIcon class={`${SORT_ICON_CLASS} text-base-content`} aria-hidden="true" />
+            }
+          >
+            <ArrowUpIcon class={`${SORT_ICON_CLASS} text-base-content`} aria-hidden="true" />
+          </Show>
+        </Show>
+      </button>
+    </TableHead>
+  );
+}
+
+// Case-insensitive string comparator. Undefined / empty values ALWAYS sort
+// to the end regardless of direction — flipping a "—" row to the top of a
+// desc sort is never what the user wants (e.g. a running task with no
+// finished duration should not headline a "slowest tasks" view).
+function cmpString(
+  a: string | undefined,
+  b: string | undefined,
+  direction: 'asc' | 'desc',
+): number {
+  const av = (a ?? '').toLowerCase();
+  const bv = (b ?? '').toLowerCase();
+  if (!av && !bv) return 0;
+  if (!av) return 1;
+  if (!bv) return -1;
+  const cmp = av === bv ? 0 : av < bv ? -1 : 1;
+  return direction === 'asc' ? cmp : -cmp;
+}
+
+function cmpNumber(
+  a: number | undefined,
+  b: number | undefined,
+  direction: 'asc' | 'desc',
+): number {
+  const av = typeof a === 'number' && Number.isFinite(a) ? a : undefined;
+  const bv = typeof b === 'number' && Number.isFinite(b) ? b : undefined;
+  if (av === undefined && bv === undefined) return 0;
+  if (av === undefined) return 1;
+  if (bv === undefined) return -1;
+  const cmp = av - bv;
+  return direction === 'asc' ? cmp : -cmp;
+}
+
+function cmpBool(a: boolean, b: boolean, direction: 'asc' | 'desc'): number {
+  const cmp = (a ? 1 : 0) - (b ? 1 : 0);
+  return direction === 'asc' ? cmp : -cmp;
+}
+
+// Per-tab sort key types and their default directions. Numeric / timestamp
+// columns default to `desc` (biggest / newest first) since that's the
+// sysadmin-default question on a backup page. String columns default to
+// `asc` (A→Z). Boolean columns default to `desc` so "true" sorts first.
+
+type SnapshotSortKey = 'guest' | 'node' | 'latest' | 'count' | 'size';
+const SNAPSHOT_SORT_DEFAULT_DIRECTION: Record<SnapshotSortKey, 'asc' | 'desc'> = {
+  guest: 'asc',
+  node: 'asc',
+  latest: 'desc',
+  count: 'desc',
+  size: 'desc',
+};
+
+type ArchiveSortKey =
+  | 'volume'
+  | 'guest'
+  | 'storage'
+  | 'node'
+  | 'format'
+  | 'created'
+  | 'size'
+  | 'protected'
+  | 'verified';
+const ARCHIVE_SORT_DEFAULT_DIRECTION: Record<ArchiveSortKey, 'asc' | 'desc'> = {
+  volume: 'asc',
+  guest: 'asc',
+  storage: 'asc',
+  node: 'asc',
+  format: 'asc',
+  created: 'desc',
+  size: 'desc',
+  protected: 'desc',
+  verified: 'desc',
+};
+
+type TaskSortKey = 'status' | 'guest' | 'node' | 'started' | 'duration' | 'size';
+const TASK_SORT_DEFAULT_DIRECTION: Record<TaskSortKey, 'asc' | 'desc'> = {
+  status: 'asc',
+  guest: 'asc',
+  node: 'asc',
+  started: 'desc',
+  duration: 'desc',
+  size: 'desc',
+};
+
 export const ProxmoxBackupsTable: Component<{
   emptyIcon: JSX.Element;
 }> = (props) => {
@@ -274,6 +423,38 @@ export const ProxmoxBackupsTable: Component<{
   const [selectedDateKey, setSelectedDateKey] = createSignal<string | null>(null);
   const [archiveMetricMode, setArchiveMetricMode] = createSignal<BackupActivityMetricMode>('count');
   const [expandedGuests, setExpandedGuests] = createSignal<ReadonlySet<string>>(new Set<string>());
+
+  const [snapshotSortKey, setSnapshotSortKey] = createSignal<SnapshotSortKey>('latest');
+  const [snapshotSortDirection, setSnapshotSortDirection] = createSignal<'asc' | 'desc'>('desc');
+  const [archiveSortKey, setArchiveSortKey] = createSignal<ArchiveSortKey>('created');
+  const [archiveSortDirection, setArchiveSortDirection] = createSignal<'asc' | 'desc'>('desc');
+  const [taskSortKey, setTaskSortKey] = createSignal<TaskSortKey>('started');
+  const [taskSortDirection, setTaskSortDirection] = createSignal<'asc' | 'desc'>('desc');
+
+  const handleSnapshotSort = (key: SnapshotSortKey) => {
+    if (snapshotSortKey() === key) {
+      setSnapshotSortDirection(snapshotSortDirection() === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSnapshotSortKey(key);
+      setSnapshotSortDirection(SNAPSHOT_SORT_DEFAULT_DIRECTION[key]);
+    }
+  };
+  const handleArchiveSort = (key: ArchiveSortKey) => {
+    if (archiveSortKey() === key) {
+      setArchiveSortDirection(archiveSortDirection() === 'asc' ? 'desc' : 'asc');
+    } else {
+      setArchiveSortKey(key);
+      setArchiveSortDirection(ARCHIVE_SORT_DEFAULT_DIRECTION[key]);
+    }
+  };
+  const handleTaskSort = (key: TaskSortKey) => {
+    if (taskSortKey() === key) {
+      setTaskSortDirection(taskSortDirection() === 'asc' ? 'desc' : 'asc');
+    } else {
+      setTaskSortKey(key);
+      setTaskSortDirection(TASK_SORT_DEFAULT_DIRECTION[key]);
+    }
+  };
   const toggleDay = (key: string) =>
     setSelectedDateKey((current) => (current === key ? null : key));
   const toggleGuestExpansion = (key: string) =>
@@ -487,7 +668,22 @@ export const ProxmoxBackupsTable: Component<{
       if (filter === 'with-ram' && enriched.withRamCount === 0) continue;
       rows.push(enriched);
     }
-    rows.sort((a, b) => (b.newestMs ?? 0) - (a.newestMs ?? 0));
+    const sortKey = snapshotSortKey();
+    const direction = snapshotSortDirection();
+    rows.sort((a, b) => {
+      switch (sortKey) {
+        case 'guest':
+          return cmpString(guestLabel(a.type, a.vmid), guestLabel(b.type, b.vmid), direction);
+        case 'node':
+          return cmpString(a.node, b.node, direction);
+        case 'latest':
+          return cmpNumber(a.newestMs, b.newestMs, direction);
+        case 'count':
+          return cmpNumber(a.count, b.count, direction);
+        case 'size':
+          return cmpNumber(a.totalBytes, b.totalBytes, direction);
+      }
+    });
     return rows;
   });
 
@@ -495,7 +691,7 @@ export const ProxmoxBackupsTable: Component<{
     const term = search().trim().toLowerCase();
     const filter = archiveFilter();
     const dateKey = selectedDateKey();
-    return archives().filter((arc) => {
+    const list = archives().filter((arc) => {
       if (filter === 'protected' && !arc.protected) return false;
       if (filter === 'verified' && !arc.verified) return false;
       if (filter === 'unverified' && arc.verified) return false;
@@ -510,13 +706,38 @@ export const ProxmoxBackupsTable: Component<{
         .toLowerCase()
         .includes(term);
     });
+    const sortKey = archiveSortKey();
+    const direction = archiveSortDirection();
+    list.sort((a, b) => {
+      switch (sortKey) {
+        case 'volume':
+          return cmpString(a.volid, b.volid, direction);
+        case 'guest':
+          return cmpString(guestLabel(a.type, a.vmid), guestLabel(b.type, b.vmid), direction);
+        case 'storage':
+          return cmpString(a.storage, b.storage, direction);
+        case 'node':
+          return cmpString(a.node, b.node, direction);
+        case 'format':
+          return cmpString(a.format, b.format, direction);
+        case 'created':
+          return cmpNumber(archiveTimestampMs(a), archiveTimestampMs(b), direction);
+        case 'size':
+          return cmpNumber(a.size, b.size, direction);
+        case 'protected':
+          return cmpBool(a.protected, b.protected, direction);
+        case 'verified':
+          return cmpBool(a.verified, b.verified, direction);
+      }
+    });
+    return list;
   });
 
   const filteredTasks = createMemo(() => {
     const term = search().trim().toLowerCase();
     const filter = taskFilter();
     const dateKey = selectedDateKey();
-    return tasks().filter((task) => {
+    const list = tasks().filter((task) => {
       const classify = classifyTaskStatus(task.status);
       if (filter === 'ok' && classify.variant !== 'success') return false;
       if (filter === 'failed' && classify.variant !== 'danger') return false;
@@ -532,6 +753,29 @@ export const ProxmoxBackupsTable: Component<{
         .toLowerCase()
         .includes(term);
     });
+    const sortKey = taskSortKey();
+    const direction = taskSortDirection();
+    list.sort((a, b) => {
+      switch (sortKey) {
+        case 'status':
+          return cmpString(
+            classifyTaskStatus(a.status).label,
+            classifyTaskStatus(b.status).label,
+            direction,
+          );
+        case 'guest':
+          return cmpString(guestLabel(a.type, a.vmid), guestLabel(b.type, b.vmid), direction);
+        case 'node':
+          return cmpString(a.node, b.node, direction);
+        case 'started':
+          return cmpNumber(taskTimestampMs(a), taskTimestampMs(b), direction);
+        case 'duration':
+          return cmpNumber(taskDurationSeconds(a), taskDurationSeconds(b), direction);
+        case 'size':
+          return cmpNumber(a.size, b.size, direction);
+      }
+    });
+    return list;
   });
 
   const totalForTab = createMemo<number>(() => {
@@ -895,17 +1139,51 @@ export const ProxmoxBackupsTable: Component<{
                 <Table class="min-w-[900px] text-xs">
                   <TableHeader>
                     <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                      <TableHead class={getPlatformTableHeadClassForKind('name')}>Guest</TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Node</TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                        Latest
-                      </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                        Snapshots
-                      </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                        Total size
-                      </TableHead>
+                      <SortableHead
+                        label="Guest"
+                        sortKey="guest"
+                        currentSort={snapshotSortKey}
+                        direction={snapshotSortDirection}
+                        onSort={handleSnapshotSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('name')}
+                      />
+                      <SortableHead
+                        label="Node"
+                        sortKey="node"
+                        currentSort={snapshotSortKey}
+                        direction={snapshotSortDirection}
+                        onSort={handleSnapshotSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('text')}
+                      />
+                      <SortableHead
+                        label="Latest"
+                        sortKey="latest"
+                        currentSort={snapshotSortKey}
+                        direction={snapshotSortDirection}
+                        onSort={handleSnapshotSort}
+                        align="right"
+                        headClass={getPlatformTableHeadClassForKind('numeric-value')}
+                      />
+                      <SortableHead
+                        label="Snapshots"
+                        sortKey="count"
+                        currentSort={snapshotSortKey}
+                        direction={snapshotSortDirection}
+                        onSort={handleSnapshotSort}
+                        align="right"
+                        headClass={getPlatformTableHeadClassForKind('numeric-value')}
+                      />
+                      <SortableHead
+                        label="Total size"
+                        sortKey="size"
+                        currentSort={snapshotSortKey}
+                        direction={snapshotSortDirection}
+                        onSort={handleSnapshotSort}
+                        align="right"
+                        headClass={getPlatformTableHeadClassForKind('numeric-value')}
+                      />
                       <TableHead class={getPlatformTableHeadClassForKind('text')}>RAM</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1103,25 +1381,87 @@ export const ProxmoxBackupsTable: Component<{
                 <Table class="min-w-[1050px] text-xs">
                   <TableHeader>
                     <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                      <TableHead class={getPlatformTableHeadClassForKind('name')}>Volume</TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Guest</TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
-                        Storage
-                      </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Node</TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Format</TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                        Created
-                      </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('metric-bar')}>
-                        Size
-                      </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
-                        Protection
-                      </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
-                        Verified
-                      </TableHead>
+                      <SortableHead
+                        label="Volume"
+                        sortKey="volume"
+                        currentSort={archiveSortKey}
+                        direction={archiveSortDirection}
+                        onSort={handleArchiveSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('name')}
+                      />
+                      <SortableHead
+                        label="Guest"
+                        sortKey="guest"
+                        currentSort={archiveSortKey}
+                        direction={archiveSortDirection}
+                        onSort={handleArchiveSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('text')}
+                      />
+                      <SortableHead
+                        label="Storage"
+                        sortKey="storage"
+                        currentSort={archiveSortKey}
+                        direction={archiveSortDirection}
+                        onSort={handleArchiveSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('text')}
+                      />
+                      <SortableHead
+                        label="Node"
+                        sortKey="node"
+                        currentSort={archiveSortKey}
+                        direction={archiveSortDirection}
+                        onSort={handleArchiveSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('text')}
+                      />
+                      <SortableHead
+                        label="Format"
+                        sortKey="format"
+                        currentSort={archiveSortKey}
+                        direction={archiveSortDirection}
+                        onSort={handleArchiveSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('text')}
+                      />
+                      <SortableHead
+                        label="Created"
+                        sortKey="created"
+                        currentSort={archiveSortKey}
+                        direction={archiveSortDirection}
+                        onSort={handleArchiveSort}
+                        align="right"
+                        headClass={getPlatformTableHeadClassForKind('numeric-value')}
+                      />
+                      <SortableHead
+                        label="Size"
+                        sortKey="size"
+                        currentSort={archiveSortKey}
+                        direction={archiveSortDirection}
+                        onSort={handleArchiveSort}
+                        align="center"
+                        headClass={getPlatformTableHeadClassForKind('metric-bar')}
+                      />
+                      <SortableHead
+                        label="Protection"
+                        sortKey="protected"
+                        currentSort={archiveSortKey}
+                        direction={archiveSortDirection}
+                        onSort={handleArchiveSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('text')}
+                      />
+                      <SortableHead
+                        label="Verified"
+                        sortKey="verified"
+                        currentSort={archiveSortKey}
+                        direction={archiveSortDirection}
+                        onSort={handleArchiveSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('text')}
+                      />
                     </TableRow>
                   </TableHeader>
                   <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
@@ -1243,18 +1583,60 @@ export const ProxmoxBackupsTable: Component<{
                 <Table class="min-w-[1000px] text-xs">
                   <TableHeader>
                     <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Status</TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Guest</TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Node</TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                        Started
-                      </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('metric-bar')}>
-                        Duration
-                      </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                        Size
-                      </TableHead>
+                      <SortableHead
+                        label="Status"
+                        sortKey="status"
+                        currentSort={taskSortKey}
+                        direction={taskSortDirection}
+                        onSort={handleTaskSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('text')}
+                      />
+                      <SortableHead
+                        label="Guest"
+                        sortKey="guest"
+                        currentSort={taskSortKey}
+                        direction={taskSortDirection}
+                        onSort={handleTaskSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('text')}
+                      />
+                      <SortableHead
+                        label="Node"
+                        sortKey="node"
+                        currentSort={taskSortKey}
+                        direction={taskSortDirection}
+                        onSort={handleTaskSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('text')}
+                      />
+                      <SortableHead
+                        label="Started"
+                        sortKey="started"
+                        currentSort={taskSortKey}
+                        direction={taskSortDirection}
+                        onSort={handleTaskSort}
+                        align="right"
+                        headClass={getPlatformTableHeadClassForKind('numeric-value')}
+                      />
+                      <SortableHead
+                        label="Duration"
+                        sortKey="duration"
+                        currentSort={taskSortKey}
+                        direction={taskSortDirection}
+                        onSort={handleTaskSort}
+                        align="center"
+                        headClass={getPlatformTableHeadClassForKind('metric-bar')}
+                      />
+                      <SortableHead
+                        label="Size"
+                        sortKey="size"
+                        currentSort={taskSortKey}
+                        direction={taskSortDirection}
+                        onSort={handleTaskSort}
+                        align="right"
+                        headClass={getPlatformTableHeadClassForKind('numeric-value')}
+                      />
                       <TableHead class={getPlatformTableHeadClassForKind('text')}>Error</TableHead>
                     </TableRow>
                   </TableHeader>
