@@ -149,23 +149,38 @@ export const VsphereHostsTable: Component<{
             <Table class="min-w-full table-fixed text-xs md:min-w-[960px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={getPlatformTableHeadClass()}>Host</TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                  {/*
+                    Desktop widths give the Host FQDN room, balance the CPU
+                    and Memory bars, and trim the Datacenter / Cluster /
+                    Power / vCenter text columns and the Datastores / VMs
+                    integer-count columns to what their content actually
+                    needs. Mobile widths are unchanged.
+                  */}
+                  <TableHead class={`${getPlatformTableHeadClass()} md:w-[18%]`}>
+                    Host
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[11%]`}>
                     Datacenter
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[12%]`}>
                     Cluster
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[9%]`}>
                     Power
                   </TableHead>
-                  <TableHead class={getPlatformTableHeadClass('right')}>CPU</TableHead>
-                  <TableHead class={getPlatformTableHeadClass('right')}>Memory</TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[13%]`}>
+                    CPU
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[13%]`}>
+                    Memory
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[9%]`}>
                     Datastores
                   </TableHead>
-                  <TableHead class={getPlatformTableHeadClass('right')}>VMs</TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[5%]`}>
+                    VMs
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[10%]`}>
                     vCenter
                   </TableHead>
                 </TableRow>
