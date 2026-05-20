@@ -6,6 +6,7 @@ import kubernetesClustersTableSource from '@/features/kubernetes/KubernetesClust
 import kubernetesDeploymentsTableSource from '@/features/kubernetes/KubernetesDeploymentsTable.tsx?raw';
 import kubernetesNodesTableSource from '@/features/kubernetes/KubernetesNodesTable.tsx?raw';
 import kubernetesPageSurfaceSource from '@/features/kubernetes/KubernetesPageSurface.tsx?raw';
+import proxmoxCephTableSource from '@/features/proxmox/ProxmoxCephTable.tsx?raw';
 import proxmoxMailGatewayTableSource from '@/features/proxmox/ProxmoxMailGatewayTable.tsx?raw';
 import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?raw';
 import proxmoxPageSurfaceSource from '@/features/proxmox/ProxmoxPageSurface.tsx?raw';
@@ -45,7 +46,11 @@ const overviewSurfaceSources = [
   vmwarePageSurfaceSource,
 ];
 
-const proxmoxDetailTableSources = [proxmoxMailGatewayTableSource, proxmoxReplicationTableSource];
+const proxmoxDetailTableSources = [
+  proxmoxCephTableSource,
+  proxmoxMailGatewayTableSource,
+  proxmoxReplicationTableSource,
+];
 
 describe('platform overview layout guardrails', () => {
   it('keeps platform inventory tables on the shared dense table styling contract', () => {

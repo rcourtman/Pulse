@@ -1,6 +1,7 @@
 import {
   For,
   Show,
+  createEffect,
   createMemo,
   createSignal,
   type Component,
@@ -8,10 +9,9 @@ import {
 } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
-import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
 import type { StatusIndicatorVariant } from '@/utils/status';
+import { TableCard } from '@/components/shared/TableCard';
 import {
   Table,
   TableBody,
@@ -22,6 +22,14 @@ import {
 } from '@/components/shared/Table';
 import { formatBytes } from '@/utils/format';
 import { asTrimmedString } from '@/utils/stringUtils';
+import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_CARD_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformTableToolbar,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
+} from '@/features/platformPage/sharedPlatformPage';
 import type { Resource, ResourceCephServiceMeta } from '@/types/resource';
 import { ProxmoxCephClusterDrawer } from './ProxmoxCephClusterDrawer';
 
@@ -38,12 +46,12 @@ import { ProxmoxCephClusterDrawer } from './ProxmoxCephClusterDrawer';
 
 type CephStatusFilter = 'all' | 'healthy' | 'warning' | 'critical';
 
-const STATUS_FILTER_OPTIONS: FilterOption<CephStatusFilter>[] = [
+const STATUS_FILTER_OPTIONS = [
   { value: 'all', label: 'All' },
   { value: 'healthy', label: 'Healthy' },
   { value: 'warning', label: 'Warning' },
   { value: 'critical', label: 'Critical' },
-];
+] satisfies Array<{ value: CephStatusFilter; label: string }>;
 
 function classify(resource: Resource): CephStatusFilter {
   const raw = (resource.ceph?.healthStatus ?? resource.status ?? '').toUpperCase();
@@ -64,7 +72,11 @@ function indicatorFor(category: CephStatusFilter): {
 } {
   switch (category) {
     case 'healthy':
-      return { variant: 'success', label: 'Healthy', tone: 'text-emerald-600 dark:text-emerald-300' };
+      return {
+        variant: 'success',
+        label: 'Healthy',
+        tone: 'text-emerald-600 dark:text-emerald-300',
+      };
     case 'warning':
       return { variant: 'warning', label: 'Warning', tone: 'text-amber-600 dark:text-amber-300' };
     case 'critical':
@@ -76,9 +88,7 @@ function indicatorFor(category: CephStatusFilter): {
 
 function summarizeServices(services: ResourceCephServiceMeta[] | undefined): string {
   if (!services || services.length === 0) return '—';
-  return services
-    .map((svc) => `${svc.type}:${svc.running}/${svc.total}`)
-    .join(' · ');
+  return services.map((svc) => `${svc.type}:${svc.running}/${svc.total}`).join(' · ');
 }
 
 function poolsLabel(resource: Resource): JSX.Element {
@@ -102,7 +112,11 @@ function osdLabel(resource: Resource): JSX.Element {
   const inService = meta.numOsdsIn ?? 0;
   const allUp = up === total && inService === total;
   return (
-    <span class={allUp ? 'tabular-nums' : 'tabular-nums text-amber-600 dark:text-amber-300 font-semibold'}>
+    <span
+      class={
+        allUp ? 'tabular-nums' : 'tabular-nums text-amber-600 dark:text-amber-300 font-semibold'
+      }
+    >
       {up}/{total}
       <span class="text-muted text-[10px]"> up · {inService} in</span>
     </span>
@@ -127,8 +141,7 @@ function capacityLabel(resource: Resource): JSX.Element {
   if (typeof total === 'number' && total > 0) {
     return (
       <span class="tabular-nums">
-        {pct.toFixed(1)}%
-        <span class="text-muted text-[10px]"> of {formatBytes(total)}</span>
+        {pct.toFixed(1)}%<span class="text-muted text-[10px]"> of {formatBytes(total)}</span>
       </span>
     );
   }
@@ -154,8 +167,22 @@ export const ProxmoxCephTable: Component<{
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<CephStatusFilter>('all');
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
-  const toggleSelected = (id: string) =>
+  // Single-cluster pages have an almost empty surface unless the user
+  // expands the only row, so auto-open it on first load. Once the user
+  // interacts (toggle or close), we stop overriding their choice.
+  const [userPicked, setUserPicked] = createSignal(false);
+  createEffect(() => {
+    if (userPicked()) return;
+    setSelectedId(props.resources.length === 1 ? props.resources[0].id : null);
+  });
+  const toggleSelected = (id: string) => {
+    setUserPicked(true);
     setSelectedId((current) => (current === id ? null : id));
+  };
+  const closeSelected = () => {
+    setUserPicked(true);
+    setSelectedId(null);
+  };
 
   const filtered = createMemo(() => {
     const term = search().trim().toLowerCase();
@@ -195,21 +222,17 @@ export const ProxmoxCephTable: Component<{
       }
     >
       <div class="space-y-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="min-w-[200px] flex-1 sm:max-w-xs">
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Search clusters, pools, FSID"
-            />
-          </div>
-          <FilterButtonGroup options={STATUS_FILTER_OPTIONS} value={status()} onChange={setStatus} />
-          <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-            <Show when={visible() !== total()} fallback={<>{total()} clusters</>}>
-              {visible()} of {total()} clusters
-            </Show>
-          </span>
-        </div>
+        <PlatformTableToolbar
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search clusters, pools, FSID"
+          status={status()}
+          onStatusChange={setStatus}
+          statusOptions={STATUS_FILTER_OPTIONS}
+          visible={visible()}
+          total={total()}
+          rowNoun="clusters"
+        />
 
         <Show
           when={filtered().length > 0}
@@ -223,23 +246,33 @@ export const ProxmoxCephTable: Component<{
             </Card>
           }
         >
-          <Card padding="none" tone="card" class="overflow-hidden">
-            <Table class="w-full min-w-[1100px] border-collapse text-xs">
-              <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                  <TableHead class="px-3 py-2 font-medium">Cluster</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Health</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">FSID</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Quorum</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">OSDs</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">PGs</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Pools</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Capacity</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Services</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Detail</TableHead>
+          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+            <Table class="min-w-[1100px] text-xs">
+              <TableHeader>
+                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                  <TableHead class={getPlatformTableHeadClassForKind('name')}>Cluster</TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Health</TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('text')}>FSID</TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Quorum
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    OSDs
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    PGs
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Pools
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Capacity
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Services</TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Detail</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody class="divide-y divide-border-subtle">
+              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                 <For each={filtered()}>
                   {(cluster) => {
                     const ind = indicatorFor(classify(cluster));
@@ -255,7 +288,7 @@ export const ProxmoxCephTable: Component<{
                           onClick={() => toggleSelected(cluster.id)}
                           aria-expanded={isOpen()}
                         >
-                          <TableCell class="px-3 py-2">
+                          <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex items-center gap-2 min-w-0">
                               <span class="font-semibold text-base-content truncate" title={name}>
                                 {name}
@@ -270,7 +303,7 @@ export const ProxmoxCephTable: Component<{
                               </div>
                             </Show>
                           </TableCell>
-                          <TableCell class="px-3 py-2">
+                          <TableCell class={getPlatformTableCellClassForKind('text')}>
                             <div class="flex items-center gap-2">
                               <StatusDot
                                 size="sm"
@@ -286,16 +319,26 @@ export const ProxmoxCephTable: Component<{
                               </div>
                             </Show>
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
+                          >
                             <span class="inline-block max-w-[10rem] truncate" title={fsid}>
                               {fsid}
                             </span>
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
                             {quorumLabel(cluster.ceph)}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">{osdLabel(cluster)}</TableCell>
-                          <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            {osdLabel(cluster)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                          >
                             <Show
                               when={(cluster.ceph?.numPGs ?? 0) > 0}
                               fallback={<span class="text-muted">—</span>}
@@ -303,14 +346,24 @@ export const ProxmoxCephTable: Component<{
                               {cluster.ceph?.numPGs}
                             </Show>
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">{poolsLabel(cluster)}</TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            {poolsLabel(cluster)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
                             {capacityLabel(cluster)}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
+                          >
                             {summarizeServices(cluster.ceph?.services)}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
                             {healthMessageCell(cluster)}
                           </TableCell>
                         </TableRow>
@@ -320,13 +373,10 @@ export const ProxmoxCephTable: Component<{
                               colspan={10}
                               class="p-0 border-b border-border bg-surface-alt"
                             >
-                              <div
-                                class="px-4 py-4"
-                                onClick={(event) => event.stopPropagation()}
-                              >
+                              <div class="px-4 py-4" onClick={(event) => event.stopPropagation()}>
                                 <ProxmoxCephClusterDrawer
                                   cluster={cluster}
-                                  onClose={() => setSelectedId(null)}
+                                  onClose={closeSelected}
                                 />
                               </div>
                             </TableCell>
@@ -338,7 +388,7 @@ export const ProxmoxCephTable: Component<{
                 </For>
               </TableBody>
             </Table>
-          </Card>
+          </TableCard>
         </Show>
       </div>
     </Show>
