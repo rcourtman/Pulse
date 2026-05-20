@@ -109,22 +109,34 @@ const TABS: BackupTabSpec[] = [
   },
 ];
 
+// Replication colours the per-row status word to match its dot (emerald
+// text for Healthy, red for Failed, etc.). Mirror that here so the
+// Recent tasks STATUS column reads the same way — dot + same-tone word.
 function classifyTaskStatus(status: string): {
   variant: StatusIndicatorVariant;
   label: string;
+  toneClass: string;
 } {
   const normalized = (status ?? '').toLowerCase();
   if (normalized === 'ok' || normalized === 'success' || normalized === 'completed') {
-    return { variant: 'success', label: 'OK' };
+    return {
+      variant: 'success',
+      label: 'OK',
+      toneClass: 'text-emerald-600 dark:text-emerald-300',
+    };
   }
   if (normalized === 'running') {
-    return { variant: 'warning', label: 'Running' };
+    return {
+      variant: 'warning',
+      label: 'Running',
+      toneClass: 'text-amber-600 dark:text-amber-300',
+    };
   }
   if (normalized === 'failed' || normalized === 'error') {
-    return { variant: 'danger', label: 'Failed' };
+    return { variant: 'danger', label: 'Failed', toneClass: 'text-red-600 dark:text-red-300' };
   }
-  if (!normalized) return { variant: 'muted', label: '—' };
-  return { variant: 'muted', label: status };
+  if (!normalized) return { variant: 'muted', label: '—', toneClass: 'text-muted' };
+  return { variant: 'muted', label: status, toneClass: 'text-muted' };
 }
 
 function guestLabel(type: string | undefined, vmid: number): string {
@@ -831,9 +843,14 @@ export const ProxmoxBackupsTable: Component<{
                 fallback={
                   <Show
                     when={visibleForTab() !== totalForTab()}
-                    fallback={<>{totalForTab()} entries</>}
+                    fallback={
+                      <>
+                        {totalForTab()} {tab() === 'archives' ? 'archives' : 'tasks'}
+                      </>
+                    }
                   >
-                    {visibleForTab()} of {totalForTab()} entries
+                    {visibleForTab()} of {totalForTab()}{' '}
+                    {tab() === 'archives' ? 'archives' : 'tasks'}
                   </Show>
                 }
               >
@@ -907,11 +924,6 @@ export const ProxmoxBackupsTable: Component<{
                                     }`}
                                     aria-hidden="true"
                                   />
-                                  <span
-                                    class={`h-2 w-2 shrink-0 rounded-full ${rowAge.swatchClass}`}
-                                    aria-hidden="true"
-                                    title={`Newest snapshot: ${rowAge.label}`}
-                                  />
                                   <span class="font-semibold">
                                     {guestLabel(row.type, row.vmid)}
                                   </span>
@@ -929,7 +941,14 @@ export const ProxmoxBackupsTable: Component<{
                                   when={row.newestMs !== undefined}
                                   fallback={<span class="text-muted">—</span>}
                                 >
-                                  {formatRelativeTime(row.newestMs, { compact: true })}
+                                  <div class="flex items-center justify-end gap-2">
+                                    <span
+                                      class={`h-1.5 w-1.5 shrink-0 rounded-full ${rowAge.swatchClass}`}
+                                      aria-hidden="true"
+                                      title={`Newest snapshot: ${rowAge.label}`}
+                                    />
+                                    <span>{formatRelativeTime(row.newestMs, { compact: true })}</span>
+                                  </div>
                                 </Show>
                               </TableCell>
                               <TableCell
@@ -967,11 +986,13 @@ export const ProxmoxBackupsTable: Component<{
                                     <table class="w-full text-[11px]">
                                       <thead>
                                         <tr class="bg-surface-alt text-muted">
-                                          <th class="px-2 py-1 text-left font-medium">Name</th>
-                                          <th class="px-2 py-1 text-left font-medium">Parent</th>
-                                          <th class="px-2 py-1 text-right font-medium">Captured</th>
-                                          <th class="px-2 py-1 text-right font-medium">Size</th>
-                                          <th class="px-2 py-1 text-left font-medium">RAM</th>
+                                          <th class="px-2 py-0.5 text-left font-medium">Name</th>
+                                          <th class="px-2 py-0.5 text-left font-medium">Parent</th>
+                                          <th class="px-2 py-0.5 text-right font-medium">
+                                            Captured
+                                          </th>
+                                          <th class="px-2 py-0.5 text-right font-medium">Size</th>
+                                          <th class="px-2 py-0.5 text-left font-medium">RAM</th>
                                         </tr>
                                       </thead>
                                       <tbody class="divide-y divide-border-subtle">
@@ -1183,9 +1204,8 @@ export const ProxmoxBackupsTable: Component<{
                                 </Show>
                               }
                             >
-                              <span class="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
-                                <StatusDot size="sm" variant="success" ariaHidden />
-                                <span class="text-[11px] font-medium">Verified</span>
+                              <span class="inline-flex items-center rounded-sm bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
+                                Verified
                               </span>
                             </Show>
                           </TableCell>
@@ -1265,7 +1285,7 @@ export const ProxmoxBackupsTable: Component<{
                                   title={classify.label}
                                   ariaHidden
                                 />
-                                <span class="text-[11px] font-medium text-base-content">
+                                <span class={`text-[11px] font-medium ${classify.toneClass}`}>
                                   {classify.label}
                                 </span>
                               </div>
