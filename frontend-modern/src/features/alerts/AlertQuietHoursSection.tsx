@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { For, Show, createUniqueId } from 'solid-js';
 
 import { controlClass, formField, labelClass } from '@/components/shared/Form';
 import { FormSelect } from '@/components/shared/FormSelect';
@@ -40,6 +40,12 @@ interface AlertQuietHoursSectionProps {
 }
 
 export function AlertQuietHoursSection(props: AlertQuietHoursSectionProps) {
+  const fieldIdPrefix = `alert-quiet-hours-${createUniqueId()}`;
+  const fieldIds = {
+    start: `${fieldIdPrefix}-start`,
+    end: `${fieldIdPrefix}-end`,
+  };
+
   return (
     <SettingsPanel
       title={ALERT_CONFIG_QUIET_HOURS_TITLE}
@@ -63,10 +69,11 @@ export function AlertQuietHoursSection(props: AlertQuietHoursSectionProps) {
         <div class="space-y-4">
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div class={formField}>
-              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+              <label for={fieldIds.start} class={labelClass('text-xs uppercase tracking-[0.08em]')}>
                 {ALERT_CONFIG_QUIET_HOURS_START_TIME_LABEL}
               </label>
               <input
+                id={fieldIds.start}
                 type="time"
                 value={props.quietHours.start}
                 onChange={(event) => props.setQuietHoursStart(event.currentTarget.value)}
@@ -74,10 +81,11 @@ export function AlertQuietHoursSection(props: AlertQuietHoursSectionProps) {
               />
             </div>
             <div class={formField}>
-              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+              <label for={fieldIds.end} class={labelClass('text-xs uppercase tracking-[0.08em]')}>
                 {ALERT_CONFIG_QUIET_HOURS_END_TIME_LABEL}
               </label>
               <input
+                id={fieldIds.end}
                 type="time"
                 value={props.quietHours.end}
                 onChange={(event) => props.setQuietHoursEnd(event.currentTarget.value)}
@@ -109,6 +117,8 @@ export function AlertQuietHoursSection(props: AlertQuietHoursSectionProps) {
                     type="button"
                     onClick={() => props.toggleQuietDay(day.id)}
                     title={day.fullLabel}
+                    aria-label={day.fullLabel}
+                    aria-pressed={props.quietHours.days[day.id]}
                     class={getAlertQuietDayButtonClass(props.quietHours.days[day.id])}
                   >
                     {day.label}

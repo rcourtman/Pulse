@@ -1,10 +1,6 @@
-import { Show } from 'solid-js';
+import { Show, createUniqueId } from 'solid-js';
 
-import {
-  formHelpText,
-  formField,
-  labelClass,
-} from '@/components/shared/Form';
+import { formHelpText, formField, labelClass } from '@/components/shared/Form';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import {
@@ -33,6 +29,11 @@ interface AlertGroupingSectionProps {
 }
 
 export function AlertGroupingSection(props: AlertGroupingSectionProps) {
+  const fieldIdPrefix = `alert-grouping-${createUniqueId()}`;
+  const fieldIds = {
+    window: `${fieldIdPrefix}-window`,
+  };
+
   return (
     <SettingsPanel
       title={ALERT_CONFIG_GROUPING_TITLE}
@@ -55,15 +56,17 @@ export function AlertGroupingSection(props: AlertGroupingSectionProps) {
       <Show when={props.grouping.enabled}>
         <div class="space-y-4">
           <div class={formField}>
-            <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+            <label for={fieldIds.window} class={labelClass('text-xs uppercase tracking-[0.08em]')}>
               {ALERT_CONFIG_GROUPING_WINDOW_LABEL}
             </label>
             <div class="flex items-center gap-3">
               <input
+                id={fieldIds.window}
                 type="range"
                 min="0"
                 max="30"
                 value={props.grouping.window}
+                aria-valuetext={`${props.grouping.window} minutes`}
                 onChange={(event) => props.setGroupingWindow(event.currentTarget.value)}
                 class="flex-1"
               />

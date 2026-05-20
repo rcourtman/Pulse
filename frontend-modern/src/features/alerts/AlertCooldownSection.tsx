@@ -1,11 +1,6 @@
-import { Show } from 'solid-js';
+import { Show, createUniqueId } from 'solid-js';
 
-import {
-  controlClass,
-  formHelpText,
-  formField,
-  labelClass,
-} from '@/components/shared/Form';
+import { controlClass, formHelpText, formField, labelClass } from '@/components/shared/Form';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import {
@@ -30,6 +25,12 @@ interface AlertCooldownSectionProps {
 }
 
 export function AlertCooldownSection(props: AlertCooldownSectionProps) {
+  const fieldIdPrefix = `alert-cooldown-${createUniqueId()}`;
+  const fieldIds = {
+    minutes: `${fieldIdPrefix}-minutes`,
+    maxAlerts: `${fieldIdPrefix}-max-alerts`,
+  };
+
   return (
     <SettingsPanel
       title={ALERT_CONFIG_COOLDOWN_TITLE}
@@ -53,11 +54,15 @@ export function AlertCooldownSection(props: AlertCooldownSectionProps) {
         <div class="space-y-4">
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div class={formField}>
-              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+              <label
+                for={fieldIds.minutes}
+                class={labelClass('text-xs uppercase tracking-[0.08em]')}
+              >
                 {ALERT_CONFIG_COOLDOWN_PERIOD_LABEL}
               </label>
               <div class="relative">
                 <input
+                  id={fieldIds.minutes}
                   type="number"
                   min="5"
                   max="120"
@@ -73,11 +78,15 @@ export function AlertCooldownSection(props: AlertCooldownSectionProps) {
             </div>
 
             <div class={formField}>
-              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+              <label
+                for={fieldIds.maxAlerts}
+                class={labelClass('text-xs uppercase tracking-[0.08em]')}
+              >
                 {ALERT_CONFIG_COOLDOWN_MAX_ALERTS_LABEL}
               </label>
               <div class="relative">
                 <input
+                  id={fieldIds.maxAlerts}
                   type="number"
                   min="1"
                   max="10"
