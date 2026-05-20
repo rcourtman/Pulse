@@ -40,17 +40,23 @@ const HOST_COLUMN_MIN_LAYOUT: Record<ProxmoxHostTableColumnId, WorkloadTableLayo
   cluster: 'compact',
 };
 
+// CPU, memory, and disk render the same kind of usage bar, so they share
+// weights (matches the workloads table below, where the three metric
+// columns are all 140px). Node gets a little extra headroom for longer
+// cluster-style names like "Disaster Recovery A"; the short-content
+// columns (version pill, uptime, temp gauge, vms/cts badges, cluster
+// pill) take only what they need.
 const HOST_COLUMN_DESKTOP_WIDTHS: Record<ProxmoxHostTableColumnId, number> = {
-  node: 15,
-  version: 8,
-  uptime: 7,
+  node: 17,
+  version: 6,
+  uptime: 6,
   cpu: 13,
   memory: 13,
-  disk: 7,
-  temp: 7,
-  vms: 5,
-  cts: 5,
-  cluster: 12,
+  disk: 13,
+  temp: 5,
+  vms: 4,
+  cts: 4,
+  cluster: 10,
 };
 
 const HOST_COLUMN_RESPONSIVE_WEIGHTS: Record<
@@ -58,17 +64,17 @@ const HOST_COLUMN_RESPONSIVE_WEIGHTS: Record<
   Partial<Record<ProxmoxHostTableColumnId, number>>
 > = {
   mobile: {
-    node: 44,
-    cpu: 23,
-    memory: 23,
-    disk: 10,
+    node: 40,
+    cpu: 20,
+    memory: 20,
+    disk: 20,
   },
   tablet: {
-    node: 30,
-    cpu: 19,
-    memory: 19,
-    disk: 11,
-    temp: 8,
+    node: 28,
+    cpu: 18,
+    memory: 18,
+    disk: 18,
+    temp: 6,
     vms: 6,
     cts: 6,
   },
