@@ -165,6 +165,11 @@ details such as detected version, config/data/log paths, Docker bind mounts,
 ports, and suggested web URLs may be authored in mock fixtures, but consumers
 must receive them through the normal Discovery API contract rather than through
 frontend-only demo data or a monitoring-only side channel.
+Demo Discovery fixtures must cover the authored estate broadly enough that the
+default drawer experience demonstrates meaningful service context instead of a
+majority of unknown placeholder records. Non-HTTP services may publish a clear
+no-web-interface diagnostic, but fixtures must still identify the service,
+version, category, and useful operator paths through the normal Discovery API.
 That same monitoring boundary also owns the escalation callback bridge into the
 alerts delivery layer. Monitor-owned escalation handling may still publish
 canonical escalation state to websocket consumers, but notification fan-out

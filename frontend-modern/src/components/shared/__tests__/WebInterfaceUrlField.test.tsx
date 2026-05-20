@@ -123,6 +123,20 @@ describe('WebInterfaceUrlField', () => {
     expect(screen.getByLabelText(getDiscoveryProvenanceTitle())).toBeInTheDocument();
   });
 
+  it('does not show missing suggested URL diagnostics when a custom URL already exists', async () => {
+    render(() => (
+      <WebInterfaceUrlField
+        metadataKind="guest"
+        metadataId="guest-1"
+        customUrl="https://198.51.100.100:8080"
+        suggestedUrlDiagnostic="No management interface could be inferred."
+      />
+    ));
+
+    expect(await screen.findByDisplayValue('https://198.51.100.100:8080')).toBeInTheDocument();
+    expect(screen.queryByText('No suggested URL available')).toBeNull();
+  });
+
   it('offers discovered URL copy, open, and adopt actions without saving automatically', async () => {
     render(() => (
       <WebInterfaceUrlField

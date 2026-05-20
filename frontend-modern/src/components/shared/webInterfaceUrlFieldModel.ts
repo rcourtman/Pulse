@@ -52,11 +52,13 @@ export function getWebInterfaceTargetLabel(
 
 export function shouldShowWebInterfaceSuggestedDiagnostic(options: {
   discoveryLoading?: boolean;
+  currentUrl?: string;
   suggestedUrl?: string;
   suggestedUrlDiagnostic?: string;
 }): boolean {
   return (
     !options.discoveryLoading &&
+    !normalizeWebInterfaceUrl(options.currentUrl) &&
     !normalizeWebInterfaceUrl(options.suggestedUrl) &&
     Boolean(options.suggestedUrlDiagnostic)
   );

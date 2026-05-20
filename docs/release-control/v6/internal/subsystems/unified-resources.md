@@ -1696,6 +1696,13 @@ That access-side analysis surface still follows the same shell/runtime split as
 the rest of the drawer: `DiscoveryTab.tsx` owns presentation and disclosures,
 while `useDiscoveryTabState.ts` owns API fetches, websocket progress, and
 note/discovery mutations.
+Discovery validity in that runtime state must defer to the shared
+`discoveryPresentation.ts` meaningful-context gate. CLI access, confidence, and
+diagnostics may support an audit trail, but they must not turn placeholder
+records such as unknown service/category/version with no ports, paths, facts,
+or suggested URL into a valid identified result. Generic workload types such
+as `service`, `container`, or `lxc` remain placeholders until Discovery also
+provides a more specific service signal.
 Discovery endpoint candidates are support context, not authoritative resource
 links. Resource and workload drawers may pass observed Discovery URLs into the
 shared web-interface field with visible provenance, copy/open affordances, and

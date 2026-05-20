@@ -1394,6 +1394,12 @@ AI runtime.
     `hasValidDiscovery` — so the same record either renders in all
     surfaces or hides in all surfaces, preventing "Unknown" rows or
     zero-confidence noise from drifting into peripheral UI.
+    CLI access, confidence fields, and no-URL diagnostics are support
+    metadata; they must not by themselves promote a record into the
+    identified-service summary when the service name, category, version,
+    paths, ports, facts, and suggested URL are all absent or placeholders,
+    including generic workload types such as `service` or `container` and
+    diagnostic facts such as metadata-only status or missing-config errors.
     Discovery is an opt-in observed-context layer, not an automatic row-link
     owner. The reducer must carry provenance, observed time, service version,
     endpoint candidates, and URL-source copy so drawer surfaces can show
@@ -2119,6 +2125,10 @@ owned title so feature drawers can place web-interface controls inside a larger
 access surface without forking the save/remove/runtime behavior. Future
 web-interface URL work should extend those owners instead of pushing metadata
 transport or validation back into the shared shell.
+Missing-suggested-URL diagnostics remain useful only when the operator has no
+saved or entered URL; once a custom web-interface URL is present, the shared
+field must suppress "no suggested URL" warnings so Discovery does not make a
+valid manual endpoint look broken.
 The shared help icon now follows that same owner split.
 `frontend-modern/src/components/shared/HelpIcon.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useHelpIconState.ts` owns open state,
@@ -3163,6 +3173,10 @@ surfacing "Unknown" rows or zero-confidence noise. Manual/persisted
 web-interface URLs still win: Discovery suggestions may be copied, opened, or
 adopted through the shared `WebInterfaceUrlField`, but they must not silently
 replace metadata or make row-name links active until the operator saves them.
+No-URL diagnostics and command access hints are not endpoint candidates; they
+can explain a Discovery result inside Discovery-owned surfaces, but they must
+not trigger out-of-tab identified-service cards or suggested-URL panels without
+another meaningful service signal.
 The visible provenance marker for those values is the shared
 `DiscoveryProvenanceMarker`; local surfaces may choose the labelled or
 icon-only variant, but must not invent alternate Discovery badges or hide the

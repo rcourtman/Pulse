@@ -11,11 +11,11 @@ import (
 )
 
 const (
-	maxMockVMDiscoveryFixtures        = 4
-	maxMockContainerDiscoveryFixtures = 4
-	maxMockDockerDiscoveryFixtures    = 10
-	maxMockHostDiscoveryFixtures      = 4
-	maxMockK8sDiscoveryFixtures       = 4
+	maxMockVMDiscoveryFixtures        = 48
+	maxMockContainerDiscoveryFixtures = 64
+	maxMockDockerDiscoveryFixtures    = 96
+	maxMockHostDiscoveryFixtures      = 6
+	maxMockK8sDiscoveryFixtures       = 80
 
 	discoveryResourceTypeVM              = "vm"
 	discoveryResourceTypeSystemContainer = "system-container"
@@ -498,6 +498,16 @@ func mockServiceDiscoveryProfile(name, image, runtime string) mockDiscoveryProfi
 		return mockProfile("redis", "Redis", firstNonEmpty(version, "7.2"), discoveryCategoryCache, 6379, "redis-server", "", "", "No web interface was suggested because Redis exposes a cache port, not an HTTP UI.", []string{"/usr/local/etc/redis/redis.conf", "/etc/redis/redis.conf"}, []string{"/data"}, []string{"/var/log/redis/redis-server.log"})
 	case strings.Contains(token, "traefik") || strings.Contains(token, "edge-proxy"):
 		return mockProfile("traefik", "Traefik", firstNonEmpty(version, "3.1"), discoveryCategoryWebServer, 443, "traefik", "https", "/", "", []string{"/etc/traefik/traefik.yml", "/etc/traefik/dynamic"}, []string{"/letsencrypt"}, []string{"/var/log/traefik/traefik.log"})
+	case strings.Contains(token, "smtp") || strings.Contains(token, "postfix") || strings.Contains(token, "mail-relay"):
+		return mockProfile("postfix", "Postfix SMTP Relay", firstNonEmpty(version, "3.8"), discoveryCategoryNetwork, 25, "master", "", "", "No web interface was suggested because the detected service exposes SMTP, not an HTTP UI.", []string{"/etc/postfix/main.cf", "/etc/postfix/master.cf"}, []string{"/var/spool/postfix"}, []string{"/var/log/mail.log"})
+	case strings.Contains(token, "auth-service"):
+		return mockProfile("auth-service", "Auth Service", firstNonEmpty(version, "2026.04"), discoveryCategorySecurity, 8080, "auth-service", "http", "/", "", []string{"/etc/auth-service/config.yaml"}, []string{"/var/lib/auth-service"}, []string{"/var/log/auth-service.log"})
+	case strings.Contains(token, "billing-worker") || strings.Contains(token, "payments-worker"):
+		return mockProfile("queue-worker", "Queue Worker", firstNonEmpty(version, "2026.04"), discoveryCategoryBackup, 0, "queue-worker", "", "", "No web interface was suggested because this workload is a background worker.", []string{"/etc/pulse-demo/worker.yaml"}, []string{"/var/lib/pulse-demo/worker"}, []string{"/var/log/pulse-demo/worker.log"})
+	case strings.Contains(token, "reporting-api") || strings.Contains(token, "inventory-api") || strings.Contains(token, "checkout-api"):
+		return mockProfile("api-service", "API Service", firstNonEmpty(version, "2026.04"), discoveryCategoryWebServer, 8080, "api-service", "http", "/", "", []string{"/etc/pulse-demo/api.yaml"}, []string{"/var/lib/pulse-demo/api"}, []string{"/var/log/pulse-demo/api.log"})
+	case strings.Contains(token, "docs-wiki") || strings.Contains(token, "docs-portal") || strings.Contains(token, "dev-portal") || strings.Contains(token, "customer-portal"):
+		return mockProfile("web-portal", "Web Portal", firstNonEmpty(version, "2026.04"), discoveryCategoryWebServer, 8080, "web-portal", "http", "/", "", []string{"/etc/pulse-demo/portal.yaml"}, []string{"/var/lib/pulse-demo/portal"}, []string{"/var/log/pulse-demo/portal.log"})
 	case strings.Contains(token, "vaultwarden"):
 		return mockProfile("vaultwarden", "Vaultwarden", firstNonEmpty(version, "1.32.7"), discoveryCategorySecurity, 80, "vaultwarden", "http", "/", "", []string{"/data/config.json"}, []string{"/data"}, []string{"/data/vaultwarden.log"})
 	case strings.Contains(token, "uptime-kuma"):

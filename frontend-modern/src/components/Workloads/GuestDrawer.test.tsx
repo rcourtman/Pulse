@@ -243,6 +243,53 @@ describe('GuestDrawer', () => {
       expect(screen.queryByText('Identified Service')).toBeNull();
     });
 
+    it('hides low-signal placeholder discovery from the Overview card and URL field', async () => {
+      discoveryApiMocks.getDiscovery.mockResolvedValueOnce({
+        id: 'system-container:pve4:152',
+        resource_type: 'system-container',
+        resource_id: '152',
+        target_id: 'pve4',
+        service_name: '',
+        service_type: 'service',
+        service_version: '',
+        category: 'unknown',
+        confidence: 0,
+        cli_access: 'pct exec 152 -- /bin/bash',
+        ports: [],
+        facts: [
+          {
+            category: 'service',
+            key: 'status',
+            value: 'online',
+            source: 'metadata',
+            confidence: 1,
+            discovered_at: '2026-05-19T00:00:00Z',
+          },
+          {
+            category: 'config',
+            key: 'missing_config',
+            value: 'nodes/delly/lxc/152.conf not found on host',
+            source: 'all_commands',
+            confidence: 1,
+            discovered_at: '2026-05-19T00:00:00Z',
+          },
+        ],
+        config_paths: [],
+        data_paths: [],
+        log_paths: [],
+        updated_at: '2026-05-18T09:49:19.049058+01:00',
+        suggested_url_diagnostic: 'no host or IP candidate available',
+      } as unknown as import('@/types/discovery').ResourceDiscovery);
+
+      render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
+
+      await waitFor(() => {
+        expect(discoveryApiMocks.getDiscovery).toHaveBeenCalled();
+      });
+      expect(screen.queryByText('Identified Service')).toBeNull();
+      expect(screen.getByTestId('url-suggested-diagnostic')).toHaveTextContent('');
+    });
+
     it('keeps the passive discovery lookup out of the parent Suspense fallback', () => {
       discoveryApiMocks.getDiscovery.mockImplementationOnce(
         () => new Promise<import('@/types/discovery').ResourceDiscovery | null>(() => undefined),

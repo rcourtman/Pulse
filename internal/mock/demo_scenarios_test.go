@@ -91,6 +91,7 @@ func TestBuildFixtureGraphIncludesDiscoveryContextFixtures(t *testing.T) {
 	var hasDockerURL bool
 	var hasVM bool
 	var hasAgent bool
+	var hasSMTPRelay bool
 	for _, discovery := range graph.DiscoveryFixtures {
 		if discovery == nil {
 			t.Fatal("discovery fixture must not be nil")
@@ -101,6 +102,9 @@ func TestBuildFixtureGraphIncludesDiscoveryContextFixtures(t *testing.T) {
 		if discovery.ServiceName == "" || discovery.ServiceVersion == "" || len(discovery.ConfigPaths) == 0 {
 			t.Fatalf("discovery fixture missing operator context: %+v", discovery)
 		}
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(discovery.ServiceName)), "unknown") {
+			t.Fatalf("mock discovery fixture must not publish placeholder service names: %+v", discovery)
+		}
 		switch discovery.ResourceType {
 		case discoveryResourceTypeDocker:
 			hasDockerURL = hasDockerURL || discovery.SuggestedURL != "" && len(discovery.DockerMounts) > 0
@@ -108,6 +112,8 @@ func TestBuildFixtureGraphIncludesDiscoveryContextFixtures(t *testing.T) {
 			hasVM = true
 		case discoveryResourceTypeAgent:
 			hasAgent = true
+		case discoveryResourceTypeSystemContainer:
+			hasSMTPRelay = hasSMTPRelay || strings.Contains(discovery.ServiceName, "SMTP")
 		}
 	}
 	if !hasDockerURL {
@@ -115,6 +121,9 @@ func TestBuildFixtureGraphIncludesDiscoveryContextFixtures(t *testing.T) {
 	}
 	if !hasVM || !hasAgent {
 		t.Fatalf("expected guest and host discovery fixtures, hasVM=%t hasAgent=%t", hasVM, hasAgent)
+	}
+	if !hasSMTPRelay {
+		t.Fatal("expected system-container discovery fixtures to identify SMTP relay workloads")
 	}
 }
 

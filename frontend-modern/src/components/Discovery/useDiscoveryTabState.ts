@@ -9,7 +9,10 @@ import {
 } from '@/api/discovery';
 import { eventBus } from '@/stores/events';
 import type { DiscoveryProgress, ResourceType } from '@/types/discovery';
-import { getDiscoveryNoConnectedAgentMessage } from '@/utils/discoveryPresentation';
+import {
+  getDiscoveryNoConnectedAgentMessage,
+  hasMeaningfulDiscoveryContext,
+} from '@/utils/discoveryPresentation';
 import { copyToClipboard } from '@/utils/clipboard';
 import { toDiscoveryAPIResourceType } from '@/utils/discoveryTarget';
 
@@ -262,29 +265,7 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
   });
 
   const hasValidDiscovery = createMemo(() => {
-    const current = discovery();
-    if (!current) return false;
-
-    const hasServiceName = current.service_name && current.service_name.toLowerCase() !== 'unknown';
-    const hasConfidence = typeof current.confidence === 'number' && current.confidence > 0;
-    const hasPorts = current.ports && current.ports.length > 0;
-    const hasFacts = current.facts && current.facts.length > 0;
-    const hasPaths =
-      (current.config_paths && current.config_paths.length > 0) ||
-      (current.data_paths && current.data_paths.length > 0) ||
-      (current.log_paths && current.log_paths.length > 0);
-    const hasCliAccess = Boolean(current.cli_access);
-    const hasSuggestedUrl = Boolean(current.suggested_url || current.suggested_url_diagnostic);
-
-    return Boolean(
-      hasServiceName ||
-      hasConfidence ||
-      hasPorts ||
-      hasFacts ||
-      hasPaths ||
-      hasCliAccess ||
-      hasSuggestedUrl,
-    );
+    return hasMeaningfulDiscoveryContext(discovery());
   });
 
   const validDiscovery = createMemo(() =>

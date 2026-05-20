@@ -31,6 +31,7 @@ export function useWebInterfaceUrlFieldState(props: WebInterfaceUrlFieldProps) {
   const normalizedSuggestedUrl = createMemo(() => normalizeWebInterfaceUrl(props.suggestedUrl));
   const showSuggestedDiagnostic = createMemo(() =>
     shouldShowWebInterfaceSuggestedDiagnostic({
+      currentUrl: currentCustomUrl(),
       discoveryLoading: props.discoveryLoading,
       suggestedUrl: props.suggestedUrl,
       suggestedUrlDiagnostic: props.suggestedUrlDiagnostic,

@@ -1,4 +1,4 @@
-import type { ResourceDiscovery } from '@/types/discovery';
+import type { DiscoveryFact, ResourceDiscovery } from '@/types/discovery';
 import {
   getInfrastructureSettingsLocationLabel,
   getInfrastructureSettingsTarget,
@@ -38,6 +38,87 @@ const toSentence = (text?: string | null): string => {
   return first.toUpperCase() + trimmed.slice(1);
 };
 
+const normalizeDiscoveryToken = (value?: string | null): string => {
+  return (value || '').trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+};
+
+const isMeaningfulDiscoveryText = (value?: string | null): boolean => {
+  const normalized = normalizeDiscoveryToken(value);
+  if (!normalized) return false;
+  return ![
+    'detected',
+    'n a',
+    'none',
+    'app',
+    'application',
+    'container',
+    'host',
+    'linux',
+    'lxc',
+    'service',
+    'system container',
+    'unknown',
+    'unknown app',
+    'unknown application',
+    'unknown container',
+    'unknown host',
+    'unknown service',
+    'unknown system container',
+    'unknown virtual machine',
+    'unknown vm',
+    'unknown workload',
+    'virtual machine',
+    'vm',
+    'workload',
+  ].includes(normalized);
+};
+
+const isMeaningfulDiscoveryFact = (fact: DiscoveryFact): boolean => {
+  const key = normalizeDiscoveryToken(fact.key);
+  const value = normalizeDiscoveryToken(fact.value);
+  const source = normalizeDiscoveryToken(fact.source);
+  if (!isMeaningfulDiscoveryText(fact.value)) return false;
+  if (key === 'status' && source === 'metadata') return false;
+  if (key.startsWith('missing') || key.endsWith('missing')) return false;
+  if (
+    value.includes('does not exist') ||
+    value.includes('not found') ||
+    value.includes('failed') ||
+    value.includes('error')
+  ) {
+    return false;
+  }
+  return ['config', 'dependency', 'network', 'port', 'security', 'service', 'version'].includes(
+    normalizeDiscoveryToken(fact.category),
+  );
+};
+
+export function hasMeaningfulDiscoveryContext(
+  discovery: ResourceDiscovery | null | undefined,
+): boolean {
+  if (!discovery) return false;
+  const portCount = Array.isArray(discovery.ports) ? discovery.ports.length : 0;
+  const configPathCount = Array.isArray(discovery.config_paths) ? discovery.config_paths.length : 0;
+  const dataPathCount = Array.isArray(discovery.data_paths) ? discovery.data_paths.length : 0;
+  const logPathCount = Array.isArray(discovery.log_paths) ? discovery.log_paths.length : 0;
+  const hasFacts =
+    Array.isArray(discovery.facts) &&
+    discovery.facts.some((fact) => isMeaningfulDiscoveryFact(fact));
+  const hasPaths = configPathCount + dataPathCount + logPathCount > 0;
+  const hasSuggestedUrl = Boolean(normalizeDiscoverySuggestedUrl(discovery.suggested_url));
+
+  return Boolean(
+    isMeaningfulDiscoveryText(discovery.service_name) ||
+    isMeaningfulDiscoveryText(discovery.service_type) ||
+    isMeaningfulDiscoveryText(discovery.service_version) ||
+    isMeaningfulDiscoveryText(discovery.category) ||
+    portCount > 0 ||
+    hasFacts ||
+    hasPaths ||
+    hasSuggestedUrl,
+  );
+}
+
 // getDiscoveryIdentifiedSummary returns a compact presentation object for
 // surfaces outside the Discovery sub-tab (e.g. the workload drawer overview)
 // to label a resource with its identified service and endpoint candidates.
@@ -48,39 +129,28 @@ export function getDiscoveryIdentifiedSummary(
   discovery: ResourceDiscovery | null | undefined,
 ): DiscoveryIdentifiedSummary | null {
   if (!discovery) return null;
+  if (!hasMeaningfulDiscoveryContext(discovery)) return null;
   const serviceName = (discovery.service_name || '').trim();
-  const hasName = serviceName.length > 0 && serviceName.toLowerCase() !== 'unknown';
+  const hasName = isMeaningfulDiscoveryText(serviceName);
   const confidence = typeof discovery.confidence === 'number' ? discovery.confidence : 0;
-  const hasConfidence = confidence > 0;
   const portCount = Array.isArray(discovery.ports) ? discovery.ports.length : 0;
   const configPathCount = Array.isArray(discovery.config_paths) ? discovery.config_paths.length : 0;
   const dataPathCount = Array.isArray(discovery.data_paths) ? discovery.data_paths.length : 0;
   const logPathCount = Array.isArray(discovery.log_paths) ? discovery.log_paths.length : 0;
-  const hasFacts = Array.isArray(discovery.facts) && discovery.facts.length > 0;
   const hasCli = typeof discovery.cli_access === 'string' && discovery.cli_access.trim().length > 0;
-  const hasPaths = configPathCount + dataPathCount + logPathCount > 0;
   const suggestedUrl = normalizeDiscoverySuggestedUrl(discovery.suggested_url);
-  const hasEndpointCandidate =
-    Boolean(suggestedUrl) ||
-    (typeof discovery.suggested_url_diagnostic === 'string' &&
-      discovery.suggested_url_diagnostic.trim().length > 0);
-  if (
-    !hasName &&
-    !hasConfidence &&
-    portCount === 0 &&
-    !hasFacts &&
-    !hasPaths &&
-    !hasCli &&
-    !hasEndpointCandidate
-  ) {
-    return null;
-  }
   const suggestedUrlReason = getDiscoverySuggestedURLReason(discovery);
   return {
     serviceName: hasName ? serviceName : 'Unidentified service',
-    serviceType: discovery.service_type?.trim() || undefined,
-    serviceVersion: discovery.service_version?.trim() || undefined,
-    category: discovery.category?.trim() || undefined,
+    serviceType: isMeaningfulDiscoveryText(discovery.service_type)
+      ? discovery.service_type?.trim()
+      : undefined,
+    serviceVersion: isMeaningfulDiscoveryText(discovery.service_version)
+      ? discovery.service_version?.trim()
+      : undefined,
+    category: isMeaningfulDiscoveryText(discovery.category)
+      ? discovery.category?.trim()
+      : undefined,
     confidence,
     confidencePercent: `${Math.round(confidence * 100)}%`,
     cliAccess: hasCli ? discovery.cli_access?.trim() : undefined,
@@ -95,7 +165,7 @@ export function getDiscoveryIdentifiedSummary(
     suggestedUrlReasonText: suggestedUrlReason.text || undefined,
     suggestedUrlReasonTitle: suggestedUrlReason.title || undefined,
     suggestedUrlDiagnostic: discovery.suggested_url_diagnostic?.trim() || undefined,
-    hasEndpointCandidate,
+    hasEndpointCandidate: Boolean(suggestedUrl),
   };
 }
 

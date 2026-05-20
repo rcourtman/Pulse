@@ -39,6 +39,63 @@ describe('DiscoveryTab', () => {
     expect(await screen.findByRole('button', { name: 'Run Discovery Now' })).toBeInTheDocument();
   });
 
+  it('treats placeholder-only discovery records as unidentified instead of valid results', async () => {
+    vi.mocked(discoveryApi.getDiscovery).mockResolvedValue({
+      id: 'system-container:pve4:152',
+      resource_type: 'system-container',
+      resource_id: '152',
+      target_id: 'pve4',
+      hostname: 'smtp-relay-32',
+      service_type: 'unknown',
+      service_name: 'Unknown Container',
+      service_version: 'unknown',
+      category: 'unknown',
+      cli_access: 'pct exec 152 -- /bin/bash',
+      facts: [
+        {
+          category: 'service',
+          key: 'status',
+          value: 'online',
+          source: 'metadata',
+          confidence: 1,
+          discovered_at: '2026-05-19T00:00:00Z',
+        },
+        {
+          category: 'config',
+          key: 'missing_config',
+          value: 'nodes/delly/lxc/152.conf not found on host',
+          source: 'all_commands',
+          confidence: 1,
+          discovered_at: '2026-05-19T00:00:00Z',
+        },
+      ],
+      config_paths: [],
+      data_paths: [],
+      log_paths: [],
+      ports: [],
+      user_notes: '',
+      user_secrets: {},
+      confidence: 0,
+      ai_reasoning: '',
+      discovered_at: '2026-05-19T00:00:00Z',
+      updated_at: '2026-05-19T00:00:00Z',
+      scan_duration: 0,
+      suggested_url_diagnostic: 'no host or IP candidate available',
+    });
+
+    render(() => (
+      <DiscoveryTab
+        resourceType="system-container"
+        agentId="pve4"
+        resourceId="152"
+        hostname="smtp-relay-32"
+      />
+    ));
+
+    expect(await screen.findByText('Unknown Service')).toBeInTheDocument();
+    expect(screen.queryByText('Unknown Container')).toBeNull();
+  });
+
   it('shows a drawer run action and triggers discovery for the current resource', async () => {
     const discovered: ResourceDiscovery = {
       id: 'discovery-1',
