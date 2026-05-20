@@ -14,6 +14,7 @@ import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
+import { ProgressBar } from '@/components/shared/ProgressBar';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCard } from '@/components/shared/TableCard';
@@ -223,33 +224,32 @@ function formatDurationFromSeconds(seconds: number): string {
   return `${h}h ${m}m`;
 }
 
-// Compact, table-row-sized horizontal usage bar. Used inline in the
-// Backup files Size column (proportional to the largest archive in view)
-// and in the Recent tasks Duration column (proportional to 2x the median
-// duration so a typical task fills ~50% and outliers fill the bar).
-//
-// Layout invariant: the bar is positioned AFTER the value text in its
-// cell, and the cell uses `justify-end`. Because the bar has a fixed
-// width and is the rightmost element, every bar's left and right edges
-// land at the same x in every row, so they read as a proper comparison
-// chart instead of a row of free-floating segments.
-function InlineProgressBar(props: {
+// Canonical row metric bar — same shape as Storage's usage bar, Ceph's
+// pool usage bar, and Workloads' MetricBar: a full-cell-width
+// ProgressBar with the value text overlaid on top of the fill. The
+// shared `ProgressBar` primitive (foreignObject-based fill that clips
+// the label) is the one source of truth for this pattern in Pulse, so
+// the Backups tabs read identically to the rest of the app.
+function RowMetricBar(props: {
   valuePct: number;
-  toneClass: string;
-  width?: string;
-  label?: string;
+  fillClass: string;
+  label: string;
+  tooltip?: string;
 }) {
-  const widthClass = props.width ?? 'w-16';
   return (
     <div
-      class={`${widthClass} h-1.5 shrink-0 overflow-hidden rounded-full bg-surface`}
-      role="img"
-      aria-label={props.label}
-      title={props.label}
+      class="metric-text relative h-4 w-full min-w-[5rem] overflow-hidden"
+      title={props.tooltip ?? props.label}
     >
-      <div
-        class={`h-full ${props.toneClass}`}
-        style={{ width: `${Math.max(0, Math.min(100, props.valuePct))}%` }}
+      <ProgressBar
+        value={props.valuePct}
+        class="h-full"
+        fillClass={props.fillClass}
+        label={
+          <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium leading-none text-base-content tabular-nums">
+            <span class="max-w-full truncate px-1 text-center">{props.label}</span>
+          </span>
+        }
       />
     </div>
   );
@@ -1113,7 +1113,7 @@ export const ProxmoxBackupsTable: Component<{
                       <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
                         Created
                       </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                      <TableHead class={getPlatformTableHeadClassForKind('metric-bar')}>
                         Size
                       </TableHead>
                       <TableHead class={getPlatformTableHeadClassForKind('text')}>
@@ -1173,25 +1173,18 @@ export const ProxmoxBackupsTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}
                           >
-                            <div class="flex items-center justify-end gap-2">
-                              <span>{formatBytes(arc.size)}</span>
-                              <InlineProgressBar
-                                valuePct={
-                                  archiveSizeMaxBytes() > 0
-                                    ? (arc.size / archiveSizeMaxBytes()) * 100
-                                    : 0
-                                }
-                                toneClass={
-                                  archiveSizeMaxBytes() > 0 &&
-                                  arc.size / archiveSizeMaxBytes() >= 0.66
-                                    ? 'bg-blue-500'
-                                    : 'bg-blue-400'
-                                }
-                                label={`${formatBytes(arc.size)} (relative to largest file in view)`}
-                              />
-                            </div>
+                            <RowMetricBar
+                              valuePct={
+                                archiveSizeMaxBytes() > 0
+                                  ? (arc.size / archiveSizeMaxBytes()) * 100
+                                  : 0
+                              }
+                              fillClass="bg-blue-500/40 dark:bg-blue-500/40"
+                              label={formatBytes(arc.size)}
+                              tooltip={`${formatBytes(arc.size)} (relative to largest file in view)`}
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
@@ -1256,7 +1249,7 @@ export const ProxmoxBackupsTable: Component<{
                       <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
                         Started
                       </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                      <TableHead class={getPlatformTableHeadClassForKind('metric-bar')}>
                         Duration
                       </TableHead>
                       <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
@@ -1315,22 +1308,18 @@ export const ProxmoxBackupsTable: Component<{
                               {formatRelativeTime(task.startTime, { compact: true })}
                             </TableCell>
                             <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                              class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}
                             >
-                              <div class="flex items-center justify-end gap-2">
-                                <span class="tabular-nums">
-                                  {formatDuration(task.startTime, task.endTime)}
-                                </span>
-                                <InlineProgressBar
-                                  valuePct={
-                                    taskDurationBaselineSeconds() > 0 && durationSec
-                                      ? durationBarPct()
-                                      : 0
-                                  }
-                                  toneClass={durationToneClass()}
-                                  label={`Duration ${formatDuration(task.startTime, task.endTime)} (median ${formatDurationFromSeconds(taskDurationBaselineSeconds())})`}
-                                />
-                              </div>
+                              <RowMetricBar
+                                valuePct={
+                                  taskDurationBaselineSeconds() > 0 && durationSec
+                                    ? durationBarPct()
+                                    : 0
+                                }
+                                fillClass={durationToneClass()}
+                                label={formatDuration(task.startTime, task.endTime)}
+                                tooltip={`Duration ${formatDuration(task.startTime, task.endTime)} (median ${formatDurationFromSeconds(taskDurationBaselineSeconds())})`}
+                              />
                             </TableCell>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
