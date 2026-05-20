@@ -485,12 +485,13 @@ or other self-hosted uncapped continuity plans.
     `PULSE_EMAIL_REPLY_TO`, defaulting to `support@pulserelay.pro`, so magic
     links, checkout handoffs, and other hosted-account messages remain
     directly replyable by customers.
-    `App.tsx` and `AppLayout.tsx` own the platform-first primary navigation.
-    `App.tsx` registers one top-level route per supported platform family
-    (Proxmox, Docker, Kubernetes, TrueNAS, vSphere) using the canonical path
-    constants from `frontend-modern/src/routing/resourceLinks.ts`. The
-    `PlatformTab` list in `AppLayout.tsx` must enumerate exactly those
-    supported families, but product navigation is support-and-evidence gated:
+    `App.tsx` and `AppLayout.tsx` own the governed platform/runtime primary
+    navigation. `App.tsx` registers one top-level route per supported platform
+    or runtime family (Proxmox, the Docker / Podman container-runtime lens,
+    Kubernetes, TrueNAS, vSphere) using the canonical path constants from
+    `frontend-modern/src/routing/resourceLinks.ts`. The `PlatformTab` list in
+    `AppLayout.tsx` must enumerate exactly those supported destinations, but
+    product navigation is support-and-evidence gated:
     `enabled`, `live`, and inclusion in the rendered primary navigation derive
     from the governed support manifest plus canonical resource evidence in
     `state.resources`. Admitted-only, presentation-only, unsupported, or
@@ -652,7 +653,10 @@ routes (`/pricing`, `/preview/setup-complete`, `/login`, settings panels
 under `/settings/...`) are unchanged. Pricing-handoff and hosted-signup
 upgrade paths must use platform routes as their canonical "back to product"
 destination instead of the retired top-level Infrastructure / Workloads /
-Storage / Recovery pages.
+Storage / Recovery pages. The Docker / Podman runtime route remains `/docker`
+for compatibility and search familiarity, but the shell may label the
+destination as Containers so it reads as a runtime lens rather than an owning
+infrastructure platform.
 
 The Proxmox platform tab in the authenticated app shell is ordinary product
 navigation. It must stay separate from hosted acquisition, monitored-system

@@ -42,7 +42,7 @@ describe('resource link routing contract', () => {
     expect(buildProxmoxPath('')).toBe('/proxmox');
   });
 
-  it('builds canonical Docker, Kubernetes, TrueNAS, and vSphere platform tab paths', () => {
+  it('builds canonical container runtime, Kubernetes, TrueNAS, and vSphere tab paths', () => {
     expect(DOCKER_PATH).toBe('/docker');
     expect(buildDockerPath()).toBe('/docker/overview');
     expect(buildDockerPath('containers')).toBe('/docker/containers');

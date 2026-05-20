@@ -93,13 +93,17 @@ export function DockerPageSurface() {
 
   return (
     <div data-testid="docker-page" class="space-y-3">
-      <PlatformSectionTabs tabs={DOCKER_TAB_SPECS} active="overview" ariaLabel="Docker sections" />
+      <PlatformSectionTabs
+        tabs={DOCKER_TAB_SPECS}
+        active="overview"
+        ariaLabel="Container runtime sections"
+      />
 
       <Show
         when={!loading() || model().resources.length > 0}
         fallback={
           <PlatformTableLoadingState
-            title="Loading Docker resources"
+            title="Loading container runtime resources"
             description="Pulse is loading the Docker / Podman resource snapshot."
           />
         }
@@ -108,7 +112,7 @@ export function DockerPageSurface() {
           when={!error()}
           fallback={
             <PlatformErrorState
-              title="Could not load Docker resources"
+              title="Could not load container runtime resources"
               description="Refresh the resource snapshot or check the API connection state."
               onRefresh={() => void refetch()}
             />
@@ -120,7 +124,7 @@ export function DockerPageSurface() {
               <PlatformTableEmptyState
                 icon={dockerIcon()}
                 title="No Docker or Podman hosts"
-                description="Install the Pulse agent on a Docker or Podman host to populate this platform page."
+                description="Install the Pulse agent on a Docker or Podman host to populate this runtime lens."
               />
             }
           >
@@ -140,7 +144,7 @@ export function DockerPageSurface() {
                     setSortKey={workloadsState.setSortKey}
                     setSortDirection={workloadsState.setSortDirection}
                     onBeforeAutoFocus={workloadsState.handleBeforeAutoFocus}
-                    ariaLabel="Docker workload filters"
+                    ariaLabel="Container runtime workload filters"
                     searchPlaceholder="Search containers by name, image, host, or runtime"
                     searchEmptyMessage="Recent Docker container searches appear here."
                     statusOptions={DOCKER_WORKLOAD_STATUS_OPTIONS}

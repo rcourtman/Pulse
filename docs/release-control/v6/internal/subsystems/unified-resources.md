@@ -118,13 +118,14 @@ cross-source deduplication.
 
 ## Shared Boundaries
 
-Docker platform navigation is a unified-resource consumer boundary: Docker
-subtabs may be shown only from canonical resource evidence (`app-container` for
-containers, `docker-service` for Swarm services), and inactive standalone
-Swarm metadata must not be interpreted as host-role or service-surface proof.
-The unified-resource adapter is the backend fail-closed layer for that rule, so
-persisted or older-agent inactive Swarm payloads cannot reintroduce false
-Swarm capability surfaces.
+Container runtime navigation is a unified-resource consumer boundary: the
+`/docker` route is the Docker / Podman runtime lens, not an exclusive owning
+platform. Its subtabs may be shown only from canonical resource evidence
+(`app-container` for containers, `docker-service` for Swarm services), and
+inactive standalone Swarm metadata must not be interpreted as host-role or
+service-surface proof. The unified-resource adapter is the backend fail-closed
+layer for that rule, so persisted or older-agent inactive Swarm payloads cannot
+reintroduce false Swarm capability surfaces.
 
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `performance-and-scalability`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx` shared with `performance-and-scalability`: the infrastructure summary surface is both a canonical unified-resource consumer and a fleet-scale summary chart hot-path boundary.
@@ -466,7 +467,7 @@ AI-only summary payloads, or page-local heuristics.
     another shared surface needs to explain how the same governed policy counts
     should be read, but those framing lines must extend the shared card API
     rather than spawning page-local policy summary shells.
-16. Keep platform-first top-level route paths on the canonical resource-link
+16. Keep platform/runtime top-level route paths on the canonical resource-link
     helper. `frontend-modern/src/routing/resourceLinks.ts` owns the
     `DOCKER_PATH`, `KUBERNETES_PATH`, `TRUENAS_PATH`, `VMWARE_PATH` constants
     and the `buildDockerPath`, `buildKubernetesPath`, `buildTrueNASPath`,

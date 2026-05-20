@@ -71,13 +71,17 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain("id: 'kubernetes',");
     expect(appLayoutSource).toContain("id: 'truenas',");
     expect(appLayoutSource).toContain("id: 'vmware',");
-    // Platform-first primary nav: Infrastructure / Workloads / Storage /
-    // Recovery are not duplicated as equal primary PlatformTab entries.
+    // Governed platform/runtime primary nav: Infrastructure / Workloads /
+    // Storage / Recovery are not duplicated as equal primary PlatformTab
+    // entries, and the Docker / Podman route is presented as the Containers
+    // runtime lens in shell chrome.
     expect(appSource).toContain('getDefaultWorkspaceRoute');
     expect(appSource).toContain('platformNavigationResolved');
     expect(appSource).toContain('buildPrimaryPlatformNavigationVisibility');
     expect(appLayoutSource).toContain('buildPrimaryPlatformNavigationVisibility');
     expect(appLayoutSource).toContain('primaryPlatformNavigationIsVisible');
+    expect(appLayoutSource).toContain("label: 'Containers'");
+    expect(appLayoutSource).toContain("'Docker / Podman runtime lens");
     expect(appLayoutSource).not.toContain("id: 'infrastructure',");
     expect(appLayoutSource).not.toContain("id: 'workloads',");
     expect(appLayoutSource).not.toContain('buildStorageRecoveryTabSpecs(');

@@ -61,13 +61,38 @@ const addPlatformDataSources = (ids: Set<string>, platformData: Record<string, u
   });
 };
 
+const addPlatformScopeEvidence = (
+  ids: Set<string>,
+  values: unknown,
+): void => {
+  if (!Array.isArray(values)) return;
+  values.forEach((value) => {
+    if (typeof value === 'string') addManifestPlatformId(ids, value);
+  });
+};
+
+const collectExplicitPlatformScopeEvidence = (
+  resource: Resource,
+  platformData: Record<string, unknown> | null,
+): string[] => {
+  const ids = new Set<string>();
+  addPlatformScopeEvidence(ids, resource.platformScopes);
+  addPlatformScopeEvidence(ids, platformData?.platformScopes);
+  return [...ids];
+};
+
 export function collectResourcePlatformEvidence(resource: Resource): string[] {
+  const platformData = asRecord(resource.platformData);
+  const platformScopeIds = collectExplicitPlatformScopeEvidence(resource, platformData);
+  if (platformScopeIds.length > 0) {
+    return platformScopeIds;
+  }
+
   const ids = new Set<string>();
   addManifestPlatformId(ids, resource.platformType);
   addManifestPlatformId(ids, resolveResourcePlatformType(resource));
   resource.sources?.forEach((source) => addManifestPlatformId(ids, source));
 
-  const platformData = asRecord(resource.platformData);
   addPlatformDataSources(ids, platformData);
 
   if (resource.type === 'pbs' || resource.pbs || asRecord(platformData?.pbs)) {

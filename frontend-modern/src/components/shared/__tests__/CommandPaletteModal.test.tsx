@@ -37,6 +37,7 @@ const makeResource = (overrides: Partial<Resource>): Resource =>
 const platformVisibility = () =>
   buildPrimaryPlatformNavigationVisibility([
     makeResource({ id: 'pve-1', type: 'agent', platformType: 'proxmox-pve' }),
+    makeResource({ id: 'docker-1', type: 'docker-host', platformType: 'docker' }),
     makeResource({ id: 'k8s-1', type: 'k8s-cluster', platformType: 'kubernetes' }),
   ]);
 
@@ -79,7 +80,7 @@ describe('CommandPaletteModal', () => {
     expect(commandPaletteModelSource).not.toContain("id: 'nav-recovery'");
   });
 
-  it('renders the platform entries and the dedicated Kubernetes pods command', () => {
+  it('renders the platform entries, container runtime lens, and dedicated Kubernetes pods command', () => {
     render(() => (
       <CommandPaletteModal
         isOpen={true}
@@ -89,6 +90,7 @@ describe('CommandPaletteModal', () => {
     ));
 
     expect(screen.getByText('Go to Proxmox')).toBeInTheDocument();
+    expect(screen.getByText('Go to Containers')).toBeInTheDocument();
     expect(screen.getByText('Go to Kubernetes Pods')).toBeInTheDocument();
     expect(screen.getByText('/kubernetes/pods')).toBeInTheDocument();
   });
@@ -135,14 +137,13 @@ describe('CommandPaletteModal', () => {
         platformVisibility={() =>
           buildPrimaryPlatformNavigationVisibility([
             makeResource({ id: 'pve-1', type: 'agent', platformType: 'proxmox-pve' }),
-            makeResource({ id: 'vmware-1', type: 'vm', platformType: 'vmware-vsphere' }),
           ])
         }
       />
     ));
 
     expect(screen.getByText('Go to Proxmox')).toBeInTheDocument();
-    expect(screen.queryByText('Go to Docker')).not.toBeInTheDocument();
+    expect(screen.queryByText('Go to Containers')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Kubernetes')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to TrueNAS')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to vSphere')).not.toBeInTheDocument();

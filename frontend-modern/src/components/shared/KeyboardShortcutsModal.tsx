@@ -20,7 +20,7 @@ const UNIFIED_NAV_SHORTCUTS: ShortcutGroup = {
   title: 'Navigation',
   items: [
     { keys: 'g then p', description: 'Go to Proxmox' },
-    { keys: 'g then d', description: 'Go to Docker' },
+    { keys: 'g then d', description: 'Go to Containers' },
     { keys: 'g then k', description: 'Go to Kubernetes' },
     { keys: 'g then n', description: 'Go to TrueNAS' },
     { keys: 'g then v', description: 'Go to vSphere' },

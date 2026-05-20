@@ -63,6 +63,60 @@ describe('platformNavigationModel', () => {
     ).toBe(true);
   });
 
+  it('uses canonical platform scopes before incidental runtime facets', () => {
+    expect(
+      collectResourcePlatformEvidence(
+        resource({
+          id: 'truenas-app-nextcloud',
+          type: 'app-container',
+          platformType: 'truenas',
+          platformScopes: ['truenas'],
+          docker: {
+            runtime: 'docker',
+          },
+        }),
+      ),
+    ).toEqual(['truenas']);
+
+    expect(
+      buildPrimaryPlatformNavigationVisibility([
+        resource({
+          id: 'truenas-app-nextcloud',
+          type: 'app-container',
+          platformType: 'truenas',
+          platformScopes: ['truenas'],
+          docker: {
+            runtime: 'docker',
+          },
+        }),
+      ]),
+    ).toEqual({
+      proxmox: false,
+      docker: false,
+      kubernetes: false,
+      truenas: true,
+      vmware: false,
+    });
+
+    expect(
+      buildPrimaryPlatformNavigationVisibility([
+        resource({
+          id: 'docker-container-frigate-141',
+          type: 'app-container',
+          platformType: 'docker',
+          platformScopes: ['proxmox-pve', 'docker'],
+          docker: {
+            runtime: 'docker',
+            hostSourceId: 'proxmox-lxc-docker:pve-a:node-a:141',
+          },
+        }),
+      ]),
+    ).toMatchObject({
+      proxmox: true,
+      docker: true,
+    });
+  });
+
   it('selects the first visible platform using the canonical primary navigation order', () => {
     expect(
       selectFirstVisiblePrimaryPlatformNavigationId({

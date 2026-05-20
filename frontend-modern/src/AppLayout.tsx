@@ -204,7 +204,7 @@ export function AppLayout(props: AppLayoutProps) {
   // as the bare app name.
   const tabTitleByActive: Record<NonNullable<ReturnType<typeof getActiveTabForPath>>, string> = {
     proxmox: 'Proxmox',
-    docker: 'Docker',
+    docker: 'Containers',
     kubernetes: 'Kubernetes',
     truenas: 'TrueNAS',
     vmware: 'vSphere',
@@ -315,9 +315,9 @@ export function AppLayout(props: AppLayoutProps) {
   const getActiveTabDesktop = () => getActiveTabForPath(location.pathname);
   const getActiveTabMobile = () => getActiveTabForPath(location.pathname);
 
-  // Primary nav is platform-first and resource-admitted. A platform tab only
-  // appears when the support manifest says the platform is supported and the
-  // current resource snapshot proves that platform is actually present.
+  // Primary nav is resource-admitted. A platform or runtime lens only appears
+  // when the support manifest says the surface is supported and the current
+  // resource snapshot proves that surface is actually present.
   // Infrastructure / Workloads / Storage / Recovery are NOT duplicated as
   // equal primary tabs — their tables are reused inside each platform page
   // via embedded tableOnly surfaces, and their routes remain wired in App.tsx
@@ -340,10 +340,10 @@ export function AppLayout(props: AppLayoutProps) {
       },
       {
         id: 'docker',
-        label: 'Docker',
+        label: 'Containers',
         route: ROOT_DOCKER_PATH,
         settingsRoute: '/settings/workloads/docker',
-        tooltip: 'Docker and Podman hosts, containers, and Swarm services',
+        tooltip: 'Docker / Podman runtime lens: hosts, containers, and Swarm services',
         enabled: isVisible('docker'),
         live: isVisible('docker'),
         icon: ContainerIcon,

@@ -116,7 +116,7 @@ runtime cost control, and shared AI transport surfaces.
    prioritization, remediation reasoning, and tool choice. Public copy must not
    present Pulse code as the intelligence engine, a prompt-keyword router, a
    learned operational-meaning engine, or a deterministic finding author.
-10. Platform-first top-level pages registered in
+10. Platform/runtime top-level pages registered in
     `frontend-modern/src/App.tsx` and the platform tab list in
     `frontend-modern/src/AppLayout.tsx` must keep the AI launcher chrome
     intact: they extend `aiChatStore`-aware route shells rather than mounting
@@ -639,13 +639,14 @@ runtime cost control, and shared AI transport surfaces.
 
 ## Current State
 
-Primary nav moved to platform-first on 2026-05-16 through
+Primary nav moved to governed platform/runtime destinations on 2026-05-16 through
 `frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx`: the top
-of the app may expose canonical platform pages (Proxmox, Docker, Kubernetes,
-TrueNAS, vSphere) plus Alerts, Patrol, and Settings, but platform destinations
-must pass the shared support-and-resource-evidence gate before they appear in
-navigation, command palette entries, keyboard shortcuts, or landing
-fallbacks. Admitted-only or absent platform surfaces must stay hidden from the
+of the app may expose canonical platform pages (Proxmox, Kubernetes, TrueNAS,
+vSphere) plus the container-runtime lens (shown as Containers for Docker /
+Podman), Alerts, Patrol, and Settings, but those destinations must pass the
+shared support-and-resource-evidence gate before they appear in navigation,
+command palette entries, keyboard shortcuts, or landing fallbacks.
+Admitted-only or absent platform/runtime surfaces must stay hidden from the
 AI-adjacent shell and must not be kept as disabled placeholders. The legacy
 `/infrastructure`, `/workloads`, `/storage`, `/recovery`, and `/ceph` route
 shells were retired alongside their page wrappers. The AI Chat launcher, the

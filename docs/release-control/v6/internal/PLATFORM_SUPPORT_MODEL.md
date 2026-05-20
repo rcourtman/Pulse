@@ -9,18 +9,20 @@ through platform-by-platform improvisation.
 
 ## Canonical Rules
 
-1. A first-class platform is a governed Pulse platform id with one declared
-   primary ingestion mode, one owned onboarding path, explicit canonical
-   resource projections, and one declared support matrix across the product
-   surfaces below.
+1. A first-class platform or runtime lens is a governed Pulse platform id with
+   one declared primary ingestion mode, one owned onboarding path, explicit
+   canonical resource projections, and one declared support matrix across the
+   product surfaces below.
 2. Platform families are grouping aids, not the support unit.
    `Proxmox` is a family; `proxmox-pve`, `proxmox-pbs`, and `proxmox-pmg` are
    separate first-class platforms because they onboard differently, project
    different canonical resources, and carry different support floors.
-3. Runtime variants are not top-level platforms.
-   `podman` is a runtime variant inside the first-class `docker` platform.
-   `qemu`, `lxc`, OCI guest/runtime details, and TrueNAS app-runtime internals
-   are workload technologies inside an owning platform, not new platforms.
+3. Runtime variants are not owning infrastructure platforms.
+   `docker` is retained as the canonical id for the Docker / Podman
+   container-runtime lens, while `podman` is a runtime variant inside that
+   lens. `qemu`, `lxc`, OCI guest/runtime details, and TrueNAS app-runtime
+   internals are workload technologies inside an owning platform, not new
+   platforms.
 4. Transport-specific implementations are not platforms.
    API clients, JSON-RPC sessions, pollers, agent heartbeat schemas, install
    flags, CRUD routes, and saved-connection tests are implementation details.
@@ -39,13 +41,15 @@ through platform-by-platform improvisation.
    or appliance family, but it does not promote that family into
    `PLATFORM_TYPE_KEYS` or first-class platform status.
 9. Product navigation is support-and-evidence gated.
-   First-class platform navigation, command/search destinations, keyboard
-   shortcuts, landing fallbacks, and platform-section tabs must derive from
-   this support model plus current runtime resource or capability evidence.
-   Supported surfaces must appear when evidence proves the platform or
-   capability is present. Admitted-only, presentation-only, unsupported, or
+   First-class platform and runtime-lens navigation, command/search
+   destinations, keyboard shortcuts, landing fallbacks, and section tabs must
+   derive from this support model plus current runtime resource or capability
+   evidence. Supported surfaces must appear when evidence proves the platform
+   or capability is present. Admitted-only, presentation-only, unsupported, or
    absent capability surfaces must be hidden rather than kept as disabled
-   placeholders.
+   placeholders. Runtime-lens membership must use canonical resource
+   `platformScopes` when present rather than inferring ownership from incidental
+   facets such as TrueNAS app containers that reuse Docker metadata.
 
 ## Platform Categories
 
@@ -61,6 +65,18 @@ A first-class platform must define:
 6. support-floor row across the product surfaces below
 7. assistant read classification and assistant control classification
 8. optional augmentation rules, if a secondary path is allowed
+
+### Runtime Lens
+
+A runtime lens is a governed top-level product surface for workloads whose
+runtime can appear inside multiple owning platforms. It has the same manifest
+and support-floor obligations as a first-class platform, but it does not imply
+exclusive infrastructure ownership.
+
+The `docker` id is the canonical Docker / Podman container-runtime lens. The
+authenticated shell may label that destination as `Containers` while shared
+badges, filters, and runtime-specific management copy continue to use
+`Docker / Podman` where that is the precise capability.
 
 ### Runtime Variant
 

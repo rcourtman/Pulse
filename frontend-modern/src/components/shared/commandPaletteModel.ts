@@ -48,7 +48,7 @@ export function buildCommandPaletteCommands(options: {
   if (primaryPlatformNavigationIsVisible(options.platformVisibility, 'docker')) {
     commands.push({
       id: 'nav-docker',
-      label: 'Go to Docker',
+      label: 'Go to Containers',
       description: options.paths.dockerPath,
       shortcut: 'g d',
       keywords: ['docker', 'podman', 'containers', 'compose', 'swarm', 'services'],
