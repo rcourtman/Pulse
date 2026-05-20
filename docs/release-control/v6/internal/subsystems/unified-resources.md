@@ -1696,6 +1696,10 @@ continue to use the operator-saved web-interface URL. Version, config-path,
 port, and endpoint facts surfaced outside the Discovery sub-tab must be
 labelled as Discovery-observed so API-owned resource facts and command-derived
 facts remain distinguishable.
+That label must be visible through the shared Discovery provenance marker on
+compact cards, suggested URL panels, and other out-of-tab Discovery values
+rather than buried in helper text or inferred from the tab where the operator
+found the value.
 Command-availability guidance inside that analysis surface must consume the
 shared `frontend-modern/src/utils/discoveryPresentation.ts` settings targets
 and scan-error copy instead of hard-coding legacy settings labels such as

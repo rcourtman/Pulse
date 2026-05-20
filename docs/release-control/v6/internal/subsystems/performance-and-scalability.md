@@ -1581,3 +1581,7 @@ dependency, row-time endpoint probe, or auto-save mutation. Suggested
 URLs remain copy/open/adopt affordances only; persisting them as a
 workload link stays a user action through the existing Web Interface URL
 field.
+The compact provenance marker for those values is presentation-only. It
+may identify already-loaded Discovery fields, but must not introduce
+additional discovery fetches, provider lookups, endpoint probes, or
+per-row layout measurement on the Workloads hot path.

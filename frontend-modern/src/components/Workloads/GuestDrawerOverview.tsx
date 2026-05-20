@@ -1,6 +1,7 @@
 import { For, Show } from 'solid-js';
 
 import { formatDiscoveryAge } from '@/api/discovery';
+import { DiscoveryProvenanceMarker } from '@/components/shared/DiscoveryProvenanceMarker';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import type { DiscoveryIdentifiedSummary } from '@/utils/discoveryPresentation';
 import { formatBytes, formatUptime } from '@/utils/format';
@@ -45,10 +46,13 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
           {(summary) => (
             <div class="rounded border border-border bg-surface p-3 shadow-sm">
               <div class="flex items-center justify-between gap-2 mb-2">
-                <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content">
-                  Identified Service
-                </h3>
-                <span class="text-[10px] font-medium text-muted">
+                <div class="flex min-w-0 items-center gap-1.5">
+                  <h3 class="truncate text-[11px] font-medium uppercase tracking-wide text-base-content">
+                    Identified Service
+                  </h3>
+                  <DiscoveryProvenanceMarker />
+                </div>
+                <span class="shrink-0 text-[10px] font-medium text-muted">
                   {summary().confidencePercent}
                 </span>
               </div>

@@ -2,6 +2,7 @@ import { Component, Show } from 'solid-js';
 import CheckIcon from 'lucide-solid/icons/check';
 import CopyIcon from 'lucide-solid/icons/copy';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
+import { DiscoveryProvenanceMarker } from './DiscoveryProvenanceMarker';
 import { useWebInterfaceUrlFieldState } from './useWebInterfaceUrlFieldState';
 import type { WebInterfaceUrlFieldProps } from './webInterfaceUrlFieldModel';
 
@@ -105,15 +106,19 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
 
         <Show when={state.showSuggestedDiagnostic()}>
           <div class="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-200">
-            <p class="font-medium">{state.suggestedUrlFallback().title}</p>
+            <div class="flex items-center gap-1.5 font-medium">
+              <span>{state.suggestedUrlFallback().title}</span>
+              <DiscoveryProvenanceMarker />
+            </div>
             <p class="mt-0.5">{state.suggestedUrlFallback().description}</p>
           </div>
         </Show>
 
         <Show when={state.showSuggestedUrl()}>
           <div class="mt-2 p-2 rounded bg-blue-50 border border-blue-200 dark:bg-blue-900 dark:border-blue-800">
-            <div class="text-[10px] font-medium text-blue-700 dark:text-blue-300 mb-1">
-              {state.normalizedCurrentUrl() ? 'Discovered URL' : 'Suggested URL'}
+            <div class="mb-1 flex items-center gap-1.5 text-[10px] font-medium text-blue-700 dark:text-blue-300">
+              <span>{state.normalizedCurrentUrl() ? 'Discovered URL' : 'Suggested URL'}</span>
+              <DiscoveryProvenanceMarker />
             </div>
             <Show when={props.suggestedUrlReasonText}>
               <p

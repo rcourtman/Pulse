@@ -27,6 +27,9 @@ export interface DiscoveryIdentifiedSummary {
 }
 
 const OBSERVED_SOURCE_LABEL = 'Observed by Discovery';
+const DISCOVERY_PROVENANCE_LABEL = 'Discovery';
+const DISCOVERY_PROVENANCE_TITLE =
+  'Surfaced by opt-in Discovery from agent-observed workload context.';
 
 const toSentence = (text?: string | null): string => {
   const trimmed = (text || '').trim();
@@ -98,6 +101,22 @@ export function getDiscoveryIdentifiedSummary(
 
 export function getDiscoveryObservedSourceLabel(): string {
   return OBSERVED_SOURCE_LABEL;
+}
+
+export function getDiscoveryProvenanceLabel(): string {
+  return DISCOVERY_PROVENANCE_LABEL;
+}
+
+export function getDiscoveryProvenanceTitle(): string {
+  return DISCOVERY_PROVENANCE_TITLE;
+}
+
+export function getDiscoveryProvenanceBadgeClass(): string {
+  return 'inline-flex h-5 shrink-0 items-center gap-1 rounded border border-cyan-200 bg-cyan-50 px-1.5 text-[10px] font-medium leading-none text-cyan-700 dark:border-cyan-800 dark:bg-cyan-950 dark:text-cyan-200';
+}
+
+export function getDiscoveryProvenanceIconClass(): string {
+  return 'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-950 dark:text-cyan-200';
 }
 
 export function normalizeDiscoverySuggestedUrl(value?: string | null): string | undefined {

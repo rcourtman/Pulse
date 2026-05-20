@@ -1400,6 +1400,11 @@ AI runtime.
     "Observed by Discovery" context and pass suggested URLs into the shared
     web-interface field. Persisted/manual web-interface metadata remains the
     only row-link source until the operator explicitly adopts a suggested URL.
+    Discovery-sourced values rendered outside the Discovery tab must carry the
+    shared compact provenance marker from
+    `frontend-modern/src/components/shared/DiscoveryProvenanceMarker.tsx`, so
+    operators can distinguish opt-in Discovery context from API-owned resource
+    facts without reading a drawer-specific explanation.
 
 ## Current State
 
@@ -3158,6 +3163,10 @@ surfacing "Unknown" rows or zero-confidence noise. Manual/persisted
 web-interface URLs still win: Discovery suggestions may be copied, opened, or
 adopted through the shared `WebInterfaceUrlField`, but they must not silently
 replace metadata or make row-name links active until the operator saves them.
+The visible provenance marker for those values is the shared
+`DiscoveryProvenanceMarker`; local surfaces may choose the labelled or
+icon-only variant, but must not invent alternate Discovery badges or hide the
+source on compact cards.
 That same settings-shell boundary now also owns the shared settings
 presentation helpers that those panels consume. `frontend-modern/src/utils/systemSettingsPresentation.ts`
 is the canonical owner for shared system-settings presets, summaries, and

@@ -329,6 +329,7 @@ import useUnifiedResourcesSource from '@/hooks/useUnifiedResources.ts?raw';
 import useWorkloadsSource from '@/hooks/useWorkloads.ts?raw';
 import findingsPanelSource from '@/components/AI/FindingsPanel.tsx?raw';
 import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
+import discoveryProvenanceMarkerSource from '@/components/shared/DiscoveryProvenanceMarker.tsx?raw';
 import discoveryPresentationSource from '@/utils/discoveryPresentation.ts?raw';
 import mailGatewaySource from '@/components/PMG/MailGateway.tsx?raw';
 import pmgInstancePanelSource from '@/components/PMG/PMGInstancePanel.tsx?raw';
@@ -3170,6 +3171,12 @@ describe('frontend resource type boundaries', () => {
     expect(discoveryPresentationSource).toContain(
       'export function getDiscoveryObservedSourceLabel',
     );
+    expect(discoveryPresentationSource).toContain('export function getDiscoveryProvenanceTitle');
+    expect(discoveryProvenanceMarkerSource).toContain('getDiscoveryProvenanceTitle');
+    expect(discoveryProvenanceMarkerSource).toContain('getDiscoveryProvenanceBadgeClass');
+    expect(discoveryTabSource).toContain('DiscoveryProvenanceMarker');
+    expect(webInterfaceUrlFieldSource).toContain('DiscoveryProvenanceMarker');
+    expect(guestDrawerOverviewSource).toContain('DiscoveryProvenanceMarker');
     expect(discoveryPresentationSource).toContain(
       'export function getDiscoverySuggestedURLCardClass',
     );

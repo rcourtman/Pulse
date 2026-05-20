@@ -25,6 +25,7 @@ import {
   getDiscoverySuggestedURLHeadingClass,
   getDiscoverySuggestedURLTextClass,
 } from '@/utils/discoveryPresentation';
+import { DiscoveryProvenanceMarker } from '@/components/shared/DiscoveryProvenanceMarker';
 import {
   DISCOVERY_ANALYSIS_EXPLANATION,
   DISCOVERY_ANALYSIS_REASONING_LABEL,
@@ -661,11 +662,15 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             <div class="rounded border border-border bg-surface p-3 shadow-sm">
               <div class="flex items-start justify-between">
                 <div>
-                  <h3 class="text-sm font-semibold text-base-content">
-                    {d().service_name || 'Unknown Service'}
-                  </h3>
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <h3 class="text-sm font-semibold text-base-content">
+                      {d().service_name || 'Unknown Service'}
+                    </h3>
+                    <DiscoveryProvenanceMarker />
+                  </div>
                   <Show when={d().service_version}>
                     <div class="mt-1 flex items-center gap-2">
+                      <DiscoveryProvenanceMarker showLabel={false} />
                       <span class="text-xs text-muted">Version {d().service_version}</span>
                       <CopyValueButton
                         value={d().service_version}
@@ -690,9 +695,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 </p>
               </Show>
               <div class="mt-3 flex flex-wrap gap-2 text-[10px] text-muted">
-                <span class="rounded border border-border bg-surface-alt px-2 py-0.5">
-                  {getDiscoveryObservedSourceLabel()}
-                </span>
+                <DiscoveryProvenanceMarker label={getDiscoveryObservedSourceLabel()} />
                 <Show when={d().updated_at}>
                   <span class="rounded border border-border bg-surface-alt px-2 py-0.5">
                     Last observed {formatDiscoveryAge(d().updated_at)}
@@ -706,7 +709,10 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
             <Show when={d().suggested_url || d().suggested_url_diagnostic}>
               <div class={getDiscoverySuggestedURLCardClass()}>
-                <div class={getDiscoverySuggestedURLHeadingClass()}>Web Interface Suggestion</div>
+                <div class={`${getDiscoverySuggestedURLHeadingClass()} flex items-center gap-1.5`}>
+                  <span>Web Interface Suggestion</span>
+                  <DiscoveryProvenanceMarker />
+                </div>
                 <Show
                   when={d().suggested_url}
                   fallback={
@@ -756,8 +762,9 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             {/* CLI Access */}
             <Show when={d().cli_access}>
               <div class="rounded border border-border p-3 shadow-sm">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
-                  CLI Access
+                <div class="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-base-content">
+                  <span>CLI Access</span>
+                  <DiscoveryProvenanceMarker showLabel={false} />
                 </div>
                 <CopyableCodeRow
                   value={d().cli_access}
@@ -779,8 +786,9 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
               <div class="rounded border border-border p-3 shadow-sm">
                 <Show when={d().config_paths?.length > 0}>
                   <div class="mb-3">
-                    <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-1">
-                      Config Paths
+                    <div class="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-base-content">
+                      <span>Config Paths</span>
+                      <DiscoveryProvenanceMarker showLabel={false} />
                     </div>
                     <div class="space-y-1">
                       <For each={d().config_paths}>
@@ -798,8 +806,9 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 </Show>
                 <Show when={d().data_paths?.length > 0}>
                   <div class="mb-3">
-                    <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-1">
-                      Data Paths
+                    <div class="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-base-content">
+                      <span>Data Paths</span>
+                      <DiscoveryProvenanceMarker showLabel={false} />
                     </div>
                     <div class="space-y-1">
                       <For each={d().data_paths}>
@@ -817,8 +826,9 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 </Show>
                 <Show when={d().log_paths?.length > 0}>
                   <div>
-                    <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-1">
-                      Log Paths
+                    <div class="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-base-content">
+                      <span>Log Paths</span>
+                      <DiscoveryProvenanceMarker showLabel={false} />
                     </div>
                     <div class="space-y-1">
                       <For each={d().log_paths}>
@@ -840,8 +850,9 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             {/* Ports */}
             <Show when={d().ports?.length > 0}>
               <div class="rounded border border-border p-3 shadow-sm">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
-                  Listening Ports
+                <div class="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-base-content">
+                  <span>Listening Ports</span>
+                  <DiscoveryProvenanceMarker showLabel={false} />
                 </div>
                 <div class="flex flex-wrap gap-1">
                   <For each={d().ports}>
@@ -877,8 +888,9 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             {/* Key Facts */}
             <Show when={d().facts?.length > 0}>
               <div class="rounded border border-border p-3 shadow-sm">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
-                  Discovered Facts
+                <div class="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-base-content">
+                  <span>Discovered Facts</span>
+                  <DiscoveryProvenanceMarker showLabel={false} />
                 </div>
                 <div class="space-y-1.5">
                   <For each={d().facts.slice(0, 8)}>

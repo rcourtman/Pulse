@@ -6,6 +6,10 @@ import {
   getDiscoveryInitialEmptyState,
   getDiscoveryLoadingState,
   getDiscoveryNoConnectedAgentMessage,
+  getDiscoveryProvenanceBadgeClass,
+  getDiscoveryProvenanceIconClass,
+  getDiscoveryProvenanceLabel,
+  getDiscoveryProvenanceTitle,
   getNetworkDiscoveryModePresentation,
   getDiscoveryNotesEmptyState,
   getDiscoveryObservedSourceLabel,
@@ -60,6 +64,10 @@ describe('discoveryPresentation', () => {
     expect(getDiscoveryCategoryBadgeClass()).toContain('text-blue-700');
     expect(getDiscoverySuggestedURLCardClass()).toContain('bg-blue-50');
     expect(getDiscoverySuggestedURLActionClass()).toContain('text-blue-700');
+    expect(getDiscoveryProvenanceLabel()).toBe('Discovery');
+    expect(getDiscoveryProvenanceTitle()).toContain('opt-in Discovery');
+    expect(getDiscoveryProvenanceBadgeClass()).toContain('border-cyan-200');
+    expect(getDiscoveryProvenanceIconClass()).toContain('h-4');
   });
 
   it('returns canonical discovery empty-state copy', () => {

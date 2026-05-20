@@ -5,6 +5,7 @@ import type { WorkloadGuest } from '@/types/workloads';
 import type { Memory, Disk, GuestNetworkInterface } from '@/types/api';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
+import { getDiscoveryProvenanceTitle } from '@/utils/discoveryPresentation';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
 
@@ -226,6 +227,7 @@ describe('GuestDrawer', () => {
       expect(screen.getByText('web_server')).toBeInTheDocument();
       expect(screen.getByText('0.9.0')).toBeInTheDocument();
       expect(screen.getByText('95%')).toBeInTheDocument();
+      expect(screen.getByLabelText(getDiscoveryProvenanceTitle())).toBeInTheDocument();
       expect(screen.getAllByText('http://192.0.2.10:3000').length).toBeGreaterThan(0);
       expect(screen.getByText('docker exec -it homepage /bin/sh')).toBeInTheDocument();
       expect(screen.getByTestId('url-suggested')).toHaveTextContent('http://192.0.2.10:3000');

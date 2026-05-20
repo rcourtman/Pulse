@@ -25,6 +25,7 @@ vi.mock('@/utils/clipboard', () => ({
 import { AgentMetadataAPI } from '@/api/agentMetadata';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { copyToClipboard } from '@/utils/clipboard';
+import { getDiscoveryProvenanceTitle } from '@/utils/discoveryPresentation';
 
 describe('WebInterfaceUrlField', () => {
   afterEach(() => {
@@ -119,6 +120,7 @@ describe('WebInterfaceUrlField', () => {
 
     expect(await screen.findByText('No suggested URL available')).toBeInTheDocument();
     expect(screen.getByText('No management interface could be inferred.')).toBeInTheDocument();
+    expect(screen.getByLabelText(getDiscoveryProvenanceTitle())).toBeInTheDocument();
   });
 
   it('offers discovered URL copy, open, and adopt actions without saving automatically', async () => {
@@ -133,6 +135,7 @@ describe('WebInterfaceUrlField', () => {
     ));
 
     expect(await screen.findByText('Suggested URL')).toBeInTheDocument();
+    expect(screen.getByLabelText(getDiscoveryProvenanceTitle())).toBeInTheDocument();
     expect(screen.getByText('http://192.0.2.10:8123')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open suggested URL' })).toHaveAttribute(
       'href',

@@ -23,6 +23,7 @@ vi.mock('@/utils/clipboard', () => ({
 import * as discoveryApi from '@/api/discovery';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import { copyToClipboard } from '@/utils/clipboard';
+import { getDiscoveryProvenanceTitle } from '@/utils/discoveryPresentation';
 
 describe('DiscoveryTab', () => {
   afterEach(() => {
@@ -176,6 +177,7 @@ describe('DiscoveryTab', () => {
     expect(await screen.findByText('Analysis: Cloud (Anthropic)')).toBeInTheDocument();
     expect(await screen.findByText('Observed by Discovery')).toBeInTheDocument();
     expect(await screen.findByText('Available to Pulse Assistant')).toBeInTheDocument();
+    expect(screen.getAllByLabelText(getDiscoveryProvenanceTitle()).length).toBeGreaterThan(1);
     expect(await screen.findByText('Analysis Reasoning')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open suggested URL' })).toHaveAttribute(
       'href',
