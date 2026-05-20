@@ -7,7 +7,7 @@ import StoragePageSummary from '@/components/Storage/StoragePageSummary';
 import { StorageViewSegmentedControl } from '@/components/Storage/StorageViewSegmentedControl';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StickySummarySection } from '@/components/shared/StickySummarySection';
-import { isStorageRecordCeph } from './storagePageState';
+import { DEFAULT_STORAGE_SELECTED_NODE_ID, isStorageRecordCeph } from './storagePageState';
 import { useStoragePageModel } from './useStoragePageModel';
 
 type StorageProps = {
@@ -20,12 +20,14 @@ type StorageProps = {
   // `showFilterToolbar` so the canonical StoragePageControls row stays
   // visible alongside the table even when `tableOnly` hides the summary
   // section. The page owns source scope via `forcedSourceFilter`; the
-  // controls toolbar still exposes search, status, grouping, sort, and
-  // node filters to the operator. `suppressSourceFilter` drops the
-  // redundant Source chip from the controls toolbar since the platform
-  // page already locks source scope through `forcedSourceFilter`.
+  // controls toolbar still exposes search, status, grouping, and sort to
+  // the operator. `suppressSourceFilter` drops the redundant Source chip
+  // from the controls toolbar since the platform page already locks source
+  // scope through `forcedSourceFilter`; `suppressNodeFilter` lets platform
+  // pages use search for host/node scoping, matching their overview pages.
   showFilterToolbar?: boolean;
   suppressSourceFilter?: boolean;
+  suppressNodeFilter?: boolean;
   filterAriaLabel?: string;
   filterSearchPlaceholder?: string;
   filterSearchEmptyMessage?: string;
@@ -123,6 +125,13 @@ const Storage: Component<StorageProps> = (props) => {
     }
   });
 
+  createEffect(() => {
+    if (!props.suppressNodeFilter) return;
+    if (selectedNodeId() !== DEFAULT_STORAGE_SELECTED_NODE_ID) {
+      setSelectedNodeId(DEFAULT_STORAGE_SELECTED_NODE_ID);
+    }
+  });
+
   return (
     <div ref={setClearSurfaceRootRef} class="space-y-4" data-testid="storage-page">
       <Show when={!props.embedded}>
@@ -204,6 +213,7 @@ const Storage: Component<StorageProps> = (props) => {
               setSourceFilter={setSourceFilter}
               sourceOptions={sourceFilterOptions}
               suppressSourceFilter={props.suppressSourceFilter || Boolean(props.forcedSourceFilter)}
+              suppressNodeFilter={props.suppressNodeFilter}
               diskRoleFilter={diskRoleFilter}
               setDiskRoleFilter={setDiskRoleFilter}
               diskRoleOptions={diskRoleOptions}

@@ -76,6 +76,10 @@ type StoragePageControlsProps = {
   // and would render as a user-visible pinned filter. Setting this drops
   // the Source chip from the rendered filter row.
   suppressSourceFilter?: boolean;
+  // Platform-owned storage tabs use the search box for host/node scoping,
+  // matching the overview-page filter contract. Standalone /storage keeps
+  // the explicit Node filter so canonical node query links remain visible.
+  suppressNodeFilter?: boolean;
 };
 
 const VIEW_TABS = STORAGE_VIEW_OPTIONS as { value: string; label: string }[];
@@ -116,8 +120,9 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
         diskRoleFilter: props.diskRoleFilter?.(),
         diskGroupFilter: props.diskGroupFilter?.(),
       }) ||
-      (props.selectedNodeId() || DEFAULT_STORAGE_SELECTED_NODE_ID) !==
-        DEFAULT_STORAGE_SELECTED_NODE_ID,
+      (!props.suppressNodeFilter &&
+        (props.selectedNodeId() || DEFAULT_STORAGE_SELECTED_NODE_ID) !==
+          DEFAULT_STORAGE_SELECTED_NODE_ID),
   );
 
   const handleClearAll = () => {
@@ -142,8 +147,10 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
   };
 
   const buildFilters = (): FilterDef[] => {
-    const filters: FilterDef[] = [
-      {
+    const filters: FilterDef[] = [];
+
+    if (!props.suppressNodeFilter) {
+      filters.push({
         id: 'storage-node',
         label: 'Node',
         group: 'scope',
@@ -155,8 +162,8 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
             value: option.value,
             label: option.label,
           })),
-      },
-    ];
+      });
+    }
 
     if (isPoolsView()) {
       filters.push({

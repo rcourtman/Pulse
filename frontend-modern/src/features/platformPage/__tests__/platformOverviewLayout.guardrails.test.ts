@@ -156,12 +156,15 @@ describe('platform overview layout guardrails', () => {
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesDeploymentsTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASSystemsTable');
     expect(truenasPageSurfaceSource).toContain('<StorageSurface');
+    expect(truenasPageSurfaceSource).toContain('suppressNodeFilter');
     expect(truenasPageSurfaceSource).not.toContain('forcedView="pools"');
     expect(truenasPageSurfaceSource).not.toContain('<TrueNASDisksTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereHostsTable');
     expect(vmwarePageSurfaceSource).toContain('<WorkloadsSurface');
     expect(vmwarePageSurfaceSource).toContain('<StorageSurface');
+    expect(vmwarePageSurfaceSource).toContain('suppressNodeFilter');
     expect(vmwarePageSurfaceSource).not.toContain('forcedView="pools"');
+    expect(proxmoxPageSurfaceSource).toContain('suppressNodeFilter');
   });
 
   it('keeps secondary overview tables from rendering duplicate standalone toolbars', () => {

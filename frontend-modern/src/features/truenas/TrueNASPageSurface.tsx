@@ -98,6 +98,7 @@ export function TrueNASPageSurface() {
                 tableOnly
                 showFilterToolbar
                 forcedSourceFilter={TRUENAS_PLATFORM_FILTER}
+                suppressNodeFilter
                 filterAriaLabel="TrueNAS storage filters"
                 filterSearchPlaceholder="Search TrueNAS pools, datasets, disks, or nodes"
                 filterSearchEmptyMessage="Recent TrueNAS storage searches appear here."

@@ -96,6 +96,7 @@ export function VmwarePageSurface() {
                 tableOnly
                 showFilterToolbar
                 forcedSourceFilter={VMWARE_PLATFORM_FILTER}
+                suppressNodeFilter
                 filterAriaLabel="vSphere datastore filters"
                 filterSearchPlaceholder="Search vSphere datastores by name, host, or capacity group"
                 filterSearchEmptyMessage="Recent vSphere datastore searches appear here."

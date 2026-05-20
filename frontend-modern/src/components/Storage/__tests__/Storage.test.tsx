@@ -365,6 +365,7 @@ describe('Storage platform-page embed contract', () => {
   it('exposes showFilterToolbar on StorageProps so platform pages keep StoragePageControls visible under tableOnly', async () => {
     const storageSource = (await import('../Storage.tsx?raw')).default;
     expect(storageSource).toContain('showFilterToolbar?: boolean;');
+    expect(storageSource).toContain('suppressNodeFilter?: boolean;');
     expect(storageSource).toContain('props.showFilterToolbar || !props.tableOnly');
   });
 
@@ -376,6 +377,14 @@ describe('Storage platform-page embed contract', () => {
     const controlsSource = (await import('../StoragePageControls.tsx?raw')).default;
     expect(controlsSource).toContain('suppressSourceFilter?: boolean;');
     expect(controlsSource).toContain('if (!props.suppressSourceFilter) {');
+  });
+
+  it('lets platform storage tabs suppress the explicit Node filter in favor of search', async () => {
+    const storageSource = (await import('../Storage.tsx?raw')).default;
+    expect(storageSource).toContain('suppressNodeFilter={props.suppressNodeFilter}');
+    const controlsSource = (await import('../StoragePageControls.tsx?raw')).default;
+    expect(controlsSource).toContain('suppressNodeFilter?: boolean;');
+    expect(controlsSource).toContain('if (!props.suppressNodeFilter) {');
   });
 });
 
@@ -1890,6 +1899,34 @@ describe('Storage', () => {
 
   it('passes platform-owned filter copy into embedded storage controls', () => {
     mockLocationPath = '/vmware/storage';
+    nodeResources = [
+      {
+        id: 'host-esxi-01',
+        type: 'agent',
+        name: 'esxi-01',
+        displayName: 'esxi-01',
+        platformId: 'vcenter-main',
+        platformType: 'vmware-vsphere',
+        sourceType: 'api',
+        status: 'online',
+        uptime: 1000,
+        lastSeen: Date.now(),
+        platformData: { sources: ['vmware-vsphere'] },
+      } as Resource,
+      {
+        id: 'host-esxi-02',
+        type: 'agent',
+        name: 'esxi-02',
+        displayName: 'esxi-02',
+        platformId: 'vcenter-main',
+        platformType: 'vmware-vsphere',
+        sourceType: 'api',
+        status: 'online',
+        uptime: 1000,
+        lastSeen: Date.now(),
+        platformData: { sources: ['vmware-vsphere'] },
+      } as Resource,
+    ];
     hookResources = [
       buildStorageResource('vsphere-datastore', 'vsan-prod', 'esxi-01', {
         platformType: 'vmware-vsphere',
@@ -1900,6 +1937,16 @@ describe('Storage', () => {
           nodes: ['esxi-01'],
         },
       }),
+      buildStorageResource('vsphere-archive', 'archive-cold', 'esxi-02', {
+        platformType: 'vmware-vsphere',
+        parentName: 'esxi-02',
+        storage: {
+          platform: 'vmware-vsphere',
+          type: 'datastore',
+          topology: 'datastore',
+          nodes: ['esxi-02'],
+        },
+      }),
     ];
 
     render(() => (
@@ -1908,6 +1955,7 @@ describe('Storage', () => {
         tableOnly
         showFilterToolbar
         forcedSourceFilter="vmware-vsphere"
+        suppressNodeFilter
         filterAriaLabel="vSphere datastore filters"
         filterSearchPlaceholder="Search vSphere datastores by name, host, or capacity group"
         filterSearchEmptyMessage="Recent vSphere datastore searches appear here."
@@ -1918,6 +1966,15 @@ describe('Storage', () => {
     expect(
       screen.getByPlaceholderText('Search vSphere datastores by name, host, or capacity group'),
     ).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Filter' })).not.toBeInTheDocument();
+
+    fireEvent.input(
+      screen.getByPlaceholderText('Search vSphere datastores by name, host, or capacity group'),
+      { target: { value: 'esxi-02' } },
+    );
+
+    expect(screen.queryByText('vsan-prod')).not.toBeInTheDocument();
+    expect(screen.getByText('archive-cold')).toBeInTheDocument();
   });
 
   it('supports Proxmox platform table embedding without standalone page chrome', async () => {

@@ -150,6 +150,7 @@ export function ProxmoxPageSurface() {
                 tableOnly
                 showFilterToolbar
                 forcedSourceFilter={PROXMOX_PLATFORM_FILTER}
+                suppressNodeFilter
                 filterAriaLabel="Proxmox storage filters"
                 filterSearchPlaceholder="Search Proxmox storage by pool, datastore, node, or device"
                 filterSearchEmptyMessage="Recent Proxmox storage searches appear here."
