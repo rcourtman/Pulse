@@ -116,7 +116,13 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
         sortDirection: props.sortDirection(),
         groupBy: props.storageFilterGroupBy(),
         statusFilter: props.statusFilter(),
-        sourceFilter: props.sourceFilter(),
+        // When the Source filter is suppressed (a platform page like
+        // Proxmox/Storage forces it to its own scope via
+        // `forcedSourceFilter`), the user cannot change it — so it must not
+        // count as an "active filter" that surfaces the Reset button.
+        sourceFilter: props.suppressSourceFilter
+          ? DEFAULT_STORAGE_SOURCE_FILTER
+          : props.sourceFilter(),
         diskRoleFilter: props.diskRoleFilter?.(),
         diskGroupFilter: props.diskGroupFilter?.(),
       }) ||
