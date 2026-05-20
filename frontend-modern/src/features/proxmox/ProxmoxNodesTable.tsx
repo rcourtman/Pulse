@@ -35,8 +35,8 @@ import {
   PLATFORM_TABLE_CARD_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
   PlatformTableEmptyState,
-  getPlatformTableCellClass,
-  getPlatformTableHeadClass,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
 import { type WorkloadsMetricDisplayMode } from '@/components/Workloads/workloadsFilterModel';
 import { type WorkloadTableMetricHistoryRange } from '@/components/Workloads/workloadMetricHistoryModel';
@@ -183,7 +183,7 @@ export const ProxmoxNodesTable: Component<{
             <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
               <For each={visibleColumns()}>
                 {(column) => (
-                  <TableHead class={getPlatformTableHeadClass(column.align)}>
+                  <TableHead class={getPlatformTableHeadClassForKind(column.kind)}>
                     {column.label}
                   </TableHead>
                 )}
@@ -246,7 +246,7 @@ export const ProxmoxNodesTable: Component<{
                   switch (column.id) {
                     case 'node':
                       return (
-                        <TableCell class={getPlatformTableCellClass(column.align)}>
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                           <div class="flex min-w-0 items-center gap-2">
                             <StatusDot
                               size="sm"
@@ -262,7 +262,7 @@ export const ProxmoxNodesTable: Component<{
                       );
                     case 'version':
                       return (
-                        <TableCell class={getPlatformTableCellClass(column.align)}>
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                           <Show when={version()} fallback={<span class="text-muted">—</span>}>
                             <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 font-mono text-[10px] text-base-content">
                               {version()}
@@ -273,7 +273,7 @@ export const ProxmoxNodesTable: Component<{
                     case 'uptime':
                       return (
                         <TableCell
-                          class={`${getPlatformTableCellClass(column.align)} tabular-nums ${
+                          class={`${getPlatformTableCellClassForKind(column.kind)} tabular-nums ${
                             uptime().warn
                               ? 'text-orange-600 dark:text-orange-400'
                               : 'text-base-content'
@@ -284,7 +284,7 @@ export const ProxmoxNodesTable: Component<{
                       );
                     case 'cpu':
                       return (
-                        <TableCell class={getPlatformTableCellClass(column.align)}>
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                           <Show
                             when={isSparklineMode()}
                             fallback={
@@ -308,7 +308,7 @@ export const ProxmoxNodesTable: Component<{
                       );
                     case 'memory':
                       return (
-                        <TableCell class={getPlatformTableCellClass(column.align)}>
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                           <Show
                             when={isSparklineMode()}
                             fallback={
@@ -342,7 +342,7 @@ export const ProxmoxNodesTable: Component<{
                       );
                     case 'disk':
                       return (
-                        <TableCell class={getPlatformTableCellClass(column.align)}>
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                           <Show
                             when={isSparklineMode()}
                             fallback={
@@ -378,7 +378,7 @@ export const ProxmoxNodesTable: Component<{
                       );
                     case 'temp':
                       return (
-                        <TableCell class={getPlatformTableCellClass(column.align)}>
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                           <Show
                             when={
                               typeof temperature() === 'number' && (temperature() as number) > 0
@@ -391,7 +391,7 @@ export const ProxmoxNodesTable: Component<{
                       );
                     case 'vms':
                       return (
-                        <TableCell class={getPlatformTableCellClass(column.align)}>
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                           <span class={counts().vms > 0 ? VMS_BADGE : ZERO_BADGE}>
                             {counts().vms}
                           </span>
@@ -399,7 +399,7 @@ export const ProxmoxNodesTable: Component<{
                       );
                     case 'cts':
                       return (
-                        <TableCell class={getPlatformTableCellClass(column.align)}>
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                           <span class={counts().containers > 0 ? CTS_BADGE : ZERO_BADGE}>
                             {counts().containers}
                           </span>
@@ -407,7 +407,7 @@ export const ProxmoxNodesTable: Component<{
                       );
                     case 'cluster':
                       return (
-                        <TableCell class={getPlatformTableCellClass(column.align)}>
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                           <span class="inline-flex items-center rounded-md bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content">
                             {cluster()}
                           </span>

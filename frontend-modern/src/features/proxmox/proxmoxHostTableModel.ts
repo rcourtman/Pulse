@@ -1,6 +1,7 @@
 import type { JSX } from 'solid-js';
 
 import type { WorkloadTableLayoutMode } from '@/components/Workloads/guestRowModel';
+import type { PlatformTableColumnKind } from '@/features/platformPage/columnAlignment';
 
 export type ProxmoxHostTableColumnId =
   | 'node'
@@ -17,7 +18,7 @@ export type ProxmoxHostTableColumnId =
 export type ProxmoxHostTableColumn = {
   id: ProxmoxHostTableColumnId;
   label: string;
-  align?: 'left' | 'right' | 'center';
+  kind: PlatformTableColumnKind;
 };
 
 const HOST_TABLE_LAYOUT_ORDER: Record<WorkloadTableLayoutMode, number> = {
@@ -84,16 +85,16 @@ const HOST_COLUMN_RESPONSIVE_WEIGHTS: Record<
 const formatPercentage = (value: number): string => `${Number(value.toFixed(4))}%`;
 
 export const PROXMOX_HOST_TABLE_COLUMNS: ProxmoxHostTableColumn[] = [
-  { id: 'node', label: 'Node' },
-  { id: 'version', label: 'Version' },
-  { id: 'uptime', label: 'Uptime', align: 'right' },
-  { id: 'cpu', label: 'CPU' },
-  { id: 'memory', label: 'Memory' },
-  { id: 'disk', label: 'Disk' },
-  { id: 'temp', label: 'Temp', align: 'right' },
-  { id: 'vms', label: 'VMs', align: 'center' },
-  { id: 'cts', label: 'CTs', align: 'center' },
-  { id: 'cluster', label: 'Cluster' },
+  { id: 'node', label: 'Node', kind: 'name' },
+  { id: 'version', label: 'Version', kind: 'text' },
+  { id: 'uptime', label: 'Uptime', kind: 'numeric-value' },
+  { id: 'cpu', label: 'CPU', kind: 'metric-bar' },
+  { id: 'memory', label: 'Memory', kind: 'metric-bar' },
+  { id: 'disk', label: 'Disk', kind: 'metric-bar' },
+  { id: 'temp', label: 'Temp', kind: 'numeric-value' },
+  { id: 'vms', label: 'VMs', kind: 'numeric-value' },
+  { id: 'cts', label: 'CTs', kind: 'numeric-value' },
+  { id: 'cluster', label: 'Cluster', kind: 'text' },
 ];
 
 export const getProxmoxHostVisibleColumnsForLayout = (

@@ -21,8 +21,8 @@ import {
   PlatformTableEmptyState,
   createPlatformTableFilterState,
   filterPlatformResources,
-  getPlatformTableCellClass,
-  getPlatformTableHeadClass,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
@@ -101,25 +101,25 @@ export const KubernetesDeploymentsTable: Component<{
                     Ready / Available) trim to what their headers plus
                     1-2 digit values need. Mobile widths are unchanged.
                   */}
-                  <TableHead class={`${getPlatformTableHeadClass()} md:w-[27%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[27%]`}>
                     Deployment
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[21%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[21%]`}>
                     Namespace
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[16%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[16%]`}>
                     Cluster
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[9%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}>
                     Desired
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[9%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}>
                     Updated
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[9%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[9%]`}>
                     Ready
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[9%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[9%]`}>
                     Available
                   </TableHead>
                 </TableRow>
@@ -136,7 +136,7 @@ export const KubernetesDeploymentsTable: Component<{
                     const indicator = () => getSimpleStatusIndicator(deployment.status);
                     return (
                       <TableRow class="text-[11px] sm:text-xs">
-                        <TableCell class={getPlatformTableCellClass()}>
+                        <TableCell class={getPlatformTableCellClassForKind('name')}>
                           <div class="flex min-w-0 items-center gap-2">
                             <StatusDot
                               size="sm"
@@ -150,32 +150,32 @@ export const KubernetesDeploymentsTable: Component<{
                           </div>
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                         >
                           {ns()}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                         >
                           {cluster()}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                         >
                           {replicaCount(deployment.kubernetes?.desiredReplicas)}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                         >
                           {replicaCount(deployment.kubernetes?.updatedReplicas)}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                         >
                           {replicaCount(deployment.kubernetes?.readyReplicas)}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                         >
                           {replicaCount(deployment.kubernetes?.availableReplicas)}
                         </TableCell>

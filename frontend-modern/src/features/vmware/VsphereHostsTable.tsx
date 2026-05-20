@@ -24,8 +24,8 @@ import {
   PlatformTableEmptyState,
   createPlatformTableFilterState,
   filterPlatformResources,
-  getPlatformTableCellClass,
-  getPlatformTableHeadClass,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -156,31 +156,31 @@ export const VsphereHostsTable: Component<{
                     integer-count columns to what their content actually
                     needs. Mobile widths are unchanged.
                   */}
-                  <TableHead class={`${getPlatformTableHeadClass()} md:w-[18%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
                     Host
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[11%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[11%]`}>
                     Datacenter
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[12%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[12%]`}>
                     Cluster
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[9%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[9%]`}>
                     Power
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[13%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[13%]`}>
                     CPU
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[13%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[13%]`}>
                     Memory
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[9%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}>
                     Datastores
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[5%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[5%]`}>
                     VMs
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[10%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}>
                     vCenter
                   </TableHead>
                 </TableRow>
@@ -220,7 +220,7 @@ export const VsphereHostsTable: Component<{
                           onKeyDown={drawer.handleActivationKey(host)}
                           tabIndex={0}
                         >
-                          <TableCell class={getPlatformTableCellClass()}>
+                          <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex min-w-0 items-center gap-2">
                               <StatusDot
                                 size="sm"
@@ -234,16 +234,16 @@ export const VsphereHostsTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
                             {datacenter()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
                             {cluster()}
                           </TableCell>
-                          <TableCell class={`${getPlatformTableCellClass()} hidden md:table-cell`}>
+                          <TableCell class={`${getPlatformTableCellClassForKind('text')} hidden md:table-cell`}>
                             <div class="flex items-center gap-2">
                               <StatusDot
                                 size="sm"
@@ -257,7 +257,7 @@ export const VsphereHostsTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
                           >
                             <ResponsiveMetricCell
                               class="w-full"
@@ -269,7 +269,7 @@ export const VsphereHostsTable: Component<{
                             />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
                           >
                             <Show
                               when={canRenderMetrics() && hasMemoryMetric()}
@@ -283,17 +283,17 @@ export const VsphereHostsTable: Component<{
                             </Show>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
                           >
                             {datastoreCount()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} text-base-content tabular-nums`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
                           >
                             {vmCount()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
                           >
                             <span class="inline-block max-w-[12rem] truncate" title={vcenter()}>
                               {vcenter()}

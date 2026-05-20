@@ -27,8 +27,8 @@ import {
   PlatformTableEmptyState,
   createPlatformTableFilterState,
   filterPlatformResources,
-  getPlatformTableCellClass,
-  getPlatformTableHeadClass,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Disk } from '@/types/api';
@@ -166,36 +166,36 @@ export const DockerHostsTable: Component<{
                     bars aren't squeezed by table-fixed's equal split. Mobile
                     widths (w-[40%], w-[20%]) are unchanged.
                   */}
-                  <TableHead class={`${getPlatformTableHeadClass()} w-[40%] md:w-[15%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} w-[40%] md:w-[15%]`}>
                     Host
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[7%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[7%]`}>
                     System
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[7%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[7%]`}>
                     Version
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[9%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}>
                     Containers
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} w-[20%] md:w-[14%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[14%]`}>
                     CPU
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} w-[20%] md:w-[14%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[14%]`}>
                     <span class="md:hidden">Mem</span>
                     <span class="hidden md:inline">Memory</span>
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} w-[20%] md:w-[14%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[14%]`}>
                     Disk
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[6%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}>
                     Uptime
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[6%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}>
                     Temp
                   </TableHead>
                   <Show when={showSwarmColumn()}>
-                    <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[9%]`}>
+                    <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[9%]`}>
                       Swarm role
                     </TableHead>
                   </Show>
@@ -262,7 +262,7 @@ export const DockerHostsTable: Component<{
                           onKeyDown={handleActivationKey}
                           tabIndex={0}
                         >
-                          <TableCell class={`${getPlatformTableCellClass()} w-[40%] md:w-auto`}>
+                          <TableCell class={`${getPlatformTableCellClassForKind('name')} w-[40%] md:w-auto`}>
                             <div class="flex min-w-0 items-center gap-2">
                               <StatusDot
                                 size="sm"
@@ -286,7 +286,7 @@ export const DockerHostsTable: Component<{
                             </Show>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
                             <Show when={systemBadge()} fallback={<span class="text-muted">—</span>}>
                               {(badge) => (
@@ -300,17 +300,17 @@ export const DockerHostsTable: Component<{
                             </Show>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
                           >
                             {version()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
                           >
                             {containerCount()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
                           >
                             <ResponsiveMetricCell
                               class="w-full"
@@ -322,7 +322,7 @@ export const DockerHostsTable: Component<{
                             />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
                           >
                             <Show
                               when={canRenderMetrics() && hasMemoryMetric()}
@@ -336,7 +336,7 @@ export const DockerHostsTable: Component<{
                             </Show>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
                           >
                             <Show
                               when={canRenderMetrics() && hasDiskMetric()}
@@ -350,18 +350,18 @@ export const DockerHostsTable: Component<{
                             </Show>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                           >
                             {formatUptime(host.uptime ?? docker()?.uptimeSeconds)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                           >
                             {formatTemperature(host.temperature ?? docker()?.temperature)}
                           </TableCell>
                           <Show when={showSwarmColumn()}>
                             <TableCell
-                              class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                              class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                             >
                               {swarmRole()}
                             </TableCell>

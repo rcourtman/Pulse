@@ -21,8 +21,8 @@ import {
   PlatformTableEmptyState,
   createPlatformTableFilterState,
   filterPlatformResources,
-  getPlatformTableCellClass,
-  getPlatformTableHeadClass,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
@@ -135,23 +135,23 @@ export const DockerServicesTable: Component<{
                     a middle slice for port lists and hostnames. Mobile
                     widths are unchanged.
                   */}
-                  <TableHead class={`${getPlatformTableHeadClass()} md:w-[22%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>
                     Service
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[25%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[25%]`}>
                     Image
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} md:w-[9%]`}>Mode</TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[8%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[9%]`}>Mode</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}>
                     Desired
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[8%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}>
                     Running
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[14%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}>
                     Ports
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[14%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}>
                     Host
                   </TableHead>
                 </TableRow>
@@ -166,7 +166,7 @@ export const DockerServicesTable: Component<{
                     const indicator = () => getSimpleStatusIndicator(service.status);
                     return (
                       <TableRow class="text-[11px] sm:text-xs">
-                        <TableCell class={getPlatformTableCellClass()}>
+                        <TableCell class={getPlatformTableCellClassForKind('name')}>
                           <div class="flex min-w-0 items-center gap-2">
                             <StatusDot
                               size="sm"
@@ -180,34 +180,34 @@ export const DockerServicesTable: Component<{
                           </div>
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                         >
                           <span class="truncate inline-block max-w-[18rem]" title={image()}>
                             {image()}
                           </span>
                         </TableCell>
-                        <TableCell class={`${getPlatformTableCellClass()} text-base-content`}>
+                        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
                           {mode()}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                         >
                           {replicaCount(service.docker?.desiredTasks)}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClass('right')} text-base-content`}
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                         >
                           {replicaCount(service.docker?.runningTasks)}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                         >
                           <span class="font-mono text-[11px]" title={formatPorts(service.docker)}>
                             {formatPorts(service.docker)}
                           </span>
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                         >
                           {host()}
                         </TableCell>

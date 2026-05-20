@@ -24,8 +24,8 @@ import {
   PlatformTableEmptyState,
   createPlatformTableFilterState,
   filterPlatformResources,
-  getPlatformTableCellClass,
-  getPlatformTableHeadClass,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -173,37 +173,37 @@ export const TrueNASSystemsTable: Component<{
                     room it needs for full "TrueNAS-SCALE-24.10.2"-style
                     labels. Mobile widths are unchanged.
                   */}
-                  <TableHead class={`${getPlatformTableHeadClass()} md:w-[14%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[14%]`}>
                     System
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[14%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}>
                     Version
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[6%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}>
                     Uptime
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[11%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[11%]`}>
                     CPU
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[12%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[12%]`}>
                     Memory
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[13%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[13%]`}>
                     Storage
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[6%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}>
                     Temp
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[6%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}>
                     Pools
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[7%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[7%]`}>
                     Datasets
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[5%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[5%]`}>
                     Disks
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[5%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[5%]`}>
                     Apps
                   </TableHead>
                 </TableRow>
@@ -253,7 +253,7 @@ export const TrueNASSystemsTable: Component<{
                           onKeyDown={drawer.handleActivationKey(system)}
                           tabIndex={0}
                         >
-                          <TableCell class={getPlatformTableCellClass()}>
+                          <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex min-w-0 items-center gap-2">
                               <StatusDot
                                 size="sm"
@@ -267,17 +267,17 @@ export const TrueNASSystemsTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
                           >
                             {version()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                           >
                             {formatUptime(system.uptime)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
                           >
                             <ResponsiveMetricCell
                               class="w-full"
@@ -289,7 +289,7 @@ export const TrueNASSystemsTable: Component<{
                             />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
                           >
                             <Show
                               when={canRenderMetrics() && hasMemoryMetric()}
@@ -303,33 +303,33 @@ export const TrueNASSystemsTable: Component<{
                             </Show>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}
                           >
                             <span class="md:hidden">{formatPercent(storagePercent())}</span>
                             <span class="hidden md:inline">{storageFullLabel()}</span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                           >
                             {formatTemperature(system.temperature)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
                           >
                             {c.pools}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
                           >
                             {c.datasets}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
                           >
                             {c.disks}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} hidden text-base-content tabular-nums md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
                           >
                             {c.apps}
                           </TableCell>

@@ -24,8 +24,8 @@ import {
   PlatformTableEmptyState,
   createPlatformTableFilterState,
   filterPlatformResources,
-  getPlatformTableCellClass,
-  getPlatformTableHeadClass,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -152,31 +152,31 @@ export const KubernetesNodesTable: Component<{
                     Roles, Kubelet, Uptime) trim accordingly. Mobile
                     widths are unchanged.
                   */}
-                  <TableHead class={`${getPlatformTableHeadClass()} md:w-[15%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[15%]`}>
                     Node
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[10%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}>
                     Cluster
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[10%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}>
                     Roles
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[8%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[8%]`}>
                     Kubelet
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[15%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[15%]`}>
                     Runtime
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[11%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[11%]`}>
                     CPU
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[11%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[11%]`}>
                     Memory
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[14%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[14%]`}>
                     Capacity
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[6%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}>
                     Uptime
                   </TableHead>
                 </TableRow>
@@ -228,7 +228,7 @@ export const KubernetesNodesTable: Component<{
                           onKeyDown={drawer.handleActivationKey(node)}
                           tabIndex={0}
                         >
-                          <TableCell class={getPlatformTableCellClass()}>
+                          <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex min-w-0 items-center gap-2">
                               <StatusDot
                                 size="sm"
@@ -242,29 +242,29 @@ export const KubernetesNodesTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
                             {cluster()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass()} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
                             {formatRoles(meta()?.roles)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
                           >
                             {kubelet()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass()} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
                           >
                             <span class="truncate inline-block max-w-[10rem]" title={runtime()}>
                               {runtime()}
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
                           >
                             <ResponsiveMetricCell
                               class="w-full"
@@ -276,7 +276,7 @@ export const KubernetesNodesTable: Component<{
                             />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} w-[20%] md:w-auto`}
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
                           >
                             <Show
                               when={canRenderMetrics() && hasMemoryMetric()}
@@ -290,13 +290,13 @@ export const KubernetesNodesTable: Component<{
                             </Show>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} text-base-content tabular-nums`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
                           >
                             <span class="md:hidden">{compactCapacityLabel()}</span>
                             <span class="hidden md:inline">{capacityLabel()}</span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClass('right')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                           >
                             {formatUptime(node.uptime)}
                           </TableCell>

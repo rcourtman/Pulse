@@ -7,6 +7,10 @@ import { SearchInput } from '@/components/shared/SearchInput';
 import { TableCard } from '@/components/shared/TableCard';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import type { Resource, ResourceStatus } from '@/types/resource';
+import {
+  getPlatformColumnAlign,
+  type PlatformTableColumnKind,
+} from './columnAlignment';
 
 export type PlatformTabSpec<TabId extends string> = {
   id: TabId;
@@ -74,6 +78,17 @@ export const getPlatformTableHeadClass = (align?: PlatformTableCellAlign): strin
 
 export const getPlatformTableCellClass = (align?: PlatformTableCellAlign): string =>
   `px-1.5 sm:px-2 py-1 ${getPlatformTableAlignClass(align)}`.trim();
+
+// Canonical kind-based wrappers. Tables should consume these instead of
+// passing literal align strings, so every CPU/Memory/Disk/Storage header
+// in the app lines up the same way (and any future column type can be
+// added once in columnAlignment.ts and propagated automatically). See
+// PlatformTableColumnKind for the kind list and rationale.
+export const getPlatformTableHeadClassForKind = (kind: PlatformTableColumnKind): string =>
+  getPlatformTableHeadClass(getPlatformColumnAlign(kind));
+
+export const getPlatformTableCellClassForKind = (kind: PlatformTableColumnKind): string =>
+  getPlatformTableCellClass(getPlatformColumnAlign(kind));
 
 export function PlatformErrorState(props: {
   title: string;
