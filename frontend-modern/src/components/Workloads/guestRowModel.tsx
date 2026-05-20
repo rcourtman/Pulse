@@ -161,6 +161,7 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     minWidth: '180px',
     maxWidth: '220px',
     sortKey: 'name',
+    kind: 'name',
   },
   {
     id: 'runtime',
@@ -169,13 +170,14 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     minWidth: '74px',
     maxWidth: '96px',
     toggleable: true,
+    kind: 'text',
   },
   createVisibleCanonicalTypeColumn(),
-  { id: 'info', label: 'Info', width: '100px' },
-  { id: 'vmid', label: 'ID', width: '45px', sortKey: 'vmid' },
-  { id: 'cpu', label: 'CPU', width: '140px', sortKey: 'cpu' },
-  { id: 'memory', label: 'Mem', width: '140px', sortKey: 'memory' },
-  { id: 'disk', label: 'Disk', width: '140px', toggleable: true, sortKey: 'disk' },
+  { id: 'info', label: 'Info', width: '100px', kind: 'numeric-value' },
+  { id: 'vmid', label: 'ID', width: '45px', sortKey: 'vmid', kind: 'numeric-value' },
+  { id: 'cpu', label: 'CPU', width: '140px', sortKey: 'cpu', kind: 'metric-bar' },
+  { id: 'memory', label: 'Mem', width: '140px', sortKey: 'memory', kind: 'metric-bar' },
+  { id: 'disk', label: 'Disk', width: '140px', toggleable: true, sortKey: 'disk', kind: 'metric-bar' },
   {
     id: 'ip',
     label: 'IP',
@@ -191,6 +193,7 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     ),
     width: '45px',
     toggleable: true,
+    kind: 'text',
   },
   {
     id: 'uptime',
@@ -208,6 +211,7 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     width: '60px',
     toggleable: true,
     sortKey: 'uptime',
+    kind: 'numeric-value',
   },
   {
     id: 'node',
@@ -225,6 +229,7 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     width: '70px',
     toggleable: true,
     sortKey: 'node',
+    kind: 'text',
   },
   {
     id: 'image',
@@ -244,6 +249,7 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     minWidth: '120px',
     toggleable: true,
     sortKey: 'image',
+    kind: 'text',
   },
   {
     id: 'namespace',
@@ -263,6 +269,7 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     minWidth: '90px',
     toggleable: true,
     sortKey: 'namespace',
+    kind: 'text',
   },
   {
     id: 'context',
@@ -281,6 +288,7 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     minWidth: '100px',
     toggleable: true,
     sortKey: 'contextLabel',
+    kind: 'text',
   },
   {
     id: 'backup',
@@ -297,6 +305,7 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     ),
     width: '50px',
     toggleable: true,
+    kind: 'badge',
   },
   {
     id: 'tags',
@@ -313,8 +322,9 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     ),
     width: '60px',
     toggleable: true,
+    kind: 'badge',
   },
-  { id: 'os', label: 'OS', width: '45px', toggleable: true },
+  { id: 'os', label: 'OS', width: '45px', toggleable: true, kind: 'badge' },
   {
     id: 'netIo',
     label: 'Net I/O',
@@ -322,6 +332,7 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     minWidth: '170px',
     toggleable: true,
     sortKey: 'netIo',
+    kind: 'numeric-value',
   },
   {
     id: 'diskIo',
@@ -330,8 +341,9 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     minWidth: '170px',
     toggleable: true,
     sortKey: 'diskIo',
+    kind: 'numeric-value',
   },
-  { id: 'update', label: 'Update', width: '86px', toggleable: true },
+  { id: 'update', label: 'Update', width: '86px', toggleable: true, kind: 'badge' },
 ];
 
 const GUEST_COLUMN_BY_ID = new Map(GUEST_COLUMNS.map((column) => [column.id, column] as const));

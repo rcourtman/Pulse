@@ -1,5 +1,6 @@
 import { createEffect, createMemo, Accessor } from 'solid-js';
 import type { JSX } from 'solid-js';
+import type { PlatformTableColumnKind } from '@/features/platformPage/columnAlignment';
 import { usePersistentSignal } from './usePersistentSignal';
 
 export interface ColumnDef {
@@ -13,6 +14,11 @@ export interface ColumnDef {
   maxWidth?: string;
   flex?: number;
   sortKey?: string;
+  // Canonical column kind for header / cell alignment. See
+  // `frontend-modern/src/features/platformPage/columnAlignment.ts` for the
+  // kind → align mapping and rationale. Optional so consumers that don't
+  // care about platform-table alignment can omit it.
+  kind?: PlatformTableColumnKind;
 }
 
 const normalizePersistedColumnIds = (

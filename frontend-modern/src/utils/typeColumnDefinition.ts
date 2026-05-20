@@ -13,6 +13,7 @@ const createCanonicalTypeColumn = (
     id: TYPE_COLUMN_ID,
     label: TYPE_COLUMN_LABEL,
     toggleable: true,
+    kind: 'badge',
     ...options,
   };
 };
