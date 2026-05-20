@@ -11,6 +11,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
+import { APP_CONTAINER_COLUMN_LABEL_OVERRIDES } from '@/features/platformPage/appContainerColumns';
 import { DockerHostsTable } from './DockerHostsTable';
 import { DockerServicesTable } from './DockerServicesTable';
 import {
@@ -27,8 +28,8 @@ const DOCKER_WORKLOAD_FORCED_VIEW_MODE = 'app-container';
 const DOCKER_WORKLOAD_DEFAULT_SORT_KEY = 'name';
 const DOCKER_WORKLOAD_COLUMN_SCOPE = 'docker-runtime-containers';
 const DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES = {
+  ...APP_CONTAINER_COLUMN_LABEL_OVERRIDES,
   context: 'Host',
-  disk: 'Writable layer',
 } as const;
 const DOCKER_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
   { value: 'all', label: 'All' },

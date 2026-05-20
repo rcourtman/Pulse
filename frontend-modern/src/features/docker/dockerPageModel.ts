@@ -6,6 +6,7 @@ import {
   type ResourceBadge,
 } from '@/utils/resourceBadgePresentation';
 import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES } from '@/utils/status';
+import { buildAppContainerDefaultHiddenColumnIds } from '@/features/platformPage/appContainerColumns';
 
 const DOCKER_HOST_TYPES = new Set<ResourceType>(['agent', 'docker-host']);
 const DOCKER_CONTAINER_TYPES = new Set<ResourceType>(['app-container']);
@@ -53,11 +54,6 @@ export interface DockerPageFilters {
   selectedHostScope?: string | null;
   statusMode?: WorkloadsStatusMode;
 }
-
-const DOCKER_CONTAINER_BASE_DEFAULT_HIDDEN_COLUMNS = ['disk', 'tags'] as const;
-
-const hasFiniteMetric = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value);
 
 const RUNTIME_ONLY_SYSTEM_LABELS = new Set(['docker', 'docker / podman', 'podman']);
 
@@ -109,24 +105,7 @@ export function buildDockerWorkloadGroupLabelBadges(
   return badges;
 }
 
-export function buildDockerContainerDefaultHiddenColumnIds(
-  containers: readonly Resource[],
-): string[] {
-  const hasNetworkIOTelemetry = containers.some(
-    (container) =>
-      hasFiniteMetric(container.network?.rxBytes) || hasFiniteMetric(container.network?.txBytes),
-  );
-  const hasDiskIOTelemetry = containers.some(
-    (container) =>
-      hasFiniteMetric(container.diskIO?.readRate) || hasFiniteMetric(container.diskIO?.writeRate),
-  );
-
-  return [
-    ...DOCKER_CONTAINER_BASE_DEFAULT_HIDDEN_COLUMNS,
-    ...(hasNetworkIOTelemetry ? [] : ['netIo']),
-    ...(hasDiskIOTelemetry ? [] : ['diskIo']),
-  ];
-}
+export const buildDockerContainerDefaultHiddenColumnIds = buildAppContainerDefaultHiddenColumnIds;
 
 export function buildDockerPageModel(resources: Resource[]): DockerPageModel {
   const dockerResources = resources.filter(

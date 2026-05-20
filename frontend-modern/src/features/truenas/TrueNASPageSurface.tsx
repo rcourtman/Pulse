@@ -14,6 +14,10 @@ import {
   PlatformTableEmptyState,
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
+import {
+  APP_CONTAINER_COLUMN_LABEL_OVERRIDES,
+  buildAppContainerDefaultHiddenColumnIds,
+} from '@/features/platformPage/appContainerColumns';
 import { TrueNASSystemsTable } from './TrueNASSystemsTable';
 import {
   TRUENAS_TAB_SPECS,
@@ -116,6 +120,9 @@ interface TrueNASOverviewProps {
 }
 
 function TrueNASOverview(props: TrueNASOverviewProps) {
+  const truenasAppDefaultHiddenColumns = createMemo(() =>
+    buildAppContainerDefaultHiddenColumnIds(props.model().apps),
+  );
   const workloadsState = useWorkloadsState({
     vms: [],
     containers: [],
@@ -128,6 +135,9 @@ function TrueNASOverview(props: TrueNASOverviewProps) {
     showFilterToolbar: true,
     suppressPlatformFilter: true,
     allowEmbeddedScopeFilters: true,
+    columnVisibilityStorageScope: 'truenas-app-containers',
+    additionalDefaultHiddenColumnIds: truenasAppDefaultHiddenColumns(),
+    columnLabelOverrides: APP_CONTAINER_COLUMN_LABEL_OVERRIDES,
     compactGroupHeaders: true,
   });
   const showSharedFilterToolbar = createMemo(
