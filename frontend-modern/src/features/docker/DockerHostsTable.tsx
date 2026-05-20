@@ -160,36 +160,42 @@ export const DockerHostsTable: Component<{
             <Table class="min-w-full table-fixed text-xs md:min-w-[1080px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={`${getPlatformTableHeadClass()} w-[40%] md:w-auto`}>
+                  {/*
+                    Desktop widths balance the three bar-metric columns (CPU /
+                    Memory / Disk) against the short-content columns so the
+                    bars aren't squeezed by table-fixed's equal split. Mobile
+                    widths (w-[40%], w-[20%]) are unchanged.
+                  */}
+                  <TableHead class={`${getPlatformTableHeadClass()} w-[40%] md:w-[15%]`}>
                     Host
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[7%]`}>
                     System
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[7%]`}>
                     Version
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[9%]`}>
                     Containers
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} w-[20%] md:w-auto`}>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} w-[20%] md:w-[14%]`}>
                     CPU
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} w-[20%] md:w-auto`}>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} w-[20%] md:w-[14%]`}>
                     <span class="md:hidden">Mem</span>
                     <span class="hidden md:inline">Memory</span>
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} w-[20%] md:w-auto`}>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} w-[20%] md:w-[14%]`}>
                     Disk
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[6%]`}>
                     Uptime
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[6%]`}>
                     Temp
                   </TableHead>
                   <Show when={showSwarmColumn()}>
-                    <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                    <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[9%]`}>
                       Swarm role
                     </TableHead>
                   </Show>
