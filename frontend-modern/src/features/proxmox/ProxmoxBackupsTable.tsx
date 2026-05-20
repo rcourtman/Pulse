@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { TableCard } from '@/components/shared/TableCard';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import {
   Table,
@@ -26,6 +27,17 @@ import {
 } from '@/components/shared/Table';
 import { apiFetch } from '@/utils/apiClient';
 import { formatBytes, formatRelativeTime } from '@/utils/format';
+import {
+  recoveryDateKeyFromTimestamp,
+  getRecoveryFilterDateLabel,
+} from '@/utils/recoveryDatePresentation';
+import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_CARD_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
+} from '@/features/platformPage/sharedPlatformPage';
 import type {
   BackupTask,
   GuestSnapshot,
@@ -33,6 +45,12 @@ import type {
   PVEBackupsResponse,
   StorageBackup,
 } from '@/types/api';
+import { BackupActivityChart } from './BackupActivityChart';
+import {
+  buildBackupActivityTimeline,
+  type BackupActivityRangeDays,
+  type BackupActivitySegmentKind,
+} from './proxmoxBackupActivityPresentation';
 
 // Proxmox VE backups split into three meaningfully different surfaces:
 //   - Snapshots: qm/pct snapshots taken on the host (no external storage)
@@ -149,12 +167,54 @@ export const ProxmoxBackupsTable: Component<{
   const [backups, { refetch }] = createResource<PVEBackupsPayload>(fetchPVEBackups);
   const [tab, setTab] = createSignal<BackupTabId>('snapshots');
   const [search, setSearch] = createSignal('');
-  const [archiveFilter, setArchiveFilter] = createSignal<'all' | 'protected' | 'verified' | 'unverified'>('all');
+  const [archiveFilter, setArchiveFilter] = createSignal<
+    'all' | 'protected' | 'verified' | 'unverified'
+  >('all');
   const [taskFilter, setTaskFilter] = createSignal<'all' | 'ok' | 'failed' | 'running'>('all');
+  const [chartRange, setChartRange] = createSignal<BackupActivityRangeDays>(30);
+  const [selectedDateKey, setSelectedDateKey] = createSignal<string | null>(null);
+  const toggleDay = (key: string) =>
+    setSelectedDateKey((current) => (current === key ? null : key));
 
   const snapshots = createMemo<GuestSnapshot[]>(() => backups()?.guestSnapshots ?? []);
   const archives = createMemo<StorageBackup[]>(() => backups()?.storageBackups ?? []);
   const tasks = createMemo<BackupTask[]>(() => backups()?.backupTasks ?? []);
+
+  const archiveTimestampMs = (arc: StorageBackup): number | undefined => {
+    const ms = Date.parse(arc.time ?? '');
+    return Number.isFinite(ms) ? ms : undefined;
+  };
+  const taskTimestampMs = (task: BackupTask): number | undefined => {
+    const ms = Date.parse(task.startTime ?? '');
+    return Number.isFinite(ms) ? ms : undefined;
+  };
+  const classifyTaskSegment = (task: BackupTask): BackupActivitySegmentKind | null => {
+    const variant = classifyTaskStatus(task.status).variant;
+    if (variant === 'success') return 'ok';
+    if (variant === 'danger') return 'failed';
+    if (variant === 'warning') return 'running';
+    return null;
+  };
+
+  const archiveTimeline = createMemo(() =>
+    buildBackupActivityTimeline<StorageBackup>(
+      chartRange(),
+      archives(),
+      archiveTimestampMs,
+      () => 'archive',
+    ),
+  );
+  const taskTimeline = createMemo(() =>
+    buildBackupActivityTimeline<BackupTask>(
+      chartRange(),
+      tasks(),
+      taskTimestampMs,
+      classifyTaskSegment,
+    ),
+  );
+
+  const ARCHIVE_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = ['archive'];
+  const TASK_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = ['ok', 'failed', 'running'];
 
   const filteredSnapshots = createMemo(() => {
     const term = search().trim().toLowerCase();
@@ -171,10 +231,15 @@ export const ProxmoxBackupsTable: Component<{
   const filteredArchives = createMemo(() => {
     const term = search().trim().toLowerCase();
     const filter = archiveFilter();
+    const dateKey = selectedDateKey();
     return archives().filter((arc) => {
       if (filter === 'protected' && !arc.protected) return false;
       if (filter === 'verified' && !arc.verified) return false;
       if (filter === 'unverified' && arc.verified) return false;
+      if (dateKey) {
+        const ms = archiveTimestampMs(arc);
+        if (ms === undefined || recoveryDateKeyFromTimestamp(ms) !== dateKey) return false;
+      }
       if (!term) return true;
       return [arc.storage, arc.node, arc.instance, arc.volid, arc.notes, String(arc.vmid)]
         .filter(Boolean)
@@ -187,11 +252,16 @@ export const ProxmoxBackupsTable: Component<{
   const filteredTasks = createMemo(() => {
     const term = search().trim().toLowerCase();
     const filter = taskFilter();
+    const dateKey = selectedDateKey();
     return tasks().filter((task) => {
       const classify = classifyTaskStatus(task.status);
       if (filter === 'ok' && classify.variant !== 'success') return false;
       if (filter === 'failed' && classify.variant !== 'danger') return false;
       if (filter === 'running' && classify.variant !== 'warning') return false;
+      if (dateKey) {
+        const ms = taskTimestampMs(task);
+        if (ms === undefined || recoveryDateKeyFromTimestamp(ms) !== dateKey) return false;
+      }
       if (!term) return true;
       return [task.node, task.instance, task.status, task.error, String(task.vmid)]
         .filter(Boolean)
@@ -289,6 +359,31 @@ export const ProxmoxBackupsTable: Component<{
             </For>
           </div>
 
+          <Show when={tab() === 'archives'}>
+            <BackupActivityChart
+              title="Backup files per day"
+              noun="archive"
+              segmentKinds={ARCHIVE_SEGMENT_KINDS}
+              range={chartRange}
+              onRangeChange={setChartRange}
+              timeline={archiveTimeline}
+              selectedDateKey={selectedDateKey}
+              onToggleDay={toggleDay}
+            />
+          </Show>
+          <Show when={tab() === 'tasks'}>
+            <BackupActivityChart
+              title="Backup tasks per day"
+              noun="task"
+              segmentKinds={TASK_SEGMENT_KINDS}
+              range={chartRange}
+              onRangeChange={setChartRange}
+              timeline={taskTimeline}
+              selectedDateKey={selectedDateKey}
+              onToggleDay={toggleDay}
+            />
+          </Show>
+
           <div class="flex flex-wrap items-center gap-2">
             <div class="min-w-[200px] flex-1 sm:max-w-xs">
               <SearchInput
@@ -316,6 +411,22 @@ export const ProxmoxBackupsTable: Component<{
                 value={taskFilter()}
                 onChange={setTaskFilter}
               />
+            </Show>
+            <Show when={selectedDateKey() !== null && tab() !== 'snapshots'}>
+              <button
+                type="button"
+                onClick={() => setSelectedDateKey(null)}
+                class="inline-flex items-center gap-1 rounded-full border border-blue-300 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
+                aria-label="Clear date filter"
+              >
+                <span class="uppercase tracking-wide text-[9px] text-blue-600 dark:text-blue-300">
+                  Date
+                </span>
+                <span class="font-mono tabular-nums">
+                  {getRecoveryFilterDateLabel(selectedDateKey()!)}
+                </span>
+                <span aria-hidden="true">×</span>
+              </button>
             </Show>
             <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
               <Show
@@ -348,51 +459,74 @@ export const ProxmoxBackupsTable: Component<{
                 </Card>
               }
             >
-              <Card padding="none" tone="card" class="overflow-hidden">
-                <Table class="w-full min-w-[900px] border-collapse text-xs">
-                  <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                    <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                      <TableHead class="px-3 py-2 font-medium">Name</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Guest</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Node</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Parent</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Captured</TableHead>
-                      <TableHead class="px-3 py-2 font-medium text-right">Size</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">RAM</TableHead>
+              <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+                <Table class="min-w-[900px] text-xs">
+                  <TableHeader>
+                    <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                      <TableHead class={getPlatformTableHeadClassForKind('name')}>Name</TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Guest</TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Node</TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Parent</TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Captured
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Size
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>RAM</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody class="divide-y divide-border-subtle">
+                  <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                     <For each={filteredSnapshots()}>
                       {(snap) => (
                         <TableRow class="hover:bg-surface-hover">
-                          <TableCell class="px-3 py-2 text-base-content">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
+                          >
                             <div class="font-semibold">{snap.name || '—'}</div>
                             <Show when={!!snap.description?.trim()}>
-                              <div class="text-[11px] text-muted truncate max-w-[20rem]" title={snap.description}>
+                              <div
+                                class="text-[11px] text-muted truncate max-w-[20rem]"
+                                title={snap.description}
+                              >
                                 {snap.description}
                               </div>
                             </Show>
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">{guestLabel(snap.type, snap.vmid)}</TableCell>
-                          <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            {guestLabel(snap.type, snap.vmid)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
+                          >
                             {snap.node || '—'}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
+                          >
                             {snap.parent?.trim() || '—'}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
                             {formatRelativeTime(snap.time, { compact: true })}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
-                            <Show when={snap.sizeBytes && snap.sizeBytes > 0} fallback={<span class="text-muted">—</span>}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                          >
+                            <Show
+                              when={snap.sizeBytes && snap.sizeBytes > 0}
+                              fallback={<span class="text-muted">—</span>}
+                            >
                               {formatBytes(snap.sizeBytes ?? 0)}
                             </Show>
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">
-                            <Show
-                              when={snap.vmstate}
-                              fallback={<span class="text-muted">—</span>}
-                            >
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <Show when={snap.vmstate} fallback={<span class="text-muted">—</span>}>
                               <span class="inline-flex items-center rounded-sm bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
                                 with RAM
                               </span>
@@ -403,7 +537,7 @@ export const ProxmoxBackupsTable: Component<{
                     </For>
                   </TableBody>
                 </Table>
-              </Card>
+              </TableCard>
             </Show>
           </Show>
 
@@ -428,57 +562,84 @@ export const ProxmoxBackupsTable: Component<{
                 </Card>
               }
             >
-              <Card padding="none" tone="card" class="overflow-hidden">
-                <Table class="w-full min-w-[1050px] border-collapse text-xs">
-                  <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                    <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                      <TableHead class="px-3 py-2 font-medium">Volume</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Guest</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Storage</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Node</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Format</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Created</TableHead>
-                      <TableHead class="px-3 py-2 font-medium text-right">Size</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Protection</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Verified</TableHead>
+              <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+                <Table class="min-w-[1050px] text-xs">
+                  <TableHeader>
+                    <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                      <TableHead class={getPlatformTableHeadClassForKind('name')}>Volume</TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Guest</TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                        Storage
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Node</TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Format</TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Created
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Size
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                        Protection
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                        Verified
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody class="divide-y divide-border-subtle">
+                  <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                     <For each={filteredArchives()}>
                       {(arc) => (
                         <TableRow class="hover:bg-surface-hover">
-                          <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('name')} text-base-content font-mono text-[11px]`}
+                          >
                             <span class="inline-block max-w-[18rem] truncate" title={arc.volid}>
                               {arc.volid}
                             </span>
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
                             {guestLabel(arc.type, arc.vmid)}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">{arc.storage || '—'}</TableCell>
-                          <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            {arc.storage || '—'}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
+                          >
                             {arc.node || '—'}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content uppercase text-[10px]">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content uppercase text-[10px]`}
+                          >
                             {arc.format || '—'}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
                             {formatRelativeTime(arc.time, { compact: true })}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                          >
                             {formatBytes(arc.size)}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">
-                            <Show
-                              when={arc.protected}
-                              fallback={<span class="text-muted">—</span>}
-                            >
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <Show when={arc.protected} fallback={<span class="text-muted">—</span>}>
                               <span class="inline-flex items-center rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
                                 Protected
                               </span>
                             </Show>
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
                             <Show
                               when={arc.verified}
                               fallback={
@@ -498,7 +659,7 @@ export const ProxmoxBackupsTable: Component<{
                     </For>
                   </TableBody>
                 </Table>
-              </Card>
+              </TableCard>
             </Show>
           </Show>
 
@@ -510,9 +671,7 @@ export const ProxmoxBackupsTable: Component<{
                   <EmptyState
                     icon={props.emptyIcon}
                     title={
-                      tasks().length === 0
-                        ? TABS[2].emptyTitle
-                        : 'No tasks match current filters'
+                      tasks().length === 0 ? TABS[2].emptyTitle : 'No tasks match current filters'
                     }
                     description={
                       tasks().length === 0
@@ -523,49 +682,77 @@ export const ProxmoxBackupsTable: Component<{
                 </Card>
               }
             >
-              <Card padding="none" tone="card" class="overflow-hidden">
-                <Table class="w-full min-w-[1000px] border-collapse text-xs">
-                  <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                    <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                      <TableHead class="px-3 py-2 font-medium">Status</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Guest</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Node</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Started</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Duration</TableHead>
-                      <TableHead class="px-3 py-2 font-medium text-right">Size</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Error</TableHead>
+              <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+                <Table class="min-w-[1000px] text-xs">
+                  <TableHeader>
+                    <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Status</TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Guest</TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Node</TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Started
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Duration
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Size
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Error</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody class="divide-y divide-border-subtle">
+                  <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                     <For each={filteredTasks()}>
                       {(task) => {
                         const classify = classifyTaskStatus(task.status);
                         return (
                           <TableRow class="hover:bg-surface-hover">
-                            <TableCell class="px-3 py-2">
+                            <TableCell class={getPlatformTableCellClassForKind('text')}>
                               <div class="flex items-center gap-2">
-                                <StatusDot size="sm" variant={classify.variant} title={classify.label} ariaHidden />
-                                <span class="text-[11px] font-medium text-base-content">{classify.label}</span>
+                                <StatusDot
+                                  size="sm"
+                                  variant={classify.variant}
+                                  title={classify.label}
+                                  ariaHidden
+                                />
+                                <span class="text-[11px] font-medium text-base-content">
+                                  {classify.label}
+                                </span>
                               </div>
                             </TableCell>
-                            <TableCell class="px-3 py-2 text-base-content">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            >
                               {guestLabel(task.type, task.vmid)}
                             </TableCell>
-                            <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
+                            >
                               {task.node || '—'}
                             </TableCell>
-                            <TableCell class="px-3 py-2 text-base-content">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            >
                               {formatRelativeTime(task.startTime, { compact: true })}
                             </TableCell>
-                            <TableCell class="px-3 py-2 text-base-content">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            >
                               {formatDuration(task.startTime, task.endTime)}
                             </TableCell>
-                            <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
-                              <Show when={task.size && task.size > 0} fallback={<span class="text-muted">—</span>}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                            >
+                              <Show
+                                when={task.size && task.size > 0}
+                                fallback={<span class="text-muted">—</span>}
+                              >
                                 {formatBytes(task.size ?? 0)}
                               </Show>
                             </TableCell>
-                            <TableCell class="px-3 py-2 text-base-content">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            >
                               <Show
                                 when={!!task.error?.trim()}
                                 fallback={<span class="text-muted">—</span>}
@@ -584,7 +771,7 @@ export const ProxmoxBackupsTable: Component<{
                     </For>
                   </TableBody>
                 </Table>
-              </Card>
+              </TableCard>
             </Show>
           </Show>
         </div>

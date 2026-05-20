@@ -6,6 +6,7 @@ import kubernetesClustersTableSource from '@/features/kubernetes/KubernetesClust
 import kubernetesDeploymentsTableSource from '@/features/kubernetes/KubernetesDeploymentsTable.tsx?raw';
 import kubernetesNodesTableSource from '@/features/kubernetes/KubernetesNodesTable.tsx?raw';
 import kubernetesPageSurfaceSource from '@/features/kubernetes/KubernetesPageSurface.tsx?raw';
+import proxmoxBackupsTableSource from '@/features/proxmox/ProxmoxBackupsTable.tsx?raw';
 import proxmoxCephTableSource from '@/features/proxmox/ProxmoxCephTable.tsx?raw';
 import proxmoxMailGatewayTableSource from '@/features/proxmox/ProxmoxMailGatewayTable.tsx?raw';
 import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?raw';
@@ -52,6 +53,13 @@ const proxmoxDetailTableSources = [
   proxmoxReplicationTableSource,
 ];
 
+const proxmoxBespokeTableSources = [
+  proxmoxBackupsTableSource,
+  proxmoxCephTableSource,
+  proxmoxMailGatewayTableSource,
+  proxmoxReplicationTableSource,
+];
+
 describe('platform overview layout guardrails', () => {
   it('keeps platform inventory tables on the shared dense table styling contract', () => {
     expect(sharedPlatformPageSource).toContain('PLATFORM_TABLE_CARD_CLASS');
@@ -85,18 +93,21 @@ describe('platform overview layout guardrails', () => {
   });
 
   it('keeps Proxmox detail tables on the shared platform table primitives', () => {
-    for (const source of proxmoxDetailTableSources) {
+    for (const source of proxmoxBespokeTableSources) {
       expect(source).toContain('TableCard');
-      expect(source).toContain('PlatformTableToolbar');
       expect(source).toContain('PLATFORM_TABLE_CARD_CLASS');
       expect(source).toContain('PLATFORM_TABLE_HEADER_ROW_CLASS');
       expect(source).toContain('PLATFORM_TABLE_BODY_CLASS');
       expect(source).toContain('getPlatformTableHeadClassForKind');
       expect(source).toContain('getPlatformTableCellClassForKind');
-      expect(source).not.toContain("from '@/components/shared/SearchInput'");
-      expect(source).not.toContain("from '@/components/shared/FilterButtonGroup'");
       expect(source).not.toContain('border-collapse text-xs');
       expect(source).not.toContain('bg-surface-alt text-muted border-b border-border');
+    }
+
+    for (const source of proxmoxDetailTableSources) {
+      expect(source).toContain('PlatformTableToolbar');
+      expect(source).not.toContain("from '@/components/shared/SearchInput'");
+      expect(source).not.toContain("from '@/components/shared/FilterButtonGroup'");
     }
   });
 
