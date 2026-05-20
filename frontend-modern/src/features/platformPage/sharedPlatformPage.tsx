@@ -132,18 +132,20 @@ export function PlatformErrorState(props: {
 // 'running' vs 'online', 'stopped' vs 'offline') collapse to one chip set.
 export type PlatformResourceStatusFilter = 'all' | 'online' | 'degraded' | 'offline';
 
+const statusDot = (className: string) => <span class={`h-2 w-2 rounded-full ${className}`} />;
+
 export const PLATFORM_STATUS_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
   { value: 'all', label: 'All' },
-  { value: 'online', label: 'Online' },
-  { value: 'degraded', label: 'Degraded' },
-  { value: 'offline', label: 'Offline' },
+  { value: 'online', label: 'Online', tone: 'success', leading: statusDot('bg-emerald-500') },
+  { value: 'degraded', label: 'Degraded', tone: 'warning', leading: statusDot('bg-amber-500') },
+  { value: 'offline', label: 'Offline', tone: 'danger', leading: statusDot('bg-red-500') },
 ];
 
 export const PLATFORM_HEALTH_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
   { value: 'all', label: 'All' },
-  { value: 'online', label: 'Healthy' },
-  { value: 'degraded', label: 'Degraded' },
-  { value: 'offline', label: 'Offline' },
+  { value: 'online', label: 'Healthy', tone: 'success', leading: statusDot('bg-emerald-500') },
+  { value: 'degraded', label: 'Degraded', tone: 'warning', leading: statusDot('bg-amber-500') },
+  { value: 'offline', label: 'Offline', tone: 'danger', leading: statusDot('bg-red-500') },
 ];
 
 const ONLINE_STATUSES = new Set<ResourceStatus>(['online', 'running']);
@@ -289,6 +291,7 @@ export function PlatformTableToolbar<T extends string | number>(props: {
         />
       </div>
       <FilterButtonGroup
+        variant="compact"
         options={props.statusOptions}
         value={props.status}
         onChange={props.onStatusChange}

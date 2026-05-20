@@ -147,18 +147,20 @@ async function fetchPVEBackups(): Promise<PVEBackupsPayload> {
   );
 }
 
+const statusDot = (className: string) => <span class={`h-2 w-2 rounded-full ${className}`} />;
+
 const ARCHIVE_STATUS_FILTERS: FilterOption<'all' | 'protected' | 'verified' | 'unverified'>[] = [
   { value: 'all', label: 'All' },
-  { value: 'protected', label: 'Protected' },
-  { value: 'verified', label: 'Verified' },
-  { value: 'unverified', label: 'Unverified' },
+  { value: 'protected', label: 'Protected', tone: 'info', leading: statusDot('bg-blue-500') },
+  { value: 'verified', label: 'Verified', tone: 'success', leading: statusDot('bg-emerald-500') },
+  { value: 'unverified', label: 'Unverified', tone: 'warning', leading: statusDot('bg-amber-500') },
 ];
 
 const TASK_STATUS_FILTERS: FilterOption<'all' | 'ok' | 'failed' | 'running'>[] = [
   { value: 'all', label: 'All' },
-  { value: 'ok', label: 'OK' },
-  { value: 'failed', label: 'Failed' },
-  { value: 'running', label: 'Running' },
+  { value: 'ok', label: 'OK', tone: 'success', leading: statusDot('bg-emerald-500') },
+  { value: 'failed', label: 'Failed', tone: 'danger', leading: statusDot('bg-red-500') },
+  { value: 'running', label: 'Running', tone: 'info', leading: statusDot('bg-blue-500') },
 ];
 
 export const ProxmoxBackupsTable: Component<{
@@ -400,6 +402,7 @@ export const ProxmoxBackupsTable: Component<{
             </div>
             <Show when={tab() === 'archives'}>
               <FilterButtonGroup
+                variant="compact"
                 options={ARCHIVE_STATUS_FILTERS}
                 value={archiveFilter()}
                 onChange={setArchiveFilter}
@@ -407,6 +410,7 @@ export const ProxmoxBackupsTable: Component<{
             </Show>
             <Show when={tab() === 'tasks'}>
               <FilterButtonGroup
+                variant="compact"
                 options={TASK_STATUS_FILTERS}
                 value={taskFilter()}
                 onChange={setTaskFilter}
