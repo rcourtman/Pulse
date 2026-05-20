@@ -16,6 +16,12 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
+} from '@/features/platformPage/sharedPlatformPage';
+import {
   formatSwarmClusterId,
   formatSwarmClusterSummary,
   formatSwarmControlLabel,
@@ -176,7 +182,8 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
 
   const swarm = createMemo(() => props.swarm);
   const clusterName = createMemo(
-    () => asTrimmedString(swarm()?.clusterName) || asTrimmedString(swarm()?.clusterId) || clusterKey(),
+    () =>
+      asTrimmedString(swarm()?.clusterName) || asTrimmedString(swarm()?.clusterId) || clusterKey(),
   );
   const clusterId = createMemo(() => asTrimmedString(swarm()?.clusterId) ?? '');
 
@@ -258,36 +265,40 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
             }
           >
             <Card padding="none" tone="card" class="overflow-hidden">
-              <Table class="w-full min-w-[900px] border-collapse text-xs">
-                <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                  <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                    <TableHead class="px-3 py-2 font-medium">
+              <Table class="min-w-full table-fixed text-xs md:min-w-[960px]">
+                <TableHeader>
+                  <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                    <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
                       {drawerPresentation.serviceColumnLabel}
                     </TableHead>
-                    <TableHead class="px-3 py-2 font-medium">
+                    <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[13%]`}>
                       {drawerPresentation.stackColumnLabel}
                     </TableHead>
-                    <TableHead class="px-3 py-2 font-medium">
+                    <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[22%]`}>
                       {drawerPresentation.imageColumnLabel}
                     </TableHead>
-                    <TableHead class="px-3 py-2 font-medium">
+                    <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[10%]`}>
                       {drawerPresentation.modeColumnLabel}
                     </TableHead>
-                    <TableHead class="px-3 py-2 font-medium">
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}
+                    >
                       {drawerPresentation.desiredColumnLabel}
                     </TableHead>
-                    <TableHead class="px-3 py-2 font-medium">
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}
+                    >
                       {drawerPresentation.runningColumnLabel}
                     </TableHead>
-                    <TableHead class="px-3 py-2 font-medium">
+                    <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
                       {drawerPresentation.updateColumnLabel}
                     </TableHead>
-                    <TableHead class="px-3 py-2 font-medium">
+                    <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[9%]`}>
                       {drawerPresentation.portsColumnLabel}
                     </TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody class="divide-y divide-border-subtle">
+                <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                   <For each={filteredServices()}>
                     {(svc) => {
                       const name = () => asTrimmedString(svc.name) || svc.id;
@@ -301,8 +312,8 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
                       const status = () => getSimpleStatusIndicator(svc.status);
 
                       return (
-                        <TableRow class="hover:bg-surface-hover">
-                          <TableCell class="px-3 py-2">
+                        <TableRow class="text-[11px] sm:text-xs">
+                          <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex items-center gap-2 min-w-0">
                               <StatusDot
                                 size="sm"
@@ -315,18 +326,48 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">{stack()}</TableCell>
-                          <TableCell class="px-3 py-2 text-base-content truncate" title={image()}>
-                            {image()}
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <span class="block truncate" title={stack()}>
+                              {stack()}
+                            </span>
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">{mode()}</TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">{desired()}</TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">{running()}</TableCell>
-                          <TableCell class="px-3 py-2 text-base-content truncate" title={update()}>
-                            {update()}
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <span class="block truncate" title={image()}>
+                              {image()}
+                            </span>
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content truncate" title={ports()}>
-                            {ports()}
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            {mode()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            <span class="tabular-nums">{desired()}</span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            <span class="tabular-nums">{running()}</span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <span class="block truncate" title={update()}>
+                              {update()}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <span class="block truncate font-mono text-[11px]" title={ports()}>
+                              {ports()}
+                            </span>
                           </TableCell>
                         </TableRow>
                       );

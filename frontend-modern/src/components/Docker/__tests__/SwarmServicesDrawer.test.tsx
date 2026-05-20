@@ -27,7 +27,7 @@ vi.mock('@/components/shared/Table', () => ({
       {props.children}
     </table>
   ),
-  TableHeader: (props: any) => <thead>{props.children}</thead>,
+  TableHeader: (props: any) => <thead class={props.class}>{props.children}</thead>,
   TableBody: (props: any) => <tbody class={props.class}>{props.children}</tbody>,
   TableRow: (props: any) => <tr class={props.class}>{props.children}</tr>,
   TableHead: (props: any) => <th class={props.class}>{props.children}</th>,
@@ -297,6 +297,21 @@ describe('SwarmServicesDrawer', () => {
       expect(screen.getByText('replicated')).toBeInTheDocument();
       expect(screen.getByText('3')).toBeInTheDocument();
       expect(screen.getByText('2')).toBeInTheDocument();
+    });
+
+    it('uses the shared platform table spacing and divider contract', async () => {
+      mockApiResponse([makeService({ id: 'svc-1', name: 'web-frontend' })]);
+      const { container } = render(() => <SwarmServicesDrawer cluster="c1" />);
+
+      await waitFor(() => {
+        expect(screen.getByText('web-frontend')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('table')).toHaveClass('table-fixed');
+      expect(container.querySelector('thead tr')).toHaveClass('bg-surface-alt');
+      expect(container.querySelector('tbody')).toHaveClass('divide-y', 'divide-border');
+      expect(container.querySelector('tbody')).not.toHaveClass('divide-border-subtle');
+      expect(container.querySelector('th')).toHaveClass('px-1.5', 'py-0.5');
     });
 
     it('uses service id as name when name is empty', async () => {
