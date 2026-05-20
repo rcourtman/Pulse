@@ -102,6 +102,17 @@ export interface ResourceAlert {
   startTime: number; // Unix milliseconds
 }
 
+// Provider-native incident associated with a unified resource.
+export interface ResourceIncident {
+  provider?: string;
+  nativeId?: string;
+  code: string;
+  severity: string;
+  source?: string;
+  summary: string;
+  startedAt?: string;
+}
+
 // Identity information for deduplication
 export interface ResourceIdentity {
   hostname?: string;
@@ -906,6 +917,7 @@ export interface Resource {
   labels?: Record<string, string>;
   lastSeen: number; // Unix milliseconds
   alerts?: ResourceAlert[];
+  incidents?: ResourceIncident[];
   incidentCount?: number;
   incidentCode?: string;
   incidentSeverity?: string;

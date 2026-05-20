@@ -38,6 +38,7 @@ import {
   getAlertHistoryLoadingState,
   getAlertHistorySearchPlaceholder,
   getAlertBucketCountLabel,
+  getAlertFilteredEmptyState,
   getAlertTimelineEmptyState,
   getAlertTimelineFailureState,
   getAlertTimelineFilterEmptyState,
@@ -70,6 +71,10 @@ describe('alertOverviewPresentation', () => {
     expect(getAlertHistoryEmptyState()).toEqual({
       title: 'No alerts found',
       description: 'Try adjusting your filters or check back later',
+    });
+    expect(getAlertFilteredEmptyState('TrueNAS alerts', 'severity')).toEqual({
+      title: 'No TrueNAS alerts match current filters',
+      description: 'Adjust the search or severity filter to see more TrueNAS alerts.',
     });
     expect(ALERT_HISTORY_LOADING_STATE).toBe('Loading alert history...');
     expect(getAlertHistoryLoadingState()).toEqual({

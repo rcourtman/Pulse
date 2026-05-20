@@ -235,10 +235,10 @@ export const filterPlatformResources = (
   return result;
 };
 
-export function createPlatformTableFilterState<Status extends string | number>(props: {
-  resources: () => Resource[];
+export function createPlatformTableFilterState<Row, Status extends string | number>(props: {
+  resources: () => Row[];
   initialStatus: Status;
-  filter: (resources: Resource[], search: string, status: Status) => Resource[];
+  filter: (resources: Row[], search: string, status: Status) => Row[];
 }) {
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<Status>(props.initialStatus);

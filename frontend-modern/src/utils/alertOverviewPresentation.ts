@@ -117,6 +117,15 @@ export function getAlertHistoryEmptyState() {
   } as const;
 }
 
+export function getAlertFilteredEmptyState(subject = 'alerts', filterLabel = 'active') {
+  const normalizedSubject = subject.trim() || 'alerts';
+  const normalizedFilterLabel = filterLabel.trim() || 'active';
+  return {
+    title: `No ${normalizedSubject} match current filters`,
+    description: `Adjust the search or ${normalizedFilterLabel} filter to see more ${normalizedSubject}.`,
+  } as const;
+}
+
 export function getAlertHistoryLoadingState() {
   return {
     text: ALERT_HISTORY_LOADING_STATE,

@@ -445,6 +445,15 @@ type APIResource = {
     };
   };
   aiSafeSummary?: string;
+  incidents?: Array<{
+    provider?: string;
+    nativeId?: string;
+    code?: string;
+    severity?: string;
+    source?: string;
+    summary?: string;
+    startedAt?: string;
+  }>;
   incidentCount?: number;
   incidentCode?: string;
   incidentSeverity?: string;
@@ -652,6 +661,17 @@ const toResource = (v2: APIResource): Resource => {
     parentName: v2.parentName,
     clusterId: getExplicitResourceClusterName(v2),
     status: resolveStatus(v2.status),
+    incidents: (v2.incidents || [])
+      .map((incident) => ({
+        provider: incident.provider,
+        nativeId: incident.nativeId,
+        code: incident.code || '',
+        severity: incident.severity || '',
+        source: incident.source,
+        summary: incident.summary || '',
+        startedAt: incident.startedAt,
+      }))
+      .filter((incident) => incident.code.trim() || incident.summary.trim()),
     incidentCount: v2.incidentCount,
     incidentCode: v2.incidentCode,
     incidentSeverity: v2.incidentSeverity,

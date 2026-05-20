@@ -15,6 +15,7 @@ import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?ra
 import proxmoxPageSurfaceSource from '@/features/proxmox/ProxmoxPageSurface.tsx?raw';
 import proxmoxReplicationTableSource from '@/features/proxmox/ProxmoxReplicationTable.tsx?raw';
 import sharedPlatformPageSource from '@/features/platformPage/sharedPlatformPage.tsx?raw';
+import truenasAlertsTableSource from '@/features/truenas/TrueNASAlertsTable.tsx?raw';
 import truenasPageSurfaceSource from '@/features/truenas/TrueNASPageSurface.tsx?raw';
 import truenasSystemsTableSource from '@/features/truenas/TrueNASSystemsTable.tsx?raw';
 import truenasVirtualMachinesTableSource from '@/features/truenas/TrueNASVirtualMachinesTable.tsx?raw';
@@ -28,6 +29,7 @@ const platformTableSources = [
   kubernetesClustersTableSource,
   kubernetesNodesTableSource,
   kubernetesDeploymentsTableSource,
+  truenasAlertsTableSource,
   truenasSystemsTableSource,
   truenasVirtualMachinesTableSource,
   vsphereHostsTableSource,
@@ -157,6 +159,7 @@ describe('platform overview layout guardrails', () => {
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesNodesTable');
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesDeploymentsTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASSystemsTable');
+    expect(truenasPageSurfaceSource).toContain('<TrueNASAlertsTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASVirtualMachinesTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASAppsTable');
     expect(truenasPageSurfaceSource).toContain('<StorageSurface');

@@ -4,9 +4,11 @@ import {
   TRUENAS_TAB_SPECS,
   buildTrueNASPageModel,
   filterTrueNASApps,
+  filterTrueNASIncidents,
   filterTrueNASShares,
   filterTrueNASVMs,
   mapTrueNASAppStatus,
+  mapTrueNASIncidentSeverity,
   mapTrueNASShareStatus,
   mapTrueNASVMStatus,
 } from '../truenasPageModel';
@@ -190,5 +192,86 @@ describe('truenasPageModel', () => {
     expect(
       filterTrueNASShares([media, archive], '10.10.20.0/24', 'disabled').map((r) => r.id),
     ).toEqual(['share-archive']);
+  });
+
+  it('derives native TrueNAS alert rows from resource incidents', () => {
+    const system = makeResource({
+      id: 'truenas-system',
+      type: 'agent',
+      incidentCount: 2,
+      incidentSeverity: 'critical',
+      incidentLabel: 'Storage Health Issue',
+      incidentAction: 'Investigate storage health immediately',
+      incidents: [
+        {
+          provider: 'truenas',
+          nativeId: 'alert-system',
+          code: 'truenas_volume_status',
+          severity: 'CRITICAL',
+          source: 'VolumeStatus',
+          summary: 'Pool tank is FAULTED',
+          startedAt: '2026-05-20T12:00:00Z',
+        },
+      ],
+    });
+    const disk = makeResource({
+      id: 'truenas-disk-sda',
+      type: 'physical_disk',
+      parentName: 'tank',
+      incidentCount: 1,
+      incidentSeverity: 'warning',
+      incidentLabel: 'Disk Health Issue',
+      incidents: [
+        {
+          provider: 'truenas',
+          nativeId: 'alert-smart',
+          code: 'truenas_smart',
+          severity: 'WARNING',
+          source: 'SMART',
+          summary: 'Device /dev/sda has unreadable sectors',
+        },
+      ],
+    });
+    const poolRollup = makeResource({
+      id: 'truenas-pool-archive',
+      type: 'storage',
+      incidentCount: 1,
+      incidentSeverity: 'warning',
+      incidentCode: 'truenas_scrub',
+      incidentLabel: 'Scrub Issue',
+      incidentSummary: 'Last scrub found checksum errors',
+    });
+    const dockerIncident = makeResource({
+      id: 'docker-host',
+      type: 'agent',
+      platformType: 'docker',
+      incidentCount: 1,
+      incidentSummary: 'Docker incident should not appear',
+    });
+
+    const model = buildTrueNASPageModel([system, disk, poolRollup, dockerIncident]);
+
+    expect(model.incidents.map((incident) => incident.resourceId)).toEqual([
+      'truenas-system',
+      'truenas-disk-sda',
+      'truenas-pool-archive',
+    ]);
+    expect(model.incidents[0]).toMatchObject({
+      severityBucket: 'critical',
+      code: 'truenas_volume_status',
+      summary: 'Pool tank is FAULTED',
+      action: 'Investigate storage health immediately',
+    });
+    expect(model.incidents[2]).toMatchObject({
+      id: 'truenas-pool-archive:incident:rollup',
+      code: 'truenas_scrub',
+      summary: 'Last scrub found checksum errors',
+    });
+    expect(mapTrueNASIncidentSeverity('WARNING')).toBe('warning');
+    expect(
+      filterTrueNASIncidents(model.incidents, 'smart', 'warning').map(
+        (incident) => incident.resourceId,
+      ),
+    ).toEqual(['truenas-disk-sda']);
   });
 });

@@ -11,6 +11,7 @@ import {
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
 import { TrueNASAppsTable } from './TrueNASAppsTable';
+import { TrueNASAlertsTable } from './TrueNASAlertsTable';
 import { TrueNASNetworkSharesTable } from './TrueNASNetworkSharesTable';
 import { TrueNASSystemsTable } from './TrueNASSystemsTable';
 import { TrueNASVirtualMachinesTable } from './TrueNASVirtualMachinesTable';
@@ -128,6 +129,15 @@ function TrueNASOverview(props: TrueNASOverviewProps) {
         emptyDescription="TrueNAS systems appear here once a TrueNAS connection reports its top-level appliance."
         showToolbar={false}
       />
+      <Show when={props.model().incidents.length > 0}>
+        <TrueNASAlertsTable
+          incidents={props.model().incidents}
+          scope={props.model().resources}
+          emptyIcon={truenasIcon()}
+          emptyTitle="No active TrueNAS alerts"
+          emptyDescription="TrueNAS health alerts appear here when the TrueNAS API reports active system, pool, or disk incidents."
+        />
+      </Show>
       <Show when={props.model().shares.length > 0}>
         <TrueNASNetworkSharesTable
           shares={props.model().shares}

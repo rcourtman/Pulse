@@ -1,0 +1,306 @@
+import { For, Show, type Component, type JSX } from 'solid-js';
+import { StatusDot } from '@/components/shared/StatusDot';
+import { TableCard } from '@/components/shared/TableCard';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/shared/Table';
+import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_CARD_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformTableEmptyState,
+  PlatformTableToolbar,
+  createPlatformTableFilterState,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
+  type PlatformTableFilterOption,
+} from '@/features/platformPage/sharedPlatformPage';
+import {
+  PlatformResourceDetailTableRow,
+  createPlatformResourceDetailState,
+  createPlatformResourceLabelResolver,
+  getPlatformResourceDetailRowClass,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
+import type { StatusIndicatorVariant } from '@/utils/status';
+import {
+  filterTrueNASIncidents,
+  type TrueNASIncidentRow,
+  type TrueNASIncidentSeverityFilter,
+} from './truenasPageModel';
+import type { Resource, ResourceType } from '@/types/resource';
+import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
+
+const TRUENAS_INCIDENT_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASIncidentSeverityFilter>[] =
+  [
+    { value: 'all', label: 'All' },
+    { value: 'critical', label: 'Critical', tone: 'danger' },
+    { value: 'warning', label: 'Warning', tone: 'warning' },
+    { value: 'info', label: 'Info', tone: 'success' },
+  ];
+
+const severityVariant = (
+  severity: TrueNASIncidentRow['severityBucket'],
+): StatusIndicatorVariant => {
+  switch (severity) {
+    case 'critical':
+      return 'danger';
+    case 'warning':
+      return 'warning';
+    case 'info':
+      return 'muted';
+  }
+};
+
+const severityLabel = (severity: string): string => {
+  const normalized = severity.trim();
+  if (!normalized) return 'Info';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
+};
+
+const severityTextClass = (severity: TrueNASIncidentRow['severityBucket']): string => {
+  switch (severity) {
+    case 'critical':
+      return 'text-red-700 dark:text-red-300';
+    case 'warning':
+      return 'text-amber-700 dark:text-amber-300';
+    case 'info':
+      return 'text-muted';
+  }
+};
+
+const formatResourceType = (type: ResourceType): string => {
+  switch (type) {
+    case 'agent':
+      return 'System';
+    case 'storage':
+    case 'pool':
+      return 'Pool';
+    case 'dataset':
+      return 'Dataset';
+    case 'physical_disk':
+      return 'Disk';
+    case 'network-share':
+      return 'Share';
+    case 'vm':
+      return 'VM';
+    case 'app-container':
+      return 'App';
+    default:
+      return type;
+  }
+};
+
+const formatCode = (code: string): string => {
+  const normalized = code.trim().replace(/^truenas_/, '');
+  if (!normalized) return '-';
+  return normalized
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+};
+
+const formatStartedAt = (value: string | undefined): string => {
+  if (!value) return '-';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '-';
+  return parsed.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+export const TrueNASAlertsTable: Component<{
+  incidents: TrueNASIncidentRow[];
+  scope: readonly Resource[];
+  emptyIcon: JSX.Element;
+  emptyTitle: string;
+  emptyDescription: string;
+  showToolbar?: boolean;
+}> = (props) => {
+  const tableState = createPlatformTableFilterState({
+    resources: () => props.incidents,
+    initialStatus: 'all' as TrueNASIncidentSeverityFilter,
+    filter: filterTrueNASIncidents,
+  });
+  const drawer = createPlatformResourceDetailState({ idPrefix: 'truenas-alert-drawer' });
+  const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
+  const filteredEmptyState = () => getAlertFilteredEmptyState('TrueNAS alerts', 'severity');
+
+  return (
+    <Show
+      when={props.incidents.length > 0}
+      fallback={
+        <PlatformTableEmptyState
+          icon={props.emptyIcon}
+          title={props.emptyTitle}
+          description={props.emptyDescription}
+        />
+      }
+    >
+      <div class="space-y-3">
+        <Show when={props.showToolbar !== false}>
+          <PlatformTableToolbar
+            search={tableState.search}
+            onSearchChange={tableState.setSearch}
+            searchPlaceholder="Search TrueNAS alerts"
+            status={tableState.status()}
+            onStatusChange={tableState.setStatus}
+            statusOptions={TRUENAS_INCIDENT_STATUS_OPTIONS}
+            visible={tableState.visible()}
+            total={tableState.total()}
+            rowNoun="alerts"
+          />
+        </Show>
+
+        <Show
+          when={tableState.filtered().length > 0}
+          fallback={
+            <PlatformTableEmptyState
+              icon={props.emptyIcon}
+              title={filteredEmptyState().title}
+              description={filteredEmptyState().description}
+            />
+          }
+        >
+          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+            <TableCardHeader title="Health Alerts" />
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1120px]">
+              <TableHeader>
+                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[20%]`}>
+                    Resource
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[10%]`}>
+                    Severity
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[32%]`}>
+                    Alert
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[13%]`}
+                  >
+                    Source
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[10%]`}
+                  >
+                    Started
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden xl:table-cell md:w-[15%]`}
+                  >
+                    Action
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+                <For each={tableState.filtered()}>
+                  {(incident) => {
+                    const detailRowId = () => drawer.detailRowId(incident);
+                    const isExpanded = () => drawer.isExpanded(incident);
+                    return (
+                      <>
+                        <TableRow
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          aria-controls={isExpanded() ? detailRowId() : undefined}
+                          aria-expanded={isExpanded() ? 'true' : 'false'}
+                          data-truenas-alert-row={incident.id}
+                          onClick={() => drawer.toggle(incident)}
+                          onKeyDown={drawer.handleActivationKey(incident)}
+                          tabIndex={0}
+                        >
+                          <TableCell class={getPlatformTableCellClassForKind('name')}>
+                            <div class="flex min-w-0 items-center gap-2">
+                              <StatusDot
+                                size="sm"
+                                variant={severityVariant(incident.severityBucket)}
+                                title={severityLabel(incident.severity)}
+                              />
+                              <div class="min-w-0">
+                                <div
+                                  class="truncate font-medium text-base-content"
+                                  title={incident.resourceName}
+                                >
+                                  {incident.resourceName}
+                                </div>
+                                <div class="truncate text-[10px] text-muted">
+                                  {formatResourceType(incident.resourceType)}
+                                  <Show when={incident.resource.parentName}>
+                                    {' '}
+                                    on {incident.resource.parentName}
+                                  </Show>
+                                </div>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell class={getPlatformTableCellClassForKind('badge')}>
+                            <span
+                              class={`text-[11px] font-semibold ${severityTextClass(
+                                incident.severityBucket,
+                              )}`}
+                            >
+                              {severityLabel(incident.severity)}
+                            </span>
+                          </TableCell>
+                          <TableCell class={`${getPlatformTableCellClassForKind('text')}`}>
+                            <span class="block truncate text-base-content" title={incident.summary}>
+                              {incident.summary}
+                            </span>
+                            <span class="block truncate text-[10px] text-muted">
+                              {incident.label}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden md:table-cell`}
+                          >
+                            <span class="block truncate" title={incident.code}>
+                              {formatCode(incident.code)}
+                            </span>
+                            <span class="block truncate text-[10px] text-muted">
+                              {incident.source}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
+                          >
+                            {formatStartedAt(incident.startedAt)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content xl:table-cell`}
+                          >
+                            <span class="block truncate" title={incident.action}>
+                              {incident.action}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                        <PlatformResourceDetailTableRow
+                          resource={incident.resource}
+                          open={isExpanded()}
+                          detailRowId={detailRowId()}
+                          colSpan={6}
+                          resolveResourceLabel={resolveResourceLabel}
+                          onClose={() => drawer.close(incident)}
+                        />
+                      </>
+                    );
+                  }}
+                </For>
+              </TableBody>
+            </Table>
+          </TableCard>
+        </Show>
+      </div>
+    </Show>
+  );
+};
+
+export default TrueNASAlertsTable;
