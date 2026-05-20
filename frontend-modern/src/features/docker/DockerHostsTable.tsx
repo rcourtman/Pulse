@@ -166,36 +166,56 @@ export const DockerHostsTable: Component<{
                     bars aren't squeezed by table-fixed's equal split. Mobile
                     widths (w-[40%], w-[20%]) are unchanged.
                   */}
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} w-[40%] md:w-[15%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('name')} w-[40%] md:w-[13%]`}
+                  >
                     Host
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[7%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[7%]`}
+                  >
                     System
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[7%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[7%]`}
+                  >
                     Version
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}
+                  >
                     Containers
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[14%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[14%]`}
+                  >
                     CPU
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[14%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[14%]`}
+                  >
                     <span class="md:hidden">Mem</span>
                     <span class="hidden md:inline">Memory</span>
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[14%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[14%]`}
+                  >
                     Disk
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
+                  >
                     Uptime
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
+                  >
                     Temp
                   </TableHead>
                   <Show when={showSwarmColumn()}>
-                    <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[9%]`}>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                    >
                       Swarm role
                     </TableHead>
                   </Show>
@@ -262,7 +282,9 @@ export const DockerHostsTable: Component<{
                           onKeyDown={handleActivationKey}
                           tabIndex={0}
                         >
-                          <TableCell class={`${getPlatformTableCellClassForKind('name')} w-[40%] md:w-auto`}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('name')} w-[40%] md:w-auto`}
+                          >
                             <div class="flex min-w-0 items-center gap-2">
                               <StatusDot
                                 size="sm"

@@ -132,6 +132,11 @@ describe('platform overview layout guardrails', () => {
     }
   });
 
+  it('keeps Docker host optional Swarm column wide enough for its header', () => {
+    expect(dockerHostsTableSource).toContain('Swarm role');
+    expect(dockerHostsTableSource).toContain('md:w-[10%]');
+  });
+
   it('keeps provider overview pages in the parent-table plus child-inventory stack', () => {
     for (const source of overviewSurfaceSources) {
       expect(source).toContain('<div class="space-y-4">');
