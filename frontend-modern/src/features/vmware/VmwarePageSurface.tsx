@@ -162,8 +162,8 @@ function VmwareOverview(props: VmwareOverviewProps) {
             statusOptions={VMWARE_VM_STATUS_OPTIONS}
             columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
             containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
-            hostFilter={workloadsState.hostFilterConfig()}
-            namespaceFilter={workloadsState.namespaceFilterConfig()}
+            hostFilter={undefined}
+            namespaceFilter={undefined}
             platformFilter={undefined}
             suppressTypeFilter
             metricDisplayMode={workloadsState.workloadMetricDisplayMode}

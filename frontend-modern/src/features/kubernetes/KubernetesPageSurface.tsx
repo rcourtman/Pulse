@@ -155,8 +155,8 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
             statusOptions={KUBERNETES_POD_STATUS_OPTIONS}
             columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
             containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
-            hostFilter={workloadsState.hostFilterConfig()}
-            namespaceFilter={workloadsState.namespaceFilterConfig()}
+            hostFilter={undefined}
+            namespaceFilter={undefined}
             platformFilter={undefined}
             suppressTypeFilter
             metricDisplayMode={workloadsState.workloadMetricDisplayMode}

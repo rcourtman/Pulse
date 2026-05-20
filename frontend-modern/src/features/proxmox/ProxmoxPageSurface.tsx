@@ -249,8 +249,8 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
             statusOptions={PROXMOX_WORKLOAD_STATUS_OPTIONS}
             columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
             containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
-            hostFilter={workloadsState.hostFilterConfig()}
-            namespaceFilter={workloadsState.namespaceFilterConfig()}
+            hostFilter={undefined}
+            namespaceFilter={undefined}
             platformFilter={undefined}
             metricDisplayMode={workloadsState.workloadMetricDisplayMode}
             setMetricDisplayMode={workloadsState.setWorkloadMetricDisplayMode}
