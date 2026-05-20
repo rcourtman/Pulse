@@ -4,6 +4,7 @@ import type { Resource, ResourceType } from '@/types/resource';
 export type TrueNASPageTabId = 'overview' | 'storage';
 export type TrueNASAppStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
 export type TrueNASVMStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
+export type TrueNASShareStatusFilter = 'all' | 'active' | 'attention' | 'disabled';
 
 export type TrueNASTabSpec = {
   id: TrueNASPageTabId;
@@ -25,6 +26,7 @@ const TRUENAS_RESOURCE_TYPES = new Set<ResourceType>([
   'agent',
   'vm',
   'app-container',
+  'network-share',
   'storage',
   'pool',
   'dataset',
@@ -37,6 +39,7 @@ const isTrueNASPlatform = (resource: Resource): boolean =>
 export type TrueNASPageModel = {
   resources: Resource[];
   systems: Resource[];
+  shares: Resource[];
   vms: Resource[];
   apps: Resource[];
 };
@@ -47,11 +50,13 @@ export function buildTrueNASPageModel(resources: Resource[]): TrueNASPageModel {
   );
 
   const systems = trueNasResources.filter((resource) => resource.type === 'agent');
+  const shares = trueNasResources.filter((resource) => resource.type === 'network-share');
   const vms = trueNasResources.filter((resource) => resource.type === 'vm');
   const apps = trueNasResources.filter((resource) => resource.type === 'app-container');
   return {
     resources: trueNasResources,
     systems,
+    shares,
     vms,
     apps,
   };
@@ -84,6 +89,22 @@ export function mapTrueNASVMStatus(resource: Resource): Exclude<TrueNASVMStatusF
 
   if (resource.status === 'online' || resource.status === 'running') return 'running';
   if (resource.status === 'offline' || resource.status === 'stopped') return 'stopped';
+  return 'attention';
+}
+
+export function mapTrueNASShareStatus(
+  resource: Resource,
+): Exclude<TrueNASShareStatusFilter, 'all'> {
+  const share = resource.truenas?.share;
+  if (share?.enabled === false || resource.status === 'offline' || resource.status === 'stopped') {
+    return 'disabled';
+  }
+  if (share?.locked || resource.status === 'degraded' || resource.status === 'paused') {
+    return 'attention';
+  }
+  if (share?.enabled === true || resource.status === 'online' || resource.status === 'running') {
+    return 'active';
+  }
   return 'attention';
 }
 
@@ -200,5 +221,57 @@ export function filterTrueNASVMs(
     if (status !== 'all' && mapTrueNASVMStatus(vm) !== status) return false;
     if (!needle) return true;
     return vmSearchHaystack(vm).includes(needle);
+  });
+}
+
+const shareSearchHaystack = (resource: Resource): string => {
+  const share = resource.truenas?.share;
+  return [
+    resource.name,
+    resource.displayName,
+    resource.id,
+    resource.parentName,
+    resource.platformId,
+    resource.platformType,
+    resource.truenas?.hostname,
+    share?.id,
+    share?.name,
+    share?.protocol,
+    share?.path,
+    share?.dataset,
+    share?.relativePath,
+    share?.comment,
+    share?.enabled === false ? 'disabled' : share?.enabled === true ? 'enabled active' : undefined,
+    share?.readOnly === true
+      ? 'read-only readonly'
+      : share?.readOnly === false
+        ? 'read-write'
+        : undefined,
+    share?.browsable ? 'browsable' : undefined,
+    share?.locked ? 'locked' : undefined,
+    share?.accessBasedEnumeration ? 'access based enumeration abe' : undefined,
+    share?.auditEnabled ? 'audit audited' : undefined,
+    share?.exposeSnapshots ? 'snapshots' : undefined,
+    ...(share?.aliases ?? []),
+    ...(share?.hosts ?? []),
+    ...(share?.networks ?? []),
+    ...(share?.security ?? []),
+    ...(resource.tags ?? []),
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' ')
+    .toLowerCase();
+};
+
+export function filterTrueNASShares(
+  shares: Resource[],
+  search: string,
+  status: TrueNASShareStatusFilter,
+): Resource[] {
+  const needle = normalize(search);
+  return shares.filter((share) => {
+    if (status !== 'all' && mapTrueNASShareStatus(share) !== status) return false;
+    if (!needle) return true;
+    return shareSearchHaystack(share).includes(needle);
   });
 }

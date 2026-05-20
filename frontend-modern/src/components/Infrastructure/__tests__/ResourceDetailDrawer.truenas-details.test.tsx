@@ -151,4 +151,42 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
     expect(section.getByText('0.0.0.0:30443 -> 443/tcp')).toBeInTheDocument();
     expect(section.getByText('/mnt/tank/apps/nextcloud -> /data')).toBeInTheDocument();
   });
+
+  it('renders native TrueNAS share detail from SMB and NFS inventory', () => {
+    const resource = baseResource({
+      id: 'truenas-share-1',
+      type: 'network-share',
+      displayName: 'Media',
+      truenas: {
+        share: {
+          name: 'Media',
+          protocol: 'SMB',
+          dataset: 'tank/media',
+          path: '/mnt/tank/media',
+          enabled: true,
+          readOnly: false,
+          browsable: true,
+          accessBasedEnumeration: true,
+          auditEnabled: true,
+          aliases: ['media'],
+        },
+      },
+    });
+
+    const { getByText, getByRole, getByTestId } = render(() => (
+      <ResourceDetailDrawer resource={resource} />
+    ));
+
+    expect(getByText('SMB, Enabled, tank/media, Read/write')).toBeInTheDocument();
+
+    fireEvent.click(getByRole('button', { name: 'Show TrueNAS' }));
+
+    const section = within(getByTestId('resource-truenas-details-section'));
+    expect(section.getByText('Share')).toBeInTheDocument();
+    expect(section.getByText('Access')).toBeInTheDocument();
+    expect(section.getByText('Clients')).toBeInTheDocument();
+    expect(section.getByText('/mnt/tank/media')).toBeInTheDocument();
+    expect(section.getByText('Read/write')).toBeInTheDocument();
+    expect(section.getByText('media')).toBeInTheDocument();
+  });
 });

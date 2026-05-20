@@ -264,6 +264,7 @@
         "agent",
         "vm",
         "app-container",
+        "network-share",
         "storage",
         "physical-disk"
       ],

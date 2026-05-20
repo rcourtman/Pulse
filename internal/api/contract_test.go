@@ -2422,6 +2422,7 @@ func TestContract_PlatformMockToggleRebindsRuntimeConnectionsAndResources(t *tes
 	}
 
 	assertResourceCount("/api/resources?source=truenas&type=app-container", len(truenas.DefaultFixtures().Apps))
+	assertResourceCount("/api/resources?source=truenas&type=network-share", len(truenas.DefaultFixtures().Shares))
 	assertResourceCount("/api/resources?source=vmware-vsphere&type=storage", len(vmware.DefaultFixtures().Datastores))
 }
 

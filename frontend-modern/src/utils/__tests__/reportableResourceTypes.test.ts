@@ -13,6 +13,7 @@ describe('reportableResourceTypes', () => {
   it('exports the shared reportable resource set', () => {
     expect(REPORTABLE_RESOURCE_TYPES.has('agent')).toBe(true);
     expect(REPORTABLE_RESOURCE_TYPES.has('pbs')).toBe(true);
+    expect(REPORTABLE_RESOURCE_TYPES.has('network-share')).toBe(true);
     expect(REPORTABLE_RESOURCE_TYPES.has('truenas' as any)).toBe(false);
   });
 
@@ -26,6 +27,7 @@ describe('reportableResourceTypes', () => {
     expect(matchesReportableResourceTypeFilter({ type: 'agent' }, 'infrastructure')).toBe(true);
     expect(matchesReportableResourceTypeFilter({ type: 'vm' }, 'workloads')).toBe(true);
     expect(matchesReportableResourceTypeFilter({ type: 'storage' }, 'storage')).toBe(true);
+    expect(matchesReportableResourceTypeFilter({ type: 'network-share' }, 'storage')).toBe(true);
     expect(matchesReportableResourceTypeFilter({ type: 'pbs' }, 'recovery')).toBe(true);
     expect(matchesReportableResourceTypeFilter({ type: 'pbs' }, 'storage')).toBe(false);
   });

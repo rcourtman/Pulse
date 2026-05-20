@@ -21,6 +21,7 @@ export const CANONICAL_RESOURCE_TYPES = [
   'pbs',
   'pmg',
   'physical_disk',
+  'network-share',
   'ceph',
   'network-endpoint',
 ] as const satisfies readonly ResourceType[];

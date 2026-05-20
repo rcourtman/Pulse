@@ -141,7 +141,8 @@ func classifyResourceSensitivity(resource Resource) ResourceSensitivity {
 		ResourceTypeStorage,
 		ResourceTypePBS,
 		ResourceTypePhysicalDisk,
-		ResourceTypeCeph:
+		ResourceTypeCeph,
+		ResourceTypeNetworkShare:
 		return ResourceSensitivitySensitive
 	}
 
@@ -279,6 +280,8 @@ func resourceSummaryType(resource Resource) string {
 		return "ceph cluster"
 	case ResourceTypePhysicalDisk:
 		return "physical disk"
+	case ResourceTypeNetworkShare:
+		return "network share"
 	default:
 		if trimmed := strings.TrimSpace(string(CanonicalResourceType(resource.Type))); trimmed != "" {
 			return trimmed
@@ -318,6 +321,9 @@ func resourceHasPlatformIdentity(resource Resource) bool {
 
 func resourceHasFilesystemPath(resource Resource) bool {
 	if resource.Storage != nil && strings.TrimSpace(resource.Storage.Path) != "" {
+		return true
+	}
+	if resource.TrueNAS != nil && resource.TrueNAS.Share != nil && strings.TrimSpace(resource.TrueNAS.Share.Path) != "" {
 		return true
 	}
 	return false

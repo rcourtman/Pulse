@@ -14,6 +14,7 @@ describe('resourceTypeCompat', () => {
     expect(canonicalizeFrontendResourceType('truenas')).toBe('agent');
     expect(canonicalizeFrontendResourceType('availability')).toBe('network-endpoint');
     expect(canonicalizeFrontendResourceType('network_endpoint')).toBe('network-endpoint');
+    expect(canonicalizeFrontendResourceType('network-share')).toBe('network-share');
   });
 
   it('does not silently canonicalize removed non-canonical workload aliases', () => {

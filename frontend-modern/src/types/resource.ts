@@ -47,6 +47,7 @@ export type ResourceType =
   | 'pbs' // Proxmox Backup Server
   | 'pmg' // Proxmox Mail Gateway
   | 'physical_disk' // Physical disk
+  | 'network-share' // SMB/NFS network share
   | 'ceph' // Ceph cluster
   | 'network-endpoint'; // Agentless availability endpoint
 
@@ -684,6 +685,31 @@ export interface ResourceTrueNASVMMeta {
   pciCount?: number;
 }
 
+export interface ResourceTrueNASShareMeta {
+  id?: string;
+  name?: string;
+  protocol?: string;
+  path?: string;
+  dataset?: string;
+  relativePath?: string;
+  comment?: string;
+  enabled?: boolean;
+  readOnly?: boolean;
+  browsable?: boolean;
+  locked?: boolean;
+  accessBasedEnumeration?: boolean;
+  auditEnabled?: boolean;
+  exposeSnapshots?: boolean;
+  aliases?: string[];
+  hosts?: string[];
+  networks?: string[];
+  security?: string[];
+  mapRootUser?: string;
+  mapRootGroup?: string;
+  mapAllUser?: string;
+  mapAllGroup?: string;
+}
+
 export interface ResourceTrueNASMeta {
   hostname?: string;
   version?: string;
@@ -697,6 +723,7 @@ export interface ResourceTrueNASMeta {
   rebuildSummary?: string;
   app?: ResourceTrueNASAppMeta;
   vm?: ResourceTrueNASVMMeta;
+  share?: ResourceTrueNASShareMeta;
 }
 
 export interface ResourceKubernetesMetricCapabilities {
@@ -941,7 +968,15 @@ export function isWorkload(r: Resource): boolean {
 }
 
 export function isStorage(r: Resource): boolean {
-  return ['storage', 'datastore', 'pool', 'dataset', 'physical_disk', 'ceph'].includes(r.type);
+  return [
+    'storage',
+    'datastore',
+    'pool',
+    'dataset',
+    'physical_disk',
+    'network-share',
+    'ceph',
+  ].includes(r.type);
 }
 
 /**

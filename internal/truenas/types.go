@@ -12,6 +12,7 @@ type FixtureSnapshot struct {
 	Alerts           []Alert
 	Apps             []App
 	VMs              []VirtualMachine
+	Shares           []NetworkShare
 	ZFSSnapshots     []ZFSSnapshot
 	ReplicationTasks []ReplicationTask
 }
@@ -250,6 +251,33 @@ type VirtualMachine struct {
 	CDROMCount            int
 	USBCount              int
 	PCICount              int
+}
+
+// NetworkShare mirrors the subset of TrueNAS SMB/NFS sharing fields needed for
+// canonical NAS share inventory.
+type NetworkShare struct {
+	ID                     string
+	Name                   string
+	Protocol               string
+	Path                   string
+	Dataset                string
+	RelativePath           string
+	Comment                string
+	Enabled                bool
+	ReadOnly               bool
+	Browsable              bool
+	Locked                 bool
+	AccessBasedEnumeration bool
+	AuditEnabled           bool
+	ExposeSnapshots        bool
+	Aliases                []string
+	Hosts                  []string
+	Networks               []string
+	Security               []string
+	MapRootUser            string
+	MapRootGroup           string
+	MapAllUser             string
+	MapAllGroup            string
 }
 
 // ZFSSnapshot mirrors the subset of snapshot fields needed for recovery-point mapping.

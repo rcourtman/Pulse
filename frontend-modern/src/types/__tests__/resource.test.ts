@@ -56,6 +56,7 @@ describe('Resource Type Guards', () => {
       'agent',
       'vm',
       'app-container',
+      'network-share',
       'storage',
       'physical-disk',
     ]);
@@ -117,7 +118,13 @@ describe('Resource Type Guards', () => {
   });
 
   describe('isStorage', () => {
-    const storageTypes: ResourceType[] = ['storage', 'datastore', 'pool', 'dataset'];
+    const storageTypes: ResourceType[] = [
+      'storage',
+      'datastore',
+      'pool',
+      'dataset',
+      'network-share',
+    ];
     const nonStorageTypes: ResourceType[] = [
       'vm',
       'agent',

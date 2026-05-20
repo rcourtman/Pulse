@@ -134,6 +134,20 @@ func TestClientGetters(t *testing.T) {
 	if len(apps[0].Volumes) != 2 || len(apps[0].Networks) != 1 {
 		t.Fatalf("unexpected app volume/network mapping: volumes=%d networks=%d", len(apps[0].Volumes), len(apps[0].Networks))
 	}
+
+	shares, err := client.GetNetworkShares(ctx)
+	if err != nil {
+		t.Fatalf("GetNetworkShares() error = %v", err)
+	}
+	if len(shares) != 2 {
+		t.Fatalf("expected 2 network shares, got %d", len(shares))
+	}
+	if shares[0].Name != "Media" || shares[0].Protocol != "SMB" || shares[0].Dataset != "tank/media" || !shares[0].AuditEnabled {
+		t.Fatalf("unexpected SMB share mapping: %+v", shares[0])
+	}
+	if shares[1].Name != "tank/projects" || shares[1].Protocol != "NFS" || !shares[1].ReadOnly || len(shares[1].Networks) != 1 {
+		t.Fatalf("unexpected NFS share mapping: %+v", shares[1])
+	}
 }
 
 func TestClientAuthHeaderAPIKey(t *testing.T) {
@@ -248,9 +262,9 @@ func TestFetchSnapshot(t *testing.T) {
 	if snapshot.System.Hostname != "truenas-main" {
 		t.Fatalf("unexpected snapshot system: %+v", snapshot.System)
 	}
-	if len(snapshot.Pools) != 1 || len(snapshot.Datasets) != 1 || len(snapshot.Disks) != 2 || len(snapshot.Alerts) != 1 || len(snapshot.Apps) != 1 || len(snapshot.VMs) != 1 {
-		t.Fatalf("unexpected snapshot counts: pools=%d datasets=%d disks=%d alerts=%d apps=%d vms=%d",
-			len(snapshot.Pools), len(snapshot.Datasets), len(snapshot.Disks), len(snapshot.Alerts), len(snapshot.Apps), len(snapshot.VMs))
+	if len(snapshot.Pools) != 1 || len(snapshot.Datasets) != 1 || len(snapshot.Disks) != 2 || len(snapshot.Alerts) != 1 || len(snapshot.Apps) != 1 || len(snapshot.VMs) != 1 || len(snapshot.Shares) != 2 {
+		t.Fatalf("unexpected snapshot counts: pools=%d datasets=%d disks=%d alerts=%d apps=%d vms=%d shares=%d",
+			len(snapshot.Pools), len(snapshot.Datasets), len(snapshot.Disks), len(snapshot.Alerts), len(snapshot.Apps), len(snapshot.VMs), len(snapshot.Shares))
 	}
 	if snapshot.Disks[0].Temperature != 34 || snapshot.Disks[1].Temperature != 49 {
 		t.Fatalf("unexpected snapshot disk temperatures: %+v", snapshot.Disks)
@@ -1252,6 +1266,12 @@ func defaultAPIResponses() map[string]apiResponse {
 		},
 		"/api/v2.0/vm": {
 			body: `[{"id":42,"name":"windows-lab","vcpus":4,"cores":2,"threads":2,"memory":8192,"bootloader":"UEFI","autostart":true,"status":{"state":"RUNNING","pid":1234,"domain_state":"RUNNING"},"devices":[{"id":1,"attributes":{"dtype":"DISK"}},{"id":2,"attributes":{"dtype":"NIC"}}]}]`,
+		},
+		"/api/v2.0/sharing/smb": {
+			body: `[{"id":1,"name":"Media","path":"/mnt/tank/media","dataset":"tank/media","enabled":true,"comment":"Household media","readonly":false,"browsable":true,"access_based_share_enumeration":true,"locked":false,"audit":{"enable":true}}]`,
+		},
+		"/api/v2.0/sharing/nfs": {
+			body: `[{"id":2,"path":"/mnt/tank/projects","dataset":"tank/projects","comment":"Linux exports","enabled":true,"ro":true,"networks":["10.10.20.0/24"],"hosts":[],"security":["SYS"],"locked":false}]`,
 		},
 	}
 }

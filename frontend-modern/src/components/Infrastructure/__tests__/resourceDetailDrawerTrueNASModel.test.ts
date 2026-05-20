@@ -84,4 +84,31 @@ describe('resourceDetailDrawerTrueNASModel', () => {
       'Storage',
     ]);
   });
+
+  it('summarizes native SMB and NFS share metadata for the detail drawer', () => {
+    const resource = baseResource({
+      type: 'network-share',
+      truenas: {
+        share: {
+          name: 'Media',
+          protocol: 'SMB',
+          dataset: 'tank/media',
+          path: '/mnt/tank/media',
+          enabled: true,
+          readOnly: false,
+          browsable: true,
+          accessBasedEnumeration: true,
+          auditEnabled: true,
+          aliases: ['media'],
+        },
+      },
+    });
+
+    expect(buildTrueNASDetailsSummary(resource)).toBe('SMB, Enabled, tank/media, Read/write');
+    expect(buildTrueNASDetailSections(resource).map((section) => section.label)).toEqual([
+      'Share',
+      'Access',
+      'Clients',
+    ]);
+  });
 });

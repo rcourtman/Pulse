@@ -224,9 +224,9 @@ work extends shared components instead of creating new local variants.
    `docker` are not collapsed back into owning platform semantics.
    It must also preserve canonical projection lists from the governed manifest
    without page-local narrowing; for example, TrueNAS exposes both native
-   `vm` workloads and `app-container` workloads through the same generated
-   platform projection used by route helpers, badges, source filters, and
-   type unions.
+   `vm`, `network-share`, and `app-container` workloads through the same
+   generated platform projection used by route helpers, badges, source
+   filters, reportable-resource pickers, and type unions.
 10. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
     That shared boundary must preserve `availability` as the agentless
     infrastructure source for `network-endpoint` resources and settings

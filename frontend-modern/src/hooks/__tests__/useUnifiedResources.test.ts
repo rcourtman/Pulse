@@ -1685,6 +1685,52 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('preserves native TrueNAS network-share resources at ingest', async () => {
+    apiFetchMock.mockResolvedValueOnce(
+      resourceResponse([
+        {
+          ...v2Resource,
+          id: 'share-smb-media',
+          type: 'network-share',
+          name: 'Media',
+          status: 'online',
+          sources: ['truenas'],
+          parentName: 'tank/media',
+          truenas: {
+            hostname: 'truenas-main',
+            share: {
+              id: 'smb-1',
+              name: 'Media',
+              protocol: 'SMB',
+              path: '/mnt/tank/media',
+              dataset: 'tank/media',
+              enabled: true,
+              readOnly: false,
+            },
+          },
+        },
+      ]),
+    );
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: 'type=network-share',
+        cacheKey: 'network-share-ingest-test',
+        initialHydration: 'immediate',
+      });
+    });
+
+    await waitForValue(() => result!.resources()[0]?.type, 'network-share');
+
+    expect(result!.resources()[0]?.platformType).toBe('truenas');
+    expect(result!.resources()[0]?.truenas?.share?.dataset).toBe('tank/media');
+
+    dispose();
+  });
+
   it('preserves resource facets from backend payloads', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,

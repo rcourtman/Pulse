@@ -116,6 +116,12 @@ truth for live infrastructure data.
     through `TrueNASData.App` on the canonical `app-container` resource.
     Monitoring must not rebuild a second Docker-only TrueNAS app inventory or
     make the Docker fallback the source of truth for the TrueNAS platform page.
+    TrueNAS VMs and network shares follow the same provider-owned inventory
+    boundary: `vm.query` data publishes native `TrueNASData.VM` on canonical
+    `vm` resources, while SMB/NFS share data from `sharing.smb.query` and
+    `sharing.nfs.query` publishes native `TrueNASData.Share` on canonical
+    `network-share` resources parented to the owning dataset or pool when the
+    API/path supplies that evidence.
 
 ## Forbidden Paths
 
@@ -155,6 +161,10 @@ truth for live infrastructure data.
    cross-runtime tooling, but platform-page app rows, source identity, and
    update posture must be carried by the TrueNAS app facet published into
    unified resources.
+9. Keep TrueNAS network-share inventory native to the TrueNAS API projection.
+   SMB/NFS shares must enter unified resources as `network-share` records with
+   the TrueNAS share facet, not as generic storage rows or Docker/container
+   compatibility records.
 
 ## Current State
 

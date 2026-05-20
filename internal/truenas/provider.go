@@ -457,7 +457,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 	systemRisk := unifiedresources.StorageRiskFromAssessment(systemAssessment)
 	_, protectionReduced, rebuildInProgress, protectionSummary, rebuildSummary := unifiedresources.StorageRiskSemantics(systemRisk)
 	systemIncidents, poolIncidents, diskIncidents := buildIncidentAssignments(snapshot)
-	records := make([]unifiedresources.IngestRecord, 0, 1+len(snapshot.Pools)+len(snapshot.Datasets)+len(snapshot.Apps)+len(snapshot.VMs)+len(snapshot.Disks))
+	records := make([]unifiedresources.IngestRecord, 0, 1+len(snapshot.Pools)+len(snapshot.Datasets)+len(snapshot.Apps)+len(snapshot.VMs)+len(snapshot.Shares)+len(snapshot.Disks))
 
 	totalCapacity, totalUsed := aggregatePoolUsage(snapshot.Pools)
 	systemAgent := agentDataFromTrueNASSystem(snapshot.System, systemRisk, protectionReduced, protectionSummary, rebuildInProgress, rebuildSummary)
@@ -659,6 +659,37 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 				Hostnames: dedupeStrings([]string{
 					strings.TrimSpace(snapshot.System.Hostname),
 					virtualMachineDisplayName(vm),
+				}),
+			},
+		})
+	}
+
+	for _, share := range snapshot.Shares {
+		parentSourceID := systemSourceID
+		if dataset := strings.TrimSpace(share.Dataset); dataset != "" {
+			parentSourceID = datasetSourceID(dataset)
+		} else if pool := poolFromSharePath(share.Path); pool != "" {
+			parentSourceID = poolSourceID(pool)
+		}
+		records = append(records, unifiedresources.IngestRecord{
+			SourceID:       networkShareSourceID(share),
+			ParentSourceID: parentSourceID,
+			Resource: unifiedresources.Resource{
+				Type:      unifiedresources.ResourceTypeNetworkShare,
+				Name:      networkShareDisplayName(share),
+				Status:    statusFromNetworkShare(share),
+				LastSeen:  collectedAt,
+				UpdatedAt: collectedAt,
+				TrueNAS: &unifiedresources.TrueNASData{
+					Hostname: strings.TrimSpace(snapshot.System.Hostname),
+					Share:    trueNASShareDataFromNetworkShare(share),
+				},
+				Tags: networkShareTags(share),
+			},
+			Identity: unifiedresources.ResourceIdentity{
+				Hostnames: dedupeStrings([]string{
+					strings.TrimSpace(snapshot.System.Hostname),
+					networkShareDisplayName(share),
 				}),
 			},
 		})
@@ -1242,6 +1273,21 @@ func virtualMachineSourceID(vm VirtualMachine) string {
 	return "vm:" + virtualMachineDisplayName(vm)
 }
 
+func networkShareSourceID(share NetworkShare) string {
+	protocol := strings.ToLower(strings.TrimSpace(share.Protocol))
+	if protocol == "" {
+		protocol = "share"
+	}
+	stable := strings.TrimSpace(share.ID)
+	if stable == "" {
+		stable = networkShareDisplayName(share)
+	}
+	if stable == "" {
+		stable = strings.TrimSpace(share.Path)
+	}
+	return "share:" + protocol + ":" + stable
+}
+
 func diskSourceID(name string) string {
 	return "disk:" + strings.TrimSpace(name)
 }
@@ -1265,6 +1311,26 @@ func virtualMachineDisplayName(vm VirtualMachine) string {
 		return name
 	}
 	return strings.TrimSpace(vm.ID)
+}
+
+func networkShareDisplayName(share NetworkShare) string {
+	if name := strings.TrimSpace(share.Name); name != "" {
+		return name
+	}
+	if len(share.Aliases) > 0 {
+		if alias := strings.TrimSpace(share.Aliases[0]); alias != "" {
+			return alias
+		}
+	}
+	if dataset := strings.TrimSpace(share.Dataset); dataset != "" {
+		return dataset
+	}
+	path := strings.Trim(strings.TrimSpace(share.Path), "/")
+	if path == "" {
+		return strings.TrimSpace(share.ID)
+	}
+	parts := strings.Split(path, "/")
+	return strings.TrimSpace(parts[len(parts)-1])
 }
 
 func findAppInSnapshot(snapshot *FixtureSnapshot, appID string) (*App, error) {
@@ -1545,6 +1611,33 @@ func trueNASVMDataFromVirtualMachine(vm VirtualMachine) *unifiedresources.TrueNA
 	}
 }
 
+func trueNASShareDataFromNetworkShare(share NetworkShare) *unifiedresources.TrueNASShare {
+	return &unifiedresources.TrueNASShare{
+		ID:                     strings.TrimSpace(share.ID),
+		Name:                   networkShareDisplayName(share),
+		Protocol:               strings.ToUpper(strings.TrimSpace(share.Protocol)),
+		Path:                   strings.TrimSpace(share.Path),
+		Dataset:                strings.TrimSpace(share.Dataset),
+		RelativePath:           strings.TrimSpace(share.RelativePath),
+		Comment:                strings.TrimSpace(share.Comment),
+		Enabled:                share.Enabled,
+		ReadOnly:               share.ReadOnly,
+		Browsable:              share.Browsable,
+		Locked:                 share.Locked,
+		AccessBasedEnumeration: share.AccessBasedEnumeration,
+		AuditEnabled:           share.AuditEnabled,
+		ExposeSnapshots:        share.ExposeSnapshots,
+		Aliases:                dedupeStrings(share.Aliases),
+		Hosts:                  dedupeStrings(share.Hosts),
+		Networks:               dedupeStrings(share.Networks),
+		Security:               dedupeStrings(share.Security),
+		MapRootUser:            strings.TrimSpace(share.MapRootUser),
+		MapRootGroup:           strings.TrimSpace(share.MapRootGroup),
+		MapAllUser:             strings.TrimSpace(share.MapAllUser),
+		MapAllGroup:            strings.TrimSpace(share.MapAllGroup),
+	}
+}
+
 func copyStringLabels(labels map[string]string) map[string]string {
 	if len(labels) == 0 {
 		return nil
@@ -1603,6 +1696,16 @@ func statusFromVirtualMachine(vm VirtualMachine) unifiedresources.ResourceStatus
 	}
 }
 
+func statusFromNetworkShare(share NetworkShare) unifiedresources.ResourceStatus {
+	if !share.Enabled {
+		return unifiedresources.StatusOffline
+	}
+	if share.Locked {
+		return unifiedresources.StatusWarning
+	}
+	return unifiedresources.StatusOnline
+}
+
 func virtualMachineTags(vm VirtualMachine) []string {
 	tags := []string{"truenas", "vm"}
 	if state := strings.ToLower(strings.TrimSpace(vm.State)); state != "" {
@@ -1619,6 +1722,23 @@ func virtualMachineTags(vm VirtualMachine) []string {
 	}
 	if vm.SecureBoot {
 		tags = append(tags, "secure-boot")
+	}
+	return dedupeStrings(tags)
+}
+
+func networkShareTags(share NetworkShare) []string {
+	tags := []string{"truenas", "share"}
+	if protocol := strings.ToLower(strings.TrimSpace(share.Protocol)); protocol != "" {
+		tags = append(tags, protocol)
+	}
+	if share.ReadOnly {
+		tags = append(tags, "readonly")
+	}
+	if share.Locked {
+		tags = append(tags, "locked")
+	}
+	if dataset := strings.TrimSpace(share.Dataset); dataset != "" {
+		tags = append(tags, "dataset:"+dataset)
 	}
 	return dedupeStrings(tags)
 }
@@ -1910,6 +2030,7 @@ func copyFixtureSnapshot(snapshot *FixtureSnapshot) *FixtureSnapshot {
 	copied.Alerts = append([]Alert(nil), snapshot.Alerts...)
 	copied.Apps = cloneApps(snapshot.Apps)
 	copied.VMs = append([]VirtualMachine(nil), snapshot.VMs...)
+	copied.Shares = cloneNetworkShares(snapshot.Shares)
 	copied.ZFSSnapshots = append([]ZFSSnapshot(nil), snapshot.ZFSSnapshots...)
 	copied.ReplicationTasks = append([]ReplicationTask(nil), snapshot.ReplicationTasks...)
 	return &copied
@@ -1944,6 +2065,21 @@ func cloneApps(apps []App) []App {
 			stats.Interfaces = append([]AppInterfaceStats(nil), apps[i].Stats.Interfaces...)
 			out[i].Stats = &stats
 		}
+	}
+	return out
+}
+
+func cloneNetworkShares(shares []NetworkShare) []NetworkShare {
+	if len(shares) == 0 {
+		return nil
+	}
+	out := make([]NetworkShare, len(shares))
+	for i := range shares {
+		out[i] = shares[i]
+		out[i].Aliases = append([]string(nil), shares[i].Aliases...)
+		out[i].Hosts = append([]string(nil), shares[i].Hosts...)
+		out[i].Networks = append([]string(nil), shares[i].Networks...)
+		out[i].Security = append([]string(nil), shares[i].Security...)
 	}
 	return out
 }

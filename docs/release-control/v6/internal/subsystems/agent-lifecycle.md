@@ -173,6 +173,13 @@ API, but they must not widen install tokens, agent profiles, or command grants
 because a Discovery record exists. Mock-mode Discovery records are demo
 payloads for the same API contract and must not become a lifecycle-local
 fixture or an implicit permission to run commands.
+Native provider resource types exposed through shared `internal/api/` resource
+handlers are the same kind of read-only context for lifecycle surfaces. A
+TrueNAS `network-share` resource may appear in resource pickers, connection
+impact previews, or cross-organization sharing only through the API and
+unified-resource contracts; lifecycle code must not treat that share as an
+agent install target, a command-agent authority, or a reason to widen setup
+tokens.
 
 The node setup modal boundary must keep guided setup and manual credential
 submission separate. For new PVE/PBS setup, API Inventory and Host Telemetry

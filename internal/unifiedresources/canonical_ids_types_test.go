@@ -65,6 +65,16 @@ func TestContractResourceType(t *testing.T) {
 			},
 			want: ResourceTypeVM,
 		},
+		{
+			name: "network share passthrough remains canonical",
+			resource: Resource{
+				Type: ResourceTypeNetworkShare,
+				TrueNAS: &TrueNASData{
+					Share: &TrueNASShare{ID: "smb-media", Protocol: "SMB"},
+				},
+			},
+			want: ResourceTypeNetworkShare,
+		},
 	}
 
 	for _, tt := range tests {

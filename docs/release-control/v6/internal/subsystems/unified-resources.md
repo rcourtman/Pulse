@@ -201,6 +201,14 @@ reintroduce false Swarm capability surfaces.
    runtime evidence, but the TrueNAS platform overview and other
    TrueNAS-native consumers must read the native facet first instead of
    treating TrueNAS apps as generic Docker rows.
+   TrueNAS VM and network-share inventory use the same native-facet rule.
+   TrueNAS API VMs publish `TrueNASData.VM` on canonical `vm` resources, and
+   SMB/NFS shares publish `TrueNASData.Share` on canonical `network-share`
+   resources. Share records must preserve protocol, path, dataset,
+   enabled/read-only/access metadata, clone and merge through unified
+   resources, redact filesystem paths through policy metadata, and derive
+   storage-parent relationships without being flattened into generic Docker or
+   storage rows.
 2. Add typed accessors and views in `internal/unifiedresources/views.go`
 3. Add source ingestion/adaptation in the adapter layer only
    Frontend resource platform contracts in

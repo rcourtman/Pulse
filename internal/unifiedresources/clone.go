@@ -359,6 +359,7 @@ func cloneTrueNASData(in *TrueNASData) *TrueNASData {
 	out.StorageRisk = cloneStorageRisk(in.StorageRisk)
 	out.App = cloneTrueNASApp(in.App)
 	out.VM = cloneTrueNASVM(in.VM)
+	out.Share = cloneTrueNASShare(in.Share)
 	return &out
 }
 
@@ -422,6 +423,18 @@ func cloneTrueNASVM(in *TrueNASVM) *TrueNASVM {
 		return nil
 	}
 	out := *in
+	return &out
+}
+
+func cloneTrueNASShare(in *TrueNASShare) *TrueNASShare {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.Aliases = append([]string(nil), in.Aliases...)
+	out.Hosts = append([]string(nil), in.Hosts...)
+	out.Networks = append([]string(nil), in.Networks...)
+	out.Security = append([]string(nil), in.Security...)
 	return &out
 }
 

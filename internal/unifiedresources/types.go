@@ -134,6 +134,7 @@ const (
 	ResourceTypePMG             ResourceType = "pmg"
 	ResourceTypeCeph            ResourceType = "ceph"
 	ResourceTypePhysicalDisk    ResourceType = "physical_disk"
+	ResourceTypeNetworkShare    ResourceType = "network-share"
 	ResourceTypeNetworkEndpoint ResourceType = "network-endpoint"
 )
 
@@ -1029,18 +1030,19 @@ type VMwareData struct {
 
 // TrueNASData contains TrueNAS-specific metadata for TrueNAS resources.
 type TrueNASData struct {
-	Hostname              string       `json:"hostname,omitempty"`
-	Version               string       `json:"version,omitempty"`
-	UptimeSeconds         int64        `json:"uptimeSeconds,omitempty"`
-	StorageRisk           *StorageRisk `json:"storageRisk,omitempty"`
-	StorageRiskSummary    string       `json:"storageRiskSummary,omitempty"`
-	StoragePostureSummary string       `json:"storagePostureSummary,omitempty"`
-	ProtectionReduced     bool         `json:"protectionReduced,omitempty"`
-	ProtectionSummary     string       `json:"protectionSummary,omitempty"`
-	RebuildInProgress     bool         `json:"rebuildInProgress,omitempty"`
-	RebuildSummary        string       `json:"rebuildSummary,omitempty"`
-	App                   *TrueNASApp  `json:"app,omitempty"`
-	VM                    *TrueNASVM   `json:"vm,omitempty"`
+	Hostname              string        `json:"hostname,omitempty"`
+	Version               string        `json:"version,omitempty"`
+	UptimeSeconds         int64         `json:"uptimeSeconds,omitempty"`
+	StorageRisk           *StorageRisk  `json:"storageRisk,omitempty"`
+	StorageRiskSummary    string        `json:"storageRiskSummary,omitempty"`
+	StoragePostureSummary string        `json:"storagePostureSummary,omitempty"`
+	ProtectionReduced     bool          `json:"protectionReduced,omitempty"`
+	ProtectionSummary     string        `json:"protectionSummary,omitempty"`
+	RebuildInProgress     bool          `json:"rebuildInProgress,omitempty"`
+	RebuildSummary        string        `json:"rebuildSummary,omitempty"`
+	App                   *TrueNASApp   `json:"app,omitempty"`
+	VM                    *TrueNASVM    `json:"vm,omitempty"`
+	Share                 *TrueNASShare `json:"share,omitempty"`
 }
 
 // TrueNASApp contains app.query / active_workloads data for one TrueNAS app.
@@ -1141,6 +1143,33 @@ type TrueNASVM struct {
 	CDROMCount            int    `json:"cdromCount,omitempty"`
 	USBCount              int    `json:"usbCount,omitempty"`
 	PCICount              int    `json:"pciCount,omitempty"`
+}
+
+// TrueNASShare contains sharing.smb.query / sharing.nfs.query data for one
+// native TrueNAS network share.
+type TrueNASShare struct {
+	ID                     string   `json:"id,omitempty"`
+	Name                   string   `json:"name,omitempty"`
+	Protocol               string   `json:"protocol,omitempty"`
+	Path                   string   `json:"path,omitempty"`
+	Dataset                string   `json:"dataset,omitempty"`
+	RelativePath           string   `json:"relativePath,omitempty"`
+	Comment                string   `json:"comment,omitempty"`
+	Enabled                bool     `json:"enabled"`
+	ReadOnly               bool     `json:"readOnly"`
+	Browsable              bool     `json:"browsable,omitempty"`
+	Locked                 bool     `json:"locked,omitempty"`
+	AccessBasedEnumeration bool     `json:"accessBasedEnumeration,omitempty"`
+	AuditEnabled           bool     `json:"auditEnabled,omitempty"`
+	ExposeSnapshots        bool     `json:"exposeSnapshots,omitempty"`
+	Aliases                []string `json:"aliases,omitempty"`
+	Hosts                  []string `json:"hosts,omitempty"`
+	Networks               []string `json:"networks,omitempty"`
+	Security               []string `json:"security,omitempty"`
+	MapRootUser            string   `json:"mapRootUser,omitempty"`
+	MapRootGroup           string   `json:"mapRootGroup,omitempty"`
+	MapAllUser             string   `json:"mapAllUser,omitempty"`
+	MapAllGroup            string   `json:"mapAllGroup,omitempty"`
 }
 
 // AvailabilityData contains agentless endpoint probe metadata for a resource.

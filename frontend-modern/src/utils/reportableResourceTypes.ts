@@ -29,6 +29,7 @@ export const REPORTABLE_RESOURCE_TYPES = new Set<ResourceType>([
   'datastore',
   'pool',
   'dataset',
+  'network-share',
   'pbs',
   'pmg',
 ]);
@@ -50,7 +51,13 @@ const WORKLOAD_TYPES = new Set<ResourceType>([
   'pod',
 ]);
 
-const STORAGE_TYPES = new Set<ResourceType>(['storage', 'datastore', 'pool', 'dataset']);
+const STORAGE_TYPES = new Set<ResourceType>([
+  'storage',
+  'datastore',
+  'pool',
+  'dataset',
+  'network-share',
+]);
 
 const RECOVERY_TYPES = new Set<ResourceType>(['pbs', 'datastore']);
 
@@ -68,6 +75,7 @@ const SORT_ORDER: Record<string, number> = {
   datastore: 10,
   pool: 11,
   dataset: 12,
+  'network-share': 13,
 };
 
 export const normalizeReportableResourceType = (type: ResourceType): string => {

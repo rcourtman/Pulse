@@ -90,6 +90,10 @@ const RESOURCE_TYPE_PRESENTATION: Partial<Record<ResourceType | string, Resource
       label: 'Physical Disk',
       badgeClasses: DEFAULT_BADGE_CLASSES,
     },
+    'network-share': {
+      label: 'Network Share',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
     ceph: {
       label: 'Ceph',
       badgeClasses: DEFAULT_BADGE_CLASSES,

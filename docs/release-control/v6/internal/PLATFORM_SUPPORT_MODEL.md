@@ -308,7 +308,7 @@ Support floor fields are recorded in this order: `setup`, `visibility`,
 | `proxmox-pve` | `platform` | `supported` | `supported` | `api-backed` | `platform-connections` | `agent`, `vm`, `system-container`, `storage`, `ceph`, `physical-disk` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=augmentation-only` |
 | `proxmox-pbs` | `platform` | `supported` | `supported` | `api-backed` | `platform-connections` | `pbs`, `storage` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
 | `proxmox-pmg` | `platform` | `supported` | `supported` | `api-backed` | `platform-connections` | `pmg` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=n/a`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
-| `truenas` | `platform` | `supported` | `supported` | `api-backed` | `platform-connections` | `agent`, `vm`, `app-container`, `storage`, `physical-disk` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
+| `truenas` | `platform` | `supported` | `supported` | `api-backed` | `platform-connections` | `agent`, `vm`, `app-container`, `network-share`, `storage`, `physical-disk` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
 | `vmware-vsphere` | `platform` | `supported` | `supported` | `api-backed` | `platform-connections` | `agent`, `vm`, `storage` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
 
 Presentation-only platform vocabulary uses `governance=presentation-only`,
@@ -368,7 +368,7 @@ or runtime platform fallbacks that are not declared in this document.
 | `proxmox-pve`    | platform      | Proxmox            | api-backed   | host agent may augment into hybrid    | `agent`, `vm`, `system-container`, `storage`, `ceph`, `physical-disk` |
 | `proxmox-pbs`    | platform      | Proxmox            | api-backed   | host agent may augment into hybrid    | `pbs`, `storage`                                                      |
 | `proxmox-pmg`    | platform      | Proxmox            | api-backed   | none today                            | `pmg`                                                                 |
-| `truenas`        | platform      | TrueNAS            | api-backed   | host agent may augment into hybrid    | `agent`, `vm`, `app-container`, `storage`, `physical-disk`            |
+| `truenas`        | platform      | TrueNAS            | api-backed   | host agent may augment into hybrid    | `agent`, `vm`, `app-container`, `network-share`, `storage`, `physical-disk` |
 | `vmware-vsphere` | platform      | VMware             | api-backed   | host or guest agent later, not phase 1 | `agent`, `vm`, `storage`                                             |
 
 | Platform         | Setup                                  | Visibility | Workloads | Storage   | Recovery  | Alerts    | Assistant read | Assistant control |

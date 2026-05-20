@@ -139,6 +139,7 @@ const mergePlatformData = (
     ['pmg', 'proxmox-pmg'],
     ['kubernetes', 'kubernetes'],
     ['vmware', 'vmware-vsphere'],
+    ['truenas', 'truenas'],
     ['availability', 'availability'],
   ] as const) {
     if (!shouldKeepSourceFacet(incomingSources, ...sourceCandidates)) {
@@ -202,6 +203,7 @@ const deriveLegacySourceList = (
   if (getFacetRecord(resource, platformData, 'pbs')) sources.push('pbs');
   if (getFacetRecord(resource, platformData, 'pmg')) sources.push('pmg');
   if (getFacetRecord(resource, platformData, 'vmware')) sources.push('vmware');
+  if (getFacetRecord(resource, platformData, 'truenas')) sources.push('truenas');
   if (getFacetRecord(resource, platformData, 'kubernetes')) sources.push('kubernetes');
   if (getFacetRecord(resource, platformData, 'docker')) sources.push('docker');
   if (getFacetRecord(resource, platformData, 'availability')) sources.push('availability');
@@ -275,6 +277,7 @@ const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformD
       ['pmg', resourceRecord.pmg],
       ['kubernetes', resourceRecord.kubernetes],
       ['vmware', resourceRecord.vmware],
+      ['truenas', resourceRecord.truenas],
       ['storage', resourceRecord.storage],
       ['availability', resourceRecord.availability],
       ['physicalDisk', resourceRecord.physicalDisk],
@@ -296,6 +299,7 @@ const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformD
     'pmg',
     'kubernetes',
     'vmware',
+    'truenas',
     'storage',
     'availability',
     'physicalDisk',
@@ -627,6 +631,7 @@ export const canonicalizeRealtimeResource = (
     pbs: resource.pbs ?? (platformRecord?.pbs as Resource['pbs']),
     kubernetes: resource.kubernetes ?? (platformRecord?.kubernetes as Resource['kubernetes']),
     vmware: resource.vmware ?? (platformRecord?.vmware as Resource['vmware']),
+    truenas: resource.truenas ?? (platformRecord?.truenas as Resource['truenas']),
     storage: resource.storage ?? (platformRecord?.storage as Resource['storage']),
     availability:
       resource.availability ?? (platformRecord?.availability as Resource['availability']),
@@ -714,6 +719,12 @@ export const mergeCanonicalResource = (incoming: Resource, existing?: Resource):
       incomingSources,
       'vmware-vsphere',
     ) as Resource['vmware'],
+    truenas: mergeCanonicalSourceFacet(
+      incoming.truenas as JsonRecord | undefined,
+      existingCanonical.truenas as JsonRecord | undefined,
+      incomingSources,
+      'truenas',
+    ) as Resource['truenas'],
     availability: mergeCanonicalSourceFacet(
       incoming.availability as JsonRecord | undefined,
       existingCanonical.availability as JsonRecord | undefined,

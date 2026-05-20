@@ -52,7 +52,7 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 	registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
 
 	resources := registry.List()
-	wantCount := 1 + len(fixtures.Pools) + len(fixtures.Datasets) + len(fixtures.Disks) + len(fixtures.Apps) + len(fixtures.VMs)
+	wantCount := 1 + len(fixtures.Pools) + len(fixtures.Datasets) + len(fixtures.Disks) + len(fixtures.Apps) + len(fixtures.VMs) + len(fixtures.Shares)
 	if len(resources) != wantCount {
 		t.Fatalf("expected %d resources, got %d", wantCount, len(resources))
 	}
@@ -194,6 +194,24 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 		t.Fatalf("expected windows-lab status online, got %q", vm.Status)
 	}
 
+	share := requireResource(t, resources, unifiedresources.ResourceTypeNetworkShare, "Media")
+	assertSourceTracking(t, *share, unifiedresources.SourceTrueNAS)
+	if share.ParentID == nil || *share.ParentID != requireResource(t, resources, unifiedresources.ResourceTypeStorage, "tank/media").ID {
+		t.Fatalf("expected share parent to be tank/media dataset, got %+v", share.ParentID)
+	}
+	if share.TrueNAS == nil || share.TrueNAS.Share == nil {
+		t.Fatal("expected native TrueNAS share metadata on network-share resource")
+	}
+	if share.TrueNAS.Share.Protocol != "SMB" || share.TrueNAS.Share.Path != "/mnt/tank/media" {
+		t.Fatalf("unexpected native TrueNAS share metadata: %+v", share.TrueNAS.Share)
+	}
+	if !share.TrueNAS.Share.Enabled || !share.TrueNAS.Share.Browsable || !share.TrueNAS.Share.AccessBasedEnumeration || !share.TrueNAS.Share.AuditEnabled {
+		t.Fatalf("expected native SMB share flags, got %+v", share.TrueNAS.Share)
+	}
+	if share.Status != unifiedresources.StatusOnline {
+		t.Fatalf("expected Media share status online, got %q", share.Status)
+	}
+
 	disk := requireResource(t, resources, unifiedresources.ResourceTypePhysicalDisk, "sda")
 	assertSourceTracking(t, *disk, unifiedresources.SourceTrueNAS)
 	if disk.ParentID == nil || *disk.ParentID != pool.ID {
@@ -264,7 +282,7 @@ func TestTrueNASResourcesFlowThroughUnifiedTypesWithoutSpecialCasing(t *testing.
 			t.Fatalf("expected canonical render type, got truenas-specific type for %s", resource.ID)
 		}
 		switch resource.Type {
-		case unifiedresources.ResourceTypeAgent, unifiedresources.ResourceTypeStorage, unifiedresources.ResourceTypePhysicalDisk, unifiedresources.ResourceTypeAppContainer, unifiedresources.ResourceTypeVM:
+		case unifiedresources.ResourceTypeAgent, unifiedresources.ResourceTypeStorage, unifiedresources.ResourceTypePhysicalDisk, unifiedresources.ResourceTypeAppContainer, unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeNetworkShare:
 		default:
 			t.Fatalf("unexpected unified type for truenas fixture resource: %s (%s)", resource.Type, resource.ID)
 		}

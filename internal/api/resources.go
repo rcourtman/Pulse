@@ -1811,6 +1811,8 @@ func resourceTypeFilterAdapter(token string) []unified.ResourceType {
 		return []unified.ResourceType{unified.ResourceTypeCeph}
 	case "physical_disk", "physical-disk", "physicaldisk", "disk":
 		return []unified.ResourceType{unified.ResourceTypePhysicalDisk}
+	case "network-share", "network-shares", "share", "shares":
+		return []unified.ResourceType{unified.ResourceTypeNetworkShare}
 	case "network-endpoint", "network-endpoints", "endpoint", "endpoints", "availability":
 		return []unified.ResourceType{unified.ResourceTypeNetworkEndpoint}
 	default:

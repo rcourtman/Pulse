@@ -9,6 +9,7 @@ describe('resourceTypePresentation', () => {
     expect(getResourceTypeLabel('docker-host')).toBe('Container Runtime');
     expect(getResourceTypeLabel('k8s-cluster')).toBe('K8s Cluster');
     expect(getResourceTypeLabel('network-endpoint')).toBe('Network Endpoint');
+    expect(getResourceTypeLabel('network-share')).toBe('Network Share');
     expect(getResourceTypeLabel('truenas')).toBe('Agent');
   });
 

@@ -213,6 +213,12 @@ scope.
 The organization sharing surface now also sources resource quick-pick labels
 from the shared preferred resource display helper, so governed resources do
 not fall back to raw names inside share creation.
+Organization share resource-type normalization is API-contract-owned but
+organization-settings consumes the resulting allowlist. Native provider
+resource types such as TrueNAS `network-share` may be shared only after the
+unified-resource and API contracts define them as canonical resource payloads;
+organization settings must not invent a local alias or a separate share-only
+taxonomy for those resources.
 Organization settings empty, unavailable, and load-error states are part of
 that same presentation boundary: the shared organization presentation helpers
 must describe server capability and settings availability directly, rather than

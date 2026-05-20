@@ -88,7 +88,7 @@ func parentRelationshipType(resourceType ResourceType) RelationshipType {
 		ResourceTypePMG,
 		ResourceTypeCeph:
 		return RelRunsOn
-	case ResourceTypeStorage, ResourceTypePhysicalDisk:
+	case ResourceTypeStorage, ResourceTypePhysicalDisk, ResourceTypeNetworkShare:
 		return RelMountedTo
 	case ResourceTypeAgent, ResourceTypeK8sNode, ResourceTypePod, ResourceTypeK8sDeployment:
 		return RelOwnedBy

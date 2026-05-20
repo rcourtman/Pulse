@@ -523,6 +523,7 @@ const resolveType = (value?: string): ResourceType => {
     case 'pbs':
     case 'pmg':
     case 'ceph':
+    case 'network-share':
     case 'network-endpoint':
       return canonicalFrontendType;
     case 'disk':

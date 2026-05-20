@@ -387,6 +387,13 @@ the canonical monitored-system blocked payload.
     fleet state, or replace the shared connection projection with page-local
     placeholders.
 3. Add dedicated contract tests for new stable payloads
+   Unified resource type-filter and organization-share resource type additions
+   must route through `internal/api/resources.go`, `internal/api/org_handlers.go`,
+   frontend resource typing, and `internal/api/contract_test.go` together.
+   Native provider projections such as TrueNAS `network-share` may be accepted
+   by `/api/resources` filters and cross-organization share normalization only
+   after the unified-resource contract defines the canonical resource type and
+   payload facet.
 3a. Route diagnostics payload fields and user-facing diagnostics copy through
     `internal/api/diagnostics.go`,
     `internal/api/diagnostics_additional_test.go`, and

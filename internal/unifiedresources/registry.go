@@ -1562,6 +1562,9 @@ func mergeTrueNASData(existing *TrueNASData, incoming *TrueNASData) *TrueNASData
 	if incoming.VM != nil {
 		merged.VM = cloneTrueNASVM(incoming.VM)
 	}
+	if incoming.Share != nil {
+		merged.Share = cloneTrueNASShare(incoming.Share)
+	}
 	return &merged
 }
 

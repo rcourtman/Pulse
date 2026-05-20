@@ -558,6 +558,73 @@ func (c *Client) getVMsREST(ctx context.Context) ([]VirtualMachine, error) {
 	return parseVirtualMachines(response), nil
 }
 
+// GetNetworkShares returns the best-effort native TrueNAS SMB/NFS sharing
+// inventory. TrueNAS exposes the modern API as JSON-RPC query methods; the
+// legacy REST endpoints are kept as compatibility fallbacks for older SCALE
+// deployments and tests.
+func (c *Client) GetNetworkShares(ctx context.Context) ([]NetworkShare, error) {
+	var shares []NetworkShare
+	var errors []error
+
+	smb, err := c.getNetworkSharesRPC(ctx, "sharing.smb.query", "SMB")
+	if err != nil {
+		smb, err = c.getNetworkSharesREST(ctx, "/sharing/smb", "SMB")
+	}
+	if err != nil {
+		errors = append(errors, fmt.Errorf("smb: %w", err))
+	} else {
+		shares = append(shares, smb...)
+	}
+
+	nfs, err := c.getNetworkSharesRPC(ctx, "sharing.nfs.query", "NFS")
+	if err != nil {
+		nfs, err = c.getNetworkSharesREST(ctx, "/sharing/nfs", "NFS")
+	}
+	if err != nil {
+		errors = append(errors, fmt.Errorf("nfs: %w", err))
+	} else {
+		shares = append(shares, nfs...)
+	}
+
+	if len(shares) == 0 && len(errors) > 0 {
+		return nil, fmt.Errorf("fetch truenas network shares: %v", errors)
+	}
+	return shares, nil
+}
+
+func (c *Client) getNetworkSharesRPC(ctx context.Context, method, protocol string) ([]NetworkShare, error) {
+	var response []map[string]any
+	if err := c.queryRPC(ctx, method, &response); err != nil {
+		return nil, err
+	}
+	return parseNetworkShares(response, protocol), nil
+}
+
+func (c *Client) getNetworkSharesREST(ctx context.Context, path, protocol string) ([]NetworkShare, error) {
+	var response []map[string]any
+	if err := c.getJSON(ctx, http.MethodGet, path, &response); err != nil {
+		return nil, err
+	}
+	return parseNetworkShares(response, protocol), nil
+}
+
+func (c *Client) queryRPC(ctx context.Context, method string, result any) error {
+	conn, err := c.dialRPC(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	rpc := trueNASRPCClient{
+		conn:   conn,
+		nextID: 1,
+	}
+	if err := rpc.authenticate(ctx, c.config); err != nil {
+		return err
+	}
+	return rpc.call(ctx, method, []any{[]any{}, map[string]any{}}, result)
+}
+
 // GetApps returns the best-effort TrueNAS app inventory as canonical workload
 // candidates. The API surface varies across TrueNAS releases, so we parse the
 // documented app.query response shape loosely.
@@ -887,6 +954,7 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 	// Recovery artifacts are best-effort: do not fail monitoring if additional endpoints are unavailable.
 	apps, _ := c.GetApps(ctx)
 	vms, _ := c.GetVMs(ctx)
+	shares, _ := c.GetNetworkShares(ctx)
 	zfsSnapshots, _ := c.GetZFSSnapshots(ctx)
 	replicationTasks, _ := c.GetReplicationTasks(ctx)
 
@@ -899,6 +967,7 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 		Alerts:           alerts,
 		Apps:             apps,
 		VMs:              vms,
+		Shares:           shares,
 		ZFSSnapshots:     zfsSnapshots,
 		ReplicationTasks: replicationTasks,
 	}, nil
@@ -2532,6 +2601,108 @@ func parseVirtualMachines(entries []map[string]any) []VirtualMachine {
 		return nil
 	}
 	return vms
+}
+
+func parseNetworkShares(entries []map[string]any, protocol string) []NetworkShare {
+	if len(entries) == 0 {
+		return nil
+	}
+	protocol = strings.ToUpper(strings.TrimSpace(protocol))
+	shares := make([]NetworkShare, 0, len(entries))
+	for _, item := range entries {
+		if item == nil {
+			continue
+		}
+
+		share := NetworkShare{
+			ID:                     strings.TrimSpace(readStringAny(item, "id")),
+			Name:                   strings.TrimSpace(readStringAny(item, "name")),
+			Protocol:               protocol,
+			Path:                   strings.TrimSpace(readStringAny(item, "path")),
+			Dataset:                strings.TrimSpace(readStringAny(item, "dataset")),
+			RelativePath:           strings.TrimSpace(readStringAny(item, "relative_path", "relativePath")),
+			Comment:                strings.TrimSpace(readStringAny(item, "comment")),
+			Enabled:                readBoolAnyDefault(item, true, "enabled"),
+			Locked:                 readBoolAny(item, "locked"),
+			Aliases:                dedupeStrings(readStringSliceAny(item, "aliases")),
+			Hosts:                  dedupeStrings(readStringSliceAny(item, "hosts")),
+			Networks:               dedupeStrings(readStringSliceAny(item, "networks")),
+			Security:               dedupeStrings(readStringSliceAny(item, "security")),
+			MapRootUser:            strings.TrimSpace(readStringAny(item, "maproot_user", "maprootUser")),
+			MapRootGroup:           strings.TrimSpace(readStringAny(item, "maproot_group", "maprootGroup")),
+			MapAllUser:             strings.TrimSpace(readStringAny(item, "mapall_user", "mapallUser")),
+			MapAllGroup:            strings.TrimSpace(readStringAny(item, "mapall_group", "mapallGroup")),
+			ExposeSnapshots:        readBoolAny(item, "expose_snapshots", "exposeSnapshots"),
+			AccessBasedEnumeration: readBoolAny(item, "access_based_share_enumeration", "accessBasedShareEnumeration"),
+		}
+
+		switch protocol {
+		case "SMB":
+			share.ReadOnly = readBoolAny(item, "readonly", "read_only", "readOnly")
+			share.Browsable = readBoolAnyDefault(item, true, "browsable")
+			share.AuditEnabled = readBoolAny(readMapAny(item, "audit"), "enable")
+		case "NFS":
+			share.ReadOnly = readBoolAny(item, "ro", "readonly", "read_only", "readOnly")
+		}
+
+		if share.Dataset == "" {
+			share.Dataset = datasetFromSharePath(share.Path)
+		}
+		if share.Name == "" {
+			share.Name = networkShareDisplayName(share)
+		}
+		if share.ID == "" {
+			share.ID = share.Name
+		}
+		if share.ID == "" && share.Path == "" {
+			continue
+		}
+		shares = append(shares, share)
+	}
+	if len(shares) == 0 {
+		return nil
+	}
+	return shares
+}
+
+func readBoolAnyDefault(record map[string]any, defaultValue bool, keys ...string) bool {
+	if record == nil {
+		return defaultValue
+	}
+	for _, key := range keys {
+		if value, ok := record[key]; ok && value != nil {
+			return readBoolAny(map[string]any{"value": value}, "value")
+		}
+	}
+	return defaultValue
+}
+
+func datasetFromSharePath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" || strings.EqualFold(path, "EXTERNAL") {
+		return ""
+	}
+	path = strings.TrimPrefix(path, "/mnt/")
+	path = strings.Trim(path, "/")
+	if path == "" {
+		return ""
+	}
+	parts := strings.Split(path, "/")
+	if len(parts) == 1 {
+		return strings.TrimSpace(parts[0])
+	}
+	return strings.TrimSpace(parts[0] + "/" + parts[1])
+}
+
+func poolFromSharePath(path string) string {
+	dataset := datasetFromSharePath(path)
+	if dataset == "" {
+		return ""
+	}
+	if idx := strings.Index(dataset, "/"); idx > 0 {
+		return strings.TrimSpace(dataset[:idx])
+	}
+	return strings.TrimSpace(dataset)
 }
 
 type vmDeviceCounts struct {

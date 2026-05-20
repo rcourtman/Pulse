@@ -358,6 +358,51 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expect((resource.platformData as Record<string, unknown>).sources).toEqual(['availability']);
   });
 
+  it('canonicalizes native TrueNAS share resources with the TrueNAS facet intact', () => {
+    const [resource] = mergeCanonicalResourceSnapshot(
+      [
+        {
+          id: 'truenas-share-media',
+          type: 'network-share',
+          name: 'Media',
+          displayName: 'SMB Media',
+          platformId: 'truenas-main:smb:media',
+          platformType: 'truenas',
+          sourceType: 'api',
+          status: 'online',
+          lastSeen: Date.now(),
+          truenas: {
+            hostname: 'truenas-main.local',
+            share: {
+              id: 'smb-media',
+              name: 'Media',
+              protocol: 'SMB',
+              path: '/mnt/tank/media',
+              dataset: 'tank/media',
+              enabled: true,
+              readOnly: false,
+            },
+          },
+        } as Resource,
+      ],
+      [],
+    );
+
+    expect(resource.platformType).toBe('truenas');
+    expect(resource.sourceType).toBe('api');
+    expect(resource.truenas?.share).toMatchObject({
+      id: 'smb-media',
+      protocol: 'SMB',
+      dataset: 'tank/media',
+      path: '/mnt/tank/media',
+    });
+    expect((resource.platformData as Record<string, unknown>).sources).toEqual(['truenas']);
+    expect((resource.platformData as Record<string, unknown>).truenas).toMatchObject({
+      hostname: 'truenas-main.local',
+      share: { id: 'smb-media' },
+    });
+  });
+
   it('canonicalizes top-level Proxmox and agent facets as one hybrid PVE resource', () => {
     const [resource] = mergeCanonicalResourceSnapshot(
       [

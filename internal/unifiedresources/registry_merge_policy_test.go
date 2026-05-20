@@ -1,6 +1,10 @@
 package unifiedresources
 
-import "testing"
+import (
+	"strings"
+	"testing"
+	"time"
+)
 
 func TestLinkedMergeAllowsOneSidedNodeHostLinkWhenHostnameCorroborates(t *testing.T) {
 	registry := NewRegistry(NewMemoryStore())
@@ -172,6 +176,18 @@ func TestMergeTrueNASDataPreservesNativeAppFacetAsClone(t *testing.T) {
 			VCPUs:       4,
 			MemoryBytes: 8 * 1024 * 1024 * 1024,
 		},
+		Share: &TrueNASShare{
+			ID:       "smb-media",
+			Name:     "Media",
+			Protocol: "SMB",
+			Path:     "/mnt/tank/media",
+			Dataset:  "tank/media",
+			Enabled:  true,
+			Aliases:  []string{"media"},
+			Hosts:    []string{"media.lab"},
+			Networks: []string{"10.10.20.0/24"},
+			Security: []string{"SYS"},
+		},
 	}
 
 	merged := mergeTrueNASData(existing, incoming)
@@ -193,6 +209,12 @@ func TestMergeTrueNASDataPreservesNativeAppFacetAsClone(t *testing.T) {
 	if merged.VM == incoming.VM {
 		t.Fatal("expected merged TrueNAS VM facet to be cloned")
 	}
+	if merged.Share == nil || merged.Share.ID != "smb-media" || merged.Share.Dataset != "tank/media" {
+		t.Fatalf("unexpected merged TrueNAS share facet: %+v", merged.Share)
+	}
+	if merged.Share == incoming.Share {
+		t.Fatal("expected merged TrueNAS share facet to be cloned")
+	}
 
 	incoming.App.Images[0] = "mutated:latest"
 	incoming.App.Volumes[0].Source = "mutated"
@@ -200,6 +222,10 @@ func TestMergeTrueNASDataPreservesNativeAppFacetAsClone(t *testing.T) {
 	incoming.App.UsedPorts[0].HostPorts[0].HostPort = 39999
 	incoming.App.Containers[0].PortConfig[0].HostPorts[0].HostPort = 39999
 	incoming.App.Containers[0].VolumeMounts[0].Source = "mutated"
+	incoming.Share.Aliases[0] = "mutated"
+	incoming.Share.Hosts[0] = "mutated"
+	incoming.Share.Networks[0] = "mutated"
+	incoming.Share.Security[0] = "mutated"
 
 	if got := merged.App.Images[0]; got != "nextcloud:stable" {
 		t.Fatalf("merged app image mutated through incoming slice: %q", got)
@@ -218,6 +244,63 @@ func TestMergeTrueNASDataPreservesNativeAppFacetAsClone(t *testing.T) {
 	}
 	if got := merged.App.Containers[0].VolumeMounts[0].Source; got != "ix-apps/nextcloud" {
 		t.Fatalf("merged app container volume mount mutated through incoming slice: %q", got)
+	}
+	if got := merged.Share.Aliases[0]; got != "media" {
+		t.Fatalf("merged share alias mutated through incoming slice: %q", got)
+	}
+	if got := merged.Share.Hosts[0]; got != "media.lab" {
+		t.Fatalf("merged share host mutated through incoming slice: %q", got)
+	}
+	if got := merged.Share.Networks[0]; got != "10.10.20.0/24" {
+		t.Fatalf("merged share network mutated through incoming slice: %q", got)
+	}
+	if got := merged.Share.Security[0]; got != "SYS" {
+		t.Fatalf("merged share security mutated through incoming slice: %q", got)
+	}
+}
+
+func TestTrueNASNetworkSharePolicyAndParentRelationship(t *testing.T) {
+	parentID := "storage:truenas:tank/media"
+	resource := Resource{
+		ID:       "network-share:truenas-main:smb:media",
+		Type:     ResourceTypeNetworkShare,
+		Name:     "SMB Media",
+		ParentID: &parentID,
+		Status:   StatusOnline,
+		LastSeen: time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC),
+		Sources:  []DataSource{SourceTrueNAS},
+		TrueNAS: &TrueNASData{
+			Share: &TrueNASShare{
+				ID:       "smb-media",
+				Name:     "Media",
+				Protocol: "SMB",
+				Path:     "/mnt/tank/media",
+				Dataset:  "tank/media",
+				Enabled:  true,
+			},
+		},
+	}
+
+	RefreshPolicyMetadata(&resource)
+	if resource.Policy == nil || resource.Policy.Sensitivity != ResourceSensitivitySensitive {
+		t.Fatalf("network-share policy = %+v, want sensitive", resource.Policy)
+	}
+	if !containsRedactionHint(resource.Policy.Routing.Redact, ResourceRedactionPath) {
+		t.Fatalf("network-share policy redactions = %+v, want path", resource.Policy.Routing.Redact)
+	}
+	if !strings.Contains(resource.AISafeSummary, "network share resource") {
+		t.Fatalf("network-share AI safe summary = %q", resource.AISafeSummary)
+	}
+
+	relationships := ResourceRelationshipsWithCanonicalParent(resource)
+	if len(relationships) != 1 {
+		t.Fatalf("expected one parent relationship, got %#v", relationships)
+	}
+	if got := relationships[0].Type; got != RelMountedTo {
+		t.Fatalf("network-share parent relationship = %q, want %q", got, RelMountedTo)
+	}
+	if relationships[0].TargetID != parentID {
+		t.Fatalf("network-share parent target = %q, want %q", relationships[0].TargetID, parentID)
 	}
 }
 

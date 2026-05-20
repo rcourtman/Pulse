@@ -1236,6 +1236,7 @@ func TestIsUnsupportedOrganizationShareResourceType(t *testing.T) {
 		{name: "mixed case host unsupported", in: " HoSt ", want: true},
 		{name: "agent supported", in: "agent", want: false},
 		{name: "docker host supported", in: "docker-host", want: false},
+		{name: "network share supported", in: "network-share", want: false},
 	}
 
 	for _, tt := range tests {

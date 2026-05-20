@@ -51,6 +51,7 @@ var supportedOrganizationShareResourceTypes = map[string]struct{}{
 	"pbs":              {},
 	"pmg":              {},
 	"physical_disk":    {},
+	"network-share":    {},
 	"ceph":             {},
 	"view":             {},
 }

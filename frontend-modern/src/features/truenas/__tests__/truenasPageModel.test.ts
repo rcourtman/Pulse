@@ -4,8 +4,10 @@ import {
   TRUENAS_TAB_SPECS,
   buildTrueNASPageModel,
   filterTrueNASApps,
+  filterTrueNASShares,
   filterTrueNASVMs,
   mapTrueNASAppStatus,
+  mapTrueNASShareStatus,
   mapTrueNASVMStatus,
 } from '../truenasPageModel';
 
@@ -30,6 +32,7 @@ describe('truenasPageModel', () => {
       makeResource({ id: 'truenas-system', type: 'agent' }),
       makeResource({ id: 'truenas-vm', type: 'vm' }),
       makeResource({ id: 'truenas-app', type: 'app-container' }),
+      makeResource({ id: 'truenas-share', type: 'network-share' }),
       makeResource({ id: 'truenas-pool', type: 'pool' }),
       makeResource({ id: 'truenas-disk', type: 'physical_disk' }),
       makeResource({ id: 'docker-host', type: 'agent', platformType: 'docker' }),
@@ -37,10 +40,18 @@ describe('truenasPageModel', () => {
     ]);
 
     expect(model.systems.map((r) => r.id)).toEqual(['truenas-system']);
+    expect(model.shares.map((r) => r.id)).toEqual(['truenas-share']);
     expect(model.vms.map((r) => r.id)).toEqual(['truenas-vm']);
     expect(model.apps.map((r) => r.id)).toEqual(['truenas-app']);
     expect(model.resources.map((r) => r.id).sort()).toEqual(
-      ['truenas-app', 'truenas-disk', 'truenas-pool', 'truenas-system', 'truenas-vm'].sort(),
+      [
+        'truenas-app',
+        'truenas-disk',
+        'truenas-pool',
+        'truenas-share',
+        'truenas-system',
+        'truenas-vm',
+      ].sort(),
     );
   });
 
@@ -131,5 +142,53 @@ describe('truenasPageModel', () => {
     expect(filterTrueNASVMs([windows, ubuntu], 'q35', 'stopped').map((r) => r.id)).toEqual([
       'vm-ubuntu',
     ]);
+  });
+
+  it('filters shares using native TrueNAS SMB and NFS metadata', () => {
+    const media = makeResource({
+      id: 'share-media',
+      type: 'network-share',
+      truenas: {
+        hostname: 'truenas-main',
+        share: {
+          id: 'smb-1',
+          name: 'Media',
+          protocol: 'SMB',
+          path: '/mnt/tank/media',
+          dataset: 'tank/media',
+          enabled: true,
+          browsable: true,
+          auditEnabled: true,
+          aliases: ['media'],
+        },
+      },
+    });
+    const archive = makeResource({
+      id: 'share-archive',
+      type: 'network-share',
+      status: 'offline',
+      truenas: {
+        share: {
+          id: 'nfs-2',
+          name: 'Archive',
+          protocol: 'NFS',
+          path: '/mnt/tank/archive',
+          dataset: 'tank/archive',
+          enabled: false,
+          readOnly: true,
+          networks: ['10.10.20.0/24'],
+          security: ['SYS'],
+        },
+      },
+    });
+
+    expect(mapTrueNASShareStatus(media)).toBe('active');
+    expect(mapTrueNASShareStatus(archive)).toBe('disabled');
+    expect(filterTrueNASShares([media, archive], 'audit', 'active').map((r) => r.id)).toEqual([
+      'share-media',
+    ]);
+    expect(
+      filterTrueNASShares([media, archive], '10.10.20.0/24', 'disabled').map((r) => r.id),
+    ).toEqual(['share-archive']);
   });
 });
