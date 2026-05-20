@@ -9,6 +9,7 @@ import {
   createEffect,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
+import XIcon from 'lucide-solid/icons/x';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession, type ChatSessionHandoffSummary } from '@/api/aiChat';
 import { notificationStore } from '@/stores/notifications';
@@ -1133,7 +1134,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           type="button"
           class="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-[1px]"
           onClick={props.onClose}
-          aria-label="Close Pulse Assistant"
+          aria-label="Close Pulse Assistant backdrop"
         />
       </Show>
       <div class={rootClassName()} data-layout-mode={isOverlayLayout() ? 'overlay' : 'docked'}>
@@ -1161,14 +1162,19 @@ export const AIChat: Component<AIChatProps> = (props) => {
             </button>
           </Show>
           {/* Header - wraps on mobile */}
-          <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-border bg-surface-alt">
-            <h2 class="text-sm font-semibold text-base-content">{AI_CHAT_DRAWER_TITLE}</h2>
+          <div class="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-border bg-surface-alt">
+            <h2 class="min-w-0 flex-1 text-sm font-semibold text-base-content">
+              {AI_CHAT_DRAWER_TITLE}
+            </h2>
 
-            <div class="flex items-center gap-1.5">
+            <div
+              class="order-3 -mx-1 flex w-full min-w-0 items-center gap-1.5 overflow-x-auto px-1 pb-0.5 sm:order-none sm:mx-0 sm:w-auto sm:flex-none sm:overflow-visible sm:px-0 sm:pb-0"
+              data-testid="assistant-header-actions"
+            >
               {/* New chat */}
               <button
                 onClick={handleNewConversation}
-                class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-muted hover:text-base-content rounded-md border border-border hover:border-border bg-surface transition-colors"
+                class="flex flex-shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-muted hover:text-base-content rounded-md border border-border hover:border-border bg-surface transition-colors"
                 title={AI_CHAT_NEW_SESSION_BUTTON_TITLE}
               >
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1199,7 +1205,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               <div class="relative" data-dropdown>
                 <button
                   onClick={() => setShowControlMenu(!showControlMenu())}
-                  class={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-md border transition-colors ${controlPresentation().pillClassName} ${controlSaving() ? 'opacity-70 cursor-wait' : 'hover:opacity-90'}`}
+                  class={`flex flex-shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-md border transition-colors ${controlPresentation().pillClassName} ${controlSaving() ? 'opacity-70 cursor-wait' : 'hover:opacity-90'}`}
                   title="Control mode"
                   disabled={controlSaving()}
                 >
@@ -1264,7 +1270,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   onClick={() => {
                     void handleToggleSessions();
                   }}
-                  class="p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors"
+                  class="flex-shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors"
                   title={AI_CHAT_SESSION_MENU_TITLE}
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1369,26 +1375,21 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   </div>
                 </Show>
               </div>
-
-              {/* Close button (Always visible as fallback) */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  props.onClose();
-                }}
-                class="p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors"
-                title="Close panel"
-              >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
             </div>
+
+            {/* Close button (Always visible as fallback) */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onClose();
+              }}
+              class="order-2 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-none"
+              title="Close panel"
+              aria-label="Close Pulse Assistant"
+              data-testid="assistant-close-button"
+            >
+              <XIcon class="h-5 w-5" />
+            </button>
           </div>
 
           <Show

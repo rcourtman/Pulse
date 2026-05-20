@@ -508,6 +508,20 @@ describe('AIChat', () => {
       expect(screen.queryByTitle('Collapse Pulse Assistant')).not.toBeInTheDocument();
       expect(screen.getByLabelText('Close Pulse Assistant')).toBeInTheDocument();
     });
+
+    it('keeps the phone close button outside the scrollable assistant header actions', () => {
+      setViewportWidth(375);
+      renderChat();
+
+      const closeButton = screen.getByRole('button', { name: 'Close Pulse Assistant' });
+      const headerActions = screen.getByTestId('assistant-header-actions');
+
+      expect(closeButton).toHaveClass('order-2');
+      expect(headerActions).toHaveClass('order-3');
+      expect(headerActions).toHaveClass('w-full');
+      expect(headerActions).toHaveClass('overflow-x-auto');
+      expect(headerActions).not.toContainElement(closeButton);
+    });
   });
 
   // ── Close button ─────────────────────────────────────────────────────
