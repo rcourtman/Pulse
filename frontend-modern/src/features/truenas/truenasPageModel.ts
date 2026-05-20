@@ -65,6 +65,22 @@ export type TrueNASIncidentRow = {
   priority: number;
 };
 
+export type TrueNASSystemChildCounts = {
+  pools: number;
+  datasets: number;
+  shares: number;
+  apps: number;
+  disks: number;
+};
+
+const emptyTrueNASSystemChildCounts = (): TrueNASSystemChildCounts => ({
+  pools: 0,
+  datasets: 0,
+  shares: 0,
+  apps: 0,
+  disks: 0,
+});
+
 export function buildTrueNASPageModel(resources: Resource[]): TrueNASPageModel {
   const trueNasResources = resources.filter(
     (resource) => isTrueNASPlatform(resource) && TRUENAS_RESOURCE_TYPES.has(resource.type),
@@ -82,6 +98,59 @@ export function buildTrueNASPageModel(resources: Resource[]): TrueNASPageModel {
     apps,
     incidents: buildTrueNASIncidentRows(trueNasResources),
   };
+}
+
+export function buildTrueNASSystemChildCounts(
+  resources: Resource[],
+  systems: Resource[],
+): Map<string, TrueNASSystemChildCounts> {
+  const countsBySystem = new Map<string, TrueNASSystemChildCounts>();
+  for (const system of systems) {
+    countsBySystem.set(system.id, emptyTrueNASSystemChildCounts());
+  }
+  if (systems.length === 0) return countsBySystem;
+
+  const systemIds = new Set(systems.map((system) => system.id));
+  const resourceById = new Map(resources.map((resource) => [resource.id, resource]));
+  const hasParentSignals = resources.some((resource) => Boolean(asTrimmedString(resource.parentId)));
+
+  const fallbackSystemId =
+    systems.length === 1 && !hasParentSignals ? asTrimmedString(systems[0]?.id) : '';
+
+  const owningSystemId = (resource: Resource): string => {
+    if (fallbackSystemId && resource.id !== fallbackSystemId) return fallbackSystemId;
+
+    let parentId = asTrimmedString(resource.parentId);
+    const visited = new Set<string>();
+    while (parentId && !visited.has(parentId)) {
+      if (systemIds.has(parentId)) return parentId;
+      visited.add(parentId);
+      parentId = asTrimmedString(resourceById.get(parentId)?.parentId);
+    }
+    return '';
+  };
+
+  for (const resource of resources) {
+    if (resource.type === 'agent') continue;
+    const systemId = owningSystemId(resource);
+    if (!systemId) continue;
+    const counts = countsBySystem.get(systemId);
+    if (!counts) continue;
+
+    if (resource.type === 'pool' || resource.storage?.topology === 'pool') {
+      counts.pools += 1;
+    } else if (resource.type === 'dataset' || resource.storage?.topology === 'dataset') {
+      counts.datasets += 1;
+    } else if (resource.type === 'network-share') {
+      counts.shares += 1;
+    } else if (resource.type === 'app-container') {
+      counts.apps += 1;
+    } else if (resource.type === 'physical_disk') {
+      counts.disks += 1;
+    }
+  }
+
+  return countsBySystem;
 }
 
 const normalize = (value: unknown): string =>

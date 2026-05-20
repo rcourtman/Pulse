@@ -224,14 +224,28 @@ func TestBuildFixtureGraphRefreshesPlatformFixtureMetricsFromCanonicalModel(t *t
 		t.Fatalf("expected refreshed TrueNAS system cpu %.6f, got %.6f", want, got)
 	}
 
+	pool := graph.PlatformFixtures.TrueNAS.Pools[0]
+	poolID := TrueNASPoolMetricID(system.Hostname, pool.Name)
+	if got, want := pool.UsedBytes, bytesFromPercent(pool.TotalBytes, SampleMetric("storage", poolID, "usage", now)); got != want {
+		t.Fatalf("expected refreshed TrueNAS pool used bytes %d, got %d", want, got)
+	}
+
+	dataset := graph.PlatformFixtures.TrueNAS.Datasets[0]
+	datasetID := TrueNASDatasetMetricID(system.Hostname, dataset.Name)
+	datasetTotal := dataset.UsedBytes + dataset.AvailBytes
+	if got, want := dataset.UsedBytes, bytesFromPercent(datasetTotal, SampleMetric("storage", datasetID, "usage", now)); got != want {
+		t.Fatalf("expected refreshed TrueNAS dataset used bytes %d, got %d", want, got)
+	}
+
 	app := graph.PlatformFixtures.TrueNAS.Apps[1]
 	if app.Stats == nil {
 		t.Fatal("expected refreshed TrueNAS app stats")
 	}
-	if got, want := app.Stats.CPUPercent, SampleMetric("dockerContainer", app.ID, "cpu", now); math.Abs(got-want) > 1e-9 {
+	appID := TrueNASAppMetricID(system.Hostname, app)
+	if got, want := app.Stats.CPUPercent, SampleMetric("dockerContainer", appID, "cpu", now); math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected refreshed TrueNAS app cpu %.6f, got %.6f", want, got)
 	}
-	if got, want := app.Stats.MemoryBytes, bytesFromPercent(system.MemoryTotalBytes, SampleMetric("dockerContainer", app.ID, "memory", now)); got != want {
+	if got, want := app.Stats.MemoryBytes, bytesFromPercent(system.MemoryTotalBytes, SampleMetric("dockerContainer", appID, "memory", now)); got != want {
 		t.Fatalf("expected refreshed TrueNAS app memory bytes %d, got %d", want, got)
 	}
 

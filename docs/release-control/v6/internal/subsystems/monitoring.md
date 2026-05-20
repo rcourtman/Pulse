@@ -116,6 +116,11 @@ truth for live infrastructure data.
     through `TrueNASData.App` on the canonical `app-container` resource.
     Monitoring must not rebuild a second Docker-only TrueNAS app inventory or
     make the Docker fallback the source of truth for the TrueNAS platform page.
+    TrueNAS child source identities are appliance-local and must be scoped under
+    the owning system source key before unified-resource ingest, so common pool,
+    dataset, app, VM, share, and disk names from different appliances remain
+    distinct. Mock fixture metrics and seeded/live history must use the same
+    scoped source keys as the TrueNAS provider metrics targets.
     TrueNAS VMs and network shares follow the same provider-owned inventory
     boundary: `vm.query` data publishes native `TrueNASData.VM` on canonical
     `vm` resources, while SMB/NFS share data from `sharing.smb.query` and

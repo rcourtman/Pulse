@@ -584,8 +584,8 @@ func TestRecordsIncludeDiskResourcesWithCorrectParentChain(t *testing.T) {
 		t.Fatalf("expected to find disk records for sda, nvme0n1, and sdc")
 	}
 
-	if sda.ParentSourceID != "pool:tank" {
-		t.Fatalf("expected sda parent pool:tank, got %q", sda.ParentSourceID)
+	if sda.ParentSourceID != "system:truenas-main/pool:tank" {
+		t.Fatalf("expected sda parent system:truenas-main/pool:tank, got %q", sda.ParentSourceID)
 	}
 	if sda.Resource.PhysicalDisk == nil {
 		t.Fatal("expected sda PhysicalDiskMeta")
@@ -612,8 +612,8 @@ func TestRecordsIncludeDiskResourcesWithCorrectParentChain(t *testing.T) {
 		t.Fatalf("expected sda identity hostname [truenas-main], got %v", sda.Identity.Hostnames)
 	}
 
-	if nvme0n1.ParentSourceID != "pool:fast" {
-		t.Fatalf("expected nvme0n1 parent pool:fast, got %q", nvme0n1.ParentSourceID)
+	if nvme0n1.ParentSourceID != "system:truenas-main/pool:fast" {
+		t.Fatalf("expected nvme0n1 parent system:truenas-main/pool:fast, got %q", nvme0n1.ParentSourceID)
 	}
 	if nvme0n1.Resource.PhysicalDisk == nil {
 		t.Fatal("expected nvme0n1 PhysicalDiskMeta")

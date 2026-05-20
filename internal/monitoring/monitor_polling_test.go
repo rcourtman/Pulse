@@ -574,11 +574,11 @@ func TestSyncUnifiedAppContainerMetricsRecordsTrueNASHistory(t *testing.T) {
 	}
 
 	target := resourceStore.MetricsTargetForResource(appResourceID)
-	if target == nil || target.ResourceType != "app-container" || target.ResourceID != "nextcloud" {
+	if target == nil || target.ResourceType != "app-container" || target.ResourceID != "system:truenas-main/app:nextcloud" {
 		t.Fatalf("unexpected app-container metrics target %+v", target)
 	}
 
-	inMemory := monitor.GetGuestMetrics("docker:nextcloud", time.Hour)
+	inMemory := monitor.GetGuestMetrics("docker:system:truenas-main/app:nextcloud", time.Hour)
 	if got := len(inMemory["cpu"]); got == 0 {
 		t.Fatalf("expected in-memory cpu history for nextcloud")
 	}
@@ -586,7 +586,7 @@ func TestSyncUnifiedAppContainerMetricsRecordsTrueNASHistory(t *testing.T) {
 		t.Fatalf("expected in-memory network history for nextcloud")
 	}
 
-	storeBacked := monitor.GetGuestMetricsForChart("docker:nextcloud", "dockerContainer", "nextcloud", 7*24*time.Hour)
+	storeBacked := monitor.GetGuestMetricsForChart("docker:system:truenas-main/app:nextcloud", "dockerContainer", "system:truenas-main/app:nextcloud", 7*24*time.Hour)
 	if got := len(storeBacked["cpu"]); got == 0 {
 		t.Fatalf("expected persisted cpu history for nextcloud")
 	}
@@ -625,7 +625,7 @@ func TestSyncUnifiedAppContainerMetricsSkipsMockOwnedTrueNASHistoryWhenMockEnabl
 
 	monitor.syncUnifiedAppContainerMetrics(resourceStore)
 
-	if got := len(monitor.GetGuestMetrics("docker:nextcloud", time.Hour)["cpu"]); got != 0 {
+	if got := len(monitor.GetGuestMetrics("docker:system:truenas-main/app:nextcloud", time.Hour)["cpu"]); got != 0 {
 		t.Fatalf("expected mock-owned TrueNAS app history to be skipped, got %d cpu points", got)
 	}
 }
@@ -983,7 +983,7 @@ func TestSyncUnifiedStorageAndDiskMetricsSkipMockOwnedTrueNASHistoryWhenMockEnab
 	monitor.syncUnifiedStorageMetrics(resourceStore)
 	monitor.syncUnifiedPhysicalDiskMetrics(resourceStore)
 
-	if got := len(monitor.GetStorageMetrics("pool:tank", time.Hour)["usage"]); got != 0 {
+	if got := len(monitor.GetStorageMetrics(mock.TrueNASPoolMetricID("truenas-main", "tank"), time.Hour)["usage"]); got != 0 {
 		t.Fatalf("expected mock-owned TrueNAS storage history to be skipped, got %d usage points", got)
 	}
 

@@ -502,8 +502,9 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 		assessment := assessPool(pool)
 		risk := unifiedresources.StorageRiskFromAssessment(assessment)
 		incidents := poolIncidents[strings.TrimSpace(pool.Name)]
+		poolSourceID := scopedPoolSourceID(systemSourceID, pool.Name)
 		records = append(records, unifiedresources.IngestRecord{
-			SourceID:       poolSourceID(pool.Name),
+			SourceID:       poolSourceID,
 			ParentSourceID: systemSourceID,
 			Resource: unifiedresources.Resource{
 				Type:      unifiedresources.ResourceTypeStorage,
@@ -547,8 +548,8 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 		}
 		totalBytes := dataset.UsedBytes + dataset.AvailBytes
 		records = append(records, unifiedresources.IngestRecord{
-			SourceID:       datasetSourceID(dataset.Name),
-			ParentSourceID: poolSourceID(parentPool),
+			SourceID:       scopedDatasetSourceID(systemSourceID, dataset.Name),
+			ParentSourceID: scopedPoolSourceID(systemSourceID, parentPool),
 			Resource: unifiedresources.Resource{
 				Type:      unifiedresources.ResourceTypeStorage,
 				Name:      dataset.Name,
@@ -614,7 +615,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 		}
 
 		records = append(records, unifiedresources.IngestRecord{
-			SourceID:       appSourceID(app.ID),
+			SourceID:       scopedAppSourceID(systemSourceID, app),
 			ParentSourceID: systemSourceID,
 			Resource: unifiedresources.Resource{
 				Type:       unifiedresources.ResourceTypeAppContainer,
@@ -640,7 +641,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 
 	for _, vm := range snapshot.VMs {
 		records = append(records, unifiedresources.IngestRecord{
-			SourceID:       virtualMachineSourceID(vm),
+			SourceID:       scopedVirtualMachineSourceID(systemSourceID, vm),
 			ParentSourceID: systemSourceID,
 			Resource: unifiedresources.Resource{
 				Type:      unifiedresources.ResourceTypeVM,
@@ -667,12 +668,12 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 	for _, share := range snapshot.Shares {
 		parentSourceID := systemSourceID
 		if dataset := strings.TrimSpace(share.Dataset); dataset != "" {
-			parentSourceID = datasetSourceID(dataset)
+			parentSourceID = scopedDatasetSourceID(systemSourceID, dataset)
 		} else if pool := poolFromSharePath(share.Path); pool != "" {
-			parentSourceID = poolSourceID(pool)
+			parentSourceID = scopedPoolSourceID(systemSourceID, pool)
 		}
 		records = append(records, unifiedresources.IngestRecord{
-			SourceID:       networkShareSourceID(share),
+			SourceID:       scopedNetworkShareSourceID(systemSourceID, share),
 			ParentSourceID: parentSourceID,
 			Resource: unifiedresources.Resource{
 				Type:      unifiedresources.ResourceTypeNetworkShare,
@@ -704,9 +705,13 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 		if disk.Serial != "" {
 			diskIdentity.MachineID = disk.Serial
 		}
+		parentSourceID := systemSourceID
+		if pool := strings.TrimSpace(disk.Pool); pool != "" {
+			parentSourceID = scopedPoolSourceID(systemSourceID, pool)
+		}
 		records = append(records, unifiedresources.IngestRecord{
-			SourceID:       diskSourceID(disk.Name),
-			ParentSourceID: poolSourceID(disk.Pool),
+			SourceID:       scopedDiskSourceID(systemSourceID, disk.Name),
+			ParentSourceID: parentSourceID,
 			Resource: unifiedresources.Resource{
 				Type:      unifiedresources.ResourceTypePhysicalDisk,
 				Name:      disk.Name,
@@ -1258,12 +1263,28 @@ func poolSourceID(pool string) string {
 	return "pool:" + strings.TrimSpace(pool)
 }
 
+func scopedPoolSourceID(systemSourceID, pool string) string {
+	return scopedTrueNASSourceID(systemSourceID, poolSourceID(pool))
+}
+
 func datasetSourceID(dataset string) string {
 	return "dataset:" + strings.TrimSpace(dataset)
 }
 
-func appSourceID(id string) string {
-	return "app:" + strings.TrimSpace(id)
+func scopedDatasetSourceID(systemSourceID, dataset string) string {
+	return scopedTrueNASSourceID(systemSourceID, datasetSourceID(dataset))
+}
+
+func appSourceID(app App) string {
+	id := strings.TrimSpace(app.ID)
+	if id == "" {
+		id = appDisplayName(app)
+	}
+	return "app:" + id
+}
+
+func scopedAppSourceID(systemSourceID string, app App) string {
+	return scopedTrueNASSourceID(systemSourceID, appSourceID(app))
 }
 
 func virtualMachineSourceID(vm VirtualMachine) string {
@@ -1271,6 +1292,10 @@ func virtualMachineSourceID(vm VirtualMachine) string {
 		return "vm:" + id
 	}
 	return "vm:" + virtualMachineDisplayName(vm)
+}
+
+func scopedVirtualMachineSourceID(systemSourceID string, vm VirtualMachine) string {
+	return scopedTrueNASSourceID(systemSourceID, virtualMachineSourceID(vm))
 }
 
 func networkShareSourceID(share NetworkShare) string {
@@ -1288,8 +1313,34 @@ func networkShareSourceID(share NetworkShare) string {
 	return "share:" + protocol + ":" + stable
 }
 
+func scopedNetworkShareSourceID(systemSourceID string, share NetworkShare) string {
+	return scopedTrueNASSourceID(systemSourceID, networkShareSourceID(share))
+}
+
 func diskSourceID(name string) string {
 	return "disk:" + strings.TrimSpace(name)
+}
+
+func scopedDiskSourceID(systemSourceID, name string) string {
+	return scopedTrueNASSourceID(systemSourceID, diskSourceID(name))
+}
+
+// TrueNAS resource names are appliance-local. Scope child source IDs under the
+// system source key so common names such as "tank" and "nextcloud" do not merge
+// across configured TrueNAS appliances.
+func scopedTrueNASSourceID(systemSourceID, sourceID string) string {
+	systemSourceID = strings.TrimSpace(systemSourceID)
+	sourceID = strings.TrimSpace(sourceID)
+	if sourceID == "" {
+		return systemSourceID
+	}
+	if systemSourceID == "" {
+		return sourceID
+	}
+	if strings.HasPrefix(sourceID, systemSourceID+"/") {
+		return sourceID
+	}
+	return systemSourceID + "/" + sourceID
 }
 
 func appDisplayName(app App) string {

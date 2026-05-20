@@ -34,6 +34,10 @@ import {
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import {
+  buildTrueNASSystemChildCounts,
+  type TrueNASSystemChildCounts,
+} from '@/features/truenas/truenasPageModel';
 import type { Resource } from '@/types/resource';
 
 // TrueNAS systems are storage appliances, not generic compute hosts.
@@ -90,6 +94,14 @@ const metricFallback = () => (
   </div>
 );
 
+const EMPTY_COUNTS: TrueNASSystemChildCounts = {
+  pools: 0,
+  datasets: 0,
+  shares: 0,
+  apps: 0,
+  disks: 0,
+};
+
 export const TrueNASSystemsTable: Component<{
   systems: Resource[];
   // Full TrueNAS resource scope so we can count pools / datasets / apps
@@ -108,23 +120,9 @@ export const TrueNASSystemsTable: Component<{
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'truenas-system-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
-
-  // Single-system canonical mock is the common case today; counts span
-  // the full TrueNAS resource scope per row. When multi-system support
-  // arrives, the canonical adapter should attach a parent system id to
-  // child resources and we can filter by it.
-  const counts = createMemo(() => {
-    const pools = props.scope.filter(
-      (r) => r.type === 'pool' || (r.type === 'storage' && r.storage?.topology === 'pool'),
-    ).length;
-    const datasets = props.scope.filter(
-      (r) => r.type === 'dataset' || (r.type === 'storage' && r.storage?.topology === 'dataset'),
-    ).length;
-    const shares = props.scope.filter((r) => r.type === 'network-share').length;
-    const apps = props.scope.filter((r) => r.type === 'app-container').length;
-    const disks = props.scope.filter((r) => r.type === 'physical_disk').length;
-    return { pools, datasets, shares, apps, disks };
-  });
+  const countsBySystem = createMemo(() =>
+    buildTrueNASSystemChildCounts(props.scope, props.systems),
+  );
 
   return (
     <Show
@@ -250,7 +248,7 @@ export const TrueNASSystemsTable: Component<{
                       typeof system.disk?.total === 'number'
                         ? `${formatBytes(system.disk.used)} / ${formatBytes(system.disk.total)}`
                         : formatPercent(storagePercent());
-                    const c = counts();
+                    const c = () => countsBySystem().get(system.id) ?? EMPTY_COUNTS;
                     const metricsKey = () => buildMetricKeyForUnifiedResource(system);
                     const cpuPercent = () => finiteMetric(system.cpu?.current);
                     const memoryTotal = () => finiteMetric(system.memory?.total) ?? 0;
@@ -336,27 +334,27 @@ export const TrueNASSystemsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
                           >
-                            {c.pools}
+                            {c().pools}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
                           >
-                            {c.datasets}
+                            {c().datasets}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
                           >
-                            {c.shares}
+                            {c().shares}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
                           >
-                            {c.disks}
+                            {c().disks}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
                           >
-                            {c.apps}
+                            {c().apps}
                           </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow

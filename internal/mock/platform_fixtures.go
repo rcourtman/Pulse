@@ -297,13 +297,13 @@ func refreshTrueNASPlatformFixture(snapshot truenas.FixtureSnapshot, at time.Tim
 	}
 
 	for i := range out.Pools {
-		usage := SampleMetric("storage", "pool:"+strings.TrimSpace(out.Pools[i].Name), "usage", at)
+		usage := SampleMetric("storage", TrueNASPoolMetricID(out.System.Hostname, out.Pools[i].Name), "usage", at)
 		applyTrueNASCapacityUsage(&out.Pools[i].UsedBytes, &out.Pools[i].FreeBytes, out.Pools[i].TotalBytes, usage)
 	}
 
 	for i := range out.Datasets {
 		totalBytes := out.Datasets[i].UsedBytes + out.Datasets[i].AvailBytes
-		usage := SampleMetric("storage", "dataset:"+strings.TrimSpace(out.Datasets[i].Name), "usage", at)
+		usage := SampleMetric("storage", TrueNASDatasetMetricID(out.System.Hostname, out.Datasets[i].Name), "usage", at)
 		usedBytes := bytesFromPercent(totalBytes, usage)
 		out.Datasets[i].UsedBytes = usedBytes
 		out.Datasets[i].AvailBytes = totalBytes - usedBytes
@@ -327,10 +327,7 @@ func refreshTrueNASPlatformFixture(snapshot truenas.FixtureSnapshot, at time.Tim
 			continue
 		}
 
-		appID := strings.TrimSpace(out.Apps[i].ID)
-		if appID == "" {
-			appID = strings.TrimSpace(out.Apps[i].Name)
-		}
+		appID := TrueNASAppMetricID(out.System.Hostname, out.Apps[i])
 		if appID == "" {
 			continue
 		}

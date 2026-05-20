@@ -4,6 +4,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -163,7 +164,7 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 		t.Fatalf("expected Nextcloud CPU metrics, got %+v", app.Metrics)
 	}
 	appTarget := registry.MetricsTarget(app.ID)
-	if appTarget == nil || appTarget.ResourceType != "app-container" || appTarget.ResourceID != "nextcloud" {
+	if appTarget == nil || appTarget.ResourceType != "app-container" || appTarget.ResourceID != "system:truenas-main/app:nextcloud" {
 		t.Fatalf("expected canonical Nextcloud metrics target, got %+v", appTarget)
 	}
 	if app.Docker.NetInRate != 2_100_000 || app.Docker.NetOutRate != 1_250_000 {
@@ -251,13 +252,83 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 	}
 	found := false
 	for _, target := range targets {
-		if target.Source == unifiedresources.SourceTrueNAS && target.SourceID == "dataset:tank/apps" {
+		if target.Source == unifiedresources.SourceTrueNAS && target.SourceID == "system:truenas-main/dataset:tank/apps" {
 			found = true
 			break
 		}
 	}
 	if !found {
 		t.Fatalf("expected truenas source target for dataset, got %+v", targets)
+	}
+}
+
+func TestRegistryIngestRecordsScopesTrueNASChildrenPerSystem(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		SetFeatureEnabled(previous)
+	})
+
+	first := DefaultFixtures()
+	second := DefaultFixtures()
+	second.System.Hostname = "truenas-backup"
+	second.System.MachineID = "truenas-backup-machine-id"
+	second.System.CollectedAt = second.System.CollectedAt.Add(time.Minute)
+	second.CollectedAt = second.CollectedAt.Add(time.Minute)
+	for i := range second.Disks {
+		second.Disks[i].Serial = strings.TrimSpace(second.Disks[i].Serial) + "-backup"
+	}
+
+	records := append(NewProvider(first).Records(), NewProvider(second).Records()...)
+	registry := unifiedresources.NewRegistry(unifiedresources.NewMemoryStore())
+	registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
+
+	resources := registry.List()
+	systems := resourcesByNameAndType(resources, unifiedresources.ResourceTypeAgent, "")
+	if len(systems) != 2 {
+		t.Fatalf("expected 2 TrueNAS systems, got %d from %+v", len(systems), systems)
+	}
+	if !hasNamedResource(systems, "truenas-main") || !hasNamedResource(systems, "truenas-backup") {
+		t.Fatalf("expected both TrueNAS system resources, got %+v", systems)
+	}
+
+	pools := resourcesByNameAndType(resources, unifiedresources.ResourceTypeStorage, "tank")
+	poolCount := 0
+	poolParents := map[string]struct{}{}
+	for _, pool := range pools {
+		if pool.Storage == nil || pool.Storage.Topology != "pool" {
+			continue
+		}
+		poolCount++
+		if pool.ParentName != "" {
+			poolParents[pool.ParentName] = struct{}{}
+		}
+	}
+	if poolCount != 2 {
+		t.Fatalf("expected duplicate pool names to remain per system, got %d from %+v", poolCount, pools)
+	}
+	if _, ok := poolParents["truenas-main"]; !ok {
+		t.Fatalf("expected tank pool parented to truenas-main, parents=%+v", poolParents)
+	}
+	if _, ok := poolParents["truenas-backup"]; !ok {
+		t.Fatalf("expected tank pool parented to truenas-backup, parents=%+v", poolParents)
+	}
+
+	apps := resourcesByNameAndType(resources, unifiedresources.ResourceTypeAppContainer, "Nextcloud")
+	if len(apps) != 2 {
+		t.Fatalf("expected duplicate app names to remain per system, got %d from %+v", len(apps), apps)
+	}
+	appParents := map[string]struct{}{}
+	for _, app := range apps {
+		if app.ParentName != "" {
+			appParents[app.ParentName] = struct{}{}
+		}
+	}
+	if _, ok := appParents["truenas-main"]; !ok {
+		t.Fatalf("expected Nextcloud app parented to truenas-main, parents=%+v", appParents)
+	}
+	if _, ok := appParents["truenas-backup"]; !ok {
+		t.Fatalf("expected Nextcloud app parented to truenas-backup, parents=%+v", appParents)
 	}
 }
 
@@ -425,6 +496,29 @@ func requireResource(t *testing.T, resources []unifiedresources.Resource, resour
 	}
 	t.Fatalf("missing resource type=%s name=%s", resourceType, name)
 	return nil
+}
+
+func resourcesByNameAndType(resources []unifiedresources.Resource, resourceType unifiedresources.ResourceType, name string) []unifiedresources.Resource {
+	out := make([]unifiedresources.Resource, 0)
+	for _, resource := range resources {
+		if resource.Type != resourceType {
+			continue
+		}
+		if name != "" && resource.Name != name {
+			continue
+		}
+		out = append(out, resource)
+	}
+	return out
+}
+
+func hasNamedResource(resources []unifiedresources.Resource, name string) bool {
+	for _, resource := range resources {
+		if resource.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func assertSourceTracking(t *testing.T, resource unifiedresources.Resource, source unifiedresources.DataSource) {

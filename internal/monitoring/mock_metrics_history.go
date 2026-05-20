@@ -793,7 +793,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	)
 
 	for _, pool := range trueNASFixtures.Pools {
-		poolKey := "pool:" + pool.Name
+		poolKey := mock.TrueNASPoolMetricID(trueNASFixtures.System.Hostname, pool.Name)
 		diskSeries := canonicalMetricSeries("storage", poolKey, "usage", seedTimestamps)
 		for i := 0; i < numPoints; i++ {
 			ts := seedTimestamps[i]
@@ -803,7 +803,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	}
 
 	for _, dataset := range trueNASFixtures.Datasets {
-		dsKey := "dataset:" + dataset.Name
+		dsKey := mock.TrueNASDatasetMetricID(trueNASFixtures.System.Hostname, dataset.Name)
 		totalBytes := dataset.UsedBytes + dataset.AvailBytes
 		diskSeries := canonicalMetricSeries("storage", dsKey, "usage", seedTimestamps)
 		for i := 0; i < numPoints; i++ {
@@ -840,11 +840,8 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	}
 
 	for _, app := range trueNASFixtures.Apps {
-		appID := strings.TrimSpace(app.ID)
-		if appID == "" {
-			appID = strings.TrimSpace(app.Name)
-		}
-		if appID == "" {
+		appID := mock.TrueNASAppMetricID(trueNASFixtures.System.Hostname, app)
+		if strings.TrimSpace(appID) == "" {
 			continue
 		}
 		recordGuest(
@@ -951,7 +948,7 @@ func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixture
 
 	for _, pool := range snapshot.Pools {
 		if pool.TotalBytes > 0 {
-			poolKey := "pool:" + pool.Name
+			poolKey := mock.TrueNASPoolMetricID(snapshot.System.Hostname, pool.Name)
 			total := float64(pool.TotalBytes)
 			usage := clampFloat(mock.SampleMetric("storage", poolKey, "usage", ts), 0, 100)
 			used := total * (usage / 100.0)
@@ -962,7 +959,7 @@ func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixture
 			mh.AddStorageMetric(poolKey, "avail", avail, ts)
 			mh.AddStorageMetric(poolKey, "total", total, ts)
 			if ms != nil {
-				ms.Write("pool", pool.Name, "disk", usage, ts)
+				ms.Write("pool", poolKey, "disk", usage, ts)
 				ms.Write("storage", poolKey, "usage", usage, ts)
 				ms.Write("storage", poolKey, "used", used, ts)
 				ms.Write("storage", poolKey, "avail", avail, ts)
@@ -974,7 +971,7 @@ func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixture
 	for _, dataset := range snapshot.Datasets {
 		totalBytes := dataset.UsedBytes + dataset.AvailBytes
 		if totalBytes > 0 {
-			dsKey := "dataset:" + dataset.Name
+			dsKey := mock.TrueNASDatasetMetricID(snapshot.System.Hostname, dataset.Name)
 			total := float64(totalBytes)
 			usage := clampFloat(mock.SampleMetric("storage", dsKey, "usage", ts), 0, 100)
 			used := total * (usage / 100.0)
@@ -985,7 +982,7 @@ func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixture
 			mh.AddStorageMetric(dsKey, "avail", avail, ts)
 			mh.AddStorageMetric(dsKey, "total", total, ts)
 			if ms != nil {
-				ms.Write("dataset", dataset.Name, "disk", usage, ts)
+				ms.Write("dataset", dsKey, "disk", usage, ts)
 				ms.Write("storage", dsKey, "usage", usage, ts)
 				ms.Write("storage", dsKey, "used", used, ts)
 				ms.Write("storage", dsKey, "avail", avail, ts)
@@ -1020,11 +1017,8 @@ func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixture
 	}
 
 	for _, app := range snapshot.Apps {
-		appID := strings.TrimSpace(app.ID)
-		if appID == "" {
-			appID = strings.TrimSpace(app.Name)
-		}
-		if appID == "" {
+		appID := mock.TrueNASAppMetricID(snapshot.System.Hostname, app)
+		if strings.TrimSpace(appID) == "" {
 			continue
 		}
 		cpu := mock.SampleMetric("dockerContainer", appID, "cpu", ts)

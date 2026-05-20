@@ -3,6 +3,7 @@ import type { Resource } from '@/types/resource';
 import {
   TRUENAS_TAB_SPECS,
   buildTrueNASPageModel,
+  buildTrueNASSystemChildCounts,
   filterTrueNASApps,
   filterTrueNASIncidents,
   filterTrueNASShares,
@@ -55,6 +56,95 @@ describe('truenasPageModel', () => {
         'truenas-vm',
       ].sort(),
     );
+  });
+
+  it('counts overview inventory from each TrueNAS system hierarchy', () => {
+    const primary = makeResource({ id: 'system-primary', type: 'agent', name: 'nas-primary' });
+    const backup = makeResource({ id: 'system-backup', type: 'agent', name: 'nas-backup' });
+    const primaryPool = makeResource({
+      id: 'primary-pool-tank',
+      type: 'storage',
+      name: 'tank',
+      parentId: primary.id,
+      storage: { topology: 'pool', platform: 'truenas' },
+    });
+    const backupPool = makeResource({
+      id: 'backup-pool-tank',
+      type: 'storage',
+      name: 'tank',
+      parentId: backup.id,
+      storage: { topology: 'pool', platform: 'truenas' },
+    });
+    const primaryDataset = makeResource({
+      id: 'primary-dataset-media',
+      type: 'storage',
+      name: 'tank/media',
+      parentId: primaryPool.id,
+      storage: { topology: 'dataset', platform: 'truenas' },
+    });
+    const backupDataset = makeResource({
+      id: 'backup-dataset-media',
+      type: 'storage',
+      name: 'tank/media',
+      parentId: backupPool.id,
+      storage: { topology: 'dataset', platform: 'truenas' },
+    });
+
+    const counts = buildTrueNASSystemChildCounts(
+      [
+        primary,
+        backup,
+        primaryPool,
+        backupPool,
+        primaryDataset,
+        backupDataset,
+        makeResource({ id: 'primary-share', type: 'network-share', parentId: primaryDataset.id }),
+        makeResource({ id: 'backup-share', type: 'network-share', parentId: backupDataset.id }),
+        makeResource({ id: 'primary-disk', type: 'physical_disk', parentId: primaryPool.id }),
+        makeResource({ id: 'backup-disk', type: 'physical_disk', parentId: backupPool.id }),
+        makeResource({ id: 'primary-app', type: 'app-container', parentId: primary.id }),
+        makeResource({ id: 'backup-app', type: 'app-container', parentId: backup.id }),
+      ],
+      [primary, backup],
+    );
+
+    expect(counts.get(primary.id)).toEqual({
+      pools: 1,
+      datasets: 1,
+      shares: 1,
+      apps: 1,
+      disks: 1,
+    });
+    expect(counts.get(backup.id)).toEqual({
+      pools: 1,
+      datasets: 1,
+      shares: 1,
+      apps: 1,
+      disks: 1,
+    });
+  });
+
+  it('keeps the single-system inventory fallback for older unparented TrueNAS resources', () => {
+    const system = makeResource({ id: 'system-primary', type: 'agent' });
+    const counts = buildTrueNASSystemChildCounts(
+      [
+        system,
+        makeResource({ id: 'pool-tank', type: 'storage', storage: { topology: 'pool' } }),
+        makeResource({ id: 'dataset-media', type: 'storage', storage: { topology: 'dataset' } }),
+        makeResource({ id: 'share-media', type: 'network-share' }),
+        makeResource({ id: 'disk-sda', type: 'physical_disk' }),
+        makeResource({ id: 'app-nextcloud', type: 'app-container' }),
+      ],
+      [system],
+    );
+
+    expect(counts.get(system.id)).toEqual({
+      pools: 1,
+      datasets: 1,
+      shares: 1,
+      apps: 1,
+      disks: 1,
+    });
   });
 
   it('filters apps using native TrueNAS app.query metadata', () => {

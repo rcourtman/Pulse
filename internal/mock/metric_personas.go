@@ -134,10 +134,10 @@ func buildMetricRoleRegistry(graph FixtureGraph) map[string]string {
 	truenasFixtures := graph.PlatformFixtures.TrueNAS
 	register("agent", truenasFixtures.System.Hostname, truenasFixtures.System.Hostname, "truenas", "storage")
 	for _, pool := range truenasFixtures.Pools {
-		register("storage", "pool:"+pool.Name, pool.Name, "truenas", "pool", "storage")
+		register("storage", TrueNASPoolMetricID(truenasFixtures.System.Hostname, pool.Name), pool.Name, "truenas", "pool", "storage")
 	}
 	for _, dataset := range truenasFixtures.Datasets {
-		register("storage", "dataset:"+dataset.Name, dataset.Name, "truenas", "dataset", "storage")
+		register("storage", TrueNASDatasetMetricID(truenasFixtures.System.Hostname, dataset.Name), dataset.Name, "truenas", "dataset", "storage")
 	}
 	for _, disk := range truenasFixtures.Disks {
 		register("disk", trueNASDiskMetricID(disk), disk.Name, disk.Model, disk.Serial, "storage", "disk")
@@ -152,7 +152,7 @@ func buildMetricRoleRegistry(graph FixtureGraph) map[string]string {
 		}
 		hints := []string{app.Name, app.ID}
 		hints = append(hints, app.Images...)
-		register("dockerContainer", appID, hints...)
+		register("dockerContainer", TrueNASAppMetricID(truenasFixtures.System.Hostname, app), hints...)
 	}
 
 	vmwareFixtures := graph.PlatformFixtures.VMware

@@ -49,8 +49,8 @@ func TestRecordsParentPoolFallsBackToDatasetName(t *testing.T) {
 		if record.Resource.Name != "tank/apps" {
 			continue
 		}
-		if record.ParentSourceID != "pool:tank" {
-			t.Fatalf("expected dataset parent source id pool:tank, got %q", record.ParentSourceID)
+		if record.ParentSourceID != "system:truenas-main/pool:tank" {
+			t.Fatalf("expected dataset parent source id system:truenas-main/pool:tank, got %q", record.ParentSourceID)
 		}
 		return
 	}

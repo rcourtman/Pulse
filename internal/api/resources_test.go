@@ -3414,8 +3414,8 @@ func TestResourceListIncludesTrueNASAppsAsAppContainers(t *testing.T) {
 	if nextcloud.Docker.Runtime != "docker" {
 		t.Fatalf("expected runtime docker, got %q", nextcloud.Docker.Runtime)
 	}
-	if nextcloud.MetricsTarget == nil || nextcloud.MetricsTarget.ResourceType != "app-container" || nextcloud.MetricsTarget.ResourceID != "nextcloud" {
-		t.Fatalf("expected canonical TrueNAS app metrics target nextcloud, got %+v", nextcloud.MetricsTarget)
+	if nextcloud.MetricsTarget == nil || nextcloud.MetricsTarget.ResourceType != "app-container" || nextcloud.MetricsTarget.ResourceID != "system:truenas-main/app:nextcloud" {
+		t.Fatalf("expected canonical TrueNAS app metrics target system:truenas-main/app:nextcloud, got %+v", nextcloud.MetricsTarget)
 	}
 }
 
@@ -3474,8 +3474,8 @@ func TestResourceListIncludesTrueNASVMsAsCanonicalWorkloads(t *testing.T) {
 	if windows.TrueNAS.VM.ID != "42" || windows.TrueNAS.VM.VCPUs != 4 || windows.TrueNAS.VM.MemoryBytes != 8*1024*1024*1024 {
 		t.Fatalf("unexpected native TrueNAS VM payload: %+v", windows.TrueNAS.VM)
 	}
-	if windows.MetricsTarget == nil || windows.MetricsTarget.ResourceType != "vm" || windows.MetricsTarget.ResourceID != "42" {
-		t.Fatalf("expected canonical TrueNAS VM metrics target 42, got %+v", windows.MetricsTarget)
+	if windows.MetricsTarget == nil || windows.MetricsTarget.ResourceType != "vm" || windows.MetricsTarget.ResourceID != "system:truenas-main/vm:42" {
+		t.Fatalf("expected canonical TrueNAS VM metrics target system:truenas-main/vm:42, got %+v", windows.MetricsTarget)
 	}
 }
 

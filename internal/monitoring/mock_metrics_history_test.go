@@ -637,7 +637,8 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 		t.Fatal("expected metrics store to have seeded canonical TrueNAS agent cpu points")
 	}
 
-	datasetPoints, err := store.Query("storage", "dataset:"+fixtures.Datasets[0].Name, "usage", now.Add(-seedDuration), now, 3600)
+	datasetID := mock.TrueNASDatasetMetricID(fixtures.System.Hostname, fixtures.Datasets[0].Name)
+	datasetPoints, err := store.Query("storage", datasetID, "usage", now.Add(-seedDuration), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query canonical TrueNAS dataset usage metrics: %v", err)
 	}
@@ -645,11 +646,12 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 		t.Fatal("expected metrics store to have seeded canonical TrueNAS dataset usage points")
 	}
 	lastDatasetPoint := datasetPoints[len(datasetPoints)-1]
-	if got, want := lastDatasetPoint.Value, expectedCanonicalStoreBucketAverage(t, "storage", "dataset:"+fixtures.Datasets[0].Name, "usage", now, seedDuration, time.Minute, lastDatasetPoint.Timestamp, 3600); math.Abs(got-want) > 1e-9 {
+	if got, want := lastDatasetPoint.Value, expectedCanonicalStoreBucketAverage(t, "storage", datasetID, "usage", now, seedDuration, time.Minute, lastDatasetPoint.Timestamp, 3600); math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected TrueNAS dataset usage seed at %s to match canonical downsample bucket, got=%v want=%v", lastDatasetPoint.Timestamp.Format(time.RFC3339), got, want)
 	}
 
-	poolUsedPoints, err := store.Query("storage", "pool:"+fixtures.Pools[0].Name, "used", now.Add(-seedDuration), now, 3600)
+	poolID := mock.TrueNASPoolMetricID(fixtures.System.Hostname, fixtures.Pools[0].Name)
+	poolUsedPoints, err := store.Query("storage", poolID, "used", now.Add(-seedDuration), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query TrueNAS pool used metrics: %v", err)
 	}
@@ -662,7 +664,8 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 		t.Fatal("expected in-memory history to have seeded TrueNAS disk temperature points")
 	}
 
-	appPoints, err := store.Query("dockerContainer", "nextcloud", "cpu", now.Add(-seedDuration), now, 3600)
+	appID := mock.TrueNASAppMetricID(fixtures.System.Hostname, fixtures.Apps[0])
+	appPoints, err := store.Query("dockerContainer", appID, "cpu", now.Add(-seedDuration), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query TrueNAS app cpu metrics: %v", err)
 	}
@@ -1484,10 +1487,7 @@ func TestSeedMockMetricsHistory_UsesCanonicalMetricModelForPlatformFixtures(t *t
 	if len(graph.PlatformFixtures.TrueNAS.Apps) == 0 {
 		t.Fatal("expected TrueNAS app fixtures")
 	}
-	trueNASAppID := strings.TrimSpace(graph.PlatformFixtures.TrueNAS.Apps[0].ID)
-	if trueNASAppID == "" {
-		trueNASAppID = strings.TrimSpace(graph.PlatformFixtures.TrueNAS.Apps[0].Name)
-	}
+	trueNASAppID := mock.TrueNASAppMetricID(trueNASHost, graph.PlatformFixtures.TrueNAS.Apps[0])
 	if trueNASAppID == "" {
 		t.Fatal("expected TrueNAS app identifier")
 	}
@@ -1715,7 +1715,7 @@ func TestRecordMockStateToMetricsHistory_UsesCanonicalMetricModelForPlatformFixt
 	if len(graph.PlatformFixtures.TrueNAS.Pools) == 0 {
 		t.Fatal("expected TrueNAS pool fixtures")
 	}
-	trueNASPoolID := "pool:" + graph.PlatformFixtures.TrueNAS.Pools[0].Name
+	trueNASPoolID := mock.TrueNASPoolMetricID(trueNASHost, graph.PlatformFixtures.TrueNAS.Pools[0].Name)
 	trueNASPoolMetrics := mh.GetAllStorageMetrics(trueNASPoolID, lookback)
 	if got, want := trueNASPoolMetrics["usage"][0].Value, mock.SampleMetric("storage", trueNASPoolID, "usage", ts); math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected TrueNAS pool usage live tick to use canonical metric model: got=%f want=%f", got, want)
@@ -1724,10 +1724,7 @@ func TestRecordMockStateToMetricsHistory_UsesCanonicalMetricModelForPlatformFixt
 	if len(graph.PlatformFixtures.TrueNAS.Apps) == 0 {
 		t.Fatal("expected TrueNAS app fixtures")
 	}
-	trueNASAppID := strings.TrimSpace(graph.PlatformFixtures.TrueNAS.Apps[0].ID)
-	if trueNASAppID == "" {
-		trueNASAppID = strings.TrimSpace(graph.PlatformFixtures.TrueNAS.Apps[0].Name)
-	}
+	trueNASAppID := mock.TrueNASAppMetricID(trueNASHost, graph.PlatformFixtures.TrueNAS.Apps[0])
 	if trueNASAppID == "" {
 		t.Fatal("expected TrueNAS app identifier")
 	}
