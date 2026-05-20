@@ -10,9 +10,8 @@ import {
 import ArrowRightIcon from 'lucide-solid/icons/arrow-right';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
-import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { TableCard } from '@/components/shared/TableCard';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import {
   Table,
@@ -24,6 +23,14 @@ import {
 } from '@/components/shared/Table';
 import { apiFetch } from '@/utils/apiClient';
 import { formatRelativeTime } from '@/utils/format';
+import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_CARD_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformTableToolbar,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
+} from '@/features/platformPage/sharedPlatformPage';
 import type { ReplicationJob, ReplicationJobsResponse } from '@/types/api';
 
 // Replication is a Proxmox-specific concept (zfs send/receive scheduled
@@ -35,13 +42,13 @@ import type { ReplicationJob, ReplicationJobsResponse } from '@/types/api';
 
 type ReplicationStatusFilter = 'all' | 'healthy' | 'failed' | 'pending' | 'disabled';
 
-const STATUS_FILTER_OPTIONS: FilterOption<ReplicationStatusFilter>[] = [
+const STATUS_FILTER_OPTIONS = [
   { value: 'all', label: 'All' },
   { value: 'healthy', label: 'Healthy' },
   { value: 'failed', label: 'Failed' },
   { value: 'pending', label: 'Pending' },
   { value: 'disabled', label: 'Disabled' },
-];
+] satisfies Array<{ value: ReplicationStatusFilter; label: string }>;
 
 interface ReplicationStatusIndicator {
   variant: StatusIndicatorVariant;
@@ -61,7 +68,11 @@ function classifyJob(job: ReplicationJob): ReplicationStatusFilter {
 function indicatorFor(classification: ReplicationStatusFilter): ReplicationStatusIndicator {
   switch (classification) {
     case 'healthy':
-      return { variant: 'success', label: 'Healthy', tone: 'text-emerald-600 dark:text-emerald-300' };
+      return {
+        variant: 'success',
+        label: 'Healthy',
+        tone: 'text-emerald-600 dark:text-emerald-300',
+      };
     case 'failed':
       return { variant: 'danger', label: 'Failed', tone: 'text-red-600 dark:text-red-300' };
     case 'pending':
@@ -194,25 +205,17 @@ export const ProxmoxReplicationTable: Component<{
           }
         >
           <div class="space-y-3">
-            <div class="flex flex-wrap items-center gap-2">
-              <div class="min-w-[200px] flex-1 sm:max-w-xs">
-                <SearchInput
-                  value={search}
-                  onChange={setSearch}
-                  placeholder="Search jobs, guests, nodes"
-                />
-              </div>
-              <FilterButtonGroup
-                options={STATUS_FILTER_OPTIONS}
-                value={status()}
-                onChange={setStatus}
-              />
-              <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-                <Show when={visible() !== total()} fallback={<>{total()} jobs</>}>
-                  {visible()} of {total()} jobs
-                </Show>
-              </span>
-            </div>
+            <PlatformTableToolbar
+              search={search}
+              onSearchChange={setSearch}
+              searchPlaceholder="Search jobs, guests, nodes"
+              status={status()}
+              onStatusChange={setStatus}
+              statusOptions={STATUS_FILTER_OPTIONS}
+              visible={visible()}
+              total={total()}
+              rowNoun="jobs"
+            />
 
             <Show
               when={filtered().length > 0}
@@ -226,22 +229,32 @@ export const ProxmoxReplicationTable: Component<{
                 </Card>
               }
             >
-              <Card padding="none" tone="card" class="overflow-hidden">
-                <Table class="w-full min-w-[1100px] border-collapse text-xs">
-                  <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                    <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                      <TableHead class="px-3 py-2 font-medium">Status</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Job</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Guest</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Source → Target</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Schedule</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Last sync</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Duration</TableHead>
-                      <TableHead class="px-3 py-2 font-medium text-right">Fail count</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Error</TableHead>
+              <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+                <Table class="min-w-[1100px] text-xs">
+                  <TableHeader>
+                    <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Status</TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Job</TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('name')}>Guest</TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                        Source → Target
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                        Schedule
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Last sync
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Duration
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Fail count
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Error</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody class="divide-y divide-border-subtle">
+                  <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                     <For each={filtered()}>
                       {(job) => {
                         const classification = classifyJob(job);
@@ -250,7 +263,7 @@ export const ProxmoxReplicationTable: Component<{
                         const targetNode = (job.targetNode ?? '').trim() || '—';
                         return (
                           <TableRow class="hover:bg-surface-hover">
-                            <TableCell class="px-3 py-2">
+                            <TableCell class={getPlatformTableCellClassForKind('text')}>
                               <div class="flex items-center gap-2">
                                 <StatusDot
                                   size="sm"
@@ -258,36 +271,63 @@ export const ProxmoxReplicationTable: Component<{
                                   title={ind.label}
                                   ariaHidden
                                 />
-                                <span class={`text-[11px] font-medium ${ind.tone}`}>{ind.label}</span>
+                                <span class={`text-[11px] font-medium ${ind.tone}`}>
+                                  {ind.label}
+                                </span>
                               </div>
                             </TableCell>
-                            <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
+                            >
                               <span title={job.id}>{job.jobId || job.id}</span>
                             </TableCell>
-                            <TableCell class="px-3 py-2 text-base-content">{formatGuestLabel(job)}</TableCell>
-                            <TableCell class="px-3 py-2 text-base-content">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
+                            >
+                              {formatGuestLabel(job)}
+                            </TableCell>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            >
                               <span class="inline-flex items-center gap-1 font-mono text-[11px]">
                                 <span>{sourceNode}</span>
                                 <ArrowRightIcon class="h-3 w-3 text-muted" aria-hidden="true" />
                                 <span>{targetNode}</span>
                               </span>
                             </TableCell>
-                            <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
+                            >
                               {job.schedule || '—'}
                             </TableCell>
-                            <TableCell class="px-3 py-2 text-base-content">{formatSyncTime(job)}</TableCell>
-                            <TableCell class="px-3 py-2 text-base-content">
-                              {formatDuration(job.lastSyncDurationSeconds, job.lastSyncDurationHuman)}
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            >
+                              {formatSyncTime(job)}
                             </TableCell>
-                            <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            >
+                              {formatDuration(
+                                job.lastSyncDurationSeconds,
+                                job.lastSyncDurationHuman,
+                              )}
+                            </TableCell>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                            >
                               <Show
                                 when={(job.failCount ?? 0) > 0}
                                 fallback={<span class="text-muted">0</span>}
                               >
-                                <span class="text-red-600 dark:text-red-300 font-semibold">{job.failCount}</span>
+                                <span class="text-red-600 dark:text-red-300 font-semibold">
+                                  {job.failCount}
+                                </span>
                               </Show>
                             </TableCell>
-                            <TableCell class="px-3 py-2 text-base-content">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            >
                               <Show
                                 when={!!job.error?.trim()}
                                 fallback={<span class="text-muted">—</span>}
@@ -306,7 +346,7 @@ export const ProxmoxReplicationTable: Component<{
                     </For>
                   </TableBody>
                 </Table>
-              </Card>
+              </TableCard>
             </Show>
           </div>
         </Show>

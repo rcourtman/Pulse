@@ -83,6 +83,8 @@ describe('settings architecture guardrails', () => {
     expect(settingsSource).toContain('useSettingsNavigation({');
     expect(settingsSource).toContain('<SettingsPageShell');
     expect(settingsSource).toContain('<SettingsDialogs');
+    expect(settingsSource).toContain('const SettingsPanelLoadingFallback');
+    expect(settingsSource).not.toContain('border-dashed border-border bg-surface-alt py-12');
     expect(settingsSource).not.toContain('<PageHeader');
 
     expect(settingsPageShellSource).toContain('import { PageHeader } from');

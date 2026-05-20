@@ -27,15 +27,20 @@ interface SettingsProps {
   setThemePreference: (pref: 'light' | 'dark' | 'system') => void;
 }
 
+const SettingsPanelLoadingFallback = () => (
+  <div class="px-1 py-1 text-xs text-muted" role="status">
+    {getSettingsLoadingState().text}
+  </div>
+);
+
 const Settings: Component<SettingsProps> = (props) => {
   const { state, connected: _connected } = useWebSocket();
   const navigate = useNavigate();
   const location = useLocation();
-  const { activeTab, selectedAgent, setActiveTab, handleSelectAgent } =
-    useSettingsNavigation({
-      navigate,
-      location,
-    });
+  const { activeTab, selectedAgent, setActiveTab, handleSelectAgent } = useSettingsNavigation({
+    navigate,
+    location,
+  });
   const {
     headerMeta,
     sidebarCollapsed,
@@ -166,22 +171,10 @@ const Settings: Component<SettingsProps> = (props) => {
       >
         <Show
           when={activeSettingsPanelEntry()}
-          fallback={
-            securityStatusLoading() ? (
-              <div class="flex items-center justify-center rounded-md border border-dashed border-border bg-surface-alt py-12 text-sm text-muted">
-                {getSettingsLoadingState().text}
-              </div>
-            ) : null
-          }
+          fallback={securityStatusLoading() ? <SettingsPanelLoadingFallback /> : null}
         >
           {(entry) => (
-            <Suspense
-              fallback={
-                <div class="flex items-center justify-center rounded-md border border-dashed border-border bg-surface-alt py-12 text-sm text-muted">
-                  {getSettingsLoadingState().text}
-                </div>
-              }
-            >
+            <Suspense fallback={<SettingsPanelLoadingFallback />}>
               <Dynamic component={entry().component} {...(entry().getProps?.() ?? {})} />
             </Suspense>
           )}

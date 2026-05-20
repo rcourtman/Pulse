@@ -1,9 +1,8 @@
-import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import { For, Show, createSignal, type Component, type JSX } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
-import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { TableCard } from '@/components/shared/TableCard';
 import {
   Table,
   TableBody,
@@ -15,7 +14,15 @@ import {
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_CARD_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformTableToolbar,
+  createPlatformTableFilterState,
   filterPlatformResources,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
@@ -27,13 +34,6 @@ import { ProxmoxMailGatewayDrawer } from './ProxmoxMailGatewayDrawer';
 // omits the queue / spam / virus / quarantine counts that are the
 // operator columns. This bespoke table reuses canonical shared
 // primitives and surfaces those PMG-native columns.
-
-const STATUS_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
-  { value: 'all', label: 'All' },
-  { value: 'online', label: 'Healthy' },
-  { value: 'degraded', label: 'Degraded' },
-  { value: 'offline', label: 'Offline' },
-];
 
 const formatUptime = (seconds: number | undefined): string => {
   if (!seconds || seconds <= 0) return '—';
@@ -54,15 +54,13 @@ export const ProxmoxMailGatewayTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
 }> = (props) => {
-  const [search, setSearch] = createSignal('');
-  const [status, setStatus] = createSignal<PlatformResourceStatusFilter>('all');
+  const tableState = createPlatformTableFilterState({
+    resources: () => props.resources,
+    initialStatus: 'all' as PlatformResourceStatusFilter,
+    filter: filterPlatformResources,
+  });
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
-  const toggleSelected = (id: string) =>
-    setSelectedId((current) => (current === id ? null : id));
-
-  const filtered = createMemo(() => filterPlatformResources(props.resources, search(), status()));
-  const visible = createMemo(() => filtered().length);
-  const total = createMemo(() => props.resources.length);
+  const toggleSelected = (id: string) => setSelectedId((current) => (current === id ? null : id));
 
   return (
     <Show
@@ -74,28 +72,20 @@ export const ProxmoxMailGatewayTable: Component<{
       }
     >
       <div class="space-y-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="min-w-[200px] flex-1 sm:max-w-xs">
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Search Mail Gateways"
-            />
-          </div>
-          <FilterButtonGroup
-            options={STATUS_FILTER_OPTIONS}
-            value={status()}
-            onChange={setStatus}
-          />
-          <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-            <Show when={visible() !== total()} fallback={<>{total()} instances</>}>
-              {visible()} of {total()} instances
-            </Show>
-          </span>
-        </div>
+        <PlatformTableToolbar
+          search={tableState.search}
+          onSearchChange={tableState.setSearch}
+          searchPlaceholder="Search Mail Gateways"
+          status={tableState.status()}
+          onStatusChange={tableState.setStatus}
+          statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+          visible={tableState.visible()}
+          total={tableState.total()}
+          rowNoun="instances"
+        />
 
         <Show
-          when={filtered().length > 0}
+          when={tableState.filtered().length > 0}
           fallback={
             <Card padding="lg">
               <EmptyState
@@ -105,24 +95,40 @@ export const ProxmoxMailGatewayTable: Component<{
             </Card>
           }
         >
-          <Card padding="none" tone="card" class="overflow-hidden">
-            <Table class="w-full min-w-[1080px] border-collapse text-xs">
-              <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                  <TableHead class="px-3 py-2 font-medium">Instance</TableHead>
-                  <TableHead class="px-3 py-2 font-medium">Version</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Nodes</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Uptime</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Mail in</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Spam</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Virus</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Quarantine</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Queue</TableHead>
-                  <TableHead class="px-3 py-2 font-medium text-right">Deferred</TableHead>
+          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+            <Table class="min-w-[1080px] text-xs">
+              <TableHeader>
+                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                  <TableHead class={getPlatformTableHeadClassForKind('name')}>Instance</TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Version</TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Nodes
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Uptime
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Mail in
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Spam
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Virus
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Quarantine
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Queue
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Deferred
+                  </TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody class="divide-y divide-border-subtle">
-                <For each={filtered()}>
+              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+                <For each={tableState.filtered()}>
                   {(instance) => {
                     const pmg = () => instance.pmg;
                     const name = () => asTrimmedString(instance.name) || instance.id;
@@ -138,7 +144,7 @@ export const ProxmoxMailGatewayTable: Component<{
                           onClick={() => toggleSelected(instance.id)}
                           aria-expanded={isOpen()}
                         >
-                          <TableCell class="px-3 py-2">
+                          <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex items-center gap-2 min-w-0">
                               <StatusDot
                                 size="sm"
@@ -151,31 +157,49 @@ export const ProxmoxMailGatewayTable: Component<{
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content font-mono text-[11px]">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
+                          >
                             {version()}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-right text-base-content tabular-nums">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                          >
                             {countCell(pmg()?.nodeCount)}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-right text-base-content">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
                             {formatUptime(instance.uptime ?? pmg()?.uptimeSeconds)}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-right text-base-content">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
                             {countCell(pmg()?.mailCountTotal)}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-right text-base-content">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
                             {countCell(pmg()?.spamIn)}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-right text-base-content">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
                             {countCell(pmg()?.virusIn)}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-right text-base-content">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
                             {countCell(pmg()?.quarantine)}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-right text-base-content">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
                             {countCell(pmg()?.queueTotal ?? pmg()?.queueActive)}
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-right text-base-content">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
                             {countCell(pmg()?.queueDeferred)}
                           </TableCell>
                         </TableRow>
@@ -185,10 +209,7 @@ export const ProxmoxMailGatewayTable: Component<{
                               colspan={10}
                               class="p-0 border-b border-border bg-surface-alt"
                             >
-                              <div
-                                class="px-4 py-4"
-                                onClick={(event) => event.stopPropagation()}
-                              >
+                              <div class="px-4 py-4" onClick={(event) => event.stopPropagation()}>
                                 <ProxmoxMailGatewayDrawer
                                   instanceRow={instance}
                                   onClose={() => setSelectedId(null)}
@@ -203,7 +224,7 @@ export const ProxmoxMailGatewayTable: Component<{
                 </For>
               </TableBody>
             </Table>
-          </Card>
+          </TableCard>
         </Show>
       </div>
     </Show>
