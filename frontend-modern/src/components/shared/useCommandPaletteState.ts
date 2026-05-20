@@ -31,7 +31,7 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
         trueNasPath: buildTrueNASPath(),
         vmwarePath: buildVmwarePath(),
       },
-      platformVisibility: props.platformVisibility(),
+      infrastructureVisibility: props.infrastructureVisibility(),
       navigate,
     }),
   );

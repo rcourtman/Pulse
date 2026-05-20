@@ -61,11 +61,11 @@ import {
 } from '@/utils/appShellScrollRestoration';
 import { DarkModeContext, WebSocketContext, useWebSocket } from '@/contexts/appRuntime';
 import {
-  buildPrimaryPlatformNavigationVisibility,
-  selectFirstVisiblePrimaryPlatformNavigationId,
-  type PlatformNavigationVisibility,
-  type PrimaryPlatformNavId,
-} from '@/features/platformNavigation/platformNavigationModel';
+  buildPrimaryInfrastructureNavigationVisibility,
+  selectFirstVisiblePrimaryInfrastructureNavigationId,
+  type InfrastructureNavigationVisibility,
+  type PrimaryInfrastructureNavId,
+} from '@/features/infrastructureNavigation/infrastructureNavigationModel';
 
 function isPublicRoutePath(pathname: string): boolean {
   // Public routes must be viewable without authentication.
@@ -95,7 +95,7 @@ const SetupCompletionPreviewPage = lazy(() =>
 );
 const ROOT_PATROL_PATH = PATROL_PATH;
 
-const PRIMARY_PLATFORM_ROUTE_BY_ID: Record<PrimaryPlatformNavId, string> = {
+const PRIMARY_INFRASTRUCTURE_ROUTE_BY_ID: Record<PrimaryInfrastructureNavId, string> = {
   proxmox: buildProxmoxPath(),
   docker: buildDockerPath(),
   kubernetes: buildKubernetesPath(),
@@ -104,11 +104,11 @@ const PRIMARY_PLATFORM_ROUTE_BY_ID: Record<PrimaryPlatformNavId, string> = {
 };
 
 function getDefaultWorkspaceRoute(
-  visibility: PlatformNavigationVisibility,
+  visibility: InfrastructureNavigationVisibility,
   hasSettingsAccess: boolean,
 ): string {
-  const platformId = selectFirstVisiblePrimaryPlatformNavigationId(visibility);
-  if (platformId) return PRIMARY_PLATFORM_ROUTE_BY_ID[platformId];
+  const navId = selectFirstVisiblePrimaryInfrastructureNavigationId(visibility);
+  if (navId) return PRIMARY_INFRASTRUCTURE_ROUTE_BY_ID[navId];
   return hasSettingsAccess ? '/settings/infrastructure' : '/alerts';
 }
 
@@ -251,10 +251,10 @@ function App() {
     const navigate = useNavigate();
     const location = useLocation();
     const isPublicRoute = createMemo(() => isPublicRoutePath(location.pathname));
-    const platformNavigationVisibility = createMemo(() =>
-      buildPrimaryPlatformNavigationVisibility(runtime.state().resources || []),
+    const infrastructureNavigationVisibility = createMemo(() =>
+      buildPrimaryInfrastructureNavigationVisibility(runtime.state().resources || []),
     );
-    const platformNavigationResolved = createMemo(() => {
+    const infrastructureNavigationResolved = createMemo(() => {
       const store = runtime.enhancedStore();
       return Boolean(store?.initialDataReceived?.());
     });
@@ -280,10 +280,13 @@ function App() {
       if (runtime.isLoading() || runtime.needsAuth() || isPublicRoute()) return;
       const normalizedPath = location.pathname.replace(/\/+$/, '') || '/';
       if (normalizedPath !== '/' && normalizedPath !== '/login') return;
-      if (!platformNavigationResolved()) return;
-      navigate(getDefaultWorkspaceRoute(platformNavigationVisibility(), hasSettingsAccess()), {
-        replace: true,
-      });
+      if (!infrastructureNavigationResolved()) return;
+      navigate(
+        getDefaultWorkspaceRoute(infrastructureNavigationVisibility(), hasSettingsAccess()),
+        {
+          replace: true,
+        },
+      );
     });
 
     createEffect(() => {
@@ -370,7 +373,7 @@ function App() {
 
     useKeyboardShortcuts({
       enabled: () => !runtime.needsAuth(),
-      platformVisibility: platformNavigationVisibility,
+      infrastructureVisibility: infrastructureNavigationVisibility,
       isShortcutsOpen: shortcutsOpen,
       isCommandPaletteOpen: commandPaletteOpen,
       onToggleShortcuts: () => {
@@ -487,14 +490,14 @@ function App() {
                         <KeyboardShortcutsModal
                           isOpen={shortcutsOpen()}
                           onClose={() => setShortcutsOpen(false)}
-                          platformVisibility={platformNavigationVisibility}
+                          infrastructureVisibility={infrastructureNavigationVisibility}
                         />
                       </Show>
                       <Show when={commandPaletteOpen()}>
                         <CommandPaletteModal
                           isOpen={commandPaletteOpen()}
                           onClose={() => setCommandPaletteOpen(false)}
-                          platformVisibility={platformNavigationVisibility}
+                          infrastructureVisibility={infrastructureNavigationVisibility}
                         />
                       </Show>
                       <Show when={tokenRevealStore.state() !== null}>

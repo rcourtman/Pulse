@@ -1,6 +1,6 @@
 # Pulse v6 Platform Support Model
 
-Last updated: 2026-04-25
+Last updated: 2026-05-20
 Status: ACTIVE
 
 This file is the canonical governed model for platform support in Pulse v6.
@@ -158,8 +158,11 @@ path defines the support floor.
 Current agent-backed primary platforms:
 
 1. `agent` for unified-agent hosts
-2. `docker`
-3. `kubernetes`
+2. `kubernetes`
+
+Current agent-backed runtime lenses:
+
+1. `docker` for the Docker / Podman container-runtime lens
 
 ### Hybrid
 
@@ -174,8 +177,9 @@ Current governed hybrid-capable platforms:
 3. `truenas`
 
 `docker` and `kubernetes` do not become hybrid platforms merely because they
-run on a machine that also reports as `agent`; those are parallel first-class
-platforms sharing one physical host.
+run on a machine that also reports as `agent`; Kubernetes is a parallel
+first-class platform, while Docker / Podman is a runtime lens sharing one
+physical host.
 
 ## Canonical Resource Projection Rules
 

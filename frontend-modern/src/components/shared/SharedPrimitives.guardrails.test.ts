@@ -1216,7 +1216,7 @@ describe('shared primitive guardrails', () => {
     expect(mobileNavBarStateSource).toContain('scrollIntoView');
     expect(mobileNavBarStateSource).toContain('export function useMobileNavBarState');
 
-    expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavPlatformTabs');
+    expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavPrimaryTabs');
     expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavUtilityTabs');
     expect(mobileNavBarModelSource).toContain('getMobileNavAlertBadgeCounts');
     expect(mobileNavBarModelSource).toContain('getMobileNavFadeState');

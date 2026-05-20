@@ -117,7 +117,7 @@ runtime cost control, and shared AI transport surfaces.
    present Pulse code as the intelligence engine, a prompt-keyword router, a
    learned operational-meaning engine, or a deterministic finding author.
 10. Platform/runtime top-level pages registered in
-    `frontend-modern/src/App.tsx` and the platform tab list in
+    `frontend-modern/src/App.tsx` and the primary tab list in
     `frontend-modern/src/AppLayout.tsx` must keep the AI launcher chrome
     intact: they extend `aiChatStore`-aware route shells rather than mounting
     bespoke layouts that suppress the Assistant launcher, Patrol entry, or

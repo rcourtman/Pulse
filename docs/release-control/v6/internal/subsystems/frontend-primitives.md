@@ -749,7 +749,7 @@ AI runtime.
    the container-runtime lens and may be labelled `Containers` in the shell,
    while shared source badges, filters, and runtime management copy continue
    to use `Docker / Podman` where the capability itself is being named.
-8. Keep shared source/platform vocabulary on the governed manifest boundary. `frontend-modern/src/utils/platformSupportManifest.generated.ts` must be the tracked frontend projection of `docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json`, `frontend-modern/src/utils/platformSupportManifest.ts`, `frontend-modern/src/utils/sourcePlatforms.ts`, and `frontend-modern/src/utils/sourcePlatformOptions.ts` must consume that generated projection instead of embedding divergent future-label lists, setup/onboarding path allowlists, host-profile labels, or presentation-only guesses, and `frontend-modern/scripts/canonical-platform-audit.mjs` must fail when the generated projection drifts from the governed manifest. The generic `docker` source-platform label is "Docker / Podman" in shared selectors, badges, and filter options so v5 Docker users can find the runtime surface while Podman-backed rows are not mislabeled as Docker-only; "Container runtime" remains the governed platform family, not the primary customer-facing label. Identity colour is semantic, not page-local decoration: shared source/platform badges, host identity badges, and container runtime badges must use the shared presentation helpers so Docker remains on the Docker/Podman blue runtime tone, Podman uses its distinct runtime tone, Proxmox PVE remains orange, and those meanings do not drift across table rows, filters, drawers, or platform pages. Agent host-profile entries, including Unraid, stay in the generated `agentHostProfiles` projection and shared wrapper helpers; frontend primitives may render those labels for Pulse Agent install/identity copy but must not add them to the first-class platform union.
+8. Keep shared source/platform vocabulary on the governed manifest boundary. `frontend-modern/src/utils/platformSupportManifest.generated.ts` must be the tracked frontend projection of `docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json`, `frontend-modern/src/utils/platformSupportManifest.ts`, `frontend-modern/src/utils/sourcePlatforms.ts`, and `frontend-modern/src/utils/sourcePlatformOptions.ts` must consume that generated projection instead of embedding divergent future-label lists, setup/onboarding path allowlists, host-profile labels, or presentation-only guesses, and `frontend-modern/scripts/canonical-platform-audit.mjs` must fail when the generated projection drifts from the governed manifest. The generic `docker` source-platform label is "Docker / Podman" in shared selectors, badges, and filter options so v5 Docker users can find the runtime surface while Podman-backed rows are not mislabeled as Docker-only; "Container runtime" remains the governed runtime family, not the primary customer-facing label. Identity colour is semantic, not page-local decoration: shared source/platform badges, host identity badges, and container runtime badges must use the shared presentation helpers so Docker remains on the Docker/Podman blue runtime tone, Podman uses its distinct runtime tone, Proxmox PVE remains orange, and those meanings do not drift across table rows, filters, drawers, or platform pages. Agent host-profile entries, including Unraid, stay in the generated `agentHostProfiles` projection and shared wrapper helpers; frontend primitives may render those labels for Pulse Agent install/identity copy but must not add them to the first-class platform union.
    The generated host-profile projection also carries runtime platform fallback
    metadata for shared explanation and parity with backend normalization, but
    frontend primitives must still render host-profile labels through
@@ -980,14 +980,14 @@ AI runtime.
     shared canonical surface already exists; new shared platform-page
     primitives live under `frontend-modern/src/features/platformPage/` so the
     chrome stays reusable across families.
-    `frontend-modern/src/AppLayout.tsx` may extend the `PlatformTab` list with
-    new family entries, but primary navigation is a support-and-evidence-gated
-    surface: rendered platform tabs, command/search destinations, keyboard
-    shortcuts, and authenticated landing fallbacks must derive from the
-    governed support manifest plus current runtime resource evidence.
-    Supported platform families appear when evidence proves they are present;
-    admitted-only, presentation-only, unsupported, or absent families stay
-    hidden rather than rendering as disabled placeholders.
+    `frontend-modern/src/AppLayout.tsx` may extend the `PrimaryTab` list with
+    new platform or runtime-family entries, but primary navigation is a
+    support-and-evidence-gated surface: rendered tabs, command/search
+    destinations, keyboard shortcuts, and authenticated landing fallbacks must
+    derive from the governed support manifest plus current runtime resource
+    evidence. Supported platform/runtime families appear when evidence proves
+    they are present; admitted-only, presentation-only, unsupported, or absent
+    families stay hidden rather than rendering as disabled placeholders.
     The `MOBILE_NAV_PLATFORM_PRIORITY` ordering in
     `frontend-modern/src/components/shared/mobileNavBarModel.ts` mirrors
     that platform-first set so mobile and desktop primary navigation stay

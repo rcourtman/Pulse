@@ -13,15 +13,15 @@ import CpuIcon from 'lucide-solid/icons/cpu';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import {
   MobileNavBar,
-  type MobileNavBarPlatformTab as PlatformTab,
+  type MobileNavBarPrimaryTab as PrimaryTab,
   type MobileNavBarUtilityTab as UtilityTab,
 } from '@/components/shared/MobileNavBar';
 import {
-  buildPrimaryPlatformNavigationVisibility,
-  primaryPlatformNavigationIsVisible,
-  selectFirstVisiblePrimaryPlatformNavigationId,
-  type PrimaryPlatformNavId,
-} from '@/features/platformNavigation/platformNavigationModel';
+  buildPrimaryInfrastructureNavigationVisibility,
+  primaryInfrastructureNavigationIsVisible,
+  selectFirstVisiblePrimaryInfrastructureNavigationId,
+  type PrimaryInfrastructureNavId,
+} from '@/features/infrastructureNavigation/infrastructureNavigationModel';
 import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';
 import { OrgSwitcher } from '@/components/OrgSwitcher';
 import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
@@ -221,10 +221,10 @@ export function AppLayout(props: AppLayoutProps) {
     setKioskMode(!kioskMode());
   };
 
-  const platformNavigationVisibility = createMemo(() =>
-    buildPrimaryPlatformNavigationVisibility(props.state().resources || []),
+  const infrastructureNavigationVisibility = createMemo(() =>
+    buildPrimaryInfrastructureNavigationVisibility(props.state().resources || []),
   );
-  const primaryPlatformRouteById: Record<PrimaryPlatformNavId, string> = {
+  const primaryInfrastructureRouteById: Record<PrimaryInfrastructureNavId, string> = {
     proxmox: ROOT_PROXMOX_PATH,
     docker: ROOT_DOCKER_PATH,
     kubernetes: ROOT_KUBERNETES_PATH,
@@ -232,10 +232,10 @@ export function AppLayout(props: AppLayoutProps) {
     vmware: ROOT_VMWARE_PATH,
   };
   const primaryWorkspacePath = createMemo(() => {
-    const platformId = selectFirstVisiblePrimaryPlatformNavigationId(
-      platformNavigationVisibility(),
+    const navId = selectFirstVisiblePrimaryInfrastructureNavigationId(
+      infrastructureNavigationVisibility(),
     );
-    return platformId ? primaryPlatformRouteById[platformId] : ROOT_ALERTS_PATH;
+    return navId ? primaryInfrastructureRouteById[navId] : ROOT_ALERTS_PATH;
   });
 
   createEffect(() => {
@@ -322,11 +322,11 @@ export function AppLayout(props: AppLayoutProps) {
   // equal primary tabs — their tables are reused inside each platform page
   // via embedded tableOnly surfaces, and their routes remain wired in App.tsx
   // purely for route-compatibility with existing deep links.
-  const platformTabs = createMemo<PlatformTab[]>(() => {
-    const visible = platformNavigationVisibility();
-    const isVisible = (id: PlatformTab['id']) =>
-      primaryPlatformNavigationIsVisible(visible, id as PrimaryPlatformNavId);
-    const allPlatforms: PlatformTab[] = [
+  const primaryTabs = createMemo<PrimaryTab[]>(() => {
+    const visible = infrastructureNavigationVisibility();
+    const isVisible = (id: PrimaryTab['id']) =>
+      primaryInfrastructureNavigationIsVisible(visible, id as PrimaryInfrastructureNavId);
+    const allPrimaryTabs: PrimaryTab[] = [
       {
         id: 'proxmox',
         label: 'Proxmox',
@@ -384,7 +384,7 @@ export function AppLayout(props: AppLayoutProps) {
       },
     ];
 
-    return allPlatforms.filter((platform) => platform.alwaysShow || platform.enabled);
+    return allPrimaryTabs.filter((tab) => tab.alwaysShow || tab.enabled);
   });
 
   const utilityTabs = createMemo(() => {
@@ -447,8 +447,8 @@ export function AppLayout(props: AppLayoutProps) {
     return tabs;
   });
 
-  const handlePlatformClick = (platform: PlatformTab) => {
-    const targetRoute = platform.enabled ? platform.route : platform.settingsRoute;
+  const handlePrimaryClick = (tab: PrimaryTab) => {
+    const targetRoute = tab.enabled ? tab.route : tab.settingsRoute;
     void (async () => {
       try {
         await preloadRouteModule(targetRoute);
@@ -485,11 +485,11 @@ export function AppLayout(props: AppLayoutProps) {
     });
   };
 
-  const getPlatformTargetRoute = (platform: PlatformTab) => {
-    if (platform.enabled) {
-      return platform.route;
+  const getPrimaryTargetRoute = (tab: PrimaryTab) => {
+    if (tab.enabled) {
+      return tab.route;
     }
-    return platform.settingsRoute;
+    return tab.settingsRoute;
   };
 
   return (
@@ -676,11 +676,11 @@ export function AppLayout(props: AppLayoutProps) {
           aria-label="Primary navigation"
         >
           <div class="flex items-end gap-1" role="group" aria-label="Infrastructure">
-            <For each={platformTabs()}>
-              {(platform) => {
-                const isActive = () => getActiveTabDesktop() === platform.id;
-                const disabled = () => !platform.enabled;
-                const Icon = platform.icon;
+            <For each={primaryTabs()}>
+              {(tab) => {
+                const isActive = () => getActiveTabDesktop() === tab.id;
+                const disabled = () => !tab.enabled;
+                const Icon = tab.icon;
                 const baseClasses =
                   'tab relative px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
 
@@ -696,22 +696,22 @@ export function AppLayout(props: AppLayoutProps) {
 
                 const title = () =>
                   disabled()
-                    ? `${platform.label} is not configured yet. Click to open settings.`
-                    : platform.tooltip;
+                    ? `${tab.label} is not configured yet. Click to open settings.`
+                    : tab.tooltip;
 
                 return (
                   <div
                     class={className()}
                     role="tab"
                     tabIndex={0}
-                    aria-label={platform.label}
+                    aria-label={tab.label}
                     aria-disabled={disabled()}
-                    onMouseEnter={() => warmNavigationTarget(getPlatformTargetRoute(platform))}
-                    onClick={() => handlePlatformClick(platform)}
+                    onMouseEnter={() => warmNavigationTarget(getPrimaryTargetRoute(tab))}
+                    onClick={() => handlePrimaryClick(tab)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
-                        handlePlatformClick(platform);
+                        handlePrimaryClick(tab);
                       }
                     }}
                     title={title()}
@@ -720,14 +720,14 @@ export function AppLayout(props: AppLayoutProps) {
                       <Icon class={NAV_TAB_ICON_CLASS} />
                     </span>
                     <span class="hidden xs:inline-flex items-center gap-1">
-                      <span>{platform.label}</span>
-                      <Show when={platform.badge}>
+                      <span>{tab.label}</span>
+                      <Show when={tab.badge}>
                         <span class="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted bg-surface-hover rounded">
-                          {platform.badge}
+                          {tab.badge}
                         </span>
                       </Show>
                     </span>
-                    <span class="xs:hidden">{platform.label.charAt(0)}</span>
+                    <span class="xs:hidden">{tab.label.charAt(0)}</span>
                   </div>
                 );
               }}
@@ -831,9 +831,9 @@ export function AppLayout(props: AppLayoutProps) {
       <Show when={!kioskMode()}>
         <MobileNavBar
           activeTab={getActiveTabMobile}
-          platformTabs={platformTabs}
+          primaryTabs={primaryTabs}
           utilityTabs={utilityTabs}
-          onPlatformClick={handlePlatformClick}
+          onPrimaryClick={handlePrimaryClick}
           onUtilityClick={handleUtilityClick}
         />
       </Show>

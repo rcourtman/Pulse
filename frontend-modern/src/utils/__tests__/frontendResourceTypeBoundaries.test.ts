@@ -3063,7 +3063,7 @@ describe('frontend resource type boundaries', () => {
     expect(mobileNavBarStateSource).toContain('window.addEventListener');
     expect(mobileNavBarStateSource).toContain('requestAnimationFrame');
     expect(mobileNavBarStateSource).toContain('scrollIntoView');
-    expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavPlatformTabs');
+    expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavPrimaryTabs');
     expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavUtilityTabs');
     expect(mobileNavBarModelSource).toContain('getMobileNavAlertBadgeCounts');
     expect(mobileNavBarModelSource).toContain('getMobileNavFadeState');

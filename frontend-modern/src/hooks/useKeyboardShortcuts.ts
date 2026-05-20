@@ -8,10 +8,10 @@ import {
   buildVmwarePath,
 } from '@/routing/resourceLinks';
 import {
-  createEmptyPlatformNavigationVisibility,
-  filterPlatformNavigationShortcuts,
-  type PlatformNavigationVisibility,
-} from '@/features/platformNavigation/platformNavigationModel';
+  createEmptyInfrastructureNavigationVisibility,
+  filterInfrastructureNavigationShortcuts,
+  type InfrastructureNavigationVisibility,
+} from '@/features/infrastructureNavigation/infrastructureNavigationModel';
 import { focusActiveTypeToSearch } from '@/hooks/useTypeToSearch';
 
 type KeyboardShortcutsOptions = {
@@ -25,7 +25,7 @@ type KeyboardShortcutsOptions = {
   onCloseCommandPalette?: () => void;
   onToggleCommandPalette?: () => void;
   onFocusSearch?: () => boolean | void;
-  platformVisibility?: Accessor<PlatformNavigationVisibility>;
+  infrastructureVisibility?: Accessor<InfrastructureNavigationVisibility>;
 };
 
 const isEditableTarget = (target: EventTarget | null): boolean => {
@@ -82,9 +82,9 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
   };
 
   const getRoutes = (): Record<string, string> => {
-    const platformVisibility =
-      options.platformVisibility?.() ?? createEmptyPlatformNavigationVisibility();
-    const platformRoutes = filterPlatformNavigationShortcuts(
+    const infrastructureVisibility =
+      options.infrastructureVisibility?.() ?? createEmptyInfrastructureNavigationVisibility();
+    const infrastructureRoutes = filterInfrastructureNavigationShortcuts(
       {
         proxmox: { key: 'p', route: buildProxmoxPath() },
         docker: { key: 'd', route: buildDockerPath() },
@@ -92,10 +92,10 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
         truenas: { key: 'n', route: buildTrueNASPath() },
         vmware: { key: 'v', route: buildVmwarePath() },
       },
-      platformVisibility,
+      infrastructureVisibility,
     );
     return {
-      ...platformRoutes,
+      ...infrastructureRoutes,
       a: '/alerts',
       r: '/patrol',
       t: '/settings',

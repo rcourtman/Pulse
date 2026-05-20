@@ -5,7 +5,7 @@ import type { Resource } from '@/types/resource';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
-import { buildPrimaryPlatformNavigationVisibility } from '@/features/platformNavigation/platformNavigationModel';
+import { buildPrimaryInfrastructureNavigationVisibility } from '@/features/infrastructureNavigation/infrastructureNavigationModel';
 
 const navigateMock = vi.fn();
 
@@ -34,8 +34,8 @@ const makeResource = (overrides: Partial<Resource>): Resource =>
     ...overrides,
   }) as Resource;
 
-const platformVisibility = () =>
-  buildPrimaryPlatformNavigationVisibility([
+const infrastructureVisibility = () =>
+  buildPrimaryInfrastructureNavigationVisibility([
     makeResource({ id: 'pve-1', type: 'agent', platformType: 'proxmox-pve' }),
     makeResource({ id: 'docker-1', type: 'docker-host', platformType: 'docker' }),
     makeResource({ id: 'k8s-1', type: 'k8s-cluster', platformType: 'kubernetes' }),
@@ -85,7 +85,7 @@ describe('CommandPaletteModal', () => {
       <CommandPaletteModal
         isOpen={true}
         onClose={vi.fn()}
-        platformVisibility={platformVisibility}
+        infrastructureVisibility={infrastructureVisibility}
       />
     ));
 
@@ -101,7 +101,7 @@ describe('CommandPaletteModal', () => {
       <CommandPaletteModal
         isOpen={true}
         onClose={onClose}
-        platformVisibility={platformVisibility}
+        infrastructureVisibility={infrastructureVisibility}
       />
     ));
 
@@ -117,7 +117,7 @@ describe('CommandPaletteModal', () => {
       <CommandPaletteModal
         isOpen={true}
         onClose={onClose}
-        platformVisibility={platformVisibility}
+        infrastructureVisibility={infrastructureVisibility}
       />
     ));
 
@@ -134,8 +134,8 @@ describe('CommandPaletteModal', () => {
       <CommandPaletteModal
         isOpen={true}
         onClose={vi.fn()}
-        platformVisibility={() =>
-          buildPrimaryPlatformNavigationVisibility([
+        infrastructureVisibility={() =>
+          buildPrimaryInfrastructureNavigationVisibility([
             makeResource({ id: 'pve-1', type: 'agent', platformType: 'proxmox-pve' }),
           ])
         }

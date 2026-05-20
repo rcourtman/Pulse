@@ -489,9 +489,9 @@ or other self-hosted uncapped continuity plans.
     navigation. `App.tsx` registers one top-level route per supported platform
     or runtime family (Proxmox, the Docker / Podman container-runtime lens,
     Kubernetes, TrueNAS, vSphere) using the canonical path constants from
-    `frontend-modern/src/routing/resourceLinks.ts`. The `PlatformTab` list in
-    `AppLayout.tsx` must enumerate exactly those supported destinations, but
-    product navigation is support-and-evidence gated:
+    `frontend-modern/src/routing/resourceLinks.ts`. The `PrimaryTab` list in
+    `AppLayout.tsx` must enumerate exactly those supported platform/runtime
+    destinations, but product navigation is support-and-evidence gated:
     `enabled`, `live`, and inclusion in the rendered primary navigation derive
     from the governed support manifest plus canonical resource evidence in
     `state.resources`. Admitted-only, presentation-only, unsupported, or

@@ -7,8 +7,8 @@ import {
 } from './mobileNavBarModel';
 
 export type {
-  MobileNavBarPlatformTab,
   MobileNavBarProps,
+  MobileNavBarPrimaryTab,
   MobileNavBarUtilityTab,
 } from './mobileNavBarModel';
 
@@ -26,33 +26,33 @@ export function MobileNavBar(props: MobileNavBarProps) {
             role="tablist"
             aria-label="Mobile navigation"
           >
-            <For each={mobileNav.orderedPlatformTabs()}>
-              {(platform) => {
-                const Icon = platform.icon;
+            <For each={mobileNav.orderedPrimaryTabs()}>
+              {(tab) => {
+                const Icon = tab.icon;
 
                 return (
                   <button
                     type="button"
-                    data-tab-id={platform.id}
-                    onClick={() => mobileNav.handlePlatformClick(platform)}
-                    title={platform.tooltip}
+                    data-tab-id={tab.id}
+                    onClick={() => mobileNav.handlePrimaryClick(tab)}
+                    title={tab.tooltip}
                     class={getMobileNavTabButtonClass({
-                      active: props.activeTab() === platform.id,
-                      enabled: platform.enabled,
+                      active: props.activeTab() === tab.id,
+                      enabled: tab.enabled,
                     })}
                   >
                     <span aria-hidden="true" class="relative flex items-center justify-center">
                       <Icon class={tabIconClass} />
                     </span>
-                    <span class="whitespace-nowrap">{platform.label}</span>
-                    <Show when={!platform.enabled}>
+                    <span class="whitespace-nowrap">{tab.label}</span>
+                    <Show when={!tab.enabled}>
                       <span class="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-900 dark:text-amber-200">
                         Setup
                       </span>
                     </Show>
-                    <Show when={platform.badge}>
+                    <Show when={tab.badge}>
                       <span class="rounded-full bg-surface-hover px-1.5 py-0.5 text-[9px] font-semibold text-muted">
-                        {platform.badge}
+                        {tab.badge}
                       </span>
                     </Show>
                   </button>
@@ -82,7 +82,10 @@ export function MobileNavBar(props: MobileNavBarProps) {
                       </span>
                       <Show when={alertBadges()}>
                         {(badges) => (
-                          <span aria-hidden="true" class="absolute -right-2 -top-1 flex items-center gap-1">
+                          <span
+                            aria-hidden="true"
+                            class="absolute -right-2 -top-1 flex items-center gap-1"
+                          >
                             <Show when={badges().critical > 0}>
                               <span class="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
                                 {badges().critical}

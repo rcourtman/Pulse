@@ -2,7 +2,7 @@ import type { Component } from 'solid-js';
 
 export type MobileNavBarIcon = Component<{ class?: string }>;
 
-export type MobileNavBarPlatformTab = {
+export type MobileNavBarPrimaryTab = {
   id: string;
   label: string;
   route: string;
@@ -28,13 +28,13 @@ export type MobileNavBarUtilityTab = {
 
 export type MobileNavBarProps = {
   activeTab: () => string | null;
-  platformTabs: () => MobileNavBarPlatformTab[];
+  primaryTabs: () => MobileNavBarPrimaryTab[];
   utilityTabs: () => MobileNavBarUtilityTab[];
-  onPlatformClick: (platform: MobileNavBarPlatformTab) => void;
+  onPrimaryClick: (tab: MobileNavBarPrimaryTab) => void;
   onUtilityClick: (tab: MobileNavBarUtilityTab) => void;
 };
 
-const MOBILE_NAV_PLATFORM_PRIORITY = [
+const MOBILE_NAV_PRIMARY_PRIORITY = [
   'proxmox',
   'docker',
   'kubernetes',
@@ -64,10 +64,10 @@ export function buildOrderedMobileNavTabs<T extends { id: string }>(
   return ordered;
 }
 
-export function buildOrderedMobileNavPlatformTabs(
-  tabs: MobileNavBarPlatformTab[],
-): MobileNavBarPlatformTab[] {
-  return buildOrderedMobileNavTabs(tabs, MOBILE_NAV_PLATFORM_PRIORITY);
+export function buildOrderedMobileNavPrimaryTabs(
+  tabs: MobileNavBarPrimaryTab[],
+): MobileNavBarPrimaryTab[] {
+  return buildOrderedMobileNavTabs(tabs, MOBILE_NAV_PRIMARY_PRIORITY);
 }
 
 export function buildOrderedMobileNavUtilityTabs(

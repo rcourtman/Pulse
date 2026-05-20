@@ -72,14 +72,14 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain("id: 'truenas',");
     expect(appLayoutSource).toContain("id: 'vmware',");
     // Governed platform/runtime primary nav: Infrastructure / Workloads /
-    // Storage / Recovery are not duplicated as equal primary PlatformTab
+    // Storage / Recovery are not duplicated as equal primary tab
     // entries, and the Docker / Podman route is presented as the Containers
     // runtime lens in shell chrome.
     expect(appSource).toContain('getDefaultWorkspaceRoute');
-    expect(appSource).toContain('platformNavigationResolved');
-    expect(appSource).toContain('buildPrimaryPlatformNavigationVisibility');
-    expect(appLayoutSource).toContain('buildPrimaryPlatformNavigationVisibility');
-    expect(appLayoutSource).toContain('primaryPlatformNavigationIsVisible');
+    expect(appSource).toContain('infrastructureNavigationResolved');
+    expect(appSource).toContain('buildPrimaryInfrastructureNavigationVisibility');
+    expect(appLayoutSource).toContain('buildPrimaryInfrastructureNavigationVisibility');
+    expect(appLayoutSource).toContain('primaryInfrastructureNavigationIsVisible');
     expect(appLayoutSource).toContain("label: 'Containers'");
     expect(appLayoutSource).toContain("'Docker / Podman runtime lens");
     expect(appLayoutSource).not.toContain("id: 'infrastructure',");
@@ -209,23 +209,23 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain('props.connected()');
     expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');
     expect(appLayoutSource).toContain(
-      'type MobileNavBarPlatformTab as PlatformTab,\n  type MobileNavBarUtilityTab as UtilityTab,',
+      'type MobileNavBarPrimaryTab as PrimaryTab,\n  type MobileNavBarUtilityTab as UtilityTab,',
     );
     expect(appLayoutSource).toContain("const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';");
     expect(appLayoutSource).toContain('function getDesktopUtilityTabAriaLabel(tab: UtilityTab)');
     expect(appLayoutSource).toContain('return `${count} ${tab.label}`;');
-    expect(appLayoutSource).toContain('const platformTabs = createMemo<PlatformTab[]>(() =>');
+    expect(appLayoutSource).toContain('const primaryTabs = createMemo<PrimaryTab[]>(() =>');
     expect(appLayoutSource).toContain("id: 'proxmox',");
     expect(appLayoutSource).toContain('icon: ProxmoxIcon,');
-    expect(appLayoutSource).toContain('const Icon = platform.icon;');
     expect(appLayoutSource).toContain('const Icon = tab.icon;');
-    expect(appLayoutSource).toContain('aria-label={platform.label}');
+    expect(appLayoutSource).toContain('const Icon = tab.icon;');
+    expect(appLayoutSource).toContain('aria-label={tab.label}');
     expect(appLayoutSource).toContain('aria-label={getDesktopUtilityTabAriaLabel(tab)}');
     expect(appLayoutSource).toContain(
       '<span aria-hidden="true" class="inline-flex items-center justify-center">',
     );
     expect(appLayoutSource).toContain('<Icon class={NAV_TAB_ICON_CLASS} />');
-    expect(appLayoutSource).not.toContain('type PlatformTab = {');
+    expect(appLayoutSource).not.toContain('type PrimaryTab = {');
     expect(appLayoutSource).not.toContain('type UtilityTab = {');
     expect(appLayoutSource).not.toContain('const platformTabsDesktop = createMemo(() =>');
     expect(appLayoutSource).not.toContain('const platformTabsMobile = createMemo(() =>');

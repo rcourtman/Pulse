@@ -799,6 +799,12 @@ canonical `/api/discovery` payload.
     top-level tabs are warm after authentication, but it must not fetch storage
     summary charts, recovery history, provider state, or preview data from
     `frontend-modern/src/App.tsx` itself.
+    The shared app shell's authenticated landing and primary-tab routing may
+    use the infrastructure navigation model that includes both owning platform
+    pages and runtime lenses such as Containers. Storage and recovery route
+    owners must treat that as shell-owned navigation evidence, not as a reason
+    to restore Storage or Recovery as equal primary tabs or depend on
+    platform-only tab terminology.
 37. Keep public self-hosted purchase handoff and activation routes on the
     adjacent commercial/auth boundary. When `internal/api/router.go`,
     `internal/api/router_routes_cloud.go`, `internal/api/licensing_handlers.go`,

@@ -40,7 +40,7 @@ describe('MobileNavBar', () => {
     expect(mobileNavBarStateSource).toContain('scrollIntoView');
     expect(mobileNavBarStateSource).toContain('export function useMobileNavBarState');
 
-    expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavPlatformTabs');
+    expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavPrimaryTabs');
     expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavUtilityTabs');
     expect(mobileNavBarModelSource).toContain('getMobileNavAlertBadgeCounts');
     expect(mobileNavBarModelSource).toContain('getMobileNavFadeState');
@@ -59,7 +59,7 @@ describe('MobileNavBar', () => {
     render(() => (
       <MobileNavBar
         activeTab={() => 'ai'}
-        platformTabs={() => []}
+        primaryTabs={() => []}
         utilityTabs={() => [
           {
             id: 'ai',
@@ -72,7 +72,7 @@ describe('MobileNavBar', () => {
             icon: PatrolIcon,
           },
         ]}
-        onPlatformClick={() => {}}
+        onPrimaryClick={() => {}}
         onUtilityClick={() => {}}
       />
     ));
@@ -88,7 +88,7 @@ describe('MobileNavBar', () => {
     const { container } = render(() => (
       <MobileNavBar
         activeTab={() => null}
-        platformTabs={() => [
+        primaryTabs={() => [
           {
             id: 'infrastructure',
             label: 'Infrastructure',
@@ -113,7 +113,7 @@ describe('MobileNavBar', () => {
             icon: SettingsIcon,
           },
         ]}
-        onPlatformClick={() => {}}
+        onPrimaryClick={() => {}}
         onUtilityClick={() => {}}
       />
     ));
@@ -127,13 +127,13 @@ describe('MobileNavBar', () => {
   });
 
   it('orders tabs, renders alert badges, and shows fades from scroll state', async () => {
-    const onPlatformClick = vi.fn();
+    const onPrimaryClick = vi.fn();
     const onUtilityClick = vi.fn();
 
     const { container } = render(() => (
       <MobileNavBar
         activeTab={() => 'infrastructure'}
-        platformTabs={() => [
+        primaryTabs={() => [
           {
             id: 'proxmox',
             label: 'Proxmox',
@@ -190,7 +190,7 @@ describe('MobileNavBar', () => {
             icon: AlertsIcon,
           },
         ]}
-        onPlatformClick={onPlatformClick}
+        onPrimaryClick={onPrimaryClick}
         onUtilityClick={onUtilityClick}
       />
     ));
@@ -214,7 +214,7 @@ describe('MobileNavBar', () => {
     expect(screen.getByText('Pro')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTitle('Storage'));
-    expect(onPlatformClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'storage' }));
+    expect(onPrimaryClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'storage' }));
 
     fireEvent.click(screen.getByTitle('Alerts'));
     expect(onUtilityClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'alerts' }));

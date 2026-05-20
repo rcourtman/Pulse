@@ -1,15 +1,15 @@
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import {
-  buildOrderedMobileNavPlatformTabs,
+  buildOrderedMobileNavPrimaryTabs,
   buildOrderedMobileNavUtilityTabs,
   getMobileNavFadeState,
-  type MobileNavBarPlatformTab,
+  type MobileNavBarPrimaryTab,
   type MobileNavBarProps,
   type MobileNavBarUtilityTab,
 } from './mobileNavBarModel';
 
 export type {
-  MobileNavBarPlatformTab,
+  MobileNavBarPrimaryTab,
   MobileNavBarProps,
   MobileNavBarUtilityTab,
 } from './mobileNavBarModel';
@@ -19,8 +19,8 @@ export function useMobileNavBarState(props: MobileNavBarProps) {
   const [showLeftFade, setShowLeftFade] = createSignal(false);
   const [navRef, setNavRef] = createSignal<HTMLDivElement>();
 
-  const orderedPlatformTabs = createMemo(() =>
-    buildOrderedMobileNavPlatformTabs(props.platformTabs()),
+  const orderedPrimaryTabs = createMemo(() =>
+    buildOrderedMobileNavPrimaryTabs(props.primaryTabs()),
   );
   const orderedUtilityTabs = createMemo(() =>
     buildOrderedMobileNavUtilityTabs(props.utilityTabs()),
@@ -62,8 +62,8 @@ export function useMobileNavBarState(props: MobileNavBarProps) {
     });
   });
 
-  const handlePlatformClick = (platform: MobileNavBarPlatformTab) => {
-    props.onPlatformClick(platform);
+  const handlePrimaryClick = (tab: MobileNavBarPrimaryTab) => {
+    props.onPrimaryClick(tab);
   };
 
   const handleUtilityClick = (tab: MobileNavBarUtilityTab) => {
@@ -71,9 +71,9 @@ export function useMobileNavBarState(props: MobileNavBarProps) {
   };
 
   return {
-    handlePlatformClick,
+    handlePrimaryClick,
     handleUtilityClick,
-    orderedPlatformTabs,
+    orderedPrimaryTabs,
     orderedUtilityTabs,
     setNavRef,
     showFade,

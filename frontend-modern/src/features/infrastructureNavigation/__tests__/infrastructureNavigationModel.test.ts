@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
-  buildPrimaryPlatformNavigationVisibility,
+  buildPrimaryInfrastructureNavigationVisibility,
   collectResourcePlatformEvidence,
-  selectFirstVisiblePrimaryPlatformNavigationId,
-} from '../platformNavigationModel';
+  selectFirstVisiblePrimaryInfrastructureNavigationId,
+} from '../infrastructureNavigationModel';
 
 const resource = (overrides: Partial<Resource>): Resource =>
   ({
@@ -20,9 +20,9 @@ const resource = (overrides: Partial<Resource>): Resource =>
     ...overrides,
   }) as Resource;
 
-describe('platformNavigationModel', () => {
-  it('shows primary platform destinations only when supported resource evidence is present', () => {
-    expect(buildPrimaryPlatformNavigationVisibility([])).toEqual({
+describe('infrastructureNavigationModel', () => {
+  it('shows primary infrastructure destinations only when supported resource evidence is present', () => {
+    expect(buildPrimaryInfrastructureNavigationVisibility([])).toEqual({
       proxmox: false,
       docker: false,
       kubernetes: false,
@@ -31,7 +31,7 @@ describe('platformNavigationModel', () => {
     });
 
     expect(
-      buildPrimaryPlatformNavigationVisibility([
+      buildPrimaryInfrastructureNavigationVisibility([
         resource({ id: 'pve-1', platformType: 'proxmox-pve', type: 'agent' }),
         resource({
           id: 'pod-1',
@@ -59,7 +59,8 @@ describe('platformNavigationModel', () => {
       'proxmox-pmg',
     );
     expect(
-      buildPrimaryPlatformNavigationVisibility([resource({ id: 'pmg-1', type: 'pmg' })]).proxmox,
+      buildPrimaryInfrastructureNavigationVisibility([resource({ id: 'pmg-1', type: 'pmg' })])
+        .proxmox,
     ).toBe(true);
   });
 
@@ -79,7 +80,7 @@ describe('platformNavigationModel', () => {
     ).toEqual(['truenas']);
 
     expect(
-      buildPrimaryPlatformNavigationVisibility([
+      buildPrimaryInfrastructureNavigationVisibility([
         resource({
           id: 'truenas-app-nextcloud',
           type: 'app-container',
@@ -99,7 +100,7 @@ describe('platformNavigationModel', () => {
     });
 
     expect(
-      buildPrimaryPlatformNavigationVisibility([
+      buildPrimaryInfrastructureNavigationVisibility([
         resource({
           id: 'docker-container-frigate-141',
           type: 'app-container',
@@ -119,7 +120,7 @@ describe('platformNavigationModel', () => {
 
   it('selects the first visible platform using the canonical primary navigation order', () => {
     expect(
-      selectFirstVisiblePrimaryPlatformNavigationId({
+      selectFirstVisiblePrimaryInfrastructureNavigationId({
         proxmox: false,
         docker: false,
         kubernetes: true,
@@ -129,7 +130,7 @@ describe('platformNavigationModel', () => {
     ).toBe('kubernetes');
 
     expect(
-      selectFirstVisiblePrimaryPlatformNavigationId({
+      selectFirstVisiblePrimaryInfrastructureNavigationId({
         proxmox: false,
         docker: false,
         kubernetes: false,

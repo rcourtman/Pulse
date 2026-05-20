@@ -7,16 +7,16 @@ import {
 } from '@/utils/platformSupportManifest';
 import { normalizeSourcePlatformKey, resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 
-export type PrimaryPlatformNavId = 'proxmox' | 'docker' | 'kubernetes' | 'truenas' | 'vmware';
+export type PrimaryInfrastructureNavId = 'proxmox' | 'docker' | 'kubernetes' | 'truenas' | 'vmware';
 
-export type PlatformNavigationVisibility = Record<PrimaryPlatformNavId, boolean>;
+export type InfrastructureNavigationVisibility = Record<PrimaryInfrastructureNavId, boolean>;
 
-export type PlatformNavigationShortcut = {
+export type InfrastructureNavigationShortcut = {
   key: string;
   route: string;
 };
 
-export const PRIMARY_PLATFORM_NAV_IDS: readonly PrimaryPlatformNavId[] = [
+export const PRIMARY_INFRASTRUCTURE_NAV_IDS: readonly PrimaryInfrastructureNavId[] = [
   'proxmox',
   'docker',
   'kubernetes',
@@ -24,7 +24,10 @@ export const PRIMARY_PLATFORM_NAV_IDS: readonly PrimaryPlatformNavId[] = [
   'vmware',
 ] as const;
 
-export const PRIMARY_PLATFORM_NAV_PLATFORM_IDS: Record<PrimaryPlatformNavId, readonly string[]> = {
+export const PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS: Record<
+  PrimaryInfrastructureNavId,
+  readonly string[]
+> = {
   proxmox: ['proxmox-pve', 'proxmox-pbs', 'proxmox-pmg'],
   docker: ['docker'],
   kubernetes: ['kubernetes'],
@@ -61,10 +64,7 @@ const addPlatformDataSources = (ids: Set<string>, platformData: Record<string, u
   });
 };
 
-const addPlatformScopeEvidence = (
-  ids: Set<string>,
-  values: unknown,
-): void => {
+const addPlatformScopeEvidence = (ids: Set<string>, values: unknown): void => {
   if (!Array.isArray(values)) return;
   values.forEach((value) => {
     if (typeof value === 'string') addManifestPlatformId(ids, value);
@@ -127,7 +127,9 @@ export function collectResourcePlatformEvidence(resource: Resource): string[] {
   return [...ids];
 }
 
-export function buildSupportedResourcePlatformSet(resources: readonly Resource[]): Set<string> {
+export function buildSupportedResourceInfrastructureScopeSet(
+  resources: readonly Resource[],
+): Set<string> {
   const present = new Set<string>();
   for (const resource of resources) {
     for (const platformId of collectResourcePlatformEvidence(resource)) {
@@ -141,53 +143,55 @@ export function buildSupportedResourcePlatformSet(resources: readonly Resource[]
   return present;
 }
 
-export function buildPrimaryPlatformNavigationVisibility(
+export function buildPrimaryInfrastructureNavigationVisibility(
   resources: readonly Resource[],
-): PlatformNavigationVisibility {
-  const presentSupportedPlatforms = buildSupportedResourcePlatformSet(resources);
+): InfrastructureNavigationVisibility {
+  const presentSupportedScopes = buildSupportedResourceInfrastructureScopeSet(resources);
   return {
-    proxmox: PRIMARY_PLATFORM_NAV_PLATFORM_IDS.proxmox.some((id) =>
-      presentSupportedPlatforms.has(id),
+    proxmox: PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS.proxmox.some((id) =>
+      presentSupportedScopes.has(id),
     ),
-    docker: PRIMARY_PLATFORM_NAV_PLATFORM_IDS.docker.some((id) =>
-      presentSupportedPlatforms.has(id),
+    docker: PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS.docker.some((id) =>
+      presentSupportedScopes.has(id),
     ),
-    kubernetes: PRIMARY_PLATFORM_NAV_PLATFORM_IDS.kubernetes.some((id) =>
-      presentSupportedPlatforms.has(id),
+    kubernetes: PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS.kubernetes.some((id) =>
+      presentSupportedScopes.has(id),
     ),
-    truenas: PRIMARY_PLATFORM_NAV_PLATFORM_IDS.truenas.some((id) =>
-      presentSupportedPlatforms.has(id),
+    truenas: PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS.truenas.some((id) =>
+      presentSupportedScopes.has(id),
     ),
-    vmware: PRIMARY_PLATFORM_NAV_PLATFORM_IDS.vmware.some((id) =>
-      presentSupportedPlatforms.has(id),
+    vmware: PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS.vmware.some((id) =>
+      presentSupportedScopes.has(id),
     ),
   };
 }
 
-export function primaryPlatformNavigationIsVisible(
-  visibility: PlatformNavigationVisibility,
-  platformId: PrimaryPlatformNavId,
+export function primaryInfrastructureNavigationIsVisible(
+  visibility: InfrastructureNavigationVisibility,
+  navId: PrimaryInfrastructureNavId,
 ): boolean {
-  return visibility[platformId] === true;
+  return visibility[navId] === true;
 }
 
-export function selectFirstVisiblePrimaryPlatformNavigationId(
-  visibility: PlatformNavigationVisibility,
-): PrimaryPlatformNavId | null {
+export function selectFirstVisiblePrimaryInfrastructureNavigationId(
+  visibility: InfrastructureNavigationVisibility,
+): PrimaryInfrastructureNavId | null {
   return (
-    PRIMARY_PLATFORM_NAV_IDS.find((platformId) =>
-      primaryPlatformNavigationIsVisible(visibility, platformId),
+    PRIMARY_INFRASTRUCTURE_NAV_IDS.find((navId) =>
+      primaryInfrastructureNavigationIsVisible(visibility, navId),
     ) ?? null
   );
 }
 
-export function filterPlatformNavigationShortcuts(
-  shortcuts: Record<string, PlatformNavigationShortcut>,
-  visibility: PlatformNavigationVisibility,
+export function filterInfrastructureNavigationShortcuts(
+  shortcuts: Record<string, InfrastructureNavigationShortcut>,
+  visibility: InfrastructureNavigationVisibility,
 ): Record<string, string> {
   const routes: Record<string, string> = {};
-  for (const [platformId, shortcut] of Object.entries(shortcuts)) {
-    if (!primaryPlatformNavigationIsVisible(visibility, platformId as PrimaryPlatformNavId)) {
+  for (const [navId, shortcut] of Object.entries(shortcuts)) {
+    if (
+      !primaryInfrastructureNavigationIsVisible(visibility, navId as PrimaryInfrastructureNavId)
+    ) {
       continue;
     }
     routes[shortcut.key] = shortcut.route;
@@ -195,7 +199,7 @@ export function filterPlatformNavigationShortcuts(
   return routes;
 }
 
-export function createEmptyPlatformNavigationVisibility(): PlatformNavigationVisibility {
+export function createEmptyInfrastructureNavigationVisibility(): InfrastructureNavigationVisibility {
   return {
     proxmox: false,
     docker: false,
@@ -205,8 +209,8 @@ export function createEmptyPlatformNavigationVisibility(): PlatformNavigationVis
   };
 }
 
-export function platformNavigationVisibilityFromResources(
+export function infrastructureNavigationVisibilityFromResources(
   resources: Accessor<readonly Resource[]>,
-): PlatformNavigationVisibility {
-  return buildPrimaryPlatformNavigationVisibility(resources());
+): InfrastructureNavigationVisibility {
+  return buildPrimaryInfrastructureNavigationVisibility(resources());
 }
