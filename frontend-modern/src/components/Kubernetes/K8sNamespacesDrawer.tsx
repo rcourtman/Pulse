@@ -16,6 +16,12 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { buildKubernetesPath } from '@/routing/resourceLinks';
 import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
+} from '@/features/platformPage/sharedPlatformPage';
+import {
   getK8sNamespacesDrawerPresentation,
   getK8sNamespacesEmptyState,
   getK8sNamespacesFailureState,
@@ -144,30 +150,34 @@ export const K8sNamespacesDrawer: Component<{
             }
           >
             <Card padding="none" tone="card" class="overflow-hidden">
-              <Table class="w-full min-w-[720px] border-collapse text-xs">
-                <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                  <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                    <TableHead class="px-3 py-2 font-medium">
+              <Table class="min-w-full table-fixed text-xs md:min-w-[760px]">
+                <TableHeader>
+                  <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                    <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>
                       {drawerPresentation.namespaceColumnLabel}
                     </TableHead>
-                    <TableHead class="px-3 py-2 font-medium">
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[18%]`}
+                    >
                       {drawerPresentation.podsColumnLabel}
                     </TableHead>
-                    <TableHead class="px-3 py-2 font-medium">
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[22%]`}
+                    >
                       {drawerPresentation.deploymentsColumnLabel}
                     </TableHead>
-                    <TableHead class="px-3 py-2 font-medium">
+                    <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[38%]`}>
                       {drawerPresentation.actionsColumnLabel}
                     </TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody class="divide-y divide-border-subtle">
+                <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                   <For each={filteredRows()}>
                     {(row) => {
                       const podIndicator = () => getNamespaceCountsIndicator(row.pods);
                       return (
-                        <TableRow class="hover:bg-surface-hover">
-                          <TableCell class="px-3 py-2">
+                        <TableRow class="text-[11px] sm:text-xs">
+                          <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex items-center gap-2 min-w-0">
                               <StatusDot
                                 size="sm"
@@ -183,8 +193,12 @@ export const K8sNamespacesDrawer: Component<{
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">
-                            <span class="font-semibold">{formatInteger(row.pods.total)}</span>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            <span class="font-semibold tabular-nums">
+                              {formatInteger(row.pods.total)}
+                            </span>
                             <span class="ml-2 text-[11px] text-muted">
                               {row.pods.offline > 0 ? `${formatInteger(row.pods.offline)} off` : ''}
                               {row.pods.warning > 0
@@ -192,8 +206,10 @@ export const K8sNamespacesDrawer: Component<{
                                 : ''}
                             </span>
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">
-                            <span class="font-semibold">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            <span class="font-semibold tabular-nums">
                               {formatInteger(row.deployments.total)}
                             </span>
                             <span class="ml-2 text-[11px] text-muted">
@@ -205,7 +221,7 @@ export const K8sNamespacesDrawer: Component<{
                                 : ''}
                             </span>
                           </TableCell>
-                          <TableCell class="px-3 py-2">
+                          <TableCell class={getPlatformTableCellClassForKind('text')}>
                             <div class="flex flex-wrap items-center gap-2">
                               <button
                                 type="button"

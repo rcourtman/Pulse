@@ -61,6 +61,21 @@ describe('K8sNamespacesDrawer', () => {
     expect(navigateMock).toHaveBeenCalledWith('/kubernetes/pods');
   });
 
+  it('uses the shared platform table spacing and divider contract', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce(makeResponse([{ namespace: 'default' }]));
+    const { container } = render(() => <K8sNamespacesDrawer cluster="cluster-a" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('default')).toBeInTheDocument();
+    });
+
+    expect(container.querySelector('table')).toHaveClass('table-fixed');
+    expect(container.querySelector('thead tr')).toHaveClass('bg-surface-alt');
+    expect(container.querySelector('tbody')).toHaveClass('divide-y', 'divide-border');
+    expect(container.querySelector('tbody')).not.toHaveClass('divide-border-subtle');
+    expect(container.querySelector('th')).toHaveClass('px-1.5', 'py-0.5');
+  });
+
   it('does not navigate when cluster is empty', async () => {
     render(() => <K8sNamespacesDrawer cluster="" />);
 
