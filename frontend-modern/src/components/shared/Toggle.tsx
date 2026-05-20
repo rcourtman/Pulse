@@ -59,8 +59,8 @@ export function Toggle(props: LabeledToggleProps) {
       <TogglePrimitive
         {...props}
         size={size}
-        ariaLabelledBy={props.label ? labelId : undefined}
-        ariaDescribedBy={props.description ? descriptionId : undefined}
+        ariaLabelledBy={props.label ? labelId : props.ariaLabelledBy}
+        ariaDescribedBy={props.description ? descriptionId : props.ariaDescribedBy}
       />
       {(props.label || props.description) && (
         <span class={getToggleLabelClass()}>

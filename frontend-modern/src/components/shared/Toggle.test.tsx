@@ -62,4 +62,23 @@ describe('Toggle', () => {
     expect(button).toHaveAttribute('aria-describedby');
     expect(button).toHaveAccessibleDescription('Turns it on');
   });
+
+  it('supports an external visible label when the layout owns label placement', () => {
+    render(() => (
+      <>
+        <span id="external-toggle-label">Alert-triggered patrols</span>
+        <span id="external-toggle-description">Run when alerts fire.</span>
+        <Toggle
+          checked={true}
+          ariaLabelledBy="external-toggle-label"
+          ariaDescribedBy="external-toggle-description"
+        />
+      </>
+    ));
+
+    const button = screen.getByRole('button', { name: 'Alert-triggered patrols' });
+    expect(button).toHaveAttribute('aria-labelledby', 'external-toggle-label');
+    expect(button).toHaveAttribute('aria-describedby', 'external-toggle-description');
+    expect(button).toHaveAccessibleDescription('Run when alerts fire.');
+  });
 });

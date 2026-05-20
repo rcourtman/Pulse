@@ -274,10 +274,14 @@ vi.mock('@/components/shared/Toggle', () => ({
     disabled?: boolean;
     onToggle?: (value: boolean) => void;
     ariaLabel?: string;
+    ariaLabelledBy?: string;
+    ariaDescribedBy?: string;
   }) => (
     <button
       type="button"
       aria-label={props.ariaLabel}
+      aria-labelledby={props.ariaLabel ? undefined : props.ariaLabelledBy}
+      aria-describedby={props.ariaDescribedBy}
       aria-pressed={props.checked}
       disabled={props.disabled}
       onClick={() => props.onToggle?.(!props.checked)}
@@ -287,11 +291,17 @@ vi.mock('@/components/shared/Toggle', () => ({
     checked?: boolean;
     disabled?: boolean;
     onChange?: (event: Event & { currentTarget: HTMLInputElement }) => void;
+    ariaLabel?: string;
+    ariaLabelledBy?: string;
+    ariaDescribedBy?: string;
   }) => (
     <input
       type="checkbox"
       checked={props.checked}
       disabled={props.disabled}
+      aria-label={props.ariaLabel}
+      aria-labelledby={props.ariaLabel ? undefined : props.ariaLabelledBy}
+      aria-describedby={props.ariaDescribedBy}
       onChange={(event) => props.onChange?.(event as Event & { currentTarget: HTMLInputElement })}
     />
   ),
@@ -789,6 +799,12 @@ describe('AIIntelligence entitlement gating', () => {
 
     expect(screen.getByRole('button', { name: 'Investigate' })).not.toBeDisabled();
     expect(screen.getByRole('button', { name: 'Remediate' })).not.toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: 'Alert-Triggered Analysis' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Alert-Triggered Patrols' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Anomaly-Triggered Patrols' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', { name: 'Autonomous critical remediation' }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
   });

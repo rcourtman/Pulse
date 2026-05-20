@@ -1,4 +1,4 @@
-import { createMemo, For, Show } from 'solid-js';
+import { createMemo, createUniqueId, For, Show } from 'solid-js';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import PlayIcon from 'lucide-solid/icons/play';
 import CircleHelpIcon from 'lucide-solid/icons/circle-help';
@@ -42,6 +42,13 @@ export function getPatrolConfigurationFailureInlineDetails(
 
 export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState }) {
   const state = props.state;
+  const fieldIdPrefix = `patrol-config-${createUniqueId()}`;
+  const fieldIds = {
+    alertTriggeredAnalysis: `${fieldIdPrefix}-alert-triggered-analysis`,
+    patrolAlertTriggers: `${fieldIdPrefix}-alert-triggered-patrols`,
+    patrolAnomalyTriggers: `${fieldIdPrefix}-anomaly-triggered-patrols`,
+    autonomousCriticalRemediation: `${fieldIdPrefix}-autonomous-critical-remediation`,
+  };
   const headerMeta = getPatrolPageHeaderMeta();
   const scheduleOptions = createMemo(() => buildPatrolScheduleOptions(state.patrolInterval()));
   const selectedScheduleLabel = createMemo(
@@ -325,9 +332,12 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                   <div class="space-y-4 pt-4 border-t border-border-subtle">
                     <div class="flex items-start justify-between gap-3">
                       <div class="flex-1">
-                        <label class="text-sm font-medium text-base-content">
+                        <span
+                          id={fieldIds.alertTriggeredAnalysis}
+                          class="text-sm font-medium text-base-content"
+                        >
                           Alert-Triggered Analysis
-                        </label>
+                        </span>
                         <p class="text-[11px] text-muted mt-0.5 leading-tight">
                           Analyze infrastructure automatically when critical alerts fire.
                         </p>
@@ -338,6 +348,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                           state.handleAlertTriggeredAnalysisChange(e.currentTarget.checked)
                         }
                         disabled={state.isUpdatingSettings() || state.alertAnalysisLocked()}
+                        ariaLabelledBy={fieldIds.alertTriggeredAnalysis}
                       />
                     </div>
 
@@ -365,9 +376,12 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
 
                     <div class="flex items-start justify-between gap-3">
                       <div class="flex-1">
-                        <label class="text-sm font-medium text-base-content">
+                        <span
+                          id={fieldIds.patrolAlertTriggers}
+                          class="text-sm font-medium text-base-content"
+                        >
                           Alert-Triggered Patrols
-                        </label>
+                        </span>
                         <p class="text-[11px] text-muted mt-0.5 leading-tight">
                           Run scoped Patrol checks when alerts fire or clear.
                         </p>
@@ -378,14 +392,18 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                           state.handlePatrolAlertTriggersChange(e.currentTarget.checked)
                         }
                         disabled={state.isUpdatingSettings() || !state.patrolEnabledLocal()}
+                        ariaLabelledBy={fieldIds.patrolAlertTriggers}
                       />
                     </div>
 
                     <div class="flex items-start justify-between gap-3">
                       <div class="flex-1">
-                        <label class="text-sm font-medium text-base-content">
+                        <span
+                          id={fieldIds.patrolAnomalyTriggers}
+                          class="text-sm font-medium text-base-content"
+                        >
                           Anomaly-Triggered Patrols
-                        </label>
+                        </span>
                         <p class="text-[11px] text-muted mt-0.5 leading-tight">
                           Run scoped Patrol checks when learned baselines detect high-signal
                           anomalies.
@@ -397,14 +415,18 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                           state.handlePatrolAnomalyTriggersChange(e.currentTarget.checked)
                         }
                         disabled={state.isUpdatingSettings() || !state.patrolEnabledLocal()}
+                        ariaLabelledBy={fieldIds.patrolAnomalyTriggers}
                       />
                     </div>
 
                     <div class="flex items-start justify-between gap-3">
                       <div class="flex-1">
-                        <label class="text-sm font-medium text-red-600 dark:text-red-400">
+                        <span
+                          id={fieldIds.autonomousCriticalRemediation}
+                          class="text-sm font-medium text-red-600 dark:text-red-400"
+                        >
                           Autonomous critical remediation
-                        </label>
+                        </span>
                         <p class="text-[11px] text-muted mt-0.5 leading-tight">
                           Permit Patrol to execute critical remediation actions without approval.
                         </p>
@@ -418,6 +440,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                             state.autonomyLevel() === 'assisted' || state.autonomyLevel() === 'full'
                           )
                         }
+                        ariaLabelledBy={fieldIds.autonomousCriticalRemediation}
                       />
                     </div>
                   </div>
