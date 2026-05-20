@@ -1,4 +1,4 @@
-import { Show, For } from 'solid-js';
+import { Show, For, createUniqueId } from 'solid-js';
 import type { UIEmailConfig } from '@/features/alerts/types';
 import {
   ALERT_EMAIL_FROM_ADDRESS_LABEL,
@@ -46,6 +46,19 @@ interface EmailProviderSelectProps extends EmailProviderSelectStateProps {
 
 export function EmailProviderSelect(props: EmailProviderSelectProps) {
   const state = useEmailProviderSelectState(props);
+  const fieldIdPrefix = `alert-email-${createUniqueId()}`;
+  const fieldIds = {
+    smtpServer: `${fieldIdPrefix}-smtp-server`,
+    smtpPort: `${fieldIdPrefix}-smtp-port`,
+    fromAddress: `${fieldIdPrefix}-from-address`,
+    replyTo: `${fieldIdPrefix}-reply-to`,
+    username: `${fieldIdPrefix}-username`,
+    password: `${fieldIdPrefix}-password`,
+    recipients: `${fieldIdPrefix}-recipients`,
+    rateLimit: `${fieldIdPrefix}-rate-limit`,
+    maxRetries: `${fieldIdPrefix}-max-retries`,
+    retryDelay: `${fieldIdPrefix}-retry-delay`,
+  };
   const instructionBoxClass =
     'mt-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200';
 
@@ -103,8 +116,11 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
 
       <div class="grid w-full gap-3 sm:grid-cols-2">
         <div class={formField}>
-          <label class={labelClass()}>{ALERT_EMAIL_SMTP_SERVER_LABEL}</label>
+          <label for={fieldIds.smtpServer} class={labelClass()}>
+            {ALERT_EMAIL_SMTP_SERVER_LABEL}
+          </label>
           <input
+            id={fieldIds.smtpServer}
             type="text"
             value={props.config.server}
             onInput={(e) => props.onChange({ ...props.config, server: e.currentTarget.value })}
@@ -114,8 +130,11 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         </div>
 
         <div class={formField}>
-          <label class={labelClass()}>{ALERT_EMAIL_SMTP_PORT_LABEL}</label>
+          <label for={fieldIds.smtpPort} class={labelClass()}>
+            {ALERT_EMAIL_SMTP_PORT_LABEL}
+          </label>
           <input
+            id={fieldIds.smtpPort}
             type="number"
             min="1"
             max="65535"
@@ -139,8 +158,11 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         </div>
 
         <div class={formField}>
-          <label class={labelClass()}>{ALERT_EMAIL_FROM_ADDRESS_LABEL}</label>
+          <label for={fieldIds.fromAddress} class={labelClass()}>
+            {ALERT_EMAIL_FROM_ADDRESS_LABEL}
+          </label>
           <input
+            id={fieldIds.fromAddress}
             type="email"
             value={props.config.from}
             onInput={(e) => props.onChange({ ...props.config, from: e.currentTarget.value })}
@@ -150,8 +172,11 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         </div>
 
         <div class={formField}>
-          <label class={labelClass()}>{ALERT_EMAIL_REPLY_TO_LABEL}</label>
+          <label for={fieldIds.replyTo} class={labelClass()}>
+            {ALERT_EMAIL_REPLY_TO_LABEL}
+          </label>
           <input
+            id={fieldIds.replyTo}
             type="email"
             value={props.config.replyTo || ''}
             onInput={(e) => props.onChange({ ...props.config, replyTo: e.currentTarget.value })}
@@ -161,8 +186,11 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         </div>
 
         <div class={formField}>
-          <label class={labelClass()}>{ALERT_EMAIL_USERNAME_LABEL}</label>
+          <label for={fieldIds.username} class={labelClass()}>
+            {ALERT_EMAIL_USERNAME_LABEL}
+          </label>
           <input
+            id={fieldIds.username}
             type="text"
             value={props.config.username}
             onInput={(e) => props.onChange({ ...props.config, username: e.currentTarget.value })}
@@ -172,8 +200,11 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         </div>
 
         <div class={formField}>
-          <label class={labelClass()}>{ALERT_EMAIL_PASSWORD_LABEL}</label>
+          <label for={fieldIds.password} class={labelClass()}>
+            {ALERT_EMAIL_PASSWORD_LABEL}
+          </label>
           <input
+            id={fieldIds.password}
             type="password"
             value={props.config.password}
             onInput={(e) => props.onChange({ ...props.config, password: e.currentTarget.value })}
@@ -184,8 +215,11 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
       </div>
 
       <div class={formField}>
-        <label class={labelClass()}>{ALERT_EMAIL_RECIPIENTS_LABEL}</label>
+        <label for={fieldIds.recipients} class={labelClass()}>
+          {ALERT_EMAIL_RECIPIENTS_LABEL}
+        </label>
         <textarea
+          id={fieldIds.recipients}
           value={props.config.to.join('\n')}
           onInput={(e) => {
             // Keep raw lines while editing — trimming/filtering on every
@@ -240,10 +274,14 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
                 <option value="tls">{ALERT_EMAIL_SECURITY_TLS_LABEL}</option>
               </FormSelect>
               <div class="flex w-full flex-wrap items-center gap-2 sm:flex-nowrap">
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                <label
+                  for={fieldIds.rateLimit}
+                  class={labelClass('text-xs uppercase tracking-[0.08em]')}
+                >
                   {ALERT_EMAIL_RATE_LIMIT_LABEL}
                 </label>
                 <input
+                  id={fieldIds.rateLimit}
                   type="number"
                   min="1"
                   value={props.config.rateLimit || 60}
@@ -258,10 +296,14 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
 
             <div class="grid w-full gap-3 sm:grid-cols-2">
               <div class={formField}>
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                <label
+                  for={fieldIds.maxRetries}
+                  class={labelClass('text-xs uppercase tracking-[0.08em]')}
+                >
                   {ALERT_EMAIL_MAX_RETRIES_LABEL}
                 </label>
                 <input
+                  id={fieldIds.maxRetries}
                   type="number"
                   value={props.config.maxRetries || 3}
                   min={0}
@@ -273,10 +315,14 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
                 />
               </div>
               <div class={formField}>
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                <label
+                  for={fieldIds.retryDelay}
+                  class={labelClass('text-xs uppercase tracking-[0.08em]')}
+                >
                   {ALERT_EMAIL_RETRY_DELAY_LABEL}
                 </label>
                 <input
+                  id={fieldIds.retryDelay}
                   type="number"
                   value={props.config.retryDelay || 5}
                   min={1}

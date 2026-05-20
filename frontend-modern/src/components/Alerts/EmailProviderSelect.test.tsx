@@ -133,6 +133,26 @@ describe('EmailProviderSelect', () => {
     );
   });
 
+  it('associates visible labels with manual SMTP fields', () => {
+    render(() => (
+      <EmailProviderSelect config={makeConfig()} onChange={onChangeMock} onTest={onTestMock} />
+    ));
+
+    expect(screen.getByRole('textbox', { name: 'SMTP server' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'SMTP port' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'From address' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Reply-to address' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Username' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Password / API key')).toHaveAttribute('type', 'password');
+    expect(screen.getByRole('textbox', { name: 'Recipients (one per line)' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Show advanced options'));
+
+    expect(screen.getByRole('spinbutton', { name: 'Rate limit' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'Max retries' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'Retry delay (seconds)' })).toBeInTheDocument();
+  });
+
   it('loads providers from the API and populates the select', async () => {
     render(() => (
       <EmailProviderSelect config={makeConfig()} onChange={onChangeMock} onTest={onTestMock} />

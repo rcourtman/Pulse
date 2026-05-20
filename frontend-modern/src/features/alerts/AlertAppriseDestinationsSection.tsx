@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { Show, createUniqueId } from 'solid-js';
 
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { TlsVerificationWarningBanner } from '@/components/shared/TlsVerificationWarningBanner';
@@ -49,6 +49,18 @@ interface AlertAppriseDestinationsSectionProps {
 }
 
 export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsSectionProps) {
+  const fieldIdPrefix = `alert-apprise-${createUniqueId()}`;
+  const fieldIds = {
+    targets: `${fieldIdPrefix}-targets`,
+    cliPath: `${fieldIdPrefix}-cli-path`,
+    serverUrl: `${fieldIdPrefix}-server-url`,
+    configKey: `${fieldIdPrefix}-config-key`,
+    apiKey: `${fieldIdPrefix}-api-key`,
+    apiKeyHeader: `${fieldIdPrefix}-api-key-header`,
+    skipTlsVerify: `${fieldIdPrefix}-skip-tls-verify`,
+    timeout: `${fieldIdPrefix}-timeout`,
+  };
+
   return (
     <SettingsPanel
       title={ALERT_DESTINATIONS_APPRISE_PANEL_TITLE}
@@ -97,10 +109,11 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
         </FormSelect>
 
         <div class={formField}>
-          <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+          <label for={fieldIds.targets} class={labelClass('text-xs uppercase tracking-[0.08em]')}>
             {ALERT_DESTINATIONS_APPRISE_TARGETS_LABEL}
           </label>
           <textarea
+            id={fieldIds.targets}
             rows={4}
             class={`${formControl} min-h-[120px] font-mono`}
             value={props.config.targetsText}
@@ -115,10 +128,11 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
 
         <Show when={props.config.mode === 'cli'}>
           <div class={formField}>
-            <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+            <label for={fieldIds.cliPath} class={labelClass('text-xs uppercase tracking-[0.08em]')}>
               {ALERT_DESTINATIONS_APPRISE_CLI_PATH_LABEL}
             </label>
             <input
+              id={fieldIds.cliPath}
               type="text"
               value={props.config.cliPath}
               class={formControl}
@@ -135,10 +149,14 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
         <Show when={props.config.mode === 'http'}>
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div class={`${formField} sm:col-span-2`}>
-              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+              <label
+                for={fieldIds.serverUrl}
+                class={labelClass('text-xs uppercase tracking-[0.08em]')}
+              >
                 {ALERT_DESTINATIONS_APPRISE_SERVER_URL_LABEL}
               </label>
               <input
+                id={fieldIds.serverUrl}
                 type="text"
                 value={props.config.serverUrl}
                 class={formControl}
@@ -151,10 +169,14 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
               <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_SERVER_URL_HELP}</p>
             </div>
             <div class={formField}>
-              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+              <label
+                for={fieldIds.configKey}
+                class={labelClass('text-xs uppercase tracking-[0.08em]')}
+              >
                 {ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_LABEL}
               </label>
               <input
+                id={fieldIds.configKey}
                 type="text"
                 value={props.config.configKey}
                 class={formControl}
@@ -167,10 +189,14 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
               <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_HELP}</p>
             </div>
             <div class={formField}>
-              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+              <label
+                for={fieldIds.apiKey}
+                class={labelClass('text-xs uppercase tracking-[0.08em]')}
+              >
                 {ALERT_DESTINATIONS_APPRISE_API_KEY_LABEL}
               </label>
               <input
+                id={fieldIds.apiKey}
                 type="password"
                 value={props.config.apiKey}
                 class={formControl}
@@ -183,10 +209,14 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
               <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_API_KEY_HELP}</p>
             </div>
             <div class={formField}>
-              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+              <label
+                for={fieldIds.apiKeyHeader}
+                class={labelClass('text-xs uppercase tracking-[0.08em]')}
+              >
                 {ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_LABEL}
               </label>
               <input
+                id={fieldIds.apiKeyHeader}
                 type="text"
                 value={props.config.apiKeyHeader}
                 class={formControl}
@@ -211,6 +241,7 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
               </Show>
               <label class="inline-flex items-center gap-2">
                 <input
+                  id={fieldIds.skipTlsVerify}
                   type="checkbox"
                   class="h-4 w-4 rounded border border-border"
                   checked={props.config.skipTlsVerify}
@@ -229,10 +260,11 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
         </Show>
 
         <div class={formField}>
-          <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+          <label for={fieldIds.timeout} class={labelClass('text-xs uppercase tracking-[0.08em]')}>
             {ALERT_DESTINATIONS_APPRISE_TIMEOUT_LABEL}
           </label>
           <input
+            id={fieldIds.timeout}
             type="number"
             min="5"
             max="120"
