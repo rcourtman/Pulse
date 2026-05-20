@@ -115,7 +115,7 @@ describe('AppLayout navigation icons', () => {
     expect(container).toHaveTextContent('Infrastructure body');
   });
 
-  it('hides platform tabs without supported infrastructure evidence', () => {
+  it('shows platform tabs with supported infrastructure evidence', () => {
     renderLayout([
       makeResource({ id: 'pve-1', type: 'agent', platformType: 'proxmox-pve' }),
       makeResource({ id: 'docker-1', type: 'docker-host', platformType: 'docker' }),
@@ -139,8 +139,8 @@ describe('AppLayout navigation icons', () => {
       within(infrastructureGroup as HTMLElement).queryByRole('tab', { name: 'TrueNAS' }),
     ).toBeNull();
     expect(
-      within(infrastructureGroup as HTMLElement).queryByRole('tab', { name: 'vSphere' }),
-    ).toBeNull();
+      within(infrastructureGroup as HTMLElement).getByRole('tab', { name: 'vSphere' }),
+    ).toBeTruthy();
   });
 
   it('keeps connected brand motion on the logo while the wordmark stays static', () => {

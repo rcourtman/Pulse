@@ -46,10 +46,7 @@ import {
   persistThemePreference,
   type ThemePreference,
 } from '@/utils/theme';
-import {
-  initKioskMode,
-  getPulseWebSocketUrl,
-} from '@/utils/url';
+import { initKioskMode, getPulseWebSocketUrl } from '@/utils/url';
 import { syncKioskMode } from '@/hooks/useKioskMode';
 import {
   isHostedModeEnabled,
@@ -73,12 +70,7 @@ import {
 type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
 
 export type AppConnectionStatus = {
-  kind:
-    | 'connected'
-    | 'sync-reconnecting'
-    | 'backend-healthy'
-    | 'reconnecting'
-    | 'disconnected';
+  kind: 'connected' | 'sync-reconnecting' | 'backend-healthy' | 'reconnecting' | 'disconnected';
   label: string;
   detail: string;
   tone: 'healthy' | 'warning' | 'offline';
@@ -89,6 +81,9 @@ const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 
 const isPreAuthLoginBootstrapPath = (pathname: string): boolean =>
   pathname === '/' || pathname === '/login';
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
 
 export const useAppRuntimeState = () => {
   initKioskMode();
@@ -218,6 +213,51 @@ export const useAppRuntimeState = () => {
     lastUpdate: 0,
     resources: [],
   };
+  const normalizeBootstrapState = (value: unknown): State | null => {
+    if (!isRecord(value)) return null;
+    return {
+      ...fallbackState,
+      ...value,
+      connectedInfrastructure: Array.isArray(value.connectedInfrastructure)
+        ? (value.connectedInfrastructure as State['connectedInfrastructure'])
+        : fallbackState.connectedInfrastructure,
+      metrics: Array.isArray(value.metrics)
+        ? (value.metrics as State['metrics'])
+        : fallbackState.metrics,
+      performance: isRecord(value.performance)
+        ? ({ ...fallbackState.performance, ...value.performance } as State['performance'])
+        : fallbackState.performance,
+      connectionHealth: isRecord(value.connectionHealth)
+        ? (value.connectionHealth as State['connectionHealth'])
+        : fallbackState.connectionHealth,
+      stats: isRecord(value.stats)
+        ? ({ ...fallbackState.stats, ...value.stats } as State['stats'])
+        : fallbackState.stats,
+      activeAlerts: Array.isArray(value.activeAlerts)
+        ? (value.activeAlerts as State['activeAlerts'])
+        : fallbackState.activeAlerts,
+      recentlyResolved: Array.isArray(value.recentlyResolved)
+        ? (value.recentlyResolved as State['recentlyResolved'])
+        : fallbackState.recentlyResolved,
+      lastUpdate:
+        typeof value.lastUpdate === 'number' ? value.lastUpdate : fallbackState.lastUpdate,
+      resources: Array.isArray(value.resources)
+        ? (value.resources as State['resources'])
+        : fallbackState.resources,
+    };
+  };
+
+  const hasRuntimeStatePayload = (candidate: State | undefined): boolean => {
+    if (!candidate) return false;
+    return (
+      candidate.lastUpdate > 0 ||
+      candidate.resources.length > 0 ||
+      candidate.connectedInfrastructure.length > 0 ||
+      candidate.activeAlerts.length > 0 ||
+      candidate.recentlyResolved.length > 0 ||
+      candidate.metrics.length > 0
+    );
+  };
 
   const [isLoading, setIsLoading] = createSignal(true);
   const [needsAuth, setNeedsAuth] = createSignal(false);
@@ -233,8 +273,16 @@ export const useAppRuntimeState = () => {
     logoutURL?: string;
   } | null>(null);
   const [wsStore, setWsStore] = createSignal<EnhancedStore | null>(null);
+  const [bootstrapState, setBootstrapState] = createSignal<State | null>(null);
   const [backendHealthy, setBackendHealthy] = createSignal(false);
-  const state = (): State => wsStore()?.state || fallbackState;
+  const state = (): State => {
+    const store = wsStore();
+    const liveState = store?.state;
+    if (liveState && (store.initialDataReceived() || hasRuntimeStatePayload(liveState))) {
+      return liveState;
+    }
+    return bootstrapState() || liveState || fallbackState;
+  };
   const connected = () => wsStore()?.connected() || false;
   const reconnecting = () => wsStore()?.reconnecting() || false;
   const [lastUpdateText, setLastUpdateText] = createSignal('');
@@ -436,6 +484,7 @@ export const useAppRuntimeState = () => {
 
     setSelectedOrgID(target);
     setActiveOrgID(target);
+    setBootstrapState(null);
     eventBus.emit('org_switched', target);
 
     try {
@@ -491,9 +540,12 @@ export const useAppRuntimeState = () => {
     }
 
     if (typeof window.requestIdleCallback === 'function') {
-      const id = window.requestIdleCallback(() => {
-        prewarmAppShellCharts();
-      }, { timeout: 2_000 });
+      const id = window.requestIdleCallback(
+        () => {
+          prewarmAppShellCharts();
+        },
+        { timeout: 2_000 },
+      );
       onCleanup(() => {
         window.cancelIdleCallback(id);
       });
@@ -555,9 +607,12 @@ export const useAppRuntimeState = () => {
     }
 
     void checkBackendHealth();
-    const interval = window.setInterval(() => {
-      void checkBackendHealth();
-    }, reconnecting() ? 5000 : 15000);
+    const interval = window.setInterval(
+      () => {
+        void checkBackendHealth();
+      },
+      reconnecting() ? 5000 : 15000,
+    );
 
     onCleanup(() => {
       window.clearInterval(interval);
@@ -566,7 +621,10 @@ export const useAppRuntimeState = () => {
 
   const handleThemeChange = async (newPreference: ThemePreference) => {
     applyThemePreferenceLocally(newPreference);
-    logger.info('Theme changed', { pref: newPreference, active: computeIsDark(newPreference) ? 'dark' : 'light' });
+    logger.info('Theme changed', {
+      pref: newPreference,
+      active: computeIsDark(newPreference) ? 'dark' : 'light',
+    });
 
     if (!needsAuth()) {
       try {
@@ -722,8 +780,15 @@ export const useAppRuntimeState = () => {
       });
 
       if (stateResponse.status === 401) {
+        setBootstrapState(null);
         setNeedsAuth(true);
       } else {
+        const protectedState = await stateResponse
+          .clone()
+          .json()
+          .then(normalizeBootstrapState)
+          .catch(() => null);
+        setBootstrapState(protectedState);
         await beginAuthenticatedRuntime();
       }
     } catch (error) {
@@ -736,6 +801,7 @@ export const useAppRuntimeState = () => {
       }
       aiChatStore.setEnabled(false);
       setHasAuth(false);
+      setBootstrapState(null);
       setNeedsAuth(true);
     } finally {
       setIsLoading(false);
@@ -777,6 +843,7 @@ export const useAppRuntimeState = () => {
     sessionStorage.clear();
     localStorage.setItem('just_logged_out', 'true');
     aiChatStore.setEnabled(false);
+    setBootstrapState(null);
 
     if (wsStore()) {
       setWsStore(null);

@@ -1,6 +1,7 @@
 import { createRoot } from 'solid-js';
 import { waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Resource } from '@/types/resource';
 
 type UseAppRuntimeStateModule = typeof import('@/useAppRuntimeState');
 
@@ -48,7 +49,10 @@ describe('useAppRuntimeState', () => {
       writable: true,
       configurable: true,
       value: vi.fn((cb: IdleRequestCallback) =>
-        window.setTimeout(() => cb({ didTimeout: false, timeRemaining: () => 50 } as IdleDeadline), 0),
+        window.setTimeout(
+          () => cb({ didTimeout: false, timeRemaining: () => 50 } as IdleDeadline),
+          0,
+        ),
       ),
     });
 
@@ -114,6 +118,7 @@ describe('useAppRuntimeState', () => {
         },
         connected: () => false,
         reconnecting: () => false,
+        initialDataReceived: () => false,
         reconnect: vi.fn(),
         switchUrl: vi.fn(),
       }),
@@ -344,6 +349,47 @@ describe('useAppRuntimeState', () => {
     dispose();
   });
 
+  it('uses the protected state response as shell state before websocket data arrives', async () => {
+    const bootstrapResource: Resource = {
+      id: 'pve-1',
+      name: 'pve-1',
+      displayName: 'pve-1',
+      type: 'agent',
+      platformId: 'pve-1',
+      platformType: 'proxmox-pve',
+      sourceType: 'api',
+      sources: ['proxmox'],
+      status: 'online',
+      lastSeen: 1_700_000_000_000,
+    };
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/security/status') {
+        return new Response(JSON.stringify({ hasAuthentication: true }), { status: 200 });
+      }
+      if (url === '/api/state') {
+        return new Response(
+          JSON.stringify({
+            resources: [bootstrapResource],
+            lastUpdate: 1_700_000_000_000,
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === '/api/health') {
+        return new Response('{}', { status: 200 });
+      }
+      throw new Error(`Unhandled apiFetch URL: ${url}`);
+    });
+
+    const { hookState, dispose } = mountHook();
+
+    await waitFor(() => {
+      expect(hookState.state().resources).toEqual([bootstrapResource]);
+    });
+
+    dispose();
+  });
+
   it('skips commercial posture bootstrap when upgrade prompts are hidden', async () => {
     apiFetchMock.mockImplementation(async (url: string) => {
       if (url === '/api/security/status') {
@@ -440,9 +486,7 @@ describe('useAppRuntimeState', () => {
     await flushAsync();
     await flushAsync();
 
-    expect(
-      apiFetchMock.mock.calls.some(([url]) => url === '/api/state'),
-    ).toBe(false);
+    expect(apiFetchMock.mock.calls.some(([url]) => url === '/api/state')).toBe(false);
     expect(hookState.needsAuth()).toBe(true);
 
     dispose();
@@ -457,9 +501,7 @@ describe('useAppRuntimeState', () => {
     await flushAsync();
     await flushAsync();
 
-    expect(
-      apiFetchMock.mock.calls.some(([url]) => url === '/api/state'),
-    ).toBe(false);
+    expect(apiFetchMock.mock.calls.some(([url]) => url === '/api/state')).toBe(false);
     expect(hookState.needsAuth()).toBe(true);
 
     dispose();
@@ -475,9 +517,7 @@ describe('useAppRuntimeState', () => {
     await flushAsync();
     await flushAsync();
 
-    expect(
-      apiFetchMock.mock.calls.some(([url]) => url === '/api/state'),
-    ).toBe(true);
+    expect(apiFetchMock.mock.calls.some(([url]) => url === '/api/state')).toBe(true);
 
     dispose();
   });

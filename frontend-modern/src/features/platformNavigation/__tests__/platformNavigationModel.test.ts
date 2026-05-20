@@ -47,7 +47,7 @@ describe('platformNavigationModel', () => {
       docker: false,
       kubernetes: true,
       truenas: true,
-      vmware: false,
+      vmware: true,
     });
   });
 
