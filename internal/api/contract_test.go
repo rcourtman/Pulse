@@ -8597,6 +8597,42 @@ func TestContract_CachedDiscoveryResponseJSONSnapshot(t *testing.T) {
 	}
 }
 
+func TestContract_DiscoveryCommandScanRoutesRequireSettingsWrite(t *testing.T) {
+	monitoringToken := "discovery-command-monitoring-token-123.12345678"
+	settingsToken := "discovery-command-settings-token-123.12345678"
+	monitoringRecord := newTokenRecord(t, monitoringToken, []string{config.ScopeMonitoringWrite}, nil)
+	settingsRecord := newTokenRecord(t, settingsToken, []string{config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, monitoringRecord, settingsRecord)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/discovery/run",
+		"/api/discovery/agent/host-1/resource-1",
+		"/api/discovery/vm/host-1/resource-1",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		req.Header.Set("X-API-Token", monitoringToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected monitoring:write token to be forbidden for command-scan route %s, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+			t.Fatalf("expected command-scan route %s to require %q, got %q", path, config.ScopeSettingsWrite, rec.Body.String())
+		}
+
+		req = httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		req.Header.Set("X-API-Token", settingsToken)
+		rec = httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code == http.StatusForbidden && strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+			t.Fatalf("expected settings:write token to pass route scope for command-scan route %s, got %d: %s", path, rec.Code, rec.Body.String())
+		}
+	}
+}
+
 func TestContract_AutoRegisterRequestJSONSnapshot(t *testing.T) {
 	payload := AutoRegisterRequest{
 		Type:       "pve",

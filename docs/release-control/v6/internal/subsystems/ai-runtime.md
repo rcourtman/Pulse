@@ -1151,6 +1151,15 @@ must honor that `Trusted` flag by bypassing the approval requirement,
 while still enforcing `PolicyBlock`. AI tool calls, Patrol fixes, and
 Assistant remediation must continue to flow through the governed approval
 record path and must never set `Trusted` on their payloads.
+Discovery command-backed scans are additionally gated by the operator's
+Discovery setting, not by the mere presence of a service-discovery store,
+connected agent, or command-capable agent token. `discovery_enabled=false`
+must fail closed for background sweeps, `/api/discovery/run`, forced
+single-resource discovery, and `pulse_discovery` refreshes before any
+`DeepScanner` command dispatch. `discovery_enabled=true` with
+`discovery_interval_hours: 0` is the only manual-command-scan mode: recurring
+scans stay stopped, but explicit admin-triggered refreshes may use the
+hardcoded trusted catalog.
 The same action-audit boundary now also requires persisted action records to
 carry a normalized plan and preflight: action id, request id, capability,
 approval policy, dry-run availability, safety checks, verification steps, and

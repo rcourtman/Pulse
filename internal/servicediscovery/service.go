@@ -256,6 +256,7 @@ type Service struct {
 	mu                sync.RWMutex
 	running           bool
 	stopping          bool
+	commandScanning   bool
 	stopCh            chan struct{}
 	loopDone          chan struct{}
 	runCancel         context.CancelFunc
@@ -302,6 +303,7 @@ type Config struct {
 	// Fingerprint-based discovery settings
 	MaxDiscoveryAge     time.Duration // Rediscover after this duration (default 30 days)
 	FingerprintInterval time.Duration // How often to collect fingerprints (default 5 min)
+	CommandScanning     bool          // Enables agent command-backed deep scans
 }
 
 const (
@@ -321,6 +323,7 @@ func DefaultConfig() Config {
 		DeepScanTimeout:     defaultDiscoveryScanTimeout,
 		MaxDiscoveryAge:     defaultDiscoveryMaxAge,
 		FingerprintInterval: defaultDiscoveryInterval,
+		CommandScanning:     false,
 	}
 }
 
@@ -395,7 +398,29 @@ func NewService(store *Store, scanner *DeepScanner, cfg Config) *Service {
 		intervalCh:        make(chan time.Duration, 1), // Buffered to prevent blocking
 		analysisCache:     make(map[string]*analysisCacheEntry),
 		inProgress:        make(map[string]*discoveryInProgress),
+		commandScanning:   cfg.CommandScanning,
 	}
+}
+
+// SetCommandScanningEnabled controls whether this service may dispatch
+// command-backed deep scans through connected Pulse agents.
+func (s *Service) SetCommandScanningEnabled(enabled bool) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.commandScanning = enabled
+	s.mu.Unlock()
+}
+
+// IsCommandScanningEnabled reports whether command-backed deep scans may run.
+func (s *Service) IsCommandScanningEnabled() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.commandScanning
 }
 
 // SetAIAnalyzer sets the AI analyzer for discovery.
@@ -418,6 +443,11 @@ func (s *Service) Start(ctx context.Context) {
 	s.mu.Lock()
 	if s.running || s.stopping {
 		s.mu.Unlock()
+		return
+	}
+	if !s.commandScanning {
+		s.mu.Unlock()
+		log.Info().Msg("Discovery command scanning disabled; background discovery service not started")
 		return
 	}
 	runCtx, cancel := context.WithCancel(ctx)
@@ -635,6 +665,9 @@ func (s *Service) RunManualDiscoveryRefresh(ctx context.Context) (DiscoveryRefre
 	if ctx == nil || ctx.Err() != nil || s.store == nil {
 		return DiscoveryRefreshSummary{Mode: "manual"}, fmt.Errorf("discovery service is not ready")
 	}
+	if !s.IsCommandScanningEnabled() {
+		return DiscoveryRefreshSummary{Mode: "manual"}, fmt.Errorf("discovery command scanning is disabled")
+	}
 
 	s.collectFingerprints(ctx)
 	return s.runDiscoveryRefresh(ctx, "manual")
@@ -644,6 +677,9 @@ func (s *Service) runDiscoveryRefresh(ctx context.Context, mode string) (Discove
 	summary := DiscoveryRefreshSummary{Mode: mode}
 	if ctx == nil || ctx.Err() != nil || s.store == nil {
 		return summary, fmt.Errorf("discovery service is not ready")
+	}
+	if !s.IsCommandScanningEnabled() {
+		return summary, fmt.Errorf("discovery command scanning is disabled")
 	}
 
 	s.mu.RLock()
@@ -1285,7 +1321,7 @@ func (s *Service) discoverDockerContainers(ctx context.Context, hosts []DockerHo
 			if discovery != nil {
 				// Smart auto deep scan: enhance if discovery is incomplete or low-confidence
 				// Also deep scan if there's no existing discovery (first time)
-				if s.scanner != nil && (existing == nil || s.needsDeepScan(discovery)) {
+				if s.scanner != nil && s.IsCommandScanningEnabled() && (existing == nil || s.needsDeepScan(discovery)) {
 					log.Info().
 						Str("id", id).
 						Float64("confidence", discovery.Confidence).
@@ -1314,7 +1350,7 @@ func (s *Service) enhanceWithDeepScan(ctx context.Context, discovery *ResourceDi
 	s.mu.RUnlock()
 	timeout = normalizeDeepScanTimeout(timeout)
 
-	if s.scanner == nil || analyzer == nil {
+	if s.scanner == nil || analyzer == nil || !s.IsCommandScanningEnabled() {
 		return discovery
 	}
 
@@ -1645,7 +1681,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	// Run deep scan if scanner is available
 	var scanResult *ScanResult
 	var scanError error
-	if s.scanner != nil {
+	if s.scanner != nil && s.IsCommandScanningEnabled() {
 		scanResult, scanError = s.scanner.Scan(ctx, req)
 		if scanError != nil {
 			log.Warn().
@@ -2864,6 +2900,7 @@ func (s *Service) GetStatusSnapshot() ServiceStatus {
 		AIAnalyzerSet:       s.aiAnalyzer != nil,
 		ScannerSet:          s.scanner != nil,
 		StoreSet:            s.store != nil,
+		CommandScanning:     s.commandScanning,
 		DeepScanTimeout:     s.deepScanTimeout.String(),
 		AIAnalysisTimeout:   s.aiAnalysisTimeout.String(),
 		MaxDiscoveryAge:     s.maxDiscoveryAge.String(),

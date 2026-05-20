@@ -212,6 +212,24 @@ func TestService_LoadConfig_SyncsInfraDiscoveryLifecycle(t *testing.T) {
 	if status.Running {
 		t.Fatalf("expected infra discovery to stay stopped when discovery is disabled")
 	}
+	if svc.discoveryService == nil {
+		t.Fatalf("expected deep discovery service to be initialized")
+	}
+	if svc.discoveryService.IsCommandScanningEnabled() {
+		t.Fatalf("expected deep discovery command scanning to stay disabled when discovery is disabled")
+	}
+
+	saveConfig(config.AIConfig{
+		Enabled:                false,
+		Model:                  "ollama:llama3.2",
+		OllamaBaseURL:          "http://localhost:11434",
+		DiscoveryEnabled:       true,
+		DiscoveryIntervalHours: 2,
+	})
+
+	if svc.discoveryService.IsCommandScanningEnabled() {
+		t.Fatalf("expected deep discovery command scanning to stay disabled when AI is disabled")
+	}
 
 	saveConfig(config.AIConfig{
 		Enabled:                true,
@@ -227,6 +245,9 @@ func TestService_LoadConfig_SyncsInfraDiscoveryLifecycle(t *testing.T) {
 	}
 	if status.Interval != 2*time.Hour {
 		t.Fatalf("expected infra discovery interval 2h, got %v", status.Interval)
+	}
+	if !svc.discoveryService.IsCommandScanningEnabled() {
+		t.Fatalf("expected deep discovery command scanning to enable with AI discovery")
 	}
 
 	saveConfig(config.AIConfig{
@@ -256,6 +277,9 @@ func TestService_LoadConfig_SyncsInfraDiscoveryLifecycle(t *testing.T) {
 	status = svc.infraDiscoveryService.GetStatusSnapshot()
 	if status.Running {
 		t.Fatalf("expected infra discovery to stop in manual discovery mode")
+	}
+	if !svc.discoveryService.IsCommandScanningEnabled() {
+		t.Fatalf("expected manual discovery mode to keep command scanning enabled")
 	}
 }
 

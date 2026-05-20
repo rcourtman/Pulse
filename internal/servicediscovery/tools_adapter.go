@@ -84,6 +84,20 @@ func (a *ToolsAdapter) FormatForAIContext(sourceData []tools.DiscoverySourceData
 
 // TriggerDiscovery implements tools.DiscoverySource - initiates discovery for a resource
 func (a *ToolsAdapter) TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string, force bool) (tools.DiscoverySourceData, error) {
+	if !a.service.IsCommandScanningEnabled() {
+		if force {
+			return tools.DiscoverySourceData{}, fmt.Errorf("discovery command scanning is disabled")
+		}
+		discovery, err := a.service.GetDiscoveryByResource(ResourceType(resourceType), targetID, resourceID)
+		if err != nil {
+			return tools.DiscoverySourceData{}, fmt.Errorf("get discovery for %s/%s/%s: %w", resourceType, targetID, resourceID, err)
+		}
+		if discovery == nil {
+			return tools.DiscoverySourceData{}, nil
+		}
+		return a.convertToSourceData(discovery), nil
+	}
+
 	req := DiscoveryRequest{
 		ResourceType: ResourceType(resourceType),
 		TargetID:     targetID,

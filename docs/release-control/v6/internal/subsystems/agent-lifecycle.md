@@ -752,7 +752,11 @@ profile and assignment columns, but embedded table framing must route through
     compact: the persistent page may expose only a concise discovery status
     line plus `Run discovery` / `Discovery settings` actions, while new-source
     admission stays on the per-platform table actions instead of competing
-    with discovery at the top of the page.
+   with discovery at the top of the page. Command-backed discovery sweeps and
+   forced single-resource refreshes remain API/AI-owned admin operations:
+   lifecycle surfaces may expose the controls, but route-level authority must
+   require `settings:write` plus the Discovery enablement gate, not
+   `monitoring:write`, enrollment state, or any fleet lifecycle shortcut.
     The editor's probe step calls the aggregator probe endpoint and
     dispatches the detected or manually-selected type into a credential
     slot; it must not bypass the probe endpoint or fabricate probe

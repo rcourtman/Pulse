@@ -49,6 +49,7 @@ func (m *MockCommandExecutor) IsAgentConnected(agentID string) bool {
 func setupDiscoveryHandlers(t *testing.T) (*DiscoveryHandlers, *servicediscovery.Service, *servicediscovery.Store) {
 	// Create temp dir
 	tmpDir := t.TempDir()
+	InitSessionStore(tmpDir)
 
 	// Create real store
 	store, err := servicediscovery.NewStore(tmpDir)
@@ -60,6 +61,7 @@ func setupDiscoveryHandlers(t *testing.T) (*DiscoveryHandlers, *servicediscovery
 
 	// Create service
 	cfg := servicediscovery.DefaultConfig()
+	cfg.CommandScanning = true
 	service := servicediscovery.NewService(store, scanner, cfg)
 
 	// Create config for handlers (needed for admin check)
@@ -269,6 +271,7 @@ func TestHandleTriggerDiscovery(t *testing.T) {
 
 	reqBody := `{"force": true, "hostname": "my-vm"}`
 	req := httptest.NewRequest("POST", "/api/discovery/vm/node1/100", bytes.NewBufferString(reqBody))
+	req.SetBasicAuth("admin", "admin")
 	w := httptest.NewRecorder()
 
 	// This will fail because MockCommandExecutor returns error for unmocked calls
@@ -288,6 +291,23 @@ func TestHandleTriggerDiscovery(t *testing.T) {
 	// Let's assume for this basic test we just want to ensure routing works.
 	// A 500 is "success" in terms of reaching the handler logic vs 404.
 	assert.True(t, w.Code == http.StatusInternalServerError || w.Code == http.StatusOK)
+}
+
+func TestHandleTriggerDiscoveryRequiresAdminAndEnabledCommandScanning(t *testing.T) {
+	h, svc, _ := setupDiscoveryHandlers(t)
+
+	req := httptest.NewRequest("POST", "/api/discovery/vm/node1/100", bytes.NewBufferString(`{"force":true}`))
+	w := httptest.NewRecorder()
+	h.HandleTriggerDiscovery(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	svc.SetCommandScanningEnabled(false)
+	req = httptest.NewRequest("POST", "/api/discovery/vm/node1/100", bytes.NewBufferString(`{"force":true}`))
+	req.SetBasicAuth("admin", "admin")
+	w = httptest.NewRecorder()
+	h.HandleTriggerDiscovery(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Contains(t, w.Body.String(), "Discovery command scanning is disabled")
 }
 
 func TestHandleUpdateNotes(t *testing.T) {
@@ -361,6 +381,7 @@ func TestHandleRunDiscovery(t *testing.T) {
 	svc.SetAIAnalyzer(discoveryHandlerTestAnalyzer{})
 
 	req := httptest.NewRequest("POST", "/api/discovery/run", nil)
+	req.SetBasicAuth("admin", "admin")
 	w := httptest.NewRecorder()
 
 	h.HandleRunDiscovery(w, req)
@@ -370,6 +391,30 @@ func TestHandleRunDiscovery(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&summary))
 	assert.Equal(t, "manual", summary.Mode)
 	assert.Equal(t, 0, summary.CandidateCount)
+}
+
+func TestHandleRunDiscoveryTokenRequiresSettingsWrite(t *testing.T) {
+	h, svc, _ := setupDiscoveryHandlers(t)
+	svc.SetAIAnalyzer(discoveryHandlerTestAnalyzer{})
+
+	monitoringToken, err := config.NewAPITokenRecord("discovery-monitoring-token-123.12345678", "monitoring", []string{config.ScopeMonitoringWrite})
+	require.NoError(t, err)
+	settingsToken, err := config.NewAPITokenRecord("discovery-settings-token-123.12345678", "settings", []string{config.ScopeSettingsWrite})
+	require.NoError(t, err)
+	h.config.APITokens = []config.APITokenRecord{*monitoringToken, *settingsToken}
+	h.config.SortAPITokens()
+
+	req := httptest.NewRequest("POST", "/api/discovery/run", nil)
+	req.Header.Set("X-API-Token", "discovery-monitoring-token-123.12345678")
+	w := httptest.NewRecorder()
+	h.HandleRunDiscovery(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	req = httptest.NewRequest("POST", "/api/discovery/run", nil)
+	req.Header.Set("X-API-Token", "discovery-settings-token-123.12345678")
+	w = httptest.NewRecorder()
+	h.HandleRunDiscovery(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestHandleUpdateSettings(t *testing.T) {

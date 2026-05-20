@@ -339,6 +339,7 @@ type ServiceStatus struct {
 	AIAnalyzerSet       bool
 	ScannerSet          bool
 	StoreSet            bool
+	CommandScanning     bool
 	DeepScanTimeout     string
 	AIAnalysisTimeout   string
 	MaxDiscoveryAge     string
@@ -368,6 +369,7 @@ func (s ServiceStatus) ToMap() map[string]any {
 		"ai_analyzer_set":       s.AIAnalyzerSet,
 		"scanner_set":           s.ScannerSet,
 		"store_set":             s.StoreSet,
+		"command_scanning":      s.CommandScanning,
 		"deep_scan_timeout":     s.DeepScanTimeout,
 		"ai_analysis_timeout":   s.AIAnalysisTimeout,
 		"max_discovery_age":     s.MaxDiscoveryAge,

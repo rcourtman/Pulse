@@ -2429,27 +2429,28 @@ func TestDiscoveryReadEndpointsRequireMonitoringReadScope(t *testing.T) {
 	}
 }
 
-func TestDiscoveryMutationEndpointsRequireMonitoringWriteScope(t *testing.T) {
+func TestDiscoveryMutationEndpointsRequireWriteScopes(t *testing.T) {
 	rawToken := "discovery-write-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	paths := []struct {
-		method string
-		path   string
-		body   string
+		method        string
+		path          string
+		body          string
+		requiredScope string
 	}{
-		{method: http.MethodPost, path: "/api/discovery/run", body: `{}`},
-		{method: http.MethodPost, path: "/api/discovery/agent/host-1/resource-1", body: `{}`},
-		{method: http.MethodPut, path: "/api/discovery/agent/host-1/resource-1/notes", body: `{}`},
-		{method: http.MethodDelete, path: "/api/discovery/agent/host-1/resource-1", body: ""},
-		{method: http.MethodPost, path: "/api/discovery/agent/host-1/resource-1", body: `{}`},
-		{method: http.MethodPut, path: "/api/discovery/agent/host-1/resource-1/notes", body: `{}`},
-		{method: http.MethodDelete, path: "/api/discovery/agent/host-1/resource-1", body: ""},
-		{method: http.MethodPost, path: "/api/discovery/resource-1", body: `{}`},
-		{method: http.MethodPut, path: "/api/discovery/resource-1/notes", body: `{}`},
-		{method: http.MethodDelete, path: "/api/discovery/resource-1", body: ""},
+		{method: http.MethodPost, path: "/api/discovery/run", body: `{}`, requiredScope: config.ScopeSettingsWrite},
+		{method: http.MethodPost, path: "/api/discovery/agent/host-1/resource-1", body: `{}`, requiredScope: config.ScopeSettingsWrite},
+		{method: http.MethodPut, path: "/api/discovery/agent/host-1/resource-1/notes", body: `{}`, requiredScope: config.ScopeMonitoringWrite},
+		{method: http.MethodDelete, path: "/api/discovery/agent/host-1/resource-1", body: "", requiredScope: config.ScopeMonitoringWrite},
+		{method: http.MethodPost, path: "/api/discovery/agent/host-1/resource-1", body: `{}`, requiredScope: config.ScopeSettingsWrite},
+		{method: http.MethodPut, path: "/api/discovery/agent/host-1/resource-1/notes", body: `{}`, requiredScope: config.ScopeMonitoringWrite},
+		{method: http.MethodDelete, path: "/api/discovery/agent/host-1/resource-1", body: "", requiredScope: config.ScopeMonitoringWrite},
+		{method: http.MethodPost, path: "/api/discovery/resource-1", body: `{}`, requiredScope: config.ScopeSettingsWrite},
+		{method: http.MethodPut, path: "/api/discovery/resource-1/notes", body: `{}`, requiredScope: config.ScopeMonitoringWrite},
+		{method: http.MethodDelete, path: "/api/discovery/resource-1", body: "", requiredScope: config.ScopeMonitoringWrite},
 	}
 
 	for _, tc := range paths {
@@ -2458,10 +2459,10 @@ func TestDiscoveryMutationEndpointsRequireMonitoringWriteScope(t *testing.T) {
 		rec := httptest.NewRecorder()
 		router.Handler().ServeHTTP(rec, req)
 		if rec.Code != http.StatusForbidden {
-			t.Fatalf("expected 403 for missing monitoring:write scope on %s %s, got %d", tc.method, tc.path, rec.Code)
+			t.Fatalf("expected 403 for missing %s scope on %s %s, got %d", tc.requiredScope, tc.method, tc.path, rec.Code)
 		}
-		if !strings.Contains(rec.Body.String(), config.ScopeMonitoringWrite) {
-			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeMonitoringWrite, rec.Body.String())
+		if !strings.Contains(rec.Body.String(), tc.requiredScope) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", tc.requiredScope, rec.Body.String())
 		}
 	}
 }

@@ -1403,10 +1403,11 @@ the canonical monitored-system blocked payload.
     must send `discovery_enabled` and `discovery_interval_hours` together as
     explicit form truth, and the backend must persist a provided
     `discovery_interval_hours: 0` as manual-only rather than replacing it with
-    the automatic-scan default. Manual discovery can be triggered directly
-    through the discovery API for a known resource, through the settings-level
-    `/api/discovery/run` sweep for new/changed/stale workload refresh, and
-    through the governed `pulse_discovery` tool; the API progress payload must
+    the automatic-scan default. Manual command-backed discovery is available
+    only while `discovery_enabled` is true and must be admin-gated at the
+    backend. When Discovery is disabled, direct known-resource refreshes,
+    `/api/discovery/run`, and governed `pulse_discovery` refreshes must fail
+    closed before any agent command dispatch. The API progress payload must
     describe discovery evidence analysis rather than presenting background work
     as a visible Pulse Assistant chat session.
 25. Keep shared AI runtime reads centralized on that same governed contract:

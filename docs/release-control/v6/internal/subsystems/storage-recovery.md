@@ -485,7 +485,10 @@ bypass the API fail-closed execution gate.
    to that adjacent discovery/API boundary. Storage and recovery surfaces may
    consume refreshed workload discovery records, but they must not reinterpret
    the sweep as a recovery scan, protected-system admission, or storage-local
-   ownership signal.
+   ownership signal. Because that sweep can dispatch agent-backed discovery
+   commands, adjacent storage/recovery surfaces must also inherit the
+   API/runtime gate: `settings:write` plus enabled Discovery are required
+   before command-backed refresh, and `monitoring:write` remains insufficient.
    That same adjacent `internal/api/` boundary also keeps public hosted signup
    commercial-only: storage and recovery surfaces must not infer tenant
    existence, email issuance, or readiness from `/api/public/signup` response

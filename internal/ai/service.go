@@ -561,8 +561,11 @@ func (s *Service) initDiscoveryServiceLocked() {
 
 	// Create the discovery service with config-driven settings
 	discoveryCfg := servicediscovery.DefaultConfig()
+	commandScanningEnabled := false
 	if s.cfg != nil {
 		discoveryCfg.Interval = s.cfg.GetDiscoveryInterval()
+		commandScanningEnabled = s.cfg.Enabled && s.cfg.IsDiscoveryEnabled() && s.provider != nil
+		discoveryCfg.CommandScanning = commandScanningEnabled
 	}
 
 	s.discoveryService = servicediscovery.NewService(
@@ -574,13 +577,15 @@ func (s *Service) initDiscoveryServiceLocked() {
 	s.discoveryService.SetReadState(s.readState)
 
 	// Start background discovery if enabled and interval is set
-	if s.cfg != nil && s.cfg.IsDiscoveryEnabled() && s.cfg.GetDiscoveryInterval() > 0 {
+	if commandScanningEnabled && s.cfg.GetDiscoveryInterval() > 0 {
 		s.discoveryService.Start(context.Background())
 		log.Info().
 			Dur("interval", s.cfg.GetDiscoveryInterval()).
 			Msg("AI-powered deep discovery service started with automatic scanning")
+	} else if commandScanningEnabled {
+		log.Info().Msg("AI-powered deep discovery service initialized (manual command scanning mode)")
 	} else {
-		log.Info().Msg("AI-powered deep discovery service initialized (manual mode)")
+		log.Info().Msg("AI-powered deep discovery service initialized with command scanning disabled")
 	}
 }
 
@@ -870,6 +875,7 @@ func (s *Service) updateDiscoverySettings(cfg *config.AIConfig) {
 
 	enabled := s.IsEnabled() && cfg.IsDiscoveryEnabled()
 	interval := cfg.GetDiscoveryInterval()
+	s.discoveryService.SetCommandScanningEnabled(enabled)
 
 	if enabled && interval > 0 {
 		// Update interval and ensure service is running

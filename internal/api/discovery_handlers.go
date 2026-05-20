@@ -212,6 +212,18 @@ func (h *DiscoveryHandlers) isAdminRequest(r *http.Request) bool {
 	return false
 }
 
+func (h *DiscoveryHandlers) requireCommandScanningAccess(w http.ResponseWriter, r *http.Request) bool {
+	if !h.isAdminRequest(r) {
+		writeDiscoveryError(w, http.StatusForbidden, "Admin privileges required")
+		return false
+	}
+	if h.service == nil || !h.service.IsCommandScanningEnabled() {
+		writeDiscoveryError(w, http.StatusForbidden, "Discovery command scanning is disabled")
+		return false
+	}
+	return true
+}
+
 // redactSensitiveFields removes sensitive data from a discovery for non-admin users.
 // This creates a copy to avoid modifying the original.
 func redactSensitiveFields(d *servicediscovery.ResourceDiscovery) *servicediscovery.ResourceDiscovery {
@@ -312,6 +324,9 @@ func (h *DiscoveryHandlers) HandleGetDiscovery(w http.ResponseWriter, r *http.Re
 func (h *DiscoveryHandlers) HandleTriggerDiscovery(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
+		return
+	}
+	if !h.requireCommandScanningAccess(w, r) {
 		return
 	}
 
@@ -549,6 +564,9 @@ func (h *DiscoveryHandlers) HandleGetStatus(w http.ResponseWriter, r *http.Reque
 func (h *DiscoveryHandlers) HandleRunDiscovery(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
+		return
+	}
+	if !h.requireCommandScanningAccess(w, r) {
 		return
 	}
 

@@ -941,6 +941,7 @@ func TestService_RunManualDiscoveryRefreshDiscoversNewFingerprints(t *testing.T)
 		response: `{"service_type":"nginx","service_name":"Nginx","service_version":"1.2","category":"web_server","cli_access":"docker exec {container} nginx -v","facts":[],"config_paths":["/etc/nginx"],"data_paths":[],"log_paths":[],"ports":[{"port":80,"protocol":"tcp","process":"nginx","address":"0.0.0.0"}],"confidence":0.9,"reasoning":"image"}`,
 	}
 	service := NewService(store, nil, DefaultConfig())
+	service.SetCommandScanningEnabled(true)
 	service.SetReadState(readStateFromSnapshot(state))
 	service.SetAIAnalyzer(analyzer)
 
@@ -1061,6 +1062,7 @@ func TestService_PromptsAndDiscoveryLoop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	service.initialDelay = time.Millisecond
+	service.SetCommandScanningEnabled(true)
 	service.Start(ctx)
 	service.Start(ctx)
 	service.Stop()
@@ -1097,6 +1099,7 @@ func TestService_FingerprintLoop_StopAndCancel(t *testing.T) {
 
 		service := NewService(store, nil, DefaultConfig())
 		service.SetReadState(readStateFromSnapshot(state))
+		service.SetCommandScanningEnabled(true)
 		// Analyzer should be called by automatic refresh for changed/new resources.
 		analyzer := &stubAnalyzer{
 			response: `{"service_type":"nginx","service_name":"Nginx","service_version":"1.2","category":"web_server","cli_access":"docker exec {container} nginx -v","facts":[],"config_paths":[],"data_paths":[],"ports":[],"confidence":0.9,"reasoning":"image"}`,
@@ -1188,6 +1191,7 @@ func TestService_StartDuringStopDoesNotStartNewLoop(t *testing.T) {
 	service.SetReadState(readStateFromSnapshot(state))
 	service.initialDelay = time.Millisecond
 	service.interval = time.Hour
+	service.SetCommandScanningEnabled(true)
 	analyzer := &blockingAnalyzer{started: make(chan struct{})}
 	service.SetAIAnalyzer(analyzer)
 
@@ -1347,7 +1351,9 @@ func TestService_DiscoverResource_ScanError(t *testing.T) {
 	store.crypto = nil
 
 	scanner := NewDeepScanner(nil)
-	service := NewService(store, scanner, DefaultConfig())
+	cfg := DefaultConfig()
+	cfg.CommandScanning = true
+	service := NewService(store, scanner, cfg)
 	service.SetAIAnalyzer(&stubAnalyzer{
 		response: `{"service_type":"nginx","service_name":"Nginx","service_version":"1.2","category":"web_server","cli_access":"docker exec {container} nginx -v","facts":[],"config_paths":[],"data_paths":[],"ports":[],"confidence":0.9,"reasoning":"image"}`,
 	})
@@ -1361,6 +1367,40 @@ func TestService_DiscoverResource_ScanError(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("expected scan error to be tolerated, got %v", err)
+	}
+}
+
+func TestService_DiscoverResource_CommandScanningDisabledSkipsScanner(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	exec := &stubExecutor{
+		agents: []ConnectedAgent{{AgentID: "host1", Hostname: "host1"}},
+	}
+	scanner := NewDeepScanner(exec)
+	service := NewService(store, scanner, DefaultConfig())
+	service.SetAIAnalyzer(&stubAnalyzer{
+		response: `{"service_type":"nginx","service_name":"Nginx","service_version":"1.2","category":"web_server","cli_access":"","facts":[],"config_paths":[],"data_paths":[],"ports":[],"confidence":0.9,"reasoning":"metadata"}`,
+	})
+
+	_, err = service.DiscoverResource(context.Background(), DiscoveryRequest{
+		ResourceType: ResourceTypeDocker,
+		ResourceID:   "web",
+		TargetID:     "host1",
+		Hostname:     "host1",
+		Force:        true,
+	})
+	if err != nil {
+		t.Fatalf("DiscoverResource error: %v", err)
+	}
+
+	exec.mu.Lock()
+	defer exec.mu.Unlock()
+	if len(exec.commands) != 0 {
+		t.Fatalf("expected command scanning disabled to skip executor, got commands: %v", exec.commands)
 	}
 }
 
@@ -1400,7 +1440,9 @@ func TestService_DiscoverResource_WithScanResult(t *testing.T) {
 		},
 	}
 
-	service := NewService(store, scanner, DefaultConfig())
+	cfg := DefaultConfig()
+	cfg.CommandScanning = true
+	service := NewService(store, scanner, cfg)
 	service.SetReadState(readStateFromSnapshot(state))
 	service.SetAIAnalyzer(&stubAnalyzer{
 		response: `{"service_type":"nginx","service_name":"Nginx","service_version":"1.2","category":"web_server","cli_access":"docker exec {container} nginx -v","facts":[],"config_paths":[],"data_paths":[],"ports":[{"port":80,"protocol":"tcp","process":"nginx","address":"0.0.0.0"}],"confidence":0.9,"reasoning":"image"}`,

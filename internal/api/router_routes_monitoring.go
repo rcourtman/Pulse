@@ -262,7 +262,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// AI-powered infrastructure discovery endpoints
 	r.mux.HandleFunc("/api/discovery", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleListDiscoveries)))
 	r.mux.HandleFunc("/api/discovery/status", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleGetStatus)))
-	r.mux.HandleFunc("/api/discovery/run", RequireAuth(r.config, RequireScope(config.ScopeMonitoringWrite, func(w http.ResponseWriter, req *http.Request) {
+	r.mux.HandleFunc("/api/discovery/run", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
 			r.discoveryHandlers.HandleRunDiscovery(w, req)
 		} else {
@@ -303,7 +303,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 					http.Error(w, "Invalid path", http.StatusBadRequest)
 				}
 			case http.MethodPost:
-				if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+				if !ensureScope(w, req, config.ScopeSettingsWrite) {
 					return
 				}
 				// POST /api/discovery/agent/{agentId}/{resourceId} → trigger discovery
@@ -341,7 +341,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 				r.discoveryHandlers.HandleGetDiscovery(w, req)
 			}
 		case http.MethodPost:
-			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+			if !ensureScope(w, req, config.ScopeSettingsWrite) {
 				return
 			}
 			r.discoveryHandlers.HandleTriggerDiscovery(w, req)

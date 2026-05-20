@@ -230,4 +230,16 @@ func TestToolsAdapter_TriggerDiscovery(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, id, result.ID)
 	})
+
+	t.Run("disabled command scanning rejects forced refresh", func(t *testing.T) {
+		_, err := adapter.TriggerDiscovery(context.Background(), "docker", "h1", "r1", true)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "discovery command scanning is disabled")
+	})
+
+	t.Run("disabled command scanning does not create missing discovery", func(t *testing.T) {
+		result, err := adapter.TriggerDiscovery(context.Background(), "docker", "h1", "missing", false)
+		require.NoError(t, err)
+		assert.Empty(t, result.ID)
+	})
 }
