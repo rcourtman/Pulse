@@ -142,7 +142,7 @@ export function DockerPageSurface() {
                     statusOptions={DOCKER_WORKLOAD_STATUS_OPTIONS}
                     columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
                     containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
-                    hostFilter={workloadsState.hostFilterConfig()}
+                    hostFilter={undefined}
                     platformFilter={undefined}
                     namespaceFilter={undefined}
                     suppressTypeFilter
