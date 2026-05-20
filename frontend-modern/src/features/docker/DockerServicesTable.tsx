@@ -127,19 +127,31 @@ export const DockerServicesTable: Component<{
             <Table class="min-w-full table-fixed text-xs md:min-w-[900px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={getPlatformTableHeadClass()}>Service</TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                  {/*
+                    Desktop widths: Service and Image take the lion's share
+                    because their content is long (registry refs, fully
+                    qualified service names). Mode / Desired / Running trim
+                    to short text and 1-2 digit counts. Ports and Host get
+                    a middle slice for port lists and hostnames. Mobile
+                    widths are unchanged.
+                  */}
+                  <TableHead class={`${getPlatformTableHeadClass()} md:w-[22%]`}>
+                    Service
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[25%]`}>
                     Image
                   </TableHead>
-                  <TableHead class={getPlatformTableHeadClass()}>Mode</TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass()} md:w-[9%]`}>Mode</TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} hidden md:table-cell md:w-[8%]`}>
                     Desired
                   </TableHead>
-                  <TableHead class={getPlatformTableHeadClass('right')}>Running</TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass('right')} md:w-[8%]`}>
+                    Running
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[14%]`}>
                     Ports
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell`}>
+                  <TableHead class={`${getPlatformTableHeadClass()} hidden md:table-cell md:w-[14%]`}>
                     Host
                   </TableHead>
                 </TableRow>
