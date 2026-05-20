@@ -45,7 +45,7 @@ export const buildWorkloadsContainerRuntimeFilterConfig = ({
 }: WorkloadsContainerRuntimeFilterConfigOptions): WorkloadsToolbarFilterConfig | undefined => {
   if (!isWorkloadsRoute && !allowEmbeddedScopeFilters) return undefined;
   if (!isContainerWorkloadViewMode(viewMode)) return undefined;
-  if (runtimeOptions.length === 0) return undefined;
+  if (runtimeOptions.length < 2) return undefined;
 
   return {
     id: 'workloads-container-runtime-filter',

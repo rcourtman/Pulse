@@ -46,6 +46,16 @@ describe('workloadFilterConfigModel', () => {
         runtimeOptions: ['docker'],
         onChange,
       }),
+    ).toBeUndefined();
+
+    expect(
+      buildWorkloadsContainerRuntimeFilterConfig({
+        isWorkloadsRoute: true,
+        viewMode: 'app-container',
+        containerRuntime: 'docker',
+        runtimeOptions: ['docker', 'podman'],
+        onChange,
+      }),
     ).toBeDefined();
 
     expect(
@@ -53,7 +63,7 @@ describe('workloadFilterConfigModel', () => {
         isWorkloadsRoute: true,
         viewMode: 'vm',
         containerRuntime: 'docker',
-        runtimeOptions: ['docker'],
+        runtimeOptions: ['docker', 'podman'],
         onChange,
       }),
     ).toBeUndefined();

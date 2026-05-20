@@ -179,6 +179,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
         id: runtimeFilter.id ?? 'workloads-runtime',
         label: runtimeFilter.label ?? 'Runtime',
         group: 'properties',
+        inline: true,
         value: () => runtimeFilter.value,
         setValue: runtimeFilter.onChange,
         defaultValue: '',

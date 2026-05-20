@@ -269,6 +269,7 @@ describe('WorkloadsFilter', () => {
               options: [
                 { value: '', label: 'All runtimes' },
                 { value: 'docker', label: 'docker' },
+                { value: 'podman', label: 'podman' },
               ],
               onChange: vi.fn(),
             },
@@ -329,6 +330,7 @@ describe('WorkloadsFilter', () => {
               options: [
                 { value: '', label: 'All runtimes' },
                 { value: 'docker', label: 'docker' },
+                { value: 'podman', label: 'podman' },
               ],
               onChange: runtimeOnChange,
             },
@@ -522,7 +524,7 @@ describe('WorkloadsFilter', () => {
   });
 
   describe('container runtime filter', () => {
-    it('appears in the direct selector only when viewMode is a container variant and containerRuntimeFilter is provided', () => {
+    it('renders inline runtime chips when viewMode is a container variant and containerRuntimeFilter is provided', () => {
       const props = makeProps({
         viewMode: vi.fn(() => 'container' as const),
         containerRuntimeFilter: {
@@ -530,15 +532,18 @@ describe('WorkloadsFilter', () => {
           options: [
             { value: '', label: 'All runtimes' },
             { value: 'docker', label: 'docker' },
+            { value: 'podman', label: 'podman' },
           ],
           onChange: vi.fn(),
         },
       });
       render(() => <WorkloadsFilter {...props} />);
-      expect(addFilterOption('Runtime', 'docker')).toBeInTheDocument();
+      const runtimeGroup = inlineFilterGroup('Runtime');
+      expect(within(runtimeGroup).getByRole('button', { name: 'docker' })).toBeInTheDocument();
+      expect(within(runtimeGroup).getByRole('button', { name: 'podman' })).toBeInTheDocument();
     });
 
-    it('does not appear when viewMode is not a container variant', () => {
+    it('does not render when viewMode is not a container variant', () => {
       const props = makeProps({
         viewMode: vi.fn(() => 'vm' as const),
         containerRuntimeFilter: {
@@ -546,15 +551,16 @@ describe('WorkloadsFilter', () => {
           options: [
             { value: '', label: 'All runtimes' },
             { value: 'docker', label: 'docker' },
+            { value: 'podman', label: 'podman' },
           ],
           onChange: vi.fn(),
         },
       });
       render(() => <WorkloadsFilter {...props} />);
-      expect(screen.queryByRole('combobox', { name: 'Filter' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: 'Runtime' })).not.toBeInTheDocument();
     });
 
-    it('calls onChange when runtime selection changes through the direct selector', () => {
+    it('calls onChange when a runtime chip is clicked', () => {
       const onChange = vi.fn();
       render(() => (
         <WorkloadsFilter
@@ -565,13 +571,14 @@ describe('WorkloadsFilter', () => {
               options: [
                 { value: '', label: 'All runtimes' },
                 { value: 'docker', label: 'docker' },
+                { value: 'podman', label: 'podman' },
               ],
               onChange,
             },
           })}
         />
       ));
-      pickFromMenu('Runtime', 'docker');
+      pickInlineFilter('Runtime', 'docker');
       expect(onChange).toHaveBeenCalledWith('docker');
     });
   });
