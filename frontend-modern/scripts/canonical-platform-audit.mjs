@@ -1338,6 +1338,30 @@ const HELPER_RULES = [
     message:
       'Do not define local RAID state/device presentation helpers in component code. Use @/utils/raidPresentation instead.',
   },
+  {
+    // Platform tables must align columns by kind, not by literal align string.
+    // The kind-based wrappers (getPlatformTableHeadClassForKind /
+    // getPlatformTableCellClassForKind) live in
+    // src/features/platformPage/sharedPlatformPage.tsx and resolve to a
+    // canonical alignment via src/features/platformPage/columnAlignment.ts.
+    // The legacy align-based helpers still exist so the wrappers can delegate
+    // to them, but no platform table should call them directly. If you hit
+    // this rule, switch the call site to the *ForKind variant and pick a
+    // column kind ('name' | 'text' | 'metric-bar' | 'numeric-value' |
+    // 'badge') for the column.
+    rule: 'canonical-platform-table/no-legacy-align-helper',
+    regex: /\bgetPlatformTable(?:Head|Cell)Class\(/g,
+    message:
+      'Use getPlatformTable{Head,Cell}ClassForKind(kind) instead of the legacy align-based helper. See frontend-modern/src/features/platformPage/columnAlignment.ts for the canonical column kinds and their alignments.',
+    allowFiles: new Set([
+      // The kind-based wrappers internally delegate to the align-based
+      // helpers; that's the one legitimate call site.
+      'src/features/platformPage/sharedPlatformPage.tsx',
+      // KubernetesClustersTable is pending migration by another agent.
+      // Remove this entry once that work lands.
+      'src/features/kubernetes/KubernetesClustersTable.tsx',
+    ]),
+  },
 ];
 
 const MAP_RULES = [
@@ -1723,7 +1747,8 @@ for (const dir of TARGET_DIRS) {
 
     const content = fs.readFileSync(filePath, 'utf8');
 
-    for (const { rule, regex, message } of HELPER_RULES) {
+    for (const { rule, regex, message, allowFiles } of HELPER_RULES) {
+      if (allowFiles && allowFiles.has(relativePath)) continue;
       for (const match of content.matchAll(regex)) {
         pushMatch(relativePath, content, match.index ?? 0, rule, message);
       }

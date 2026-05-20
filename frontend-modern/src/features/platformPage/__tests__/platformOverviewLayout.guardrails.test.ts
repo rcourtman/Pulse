@@ -112,15 +112,22 @@ describe('platform overview layout guardrails', () => {
   });
 
   it('keeps mobile host tables focused on useful operational columns', () => {
-    expect(dockerHostsTableSource).toContain('<TableHead class={getPlatformTableHeadClass()}>Host');
-    expect(dockerHostsTableSource).toContain(
-      "<TableHead class={getPlatformTableHeadClass('right')}>CPU",
+    // Assertions use the canonical kind-based helpers
+    // (getPlatformTableHeadClassForKind('<kind>')) for files that have been
+    // migrated. KubernetesClustersTable still uses the legacy align-based
+    // helper because another agent has it mid-edit; the assertions below
+    // match that legacy form until its migration lands.
+    expect(dockerHostsTableSource).toMatch(
+      /getPlatformTableHeadClassForKind\('name'\)[\s\S]{0,200}?Host/,
     );
-    expect(dockerHostsTableSource).toContain(
-      "<TableHead class={getPlatformTableHeadClass('right')}>Memory",
+    expect(dockerHostsTableSource).toMatch(
+      /getPlatformTableHeadClassForKind\('metric-bar'\)[\s\S]{0,200}?CPU/,
     );
-    expect(dockerHostsTableSource).toContain(
-      "<TableHead class={getPlatformTableHeadClass('right')}>Disk",
+    expect(dockerHostsTableSource).toMatch(
+      /getPlatformTableHeadClassForKind\('metric-bar'\)[\s\S]{0,200}?Memory/,
+    );
+    expect(dockerHostsTableSource).toMatch(
+      /getPlatformTableHeadClassForKind\('metric-bar'\)[\s\S]{0,200}?Disk/,
     );
 
     expect(kubernetesClustersTableSource).toContain(
@@ -129,24 +136,24 @@ describe('platform overview layout guardrails', () => {
     expect(kubernetesClustersTableSource).toContain(
       "<TableHead class={getPlatformTableHeadClass('right')}>Nodes",
     );
-    expect(kubernetesNodesTableSource).toContain(
-      '<TableHead class={getPlatformTableHeadClass()}>Node',
+    expect(kubernetesNodesTableSource).toMatch(
+      /getPlatformTableHeadClassForKind\('name'\)[\s\S]{0,200}?Node/,
     );
     expect(kubernetesNodesTableSource).toContain(
       '<span class="md:hidden">{compactCapacityLabel()}</span>',
     );
 
-    expect(truenasSystemsTableSource).toContain(
-      '<TableHead class={getPlatformTableHeadClass()}>System',
+    expect(truenasSystemsTableSource).toMatch(
+      /getPlatformTableHeadClassForKind\('name'\)[\s\S]{0,200}?System/,
     );
     expect(truenasSystemsTableSource).toContain(
       '<span class="md:hidden">{formatPercent(storagePercent())}</span>',
     );
-    expect(vsphereHostsTableSource).toContain(
-      '<TableHead class={getPlatformTableHeadClass()}>Host',
+    expect(vsphereHostsTableSource).toMatch(
+      /getPlatformTableHeadClassForKind\('name'\)[\s\S]{0,200}?Host/,
     );
-    expect(vsphereHostsTableSource).toContain(
-      "<TableHead class={getPlatformTableHeadClass('right')}>VMs",
+    expect(vsphereHostsTableSource).toMatch(
+      /getPlatformTableHeadClassForKind\('numeric-value'\)[\s\S]{0,200}?VMs/,
     );
     expect(vsphereHostsTableSource).toContain('hidden md:table-cell');
   });
