@@ -1519,10 +1519,10 @@ func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData
 
 func mergeTrueNASData(existing *TrueNASData, incoming *TrueNASData) *TrueNASData {
 	if existing == nil {
-		return incoming
+		return cloneTrueNASData(incoming)
 	}
 	if incoming == nil {
-		return existing
+		return cloneTrueNASData(existing)
 	}
 
 	merged := *existing
@@ -1555,6 +1555,9 @@ func mergeTrueNASData(existing *TrueNASData, incoming *TrueNASData) *TrueNASData
 	}
 	if incoming.RebuildSummary != "" {
 		merged.RebuildSummary = incoming.RebuildSummary
+	}
+	if incoming.App != nil {
+		merged.App = cloneTrueNASApp(incoming.App)
 	}
 	return &merged
 }

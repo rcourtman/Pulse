@@ -141,6 +141,21 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 	if app.Docker.Runtime != "docker" {
 		t.Fatalf("expected app runtime docker, got %q", app.Docker.Runtime)
 	}
+	if app.TrueNAS == nil || app.TrueNAS.App == nil {
+		t.Fatal("expected native TrueNAS app metadata on TrueNAS app resource")
+	}
+	if app.TrueNAS.App.ID != "nextcloud" || app.TrueNAS.App.State != "RUNNING" {
+		t.Fatalf("unexpected native TrueNAS app identity/state: %+v", app.TrueNAS.App)
+	}
+	if app.TrueNAS.App.HumanVersion != "29.0.7" || !app.TrueNAS.App.UpgradeAvailable || !app.TrueNAS.App.ImageUpdatesAvailable {
+		t.Fatalf("unexpected native TrueNAS app version/update metadata: %+v", app.TrueNAS.App)
+	}
+	if app.TrueNAS.App.ContainerCount != 2 || len(app.TrueNAS.App.Containers) != 2 {
+		t.Fatalf("expected native TrueNAS app container inventory, got %+v", app.TrueNAS.App)
+	}
+	if len(app.TrueNAS.App.UsedPorts) != 1 || len(app.TrueNAS.App.UsedPorts[0].HostPorts) != 1 || app.TrueNAS.App.UsedPorts[0].HostPorts[0].HostPort != 30443 {
+		t.Fatalf("unexpected native TrueNAS app ports: %+v", app.TrueNAS.App.UsedPorts)
+	}
 	if app.Status != unifiedresources.StatusOnline {
 		t.Fatalf("expected Nextcloud status online, got %q", app.Status)
 	}

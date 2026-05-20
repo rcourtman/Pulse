@@ -357,7 +357,63 @@ func cloneTrueNASData(in *TrueNASData) *TrueNASData {
 	}
 	out := *in
 	out.StorageRisk = cloneStorageRisk(in.StorageRisk)
+	out.App = cloneTrueNASApp(in.App)
 	return &out
+}
+
+func cloneTrueNASApp(in *TrueNASApp) *TrueNASApp {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.UsedHostIPs = append([]string(nil), in.UsedHostIPs...)
+	out.UsedPorts = cloneTrueNASAppPorts(in.UsedPorts)
+	out.Containers = cloneTrueNASAppContainers(in.Containers)
+	out.Volumes = append([]TrueNASAppVolume(nil), in.Volumes...)
+	out.Images = append([]string(nil), in.Images...)
+	out.Networks = cloneTrueNASAppNetworks(in.Networks)
+	if in.Stats != nil {
+		stats := *in.Stats
+		out.Stats = &stats
+	}
+	return &out
+}
+
+func cloneTrueNASAppPorts(in []TrueNASAppPort) []TrueNASAppPort {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]TrueNASAppPort, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].HostPorts = append([]TrueNASAppHostPort(nil), in[i].HostPorts...)
+	}
+	return out
+}
+
+func cloneTrueNASAppContainers(in []TrueNASAppContainer) []TrueNASAppContainer {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]TrueNASAppContainer, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].PortConfig = cloneTrueNASAppPorts(in[i].PortConfig)
+		out[i].VolumeMounts = append([]TrueNASAppVolume(nil), in[i].VolumeMounts...)
+	}
+	return out
+}
+
+func cloneTrueNASAppNetworks(in []TrueNASAppNetwork) []TrueNASAppNetwork {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]TrueNASAppNetwork, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].Labels = cloneStringMap(in[i].Labels)
+	}
+	return out
 }
 
 func cloneCPUInfo(in *CPUInfo) *CPUInfo {

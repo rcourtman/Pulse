@@ -102,11 +102,20 @@ truth for live infrastructure data.
    guest-local host agent, and must keep the command set to minimal read-only
    Docker summary and aggregate stats collection.
 15. Add or change mock-mode Discovery context through the canonical mock
-   fixture graph. Mock Discovery records must be derived from the same authored
-   state graph as mock nodes, guests, Docker hosts, containers, and Kubernetes
-   workloads, then exposed through API-owned Discovery handlers. Monitoring
-   must not create a second frontend-only fixture path for service versions,
-   config paths, bind mounts, ports, or suggested URLs.
+    fixture graph. Mock Discovery records must be derived from the same authored
+    state graph as mock nodes, guests, Docker hosts, containers, and Kubernetes
+    workloads, then exposed through API-owned Discovery handlers. Monitoring
+    must not create a second frontend-only fixture path for service versions,
+    config paths, bind mounts, ports, or suggested URLs.
+16. Add or change TrueNAS supplemental inventory only through the native
+    TrueNAS provider path and unified-resource projection. TrueNAS apps are
+    API-owned application records: the provider may preserve Docker-compatible
+    runtime metadata for shared container tooling, but it must also publish the
+    native app identity, state, version, update availability, workload
+    containers, ports, images, volumes, networks, and stat collection metadata
+    through `TrueNASData.App` on the canonical `app-container` resource.
+    Monitoring must not rebuild a second Docker-only TrueNAS app inventory or
+    make the Docker fallback the source of truth for the TrueNAS platform page.
 
 ## Forbidden Paths
 
@@ -141,6 +150,11 @@ truth for live infrastructure data.
    ports, and aggregate `docker stats` counters, but it must not run
    `docker inspect` or collect guest environment values, mount sources, files,
    container commands, or process details.
+8. Keep TrueNAS app inventory native to the TrueNAS API projection. The
+   monitoring/provider boundary may expose Docker-compatible fields for
+   cross-runtime tooling, but platform-page app rows, source identity, and
+   update posture must be carried by the TrueNAS app facet published into
+   unified resources.
 
 ## Current State
 

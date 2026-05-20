@@ -1027,7 +1027,7 @@ type VMwareData struct {
 	SnapshotCount       int      `json:"snapshotCount,omitempty"`
 }
 
-// TrueNASData contains TrueNAS-specific metadata for system host resources.
+// TrueNASData contains TrueNAS-specific metadata for TrueNAS resources.
 type TrueNASData struct {
 	Hostname              string       `json:"hostname,omitempty"`
 	Version               string       `json:"version,omitempty"`
@@ -1039,6 +1039,73 @@ type TrueNASData struct {
 	ProtectionSummary     string       `json:"protectionSummary,omitempty"`
 	RebuildInProgress     bool         `json:"rebuildInProgress,omitempty"`
 	RebuildSummary        string       `json:"rebuildSummary,omitempty"`
+	App                   *TrueNASApp  `json:"app,omitempty"`
+}
+
+// TrueNASApp contains app.query / active_workloads data for one TrueNAS app.
+type TrueNASApp struct {
+	ID                    string                `json:"id,omitempty"`
+	Name                  string                `json:"name,omitempty"`
+	State                 string                `json:"state,omitempty"`
+	Version               string                `json:"version,omitempty"`
+	HumanVersion          string                `json:"humanVersion,omitempty"`
+	CustomApp             bool                  `json:"customApp,omitempty"`
+	UpgradeAvailable      bool                  `json:"upgradeAvailable,omitempty"`
+	ImageUpdatesAvailable bool                  `json:"imageUpdatesAvailable,omitempty"`
+	Notes                 string                `json:"notes,omitempty"`
+	ContainerCount        int                   `json:"containerCount,omitempty"`
+	UsedHostIPs           []string              `json:"usedHostIps,omitempty"`
+	UsedPorts             []TrueNASAppPort      `json:"usedPorts,omitempty"`
+	Containers            []TrueNASAppContainer `json:"containers,omitempty"`
+	Volumes               []TrueNASAppVolume    `json:"volumes,omitempty"`
+	Images                []string              `json:"images,omitempty"`
+	Networks              []TrueNASAppNetwork   `json:"networks,omitempty"`
+	Stats                 *TrueNASAppStats      `json:"stats,omitempty"`
+}
+
+// TrueNASAppStats contains app.stats telemetry metadata that is not already
+// normalized into top-level Resource metrics.
+type TrueNASAppStats struct {
+	IntervalSeconds int       `json:"intervalSeconds,omitempty"`
+	CollectedAt     time.Time `json:"collectedAt,omitempty"`
+}
+
+// TrueNASAppPort describes a TrueNAS app published port entry.
+type TrueNASAppPort struct {
+	ContainerPort int                  `json:"containerPort,omitempty"`
+	Protocol      string               `json:"protocol,omitempty"`
+	HostPorts     []TrueNASAppHostPort `json:"hostPorts,omitempty"`
+}
+
+// TrueNASAppHostPort describes a host binding for a TrueNAS app port.
+type TrueNASAppHostPort struct {
+	HostPort int    `json:"hostPort,omitempty"`
+	HostIP   string `json:"hostIp,omitempty"`
+}
+
+// TrueNASAppContainer describes a runtime container inside a TrueNAS app.
+type TrueNASAppContainer struct {
+	ID           string             `json:"id,omitempty"`
+	ServiceName  string             `json:"serviceName,omitempty"`
+	Image        string             `json:"image,omitempty"`
+	State        string             `json:"state,omitempty"`
+	PortConfig   []TrueNASAppPort   `json:"portConfig,omitempty"`
+	VolumeMounts []TrueNASAppVolume `json:"volumeMounts,omitempty"`
+}
+
+// TrueNASAppVolume describes a TrueNAS app volume or bind mount.
+type TrueNASAppVolume struct {
+	Source      string `json:"source,omitempty"`
+	Destination string `json:"destination,omitempty"`
+	Mode        string `json:"mode,omitempty"`
+	Type        string `json:"type,omitempty"`
+}
+
+// TrueNASAppNetwork describes a network attached to a TrueNAS app workload.
+type TrueNASAppNetwork struct {
+	ID     string            `json:"id,omitempty"`
+	Name   string            `json:"name,omitempty"`
+	Labels map[string]string `json:"labels,omitempty"`
 }
 
 // AvailabilityData contains agentless endpoint probe metadata for a resource.

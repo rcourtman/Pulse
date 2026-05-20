@@ -23,7 +23,6 @@ import {
 } from '@/components/shared/Table';
 import { apiFetch } from '@/utils/apiClient';
 import { formatRelativeTime } from '@/utils/format';
-import type { FilterOption } from '@/components/shared/FilterButtonGroup';
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_CARD_CLASS,
@@ -31,6 +30,7 @@ import {
   PlatformTableToolbar,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  type PlatformTableFilterOption,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { ReplicationJob, ReplicationJobsResponse } from '@/types/api';
 
@@ -45,7 +45,7 @@ type ReplicationStatusFilter = 'all' | 'healthy' | 'failed' | 'pending' | 'disab
 
 const statusDot = (className: string) => <span class={`h-2 w-2 rounded-full ${className}`} />;
 
-const STATUS_FILTER_OPTIONS: FilterOption<ReplicationStatusFilter>[] = [
+const STATUS_FILTER_OPTIONS: PlatformTableFilterOption<ReplicationStatusFilter>[] = [
   { value: 'all', label: 'All' },
   { value: 'healthy', label: 'Healthy', tone: 'success', leading: statusDot('bg-emerald-500') },
   { value: 'failed', label: 'Failed', tone: 'danger', leading: statusDot('bg-red-500') },

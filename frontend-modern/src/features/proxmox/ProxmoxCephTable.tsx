@@ -9,7 +9,6 @@ import {
 } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
-import type { FilterOption } from '@/components/shared/FilterButtonGroup';
 import { StatusDot } from '@/components/shared/StatusDot';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { TableCard } from '@/components/shared/TableCard';
@@ -30,6 +29,7 @@ import {
   PlatformTableToolbar,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  type PlatformTableFilterOption,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource, ResourceCephServiceMeta } from '@/types/resource';
 import { ProxmoxCephClusterDrawer } from './ProxmoxCephClusterDrawer';
@@ -49,7 +49,7 @@ type CephStatusFilter = 'all' | 'healthy' | 'warning' | 'critical';
 
 const statusDot = (className: string) => <span class={`h-2 w-2 rounded-full ${className}`} />;
 
-const STATUS_FILTER_OPTIONS: FilterOption<CephStatusFilter>[] = [
+const STATUS_FILTER_OPTIONS: PlatformTableFilterOption<CephStatusFilter>[] = [
   { value: 'all', label: 'All' },
   { value: 'healthy', label: 'Healthy', tone: 'success', leading: statusDot('bg-emerald-500') },
   { value: 'warning', label: 'Warning', tone: 'warning', leading: statusDot('bg-amber-500') },

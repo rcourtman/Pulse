@@ -191,6 +191,16 @@ reintroduce false Swarm capability surfaces.
    `resourceVersion`, `policyVersion`, or `planHash` drift as
    `action_plan_drift`, and record/publish a failed audit instead of leaving
    executor adapters to make stale-approval decisions.
+   TrueNAS app inventory enters the model as native `TrueNASData.App`
+   metadata on canonical `app-container` resources. The facet is sourced from
+   the TrueNAS API app inventory (`app.query` plus active workload/stat
+   details where available), preserves app id/name/state/version/update
+   signals, containers, ports, images, volumes, networks, and app stat
+   collection metadata, and is cloned and merged by unified resources before
+   transport. Docker metadata may still ride beside the app as compatibility
+   runtime evidence, but the TrueNAS platform overview and other
+   TrueNAS-native consumers must read the native facet first instead of
+   treating TrueNAS apps as generic Docker rows.
 2. Add typed accessors and views in `internal/unifiedresources/views.go`
 3. Add source ingestion/adaptation in the adapter layer only
    Frontend resource platform contracts in
@@ -1038,6 +1048,16 @@ interactive-series filtering, focused-resource naming, and active-series
 resolution so the infrastructure summary stays page-scoped while still
 highlighting the same canonical resource IDs used by the unified-resource
 table and route state.
+TrueNAS application resources now carry the same shared source boundary.
+`internal/truenas/provider.go` projects native app API records into
+`TrueNASData.App`, while `internal/unifiedresources/types.go`,
+`internal/unifiedresources/clone.go`, `internal/unifiedresources/registry.go`,
+`frontend-modern/src/types/resource.ts`, and
+`frontend-modern/src/hooks/useUnifiedResources.ts` must preserve that facet
+across backend clone/merge and frontend transport. The owning resource remains
+the canonical `app-container`; the TrueNAS facet explains the platform-native
+app shape, and Docker metadata remains secondary runtime compatibility rather
+than the source of truth for the TrueNAS overview.
 That same infrastructure focus boundary now also owns deliberate drawer reveal.
 When an infrastructure row opens inline detail on the same route, the page must
 tag that detail with the canonical active resource ID. Direct row toggles that

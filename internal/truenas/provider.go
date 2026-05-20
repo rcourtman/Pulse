@@ -617,14 +617,18 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 			SourceID:       appSourceID(app.ID),
 			ParentSourceID: systemSourceID,
 			Resource: unifiedresources.Resource{
-				Type:         unifiedresources.ResourceTypeAppContainer,
-				Technology:   "docker",
-				Name:         appDisplayName(app),
-				Status:       statusFromApp(app),
-				LastSeen:     collectedAt,
-				UpdatedAt:    collectedAt,
-				Metrics:      metrics,
-				Docker:       dockerMeta,
+				Type:       unifiedresources.ResourceTypeAppContainer,
+				Technology: "docker",
+				Name:       appDisplayName(app),
+				Status:     statusFromApp(app),
+				LastSeen:   collectedAt,
+				UpdatedAt:  collectedAt,
+				Metrics:    metrics,
+				Docker:     dockerMeta,
+				TrueNAS: &unifiedresources.TrueNASData{
+					Hostname: strings.TrimSpace(snapshot.System.Hostname),
+					App:      trueNASAppDataFromApp(app),
+				},
 				Capabilities: truenasAppCapabilities(),
 				Tags:         appTags(app),
 			},
@@ -1320,6 +1324,168 @@ func primaryAppImage(app App) string {
 		}
 	}
 	return ""
+}
+
+func trueNASAppDataFromApp(app App) *unifiedresources.TrueNASApp {
+	containerCount := app.ContainerCount
+	if containerCount == 0 && len(app.Containers) > 0 {
+		containerCount = len(app.Containers)
+	}
+	data := &unifiedresources.TrueNASApp{
+		ID:                    strings.TrimSpace(app.ID),
+		Name:                  strings.TrimSpace(app.Name),
+		State:                 strings.TrimSpace(app.State),
+		Version:               strings.TrimSpace(app.Version),
+		HumanVersion:          strings.TrimSpace(app.HumanVersion),
+		CustomApp:             app.CustomApp,
+		UpgradeAvailable:      app.UpgradeAvailable,
+		ImageUpdatesAvailable: app.ImageUpdatesAvailable,
+		Notes:                 strings.TrimSpace(app.Notes),
+		ContainerCount:        containerCount,
+		UsedHostIPs:           dedupeStrings(app.UsedHostIPs),
+		UsedPorts:             trueNASAppPortsFromAppPorts(app.UsedPorts),
+		Containers:            trueNASAppContainersFromAppContainers(app.Containers),
+		Volumes:               trueNASAppVolumesFromAppVolumes(app.Volumes),
+		Images:                dedupeStrings(app.Images),
+		Networks:              trueNASAppNetworksFromAppNetworks(app.Networks),
+	}
+	if app.Stats != nil {
+		data.Stats = &unifiedresources.TrueNASAppStats{
+			IntervalSeconds: app.Stats.IntervalSeconds,
+			CollectedAt:     app.Stats.CollectedAt,
+		}
+	}
+	return data
+}
+
+func trueNASAppPortsFromAppPorts(ports []AppPort) []unifiedresources.TrueNASAppPort {
+	if len(ports) == 0 {
+		return nil
+	}
+	out := make([]unifiedresources.TrueNASAppPort, 0, len(ports))
+	for _, port := range ports {
+		if port.ContainerPort == 0 && len(port.HostPorts) == 0 {
+			continue
+		}
+		out = append(out, unifiedresources.TrueNASAppPort{
+			ContainerPort: port.ContainerPort,
+			Protocol:      strings.ToLower(strings.TrimSpace(port.Protocol)),
+			HostPorts:     trueNASAppHostPortsFromAppHostPorts(port.HostPorts),
+		})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func trueNASAppHostPortsFromAppHostPorts(hostPorts []AppHostPort) []unifiedresources.TrueNASAppHostPort {
+	if len(hostPorts) == 0 {
+		return nil
+	}
+	out := make([]unifiedresources.TrueNASAppHostPort, 0, len(hostPorts))
+	for _, hostPort := range hostPorts {
+		if hostPort.HostPort == 0 && strings.TrimSpace(hostPort.HostIP) == "" {
+			continue
+		}
+		out = append(out, unifiedresources.TrueNASAppHostPort{
+			HostPort: hostPort.HostPort,
+			HostIP:   strings.TrimSpace(hostPort.HostIP),
+		})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func trueNASAppContainersFromAppContainers(containers []AppContainer) []unifiedresources.TrueNASAppContainer {
+	if len(containers) == 0 {
+		return nil
+	}
+	out := make([]unifiedresources.TrueNASAppContainer, 0, len(containers))
+	for _, container := range containers {
+		if strings.TrimSpace(container.ID) == "" && strings.TrimSpace(container.ServiceName) == "" {
+			continue
+		}
+		out = append(out, unifiedresources.TrueNASAppContainer{
+			ID:           strings.TrimSpace(container.ID),
+			ServiceName:  strings.TrimSpace(container.ServiceName),
+			Image:        strings.TrimSpace(container.Image),
+			State:        strings.TrimSpace(container.State),
+			PortConfig:   trueNASAppPortsFromAppPorts(container.PortConfig),
+			VolumeMounts: trueNASAppVolumesFromAppVolumes(container.VolumeMounts),
+		})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func trueNASAppVolumesFromAppVolumes(volumes []AppVolume) []unifiedresources.TrueNASAppVolume {
+	if len(volumes) == 0 {
+		return nil
+	}
+	out := make([]unifiedresources.TrueNASAppVolume, 0, len(volumes))
+	for _, volume := range volumes {
+		source := strings.TrimSpace(volume.Source)
+		destination := strings.TrimSpace(volume.Destination)
+		if source == "" && destination == "" {
+			continue
+		}
+		out = append(out, unifiedresources.TrueNASAppVolume{
+			Source:      source,
+			Destination: destination,
+			Mode:        strings.TrimSpace(volume.Mode),
+			Type:        strings.TrimSpace(volume.Type),
+		})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func trueNASAppNetworksFromAppNetworks(networks []AppNetwork) []unifiedresources.TrueNASAppNetwork {
+	if len(networks) == 0 {
+		return nil
+	}
+	out := make([]unifiedresources.TrueNASAppNetwork, 0, len(networks))
+	for _, network := range networks {
+		id := strings.TrimSpace(network.ID)
+		name := strings.TrimSpace(network.Name)
+		if id == "" && name == "" {
+			continue
+		}
+		out = append(out, unifiedresources.TrueNASAppNetwork{
+			ID:     id,
+			Name:   name,
+			Labels: copyStringLabels(network.Labels),
+		})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func copyStringLabels(labels map[string]string) map[string]string {
+	if len(labels) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(labels))
+	for key, value := range labels {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		out[key] = strings.TrimSpace(value)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func appContainerState(app App) string {

@@ -707,6 +707,21 @@ func TestRecordsIncludeTrueNASAppsAsCanonicalWorkloads(t *testing.T) {
 	if nextcloud.Resource.Docker.Runtime != "docker" {
 		t.Fatalf("expected Nextcloud runtime docker, got %q", nextcloud.Resource.Docker.Runtime)
 	}
+	if nextcloud.Resource.TrueNAS == nil || nextcloud.Resource.TrueNAS.App == nil {
+		t.Fatal("expected Nextcloud native TrueNAS app metadata")
+	}
+	if nextcloud.Resource.TrueNAS.App.ID != "nextcloud" || nextcloud.Resource.TrueNAS.App.Name != "Nextcloud" {
+		t.Fatalf("unexpected Nextcloud native app identity: %+v", nextcloud.Resource.TrueNAS.App)
+	}
+	if nextcloud.Resource.TrueNAS.App.ContainerCount != 2 || len(nextcloud.Resource.TrueNAS.App.Containers) != 2 {
+		t.Fatalf("expected Nextcloud native app containers, got %+v", nextcloud.Resource.TrueNAS.App)
+	}
+	if len(nextcloud.Resource.TrueNAS.App.Images) != 2 {
+		t.Fatalf("expected Nextcloud native app images, got %+v", nextcloud.Resource.TrueNAS.App.Images)
+	}
+	if len(nextcloud.Resource.TrueNAS.App.Volumes) != 2 {
+		t.Fatalf("expected Nextcloud native app volumes, got %+v", nextcloud.Resource.TrueNAS.App.Volumes)
+	}
 	if len(nextcloud.Resource.Docker.Ports) != 1 || nextcloud.Resource.Docker.Ports[0].PublicPort != 30443 {
 		t.Fatalf("unexpected Nextcloud published ports: %+v", nextcloud.Resource.Docker.Ports)
 	}

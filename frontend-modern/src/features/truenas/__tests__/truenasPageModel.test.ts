@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
-import { TRUENAS_TAB_SPECS, buildTrueNASPageModel } from '../truenasPageModel';
+import {
+  TRUENAS_TAB_SPECS,
+  buildTrueNASPageModel,
+  filterTrueNASApps,
+  mapTrueNASAppStatus,
+} from '../truenasPageModel';
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource => ({
   name: resource.id,
@@ -33,5 +38,53 @@ describe('truenasPageModel', () => {
     expect(model.resources.map((r) => r.id).sort()).toEqual(
       ['truenas-app', 'truenas-disk', 'truenas-pool', 'truenas-system'].sort(),
     );
+  });
+
+  it('filters apps using native TrueNAS app.query metadata', () => {
+    const nextcloud = makeResource({
+      id: 'app-nextcloud',
+      type: 'app-container',
+      parentName: 'truenas-main',
+      truenas: {
+        hostname: 'truenas-main',
+        app: {
+          id: 'nextcloud',
+          name: 'Nextcloud',
+          state: 'RUNNING',
+          humanVersion: '29.0.7',
+          images: ['docker.io/library/nextcloud:29.0.7'],
+          usedPorts: [
+            {
+              containerPort: 443,
+              protocol: 'tcp',
+              hostPorts: [{ hostPort: 30443, hostIp: '0.0.0.0' }],
+            },
+          ],
+          volumes: [{ source: '/mnt/tank/apps/nextcloud', destination: '/var/www/html' }],
+        },
+      },
+    });
+    const adguard = makeResource({
+      id: 'app-adguard',
+      type: 'app-container',
+      status: 'offline',
+      truenas: {
+        app: {
+          id: 'adguard',
+          name: 'AdGuard Home',
+          state: 'STOPPED',
+          images: ['docker.io/adguard/adguardhome:v0.107'],
+        },
+      },
+    });
+
+    expect(mapTrueNASAppStatus(nextcloud)).toBe('running');
+    expect(mapTrueNASAppStatus(adguard)).toBe('stopped');
+    expect(filterTrueNASApps([nextcloud, adguard], '30443', 'all').map((r) => r.id)).toEqual([
+      'app-nextcloud',
+    ]);
+    expect(
+      filterTrueNASApps([nextcloud, adguard], 'adguardhome', 'stopped').map((r) => r.id),
+    ).toEqual(['app-adguard']);
   });
 });

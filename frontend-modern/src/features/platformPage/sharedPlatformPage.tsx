@@ -2,12 +2,17 @@ import { A } from '@solidjs/router';
 import TriangleAlertIcon from 'lucide-solid/icons/triangle-alert';
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
+import {
+  FilterButtonGroup,
+  type FilterOption as PlatformTableFilterOption,
+} from '@/components/shared/FilterButtonGroup';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { TableCard } from '@/components/shared/TableCard';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import type { Resource, ResourceStatus } from '@/types/resource';
 import { getPlatformColumnAlign, type PlatformTableColumnKind } from './columnAlignment';
+
+export type { PlatformTableFilterOption };
 
 export type PlatformTabSpec<TabId extends string> = {
   id: TabId;
@@ -134,19 +139,21 @@ export type PlatformResourceStatusFilter = 'all' | 'online' | 'degraded' | 'offl
 
 const statusDot = (className: string) => <span class={`h-2 w-2 rounded-full ${className}`} />;
 
-export const PLATFORM_STATUS_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
-  { value: 'all', label: 'All' },
-  { value: 'online', label: 'Online', tone: 'success', leading: statusDot('bg-emerald-500') },
-  { value: 'degraded', label: 'Degraded', tone: 'warning', leading: statusDot('bg-amber-500') },
-  { value: 'offline', label: 'Offline', tone: 'danger', leading: statusDot('bg-red-500') },
-];
+export const PLATFORM_STATUS_FILTER_OPTIONS: PlatformTableFilterOption<PlatformResourceStatusFilter>[] =
+  [
+    { value: 'all', label: 'All' },
+    { value: 'online', label: 'Online', tone: 'success', leading: statusDot('bg-emerald-500') },
+    { value: 'degraded', label: 'Degraded', tone: 'warning', leading: statusDot('bg-amber-500') },
+    { value: 'offline', label: 'Offline', tone: 'danger', leading: statusDot('bg-red-500') },
+  ];
 
-export const PLATFORM_HEALTH_FILTER_OPTIONS: FilterOption<PlatformResourceStatusFilter>[] = [
-  { value: 'all', label: 'All' },
-  { value: 'online', label: 'Healthy', tone: 'success', leading: statusDot('bg-emerald-500') },
-  { value: 'degraded', label: 'Degraded', tone: 'warning', leading: statusDot('bg-amber-500') },
-  { value: 'offline', label: 'Offline', tone: 'danger', leading: statusDot('bg-red-500') },
-];
+export const PLATFORM_HEALTH_FILTER_OPTIONS: PlatformTableFilterOption<PlatformResourceStatusFilter>[] =
+  [
+    { value: 'all', label: 'All' },
+    { value: 'online', label: 'Healthy', tone: 'success', leading: statusDot('bg-emerald-500') },
+    { value: 'degraded', label: 'Degraded', tone: 'warning', leading: statusDot('bg-amber-500') },
+    { value: 'offline', label: 'Offline', tone: 'danger', leading: statusDot('bg-red-500') },
+  ];
 
 const ONLINE_STATUSES = new Set<ResourceStatus>(['online', 'running']);
 const OFFLINE_STATUSES = new Set<ResourceStatus>(['offline', 'stopped']);
@@ -276,7 +283,7 @@ export function PlatformTableToolbar<T extends string | number>(props: {
   searchPlaceholder: string;
   status: T;
   onStatusChange: (value: T) => void;
-  statusOptions: FilterOption<T>[];
+  statusOptions: PlatformTableFilterOption<T>[];
   visible: number;
   total: number;
   rowNoun: string;

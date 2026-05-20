@@ -533,7 +533,11 @@ export interface ResourceProxmoxMeta {
 export interface ResourceDockerMeta {
   serviceId?: string;
   hostSourceId?: string;
+  containerId?: string;
   hostname?: string;
+  displayName?: string;
+  customDisplayName?: string;
+  machineId?: string;
   temperature?: number;
   runtime?: string;
   runtimeVersion?: string;
@@ -548,6 +552,25 @@ export interface ResourceDockerMeta {
   updatesLastCheckedAt?: string;
   command?: Record<string, unknown>;
   image?: string;
+  containerState?: string;
+  ports?: Array<{
+    privatePort?: number;
+    publicPort?: number;
+    protocol?: string;
+    ip?: string;
+  }>;
+  mounts?: Array<{
+    type?: string;
+    source?: string;
+    destination?: string;
+    mode?: string;
+    rw?: boolean;
+  }>;
+  networks?: Array<{
+    name?: string;
+    ipv4?: string;
+    ipv6?: string;
+  }>;
   mode?: string;
   desiredTasks?: number;
   runningTasks?: number;
@@ -568,6 +591,78 @@ export interface ResourceDockerMeta {
     scope?: string;
     error?: string;
   };
+}
+
+export interface ResourceTrueNASAppHostPort {
+  hostPort?: number;
+  hostIp?: string;
+}
+
+export interface ResourceTrueNASAppPort {
+  containerPort?: number;
+  protocol?: string;
+  hostPorts?: ResourceTrueNASAppHostPort[];
+}
+
+export interface ResourceTrueNASAppVolume {
+  source?: string;
+  destination?: string;
+  mode?: string;
+  type?: string;
+}
+
+export interface ResourceTrueNASAppContainer {
+  id?: string;
+  serviceName?: string;
+  image?: string;
+  state?: string;
+  portConfig?: ResourceTrueNASAppPort[];
+  volumeMounts?: ResourceTrueNASAppVolume[];
+}
+
+export interface ResourceTrueNASAppNetwork {
+  id?: string;
+  name?: string;
+  labels?: Record<string, string>;
+}
+
+export interface ResourceTrueNASAppStats {
+  intervalSeconds?: number;
+  collectedAt?: string;
+}
+
+export interface ResourceTrueNASAppMeta {
+  id?: string;
+  name?: string;
+  state?: string;
+  version?: string;
+  humanVersion?: string;
+  customApp?: boolean;
+  upgradeAvailable?: boolean;
+  imageUpdatesAvailable?: boolean;
+  notes?: string;
+  containerCount?: number;
+  usedHostIps?: string[];
+  usedPorts?: ResourceTrueNASAppPort[];
+  containers?: ResourceTrueNASAppContainer[];
+  volumes?: ResourceTrueNASAppVolume[];
+  images?: string[];
+  networks?: ResourceTrueNASAppNetwork[];
+  stats?: ResourceTrueNASAppStats;
+}
+
+export interface ResourceTrueNASMeta {
+  hostname?: string;
+  version?: string;
+  uptimeSeconds?: number;
+  storageRisk?: ResourceStorageRisk;
+  storageRiskSummary?: string;
+  storagePostureSummary?: string;
+  protectionReduced?: boolean;
+  protectionSummary?: string;
+  rebuildInProgress?: boolean;
+  rebuildSummary?: string;
+  app?: ResourceTrueNASAppMeta;
 }
 
 export interface ResourceKubernetesMetricCapabilities {
@@ -784,6 +879,7 @@ export interface Resource {
   agent?: ResourceAgentMeta;
   kubernetes?: ResourceKubernetesMeta;
   docker?: ResourceDockerMeta;
+  truenas?: ResourceTrueNASMeta;
   pmg?: ResourcePMGMeta;
   vmware?: ResourceVMwareMeta;
   proxmox?: ResourceProxmoxMeta;

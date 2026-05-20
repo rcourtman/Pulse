@@ -2,6 +2,7 @@ import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import type { Resource, ResourceType } from '@/types/resource';
 
 export type TrueNASPageTabId = 'overview' | 'storage';
+export type TrueNASAppStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
 
 export type TrueNASTabSpec = {
   id: TrueNASPageTabId;
@@ -48,4 +49,93 @@ export function buildTrueNASPageModel(resources: Resource[]): TrueNASPageModel {
     systems,
     apps,
   };
+}
+
+const normalize = (value: unknown): string =>
+  typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+export function mapTrueNASAppStatus(resource: Resource): Exclude<TrueNASAppStatusFilter, 'all'> {
+  const state = normalize(resource.truenas?.app?.state);
+  if (state === 'running') return 'running';
+  if (state === 'stopped') return 'stopped';
+  if (state === 'crashed' || state === 'deploying' || state === 'stopping') return 'attention';
+
+  if (resource.status === 'online' || resource.status === 'running') return 'running';
+  if (resource.status === 'offline' || resource.status === 'stopped') return 'stopped';
+  if (resource.status === 'degraded' || resource.status === 'paused') return 'attention';
+  return 'attention';
+}
+
+const portSearchTokens = (resource: Resource): string[] => {
+  const app = resource.truenas?.app;
+  const tokens: string[] = [];
+  for (const port of app?.usedPorts ?? []) {
+    if (typeof port.containerPort === 'number') tokens.push(String(port.containerPort));
+    if (port.protocol) tokens.push(port.protocol);
+    for (const hostPort of port.hostPorts ?? []) {
+      if (typeof hostPort.hostPort === 'number') tokens.push(String(hostPort.hostPort));
+      if (hostPort.hostIp) tokens.push(hostPort.hostIp);
+    }
+  }
+  for (const port of resource.docker?.ports ?? []) {
+    if (typeof port.publicPort === 'number') tokens.push(String(port.publicPort));
+    if (typeof port.privatePort === 'number') tokens.push(String(port.privatePort));
+    if (port.protocol) tokens.push(port.protocol);
+    if (port.ip) tokens.push(port.ip);
+  }
+  return tokens;
+};
+
+const appSearchHaystack = (resource: Resource): string => {
+  const app = resource.truenas?.app;
+  return [
+    resource.name,
+    resource.displayName,
+    resource.id,
+    resource.parentName,
+    resource.platformId,
+    resource.platformType,
+    resource.docker?.runtime,
+    resource.docker?.image,
+    resource.truenas?.hostname,
+    app?.id,
+    app?.name,
+    app?.state,
+    app?.version,
+    app?.humanVersion,
+    app?.notes,
+    ...(app?.usedHostIps ?? []),
+    ...(app?.images ?? []),
+    ...(app?.containers?.flatMap((container) => [
+      container.id,
+      container.serviceName,
+      container.image,
+      container.state,
+    ]) ?? []),
+    ...(app?.volumes?.flatMap((volume) => [
+      volume.source,
+      volume.destination,
+      volume.mode,
+      volume.type,
+    ]) ?? []),
+    ...(app?.networks?.flatMap((network) => [network.id, network.name]) ?? []),
+    ...portSearchTokens(resource),
+    ...(resource.tags ?? []),
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' ')
+    .toLowerCase();
+};
+
+export function filterTrueNASApps(
+  apps: Resource[],
+  search: string,
+  status: TrueNASAppStatusFilter,
+): Resource[] {
+  const needle = normalize(search);
+  return apps.filter((app) => {
+    if (status !== 'all' && mapTrueNASAppStatus(app) !== status) return false;
+    if (!needle) return true;
+    return appSearchHaystack(app).includes(needle);
+  });
 }

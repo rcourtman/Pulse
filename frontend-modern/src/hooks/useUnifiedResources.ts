@@ -13,6 +13,7 @@ import type {
   ResourceChange,
   ResourceFacetCounts,
   ResourceDiscoveryTarget,
+  ResourceDockerMeta,
   ResourceMetricsTarget,
   ResourceAvailabilityMeta,
   ResourcePBSMeta,
@@ -20,6 +21,7 @@ import type {
   ResourceStatus,
   ResourceStorageMeta,
   ResourceStorageRisk,
+  ResourceTrueNASMeta,
   ResourceType,
   ResourceVMwareMeta,
 } from '@/types/resource';
@@ -211,24 +213,8 @@ type APIResource = {
     tokenHint?: string;
     tokenLastUsedAt?: number;
   };
-  docker?: {
-    hostSourceId?: string;
-    hostname?: string;
-    temperature?: number;
-    runtime?: string;
-    runtimeVersion?: string;
-    dockerVersion?: string;
-    os?: string;
-    kernelVersion?: string;
-    architecture?: string;
-    agentVersion?: string;
-    uptimeSeconds?: number;
-    swarm?: unknown;
-    containerCount?: number;
-    updatesAvailableCount?: number;
-    updatesLastCheckedAt?: string;
-    command?: Record<string, unknown>;
-  };
+  docker?: ResourceDockerMeta;
+  truenas?: ResourceTrueNASMeta;
   pbs?: {
     instanceId?: string;
     hostname?: string;
@@ -677,6 +663,8 @@ const toResource = (v2: APIResource): Resource => {
     incidentAction: v2.incidentAction,
     agent: v2.agent,
     kubernetes: v2.kubernetes,
+    docker: v2.docker as ResourceDockerMeta | undefined,
+    truenas: v2.truenas as ResourceTrueNASMeta | undefined,
     vmware: v2.vmware as ResourceVMwareMeta | undefined,
     pbs: v2.pbs as ResourcePBSMeta | undefined,
     availability: v2.availability as ResourceAvailabilityMeta | undefined,
@@ -746,6 +734,7 @@ const toResource = (v2: APIResource): Resource => {
       proxmox: v2.proxmox,
       agent: v2.agent,
       docker: v2.docker,
+      truenas: v2.truenas,
       pbs: v2.pbs,
       storage: v2.storage,
       pmg: v2.pmg,

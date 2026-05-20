@@ -494,8 +494,10 @@ declared floor.
    TrueNAS is API-first. The unified agent may augment a TrueNAS system later,
    but it is not required for bootstrap or baseline support. TrueNAS must
    project into the canonical `agent`, `app-container`, `storage`,
-   `physical-disk`, and recovery contracts instead of reopening a parallel
-   TrueNAS product model.
+   `physical-disk`, and recovery contracts. TrueNAS app rows may carry a
+   TrueNAS-native app facet sourced from `app.query` / `active_workloads` so
+   the platform page can render API-native app facts without turning Docker
+   labels into the TrueNAS product model.
 2. Onboarding path:
    Supported now through the shared platform-connections flow and
    `/api/truenas/connections`. Operators can add, test, edit, retest, and
@@ -512,9 +514,11 @@ declared floor.
    separate `truenas-system` surface or provider-local infrastructure model.
 4. Workloads:
    Supported now for TrueNAS apps projected as canonical `app-container`
-   workloads with shared workload navigation, metrics, and related links. Out
-   of scope: a separate TrueNAS app runtime model or provider-local workload
-   page/control surface.
+   workloads with shared workload navigation, metrics, and related links. The
+   TrueNAS platform overview renders those apps through the TrueNAS API-native
+   app facet first, using Docker metadata only as runtime compatibility
+   fallback. Out of scope: a parallel provider-local workload control plane
+   that bypasses the canonical resource/action contracts.
 5. Storage and disk health:
    Supported now for pools, datasets, and physical disks projected into the
    shared storage and disk contracts, including SMART/disk-state risk, live

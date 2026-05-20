@@ -513,3 +513,59 @@ func TestRefreshCanonicalIdentityIgnoresVMwarePlacementDetailAliases(t *testing.
 		}
 	}
 }
+
+func TestRefreshCanonicalIdentityPreservesTrueNASAppContainerIdentity(t *testing.T) {
+	resource := Resource{
+		ID:   "truenas-app-nextcloud",
+		Type: ResourceTypeAppContainer,
+		Name: "Nextcloud",
+		TrueNAS: &TrueNASData{
+			Hostname: "truenas-a.local",
+			App: &TrueNASApp{
+				ID:   "nextcloud",
+				Name: "Nextcloud",
+			},
+		},
+		MetricsTarget: &MetricsTarget{
+			ResourceType: string(ResourceTypeAppContainer),
+			ResourceID:   "nextcloud",
+		},
+	}
+
+	if got := ContractResourceType(resource); got != ResourceTypeAppContainer {
+		t.Fatalf("ContractResourceType = %q, want %q", got, ResourceTypeAppContainer)
+	}
+
+	RefreshCanonicalIdentity(&resource)
+
+	if resource.Canonical == nil {
+		t.Fatalf("expected canonical identity")
+	}
+	if got := resource.Canonical.DisplayName; got != "Nextcloud" {
+		t.Fatalf("displayName = %q, want Nextcloud", got)
+	}
+	if got := resource.Canonical.Hostname; got != "truenas-a.local" {
+		t.Fatalf("hostname = %q, want truenas-a.local", got)
+	}
+	if got := resource.Canonical.PlatformID; got != "truenas-a.local" {
+		t.Fatalf("platformId = %q, want truenas-a.local", got)
+	}
+	if got := resource.Canonical.PrimaryID; got != "app-container:nextcloud" {
+		t.Fatalf("primaryId = %q, want app-container:nextcloud", got)
+	}
+
+	wantAliases := []string{
+		"app-container:nextcloud",
+		"nextcloud",
+		"truenas-a.local",
+		"truenas-app-nextcloud",
+	}
+	if len(resource.Canonical.Aliases) != len(wantAliases) {
+		t.Fatalf("aliases len = %d, want %d (%v)", len(resource.Canonical.Aliases), len(wantAliases), resource.Canonical.Aliases)
+	}
+	for i, want := range wantAliases {
+		if got := resource.Canonical.Aliases[i]; got != want {
+			t.Fatalf("alias[%d] = %q, want %q", i, got, want)
+		}
+	}
+}

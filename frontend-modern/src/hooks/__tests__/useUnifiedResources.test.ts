@@ -297,9 +297,7 @@ describe('useUnifiedResources', () => {
     expect(result!.resources()[0].agent?.storagePostureSummary).toBe(
       'Unraid array is running without parity protection',
     );
-    expect(result!.resources()[0].agent?.unraid?.risk?.reasons?.[0]?.code).toBe(
-      'unraid_no_parity',
-    );
+    expect(result!.resources()[0].agent?.unraid?.risk?.reasons?.[0]?.code).toBe('unraid_no_parity');
     expect(result!.resources()[0].storage?.postureSummary).toBe(
       'Unraid array is running without parity protection',
     );
@@ -476,6 +474,17 @@ describe('useUnifiedResources', () => {
           sources: ['truenas'],
           truenas: {
             hostname: 'truenas-main',
+            app: {
+              id: 'nextcloud',
+              state: 'RUNNING',
+              usedPorts: [
+                {
+                  containerPort: 443,
+                  protocol: 'tcp',
+                  hostPorts: [{ hostPort: 30443, hostIp: '0.0.0.0' }],
+                },
+              ],
+            },
           },
           docker: {
             containerId: 'nextcloud',
@@ -493,23 +502,29 @@ describe('useUnifiedResources', () => {
     });
 
     await waitForValue(
-      () => Boolean(result!.resources().find((resource) => resource.id === 'docker-container-frigate-141')),
+      () =>
+        Boolean(
+          result!.resources().find((resource) => resource.id === 'docker-container-frigate-141'),
+        ),
       true,
     );
 
-    const dockerResource = result!.resources().find(
-      (resource) => resource.id === 'docker-container-frigate-141',
-    );
-    const truenasResource = result!.resources().find(
-      (resource) => resource.id === 'truenas-app-nextcloud',
-    );
+    const dockerResource = result!
+      .resources()
+      .find((resource) => resource.id === 'docker-container-frigate-141');
+    const truenasResource = result!
+      .resources()
+      .find((resource) => resource.id === 'truenas-app-nextcloud');
 
     expect(dockerResource?.platformScopes).toEqual(['proxmox-pve', 'docker']);
+    expect(dockerResource?.docker?.containerId).toBe('frigate');
     expect((dockerResource?.platformData as Record<string, unknown>)?.platformScopes).toEqual([
       'proxmox-pve',
       'docker',
     ]);
     expect(truenasResource?.platformScopes).toEqual(['truenas']);
+    expect(truenasResource?.truenas?.hostname).toBe('truenas-main');
+    expect(truenasResource?.truenas?.app?.usedPorts?.[0]?.hostPorts?.[0]?.hostPort).toBe(30443);
 
     dispose();
   });
