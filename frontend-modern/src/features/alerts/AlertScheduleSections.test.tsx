@@ -4,6 +4,7 @@ import { AlertCooldownSection } from './AlertCooldownSection';
 import { AlertEscalationSection } from './AlertEscalationSection';
 import { AlertGroupingSection } from './AlertGroupingSection';
 import { AlertQuietHoursSection } from './AlertQuietHoursSection';
+import { AlertRecoverySection } from './AlertRecoverySection';
 import type { CooldownConfig, EscalationConfig, GroupingConfig, QuietHoursConfig } from './types';
 
 function makeQuietHours(overrides: Partial<QuietHoursConfig> = {}): QuietHoursConfig {
@@ -55,6 +56,10 @@ describe('Alert schedule sections', () => {
       />
     ));
 
+    expect(screen.getByRole('button', { name: 'Quiet hours Enabled' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(screen.getByLabelText('Start time')).toHaveAttribute('type', 'time');
     expect(screen.getByLabelText('End time')).toHaveAttribute('type', 'time');
     expect(screen.getByRole('combobox', { name: 'Timezone' })).toBeInTheDocument();
@@ -77,6 +82,10 @@ describe('Alert schedule sections', () => {
       />
     ));
 
+    expect(screen.getByRole('button', { name: 'Alert cooldown Enabled' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(screen.getByRole('spinbutton', { name: 'Cooldown period' })).toBeInTheDocument();
     expect(screen.getByRole('spinbutton', { name: 'Max alerts / hour' })).toBeInTheDocument();
   });
@@ -94,6 +103,10 @@ describe('Alert schedule sections', () => {
       />
     ));
 
+    expect(screen.getByRole('button', { name: 'Smart grouping Enabled' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(screen.getByRole('slider', { name: 'Grouping window' })).toHaveAttribute(
       'aria-valuetext',
       '10 minutes',
@@ -119,8 +132,23 @@ describe('Alert schedule sections', () => {
       />
     ));
 
+    expect(screen.getByRole('button', { name: 'Alert escalation Enabled' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(screen.getByRole('spinbutton', { name: 'After' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Notify' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remove escalation level' })).toBeInTheDocument();
+  });
+
+  it('associates the visible recovery heading with its status toggle', () => {
+    render(() => (
+      <AlertRecoverySection notifyOnResolve={false} setNotifyOnResolveEnabled={vi.fn()} />
+    ));
+
+    expect(screen.getByRole('button', { name: 'Recovery notifications Disabled' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
   });
 });

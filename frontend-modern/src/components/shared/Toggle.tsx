@@ -53,14 +53,21 @@ export function Toggle(props: LabeledToggleProps) {
   const size = resolveToggleSize(props.size, 'md');
   const labelId = createUniqueId();
   const descriptionId = createUniqueId();
+  const labelledBy = () =>
+    [props.ariaLabelledBy, props.label ? labelId : undefined].filter(Boolean).join(' ') ||
+    undefined;
+  const describedBy = () =>
+    [props.ariaDescribedBy, props.description ? descriptionId : undefined]
+      .filter(Boolean)
+      .join(' ') || undefined;
 
   return (
     <div class={getToggleContainerClass(props.containerClass)}>
       <TogglePrimitive
         {...props}
         size={size}
-        ariaLabelledBy={props.label ? labelId : props.ariaLabelledBy}
-        ariaDescribedBy={props.description ? descriptionId : props.ariaDescribedBy}
+        ariaLabelledBy={labelledBy()}
+        ariaDescribedBy={describedBy()}
       />
       {(props.label || props.description) && (
         <span class={getToggleLabelClass()}>

@@ -31,11 +31,13 @@ interface AlertGroupingSectionProps {
 export function AlertGroupingSection(props: AlertGroupingSectionProps) {
   const fieldIdPrefix = `alert-grouping-${createUniqueId()}`;
   const fieldIds = {
+    title: `${fieldIdPrefix}-title`,
     window: `${fieldIdPrefix}-window`,
   };
 
   return (
     <SettingsPanel
+      titleId={fieldIds.title}
       title={ALERT_CONFIG_GROUPING_TITLE}
       description={ALERT_CONFIG_GROUPING_DESCRIPTION}
       action={
@@ -43,6 +45,7 @@ export function AlertGroupingSection(props: AlertGroupingSectionProps) {
           checked={props.grouping.enabled}
           onChange={(event) => props.setGroupingEnabled(event.currentTarget.checked)}
           containerClass="sm:self-start"
+          ariaLabelledBy={fieldIds.title}
           label={
             <span class="text-xs font-medium text-muted">
               {getAlertConfigToggleStatusLabel(props.grouping.enabled)}

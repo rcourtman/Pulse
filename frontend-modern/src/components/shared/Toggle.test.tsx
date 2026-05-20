@@ -81,4 +81,22 @@ describe('Toggle', () => {
     expect(button).toHaveAttribute('aria-describedby', 'external-toggle-description');
     expect(button).toHaveAccessibleDescription('Run when alerts fire.');
   });
+
+  it('combines external context with its visible status label', () => {
+    render(() => (
+      <>
+        <span id="schedule-section-label">Quiet hours</span>
+        <Toggle
+          checked={false}
+          ariaLabelledBy="schedule-section-label"
+          label={<span>Disabled</span>}
+        />
+      </>
+    ));
+
+    const button = screen.getByRole('button', { name: 'Quiet hours Disabled' });
+    const labelledBy = button.getAttribute('aria-labelledby')?.split(/\s+/) ?? [];
+    expect(labelledBy).toContain('schedule-section-label');
+    expect(labelledBy).toHaveLength(2);
+  });
 });

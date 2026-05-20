@@ -10,6 +10,7 @@ import {
   ALERT_CONFIG_QUIET_HOURS_START_TIME_LABEL,
   ALERT_CONFIG_QUIET_HOURS_TIMEZONE_LABEL,
   ALERT_CONFIG_QUIET_HOURS_TITLE,
+  getAlertConfigToggleStatusLabel,
 } from '@/utils/alertConfigPresentation';
 import {
   getAlertQuietDayButtonClass,
@@ -42,12 +43,14 @@ interface AlertQuietHoursSectionProps {
 export function AlertQuietHoursSection(props: AlertQuietHoursSectionProps) {
   const fieldIdPrefix = `alert-quiet-hours-${createUniqueId()}`;
   const fieldIds = {
+    title: `${fieldIdPrefix}-title`,
     start: `${fieldIdPrefix}-start`,
     end: `${fieldIdPrefix}-end`,
   };
 
   return (
     <SettingsPanel
+      titleId={fieldIds.title}
       title={ALERT_CONFIG_QUIET_HOURS_TITLE}
       description={ALERT_CONFIG_QUIET_HOURS_DESCRIPTION}
       action={
@@ -55,9 +58,10 @@ export function AlertQuietHoursSection(props: AlertQuietHoursSectionProps) {
           checked={props.quietHours.enabled}
           onChange={(event) => props.setQuietHoursEnabled(event.currentTarget.checked)}
           containerClass="sm:self-start"
+          ariaLabelledBy={fieldIds.title}
           label={
             <span class="text-xs font-medium text-muted">
-              {props.quietHours.enabled ? 'Enabled' : 'Disabled'}
+              {getAlertConfigToggleStatusLabel(props.quietHours.enabled)}
             </span>
           }
         />

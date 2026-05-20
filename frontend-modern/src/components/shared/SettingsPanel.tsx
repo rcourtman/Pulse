@@ -4,6 +4,7 @@ import { Card } from '@/components/shared/Card';
 type SettingsPanelProps = {
   title: JSX.Element;
   description?: JSX.Element;
+  titleId?: string;
   action?: JSX.Element;
   bodyClass?: string;
   tone?: 'default' | 'muted' | 'info' | 'success' | 'warning' | 'danger';
@@ -15,6 +16,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const [local, rest] = splitProps(props, [
     'title',
     'description',
+    'titleId',
     'action',
     'bodyClass',
     'children',
@@ -35,13 +37,14 @@ export function SettingsPanel(props: SettingsPanelProps) {
       <div class="px-3 py-3 sm:px-6 sm:py-4 border-b border-border bg-surface-alt">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div class="flex min-w-0 flex-col gap-1 flex-1">
-            <h2 class="text-sm sm:text-base tracking-tight font-semibold text-base-content dark:text-slate-100">
+            <h2
+              id={local.titleId}
+              class="text-sm sm:text-base tracking-tight font-semibold text-base-content dark:text-slate-100"
+            >
               {local.title}
             </h2>
             <Show when={local.description}>
-              <p class="text-xs sm:text-sm text-muted dark:text-slate-200">
-                {local.description}
-              </p>
+              <p class="text-xs sm:text-sm text-muted dark:text-slate-200">{local.description}</p>
             </Show>
           </div>
           <Show when={local.action}>

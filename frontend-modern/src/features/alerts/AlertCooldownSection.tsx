@@ -27,12 +27,14 @@ interface AlertCooldownSectionProps {
 export function AlertCooldownSection(props: AlertCooldownSectionProps) {
   const fieldIdPrefix = `alert-cooldown-${createUniqueId()}`;
   const fieldIds = {
+    title: `${fieldIdPrefix}-title`,
     minutes: `${fieldIdPrefix}-minutes`,
     maxAlerts: `${fieldIdPrefix}-max-alerts`,
   };
 
   return (
     <SettingsPanel
+      titleId={fieldIds.title}
       title={ALERT_CONFIG_COOLDOWN_TITLE}
       description={ALERT_CONFIG_COOLDOWN_DESCRIPTION}
       action={
@@ -40,6 +42,7 @@ export function AlertCooldownSection(props: AlertCooldownSectionProps) {
           checked={props.cooldown.enabled}
           onChange={(event) => props.setCooldownEnabled(event.currentTarget.checked)}
           containerClass="sm:self-start"
+          ariaLabelledBy={fieldIds.title}
           label={
             <span class="text-xs font-medium text-muted">
               {getAlertConfigToggleStatusLabel(props.cooldown.enabled)}

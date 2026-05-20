@@ -30,9 +30,11 @@ interface AlertEscalationSectionProps {
 
 export function AlertEscalationSection(props: AlertEscalationSectionProps) {
   const fieldIdPrefix = `alert-escalation-${createUniqueId()}`;
+  const titleId = `${fieldIdPrefix}-title`;
 
   return (
     <SettingsPanel
+      titleId={titleId}
       title={ALERT_CONFIG_ESCALATION_TITLE}
       description={ALERT_CONFIG_ESCALATION_DESCRIPTION}
       action={
@@ -40,6 +42,7 @@ export function AlertEscalationSection(props: AlertEscalationSectionProps) {
           checked={props.escalation.enabled}
           onChange={(event) => props.setEscalationEnabled(event.currentTarget.checked)}
           containerClass="sm:self-start"
+          ariaLabelledBy={titleId}
           label={
             <span class="text-xs font-medium text-muted">
               {getAlertConfigToggleStatusLabel(props.escalation.enabled)}
