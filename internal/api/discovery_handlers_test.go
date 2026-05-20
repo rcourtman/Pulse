@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/testutil"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -586,6 +588,62 @@ func TestHandleGetDiscovery_EmitsCanonicalAgentID(t *testing.T) {
 	assert.NotContains(t, body, "host_id")
 }
 
+func TestDiscoveryHandlers_MockModeServesFixturesWithoutService(t *testing.T) {
+	testutil.SetMockMode(t, true)
+	h := NewDiscoveryHandlers(nil, nil)
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/discovery", nil)
+	listRec := httptest.NewRecorder()
+	h.HandleListDiscoveries(listRec, listReq)
+
+	require.Equal(t, http.StatusOK, listRec.Code)
+	var listBody map[string]any
+	require.NoError(t, json.NewDecoder(listRec.Body).Decode(&listBody))
+	require.Greater(t, listBody["total"].(float64), float64(0))
+	discoveries := listBody["discoveries"].([]any)
+	first := discoveries[0].(map[string]any)
+
+	resourceType := first["resource_type"].(string)
+	targetID := first["target_id"].(string)
+	resourceID := first["resource_id"].(string)
+	detailPath := fmt.Sprintf("/api/discovery/%s/%s/%s", resourceType, targetID, resourceID)
+
+	detailReq := httptest.NewRequest(http.MethodGet, detailPath, nil)
+	detailRec := httptest.NewRecorder()
+	h.HandleGetDiscovery(detailRec, detailReq)
+	require.Equal(t, http.StatusOK, detailRec.Code)
+	var detailBody map[string]any
+	require.NoError(t, json.NewDecoder(detailRec.Body).Decode(&detailBody))
+	require.Equal(t, first["id"], detailBody["id"])
+	require.NotEmpty(t, detailBody["service_name"])
+	require.NotContains(t, detailBody, "raw_command_output")
+
+	typeReq := httptest.NewRequest(http.MethodGet, "/api/discovery/type/"+resourceType, nil)
+	typeRec := httptest.NewRecorder()
+	h.HandleListByType(typeRec, typeReq)
+	require.Equal(t, http.StatusOK, typeRec.Code)
+	var typeBody map[string]any
+	require.NoError(t, json.NewDecoder(typeRec.Body).Decode(&typeBody))
+	require.Greater(t, typeBody["total"].(float64), float64(0))
+
+	progressReq := httptest.NewRequest(http.MethodGet, detailPath+"/progress", nil)
+	progressRec := httptest.NewRecorder()
+	h.HandleGetProgress(progressRec, progressReq)
+	require.Equal(t, http.StatusOK, progressRec.Code)
+	var progressBody map[string]any
+	require.NoError(t, json.NewDecoder(progressRec.Body).Decode(&progressBody))
+	require.Equal(t, "completed", progressBody["status"])
+
+	statusReq := httptest.NewRequest(http.MethodGet, "/api/discovery/status", nil)
+	statusRec := httptest.NewRecorder()
+	h.HandleGetStatus(statusRec, statusReq)
+	require.Equal(t, http.StatusOK, statusRec.Code)
+	var statusBody map[string]any
+	require.NoError(t, json.NewDecoder(statusRec.Body).Decode(&statusBody))
+	require.Equal(t, false, statusBody["running"])
+	require.Equal(t, float64(len(discoveries)), statusBody["fingerprint_count"])
+}
+
 // Additional test to cover service not configured case
 func TestHandlers_NoService(t *testing.T) {
 	h := NewDiscoveryHandlers(nil, nil)
@@ -596,7 +654,7 @@ func TestHandlers_NoService(t *testing.T) {
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 
 	w = httptest.NewRecorder()
-	h.HandleGetDiscovery(w, req)
+	h.HandleGetDiscovery(w, httptest.NewRequest("GET", "/api/discovery/vm/node1/100", nil))
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 
 	w = httptest.NewRecorder()

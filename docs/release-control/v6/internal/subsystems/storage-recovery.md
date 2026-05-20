@@ -132,6 +132,12 @@ driver runs. Dry-run-only plans remain planning
 evidence only; storage and recovery surfaces must not present them as
 executable, dispatch them through provider-local restore/remediation paths, or
 bypass the API fail-closed execution gate.
+Storage and recovery surfaces may consume Discovery context from the shared
+API boundary when it helps explain protected workloads or storage-adjacent
+services, including mock-mode config/data/log path examples. That context is
+read-only evidence: it must not become a storage/recovery-owned command path,
+secret source, restore entitlement, or frontend-only fixture separate from the
+canonical `/api/discovery` payload.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 2. Add or change recovery page UX through `frontend-modern/src/components/Recovery/` and keep canonical route/query/filter state ownership in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`

@@ -1936,6 +1936,8 @@ func buildDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
 		return proxmoxGuestDiscoveryTarget(resource, "vm")
 	case unified.ResourceTypeSystemContainer:
 		return proxmoxGuestDiscoveryTarget(resource, "system-container")
+	case unified.ResourceTypeAppContainer:
+		return dockerContainerDiscoveryTarget(resource)
 	case unified.ResourceTypePBS:
 		return hostDiscoveryTarget(resource)
 	case unified.ResourceTypePMG:
@@ -1989,6 +1991,7 @@ func hostDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
 	hostID := firstNonEmptyTrimmed(
 		agentID(resource.Agent),
 		linkedAgentID,
+		dockerAgentID(resource.Docker),
 		proxmoxNodeName(resource.Proxmox),
 		agentHostname(resource.Agent),
 		dockerHostname(resource.Docker),
@@ -2014,6 +2017,34 @@ func hostDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
 			firstResourceHostname(resource),
 			resource.Name,
 			hostID,
+		),
+	}
+}
+
+func dockerContainerDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
+	if resource.Docker == nil {
+		return nil
+	}
+	hostID := strings.TrimSpace(resource.Docker.AgentID)
+	if hostID == "" {
+		return nil
+	}
+	resourceID := firstNonEmptyTrimmed(
+		resource.Name,
+		resource.Docker.ContainerID,
+		resource.ID,
+	)
+	if resourceID == "" {
+		return nil
+	}
+	return &unified.DiscoveryTarget{
+		ResourceType: "app-container",
+		AgentID:      hostID,
+		ResourceID:   resourceID,
+		Hostname: firstNonEmptyTrimmed(
+			resource.Docker.Hostname,
+			firstResourceHostname(resource),
+			resource.Name,
 		),
 	}
 }
@@ -2167,6 +2198,13 @@ func agentID(agent *unified.AgentData) string {
 		return ""
 	}
 	return agent.AgentID
+}
+
+func dockerAgentID(docker *unified.DockerData) string {
+	if docker == nil {
+		return ""
+	}
+	return docker.AgentID
 }
 
 func agentHostname(agent *unified.AgentData) string {

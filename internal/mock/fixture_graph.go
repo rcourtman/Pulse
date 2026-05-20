@@ -17,6 +17,7 @@ type FixtureGraph struct {
 	AlertHistory         []models.Alert
 	PlatformFixtures     PlatformFixtures
 	AvailabilityFixtures []AvailabilityFixture
+	DiscoveryFixtures    []*DiscoveryFixture
 }
 
 func emptyFixtureGraph() FixtureGraph {
@@ -46,6 +47,7 @@ func cloneFixtureGraph(in FixtureGraph) FixtureGraph {
 		AlertHistory:         append([]models.Alert(nil), in.AlertHistory...),
 		PlatformFixtures:     clonePlatformFixtures(in.PlatformFixtures),
 		AvailabilityFixtures: cloneAvailabilityFixtures(in.AvailabilityFixtures),
+		DiscoveryFixtures:    cloneDiscoveryFixtures(in.DiscoveryFixtures),
 	}
 }
 
@@ -61,6 +63,7 @@ func (g *FixtureGraph) UpdateMetrics(cfg MockConfig, now time.Time) {
 	g.PlatformFixtures = rebasePlatformFixtures(g.PlatformFixtures, now)
 	g.AvailabilityFixtures = rebaseAvailabilityFixtures(g.AvailabilityFixtures, now)
 	applyDemoScenarioGraph(g, now)
+	g.DiscoveryFixtures = buildDiscoveryFixtures(g.State, now)
 	syncMetricRoleRegistryFromGraph(*g)
 }
 

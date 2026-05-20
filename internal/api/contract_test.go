@@ -103,6 +103,89 @@ func TestContract_MockAvailabilityTargetsUseSavedTargetPayloads(t *testing.T) {
 	}
 }
 
+func TestContract_MockDiscoveryEndpointsUseCanonicalPayloads(t *testing.T) {
+	previousMock := mock.IsMockEnabled()
+	if err := mock.SetEnabled(true); err != nil {
+		t.Fatalf("enable mock mode: %v", err)
+	}
+	t.Cleanup(func() { _ = mock.SetEnabled(previousMock) })
+
+	handlers := NewDiscoveryHandlers(nil, nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/discovery", nil)
+	listRec := httptest.NewRecorder()
+	handlers.HandleListDiscoveries(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("/api/discovery status = %d, body=%s", listRec.Code, listRec.Body.String())
+	}
+
+	var listBody struct {
+		Discoveries []map[string]any `json:"discoveries"`
+		Total       int              `json:"total"`
+	}
+	if err := json.NewDecoder(listRec.Body).Decode(&listBody); err != nil {
+		t.Fatalf("decode discovery list: %v", err)
+	}
+	if listBody.Total == 0 || len(listBody.Discoveries) == 0 {
+		t.Fatal("expected mock discovery list to expose canonical discovery summaries")
+	}
+
+	var dockerDetail map[string]any
+	for _, summary := range listBody.Discoveries {
+		if summary["resource_type"] != "docker" {
+			continue
+		}
+		resourceType, _ := summary["resource_type"].(string)
+		targetID, _ := summary["target_id"].(string)
+		resourceID, _ := summary["resource_id"].(string)
+		if resourceType == "" || targetID == "" || resourceID == "" {
+			t.Fatalf("mock discovery summary lost canonical identity: %#v", summary)
+		}
+
+		detailReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/discovery/%s/%s/%s", resourceType, targetID, resourceID), nil)
+		detailRec := httptest.NewRecorder()
+		handlers.HandleGetDiscovery(detailRec, detailReq)
+		if detailRec.Code != http.StatusOK {
+			t.Fatalf("discovery detail status = %d, body=%s", detailRec.Code, detailRec.Body.String())
+		}
+
+		var detail map[string]any
+		if err := json.NewDecoder(detailRec.Body).Decode(&detail); err != nil {
+			t.Fatalf("decode discovery detail: %v", err)
+		}
+		if !discoveryContractValueEmpty(detail["suggested_url"]) {
+			dockerDetail = detail
+			break
+		}
+	}
+	if dockerDetail == nil {
+		t.Fatalf("expected mock discovery summaries to include Docker workload URL context: %#v", listBody.Discoveries)
+	}
+	for _, key := range []string{"service_name", "service_version", "config_paths", "ports", "suggested_url", "cli_access_version"} {
+		value, ok := dockerDetail[key]
+		if !ok || discoveryContractValueEmpty(value) {
+			t.Fatalf("mock discovery detail missing %s: %#v", key, dockerDetail)
+		}
+	}
+	if _, ok := dockerDetail["raw_command_output"]; ok {
+		t.Fatalf("mock discovery detail exposed raw command output: %#v", dockerDetail)
+	}
+}
+
+func discoveryContractValueEmpty(value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return true
+	case string:
+		return strings.TrimSpace(typed) == ""
+	case []any:
+		return len(typed) == 0
+	case float64:
+		return typed == 0
+	default:
+		return false
+	}
+}
+
 func TestPatrolRemediationCommercialCopyUsesSafeRemediationWording(t *testing.T) {
 	files := []string{"ai_handlers.go", "router_routes_ai_relay.go"}
 	for _, file := range files {

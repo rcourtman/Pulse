@@ -55,6 +55,7 @@ truth for live infrastructure data.
 31. `internal/monitoring/availability_poller.go`
 32. `internal/monitoring/scheduler.go`
 33. `internal/monitoring/docker_detection.go`
+34. `internal/mock/fixture_graph.go`
 
 ## Shared Boundaries
 
@@ -100,6 +101,12 @@ truth for live infrastructure data.
    reports into `ApplyDockerReport`, must skip guests with a linked online
    guest-local host agent, and must keep the command set to minimal read-only
    Docker summary and aggregate stats collection.
+15. Add or change mock-mode Discovery context through the canonical mock
+   fixture graph. Mock Discovery records must be derived from the same authored
+   state graph as mock nodes, guests, Docker hosts, containers, and Kubernetes
+   workloads, then exposed through API-owned Discovery handlers. Monitoring
+   must not create a second frontend-only fixture path for service versions,
+   config paths, bind mounts, ports, or suggested URLs.
 
 ## Forbidden Paths
 
@@ -153,6 +160,11 @@ Mock-mode availability targets must use that same provider vocabulary. The
 mock fixture graph may author ping/TCP/HTTP endpoint examples, but monitoring
 and API consumers must receive them through `SourceAvailability` supplemental
 records and probe-status projections, not through a mock-only monitoring type.
+Mock-mode Discovery context follows the same fixture-graph rule. Demo service
+details such as detected version, config/data/log paths, Docker bind mounts,
+ports, and suggested web URLs may be authored in mock fixtures, but consumers
+must receive them through the normal Discovery API contract rather than through
+frontend-only demo data or a monitoring-only side channel.
 That same monitoring boundary also owns the escalation callback bridge into the
 alerts delivery layer. Monitor-owned escalation handling may still publish
 canonical escalation state to websocket consumers, but notification fan-out

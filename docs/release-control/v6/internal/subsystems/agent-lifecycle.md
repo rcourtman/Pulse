@@ -165,6 +165,14 @@ text unless they also hold action execution scope. Lifecycle UI and agents may
 use those redacted events as doorbells or status summaries, but they must fetch
 governed detail through the approval/action surfaces and must not treat a
 monitoring-readable event stream as command disclosure or execution authority.
+Discovery context exposed by `/api/discovery` is similarly API-owned
+observability context, not lifecycle command authority. Lifecycle and
+infrastructure setup surfaces may display service versions, config paths,
+ports, bind mounts, suggested URLs, and mock-mode examples from the Discovery
+API, but they must not widen install tokens, agent profiles, or command grants
+because a Discovery record exists. Mock-mode Discovery records are demo
+payloads for the same API contract and must not become a lifecycle-local
+fixture or an implicit permission to run commands.
 
 The node setup modal boundary must keep guided setup and manual credential
 submission separate. For new PVE/PBS setup, API Inventory and Host Telemetry

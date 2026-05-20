@@ -188,6 +188,41 @@ describe('toDiscoveryConfig', () => {
     });
   });
 
+  it('keeps backend app-container discoveryTarget identity for Docker workloads', () => {
+    const resource: Resource = {
+      ...baseResource(),
+      id: 'resource:app-container:customer-portal',
+      type: 'app-container',
+      name: 'customer-portal',
+      platformType: 'docker',
+      discoveryTarget: {
+        resourceType: 'app-container',
+        agentId: 'agent-edge-01',
+        resourceId: 'customer-portal',
+        hostname: 'edge-apps-01',
+      },
+      platformData: {
+        sources: ['docker'],
+        docker: {
+          hostSourceId: 'agent-edge-01',
+          containerId: 'abc123def456',
+          hostname: 'edge-apps-01',
+        },
+      },
+    };
+
+    const config = toDiscoveryConfig(resource);
+    expect(config).toEqual({
+      resourceType: 'app-container',
+      agentId: 'agent-edge-01',
+      resourceId: 'customer-portal',
+      hostname: 'edge-apps-01',
+      metadataKind: 'guest',
+      metadataId: 'customer-portal',
+      targetLabel: 'container',
+    });
+  });
+
   it('prefers kubernetes cluster/pod IDs for pod fallback mapping', () => {
     const resource: Resource = {
       ...baseResource(),
@@ -255,4 +290,3 @@ describe('toDiscoveryConfig', () => {
     });
   });
 });
-

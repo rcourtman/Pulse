@@ -1844,6 +1844,57 @@ func TestBuildDiscoveryTargetKubernetesPrefersAgentID(t *testing.T) {
 	}
 }
 
+func TestBuildDiscoveryTargetDockerAppContainerUsesAgentAndContainerName(t *testing.T) {
+	target := buildDiscoveryTarget(unified.Resource{
+		ID:   "app-container:source:abc123",
+		Type: unified.ResourceTypeAppContainer,
+		Name: "customer-portal",
+		Docker: &unified.DockerData{
+			AgentID:     "agent-edge-01",
+			ContainerID: "abc123def456",
+			Hostname:    "edge-apps-01",
+		},
+	})
+
+	if target == nil {
+		t.Fatal("expected discovery target")
+	}
+	if target.ResourceType != "app-container" {
+		t.Fatalf("resource type = %q, want app-container", target.ResourceType)
+	}
+	if target.AgentID != "agent-edge-01" {
+		t.Fatalf("agentID = %q, want agent-edge-01", target.AgentID)
+	}
+	if target.ResourceID != "customer-portal" {
+		t.Fatalf("resourceID = %q, want customer-portal", target.ResourceID)
+	}
+	if target.Hostname != "edge-apps-01" {
+		t.Fatalf("hostname = %q, want edge-apps-01", target.Hostname)
+	}
+}
+
+func TestBuildDiscoveryTargetDockerHostUsesAgentID(t *testing.T) {
+	target := buildDiscoveryTarget(unified.Resource{
+		ID:   "agent:docker-host",
+		Type: unified.ResourceTypeAgent,
+		Name: "Edge Apps 01",
+		Docker: &unified.DockerData{
+			AgentID:  "agent-edge-01",
+			Hostname: "edge-apps-01",
+		},
+	})
+
+	if target == nil {
+		t.Fatal("expected discovery target")
+	}
+	if target.ResourceType != "agent" {
+		t.Fatalf("resource type = %q, want agent", target.ResourceType)
+	}
+	if target.AgentID != "agent-edge-01" || target.ResourceID != "agent-edge-01" {
+		t.Fatalf("target = %+v, want agent-edge-01/agent-edge-01", target)
+	}
+}
+
 func TestK8sNamespacesEndpointAggregatesPodsAndDeployments(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{

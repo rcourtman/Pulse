@@ -27,6 +27,7 @@ product API routes free of maintainer commercial analytics.
 ## Canonical Files
 1. `internal/api/contract_test.go`
 2. `internal/api/resources.go`
+3. `internal/api/discovery_handlers.go`
 3. `internal/api/alerts.go`
 4. `internal/api/activity_audit_handlers.go`
 5. `internal/api/actions.go`
@@ -114,6 +115,15 @@ organization, range, metric set, and workload scope, but that cache is
 transport-only. It may amortize polling and remount cost, but it must not
 change normalized response shape, bypass monitor or read-state availability
 checks, merge tenants, or become the source of truth for telemetry freshness.
+
+Discovery read endpoints are a canonical API payload boundary even when Pulse
+is running in mock mode. `/api/discovery`, typed discovery detail/progress
+routes, type filters, agent filters, and status must expose mock-authored
+Discovery records through the same `servicediscovery.ResourceDiscovery` and
+summary response shapes used by the live discovery service. Live service data
+remains primary when a service is configured; mock fixtures may supplement or
+stand in for that data only in mock mode, and they must not expose raw command
+output or bypass the normal non-admin redaction path.
 
 1. `frontend-modern/src/api/agentProfiles.ts` shared with `agent-lifecycle`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/api/ai.ts` shared with `ai-runtime`: the AI frontend client is both an AI runtime control surface and a canonical API payload contract boundary.

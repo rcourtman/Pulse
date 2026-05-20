@@ -156,6 +156,14 @@ Swarm capability surfaces.
     normalization so client-side grouping behaves identically against mock
     fixtures and live backends.
 17. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+    App-container Discovery targets are part of that shared payload contract.
+    Backend resources must expose frontend-facing `resourceType=app-container`
+    with the reporting Docker/Podman agent id and the stable container name as
+    the target resource id; browser Discovery clients are responsible for
+    translating that frontend resource type to the Discovery API's `docker`
+    route type. Docker host resources must likewise prefer the reported agent
+    id over host labels when building host-level Discovery targets, so detail
+    drawers, websocket hydration, and API lookups use the same identity.
 ## Extension Points
 
 1. Add new resource types and identity fields in `internal/unifiedresources/types.go`

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	mockfixtures "github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
@@ -249,21 +250,125 @@ func discoveryDetailResponse(d *servicediscovery.ResourceDiscovery) *servicedisc
 	return d
 }
 
-// HandleListDiscoveries handles GET /api/discovery
-func (h *DiscoveryHandlers) HandleListDiscoveries(w http.ResponseWriter, r *http.Request) {
-	if h.service == nil {
-		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
-		return
+func mockDiscoveryFixtureToService(fixture *mockfixtures.DiscoveryFixture) *servicediscovery.ResourceDiscovery {
+	if fixture == nil {
+		return nil
+	}
+	facts := make([]servicediscovery.DiscoveryFact, 0, len(fixture.Facts))
+	for _, fact := range fixture.Facts {
+		facts = append(facts, servicediscovery.DiscoveryFact{
+			Category:     servicediscovery.FactCategory(fact.Category),
+			Key:          fact.Key,
+			Value:        fact.Value,
+			Source:       fact.Source,
+			Confidence:   fact.Confidence,
+			DiscoveredAt: fact.DiscoveredAt,
+		})
+	}
+	ports := make([]servicediscovery.PortInfo, 0, len(fixture.Ports))
+	for _, port := range fixture.Ports {
+		ports = append(ports, servicediscovery.PortInfo{
+			Port:     port.Port,
+			Protocol: port.Protocol,
+			Process:  port.Process,
+			Address:  port.Address,
+		})
+	}
+	mounts := make([]servicediscovery.DockerBindMount, 0, len(fixture.DockerMounts))
+	for _, mount := range fixture.DockerMounts {
+		mounts = append(mounts, servicediscovery.DockerBindMount{
+			ContainerName: mount.ContainerName,
+			Source:        mount.Source,
+			Destination:   mount.Destination,
+			Type:          mount.Type,
+			ReadOnly:      mount.ReadOnly,
+		})
+	}
+	userSecrets := map[string]string{}
+	for key, value := range fixture.UserSecrets {
+		userSecrets[key] = value
 	}
 
-	discoveries, err := h.service.ListDiscoveries()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to list discoveries")
-		writeDiscoveryError(w, http.StatusInternalServerError, "Failed to list discoveries")
-		return
+	return &servicediscovery.ResourceDiscovery{
+		ID:                       fixture.ID,
+		ResourceType:             servicediscovery.ResourceType(fixture.ResourceType),
+		ResourceID:               fixture.ResourceID,
+		TargetID:                 fixture.TargetID,
+		AgentID:                  fixture.AgentID,
+		Hostname:                 fixture.Hostname,
+		ServiceType:              fixture.ServiceType,
+		ServiceName:              fixture.ServiceName,
+		ServiceVersion:           fixture.ServiceVersion,
+		Category:                 servicediscovery.ServiceCategory(fixture.Category),
+		CLIAccess:                fixture.CLIAccess,
+		Facts:                    facts,
+		ConfigPaths:              append([]string(nil), fixture.ConfigPaths...),
+		DataPaths:                append([]string(nil), fixture.DataPaths...),
+		LogPaths:                 append([]string(nil), fixture.LogPaths...),
+		Ports:                    ports,
+		DockerMounts:             mounts,
+		UserNotes:                fixture.UserNotes,
+		UserSecrets:              userSecrets,
+		Confidence:               fixture.Confidence,
+		AIReasoning:              fixture.AIReasoning,
+		DiscoveredAt:             fixture.DiscoveredAt,
+		UpdatedAt:                fixture.UpdatedAt,
+		ScanDuration:             fixture.ScanDuration,
+		Fingerprint:              fixture.Fingerprint,
+		FingerprintedAt:          fixture.FingerprintedAt,
+		FingerprintSchemaVersion: fixture.FingerprintSchemaVersion,
+		CLIAccessVersion:         fixture.CLIAccessVersion,
+		SuggestedURL:             fixture.SuggestedURL,
+		SuggestedURLSourceCode:   fixture.SuggestedURLSourceCode,
+		SuggestedURLSourceDetail: fixture.SuggestedURLSourceDetail,
+		SuggestedURLDiagnostic:   fixture.SuggestedURLDiagnostic,
+	}
+}
+
+func mockDiscoveryFixturesToService(fixtures []*mockfixtures.DiscoveryFixture) []*servicediscovery.ResourceDiscovery {
+	converted := make([]*servicediscovery.ResourceDiscovery, 0, len(fixtures))
+	for _, fixture := range fixtures {
+		if discovery := mockDiscoveryFixtureToService(fixture); discovery != nil {
+			converted = append(converted, discovery)
+		}
+	}
+	return converted
+}
+
+func mergeDiscoveryRecords(primary, fixtures []*servicediscovery.ResourceDiscovery) []*servicediscovery.ResourceDiscovery {
+	if len(primary) == 0 {
+		return fixtures
+	}
+	if len(fixtures) == 0 {
+		return primary
 	}
 
-	// Convert to summaries for list view
+	merged := make([]*servicediscovery.ResourceDiscovery, 0, len(primary)+len(fixtures))
+	seen := make(map[string]struct{}, len(primary)+len(fixtures))
+	add := func(discovery *servicediscovery.ResourceDiscovery) {
+		if discovery == nil {
+			return
+		}
+		key := strings.TrimSpace(discovery.ID)
+		if key == "" {
+			key = servicediscovery.MakeResourceID(discovery.ResourceType, discovery.TargetID, discovery.ResourceID)
+		}
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, discovery)
+	}
+	for _, discovery := range primary {
+		add(discovery)
+	}
+	for _, discovery := range fixtures {
+		add(discovery)
+	}
+	return merged
+}
+
+func discoverySummaryList(discoveries []*servicediscovery.ResourceDiscovery) []servicediscovery.DiscoverySummary {
 	summaries := make([]servicediscovery.DiscoverySummary, 0, len(discoveries))
 	for _, d := range discoveries {
 		if d == nil {
@@ -271,6 +376,83 @@ func (h *DiscoveryHandlers) HandleListDiscoveries(w http.ResponseWriter, r *http
 		}
 		summaries = append(summaries, discoverySummaryResponse(d))
 	}
+	return summaries
+}
+
+func mockDiscoveryFixtures() []*servicediscovery.ResourceDiscovery {
+	if !mockfixtures.IsMockEnabled() {
+		return nil
+	}
+	return mockDiscoveryFixturesToService(mockfixtures.CurrentDiscoveryFixtures())
+}
+
+func mockDiscoveryFixtureByResource(resourceType servicediscovery.ResourceType, targetID, resourceID string) *servicediscovery.ResourceDiscovery {
+	if !mockfixtures.IsMockEnabled() {
+		return nil
+	}
+	return mockDiscoveryFixtureToService(mockfixtures.CurrentDiscoveryFixtureByResource(string(resourceType), targetID, resourceID))
+}
+
+func mockDiscoveryFixturesByType(resourceType servicediscovery.ResourceType) []*servicediscovery.ResourceDiscovery {
+	if !mockfixtures.IsMockEnabled() {
+		return nil
+	}
+	return mockDiscoveryFixturesToService(mockfixtures.CurrentDiscoveryFixturesByType(string(resourceType)))
+}
+
+func mockDiscoveryFixturesByTarget(targetID string) []*servicediscovery.ResourceDiscovery {
+	if !mockfixtures.IsMockEnabled() {
+		return nil
+	}
+	return mockDiscoveryFixturesToService(mockfixtures.CurrentDiscoveryFixturesByTarget(targetID))
+}
+
+func mockDiscoveryStatus() map[string]any {
+	fixtures := mockDiscoveryFixtures()
+	var latest time.Time
+	for _, discovery := range fixtures {
+		if discovery != nil && discovery.UpdatedAt.After(latest) {
+			latest = discovery.UpdatedAt
+		}
+	}
+	return map[string]any{
+		"running":               false,
+		"last_run":              latest,
+		"interval":              "mock",
+		"cache_size":            len(fixtures),
+		"ai_analyzer_set":       false,
+		"scanner_set":           false,
+		"store_set":             true,
+		"command_scanning":      false,
+		"deep_scan_timeout":     "",
+		"ai_analysis_timeout":   "",
+		"max_discovery_age":     "",
+		"fingerprint_count":     len(fixtures),
+		"last_fingerprint_scan": latest,
+		"changed_count":         0,
+		"stale_count":           0,
+	}
+}
+
+// HandleListDiscoveries handles GET /api/discovery
+func (h *DiscoveryHandlers) HandleListDiscoveries(w http.ResponseWriter, r *http.Request) {
+	if h.service == nil && !mockfixtures.IsMockEnabled() {
+		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
+		return
+	}
+
+	var discoveries []*servicediscovery.ResourceDiscovery
+	if h.service != nil {
+		serviceDiscoveries, err := h.service.ListDiscoveries()
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to list discoveries")
+			writeDiscoveryError(w, http.StatusInternalServerError, "Failed to list discoveries")
+			return
+		}
+		discoveries = serviceDiscoveries
+	}
+
+	summaries := discoverySummaryList(mergeDiscoveryRecords(discoveries, mockDiscoveryFixtures()))
 
 	writeDiscoveryJSON(w, map[string]any{
 		"discoveries": summaries,
@@ -280,11 +462,6 @@ func (h *DiscoveryHandlers) HandleListDiscoveries(w http.ResponseWriter, r *http
 
 // HandleGetDiscovery handles GET /api/discovery/{type}/{target}/{id}
 func (h *DiscoveryHandlers) HandleGetDiscovery(w http.ResponseWriter, r *http.Request) {
-	if h.service == nil {
-		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
-		return
-	}
-
 	// Parse path: /api/discovery/{type}/{target}/{id}
 	path := strings.TrimPrefix(r.URL.Path, "/api/discovery/")
 	parts := strings.SplitN(path, "/", 3)
@@ -301,16 +478,26 @@ func (h *DiscoveryHandlers) HandleGetDiscovery(w http.ResponseWriter, r *http.Re
 	targetID := parts[1]
 	resourceID := parts[2]
 
-	discovery, err := h.service.GetDiscoveryByResource(resourceType, targetID, resourceID)
-	if err != nil {
-		log.Error().Err(err).Str("type", string(resourceType)).Str("target", targetID).Str("id", resourceID).Msg("Failed to get discovery")
-		writeDiscoveryError(w, http.StatusInternalServerError, "Failed to get discovery")
+	var discovery *servicediscovery.ResourceDiscovery
+	if h.service != nil {
+		serviceDiscovery, err := h.service.GetDiscoveryByResource(resourceType, targetID, resourceID)
+		if err != nil {
+			log.Error().Err(err).Str("type", string(resourceType)).Str("target", targetID).Str("id", resourceID).Msg("Failed to get discovery")
+			writeDiscoveryError(w, http.StatusInternalServerError, "Failed to get discovery")
+			return
+		}
+		discovery = serviceDiscovery
+	} else if !mockfixtures.IsMockEnabled() {
+		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
 		return
 	}
 
 	if discovery == nil {
-		writeDiscoveryError(w, http.StatusNotFound, "Discovery not found")
-		return
+		discovery = mockDiscoveryFixtureByResource(resourceType, targetID, resourceID)
+		if discovery == nil {
+			writeDiscoveryError(w, http.StatusNotFound, "Discovery not found")
+			return
+		}
 	}
 
 	// Redact sensitive fields for non-admin users
@@ -484,11 +671,6 @@ func (h *DiscoveryHandlers) HandleDeleteDiscovery(w http.ResponseWriter, r *http
 
 // HandleGetProgress handles GET /api/discovery/{type}/{target}/{id}/progress
 func (h *DiscoveryHandlers) HandleGetProgress(w http.ResponseWriter, r *http.Request) {
-	if h.service == nil {
-		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
-		return
-	}
-
 	// Parse path
 	path := strings.TrimPrefix(r.URL.Path, "/api/discovery/")
 	path = strings.TrimSuffix(path, "/progress")
@@ -508,11 +690,26 @@ func (h *DiscoveryHandlers) HandleGetProgress(w http.ResponseWriter, r *http.Req
 
 	discoveryID := servicediscovery.MakeResourceID(resourceType, targetID, resourceID)
 
-	progress := h.service.GetProgress(discoveryID)
+	var progress *servicediscovery.DiscoveryProgress
+	if h.service != nil {
+		progress = h.service.GetProgress(discoveryID)
+	} else if !mockfixtures.IsMockEnabled() {
+		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
+		return
+	}
 	if progress == nil {
 		// Not currently scanning - check if we have a discovery
-		discovery, err := h.service.GetDiscovery(discoveryID)
-		if err == nil && discovery != nil {
+		var discovery *servicediscovery.ResourceDiscovery
+		if h.service != nil {
+			serviceDiscovery, err := h.service.GetDiscovery(discoveryID)
+			if err == nil {
+				discovery = serviceDiscovery
+			}
+		}
+		if discovery == nil {
+			discovery = mockDiscoveryFixtureByResource(resourceType, targetID, resourceID)
+		}
+		if discovery != nil {
 			// Return completed status with all fields for frontend compatibility
 			writeDiscoveryJSON(w, map[string]any{
 				"resource_id":     discoveryID,
@@ -544,6 +741,10 @@ func (h *DiscoveryHandlers) HandleGetProgress(w http.ResponseWriter, r *http.Req
 // HandleGetStatus handles GET /api/discovery/status
 func (h *DiscoveryHandlers) HandleGetStatus(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
+		if mockfixtures.IsMockEnabled() {
+			writeDiscoveryJSON(w, mockDiscoveryStatus())
+			return
+		}
 		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
 		return
 	}
@@ -620,11 +821,6 @@ func (h *DiscoveryHandlers) HandleUpdateSettings(w http.ResponseWriter, r *http.
 
 // HandleListByType handles GET /api/discovery/type/{type}
 func (h *DiscoveryHandlers) HandleListByType(w http.ResponseWriter, r *http.Request) {
-	if h.service == nil {
-		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
-		return
-	}
-
 	// Parse path
 	path := strings.TrimPrefix(r.URL.Path, "/api/discovery/type/")
 	resourceType, err := parseDiscoveryResourceType(path)
@@ -633,20 +829,21 @@ func (h *DiscoveryHandlers) HandleListByType(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	discoveries, err := h.service.ListDiscoveriesByType(resourceType)
-	if err != nil {
-		log.Error().Err(err).Str("type", string(resourceType)).Msg("Failed to list discoveries by type")
-		writeDiscoveryError(w, http.StatusInternalServerError, "Failed to list discoveries")
+	var discoveries []*servicediscovery.ResourceDiscovery
+	if h.service != nil {
+		serviceDiscoveries, err := h.service.ListDiscoveriesByType(resourceType)
+		if err != nil {
+			log.Error().Err(err).Str("type", string(resourceType)).Msg("Failed to list discoveries by type")
+			writeDiscoveryError(w, http.StatusInternalServerError, "Failed to list discoveries")
+			return
+		}
+		discoveries = serviceDiscoveries
+	} else if !mockfixtures.IsMockEnabled() {
+		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
 		return
 	}
 
-	summaries := make([]servicediscovery.DiscoverySummary, 0, len(discoveries))
-	for _, d := range discoveries {
-		if d == nil {
-			continue
-		}
-		summaries = append(summaries, discoverySummaryResponse(d))
-	}
+	summaries := discoverySummaryList(mergeDiscoveryRecords(discoveries, mockDiscoveryFixturesByType(resourceType)))
 
 	writeDiscoveryJSON(w, map[string]any{
 		"discoveries": summaries,
@@ -657,28 +854,24 @@ func (h *DiscoveryHandlers) HandleListByType(w http.ResponseWriter, r *http.Requ
 
 // HandleListByAgent handles GET /api/discovery/agent/{agentId}
 func (h *DiscoveryHandlers) HandleListByAgent(w http.ResponseWriter, r *http.Request) {
-	if h.service == nil {
+	// Parse path
+	agentID := strings.TrimPrefix(r.URL.Path, "/api/discovery/agent/")
+
+	var discoveries []*servicediscovery.ResourceDiscovery
+	if h.service != nil {
+		serviceDiscoveries, err := h.service.ListDiscoveriesByTarget(agentID)
+		if err != nil {
+			log.Error().Err(err).Str("agentId", agentID).Msg("Failed to list discoveries by agent")
+			writeDiscoveryError(w, http.StatusInternalServerError, "Failed to list discoveries")
+			return
+		}
+		discoveries = serviceDiscoveries
+	} else if !mockfixtures.IsMockEnabled() {
 		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
 		return
 	}
 
-	// Parse path
-	agentID := strings.TrimPrefix(r.URL.Path, "/api/discovery/agent/")
-
-	discoveries, err := h.service.ListDiscoveriesByTarget(agentID)
-	if err != nil {
-		log.Error().Err(err).Str("agentId", agentID).Msg("Failed to list discoveries by agent")
-		writeDiscoveryError(w, http.StatusInternalServerError, "Failed to list discoveries")
-		return
-	}
-
-	summaries := make([]servicediscovery.DiscoverySummary, 0, len(discoveries))
-	for _, d := range discoveries {
-		if d == nil {
-			continue
-		}
-		summaries = append(summaries, discoverySummaryResponse(d))
-	}
+	summaries := discoverySummaryList(mergeDiscoveryRecords(discoveries, mockDiscoveryFixturesByTarget(agentID)))
 
 	writeDiscoveryJSON(w, map[string]any{
 		"discoveries": summaries,
