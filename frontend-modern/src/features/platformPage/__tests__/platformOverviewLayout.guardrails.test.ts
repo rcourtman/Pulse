@@ -16,6 +16,8 @@ import proxmoxPageSurfaceSource from '@/features/proxmox/ProxmoxPageSurface.tsx?
 import proxmoxReplicationTableSource from '@/features/proxmox/ProxmoxReplicationTable.tsx?raw';
 import sharedPlatformPageSource from '@/features/platformPage/sharedPlatformPage.tsx?raw';
 import truenasAlertsTableSource from '@/features/truenas/TrueNASAlertsTable.tsx?raw';
+import truenasAppsTableSource from '@/features/truenas/TrueNASAppsTable.tsx?raw';
+import truenasNetworkSharesTableSource from '@/features/truenas/TrueNASNetworkSharesTable.tsx?raw';
 import truenasPageSurfaceSource from '@/features/truenas/TrueNASPageSurface.tsx?raw';
 import truenasProtectionTableSource from '@/features/truenas/TrueNASProtectionTable.tsx?raw';
 import truenasStorageTopologyTableSource from '@/features/truenas/TrueNASStorageTopologyTable.tsx?raw';
@@ -32,6 +34,8 @@ const platformTableSources = [
   kubernetesNodesTableSource,
   kubernetesDeploymentsTableSource,
   truenasAlertsTableSource,
+  truenasAppsTableSource,
+  truenasNetworkSharesTableSource,
   truenasProtectionTableSource,
   truenasStorageTopologyTableSource,
   truenasSystemsTableSource,
@@ -175,8 +179,16 @@ describe('platform overview layout guardrails', () => {
     expect(truenasPageSurfaceSource).not.toContain('<StorageSurface');
     expect(truenasPageSurfaceSource).not.toContain('<WorkloadsSurface');
     expect(truenasPageSurfaceSource).not.toContain('<TrueNASDisksTable');
+    expect(truenasAppsTableSource).toContain('md:min-w-[960px]');
+    expect(truenasAppsTableSource).not.toContain('Volumes');
+    expect(truenasNetworkSharesTableSource).toContain('md:min-w-[960px]');
+    expect(truenasNetworkSharesTableSource).not.toMatch(
+      /getPlatformTableHeadClassForKind\('text'\)[\s\S]{0,200}?Dataset/,
+    );
     expect(truenasProtectionTableSource).not.toContain('Signal');
     expect(truenasProtectionTableSource).toContain('md:min-w-[960px]');
+    expect(truenasStorageTopologyTableSource).toContain('md:min-w-[960px]');
+    expect(truenasVirtualMachinesTableSource).toContain('md:min-w-[960px]');
     expect(vmwarePageSurfaceSource).toContain('<VsphereHostsTable');
     expect(vmwarePageSurfaceSource).toContain('<WorkloadsSurface');
     expect(vmwarePageSurfaceSource).toContain('<StorageSurface');

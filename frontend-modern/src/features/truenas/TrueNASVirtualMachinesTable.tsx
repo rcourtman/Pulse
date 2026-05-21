@@ -163,7 +163,7 @@ export const TrueNASVirtualMachinesTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title="Virtual Machines" />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1100px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[960px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>
@@ -235,7 +235,10 @@ export const TrueNASVirtualMachinesTable: Component<{
                                   {name()}
                                 </div>
                                 <div class="truncate text-[10px] text-muted">
-                                  {vm()?.description || vm()?.uuid || resource.parentName || 'TrueNAS'}
+                                  {vm()?.description ||
+                                    vm()?.uuid ||
+                                    resource.parentName ||
+                                    'TrueNAS'}
                                 </div>
                               </div>
                             </div>

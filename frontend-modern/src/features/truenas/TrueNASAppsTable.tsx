@@ -33,12 +33,7 @@ import {
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
-import type {
-  Resource,
-  ResourceTrueNASAppMeta,
-  ResourceTrueNASAppPort,
-  ResourceTrueNASAppVolume,
-} from '@/types/resource';
+import type { Resource, ResourceTrueNASAppMeta, ResourceTrueNASAppPort } from '@/types/resource';
 import { filterTrueNASApps, type TrueNASAppStatusFilter } from './truenasPageModel';
 
 const TRUENAS_APP_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASAppStatusFilter>[] = [
@@ -80,9 +75,6 @@ const appContainerCount = (app: ResourceTrueNASAppMeta | undefined): number => {
   return app?.containers?.length ?? 0;
 };
 
-const plural = (count: number, singular: string): string =>
-  `${count} ${count === 1 ? singular : `${singular}s`}`;
-
 const formatHostPort = (port: ResourceTrueNASAppPort): string => {
   const protocol = (asTrimmedString(port.protocol) ?? '').toLowerCase() || 'tcp';
   const target = typeof port.containerPort === 'number' ? String(port.containerPort) : '';
@@ -119,24 +111,6 @@ const formatImages = (
   const visible = labels.slice(0, 2);
   const suffix = labels.length > visible.length ? ` +${labels.length - visible.length}` : '';
   return { label: `${visible.join(', ')}${suffix}`, title: images.join(', ') };
-};
-
-const volumeLabel = (volume: ResourceTrueNASAppVolume): string => {
-  const source = asTrimmedString(volume.source);
-  const destination = asTrimmedString(volume.destination);
-  if (source && destination) return `${source}->${destination}`;
-  return source || destination || '';
-};
-
-const formatVolumes = (
-  app: ResourceTrueNASAppMeta | undefined,
-): { label: string; title: string } => {
-  const volumes = app?.volumes ?? [];
-  if (volumes.length === 0) return { label: '-', title: '' };
-  return {
-    label: plural(volumes.length, 'volume'),
-    title: volumes.map(volumeLabel).filter(Boolean).join(', '),
-  };
 };
 
 const UpdatePills: Component<{ app: ResourceTrueNASAppMeta | undefined }> = (props) => {
@@ -221,10 +195,10 @@ export const TrueNASAppsTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title="Apps" />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1280px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[960px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[16%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[17%]`}>
                     App
                   </TableHead>
                   <TableHead
@@ -232,33 +206,28 @@ export const TrueNASAppsTable: Component<{
                   >
                     Version
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[10%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[9%]`}>
                     CPU
                   </TableHead>
                   <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[12%]`}>
                     Memory
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden sm:table-cell md:w-[9%]`}
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden sm:table-cell md:w-[12%]`}
                   >
                     Containers
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[16%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[18%]`}
                   >
                     Ports
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[13%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[12%]`}
                   >
                     Images
                   </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden xl:table-cell md:w-[7%]`}
-                  >
-                    Volumes
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[7%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[10%]`}>
                     Updates
                   </TableHead>
                 </TableRow>
@@ -284,7 +253,6 @@ export const TrueNASAppsTable: Component<{
                     const canRenderMetrics = () => indicator().variant !== 'muted';
                     const ports = createMemo(() => formatPorts(app()));
                     const images = createMemo(() => formatImages(app()));
-                    const volumes = createMemo(() => formatVolumes(app()));
                     const detailRowId = () => drawer.detailRowId(resource);
                     const isExpanded = () => drawer.isExpanded(resource);
                     return (
@@ -365,13 +333,6 @@ export const TrueNASAppsTable: Component<{
                               {images().label}
                             </span>
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden xl:table-cell`}
-                          >
-                            <span class="block truncate" title={volumes().title}>
-                              {volumes().label}
-                            </span>
-                          </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('badge')}>
                             <UpdatePills app={app()} />
                           </TableCell>
@@ -380,7 +341,7 @@ export const TrueNASAppsTable: Component<{
                           resource={resource}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
-                          colSpan={9}
+                          colSpan={8}
                           resolveResourceLabel={resolveResourceLabel}
                           onClose={() => drawer.close(resource)}
                         />

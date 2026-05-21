@@ -169,34 +169,29 @@ export const TrueNASNetworkSharesTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title="Network Shares" />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1180px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[960px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[20%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[23%]`}>
                     Share
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[8%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[11%]`}>
                     Protocol
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden sm:table-cell md:w-[15%]`}
-                  >
-                    Dataset
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[23%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[27%]`}
                   >
                     Path
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[16%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[19%]`}>
                     Access
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[12%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[13%]`}
                   >
                     Clients
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[6%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[7%]`}>
                     State
                   </TableHead>
                 </TableRow>
@@ -250,13 +245,6 @@ export const TrueNASNetworkSharesTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
-                          >
-                            <span class="block truncate" title={share()?.dataset}>
-                              {share()?.dataset || '-'}
-                            </span>
-                          </TableCell>
-                          <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
                             <span
@@ -293,7 +281,7 @@ export const TrueNASNetworkSharesTable: Component<{
                           resource={resource}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
-                          colSpan={7}
+                          colSpan={6}
                           resolveResourceLabel={resolveResourceLabel}
                           onClose={() => drawer.close(resource)}
                         />

@@ -259,21 +259,21 @@ export const TrueNASStorageTopologyTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title="Storage Topology" />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1180px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[960px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[28%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[27%]`}>
                     Resource
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[10%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[9%]`}>
                     Kind
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden sm:table-cell md:w-[11%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden sm:table-cell md:w-[10%]`}
                   >
                     State
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[21%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[22%]`}>
                     Usage / Size
                   </TableHead>
                   <TableHead
@@ -287,11 +287,11 @@ export const TrueNASStorageTopologyTable: Component<{
                     Disks
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell md:w-[7%]`}
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell md:w-[6%]`}
                   >
                     Temp
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[7%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[10%]`}>
                     Health
                   </TableHead>
                 </TableRow>
