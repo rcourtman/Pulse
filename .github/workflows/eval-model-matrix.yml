@@ -16,7 +16,7 @@ on:
         required: false
         default: ""
       base_url:
-        description: Pulse API base URL (e.g. http://127.0.0.1:7655)
+        description: Pulse API base URL reachable from the GitHub-hosted runner. Add Tailscale or another reachability layer to the workflow if pointing at a private instance.
         required: true
 
 permissions:
@@ -25,7 +25,12 @@ permissions:
 jobs:
   eval:
     name: Model Matrix Eval
-    runs-on: self-hosted
+    # Moved off self-hosted: a self-hosted runner attached to a public repo
+    # is RCE-equivalent on the runner host as soon as one workflow gets
+    # mis-configured to run untrusted PR code. Reachability to the eval
+    # target is now the dispatcher's responsibility (pass a base_url the
+    # runner can reach, or add tailscale/* steps before this job).
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
 
     steps:
@@ -37,23 +42,40 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Verify eval credentials are configured
+        env:
+          PULSE_EVAL_USER: ${{ secrets.PULSE_EVAL_USER }}
+          PULSE_EVAL_PASS: ${{ secrets.PULSE_EVAL_PASS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PULSE_EVAL_USER}" ] || [ -z "${PULSE_EVAL_PASS}" ]; then
+            echo "::error::PULSE_EVAL_USER and PULSE_EVAL_PASS repo secrets must be set."
+            echo "::error::Refusing to fall back to admin/admin defaults."
+            exit 1
+          fi
+
       - name: Run eval matrix
         env:
           EVAL_REPORT_DIR: tmp/eval-reports
-          PULSE_EVAL_USER: ${{ secrets.PULSE_EVAL_USER || 'admin' }}
-          PULSE_EVAL_PASS: ${{ secrets.PULSE_EVAL_PASS || 'admin' }}
+          PULSE_EVAL_USER: ${{ secrets.PULSE_EVAL_USER }}
+          PULSE_EVAL_PASS: ${{ secrets.PULSE_EVAL_PASS }}
+          INPUT_SCENARIO: ${{ inputs.scenario }}
+          INPUT_MODELS: ${{ inputs.models }}
+          INPUT_PROVIDERS: ${{ inputs.providers }}
+          INPUT_BASE_URL: ${{ inputs.base_url }}
         run: |
+          set -euo pipefail
           MODEL_ARGS=("-auto-models")
-          if [ -n "${{ inputs.models }}" ]; then
-            MODEL_ARGS=("-models" "${{ inputs.models }}")
+          if [ -n "${INPUT_MODELS}" ]; then
+            MODEL_ARGS=("-models" "${INPUT_MODELS}")
           fi
-          if [ -n "${{ inputs.providers }}" ]; then
-            export EVAL_MODEL_PROVIDERS="${{ inputs.providers }}"
+          if [ -n "${INPUT_PROVIDERS}" ]; then
+            export EVAL_MODEL_PROVIDERS="${INPUT_PROVIDERS}"
           fi
           go run ./cmd/eval \
-            -scenario "${{ inputs.scenario }}" \
+            -scenario "${INPUT_SCENARIO}" \
             "${MODEL_ARGS[@]}" \
-            -url "${{ inputs.base_url }}" \
+            -url "${INPUT_BASE_URL}" \
             -user "${PULSE_EVAL_USER}" \
             -pass "${PULSE_EVAL_PASS}"
 
