@@ -755,10 +755,17 @@ status_bg() {
   proxy_health_url="${browser_url}/api/health"
   backend_health_url="http://127.0.0.1:${PULSE_DEV_API_PORT}/api/health"
 
-  local frontend_code proxy_code backend_code
+  local frontend_code proxy_code backend_code local_probe_unavailable
   frontend_code="$(http_status_code "${frontend_url}")"
   proxy_code="$(http_status_code "${proxy_health_url}")"
   backend_code="$(http_status_code "${backend_health_url}")"
+  local_probe_unavailable="false"
+  if process_inspection_restricted && [[ "${frontend_code}" == "000" && "${backend_code}" == "000" ]] && is_port_listening "${FRONTEND_DEV_PORT}" && is_port_listening "${PULSE_DEV_API_PORT}"; then
+    local_probe_unavailable="true"
+    frontend_code="unavailable"
+    proxy_code="unavailable"
+    backend_code="unavailable"
+  fi
   log "Browser entrypoint: ${browser_url}"
   if [[ -n "${lan_browser_url}" ]]; then
     log "LAN browser entrypoint: ${lan_browser_url}"
@@ -782,7 +789,7 @@ status_bg() {
 
   if http_status_ok "${frontend_code}" && http_status_ok "${proxy_code}" && http_status_ok "${backend_code}"; then
     log "Runtime summary: frontend shell, proxy, and backend are healthy. Use ${browser_url} in the browser."
-  elif process_inspection_restricted && [[ "${frontend_code}" == "000" && "${backend_code}" == "000" ]] && is_port_listening "${FRONTEND_DEV_PORT}" && is_port_listening "${PULSE_DEV_API_PORT}"; then
+  elif [[ "${local_probe_unavailable}" == "true" ]]; then
     log "Runtime summary: local HTTP probes are unavailable from this restricted shell, but frontend and backend listeners are present. Use ${browser_url} in the browser or rerun status outside the restricted shell."
   elif http_status_blocked "${frontend_code}" || http_status_blocked "${proxy_code}" || http_status_blocked "${backend_code}"; then
     log "Runtime summary: local HTTP probes are blocked by this shell. Use ${browser_url} in the browser or rerun status outside the restricted shell."

@@ -954,6 +954,9 @@ test_hot_dev_bg_status_degrades_ownership_when_process_inspection_is_restricted(
   )"
 
   assert_contains "restricted status keeps the managed runtime pid" "${output}" "[hot-dev-bg] Running (pid: 4242)"
+  assert_contains "restricted status renders frontend probe as unavailable" "${output}" "[hot-dev-bg] Frontend shell HTTP: unavailable"
+  assert_contains "restricted status renders proxy probe as unavailable" "${output}" "[hot-dev-bg] Frontend proxy /api/health: unavailable"
+  assert_contains "restricted status renders backend probe as unavailable" "${output}" "[hot-dev-bg] Backend /api/health: unavailable"
   assert_contains "restricted status marks listener ownership as unknown" "${output}" "[hot-dev-bg] Port 5173: unknown listener pid=14111"
   assert_not_contains "restricted status does not accuse split ownership" "${output}" "Detected split ownership"
   assert_contains "restricted status reports unavailable health probes without claiming a crash" "${output}" "local HTTP probes are unavailable from this restricted shell"
