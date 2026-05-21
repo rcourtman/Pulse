@@ -258,6 +258,32 @@ func TestTenantMiddleware_HostedMode_UnboundedTrial_Blocked(t *testing.T) {
 	}
 }
 
+// TestTenantMiddleware_HostedMode_ExpiredTrial_Blocked is the regression test
+// for a fix where isHostedSubscriptionValid only checked that TrialEndsAt was
+// non-nil, not that the trial had not yet expired. A tenant whose trial ended
+// in the past but whose stored subscription state was still "trial" with a
+// non-nil TrialEndsAt would otherwise retain full Cloud access indefinitely.
+func TestTenantMiddleware_HostedMode_ExpiredTrial_Blocked(t *testing.T) {
+	trialEnd := time.Now().Add(-24 * time.Hour).Unix() // ended yesterday
+	setupHostedLicenseProvider(t, pkglicensing.SubStateTrial, &trialEnd)
+
+	mw := NewTenantMiddlewareWithConfig(TenantMiddlewareConfig{
+		HostedMode: true,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Pulse-Org-ID", "cloud-expired-trial")
+	rec := httptest.NewRecorder()
+
+	mw.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("handler should NOT be called for expired trial")
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected 402 for expired trial, got %d", rec.Code)
+	}
+}
+
 func TestTenantMiddleware_HostedMode_ExpiredSubscription_Blocked(t *testing.T) {
 	setupHostedLicenseProvider(t, pkglicensing.SubStateExpired, nil)
 

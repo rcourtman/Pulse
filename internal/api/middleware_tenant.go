@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -269,16 +270,27 @@ func GetOrganization(ctx context.Context) *models.Organization {
 // isHostedSubscriptionValid checks whether a hosted Cloud tenant has a valid subscription
 // or a bounded trial. This replaces the FeatureMultiTenant check for hosted mode, where
 // tenant routing is infrastructure rather than a paid feature.
+//
+// Trial validity requires both that an end timestamp exists AND that the
+// current time has not passed it. A non-nil TrialEndsAt alone is not enough —
+// a stale "trial" subscription state with an expired timestamp on disk would
+// otherwise grant indefinite access if lease refresh ever fails.
 func isHostedSubscriptionValid(ctx context.Context) bool {
 	svc := getLicenseServiceForContext(ctx)
 	subState := strings.ToLower(strings.TrimSpace(svc.SubscriptionState()))
 	eval := svc.Evaluator()
-	hasTrialEnd := eval != nil && eval.TrialEndsAt() != nil
 	switch subState {
 	case subStateActive, subStateGrace:
 		return true
 	case subStateTrial:
-		return hasTrialEnd
+		if eval == nil {
+			return false
+		}
+		trialEnd := eval.TrialEndsAt()
+		if trialEnd == nil {
+			return false
+		}
+		return time.Now().Unix() < *trialEnd
 	default:
 		return false
 	}
