@@ -48,6 +48,7 @@ type PlatformPageCase = {
   // are allowed for platform pages whose subtab is service-only or stays
   // empty under the default mock fixtures.
   populatedTabPaths?: readonly string[];
+  populatedRowSelectors?: Partial<Record<string, string>>;
 };
 
 const PLATFORM_PAGES: readonly PlatformPageCase[] = [
@@ -76,6 +77,11 @@ const PLATFORM_PAGES: readonly PlatformPageCase[] = [
     ariaLabel: 'TrueNAS sections',
     tabPaths: ['/truenas/overview', '/truenas/storage', '/truenas/protection'],
     populatedTabPaths: ['/truenas/overview', '/truenas/storage', '/truenas/protection'],
+    populatedRowSelectors: {
+      '/truenas/overview': '[data-truenas-system-row]',
+      '/truenas/storage': '[data-truenas-storage-row]',
+      '/truenas/protection': '[data-truenas-protection-row]',
+    },
   },
   {
     id: 'vmware',
@@ -145,7 +151,8 @@ test.describe('Platform pages shell', () => {
         await expect(pageRoot).toBeVisible({ timeout: 30_000 });
 
         // Each populated sub-tab must render at least one canonical table.
-        await expect(pageRoot.locator('table tbody tr').first()).toBeVisible({
+        const rowSelector = platform.populatedRowSelectors?.[tabPath] ?? 'table tbody tr';
+        await expect(pageRoot.locator(rowSelector).first()).toBeVisible({
           timeout: 30_000,
         });
       }

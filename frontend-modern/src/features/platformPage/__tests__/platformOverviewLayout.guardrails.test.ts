@@ -17,6 +17,8 @@ import proxmoxReplicationTableSource from '@/features/proxmox/ProxmoxReplication
 import sharedPlatformPageSource from '@/features/platformPage/sharedPlatformPage.tsx?raw';
 import truenasAlertsTableSource from '@/features/truenas/TrueNASAlertsTable.tsx?raw';
 import truenasPageSurfaceSource from '@/features/truenas/TrueNASPageSurface.tsx?raw';
+import truenasProtectionTableSource from '@/features/truenas/TrueNASProtectionTable.tsx?raw';
+import truenasStorageTopologyTableSource from '@/features/truenas/TrueNASStorageTopologyTable.tsx?raw';
 import truenasSystemsTableSource from '@/features/truenas/TrueNASSystemsTable.tsx?raw';
 import truenasVirtualMachinesTableSource from '@/features/truenas/TrueNASVirtualMachinesTable.tsx?raw';
 import vmwarePageSurfaceSource from '@/features/vmware/VmwarePageSurface.tsx?raw';
@@ -30,6 +32,8 @@ const platformTableSources = [
   kubernetesNodesTableSource,
   kubernetesDeploymentsTableSource,
   truenasAlertsTableSource,
+  truenasProtectionTableSource,
+  truenasStorageTopologyTableSource,
   truenasSystemsTableSource,
   truenasVirtualMachinesTableSource,
   vsphereHostsTableSource,
@@ -162,12 +166,12 @@ describe('platform overview layout guardrails', () => {
     expect(truenasPageSurfaceSource).toContain('<TrueNASAlertsTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASVirtualMachinesTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASAppsTable');
-    expect(truenasPageSurfaceSource).toContain('<StorageSurface');
-    expect(truenasPageSurfaceSource).toContain('<RecoverySurface');
-    expect(truenasPageSurfaceSource).toContain('defaultWorkspaceView="inventory"');
-    expect(truenasPageSurfaceSource).toContain('forcedPlatformFilter={TRUENAS_PLATFORM_FILTER}');
-    expect(truenasPageSurfaceSource).toContain('suppressNodeFilter');
+    expect(truenasPageSurfaceSource).toContain('<TrueNASStorageTopologyTable');
+    expect(truenasPageSurfaceSource).toContain('<TrueNASProtection');
+    expect(truenasPageSurfaceSource).toContain('platform: TRUENAS_PLATFORM_FILTER');
     expect(truenasPageSurfaceSource).not.toContain('forcedView="pools"');
+    expect(truenasPageSurfaceSource).not.toContain('<RecoverySurface');
+    expect(truenasPageSurfaceSource).not.toContain('<StorageSurface');
     expect(truenasPageSurfaceSource).not.toContain('<WorkloadsSurface');
     expect(truenasPageSurfaceSource).not.toContain('<TrueNASDisksTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereHostsTable');

@@ -1,7 +1,7 @@
 import { useLocation } from '@solidjs/router';
 import DatabaseIcon from 'lucide-solid/icons/database';
 import { Show, createMemo, type Accessor } from 'solid-js';
-import RecoverySurface from '@/components/Recovery/Recovery';
+import { useRecoveryPoints } from '@/hooks/useRecoveryPoints';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
@@ -12,6 +12,7 @@ import {
 import { TrueNASAppsTable } from './TrueNASAppsTable';
 import { TrueNASAlertsTable } from './TrueNASAlertsTable';
 import { TrueNASNetworkSharesTable } from './TrueNASNetworkSharesTable';
+import { TrueNASProtectionTable } from './TrueNASProtectionTable';
 import { TrueNASStorageTopologyTable } from './TrueNASStorageTopologyTable';
 import { TrueNASSystemsTable } from './TrueNASSystemsTable';
 import { TrueNASVirtualMachinesTable } from './TrueNASVirtualMachinesTable';
@@ -90,13 +91,7 @@ export function TrueNASPageSurface() {
               <TrueNASStorage model={model} />
             </Show>
             <Show when={activeTab() === 'protection'}>
-              <RecoverySurface
-                embedded
-                tableOnly
-                defaultWorkspaceView="inventory"
-                forcedPlatformFilter={TRUENAS_PLATFORM_FILTER}
-                showEmbeddedWorkspaceSwitcher
-              />
+              <TrueNASProtection />
             </Show>
           </Show>
         </Show>
@@ -117,6 +112,26 @@ function TrueNASStorage(props: TrueNASOverviewProps) {
       emptyIcon={truenasIcon()}
       emptyTitle="No TrueNAS storage inventory"
       emptyDescription="Pools, datasets, and physical disks appear here once the TrueNAS API reports storage inventory."
+    />
+  );
+}
+
+function TrueNASProtection() {
+  const recoveryPoints = useRecoveryPoints(() => ({
+    platform: TRUENAS_PLATFORM_FILTER,
+    page: 1,
+    limit: 200,
+  }));
+
+  return (
+    <TrueNASProtectionTable
+      points={recoveryPoints.points()}
+      loading={recoveryPoints.response.loading}
+      error={recoveryPoints.response.error}
+      onRefresh={() => void recoveryPoints.refetch()}
+      emptyIcon={truenasIcon()}
+      emptyTitle="No TrueNAS protection activity"
+      emptyDescription="ZFS snapshots and replication tasks appear here once the TrueNAS API reports snapshot or replication activity."
     />
   );
 }

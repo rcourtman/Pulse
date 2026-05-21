@@ -1,6 +1,7 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import { asTrimmedString } from '@/utils/stringUtils';
 import type { Resource, ResourceIncident, ResourceType } from '@/types/resource';
+import type { RecoveryPoint } from '@/types/recovery';
 
 export type TrueNASPageTabId = 'overview' | 'storage' | 'protection';
 export type TrueNASAppStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
@@ -8,6 +9,14 @@ export type TrueNASVMStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
 export type TrueNASShareStatusFilter = 'all' | 'active' | 'attention' | 'disabled';
 export type TrueNASIncidentSeverityFilter = 'all' | 'critical' | 'warning' | 'info';
 export type TrueNASStorageStatusFilter = 'all' | 'healthy' | 'attention' | 'offline';
+export type TrueNASProtectionStatusFilter =
+  | 'all'
+  | 'success'
+  | 'warning'
+  | 'failed'
+  | 'running'
+  | 'unknown';
+export type TrueNASProtectionKind = 'snapshot' | 'replication' | 'other';
 
 export type TrueNASTabSpec = {
   id: TrueNASPageTabId;
@@ -18,7 +27,8 @@ export type TrueNASTabSpec = {
 // The Overview tab is intentionally narrow: appliance systems first, then
 // native workload inventory when present. Storage inventory, pool topology, and
 // physical disks all live on the Storage tab, while snapshots and replication
-// live on the Protection tab through the canonical Recovery surface.
+// live on the Protection tab through a TrueNAS-native presentation over the
+// canonical recovery points contract.
 export const TRUENAS_TAB_SPECS: readonly TrueNASTabSpec[] = [
   { id: 'overview', label: 'Overview', path: '/truenas/overview' },
   { id: 'storage', label: 'Storage', path: '/truenas/storage' },
@@ -346,6 +356,26 @@ export function filterTrueNASStorageTopologyRows(
 const normalize = (value: unknown): string =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
 
+const normalizeProtectionOutcome = (
+  value: unknown,
+): Exclude<TrueNASProtectionStatusFilter, 'all'> => {
+  const normalized = normalize(value);
+  if (normalized === 'success' || normalized === 'ok') return 'success';
+  if (normalized === 'warning' || normalized === 'warn') return 'warning';
+  if (normalized === 'failed' || normalized === 'failure' || normalized === 'error') {
+    return 'failed';
+  }
+  if (normalized === 'running') return 'running';
+  return 'unknown';
+};
+
+const getRecoveryPointTimestampMs = (point: RecoveryPoint): number => {
+  const parsed = Date.parse(
+    asTrimmedString(point.completedAt) || asTrimmedString(point.startedAt) || '',
+  );
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const titleize = (value: string): string =>
   value
     .split(/[\s_-]+/)
@@ -413,6 +443,120 @@ export function mapTrueNASStorageStatus(
   }
   if (['online', 'running', 'healthy'].includes(status)) return 'healthy';
   return 'unknown';
+}
+
+export function mapTrueNASProtectionStatus(
+  point: RecoveryPoint,
+): Exclude<TrueNASProtectionStatusFilter, 'all'> {
+  return normalizeProtectionOutcome(point.outcome);
+}
+
+export function mapTrueNASProtectionKind(point: RecoveryPoint): TrueNASProtectionKind {
+  const kind = normalize(point.kind);
+  const mode = normalize(point.mode);
+  if (kind === 'snapshot' || mode === 'snapshot') return 'snapshot';
+  if (kind === 'backup' && mode === 'remote') return 'replication';
+  const details = point.details ?? {};
+  if (
+    asTrimmedString(details.taskName) ||
+    asTrimmedString(details.taskId) ||
+    asTrimmedString(details.targetDataset)
+  ) {
+    return 'replication';
+  }
+  return 'other';
+}
+
+const trueNASProtectionSearchTokens = (point: RecoveryPoint): string[] => {
+  const details = point.details ?? {};
+  const sourceDatasets = Array.isArray(details.sourceDatasets)
+    ? details.sourceDatasets.filter((value): value is string => typeof value === 'string')
+    : [];
+
+  return [
+    point.id,
+    point.platform,
+    point.kind,
+    point.mode,
+    point.outcome,
+    point.entityId,
+    point.cluster,
+    point.node,
+    point.namespace,
+    point.display?.itemLabel,
+    point.display?.subjectLabel,
+    point.display?.itemType,
+    point.display?.subjectType,
+    point.display?.clusterLabel,
+    point.display?.nodeHostLabel,
+    point.display?.nodeAgentLabel,
+    point.display?.namespaceLabel,
+    point.display?.entityIdLabel,
+    point.display?.repositoryLabel,
+    point.display?.detailsSummary,
+    point.itemRef?.type,
+    point.itemRef?.namespace,
+    point.itemRef?.name,
+    point.itemRef?.uid,
+    point.itemRef?.id,
+    point.subjectRef?.type,
+    point.subjectRef?.namespace,
+    point.subjectRef?.name,
+    point.subjectRef?.uid,
+    point.subjectRef?.id,
+    point.repositoryRef?.type,
+    point.repositoryRef?.namespace,
+    point.repositoryRef?.name,
+    point.repositoryRef?.uid,
+    point.repositoryRef?.id,
+    details.connectionId,
+    details.dataset,
+    details.direction,
+    details.fullName,
+    details.hostname,
+    details.lastError,
+    details.lastSnapshot,
+    details.lastState,
+    details.snapshot,
+    details.targetDataset,
+    details.taskId,
+    details.taskName,
+    ...sourceDatasets,
+  ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+};
+
+export function sortTrueNASProtectionPoints(points: readonly RecoveryPoint[]): RecoveryPoint[] {
+  return [...points].sort((left, right) => {
+    const timeDelta = getRecoveryPointTimestampMs(right) - getRecoveryPointTimestampMs(left);
+    if (timeDelta !== 0) return timeDelta;
+    const leftLabel =
+      asTrimmedString(left.display?.itemLabel) ||
+      asTrimmedString(left.display?.subjectLabel) ||
+      asTrimmedString(left.itemRef?.name) ||
+      asTrimmedString(left.subjectRef?.name) ||
+      left.id;
+    const rightLabel =
+      asTrimmedString(right.display?.itemLabel) ||
+      asTrimmedString(right.display?.subjectLabel) ||
+      asTrimmedString(right.itemRef?.name) ||
+      asTrimmedString(right.subjectRef?.name) ||
+      right.id;
+    return leftLabel.localeCompare(rightLabel);
+  });
+}
+
+export function filterTrueNASProtectionPoints(
+  points: RecoveryPoint[],
+  search: string,
+  status: TrueNASProtectionStatusFilter,
+): RecoveryPoint[] {
+  const needle = search.trim().toLowerCase();
+  return points.filter((point) => {
+    if (status !== 'all' && mapTrueNASProtectionStatus(point) !== status) return false;
+    if (!needle) return true;
+    if (mapTrueNASProtectionKind(point).includes(needle)) return true;
+    return trueNASProtectionSearchTokens(point).join(' ').toLowerCase().includes(needle);
+  });
 }
 
 const matchesTrueNASStorageSearch = (resource: Resource, search: string): boolean => {

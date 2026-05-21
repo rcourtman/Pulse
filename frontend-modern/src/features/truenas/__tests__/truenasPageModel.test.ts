@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { RecoveryPoint } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import {
   TRUENAS_TAB_SPECS,
@@ -8,14 +9,18 @@ import {
   buildTrueNASSystemChildCounts,
   filterTrueNASApps,
   filterTrueNASIncidents,
+  filterTrueNASProtectionPoints,
   filterTrueNASStorageTopologyRows,
   filterTrueNASShares,
   filterTrueNASVMs,
   mapTrueNASAppStatus,
   mapTrueNASIncidentSeverity,
+  mapTrueNASProtectionKind,
+  mapTrueNASProtectionStatus,
   mapTrueNASShareStatus,
   mapTrueNASStorageStatus,
   mapTrueNASVMStatus,
+  sortTrueNASProtectionPoints,
 } from '../truenasPageModel';
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource => ({
@@ -27,6 +32,16 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
   status: 'online',
   lastSeen: 1_700_000_000_000,
   ...resource,
+});
+
+const makeRecoveryPoint = (
+  point: Partial<RecoveryPoint> & Pick<RecoveryPoint, 'id' | 'kind' | 'mode'>,
+): RecoveryPoint => ({
+  outcome: 'success',
+  platform: 'truenas',
+  startedAt: '2026-05-20T00:00:00Z',
+  completedAt: '2026-05-20T00:00:00Z',
+  ...point,
 });
 
 describe('truenasPageModel', () => {
@@ -473,5 +488,105 @@ describe('truenasPageModel', () => {
         (incident) => incident.resourceId,
       ),
     ).toEqual(['truenas-disk-sda']);
+  });
+
+  it('classifies and filters TrueNAS protection points from canonical recovery payloads', () => {
+    const snapshot = makeRecoveryPoint({
+      id: 'snapshot-tank-apps',
+      kind: 'snapshot',
+      mode: 'snapshot',
+      display: {
+        itemLabel: 'tank/apps',
+        detailsSummary: 'auto-20260331-0600',
+        nodeHostLabel: 'truenas-main',
+      },
+      itemRef: { type: 'truenas-dataset', name: 'tank/apps', id: 'tank/apps' },
+      details: {
+        dataset: 'tank/apps',
+        fullName: 'tank/apps@auto-20260331-0600',
+        hostname: 'truenas-main',
+        snapshot: 'auto-20260331-0600',
+      },
+    });
+    const replication = makeRecoveryPoint({
+      id: 'replicate-tank-apps',
+      kind: 'backup',
+      mode: 'remote',
+      outcome: 'running',
+      display: {
+        itemLabel: 'tank/apps',
+        repositoryLabel: 'vault/compliance/tank_apps',
+        detailsSummary: 'replicate-tank-apps (tank/apps@auto-20260331-0600)',
+      },
+      repositoryRef: {
+        type: 'truenas-dataset',
+        name: 'vault/compliance/tank_apps',
+        id: 'vault/compliance/tank_apps',
+      },
+      details: {
+        direction: 'PUSH',
+        lastSnapshot: 'tank/apps@auto-20260331-0600',
+        lastState: 'RUNNING',
+        sourceDatasets: ['tank/apps'],
+        targetDataset: 'vault/compliance/tank_apps',
+        taskId: 'rep-task-tank-apps',
+        taskName: 'replicate-tank-apps',
+      },
+    });
+    const legacyReplication = makeRecoveryPoint({
+      id: 'legacy-task',
+      kind: 'other',
+      mode: 'local',
+      outcome: 'warning',
+      details: {
+        targetDataset: 'offsite/archive_backups',
+        taskName: 'replicate-archive-backups',
+      },
+    });
+
+    expect(mapTrueNASProtectionKind(snapshot)).toBe('snapshot');
+    expect(mapTrueNASProtectionKind(replication)).toBe('replication');
+    expect(mapTrueNASProtectionKind(legacyReplication)).toBe('replication');
+    expect(mapTrueNASProtectionStatus(replication)).toBe('running');
+    expect(mapTrueNASProtectionStatus(legacyReplication)).toBe('warning');
+
+    expect(
+      filterTrueNASProtectionPoints([snapshot, replication, legacyReplication], 'vault', 'running')
+        .map((point) => point.id),
+    ).toEqual(['replicate-tank-apps']);
+    expect(
+      filterTrueNASProtectionPoints(
+        [snapshot, replication, legacyReplication],
+        'auto-20260331',
+        'all',
+      ).map((point) => point.id),
+    ).toEqual(['snapshot-tank-apps', 'replicate-tank-apps']);
+    expect(
+      filterTrueNASProtectionPoints(
+        [snapshot, replication, legacyReplication],
+        'replication',
+        'all',
+      ).map((point) => point.id),
+    ).toEqual(['replicate-tank-apps', 'legacy-task']);
+  });
+
+  it('orders TrueNAS protection points by latest recovery timestamp', () => {
+    const older = makeRecoveryPoint({
+      id: 'older-snapshot',
+      kind: 'snapshot',
+      mode: 'snapshot',
+      completedAt: '2026-05-19T00:00:00Z',
+    });
+    const newer = makeRecoveryPoint({
+      id: 'newer-replication',
+      kind: 'backup',
+      mode: 'remote',
+      completedAt: '2026-05-21T00:00:00Z',
+    });
+
+    expect(sortTrueNASProtectionPoints([older, newer]).map((point) => point.id)).toEqual([
+      'newer-replication',
+      'older-snapshot',
+    ]);
   });
 });
