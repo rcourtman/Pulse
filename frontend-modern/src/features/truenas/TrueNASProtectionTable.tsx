@@ -31,6 +31,10 @@ import {
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
 } from '@/features/platformPage/sharedPlatformPage';
+import {
+  createPlatformResourceDetailState,
+  getPlatformResourceDetailRowClass,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { RecoveryPoint } from '@/types/recovery';
 import {
   filterTrueNASProtectionPoints,
@@ -173,6 +177,129 @@ const formatPointTime = (point: RecoveryPoint): string => {
 const sizeLabel = (point: RecoveryPoint): string =>
   typeof point.sizeBytes === 'number' && point.sizeBytes > 0 ? formatBytes(point.sizeBytes) : '-';
 
+type ProtectionDetailTone = 'default' | 'success' | 'warning' | 'danger' | 'muted';
+
+type ProtectionDetailRow = {
+  label: string;
+  value: string;
+  title?: string;
+  tone?: ProtectionDetailTone;
+};
+
+type ProtectionDetailSection = {
+  label: string;
+  rows: ProtectionDetailRow[];
+};
+
+const detailBool = (value?: boolean | null): string | null => {
+  if (value == null) return null;
+  return value ? 'Yes' : 'No';
+};
+
+const detailDateTime = (value?: string | null): string | null => {
+  const raw = asTrimmedString(value);
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return parsed.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const detailRow = (
+  label: string,
+  value?: string | null,
+  options: Pick<ProtectionDetailRow, 'title' | 'tone'> = {},
+): ProtectionDetailRow | null => {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed === '-') return null;
+  return { label, value: trimmed, ...options };
+};
+
+const compactDetailRows = (rows: Array<ProtectionDetailRow | null>): ProtectionDetailRow[] =>
+  rows.filter((row): row is ProtectionDetailRow => Boolean(row));
+
+const compactDetailSections = (
+  sections: Array<ProtectionDetailSection | null>,
+): ProtectionDetailSection[] =>
+  sections.filter((section): section is ProtectionDetailSection =>
+    Boolean(section && section.rows.length > 0),
+  );
+
+const detailValueToneClass = (tone: ProtectionDetailTone | undefined): string => {
+  if (tone === 'success') return 'text-emerald-700 dark:text-emerald-300';
+  if (tone === 'warning') return 'text-amber-700 dark:text-amber-300';
+  if (tone === 'danger') return 'text-rose-700 dark:text-rose-300';
+  if (tone === 'muted') return 'text-muted';
+  return 'text-base-content';
+};
+
+const outcomeTone = (point: RecoveryPoint): ProtectionDetailTone => {
+  const outcome = normalizeRecoveryOutcome(point.outcome);
+  if (outcome === 'success') return 'success';
+  if (outcome === 'running') return 'muted';
+  if (outcome === 'failed') return 'danger';
+  if (outcome === 'warning') return 'warning';
+  return 'default';
+};
+
+const sourceDatasetsLabel = (point: RecoveryPoint): string | null => {
+  const datasets = detailStringList(point, 'sourceDatasets');
+  return datasets.length > 0 ? datasets.join(', ') : null;
+};
+
+const buildProtectionDetailSections = (point: RecoveryPoint): ProtectionDetailSection[] => {
+  const kind = mapTrueNASProtectionKind(point);
+  const target = targetLabel(point);
+  const targetSecondary = targetSecondaryLabel(point);
+  const summaryRows = compactDetailRows([
+    detailRow('Kind', kindLabel(kind)),
+    detailRow('Outcome', getRecoveryOutcomeLabel(normalizeRecoveryOutcome(point.outcome)), {
+      tone: outcomeTone(point),
+    }),
+    detailRow('Dataset', datasetLabel(point)),
+    detailRow('Host', hostLabel(point)),
+    detailRow('Started', detailDateTime(point.startedAt)),
+    detailRow('Completed', detailDateTime(point.completedAt)),
+    detailRow('Size', sizeLabel(point)),
+    detailRow('Verified', detailBool(point.verified)),
+    detailRow('Encrypted', detailBool(point.encrypted)),
+    detailRow('Immutable', detailBool(point.immutable)),
+  ]);
+
+  const artifactRows = compactDetailRows([
+    detailRow('Artifact', artifactLabel(point)),
+    detailRow('Summary', asTrimmedString(point.display?.detailsSummary)),
+    detailRow('Full name', detailString(point, 'fullName')),
+    detailRow('Snapshot', detailString(point, 'snapshot')),
+    detailRow('Last snapshot', detailString(point, 'lastSnapshot')),
+    detailRow('Task name', detailString(point, 'taskName')),
+    detailRow('Task ID', detailString(point, 'taskId') || detailString(point, 'upid')),
+  ]);
+
+  const targetRows = compactDetailRows([
+    detailRow('Target', target === 'Local ZFS' ? target : target || null),
+    detailRow('Target detail', targetSecondary),
+    detailRow('Direction', detailString(point, 'direction')),
+    detailRow('Last state', detailString(point, 'lastState'), {
+      tone: detailString(point, 'lastState').toLowerCase() === 'running' ? 'muted' : 'default',
+    }),
+    detailRow('Source datasets', sourceDatasetsLabel(point)),
+    detailRow('Target dataset', detailString(point, 'targetDataset')),
+    detailRow('Repository', asTrimmedString(point.repositoryRef?.name)),
+  ]);
+
+  return compactDetailSections([
+    { label: 'Protection', rows: summaryRows },
+    { label: kind === 'replication' ? 'Replication' : 'Snapshot', rows: artifactRows },
+    { label: 'Target', rows: targetRows },
+  ]);
+};
+
 const DatasetCell: Component<{ point: RecoveryPoint }> = (props) => {
   const status = () => mapTrueNASProtectionStatus(props.point);
   const kind = () => mapTrueNASProtectionKind(props.point);
@@ -199,6 +326,72 @@ const DatasetCell: Component<{ point: RecoveryPoint }> = (props) => {
   );
 };
 
+const ProtectionDetailTable: Component<{ point: RecoveryPoint; onClose: () => void }> = (props) => {
+  const sections = createMemo(() => buildProtectionDetailSections(props.point));
+
+  return (
+    <div
+      class="space-y-3"
+      data-testid="truenas-protection-detail"
+      data-truenas-protection-detail-for={props.point.id}
+    >
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
+            Protection detail
+          </div>
+          <div class="mt-1 text-[10px] text-muted">
+            {kindLabel(mapTrueNASProtectionKind(props.point))} ·{' '}
+            {getRecoveryOutcomeLabel(normalizeRecoveryOutcome(props.point.outcome))}
+          </div>
+        </div>
+        <button
+          type="button"
+          class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
+          onClick={props.onClose}
+        >
+          Close
+        </button>
+      </div>
+      <div class="overflow-hidden rounded border border-border bg-surface">
+        <Table class="w-full table-fixed text-[11px]">
+          <TableBody class="divide-y divide-border">
+            <For each={sections()}>
+              {(section) => (
+                <>
+                  <TableRow class="bg-surface-alt">
+                    <TableHead
+                      colspan={2}
+                      class="px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted"
+                    >
+                      {section.label}
+                    </TableHead>
+                  </TableRow>
+                  <For each={section.rows}>
+                    {(row) => (
+                      <TableRow>
+                        <TableCell class="w-[38%] px-2 py-1 align-top text-muted">
+                          {row.label}
+                        </TableCell>
+                        <TableCell
+                          class={`px-2 py-1 text-right align-top font-medium ${detailValueToneClass(row.tone)}`}
+                          title={row.title ?? row.value}
+                        >
+                          <span class="block truncate">{row.value}</span>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </For>
+                </>
+              )}
+            </For>
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+};
+
 export const TrueNASProtectionTable: Component<{
   points: RecoveryPoint[];
   loading?: boolean;
@@ -210,6 +403,7 @@ export const TrueNASProtectionTable: Component<{
   showToolbar?: boolean;
 }> = (props) => {
   const rows = createMemo(() => sortTrueNASProtectionPoints(props.points));
+  const detail = createPlatformResourceDetailState({ idPrefix: 'truenas-protection-detail' });
   const tableState = createPlatformTableFilterState({
     resources: rows,
     initialStatus: 'all' as TrueNASProtectionStatusFilter,
@@ -317,60 +511,91 @@ export const TrueNASProtectionTable: Component<{
                         const artifactSecondary = () => artifactSecondaryLabel(point);
                         const target = () => targetLabel(point);
                         const targetSecondary = () => targetSecondaryLabel(point);
+                        const detailRowId = () => detail.detailRowId(point);
+                        const isExpanded = () => detail.isExpanded(point);
                         return (
-                          <TableRow
-                            class="text-[11px] sm:text-xs"
-                            data-truenas-protection-row={point.id}
-                            data-truenas-protection-kind={mapTrueNASProtectionKind(point)}
-                            data-truenas-protection-outcome={mapTrueNASProtectionStatus(point)}
-                          >
-                            <TableCell class={getPlatformTableCellClassForKind('name')}>
-                              <DatasetCell point={point} />
-                            </TableCell>
-                            <TableCell class={getPlatformTableCellClassForKind('text')}>
-                              <span class="block truncate text-base-content" title={artifact()}>
-                                {artifact()}
-                              </span>
-                              <Show when={artifactSecondary()}>
-                                <span
-                                  class="block truncate text-[10px] text-muted"
-                                  title={artifactSecondary()}
-                                >
-                                  {artifactSecondary()}
+                          <>
+                            <TableRow
+                              class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                              aria-controls={isExpanded() ? detailRowId() : undefined}
+                              aria-expanded={isExpanded() ? 'true' : 'false'}
+                              data-truenas-protection-row={point.id}
+                              data-truenas-protection-kind={mapTrueNASProtectionKind(point)}
+                              data-truenas-protection-outcome={mapTrueNASProtectionStatus(point)}
+                              onClick={() => detail.toggle(point)}
+                              onKeyDown={detail.handleActivationKey(point)}
+                              tabIndex={0}
+                            >
+                              <TableCell class={getPlatformTableCellClassForKind('name')}>
+                                <DatasetCell point={point} />
+                              </TableCell>
+                              <TableCell class={getPlatformTableCellClassForKind('text')}>
+                                <span class="block truncate text-base-content" title={artifact()}>
+                                  {artifact()}
                                 </span>
-                              </Show>
-                            </TableCell>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} hidden md:table-cell`}
-                            >
-                              <span class="block truncate text-base-content" title={target()}>
-                                {target()}
-                              </span>
-                              <Show when={targetSecondary()}>
-                                <span
-                                  class="block truncate text-[10px] text-muted"
-                                  title={targetSecondary()}
-                                >
-                                  {targetSecondary()}
+                                <Show when={artifactSecondary()}>
+                                  <span
+                                    class="block truncate text-[10px] text-muted"
+                                    title={artifactSecondary()}
+                                  >
+                                    {artifactSecondary()}
+                                  </span>
+                                </Show>
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} hidden md:table-cell`}
+                              >
+                                <span class="block truncate text-base-content" title={target()}>
+                                  {target()}
                                 </span>
-                              </Show>
-                            </TableCell>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
-                            >
-                              {formatPointTime(point)}
-                            </TableCell>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums lg:table-cell`}
-                            >
-                              {sizeLabel(point)}
-                            </TableCell>
-                            <TableCell class={getPlatformTableCellClassForKind('badge')}>
-                              <span class={getRecoveryOutcomeBadgeClass(outcome())}>
-                                {getRecoveryOutcomeLabel(outcome())}
-                              </span>
-                            </TableCell>
-                          </TableRow>
+                                <Show when={targetSecondary()}>
+                                  <span
+                                    class="block truncate text-[10px] text-muted"
+                                    title={targetSecondary()}
+                                  >
+                                    {targetSecondary()}
+                                  </span>
+                                </Show>
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                              >
+                                {formatPointTime(point)}
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums lg:table-cell`}
+                              >
+                                {sizeLabel(point)}
+                              </TableCell>
+                              <TableCell class={getPlatformTableCellClassForKind('badge')}>
+                                <span class={getRecoveryOutcomeBadgeClass(outcome())}>
+                                  {getRecoveryOutcomeLabel(outcome())}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                            <Show when={isExpanded()}>
+                              <TableRow
+                                data-inline-detail-for={point.id}
+                                data-truenas-protection-detail-row={point.id}
+                              >
+                                <TableCell
+                                  id={detailRowId()}
+                                  colspan={6}
+                                  class="border-b border-border bg-surface-alt p-0"
+                                >
+                                  <div
+                                    class="px-2 py-3 sm:px-4 sm:py-4"
+                                    onClick={(event) => event.stopPropagation()}
+                                  >
+                                    <ProtectionDetailTable
+                                      point={point}
+                                      onClose={() => detail.close(point)}
+                                    />
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            </Show>
+                          </>
                         );
                       }}
                     </For>
