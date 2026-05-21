@@ -1894,7 +1894,7 @@ create_lxc_container() {
         print_info "Copying Pulse release archive to container..."
         if ! pct push $CTID "$container_archive_source" "$container_archive_dest" >/dev/null 2>&1; then
             if [[ "$container_archive_temp" == "true" ]]; then
-                rm -f "$container_archive_source"
+                rm -f "$container_archive_source" "${container_archive_source}.sshsig"
             fi
             if [[ "$archive_requested" == "true" ]]; then
                 print_error "Failed to copy Pulse release archive to container"
@@ -1904,11 +1904,29 @@ create_lxc_container() {
             container_archive_source=""
             container_archive_dest=""
             container_archive_temp=false
+        else
+            # Signature sidecar must travel with the archive so that
+            # install_pulse_archive inside the container can verify it.
+            if [[ -f "${container_archive_source}.sshsig" ]]; then
+                if ! pct push $CTID "${container_archive_source}.sshsig" "${container_archive_dest}.sshsig" >/dev/null 2>&1; then
+                    if [[ "$container_archive_temp" == "true" ]]; then
+                        rm -f "$container_archive_source" "${container_archive_source}.sshsig"
+                    fi
+                    print_error "Failed to copy Pulse release archive signature to container"
+                    cleanup_on_error
+                fi
+            else
+                if [[ "$container_archive_temp" == "true" ]]; then
+                    rm -f "$container_archive_source"
+                fi
+                print_error "Pulse release archive signature missing alongside ${container_archive_source}"
+                cleanup_on_error
+            fi
         fi
     fi
 
     if [[ "$container_archive_temp" == "true" ]]; then
-        rm -f "$container_archive_source"
+        rm -f "$container_archive_source" "${container_archive_source}.sshsig"
     fi
     
     # Run installation with visible progress
@@ -2773,7 +2791,7 @@ download_release_archive() {
     local archive_name="pulse-${release}-linux-${pulse_arch}.tar.gz"
     local download_url="https://github.com/$GITHUB_REPO/releases/download/$release/${archive_name}"
     local signature_url="${download_url}.sshsig"
-    local signature_file=""
+    local signature_file="${archive_path}.sshsig"
 
     DOWNLOAD_URL="$download_url"
     print_info "Downloading from: $DOWNLOAD_URL"
@@ -2790,7 +2808,6 @@ download_release_archive() {
         return 1
     fi
 
-    signature_file=$(mktemp /tmp/pulse-release-signature.XXXXXX)
     if ! wget -q --timeout=60 --tries=2 -O "$signature_file" "$signature_url"; then
         rm -f "$signature_file" "$archive_path"
         print_error "Failed to download signature for Pulse release"
@@ -2798,11 +2815,14 @@ download_release_archive() {
         return 1
     fi
 
+    # The signature stays alongside the archive (not in a mktemp temp file)
+    # so that install_pulse_archive can re-verify before extraction. This
+    # also lets the Proxmox LXC bootstrap path propagate the signature
+    # into the container alongside the archive.
     if ! verify_release_signature "$archive_path" "$signature_file" "downloaded Pulse release"; then
         rm -f "$signature_file" "$archive_path"
         return 1
     fi
-    rm -f "$signature_file"
     print_info "Pulse release signature verified"
 
     return 0
@@ -2811,6 +2831,7 @@ download_release_archive() {
 install_pulse_archive() {
     local archive_path="$1"
     local expected_release="${2:-}"
+    local signature_path="${archive_path}.sshsig"
     local temp_extract=""
     local temp_extract2=""
     local installed_version=""
@@ -2819,6 +2840,22 @@ install_pulse_archive() {
 
     if [[ ! -f "$archive_path" ]]; then
         print_error "Archive not found: $archive_path"
+        return 1
+    fi
+
+    # Signature verification is mandatory at install time, regardless of
+    # how the archive got here. download_release_archive already verifies
+    # before this is called, but the --archive PATH path (and the LXC
+    # bootstrap that propagates --archive into the container) reach this
+    # function without going through download. Re-verifying here closes
+    # the local-tarball-swap window between download/propagation and
+    # extraction.
+    if [[ ! -f "$signature_path" ]]; then
+        print_error "Required signature sidecar not found: $signature_path"
+        print_info "Pulse archives must ship with a matching .sshsig file from the canonical release pipeline."
+        return 1
+    fi
+    if ! verify_release_signature "$archive_path" "$signature_path" "Pulse release archive at $archive_path"; then
         return 1
     fi
 
@@ -3018,13 +3055,13 @@ download_pulse() {
 
         if ! install_pulse_archive "$archive_path" "$expected_release"; then
             if [[ "$archive_from_temp" == "true" ]]; then
-                rm -f "$archive_path"
+                rm -f "$archive_path" "${archive_path}.sshsig"
             fi
             exit 1
         fi
 
         if [[ "$archive_from_temp" == "true" ]]; then
-            rm -f "$archive_path"
+            rm -f "$archive_path" "${archive_path}.sshsig"
         fi
     fi  # End of SKIP_DOWNLOAD check
 }
@@ -4621,6 +4658,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --stable           Install latest stable version (default)"
             echo "  --version VERSION  Install specific version (e.g., v4.4.0-rc.1)"
             echo "  --archive PATH     Install from a local Pulse release tarball"
+            echo "                     Requires PATH.sshsig sidecar from the canonical release pipeline."
             echo "  --source [BRANCH]  Build and install from source (default: main)"
             echo "  --enable-auto-updates   Enable automatic stable updates (via systemd timer)"
             echo "  --disable-auto-updates  Explicitly keep automatic updates disabled"

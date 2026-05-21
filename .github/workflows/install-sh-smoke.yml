@@ -115,6 +115,11 @@ jobs:
           tarball="pulse-${TAG}-linux-amd64.tar.gz"
           curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
             -o "${tarball}" "${base}/${tarball}"
+          # The .sshsig sidecar must travel with the tarball: install.sh
+          # --archive now requires it for signature verification before
+          # extraction, closing the local-tarball-swap window.
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
+            -o "${tarball}.sshsig" "${base}/${tarball}.sshsig"
 
           echo "Downloaded:"
           ls -la
