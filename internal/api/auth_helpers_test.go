@@ -255,6 +255,10 @@ func TestGetCookieSettings(t *testing.T) {
 			wantSameSite: http.SameSiteLaxMode,
 		},
 		{
+			// Regression: previously auto-escalated SameSite to None here,
+			// which disabled the browser-side CSRF defence for every
+			// proxied-HTTPS deployment. SameSite must stay Lax; Secure
+			// still tracks the proxied protocol.
 			name:   "HTTPS through proxy",
 			useTLS: false,
 			headers: map[string]string{
@@ -262,7 +266,7 @@ func TestGetCookieSettings(t *testing.T) {
 				"X-Forwarded-Proto": "https",
 			},
 			wantSecure:   true,
-			wantSameSite: http.SameSiteNoneMode,
+			wantSameSite: http.SameSiteLaxMode,
 		},
 		{
 			name:   "HTTP through proxy",
@@ -275,6 +279,8 @@ func TestGetCookieSettings(t *testing.T) {
 			wantSameSite: http.SameSiteLaxMode,
 		},
 		{
+			// Regression: same pattern as the HTTPS-through-proxy case via
+			// Cloudflare's CF-* headers — must NOT escalate to SameSite=None.
 			name:   "Cloudflare tunnel HTTPS",
 			useTLS: false,
 			headers: map[string]string{
@@ -283,7 +289,7 @@ func TestGetCookieSettings(t *testing.T) {
 				"X-Forwarded-Proto": "https",
 			},
 			wantSecure:   true,
-			wantSameSite: http.SameSiteNoneMode,
+			wantSameSite: http.SameSiteLaxMode,
 		},
 		{
 			name:   "proxy detected but no proto header",
@@ -295,13 +301,15 @@ func TestGetCookieSettings(t *testing.T) {
 			wantSameSite: http.SameSiteLaxMode,
 		},
 		{
+			// Regression: previously SameSite=None when TLS + trusted-proxy
+			// Forwarded header. Must stay Lax.
 			name:   "direct TLS with Forwarded header (trusted proxy)",
 			useTLS: true,
 			headers: map[string]string{
 				"Forwarded": "for=192.168.1.1;proto=https",
 			},
 			wantSecure:   true,
-			wantSameSite: http.SameSiteNoneMode,
+			wantSameSite: http.SameSiteLaxMode,
 		},
 	}
 

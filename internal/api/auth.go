@@ -288,7 +288,21 @@ func isWebSocketUpgrade(r *http.Request) bool {
 	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
 }
 
-// getCookieSettings returns the appropriate cookie settings based on proxy detection
+// getCookieSettings returns the appropriate cookie settings based on proxy detection.
+//
+// SameSite defaults to Lax for ALL requests, regardless of proxy mode. The
+// previous behaviour auto-escalated to SameSite=None whenever the request
+// arrived via a trusted proxy on https — intended to "be more permissive"
+// for proxied deployments, but in practice that disabled the browser-side
+// CSRF defence for every deployment behind a reverse proxy (which is nearly
+// all of them). SameSite=None tells the browser to send the cookie on
+// arbitrary cross-site requests, which is only required for cross-origin
+// iframe embedding scenarios Pulse does not document or support. Lax
+// continues to send cookies on top-level navigations (the OIDC/SAML
+// callback case), so the proxied-login flow is unaffected.
+//
+// Secure is still set automatically based on the actual connection state
+// (TLS, or X-Forwarded-Proto: https from a trusted proxy).
 func getCookieSettings(r *http.Request) (secure bool, sameSite http.SameSite) {
 	isProxied := detectProxy(r)
 	isSecure := isConnectionSecure(r)
@@ -302,24 +316,10 @@ func getCookieSettings(r *http.Request) (secure bool, sameSite http.SameSite) {
 			Str("cf_connecting_ip", r.Header.Get("CF-Connecting-IP")).
 			Str("x_forwarded_for", r.Header.Get("X-Forwarded-For")).
 			Str("x_forwarded_proto", r.Header.Get("X-Forwarded-Proto")).
-			Msg("Proxy/tunnel detected - adjusting cookie settings")
+			Msg("Proxy/tunnel detected - cookies use Lax SameSite")
 	}
 
-	// Default to Lax for better compatibility
-	sameSitePolicy := http.SameSiteLaxMode
-
-	if isProxied {
-		// For proxied connections, we need to be more permissive
-		// But only use None if connection is secure (required by browsers)
-		if isSecure {
-			sameSitePolicy = http.SameSiteNoneMode
-		} else {
-			// For HTTP proxies, stay with Lax for compatibility
-			sameSitePolicy = http.SameSiteLaxMode
-		}
-	}
-
-	return isSecure, sameSitePolicy
+	return isSecure, http.SameSiteLaxMode
 }
 
 // Cookie name constants. The session cookie uses the __Host- prefix when served
