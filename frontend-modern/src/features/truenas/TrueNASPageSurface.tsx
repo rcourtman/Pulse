@@ -2,7 +2,6 @@ import { useLocation } from '@solidjs/router';
 import DatabaseIcon from 'lucide-solid/icons/database';
 import { Show, createMemo, type Accessor } from 'solid-js';
 import RecoverySurface from '@/components/Recovery/Recovery';
-import StorageSurface from '@/components/Storage/Storage';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
@@ -13,6 +12,7 @@ import {
 import { TrueNASAppsTable } from './TrueNASAppsTable';
 import { TrueNASAlertsTable } from './TrueNASAlertsTable';
 import { TrueNASNetworkSharesTable } from './TrueNASNetworkSharesTable';
+import { TrueNASStorageTopologyTable } from './TrueNASStorageTopologyTable';
 import { TrueNASSystemsTable } from './TrueNASSystemsTable';
 import { TrueNASVirtualMachinesTable } from './TrueNASVirtualMachinesTable';
 import {
@@ -87,16 +87,7 @@ export function TrueNASPageSurface() {
               <TrueNASOverview model={model} />
             </Show>
             <Show when={activeTab() === 'storage'}>
-              <StorageSurface
-                embedded
-                tableOnly
-                showFilterToolbar
-                forcedSourceFilter={TRUENAS_PLATFORM_FILTER}
-                suppressNodeFilter
-                filterAriaLabel="TrueNAS storage filters"
-                filterSearchPlaceholder="Search TrueNAS pools, datasets, disks, or nodes"
-                filterSearchEmptyMessage="Recent TrueNAS storage searches appear here."
-              />
+              <TrueNASStorage model={model} />
             </Show>
             <Show when={activeTab() === 'protection'}>
               <RecoverySurface
@@ -116,6 +107,18 @@ export function TrueNASPageSurface() {
 
 interface TrueNASOverviewProps {
   model: Accessor<TrueNASPageModel>;
+}
+
+function TrueNASStorage(props: TrueNASOverviewProps) {
+  return (
+    <TrueNASStorageTopologyTable
+      resources={props.model().resources}
+      scope={props.model().resources}
+      emptyIcon={truenasIcon()}
+      emptyTitle="No TrueNAS storage inventory"
+      emptyDescription="Pools, datasets, and physical disks appear here once the TrueNAS API reports storage inventory."
+    />
+  );
 }
 
 function TrueNASOverview(props: TrueNASOverviewProps) {

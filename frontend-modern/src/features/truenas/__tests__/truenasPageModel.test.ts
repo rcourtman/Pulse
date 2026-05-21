@@ -3,14 +3,18 @@ import type { Resource } from '@/types/resource';
 import {
   TRUENAS_TAB_SPECS,
   buildTrueNASPageModel,
+  buildTrueNASStorageChildCounts,
+  buildTrueNASStorageTopologyRows,
   buildTrueNASSystemChildCounts,
   filterTrueNASApps,
   filterTrueNASIncidents,
+  filterTrueNASStorageTopologyRows,
   filterTrueNASShares,
   filterTrueNASVMs,
   mapTrueNASAppStatus,
   mapTrueNASIncidentSeverity,
   mapTrueNASShareStatus,
+  mapTrueNASStorageStatus,
   mapTrueNASVMStatus,
 } from '../truenasPageModel';
 
@@ -30,13 +34,22 @@ describe('truenasPageModel', () => {
     expect(TRUENAS_TAB_SPECS.map((tab) => tab.id)).toEqual(['overview', 'storage', 'protection']);
   });
 
-  it('buckets systems and apps while keeping storage inventory in scope for shared surfaces', () => {
+  it('buckets systems, workloads, and native storage inventory by TrueNAS API facet', () => {
     const model = buildTrueNASPageModel([
       makeResource({ id: 'truenas-system', type: 'agent' }),
       makeResource({ id: 'truenas-vm', type: 'vm' }),
       makeResource({ id: 'truenas-app', type: 'app-container' }),
       makeResource({ id: 'truenas-share', type: 'network-share' }),
-      makeResource({ id: 'truenas-pool', type: 'pool' }),
+      makeResource({
+        id: 'truenas-pool',
+        type: 'storage',
+        storage: { topology: 'pool', platform: 'truenas' },
+      }),
+      makeResource({
+        id: 'truenas-dataset',
+        type: 'storage',
+        storage: { topology: 'dataset', platform: 'truenas' },
+      }),
       makeResource({ id: 'truenas-disk', type: 'physical_disk' }),
       makeResource({ id: 'docker-host', type: 'agent', platformType: 'docker' }),
       makeResource({ id: 'pve-node', type: 'agent', platformType: 'proxmox-pve' }),
@@ -46,9 +59,13 @@ describe('truenasPageModel', () => {
     expect(model.shares.map((r) => r.id)).toEqual(['truenas-share']);
     expect(model.vms.map((r) => r.id)).toEqual(['truenas-vm']);
     expect(model.apps.map((r) => r.id)).toEqual(['truenas-app']);
+    expect(model.pools.map((r) => r.id)).toEqual(['truenas-pool']);
+    expect(model.datasets.map((r) => r.id)).toEqual(['truenas-dataset']);
+    expect(model.disks.map((r) => r.id)).toEqual(['truenas-disk']);
     expect(model.resources.map((r) => r.id).sort()).toEqual(
       [
         'truenas-app',
+        'truenas-dataset',
         'truenas-disk',
         'truenas-pool',
         'truenas-share',
@@ -145,6 +162,99 @@ describe('truenasPageModel', () => {
       apps: 1,
       disks: 1,
     });
+  });
+
+  it('builds a native TrueNAS storage topology with pool child counts', () => {
+    const system = makeResource({ id: 'system-primary', type: 'agent' });
+    const pool = makeResource({
+      id: 'pool-tank',
+      type: 'storage',
+      name: 'tank',
+      parentId: system.id,
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'ONLINE' },
+    });
+    const dataset = makeResource({
+      id: 'dataset-media',
+      type: 'storage',
+      name: 'tank/media',
+      parentId: pool.id,
+      storage: { topology: 'dataset', platform: 'truenas', path: '/mnt/tank/media' },
+    });
+    const share = makeResource({
+      id: 'share-media',
+      type: 'network-share',
+      parentId: dataset.id,
+      truenas: {
+        share: {
+          id: 'smb-1',
+          name: 'Media',
+          protocol: 'SMB',
+          path: '/mnt/tank/media',
+          dataset: 'tank/media',
+        },
+      },
+    });
+    const disk = makeResource({
+      id: 'disk-sda',
+      type: 'physical_disk',
+      name: 'sda',
+      parentId: pool.id,
+      physicalDisk: {
+        devPath: '/dev/sda',
+        serial: 'serial-123',
+        sizeBytes: 2_000_000_000_000,
+        health: 'PASSED',
+      },
+    });
+
+    const counts = buildTrueNASStorageChildCounts([system, pool, dataset, share, disk]);
+    const rows = buildTrueNASStorageTopologyRows([system, pool, dataset, share, disk]);
+
+    expect(counts.get(pool.id)).toEqual({ datasets: 1, shares: 1, disks: 1 });
+    expect(counts.get(dataset.id)).toEqual({ datasets: 0, shares: 1, disks: 0 });
+    expect(rows.map((row) => row.id)).toEqual([
+      'pool:pool-tank',
+      'dataset:dataset-media',
+      'disk:disk-sda',
+    ]);
+    expect(rows.map((row) => row.depth)).toEqual([0, 1, 1]);
+    expect(rows[1]?.parentRowId).toBe('pool:pool-tank');
+    expect(rows[2]?.parentRowId).toBe('pool:pool-tank');
+  });
+
+  it('keeps pool ancestors visible when filtering matching storage children', () => {
+    const pool = makeResource({
+      id: 'pool-tank',
+      type: 'storage',
+      name: 'tank',
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'ONLINE' },
+    });
+    const degradedPool = makeResource({
+      id: 'pool-archive',
+      type: 'storage',
+      name: 'archive',
+      status: 'online',
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'DEGRADED' },
+    });
+    const disk = makeResource({
+      id: 'disk-sdb',
+      type: 'physical_disk',
+      name: 'sdb',
+      parentId: pool.id,
+      physicalDisk: {
+        devPath: '/dev/sdb',
+        serial: 'serial-degraded',
+        health: 'DEGRADED',
+      },
+    });
+
+    expect(mapTrueNASStorageStatus(degradedPool)).toBe('attention');
+    expect(mapTrueNASStorageStatus(disk)).toBe('attention');
+
+    const rows = buildTrueNASStorageTopologyRows([pool, degradedPool, disk]);
+    expect(
+      filterTrueNASStorageTopologyRows(rows, 'serial-degraded', 'attention').map((row) => row.id),
+    ).toEqual(['pool:pool-tank', 'disk:disk-sdb']);
   });
 
   it('filters apps using native TrueNAS app.query metadata', () => {
