@@ -51,6 +51,7 @@ import { buildPbsJobHealthEvidenceModel } from './resourceDetailDrawerServiceMod
 import { ResourceDetailDrawerSupportDisclosure as SupportDisclosure } from './ResourceDetailDrawerSupportDisclosure';
 import type { UseResourceDetailDrawerStateResult } from './useResourceDetailDrawerState';
 import type { ResourceDetailDrawerPresentation } from './resourceDetailDrawerPresentation';
+import type { ResourceDetailDrawerTrueNASSection } from './resourceDetailDrawerTrueNASModel';
 
 interface ResourceDetailDrawerOverviewTabProps {
   resource: Resource;
@@ -84,6 +85,46 @@ const trueNASRowToneClass = (tone?: 'default' | 'accent' | 'warning' | 'success'
       return 'text-base-content';
   }
 };
+
+const TrueNASDetailSectionTables: Component<{
+  sections: ResourceDetailDrawerTrueNASSection[];
+}> = (props) => (
+  <div class="overflow-hidden rounded border border-border bg-surface">
+    <table class="w-full table-fixed text-[11px]">
+      <tbody class="divide-y divide-border">
+        <For each={props.sections}>
+          {(section) => (
+            <>
+              <tr class="bg-surface-alt">
+                <th
+                  colspan="2"
+                  class="px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted"
+                >
+                  {section.label}
+                </th>
+              </tr>
+              <For each={section.rows}>
+                {(row) => (
+                  <tr>
+                    <td class="w-[38%] px-2 py-1 align-top text-muted">{row.label}</td>
+                    <td
+                      class={`px-2 py-1 text-right align-top font-medium ${trueNASRowToneClass(
+                        row.tone,
+                      )}`}
+                      title={row.title ?? row.value}
+                    >
+                      <span class="block truncate">{row.value}</span>
+                    </td>
+                  </tr>
+                )}
+              </For>
+            </>
+          )}
+        </For>
+      </tbody>
+    </table>
+  </div>
+);
 
 const pbsEvidenceBadgeClass = (tone: string): string => {
   switch (tone) {
@@ -657,32 +698,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                 contentClass="mt-3 space-y-3"
                 dataTestId="resource-truenas-details-section"
               >
-                <div class="space-y-3">
-                  <For each={drawer.trueNASDetailSections()}>
-                    {(section) => (
-                      <div class="rounded border border-cyan-200 bg-cyan-50 p-3 dark:border-cyan-700 dark:bg-cyan-900">
-                        <div class="mb-2 text-[10px] font-medium uppercase tracking-wide text-cyan-700 dark:text-cyan-300">
-                          {section.label}
-                        </div>
-                        <div class="space-y-1.5 text-[11px]">
-                          <For each={section.rows}>
-                            {(row) => (
-                              <div class="flex items-center justify-between gap-2">
-                                <span class="text-muted">{row.label}</span>
-                                <span
-                                  class={`max-w-[60%] truncate text-right font-medium ${trueNASRowToneClass(row.tone)}`}
-                                  title={row.title ?? row.value}
-                                >
-                                  {row.value}
-                                </span>
-                              </div>
-                            )}
-                          </For>
-                        </div>
-                      </div>
-                    )}
-                  </For>
-                </div>
+                <TrueNASDetailSectionTables sections={drawer.trueNASDetailSections()} />
               </SupportDisclosure>
             </Show>
 

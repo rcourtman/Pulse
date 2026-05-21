@@ -187,6 +187,10 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
 
     expect(getByRole('button', { name: 'Hide TrueNAS' })).toBeInTheDocument();
     const section = within(getByTestId('resource-truenas-details-section'));
+    expect(getByTestId('resource-truenas-details-section').querySelector('table')).toBeTruthy();
+    expect(
+      getByTestId('resource-truenas-details-section').querySelector('[class*="cyan"]'),
+    ).toBeNull();
     expect(section.getByText('App')).toBeInTheDocument();
     expect(section.getByText('0.0.0.0:30443 -> 443/tcp')).toBeInTheDocument();
     expect(section.getByText('/mnt/tank/apps/nextcloud -> /data')).toBeInTheDocument();
