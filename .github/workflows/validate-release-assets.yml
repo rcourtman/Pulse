@@ -242,9 +242,11 @@ jobs:
 
       - name: Set commit status - Success
         if: steps.context.outputs.should_run == 'true' && steps.validate.outputs.validation_passed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           curl --fail-with-body --silent --show-error -X POST \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/statuses/${{ steps.context.outputs.target_commitish }}" \
             -d '{
@@ -256,6 +258,8 @@ jobs:
 
       - name: Update release body - Success
         if: steps.context.outputs.should_run == 'true' && steps.validate.outputs.validation_passed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "✅ Validation passed - updating release description"
 
@@ -270,7 +274,7 @@ jobs:
               INTRO_LINE="Assets were revalidated after publication due to a release edit."
           fi
 
-          CURRENT_BODY=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          CURRENT_BODY=$(curl -s -H "Authorization: token $GH_TOKEN" \
             "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
             | jq -r '.body // ""')
 
@@ -306,7 +310,7 @@ jobs:
           $CURRENT_BODY"
 
           RELEASE_JSON=$(curl --fail-with-body --silent --show-error -X PATCH \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
             -d "$(jq -n \
@@ -328,9 +332,11 @@ jobs:
 
       - name: Set commit status - Failure
         if: steps.context.outputs.should_run == 'true' && (failure() || steps.validate.outputs.validation_passed == 'false')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           curl --fail-with-body --silent --show-error -X POST \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/statuses/${{ steps.context.outputs.target_commitish }}" \
             -d '{
@@ -342,6 +348,8 @@ jobs:
 
       - name: Delete all release assets on failure
         if: steps.context.outputs.should_run == 'true' && (failure() || steps.validate.outputs.validation_passed == 'false')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "❌ Validation failed - deleting all release assets"
 
@@ -349,7 +357,7 @@ jobs:
           if [ "$INITIAL_STATE" != "true" ]; then
             echo "Release was published; reverting to draft before deleting assets..."
             RELEASE_JSON=$(curl --fail-with-body --silent --show-error -X PATCH \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Authorization: token $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
               -d "$(jq -n \
@@ -370,7 +378,7 @@ jobs:
             sleep 5
           fi
 
-          ASSET_IDS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          ASSET_IDS=$(curl -s -H "Authorization: token $GH_TOKEN" \
             "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}/assets" \
             | jq -r '.[].id')
 
@@ -379,7 +387,7 @@ jobs:
               if [ -n "$asset_id" ] && [ "$asset_id" != "null" ]; then
                 echo "Deleting asset ID: $asset_id"
                 curl -X DELETE \
-                  -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                  -H "Authorization: token $GH_TOKEN" \
                   "https://api.github.com/repos/${{ github.repository }}/releases/assets/$asset_id"
               fi
             done
@@ -390,6 +398,8 @@ jobs:
 
       - name: Update release body - Failure
         if: steps.context.outputs.should_run == 'true' && (failure() || steps.validate.outputs.validation_passed == 'false')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "❌ Validation failed - updating release description"
 
@@ -404,7 +414,7 @@ jobs:
               INTRO_LINE="A published release edit introduced invalid assets. The release has been reverted to draft and assets were deleted to stop further downloads."
           fi
 
-          CURRENT_BODY=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          CURRENT_BODY=$(curl -s -H "Authorization: token $GH_TOKEN" \
             "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
             | jq -r '.body // ""')
 
@@ -463,7 +473,7 @@ jobs:
           $CURRENT_BODY"
 
           RELEASE_JSON=$(curl --fail-with-body --silent --show-error -X PATCH \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
             -d "$(jq -n \
