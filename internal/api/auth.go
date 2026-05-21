@@ -1100,11 +1100,30 @@ func RequirePermission(cfg *config.Config, authorizer auth.Authorizer, action, r
 			}
 		}
 
-		// Extract user from header (set by CheckAuth) and inject into context
-		username := w.Header().Get("X-Authenticated-User")
+		// Take the authenticated identity from the REQUEST context, not the
+		// response header. checkAuth above (and every other auth path
+		// upstream) attaches the username via attachUserContext, which
+		// stores it on the request context. Reading from w.Header() — a
+		// mutable response header that any handler between checkAuth and
+		// RequirePermission can overwrite — would let a downstream
+		// middleware substitute an arbitrary username and have the RBAC
+		// authorizer make its decision against that value. Response
+		// headers are not an identity channel.
 		ctx := r.Context()
-		if username != "" {
-			ctx = internalauth.WithUser(ctx, username)
+		username := internalauth.GetUser(ctx)
+		if username == "" {
+			// Defensive fallback: if some upstream auth path set the
+			// header but skipped attachUserContext, surface that here so
+			// the authorizer still gets the right identity, but log it so
+			// the gap can be plugged at the source.
+			if headerUser := w.Header().Get("X-Authenticated-User"); headerUser != "" {
+				log.Warn().
+					Str("user", headerUser).
+					Str("path", r.URL.Path).
+					Msg("Authenticated user found only in response header; upstream auth path should attachUserContext")
+				username = headerUser
+				ctx = internalauth.WithUser(ctx, username)
+			}
 		}
 
 		// Check permission via authorizer

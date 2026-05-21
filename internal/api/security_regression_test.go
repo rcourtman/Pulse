@@ -4668,3 +4668,46 @@ func TestCheckCSRF_HeaderDoesNotBypassWhenSessionCookiePresent(t *testing.T) {
 		})
 	}
 }
+
+// TestRequirePermissionUsesContextUsername regresses the X-Authenticated-User
+// response-header-as-identity bug. RequirePermission previously read the
+// authenticated username from w.Header().Get("X-Authenticated-User"). That
+// header is mutable across the handler chain; any middleware sitting between
+// checkAuth and RequirePermission that wrote to the response header could
+// substitute an arbitrary identity, and the RBAC authorizer would make its
+// decision against the substituted value. The contract is now: the identity
+// comes from the REQUEST context (set by attachUserContext during auth).
+// When the response header and the context disagree, the context wins.
+func TestRequirePermissionUsesContextUsername(t *testing.T) {
+	cfg := &config.Config{}
+
+	var observedSubject string
+	authorizer := &mockAuthorizerFn{fn: func(ctx context.Context, action string, resource string) (bool, error) {
+		observedSubject = auth.GetUser(ctx)
+		return true, nil
+	}}
+
+	handler := RequirePermission(cfg, authorizer, "read", "logs", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := newLoopbackRequest("GET", "/api/test", nil)
+
+	// Simulate a downstream middleware that has written a different value
+	// to the response header AFTER checkAuth ran. The header below is the
+	// would-be-attacker-supplied value; the context (set by attachUserContext)
+	// holds the real authenticated user.
+	rr := httptest.NewRecorder()
+	rr.Header().Set("X-Authenticated-User", "evil-spoofed-user")
+
+	ctxReq := req.WithContext(auth.WithUser(req.Context(), "real-authenticated-user"))
+
+	handler.ServeHTTP(rr, ctxReq)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if observedSubject != "real-authenticated-user" {
+		t.Fatalf("RBAC subject must come from context, got %q (header was %q)", observedSubject, "evil-spoofed-user")
+	}
+}
