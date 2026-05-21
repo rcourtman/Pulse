@@ -128,7 +128,10 @@ truth for live infrastructure data.
     `vm` resources, while SMB/NFS share data from `sharing.smb.query` and
     `sharing.nfs.query` publishes native `TrueNASData.Share` on canonical
     `network-share` resources parented to the owning dataset or pool when the
-    API/path supplies that evidence.
+    API/path supplies that evidence. TrueNAS protection inventory follows the
+    same native-query rule: ZFS snapshots prefer `zfs.resource.snapshot.query`
+    with older `pool.snapshot.query`/REST compatibility fallback, and
+    replication tasks prefer `replication.query`.
 
 ## Forbidden Paths
 

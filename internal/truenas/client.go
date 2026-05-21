@@ -609,6 +609,10 @@ func (c *Client) getNetworkSharesREST(ctx context.Context, path, protocol string
 }
 
 func (c *Client) queryRPC(ctx context.Context, method string, result any) error {
+	return c.callRPC(ctx, method, []any{[]any{}, map[string]any{}}, result)
+}
+
+func (c *Client) callRPC(ctx context.Context, method string, params any, result any) error {
 	conn, err := c.dialRPC(ctx)
 	if err != nil {
 		return err
@@ -622,7 +626,7 @@ func (c *Client) queryRPC(ctx context.Context, method string, result any) error 
 	if err := rpc.authenticate(ctx, c.config); err != nil {
 		return err
 	}
-	return rpc.call(ctx, method, []any{[]any{}, map[string]any{}}, result)
+	return rpc.call(ctx, method, params, result)
 }
 
 // GetApps returns the best-effort TrueNAS app inventory as canonical workload
@@ -827,16 +831,46 @@ func (c *Client) executeAppAction(ctx context.Context, method, appID string) err
 	return nil
 }
 
-// GetZFSSnapshots returns a best-effort list of ZFS snapshots.
-//
-// NOTE: TrueNAS exposes multiple snapshot APIs across versions. We intentionally parse the
-// response loosely and fall back to parsing dataset/snapshot names from the snapshot ID.
+// GetZFSSnapshots returns a best-effort list of ZFS snapshots. Modern TrueNAS
+// exposes snapshots through JSON-RPC; legacy REST remains a compatibility
+// fallback for older deployments.
 func (c *Client) GetZFSSnapshots(ctx context.Context) ([]ZFSSnapshot, error) {
+	snapshots, err := c.getZFSSnapshotsRPC(ctx)
+	if err == nil {
+		return snapshots, nil
+	}
+	restSnapshots, restErr := c.getZFSSnapshotsREST(ctx)
+	if restErr != nil {
+		return nil, fmt.Errorf("fetch truenas zfs snapshots via rpc and rest: rpc=%w rest=%v", err, restErr)
+	}
+	return restSnapshots, nil
+}
+
+func (c *Client) getZFSSnapshotsRPC(ctx context.Context) ([]ZFSSnapshot, error) {
+	var response []map[string]any
+	if err := c.callRPC(ctx, "zfs.resource.snapshot.query", []any{map[string]any{
+		"paths":      []string{},
+		"recursive":  true,
+		"properties": []string{"creation", "used", "referenced"},
+	}}, &response); err == nil {
+		return parseZFSSnapshots(response), nil
+	}
+
+	if err := c.queryRPC(ctx, "pool.snapshot.query", &response); err != nil {
+		return nil, err
+	}
+	return parseZFSSnapshots(response), nil
+}
+
+func (c *Client) getZFSSnapshotsREST(ctx context.Context) ([]ZFSSnapshot, error) {
 	var response []map[string]any
 	if err := c.getJSON(ctx, http.MethodGet, "/zfs/snapshot", &response); err != nil {
 		return nil, err
 	}
+	return parseZFSSnapshots(response), nil
+}
 
+func parseZFSSnapshots(response []map[string]any) []ZFSSnapshot {
 	snapshots := make([]ZFSSnapshot, 0, len(response))
 	for _, item := range response {
 		full := readStringAny(item, "id", "name", "snapshot", "snapshot_name", "snapshotName")
@@ -855,6 +889,7 @@ func (c *Client) GetZFSSnapshots(ctx context.Context) ([]ZFSSnapshot, error) {
 		}
 
 		var createdAt *time.Time
+		properties, _ := item["properties"].(map[string]any)
 		if t := readTimeAny(item,
 			"created_at",
 			"createdAt",
@@ -865,12 +900,20 @@ func (c *Client) GetZFSSnapshots(ctx context.Context) ([]ZFSSnapshot, error) {
 			"datetime",
 		); t != nil {
 			createdAt = t
-		} else if props, ok := item["properties"].(map[string]any); ok {
-			createdAt = readTimeAny(props, "creation", "created", "datetime")
+		} else if properties != nil {
+			createdAt = readTimeAny(properties, "creation", "created", "datetime")
 		}
 
 		usedBytes := readInt64PtrAny(item, "used", "used_bytes", "usedBytes")
 		referenced := readInt64PtrAny(item, "referenced", "referenced_bytes", "referencedBytes")
+		if properties != nil {
+			if usedBytes == nil {
+				usedBytes = readInt64PtrAny(properties, "used", "used_bytes", "usedBytes")
+			}
+			if referenced == nil {
+				referenced = readInt64PtrAny(properties, "referenced", "referenced_bytes", "referencedBytes")
+			}
+		}
 
 		if full == "" && dataset != "" && snapName != "" {
 			full = dataset + "@" + snapName
@@ -887,16 +930,39 @@ func (c *Client) GetZFSSnapshots(ctx context.Context) ([]ZFSSnapshot, error) {
 		})
 	}
 
-	return snapshots, nil
+	return snapshots
 }
 
 // GetReplicationTasks returns a best-effort list of replication tasks including last-run state.
 func (c *Client) GetReplicationTasks(ctx context.Context) ([]ReplicationTask, error) {
+	tasks, err := c.getReplicationTasksRPC(ctx)
+	if err == nil {
+		return tasks, nil
+	}
+	restTasks, restErr := c.getReplicationTasksREST(ctx)
+	if restErr != nil {
+		return nil, fmt.Errorf("fetch truenas replication tasks via rpc and rest: rpc=%w rest=%v", err, restErr)
+	}
+	return restTasks, nil
+}
+
+func (c *Client) getReplicationTasksRPC(ctx context.Context) ([]ReplicationTask, error) {
+	var response []map[string]any
+	if err := c.queryRPC(ctx, "replication.query", &response); err != nil {
+		return nil, err
+	}
+	return parseReplicationTasks(response), nil
+}
+
+func (c *Client) getReplicationTasksREST(ctx context.Context) ([]ReplicationTask, error) {
 	var response []map[string]any
 	if err := c.getJSON(ctx, http.MethodGet, "/replication", &response); err != nil {
 		return nil, err
 	}
+	return parseReplicationTasks(response), nil
+}
 
+func parseReplicationTasks(response []map[string]any) []ReplicationTask {
 	tasks := make([]ReplicationTask, 0, len(response))
 	for _, item := range response {
 		id := readStringAny(item, "id")
@@ -943,7 +1009,7 @@ func (c *Client) GetReplicationTasks(ctx context.Context) ([]ReplicationTask, er
 		})
 	}
 
-	return tasks, nil
+	return tasks
 }
 
 // FetchSnapshot collects a complete fixture-compatible snapshot.
@@ -3464,7 +3530,7 @@ func readStringAny(record map[string]any, keys ...string) string {
 			return strconv.FormatInt(typed, 10)
 		case map[string]any:
 			// Try common wrapper shapes: { "rawvalue": "...", "parsed": ... }
-			if s := readStringAny(typed, "rawvalue", "value", "parsed"); s != "" {
+			if s := readStringAny(typed, "rawvalue", "value", "parsed", "raw"); s != "" {
 				return s
 			}
 		}
@@ -3568,6 +3634,9 @@ func readInt64PtrAny(record map[string]any, keys ...string) *int64 {
 			if v, ok := parseInt64Any(nested["rawvalue"]); ok {
 				return &v
 			}
+			if v, ok := parseInt64Any(nested["raw"]); ok {
+				return &v
+			}
 		}
 	}
 	return nil
@@ -3655,6 +3724,11 @@ func readTimeAny(record map[string]any, keys ...string) *time.Time {
 				}
 			}
 			if rawValue, ok := nested["rawvalue"]; ok {
+				if t := parseTimeAny(rawValue); t != nil {
+					return t
+				}
+			}
+			if rawValue, ok := nested["raw"]; ok {
 				if t := parseTimeAny(rawValue); t != nil {
 					return t
 				}

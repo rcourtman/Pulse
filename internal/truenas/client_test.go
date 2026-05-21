@@ -463,6 +463,113 @@ func TestGetAppsEnrichesStatsFromRPC(t *testing.T) {
 	}
 }
 
+func TestGetZFSSnapshotsUsesNativeSnapshotQueryShape(t *testing.T) {
+	server := newMockServerWithRPC(t, map[string]apiResponse{
+		"/api/v2.0/zfs/snapshot": {status: http.StatusInternalServerError, body: `{"error":"legacy snapshot endpoint should not be used"}`},
+	}, nil, func(t *testing.T, conn *websocket.Conn) {
+		authReq := readRPCRequest(t, conn)
+		if authReq.Method != "auth.login_with_api_key" {
+			t.Fatalf("expected api-key auth method, got %q", authReq.Method)
+		}
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		request := readRPCRequest(t, conn)
+		if request.Method != "zfs.resource.snapshot.query" {
+			t.Fatalf("expected zfs.resource.snapshot.query, got %q", request.Method)
+		}
+		params, ok := request.Params.([]any)
+		if !ok || len(params) != 1 {
+			t.Fatalf("unexpected snapshot query params: %#v", request.Params)
+		}
+		writeRPCResult(t, conn, request.ID, []map[string]any{{
+			"name":          "tank/apps@auto-20260331-0600",
+			"dataset":       "tank/apps",
+			"snapshot_name": "auto-20260331-0600",
+			"properties": map[string]any{
+				"creation":   map[string]any{"raw": "1710000000"},
+				"used":       map[string]any{"raw": "1024"},
+				"referenced": map[string]any{"raw": "2048"},
+			},
+		}})
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	snapshots, err := client.GetZFSSnapshots(context.Background())
+	if err != nil {
+		t.Fatalf("GetZFSSnapshots() error = %v", err)
+	}
+	if len(snapshots) != 1 {
+		t.Fatalf("expected 1 snapshot, got %d", len(snapshots))
+	}
+	snapshot := snapshots[0]
+	if snapshot.FullName != "tank/apps@auto-20260331-0600" || snapshot.Dataset != "tank/apps" || snapshot.Name != "auto-20260331-0600" {
+		t.Fatalf("unexpected snapshot identity: %+v", snapshot)
+	}
+	if snapshot.CreatedAt == nil || !snapshot.CreatedAt.Equal(time.Unix(1710000000, 0).UTC()) {
+		t.Fatalf("unexpected snapshot creation time: %+v", snapshot.CreatedAt)
+	}
+	if snapshot.UsedBytes == nil || *snapshot.UsedBytes != 1024 || snapshot.Referenced == nil || *snapshot.Referenced != 2048 {
+		t.Fatalf("unexpected snapshot byte properties: %+v", snapshot)
+	}
+}
+
+func TestGetReplicationTasksUsesNativeReplicationQueryShape(t *testing.T) {
+	server := newMockServerWithRPC(t, map[string]apiResponse{
+		"/api/v2.0/replication": {status: http.StatusInternalServerError, body: `{"error":"legacy replication endpoint should not be used"}`},
+	}, nil, func(t *testing.T, conn *websocket.Conn) {
+		authReq := readRPCRequest(t, conn)
+		if authReq.Method != "auth.login_with_api_key" {
+			t.Fatalf("expected api-key auth method, got %q", authReq.Method)
+		}
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		request := readRPCRequest(t, conn)
+		if request.Method != "replication.query" {
+			t.Fatalf("expected replication.query, got %q", request.Method)
+		}
+		params, ok := request.Params.([]any)
+		if !ok || len(params) != 2 {
+			t.Fatalf("expected replication.query filters/options params, got %#v", request.Params)
+		}
+		writeRPCResult(t, conn, request.ID, []map[string]any{{
+			"id":              7,
+			"name":            "Offsite apps",
+			"direction":       "PUSH",
+			"source_datasets": []string{"tank/apps"},
+			"target_dataset":  "backup/apps",
+			"state": map[string]any{
+				"state":         "SUCCESS",
+				"datetime":      "2026-03-31T06:30:00Z",
+				"last_snapshot": "tank/apps@auto-20260331-0600",
+			},
+		}})
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	tasks, err := client.GetReplicationTasks(context.Background())
+	if err != nil {
+		t.Fatalf("GetReplicationTasks() error = %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks))
+	}
+	task := tasks[0]
+	if task.ID != "7" || task.Name != "Offsite apps" || task.Direction != "PUSH" {
+		t.Fatalf("unexpected replication identity: %+v", task)
+	}
+	if len(task.SourceDatasets) != 1 || task.SourceDatasets[0] != "tank/apps" || task.TargetDataset != "backup/apps" {
+		t.Fatalf("unexpected replication datasets: %+v", task)
+	}
+	if task.LastState != "SUCCESS" || task.LastSnapshot != "tank/apps@auto-20260331-0600" {
+		t.Fatalf("unexpected replication state: %+v", task)
+	}
+	if task.LastRun == nil || task.LastRun.Format(time.RFC3339) != "2026-03-31T06:30:00Z" {
+		t.Fatalf("unexpected replication last run: %+v", task.LastRun)
+	}
+}
+
 func TestStartAndStopAppUseRPCMethods(t *testing.T) {
 	var rpcCalls int
 	server := newMockServerWithRPC(t, defaultAPIResponses(), nil, func(t *testing.T, conn *websocket.Conn) {
