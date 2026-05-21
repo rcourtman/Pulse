@@ -123,6 +123,8 @@ test_hot_dev_keeps_backend_launch_errors_in_debug_log() {
   output="$(sed -n '1,760p' "${HOT_DEV}")"
 
   assert_contains "hot-dev exposes backend debug log override" "${output}" "BACKEND_DEBUG_LOG=\"\${PULSE_BACKEND_LOG_FILE:-/tmp/pulse-debug.log}\""
+  assert_contains "hot-dev defaults backend log level to info" "${output}" "LOG_LEVEL=\"\${LOG_LEVEL:-info}\""
+  assert_contains "hot-dev disables background AI automation by default" "${output}" "PULSE_DEV_DISABLE_BACKGROUND_AI=\"\${PULSE_DEV_DISABLE_BACKGROUND_AI:-true}\""
   assert_contains "backend launch stderr is appended to the debug log" "${output}" ">> \"\${BACKEND_DEBUG_LOG}\" 2>&1"
   assert_contains "backend LOG_FILE follows debug log override" "${output}" "LOG_FILE=\"\${BACKEND_DEBUG_LOG}\""
 }
@@ -165,6 +167,7 @@ test_hot_dev_network_defaults_are_lan_capable() {
   assert_contains "network defaults derive the websocket URL" "${output}" "ws_url=ws://192.168.50.10:7655"
   assert_contains "network defaults allow the detected LAN frontend origin" "${output}" "http://192.168.50.10:5173"
   assert_contains "network defaults retain loopback frontend origins" "${output}" "http://127.0.0.1:5173"
+  assert_contains "network defaults allow the wildcard dev origin Electron may report" "${output}" "http://0.0.0.0:5173"
 }
 
 test_hot_dev_browser_urls_distinguish_bind_and_browser_hosts() {

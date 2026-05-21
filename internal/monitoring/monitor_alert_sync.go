@@ -28,8 +28,8 @@ func (m *Monitor) syncAlertsToState() {
 	m.state.UpdateActiveAlerts(modelAlerts)
 
 	recentlyResolved := m.alertManager.GetRecentlyResolved()
-	if len(recentlyResolved) > 0 {
-		log.Info().Int("count", len(recentlyResolved)).Msg("syncing recently resolved alerts")
+	if len(recentlyResolved) > 0 && logging.IsLevelEnabled(zerolog.DebugLevel) {
+		log.Debug().Int("count", len(recentlyResolved)).Msg("syncing recently resolved alerts")
 	}
 	m.state.UpdateRecentlyResolved(recentlyResolved)
 }

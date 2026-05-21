@@ -76,6 +76,9 @@ hot_dev_configure_network_defaults() {
     ALLOWED_ORIGINS="http://${PULSE_DEV_API_HOST:-127.0.0.1}:${FRONTEND_DEV_PORT:-7655}"
     ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://localhost:${FRONTEND_DEV_PORT:-7655},http://127.0.0.1:${FRONTEND_DEV_PORT:-7655}"
     ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://localhost:5173,http://127.0.0.1:5173"
+    if [[ "${FRONTEND_DEV_HOST:-}" == "0.0.0.0" ]]; then
+        ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://0.0.0.0:${FRONTEND_DEV_PORT:-7655},http://0.0.0.0:5173"
+    fi
 
     local ip
     for ip in ${ALL_IPS:-}; do

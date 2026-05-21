@@ -582,6 +582,7 @@ func TestParityPBSInstanceFields(t *testing.T) {
 func TestParityPMGInstanceFields(t *testing.T) {
 	now := time.Now().UTC()
 	queueUpdated := now.Add(-2 * time.Minute)
+	statsUpdated := now.Add(-5 * time.Minute)
 
 	pmg := models.PMGInstance{
 		ID:       "pmg-1",
@@ -623,12 +624,24 @@ func TestParityPMGInstanceFields(t *testing.T) {
 			},
 		},
 		MailStats: &models.PMGMailStats{
-			Timeframe:  "hour",
-			CountTotal: 123.0,
-			SpamIn:     7.0,
-			VirusIn:    2.0,
-			UpdatedAt:  now.Add(-5 * time.Minute),
+			Timeframe:       "hour",
+			CountTotal:      123.0,
+			CountIn:         100.0,
+			CountOut:        23.0,
+			SpamIn:          7.0,
+			VirusIn:         2.0,
+			JunkIn:          5.0,
+			PregreetRejects: 4.0,
+			UpdatedAt:       statsUpdated,
 		},
+		MailCount: []models.PMGMailCountPoint{{
+			Timestamp: statsUpdated,
+			Count:     123,
+			CountIn:   100,
+			CountOut:  23,
+			Timeframe: "hour",
+			Index:     1,
+		}},
 		ConnectionHealth: "connected",
 		LastSeen:         now,
 		LastUpdated:      now.Add(-1 * time.Minute),
@@ -648,6 +661,7 @@ func TestParityPMGInstanceFields(t *testing.T) {
 	require.Equal(t, pmg.Name, v.Name())
 	require.Equal(t, unifiedresources.StatusOnline, v.Status())
 	require.Equal(t, "pmg.example.test", v.Hostname())
+	require.Equal(t, pmg.Host, v.HostURL())
 	require.Equal(t, pmg.Version, v.Version())
 	require.Equal(t, len(pmg.Nodes), v.NodeCount())
 	require.Equal(t, int64(2000), v.UptimeSeconds())
@@ -660,12 +674,24 @@ func TestParityPMGInstanceFields(t *testing.T) {
 	require.Equal(t, pmg.MailStats.CountTotal, v.MailCountTotal())
 	require.Equal(t, pmg.MailStats.SpamIn, v.SpamIn())
 	require.Equal(t, pmg.MailStats.VirusIn, v.VirusIn())
+	require.Len(t, v.Nodes(), 2)
+	require.NotNil(t, v.Nodes()[1].QueueStatus)
+	require.Equal(t, int64(300), v.Nodes()[1].QueueStatus.OldestAge)
+	require.True(t, v.Nodes()[1].QueueStatus.UpdatedAt.Equal(queueUpdated.Add(1*time.Minute)))
+	require.NotNil(t, v.MailStats())
+	require.Equal(t, pmg.MailStats.CountIn, v.MailStats().CountIn)
+	require.Equal(t, pmg.MailStats.JunkIn, v.MailStats().JunkIn)
+	require.Equal(t, pmg.MailStats.PregreetRejects, v.MailStats().PregreetRejects)
+	require.True(t, v.MailStats().UpdatedAt.Equal(statsUpdated))
+	require.Len(t, v.MailCount(), 1)
+	require.Equal(t, pmg.MailCount[0].Count, v.MailCount()[0].Count)
 
 	require.Equal(t, pmg.ConnectionHealth, v.ConnectionHealth())
 	require.Equal(t, 0.0, v.CPUPercent())
 	require.Equal(t, 0.0, v.MemoryPercent())
 	require.Equal(t, 0.0, v.DiskPercent())
 	require.True(t, v.LastSeen().Equal(pmg.LastSeen))
+	require.Equal(t, pmg.GuestURL, v.GuestURL())
 	require.Equal(t, pmg.GuestURL, v.CustomURL())
 }
 

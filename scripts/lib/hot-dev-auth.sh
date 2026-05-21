@@ -42,6 +42,19 @@ hot_dev_single_quote() {
     printf '%s' "$1" | sed "s/'/'\\\\''/g"
 }
 
+hot_dev_cleanup_env_temp_files() {
+    local runtime_env=$1
+    local env_dir
+    local env_base
+
+    [[ -n "${runtime_env}" ]] || return 0
+    env_dir="$(dirname "${runtime_env}")"
+    env_base="$(basename "${runtime_env}")"
+    [[ -d "${env_dir}" ]] || return 0
+
+    find "${env_dir}" -maxdepth 1 -type f \( -name "${env_base}.tmp.*" -o -name "${env_base}.audit.*" \) -exec rm -f {} + 2>/dev/null || true
+}
+
 hot_dev_sync_auth_env_file() {
     local runtime_env=$1
     local auth_user=$2
@@ -49,6 +62,7 @@ hot_dev_sync_auth_env_file() {
     local tmp_file
 
     mkdir -p "$(dirname "${runtime_env}")"
+    hot_dev_cleanup_env_temp_files "${runtime_env}"
     tmp_file="${runtime_env}.tmp.$$"
 
     {

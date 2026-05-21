@@ -1329,6 +1329,9 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 	})
 
 	t.Run("PMGInstanceView", func(t *testing.T) {
+		queueUpdated := now.Add(-2 * time.Minute)
+		statsUpdated := now.Add(-1 * time.Minute)
+		domainStatsAsOf := now.Add(-30 * time.Second)
 		r := &Resource{
 			ID:        "pmg-1",
 			Type:      ResourceTypePMG,
@@ -1339,17 +1342,67 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 			CustomURL: "https://pmg.example/ui",
 			PMG: &PMGData{
 				Hostname:         "pmg.example",
+				HostURL:          "https://pmg.example:8006",
+				GuestURL:         "https://pmg-guest.example:8006",
 				Version:          "8.0",
 				NodeCount:        2,
 				UptimeSeconds:    200,
 				QueueActive:      10,
 				QueueDeferred:    20,
 				QueueHold:        15,
+				QueueIncoming:    4,
 				QueueTotal:       30,
 				MailCountTotal:   1000,
 				SpamIn:           11,
 				VirusIn:          22,
 				ConnectionHealth: "online",
+				LastUpdated:      now,
+				Nodes: []PMGNodeMeta{{
+					Name:   "pmg-node-1",
+					Status: "online",
+					Role:   "master",
+					Uptime: 123,
+					QueueStatus: &PMGQueueMeta{
+						Active:    1,
+						Deferred:  2,
+						Hold:      3,
+						Incoming:  4,
+						Total:     10,
+						OldestAge: 55,
+						UpdatedAt: queueUpdated,
+					},
+				}},
+				MailStats: &PMGMailStatsMeta{
+					Timeframe:            "day",
+					CountTotal:           1000,
+					CountIn:              700,
+					CountOut:             300,
+					SpamIn:               11,
+					SpamOut:              2,
+					VirusIn:              22,
+					VirusOut:             1,
+					BouncesIn:            3,
+					BouncesOut:           4,
+					BytesIn:              500,
+					BytesOut:             600,
+					GreylistCount:        7,
+					JunkIn:               8,
+					RBLRejects:           9,
+					AverageProcessTimeMs: 10,
+					PregreetRejects:      12,
+					UpdatedAt:            statsUpdated,
+				},
+				MailCount: []models.PMGMailCountPoint{{
+					Timestamp: statsUpdated,
+					Count:     1000,
+					Timeframe: "hour",
+					Index:     1,
+				}},
+				Quarantine:       &PMGQuarantineMeta{Spam: 1, Virus: 2, Attachment: 3, Blacklisted: 4},
+				SpamDistribution: []PMGSpamBucketMeta{{Bucket: "5", Count: 6}},
+				RelayDomains:     []PMGRelayDomainMeta{{Domain: "example.com", Comment: "primary"}},
+				DomainStats:      []PMGDomainStatMeta{{Domain: "example.com", MailCount: 100, SpamCount: 5, VirusCount: 1, Bytes: 2048}},
+				DomainStatsAsOf:  domainStatsAsOf,
 			},
 			Metrics: &ResourceMetrics{
 				CPU:    &MetricValue{Percent: 4},
@@ -1361,14 +1414,38 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 		if v.ID() != "pmg-1" || v.Name() != "pmg-a" || v.Status() != StatusWarning {
 			t.Fatalf("expected basic accessors to match, got id=%q name=%q status=%q", v.ID(), v.Name(), v.Status())
 		}
-		if v.Hostname() != "pmg.example" || v.Version() != "8.0" || v.NodeCount() != 2 || v.UptimeSeconds() != 200 {
-			t.Fatalf("expected pmg fields to match, got host=%q ver=%q nodes=%d uptime=%d", v.Hostname(), v.Version(), v.NodeCount(), v.UptimeSeconds())
+		if v.Hostname() != "pmg.example" || v.HostURL() != "https://pmg.example:8006" || v.GuestURL() != "https://pmg-guest.example:8006" || v.Version() != "8.0" || v.NodeCount() != 2 || v.UptimeSeconds() != 200 {
+			t.Fatalf("expected pmg fields to match, got host=%q hostURL=%q guestURL=%q ver=%q nodes=%d uptime=%d", v.Hostname(), v.HostURL(), v.GuestURL(), v.Version(), v.NodeCount(), v.UptimeSeconds())
 		}
-		if v.QueueActive() != 10 || v.QueueDeferred() != 20 || v.QueueHold() != 15 || v.QueueTotal() != 30 {
-			t.Fatalf("expected queue active/deferred/hold/total 10/20/15/30, got %d/%d/%d/%d", v.QueueActive(), v.QueueDeferred(), v.QueueHold(), v.QueueTotal())
+		if v.QueueActive() != 10 || v.QueueDeferred() != 20 || v.QueueHold() != 15 || v.QueueIncoming() != 4 || v.QueueTotal() != 30 {
+			t.Fatalf("expected queue active/deferred/hold/incoming/total 10/20/15/4/30, got %d/%d/%d/%d/%d", v.QueueActive(), v.QueueDeferred(), v.QueueHold(), v.QueueIncoming(), v.QueueTotal())
 		}
 		if v.MailCountTotal() != 1000 || v.SpamIn() != 11 || v.VirusIn() != 22 {
 			t.Fatalf("expected mail stats total/spam/virus 1000/11/22, got %v/%v/%v", v.MailCountTotal(), v.SpamIn(), v.VirusIn())
+		}
+		if nodes := v.Nodes(); len(nodes) != 1 || nodes[0].QueueStatus == nil || nodes[0].QueueStatus.OldestAge != 55 || !nodes[0].QueueStatus.UpdatedAt.Equal(queueUpdated) {
+			t.Fatalf("expected node queue details to match, got %+v", nodes)
+		}
+		if stats := v.MailStats(); stats == nil || stats.CountTotal != 1000 || stats.JunkIn != 8 || stats.PregreetRejects != 12 || !stats.UpdatedAt.Equal(statsUpdated) {
+			t.Fatalf("expected full mail stats, got %+v", stats)
+		}
+		if points := v.MailCount(); len(points) != 1 || points[0].Count != 1000 || points[0].Index != 1 {
+			t.Fatalf("expected mail count points, got %+v", points)
+		}
+		if q := v.Quarantine(); q == nil || q.Spam != 1 || q.Blacklisted != 4 {
+			t.Fatalf("expected quarantine details, got %+v", q)
+		}
+		if buckets := v.SpamDistribution(); len(buckets) != 1 || buckets[0].Bucket != "5" || buckets[0].Count != 6 {
+			t.Fatalf("expected spam distribution, got %+v", buckets)
+		}
+		if domains := v.RelayDomains(); len(domains) != 1 || domains[0].Domain != "example.com" || domains[0].Comment != "primary" {
+			t.Fatalf("expected relay domains, got %+v", domains)
+		}
+		if stats := v.DomainStats(); len(stats) != 1 || stats[0].Domain != "example.com" || stats[0].Bytes != 2048 {
+			t.Fatalf("expected domain stats, got %+v", stats)
+		}
+		if !v.LastUpdated().Equal(now) || !v.DomainStatsAsOf().Equal(domainStatsAsOf) {
+			t.Fatalf("expected PMG timestamps to match, got lastUpdated=%v domainStatsAsOf=%v", v.LastUpdated(), v.DomainStatsAsOf())
 		}
 		if v.ConnectionHealth() != "online" {
 			t.Fatalf("expected connection health %q, got %q", "online", v.ConnectionHealth())
@@ -1386,7 +1463,7 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 
 		t.Run("NilResourceAndNilPMGAreSafe", func(t *testing.T) {
 			var zero PMGInstanceView
-			if zero.QueueActive() != 0 || zero.QueueDeferred() != 0 || zero.QueueHold() != 0 || zero.QueueTotal() != 0 {
+			if zero.HostURL() != "" || zero.GuestURL() != "" || zero.QueueActive() != 0 || zero.QueueDeferred() != 0 || zero.QueueHold() != 0 || zero.QueueIncoming() != 0 || zero.QueueTotal() != 0 || zero.MailCount() != nil || !zero.LastUpdated().IsZero() || zero.RelayDomains() != nil || zero.DomainStats() != nil || !zero.DomainStatsAsOf().IsZero() {
 				t.Fatalf("expected zero queue values for nil resource, got active=%d deferred=%d hold=%d total=%d",
 					zero.QueueActive(), zero.QueueDeferred(), zero.QueueHold(), zero.QueueTotal())
 			}
@@ -1394,7 +1471,7 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 			rNoPMG := testResource(ResourceTypePMG)
 			rNoPMG.PMG = nil
 			vNoPMG := NewPMGInstanceView(rNoPMG)
-			if vNoPMG.QueueActive() != 0 || vNoPMG.QueueDeferred() != 0 || vNoPMG.QueueHold() != 0 || vNoPMG.QueueTotal() != 0 {
+			if vNoPMG.HostURL() != "" || vNoPMG.GuestURL() != "" || vNoPMG.QueueActive() != 0 || vNoPMG.QueueDeferred() != 0 || vNoPMG.QueueHold() != 0 || vNoPMG.QueueIncoming() != 0 || vNoPMG.QueueTotal() != 0 || vNoPMG.MailCount() != nil || !vNoPMG.LastUpdated().IsZero() || vNoPMG.RelayDomains() != nil || vNoPMG.DomainStats() != nil || !vNoPMG.DomainStatsAsOf().IsZero() {
 				t.Fatalf("expected zero queue values when PMG is nil, got active=%d deferred=%d hold=%d total=%d",
 					vNoPMG.QueueActive(), vNoPMG.QueueDeferred(), vNoPMG.QueueHold(), vNoPMG.QueueTotal())
 			}

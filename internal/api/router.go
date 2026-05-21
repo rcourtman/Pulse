@@ -2160,7 +2160,12 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, orgID, da
 
 			// Set patrol trigger function (triggers mini-patrol on alert events)
 			patrol := aiService.GetPatrolService()
-			if patrol != nil {
+			if patrol != nil && ai.BackgroundAutomationDisabledForDev() {
+				log.Info().
+					Str("env", ai.DevDisableBackgroundAIEnv).
+					Str("org_id", orgID).
+					Msg("Pulse dev background AI disabled; alert bridge patrol trigger not wired")
+			} else if patrol != nil {
 				alertBridge.SetPatrolTrigger(func(resourceID, resourceType, reason, alertType string) {
 					scope := ai.PatrolScope{
 						ResourceIDs:   []string{resourceID},
@@ -3576,6 +3581,13 @@ func (r *Router) WireAlertTriggeredAI() {
 	// 2. Get the Monitor (The Trigger)
 	if r.monitor == nil {
 		log.Debug().Msg("Monitor not available for AI alert callback")
+		return
+	}
+
+	if ai.BackgroundAutomationDisabledForDev() {
+		log.Info().
+			Str("env", ai.DevDisableBackgroundAIEnv).
+			Msg("Pulse dev background AI disabled; alert-triggered AI analyzer not wired")
 		return
 	}
 

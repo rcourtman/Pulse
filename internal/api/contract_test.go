@@ -60,6 +60,74 @@ type resourceContractSnapshot struct {
 	Type string
 }
 
+func TestContract_PMGInstancesEndpointUsesUnifiedReadStatePayload(t *testing.T) {
+	now := time.Now().UTC()
+	source := models.PMGInstance{
+		ID:       "pmg-contract-1",
+		Name:     "gateway-contract",
+		Host:     "https://pmg-contract.example.com:8006",
+		GuestURL: "https://pmg-contract.example.com/quarantine",
+		Status:   "online",
+		Version:  "8.2",
+		Nodes: []models.PMGNodeStatus{{
+			Name:   "pmg-node-contract",
+			Status: "online",
+			QueueStatus: &models.PMGQueueStatus{
+				Incoming:  4,
+				Total:     10,
+				OldestAge: 600,
+				UpdatedAt: now,
+			},
+		}},
+		MailStats: &models.PMGMailStats{
+			CountTotal:      1000,
+			JunkIn:          10,
+			PregreetRejects: 13,
+			UpdatedAt:       now,
+		},
+		MailCount:        []models.PMGMailCountPoint{{Timestamp: now, Count: 1000, Timeframe: "hour", Index: 1}},
+		DomainStats:      []models.PMGDomainStat{{Domain: "example.com", MailCount: 100, Bytes: 2048}},
+		DomainStatsAsOf:  now,
+		ConnectionHealth: "connected",
+		LastSeen:         now,
+		LastUpdated:      now,
+	}
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{PMGInstances: []models.PMGInstance{source}})
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "resourceStore", unifiedresources.NewMonitorAdapter(registry))
+
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/pmg/instances?id=pmg-contract-1", nil)
+	rec := httptest.NewRecorder()
+	router.handleListPMGInstances(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var resp PMGInstancesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode PMG contract response: %v", err)
+	}
+	if resp.Meta.Total != 1 || len(resp.Data) != 1 {
+		t.Fatalf("expected one PMG instance, got total=%d len=%d", resp.Meta.Total, len(resp.Data))
+	}
+	got := resp.Data[0]
+	if got.ID != source.ID || got.Host != source.Host || got.GuestURL != source.GuestURL {
+		t.Fatalf("PMG identity and URL contract not preserved: %+v", got)
+	}
+	if len(got.Nodes) != 1 || got.Nodes[0].QueueStatus == nil || got.Nodes[0].QueueStatus.OldestAge != 600 {
+		t.Fatalf("PMG queue contract not preserved: %+v", got.Nodes)
+	}
+	if got.MailStats == nil || got.MailStats.CountTotal != 1000 || got.MailStats.JunkIn != 10 || got.MailStats.PregreetRejects != 13 {
+		t.Fatalf("PMG mail stats contract not preserved: %+v", got.MailStats)
+	}
+	if len(got.MailCount) != 1 || got.MailCount[0].Index != 1 || len(got.DomainStats) != 1 || got.DomainStats[0].Bytes != 2048 {
+		t.Fatalf("PMG historical/domain contract not preserved: mail=%+v domains=%+v", got.MailCount, got.DomainStats)
+	}
+}
+
 func TestContract_MockAvailabilityTargetsUseSavedTargetPayloads(t *testing.T) {
 	previousMock := mock.IsMockEnabled()
 	if err := mock.SetEnabled(true); err != nil {

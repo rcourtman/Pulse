@@ -854,6 +854,42 @@ func TestService_PatrolManagement(t *testing.T) {
 	}
 }
 
+func TestService_StartPatrolHonorsDevBackgroundAIGuard(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	t.Setenv(DevDisableBackgroundAIEnv, "true")
+
+	svc := NewService(nil, nil)
+	patrol := NewPatrolService(svc, nil)
+	svc.patrolService = patrol
+
+	alertAnalyzer := &mockAlertAnalyzer{enabled: true}
+	svc.alertTriggeredAnalyzer = alertAnalyzer
+	svc.licenseChecker = &mockLicenseStore{
+		features: map[string]bool{
+			FeatureAIPatrol: true,
+			FeatureAIAlerts: true,
+		},
+	}
+	svc.cfg = &config.AIConfig{
+		Enabled:                      true,
+		PatrolEnabled:                true,
+		PatrolIntervalMinutes:        30,
+		AlertTriggeredAnalysis:       true,
+		PatrolEventTriggersEnabled:   true,
+		PatrolAlertTriggersEnabled:   true,
+		PatrolAnomalyTriggersEnabled: true,
+	}
+
+	svc.StartPatrol(context.Background())
+
+	if alertAnalyzer.IsEnabled() {
+		t.Fatal("expected dev background AI guard to keep alert analyzer disabled")
+	}
+	if status := patrol.GetStatus(); status.NextPatrolAt != nil {
+		t.Fatalf("expected dev background AI guard to avoid scheduling patrol, got %v", status.NextPatrolAt)
+	}
+}
+
 func TestService_LookupNodeForVMID_Extended(t *testing.T) {
 	svc := NewService(nil, nil)
 

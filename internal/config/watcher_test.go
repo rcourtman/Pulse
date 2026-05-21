@@ -107,6 +107,29 @@ func TestConfigWatcher_StopWaitsForBackgroundWorker(t *testing.T) {
 	}
 }
 
+func TestConfigWatcher_StartWatchesFilesWithoutDirectoryFanout(t *testing.T) {
+	tempDir := t.TempDir()
+	envPath := filepath.Join(tempDir, ".env")
+	apiTokensPath := filepath.Join(tempDir, "api_tokens.json")
+	require.NoError(t, os.WriteFile(envPath, []byte("PULSE_AUTH_USER=admin\n"), 0644))
+	require.NoError(t, os.WriteFile(apiTokensPath, []byte("[]"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, ".env.tmp.123"), []byte("stale"), 0644))
+
+	t.Setenv("PULSE_AUTH_CONFIG_DIR", tempDir)
+	cw, err := NewConfigWatcher(&Config{ConfigPath: tempDir})
+	require.NoError(t, err)
+	cw.pollInterval = time.Hour
+
+	require.NoError(t, cw.Start())
+	defer cw.Stop()
+
+	watched := cw.watcher.WatchList()
+	assert.Contains(t, watched, envPath)
+	assert.Contains(t, watched, apiTokensPath)
+	assert.NotContains(t, watched, tempDir)
+	assert.NotContains(t, watched, filepath.Join(tempDir, ".env.tmp.123"))
+}
+
 func TestConfigWatcher_ReloadConfig(t *testing.T) {
 	// Setup
 	tempDir := t.TempDir()

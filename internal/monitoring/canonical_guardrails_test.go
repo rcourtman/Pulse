@@ -138,6 +138,21 @@ func TestGetStateRefreshesLiveAlertSnapshots(t *testing.T) {
 	}
 }
 
+func TestAlertStateSyncDoesNotLogNormalResolvedStateAtInfo(t *testing.T) {
+	data, err := os.ReadFile("monitor_alert_sync.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor_alert_sync.go: %v", err)
+	}
+	source := string(data)
+
+	if !strings.Contains(source, `log.Debug().Int("count", len(recentlyResolved)).Msg("syncing recently resolved alerts")`) {
+		t.Fatal("recently resolved alert sync must stay at debug level to avoid info-log churn")
+	}
+	if strings.Contains(source, `log.Info().Int("count", len(recentlyResolved)).Msg("syncing recently resolved alerts")`) {
+		t.Fatal("recently resolved alert sync must not log normal polling state at info level")
+	}
+}
+
 func TestStateBroadcastTreatsTypedNilHubAsAbsent(t *testing.T) {
 	data, err := os.ReadFile("monitor.go")
 	if err != nil {

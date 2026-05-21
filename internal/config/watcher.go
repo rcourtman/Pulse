@@ -26,7 +26,7 @@ var (
 	debounceAPITokensWrite = 250 * time.Millisecond
 )
 
-// ConfigWatcher monitors the .env file for changes and updates runtime config
+// ConfigWatcher monitors runtime config files for changes and updates runtime config.
 type ConfigWatcher struct {
 	config               *Config
 	envPath              string
@@ -147,36 +147,78 @@ func (cw *ConfigWatcher) SetAPITokenReloadCallback(callback func()) {
 	cw.onAPITokenReload = callback
 }
 
-// Start begins watching the config file
+// Start begins watching the config files.
 func (cw *ConfigWatcher) Start() error {
-	// Watch the directory for .env
-	dir := filepath.Dir(cw.envPath)
-	err := cw.watcher.Add(dir)
-	if err != nil {
-		log.Warn().Err(err).Str("path", dir).Msg("Failed to watch config directory")
+	watched := 0
+	for _, path := range []string{cw.envPath, cw.apiTokensPath} {
+		ok, err := cw.addFileWatchIfPresent(path)
+		if err != nil {
+			log.Warn().Err(err).Str("path", path).Msg("Failed to watch config file")
+			continue
+		}
+		if ok {
+			watched++
+		}
 	}
 
-	if err != nil {
-		log.Warn().
-			Err(err).
-			Str("env_path", cw.envPath).
-			Dur("poll_interval", cw.pollInterval).
-			Msg("Falling back to polling for config changes")
+	if watched > 0 {
 		cw.wg.Add(1)
 		go func() {
 			defer cw.wg.Done()
-			cw.pollForChanges()
+			cw.watchForChanges()
 		}()
-		return nil
+		log.Info().
+			Str("env_path", cw.envPath).
+			Str("api_tokens_path", cw.apiTokensPath).
+			Dur("poll_interval", cw.pollInterval).
+			Msg("Started watching config files for changes")
+	} else {
+		log.Info().
+			Str("env_path", cw.envPath).
+			Str("api_tokens_path", cw.apiTokensPath).
+			Dur("poll_interval", cw.pollInterval).
+			Msg("Config files not present yet; polling for config changes")
 	}
 
 	cw.wg.Add(1)
 	go func() {
 		defer cw.wg.Done()
-		cw.watchForChanges()
+		cw.pollForChanges()
 	}()
-	log.Info().Str("env_path", cw.envPath).Str("api_tokens_path", cw.apiTokensPath).Msg("Started watching config files for changes")
 	return nil
+}
+
+func (cw *ConfigWatcher) addFileWatchIfPresent(path string) (bool, error) {
+	if cw == nil || cw.watcher == nil || strings.TrimSpace(path) == "" {
+		return false, nil
+	}
+	stat, err := watcherOsStat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if stat.IsDir() {
+		return false, nil
+	}
+	if err := cw.watcher.Add(path); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (cw *ConfigWatcher) rewatchFileIfPresent(path string) {
+	if cw == nil || cw.watcher == nil || strings.TrimSpace(path) == "" {
+		return
+	}
+	if _, err := watcherOsStat(path); err != nil {
+		return
+	}
+	_ = cw.watcher.Remove(path)
+	if err := cw.watcher.Add(path); err != nil {
+		log.Debug().Err(err).Str("path", path).Msg("Failed to re-arm config file watch")
+	}
 }
 
 // Stop stops the config watcher
@@ -211,13 +253,14 @@ func (cw *ConfigWatcher) handleEvents(events <-chan fsnotify.Event, errors <-cha
 			}
 
 			// Check if the event is for our .env file
-			if filepath.Base(event.Name) == ".env" || event.Name == cw.envPath {
+			if configWatcherEventMatchesPath(event, cw.envPath) {
 				// Debounce - wait a bit for write to complete
 				if !cw.waitForDuration(debounceEnvWrite) {
 					return
 				}
 
-				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
+				if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename|fsnotify.Remove) != 0 {
+					cw.rewatchFileIfPresent(cw.envPath)
 					// Check if content actually changed to prevent restart loops on touch
 					newHash, err := cw.calculateFileHash(cw.envPath)
 					if err == nil {
@@ -226,6 +269,9 @@ func (cw *ConfigWatcher) handleEvents(events <-chan fsnotify.Event, errors <-cha
 							continue
 						}
 						cw.lastEnvHash = newHash
+						if stat, statErr := watcherOsStat(cw.envPath); statErr == nil {
+							cw.lastModTime = stat.ModTime()
+						}
 					}
 
 					log.Info().Str("event", event.Op.String()).Msg("Detected .env file change")
@@ -233,14 +279,18 @@ func (cw *ConfigWatcher) handleEvents(events <-chan fsnotify.Event, errors <-cha
 				}
 			}
 
-			if cw.apiTokensPath != "" && (filepath.Base(event.Name) == filepath.Base(cw.apiTokensPath) || event.Name == cw.apiTokensPath) {
+			if configWatcherEventMatchesPath(event, cw.apiTokensPath) {
 				// Debounce - wait longer for atomic file operations to complete
 				// (write to .tmp, rename to final file)
 				if !cw.waitForDuration(debounceAPITokensWrite) {
 					return
 				}
 
-				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
+				if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename|fsnotify.Remove) != 0 {
+					cw.rewatchFileIfPresent(cw.apiTokensPath)
+					if stat, statErr := watcherOsStat(cw.apiTokensPath); statErr == nil {
+						cw.apiTokensLastModTime = stat.ModTime()
+					}
 					log.Info().Str("event", event.Op.String()).Msg("Detected API token file change")
 					cw.reloadAPITokens()
 				}
@@ -260,6 +310,13 @@ func (cw *ConfigWatcher) handleEvents(events <-chan fsnotify.Event, errors <-cha
 			return
 		}
 	}
+}
+
+func configWatcherEventMatchesPath(event fsnotify.Event, path string) bool {
+	if strings.TrimSpace(path) == "" {
+		return false
+	}
+	return event.Name == path || filepath.Base(event.Name) == filepath.Base(path)
 }
 
 // waitForDuration blocks for d unless shutdown is requested first.

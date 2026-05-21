@@ -251,7 +251,7 @@ func (e *PulseToolExecutor) executeGetMailQueues(_ context.Context, args map[str
 					Hold:             node.QueueStatus.Hold,
 					Incoming:         node.QueueStatus.Incoming,
 					Total:            node.QueueStatus.Total,
-					OldestAgeSeconds: 0, // Age not provided in unified resource
+					OldestAgeSeconds: node.QueueStatus.OldestAge,
 				})
 			}
 		}

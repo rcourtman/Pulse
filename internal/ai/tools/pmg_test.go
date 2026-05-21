@@ -391,4 +391,5 @@ func TestExecuteGetMailQueuesUsesFirstInstance(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
 	assert.Equal(t, "gateway-1", resp.Instance)
 	require.Len(t, resp.Queues, 1)
+	assert.Equal(t, int64(5), resp.Queues[0].OldestAgeSeconds)
 }

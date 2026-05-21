@@ -1328,6 +1328,8 @@ func resourceFromPMGInstance(instance models.PMGInstance) (Resource, ResourceIde
 		PMG: &PMGData{
 			InstanceID:       instance.ID,
 			Hostname:         extractHostname(instance.Host),
+			HostURL:          strings.TrimSpace(instance.Host),
+			GuestURL:         strings.TrimSpace(instance.GuestURL),
 			Version:          instance.Version,
 			NodeCount:        len(instance.Nodes),
 			UptimeSeconds:    uptime,
@@ -1360,11 +1362,13 @@ func resourceFromPMGInstance(instance models.PMGInstance) (Resource, ResourceIde
 			}
 			if n.QueueStatus != nil {
 				nodes[i].QueueStatus = &PMGQueueMeta{
-					Active:   n.QueueStatus.Active,
-					Deferred: n.QueueStatus.Deferred,
-					Hold:     n.QueueStatus.Hold,
-					Incoming: n.QueueStatus.Incoming,
-					Total:    n.QueueStatus.Total,
+					Active:    n.QueueStatus.Active,
+					Deferred:  n.QueueStatus.Deferred,
+					Hold:      n.QueueStatus.Hold,
+					Incoming:  n.QueueStatus.Incoming,
+					Total:     n.QueueStatus.Total,
+					OldestAge: n.QueueStatus.OldestAge,
+					UpdatedAt: n.QueueStatus.UpdatedAt,
 				}
 			}
 		}
@@ -1375,6 +1379,7 @@ func resourceFromPMGInstance(instance models.PMGInstance) (Resource, ResourceIde
 	if instance.MailStats != nil {
 		resource.PMG.MailStats = &PMGMailStatsMeta{
 			Timeframe:            instance.MailStats.Timeframe,
+			CountTotal:           instance.MailStats.CountTotal,
 			CountIn:              instance.MailStats.CountIn,
 			CountOut:             instance.MailStats.CountOut,
 			SpamIn:               instance.MailStats.SpamIn,
@@ -1386,9 +1391,16 @@ func resourceFromPMGInstance(instance models.PMGInstance) (Resource, ResourceIde
 			BytesIn:              instance.MailStats.BytesIn,
 			BytesOut:             instance.MailStats.BytesOut,
 			GreylistCount:        instance.MailStats.GreylistCount,
+			JunkIn:               instance.MailStats.JunkIn,
 			RBLRejects:           instance.MailStats.RBLRejects,
 			AverageProcessTimeMs: instance.MailStats.AverageProcessTimeMs,
+			PregreetRejects:      instance.MailStats.PregreetRejects,
+			UpdatedAt:            instance.MailStats.UpdatedAt,
 		}
+	}
+
+	if len(instance.MailCount) > 0 {
+		resource.PMG.MailCount = append([]models.PMGMailCountPoint(nil), instance.MailCount...)
 	}
 
 	// Populate quarantine

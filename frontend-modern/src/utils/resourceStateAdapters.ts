@@ -1224,7 +1224,7 @@ export const pmgInstanceFromResource = (resource: Resource): PMGInstance | null 
   const platform = resourcePlatformData(resource);
   const pmg = asRecord(platform?.pmg);
   const hostName = getPreferredResourceHostname(resource) || resource.id;
-  const host = resource.platformId || `https://${hostName}:8006`;
+  const host = asString(pmg?.hostUrl) || resource.platformId || `https://${hostName}:8006`;
   const lastSeen = toISOTime(undefined, resource.lastSeen);
   const mailStats =
     mapPMGMailStats(pmg?.mailStats) ||
@@ -1240,6 +1240,7 @@ export const pmgInstanceFromResource = (resource: Resource): PMGInstance | null 
     name: getPreferredInfrastructureDisplayName(resource),
     host,
     guestURL:
+      asString(pmg?.guestUrl) ||
       asString((resource as unknown as Record<string, unknown>).customURL) ||
       asString((resource as unknown as Record<string, unknown>).customUrl),
     status: resource.status || 'unknown',

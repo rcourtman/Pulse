@@ -59,6 +59,7 @@ type Correlation struct {
 // Detector tracks events and detects correlations between resources
 type Detector struct {
 	mu           sync.RWMutex
+	saveMu       sync.Mutex
 	events       []Event
 	correlations map[string]*Correlation // key: sourceID:targetID:pattern
 
@@ -454,6 +455,9 @@ func (d *Detector) saveToDisk() error {
 		return nil
 	}
 
+	d.saveMu.Lock()
+	defer d.saveMu.Unlock()
+
 	d.mu.RLock()
 	eventsSnapshot := make([]Event, len(d.events))
 	copy(eventsSnapshot, d.events)
@@ -482,12 +486,37 @@ func (d *Detector) saveToDisk() error {
 	}
 
 	path := filepath.Join(d.dataDir, "ai_correlations.json")
-	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, jsonData, 0600); err != nil {
+	tmpFile, err := os.CreateTemp(d.dataDir, "ai_correlations-*.json.tmp")
+	if err != nil {
 		return err
 	}
+	tmpPath := tmpFile.Name()
+	cleanupTemp := true
+	defer func() {
+		if !cleanupTemp {
+			return
+		}
+		if err := os.Remove(tmpPath); err != nil && !os.IsNotExist(err) {
+			log.Warn().Err(err).Str("file", tmpPath).Msg("failed to remove temp correlation data file")
+		}
+	}()
 
-	return os.Rename(tmpPath, path)
+	if _, err := tmpFile.Write(jsonData); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+	if err := tmpFile.Chmod(0600); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	cleanupTemp = false
+	return os.Chmod(path, 0600)
 }
 
 // loadFromDisk loads data

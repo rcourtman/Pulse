@@ -901,29 +901,35 @@ type PMGNodeMeta struct {
 
 // PMGQueueMeta describes a PMG node's postfix queue status.
 type PMGQueueMeta struct {
-	Active   int `json:"active"`
-	Deferred int `json:"deferred"`
-	Hold     int `json:"hold"`
-	Incoming int `json:"incoming"`
-	Total    int `json:"total"`
+	Active    int       `json:"active"`
+	Deferred  int       `json:"deferred"`
+	Hold      int       `json:"hold"`
+	Incoming  int       `json:"incoming"`
+	Total     int       `json:"total"`
+	OldestAge int64     `json:"oldestAge,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt,omitempty"`
 }
 
 // PMGMailStatsMeta describes PMG mail statistics.
 type PMGMailStatsMeta struct {
-	Timeframe            string  `json:"timeframe"`
-	CountIn              float64 `json:"countIn"`
-	CountOut             float64 `json:"countOut"`
-	SpamIn               float64 `json:"spamIn"`
-	SpamOut              float64 `json:"spamOut"`
-	VirusIn              float64 `json:"virusIn"`
-	VirusOut             float64 `json:"virusOut"`
-	BouncesIn            float64 `json:"bouncesIn"`
-	BouncesOut           float64 `json:"bouncesOut"`
-	BytesIn              float64 `json:"bytesIn"`
-	BytesOut             float64 `json:"bytesOut"`
-	GreylistCount        float64 `json:"greylistCount"`
-	RBLRejects           float64 `json:"rblRejects"`
-	AverageProcessTimeMs float64 `json:"averageProcessTimeMs"`
+	Timeframe            string    `json:"timeframe"`
+	CountTotal           float64   `json:"countTotal"`
+	CountIn              float64   `json:"countIn"`
+	CountOut             float64   `json:"countOut"`
+	SpamIn               float64   `json:"spamIn"`
+	SpamOut              float64   `json:"spamOut"`
+	VirusIn              float64   `json:"virusIn"`
+	VirusOut             float64   `json:"virusOut"`
+	BouncesIn            float64   `json:"bouncesIn"`
+	BouncesOut           float64   `json:"bouncesOut"`
+	BytesIn              float64   `json:"bytesIn"`
+	BytesOut             float64   `json:"bytesOut"`
+	GreylistCount        float64   `json:"greylistCount"`
+	JunkIn               float64   `json:"junkIn"`
+	RBLRejects           float64   `json:"rblRejects"`
+	AverageProcessTimeMs float64   `json:"averageProcessTimeMs"`
+	PregreetRejects      float64   `json:"pregreetRejects"`
+	UpdatedAt            time.Time `json:"updatedAt,omitempty"`
 }
 
 // PMGQuarantineMeta describes PMG quarantine totals.
@@ -960,6 +966,8 @@ type PMGDomainStatMeta struct {
 type PMGData struct {
 	InstanceID       string    `json:"instanceId,omitempty"`
 	Hostname         string    `json:"hostname,omitempty"`
+	HostURL          string    `json:"hostUrl,omitempty"`
+	GuestURL         string    `json:"guestUrl,omitempty"`
 	Version          string    `json:"version,omitempty"`
 	NodeCount        int       `json:"nodeCount,omitempty"`
 	UptimeSeconds    int64     `json:"uptimeSeconds,omitempty"`
@@ -974,13 +982,14 @@ type PMGData struct {
 	ConnectionHealth string    `json:"connectionHealth,omitempty"`
 	LastUpdated      time.Time `json:"lastUpdated,omitempty"`
 
-	Nodes            []PMGNodeMeta        `json:"nodes,omitempty"`
-	MailStats        *PMGMailStatsMeta    `json:"mailStats,omitempty"`
-	Quarantine       *PMGQuarantineMeta   `json:"quarantine,omitempty"`
-	SpamDistribution []PMGSpamBucketMeta  `json:"spamDistribution,omitempty"`
-	RelayDomains     []PMGRelayDomainMeta `json:"relayDomains,omitempty"`
-	DomainStats      []PMGDomainStatMeta  `json:"domainStats,omitempty"`
-	DomainStatsAsOf  time.Time            `json:"domainStatsAsOf,omitempty"`
+	Nodes            []PMGNodeMeta              `json:"nodes,omitempty"`
+	MailStats        *PMGMailStatsMeta          `json:"mailStats,omitempty"`
+	MailCount        []models.PMGMailCountPoint `json:"mailCount,omitempty"`
+	Quarantine       *PMGQuarantineMeta         `json:"quarantine,omitempty"`
+	SpamDistribution []PMGSpamBucketMeta        `json:"spamDistribution,omitempty"`
+	RelayDomains     []PMGRelayDomainMeta       `json:"relayDomains,omitempty"`
+	DomainStats      []PMGDomainStatMeta        `json:"domainStats,omitempty"`
+	DomainStatsAsOf  time.Time                  `json:"domainStatsAsOf,omitempty"`
 }
 
 // VMwareData contains VMware vSphere metadata for canonical agent, vm, and

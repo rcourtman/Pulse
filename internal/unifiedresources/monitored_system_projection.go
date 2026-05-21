@@ -792,6 +792,7 @@ func monitoredSystemCandidateResource(candidate MonitoredSystemCandidate) *Resou
 		resource.PMG = &PMGData{
 			InstanceID: strings.TrimSpace(candidate.ResourceID),
 			Hostname:   host,
+			HostURL:    strings.TrimSpace(candidate.HostURL),
 		}
 	case SourceK8s:
 		clusterName := firstTrimmed(candidate.Name, host, candidate.ResourceID)

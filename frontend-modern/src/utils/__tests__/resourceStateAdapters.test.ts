@@ -192,6 +192,22 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expect(instance?.host).toBe('https://pmg-service.local:8006');
   });
 
+  it('uses PMG host and guest URLs from canonical platform data when available', () => {
+    const instance = pmgInstanceFromResource(
+      createServiceResource('pmg', {
+        pmg: {
+          hostname: 'pmg-service.local',
+          hostUrl: 'https://pmg-service.local:8443',
+          guestUrl: 'https://mail.example.com',
+          instanceId: 'pmg-instance-1',
+        },
+      }),
+    );
+
+    expect(instance?.host).toBe('https://pmg-service.local:8443');
+    expect(instance?.guestURL).toBe('https://mail.example.com');
+  });
+
   it('keeps PMG operator labels on local identity when governed summaries exist', () => {
     const instance = pmgInstanceFromResource(
       createServiceResource(

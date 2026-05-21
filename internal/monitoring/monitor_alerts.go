@@ -292,16 +292,16 @@ func (m *Monitor) broadcastStateUpdate() {
 func (m *Monitor) checkMockAlerts() {
 	defer recoverFromPanic("checkMockAlerts")
 
-	log.Info().Bool("mockEnabled", mock.IsMockEnabled()).Msg("checkMockAlerts called")
+	log.Debug().Bool("mockEnabled", mock.IsMockEnabled()).Msg("checkMockAlerts called")
 	if !mock.IsMockEnabled() {
-		log.Info().Msg("mock mode not enabled, skipping mock alert check")
+		log.Debug().Msg("mock mode not enabled, skipping mock alert check")
 		return
 	}
 
 	// Get mock state
 	state := mock.CurrentFixtureGraph().State
 
-	log.Info().
+	log.Debug().
 		Int("vms", len(state.VMs)).
 		Int("containers", len(state.Containers)).
 		Int("nodes", len(state.Nodes)).
@@ -322,7 +322,7 @@ func (m *Monitor) checkMockAlerts() {
 			existingNodes[pbsInst.Host] = true
 		}
 	}
-	log.Info().
+	log.Debug().
 		Int("trackedNodes", len(existingNodes)).
 		Msg("Collecting resources for alert cleanup in mock mode")
 	m.alertManager.CleanupAlertsForNodes(existingNodes)
@@ -367,7 +367,7 @@ func (m *Monitor) checkMockAlerts() {
 	}
 
 	// Check alerts for storage
-	log.Info().Int("storageCount", len(state.Storage)).Msg("checking storage alerts")
+	log.Debug().Int("storageCount", len(state.Storage)).Msg("checking storage alerts")
 	for _, storage := range state.Storage {
 		log.Debug().
 			Str("name", storage.Name).
@@ -377,13 +377,13 @@ func (m *Monitor) checkMockAlerts() {
 	}
 
 	// Check alerts for PBS instances
-	log.Info().Int("pbsCount", len(state.PBSInstances)).Msg("checking PBS alerts")
+	log.Debug().Int("pbsCount", len(state.PBSInstances)).Msg("checking PBS alerts")
 	for _, pbsInst := range state.PBSInstances {
 		m.alertManager.CheckPBS(pbsInst)
 	}
 
 	// Check alerts for PMG instances
-	log.Info().Int("pmgCount", len(state.PMGInstances)).Msg("checking PMG alerts")
+	log.Debug().Int("pmgCount", len(state.PMGInstances)).Msg("checking PMG alerts")
 	for _, pmgInst := range state.PMGInstances {
 		m.alertManager.CheckPMG(pmgInst)
 	}

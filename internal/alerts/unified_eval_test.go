@@ -7,6 +7,7 @@ import (
 
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func unifiedEvalBaseConfig() AlertConfig {
@@ -806,6 +807,9 @@ func TestCheckPMGOldestMessageAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	}
 	if got := alert.Metadata["canonicalSpecID"]; got != "pmg-1-oldest-message" {
 		t.Fatalf("canonicalSpecID = %v, want pmg-1-oldest-message", got)
+	}
+	if got := alert.Metadata["resourceType"]; got != string(unifiedresources.ResourceTypePMG) {
+		t.Fatalf("resourceType = %v, want pmg", got)
 	}
 }
 

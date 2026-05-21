@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -152,6 +153,51 @@ func TestDetector_SaveLoadAndLargeFile(t *testing.T) {
 	}
 	if err := loaded.loadFromDisk(); err == nil {
 		t.Fatalf("expected error for large file")
+	}
+}
+
+func TestDetector_SaveToDiskSerializesConcurrentWrites(t *testing.T) {
+	dir := t.TempDir()
+	d := NewDetector(Config{
+		DataDir:         dir,
+		MinOccurrences:  1,
+		RetentionWindow: time.Hour,
+	})
+
+	for i := 0; i < 25; i++ {
+		d.events = append(d.events, Event{
+			ID:         intToStr(i),
+			ResourceID: "resource-" + intToStr(i),
+			EventType:  EventAlert,
+			Timestamp:  time.Now(),
+		})
+	}
+
+	start := make(chan struct{})
+	errs := make(chan error, 25)
+	var wg sync.WaitGroup
+	for i := 0; i < 25; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			errs <- d.saveToDisk()
+		}()
+	}
+
+	close(start)
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent save failed: %v", err)
+		}
+	}
+
+	loaded := NewDetector(Config{DataDir: dir, MinOccurrences: 1})
+	if len(loaded.events) != len(d.events) {
+		t.Fatalf("loaded events = %d, want %d", len(loaded.events), len(d.events))
 	}
 }
 

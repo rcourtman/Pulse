@@ -5,6 +5,7 @@ import (
 	"time"
 
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -220,7 +221,61 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 	}
 }
 
-// CleanupAlertsForNodes removes alerts for nodes that no longer exist.
+func alertMetadataResourceType(alert *Alert) string {
+	if alert == nil || alert.Metadata == nil {
+		return ""
+	}
+	if value, ok := alert.Metadata["resourceType"].(string); ok {
+		return strings.ToLower(strings.TrimSpace(value))
+	}
+	return ""
+}
+
+func shouldPreserveAlertOutsideNodeCleanup(alertID string, alert *Alert) bool {
+	if alert == nil {
+		return true
+	}
+	if strings.HasPrefix(alertID, "docker-") || strings.HasPrefix(alert.ResourceID, "docker:") {
+		return true
+	}
+	if strings.HasPrefix(alertID, "pbs-") || alert.Type == "pbs-offline" {
+		return true
+	}
+	if strings.HasPrefix(alert.ResourceID, "agent:") {
+		return true
+	}
+	if alert.CanonicalKind == string(alertspecs.AlertSpecKindProviderIncident) {
+		return true
+	}
+
+	switch alertMetadataResourceType(alert) {
+	case string(unifiedresources.ResourceTypeAgent),
+		string(unifiedresources.ResourceTypeAppContainer),
+		string(unifiedresources.ResourceTypeDockerService),
+		string(unifiedresources.ResourceTypeK8sCluster),
+		string(unifiedresources.ResourceTypeK8sNode),
+		string(unifiedresources.ResourceTypePod),
+		string(unifiedresources.ResourceTypeK8sDeployment),
+		string(unifiedresources.ResourceTypeStorage),
+		string(unifiedresources.ResourceTypePBS),
+		string(unifiedresources.ResourceTypePMG),
+		string(unifiedresources.ResourceTypeCeph),
+		string(unifiedresources.ResourceTypePhysicalDisk),
+		string(unifiedresources.ResourceTypeNetworkShare),
+		string(unifiedresources.ResourceTypeNetworkEndpoint),
+		"docker",
+		"host",
+		"kubernetes",
+		"k8s",
+		"truenas",
+		"vmware":
+		return true
+	default:
+		return false
+	}
+}
+
+// CleanupAlertsForNodes removes stale Proxmox node-scoped alerts.
 func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -238,33 +293,10 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 			continue
 		}
 
-		if strings.HasPrefix(alertID, "docker-") || strings.HasPrefix(alert.ResourceID, "docker:") {
-			continue
-		}
-		if strings.HasPrefix(alertID, "pbs-") || alert.Type == "pbs-offline" {
-			continue
-		}
-		if alert.Metadata != nil {
-			if resourceType, _ := alert.Metadata["resourceType"].(string); resourceType == "pbs" {
-				continue
-			}
-		}
 		if alert.CanonicalKind == string(alertspecs.AlertSpecKindConnectivity) && strings.HasPrefix(alert.ResourceID, "pbs") {
 			continue
 		}
-		// Agent-sourced resources (Unraid, standalone Linux hosts, TrueNAS,
-		// any platform reached via Pulse Agent) do not appear in the
-		// existingNodes map — that map is built only from Proxmox nodes
-		// and PBS instances. Without this carve-out, every cleanup cycle
-		// removes the agent alert because alert.Node is empty or unmapped,
-		// then the next poll re-creates the alert as "new", calls
-		// AddAlert, and appends a fresh history row. Result observed in
-		// the wild: 3,980 history entries in 7 days for what were really
-		// a small number of persistent issues (e.g. an Unraid array
-		// running without parity protection generating one entry per
-		// 30-second poll). Agent resource IDs are namespaced as
-		// "agent:<id>...", so this carve-out matches that pattern.
-		if strings.HasPrefix(alert.ResourceID, "agent:") {
+		if shouldPreserveAlertOutsideNodeCleanup(alertID, alert) {
 			continue
 		}
 
@@ -289,7 +321,7 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 			}
 		}()
 	} else {
-		log.Info().Msg("no alerts needed cleanup")
+		log.Debug().Msg("no alerts needed cleanup")
 	}
 }
 

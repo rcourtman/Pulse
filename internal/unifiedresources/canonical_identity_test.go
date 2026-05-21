@@ -103,6 +103,33 @@ func TestRefreshCanonicalIdentityFallsBackWithoutTargets(t *testing.T) {
 	}
 }
 
+func TestRefreshCanonicalIdentityUsesPMGInstanceIdentity(t *testing.T) {
+	resource := Resource{
+		ID:   "pmg-resource-1",
+		Type: ResourceTypePMG,
+		Name: "",
+		PMG: &PMGData{
+			InstanceID: "pmg-main",
+			Hostname:   "mail.example",
+		},
+	}
+
+	RefreshCanonicalIdentity(&resource)
+
+	if resource.Canonical == nil {
+		t.Fatalf("expected canonical identity")
+	}
+	if got := resource.Canonical.DisplayName; got != "mail.example" {
+		t.Fatalf("displayName = %q, want mail.example", got)
+	}
+	if got := resource.Canonical.Hostname; got != "mail.example" {
+		t.Fatalf("hostname = %q, want mail.example", got)
+	}
+	if got := resource.Canonical.PrimaryID; got != "pmg:pmg-main" {
+		t.Fatalf("primaryId = %q, want pmg:pmg-main", got)
+	}
+}
+
 func TestRefreshCanonicalIdentityUsesAvailabilityTargetIdentity(t *testing.T) {
 	resource := Resource{
 		ID:   "availability:energy-meter",

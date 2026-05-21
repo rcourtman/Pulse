@@ -562,9 +562,11 @@ func (s *Service) initDiscoveryServiceLocked() {
 	// Create the discovery service with config-driven settings
 	discoveryCfg := servicediscovery.DefaultConfig()
 	commandScanningEnabled := false
+	backgroundScanningEnabled := false
 	if s.cfg != nil {
 		discoveryCfg.Interval = s.cfg.GetDiscoveryInterval()
 		commandScanningEnabled = s.cfg.Enabled && s.cfg.IsDiscoveryEnabled() && s.provider != nil
+		backgroundScanningEnabled = commandScanningEnabled && !BackgroundAutomationDisabledForDev()
 		discoveryCfg.CommandScanning = commandScanningEnabled
 	}
 
@@ -577,11 +579,15 @@ func (s *Service) initDiscoveryServiceLocked() {
 	s.discoveryService.SetReadState(s.readState)
 
 	// Start background discovery if enabled and interval is set
-	if commandScanningEnabled && s.cfg.GetDiscoveryInterval() > 0 {
+	if backgroundScanningEnabled && s.cfg.GetDiscoveryInterval() > 0 {
 		s.discoveryService.Start(context.Background())
 		log.Info().
 			Dur("interval", s.cfg.GetDiscoveryInterval()).
 			Msg("AI-powered deep discovery service started with automatic scanning")
+	} else if commandScanningEnabled && BackgroundAutomationDisabledForDev() {
+		log.Info().
+			Str("env", DevDisableBackgroundAIEnv).
+			Msg("AI-powered deep discovery service initialized; automatic scanning disabled for dev")
 	} else if commandScanningEnabled {
 		log.Info().Msg("AI-powered deep discovery service initialized (manual command scanning mode)")
 	} else {
@@ -849,9 +855,10 @@ func (s *Service) updateInfraDiscoverySettings(cfg *config.AIConfig) {
 	}
 
 	enabled := s.IsEnabled() && cfg.IsDiscoveryEnabled()
+	backgroundEnabled := enabled && !BackgroundAutomationDisabledForDev()
 	interval := cfg.GetDiscoveryInterval()
 
-	if enabled && interval > 0 {
+	if backgroundEnabled && interval > 0 {
 		s.infraDiscoveryService.SetInterval(interval)
 		s.infraDiscoveryService.Start(context.Background())
 		log.Info().
@@ -874,10 +881,11 @@ func (s *Service) updateDiscoverySettings(cfg *config.AIConfig) {
 	}
 
 	enabled := s.IsEnabled() && cfg.IsDiscoveryEnabled()
+	backgroundEnabled := enabled && !BackgroundAutomationDisabledForDev()
 	interval := cfg.GetDiscoveryInterval()
 	s.discoveryService.SetCommandScanningEnabled(enabled)
 
-	if enabled && interval > 0 {
+	if backgroundEnabled && interval > 0 {
 		// Update interval and ensure service is running
 		s.discoveryService.SetInterval(interval)
 		s.discoveryService.Start(context.Background())
@@ -1021,6 +1029,28 @@ const (
 	FeatureAIAutoFix = pkglicensing.FeatureAIAutoFix
 )
 
+const DevDisableBackgroundAIEnv = "PULSE_DEV_DISABLE_BACKGROUND_AI"
+
+// BackgroundAutomationDisabledForDev returns true when the local development
+// runtime should avoid automatic AI work that can burn provider quota while a
+// developer is only trying to run the app.
+func BackgroundAutomationDisabledForDev() bool {
+	if os.Getenv("PULSE_DEV") != "true" && !strings.EqualFold(os.Getenv("NODE_ENV"), "development") {
+		return false
+	}
+
+	value := strings.TrimSpace(os.Getenv(DevDisableBackgroundAIEnv))
+	if value == "" {
+		return false
+	}
+
+	disabled, err := strconv.ParseBool(value)
+	if err != nil {
+		return false
+	}
+	return disabled
+}
+
 // StartPatrol starts the background patrol service
 func (s *Service) StartPatrol(ctx context.Context) {
 	s.mu.RLock()
@@ -1049,6 +1079,21 @@ func (s *Service) StartPatrol(ctx context.Context) {
 	patrolCfg := s.patrolConfigFromAIConfig(cfg)
 	patrol.SetConfig(patrolCfg)
 	patrol.SetProactiveMode(cfg.UseProactiveThresholds)
+
+	if BackgroundAutomationDisabledForDev() {
+		patrol.SetEventTriggerConfig(PatrolEventTriggerConfig{
+			AlertTriggersEnabled:   false,
+			AnomalyTriggersEnabled: false,
+		})
+		if alertAnalyzer != nil {
+			alertAnalyzer.SetEnabled(false)
+		}
+		log.Info().
+			Str("env", DevDisableBackgroundAIEnv).
+			Msg("Pulse dev background AI disabled; Patrol scheduler and alert-triggered AI are not started")
+		return
+	}
+
 	patrol.SetEventTriggerConfig(PatrolEventTriggerConfig{
 		AlertTriggersEnabled:   cfg.IsPatrolAlertTriggersEnabled(),
 		AnomalyTriggersEnabled: cfg.IsPatrolAnomalyTriggersEnabled(),
@@ -1149,6 +1194,21 @@ func (s *Service) ReconfigurePatrol() {
 
 	// Update proactive threshold mode
 	patrol.SetProactiveMode(cfg.UseProactiveThresholds)
+
+	if BackgroundAutomationDisabledForDev() {
+		patrol.SetEventTriggerConfig(PatrolEventTriggerConfig{
+			AlertTriggersEnabled:   false,
+			AnomalyTriggersEnabled: false,
+		})
+		patrol.Stop()
+		if alertAnalyzer != nil {
+			alertAnalyzer.SetEnabled(false)
+		}
+		log.Info().
+			Str("env", DevDisableBackgroundAIEnv).
+			Msg("Pulse dev background AI disabled; Patrol background automation stopped")
+		return
+	}
 
 	// Update event-driven patrol trigger gate
 	patrol.SetEventTriggerConfig(PatrolEventTriggerConfig{

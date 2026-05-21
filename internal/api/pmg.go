@@ -8,6 +8,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
@@ -42,8 +43,15 @@ func (r *Router) handleListPMGInstances(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	state := monitor.GetState()
-	instances := filterPMGInstances(state.PMGInstances, req)
+	readState := monitor.GetUnifiedReadStateOrSnapshot()
+	views := readState.PMGInstances()
+
+	mappedInstances := make([]models.PMGInstance, len(views))
+	for i, v := range views {
+		mappedInstances[i] = mapPMGInstanceViewToModel(v)
+	}
+
+	instances := filterPMGInstances(mappedInstances, req)
 
 	response := PMGInstancesResponse{
 		Data: instances,
@@ -55,6 +63,143 @@ func (r *Router) handleListPMGInstances(w http.ResponseWriter, req *http.Request
 		writeErrorResponse(w, http.StatusInternalServerError, "encoding_error",
 			"Failed to encode PMG instances", nil)
 	}
+}
+
+// mapPMGInstanceViewToModel projects the canonical PMG read-state view onto
+// the legacy API payload consumed by existing PMG surfaces.
+func mapPMGInstanceViewToModel(v *unifiedresources.PMGInstanceView) models.PMGInstance {
+	if v == nil {
+		return models.PMGInstance{}
+	}
+
+	nodes := v.Nodes()
+	modelNodes := make([]models.PMGNodeStatus, len(nodes))
+	for i, n := range nodes {
+		modelNodes[i] = models.PMGNodeStatus{
+			Name:    n.Name,
+			Status:  n.Status,
+			Role:    n.Role,
+			Uptime:  n.Uptime,
+			LoadAvg: n.LoadAvg,
+		}
+		if n.QueueStatus != nil {
+			modelNodes[i].QueueStatus = &models.PMGQueueStatus{
+				Active:    n.QueueStatus.Active,
+				Deferred:  n.QueueStatus.Deferred,
+				Hold:      n.QueueStatus.Hold,
+				Incoming:  n.QueueStatus.Incoming,
+				Total:     n.QueueStatus.Total,
+				OldestAge: n.QueueStatus.OldestAge,
+				UpdatedAt: n.QueueStatus.UpdatedAt,
+			}
+		}
+	}
+
+	var modelMailStats *models.PMGMailStats
+	if stats := v.MailStats(); stats != nil {
+		countTotal := stats.CountTotal
+		if countTotal == 0 {
+			countTotal = v.MailCountTotal()
+		}
+		updatedAt := stats.UpdatedAt
+		if updatedAt.IsZero() {
+			updatedAt = v.LastUpdated()
+		}
+		modelMailStats = &models.PMGMailStats{
+			Timeframe:            stats.Timeframe,
+			CountTotal:           countTotal,
+			CountIn:              stats.CountIn,
+			CountOut:             stats.CountOut,
+			SpamIn:               stats.SpamIn,
+			SpamOut:              stats.SpamOut,
+			VirusIn:              stats.VirusIn,
+			VirusOut:             stats.VirusOut,
+			BouncesIn:            stats.BouncesIn,
+			BouncesOut:           stats.BouncesOut,
+			BytesIn:              stats.BytesIn,
+			BytesOut:             stats.BytesOut,
+			GreylistCount:        stats.GreylistCount,
+			JunkIn:               stats.JunkIn,
+			AverageProcessTimeMs: stats.AverageProcessTimeMs,
+			RBLRejects:           stats.RBLRejects,
+			PregreetRejects:      stats.PregreetRejects,
+			UpdatedAt:            updatedAt,
+		}
+	}
+
+	var modelQuarantine *models.PMGQuarantineTotals
+	if q := v.Quarantine(); q != nil {
+		modelQuarantine = &models.PMGQuarantineTotals{
+			Spam:        q.Spam,
+			Virus:       q.Virus,
+			Attachment:  q.Attachment,
+			Blacklisted: q.Blacklisted,
+		}
+	}
+
+	spamDist := v.SpamDistribution()
+	modelSpamDist := make([]models.PMGSpamBucket, len(spamDist))
+	for i, b := range spamDist {
+		modelSpamDist[i] = models.PMGSpamBucket{
+			Score: b.Bucket,
+			Count: b.Count,
+		}
+	}
+
+	relayDomains := v.RelayDomains()
+	modelRelayDomains := make([]models.PMGRelayDomain, len(relayDomains))
+	for i, d := range relayDomains {
+		modelRelayDomains[i] = models.PMGRelayDomain{
+			Domain:  d.Domain,
+			Comment: d.Comment,
+		}
+	}
+
+	domainStats := v.DomainStats()
+	modelDomainStats := make([]models.PMGDomainStat, len(domainStats))
+	for i, s := range domainStats {
+		modelDomainStats[i] = models.PMGDomainStat{
+			Domain:     s.Domain,
+			MailCount:  s.MailCount,
+			SpamCount:  s.SpamCount,
+			VirusCount: s.VirusCount,
+			Bytes:      s.Bytes,
+		}
+	}
+
+	host := v.HostURL()
+	if strings.TrimSpace(host) == "" {
+		host = v.Hostname()
+	}
+	guestURL := v.GuestURL()
+	if strings.TrimSpace(guestURL) == "" {
+		guestURL = v.CustomURL()
+	}
+	instanceID := v.InstanceID()
+	if strings.TrimSpace(instanceID) == "" {
+		instanceID = v.ID()
+	}
+
+	inst := models.PMGInstance{
+		ID:               instanceID,
+		Name:             v.Name(),
+		Host:             host,
+		GuestURL:         guestURL,
+		Status:           string(v.Status()),
+		Version:          v.Version(),
+		Nodes:            modelNodes,
+		MailStats:        modelMailStats,
+		MailCount:        v.MailCount(),
+		SpamDistribution: modelSpamDist,
+		Quarantine:       modelQuarantine,
+		RelayDomains:     modelRelayDomains,
+		DomainStats:      modelDomainStats,
+		DomainStatsAsOf:  v.DomainStatsAsOf(),
+		ConnectionHealth: v.ConnectionHealth(),
+		LastSeen:         v.LastSeen(),
+		LastUpdated:      v.LastUpdated(),
+	}
+	return inst.NormalizeCollections()
 }
 
 // filterPMGInstances narrows the snapshot by optional `id=` or

@@ -2629,7 +2629,21 @@ func (v PMGInstanceView) Hostname() string {
 	if v.r == nil || v.r.PMG == nil {
 		return ""
 	}
-	return v.r.PMG.Hostname
+	return strings.TrimSpace(v.r.PMG.Hostname)
+}
+
+func (v PMGInstanceView) HostURL() string {
+	if v.r == nil || v.r.PMG == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.PMG.HostURL)
+}
+
+func (v PMGInstanceView) GuestURL() string {
+	if v.r == nil || v.r.PMG == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.PMG.GuestURL)
 }
 
 func (v PMGInstanceView) Version() string {
@@ -2672,6 +2686,13 @@ func (v PMGInstanceView) QueueHold() int {
 		return 0
 	}
 	return v.r.PMG.QueueHold
+}
+
+func (v PMGInstanceView) QueueIncoming() int {
+	if v.r == nil || v.r.PMG == nil {
+		return 0
+	}
+	return v.r.PMG.QueueIncoming
 }
 
 func (v PMGInstanceView) QueueTotal() int {
@@ -2765,6 +2786,13 @@ func (v PMGInstanceView) MailStats() *PMGMailStatsMeta {
 	return clonePMGMailStatsMeta(v.r.PMG.MailStats)
 }
 
+func (v PMGInstanceView) MailCount() []models.PMGMailCountPoint {
+	if v.r == nil || v.r.PMG == nil {
+		return nil
+	}
+	return append([]models.PMGMailCountPoint(nil), v.r.PMG.MailCount...)
+}
+
 func (v PMGInstanceView) Quarantine() *PMGQuarantineMeta {
 	if v.r == nil || v.r.PMG == nil {
 		return nil
@@ -2777,6 +2805,34 @@ func (v PMGInstanceView) SpamDistribution() []PMGSpamBucketMeta {
 		return nil
 	}
 	return clonePMGSpamBucketMetaSlice(v.r.PMG.SpamDistribution)
+}
+
+func (v PMGInstanceView) LastUpdated() time.Time {
+	if v.r == nil || v.r.PMG == nil {
+		return time.Time{}
+	}
+	return v.r.PMG.LastUpdated
+}
+
+func (v PMGInstanceView) RelayDomains() []PMGRelayDomainMeta {
+	if v.r == nil || v.r.PMG == nil {
+		return nil
+	}
+	return clonePMGRelayDomainMetaSlice(v.r.PMG.RelayDomains)
+}
+
+func (v PMGInstanceView) DomainStats() []PMGDomainStatMeta {
+	if v.r == nil || v.r.PMG == nil {
+		return nil
+	}
+	return clonePMGDomainStatMetaSlice(v.r.PMG.DomainStats)
+}
+
+func (v PMGInstanceView) DomainStatsAsOf() time.Time {
+	if v.r == nil || v.r.PMG == nil {
+		return time.Time{}
+	}
+	return v.r.PMG.DomainStatsAsOf
 }
 
 // K8sClusterView wraps a Kubernetes cluster resource.

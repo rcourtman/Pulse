@@ -34,6 +34,36 @@ func (m *mockAlertAnalyzer) IsEnabled() bool                       { return m.en
 func (m *mockAlertAnalyzer) Start()                                {}
 func (m *mockAlertAnalyzer) Stop()                                 {}
 
+func TestBackgroundAutomationDisabledForDev(t *testing.T) {
+	t.Run("disabled in Pulse dev", func(t *testing.T) {
+		t.Setenv("PULSE_DEV", "true")
+		t.Setenv(DevDisableBackgroundAIEnv, "true")
+
+		if !BackgroundAutomationDisabledForDev() {
+			t.Fatal("expected dev background AI automation to be disabled")
+		}
+	})
+
+	t.Run("explicit false allows dev automation", func(t *testing.T) {
+		t.Setenv("PULSE_DEV", "true")
+		t.Setenv(DevDisableBackgroundAIEnv, "false")
+
+		if BackgroundAutomationDisabledForDev() {
+			t.Fatal("expected explicit false to allow dev background AI automation")
+		}
+	})
+
+	t.Run("ignored outside dev", func(t *testing.T) {
+		t.Setenv("PULSE_DEV", "")
+		t.Setenv("NODE_ENV", "production")
+		t.Setenv(DevDisableBackgroundAIEnv, "true")
+
+		if BackgroundAutomationDisabledForDev() {
+			t.Fatal("expected background AI automation guard to be dev-only")
+		}
+	})
+}
+
 func TestNewService(t *testing.T) {
 	svc := NewService(nil, nil)
 

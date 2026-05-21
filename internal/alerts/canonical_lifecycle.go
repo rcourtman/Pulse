@@ -386,6 +386,9 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 		if alert.Metadata == nil {
 			alert.Metadata = make(map[string]interface{}, 2)
 		}
+		if _, ok := alert.Metadata["resourceType"]; !ok && params.Spec.ResourceType != "" {
+			alert.Metadata["resourceType"] = string(params.Spec.ResourceType)
+		}
 		applyCanonicalIdentity(alert, params.Spec.ID, string(params.Spec.Kind))
 
 		m.preserveAlertState(storageKey, alert)
@@ -507,6 +510,9 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		}
 		if alert.Metadata == nil {
 			alert.Metadata = make(map[string]interface{}, 2)
+		}
+		if _, ok := alert.Metadata["resourceType"]; !ok && params.Spec.ResourceType != "" {
+			alert.Metadata["resourceType"] = string(params.Spec.ResourceType)
 		}
 		applyCanonicalIdentity(alert, params.Spec.ID, string(params.Spec.Kind))
 

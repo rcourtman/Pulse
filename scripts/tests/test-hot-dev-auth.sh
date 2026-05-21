@@ -104,6 +104,30 @@ EOF
   assert_contains "sync preserves mock settings" "${output}" "PULSE_MOCK_MODE=false"
 }
 
+test_sync_auth_env_file_removes_stale_temp_files() {
+  local state_dir runtime_env output
+  state_dir="$(make_temp_dir)"
+  runtime_env="${state_dir}/.env"
+
+  touch "${runtime_env}.tmp.111" "${runtime_env}.audit.222"
+
+  output="$(
+    HOT_DEV_AUTH_LIB="${HOT_DEV_AUTH_LIB}" \
+    RUNTIME_ENV_PATH="${runtime_env}" \
+    bash -lc '
+      source "${HOT_DEV_AUTH_LIB}"
+      hot_dev_sync_auth_env_file "${RUNTIME_ENV_PATH}" "admin" "${HOT_DEV_DEFAULT_AUTH_HASH}"
+      if compgen -G "${RUNTIME_ENV_PATH}.tmp.*" >/dev/null || compgen -G "${RUNTIME_ENV_PATH}.audit.*" >/dev/null; then
+        printf "stale_temp_remaining=yes\n"
+      else
+        printf "stale_temp_remaining=no\n"
+      fi
+    '
+  )"
+
+  assert_contains "sync removes stale managed temp files" "${output}" "stale_temp_remaining=no"
+}
+
 test_sync_auth_env_file_handles_managed_only_env_under_errexit() {
   local state_dir runtime_env output
   state_dir="$(make_temp_dir)"
@@ -175,6 +199,7 @@ source "${HOT_DEV_AUTH_LIB}"
 test_default_auth_contract
 test_custom_auth_banner_contract
 test_sync_auth_env_file_preserves_non_auth_settings
+test_sync_auth_env_file_removes_stale_temp_files
 test_sync_auth_env_file_handles_managed_only_env_under_errexit
 test_sync_audit_signing_env_file_restores_missing_key
 

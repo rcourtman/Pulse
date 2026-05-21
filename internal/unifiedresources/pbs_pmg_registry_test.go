@@ -55,18 +55,23 @@ func TestIngestSnapshotIncludesPBSAndPMGInstances(t *testing.T) {
 				ID:               "pmg-1",
 				Name:             "pmg-main",
 				Host:             "https://pmg.example.com:8006",
+				GuestURL:         "https://pmg.example.com/quarantine",
 				Status:           "online",
 				Version:          "8.2",
 				ConnectionHealth: "connected",
 				LastSeen:         now,
 				LastUpdated:      now,
 				MailStats: &models.PMGMailStats{
-					CountTotal: 1900,
-					BytesIn:    5_000_000,
-					BytesOut:   4_000_000,
-					SpamIn:     125,
-					VirusIn:    4,
+					CountTotal:      1900,
+					BytesIn:         5_000_000,
+					BytesOut:        4_000_000,
+					SpamIn:          125,
+					VirusIn:         4,
+					JunkIn:          32,
+					PregreetRejects: 7,
+					UpdatedAt:       now,
 				},
+				MailCount: []models.PMGMailCountPoint{{Timestamp: now, Count: 1900, CountIn: 1200, CountOut: 700, Timeframe: "hour", Index: 1}},
 				Nodes: []models.PMGNodeStatus{
 					{
 						Name:   "pmg-node-1",
@@ -78,6 +83,7 @@ func TestIngestSnapshotIncludesPBSAndPMGInstances(t *testing.T) {
 							Hold:      2,
 							Incoming:  3,
 							Total:     22,
+							OldestAge: 1800,
 							UpdatedAt: now,
 						},
 					},
@@ -171,5 +177,17 @@ func TestIngestSnapshotIncludesPBSAndPMGInstances(t *testing.T) {
 	}
 	if pmgResource.PMG == nil || pmgResource.PMG.QueueTotal != 22 {
 		t.Fatalf("expected PMG payload with queue totals, got %+v", pmgResource.PMG)
+	}
+	if pmgResource.PMG.HostURL != "https://pmg.example.com:8006" || pmgResource.PMG.GuestURL != "https://pmg.example.com/quarantine" {
+		t.Fatalf("expected PMG URL payloads, got %+v", pmgResource.PMG)
+	}
+	if len(pmgResource.PMG.Nodes) != 1 || pmgResource.PMG.Nodes[0].QueueStatus == nil || pmgResource.PMG.Nodes[0].QueueStatus.OldestAge != 1800 {
+		t.Fatalf("expected PMG queue oldest age, got %+v", pmgResource.PMG.Nodes)
+	}
+	if pmgResource.PMG.MailStats == nil || pmgResource.PMG.MailStats.CountTotal != 1900 || pmgResource.PMG.MailStats.JunkIn != 32 || pmgResource.PMG.MailStats.PregreetRejects != 7 {
+		t.Fatalf("expected full PMG mail stats payload, got %+v", pmgResource.PMG.MailStats)
+	}
+	if len(pmgResource.PMG.MailCount) != 1 || pmgResource.PMG.MailCount[0].Index != 1 {
+		t.Fatalf("expected PMG mail count points, got %+v", pmgResource.PMG.MailCount)
 	}
 }

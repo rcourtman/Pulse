@@ -241,6 +241,7 @@ func clonePMGData(in *PMGData) *PMGData {
 	out := *in
 	out.Nodes = clonePMGNodeMetaSlice(in.Nodes)
 	out.MailStats = clonePMGMailStatsMeta(in.MailStats)
+	out.MailCount = append([]models.PMGMailCountPoint(nil), in.MailCount...)
 	out.Quarantine = clonePMGQuarantineMeta(in.Quarantine)
 	out.SpamDistribution = clonePMGSpamBucketMetaSlice(in.SpamDistribution)
 	out.RelayDomains = clonePMGRelayDomainMetaSlice(in.RelayDomains)

@@ -11372,6 +11372,84 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 			t.Error("non-agent alert with stale node must still be removed (control case)")
 		}
 	})
+
+	t.Run("preserves non-node canonical infrastructure alerts", func(t *testing.T) {
+		m := newTestManager(t)
+
+		storageProviderID := buildCanonicalStateID("storage-1", "alertspec:provider-incident:test")
+		pmgQueueID := buildCanonicalStateID("pmg-main", "pmg-main-oldest-message")
+
+		m.mu.Lock()
+		m.activeAlerts[storageProviderID] = &Alert{
+			ID:            storageProviderID,
+			ResourceID:    "storage-1",
+			Type:          "storage-incident",
+			CanonicalKind: string(alertspecs.AlertSpecKindProviderIncident),
+			Node:          "",
+		}
+		m.activeAlerts[pmgQueueID] = &Alert{
+			ID:         pmgQueueID,
+			ResourceID: "pmg-main",
+			Type:       "message-age",
+			Node:       "",
+			Metadata:   map[string]interface{}{"resourceType": "pmg"},
+		}
+		m.activeAlerts["proxmox-empty-node"] = &Alert{
+			ID:   "proxmox-empty-node",
+			Node: "",
+		}
+		m.mu.Unlock()
+
+		m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+		time.Sleep(50 * time.Millisecond)
+
+		m.mu.RLock()
+		_, storageStays := testLookupActiveAlert(t, m, storageProviderID)
+		_, pmgStays := testLookupActiveAlert(t, m, pmgQueueID)
+		_, proxmoxStays := testLookupActiveAlert(t, m, "proxmox-empty-node")
+		m.mu.RUnlock()
+
+		if !storageStays {
+			t.Error("canonical provider incident must survive node cleanup")
+		}
+		if !pmgStays {
+			t.Error("PMG alert must survive node cleanup")
+		}
+		if proxmoxStays {
+			t.Error("plain node-scoped alert with empty node should still be removed")
+		}
+	})
+
+	t.Run("preserves PMG alerts created by canonical stateful evaluator", func(t *testing.T) {
+		m := newTestManager(t)
+		pmgState := buildCanonicalStateID("pmg1", "pmg1-oldest-message")
+
+		m.checkPMGOldestMessage(models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Host: "https://pmg.mock.lan:8006",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: &models.PMGQueueStatus{OldestAge: 2400}},
+			},
+		}, PMGThresholdConfig{
+			OldestMessageWarnMins: 30,
+			OldestMessageCritMins: 60,
+		})
+
+		m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+		time.Sleep(50 * time.Millisecond)
+
+		m.mu.RLock()
+		alert, pmgStays := testLookupActiveAlert(t, m, pmgState)
+		m.mu.RUnlock()
+
+		if !pmgStays {
+			t.Fatal("PMG alert created by canonical stateful evaluator must survive node cleanup")
+		}
+		if got := alert.Metadata["resourceType"]; got != string(unifiedresources.ResourceTypePMG) {
+			t.Fatalf("resourceType = %v, want pmg", got)
+		}
+	})
 }
 
 func TestCheckZFSPoolHealth(t *testing.T) {

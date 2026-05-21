@@ -17,6 +17,9 @@
 #   PULSE_DATA_DIR=/path         Override data directory
 #   PULSE_DEV_API_PORT=7655      Backend API port (default: 7655)
 #   FRONTEND_DEV_PORT=5173       Frontend dev server port (default: 5173)
+#   LOG_LEVEL=debug              Opt into verbose backend logs (default: info)
+#   PULSE_DEV_DISABLE_BACKGROUND_AI=false
+#                                   Allow automatic Patrol/discovery/alert AI in dev
 #   HOT_DEV_BACKEND_HEALTH_STARTUP_GRACE_SECONDS=180
 #                                   Backend /api/health grace after starts/restarts
 #   HOT_DEV_BACKEND_UNHEALTHY_THRESHOLD=2
@@ -342,12 +345,14 @@ FRONTEND_PORT=${PULSE_DEV_API_PORT}
 PORT=${PULSE_DEV_API_PORT}
 PULSE_DEV=true  # Enable development mode features (needed for admin bypass etc)
 ALLOW_ADMIN_BYPASS=1  # Allow X-Admin-Bypass header in dev mode
+LOG_LEVEL="${LOG_LEVEL:-info}"
+PULSE_DEV_DISABLE_BACKGROUND_AI="${PULSE_DEV_DISABLE_BACKGROUND_AI:-true}"
 
 # Managed dev credentials default to admin/adminadminadmin unless
 # HOT_DEV_AUTH_USER / HOT_DEV_AUTH_PASS explicitly override them.
 PULSE_AUTH_USER="$(hot_dev_resolve_auth_user)"
 PULSE_AUTH_PASS="$(hot_dev_resolve_auth_pass)"
-export FRONTEND_PORT PULSE_DEV_API_PORT PORT PULSE_DEV ALLOW_ADMIN_BYPASS PULSE_AUTH_USER PULSE_AUTH_PASS
+export FRONTEND_PORT PULSE_DEV_API_PORT PORT PULSE_DEV ALLOW_ADMIN_BYPASS PULSE_AUTH_USER PULSE_AUTH_PASS LOG_LEVEL PULSE_DEV_DISABLE_BACKGROUND_AI
 
 # Data Directory Setup
 # Keep one persistent data directory in both mock and real modes so real
@@ -453,7 +458,8 @@ mark_backend_startup_grace() {
 
 start_backend_process() {
     mark_backend_startup_grace
-    LOG_LEVEL="${LOG_LEVEL:-debug}" \
+    LOG_LEVEL="${LOG_LEVEL:-info}" \
+    PULSE_DEV_DISABLE_BACKGROUND_AI="${PULSE_DEV_DISABLE_BACKGROUND_AI:-true}" \
     FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
     PORT="${PULSE_DEV_API_PORT:-7655}" \
     PULSE_DATA_DIR="${PULSE_DATA_DIR:-}" \
