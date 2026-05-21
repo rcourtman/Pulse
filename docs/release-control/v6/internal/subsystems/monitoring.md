@@ -109,11 +109,13 @@ truth for live infrastructure data.
     config paths, bind mounts, ports, or suggested URLs.
 16. Add or change TrueNAS supplemental inventory only through the native
     TrueNAS provider path and unified-resource projection. TrueNAS apps are
-    API-owned application records: the provider may preserve Docker-compatible
-    runtime metadata for shared container tooling, but it must also publish the
-    native app identity, state, version, update availability, workload
-    containers, ports, images, volumes, networks, and stat collection metadata
-    through `TrueNASData.App` on the canonical `app-container` resource.
+    API-owned application records: `app.query` is the preferred live inventory
+    source, with legacy REST allowed only as a compatibility fallback. The
+    provider may preserve Docker-compatible runtime metadata for shared
+    container tooling, but it must also publish the native app identity, state,
+    version, update availability, workload containers, ports, images, volumes,
+    networks, and stat collection metadata through `TrueNASData.App` on the
+    canonical `app-container` resource.
     Monitoring must not rebuild a second Docker-only TrueNAS app inventory or
     make the Docker fallback the source of truth for the TrueNAS platform page.
     TrueNAS child source identities are appliance-local and must be scoped under

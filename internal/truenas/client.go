@@ -626,13 +626,38 @@ func (c *Client) queryRPC(ctx context.Context, method string, result any) error 
 }
 
 // GetApps returns the best-effort TrueNAS app inventory as canonical workload
-// candidates. The API surface varies across TrueNAS releases, so we parse the
-// documented app.query response shape loosely.
+// candidates. TrueNAS 25.04+ documents app.query on the JSON-RPC API, with
+// the legacy REST endpoint kept as a compatibility fallback for older
+// deployments and existing tests.
 func (c *Client) GetApps(ctx context.Context) ([]App, error) {
+	apps, err := c.getAppsRPC(ctx)
+	if err == nil {
+		return apps, nil
+	}
+	restApps, restErr := c.getAppsREST(ctx)
+	if restErr != nil {
+		return nil, fmt.Errorf("fetch truenas apps via rpc and rest: rpc=%w rest=%v", err, restErr)
+	}
+	return restApps, nil
+}
+
+func (c *Client) getAppsRPC(ctx context.Context) ([]App, error) {
+	var response []map[string]any
+	if err := c.queryRPC(ctx, "app.query", &response); err != nil {
+		return nil, err
+	}
+	return c.parseAppsWithStats(ctx, response), nil
+}
+
+func (c *Client) getAppsREST(ctx context.Context) ([]App, error) {
 	var response []map[string]any
 	if err := c.getJSON(ctx, http.MethodGet, "/app", &response); err != nil {
 		return nil, err
 	}
+	return c.parseAppsWithStats(ctx, response), nil
+}
+
+func (c *Client) parseAppsWithStats(ctx context.Context, response []map[string]any) []App {
 	statsByApp, err := c.GetAppStats(ctx)
 	if err != nil {
 		statsByApp = nil
@@ -686,7 +711,7 @@ func (c *Client) GetApps(ctx context.Context) ([]App, error) {
 		apps = append(apps, app)
 	}
 
-	return apps, nil
+	return apps
 }
 
 // GetAppStats retrieves live TrueNAS app workload telemetry from the modern

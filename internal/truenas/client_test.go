@@ -353,6 +353,55 @@ func TestGetVMsParsesNativeVMQueryShape(t *testing.T) {
 	}
 }
 
+func TestGetAppsParsesNativeAppQueryShape(t *testing.T) {
+	server := newMockServerWithRPC(t, map[string]apiResponse{
+		"/api/v2.0/app": {status: http.StatusInternalServerError, body: `{"error":"legacy app endpoint should not be used"}`},
+	}, nil, func(t *testing.T, conn *websocket.Conn) {
+		authReq := readRPCRequest(t, conn)
+		if authReq.Method != "auth.login_with_api_key" {
+			t.Fatalf("expected api-key auth method, got %q", authReq.Method)
+		}
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		request := readRPCRequest(t, conn)
+		switch request.Method {
+		case "app.query":
+			params, ok := request.Params.([]any)
+			if !ok || len(params) != 2 {
+				t.Fatalf("expected app.query filters/options params, got %#v", request.Params)
+			}
+			writeRPCResult(t, conn, request.ID, defaultAppQueryPayload(t))
+		case "core.subscribe":
+			writeRPCError(t, conn, request.ID, 1, "stats unavailable")
+		default:
+			t.Fatalf("unexpected rpc method %q", request.Method)
+		}
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	apps, err := client.GetApps(context.Background())
+	if err != nil {
+		t.Fatalf("GetApps() error = %v", err)
+	}
+	if len(apps) != 1 {
+		t.Fatalf("expected 1 app, got %d", len(apps))
+	}
+	app := apps[0]
+	if app.ID != "nextcloud" || app.Name != "Nextcloud" || app.State != "RUNNING" {
+		t.Fatalf("unexpected app identity/status: %+v", app)
+	}
+	if app.ContainerCount != 2 || len(app.Containers) != 2 {
+		t.Fatalf("unexpected app container mapping: %+v", app)
+	}
+	if len(app.UsedPorts) != 1 || len(app.UsedPorts[0].HostPorts) != 1 || app.UsedPorts[0].HostPorts[0].HostPort != 30443 {
+		t.Fatalf("unexpected app port mapping: %+v", app.UsedPorts)
+	}
+	if len(app.Volumes) != 2 || len(app.Images) != 2 || len(app.Networks) != 1 {
+		t.Fatalf("unexpected app runtime shape: volumes=%d images=%d networks=%d", len(app.Volumes), len(app.Images), len(app.Networks))
+	}
+}
+
 func TestGetAppsEnrichesStatsFromRPC(t *testing.T) {
 	server := newMockServerWithRPC(t, defaultAPIResponses(), nil, func(t *testing.T, conn *websocket.Conn) {
 		authReq := readRPCRequest(t, conn)
@@ -361,11 +410,16 @@ func TestGetAppsEnrichesStatsFromRPC(t *testing.T) {
 		}
 		writeRPCResult(t, conn, authReq.ID, true)
 
-		subscribeReq := readRPCRequest(t, conn)
-		if subscribeReq.Method != "core.subscribe" {
-			t.Fatalf("expected core.subscribe, got %q", subscribeReq.Method)
+		request := readRPCRequest(t, conn)
+		switch request.Method {
+		case "app.query":
+			writeRPCResult(t, conn, request.ID, defaultAppQueryPayload(t))
+			return
+		case "core.subscribe":
+		default:
+			t.Fatalf("expected app.query or core.subscribe, got %q", request.Method)
 		}
-		writeRPCResult(t, conn, subscribeReq.ID, "sub-1")
+		writeRPCResult(t, conn, request.ID, "sub-1")
 		writeRPCNotification(t, conn, "collection_update", map[string]any{
 			"collection": "app.stats:{\"interval\":2}",
 			"fields": []map[string]any{
@@ -1239,6 +1293,16 @@ func TestClientCloseNilSafe(t *testing.T) {
 
 	(&Client{}).Close()
 	(&Client{httpClient: &http.Client{}}).Close()
+}
+
+func defaultAppQueryPayload(t *testing.T) []map[string]any {
+	t.Helper()
+
+	var payload []map[string]any
+	if err := json.Unmarshal([]byte(defaultAPIResponses()["/api/v2.0/app"].body), &payload); err != nil {
+		t.Fatalf("unmarshal default app fixture: %v", err)
+	}
+	return payload
 }
 
 func defaultAPIResponses() map[string]apiResponse {
