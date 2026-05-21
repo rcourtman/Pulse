@@ -238,4 +238,57 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
     expect(section.getByText('Read/write')).toBeInTheDocument();
     expect(section.getByText('media')).toBeInTheDocument();
   });
+
+  it('opens native TrueNAS storage detail immediately for inline storage rows', () => {
+    const resource = baseResource({
+      id: 'truenas-pool-1',
+      type: 'storage',
+      displayName: 'archive',
+      status: 'degraded',
+      platformScopes: ['truenas'],
+      disk: {
+        current: 35.2,
+        used: 25.3 * 1024 ** 4,
+        total: 72 * 1024 ** 4,
+      },
+      childCount: 4,
+      storage: {
+        type: 'zfs-pool',
+        topology: 'pool',
+        platform: 'truenas',
+        protection: 'zfs',
+        zfsPoolState: 'DEGRADED',
+        risk: {
+          level: 'warning',
+          reasons: [
+            {
+              code: 'zfs_pool_state',
+              severity: 'warning',
+              summary: 'ZFS pool archive is DEGRADED',
+            },
+          ],
+        },
+        riskSummary: 'ZFS pool archive is DEGRADED',
+        protectionReduced: true,
+        protectionSummary: 'ZFS pool archive is DEGRADED',
+      },
+    });
+
+    const { getByRole, getByTestId } = render(() => (
+      <ResourceDetailDrawer
+        resource={resource}
+        presentation="table-row"
+        initialShowTrueNASDetails
+      />
+    ));
+
+    expect(getByRole('button', { name: 'Hide TrueNAS' })).toBeInTheDocument();
+    const section = within(getByTestId('resource-truenas-details-section'));
+    expect(getByTestId('resource-truenas-details-section').querySelector('table')).toBeTruthy();
+    expect(section.getByText('Storage')).toBeInTheDocument();
+    expect(section.getByText('Capacity')).toBeInTheDocument();
+    expect(section.getByText('Health')).toBeInTheDocument();
+    expect(section.getByText('ZFS')).toBeInTheDocument();
+    expect(section.getAllByText('ZFS pool archive is DEGRADED')).toHaveLength(3);
+  });
 });

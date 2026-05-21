@@ -909,6 +909,7 @@ export interface Resource {
   // Hierarchy
   parentId?: string; // Parent resource (e.g., VM -> Node)
   parentName?: string; // Parent display identifier when available
+  childCount?: number; // Backend-derived count of direct child resources
   clusterId?: string; // Cluster membership
 
   // Universal Metrics

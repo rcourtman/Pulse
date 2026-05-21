@@ -111,4 +111,81 @@ describe('resourceDetailDrawerTrueNASModel', () => {
       'Clients',
     ]);
   });
+
+  it('summarizes native TrueNAS storage pool metadata for the detail drawer', () => {
+    const resource = baseResource({
+      type: 'storage',
+      displayName: 'archive',
+      status: 'degraded',
+      platformScopes: ['truenas'],
+      disk: {
+        current: 35.2,
+        used: 25.3 * 1024 ** 4,
+        total: 72 * 1024 ** 4,
+      },
+      childCount: 4,
+      storage: {
+        type: 'zfs-pool',
+        topology: 'pool',
+        platform: 'truenas',
+        protection: 'zfs',
+        zfsPoolState: 'DEGRADED',
+        risk: {
+          level: 'warning',
+          reasons: [
+            {
+              code: 'zfs_pool_state',
+              severity: 'warning',
+              summary: 'ZFS pool archive is DEGRADED',
+            },
+          ],
+        },
+        riskSummary: 'ZFS pool archive is DEGRADED',
+        protectionReduced: true,
+        protectionSummary: 'ZFS pool archive is DEGRADED',
+      },
+    });
+
+    expect(buildTrueNASDetailsSummary(resource)).toBe(
+      'Pool, DEGRADED, 25.3 TB / 72.0 TB, ZFS pool archive is DEGRADED',
+    );
+    expect(buildTrueNASDetailSections(resource).map((section) => section.label)).toEqual([
+      'Storage',
+      'Capacity',
+      'Health',
+    ]);
+    expect(buildTrueNASDetailSections(resource)[0]?.rows).toEqual(
+      expect.arrayContaining([expect.objectContaining({ label: 'Protection', value: 'ZFS' })]),
+    );
+  });
+
+  it('summarizes native TrueNAS physical disk metadata for the detail drawer', () => {
+    const resource = baseResource({
+      type: 'physical_disk',
+      displayName: 'sdc',
+      platformScopes: ['truenas'],
+      physicalDisk: {
+        devPath: '/dev/sdc',
+        model: 'WD Red Pro',
+        serial: 'WD-WX12A3456',
+        diskType: 'sata',
+        sizeBytes: 24 * 1024 ** 4,
+        health: 'DEGRADED',
+        temperature: 39,
+        rpm: 7200,
+        smart: {
+          powerOnHours: 10_240,
+          reallocatedSectors: 4,
+          pendingSectors: 1,
+        },
+      },
+    });
+
+    expect(buildTrueNASDetailsSummary(resource)).toBe('SATA, Degraded, 24.0 TB, 39°C');
+    expect(buildTrueNASDetailSections(resource).map((section) => section.label)).toEqual([
+      'Disk',
+      'Health',
+      'SMART',
+    ]);
+  });
 });

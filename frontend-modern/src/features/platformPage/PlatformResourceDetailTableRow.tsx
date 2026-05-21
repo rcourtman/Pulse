@@ -1,5 +1,6 @@
 import { Show, createSignal, type Component, type JSX } from 'solid-js';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
+import { hasTrueNASDetailSections } from '@/components/Infrastructure/resourceDetailDrawerTrueNASModel';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import type { Resource } from '@/types/resource';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
@@ -63,9 +64,6 @@ export function createPlatformResourceLabelResolver(resources: () => readonly Re
   };
 }
 
-const hasNativeTrueNASDetails = (resource: Resource): boolean =>
-  Boolean(resource.truenas?.app || resource.truenas?.share || resource.truenas?.vm);
-
 export const PlatformResourceDetailTableRow: Component<{
   resource: Resource;
   open: boolean;
@@ -76,7 +74,7 @@ export const PlatformResourceDetailTableRow: Component<{
   onClose?: () => void;
 }> = (props) => {
   const initialShowTrueNASDetails = () =>
-    props.initialShowTrueNASDetails ?? hasNativeTrueNASDetails(props.resource);
+    props.initialShowTrueNASDetails ?? hasTrueNASDetailSections(props.resource);
 
   return (
     <Show when={props.open}>

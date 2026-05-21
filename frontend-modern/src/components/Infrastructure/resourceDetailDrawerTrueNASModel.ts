@@ -1,5 +1,7 @@
 import type {
   Resource,
+  ResourcePhysicalDiskMeta,
+  ResourceStorageMeta,
   ResourceTrueNASAppMeta,
   ResourceTrueNASAppPort,
   ResourceTrueNASShareMeta,
@@ -56,6 +58,16 @@ const formatBytes = (bytes?: number): string | null => {
   return `${scaled.toFixed(scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 };
 
+const formatPercent = (percent?: number): string | null => {
+  if (typeof percent !== 'number' || !Number.isFinite(percent)) return null;
+  return `${percent.toFixed(percent >= 10 ? 1 : 2)}%`;
+};
+
+const formatTemperature = (celsius?: number): string | null => {
+  if (typeof celsius !== 'number' || !Number.isFinite(celsius) || celsius <= 0) return null;
+  return `${celsius.toFixed(0)}°C`;
+};
+
 const formatCount = (value: number, singular: string, plural = `${singular}s`): string =>
   `${new Intl.NumberFormat().format(value)} ${value === 1 ? singular : plural}`;
 
@@ -101,6 +113,199 @@ const compactSections = (
   sections.filter((section): section is ResourceDetailDrawerTrueNASSection =>
     Boolean(section && section.rows.length > 0),
   );
+
+const isTrueNASScopedResource = (resource: Resource): boolean =>
+  resource.platformType === 'truenas' ||
+  resource.platformScopes?.includes('truenas') === true ||
+  resource.sources?.includes('truenas') === true ||
+  resource.storage?.platform === 'truenas' ||
+  resource.tags?.includes('truenas') === true;
+
+const storageKindLabel = (storage: ResourceStorageMeta): string | null => {
+  const topology = asString(storage.topology);
+  if (topology) return normalizeDelimitedLabel(topology);
+  return normalizeDelimitedLabel(storage.type);
+};
+
+const storageStateLabel = (resource: Resource, storage: ResourceStorageMeta): string | null =>
+  asString(storage.zfsPoolState) ??
+  normalizeDelimitedLabel(storage.arrayState) ??
+  normalizeDelimitedLabel(resource.status);
+
+const storageStateTone = (
+  resource: Resource,
+  storage: ResourceStorageMeta,
+): ResourceDetailDrawerTrueNASRowTone => {
+  const state = (storage.zfsPoolState ?? storage.arrayState ?? resource.status).toLowerCase();
+  if (state === 'online' || state === 'healthy' || state === 'mounted') return 'success';
+  if (state === 'degraded' || state === 'warning' || state === 'offline') return 'warning';
+  return 'default';
+};
+
+const storageUsageLabel = (resource: Resource): string | null => {
+  const used = formatBytes(resource.disk?.used);
+  const total = formatBytes(resource.disk?.total);
+  if (used && total) return `${used} / ${total}`;
+  return formatPercent(resource.disk?.current);
+};
+
+const storageProtectionLabel = (value?: string): string | null => {
+  const protection = asString(value);
+  if (!protection) return null;
+  const normalized = protection.toLowerCase();
+  if (normalized === 'zfs' || normalized.startsWith('raidz')) return normalized.toUpperCase();
+  return normalizeDelimitedLabel(protection);
+};
+
+const buildTrueNASStorageSections = (
+  resource: Resource,
+  storage: ResourceStorageMeta,
+): ResourceDetailDrawerTrueNASSection[] => {
+  const riskReasons = (storage.risk?.reasons ?? [])
+    .map((reason) => asString(reason.summary))
+    .filter((value): value is string => Boolean(value));
+  const storageRows = compactRows([
+    row('Kind', storageKindLabel(storage)),
+    row('State', storageStateLabel(resource, storage), {
+      tone: storageStateTone(resource, storage),
+    }),
+    row('Pool', asString(storage.pool) ?? asString(resource.parentName)),
+    row('Path', asString(storage.path)),
+    row('Protection', storageProtectionLabel(storage.protection)),
+    row('Shared', yesNoValue(storage.shared)),
+  ]);
+
+  const capacityRows = compactRows([
+    row('Usage', storageUsageLabel(resource)),
+    row('Used', formatBytes(resource.disk?.used)),
+    row('Total', formatBytes(resource.disk?.total)),
+    row('Percent', formatPercent(resource.disk?.current)),
+    row('Children', formatInteger(resource.childCount)),
+    row('Consumers', formatInteger(storage.consumerCount)),
+  ]);
+
+  const healthRows = compactRows([
+    row('Risk', normalizeDelimitedLabel(storage.risk?.level), {
+      tone: storage.risk?.level?.toLowerCase() === 'warning' ? 'warning' : 'default',
+    }),
+    row('Risk summary', asString(storage.riskSummary), { tone: 'warning' }),
+    row('Posture', asString(storage.postureSummary), {
+      tone: storage.postureSummary ? 'warning' : 'default',
+    }),
+    row('Protection reduced', booleanValue(storage.protectionReduced), {
+      tone: storage.protectionReduced ? 'warning' : 'success',
+    }),
+    row('Protection summary', asString(storage.protectionSummary), {
+      tone: storage.protectionSummary ? 'warning' : 'default',
+    }),
+    row('Rebuild', asString(storage.rebuildSummary)),
+    row('Reasons', summarizeList(riskReasons, 2), {
+      title: riskReasons.join(', '),
+      tone: 'warning',
+    }),
+  ]);
+
+  return compactSections([
+    { label: 'Storage', rows: storageRows },
+    { label: 'Capacity', rows: capacityRows },
+    { label: 'Health', rows: healthRows },
+  ]);
+};
+
+const diskStateTone = (disk: ResourcePhysicalDiskMeta): ResourceDetailDrawerTrueNASRowTone => {
+  const health = disk.health?.toLowerCase();
+  if (health === 'passed' || health === 'healthy' || health === 'ok') return 'success';
+  if (health === 'degraded' || health === 'failed' || health === 'warning') return 'warning';
+  return 'default';
+};
+
+const diskTypeLabel = (value?: string): string | null => {
+  const diskType = asString(value);
+  if (!diskType) return null;
+  const normalized = diskType.toLowerCase();
+  if (normalized === 'nvme') return 'NVMe';
+  if (['sata', 'sas', 'ssd', 'hdd'].includes(normalized)) return normalized.toUpperCase();
+  return normalizeDelimitedLabel(diskType);
+};
+
+const formatDiskHours = (hours?: number): string | null => {
+  const value = asPositiveNumber(hours);
+  if (!value) return null;
+  return `${formatInteger(value) ?? value.toFixed(0)}h`;
+};
+
+const buildTrueNASDiskSections = (
+  resource: Resource,
+  disk: ResourcePhysicalDiskMeta,
+): ResourceDetailDrawerTrueNASSection[] => {
+  const riskReasons = (disk.risk?.reasons ?? [])
+    .map((reason) => asString(reason.summary))
+    .filter((value): value is string => Boolean(value));
+  const identityRows = compactRows([
+    row('Device', asString(disk.devPath) ?? asString(resource.name)),
+    row('Model', asString(disk.model)),
+    row('Serial', asString(disk.serial)),
+    row('WWN', asString(disk.wwn)),
+    row('Type', diskTypeLabel(disk.diskType)),
+    row('Size', formatBytes(disk.sizeBytes)),
+  ]);
+
+  const healthRows = compactRows([
+    row('Health', normalizeDelimitedLabel(disk.health), { tone: diskStateTone(disk) }),
+    row('Temperature', formatTemperature(disk.temperature), {
+      tone: disk.temperature && disk.temperature >= 55 ? 'warning' : 'default',
+    }),
+    row(
+      'Wearout',
+      disk.wearout === undefined || disk.wearout < 0 ? null : formatPercent(disk.wearout),
+    ),
+    row('RPM', formatInteger(disk.rpm)),
+    row('Role', normalizeDelimitedLabel(disk.storageRole)),
+    row('Group', asString(disk.storageGroup) ?? asString(resource.parentName)),
+    row('State', normalizeDelimitedLabel(disk.storageState)),
+    row('Spun down', yesNoValue(disk.spunDown)),
+  ]);
+
+  const smartRows = compactRows([
+    row('Power on', formatDiskHours(disk.smart?.powerOnHours)),
+    row('Power cycles', formatInteger(disk.smart?.powerCycles)),
+    row('Reallocated', formatInteger(disk.smart?.reallocatedSectors), {
+      tone: disk.smart?.reallocatedSectors ? 'warning' : 'default',
+    }),
+    row('Pending sectors', formatInteger(disk.smart?.pendingSectors), {
+      tone: disk.smart?.pendingSectors ? 'warning' : 'default',
+    }),
+    row('Offline uncorrectable', formatInteger(disk.smart?.offlineUncorrectable), {
+      tone: disk.smart?.offlineUncorrectable ? 'warning' : 'default',
+    }),
+    row('CRC errors', formatInteger(disk.smart?.udmaCrcErrors), {
+      tone: disk.smart?.udmaCrcErrors ? 'warning' : 'default',
+    }),
+    row('Media errors', formatInteger(disk.smart?.mediaErrors), {
+      tone: disk.smart?.mediaErrors ? 'warning' : 'default',
+    }),
+    row('Unsafe shutdowns', formatInteger(disk.smart?.unsafeShutdowns)),
+    row('Available spare', formatPercent(disk.smart?.availableSpare)),
+    row('Percentage used', formatPercent(disk.smart?.percentageUsed)),
+  ]);
+
+  const riskRows = compactRows([
+    row('Risk', normalizeDelimitedLabel(disk.risk?.level), {
+      tone: disk.risk?.level?.toLowerCase() === 'warning' ? 'warning' : 'default',
+    }),
+    row('Reasons', summarizeList(riskReasons, 2), {
+      title: riskReasons.join(', '),
+      tone: 'warning',
+    }),
+  ]);
+
+  return compactSections([
+    { label: 'Disk', rows: identityRows },
+    { label: 'Health', rows: healthRows },
+    { label: 'SMART', rows: smartRows },
+    { label: 'Risk', rows: riskRows },
+  ]);
+};
 
 const portLabel = (port: ResourceTrueNASAppPort): string | null => {
   const protocol = asString(port.protocol)?.toLowerCase();
@@ -341,6 +546,12 @@ export const buildTrueNASDetailSections = (
   if (resource.truenas?.share) return buildTrueNASShareSections(resource.truenas.share);
   if (resource.truenas?.vm) return buildTrueNASVMSections(resource.truenas.vm);
   if (resource.truenas?.app) return buildTrueNASAppSections(resource.truenas.app);
+  if (isTrueNASScopedResource(resource) && resource.storage) {
+    return buildTrueNASStorageSections(resource, resource.storage);
+  }
+  if (isTrueNASScopedResource(resource) && resource.physicalDisk) {
+    return buildTrueNASDiskSections(resource, resource.physicalDisk);
+  }
   return [];
 };
 
@@ -381,5 +592,30 @@ export const buildTrueNASDetailsSummary = (resource: Resource): string | null =>
     return summary.length > 0 ? summary.join(', ') : null;
   }
 
+  if (isTrueNASScopedResource(resource) && resource.storage) {
+    const storage = resource.storage;
+    const summary = [
+      storageKindLabel(storage),
+      storageStateLabel(resource, storage),
+      storageUsageLabel(resource),
+      asString(storage.riskSummary),
+    ].filter((value): value is string => Boolean(value));
+    return summary.length > 0 ? summary.join(', ') : null;
+  }
+
+  if (isTrueNASScopedResource(resource) && resource.physicalDisk) {
+    const disk = resource.physicalDisk;
+    const summary = [
+      diskTypeLabel(disk.diskType),
+      normalizeDelimitedLabel(disk.health),
+      formatBytes(disk.sizeBytes),
+      formatTemperature(disk.temperature),
+    ].filter((value): value is string => Boolean(value));
+    return summary.length > 0 ? summary.join(', ') : null;
+  }
+
   return null;
 };
+
+export const hasTrueNASDetailSections = (resource: Resource): boolean =>
+  buildTrueNASDetailSections(resource).length > 0;

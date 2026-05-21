@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { KubernetesClustersTable } from '@/features/kubernetes/KubernetesClustersTable';
 import { KubernetesNodesTable } from '@/features/kubernetes/KubernetesNodesTable';
+import { TrueNASStorageTopologyTable } from '@/features/truenas/TrueNASStorageTopologyTable';
 import { TrueNASSystemsTable } from '@/features/truenas/TrueNASSystemsTable';
 import { VsphereHostsTable } from '@/features/vmware/VsphereHostsTable';
 
@@ -11,12 +12,14 @@ vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
   ResourceDetailDrawer: (props: {
     resource: { id: string };
     presentation?: string;
+    initialShowTrueNASDetails?: boolean;
     onClose?: () => void;
   }) => (
     <div
       data-testid="resource-detail-drawer"
       data-resource-id={props.resource.id}
       data-presentation={props.presentation ?? 'full'}
+      data-initial-show-truenas-details={String(props.initialShowTrueNASDetails ?? false)}
     >
       <button type="button" aria-label="Close resource drawer" onClick={() => props.onClose?.()} />
     </div>
@@ -101,6 +104,47 @@ describe('platform resource table drawers', () => {
     const row = screen.getByText('truenas-main').closest('tr');
     expect(row).toBeTruthy();
     await expectRowOpensResourceDrawer(row!, system.id);
+  });
+
+  it('opens native TrueNAS detail by default from TrueNAS storage topology rows', async () => {
+    const pool = makeResource({
+      id: 'storage:tank',
+      type: 'storage',
+      name: 'tank',
+      displayName: 'tank',
+      platformType: 'truenas',
+      platformScopes: ['truenas'],
+      storage: {
+        topology: 'pool',
+        platform: 'truenas',
+        zfsPoolState: 'ONLINE',
+      },
+    });
+
+    render(() => (
+      <TrueNASStorageTopologyTable
+        resources={[pool]}
+        scope={[pool]}
+        emptyIcon={<span />}
+        emptyTitle="No storage"
+        emptyDescription="No storage"
+        showToolbar={false}
+      />
+    ));
+
+    const row = screen.getByText('tank').closest('tr');
+    expect(row).toBeTruthy();
+
+    await fireEvent.click(row!);
+
+    expect(screen.getByTestId('resource-detail-drawer')).toHaveAttribute(
+      'data-resource-id',
+      pool.id,
+    );
+    expect(screen.getByTestId('resource-detail-drawer')).toHaveAttribute(
+      'data-initial-show-truenas-details',
+      'true',
+    );
   });
 
   it('opens canonical resource details from vSphere host rows', async () => {
