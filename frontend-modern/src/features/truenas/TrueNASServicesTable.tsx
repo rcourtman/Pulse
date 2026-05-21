@@ -169,13 +169,8 @@ export const TrueNASServicesTable: Component<{
                               variant={serviceStatusVariant(status())}
                               title={titleCase(status())}
                             />
-                            <div class="min-w-0">
-                              <div class="truncate font-medium text-base-content">
-                                {formatServiceName(row.service.service)}
-                              </div>
-                              <div class="truncate text-[11px] text-muted">
-                                {asTrimmedString(row.service.id) || row.id}
-                              </div>
+                            <div class="min-w-0 truncate font-medium text-base-content">
+                              {formatServiceName(row.service.service)}
                             </div>
                           </div>
                         </TableCell>
@@ -203,7 +198,6 @@ export const TrueNASServicesTable: Component<{
                         </TableCell>
                         <TableCell class={getPlatformTableCellClassForKind('text')}>
                           <div class="truncate text-base-content">{row.systemName}</div>
-                          <div class="truncate text-[11px] text-muted">{row.systemId}</div>
                         </TableCell>
                       </TableRow>
                     );

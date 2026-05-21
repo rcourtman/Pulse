@@ -173,7 +173,7 @@ export const TrueNASAlertsTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title="Health Alerts" />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1120px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[960px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[20%]`}>

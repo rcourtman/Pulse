@@ -169,6 +169,7 @@ describe('platform overview layout guardrails', () => {
     expect(truenasPageSurfaceSource).toContain('<TrueNASStorageTopologyTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASProtection');
     expect(truenasPageSurfaceSource).toContain('platform: TRUENAS_PLATFORM_FILTER');
+    expect(truenasPageSurfaceSource).toContain('source=truenas,agent');
     expect(truenasPageSurfaceSource).not.toContain('forcedView="pools"');
     expect(truenasPageSurfaceSource).not.toContain('<RecoverySurface');
     expect(truenasPageSurfaceSource).not.toContain('<StorageSurface');

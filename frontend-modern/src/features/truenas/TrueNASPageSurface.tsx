@@ -28,8 +28,11 @@ import {
 // (with `storage.topology` differentiating them) — they are not
 // first-class type tokens and including them triggers a 400 from
 // `/api/resources`. The page model still buckets by topology
-// client-side.
-const TRUENAS_RESOURCE_QUERY = 'type=agent,vm,app-container,network-share,storage,physical_disk';
+// client-side. Keep `agent` in the source filter so a TrueNAS host that
+// reports through the Pulse agent can still appear as the top-level appliance
+// while native TrueNAS API inventory remains the primary source.
+const TRUENAS_RESOURCE_QUERY =
+  'source=truenas,agent&type=agent,vm,app-container,network-share,storage,physical_disk';
 const TRUENAS_PLATFORM_FILTER = 'truenas';
 const VALID_TABS = new Set<TrueNASPageTabId>(TRUENAS_TAB_SPECS.map((tab) => tab.id));
 
