@@ -587,6 +587,13 @@ func (r *Router) clearSession(w http.ResponseWriter, req *http.Request) {
 			UntrackUserSession(username, cookie.Value)
 		}
 		GetSessionStore().InvalidateSession(cookie.Value)
+		// Also clear the server-side CSRF token bound to this session.
+		// InvalidateUserSessions and InvalidateOldSessionFromRequest already
+		// delete CSRF state for their cases (password change, re-login);
+		// logout was the missing-symmetry path — sessions were destroyed
+		// but the matching CSRF entries lingered until their 4-hour TTL,
+		// accumulating dead records on disk/memory.
+		GetCSRFStore().DeleteCSRFToken(cookie.Value)
 	}
 
 	// Clear both session cookie variants (prefixed and unprefixed)

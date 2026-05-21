@@ -125,6 +125,41 @@ func TestClearSession(t *testing.T) {
 	}
 }
 
+// TestClearSession_DeletesServerSideCSRFToken regresses the missing CSRF-
+// cleanup-on-logout symmetry: clearSession invalidated the session-store
+// record and zeroed the cookies, but never deleted the CSRF entry bound to
+// the session. The entry stuck around in the in-memory + on-disk CSRF store
+// for up to 4 hours after logout — not exploitable (the session was gone),
+// but the asymmetry was a real bug that accumulated dead records, and
+// password-change / re-login paths already delete CSRF state on cleanup.
+func TestClearSession_DeletesServerSideCSRFToken(t *testing.T) {
+	dataDir := t.TempDir()
+	InitSessionStore(dataDir)
+	InitCSRFStore(dataDir)
+
+	sessionToken := "test-clear-session-csrf-token-1234567890"
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "test-ua", "127.0.0.1", "testuser")
+
+	csrfToken := GetCSRFStore().GenerateCSRFToken(sessionToken)
+	if csrfToken == "" {
+		t.Fatal("expected non-empty CSRF token from GenerateCSRFToken")
+	}
+	if !GetCSRFStore().ValidateCSRFToken(sessionToken, csrfToken) {
+		t.Fatal("CSRF token should validate immediately after issuance")
+	}
+
+	router := &Router{}
+	req := httptest.NewRequest(http.MethodPost, "/api/logout", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	rec := httptest.NewRecorder()
+
+	router.clearSession(rec, req)
+
+	if GetCSRFStore().ValidateCSRFToken(sessionToken, csrfToken) {
+		t.Fatal("CSRF token must be invalidated when clearSession runs against the bound session")
+	}
+}
+
 // TestHandleSAMLSLO_RejectsEmptyPayload regresses the unauthenticated force-
 // logout DoS that previously existed on /api/saml/{id}/slo. A bare GET or
 // POST with no SAMLResponse/SAMLRequest payload must not redirect to the
