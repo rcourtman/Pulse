@@ -132,11 +132,51 @@ EOF
   assert_contains "managed-only sync rewrites auth password hash" "${output}" "PULSE_AUTH_PASS='${HOT_DEV_DEFAULT_AUTH_HASH}'"
 }
 
+test_sync_audit_signing_env_file_restores_missing_key() {
+  local state_dir runtime_env output
+  state_dir="$(make_temp_dir)"
+  runtime_env="${state_dir}/.env"
+
+  cat > "${runtime_env}" <<'EOF'
+# Managed by hot-dev.sh for deterministic dev auth
+PULSE_AUTH_USER='admin'
+PULSE_AUTH_PASS='hash'
+EOF
+
+  output="$(
+    HOT_DEV_AUTH_LIB="${HOT_DEV_AUTH_LIB}" \
+    RUNTIME_ENV_PATH="${runtime_env}" \
+    DATA_DIR="${state_dir}" \
+    bash -lc '
+      source "${HOT_DEV_AUTH_LIB}"
+      hot_dev_sync_audit_signing_env_file "${RUNTIME_ENV_PATH}" "${DATA_DIR}"
+      key_line_count="$(grep -c "^PULSE_AUDIT_SIGNING_KEY=" "${RUNTIME_ENV_PATH}")"
+      key_value="$(grep "^PULSE_AUDIT_SIGNING_KEY=" "${RUNTIME_ENV_PATH}" | cut -d= -f2- | tr -d "\\047")"
+      key_file_value="$(cat "${DATA_DIR}/.audit-signing.key")"
+      mode="$(stat -f "%Lp" "${DATA_DIR}/.audit-signing.key" 2>/dev/null || stat -c "%a" "${DATA_DIR}/.audit-signing.key")"
+      hot_dev_sync_audit_signing_env_file "${RUNTIME_ENV_PATH}" "${DATA_DIR}"
+      key_line_count_after="$(grep -c "^PULSE_AUDIT_SIGNING_KEY=" "${RUNTIME_ENV_PATH}")"
+      printf "key_line_count=%s\n" "${key_line_count}"
+      printf "key_length=%s\n" "${#key_value}"
+      printf "key_matches_file=%s\n" "$([[ "${key_value}" == "${key_file_value}" ]] && printf yes || printf no)"
+      printf "key_line_count_after=%s\n" "${key_line_count_after}"
+      printf "mode=%s\n" "${mode}"
+    '
+  )"
+
+  assert_contains "audit signing sync appends one env key" "${output}" "key_line_count=1"
+  assert_contains "audit signing sync writes a 32-byte hex key" "${output}" "key_length=64"
+  assert_contains "audit signing sync persists the same key to file" "${output}" "key_matches_file=yes"
+  assert_contains "audit signing sync is idempotent" "${output}" "key_line_count_after=1"
+  assert_contains "audit signing key file is private" "${output}" "mode=600"
+}
+
 source "${HOT_DEV_AUTH_LIB}"
 test_default_auth_contract
 test_custom_auth_banner_contract
 test_sync_auth_env_file_preserves_non_auth_settings
 test_sync_auth_env_file_handles_managed_only_env_under_errexit
+test_sync_audit_signing_env_file_restores_missing_key
 
 if (( failures > 0 )); then
   echo "FAIL: ${failures} hot-dev auth assertions failed" >&2

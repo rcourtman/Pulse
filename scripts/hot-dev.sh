@@ -149,6 +149,8 @@ sync_runtime_auth_env_overrides() {
     fi
 
     hot_dev_sync_auth_env_file "${runtime_env}" "${PULSE_AUTH_USER}" "${PULSE_AUTH_PASS}"
+    hot_dev_sync_audit_signing_env_file "${runtime_env}" "${PULSE_DATA_DIR}"
+    hot_dev_sync_bootstrap_token_file "${PULSE_DATA_DIR}"
     log_info "Seeded managed dev auth defaults in ${runtime_env}"
 }
 

@@ -37,16 +37,27 @@ describe('App architecture', () => {
     expect(routePreloadSource).toContain('ROOT_PROXMOX_PATH,');
     expect(routePreloadSource).toContain('PATROL_PATH,');
     // Legacy top-level routes (Infrastructure/Workloads/Storage/Recovery/Ceph)
-    // were retired when primary nav moved to platform-first. Their preloaders
-    // and route entries must not return.
+    // were retired as primary nav tabs when navigation moved to platform-first.
+    // Keep them out of shell preloading, but leave lightweight route
+    // compatibility wired through the current component-owned surfaces so
+    // deep links and managed-dev browser proofs do not land on Not Found.
     expect(routePreloadSource).not.toContain('ROOT_INFRASTRUCTURE_PATH');
     expect(routePreloadSource).not.toContain('ROOT_WORKLOADS_PATH');
     expect(routePreloadSource).not.toContain('RECOVERY_ROUTE_PATH');
     expect(routePreloadSource).not.toContain('STORAGE_PATH');
-    expect(appSource).not.toContain('INFRASTRUCTURE_ROUTE_PATH');
-    expect(appSource).not.toContain('ROOT_WORKLOADS_PATH');
-    expect(appSource).not.toContain('RECOVERY_ROUTE_PATH');
-    expect(appSource).not.toContain('STORAGE_PATH');
+    expect(appSource).toContain(
+      "const InfrastructurePage = lazy(() => import('./features/infrastructure/InfrastructurePageSurface'));",
+    );
+    expect(appSource).toContain("import('./components/Workloads/WorkloadsSurface')");
+    expect(appSource).toContain("import('./components/Storage/Storage')");
+    expect(appSource).toContain(
+      "import('./components/Recovery/Recovery')",
+    );
+    expect(appSource).toContain('<Route path={INFRASTRUCTURE_PATH} component={InfrastructurePage} />');
+    expect(appSource).toContain('<Route path={WORKLOADS_PATH} component={WorkloadsPage} />');
+    expect(appSource).toContain('<Route path={STORAGE_PATH} component={StoragePage} />');
+    expect(appSource).toContain('<Route path={RECOVERY_PATH} component={RecoveryPage} />');
+    expect(appSource).toContain('<Route path="/ceph" component={() => <Navigate href="/proxmox/ceph" />} />');
     expect(appSource).toContain('await preloadRouteModule(route);');
     expect(appRuntimeStateSource).not.toContain('preloadLazyRoutes');
     expect(appRuntimeStateSource).not.toContain("import('@/pages/Alerts')");

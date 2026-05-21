@@ -66,6 +66,7 @@ import { formatIdentifierLabel } from '@/utils/textPresentation';
 const MODEL_SESSION_STORAGE_KEY = 'pulse:ai_chat_models_by_session';
 const DEFAULT_SESSION_KEY = '__default__';
 const AI_CHAT_MIN_DOCKED_VIEWPORT_WIDTH = 1200;
+const STRUCTURED_PATROL_CONTEXT_TARGETS = new Set(['patrol-configuration', 'patrol-run']);
 
 interface AIChatProps {
   onClose: () => void;
@@ -76,6 +77,9 @@ const compactText = (items: Array<string | undefined>): string[] =>
 
 const pluralizeCount = (count: number, singular: string, plural: string) =>
   `${count} ${count === 1 ? singular : plural}`;
+
+const shouldShowStructuredPatrolContext = (targetType: string | undefined) =>
+  STRUCTURED_PATROL_CONTEXT_TARGETS.has(targetType ?? '');
 
 const isPatrolFindingSessionHandoff = (summary: ChatSessionHandoffSummary) =>
   summary.kind === 'patrol_finding' || Boolean(summary.finding_id);
@@ -511,11 +515,43 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     const title = briefing.title?.trim() ?? '';
     const subject = briefing.subject?.trim() ?? '';
+    if (shouldShowStructuredPatrolContext(aiChatStore.context.targetType)) {
+      return title || subject || 'Context attached';
+    }
     if (subject && /attached|briefing/i.test(title)) {
       return subject;
     }
 
     return title || subject || 'Context attached';
+  });
+  const contextBriefingDetailLines = createMemo(() => {
+    const briefing = contextBriefing();
+    if (!briefing) return [];
+    if (!shouldShowStructuredPatrolContext(aiChatStore.context.targetType)) return [];
+
+    const seen = new Set<string>();
+    const lines: string[] = [];
+    const addLine = (value: string | undefined) => {
+      const normalized = value?.trim();
+      if (!normalized || seen.has(normalized)) return;
+      seen.add(normalized);
+      lines.push(normalized);
+    };
+
+    const subject = briefing.subject?.trim();
+    if (subject !== contextBriefingTitle()) {
+      addLine(subject);
+    }
+    addLine(briefing.actionLabel);
+    for (const line of briefing.detailLines ?? []) {
+      addLine(line);
+    }
+    for (const line of briefing.evidence ?? []) {
+      addLine(line);
+    }
+    addLine(briefing.safetyNote);
+
+    return lines.slice(0, 8);
   });
   const contextBriefingNote = createMemo(() => {
     if (hasScopedApprovalHandoff()) {
@@ -1480,6 +1516,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
               <div class="mt-1 text-sm font-semibold text-base-content">
                 {contextBriefingTitle()}
               </div>
+              <Show when={contextBriefingDetailLines().length > 0}>
+                <div class="mt-1 space-y-0.5 text-xs text-muted">
+                  <For each={contextBriefingDetailLines()}>{(line) => <div>{line}</div>}</For>
+                </div>
+              </Show>
               <Show when={contextBriefingNote()}>
                 <div class="mt-0.5 text-xs text-muted">{contextBriefingNote()}</div>
               </Show>

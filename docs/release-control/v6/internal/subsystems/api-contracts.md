@@ -143,6 +143,11 @@ output or bypass the normal non-admin redaction path.
    `/api/ai/patrol/runs` records may expose bounded `source` provenance so demo
    evidence can be separated from live runtime assessment state without
    changing the stable run payload shape.
+   The Patrol status payload's `trigger_status` object is the canonical
+   transport for alert/anomaly trigger queue and mode facts. Patrol summary UI
+   may present that state as factual trigger-mode context, but it must not infer
+   trigger enablement or queue state from settings payloads, route state, or
+   run-history labels.
 7. `frontend-modern/src/api/rbac.ts` shared with `organization-settings`: the RBAC frontend client is both an organization settings control surface and a canonical API payload contract boundary.
 8. `frontend-modern/src/api/security.ts` shared with `security-privacy`: the security frontend client is both a security/privacy control surface and a canonical API payload contract boundary.
 9. `frontend-modern/src/api/updates.ts` shared with `deployment-installability`: the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary.

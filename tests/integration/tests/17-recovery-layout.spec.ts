@@ -199,11 +199,12 @@ test.describe("Recovery desktop layout guards", () => {
     await page.goto("/recovery", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("recovery-page")).toBeVisible();
 
-    const protectedRow = page
-      .locator('[data-testid="recovery-page"] table tbody tr')
-      .first();
-    await expect(protectedRow).toBeVisible();
-    await protectedRow.click();
+    const itemFilter = page.getByTestId("recovery-history-item-filter-trigger");
+    await expect(itemFilter).toBeVisible();
+    await itemFilter.click();
+    await page
+      .getByTestId("recovery-history-item-filter-option-res:vm-archive-01")
+      .click();
 
     await expect(
       page.getByTestId("recovery-history-item-filter-trigger"),

@@ -6,6 +6,11 @@ import {
   getPatrolRecencyPresentation,
   getPatrolSummaryMetricState,
 } from '@/utils/patrolSummaryPresentation';
+import {
+  formatPatrolActivityBreakdown,
+  getPatrolActivityBreakdown,
+  getPatrolTriggerStatusSummary,
+} from '@/utils/patrolRunPresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 import { formatRelativeTime } from '@/utils/format';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
@@ -96,6 +101,12 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       activeFindings: state.activePatrolFindings(),
       runs: state.patrolRunHistory.value() ?? [],
     }),
+  );
+  const activityBreakdownLabel = createMemo(() =>
+    formatPatrolActivityBreakdown(getPatrolActivityBreakdown(state.patrolRunHistory.value() ?? [])),
+  );
+  const triggerStatusSummary = createMemo(() =>
+    getPatrolTriggerStatusSummary(state.patrolStatus()?.trigger_status),
   );
   const recency = createMemo(() =>
     getPatrolRecencyPresentation({
@@ -205,6 +216,21 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                   </span>
                   <span class="font-semibold text-base-content">{compactAssessmentSummary()}</span>
                 </div>
+                <Show when={activityBreakdownLabel() || triggerStatusSummary()}>
+                  <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                    <Show when={activityBreakdownLabel()}>
+                      <span>Recent activity mix: {activityBreakdownLabel()}</span>
+                    </Show>
+                    <Show when={activityBreakdownLabel() && triggerStatusSummary()}>
+                      <span aria-hidden="true" class="text-slate-300">
+                        |
+                      </span>
+                    </Show>
+                    <Show when={triggerStatusSummary()}>
+                      <span>Trigger mode: {triggerStatusSummary()}</span>
+                    </Show>
+                  </div>
+                </Show>
               </div>
             </div>
           </section>

@@ -72,22 +72,26 @@ const {
     error: vi.fn(),
   };
 
-  const emptyChatContext = () => ({
-    findingId: undefined,
-    autonomousMode: undefined,
-    context: undefined,
+	  const emptyChatContext = () => ({
+	    targetType: undefined,
+	    targetId: undefined,
+	    findingId: undefined,
+	    autonomousMode: undefined,
+	    context: undefined,
     briefing: undefined,
     handoffContext: undefined,
     handoffResources: undefined,
     handoffActions: undefined,
   });
 
-  const mockAiChatStore = {
-    isOpenSignal: vi.fn(() => true),
-    context: emptyChatContext() as {
-      findingId?: string;
-      autonomousMode?: boolean;
-      context?: Record<string, unknown>;
+	  const mockAiChatStore = {
+	    isOpenSignal: vi.fn(() => true),
+	    context: emptyChatContext() as {
+	      targetType?: string;
+	      targetId?: string;
+	      findingId?: string;
+	      autonomousMode?: boolean;
+	      context?: Record<string, unknown>;
       handoffContext?: string;
       handoffResources?: Array<{
         id: string;
@@ -385,6 +389,59 @@ describe('AIChat', () => {
         'href',
         '/settings/system-ai',
       );
+    });
+
+    it('renders Patrol configuration handoff details without replacing the attached headline', () => {
+      mockAiChatStore.context = {
+        targetType: 'patrol-configuration',
+        autonomousMode: false,
+        briefing: {
+          sourceLabel: 'Pulse Patrol',
+          title: 'Patrol configuration failure attached',
+          subject:
+            'patrol_autonomy_pro_required: Investigation and auto-fix require Pulse Pro.',
+          statusLabel: 'HTTP 402 · model_unsupported_tools',
+          detailLines: ['Provider: openrouter'],
+          evidence: ['Command: sensitive or command detail withheld'],
+          safetyNote:
+            'Assistant can explain the configuration state; provider changes remain operator-controlled.',
+        },
+      };
+
+      renderChat();
+
+      const context = screen.getByLabelText('Assistant context');
+      expect(context).toHaveTextContent('Patrol configuration failure attached');
+      expect(context).toHaveTextContent('patrol_autonomy_pro_required');
+      expect(context).toHaveTextContent('Provider: openrouter');
+      expect(context).toHaveTextContent('Command: sensitive or command detail withheld');
+      expect(context).toHaveTextContent('Approval required before any action.');
+    });
+
+    it('renders Patrol run handoff details without replacing the attached headline', () => {
+      mockAiChatStore.context = {
+        targetType: 'patrol-run',
+        autonomousMode: false,
+        briefing: {
+          sourceLabel: 'Pulse Patrol',
+          title: 'Patrol run attached',
+          subject: 'Scoped run run-alert-scoped',
+          statusLabel: 'error · Alert fired · Checked 2 resources',
+          detailLines: ['Runtime failure: Selected model does not support Patrol tools'],
+          actionLabel: 'Review Patrol runtime failure',
+          safetyNote:
+            'Assistant can explain the Patrol run context; retries, configuration changes, and remediation remain operator-controlled.',
+        },
+      };
+
+      renderChat();
+
+      const context = screen.getByLabelText('Assistant context');
+      expect(context).toHaveTextContent('Patrol run attached');
+      expect(context).toHaveTextContent('Scoped run run-alert-scoped');
+      expect(context).toHaveTextContent('Review Patrol runtime failure');
+      expect(context).toHaveTextContent('Selected model does not support Patrol tools');
+      expect(context).toHaveTextContent('Approval required before any action.');
     });
 
     it('keeps Patrol action-artifact briefings compact in the sidebar', () => {

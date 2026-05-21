@@ -408,12 +408,12 @@ describe('PatrolStatusBar', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText('Breakdown: 1 full, 1 alert-triggered, 1 anomaly-triggered'),
+        screen.getByText('Recent activity mix: 1 full, 1 alert-triggered, 1 anomaly-triggered'),
       ).toBeInTheDocument();
     });
 
     expect(
-      screen.getByText('Scoped triggers: 4 queued · busy mode · anomalies off'),
+      screen.getByText('Trigger mode: 4 queued · busy mode · anomalies off'),
     ).toBeInTheDocument();
   });
 
@@ -460,7 +460,7 @@ describe('PatrolStatusBar', () => {
       expect(screen.getByText('Recent activity')).toBeInTheDocument();
     });
 
-    expect(screen.queryByText(/Scoped triggers:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Trigger mode:/)).not.toBeInTheDocument();
 
     setTriggerStatus({
       running: true,
@@ -474,7 +474,7 @@ describe('PatrolStatusBar', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText('Scoped triggers: 4 queued · busy mode · anomalies off'),
+        screen.getByText('Trigger mode: 4 queued · busy mode · anomalies off'),
       ).toBeInTheDocument();
     });
   });

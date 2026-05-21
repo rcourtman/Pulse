@@ -278,6 +278,10 @@ metadata, but the shared drawer boundary must not turn those handoffs into
 frontend-authored prompts, tool routes, or remediation plans; the configured
 model owns tool choice and diagnostic reasoning after the request reaches the
 AI runtime.
+The compact Patrol assessment strip may include factual recent activity mix and
+trigger-mode labels when those values are derived from the Patrol run-history
+and status payloads. Those labels are summary context inside the same strip,
+not a replacement status card, CTA band, or page-local nested card.
 
 1. Add shared primitives in `frontend-modern/src/components/shared/`
    Framed product table surfaces must consume the shared `TableCard` frame and
@@ -386,6 +390,12 @@ AI runtime.
    frontend primitives must not register `/cloud` or `/cloud/signup` as public
    product-runtime routes, because Cloud signup belongs to Pulse Account and
    the Cloud control plane rather than a local in-product trial page.
+   Compatibility top-level operator routes such as `/infrastructure`,
+   `/workloads`, `/storage`, `/recovery`, and `/ceph` may remain registered in
+   `frontend-modern/src/App.tsx` only as thin routes into their owning product
+   surfaces or canonical redirect targets. They must not become preloaded
+   primary nav tabs, duplicate app shells, or local `NotFound` fallbacks for
+   still-supported operator destinations.
    The same settings-shell boundary owns read-only landing posture: when the
    session presentation policy says the operator cannot manage setup, `/settings`
    and sidebar navigation must land on the canonical reporting/control surface

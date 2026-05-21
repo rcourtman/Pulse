@@ -211,13 +211,13 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
           <Show when={resolvedStats()!.activityBreakdownLabel}>
             <span class="hidden sm:inline text-slate-300 ">|</span>
             <span class="text-xs text-muted">
-              Breakdown: {resolvedStats()!.activityBreakdownLabel}
+              Recent activity mix: {resolvedStats()!.activityBreakdownLabel}
             </span>
           </Show>
 
           <Show when={triggerStatusSummary()}>
             <span class="hidden sm:inline text-slate-300 ">|</span>
-            <span class="text-xs text-muted">Scoped triggers: {triggerStatusSummary()}</span>
+            <span class="text-xs text-muted">Trigger mode: {triggerStatusSummary()}</span>
           </Show>
         </div>
       </div>

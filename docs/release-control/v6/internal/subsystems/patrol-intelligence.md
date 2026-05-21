@@ -60,6 +60,10 @@ Patrol-specific presentation helpers.
 2. Add or change Patrol findings, approvals, investigation, or run-history presentation through `frontend-modern/src/components/AI/FindingsPanel.tsx` and `frontend-modern/src/components/patrol/`
 3. Keep remediation execution badge copy and severity styling aligned through `frontend-modern/src/components/patrol/RemediationStatus.tsx` and `frontend-modern/src/utils/remediationPresentation.ts`
 4. Add or change Patrol header, summary, status runtime-state presentation, or runtime provider action presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`, `frontend-modern/src/components/patrol/PatrolStatusBar.tsx`, `frontend-modern/src/utils/patrolRuntimePresentation.ts`, and `frontend-modern/src/utils/patrolRuntimeActions.ts`
+   Patrol summary presentation may show recent activity mix and trigger mode as
+   compact factual context sourced from Patrol run history and
+   `status.trigger_status`; it must not reintroduce status cards, suggested
+   actions, or a separate activity tab to explain the same facts.
 5. Add or change Patrol header schedule and runtime presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/utils/aiPatrolSchedulePresentation.ts`, and `frontend-modern/src/utils/patrolRuntimePresentation.ts`.
    Patrol must not surface retired hosted-model credit badges or trial-like activation prompts in the normal self-hosted GA app, even when legacy transport fields are still present.
 6. Keep Patrol and chat identifier-label presentation aligned through the shared `frontend-modern/src/utils/textPresentation.ts`
@@ -251,6 +255,11 @@ Patrol-specific presentation helpers.
    with the same Patrol-owned visible briefing and approval-required posture
    from current finding facts; it must not fall back to generic investigation
    chat or invite execution from missing command details.
+   Patrol run-history Assistant handoffs are a separate run-context surface:
+   the visible drawer must keep the `Patrol run attached` headline, may show the
+   scoped run subject, safe runtime-failure/action label, and classified
+   redacted failure summary, and must continue to omit raw provider payloads,
+   command text, and remediation instructions.
    If the live approval is gone but the structured action artifact payload is still
    available, the recovery Assistant briefing must carry only safe action artifact
    metadata such as description, target, risk, rationale, destructive posture,

@@ -291,6 +291,10 @@ async function completeSetupWizard(
     await bootstrapTokenInput.click();
     await bootstrapTokenInput.fill("");
     await bootstrapTokenInput.fill(bootstrapToken);
+    if ((await bootstrapTokenInput.inputValue()) !== bootstrapToken) {
+      await bootstrapTokenInput.fill("");
+      await bootstrapTokenInput.pressSequentially(bootstrapToken, { delay: 1 });
+    }
     await expect(bootstrapTokenInput).toHaveValue(bootstrapToken);
   };
 
@@ -651,6 +655,55 @@ export async function ensureFirstRunExperience(
     completionTarget === "none"
       ? /\/(settings\/infrastructure|proxmox|nodes|hosts|docker|infrastructure)/
       : SETUP_COMPLETION_HANDOFFS[completionTarget].urlPattern;
+  const targetPath =
+    completionTarget === "none"
+      ? "/settings/infrastructure"
+      : SETUP_COMPLETION_HANDOFFS[completionTarget].path;
+
+  const ensureTargetVisible = async () => {
+    if (completionTarget !== "sources") {
+      return true;
+    }
+    const addDialog = page.getByRole("dialog", {
+      name: "Add infrastructure",
+    });
+    if (await addDialog.isVisible().catch(() => false)) {
+      return true;
+    }
+    if (/\/settings\/infrastructure$/.test(page.url())) {
+      const addButton = page.getByRole("button", {
+        name: "Add infrastructure",
+        exact: true,
+      });
+      if (await addButton.isVisible().catch(() => false)) {
+        await addButton.click({ timeout: 10_000 });
+      }
+    }
+    return addDialog
+      .waitFor({ state: "visible", timeout: 15_000 })
+      .then(() => true)
+      .catch(() => false);
+  };
+
+  const completeViaAPIFallback = async () => {
+    const fallbackSetup = await completeFirstRunViaAPI(page, bootstrapToken);
+    rememberSetupCredentials(fallbackSetup);
+    if (!(await authenticateWithPrimaryAPIToken(page))) {
+      await login(page, {
+        ...E2E_CREDENTIALS,
+        ...fallbackSetup,
+      });
+    }
+    await page.goto(targetPath, { waitUntil: "domcontentloaded" });
+    await waitForAppShell(page);
+    await expect(page).toHaveURL(firstRunLandingPattern);
+    await expect(page.getByRole("main", { name: "Pulse Setup Wizard" })).not.toBeVisible({
+      timeout: 10_000,
+    });
+    if (!(await ensureTargetVisible())) {
+      throw new Error(`First-run setup did not render target UI at ${page.url()}`);
+    }
+  };
 
   if (completionTarget === "none") {
     const setup = await completeFirstRunViaAPI(page, bootstrapToken);
@@ -727,6 +780,9 @@ export async function ensureFirstRunExperience(
       await expect(page).toHaveURL(firstRunLandingPattern);
     }
     if (!(await setupWizard.isVisible({ timeout: 500 }).catch(() => false))) {
+      if (!(await ensureTargetVisible())) {
+        await completeViaAPIFallback();
+      }
       break;
     }
     const status = await getSecurityStatus(page).catch(() => ({}));
@@ -735,22 +791,7 @@ export async function ensureFirstRunExperience(
       break;
     }
     if (setupAttempt === 1) {
-      const fallbackSetup = await completeFirstRunViaAPI(page, bootstrapToken);
-      rememberSetupCredentials(fallbackSetup);
-      if (!(await authenticateWithPrimaryAPIToken(page))) {
-        await login(page, {
-          ...E2E_CREDENTIALS,
-          ...fallbackSetup,
-        });
-      }
-      const targetPath =
-        completionTarget === "none"
-          ? "/settings/infrastructure"
-          : SETUP_COMPLETION_HANDOFFS[completionTarget].path;
-      await page.goto(targetPath, { waitUntil: "domcontentloaded" });
-      await waitForAppShell(page);
-      await expect(page).toHaveURL(firstRunLandingPattern);
-      await expect(setupWizard).not.toBeVisible({ timeout: 10_000 });
+      await completeViaAPIFallback();
       break;
     }
     await page.goto("/");

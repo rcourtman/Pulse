@@ -789,9 +789,19 @@ restart_backend_bg() {
     fail "Managed backend failed to recover after restart"
   fi
 
-  local backend_health_url backend_code
+  local backend_health_url backend_code checks
   backend_health_url="http://127.0.0.1:${PULSE_DEV_API_PORT}/api/health"
-  backend_code="$(http_status_code "${backend_health_url}")"
+  backend_code="000"
+  checks=180
+  while (( checks > 0 )); do
+    backend_code="$(http_status_code "${backend_health_url}")"
+    if http_status_ok "${backend_code}"; then
+      break
+    fi
+    sleep 0.5
+    checks=$((checks - 1))
+  done
+
   if ! http_status_ok "${backend_code}"; then
     fail "Managed backend listener recovered but health probe returned ${backend_code}"
   fi

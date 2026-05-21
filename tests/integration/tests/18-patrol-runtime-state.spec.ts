@@ -989,6 +989,7 @@ test.describe("Patrol runtime-state browser contract", () => {
     const assistantContext = page.getByLabel("Assistant context");
     await expect(assistantContext).toBeVisible();
     await expect(assistantContext).toContainText("Patrol run attached");
+    await expect(assistantContext).toContainText("Scoped run run-alert-scoped");
     await expect(assistantContext).toContainText(
       "Review Patrol runtime failure",
     );

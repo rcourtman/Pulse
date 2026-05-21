@@ -193,6 +193,15 @@ server-side update execution surfaces.
    backend process: a missing `./pulse` process may be tolerated only for the
    short configured missing-process grace, after which the managed runtime must
    restart it instead of waiting for the full HTTP warmup window.
+   Managed hot-dev first-run recovery is part of the same proof boundary:
+   non-production dev data directories must seed the deterministic E2E
+   bootstrap token when no token file exists, and browser helpers must prove
+   the target first-run handoff UI rendered instead of accepting a route match
+   while the setup wizard is still blocking the app.
+   Hot-dev must also recreate the local Pro audit signing key env binding when
+   first-run reset removes the runtime `.env`; otherwise the Pro backend fails
+   closed before binding the API port and the supervisor loops without ever
+   reaching browser-verifiable health.
 6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, the canonical version file, prerelease feedback intake prompts, artifact publication lineage enforcement, release note or changelog packet composition, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `scripts/trigger-release.sh`, and `scripts/trigger-release-dry-run.sh`
    That release-promotion boundary also owns prerelease note packet lineage:
    shipped RC notes must remain historically accurate, the top-level

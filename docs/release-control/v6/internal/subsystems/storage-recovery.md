@@ -156,6 +156,12 @@ a separate Docker-only or TrueNAS-local inventory path.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 2. Add or change recovery page UX through `frontend-modern/src/components/Recovery/` and keep canonical route/query/filter state ownership in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`
+   `/recovery` remains a supported authenticated operator destination even
+   when Recovery is not a primary platform tab. Route compatibility in
+   `frontend-modern/src/App.tsx` must render the canonical Recovery surface
+   rather than `NotFound`, and `/storage` compatibility must likewise render
+   the Storage owner surface instead of duplicating storage/recovery state in
+   the app shell.
    Recovery table surfaces must consume the frontend-primitives-owned
    `TableCard` frame and `TableCardHeader` header band for protected-item,
    recovery-event, and adjacent table-fallback chrome. Storage/recovery may own

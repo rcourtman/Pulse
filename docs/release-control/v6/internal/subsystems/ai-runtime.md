@@ -103,6 +103,12 @@ runtime cost control, and shared AI transport surfaces.
    attached, the Assistant empty
    message state must also remain source-named and must not fall back to generic
    cluster/system starter prompts that compete with the attached briefing.
+   Structured Patrol run and Patrol configuration handoffs may render bounded,
+   redacted diagnostic lines in the drawer when they are opened directly from
+   Patrol runtime/configuration surfaces, but the attached headline must remain
+   source-owned (`Patrol run attached`, `Patrol configuration ... attached`)
+   and the drawer must still exclude raw provider payloads, commands, and
+   Patrol-authored remediation steps.
    Reloaded Assistant sessions may consume the backend-owned
    `handoff_summary` only as safe presentation state and a Patrol finding
    pointer; hidden model context, command payloads, preflight data, and action

@@ -172,6 +172,8 @@ describe('websocket store resilience', () => {
       store.reconnect();
       expect(previous!.close).toHaveBeenCalledWith(1000, 'Reconnecting');
       expect(instances).toHaveLength(2);
+      expect(store.connected()).toBe(false);
+      expect(store.reconnecting()).toBe(true);
 
       previous!.onclose?.({ code: 1000, reason: 'Reconnecting' } as CloseEvent);
       vi.advanceTimersByTime(60000);

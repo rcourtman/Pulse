@@ -40,14 +40,18 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import {
   DOCKER_PATH,
+  INFRASTRUCTURE_PATH,
   KUBERNETES_PATH,
   PATROL_PATH,
   PROXMOX_PATH,
+  RECOVERY_PATH,
   TRUENAS_PATH,
   VMWARE_PATH,
+  WORKLOADS_PATH,
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
+  buildStoragePath,
   buildTrueNASPath,
   buildVmwarePath,
 } from './routing/resourceLinks';
@@ -77,6 +81,22 @@ const AlertsPage = lazy(() =>
   import('./pages/Alerts').then((module) => ({ default: module.Alerts })),
 );
 const SettingsPage = lazy(() => import('./components/Settings/Settings'));
+const InfrastructurePage = lazy(() => import('./features/infrastructure/InfrastructurePageSurface'));
+const WorkloadsPage = lazy(() =>
+  import('./components/Workloads/WorkloadsSurface').then((module) => ({
+    default: () => <module.WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />,
+  })),
+);
+const StoragePage = lazy(() =>
+  import('./components/Storage/Storage').then((module) => ({
+    default: () => <module.default />,
+  })),
+);
+const RecoveryPage = lazy(() =>
+  import('./components/Recovery/Recovery').then((module) => ({
+    default: () => <module.default />,
+  })),
+);
 const ProxmoxPage = lazy(() => import('./pages/Proxmox'));
 const DockerPage = lazy(() => import('./pages/Docker'));
 const KubernetesPage = lazy(() => import('./pages/Kubernetes'));
@@ -94,6 +114,7 @@ const SetupCompletionPreviewPage = lazy(() =>
   })),
 );
 const ROOT_PATROL_PATH = PATROL_PATH;
+const STORAGE_PATH = buildStoragePath();
 
 const PRIMARY_INFRASTRUCTURE_ROUTE_BY_ID: Record<PrimaryInfrastructureNavId, string> = {
   proxmox: buildProxmoxPath(),
@@ -528,6 +549,16 @@ function App() {
       <Route path="/preview/setup-complete" component={SetupCompletionPreviewPage} />
       <Route path="/login" component={RuntimeHomePage} />
       <Route path="/" component={RuntimeHomePage} />
+      <Route path={INFRASTRUCTURE_PATH} component={InfrastructurePage} />
+      <Route path={`${INFRASTRUCTURE_PATH}/*`} component={InfrastructurePage} />
+      <Route path={WORKLOADS_PATH} component={WorkloadsPage} />
+      <Route path={`${WORKLOADS_PATH}/*`} component={WorkloadsPage} />
+      <Route path={STORAGE_PATH} component={StoragePage} />
+      <Route path={`${STORAGE_PATH}/*`} component={StoragePage} />
+      <Route path={RECOVERY_PATH} component={RecoveryPage} />
+      <Route path={`${RECOVERY_PATH}/*`} component={RecoveryPage} />
+      <Route path="/ceph" component={() => <Navigate href="/proxmox/ceph" />} />
+      <Route path="/ceph/*" component={() => <Navigate href="/proxmox/ceph" />} />
       <Route path={PROXMOX_PATH} component={ProxmoxPage} />
       <Route path={`${PROXMOX_PATH}/*`} component={ProxmoxPage} />
       <Route path={DOCKER_PATH} component={DockerPage} />

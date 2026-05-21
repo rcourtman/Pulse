@@ -704,6 +704,42 @@ test_hot_dev_script_ignores_test_only_backend_churn() {
   assert_contains "hot-dev watcher suppresses source churn during managed verification" "${output}" 'verify_lock_active'
 }
 
+test_hot_dev_auth_helper_seeds_deterministic_bootstrap_token() {
+  local test_dir output
+  test_dir="$(mktemp -d)"
+  temp_dirs+=("${test_dir}")
+
+  output="$(
+    HOT_DEV_AUTH_PATH="${ROOT_DIR}/scripts/lib/hot-dev-auth.sh" \
+    DATA_DIR="${test_dir}/data" \
+    bash -lc '
+      source "${HOT_DEV_AUTH_PATH}"
+      hot_dev_sync_bootstrap_token_file "${DATA_DIR}"
+      first="$(cat "${DATA_DIR}/.bootstrap_token")"
+      hot_dev_sync_bootstrap_token_file "${DATA_DIR}"
+      second="$(cat "${DATA_DIR}/.bootstrap_token")"
+      PULSE_E2E_BOOTSTRAP_TOKEN="custom-bootstrap-token"
+      hot_dev_sync_bootstrap_token_file "${DATA_DIR}"
+      explicit="$(cat "${DATA_DIR}/.bootstrap_token")"
+      rm -f "${DATA_DIR}/.bootstrap_token"
+      hot_dev_sync_bootstrap_token_file "${DATA_DIR}"
+      third="$(cat "${DATA_DIR}/.bootstrap_token")"
+      mode="$(stat -f "%Lp" "${DATA_DIR}/.bootstrap_token" 2>/dev/null || stat -c "%a" "${DATA_DIR}/.bootstrap_token")"
+      printf "first=%s\n" "${first}"
+      printf "second=%s\n" "${second}"
+      printf "explicit=%s\n" "${explicit}"
+      printf "third=%s\n" "${third}"
+      printf "mode=%s\n" "${mode}"
+    '
+  )"
+
+  assert_contains "hot-dev bootstrap seed uses deterministic default" "${output}" "first=0123456789abcdef0123456789abcdef0123456789abcdef"
+  assert_contains "hot-dev bootstrap seed preserves an existing token" "${output}" "second=0123456789abcdef0123456789abcdef0123456789abcdef"
+  assert_contains "hot-dev bootstrap seed lets e2e override replace an existing token" "${output}" "explicit=custom-bootstrap-token"
+  assert_contains "hot-dev bootstrap seed honors explicit e2e override when creating a token" "${output}" "third=custom-bootstrap-token"
+  assert_contains "hot-dev bootstrap token file is private" "${output}" "mode=600"
+}
+
 test_hot_dev_reconciles_agent_reachable_bind_address() {
   local output
 
@@ -1265,6 +1301,57 @@ test_backend_restart_requires_managed_runtime() {
   assert_contains "backend restart returns failure without managed runtime" "${output}" "exit_code=1"
 }
 
+test_backend_restart_waits_for_healthy_listener() {
+  local test_dir output
+  test_dir="$(mktemp -d)"
+  temp_dirs+=("${test_dir}")
+  mkdir -p "${test_dir}/tmp"
+  touch "${test_dir}/tmp/hot-dev.restart"
+
+  output="$(
+    HOT_DEV_BG_PATH="${HOT_DEV_BG}" \
+    bash -lc '
+      source "${HOT_DEV_BG_PATH}"
+      ROOT_DIR="'"${test_dir}"'"
+      LOG_FILE="'"${test_dir}"'/hot-dev-bg.log"
+      PULSE_DEV_API_PORT=7655
+      health_counter="'"${test_dir}"'/health-count"
+      listener_counter="'"${test_dir}"'/listener-count"
+      is_running(){ return 0; }
+      managed_session_pid(){ printf "4242\n"; }
+      first_managed_listener_pid(){
+        local count
+        count="$(cat "${listener_counter}" 2>/dev/null || printf "0")"
+        count=$((count + 1))
+        printf "%s\n" "${count}" > "${listener_counter}"
+        if (( count == 1 )); then
+          printf "1111\n"
+        else
+          printf "2222\n"
+        fi
+      }
+      wait_for_managed_listener(){ return 0; }
+      http_status_code(){
+        local count
+        count="$(cat "${health_counter}" 2>/dev/null || printf "0")"
+        count=$((count + 1))
+        printf "%s\n" "${count}" > "${health_counter}"
+        if (( count < 3 )); then
+          printf "000\n"
+        else
+          printf "200\n"
+        fi
+      }
+      sleep(){ :; }
+      restart_backend_bg
+      printf "health_checks=%s\n" "$(cat "${health_counter}")"
+    '
+  )"
+
+  assert_contains "backend restart reports healthy recovery" "${output}" "Managed backend recovered and is healthy on port 7655"
+  assert_contains "backend restart retries health until ready" "${output}" "health_checks=3"
+}
+
 test_detects_unmanaged_listeners() {
   local frontend_port backend_port status_output start_output
   local state_dir
@@ -1332,6 +1419,7 @@ main() {
   test_makefile_routes_managed_runtime_through_npm
   test_hot_dev_script_advertises_foreground_escape_hatch
   test_hot_dev_script_ignores_test_only_backend_churn
+  test_hot_dev_auth_helper_seeds_deterministic_bootstrap_token
   test_hot_dev_reconciles_agent_reachable_bind_address
   test_hot_dev_health_monitor_probes_api_health
   test_hot_dev_bg_script_advertises_managed_entrypoint
@@ -1352,6 +1440,7 @@ main() {
   test_clean_mock_alerts_prefers_managed_runtime
   test_dev_check_uses_managed_runtime_status
   test_backend_restart_requires_managed_runtime
+  test_backend_restart_waits_for_healthy_listener
   test_status_without_runtime
   test_detects_unmanaged_listeners
 

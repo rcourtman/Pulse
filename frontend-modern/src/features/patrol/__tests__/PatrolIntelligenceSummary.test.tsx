@@ -24,6 +24,54 @@ describe('PatrolIntelligenceSummary', () => {
     expect(screen.queryByTestId('patrol-assessment-assistant-button')).not.toBeInTheDocument();
   });
 
+  it('surfaces recent activity mix and trigger mode in the compact assessment strip', () => {
+    const patrolState = {
+      ...createPatrolState(),
+      patrolRunHistory: makePatrolRunHistory([
+        makePatrolRunRecord({
+          id: 'run-alert-scoped',
+          started_at: todayAt(11, 0),
+          completed_at: todayAt(11, 2),
+          type: 'scoped',
+          trigger_reason: 'alert_fired',
+          new_findings: 1,
+        }),
+        makePatrolRunRecord({
+          id: 'run-anomaly-scoped',
+          started_at: todayAt(10, 15),
+          completed_at: todayAt(10, 16),
+          type: 'scoped',
+          trigger_reason: 'anomaly',
+        }),
+        makePatrolRunRecord({
+          id: 'run-full-review',
+          started_at: todayAt(9, 0),
+          completed_at: todayAt(9, 3),
+          type: 'full',
+          trigger_reason: 'scheduled',
+        }),
+      ]),
+      patrolStatus: () => ({
+        trigger_status: {
+          running: false,
+          pending_triggers: 4,
+          current_interval_ms: 10000,
+          recent_events: 12,
+          is_busy_mode: true,
+          alert_triggers_enabled: true,
+          anomaly_triggers_enabled: false,
+        },
+      }),
+    } as unknown as PatrolIntelligenceState;
+
+    render(() => <PatrolIntelligenceSummary state={patrolState} />);
+
+    expect(
+      screen.getByText('Recent activity mix: 1 full, 1 alert-triggered, 1 anomaly-triggered'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Trigger mode: 4 queued · busy mode · anomalies off')).toBeInTheDocument();
+  });
+
   it('does not surface disabled run actions on the compact assessment strip', () => {
     const patrolState = {
       ...createPatrolState(),
@@ -125,6 +173,12 @@ describe('PatrolIntelligenceSummary', () => {
     expect(screen.queryByTestId('patrol-summary-loading')).not.toBeInTheDocument();
   });
 });
+
+function todayAt(hours: number, minutes: number): string {
+  const value = new Date();
+  value.setHours(hours, minutes, 0, 0);
+  return value.toISOString();
+}
 
 function createPatrolState(): PatrolIntelligenceState {
   return {

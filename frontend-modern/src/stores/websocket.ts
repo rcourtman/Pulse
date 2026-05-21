@@ -780,12 +780,15 @@ export function createWebSocketStore(url: string) {
     shutdown,
     reconnect: () => {
       if (isDisposed) return;
-      ws?.close();
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        ws.close(1000, 'Reconnecting');
+      }
       clearReconnectTimeout();
       clearReconnectDelayTimeout();
       reconnectAttempt = 0; // Reset attempts for manual reconnect
       isReconnecting = false;
-      setReconnecting(false);
+      setConnected(false);
+      setReconnecting(true);
       connect();
     },
     switchUrl: (nextUrl: string) => {

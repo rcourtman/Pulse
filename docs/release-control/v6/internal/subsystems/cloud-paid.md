@@ -382,6 +382,12 @@ or other self-hosted uncapped continuity plans.
     also keep decorative icon titles out of tab accessible names, so hosted and
     self-hosted chrome announce the canonical tab label plus meaningful badge
     counts rather than duplicating branded SVG titles.
+    Retired operator top-level route compatibility in
+    `frontend-modern/src/App.tsx` must stay inside authenticated app-owned
+    surfaces such as Infrastructure, Workloads, Storage, and Recovery. Those
+    compatibility routes must not revive hosted signup, public Cloud trial,
+    pricing, or commercial acquisition surfaces inside the local product
+    runtime.
 22. Keep the hosted account portal shell task-first and compact. Section
     headers, billing action rows, and the maintained portal bundle under
     `internal/cloudcp/portal/` may surface the facts an operator needs, but the

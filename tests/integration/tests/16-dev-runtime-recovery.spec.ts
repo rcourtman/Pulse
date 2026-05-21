@@ -83,7 +83,7 @@ test.describe.serial('Managed dev runtime recovery', () => {
     test.skip(!truthy(process.env.PULSE_E2E_USE_HOT_DEV), 'Runs only against the managed hot-dev runtime');
 
     let blockNextSocket = false;
-    await page.routeWebSocket('/ws', async (ws) => {
+    await page.routeWebSocket('**/ws*', async (ws) => {
       if (blockNextSocket) {
         blockNextSocket = false;
         await ws.close({ code: 1013, reason: 'test-stream-interruption' });
