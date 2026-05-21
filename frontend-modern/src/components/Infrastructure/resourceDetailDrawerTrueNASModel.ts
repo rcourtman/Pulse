@@ -4,6 +4,8 @@ import type {
   ResourceStorageMeta,
   ResourceTrueNASAppMeta,
   ResourceTrueNASAppPort,
+  ResourceTrueNASMeta,
+  ResourceTrueNASServiceMeta,
   ResourceTrueNASShareMeta,
   ResourceTrueNASVMMeta,
 } from '@/types/resource';
@@ -68,6 +70,17 @@ const formatTemperature = (celsius?: number): string | null => {
   return `${celsius.toFixed(0)}°C`;
 };
 
+const formatDurationSeconds = (seconds?: number): string | null => {
+  const value = asPositiveNumber(seconds);
+  if (!value) return null;
+  const days = Math.floor(value / 86_400);
+  if (days > 0) return `${days}d`;
+  const hours = Math.floor(value / 3_600);
+  if (hours > 0) return `${hours}h`;
+  const minutes = Math.floor(value / 60);
+  return minutes > 0 ? `${minutes}m` : '<1m';
+};
+
 const formatCount = (value: number, singular: string, plural = `${singular}s`): string =>
   `${new Intl.NumberFormat().format(value)} ${value === 1 ? singular : plural}`;
 
@@ -120,6 +133,109 @@ const isTrueNASScopedResource = (resource: Resource): boolean =>
   resource.sources?.includes('truenas') === true ||
   resource.storage?.platform === 'truenas' ||
   resource.tags?.includes('truenas') === true;
+
+type TrueNASServiceStatus = 'running' | 'attention' | 'stopped' | 'disabled';
+
+const truenasServiceStatus = (service: ResourceTrueNASServiceMeta): TrueNASServiceStatus => {
+  const state = asString(service.state)?.toLowerCase() ?? '';
+  if (['running', 'started', 'active'].includes(state)) return 'running';
+  if (['failed', 'error', 'crashed', 'degraded', 'unknown'].includes(state)) return 'attention';
+  if (['stopped', 'stop', 'inactive'].includes(state)) {
+    return service.enabled === false ? 'disabled' : 'stopped';
+  }
+  return service.enabled === false ? 'disabled' : 'attention';
+};
+
+const serviceStatusLabel = (status: TrueNASServiceStatus): string => {
+  if (status === 'running') return 'Running';
+  if (status === 'attention') return 'Attention';
+  if (status === 'stopped') return 'Stopped';
+  return 'Disabled';
+};
+
+const serviceStatusTone = (status: TrueNASServiceStatus): ResourceDetailDrawerTrueNASRowTone => {
+  if (status === 'running') return 'success';
+  if (status === 'attention' || status === 'stopped') return 'warning';
+  return 'default';
+};
+
+const serviceNameLabel = (service: ResourceTrueNASServiceMeta): string | null => {
+  const value = asString(service.service) ?? asString(service.id);
+  if (!value) return null;
+  const normalized = value.toLowerCase();
+  if (['ftp', 'nfs', 's3', 'smb', 'snmp', 'ssh', 'ups'].includes(normalized)) {
+    return normalized.toUpperCase();
+  }
+  if (normalized === 'smartd') return 'SMART';
+  return normalizeDelimitedLabel(value);
+};
+
+const buildTrueNASSystemSections = (
+  resource: Resource,
+  truenas: ResourceTrueNASMeta,
+): ResourceDetailDrawerTrueNASSection[] => {
+  const services = truenas.services ?? [];
+  const serviceCounts = services.reduce<Record<TrueNASServiceStatus, number>>(
+    (counts, service) => {
+      counts[truenasServiceStatus(service)] += 1;
+      return counts;
+    },
+    { running: 0, attention: 0, stopped: 0, disabled: 0 },
+  );
+  const serviceLabels = services
+    .map((service) => serviceNameLabel(service))
+    .filter((value): value is string => Boolean(value));
+  const pids = services.flatMap((service) => service.pids ?? []).filter((pid) => pid > 0);
+  const systemRows = compactRows([
+    row('Hostname', asString(truenas.hostname) ?? asString(resource.name)),
+    row('Version', asString(truenas.version)),
+    row('Uptime', formatDurationSeconds(truenas.uptimeSeconds ?? resource.uptime)),
+    row('Status', normalizeDelimitedLabel(resource.status)),
+  ]);
+
+  const healthRows = compactRows([
+    row('Storage risk', normalizeDelimitedLabel(truenas.storageRisk?.level), {
+      tone: truenas.storageRisk?.level?.toLowerCase() === 'warning' ? 'warning' : 'default',
+    }),
+    row('Storage summary', asString(truenas.storageRiskSummary), { tone: 'warning' }),
+    row('Storage posture', asString(truenas.storagePostureSummary), {
+      tone: truenas.storagePostureSummary ? 'warning' : 'default',
+    }),
+    row('Protection reduced', yesNoValue(truenas.protectionReduced), {
+      tone: truenas.protectionReduced ? 'warning' : 'success',
+    }),
+    row('Protection summary', asString(truenas.protectionSummary), {
+      tone: truenas.protectionSummary ? 'warning' : 'default',
+    }),
+    row('Rebuild active', yesNoValue(truenas.rebuildInProgress), {
+      tone: truenas.rebuildInProgress ? 'warning' : 'success',
+    }),
+    row('Rebuild', asString(truenas.rebuildSummary)),
+  ]);
+
+  const serviceRows = compactRows([
+    row('Services', services.length > 0 ? formatCount(services.length, 'service') : null),
+    ...(['running', 'attention', 'stopped', 'disabled'] as TrueNASServiceStatus[]).map((status) =>
+      row(
+        serviceStatusLabel(status),
+        serviceCounts[status] > 0 ? `${serviceCounts[status]}` : null,
+        {
+          tone: serviceStatusTone(status),
+        },
+      ),
+    ),
+    row('PIDs', pids.length > 0 ? summarizeList(pids.map(String), 4) : null, {
+      title: pids.join(', '),
+    }),
+    row('Names', summarizeList(serviceLabels, 6), { title: serviceLabels.join(', ') }),
+  ]);
+
+  return compactSections([
+    { label: 'System', rows: systemRows },
+    { label: 'Storage Health', rows: healthRows },
+    { label: 'Services', rows: serviceRows },
+  ]);
+};
 
 const storageKindLabel = (storage: ResourceStorageMeta): string | null => {
   const topology = asString(storage.topology);
@@ -552,6 +668,9 @@ export const buildTrueNASDetailSections = (
   if (isTrueNASScopedResource(resource) && resource.physicalDisk) {
     return buildTrueNASDiskSections(resource, resource.physicalDisk);
   }
+  if (isTrueNASScopedResource(resource) && resource.truenas) {
+    return buildTrueNASSystemSections(resource, resource.truenas);
+  }
   return [];
 };
 
@@ -610,6 +729,18 @@ export const buildTrueNASDetailsSummary = (resource: Resource): string | null =>
       normalizeDelimitedLabel(disk.health),
       formatBytes(disk.sizeBytes),
       formatTemperature(disk.temperature),
+    ].filter((value): value is string => Boolean(value));
+    return summary.length > 0 ? summary.join(', ') : null;
+  }
+
+  if (isTrueNASScopedResource(resource) && resource.truenas) {
+    const truenas = resource.truenas;
+    const serviceCount = truenas.services?.length;
+    const summary = [
+      asString(truenas.version),
+      formatDurationSeconds(truenas.uptimeSeconds ?? resource.uptime),
+      serviceCount !== undefined ? formatCount(serviceCount, 'service') : null,
+      asString(truenas.storageRiskSummary) ?? asString(truenas.protectionSummary),
     ].filter((value): value is string => Boolean(value));
     return summary.length > 0 ? summary.join(', ') : null;
   }

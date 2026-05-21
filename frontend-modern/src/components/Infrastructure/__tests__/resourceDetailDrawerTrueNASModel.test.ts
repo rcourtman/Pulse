@@ -19,6 +19,45 @@ const baseResource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 describe('resourceDetailDrawerTrueNASModel', () => {
+  it('summarizes native TrueNAS system metadata for the detail drawer', () => {
+    const resource = baseResource({
+      type: 'agent',
+      displayName: 'truenas-main',
+      uptime: 42 * 86_400,
+      truenas: {
+        hostname: 'truenas-main',
+        version: 'TrueNAS-SCALE-24.10.2',
+        storageRisk: { level: 'warning' },
+        storageRiskSummary: 'ZFS pool archive is DEGRADED',
+        storagePostureSummary: 'One pool needs attention',
+        protectionReduced: true,
+        protectionSummary: 'Snapshots are current but replication is degraded',
+        services: [
+          { id: '1', service: 'smb', enabled: true, state: 'RUNNING', pids: [2418, 2420] },
+          { id: '2', service: 'nfs', enabled: true, state: 'RUNNING', pids: [2501] },
+          { id: '3', service: 'ssh', enabled: false, state: 'STOPPED' },
+          { id: '4', service: 'smartd', enabled: true, state: 'STOPPED' },
+        ],
+      },
+    });
+
+    expect(buildTrueNASDetailsSummary(resource)).toBe(
+      'TrueNAS-SCALE-24.10.2, 42d, 4 services, ZFS pool archive is DEGRADED',
+    );
+    expect(buildTrueNASDetailSections(resource).map((section) => section.label)).toEqual([
+      'System',
+      'Storage Health',
+      'Services',
+    ]);
+    expect(buildTrueNASDetailSections(resource)[2]?.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'Running', value: '2' }),
+        expect.objectContaining({ label: 'Disabled', value: '1' }),
+        expect.objectContaining({ label: 'Names', value: 'SMB, NFS, SSH, SMART' }),
+      ]),
+    );
+  });
+
   it('summarizes native vm.query metadata for the detail drawer', () => {
     const resource = baseResource({
       type: 'vm',

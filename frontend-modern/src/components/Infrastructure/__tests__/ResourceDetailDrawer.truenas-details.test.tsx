@@ -65,6 +65,49 @@ const baseResource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 describe('ResourceDetailDrawer TrueNAS details', () => {
+  it('opens native TrueNAS system detail immediately for inline platform rows', () => {
+    const resource = baseResource({
+      id: 'truenas-system-1',
+      type: 'agent',
+      displayName: 'truenas-main',
+      uptime: 42 * 86_400,
+      truenas: {
+        hostname: 'truenas-main',
+        version: 'TrueNAS-SCALE-24.10.2',
+        storageRisk: { level: 'warning' },
+        storageRiskSummary: 'ZFS pool archive is DEGRADED',
+        storagePostureSummary: 'One pool needs attention',
+        protectionReduced: true,
+        protectionSummary: 'Snapshots are current but replication is degraded',
+        services: [
+          { id: '1', service: 'smb', enabled: true, state: 'RUNNING', pids: [2418, 2420] },
+          { id: '2', service: 'nfs', enabled: true, state: 'RUNNING', pids: [2501] },
+          { id: '3', service: 'ssh', enabled: false, state: 'STOPPED' },
+          { id: '4', service: 'smartd', enabled: true, state: 'STOPPED' },
+        ],
+      },
+    });
+
+    const { getByRole, getByTestId } = render(() => (
+      <ResourceDetailDrawer
+        resource={resource}
+        presentation="table-row"
+        initialShowTrueNASDetails
+      />
+    ));
+
+    expect(getByRole('button', { name: 'Hide TrueNAS' })).toBeInTheDocument();
+    const section = within(getByTestId('resource-truenas-details-section'));
+    expect(section.getByText('System')).toBeInTheDocument();
+    expect(section.getByText('Storage Health')).toBeInTheDocument();
+    expect(section.getAllByText('Services').length).toBeGreaterThan(1);
+    expect(section.getByText('TrueNAS-SCALE-24.10.2')).toBeInTheDocument();
+    expect(section.getByText('SMB, NFS, SSH, SMART')).toBeInTheDocument();
+    expect(
+      section.getByText('Snapshots are current but replication is degraded'),
+    ).toBeInTheDocument();
+  });
+
   it('renders native TrueNAS VM detail only after the TrueNAS section is expanded', () => {
     const resource = baseResource({
       id: 'truenas-vm-1',
