@@ -18,17 +18,13 @@ import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
 import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
-import {
-  getResourceRoutingScopeLabel,
-  getResourceSensitivityLabel,
-} from '@/utils/resourcePolicyPresentation';
 import { ResourceCorrelationSummary } from './ResourceCorrelationSummary';
-import { ResourceChangeSummary } from './ResourceChangeSummary';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
 import { ResourceActionHistory } from './ResourceActionHistory';
 import { ResourceOperatorStateSection } from './ResourceOperatorStateSection';
 import { MaintenanceVerificationSection } from './MaintenanceVerificationSection';
 import { InlineResourceSummaryTables, ResourceSummaryCards } from './ResourceDetailSummary';
+import { ResourceInvestigationContextTables } from './ResourceInvestigationContextTables';
 import {
   RESOURCE_CHANGE_KIND_ORDER,
   RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER,
@@ -41,10 +37,6 @@ import { formatConfidenceLabel } from '@/utils/confidencePresentation';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 import { shouldShowResourcePlatformId } from '@/utils/resourceIdentity';
 import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
-import {
-  RESOURCE_ANALYSIS_LABEL,
-  RESOURCE_SAFE_SUMMARY_LABEL,
-} from '@/utils/resourceAnalysisPresentation';
 import { formatInteger } from './resourceDetailMappers';
 import { buildPbsJobHealthEvidenceModel } from './resourceDetailDrawerServiceModel';
 import { ResourceDetailDrawerSupportDisclosure as SupportDisclosure } from './ResourceDetailDrawerSupportDisclosure';
@@ -634,93 +626,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                 contentClass="mt-3 space-y-3"
                 dataTestId="resource-investigation-context"
               >
-                <Show when={drawer.resourceIntelligence()}>
-                  {(intel) => (
-                    <div class="space-y-1.5 text-[11px]">
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="text-muted uppercase tracking-wide">
-                          {RESOURCE_ANALYSIS_LABEL}
-                        </span>
-                      </div>
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="text-muted">Health</span>
-                        <span class="font-semibold text-base-content">
-                          {intel().health.grade} · {Math.round(intel().health.score)}/100
-                        </span>
-                      </div>
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="text-muted">Trend</span>
-                        <span class="font-semibold capitalize text-base-content">
-                          {intel().health.trend}
-                        </span>
-                      </div>
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="text-muted">Notes</span>
-                        <span class="font-semibold text-base-content">{intel().note_count}</span>
-                      </div>
-                      <ResourceChangeSummary
-                        class="space-y-0"
-                        title="Latest canonical change"
-                        changes={intel().recent_changes}
-                        resolveResourceLabel={drawer.resolveResourceLabel}
-                        maxChanges={1}
-                        compact
-                      />
-                    </div>
-                  )}
-                </Show>
-
-                <Show when={drawer.hasGovernanceData()}>
-                  <div class="space-y-1.5 text-[11px]">
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="text-muted uppercase tracking-wide">Governance</span>
-                    </div>
-                    <Show when={resource.policy}>
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="text-muted">Sensitivity</span>
-                        <span class="font-semibold text-base-content">
-                          {getResourceSensitivityLabel(resource.policy?.sensitivity)}
-                        </span>
-                      </div>
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="text-muted">Routing</span>
-                        <span class="font-semibold text-base-content">
-                          {getResourceRoutingScopeLabel(resource.policy?.routing.scope)}
-                        </span>
-                      </div>
-                    </Show>
-                    <Show when={drawer.policyRedactions().length > 0 || drawer.governanceSummary()}>
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="text-muted">Redactions</span>
-                        <span class="font-semibold text-base-content">
-                          {drawer.policyRedactions().length}
-                        </span>
-                      </div>
-                    </Show>
-                    <Show when={drawer.policyRedactions().length > 0}>
-                      <div class="flex flex-col gap-1">
-                        <span class="text-muted">Redaction labels</span>
-                        <div class="flex flex-wrap gap-1">
-                          <For each={drawer.policyRedactions()}>
-                            {(label) => (
-                              <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
-                                {label}
-                              </span>
-                            )}
-                          </For>
-                        </div>
-                      </div>
-                    </Show>
-                    <Show when={drawer.governanceSummary()}>
-                      <div class="flex flex-col gap-1">
-                        <span class="text-muted">{RESOURCE_SAFE_SUMMARY_LABEL}</span>
-                        <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px] text-base-content">
-                          {drawer.governanceSummary()}
-                        </div>
-                      </div>
-                    </Show>
-                  </div>
-                </Show>
+                <ResourceInvestigationContextTables resource={resource} drawer={drawer} />
               </SupportDisclosure>
             </Show>
 

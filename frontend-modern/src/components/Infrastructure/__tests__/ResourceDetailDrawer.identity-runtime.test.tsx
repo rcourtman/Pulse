@@ -128,7 +128,9 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(() => getByText('Mode')).toThrow();
     expect(() => getByText('Hybrid')).toThrow();
     expect(() => getByText('Platform ID')).toThrow();
-    expect(getByTestId('resource-current-state-section').querySelector('.border-dashed')).toBeNull();
+    expect(
+      getByTestId('resource-current-state-section').querySelector('.border-dashed'),
+    ).toBeNull();
     expect(queryByRole('button', { name: 'Show details' })).toBeNull();
     expect(() => getByText('Runtime')).toThrow();
     expect(container.querySelector('.text-\\[11px\\].text-muted.truncate')).toBeNull();
@@ -211,12 +213,8 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
   it('uses terse availability notices for specialized tabs', () => {
     expect(getSpecializedTabAvailabilityMessage('mail')).toBe('PMG resources only.');
     expect(getSpecializedTabAvailabilityMessage('namespaces')).toBe('Kubernetes clusters only.');
-    expect(getSpecializedTabAvailabilityMessage('deployments')).toBe(
-      'Kubernetes clusters only.',
-    );
-    expect(getSpecializedTabAvailabilityMessage('swarm')).toBe(
-      'Docker runtimes with Swarm only.',
-    );
+    expect(getSpecializedTabAvailabilityMessage('deployments')).toBe('Kubernetes clusters only.');
+    expect(getSpecializedTabAvailabilityMessage('swarm')).toBe('Docker runtimes with Swarm only.');
   });
 
   it('keeps host detail cards behind a secondary overview disclosure', async () => {
@@ -268,23 +266,20 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       expect(getByText('Hardware')).toBeInTheDocument();
     });
     expect(getByTestId('resource-secondary-sections').classList.contains('space-y-3')).toBe(true);
-    expect(
-      getByTestId('resource-support-sections').classList.contains('flex'),
-    ).toBe(true);
-    expect(
-      getByTestId('resource-support-sections').classList.contains('flex-wrap'),
-    ).toBe(true);
+    expect(getByTestId('resource-support-sections').classList.contains('flex')).toBe(true);
+    expect(getByTestId('resource-support-sections').classList.contains('flex-wrap')).toBe(true);
     expect(
       Array.from(getByTestId('resource-support-sections').children).map((node) =>
         node.getAttribute('data-testid'),
       ),
-    ).toEqual([
-      'resource-access-section',
-      'resource-host-details-section',
-    ]);
-    expect(getByTestId('resource-host-details-section').querySelector('.mt-3.flex.flex-wrap')).toBeTruthy();
+    ).toEqual(['resource-access-section', 'resource-host-details-section']);
     expect(
-      getByTestId('resource-host-details-section').querySelector('.mt-3.flex.flex-wrap')?.classList.contains('[&>*]:min-w-[220px]'),
+      getByTestId('resource-host-details-section').querySelector('.mt-3.flex.flex-wrap'),
+    ).toBeTruthy();
+    expect(
+      getByTestId('resource-host-details-section')
+        .querySelector('.mt-3.flex.flex-wrap')
+        ?.classList.contains('[&>*]:min-w-[220px]'),
     ).toBe(true);
     expect(getByText('Network')).toBeInTheDocument();
     expect(getByText('Disks')).toBeInTheDocument();
@@ -349,7 +344,9 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     ));
 
     expect(getByTestId('resource-vmware-details-section')).toBeInTheDocument();
-    expect(getByText('Lab VC · Read-only vCenter context · 2 snapshots · 1 alarm · 1 task')).toBeInTheDocument();
+    expect(
+      getByText('Lab VC · Read-only vCenter context · 2 snapshots · 1 alarm · 1 task'),
+    ).toBeInTheDocument();
     expect(queryByText('Compute Cluster')).toBeNull();
     expect(queryByText('Create snapshot (success)')).toBeNull();
 
@@ -381,9 +378,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
     });
 
-    const { getByTestId, queryByText } = render(() => (
-      <ResourceDetailDrawer resource={resource} />
-    ));
+    const { getByTestId, queryByText } = render(() => <ResourceDetailDrawer resource={resource} />);
 
     expect(queryByText('Sources')).toBeNull();
     expect(within(getByTestId('resource-header-badges')).getByText('PMG')).toBeInTheDocument();
@@ -666,6 +661,9 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
         within(getByTestId('resource-investigation-context')).getByText('Analysis'),
       ).toBeInTheDocument();
     });
+    const contextSection = getByTestId('resource-investigation-context');
+    expect(contextSection.querySelector('table')).toBeTruthy();
+    expect(contextSection.querySelector('tbody')).toBeTruthy();
     expect(getByText('Health')).toBeInTheDocument();
     expect(getByText('A · 92/100')).toBeInTheDocument();
     expect(getByText('Trend')).toBeInTheDocument();

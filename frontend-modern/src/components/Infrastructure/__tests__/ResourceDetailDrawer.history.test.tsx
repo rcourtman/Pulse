@@ -7,6 +7,7 @@ import discoveryTabStateSource from '@/components/Discovery/useDiscoveryTabState
 import resourceDetailDrawerShellSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import resourceDetailSummarySource from '@/components/Infrastructure/ResourceDetailSummary.tsx?raw';
+import resourceInvestigationContextSource from '@/components/Infrastructure/ResourceInvestigationContextTables.tsx?raw';
 import resourceActionHistorySource from '@/components/Infrastructure/ResourceActionHistory.tsx?raw';
 import resourceDetailDrawerHistoryStateSource from '@/components/Infrastructure/useResourceDetailDrawerHistoryState.ts?raw';
 import createNonSuspendingQuerySource from '@/hooks/createNonSuspendingQuery.ts?raw';
@@ -151,7 +152,12 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(discoveryTabSource).not.toContain('triggerDiscovery(');
     expect(discoveryTabSource).not.toContain('updateDiscoveryNotes(');
     expect(resourceDetailDrawerOverviewSource).toContain("from './ResourceDetailSummary'");
+    expect(resourceDetailDrawerOverviewSource).toContain(
+      "from './ResourceInvestigationContextTables'",
+    );
     expect(resourceDetailSummarySource).toContain("from '@/components/shared/TagBadges'");
+    expect(resourceInvestigationContextSource).toContain('<table');
+    expect(resourceInvestigationContextSource).toContain('RESOURCE_SAFE_SUMMARY_LABEL');
     expect(resourceDetailDrawerOverviewSource).toContain('getAllFilterOptionLabel');
     expect(resourceDetailDrawerOverviewSource).not.toContain("'All kinds'");
     expect(resourceDetailDrawerOverviewSource).not.toContain("'All sources'");
@@ -588,11 +594,12 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getByRole('button', { name: 'Open analysis' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Show context' }));
-    await within(screen.getByTestId('resource-investigation-context')).findByText('Analysis');
+    const contextSection = screen.getByTestId('resource-investigation-context');
+    await within(contextSection).findByText('Analysis');
+    expect(contextSection.querySelector('table')).toBeTruthy();
+    expect(contextSection.querySelector('tbody')).toBeTruthy();
     expect(
-      screen
-        .getByTestId('resource-investigation-context')
-        .querySelectorAll('.rounded.border.border-border.bg-surface.p-3').length,
+      contextSection.querySelectorAll('.rounded.border.border-border.bg-surface.p-3').length,
     ).toBe(0);
     expect(screen.getByText('Health')).toBeInTheDocument();
     expect(screen.getByText('A · 92/100')).toBeInTheDocument();
