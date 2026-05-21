@@ -27,9 +27,11 @@ jobs:
     steps:
       - name: Resolve demo target environment
         id: target
+        env:
+          INPUT_TARGET: ${{ inputs.target }}
         run: |
           set -euo pipefail
-          TARGET="${{ inputs.target }}"
+          TARGET="$INPUT_TARGET"
           case "$TARGET" in
             stable)
               ENVIRONMENT_NAME="demo-stable"

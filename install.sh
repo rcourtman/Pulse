@@ -2574,11 +2574,14 @@ detect_pulse_architecture() {
 find_pulse_binary_in_dir() {
     local dir="$1"
 
-    if [[ -f "$dir/bin/pulse" ]]; then
+    # Reject symlinks: a malicious archive could place a symlink at the
+    # expected binary path pointing at an arbitrary file outside the
+    # extract directory, which would then be cp'd to $INSTALL_DIR/bin/pulse.
+    if [[ -f "$dir/bin/pulse" && ! -L "$dir/bin/pulse" ]]; then
         printf '%s\n' "$dir/bin/pulse"
         return 0
     fi
-    if [[ -f "$dir/pulse" ]]; then
+    if [[ -f "$dir/pulse" && ! -L "$dir/pulse" ]]; then
         printf '%s\n' "$dir/pulse"
         return 0
     fi
@@ -2824,7 +2827,9 @@ install_pulse_archive() {
     fi
 
     temp_extract=$(mktemp -d /tmp/pulse-extract-XXXXXX)
-    if ! tar -xzf "$archive_path" -C "$temp_extract"; then
+    # --no-same-owner: do not honor uid/gid stored in the archive (extract as root, owned by root)
+    # --no-overwrite-dir: refuse to replace existing directory metadata with archive entries
+    if ! tar --no-same-owner --no-overwrite-dir -xzf "$archive_path" -C "$temp_extract"; then
         print_error "Failed to extract Pulse release archive"
         rm -rf "$temp_extract"
         return 1
@@ -2893,7 +2898,7 @@ install_pulse_archive() {
 
         rm -f "$INSTALL_DIR/bin/pulse"
         temp_extract2=$(mktemp -d /tmp/pulse-extract2-XXXXXX)
-        if ! tar -xzf "$archive_path" -C "$temp_extract2"; then
+        if ! tar --no-same-owner --no-overwrite-dir -xzf "$archive_path" -C "$temp_extract2"; then
             print_warn "Failed to re-extract archive for version verification retry"
         else
             pulse_binary_path=$(find_pulse_binary_in_dir "$temp_extract2" 2>/dev/null || true)

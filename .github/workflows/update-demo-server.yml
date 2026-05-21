@@ -34,14 +34,19 @@ jobs:
     steps:
       - name: Resolve target tag and demo environment
         id: target
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_TARGET: ${{ inputs.target }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ inputs.tag }}"
-            REQUESTED_TARGET="${{ inputs.target }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$INPUT_TAG"
+            REQUESTED_TARGET="$INPUT_TARGET"
           else
-            TAG="${{ github.event.release.tag_name }}"
+            TAG="$RELEASE_TAG"
             REQUESTED_TARGET="auto"
           fi
 
