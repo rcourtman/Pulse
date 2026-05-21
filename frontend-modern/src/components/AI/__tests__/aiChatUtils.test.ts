@@ -105,6 +105,42 @@ describe('aiChatUtils', () => {
 
       spy.mockRestore();
     });
+
+    // Regression: drop `javascript:` href from LLM-supplied markdown links.
+    // Relies on the explicit ALLOWED_URI_REGEXP pin so the behaviour survives
+    // future DOMPurify upgrades that might relax internal scheme filtering.
+    it('strips javascript: hrefs from links', () => {
+      const output = utils.renderMarkdown('[click](javascript:alert(1))');
+      expect(output).not.toContain('javascript:');
+      expect(output).not.toContain('alert(1)');
+    });
+
+    // Regression: data: URIs are not in the allowlist either; including SVG
+    // data URIs which some browsers will execute inline script from.
+    it('strips data: hrefs from links', () => {
+      const output = utils.renderMarkdown('[svg](data:image/svg+xml,<svg/>)');
+      expect(output).not.toContain('data:');
+    });
+
+    // Regression: the LLM has no legitimate reason to apply arbitrary CSS
+    // classes — used to be ALLOWED_ATTR; allowing them opens a UI-redress
+    // surface (overlay attacks, hidden text, etc.).
+    it('strips class attribute from LLM-supplied markup', () => {
+      const output = utils.renderMarkdown(
+        '<div class="fixed inset-0 z-50 bg-black">overlay</div>',
+      );
+      expect(output).not.toContain('class="fixed');
+      expect(output).not.toContain('inset-0');
+    });
+
+    // Regression: real http/https links still render and pick up the safe
+    // target/rel attributes from the afterSanitizeAttributes hook.
+    it('preserves https links and applies target/rel', () => {
+      const output = utils.renderMarkdown('[ok](https://example.com)');
+      expect(output).toContain('href="https://example.com"');
+      expect(output).toContain('target="_blank"');
+      expect(output).toContain('rel="noopener noreferrer"');
+    });
   });
 
   describe('Mention ID format contracts', () => {

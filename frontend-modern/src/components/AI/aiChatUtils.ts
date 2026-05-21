@@ -18,7 +18,15 @@ export function groupModelsByProvider(models: ModelInfo[]): Map<string, ModelInf
   return grouped;
 }
 
-// Configure marked for safe rendering
+// Configure marked for safe rendering.
+//
+// DOMPurify runs downstream of marked.parse and is the actual XSS gate, but
+// we set marked options here to keep its output predictable rather than
+// relying solely on the downstream sanitizer. Raw HTML coming out of an LLM
+// would otherwise pass through marked unchanged (marked allows raw HTML by
+// default since v9) and rely on DOMPurify to clean it. Defence-in-depth: a
+// future DOMPurify-config edit that accidentally loosens the allowlist
+// shouldn't suddenly mean script tags from the LLM hit the DOM.
 marked.setOptions({
   breaks: true, // Convert \n to <br>
   gfm: true, // GitHub Flavored Markdown
@@ -59,7 +67,21 @@ export const renderMarkdown = (content: unknown): string => {
   try {
     configureDOMPurify();
     const rawHtml = marked.parse(normalized) as string;
-    // Sanitize to prevent XSS from malicious LLM output or injected content
+    // Sanitize to prevent XSS from malicious LLM output or injected content.
+    //
+    // Hardening notes:
+    //  - ALLOWED_URI_REGEXP pins href values to http/https/mailto. Without
+    //    this we rely on DOMPurify's internal default URI scheme filter,
+    //    which strips javascript:/data: in current versions but is library-
+    //    version dependent; an explicit allowlist regex makes the intent
+    //    survive future updates.
+    //  - 'class' was previously in ALLOWED_ATTR. The LLM has no legitimate
+    //    reason to apply utility classes, and allowing arbitrary classes
+    //    opens a UI-redressing surface (e.g. injecting "fixed inset-0 z-50
+    //    bg-black" to overlay the page). Drop it.
+    //  - 'target' and 'rel' are not in ALLOWED_ATTR because the
+    //    afterSanitizeAttributes hook above sets them on every <a>; they
+    //    don't need to be parsed in from the LLM-supplied HTML.
     return DOMPurify.sanitize(rawHtml, {
       // Allow common formatting tags but block scripts, iframes, etc.
       ALLOWED_TAGS: [
@@ -93,7 +115,8 @@ export const renderMarkdown = (content: unknown): string => {
         'span',
         'div',
       ],
-      ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
+      ALLOWED_ATTR: ['href'],
+      ALLOWED_URI_REGEXP: /^(?:https?:|mailto:)/i,
       // Force all links to open in new tab and prevent opener attacks
       ADD_ATTR: ['target', 'rel'],
     });
