@@ -45,8 +45,15 @@ const makeRecoveryPoint = (
 });
 
 describe('truenasPageModel', () => {
-  it('declares the TrueNAS section set as Overview + Storage + Protection', () => {
-    expect(TRUENAS_TAB_SPECS.map((tab) => tab.id)).toEqual(['overview', 'storage', 'protection']);
+  it('declares the native TrueNAS section set around API facets', () => {
+    expect(TRUENAS_TAB_SPECS.map((tab) => tab.id)).toEqual([
+      'overview',
+      'storage',
+      'apps',
+      'vms',
+      'shares',
+      'protection',
+    ]);
   });
 
   it('buckets systems, workloads, and native storage inventory by TrueNAS API facet', () => {

@@ -3,7 +3,7 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import type { Resource, ResourceIncident, ResourceType } from '@/types/resource';
 import type { RecoveryPoint } from '@/types/recovery';
 
-export type TrueNASPageTabId = 'overview' | 'storage' | 'protection';
+export type TrueNASPageTabId = 'overview' | 'storage' | 'apps' | 'vms' | 'shares' | 'protection';
 export type TrueNASAppStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
 export type TrueNASVMStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
 export type TrueNASShareStatusFilter = 'all' | 'active' | 'attention' | 'disabled';
@@ -24,14 +24,17 @@ export type TrueNASTabSpec = {
   path: string;
 };
 
-// The Overview tab is intentionally narrow: appliance systems first, then
-// native workload inventory when present. Storage inventory, pool topology, and
-// physical disks all live on the Storage tab, while snapshots and replication
-// live on the Protection tab through a TrueNAS-native presentation over the
-// canonical recovery points contract.
+// The Overview tab is intentionally narrow: appliance systems and active
+// health signals. Native API inventory has first-class homes: Storage for
+// pools, datasets, and disks; Apps, VMs, and Shares for their TrueNAS API
+// facets; and Protection for snapshots and replication over the canonical
+// recovery points contract.
 export const TRUENAS_TAB_SPECS: readonly TrueNASTabSpec[] = [
   { id: 'overview', label: 'Overview', path: '/truenas/overview' },
   { id: 'storage', label: 'Storage', path: '/truenas/storage' },
+  { id: 'apps', label: 'Apps', path: '/truenas/apps' },
+  { id: 'vms', label: 'VMs', path: '/truenas/vms' },
+  { id: 'shares', label: 'Shares', path: '/truenas/shares' },
   { id: 'protection', label: 'Protection', path: '/truenas/protection' },
 ] as const;
 
