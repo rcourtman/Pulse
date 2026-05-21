@@ -12,6 +12,7 @@ export interface UseResourceDetailDrawerStateOptions {
   resource: Resource;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   presentation?: ResourceDetailDrawerPresentation;
+  initialShowTrueNASDetails?: boolean;
 }
 
 export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerStateOptions) => {
@@ -27,7 +28,9 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   const [showHostDetails, setShowHostDetails] = createSignal(false);
   const [showServiceDetails, setShowServiceDetails] = createSignal(false);
   const [showVMwareDetails, setShowVMwareDetails] = createSignal(false);
-  const [showTrueNASDetails, setShowTrueNASDetails] = createSignal(false);
+  const [showTrueNASDetails, setShowTrueNASDetails] = createSignal(
+    options.initialShowTrueNASDetails === true,
+  );
   const [showPbsJobDetail, setShowPbsJobDetail] = createSignal(false);
   const [showPmgMailFlowDetail, setShowPmgMailFlowDetail] = createSignal(false);
   const [k8sDeploymentsPrefillNamespace, setK8sDeploymentsPrefillNamespace] = createSignal('');

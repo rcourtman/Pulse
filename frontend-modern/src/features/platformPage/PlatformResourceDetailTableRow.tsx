@@ -63,33 +63,43 @@ export function createPlatformResourceLabelResolver(resources: () => readonly Re
   };
 }
 
+const hasNativeTrueNASDetails = (resource: Resource): boolean =>
+  Boolean(resource.truenas?.app || resource.truenas?.share || resource.truenas?.vm);
+
 export const PlatformResourceDetailTableRow: Component<{
   resource: Resource;
   open: boolean;
   detailRowId: string;
   colSpan: number;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
+  initialShowTrueNASDetails?: boolean;
   onClose?: () => void;
-}> = (props) => (
-  <Show when={props.open}>
-    <TableRow
-      data-inline-detail-for={props.resource.id}
-      data-inline-platform-resource-detail-for={props.resource.id}
-    >
-      <TableCell
-        id={props.detailRowId}
-        colspan={props.colSpan}
-        class="border-b border-border bg-surface-alt p-0"
+}> = (props) => {
+  const initialShowTrueNASDetails = () =>
+    props.initialShowTrueNASDetails ?? hasNativeTrueNASDetails(props.resource);
+
+  return (
+    <Show when={props.open}>
+      <TableRow
+        data-inline-detail-for={props.resource.id}
+        data-inline-platform-resource-detail-for={props.resource.id}
       >
-        <div class="px-2 py-3 sm:px-4 sm:py-4" onClick={(event) => event.stopPropagation()}>
-          <ResourceDetailDrawer
-            resource={props.resource}
-            presentation="table-row"
-            resolveResourceLabel={props.resolveResourceLabel}
-            onClose={props.onClose}
-          />
-        </div>
-      </TableCell>
-    </TableRow>
-  </Show>
-);
+        <TableCell
+          id={props.detailRowId}
+          colspan={props.colSpan}
+          class="border-b border-border bg-surface-alt p-0"
+        >
+          <div class="px-2 py-3 sm:px-4 sm:py-4" onClick={(event) => event.stopPropagation()}>
+            <ResourceDetailDrawer
+              resource={props.resource}
+              presentation="table-row"
+              resolveResourceLabel={props.resolveResourceLabel}
+              initialShowTrueNASDetails={initialShowTrueNASDetails()}
+              onClose={props.onClose}
+            />
+          </div>
+        </TableCell>
+      </TableRow>
+    </Show>
+  );
+};

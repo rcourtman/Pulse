@@ -152,6 +152,46 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
     expect(section.getByText('/mnt/tank/apps/nextcloud -> /data')).toBeInTheDocument();
   });
 
+  it('can open native TrueNAS detail immediately for inline platform rows', () => {
+    const resource = baseResource({
+      id: 'truenas-app-1',
+      type: 'app-container',
+      displayName: 'nextcloud',
+      truenas: {
+        app: {
+          name: 'nextcloud',
+          state: 'RUNNING',
+          humanVersion: '29.0.0',
+          containerCount: 2,
+          upgradeAvailable: true,
+          imageUpdatesAvailable: false,
+          usedPorts: [
+            {
+              containerPort: 443,
+              protocol: 'tcp',
+              hostPorts: [{ hostIp: '0.0.0.0', hostPort: 30443 }],
+            },
+          ],
+          volumes: [{ source: '/mnt/tank/apps/nextcloud', destination: '/data' }],
+        },
+      },
+    });
+
+    const { getByRole, getByTestId } = render(() => (
+      <ResourceDetailDrawer
+        resource={resource}
+        presentation="table-row"
+        initialShowTrueNASDetails
+      />
+    ));
+
+    expect(getByRole('button', { name: 'Hide TrueNAS' })).toBeInTheDocument();
+    const section = within(getByTestId('resource-truenas-details-section'));
+    expect(section.getByText('App')).toBeInTheDocument();
+    expect(section.getByText('0.0.0.0:30443 -> 443/tcp')).toBeInTheDocument();
+    expect(section.getByText('/mnt/tank/apps/nextcloud -> /data')).toBeInTheDocument();
+  });
+
   it('renders native TrueNAS share detail from SMB and NFS inventory', () => {
     const resource = baseResource({
       id: 'truenas-share-1',
