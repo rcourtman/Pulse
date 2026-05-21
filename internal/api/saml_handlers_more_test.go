@@ -125,18 +125,89 @@ func TestClearSession(t *testing.T) {
 	}
 }
 
-func TestHandleSAMLSLO_Redirects(t *testing.T) {
-	router := &Router{}
+// TestHandleSAMLSLO_RejectsEmptyPayload regresses the unauthenticated force-
+// logout DoS that previously existed on /api/saml/{id}/slo. A bare GET or
+// POST with no SAMLResponse/SAMLRequest payload must not redirect to the
+// "logout=success" page and must not touch session state.
+func TestHandleSAMLSLO_RejectsEmptyPayload(t *testing.T) {
+	router := &Router{samlManager: NewSAMLServiceManager("https://pulse.example.com")}
+	metadataXML := `<?xml version="1.0"?>
+<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="idp">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/>
+  </IDPSSODescriptor>
+</EntityDescriptor>`
+	router.samlManager.services["okta"] = newTestSAMLService(t, "okta", metadataXML)
+
 	req := httptest.NewRequest(http.MethodGet, "/api/saml/okta/slo", nil)
 	rec := httptest.NewRecorder()
 
 	router.handleSAMLSLO(rec, req)
 
-	if rec.Code != http.StatusFound {
-		t.Fatalf("expected status %d, got %d", http.StatusFound, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on empty SLO payload, got %d body=%q", rec.Code, rec.Body.String())
 	}
-	if loc := rec.Header().Get("Location"); loc != "/?logout=success" {
-		t.Fatalf("unexpected redirect location %q", loc)
+	if loc := rec.Header().Get("Location"); loc != "" {
+		t.Fatalf("must not redirect on empty SLO payload, got %q", loc)
+	}
+}
+
+// TestHandleSAMLSLO_RejectsInvalidLogoutResponse confirms a SAMLResponse
+// parameter with a value the IdP cert cannot validate (gibberish) is
+// rejected with 403, again without clearing session.
+func TestHandleSAMLSLO_RejectsInvalidLogoutResponse(t *testing.T) {
+	router := &Router{samlManager: NewSAMLServiceManager("https://pulse.example.com")}
+	metadataXML := `<?xml version="1.0"?>
+<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="idp">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/>
+  </IDPSSODescriptor>
+</EntityDescriptor>`
+	router.samlManager.services["okta"] = newTestSAMLService(t, "okta", metadataXML)
+
+	// A garbage SAMLResponse value: not real base64-encoded XML, no signature.
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/saml/okta/slo?SAMLResponse=not-a-real-response",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+
+	router.handleSAMLSLO(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 on invalid LogoutResponse, got %d body=%q", rec.Code, rec.Body.String())
+	}
+	if loc := rec.Header().Get("Location"); loc != "" {
+		t.Fatalf("must not redirect on invalid LogoutResponse, got %q", loc)
+	}
+}
+
+// TestHandleSAMLSLO_RejectsIDPInitiatedLogoutRequest documents the explicit
+// rejection of IdP-initiated SLO until proper request-binding is wired up.
+// Today an unvalidated LogoutRequest must not be treated as a force-logout
+// signal.
+func TestHandleSAMLSLO_RejectsIDPInitiatedLogoutRequest(t *testing.T) {
+	router := &Router{samlManager: NewSAMLServiceManager("https://pulse.example.com")}
+	metadataXML := `<?xml version="1.0"?>
+<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="idp">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/>
+  </IDPSSODescriptor>
+</EntityDescriptor>`
+	router.samlManager.services["okta"] = newTestSAMLService(t, "okta", metadataXML)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/saml/okta/slo?SAMLRequest=anything",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+
+	router.handleSAMLSLO(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on IdP-initiated SLO, got %d body=%q", rec.Code, rec.Body.String())
 	}
 }
 

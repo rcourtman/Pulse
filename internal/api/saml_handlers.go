@@ -425,10 +425,70 @@ func (r *Router) handleSAMLLogout(w http.ResponseWriter, req *http.Request) {
 	http.Redirect(w, req, logoutURL, http.StatusFound)
 }
 
-// handleSAMLSLO handles SAML Single Logout responses/requests
+// handleSAMLSLO handles the IdP's signed LogoutResponse following an
+// SP-initiated SLO (the redirect target our MakeLogoutRequest pointed at).
+//
+// The previous implementation cleared the user's session unconditionally on
+// any POST or GET to this endpoint — an unauthenticated cross-origin force-
+// logout DoS against any user with a SAML session. Verify the IdP's
+// XML-DSig on the LogoutResponse before clearing anything; on validation
+// failure log the audit event and refuse to mutate session state.
 func (r *Router) handleSAMLSLO(w http.ResponseWriter, req *http.Request) {
-	// For now, just redirect to home with logout success
-	// A full implementation would validate the LogoutResponse
+	providerID := extractSAMLProviderID(req.URL.Path, "slo")
+	if providerID == "" || !validateProviderID(providerID) {
+		http.NotFound(w, req)
+		return
+	}
+
+	service := r.samlManager.GetService(providerID)
+	if service == nil {
+		http.NotFound(w, req)
+		return
+	}
+
+	// Require either a SAMLResponse (response to our SLO request) or a
+	// SAMLRequest (IdP-initiated SLO). Requests with neither are not real
+	// SAML traffic and should not touch session state.
+	if err := req.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	hasResponse := req.URL.Query().Get("SAMLResponse") != "" || req.PostForm.Get("SAMLResponse") != ""
+	hasRequest := req.URL.Query().Get("SAMLRequest") != "" || req.PostForm.Get("SAMLRequest") != ""
+	if !hasResponse && !hasRequest {
+		log.Warn().
+			Str("provider_id", providerID).
+			Str("client_ip", GetClientIP(req)).
+			Msg("SAML SLO endpoint hit with no SAMLResponse/SAMLRequest payload — refusing to clear session")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "saml_slo_callback", "", GetClientIP(req), req.URL.Path, false, "Missing SAMLResponse/SAMLRequest payload")
+		http.Error(w, "missing SAML payload", http.StatusBadRequest)
+		return
+	}
+
+	// IdP-initiated LogoutRequest validation isn't wired up yet (no stored
+	// in-flight request IDs to bind it to). Reject explicitly rather than
+	// silently treating it as a force-logout signal.
+	if hasRequest && !hasResponse {
+		log.Warn().
+			Str("provider_id", providerID).
+			Str("client_ip", GetClientIP(req)).
+			Msg("IdP-initiated SAML LogoutRequest received but not supported on this SP")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "saml_slo_callback", "", GetClientIP(req), req.URL.Path, false, "IdP-initiated LogoutRequest not supported")
+		http.Error(w, "IdP-initiated logout not supported", http.StatusBadRequest)
+		return
+	}
+
+	if err := service.ValidateLogoutResponse(req); err != nil {
+		log.Warn().
+			Err(err).
+			Str("provider_id", providerID).
+			Str("client_ip", GetClientIP(req)).
+			Msg("SAML LogoutResponse failed signature/validation — refusing to clear session")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "saml_slo_callback", "", GetClientIP(req), req.URL.Path, false, "LogoutResponse validation failed")
+		http.Error(w, "invalid LogoutResponse", http.StatusForbidden)
+		return
+	}
+
 	r.clearSession(w, req)
 	LogAuditEventForTenant(GetOrgID(req.Context()), "saml_slo_callback", "", GetClientIP(req), req.URL.Path, true, "SAML SLO complete")
 	http.Redirect(w, req, "/?logout=success", http.StatusFound)

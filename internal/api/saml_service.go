@@ -622,6 +622,28 @@ func (s *SAMLService) MakeLogoutRequest(nameID, sessionIdx string) (string, erro
 	return validateSAMLRedirectTarget(redirectURL.String(), s.idpMetadata.IDPSSODescriptors[0].SingleLogoutServices)
 }
 
+// ValidateLogoutResponse verifies an incoming IdP-signed SAML LogoutResponse,
+// checking the XML-DSig signature against the IdP's published certificate as
+// well as the standard LogoutResponse temporal / target invariants. Returns
+// nil only when the response is genuinely from the configured IdP and bound
+// to the SAML state — anything that fails validation (no payload, bad
+// signature, unknown issuer, expired) returns an error and the caller MUST
+// NOT mutate any session state on the strength of the request.
+//
+// Without this validation the SLO callback endpoint was an unauthenticated
+// force-logout DoS: a cross-origin POST with no payload, or any forged
+// payload, cleared the user's session.
+func (s *SAMLService) ValidateLogoutResponse(req *http.Request) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.sp == nil {
+		return errors.New("service provider not initialized")
+	}
+
+	return s.sp.ValidateLogoutResponseRequest(req)
+}
+
 func validateSAMLRedirectTarget(rawURL string, allowedEndpoints []saml.Endpoint) (string, error) {
 	validatedURL, err := securityutil.NormalizeAbsoluteHTTPURL(rawURL)
 	if err != nil {
