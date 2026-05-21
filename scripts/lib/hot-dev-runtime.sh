@@ -43,6 +43,23 @@ hot_dev_detect_all_ipv4s() {
     hostname -I 2>/dev/null || true
 }
 
+hot_dev_truthy() {
+    local value
+    value="$(printf '%s\n' "${1:-}" | tr '[:upper:]' '[:lower:]')"
+
+    case "${value}" in
+        1|true|yes|y|on)
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
+hot_dev_lan_enabled() {
+    hot_dev_truthy "${PULSE_DEV_LAN:-false}"
+}
+
 hot_dev_configure_network_defaults() {
     FRONTEND_PORT="${FRONTEND_PORT:-${PORT:-5173}}"
     PORT="${PORT:-${FRONTEND_PORT}}"
@@ -52,9 +69,16 @@ hot_dev_configure_network_defaults() {
     fi
     LAN_IP="${LAN_IP:-0.0.0.0}"
 
-    FRONTEND_DEV_HOST="${FRONTEND_DEV_HOST:-0.0.0.0}"
+    if hot_dev_lan_enabled; then
+        FRONTEND_DEV_HOST="${FRONTEND_DEV_HOST:-0.0.0.0}"
+        PULSE_DEV_API_HOST="${PULSE_DEV_API_HOST:-${LAN_IP}}"
+        BIND_ADDRESS="${BIND_ADDRESS:-0.0.0.0}"
+    else
+        FRONTEND_DEV_HOST="${FRONTEND_DEV_HOST:-127.0.0.1}"
+        PULSE_DEV_API_HOST="${PULSE_DEV_API_HOST:-127.0.0.1}"
+        BIND_ADDRESS="${BIND_ADDRESS:-127.0.0.1}"
+    fi
     FRONTEND_DEV_PORT="${FRONTEND_DEV_PORT:-${FRONTEND_PORT}}"
-    PULSE_DEV_API_HOST="${PULSE_DEV_API_HOST:-${LAN_IP}}"
     PULSE_DEV_API_PORT="${PULSE_DEV_API_PORT:-7655}"
 
     if [[ -z "${PULSE_DEV_API_URL:-}" ]]; then
@@ -80,21 +104,23 @@ hot_dev_configure_network_defaults() {
         ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://0.0.0.0:${FRONTEND_DEV_PORT:-7655},http://0.0.0.0:5173"
     fi
 
-    local ip
-    for ip in ${ALL_IPS:-}; do
-        if [[ "${ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            if [[ "${ip}" != "127.0.0.1" ]]; then
-                ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://${ip}:${FRONTEND_DEV_PORT:-7655}"
-                ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://${ip}:5173"
+    if hot_dev_lan_enabled; then
+        local ip
+        for ip in ${ALL_IPS:-}; do
+            if [[ "${ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                if [[ "${ip}" != "127.0.0.1" ]]; then
+                    ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://${ip}:${FRONTEND_DEV_PORT:-7655}"
+                    ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://${ip}:5173"
+                fi
             fi
-        fi
-    done
+        done
+    fi
 
     export FRONTEND_PORT PORT
     export LAN_IP ALL_IPS
     export FRONTEND_DEV_HOST FRONTEND_DEV_PORT
     export PULSE_DEV_API_HOST PULSE_DEV_API_PORT PULSE_DEV_API_URL PULSE_DEV_WS_URL
-    export ALLOWED_ORIGINS
+    export BIND_ADDRESS ALLOWED_ORIGINS
 }
 
 hot_dev_normalize_host() {
@@ -232,6 +258,13 @@ hot_dev_reconcile_agent_bind_address() {
         [[ -n "${host}" ]] || continue
         hot_dev_host_is_loopback "${host}" && continue
         hot_dev_host_matches_local_interface "${host}" || continue
+
+        if ! hot_dev_lan_enabled; then
+            if declare -F log_warn >/dev/null 2>&1; then
+                log_warn "${label}=${url} points at this machine, but hot-dev is local-only by default. Leaving BIND_ADDRESS=${bind_address}; set PULSE_DEV_LAN=true to expose this dev backend to installed agents."
+            fi
+            return 0
+        fi
 
         BIND_ADDRESS="0.0.0.0"
         export BIND_ADDRESS

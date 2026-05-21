@@ -5,7 +5,7 @@ import path from 'path';
 import { URL } from 'node:url';
 import { configDefaults } from 'vitest/config';
 
-const frontendDevHost = process.env.FRONTEND_DEV_HOST ?? '0.0.0.0';
+const frontendDevHost = process.env.FRONTEND_DEV_HOST ?? '127.0.0.1';
 const frontendDevPort = Number(
   process.env.FRONTEND_DEV_PORT ?? process.env.VITE_PORT ?? process.env.PORT ?? 5173,
 );
@@ -48,7 +48,7 @@ export default defineConfig({
   },
   server: {
     port: frontendDevPort,
-    host: frontendDevHost, // Listen on all interfaces for remote access
+    host: frontendDevHost,
     strictPort: true,
     proxy: {
       '/ws': {

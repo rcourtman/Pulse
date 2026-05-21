@@ -210,7 +210,7 @@ EOF
   assert_contains "default verify proof keeps chromium project pin" "${output}" "--project=chromium"
 }
 
-test_managed_wrapper_defaults_to_lan_capable_frontend() {
+test_managed_wrapper_defaults_to_local_only_runtime() {
   local output
   output="$(
     LAN_IP=192.168.50.10 \
@@ -220,15 +220,17 @@ test_managed_wrapper_defaults_to_lan_capable_frontend() {
       source "${HOT_DEV_BG_PATH}"
       printf "frontend_host=%s\n" "${FRONTEND_DEV_HOST}"
       printf "api_host=%s\n" "${PULSE_DEV_API_HOST}"
+      printf "bind=%s\n" "${BIND_ADDRESS}"
       printf "browser=%s\n" "$(hot_dev_local_browser_url "${FRONTEND_DEV_HOST}" "${FRONTEND_DEV_PORT}")"
       printf "lan_browser=%s\n" "$(hot_dev_lan_browser_url "${FRONTEND_DEV_HOST}" "${FRONTEND_DEV_PORT}" "${LAN_IP}")"
     '
   )"
 
-  assert_contains "managed wrapper exposes Vite on all interfaces by default" "${output}" "frontend_host=0.0.0.0"
-  assert_contains "managed wrapper uses the shared LAN API default" "${output}" "api_host=192.168.50.10"
+  assert_contains "managed wrapper keeps Vite on loopback by default" "${output}" "frontend_host=127.0.0.1"
+  assert_contains "managed wrapper uses the loopback API default" "${output}" "api_host=127.0.0.1"
+  assert_contains "managed wrapper binds the backend to loopback by default" "${output}" "bind=127.0.0.1"
   assert_contains "managed wrapper keeps local browser entrypoint on loopback" "${output}" "browser=http://127.0.0.1:5173"
-  assert_contains "managed wrapper advertises a LAN browser entrypoint" "${output}" "lan_browser=http://192.168.50.10:5173"
+  assert_contains "managed wrapper does not advertise a LAN browser entrypoint by default" "${output}" "lan_browser="
 }
 
 test_verify_bg_holds_runtime_lock_for_proof_duration() {
@@ -752,18 +754,28 @@ test_hot_dev_reconciles_agent_reachable_bind_address() {
       ALL_IPS="192.168.50.10 10.10.10.5"
 
       BIND_ADDRESS=127.0.0.1
+      unset PULSE_DEV_LAN
       PULSE_PUBLIC_URL=http://192.168.50.10:7655
       unset PULSE_AGENT_CONNECT_URL PULSE_AGENT_URL
       hot_dev_reconcile_agent_bind_address
-      printf "lan_bind=%s\n" "${BIND_ADDRESS}"
+      printf "default_lan_bind=%s\n" "${BIND_ADDRESS}"
 
       BIND_ADDRESS=127.0.0.1
+      PULSE_DEV_LAN=true
+      PULSE_PUBLIC_URL=http://192.168.50.10:7655
+      unset PULSE_AGENT_CONNECT_URL PULSE_AGENT_URL
+      hot_dev_reconcile_agent_bind_address
+      printf "opt_in_lan_bind=%s\n" "${BIND_ADDRESS}"
+
+      BIND_ADDRESS=127.0.0.1
+      PULSE_DEV_LAN=true
       PULSE_PUBLIC_URL=https://pulse.example.com
       unset PULSE_AGENT_CONNECT_URL PULSE_AGENT_URL
       hot_dev_reconcile_agent_bind_address
       printf "external_bind=%s\n" "${BIND_ADDRESS}"
 
       BIND_ADDRESS=0.0.0.0
+      PULSE_DEV_LAN=true
       PULSE_AGENT_CONNECT_URL=http://192.168.50.10:7655
       unset PULSE_PUBLIC_URL PULSE_AGENT_URL
       hot_dev_reconcile_agent_bind_address
@@ -771,7 +783,8 @@ test_hot_dev_reconciles_agent_reachable_bind_address() {
     '
   )"
 
-  assert_contains "hot-dev exposes backend for LAN public URL" "${output}" "lan_bind=0.0.0.0"
+  assert_contains "hot-dev stays local-only for LAN public URL by default" "${output}" "default_lan_bind=127.0.0.1"
+  assert_contains "hot-dev exposes backend for LAN public URL when explicitly opted in" "${output}" "opt_in_lan_bind=0.0.0.0"
   assert_contains "hot-dev leaves external public URLs on loopback" "${output}" "external_bind=127.0.0.1"
   assert_contains "hot-dev preserves already exposed backend bind" "${output}" "already_exposed_bind=0.0.0.0"
 }
@@ -869,6 +882,100 @@ test_hot_dev_bg_recovers_stale_pid_file_from_live_supervisor() {
   assert_contains "hot-dev-bg recovers running state from a live supervisor" "${output}" "running=yes"
   assert_contains "hot-dev-bg rewrites stale pid file to discovered supervisor" "${output}" "pid_file=4242"
   assert_contains "managed_session_pid returns recovered supervisor pid" "${output}" "managed_pid=4242"
+}
+
+test_hot_dev_bg_preserves_pid_file_when_signal_probe_is_denied() {
+  local test_dir output
+  test_dir="$(mktemp -d)"
+  temp_dirs+=("${test_dir}")
+
+  output="$(
+    HOT_DEV_BG_PATH="${HOT_DEV_BG}" \
+    bash -lc '
+      source "${HOT_DEV_BG_PATH}"
+      PID_FILE="'"${test_dir}"'/hot-dev-bg.pid"
+      printf "4242\n" > "${PID_FILE}"
+      kill() {
+        if [[ "${1:-}" == "-0" && "${2:-}" == "4242" ]]; then
+          printf "kill: 4242: Operation not permitted\n" >&2
+          return 1
+        fi
+        return 1
+      }
+      recover_managed_pid_file() {
+        printf "recover_called=yes\n"
+        return 1
+      }
+
+      if is_running; then
+        printf "running=yes\n"
+      else
+        printf "running=no\n"
+      fi
+      if [[ -f "${PID_FILE}" ]]; then
+        printf "pid_file=%s\n" "$(cat "${PID_FILE}")"
+      else
+        printf "pid_file=missing\n"
+      fi
+    '
+  )"
+
+  assert_contains "permission-denied process probes are treated as alive" "${output}" "running=yes"
+  assert_contains "permission-denied process probes do not delete the pid file" "${output}" "pid_file=4242"
+  assert_not_contains "permission-denied process probes do not trigger recovery" "${output}" "recover_called=yes"
+}
+
+test_hot_dev_bg_status_degrades_ownership_when_process_inspection_is_restricted() {
+  local test_dir output
+  test_dir="$(mktemp -d)"
+  temp_dirs+=("${test_dir}")
+
+  output="$(
+    HOT_DEV_BG_PATH="${HOT_DEV_BG}" \
+    bash -lc '
+      source "${HOT_DEV_BG_PATH}"
+      PID_FILE="'"${test_dir}"'/hot-dev-bg.pid"
+      printf "4242\n" > "${PID_FILE}"
+      kill() {
+        if [[ "${1:-}" == "-0" && "${2:-}" == "4242" ]]; then
+          return 0
+        fi
+        return 1
+      }
+      process_inspection_restricted(){ return 0; }
+      is_port_listening(){ return 0; }
+      listener_pids(){ printf "14111\n"; }
+      process_group_id(){ return 1; }
+      process_command(){ return 1; }
+      http_status_code(){ printf "000\n"; }
+
+      status_bg
+    '
+  )"
+
+  assert_contains "restricted status keeps the managed runtime pid" "${output}" "[hot-dev-bg] Running (pid: 4242)"
+  assert_contains "restricted status marks listener ownership as unknown" "${output}" "[hot-dev-bg] Port 5173: unknown listener pid=14111"
+  assert_not_contains "restricted status does not accuse split ownership" "${output}" "Detected split ownership"
+  assert_contains "restricted status reports unavailable health probes without claiming a crash" "${output}" "local HTTP probes are unavailable from this restricted shell"
+}
+
+test_hot_dev_bg_http_status_reports_blocked_local_probe() {
+  local output
+
+  output="$(
+    HOT_DEV_BG_PATH="${HOT_DEV_BG}" \
+    bash -lc '
+      source "${HOT_DEV_BG_PATH}"
+      curl() {
+        printf "curl: (7) Failed to connect to 127.0.0.1 port 5173: Operation not permitted\n" >&2
+        printf "000\n"
+        return 7
+      }
+      printf "code=%s\n" "$(http_status_code "http://127.0.0.1:5173/")"
+    '
+  )"
+
+  assert_contains "local network sandbox denial is reported distinctly" "${output}" "code=blocked"
 }
 
 test_hot_dev_bg_usage_prefers_managed_wrappers() {
@@ -1403,7 +1510,7 @@ main() {
   test_cli_parses_takeover_flag
   test_verify_command_injects_managed_runtime_env
   test_default_verify_command_runs_runtime_and_layout_proofs
-  test_managed_wrapper_defaults_to_lan_capable_frontend
+  test_managed_wrapper_defaults_to_local_only_runtime
   test_verify_bg_holds_runtime_lock_for_proof_duration
   test_managed_dev_runtime_restarts_existing_session_for_verification
   test_takeover_avoids_killing_current_shell_lineage
@@ -1424,6 +1531,9 @@ main() {
   test_hot_dev_health_monitor_probes_api_health
   test_hot_dev_bg_script_advertises_managed_entrypoint
   test_hot_dev_bg_recovers_stale_pid_file_from_live_supervisor
+  test_hot_dev_bg_preserves_pid_file_when_signal_probe_is_denied
+  test_hot_dev_bg_status_degrades_ownership_when_process_inspection_is_restricted
+  test_hot_dev_bg_http_status_reports_blocked_local_probe
   test_hot_dev_bg_usage_prefers_managed_wrappers
   test_integration_readme_uses_managed_backend_restart_wrapper
   test_integration_readme_documents_retired_trial_start_contract
@@ -1452,4 +1562,6 @@ main() {
   echo "hot-dev-bg ownership diagnostics smoke tests passed."
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

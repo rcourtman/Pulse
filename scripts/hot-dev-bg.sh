@@ -39,15 +39,26 @@ fail() {
 
 http_status_code() {
   local url="$1"
-  local code
-  code="$(curl -sS -m 2 -o /dev/null -w '%{http_code}' "${url}" 2>/dev/null || true)"
-  [[ -n "${code}" ]] || code="000"
+  local output code
+  output="$(curl -sS -m 2 -o /dev/null -w $'\n%{http_code}' "${url}" 2>&1 || true)"
+  code="${output##*$'\n'}"
+  if [[ ! "${code}" =~ ^[0-9][0-9][0-9]$ ]]; then
+    code="000"
+  fi
+  if [[ "${code}" == "000" && "${output}" == *"Operation not permitted"* ]]; then
+    code="blocked"
+  fi
   printf "%s\n" "${code}"
 }
 
 http_status_ok() {
   local code="$1"
   [[ "${code}" =~ ^2[0-9][0-9]$ || "${code}" =~ ^3[0-9][0-9]$ ]]
+}
+
+http_status_blocked() {
+  local code="$1"
+  [[ "${code}" == "blocked" ]]
 }
 
 is_port_listening() {
@@ -75,6 +86,41 @@ process_parent_id() {
   ps -o ppid= -p "${pid}" 2>/dev/null | tr -d '[:space:]'
 }
 
+process_probe_denied() {
+  local output="$1"
+  [[ "${output}" == *"Operation not permitted"* || "${output}" == *"operation not permitted"* || "${output}" == *"not permitted"* ]]
+}
+
+pid_signal_probe() {
+  local pid="${1:-}"
+  local output
+
+  [[ -n "${pid}" ]] || return 1
+  if output="$(kill -0 "${pid}" 2>&1)"; then
+    return 0
+  fi
+  if process_probe_denied "${output}"; then
+    return 2
+  fi
+  return 1
+}
+
+pid_may_be_running() {
+  local status
+  pid_signal_probe "${1:-}"
+  status=$?
+  [[ "${status}" -eq 0 || "${status}" -eq 2 ]]
+}
+
+process_inspection_restricted() {
+  local output
+
+  if output="$(ps -o pid= -p "$$" 2>&1 >/dev/null)"; then
+    return 1
+  fi
+  process_probe_denied "${output}"
+}
+
 discover_managed_supervisor_pid() {
   local pid command
 
@@ -99,7 +145,7 @@ recover_managed_pid_file() {
   [[ "${PID_FILE}" == "${DEFAULT_HOT_DEV_BG_PID_FILE}" ]] || return 1
   discovered_pid="$(discover_managed_supervisor_pid || true)"
   [[ -n "${discovered_pid}" ]] || return 1
-  kill -0 "${discovered_pid}" 2>/dev/null || return 1
+  pid_may_be_running "${discovered_pid}" || return 1
   mkdir -p "$(dirname "${PID_FILE}")"
   printf "%s\n" "${discovered_pid}" > "${PID_FILE}"
   return 0
@@ -209,6 +255,10 @@ port_has_unmanaged_listener() {
   local session_pid="$2"
   local listener_pid
 
+  if [[ -n "${session_pid}" ]] && process_inspection_restricted; then
+    return 1
+  fi
+
   while IFS= read -r listener_pid; do
     [[ -n "${listener_pid}" ]] || continue
     if ! pid_is_managed "${listener_pid}" "${session_pid}"; then
@@ -259,7 +309,7 @@ is_running() {
   fi
   local pid
   pid="$(cat "${PID_FILE}" 2>/dev/null || true)"
-  if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+  if [[ -n "${pid}" ]] && pid_may_be_running "${pid}"; then
     return 0
   fi
   rm -f "${PID_FILE}"
@@ -285,6 +335,8 @@ describe_listener() {
     owner="unmanaged"
     if pid_is_managed "${listener_pid}" "${session_pid}"; then
       owner="managed"
+    elif [[ -n "${session_pid}" ]] && process_inspection_restricted; then
+      owner="unknown"
     fi
     command="$(process_command "${listener_pid}")"
     log "Port ${port}: ${owner} listener pid=${listener_pid} pgid=${pgid:-unknown} cmd=${command:-unknown}"
@@ -730,6 +782,10 @@ status_bg() {
 
   if http_status_ok "${frontend_code}" && http_status_ok "${proxy_code}" && http_status_ok "${backend_code}"; then
     log "Runtime summary: frontend shell, proxy, and backend are healthy. Use ${browser_url} in the browser."
+  elif process_inspection_restricted && [[ "${frontend_code}" == "000" && "${backend_code}" == "000" ]] && is_port_listening "${FRONTEND_DEV_PORT}" && is_port_listening "${PULSE_DEV_API_PORT}"; then
+    log "Runtime summary: local HTTP probes are unavailable from this restricted shell, but frontend and backend listeners are present. Use ${browser_url} in the browser or rerun status outside the restricted shell."
+  elif http_status_blocked "${frontend_code}" || http_status_blocked "${proxy_code}" || http_status_blocked "${backend_code}"; then
+    log "Runtime summary: local HTTP probes are blocked by this shell. Use ${browser_url} in the browser or rerun status outside the restricted shell."
   elif http_status_ok "${frontend_code}" && ! http_status_ok "${proxy_code}" && http_status_ok "${backend_code}"; then
     log "Runtime summary: frontend shell is up and the backend is healthy, but the frontend proxy path is unhealthy."
   elif http_status_ok "${frontend_code}" && ! http_status_ok "${backend_code}"; then

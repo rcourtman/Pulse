@@ -17,6 +17,7 @@
 #   PULSE_DATA_DIR=/path         Override data directory
 #   PULSE_DEV_API_PORT=7655      Backend API port (default: 7655)
 #   FRONTEND_DEV_PORT=5173       Frontend dev server port (default: 5173)
+#   PULSE_DEV_LAN=true           Expose frontend/backend on the LAN for agent/mobile testing (default: false)
 #   LOG_LEVEL=debug              Opt into verbose backend logs (default: info)
 #   PULSE_DEV_DISABLE_BACKGROUND_AI=false
 #                                   Allow automatic Patrol/discovery/alert AI in dev

@@ -138,36 +138,57 @@ test_hot_dev_avoids_self_killing_npm_wrapper() {
   assert_not_contains "hot-dev no longer broad-kills npm dev wrappers" "${output}" 'pkill -f "npm run dev"'
 }
 
-test_hot_dev_network_defaults_are_lan_capable() {
+test_hot_dev_network_defaults_are_local_first_with_explicit_lan_opt_in() {
   local output
   output="$(
     HOT_DEV_RUNTIME_LIB="${HOT_DEV_RUNTIME_LIB}" \
     bash -c '
       set -euo pipefail
       source "${HOT_DEV_RUNTIME_LIB}"
-      unset FRONTEND_PORT PORT FRONTEND_DEV_HOST FRONTEND_DEV_PORT
+      unset FRONTEND_PORT PORT FRONTEND_DEV_HOST FRONTEND_DEV_PORT BIND_ADDRESS PULSE_DEV_LAN
       unset PULSE_DEV_API_HOST PULSE_DEV_API_PORT PULSE_DEV_API_URL PULSE_DEV_WS_URL
       unset ALLOWED_ORIGINS
       LAN_IP=192.168.50.10
       ALL_IPS="192.168.50.10 10.10.10.5"
       hot_dev_configure_network_defaults
-      printf "frontend_host=%s\n" "${FRONTEND_DEV_HOST}"
-      printf "frontend_port=%s\n" "${FRONTEND_DEV_PORT}"
-      printf "api_host=%s\n" "${PULSE_DEV_API_HOST}"
-      printf "api_url=%s\n" "${PULSE_DEV_API_URL}"
-      printf "ws_url=%s\n" "${PULSE_DEV_WS_URL}"
-      printf "origins=%s\n" "${ALLOWED_ORIGINS}"
+      printf "default_frontend_host=%s\n" "${FRONTEND_DEV_HOST}"
+      printf "default_frontend_port=%s\n" "${FRONTEND_DEV_PORT}"
+      printf "default_api_host=%s\n" "${PULSE_DEV_API_HOST}"
+      printf "default_api_url=%s\n" "${PULSE_DEV_API_URL}"
+      printf "default_ws_url=%s\n" "${PULSE_DEV_WS_URL}"
+      printf "default_bind=%s\n" "${BIND_ADDRESS}"
+      printf "default_origins=%s\n" "${ALLOWED_ORIGINS}"
+
+      unset FRONTEND_PORT PORT FRONTEND_DEV_HOST FRONTEND_DEV_PORT BIND_ADDRESS
+      unset PULSE_DEV_API_HOST PULSE_DEV_API_PORT PULSE_DEV_API_URL PULSE_DEV_WS_URL
+      unset ALLOWED_ORIGINS
+      PULSE_DEV_LAN=true
+      hot_dev_configure_network_defaults
+      printf "lan_frontend_host=%s\n" "${FRONTEND_DEV_HOST}"
+      printf "lan_api_host=%s\n" "${PULSE_DEV_API_HOST}"
+      printf "lan_api_url=%s\n" "${PULSE_DEV_API_URL}"
+      printf "lan_ws_url=%s\n" "${PULSE_DEV_WS_URL}"
+      printf "lan_bind=%s\n" "${BIND_ADDRESS}"
+      printf "lan_origins=%s\n" "${ALLOWED_ORIGINS}"
     '
   )"
 
-  assert_contains "network defaults expose the frontend on all interfaces" "${output}" "frontend_host=0.0.0.0"
-  assert_contains "network defaults keep the canonical frontend dev port" "${output}" "frontend_port=5173"
-  assert_contains "network defaults target the detected LAN API host" "${output}" "api_host=192.168.50.10"
-  assert_contains "network defaults derive the API URL" "${output}" "api_url=http://192.168.50.10:7655"
-  assert_contains "network defaults derive the websocket URL" "${output}" "ws_url=ws://192.168.50.10:7655"
-  assert_contains "network defaults allow the detected LAN frontend origin" "${output}" "http://192.168.50.10:5173"
+  assert_contains "network defaults keep hot-dev frontend loopback-only" "${output}" "default_frontend_host=127.0.0.1"
+  assert_contains "network defaults keep the canonical frontend dev port" "${output}" "default_frontend_port=5173"
+  assert_contains "network defaults target loopback API host" "${output}" "default_api_host=127.0.0.1"
+  assert_contains "network defaults derive the loopback API URL" "${output}" "default_api_url=http://127.0.0.1:7655"
+  assert_contains "network defaults derive the loopback websocket URL" "${output}" "default_ws_url=ws://127.0.0.1:7655"
+  assert_contains "network defaults bind backend to loopback" "${output}" "default_bind=127.0.0.1"
   assert_contains "network defaults retain loopback frontend origins" "${output}" "http://127.0.0.1:5173"
-  assert_contains "network defaults allow the wildcard dev origin Electron may report" "${output}" "http://0.0.0.0:5173"
+  assert_not_contains "network defaults do not allow detected LAN frontend origins by default" "${output}" "default_origins=http://192.168.50.10"
+  assert_not_contains "network defaults do not allow wildcard dev origin by default" "${output}" "default_origins=http://0.0.0.0:5173"
+  assert_contains "LAN opt-in exposes the frontend on all interfaces" "${output}" "lan_frontend_host=0.0.0.0"
+  assert_contains "LAN opt-in targets the detected LAN API host" "${output}" "lan_api_host=192.168.50.10"
+  assert_contains "LAN opt-in derives the API URL" "${output}" "lan_api_url=http://192.168.50.10:7655"
+  assert_contains "LAN opt-in derives the websocket URL" "${output}" "lan_ws_url=ws://192.168.50.10:7655"
+  assert_contains "LAN opt-in binds backend to all interfaces" "${output}" "lan_bind=0.0.0.0"
+  assert_contains "LAN opt-in allows the detected LAN frontend origin" "${output}" "lan_origins=http://192.168.50.10"
+  assert_contains "LAN opt-in allows the wildcard dev origin Electron may report" "${output}" "http://0.0.0.0:5173"
 }
 
 test_hot_dev_browser_urls_distinguish_bind_and_browser_hosts() {
@@ -195,7 +216,7 @@ test_pulse_process_count_counts_matching_processes
 test_hot_dev_uses_resilient_backend_process_count
 test_hot_dev_keeps_backend_launch_errors_in_debug_log
 test_hot_dev_avoids_self_killing_npm_wrapper
-test_hot_dev_network_defaults_are_lan_capable
+test_hot_dev_network_defaults_are_local_first_with_explicit_lan_opt_in
 test_hot_dev_browser_urls_distinguish_bind_and_browser_hosts
 
 if (( failures > 0 )); then

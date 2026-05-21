@@ -183,10 +183,12 @@ server-side update execution surfaces.
    owns the run-scoped `HOT_DEV_VERIFY_LOCK_FILE` handoff so overlapping browser
    proof cannot reuse stale first-run credentials.
    The managed and foreground hot-dev entrypoints must share one network-default
-   contract: Vite binds `FRONTEND_DEV_HOST=0.0.0.0` by default so LAN devices can
-   open the dev browser shell, while local browser/proof URLs normalize wildcard
-   binds back to `127.0.0.1` and advertise the detected LAN browser entrypoint
-   separately.
+   contract: local dev binds frontend and backend traffic to loopback by default
+   so installed LAN agents cannot accidentally treat a developer laptop as the
+   active Pulse control plane. LAN exposure for agent/mobile testing must be an
+   explicit `PULSE_DEV_LAN=true` opt-in; only that mode may bind Vite/backend
+   listeners to `0.0.0.0`, include LAN origins, or advertise the detected LAN
+   browser entrypoint.
    The hot-dev supervisor must also recover its managed PID file from a live
    `hot-dev-bg.sh supervise` process before treating the runtime as unmanaged.
    Backend health monitoring must distinguish HTTP startup grace from a missing
