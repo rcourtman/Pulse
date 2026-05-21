@@ -53,6 +53,8 @@ type TrueNASConnectionObservedSummary struct {
 	StoragePools      int        `json:"storagePools"`
 	Datasets          int        `json:"datasets"`
 	Apps              int        `json:"apps"`
+	VMs               int        `json:"vms"`
+	Shares            int        `json:"shares"`
 	Disks             int        `json:"disks"`
 	RecoveryArtifacts int        `json:"recoveryArtifacts"`
 }
@@ -780,6 +782,8 @@ func buildTrueNASObservedSummary(snapshot *truenas.FixtureSnapshot) *TrueNASConn
 		StoragePools:      len(snapshot.Pools),
 		Datasets:          len(snapshot.Datasets),
 		Apps:              len(snapshot.Apps),
+		VMs:               len(snapshot.VMs),
+		Shares:            len(snapshot.Shares),
 		Disks:             len(snapshot.Disks),
 		RecoveryArtifacts: len(snapshot.ZFSSnapshots) + len(snapshot.ReplicationTasks),
 	}
@@ -837,6 +841,8 @@ func cloneTrueNASObservedSummary(value *TrueNASConnectionObservedSummary) *TrueN
 		StoragePools:      value.StoragePools,
 		Datasets:          value.Datasets,
 		Apps:              value.Apps,
+		VMs:               value.VMs,
+		Shares:            value.Shares,
 		Disks:             value.Disks,
 		RecoveryArtifacts: value.RecoveryArtifacts,
 	}

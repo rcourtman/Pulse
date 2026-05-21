@@ -44,6 +44,8 @@ export interface TrueNASConnectionObservedSummary {
   storagePools: number;
   datasets: number;
   apps: number;
+  vms: number;
+  shares: number;
   disks: number;
   recoveryArtifacts: number;
 }
@@ -125,6 +127,8 @@ const normalizeTrueNASConnectionObservedSummary = (
     storagePools: finiteNumberOrUndefined(observed.storagePools) ?? 0,
     datasets: finiteNumberOrUndefined(observed.datasets) ?? 0,
     apps: finiteNumberOrUndefined(observed.apps) ?? 0,
+    vms: finiteNumberOrUndefined(observed.vms) ?? 0,
+    shares: finiteNumberOrUndefined(observed.shares) ?? 0,
     disks: finiteNumberOrUndefined(observed.disks) ?? 0,
     recoveryArtifacts: finiteNumberOrUndefined(observed.recoveryArtifacts) ?? 0,
   };

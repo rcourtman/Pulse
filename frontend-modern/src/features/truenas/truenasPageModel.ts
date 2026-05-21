@@ -86,6 +86,7 @@ export type TrueNASSystemChildCounts = {
   pools: number;
   datasets: number;
   shares: number;
+  vms: number;
   apps: number;
   disks: number;
 };
@@ -111,6 +112,7 @@ const emptyTrueNASSystemChildCounts = (): TrueNASSystemChildCounts => ({
   pools: 0,
   datasets: 0,
   shares: 0,
+  vms: 0,
   apps: 0,
   disks: 0,
 });
@@ -133,6 +135,7 @@ export function buildTrueNASPageModel(resources: Resource[]): TrueNASPageModel {
   const shares = trueNasResources.filter((resource) => resource.type === 'network-share');
   const vms = trueNasResources.filter((resource) => resource.type === 'vm');
   const apps = trueNasResources.filter((resource) => resource.type === 'app-container');
+  const incidents = buildTrueNASIncidentRows(trueNasResources);
   return {
     resources: trueNasResources,
     systems,
@@ -142,7 +145,7 @@ export function buildTrueNASPageModel(resources: Resource[]): TrueNASPageModel {
     shares,
     vms,
     apps,
-    incidents: buildTrueNASIncidentRows(trueNasResources),
+    incidents,
   };
 }
 
@@ -197,6 +200,8 @@ export function buildTrueNASSystemChildCounts(
       counts.datasets += 1;
     } else if (resource.type === 'network-share') {
       counts.shares += 1;
+    } else if (resource.type === 'vm') {
+      counts.vms += 1;
     } else if (resource.type === 'app-container') {
       counts.apps += 1;
     } else if (resource.type === 'physical_disk') {

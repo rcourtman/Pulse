@@ -1509,6 +1509,12 @@ the canonical monitored-system blocked payload.
 
 ## Current State
 
+TrueNAS platform-connections responses treat native VMs and network shares as
+first-class observed contribution facets alongside systems, pools, datasets,
+apps, disks, and recovery artifacts. The frontend TrueNAS API client must
+normalize and preserve those fields for settings and platform handoffs instead
+of collapsing them into generic app, storage, or runtime counts.
+
 The frontend `Node` API projection now carries optional `networkIn`,
 `networkOut`, `diskRead`, and `diskWrite` fields so table consumers can align
 Proxmox host rows with workload I/O columns. These fields are a read-model
@@ -2560,9 +2566,12 @@ operator-facing runtime summary for those configured connections. The list
 response must carry the canonical redacted config together with poll health
 (`intervalSeconds`, last success/failure, consecutive failures) and discovered
 platform contribution summary (host/resource identity plus systems, pools,
-datasets, apps, disks, and recovery artifacts) so the platform-connections
+datasets, apps, VMs, shares, disks, and recovery artifacts) so the platform-connections
 workspace can render real API-backed status and handoff context without
-inventing a settings-local shadow fetch path. Zero-value legacy
+inventing a settings-local shadow fetch path. `frontend-modern/src/api/truenas.ts`
+owns the browser normalizer for that observed summary and must preserve those
+native inventory facets instead of collapsing them into a generic app or
+storage count. Zero-value legacy
 `pollIntervalSeconds` config must normalize back to the canonical 60-second
 default at this same boundary instead of leaking ambiguous `0` values to the
 frontend.

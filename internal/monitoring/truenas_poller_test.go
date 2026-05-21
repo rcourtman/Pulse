@@ -312,6 +312,43 @@ func TestTrueNASPollerConnectionSummariesExposeObservedCounts(t *testing.T) {
 	}
 }
 
+func TestTrueNASObservedSummaryIncludesNativeRuntimeAndSharingFacets(t *testing.T) {
+	collectedAt := time.Date(2026, time.March, 30, 12, 0, 0, 0, time.UTC)
+	summary := buildTrueNASObservedSummary(&truenas.FixtureSnapshot{
+		CollectedAt: collectedAt,
+		System:      truenas.SystemInfo{Hostname: "summary-native"},
+		Pools:       []truenas.Pool{{Name: "tank"}},
+		Datasets:    []truenas.Dataset{{Name: "tank/apps"}},
+		Apps:        []truenas.App{{ID: "nextcloud"}, {ID: "adguard"}},
+		VMs:         []truenas.VirtualMachine{{ID: "42"}, {ID: "43"}},
+		Shares:      []truenas.NetworkShare{{ID: "smb-1"}, {ID: "nfs-1"}, {ID: "smb-2"}},
+		Disks:       []truenas.Disk{{Name: "sda"}},
+		ZFSSnapshots: []truenas.ZFSSnapshot{
+			{ID: "tank/apps@auto-1"},
+		},
+		ReplicationTasks: []truenas.ReplicationTask{
+			{ID: "replicate-tank-apps"},
+		},
+	})
+
+	if summary == nil {
+		t.Fatal("expected observed summary")
+	}
+	if summary.Systems != 1 ||
+		summary.StoragePools != 1 ||
+		summary.Datasets != 1 ||
+		summary.Apps != 2 ||
+		summary.VMs != 2 ||
+		summary.Shares != 3 ||
+		summary.Disks != 1 ||
+		summary.RecoveryArtifacts != 2 {
+		t.Fatalf("unexpected native observed counts: %+v", summary)
+	}
+	if summary.CollectedAt == nil || !summary.CollectedAt.Equal(collectedAt) {
+		t.Fatalf("expected collectedAt %s, got %+v", collectedAt, summary.CollectedAt)
+	}
+}
+
 func TestTrueNASPollerConnectionSummariesCaptureFailures(t *testing.T) {
 	previous := truenas.IsFeatureEnabled()
 	truenas.SetFeatureEnabled(true)

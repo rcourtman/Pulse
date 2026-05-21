@@ -141,6 +141,8 @@ describe('truenasPageModel', () => {
         makeResource({ id: 'backup-share', type: 'network-share', parentId: backupDataset.id }),
         makeResource({ id: 'primary-disk', type: 'physical_disk', parentId: primaryPool.id }),
         makeResource({ id: 'backup-disk', type: 'physical_disk', parentId: backupPool.id }),
+        makeResource({ id: 'primary-vm', type: 'vm', parentId: primary.id }),
+        makeResource({ id: 'backup-vm', type: 'vm', parentId: backup.id }),
         makeResource({ id: 'primary-app', type: 'app-container', parentId: primary.id }),
         makeResource({ id: 'backup-app', type: 'app-container', parentId: backup.id }),
       ],
@@ -151,6 +153,7 @@ describe('truenasPageModel', () => {
       pools: 1,
       datasets: 1,
       shares: 1,
+      vms: 1,
       apps: 1,
       disks: 1,
     });
@@ -158,6 +161,7 @@ describe('truenasPageModel', () => {
       pools: 1,
       datasets: 1,
       shares: 1,
+      vms: 1,
       apps: 1,
       disks: 1,
     });
@@ -172,6 +176,7 @@ describe('truenasPageModel', () => {
         makeResource({ id: 'dataset-media', type: 'storage', storage: { topology: 'dataset' } }),
         makeResource({ id: 'share-media', type: 'network-share' }),
         makeResource({ id: 'disk-sda', type: 'physical_disk' }),
+        makeResource({ id: 'vm-windows', type: 'vm' }),
         makeResource({ id: 'app-nextcloud', type: 'app-container' }),
       ],
       [system],
@@ -181,6 +186,7 @@ describe('truenasPageModel', () => {
       pools: 1,
       datasets: 1,
       shares: 1,
+      vms: 1,
       apps: 1,
       disks: 1,
     });

@@ -182,6 +182,12 @@ describe('platform overview layout guardrails', () => {
     expect(proxmoxPageSurfaceSource).toContain('suppressNodeFilter');
   });
 
+  it('keeps TrueNAS overview inventory in tables instead of summary cards', () => {
+    expect(truenasPageSurfaceSource).toContain('<TrueNASSystemsTable');
+    expect(truenasPageSurfaceSource).not.toContain('TrueNASInventorySummary');
+    expect(truenasPageSurfaceSource).not.toContain('data-truenas-summary-tile');
+  });
+
   it('keeps secondary overview tables from rendering duplicate standalone toolbars', () => {
     for (const source of [
       dockerPageSurfaceSource,

@@ -3552,6 +3552,57 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA31",
+      "summary": "Platform overview inventory stays table-first: native provider facts belong in dense provider tables and governed platform tabs, not standalone summary-card strips or decorative card grids.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L8",
+        "L21"
+      ],
+      "subsystem_ids": [
+        "frontend-primitives"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "platform-overview-table-first-guardrails",
+          "run": [
+            "npm",
+            "--prefix",
+            "frontend-modern",
+            "test",
+            "--",
+            "--run",
+            "src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/status.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/truenas/TrueNASSystemsTable.tsx",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {

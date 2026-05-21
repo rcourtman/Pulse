@@ -852,7 +852,7 @@ health and discovered-summary state for the settings platform-connections
 surface. `internal/monitoring/truenas_poller.go` must honor each configured
 TrueNAS connection's `pollIntervalSeconds`, keep the next poll schedule plus
 last success/failure state in one canonical runtime owner, and project the most
-recent discovered host/pool/dataset/app/disk/recovery counts there instead of
+recent discovered host/pool/dataset/app/VM/share/disk/recovery counts there instead of
 recomputing settings health panel-by-panel. That same poller-owned summary must
 also absorb manual saved-connection test results from the shared
 `POST /api/truenas/connections/{id}/test` path, so row-level operator tests in
@@ -1008,12 +1008,12 @@ capability or invent a TrueNAS-local sensor payload.
 Taken together, this is the current monitoring-owned TrueNAS floor: one stored
 API connection can surface one canonical top-level system, shared host
 telemetry/history, app-container workloads, native VM workloads, disk
-health/history, and per-connection poll health without requiring the unified
-agent. The same poller/provider path also owns assistant-driven app
-start/stop, logs, and config refresh for canonical app workloads. Pulse does
-not promise a
-separate TrueNAS runtime model, broader NAS administration, or agent-required
-bootstrap at this floor.
+health/history, native network shares, and per-connection poll health plus
+observed contribution counts without requiring the unified agent. The same
+poller/provider path also owns assistant-driven app start/stop, logs, and
+config refresh for canonical app workloads. Pulse does not promise a separate
+TrueNAS runtime model, broader NAS administration, or agent-required bootstrap
+at this floor.
 That same monitoring boundary now also owns VMware signal enrichment on the
 canonical alert timeline. `internal/vmware/client_signals.go`,
 `internal/vmware/provider.go`, and `internal/monitoring/monitor_alerts.go`
