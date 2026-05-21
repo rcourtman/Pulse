@@ -97,7 +97,12 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
     ));
 
     expect(getByRole('button', { name: 'Hide TrueNAS' })).toBeInTheDocument();
-    const section = within(getByTestId('resource-truenas-details-section'));
+    const trueNASSection = getByTestId('resource-truenas-details-section');
+    const summary = getByTestId('resource-summary-section');
+    expect(
+      trueNASSection.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    const section = within(trueNASSection);
     expect(section.getByText('System')).toBeInTheDocument();
     expect(section.getByText('Storage Health')).toBeInTheDocument();
     expect(section.getAllByText('Services').length).toBeGreaterThan(1);
@@ -234,8 +239,12 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
     expect(getByTestId('resource-identity-section').tagName).toBe('TBODY');
     expect(summary.querySelector('[class*="shadow-sm"]')).toBeNull();
     expect(getByRole('button', { name: 'Hide TrueNAS' })).toBeInTheDocument();
-    const section = within(getByTestId('resource-truenas-details-section'));
-    expect(getByTestId('resource-truenas-details-section').querySelector('table')).toBeTruthy();
+    const trueNASSection = getByTestId('resource-truenas-details-section');
+    expect(
+      trueNASSection.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    const section = within(trueNASSection);
+    expect(trueNASSection.querySelector('table')).toBeTruthy();
     expect(
       getByTestId('resource-truenas-details-section').querySelector('[class*="cyan"]'),
     ).toBeNull();

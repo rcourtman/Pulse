@@ -117,6 +117,26 @@ const TrueNASDetailSectionTables: Component<{
   </div>
 );
 
+const TrueNASDetailsDisclosure: Component<{
+  drawer: UseResourceDetailDrawerStateResult;
+  class?: string;
+  contentClass?: string;
+}> = (props) => (
+  <SupportDisclosure
+    title="TrueNAS"
+    summary={props.drawer.trueNASDetailsSummary()}
+    expanded={props.drawer.showTrueNASDetails()}
+    onToggle={() => props.drawer.setShowTrueNASDetails((value) => !value)}
+    showLabel="Show TrueNAS"
+    hideLabel="Hide TrueNAS"
+    class={props.class}
+    contentClass={props.contentClass ?? 'mt-3 space-y-3'}
+    dataTestId="resource-truenas-details-section"
+  >
+    <TrueNASDetailSectionTables sections={props.drawer.trueNASDetailSections()} />
+  </SupportDisclosure>
+);
+
 const pbsEvidenceBadgeClass = (tone: string): string => {
   switch (tone) {
     case 'danger':
@@ -179,9 +199,14 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
       drawer.sortedActionAudits().length > 0 ||
       drawer.actionAuditCount() > 0 ||
       Boolean(drawer.actionAuditError()));
+  const shouldPromoteTrueNASDetails = () => compactTableRow() && drawer.hasTrueNASDetails();
 
   return (
     <div class="space-y-3">
+      <Show when={shouldPromoteTrueNASDetails()}>
+        <TrueNASDetailsDisclosure drawer={drawer} class="space-y-2" contentClass="space-y-2" />
+      </Show>
+
       <Show
         when={compactTableRow()}
         fallback={
@@ -493,20 +518,8 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             data-testid="resource-support-sections"
             class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(50%-0.375rem)] [&>*]:min-w-[260px] [&>*]:max-w-full [&>*]:overflow-hidden"
           >
-            <Show when={drawer.hasTrueNASDetails()}>
-              <SupportDisclosure
-                title="TrueNAS"
-                summary={drawer.trueNASDetailsSummary()}
-                expanded={drawer.showTrueNASDetails()}
-                onToggle={() => drawer.setShowTrueNASDetails((value) => !value)}
-                showLabel="Show TrueNAS"
-                hideLabel="Hide TrueNAS"
-                class="h-full"
-                contentClass="mt-3 space-y-3"
-                dataTestId="resource-truenas-details-section"
-              >
-                <TrueNASDetailSectionTables sections={drawer.trueNASDetailSections()} />
-              </SupportDisclosure>
+            <Show when={drawer.hasTrueNASDetails() && !shouldPromoteTrueNASDetails()}>
+              <TrueNASDetailsDisclosure drawer={drawer} class="h-full" />
             </Show>
 
             <Show when={drawer.hasAccessContext()}>
