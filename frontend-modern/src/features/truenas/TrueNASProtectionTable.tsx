@@ -157,14 +157,6 @@ const targetSecondaryLabel = (point: RecoveryPoint): string => {
   return [direction, state].filter(Boolean).join(' / ');
 };
 
-const signalLabel = (point: RecoveryPoint): string => {
-  const lastError = detailString(point, 'lastError');
-  if (lastError) return lastError;
-  const state = detailString(point, 'lastState');
-  if (state) return state;
-  return getRecoveryOutcomeLabel(normalizeRecoveryOutcome(point.outcome));
-};
-
 const formatPointTime = (point: RecoveryPoint): string => {
   const raw = asTrimmedString(point.completedAt) || asTrimmedString(point.startedAt);
   if (!raw) return '-';
@@ -288,17 +280,17 @@ export const TrueNASProtectionTable: Component<{
                     </span>
                   }
                 />
-                <Table class="min-w-full table-fixed text-xs md:min-w-[1180px]">
+                <Table class="min-w-full table-fixed text-xs md:min-w-[960px]">
                   <TableHeader>
                     <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                      <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[21%]`}>
+                      <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>
                         Dataset
                       </TableHead>
-                      <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[24%]`}>
+                      <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[25%]`}>
                         Artifact
                       </TableHead>
                       <TableHead
-                        class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[17%]`}
+                        class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[23%]`}
                       >
                         Target
                       </TableHead>
@@ -311,11 +303,6 @@ export const TrueNASProtectionTable: Component<{
                         class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell md:w-[8%]`}
                       >
                         Size
-                      </TableHead>
-                      <TableHead
-                        class={`${getPlatformTableHeadClassForKind('text')} hidden xl:table-cell md:w-[9%]`}
-                      >
-                        Signal
                       </TableHead>
                       <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[9%]`}>
                         Outcome
@@ -330,7 +317,6 @@ export const TrueNASProtectionTable: Component<{
                         const artifactSecondary = () => artifactSecondaryLabel(point);
                         const target = () => targetLabel(point);
                         const targetSecondary = () => targetSecondaryLabel(point);
-                        const signal = () => signalLabel(point);
                         return (
                           <TableRow
                             class="text-[11px] sm:text-xs"
@@ -378,13 +364,6 @@ export const TrueNASProtectionTable: Component<{
                               class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums lg:table-cell`}
                             >
                               {sizeLabel(point)}
-                            </TableCell>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} hidden xl:table-cell`}
-                            >
-                              <span class="block truncate text-muted" title={signal()}>
-                                {signal()}
-                              </span>
                             </TableCell>
                             <TableCell class={getPlatformTableCellClassForKind('badge')}>
                               <span class={getRecoveryOutcomeBadgeClass(outcome())}>

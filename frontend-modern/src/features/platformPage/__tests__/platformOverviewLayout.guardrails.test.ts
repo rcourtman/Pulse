@@ -175,6 +175,8 @@ describe('platform overview layout guardrails', () => {
     expect(truenasPageSurfaceSource).not.toContain('<StorageSurface');
     expect(truenasPageSurfaceSource).not.toContain('<WorkloadsSurface');
     expect(truenasPageSurfaceSource).not.toContain('<TrueNASDisksTable');
+    expect(truenasProtectionTableSource).not.toContain('Signal');
+    expect(truenasProtectionTableSource).toContain('md:min-w-[960px]');
     expect(vmwarePageSurfaceSource).toContain('<VsphereHostsTable');
     expect(vmwarePageSurfaceSource).toContain('<WorkloadsSurface');
     expect(vmwarePageSurfaceSource).toContain('<StorageSurface');
