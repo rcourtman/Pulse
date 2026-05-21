@@ -59,30 +59,21 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	}
 
-	// Skip CSRF for API token auth (API clients don't have sessions)
-	if r.Header.Get("X-API-Token") != "" {
-		log.Debug().Str("path", r.URL.Path).Msg("CSRF check skipped: API token auth")
-		return true
-	}
+	// CSRF is a defence against browser-auto-attached credentials. The only
+	// auto-attached credential we issue is the session cookie, so the session
+	// cookie is the ONLY signal for whether CSRF applies. Explicit per-request
+	// credentials (X-API-Token, Authorization: Bearer, Authorization: Basic)
+	// are NOT a skip-signal: an attacker on a cross-origin page can attach
+	// those headers after a CORS preflight while the browser still
+	// auto-attaches the victim's session cookie, fully bypassing CSRF. The
+	// previous behaviour — early-returning on any Authorization header — is a
+	// full CSRF bypass for session-authenticated users and must not return.
 
-	// Skip CSRF only for explicit non-session auth schemes.
-	if authHeader := strings.TrimSpace(r.Header.Get("Authorization")); authHeader != "" {
-		lower := strings.ToLower(authHeader)
-		if strings.HasPrefix(lower, "basic ") {
-			log.Debug().Str("path", r.URL.Path).Msg("CSRF check skipped: Basic auth header present")
-			return true
-		}
-		if strings.HasPrefix(lower, "bearer ") {
-			log.Debug().Str("path", r.URL.Path).Msg("CSRF check skipped: Bearer auth header present")
-			return true
-		}
-	}
-
-	// Get session from cookie
+	// Get session from cookie. No cookie => purely header-authenticated (or
+	// unauthenticated) request that downstream auth will accept or reject on
+	// its own merits; CSRF does not apply.
 	cookie, err := readSessionCookie(r)
 	if err != nil {
-		// No session cookie means no CSRF check needed
-		// (either no auth configured or using basic auth which doesn't use sessions)
 		log.Debug().Str("path", r.URL.Path).Msg("CSRF check skipped: no session cookie")
 		return true
 	}

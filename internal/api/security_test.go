@@ -1369,39 +1369,41 @@ func TestCheckCSRF_SafeMethods(t *testing.T) {
 	}
 }
 
-func TestCheckCSRF_APITokenAuth(t *testing.T) {
+func TestCheckCSRF_APITokenAuth_NoSessionCookie(t *testing.T) {
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/test", nil)
 	req.Header.Set("X-API-Token", "some-api-token")
 
-	// API token auth bypasses CSRF check
+	// No session cookie => no CSRF check needed (the API client is purely
+	// header-authenticated). Regression coverage for the header+cookie case
+	// lives in security_regression_test.go.
 	result := CheckCSRF(w, req)
 	if !result {
-		t.Error("CheckCSRF should return true when X-API-Token is present")
+		t.Error("CheckCSRF should return true when X-API-Token is present and no session cookie")
 	}
 }
 
-func TestCheckCSRF_BasicAuth(t *testing.T) {
+func TestCheckCSRF_BasicAuth_NoSessionCookie(t *testing.T) {
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/test", nil)
 	req.Header.Set("Authorization", "Basic dXNlcjpwYXNz")
 
-	// Basic auth bypasses CSRF check
+	// No session cookie => no CSRF check needed.
 	result := CheckCSRF(w, req)
 	if !result {
-		t.Error("CheckCSRF should return true when Basic Authorization header is present")
+		t.Error("CheckCSRF should return true when Basic Authorization header is present and no session cookie")
 	}
 }
 
-func TestCheckCSRF_BearerAuth(t *testing.T) {
+func TestCheckCSRF_BearerAuth_NoSessionCookie(t *testing.T) {
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/test", nil)
 	req.Header.Set("Authorization", "Bearer some-token")
 
-	// Bearer auth bypasses CSRF check for token-based API clients.
+	// No session cookie => no CSRF check needed.
 	result := CheckCSRF(w, req)
 	if !result {
-		t.Error("CheckCSRF should return true when Bearer Authorization header is present")
+		t.Error("CheckCSRF should return true when Bearer Authorization header is present and no session cookie")
 	}
 }
 

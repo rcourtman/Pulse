@@ -4603,3 +4603,68 @@ func TestSSHConfigRejectsSetupTokenQueryParam(t *testing.T) {
 		t.Fatalf("expected 401 when setup token is only provided in query string, got %d", rec.Code)
 	}
 }
+
+// TestCheckCSRF_HeaderDoesNotBypassWhenSessionCookiePresent regression-tests the
+// fix for a CSRF bypass: CheckCSRF was skipping the entire CSRF check whenever
+// the request carried Authorization: Basic, Authorization: Bearer, or
+// X-API-Token, without validating the credential. A cross-origin attacker
+// could fetch() with credentials: 'include' and an arbitrary Authorization
+// header — the browser would still auto-attach the victim's session cookie
+// and the server would skip CSRF, fully bypassing protection. The contract is
+// now: a session cookie is the only signal for whether CSRF applies. If a
+// session cookie is present, CSRF must be valid regardless of any other
+// auth-style header.
+func TestCheckCSRF_HeaderDoesNotBypassWhenSessionCookiePresent(t *testing.T) {
+	cases := []struct {
+		name        string
+		setHeader   func(*http.Request)
+		description string
+	}{
+		{
+			name: "x_api_token",
+			setHeader: func(r *http.Request) {
+				r.Header.Set("X-API-Token", "some-api-token")
+			},
+			description: "X-API-Token must not bypass CSRF when a session cookie is present",
+		},
+		{
+			name: "authorization_basic",
+			setHeader: func(r *http.Request) {
+				r.Header.Set("Authorization", "Basic dXNlcjpwYXNz")
+			},
+			description: "Authorization: Basic must not bypass CSRF when a session cookie is present",
+		},
+		{
+			name: "authorization_bearer",
+			setHeader: func(r *http.Request) {
+				r.Header.Set("Authorization", "Bearer some-token")
+			},
+			description: "Authorization: Bearer must not bypass CSRF when a session cookie is present",
+		},
+		{
+			name: "authorization_bearer_mixed_case",
+			setHeader: func(r *http.Request) {
+				// Mixed-case scheme to ensure the old lower-case prefix check
+				// is not reintroduced as a guarded skip.
+				r.Header.Set("Authorization", "BeArEr some-token")
+			},
+			description: "Mixed-case Bearer must not bypass CSRF when a session cookie is present",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest("POST", "/api/test", nil)
+			tc.setHeader(req)
+			req.AddCookie(&http.Cookie{
+				Name:  "pulse_session",
+				Value: "test-session-id-1234567890",
+			})
+
+			if CheckCSRF(w, req) {
+				t.Fatal(tc.description)
+			}
+		})
+	}
+}
