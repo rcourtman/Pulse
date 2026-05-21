@@ -10,6 +10,7 @@ type FixtureSnapshot struct {
 	Datasets         []Dataset
 	Disks            []Disk
 	Alerts           []Alert
+	Services         []Service
 	Apps             []App
 	VMs              []VirtualMachine
 	Shares           []NetworkShare
@@ -112,6 +113,16 @@ type Alert struct {
 	Source    string
 	Dismissed bool
 	Datetime  time.Time
+}
+
+// Service mirrors the service.query system service inventory returned by
+// TrueNAS middleware.
+type Service struct {
+	ID      string
+	Service string
+	Enabled bool
+	State   string
+	PIDs    []int
 }
 
 // App mirrors the subset of TrueNAS application fields needed for unified

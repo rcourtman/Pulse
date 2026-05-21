@@ -488,16 +488,18 @@ log_info "Starting backend health monitor..."
     UNHEALTHY_STREAK=0
     UNHEALTHY_THRESHOLD="${HOT_DEV_BACKEND_UNHEALTHY_THRESHOLD:-2}"
     BACKEND_HEALTH_STARTUP_GRACE_SECONDS="${HOT_DEV_BACKEND_HEALTH_STARTUP_GRACE_SECONDS:-180}"
+    BACKEND_PROCESS_MISSING_GRACE_SECONDS="${HOT_DEV_BACKEND_PROCESS_MISSING_GRACE_SECONDS:-10}"
 
     [[ "${UNHEALTHY_THRESHOLD}" =~ ^[1-9][0-9]*$ ]] || UNHEALTHY_THRESHOLD=2
     [[ "${BACKEND_HEALTH_STARTUP_GRACE_SECONDS}" =~ ^[0-9]+$ ]] || BACKEND_HEALTH_STARTUP_GRACE_SECONDS=180
+    [[ "${BACKEND_PROCESS_MISSING_GRACE_SECONDS}" =~ ^[0-9]+$ ]] || BACKEND_PROCESS_MISSING_GRACE_SECONDS=10
 
     backend_serving() {
         curl -sf -o /dev/null --max-time 3 \
             "http://127.0.0.1:${PULSE_DEV_API_PORT:-7655}/api/health" 2>/dev/null
     }
 
-    backend_in_startup_grace() {
+    backend_startup_age_seconds() {
         local backend_started_at
         local now
 
@@ -506,7 +508,14 @@ log_info "Starting backend health monitor..."
         [[ "${backend_started_at}" =~ ^[0-9]+$ ]] || return 1
 
         now="$(date +%s)"
-        (( now - backend_started_at < BACKEND_HEALTH_STARTUP_GRACE_SECONDS ))
+        printf "%s\n" "$((now - backend_started_at))"
+    }
+
+    backend_in_startup_grace() {
+        local age
+
+        age="$(backend_startup_age_seconds)" || return 1
+        (( age < BACKEND_HEALTH_STARTUP_GRACE_SECONDS ))
     }
 
     while true; do
@@ -514,9 +523,10 @@ log_info "Starting backend health monitor..."
         PULSE_COUNT="$(hot_dev_pulse_process_count)"
 
         if [[ "$PULSE_COUNT" -eq 0 ]]; then
-            if backend_in_startup_grace; then
+            startup_age="$(backend_startup_age_seconds || printf '%s\n' "${BACKEND_PROCESS_MISSING_GRACE_SECONDS}")"
+            if backend_in_startup_grace && (( startup_age < BACKEND_PROCESS_MISSING_GRACE_SECONDS )); then
                 UNHEALTHY_STREAK=0
-                log_warn "⚠️  Pulse process not running yet during backend startup grace (${BACKEND_HEALTH_STARTUP_GRACE_SECONDS}s)"
+                log_warn "⚠️  Pulse process not running yet during backend startup grace (${startup_age}/${BACKEND_PROCESS_MISSING_GRACE_SECONDS}s)"
                 continue
             fi
             log_warn "⚠️  Pulse died unexpectedly, restarting..."

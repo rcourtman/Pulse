@@ -262,9 +262,9 @@ func TestFetchSnapshot(t *testing.T) {
 	if snapshot.System.Hostname != "truenas-main" {
 		t.Fatalf("unexpected snapshot system: %+v", snapshot.System)
 	}
-	if len(snapshot.Pools) != 1 || len(snapshot.Datasets) != 1 || len(snapshot.Disks) != 2 || len(snapshot.Alerts) != 1 || len(snapshot.Apps) != 1 || len(snapshot.VMs) != 1 || len(snapshot.Shares) != 2 {
-		t.Fatalf("unexpected snapshot counts: pools=%d datasets=%d disks=%d alerts=%d apps=%d vms=%d shares=%d",
-			len(snapshot.Pools), len(snapshot.Datasets), len(snapshot.Disks), len(snapshot.Alerts), len(snapshot.Apps), len(snapshot.VMs), len(snapshot.Shares))
+	if len(snapshot.Pools) != 1 || len(snapshot.Datasets) != 1 || len(snapshot.Disks) != 2 || len(snapshot.Alerts) != 1 || len(snapshot.Services) != 2 || len(snapshot.Apps) != 1 || len(snapshot.VMs) != 1 || len(snapshot.Shares) != 2 {
+		t.Fatalf("unexpected snapshot counts: pools=%d datasets=%d disks=%d alerts=%d services=%d apps=%d vms=%d shares=%d",
+			len(snapshot.Pools), len(snapshot.Datasets), len(snapshot.Disks), len(snapshot.Alerts), len(snapshot.Services), len(snapshot.Apps), len(snapshot.VMs), len(snapshot.Shares))
 	}
 	if snapshot.Disks[0].Temperature != 34 || snapshot.Disks[1].Temperature != 49 {
 		t.Fatalf("unexpected snapshot disk temperatures: %+v", snapshot.Disks)
@@ -274,6 +274,9 @@ func TestFetchSnapshot(t *testing.T) {
 	}
 	if snapshot.VMs[0].Name != "windows-lab" || snapshot.VMs[0].MemoryBytes != 8*1024*1024*1024 {
 		t.Fatalf("unexpected snapshot vms: %+v", snapshot.VMs)
+	}
+	if snapshot.Services[0].Service != "smb" || !snapshot.Services[0].Enabled || snapshot.Services[0].State != "RUNNING" {
+		t.Fatalf("unexpected snapshot services: %+v", snapshot.Services)
 	}
 }
 
@@ -332,6 +335,55 @@ func TestGetPoolsDatasetsAndAlertsUseNativeQueryShapes(t *testing.T) {
 	}
 	if len(alerts) != 1 || alerts[0].ID != "a1" || alerts[0].Level != "WARNING" {
 		t.Fatalf("unexpected native alert mapping: %+v", alerts)
+	}
+}
+
+func TestGetServicesUsesNativeServiceQueryShape(t *testing.T) {
+	server := newMockServerWithRPC(t, map[string]apiResponse{
+		"/api/v2.0/service": {status: http.StatusInternalServerError, body: `{"error":"legacy service endpoint should not be used"}`},
+	}, nil, func(t *testing.T, conn *websocket.Conn) {
+		authReq := readRPCRequest(t, conn)
+		if authReq.Method != "auth.login_with_api_key" {
+			t.Fatalf("expected api-key auth method, got %q", authReq.Method)
+		}
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		queryReq := readRPCRequest(t, conn)
+		if queryReq.Method != "service.query" {
+			t.Fatalf("expected service.query, got %q", queryReq.Method)
+		}
+		params, ok := queryReq.Params.([]any)
+		if !ok || len(params) != 2 {
+			t.Fatalf("expected service.query filters/options params, got %#v", queryReq.Params)
+		}
+		options, ok := params[1].(map[string]any)
+		if !ok {
+			t.Fatalf("expected service.query options, got %#v", params[1])
+		}
+		extra, ok := options["extra"].(map[string]any)
+		if !ok || extra["include_state"] != true {
+			t.Fatalf("expected service.query include_state option, got %#v", options)
+		}
+		writeRPCResult(t, conn, queryReq.ID, []map[string]any{
+			{"id": 1, "service": "smb", "enable": true, "state": "RUNNING", "pids": []int{2418, 2420}},
+			{"id": 2, "service": "ssh", "enable": false, "state": "STOPPED", "pids": []any{}},
+		})
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	services, err := client.GetServices(context.Background())
+	if err != nil {
+		t.Fatalf("GetServices() error = %v", err)
+	}
+	if len(services) != 2 {
+		t.Fatalf("expected 2 services, got %d", len(services))
+	}
+	if services[0].ID != "1" || services[0].Service != "smb" || !services[0].Enabled || services[0].State != "RUNNING" || len(services[0].PIDs) != 2 {
+		t.Fatalf("unexpected smb service mapping: %+v", services[0])
+	}
+	if services[1].Service != "ssh" || services[1].Enabled || services[1].State != "STOPPED" {
+		t.Fatalf("unexpected ssh service mapping: %+v", services[1])
 	}
 }
 
@@ -1579,6 +1631,9 @@ func defaultAPIResponses() map[string]apiResponse {
 		},
 		"/api/v2.0/alert/list": {
 			body: `[{"id":"a1","level":"WARNING","formatted":"Disk temp high","source":"DiskService","dismissed":false,"datetime":{"$date":1707400000000}}]`,
+		},
+		"/api/v2.0/service": {
+			body: `[{"id":1,"service":"smb","enable":true,"state":"RUNNING","pids":[2418,2420]},{"id":2,"service":"ssh","enable":false,"state":"STOPPED","pids":[]}]`,
 		},
 		"/api/v2.0/app": {
 			body: `[{"id":"nextcloud","name":"Nextcloud","state":"RUNNING","version":"1.0.3","human_version":"29.0.7","upgrade_available":true,"image_updates_available":true,"notes":"Team cloud","active_workloads":{"containers":2,"used_host_ips":["0.0.0.0"],"used_ports":[{"container_port":443,"protocol":"tcp","host_ports":[{"host_port":30443,"host_ip":"0.0.0.0"}]}],"container_details":[{"id":"nextcloud-web-1","service_name":"nextcloud","image":"docker.io/library/nextcloud:29.0.7","state":"running","port_config":[{"container_port":443,"protocol":"tcp","host_ports":[{"host_port":30443,"host_ip":"0.0.0.0"}]}],"volume_mounts":[{"source":"/mnt/tank/apps/nextcloud","destination":"/var/www/html","mode":"rw","type":"bind"}]},{"id":"nextcloud-redis-1","service_name":"redis","image":"docker.io/library/redis:7.2","state":"running","port_config":[],"volume_mounts":[{"source":"ix-nextcloud-redis","destination":"/data","mode":"rw","type":"volume"}]}],"volumes":[{"source":"/mnt/tank/apps/nextcloud","destination":"/var/www/html","mode":"rw","type":"bind"},{"source":"ix-nextcloud-redis","destination":"/data","mode":"rw","type":"volume"}],"images":["docker.io/library/nextcloud:29.0.7","docker.io/library/redis:7.2"],"networks":[{"name":"ix-nextcloud_default","id":"net-1","labels":{"com.docker.compose.project":"nextcloud"}}]}}]`,

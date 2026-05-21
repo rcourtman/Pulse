@@ -86,6 +86,38 @@ func TestContractResourceType(t *testing.T) {
 	}
 }
 
+func TestTrueNASServiceInventoryStaysOnSystemResource(t *testing.T) {
+	resource := Resource{
+		Type: ResourceTypeAgent,
+		TrueNAS: &TrueNASData{
+			Hostname: "truenas-a",
+			Services: []TrueNASService{
+				{
+					ID:      "cifs",
+					Service: "smb",
+					Enabled: true,
+					State:   "RUNNING",
+					PIDs:    []int{1234, 5678},
+				},
+			},
+		},
+	}
+
+	if got := ContractResourceType(resource); got != ResourceTypeAgent {
+		t.Fatalf("ContractResourceType(TrueNAS system with services) = %q, want %q", got, ResourceTypeAgent)
+	}
+	if len(resource.TrueNAS.Services) != 1 {
+		t.Fatalf("TrueNAS service inventory length = %d, want 1", len(resource.TrueNAS.Services))
+	}
+	service := resource.TrueNAS.Services[0]
+	if service.ID != "cifs" || service.Service != "smb" || !service.Enabled || service.State != "RUNNING" {
+		t.Fatalf("unexpected TrueNAS service metadata: %+v", service)
+	}
+	if len(service.PIDs) != 2 || service.PIDs[0] != 1234 || service.PIDs[1] != 5678 {
+		t.Fatalf("unexpected TrueNAS service pid metadata: %+v", service.PIDs)
+	}
+}
+
 func TestCanonicalResourceIDDoesNotAliasLegacyHostPrefixes(t *testing.T) {
 	cases := []struct {
 		name string

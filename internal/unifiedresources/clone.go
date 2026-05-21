@@ -360,7 +360,20 @@ func cloneTrueNASData(in *TrueNASData) *TrueNASData {
 	out.App = cloneTrueNASApp(in.App)
 	out.VM = cloneTrueNASVM(in.VM)
 	out.Share = cloneTrueNASShare(in.Share)
+	out.Services = cloneTrueNASServices(in.Services)
 	return &out
+}
+
+func cloneTrueNASServices(in []TrueNASService) []TrueNASService {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]TrueNASService, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].PIDs = append([]int(nil), in[i].PIDs...)
+	}
+	return out
 }
 
 func cloneTrueNASApp(in *TrueNASApp) *TrueNASApp {

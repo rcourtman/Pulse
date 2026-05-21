@@ -188,6 +188,9 @@ func TestMergeTrueNASDataPreservesNativeAppFacetAsClone(t *testing.T) {
 			Networks: []string{"10.10.20.0/24"},
 			Security: []string{"SYS"},
 		},
+		Services: []TrueNASService{
+			{ID: "1", Service: "smb", Enabled: true, State: "RUNNING", PIDs: []int{2418, 2420}},
+		},
 	}
 
 	merged := mergeTrueNASData(existing, incoming)
@@ -215,6 +218,9 @@ func TestMergeTrueNASDataPreservesNativeAppFacetAsClone(t *testing.T) {
 	if merged.Share == incoming.Share {
 		t.Fatal("expected merged TrueNAS share facet to be cloned")
 	}
+	if len(merged.Services) != 1 || merged.Services[0].Service != "smb" || len(merged.Services[0].PIDs) != 2 {
+		t.Fatalf("unexpected merged TrueNAS services: %+v", merged.Services)
+	}
 
 	incoming.App.Images[0] = "mutated:latest"
 	incoming.App.Volumes[0].Source = "mutated"
@@ -226,6 +232,7 @@ func TestMergeTrueNASDataPreservesNativeAppFacetAsClone(t *testing.T) {
 	incoming.Share.Hosts[0] = "mutated"
 	incoming.Share.Networks[0] = "mutated"
 	incoming.Share.Security[0] = "mutated"
+	incoming.Services[0].PIDs[0] = 9999
 
 	if got := merged.App.Images[0]; got != "nextcloud:stable" {
 		t.Fatalf("merged app image mutated through incoming slice: %q", got)
@@ -256,6 +263,9 @@ func TestMergeTrueNASDataPreservesNativeAppFacetAsClone(t *testing.T) {
 	}
 	if got := merged.Share.Security[0]; got != "SYS" {
 		t.Fatalf("merged share security mutated through incoming slice: %q", got)
+	}
+	if got := merged.Services[0].PIDs[0]; got != 2418 {
+		t.Fatalf("merged service PIDs mutated through incoming slice: %d", got)
 	}
 }
 

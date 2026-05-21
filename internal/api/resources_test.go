@@ -3529,6 +3529,9 @@ func TestResourceListIncludesTrueNASSystemAsCanonicalHost(t *testing.T) {
 	if system.MetricsTarget == nil || system.MetricsTarget.ResourceType != "agent" || system.MetricsTarget.ResourceID != "truenas-main" {
 		t.Fatalf("expected canonical TrueNAS host metrics target truenas-main, got %+v", system.MetricsTarget)
 	}
+	if system.TrueNAS == nil || len(system.TrueNAS.Services) == 0 {
+		t.Fatalf("expected native TrueNAS services on system resource, got %+v", system.TrueNAS)
+	}
 }
 
 func TestResourceStorageIncidentsGroupsCanonicalSections(t *testing.T) {

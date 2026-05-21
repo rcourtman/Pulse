@@ -311,6 +311,34 @@ func DefaultFixtures() FixtureSnapshot {
 				Datetime:  time.Date(2026, 3, 31, 8, 25, 0, 0, time.UTC),
 			},
 		},
+		Services: []Service{
+			{
+				ID:      "1",
+				Service: "smb",
+				Enabled: true,
+				State:   "RUNNING",
+				PIDs:    []int{2418, 2420},
+			},
+			{
+				ID:      "2",
+				Service: "nfs",
+				Enabled: true,
+				State:   "RUNNING",
+				PIDs:    []int{2501},
+			},
+			{
+				ID:      "3",
+				Service: "ssh",
+				Enabled: false,
+				State:   "STOPPED",
+			},
+			{
+				ID:      "4",
+				Service: "smartd",
+				Enabled: true,
+				State:   "STOPPED",
+			},
+		},
 		Apps: []App{
 			{
 				ID:                    "nextcloud",

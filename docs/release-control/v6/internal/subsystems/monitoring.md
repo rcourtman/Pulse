@@ -136,6 +136,12 @@ truth for live infrastructure data.
     same native-query rule: ZFS snapshots prefer `zfs.resource.snapshot.query`
     with older `pool.snapshot.query`/REST compatibility fallback, and
     replication tasks prefer `replication.query`.
+    TrueNAS system services are also native appliance inventory: `service.query`
+    is the preferred source for service name, boot enablement, runtime state,
+    and process IDs. Pulse must publish that data through `TrueNASData.Services`
+    on the owning top-level TrueNAS system resource instead of inventing a
+    generic service resource type or rendering services as Docker/container
+    rows.
 
 ## Forbidden Paths
 

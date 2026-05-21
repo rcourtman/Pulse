@@ -145,6 +145,7 @@ func TestFixtureFetcherReturnsSnapshotCopy(t *testing.T) {
 
 	first.Pools[0].Name = "mutated"
 	first.Datasets = append(first.Datasets, Dataset{Name: "extra/dataset"})
+	first.Services[0].PIDs[0] = 9999
 	first.System.TemperatureCelsius["cpu_package"] = 99.9
 
 	second, err := fetcher.Fetch(context.Background())
@@ -159,6 +160,9 @@ func TestFixtureFetcherReturnsSnapshotCopy(t *testing.T) {
 	}
 	if len(second.Datasets) != len(fixtures.Datasets) {
 		t.Fatalf("expected dataset count %d, got %d", len(fixtures.Datasets), len(second.Datasets))
+	}
+	if second.Services[0].PIDs[0] != fixtures.Services[0].PIDs[0] {
+		t.Fatalf("expected fixture service PID %d, got %d", fixtures.Services[0].PIDs[0], second.Services[0].PIDs[0])
 	}
 	if second.System.TemperatureCelsius["cpu_package"] != fixtures.System.TemperatureCelsius["cpu_package"] {
 		t.Fatalf("expected fixture cpu_package temperature %v, got %v", fixtures.System.TemperatureCelsius["cpu_package"], second.System.TemperatureCelsius["cpu_package"])
@@ -737,6 +741,44 @@ func TestRecordsIncludeTrueNASAppsAsCanonicalWorkloads(t *testing.T) {
 	}
 	if adguard.Resource.Docker == nil || adguard.Resource.Docker.ContainerState != "exited" {
 		t.Fatalf("expected AdGuard Home container state exited, got %+v", adguard.Resource.Docker)
+	}
+}
+
+func TestRecordsIncludeTrueNASServicesOnSystemResource(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		SetFeatureEnabled(previous)
+	})
+
+	provider := NewProvider(DefaultFixtures())
+	records := provider.Records()
+	if len(records) == 0 {
+		t.Fatal("expected fixture records from provider")
+	}
+
+	var system *unifiedresources.IngestRecord
+	for i := range records {
+		if records[i].Resource.Type == unifiedresources.ResourceTypeAgent && records[i].SourceID == "system:truenas-main" {
+			system = &records[i]
+			break
+		}
+	}
+	if system == nil {
+		t.Fatal("expected TrueNAS system record")
+	}
+	if system.Resource.TrueNAS == nil {
+		t.Fatal("expected TrueNAS system metadata")
+	}
+	services := system.Resource.TrueNAS.Services
+	if len(services) != 4 {
+		t.Fatalf("expected 4 TrueNAS services, got %+v", services)
+	}
+	if services[0].Service != "smb" || !services[0].Enabled || services[0].State != "RUNNING" || len(services[0].PIDs) != 2 {
+		t.Fatalf("unexpected SMB service metadata: %+v", services[0])
+	}
+	if services[3].Service != "smartd" || !services[3].Enabled || services[3].State != "STOPPED" {
+		t.Fatalf("expected stopped enabled smartd service, got %+v", services[3])
 	}
 }
 

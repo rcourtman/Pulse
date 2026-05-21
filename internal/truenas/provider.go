@@ -484,6 +484,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 				ProtectionSummary:     protectionSummary,
 				RebuildInProgress:     rebuildInProgress,
 				RebuildSummary:        rebuildSummary,
+				Services:              trueNASServicesFromServices(snapshot.Services),
 			},
 			Tags: []string{
 				"truenas",
@@ -1483,6 +1484,28 @@ func primaryAppImage(app App) string {
 	return ""
 }
 
+func trueNASServicesFromServices(services []Service) []unifiedresources.TrueNASService {
+	if len(services) == 0 {
+		return nil
+	}
+	out := make([]unifiedresources.TrueNASService, 0, len(services))
+	for _, service := range services {
+		name := strings.TrimSpace(service.Service)
+		id := strings.TrimSpace(service.ID)
+		if id == "" {
+			id = name
+		}
+		out = append(out, unifiedresources.TrueNASService{
+			ID:      id,
+			Service: name,
+			Enabled: service.Enabled,
+			State:   strings.TrimSpace(service.State),
+			PIDs:    append([]int(nil), service.PIDs...),
+		})
+	}
+	return out
+}
+
 func trueNASAppDataFromApp(app App) *unifiedresources.TrueNASApp {
 	containerCount := app.ContainerCount
 	if containerCount == 0 && len(app.Containers) > 0 {
@@ -2079,6 +2102,7 @@ func copyFixtureSnapshot(snapshot *FixtureSnapshot) *FixtureSnapshot {
 	copied.Datasets = append([]Dataset(nil), snapshot.Datasets...)
 	copied.Disks = append([]Disk(nil), snapshot.Disks...)
 	copied.Alerts = append([]Alert(nil), snapshot.Alerts...)
+	copied.Services = cloneServices(snapshot.Services)
 	copied.Apps = cloneApps(snapshot.Apps)
 	copied.VMs = append([]VirtualMachine(nil), snapshot.VMs...)
 	copied.Shares = cloneNetworkShares(snapshot.Shares)
@@ -2096,6 +2120,18 @@ func cloneSystemInfo(system SystemInfo) SystemInfo {
 		}
 	}
 	return cloned
+}
+
+func cloneServices(services []Service) []Service {
+	if len(services) == 0 {
+		return nil
+	}
+	out := make([]Service, len(services))
+	for i := range services {
+		out[i] = services[i]
+		out[i].PIDs = append([]int(nil), services[i].PIDs...)
+	}
+	return out
 }
 
 func cloneApps(apps []App) []App {

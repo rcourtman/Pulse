@@ -723,6 +723,56 @@ func (c *Client) getAlertsREST(ctx context.Context) ([]Alert, error) {
 	return alerts, nil
 }
 
+// GetServices returns the native TrueNAS system service inventory.
+func (c *Client) GetServices(ctx context.Context) ([]Service, error) {
+	services, err := c.getServicesRPC(ctx)
+	if err == nil {
+		return services, nil
+	}
+	restServices, restErr := c.getServicesREST(ctx)
+	if restErr != nil {
+		return nil, fmt.Errorf("fetch truenas services via rpc and rest: rpc=%w rest=%v", err, restErr)
+	}
+	return restServices, nil
+}
+
+func (c *Client) getServicesRPC(ctx context.Context) ([]Service, error) {
+	var response []map[string]any
+	if err := c.callRPC(ctx, "service.query", []any{[]any{}, map[string]any{
+		"extra": map[string]any{"include_state": true},
+	}}, &response); err != nil {
+		return nil, err
+	}
+	return parseServices(response), nil
+}
+
+func (c *Client) getServicesREST(ctx context.Context) ([]Service, error) {
+	var response []map[string]any
+	if err := c.getJSON(ctx, http.MethodGet, "/service", &response); err != nil {
+		return nil, err
+	}
+	return parseServices(response), nil
+}
+
+func parseServices(response []map[string]any) []Service {
+	services := make([]Service, 0, len(response))
+	for _, item := range response {
+		name := strings.TrimSpace(readStringAny(item, "service", "name"))
+		id := strings.TrimSpace(readStringAny(item, "id"))
+		if id == "" {
+			id = name
+		}
+		services = append(services, Service{
+			ID:      id,
+			Service: name,
+			Enabled: readBoolAny(item, "enable", "enabled"),
+			State:   strings.TrimSpace(readStringAny(item, "state", "status")),
+			PIDs:    readIntSliceAny(item, "pids", "pid"),
+		})
+	}
+	return services
+}
+
 // GetVMs returns the best-effort native TrueNAS VM inventory. TrueNAS 25.04+
 // documents vm.query on the JSON-RPC API, with the legacy REST endpoint kept
 // as a compatibility fallback for existing client tests and older deployments.
@@ -1253,6 +1303,7 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 	}
 
 	// Recovery artifacts are best-effort: do not fail monitoring if additional endpoints are unavailable.
+	services, _ := c.GetServices(ctx)
 	apps, _ := c.GetApps(ctx)
 	vms, _ := c.GetVMs(ctx)
 	shares, _ := c.GetNetworkShares(ctx)
@@ -1266,6 +1317,7 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 		Datasets:         datasets,
 		Disks:            disks,
 		Alerts:           alerts,
+		Services:         services,
 		Apps:             apps,
 		VMs:              vms,
 		Shares:           shares,
@@ -2834,6 +2886,33 @@ func readIntAny(record map[string]any, keys ...string) int {
 		}
 	}
 	return 0
+}
+
+func readIntSliceAny(record map[string]any, keys ...string) []int {
+	if record == nil {
+		return nil
+	}
+	for _, key := range keys {
+		value, ok := record[key]
+		if !ok || value == nil {
+			continue
+		}
+		switch typed := value.(type) {
+		case []any:
+			out := make([]int, 0, len(typed))
+			for _, item := range typed {
+				if parsed, ok := parseInt64Any(item); ok {
+					out = append(out, int(parsed))
+				}
+			}
+			return out
+		default:
+			if parsed, ok := parseInt64Any(value); ok {
+				return []int{int(parsed)}
+			}
+		}
+	}
+	return nil
 }
 
 func readInt64Any(record map[string]any, keys ...string) int64 {

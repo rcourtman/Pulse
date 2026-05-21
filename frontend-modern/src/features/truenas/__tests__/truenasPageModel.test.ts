@@ -4,12 +4,14 @@ import type { Resource } from '@/types/resource';
 import {
   TRUENAS_TAB_SPECS,
   buildTrueNASPageModel,
+  buildTrueNASServiceRows,
   buildTrueNASStorageChildCounts,
   buildTrueNASStorageTopologyRows,
   buildTrueNASSystemChildCounts,
   filterTrueNASApps,
   filterTrueNASIncidents,
   filterTrueNASProtectionPoints,
+  filterTrueNASServices,
   filterTrueNASStorageTopologyRows,
   filterTrueNASShares,
   filterTrueNASVMs,
@@ -17,6 +19,7 @@ import {
   mapTrueNASIncidentSeverity,
   mapTrueNASProtectionKind,
   mapTrueNASProtectionStatus,
+  mapTrueNASServiceStatus,
   mapTrueNASShareStatus,
   mapTrueNASStorageStatus,
   mapTrueNASVMStatus,
@@ -49,6 +52,7 @@ describe('truenasPageModel', () => {
     expect(TRUENAS_TAB_SPECS.map((tab) => tab.id)).toEqual([
       'overview',
       'storage',
+      'services',
       'apps',
       'vms',
       'shares',
@@ -58,7 +62,11 @@ describe('truenasPageModel', () => {
 
   it('buckets systems, workloads, and native storage inventory by TrueNAS API facet', () => {
     const model = buildTrueNASPageModel([
-      makeResource({ id: 'truenas-system', type: 'agent' }),
+      makeResource({
+        id: 'truenas-system',
+        type: 'agent',
+        truenas: { services: [{ id: '1', service: 'smb', enabled: true, state: 'RUNNING' }] },
+      }),
       makeResource({ id: 'truenas-vm', type: 'vm' }),
       makeResource({ id: 'truenas-app', type: 'app-container' }),
       makeResource({ id: 'truenas-share', type: 'network-share' }),
@@ -81,6 +89,7 @@ describe('truenasPageModel', () => {
     expect(model.shares.map((r) => r.id)).toEqual(['truenas-share']);
     expect(model.vms.map((r) => r.id)).toEqual(['truenas-vm']);
     expect(model.apps.map((r) => r.id)).toEqual(['truenas-app']);
+    expect(model.services.map((row) => row.service.service)).toEqual(['smb']);
     expect(model.pools.map((r) => r.id)).toEqual(['truenas-pool']);
     expect(model.datasets.map((r) => r.id)).toEqual(['truenas-dataset']);
     expect(model.disks.map((r) => r.id)).toEqual(['truenas-disk']);
@@ -98,8 +107,23 @@ describe('truenasPageModel', () => {
   });
 
   it('counts overview inventory from each TrueNAS system hierarchy', () => {
-    const primary = makeResource({ id: 'system-primary', type: 'agent', name: 'nas-primary' });
-    const backup = makeResource({ id: 'system-backup', type: 'agent', name: 'nas-backup' });
+    const primary = makeResource({
+      id: 'system-primary',
+      type: 'agent',
+      name: 'nas-primary',
+      truenas: {
+        services: [
+          { id: '1', service: 'smb', enabled: true, state: 'RUNNING' },
+          { id: '2', service: 'ssh', enabled: false, state: 'STOPPED' },
+        ],
+      },
+    });
+    const backup = makeResource({
+      id: 'system-backup',
+      type: 'agent',
+      name: 'nas-backup',
+      truenas: { services: [{ id: '1', service: 'nfs', enabled: true, state: 'RUNNING' }] },
+    });
     const primaryPool = makeResource({
       id: 'primary-pool-tank',
       type: 'storage',
@@ -156,6 +180,7 @@ describe('truenasPageModel', () => {
       vms: 1,
       apps: 1,
       disks: 1,
+      services: 2,
     });
     expect(counts.get(backup.id)).toEqual({
       pools: 1,
@@ -164,11 +189,16 @@ describe('truenasPageModel', () => {
       vms: 1,
       apps: 1,
       disks: 1,
+      services: 1,
     });
   });
 
   it('keeps the single-system inventory fallback for older unparented TrueNAS resources', () => {
-    const system = makeResource({ id: 'system-primary', type: 'agent' });
+    const system = makeResource({
+      id: 'system-primary',
+      type: 'agent',
+      truenas: { services: [{ id: '1', service: 'smb', enabled: true, state: 'RUNNING' }] },
+    });
     const counts = buildTrueNASSystemChildCounts(
       [
         system,
@@ -189,7 +219,38 @@ describe('truenasPageModel', () => {
       vms: 1,
       apps: 1,
       disks: 1,
+      services: 1,
     });
+  });
+
+  it('builds and filters native TrueNAS service rows from system metadata', () => {
+    const system = makeResource({
+      id: 'system-primary',
+      type: 'agent',
+      name: 'nas-primary',
+      truenas: {
+        hostname: 'nas-primary',
+        services: [
+          { id: '1', service: 'smb', enabled: true, state: 'RUNNING', pids: [2418, 2420] },
+          { id: '2', service: 'ssh', enabled: false, state: 'STOPPED' },
+          { id: '3', service: 'smartd', enabled: true, state: 'STOPPED' },
+        ],
+      },
+    });
+
+    const rows = buildTrueNASServiceRows([system]);
+
+    expect(rows.map((row) => row.service.service)).toEqual(['smartd', 'ssh', 'smb']);
+    expect(mapTrueNASServiceStatus(rows[0])).toBe('stopped');
+    expect(mapTrueNASServiceStatus(rows[1])).toBe('disabled');
+    expect(mapTrueNASServiceStatus(rows[2])).toBe('running');
+    expect(filterTrueNASServices(rows, 'nas-primary', 'all')).toHaveLength(3);
+    expect(filterTrueNASServices(rows, 'smb', 'running').map((row) => row.service.service)).toEqual(
+      ['smb'],
+    );
+    expect(filterTrueNASServices(rows, '', 'disabled').map((row) => row.service.service)).toEqual([
+      'ssh',
+    ]);
   });
 
   it('builds a native TrueNAS storage topology with pool child counts', () => {
@@ -564,8 +625,11 @@ describe('truenasPageModel', () => {
     expect(mapTrueNASProtectionStatus(legacyReplication)).toBe('warning');
 
     expect(
-      filterTrueNASProtectionPoints([snapshot, replication, legacyReplication], 'vault', 'running')
-        .map((point) => point.id),
+      filterTrueNASProtectionPoints(
+        [snapshot, replication, legacyReplication],
+        'vault',
+        'running',
+      ).map((point) => point.id),
     ).toEqual(['replicate-tank-apps']);
     expect(
       filterTrueNASProtectionPoints(

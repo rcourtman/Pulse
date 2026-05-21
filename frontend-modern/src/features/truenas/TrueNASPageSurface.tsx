@@ -13,6 +13,7 @@ import { TrueNASAppsTable } from './TrueNASAppsTable';
 import { TrueNASAlertsTable } from './TrueNASAlertsTable';
 import { TrueNASNetworkSharesTable } from './TrueNASNetworkSharesTable';
 import { TrueNASProtectionTable } from './TrueNASProtectionTable';
+import { TrueNASServicesTable } from './TrueNASServicesTable';
 import { TrueNASStorageTopologyTable } from './TrueNASStorageTopologyTable';
 import { TrueNASSystemsTable } from './TrueNASSystemsTable';
 import { TrueNASVirtualMachinesTable } from './TrueNASVirtualMachinesTable';
@@ -90,6 +91,9 @@ export function TrueNASPageSurface() {
             <Show when={activeTab() === 'storage'}>
               <TrueNASStorage model={model} />
             </Show>
+            <Show when={activeTab() === 'services'}>
+              <TrueNASServices model={model} />
+            </Show>
             <Show when={activeTab() === 'apps'}>
               <TrueNASApps model={model} />
             </Show>
@@ -133,6 +137,17 @@ function TrueNASApps(props: TrueNASOverviewProps) {
       emptyIcon={truenasIcon()}
       emptyTitle="No TrueNAS apps"
       emptyDescription="Apps appear here once the TrueNAS API reports app.query inventory."
+    />
+  );
+}
+
+function TrueNASServices(props: TrueNASOverviewProps) {
+  return (
+    <TrueNASServicesTable
+      services={props.model().services}
+      emptyIcon={truenasIcon()}
+      emptyTitle="No TrueNAS services"
+      emptyDescription="System services appear here once the TrueNAS API reports service.query inventory."
     />
   );
 }

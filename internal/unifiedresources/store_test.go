@@ -174,6 +174,14 @@ func TestNewSQLiteResourceStore_MigratesLegacyResourceChangesTable(t *testing.T)
 	}
 	defer store.Close()
 
+	var rawObservedAt sql.NullString
+	if err := store.db.QueryRow(`SELECT observed_at FROM resource_changes WHERE id = ?`, "chg-legacy").Scan(&rawObservedAt); err != nil {
+		t.Fatalf("query raw migrated observed_at: %v", err)
+	}
+	if rawObservedAt.Valid && strings.TrimSpace(rawObservedAt.String) != "" {
+		t.Fatalf("legacy observed_at was physically backfilled during startup: %q", rawObservedAt.String)
+	}
+
 	results, err := store.GetRecentChanges("vm:legacy", time.Time{}, 10)
 	if err != nil {
 		t.Fatalf("GetRecentChanges on migrated legacy table returned error: %v", err)
@@ -195,6 +203,14 @@ func TestNewSQLiteResourceStore_MigratesLegacyResourceChangesTable(t *testing.T)
 	}
 	if results[0].OccurredAt != nil {
 		t.Fatalf("legacy occurred_at = %v, want nil", results[0].OccurredAt)
+	}
+
+	count, err := store.CountRecentChanges("vm:legacy", time.Date(2026, 3, 18, 11, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("CountRecentChanges on migrated legacy table returned error: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("CountRecentChanges on migrated legacy table returned %d, want 1", count)
 	}
 
 	if err := store.RecordChange(ResourceChange{
@@ -240,6 +256,48 @@ func TestNewSQLiteResourceStore_MigratesLegacyResourceChangesTable(t *testing.T)
 		if _, ok := indexes[want]; !ok {
 			t.Fatalf("expected migrated resource_changes index %q, got %#v", want, indexes)
 		}
+	}
+}
+
+func TestNormalizeResourceChangeRowsSkipsAlreadyCanonicalRows(t *testing.T) {
+	dataDir := t.TempDir()
+
+	store, err := NewSQLiteResourceStore(dataDir, defaultOrgID)
+	if err != nil {
+		t.Fatalf("NewSQLiteResourceStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.RecordChange(ResourceChange{
+		ID:            "chg-canonical",
+		ResourceID:    "vm:canonical",
+		ObservedAt:    time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC),
+		Kind:          ChangeRestart,
+		SourceType:    SourcePlatformEvent,
+		SourceAdapter: AdapterProxmox,
+		Confidence:    ConfidenceHigh,
+		Reason:        "canonical row",
+	}); err != nil {
+		t.Fatalf("RecordChange failed: %v", err)
+	}
+
+	columns, err := resourceChangeColumns(store.db)
+	if err != nil {
+		t.Fatalf("resourceChangeColumns: %v", err)
+	}
+	var before int
+	if err := store.db.QueryRow(`SELECT total_changes()`).Scan(&before); err != nil {
+		t.Fatalf("SELECT total_changes() before normalize: %v", err)
+	}
+	if err := store.normalizeResourceChangeRows(columns); err != nil {
+		t.Fatalf("normalizeResourceChangeRows returned error: %v", err)
+	}
+	var after int
+	if err := store.db.QueryRow(`SELECT total_changes()`).Scan(&after); err != nil {
+		t.Fatalf("SELECT total_changes() after normalize: %v", err)
+	}
+	if after != before {
+		t.Fatalf("normalizeResourceChangeRows changed %d row(s), want 0", after-before)
 	}
 }
 

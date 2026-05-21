@@ -78,6 +78,7 @@ const PLATFORM_PAGES: readonly PlatformPageCase[] = [
     tabPaths: [
       '/truenas/overview',
       '/truenas/storage',
+      '/truenas/services',
       '/truenas/apps',
       '/truenas/vms',
       '/truenas/shares',
@@ -86,6 +87,7 @@ const PLATFORM_PAGES: readonly PlatformPageCase[] = [
     populatedTabPaths: [
       '/truenas/overview',
       '/truenas/storage',
+      '/truenas/services',
       '/truenas/apps',
       '/truenas/vms',
       '/truenas/shares',
@@ -94,6 +96,7 @@ const PLATFORM_PAGES: readonly PlatformPageCase[] = [
     populatedRowSelectors: {
       '/truenas/overview': '[data-truenas-system-row]',
       '/truenas/storage': '[data-truenas-storage-row]',
+      '/truenas/services': '[data-truenas-service-row]',
       '/truenas/apps': '[data-truenas-app-row]',
       '/truenas/vms': '[data-truenas-vm-row]',
       '/truenas/shares': '[data-truenas-share-row]',
@@ -209,6 +212,7 @@ test.describe('Platform pages shell', () => {
       { path: '/kubernetes/deployments', testId: 'kubernetes-page' },
       { path: '/truenas/overview', testId: 'truenas-page' },
       { path: '/truenas/storage', testId: 'truenas-page' },
+      { path: '/truenas/services', testId: 'truenas-page' },
       { path: '/truenas/apps', testId: 'truenas-page' },
       { path: '/truenas/vms', testId: 'truenas-page' },
       { path: '/truenas/shares', testId: 'truenas-page' },

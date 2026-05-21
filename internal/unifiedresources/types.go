@@ -1030,19 +1030,30 @@ type VMwareData struct {
 
 // TrueNASData contains TrueNAS-specific metadata for TrueNAS resources.
 type TrueNASData struct {
-	Hostname              string        `json:"hostname,omitempty"`
-	Version               string        `json:"version,omitempty"`
-	UptimeSeconds         int64         `json:"uptimeSeconds,omitempty"`
-	StorageRisk           *StorageRisk  `json:"storageRisk,omitempty"`
-	StorageRiskSummary    string        `json:"storageRiskSummary,omitempty"`
-	StoragePostureSummary string        `json:"storagePostureSummary,omitempty"`
-	ProtectionReduced     bool          `json:"protectionReduced,omitempty"`
-	ProtectionSummary     string        `json:"protectionSummary,omitempty"`
-	RebuildInProgress     bool          `json:"rebuildInProgress,omitempty"`
-	RebuildSummary        string        `json:"rebuildSummary,omitempty"`
-	App                   *TrueNASApp   `json:"app,omitempty"`
-	VM                    *TrueNASVM    `json:"vm,omitempty"`
-	Share                 *TrueNASShare `json:"share,omitempty"`
+	Hostname              string           `json:"hostname,omitempty"`
+	Version               string           `json:"version,omitempty"`
+	UptimeSeconds         int64            `json:"uptimeSeconds,omitempty"`
+	StorageRisk           *StorageRisk     `json:"storageRisk,omitempty"`
+	StorageRiskSummary    string           `json:"storageRiskSummary,omitempty"`
+	StoragePostureSummary string           `json:"storagePostureSummary,omitempty"`
+	ProtectionReduced     bool             `json:"protectionReduced,omitempty"`
+	ProtectionSummary     string           `json:"protectionSummary,omitempty"`
+	RebuildInProgress     bool             `json:"rebuildInProgress,omitempty"`
+	RebuildSummary        string           `json:"rebuildSummary,omitempty"`
+	App                   *TrueNASApp      `json:"app,omitempty"`
+	VM                    *TrueNASVM       `json:"vm,omitempty"`
+	Share                 *TrueNASShare    `json:"share,omitempty"`
+	Services              []TrueNASService `json:"services,omitempty"`
+}
+
+// TrueNASService contains service.query data for one native TrueNAS system
+// service.
+type TrueNASService struct {
+	ID      string `json:"id,omitempty"`
+	Service string `json:"service,omitempty"`
+	Enabled bool   `json:"enabled"`
+	State   string `json:"state,omitempty"`
+	PIDs    []int  `json:"pids,omitempty"`
 }
 
 // TrueNASApp contains app.query / active_workloads data for one TrueNAS app.

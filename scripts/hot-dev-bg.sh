@@ -19,7 +19,8 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/hot-dev-runtime.sh"
 
-PID_FILE="${HOT_DEV_BG_PID_FILE:-${ROOT_DIR}/tmp/hot-dev.bg.pid}"
+DEFAULT_HOT_DEV_BG_PID_FILE="${ROOT_DIR}/tmp/hot-dev.bg.pid"
+PID_FILE="${HOT_DEV_BG_PID_FILE:-${DEFAULT_HOT_DEV_BG_PID_FILE}}"
 LOG_FILE="${HOT_DEV_BG_LOG_FILE:-${ROOT_DIR}/tmp/hot-dev.bg.log}"
 HOT_DEV_VERIFY_LOCK="${HOT_DEV_VERIFY_LOCK_FILE:-${ROOT_DIR}/tmp/hot-dev.verify.lock}"
 
@@ -72,6 +73,36 @@ process_command() {
 process_parent_id() {
   local pid="$1"
   ps -o ppid= -p "${pid}" 2>/dev/null | tr -d '[:space:]'
+}
+
+discover_managed_supervisor_pid() {
+  local pid command
+
+  while IFS= read -r pid; do
+    [[ -n "${pid}" ]] || continue
+    [[ "${pid}" != "$$" ]] || continue
+    command="$(process_command "${pid}")"
+    case "${command}" in
+      "bash ${ROOT_DIR}/scripts/hot-dev-bg.sh supervise"|"/bin/bash ${ROOT_DIR}/scripts/hot-dev-bg.sh supervise"|"${ROOT_DIR}/scripts/hot-dev-bg.sh supervise")
+        printf "%s\n" "${pid}"
+        return 0
+        ;;
+    esac
+  done < <(pgrep -f "${ROOT_DIR}/scripts/hot-dev-bg.sh supervise" 2>/dev/null | sort -n)
+
+  return 1
+}
+
+recover_managed_pid_file() {
+  local discovered_pid
+
+  [[ "${PID_FILE}" == "${DEFAULT_HOT_DEV_BG_PID_FILE}" ]] || return 1
+  discovered_pid="$(discover_managed_supervisor_pid || true)"
+  [[ -n "${discovered_pid}" ]] || return 1
+  kill -0 "${discovered_pid}" 2>/dev/null || return 1
+  mkdir -p "$(dirname "${PID_FILE}")"
+  printf "%s\n" "${discovered_pid}" > "${PID_FILE}"
+  return 0
 }
 
 array_contains() {
@@ -223,16 +254,22 @@ wait_for_managed_listener() {
 
 is_running() {
   if [[ ! -f "${PID_FILE}" ]]; then
-    return 1
+    recover_managed_pid_file
+    return $?
   fi
   local pid
   pid="$(cat "${PID_FILE}" 2>/dev/null || true)"
-  [[ -n "${pid}" ]] || return 1
-  kill -0 "${pid}" 2>/dev/null
+  if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "${PID_FILE}"
+  recover_managed_pid_file
 }
 
 managed_session_pid() {
-  cat "${PID_FILE}" 2>/dev/null || true
+  if is_running; then
+    cat "${PID_FILE}" 2>/dev/null || true
+  fi
 }
 
 describe_listener() {

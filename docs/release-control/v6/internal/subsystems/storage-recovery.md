@@ -145,13 +145,14 @@ read-only evidence: it must not become a storage/recovery-owned command path,
 secret source, restore entitlement, or frontend-only fixture separate from the
 canonical `/api/discovery` payload.
 Storage and recovery may also consume unified-resource TrueNAS app and VM
-metadata, plus TrueNAS network-share metadata, as read-only workload and
-storage-access context when explaining appliance-owned storage or protected
-items. `TrueNASData.App`, `TrueNASData.VM`, and `TrueNASData.Share` remain
+metadata, TrueNAS native service metadata, plus TrueNAS network-share metadata,
+as read-only workload, system, and storage-access context when explaining
+appliance-owned storage or protected items. `TrueNASData.App`,
+`TrueNASData.VM`, `TrueNASData.Share`, and `TrueNASData.Services` remain
 unified-resource/platform truth sourced from the TrueNAS API; storage/recovery
-must not reinterpret app containers, VM device inventory, share paths, volumes,
-or update posture as storage ownership, restore entitlement, or a separate
-Docker-only or TrueNAS-local inventory path.
+must not reinterpret app containers, VM device inventory, service PIDs, share
+paths, volumes, or update posture as storage ownership, restore entitlement, or
+a separate Docker-only or TrueNAS-local inventory path.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 2. Add or change recovery page UX through `frontend-modern/src/components/Recovery/` and keep canonical route/query/filter state ownership in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`

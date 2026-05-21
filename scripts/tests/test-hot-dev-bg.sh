@@ -357,6 +357,8 @@ test_launchd_session_supervises_managed_runtime() {
       LOG_FILE="${test_dir}/hot-dev-bg.log"
       require_python(){ :; }
       start_bg(){ printf "%s\n" "999999" > "${PID_FILE}"; }
+      is_running(){ return 1; }
+      managed_session_pid(){ printf "%s\n" "999999"; }
       launchd_session_bg true
       status=$?
       printf "status=%s\n" "${status}"
@@ -744,9 +746,12 @@ test_hot_dev_health_monitor_probes_api_health() {
 
   assert_contains "hot-dev health monitor declares a configurable unhealthy streak threshold" "${output}" 'UNHEALTHY_THRESHOLD="${HOT_DEV_BACKEND_UNHEALTHY_THRESHOLD:-2}"'
   assert_contains "hot-dev health monitor declares backend startup grace" "${output}" 'BACKEND_HEALTH_STARTUP_GRACE_SECONDS="${HOT_DEV_BACKEND_HEALTH_STARTUP_GRACE_SECONDS:-180}"'
+  assert_contains "hot-dev health monitor declares missing-process grace" "${output}" 'BACKEND_PROCESS_MISSING_GRACE_SECONDS="${HOT_DEV_BACKEND_PROCESS_MISSING_GRACE_SECONDS:-10}"'
   assert_contains "hot-dev health monitor tracks backend restart time through a shared marker" "${output}" 'BACKEND_STARTED_AT_FILE="${HOT_DEV_BACKEND_STARTED_AT_FILE:-${ROOT_DIR}/tmp/hot-dev.backend.started-at}"'
   assert_contains "hot-dev managed restarts mark backend startup grace before killing" "${output}" 'mark_backend_startup_grace'
+  assert_contains "hot-dev health monitor measures backend startup age" "${output}" 'backend_startup_age_seconds()'
   assert_contains "hot-dev health monitor checks startup grace before killing a live backend" "${output}" 'backend_in_startup_grace'
+  assert_contains "hot-dev health monitor bounds missing process grace separately" "${output}" 'startup_age < BACKEND_PROCESS_MISSING_GRACE_SECONDS'
   assert_contains "hot-dev health monitor probes /api/health on the dev backend port" "${output}" '"http://127.0.0.1:${PULSE_DEV_API_PORT:-7655}/api/health"'
   assert_contains "hot-dev health monitor restarts on alive-but-unresponsive state" "${output}" 'elif ! backend_serving; then'
   assert_contains "hot-dev health monitor kills unresponsive Pulse before restart" "${output}" 'Killing unresponsive Pulse and restarting'
@@ -790,6 +795,44 @@ test_hot_dev_bg_script_advertises_managed_entrypoint() {
   assert_contains "hot-dev-bg routes verify guidance to managed wrapper" "${output}" "Rerun with: npm run dev:verify"
   assert_contains "hot-dev-bg routes launchd supervision guidance to managed wrapper" "${output}" "Rerun with: npm run dev"
   assert_contains "hot-dev-bg managed child skips npm wrapper cleanup" "${output}" "HOT_DEV_SKIP_NPM_CLEANUP=true"
+  assert_contains "hot-dev-bg can discover a live supervisor" "${output}" "discover_managed_supervisor_pid()"
+  assert_contains "hot-dev-bg can recover a missing managed pid file" "${output}" "recover_managed_pid_file()"
+}
+
+test_hot_dev_bg_recovers_stale_pid_file_from_live_supervisor() {
+  local test_dir output
+  test_dir="$(mktemp -d)"
+  temp_dirs+=("${test_dir}")
+
+  output="$(
+    HOT_DEV_BG_PATH="${HOT_DEV_BG}" \
+    bash -lc '
+      source "${HOT_DEV_BG_PATH}"
+      DEFAULT_HOT_DEV_BG_PID_FILE="'"${test_dir}"'/hot-dev-bg.pid"
+      PID_FILE="${DEFAULT_HOT_DEV_BG_PID_FILE}"
+      printf "111\n" > "${PID_FILE}"
+      pgrep() { printf "4242\n"; }
+      process_command() { printf "bash %s/scripts/hot-dev-bg.sh supervise\n" "${ROOT_DIR}"; }
+      kill() {
+        if [[ "${1:-}" == "-0" && "${2:-}" == "4242" ]]; then
+          return 0
+        fi
+        return 1
+      }
+
+      if is_running; then
+        printf "running=yes\n"
+      else
+        printf "running=no\n"
+      fi
+      printf "pid_file=%s\n" "$(cat "${PID_FILE}")"
+      printf "managed_pid=%s\n" "$(managed_session_pid)"
+    '
+  )"
+
+  assert_contains "hot-dev-bg recovers running state from a live supervisor" "${output}" "running=yes"
+  assert_contains "hot-dev-bg rewrites stale pid file to discovered supervisor" "${output}" "pid_file=4242"
+  assert_contains "managed_session_pid returns recovered supervisor pid" "${output}" "managed_pid=4242"
 }
 
 test_hot_dev_bg_usage_prefers_managed_wrappers() {
@@ -1292,6 +1335,7 @@ main() {
   test_hot_dev_reconciles_agent_reachable_bind_address
   test_hot_dev_health_monitor_probes_api_health
   test_hot_dev_bg_script_advertises_managed_entrypoint
+  test_hot_dev_bg_recovers_stale_pid_file_from_live_supervisor
   test_hot_dev_bg_usage_prefers_managed_wrappers
   test_integration_readme_uses_managed_backend_restart_wrapper
   test_integration_readme_documents_retired_trial_start_contract

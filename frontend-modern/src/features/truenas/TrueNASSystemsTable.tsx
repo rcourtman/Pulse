@@ -101,6 +101,7 @@ const EMPTY_COUNTS: TrueNASSystemChildCounts = {
   vms: 0,
   apps: 0,
   disks: 0,
+  services: 0,
 };
 
 export const TrueNASSystemsTable: Component<{
@@ -163,45 +164,45 @@ export const TrueNASSystemsTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title={props.title ?? 'Systems'} />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1320px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1400px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   {/*
                     Desktop widths balance the bar-metric columns (CPU /
                     Memory / Storage) against the short integer-count columns
-                    (Pools / Datasets / Shares / VMs / Disks / Apps) and give Version the
-                    room it needs for full "TrueNAS-SCALE-24.10.2"-style
-                    labels. Mobile widths are unchanged.
+                    (Pools / Datasets / Shares / VMs / Disks / Apps /
+                    Services) and give Version the room it needs for full
+                    "TrueNAS-SCALE-24.10.2"-style labels. Mobile widths are unchanged.
                   */}
                   <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[10%]`}>
                     System
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[13%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[12%]`}
                   >
                     Version
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[10%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[9%]`}>
                     CPU
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[10%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[9%]`}>
                     Memory
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[11%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[10%]`}>
                     Storage
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[5%]`}
                   >
                     Temp
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[5%]`}
                   >
                     Uptime
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[5%]`}
                   >
                     Pools
                   </TableHead>
@@ -226,9 +227,14 @@ export const TrueNASSystemsTable: Component<{
                     Disks
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[5%]`}
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
                   >
                     Apps
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
+                  >
+                    Services
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -367,12 +373,17 @@ export const TrueNASSystemsTable: Component<{
                           >
                             {c().apps}
                           </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
+                          >
+                            {c().services}
+                          </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={system}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
-                          colSpan={13}
+                          colSpan={14}
                           resolveResourceLabel={resolveResourceLabel}
                           onClose={() => drawer.close(system)}
                         />

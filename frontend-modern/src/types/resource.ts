@@ -721,6 +721,14 @@ export interface ResourceTrueNASShareMeta {
   mapAllGroup?: string;
 }
 
+export interface ResourceTrueNASServiceMeta {
+  id?: string;
+  service?: string;
+  enabled?: boolean;
+  state?: string;
+  pids?: number[];
+}
+
 export interface ResourceTrueNASMeta {
   hostname?: string;
   version?: string;
@@ -735,6 +743,7 @@ export interface ResourceTrueNASMeta {
   app?: ResourceTrueNASAppMeta;
   vm?: ResourceTrueNASVMMeta;
   share?: ResourceTrueNASShareMeta;
+  services?: ResourceTrueNASServiceMeta[];
 }
 
 export interface ResourceKubernetesMetricCapabilities {

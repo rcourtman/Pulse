@@ -209,6 +209,11 @@ reintroduce false Swarm capability surfaces.
    resources, redact filesystem paths through policy metadata, and derive
    storage-parent relationships without being flattened into generic Docker or
    storage rows.
+   TrueNAS service inventory remains a system-owned native facet rather than a
+   new generic resource type. `service.query` output must project into
+   `TrueNASData.Services` on the canonical top-level `agent` resource,
+   preserving service name, boot enablement, runtime state, and process IDs
+   through clone, merge, transport, and frontend decode paths.
 2. Add typed accessors and views in `internal/unifiedresources/views.go`
 3. Add source ingestion/adaptation in the adapter layer only
    Frontend resource platform contracts in
@@ -1225,9 +1230,11 @@ guest-config routing or inventing a TrueNAS-local config type.
 That projection contract is the product-definition floor for TrueNAS support:
 Pulse supports TrueNAS only when it lands on the shared `agent`, `vm`,
 `app-container`, `storage`, `physical-disk`, and recovery-linked resource
-shapes. The unified agent may augment a TrueNAS system later, but baseline
-support does not depend on it, and product surfaces must not reopen a parallel
-`truenas-*` resource model just to add another capability.
+shapes, with native system-owned service inventory carried as
+`TrueNASData.Services` on the canonical `agent`. The unified agent may augment
+a TrueNAS system later, but baseline support does not depend on it, and product
+surfaces must not reopen a parallel `truenas-*` resource model just to add
+another capability.
 The canonical resource timeline now also owns durable incident-response facts
 that materially changed resource investigation state. `ResourceChange` kinds
 such as `alert_fired`, `alert_acknowledged`, `alert_unacknowledged`,
@@ -1554,9 +1561,11 @@ The same change emitter now also classifies canonical incident changes as
 anomalies stay attached to the canonical incident surface instead of being
 inferred later from metric noise or alert-adjacent heuristics.
 That store also now migrates legacy `resource_changes` tables that still carry
-the pre-v6 `timestamp` column by backfilling canonical `observed_at` values,
-adding the newer `occurred_at` field, and preserving the legacy timestamp on
-write when the target database still requires it.
+the pre-v6 `timestamp` column by adding canonical columns without rewriting
+large historical tables during startup. Timeline reads must resolve legacy
+`timestamp` and nullable `observed_at` values through read-time fallback
+expressions, while writes preserve the legacy timestamp on target databases
+that still require it.
 `internal/api/resources.go` now exposes that same history through dedicated
 `/api/resources/{id}/timeline` reads, while the bundled `/api/resources/{id}/facets`
 surface keeps the facet summary and recent-change history available without

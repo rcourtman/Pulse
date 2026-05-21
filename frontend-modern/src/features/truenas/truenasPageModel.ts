@@ -1,10 +1,23 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import { asTrimmedString } from '@/utils/stringUtils';
-import type { Resource, ResourceIncident, ResourceType } from '@/types/resource';
+import type {
+  Resource,
+  ResourceIncident,
+  ResourceTrueNASServiceMeta,
+  ResourceType,
+} from '@/types/resource';
 import type { RecoveryPoint } from '@/types/recovery';
 
-export type TrueNASPageTabId = 'overview' | 'storage' | 'apps' | 'vms' | 'shares' | 'protection';
+export type TrueNASPageTabId =
+  | 'overview'
+  | 'storage'
+  | 'services'
+  | 'apps'
+  | 'vms'
+  | 'shares'
+  | 'protection';
 export type TrueNASAppStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
+export type TrueNASServiceStatusFilter = 'all' | 'running' | 'attention' | 'stopped' | 'disabled';
 export type TrueNASVMStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
 export type TrueNASShareStatusFilter = 'all' | 'active' | 'attention' | 'disabled';
 export type TrueNASIncidentSeverityFilter = 'all' | 'critical' | 'warning' | 'info';
@@ -26,12 +39,13 @@ export type TrueNASTabSpec = {
 
 // The Overview tab is intentionally narrow: appliance systems and active
 // health signals. Native API inventory has first-class homes: Storage for
-// pools, datasets, and disks; Apps, VMs, and Shares for their TrueNAS API
-// facets; and Protection for snapshots and replication over the canonical
+// pools, datasets, and disks; Services, Apps, VMs, and Shares for their TrueNAS
+// API facets; and Protection for snapshots and replication over the canonical
 // recovery points contract.
 export const TRUENAS_TAB_SPECS: readonly TrueNASTabSpec[] = [
   { id: 'overview', label: 'Overview', path: '/truenas/overview' },
   { id: 'storage', label: 'Storage', path: '/truenas/storage' },
+  { id: 'services', label: 'Services', path: '/truenas/services' },
   { id: 'apps', label: 'Apps', path: '/truenas/apps' },
   { id: 'vms', label: 'VMs', path: '/truenas/vms' },
   { id: 'shares', label: 'Shares', path: '/truenas/shares' },
@@ -61,7 +75,16 @@ export type TrueNASPageModel = {
   shares: Resource[];
   vms: Resource[];
   apps: Resource[];
+  services: TrueNASServiceRow[];
   incidents: TrueNASIncidentRow[];
+};
+
+export type TrueNASServiceRow = {
+  id: string;
+  system: Resource;
+  systemId: string;
+  systemName: string;
+  service: ResourceTrueNASServiceMeta;
 };
 
 export type TrueNASIncidentRow = {
@@ -89,6 +112,7 @@ export type TrueNASSystemChildCounts = {
   vms: number;
   apps: number;
   disks: number;
+  services: number;
 };
 
 export type TrueNASStorageChildCounts = {
@@ -115,6 +139,7 @@ const emptyTrueNASSystemChildCounts = (): TrueNASSystemChildCounts => ({
   vms: 0,
   apps: 0,
   disks: 0,
+  services: 0,
 });
 
 const emptyTrueNASStorageChildCounts = (): TrueNASStorageChildCounts => ({
@@ -135,6 +160,7 @@ export function buildTrueNASPageModel(resources: Resource[]): TrueNASPageModel {
   const shares = trueNasResources.filter((resource) => resource.type === 'network-share');
   const vms = trueNasResources.filter((resource) => resource.type === 'vm');
   const apps = trueNasResources.filter((resource) => resource.type === 'app-container');
+  const services = buildTrueNASServiceRows(systems);
   const incidents = buildTrueNASIncidentRows(trueNasResources);
   return {
     resources: trueNasResources,
@@ -145,6 +171,7 @@ export function buildTrueNASPageModel(resources: Resource[]): TrueNASPageModel {
     shares,
     vms,
     apps,
+    services,
     incidents,
   };
 }
@@ -207,6 +234,12 @@ export function buildTrueNASSystemChildCounts(
     } else if (resource.type === 'physical_disk') {
       counts.disks += 1;
     }
+  }
+
+  for (const system of systems) {
+    const counts = countsBySystem.get(system.id);
+    if (!counts) continue;
+    counts.services = system.truenas?.services?.length ?? 0;
   }
 
   return countsBySystem;
@@ -408,6 +441,27 @@ const compareStorageResources = (left: Resource, right: Resource): number => {
   const rankDelta = storageStatusRank(left) - storageStatusRank(right);
   if (rankDelta !== 0) return rankDelta;
   return resourceDisplayName(left).localeCompare(resourceDisplayName(right));
+};
+
+const serviceStatusRank = (row: TrueNASServiceRow): number => {
+  switch (mapTrueNASServiceStatus(row)) {
+    case 'attention':
+      return 0;
+    case 'stopped':
+      return 1;
+    case 'disabled':
+      return 2;
+    case 'running':
+      return 3;
+  }
+};
+
+const compareServiceRows = (left: TrueNASServiceRow, right: TrueNASServiceRow): number => {
+  const rankDelta = serviceStatusRank(left) - serviceStatusRank(right);
+  if (rankDelta !== 0) return rankDelta;
+  const systemDelta = left.systemName.localeCompare(right.systemName);
+  if (systemDelta !== 0) return systemDelta;
+  return serviceDisplayName(left.service).localeCompare(serviceDisplayName(right.service));
 };
 
 const incidentSeverityRank = (severity: string): number => {
@@ -634,6 +688,27 @@ const resourceDisplayName = (resource: Resource): string =>
   asTrimmedString(resource.truenas?.hostname) ||
   resource.id;
 
+const serviceDisplayName = (service: ResourceTrueNASServiceMeta): string =>
+  asTrimmedString(service.service) || asTrimmedString(service.id) || 'unknown';
+
+export function buildTrueNASServiceRows(systems: Resource[]): TrueNASServiceRow[] {
+  const rows: TrueNASServiceRow[] = [];
+  for (const system of systems) {
+    const systemName = resourceDisplayName(system);
+    for (const service of system.truenas?.services ?? []) {
+      const serviceKey = serviceDisplayName(service);
+      rows.push({
+        id: `${system.id}:service:${asTrimmedString(service.id) || serviceKey}`,
+        system,
+        systemId: system.id,
+        systemName,
+        service,
+      });
+    }
+  }
+  return rows.sort(compareServiceRows);
+}
+
 const hasIncidentSignal = (incident: ResourceIncident): boolean =>
   Boolean(asTrimmedString(incident.code) || asTrimmedString(incident.summary));
 
@@ -734,6 +809,19 @@ export function mapTrueNASAppStatus(resource: Resource): Exclude<TrueNASAppStatu
   if (resource.status === 'online' || resource.status === 'running') return 'running';
   if (resource.status === 'offline' || resource.status === 'stopped') return 'stopped';
   if (resource.status === 'degraded' || resource.status === 'paused') return 'attention';
+  return 'attention';
+}
+
+export function mapTrueNASServiceStatus(
+  row: TrueNASServiceRow,
+): Exclude<TrueNASServiceStatusFilter, 'all'> {
+  const state = normalize(row.service.state);
+  if (['running', 'started', 'active'].includes(state)) return 'running';
+  if (['failed', 'error', 'crashed', 'degraded', 'unknown'].includes(state)) return 'attention';
+  if (['stopped', 'stop', 'inactive'].includes(state)) {
+    return row.service.enabled === false ? 'disabled' : 'stopped';
+  }
+  if (row.service.enabled === false) return 'disabled';
   return 'attention';
 }
 
@@ -839,6 +927,35 @@ export function filterTrueNASApps(
     if (status !== 'all' && mapTrueNASAppStatus(app) !== status) return false;
     if (!needle) return true;
     return appSearchHaystack(app).includes(needle);
+  });
+}
+
+const serviceSearchHaystack = (row: TrueNASServiceRow): string =>
+  [
+    row.id,
+    row.systemId,
+    row.systemName,
+    row.system.truenas?.hostname,
+    row.service.id,
+    row.service.service,
+    row.service.state,
+    row.service.enabled === true ? 'enabled boot start' : 'disabled no boot',
+    ...(row.service.pids ?? []).map(String),
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' ')
+    .toLowerCase();
+
+export function filterTrueNASServices(
+  services: TrueNASServiceRow[],
+  search: string,
+  status: TrueNASServiceStatusFilter,
+): TrueNASServiceRow[] {
+  const needle = normalize(search);
+  return services.filter((service) => {
+    if (status !== 'all' && mapTrueNASServiceStatus(service) !== status) return false;
+    if (!needle) return true;
+    return serviceSearchHaystack(service).includes(needle);
   });
 }
 
