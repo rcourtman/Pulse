@@ -6,6 +6,7 @@ import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
 import discoveryTabStateSource from '@/components/Discovery/useDiscoveryTabState.ts?raw';
 import resourceDetailDrawerShellSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
+import resourceDetailSummarySource from '@/components/Infrastructure/ResourceDetailSummary.tsx?raw';
 import resourceActionHistorySource from '@/components/Infrastructure/ResourceActionHistory.tsx?raw';
 import resourceDetailDrawerHistoryStateSource from '@/components/Infrastructure/useResourceDetailDrawerHistoryState.ts?raw';
 import createNonSuspendingQuerySource from '@/hooks/createNonSuspendingQuery.ts?raw';
@@ -149,14 +150,13 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(discoveryTabSource).not.toContain('getConnectedAgents(');
     expect(discoveryTabSource).not.toContain('triggerDiscovery(');
     expect(discoveryTabSource).not.toContain('updateDiscoveryNotes(');
-    expect(resourceDetailDrawerOverviewSource).toContain("from '@/components/shared/TagBadges'");
+    expect(resourceDetailDrawerOverviewSource).toContain("from './ResourceDetailSummary'");
+    expect(resourceDetailSummarySource).toContain("from '@/components/shared/TagBadges'");
     expect(resourceDetailDrawerOverviewSource).toContain('getAllFilterOptionLabel');
     expect(resourceDetailDrawerOverviewSource).not.toContain("'All kinds'");
     expect(resourceDetailDrawerOverviewSource).not.toContain("'All sources'");
     expect(resourceDetailDrawerOverviewSource).not.toContain("'All adapters'");
-    expect(resourceDetailDrawerOverviewSource).not.toContain(
-      "from '@/components/Workloads/TagBadges'",
-    );
+    expect(resourceDetailSummarySource).not.toContain("from '@/components/Workloads/TagBadges'");
     expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerOverviewTab'");
     expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerDebugTab'");
     expect(resourceDetailDrawerShellSource).toContain('data-testid="resource-header-badges"');
