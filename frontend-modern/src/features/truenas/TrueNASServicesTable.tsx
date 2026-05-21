@@ -23,6 +23,10 @@ import {
   type PlatformTableFilterOption,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
+  createPlatformResourceDetailState,
+  getPlatformResourceDetailRowClass,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
+import {
   filterTrueNASServices,
   mapTrueNASServiceStatus,
   type TrueNASServiceRow,
@@ -78,6 +82,170 @@ const serviceStatusVariant = (
   return 'muted';
 };
 
+type ServiceDetailTone = 'default' | 'success' | 'warning' | 'danger' | 'muted';
+
+type ServiceDetailRow = {
+  label: string;
+  value: string;
+  title?: string;
+  tone?: ServiceDetailTone;
+};
+
+type ServiceDetailSection = {
+  label: string;
+  rows: ServiceDetailRow[];
+};
+
+const detailBool = (value?: boolean): string | null => {
+  if (value === undefined) return null;
+  return value ? 'Enabled' : 'Disabled';
+};
+
+const detailRow = (
+  label: string,
+  value?: string | null,
+  options: Pick<ServiceDetailRow, 'title' | 'tone'> = {},
+): ServiceDetailRow | null => {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed === '-') return null;
+  return { label, value: trimmed, ...options };
+};
+
+const compactDetailRows = (rows: Array<ServiceDetailRow | null>): ServiceDetailRow[] =>
+  rows.filter((row): row is ServiceDetailRow => Boolean(row));
+
+const compactDetailSections = (
+  sections: Array<ServiceDetailSection | null>,
+): ServiceDetailSection[] =>
+  sections.filter((section): section is ServiceDetailSection =>
+    Boolean(section && section.rows.length > 0),
+  );
+
+const serviceTone = (row: TrueNASServiceRow): ServiceDetailTone => {
+  const status = mapTrueNASServiceStatus(row);
+  if (status === 'running') return 'success';
+  if (status === 'attention' || status === 'stopped') return 'warning';
+  if (status === 'disabled') return 'muted';
+  return 'default';
+};
+
+const detailValueToneClass = (tone: ServiceDetailTone | undefined): string => {
+  if (tone === 'success') return 'text-emerald-700 dark:text-emerald-300';
+  if (tone === 'warning') return 'text-amber-700 dark:text-amber-300';
+  if (tone === 'danger') return 'text-rose-700 dark:text-rose-300';
+  if (tone === 'muted') return 'text-muted';
+  return 'text-base-content';
+};
+
+const formatAllPIDs = (pids: number[] | undefined): { label: string | null; title?: string } => {
+  const values = (pids ?? []).filter((pid) => Number.isFinite(pid) && pid > 0);
+  if (values.length === 0) return { label: null };
+  const label = values.join(', ');
+  return { label, title: label };
+};
+
+const buildServiceDetailSections = (row: TrueNASServiceRow): ServiceDetailSection[] => {
+  const pids = formatAllPIDs(row.service.pids);
+  const hostName = asTrimmedString(row.system.truenas?.hostname) || row.systemName;
+  return compactDetailSections([
+    {
+      label: 'Service',
+      rows: compactDetailRows([
+        detailRow('Name', formatServiceName(row.service.service)),
+        detailRow('TrueNAS ID', asTrimmedString(row.service.id)),
+        detailRow('System', row.systemName),
+        detailRow('System ID', row.systemId),
+      ]),
+    },
+    {
+      label: 'Runtime',
+      rows: compactDetailRows([
+        detailRow('State', titleCase(asTrimmedString(row.service.state) || undefined), {
+          tone: serviceTone(row),
+        }),
+        detailRow('Boot', detailBool(row.service.enabled), {
+          tone: row.service.enabled ? 'success' : 'muted',
+        }),
+        detailRow('PIDs', pids.label, { title: pids.title }),
+        detailRow('PID count', row.service.pids?.length ? String(row.service.pids.length) : null),
+      ]),
+    },
+    {
+      label: 'Host',
+      rows: compactDetailRows([
+        detailRow('Hostname', hostName),
+        detailRow('Version', asTrimmedString(row.system.truenas?.version)),
+      ]),
+    },
+  ]);
+};
+
+const ServiceDetailTable: Component<{ row: TrueNASServiceRow; onClose: () => void }> = (props) => {
+  const sections = createMemo(() => buildServiceDetailSections(props.row));
+
+  return (
+    <div
+      class="space-y-3"
+      data-testid="truenas-service-detail"
+      data-truenas-service-detail-for={props.row.id}
+    >
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
+            Service detail
+          </div>
+          <div class="mt-1 text-[10px] text-muted">
+            {formatServiceName(props.row.service.service)} ·{' '}
+            {titleCase(mapTrueNASServiceStatus(props.row))}
+          </div>
+        </div>
+        <button
+          type="button"
+          class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
+          onClick={props.onClose}
+        >
+          Close
+        </button>
+      </div>
+      <div class="overflow-hidden rounded border border-border bg-surface">
+        <Table class="w-full table-fixed text-[11px]">
+          <TableBody class="divide-y divide-border">
+            <For each={sections()}>
+              {(section) => (
+                <>
+                  <TableRow class="bg-surface-alt">
+                    <TableHead
+                      colspan={2}
+                      class="px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted"
+                    >
+                      {section.label}
+                    </TableHead>
+                  </TableRow>
+                  <For each={section.rows}>
+                    {(row) => (
+                      <TableRow>
+                        <TableCell class="w-[38%] px-2 py-1 align-top text-muted">
+                          {row.label}
+                        </TableCell>
+                        <TableCell
+                          class={`px-2 py-1 text-right align-top font-medium ${detailValueToneClass(row.tone)}`}
+                          title={row.title ?? row.value}
+                        >
+                          <span class="block truncate">{row.value}</span>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </For>
+                </>
+              )}
+            </For>
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+};
+
 export const TrueNASServicesTable: Component<{
   services: TrueNASServiceRow[];
   emptyIcon: JSX.Element;
@@ -90,6 +258,7 @@ export const TrueNASServicesTable: Component<{
     initialStatus: 'all' as TrueNASServiceStatusFilter,
     filter: filterTrueNASServices,
   });
+  const detail = createPlatformResourceDetailState({ idPrefix: 'truenas-service-detail' });
 
   return (
     <Show
@@ -157,49 +326,80 @@ export const TrueNASServicesTable: Component<{
                     const status = () => mapTrueNASServiceStatus(row);
                     const pids = createMemo(() => formatPIDs(row.service.pids));
                     const rawState = () => asTrimmedString(row.service.state) || '-';
+                    const detailRowId = () => detail.detailRowId(row);
+                    const isExpanded = () => detail.isExpanded(row);
                     return (
-                      <TableRow
-                        class="text-[11px] hover:bg-surface-hover sm:text-xs"
-                        data-truenas-service-row={row.id}
-                      >
-                        <TableCell class={getPlatformTableCellClassForKind('name')}>
-                          <div class="flex min-w-0 items-center gap-2">
-                            <StatusDot
-                              size="sm"
-                              variant={serviceStatusVariant(status())}
-                              title={titleCase(status())}
-                            />
-                            <div class="min-w-0 truncate font-medium text-base-content">
-                              {formatServiceName(row.service.service)}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell class={getPlatformTableCellClassForKind('badge')}>
-                          <span class="inline-flex rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-base-content">
-                            {titleCase(rawState())}
-                          </span>
-                        </TableCell>
-                        <TableCell class={getPlatformTableCellClassForKind('badge')}>
-                          <span
-                            class={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-                              row.service.enabled
-                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                : 'border-border bg-surface-alt text-muted'
-                            }`}
-                          >
-                            {row.service.enabled ? 'Enabled' : 'Disabled'}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden sm:table-cell`}
-                          title={pids().title || undefined}
+                      <>
+                        <TableRow
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          aria-controls={isExpanded() ? detailRowId() : undefined}
+                          aria-expanded={isExpanded() ? 'true' : 'false'}
+                          data-truenas-service-row={row.id}
+                          onClick={() => detail.toggle(row)}
+                          onKeyDown={detail.handleActivationKey(row)}
+                          tabIndex={0}
                         >
-                          <span class="tabular-nums text-base-content">{pids().label}</span>
-                        </TableCell>
-                        <TableCell class={getPlatformTableCellClassForKind('text')}>
-                          <div class="truncate text-base-content">{row.systemName}</div>
-                        </TableCell>
-                      </TableRow>
+                          <TableCell class={getPlatformTableCellClassForKind('name')}>
+                            <div class="flex min-w-0 items-center gap-2">
+                              <StatusDot
+                                size="sm"
+                                variant={serviceStatusVariant(status())}
+                                title={titleCase(status())}
+                              />
+                              <div class="min-w-0 truncate font-medium text-base-content">
+                                {formatServiceName(row.service.service)}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell class={getPlatformTableCellClassForKind('badge')}>
+                            <span class="inline-flex rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-base-content">
+                              {titleCase(rawState())}
+                            </span>
+                          </TableCell>
+                          <TableCell class={getPlatformTableCellClassForKind('badge')}>
+                            <span
+                              class={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                                row.service.enabled
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                  : 'border-border bg-surface-alt text-muted'
+                              }`}
+                            >
+                              {row.service.enabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden sm:table-cell`}
+                            title={pids().title || undefined}
+                          >
+                            <span class="tabular-nums text-base-content">{pids().label}</span>
+                          </TableCell>
+                          <TableCell class={getPlatformTableCellClassForKind('text')}>
+                            <div class="truncate text-base-content">{row.systemName}</div>
+                          </TableCell>
+                        </TableRow>
+                        <Show when={isExpanded()}>
+                          <TableRow
+                            data-inline-detail-for={row.id}
+                            data-truenas-service-detail-row={row.id}
+                          >
+                            <TableCell
+                              id={detailRowId()}
+                              colspan={5}
+                              class="border-b border-border bg-surface-alt p-0"
+                            >
+                              <div
+                                class="px-2 py-3 sm:px-4 sm:py-4"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <ServiceDetailTable
+                                  row={row}
+                                  onClose={() => detail.close(row)}
+                                />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        </Show>
+                      </>
                     );
                   }}
                 </For>
