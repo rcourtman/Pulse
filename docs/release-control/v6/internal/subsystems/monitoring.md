@@ -123,6 +123,10 @@ truth for live infrastructure data.
     dataset, app, VM, share, and disk names from different appliances remain
     distinct. Mock fixture metrics and seeded/live history must use the same
     scoped source keys as the TrueNAS provider metrics targets.
+    TrueNAS storage and alert inventory follow native query methods first:
+    pools use `pool.query`, datasets use `pool.dataset.query`, disks use
+    `disk.query` with pool join options, and alerts use `alert.list`, with
+    legacy REST allowed only as compatibility fallback.
     TrueNAS VMs and network shares follow the same provider-owned inventory
     boundary: `vm.query` data publishes native `TrueNASData.VM` on canonical
     `vm` resources, while SMB/NFS share data from `sharing.smb.query` and

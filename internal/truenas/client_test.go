@@ -277,6 +277,121 @@ func TestFetchSnapshot(t *testing.T) {
 	}
 }
 
+func TestGetPoolsDatasetsAndAlertsUseNativeQueryShapes(t *testing.T) {
+	server := newMockServerWithRPC(t, map[string]apiResponse{
+		"/api/v2.0/pool":         {status: http.StatusInternalServerError, body: `{"error":"legacy pool endpoint should not be used"}`},
+		"/api/v2.0/pool/dataset": {status: http.StatusInternalServerError, body: `{"error":"legacy dataset endpoint should not be used"}`},
+		"/api/v2.0/alert/list":   {status: http.StatusInternalServerError, body: `{"error":"legacy alert endpoint should not be used"}`},
+	}, nil, func(t *testing.T, conn *websocket.Conn) {
+		authReq := readRPCRequest(t, conn)
+		if authReq.Method != "auth.login_with_api_key" {
+			t.Fatalf("expected api-key auth method, got %q", authReq.Method)
+		}
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		request := readRPCRequest(t, conn)
+		switch request.Method {
+		case "pool.query":
+			assertQueryParams(t, request.Params, "pool.query")
+			writeRPCResult(t, conn, request.ID, defaultRoutePayloadMaps(t, "/api/v2.0/pool"))
+		case "pool.dataset.query":
+			assertQueryParams(t, request.Params, "pool.dataset.query")
+			writeRPCResult(t, conn, request.ID, defaultRoutePayloadMaps(t, "/api/v2.0/pool/dataset"))
+		case "alert.list":
+			params, ok := request.Params.([]any)
+			if !ok || len(params) != 0 {
+				t.Fatalf("expected alert.list to use no params, got %#v", request.Params)
+			}
+			writeRPCResult(t, conn, request.ID, defaultRoutePayloadMaps(t, "/api/v2.0/alert/list"))
+		default:
+			t.Fatalf("unexpected rpc method %q", request.Method)
+		}
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	pools, err := client.GetPools(context.Background())
+	if err != nil {
+		t.Fatalf("GetPools() error = %v", err)
+	}
+	if len(pools) != 1 || pools[0].Name != "tank" || pools[0].UsedBytes != 400 {
+		t.Fatalf("unexpected native pool mapping: %+v", pools)
+	}
+
+	datasets, err := client.GetDatasets(context.Background())
+	if err != nil {
+		t.Fatalf("GetDatasets() error = %v", err)
+	}
+	if len(datasets) != 1 || datasets[0].ID != "tank/apps" || datasets[0].Pool != "tank" || datasets[0].UsedBytes != 12345 {
+		t.Fatalf("unexpected native dataset mapping: %+v", datasets)
+	}
+
+	alerts, err := client.GetAlerts(context.Background())
+	if err != nil {
+		t.Fatalf("GetAlerts() error = %v", err)
+	}
+	if len(alerts) != 1 || alerts[0].ID != "a1" || alerts[0].Level != "WARNING" {
+		t.Fatalf("unexpected native alert mapping: %+v", alerts)
+	}
+}
+
+func TestGetDisksUsesNativeDiskQueryShape(t *testing.T) {
+	connectionCount := 0
+	server := newMockServerWithRPC(t, map[string]apiResponse{
+		"/api/v2.0/disk": {status: http.StatusInternalServerError, body: `{"error":"legacy disk endpoint should not be used"}`},
+		"/api/v2.0/disk/temperatures": {
+			body: `{"sda":34}`,
+		},
+	}, nil, func(t *testing.T, conn *websocket.Conn) {
+		authReq := readRPCRequest(t, conn)
+		if authReq.Method != "auth.login_with_api_key" {
+			t.Fatalf("expected api-key auth method, got %q", authReq.Method)
+		}
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		connectionCount++
+		request := readRPCRequest(t, conn)
+		switch connectionCount {
+		case 1:
+			if request.Method != "disk.query" {
+				t.Fatalf("expected disk.query, got %q", request.Method)
+			}
+			params, ok := request.Params.([]any)
+			if !ok || len(params) != 2 {
+				t.Fatalf("expected disk.query filters/options params, got %#v", request.Params)
+			}
+			writeRPCResult(t, conn, request.ID, defaultRoutePayloadMaps(t, "/api/v2.0/disk")[:1])
+		case 2:
+			if request.Method != "disk.temperature_agg" {
+				t.Fatalf("expected disk.temperature_agg, got %q", request.Method)
+			}
+			writeRPCResult(t, conn, request.ID, map[string]any{
+				"sda": map[string]any{
+					"min":         29.0,
+					"avg":         32.8,
+					"max":         38.0,
+					"window_days": 7,
+				},
+			})
+		default:
+			t.Fatalf("unexpected extra websocket connection %d", connectionCount)
+		}
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	disks, err := client.GetDisks(context.Background())
+	if err != nil {
+		t.Fatalf("GetDisks() error = %v", err)
+	}
+	if len(disks) != 1 {
+		t.Fatalf("expected 1 disk, got %d", len(disks))
+	}
+	if disks[0].Name != "sda" || disks[0].Temperature != 34 || disks[0].TemperatureAggregate.MaxCelsius != 38 {
+		t.Fatalf("unexpected native disk mapping: %+v", disks[0])
+	}
+}
+
 func TestGetVMsParsesNativeVMQueryShape(t *testing.T) {
 	server := newMockServerWithRPC(t, map[string]apiResponse{}, nil, func(t *testing.T, conn *websocket.Conn) {
 		authReq := readRPCRequest(t, conn)
@@ -1041,6 +1156,11 @@ func TestGetDisksFallsBackToReportingRPCWhenTemperatureEndpointUnavailable(t *te
 		request := readRPCRequest(t, conn)
 		switch connectionCount {
 		case 1:
+			if request.Method != "disk.query" {
+				t.Fatalf("expected disk.query, got %q", request.Method)
+			}
+			writeRPCResult(t, conn, request.ID, defaultRoutePayloadMaps(t, "/api/v2.0/disk")[:1])
+		case 2:
 			if request.Method != "reporting.get_data" {
 				t.Fatalf("expected reporting.get_data, got %q", request.Method)
 			}
@@ -1057,7 +1177,7 @@ func TestGetDisksFallsBackToReportingRPCWhenTemperatureEndpointUnavailable(t *te
 				"start": time.Now().Add(-5 * time.Minute).Unix(),
 				"end":   time.Now().Unix(),
 			}})
-		case 2:
+		case 3:
 			if request.Method != "disk.temperature_agg" {
 				t.Fatalf("expected disk.temperature_agg, got %q", request.Method)
 			}
@@ -1092,6 +1212,7 @@ func TestGetDisksFallsBackToReportingRPCWhenTemperatureEndpointUnavailable(t *te
 }
 
 func TestGetDisksIncludesDiskTemperatureAggregatesFromRPC(t *testing.T) {
+	connectionCount := 0
 	server := newMockServerWithRPC(t, map[string]apiResponse{
 		"/api/v2.0/disk": {
 			body: `[{"identifier":"{disk-1}","name":"sda","serial":"SER-A","size":1000000,"model":"Seagate","type":"HDD","pool":"tank","bus":"SATA","rotationrate":7200,"status":"ONLINE"}]`,
@@ -1106,7 +1227,15 @@ func TestGetDisksIncludesDiskTemperatureAggregatesFromRPC(t *testing.T) {
 		}
 		writeRPCResult(t, conn, authReq.ID, true)
 
+		connectionCount++
 		aggregateReq := readRPCRequest(t, conn)
+		if connectionCount == 1 {
+			if aggregateReq.Method != "disk.query" {
+				t.Fatalf("expected disk.query, got %q", aggregateReq.Method)
+			}
+			writeRPCResult(t, conn, aggregateReq.ID, defaultRoutePayloadMaps(t, "/api/v2.0/disk")[:1])
+			return
+		}
 		if aggregateReq.Method != "disk.temperature_agg" {
 			t.Fatalf("expected disk.temperature_agg, got %q", aggregateReq.Method)
 		}
@@ -1405,11 +1534,30 @@ func TestClientCloseNilSafe(t *testing.T) {
 func defaultAppQueryPayload(t *testing.T) []map[string]any {
 	t.Helper()
 
+	return defaultRoutePayloadMaps(t, "/api/v2.0/app")
+}
+
+func defaultRoutePayloadMaps(t *testing.T, route string) []map[string]any {
+	t.Helper()
+
+	response, ok := defaultAPIResponses()[route]
+	if !ok {
+		t.Fatalf("missing default fixture route %q", route)
+	}
 	var payload []map[string]any
-	if err := json.Unmarshal([]byte(defaultAPIResponses()["/api/v2.0/app"].body), &payload); err != nil {
-		t.Fatalf("unmarshal default app fixture: %v", err)
+	if err := json.Unmarshal([]byte(response.body), &payload); err != nil {
+		t.Fatalf("unmarshal default fixture route %q: %v", route, err)
 	}
 	return payload
+}
+
+func assertQueryParams(t *testing.T, params any, method string) {
+	t.Helper()
+
+	values, ok := params.([]any)
+	if !ok || len(values) != 2 {
+		t.Fatalf("expected %s filters/options params, got %#v", method, params)
+	}
 }
 
 func defaultAPIResponses() map[string]apiResponse {

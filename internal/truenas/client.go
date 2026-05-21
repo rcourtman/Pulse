@@ -240,6 +240,43 @@ func (c *Client) GetSystemMetricHistory(ctx context.Context, duration time.Durat
 
 // GetPools returns storage pools.
 func (c *Client) GetPools(ctx context.Context) ([]Pool, error) {
+	pools, err := c.getPoolsRPC(ctx)
+	if err == nil {
+		return pools, nil
+	}
+	restPools, restErr := c.getPoolsREST(ctx)
+	if restErr != nil {
+		return nil, fmt.Errorf("fetch truenas pools via rpc and rest: rpc=%w rest=%v", err, restErr)
+	}
+	return restPools, nil
+}
+
+func (c *Client) getPoolsRPC(ctx context.Context) ([]Pool, error) {
+	var response []map[string]any
+	if err := c.queryRPC(ctx, "pool.query", &response); err != nil {
+		return nil, err
+	}
+
+	pools := make([]Pool, 0, len(response))
+	for _, item := range response {
+		id := strings.TrimSpace(readStringAny(item, "id"))
+		name := strings.TrimSpace(readStringAny(item, "name"))
+		if id == "" || id == "0" {
+			id = name
+		}
+		pools = append(pools, Pool{
+			ID:         id,
+			Name:       name,
+			Status:     strings.TrimSpace(readStringAny(item, "status")),
+			TotalBytes: readInt64Any(item, "size", "total", "total_bytes", "totalBytes"),
+			UsedBytes:  readInt64Any(item, "allocated", "used", "used_bytes", "usedBytes"),
+			FreeBytes:  readInt64Any(item, "free", "free_bytes", "freeBytes", "available"),
+		})
+	}
+	return pools, nil
+}
+
+func (c *Client) getPoolsREST(ctx context.Context) ([]Pool, error) {
 	var response []poolResponse
 	if err := c.getJSON(ctx, http.MethodGet, "/pool", &response); err != nil {
 		return nil, err
@@ -266,6 +303,51 @@ func (c *Client) GetPools(ctx context.Context) ([]Pool, error) {
 
 // GetDatasets returns datasets and normalized capacity/read-only fields.
 func (c *Client) GetDatasets(ctx context.Context) ([]Dataset, error) {
+	datasets, err := c.getDatasetsRPC(ctx)
+	if err == nil {
+		return datasets, nil
+	}
+	restDatasets, restErr := c.getDatasetsREST(ctx)
+	if restErr != nil {
+		return nil, fmt.Errorf("fetch truenas datasets via rpc and rest: rpc=%w rest=%v", err, restErr)
+	}
+	return restDatasets, nil
+}
+
+func (c *Client) getDatasetsRPC(ctx context.Context) ([]Dataset, error) {
+	var response []map[string]any
+	if err := c.queryRPC(ctx, "pool.dataset.query", &response); err != nil {
+		return nil, err
+	}
+
+	datasets := make([]Dataset, 0, len(response))
+	for _, item := range response {
+		name := strings.TrimSpace(readStringAny(item, "name", "id"))
+		id := strings.TrimSpace(readStringAny(item, "id"))
+		if id == "" {
+			id = name
+		}
+		poolName := strings.TrimSpace(readStringAny(item, "pool"))
+		if poolName == "" {
+			poolName = parentPoolFromDataset(name)
+		}
+		used := readInt64Any(item, "used", "used_bytes", "usedBytes")
+		available := readInt64Any(item, "available", "avail", "avail_bytes", "available_bytes", "availableBytes")
+
+		datasets = append(datasets, Dataset{
+			ID:         id,
+			Name:       name,
+			Pool:       poolName,
+			UsedBytes:  used,
+			AvailBytes: available,
+			Mounted:    readBoolAny(item, "mounted"),
+			ReadOnly:   readBoolAny(item, "readonly", "read_only", "readOnly"),
+		})
+	}
+	return datasets, nil
+}
+
+func (c *Client) getDatasetsREST(ctx context.Context) ([]Dataset, error) {
 	var response []datasetResponse
 	if err := c.getJSON(ctx, http.MethodGet, "/pool/dataset", &response); err != nil {
 		return nil, err
@@ -313,6 +395,28 @@ func (c *Client) GetDatasets(ctx context.Context) ([]Dataset, error) {
 
 // GetDisks returns the system disk inventory.
 func (c *Client) GetDisks(ctx context.Context) ([]Disk, error) {
+	disks, err := c.getDisksRPC(ctx)
+	if err == nil {
+		return disks, nil
+	}
+	restDisks, restErr := c.getDisksREST(ctx)
+	if restErr != nil {
+		return nil, fmt.Errorf("fetch truenas disks via rpc and rest: rpc=%w rest=%v", err, restErr)
+	}
+	return restDisks, nil
+}
+
+func (c *Client) getDisksRPC(ctx context.Context) ([]Disk, error) {
+	var response []map[string]any
+	if err := c.callRPC(ctx, "disk.query", []any{[]any{}, map[string]any{
+		"extra": map[string]any{"pools": true},
+	}}, &response); err != nil {
+		return nil, err
+	}
+	return c.disksFromMaps(ctx, response)
+}
+
+func (c *Client) getDisksREST(ctx context.Context) ([]Disk, error) {
 	var response []diskResponse
 	if err := c.getJSON(ctx, http.MethodGet, "/disk", &response); err != nil {
 		return nil, err
@@ -358,6 +462,58 @@ func (c *Client) GetDisks(ctx context.Context) ([]Disk, error) {
 			Transport:            strings.ToLower(strings.TrimSpace(item.Bus)),
 			Rotational:           rotational,
 		})
+	}
+
+	return disks, nil
+}
+
+func (c *Client) disksFromMaps(ctx context.Context, response []map[string]any) ([]Disk, error) {
+	identifiers := diskReportingIdentifiersFromMaps(response)
+	temperatures, err := c.getDiskTemperaturesWithFallback(ctx, identifiers)
+	if err != nil {
+		temperatures = nil
+	}
+	aggregates, err := c.getDiskTemperatureAggregates(ctx, identifiers, defaultDiskTemperatureAggregateWindowDays)
+	if err != nil {
+		aggregates = nil
+	}
+
+	disks := make([]Disk, 0, len(response))
+	for _, item := range response {
+		rotationRate := readIntAny(item, "rotationrate", "rotation_rate", "rotationRate")
+		rotational := rotationRate > 0
+		diskType := strings.ToLower(strings.TrimSpace(readStringAny(item, "type")))
+		if rotationRate == 0 {
+			switch diskType {
+			case "hdd":
+				rotational = true
+			case "ssd", "nvme":
+				rotational = false
+			}
+		}
+
+		diskID := strings.TrimSpace(readStringAny(item, "identifier", "id"))
+		if diskID == "" {
+			diskID = strings.TrimSpace(readStringAny(item, "name", "devname"))
+		}
+		name := strings.TrimSpace(readStringAny(item, "name", "devname"))
+		disk := Disk{
+			ID:                   diskID,
+			Name:                 name,
+			Pool:                 strings.TrimSpace(readStringAny(item, "pool", "pool_name", "poolName")),
+			Status:               strings.TrimSpace(readStringAny(item, "status")),
+			Model:                strings.TrimSpace(readStringAny(item, "model")),
+			Serial:               strings.TrimSpace(readStringAny(item, "serial")),
+			SizeBytes:            readInt64Any(item, "size", "size_bytes", "sizeBytes"),
+			Temperature:          temperatureForTrueNASDiskMap(temperatures, item),
+			TemperatureAggregate: temperatureAggregateForTrueNASDiskMap(aggregates, item),
+			Transport:            strings.ToLower(strings.TrimSpace(readStringAny(item, "bus", "transport"))),
+			Rotational:           rotational,
+		}
+		if disk.Transport == "" {
+			disk.Transport = diskType
+		}
+		disks = append(disks, disk)
 	}
 
 	return disks, nil
@@ -443,6 +599,20 @@ func diskReportingIdentifiers(disks []diskResponse) []string {
 	return dedupeStrings(identifiers)
 }
 
+func diskReportingIdentifiersFromMaps(disks []map[string]any) []string {
+	identifiers := make([]string, 0, len(disks))
+	for _, disk := range disks {
+		if name := strings.TrimSpace(readStringAny(disk, "name", "devname")); name != "" {
+			identifiers = append(identifiers, name)
+			continue
+		}
+		if identifier := strings.TrimSpace(readStringAny(disk, "identifier", "id")); identifier != "" {
+			identifiers = append(identifiers, identifier)
+		}
+	}
+	return dedupeStrings(identifiers)
+}
+
 func (c *Client) getDiskTemperaturesFromReporting(ctx context.Context, identifiers []string) (map[string]int, error) {
 	identifiers = dedupeStrings(identifiers)
 	if len(identifiers) == 0 {
@@ -483,6 +653,46 @@ func (c *Client) getDiskTemperatureAggregates(ctx context.Context, identifiers [
 
 // GetAlerts returns active and dismissed TrueNAS alerts.
 func (c *Client) GetAlerts(ctx context.Context) ([]Alert, error) {
+	alerts, err := c.getAlertsRPC(ctx)
+	if err == nil {
+		return alerts, nil
+	}
+	restAlerts, restErr := c.getAlertsREST(ctx)
+	if restErr != nil {
+		return nil, fmt.Errorf("fetch truenas alerts via rpc and rest: rpc=%w rest=%v", err, restErr)
+	}
+	return restAlerts, nil
+}
+
+func (c *Client) getAlertsRPC(ctx context.Context) ([]Alert, error) {
+	var response []map[string]any
+	if err := c.callRPC(ctx, "alert.list", []any{}, &response); err != nil {
+		return nil, err
+	}
+
+	alerts := make([]Alert, 0, len(response))
+	for _, item := range response {
+		id := strings.TrimSpace(readStringAny(item, "uuid", "id", "key"))
+		if id == "" {
+			id = strings.TrimSpace(readStringAny(item, "klass"))
+		}
+		var datetime time.Time
+		if t := readTimeAny(item, "datetime", "last_occurrence", "lastOccurrence"); t != nil {
+			datetime = *t
+		}
+		alerts = append(alerts, Alert{
+			ID:        id,
+			Level:     strings.TrimSpace(readStringAny(item, "level")),
+			Message:   strings.TrimSpace(readStringAny(item, "formatted", "text", "message", "klass")),
+			Source:    strings.TrimSpace(readStringAny(item, "source", "node")),
+			Dismissed: readBoolAny(item, "dismissed"),
+			Datetime:  datetime,
+		})
+	}
+	return alerts, nil
+}
+
+func (c *Client) getAlertsREST(ctx context.Context) ([]Alert, error) {
 	var response []alertResponse
 	if err := c.getJSON(ctx, http.MethodGet, "/alert/list", &response); err != nil {
 		return nil, err
@@ -1113,6 +1323,26 @@ func temperatureForTrueNASDisk(temperatures map[string]int, item diskResponse) i
 	return 0
 }
 
+func temperatureForTrueNASDiskMap(temperatures map[string]int, item map[string]any) int {
+	if len(temperatures) == 0 {
+		return 0
+	}
+	keys := []string{
+		strings.TrimSpace(readStringAny(item, "name", "devname")),
+		strings.TrimSpace(readStringAny(item, "identifier", "id")),
+		strings.TrimSpace(readStringAny(item, "serial")),
+	}
+	for _, key := range keys {
+		if key == "" {
+			continue
+		}
+		if temperature, ok := temperatures[key]; ok {
+			return temperature
+		}
+	}
+	return 0
+}
+
 func temperatureAggregateForTrueNASDisk(aggregates map[string]DiskTemperatureAggregate, item diskResponse) DiskTemperatureAggregate {
 	if len(aggregates) == 0 {
 		return DiskTemperatureAggregate{}
@@ -1121,6 +1351,26 @@ func temperatureAggregateForTrueNASDisk(aggregates map[string]DiskTemperatureAgg
 		strings.TrimSpace(item.Name),
 		strings.TrimSpace(item.Identifier),
 		strings.TrimSpace(item.Serial),
+	}
+	for _, key := range keys {
+		if key == "" {
+			continue
+		}
+		if aggregate, ok := aggregates[key]; ok {
+			return aggregate
+		}
+	}
+	return DiskTemperatureAggregate{}
+}
+
+func temperatureAggregateForTrueNASDiskMap(aggregates map[string]DiskTemperatureAggregate, item map[string]any) DiskTemperatureAggregate {
+	if len(aggregates) == 0 {
+		return DiskTemperatureAggregate{}
+	}
+	keys := []string{
+		strings.TrimSpace(readStringAny(item, "name", "devname")),
+		strings.TrimSpace(readStringAny(item, "identifier", "id")),
+		strings.TrimSpace(readStringAny(item, "serial")),
 	}
 	for _, key := range keys {
 		if key == "" {
@@ -2560,7 +2810,7 @@ func readBoolAny(record map[string]any, keys ...string) bool {
 				return true
 			}
 		case map[string]any:
-			if parsed, ok := firstAny(typed, "parsed", "rawvalue", "value"); ok {
+			if parsed, ok := firstAny(typed, "parsed", "rawvalue", "value", "raw"); ok {
 				if readBoolAny(map[string]any{"value": parsed}, "value") {
 					return true
 				}
@@ -3665,6 +3915,10 @@ func parseInt64Any(value any) (int64, bool) {
 		if v, err := strconv.ParseInt(s, 10, 64); err == nil {
 			return v, true
 		}
+	case map[string]any:
+		if parsed, ok := firstAny(typed, "parsed", "value", "rawvalue", "raw"); ok {
+			return parseInt64Any(parsed)
+		}
 	}
 	return 0, false
 }
@@ -3692,7 +3946,7 @@ func parseFloat64Any(value any) (float64, bool) {
 			return v, true
 		}
 	case map[string]any:
-		if parsed, ok := firstAny(typed, "parsed", "value", "rawvalue"); ok {
+		if parsed, ok := firstAny(typed, "parsed", "value", "rawvalue", "raw"); ok {
 			return parseFloat64Any(parsed)
 		}
 	}
