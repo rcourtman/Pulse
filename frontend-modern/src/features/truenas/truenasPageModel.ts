@@ -194,16 +194,9 @@ export function buildTrueNASSystemChildCounts(
 
   const systemIds = new Set(systems.map((system) => system.id));
   const resourceById = new Map(resources.map((resource) => [resource.id, resource]));
-  const hasParentSignals = resources.some((resource) =>
-    Boolean(asTrimmedString(resource.parentId)),
-  );
-
-  const fallbackSystemId =
-    systems.length === 1 && !hasParentSignals ? asTrimmedString(systems[0]?.id) : '';
+  const fallbackSystemId = systems.length === 1 ? asTrimmedString(systems[0]?.id) : '';
 
   const owningSystemId = (resource: Resource): string => {
-    if (fallbackSystemId && resource.id !== fallbackSystemId) return fallbackSystemId;
-
     let parentId = asTrimmedString(resource.parentId);
     const visited = new Set<string>();
     while (parentId && !visited.has(parentId)) {
@@ -211,7 +204,7 @@ export function buildTrueNASSystemChildCounts(
       visited.add(parentId);
       parentId = asTrimmedString(resourceById.get(parentId)?.parentId);
     }
-    return '';
+    return fallbackSystemId && resource.id !== fallbackSystemId ? fallbackSystemId : '';
   };
 
   for (const resource of resources) {

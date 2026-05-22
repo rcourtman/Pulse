@@ -223,6 +223,49 @@ describe('truenasPageModel', () => {
     });
   });
 
+  it('counts unparented TrueNAS inventory in mixed single-system snapshots', () => {
+    const system = makeResource({
+      id: 'system-primary',
+      type: 'agent',
+      truenas: { services: [{ id: '1', service: 'smb', enabled: true, state: 'RUNNING' }] },
+    });
+    const pool = makeResource({
+      id: 'pool-tank',
+      type: 'storage',
+      parentId: system.id,
+      storage: { topology: 'pool', platform: 'truenas' },
+    });
+    const dataset = makeResource({
+      id: 'dataset-media',
+      type: 'storage',
+      parentId: pool.id,
+      storage: { topology: 'dataset', platform: 'truenas' },
+    });
+
+    const counts = buildTrueNASSystemChildCounts(
+      [
+        system,
+        pool,
+        dataset,
+        makeResource({ id: 'share-media', type: 'network-share' }),
+        makeResource({ id: 'disk-sda', type: 'physical_disk' }),
+        makeResource({ id: 'vm-windows', type: 'vm' }),
+        makeResource({ id: 'app-nextcloud', type: 'app-container' }),
+      ],
+      [system],
+    );
+
+    expect(counts.get(system.id)).toEqual({
+      pools: 1,
+      datasets: 1,
+      shares: 1,
+      vms: 1,
+      apps: 1,
+      disks: 1,
+      services: 1,
+    });
+  });
+
   it('builds and filters native TrueNAS service rows from system metadata', () => {
     const system = makeResource({
       id: 'system-primary',
