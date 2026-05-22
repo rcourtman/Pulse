@@ -1,12 +1,7 @@
 import { useLocation } from '@solidjs/router';
 import CpuIcon from 'lucide-solid/icons/cpu';
 import { Show, createMemo, type Accessor } from 'solid-js';
-import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
-import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
-import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
-import type { WorkloadsStatusOption } from '@/components/Workloads/workloadsFilterModel';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
-import { resourceMatchesSearch } from '@/utils/resourceSearchMatch';
 import {
   PlatformErrorState,
   PlatformSectionTabs,
@@ -21,19 +16,13 @@ import {
   type VmwarePageTabId,
 } from './vmwarePageModel';
 import { VsphereDatastoresTable } from './VsphereDatastoresTable';
+import { VsphereVirtualMachinesTable } from './VsphereVirtualMachinesTable';
 
 // vSphere phase 1 projects ESXi hosts as canonical `agent`, virtual machines
 // as canonical `vm`, and datastores as canonical `storage`; provider-native
 // topology stays in VMware metadata under those shared resources.
 const VMWARE_RESOURCE_QUERY = 'type=agent,vm,storage';
-const VMWARE_PLATFORM_FILTER = 'vmware-vsphere';
 const VALID_TABS = new Set<VmwarePageTabId>(VMWARE_TAB_SPECS.map((tab) => tab.id));
-const VMWARE_VM_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
-  { value: 'all', label: 'All' },
-  { value: 'running', label: 'Powered on' },
-  { value: 'degraded', label: 'Attention' },
-  { value: 'stopped', label: 'Powered off' },
-];
 
 const vmwareIcon = () => <CpuIcon class="h-6 w-6 text-slate-400" />;
 
@@ -111,91 +100,22 @@ interface VmwareOverviewProps {
 }
 
 function VmwareOverview(props: VmwareOverviewProps) {
-  const workloadsState = useWorkloadsState({
-    vms: [],
-    containers: [],
-    nodes: [],
-    useWorkloads: true,
-    embedded: true,
-    tableOnly: true,
-    forcedPlatform: VMWARE_PLATFORM_FILTER,
-    forcedViewMode: 'vm',
-    showFilterToolbar: true,
-    suppressPlatformFilter: true,
-    allowEmbeddedScopeFilters: true,
-    compactGroupHeaders: true,
-  });
-  const showSharedFilterToolbar = createMemo(
-    () =>
-      workloadsState.surfaceConnected() &&
-      workloadsState.surfaceInitialDataReceived() &&
-      workloadsState.allGuests().length > 0,
-  );
-  const filteredHosts = createMemo(() => {
-    const term = workloadsState.search().trim();
-    if (!term) return props.model().hosts;
-    return props.model().hosts.filter((host) => resourceMatchesSearch(host, term));
-  });
-
   return (
     <div class="space-y-4">
-      <Show when={showSharedFilterToolbar()}>
-        <div data-summary-clear-ignore>
-          <WorkloadsFilter
-            search={workloadsState.search}
-            setSearch={workloadsState.setSearch}
-            viewMode={workloadsState.viewMode}
-            setViewMode={workloadsState.setViewMode}
-            statusMode={workloadsState.statusMode}
-            setStatusMode={workloadsState.setStatusMode}
-            groupingMode={workloadsState.groupingMode}
-            setGroupingMode={workloadsState.setGroupingMode}
-            setSortKey={workloadsState.setSortKey}
-            setSortDirection={workloadsState.setSortDirection}
-            onBeforeAutoFocus={workloadsState.handleBeforeAutoFocus}
-            ariaLabel="vSphere VM filters"
-            searchPlaceholder="Search vSphere VMs by name, VM ID, host, or status"
-            searchEmptyMessage="Recent vSphere VM searches appear here."
-            statusOptions={VMWARE_VM_STATUS_OPTIONS}
-            columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
-            containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
-            hostFilter={undefined}
-            namespaceFilter={undefined}
-            platformFilter={undefined}
-            suppressTypeFilter
-            metricDisplayMode={workloadsState.workloadMetricDisplayMode}
-            setMetricDisplayMode={workloadsState.setWorkloadMetricDisplayMode}
-            metricHistoryRange={workloadsState.workloadMetricHistoryRange}
-            setMetricHistoryRange={workloadsState.setWorkloadMetricHistoryRange}
-            forcedPlatform={VMWARE_PLATFORM_FILTER}
-            pinnedSelectionActive={() =>
-              Boolean(
-                workloadsState.selectedGuestId() || workloadsState.focusedSummaryWorkloadGroupId(),
-              )
-            }
-            onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}
-          />
-        </div>
-      </Show>
       <VsphereHostsTable
-        hosts={filteredHosts()}
+        hosts={props.model().hosts}
         scope={props.model().resources}
         emptyIcon={vmwareIcon()}
         emptyTitle="No vSphere hosts"
         emptyDescription="Hosts appear here once the vCenter connection enumerates them."
         showToolbar={false}
       />
-      <WorkloadsSurface
-        state={workloadsState}
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
-        embedded
-        tableOnly
-        forcedPlatform={VMWARE_PLATFORM_FILTER}
-        forcedViewMode="vm"
-        compactGroupHeaders
+      <VsphereVirtualMachinesTable
+        vms={props.model().vms}
+        scope={props.model().resources}
+        emptyIcon={vmwareIcon()}
+        emptyTitle="No vSphere VMs"
+        emptyDescription="Virtual machines appear here once the vCenter connection enumerates them."
       />
     </div>
   );

@@ -4,7 +4,9 @@ import {
   VMWARE_TAB_SPECS,
   buildVmwarePageModel,
   filterVmwareDatastores,
+  filterVmwareVirtualMachines,
   mapVmwareDatastoreStatus,
+  mapVmwareVirtualMachineStatus,
 } from '../vmwarePageModel';
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource => ({
@@ -107,5 +109,67 @@ describe('vmwarePageModel', () => {
         (resource) => resource.id,
       ),
     ).toEqual(['ds-inaccessible']);
+  });
+
+  it('filters vSphere VMs using vCenter VM metadata', () => {
+    const poweredOn = makeResource({
+      id: 'vm-powered-on',
+      type: 'vm',
+      name: 'warehouse-api-01',
+      vmware: {
+        entityType: 'vm',
+        powerState: 'POWERED_ON',
+        runtimeHostName: 'esxi-01.lab.local',
+        clusterName: 'Production Cluster',
+        resourcePoolName: 'Tier 1',
+        guestHostname: 'warehouse-api-01.internal',
+        guestIpAddresses: ['10.42.10.21'],
+        datastoreNames: ['nvme-primary'],
+      },
+    });
+    const attention = makeResource({
+      id: 'vm-attention',
+      type: 'vm',
+      name: 'warehouse-db-01',
+      status: 'degraded',
+      vmware: {
+        entityType: 'vm',
+        powerState: 'POWERED_ON',
+        overallStatus: 'yellow',
+        activeAlarmCount: 1,
+        activeAlarmSummary: 'Snapshot age warning',
+        runtimeHostName: 'esxi-02.lab.local',
+      },
+    });
+    const poweredOff = makeResource({
+      id: 'vm-powered-off',
+      type: 'vm',
+      name: 'cold-archive-01',
+      status: 'stopped',
+      vmware: {
+        entityType: 'vm',
+        powerState: 'poweredOff',
+        runtimeHostName: 'esxi-03.lab.local',
+      },
+    });
+
+    expect(mapVmwareVirtualMachineStatus(poweredOn)).toBe('powered-on');
+    expect(mapVmwareVirtualMachineStatus(attention)).toBe('attention');
+    expect(mapVmwareVirtualMachineStatus(poweredOff)).toBe('powered-off');
+    expect(
+      filterVmwareVirtualMachines([poweredOn, attention, poweredOff], 'tier 1', 'powered-on').map(
+        (resource) => resource.id,
+      ),
+    ).toEqual(['vm-powered-on']);
+    expect(
+      filterVmwareVirtualMachines([poweredOn, attention, poweredOff], 'snapshot', 'attention').map(
+        (resource) => resource.id,
+      ),
+    ).toEqual(['vm-attention']);
+    expect(
+      filterVmwareVirtualMachines([poweredOn, attention, poweredOff], 'esxi-03', 'all').map(
+        (resource) => resource.id,
+      ),
+    ).toEqual(['vm-powered-off']);
   });
 });
