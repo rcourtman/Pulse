@@ -207,6 +207,17 @@ func defaultFixturesPrimaryCluster(
 				GuestIPAddresses:    []string{"10.42.10.21"},
 				OverallStatus:       "green",
 				SnapshotCount:       1,
+				CurrentSnapshotID:   "snapshot-201",
+				SnapshotTree: []InventoryVMSnapshot{{
+					Snapshot:    "snapshot-201",
+					Name:        "pre-deploy-checkpoint",
+					Description: "Before service deployment",
+					ID:          201,
+					CreatedAt:   inventorySnapshotTime(collectedAt.Add(-46 * time.Minute)),
+					State:       "poweredOn",
+					Quiesced:    true,
+					Current:     true,
+				}},
 				Metrics: &InventoryMetrics{
 					CPUPercent:              float64Ptr(36.2),
 					MemoryPercent:           float64Ptr(64.4),
@@ -252,6 +263,31 @@ func defaultFixturesPrimaryCluster(
 				GuestIPAddresses:    []string{"10.42.10.32"},
 				OverallStatus:       "yellow",
 				SnapshotCount:       3,
+				CurrentSnapshotID:   "snapshot-213",
+				SnapshotTree: []InventoryVMSnapshot{{
+					Snapshot:  "snapshot-211",
+					Name:      "baseline",
+					ID:        211,
+					CreatedAt: inventorySnapshotTime(collectedAt.Add(-72 * time.Hour)),
+					State:     "poweredOn",
+					Quiesced:  true,
+					Children: []InventoryVMSnapshot{{
+						Snapshot:  "snapshot-212",
+						Name:      "schema-migration",
+						ID:        212,
+						CreatedAt: inventorySnapshotTime(collectedAt.Add(-36 * time.Hour)),
+						State:     "poweredOn",
+						Quiesced:  true,
+						Children: []InventoryVMSnapshot{{
+							Snapshot:  "snapshot-213",
+							Name:      "post-migration",
+							ID:        213,
+							CreatedAt: inventorySnapshotTime(collectedAt.Add(-18 * time.Hour)),
+							State:     "poweredOn",
+							Current:   true,
+						}},
+					}},
+				}},
 				Metrics: &InventoryMetrics{
 					CPUPercent:              float64Ptr(58.8),
 					MemoryPercent:           float64Ptr(82.1),
@@ -749,4 +785,9 @@ func guestOSFamily(name string) string {
 	default:
 		return "LINUX"
 	}
+}
+
+func inventorySnapshotTime(value time.Time) *time.Time {
+	timestamp := value.UTC()
+	return &timestamp
 }

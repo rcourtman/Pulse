@@ -38,6 +38,21 @@ type InventoryEvent struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 }
 
+// InventoryVMSnapshot preserves the VI JSON snapshot tree as read-only VM
+// context. It must not be promoted into Pulse recovery artifacts.
+type InventoryVMSnapshot struct {
+	Snapshot        string                `json:"snapshot,omitempty"`
+	Name            string                `json:"name,omitempty"`
+	Description     string                `json:"description,omitempty"`
+	ID              int                   `json:"id,omitempty"`
+	CreatedAt       *time.Time            `json:"created_at,omitempty"`
+	State           string                `json:"state,omitempty"`
+	Quiesced        bool                  `json:"quiesced"`
+	ReplaySupported bool                  `json:"replay_supported,omitempty"`
+	Current         bool                  `json:"current,omitempty"`
+	Children        []InventoryVMSnapshot `json:"children,omitempty"`
+}
+
 // InventoryMetrics captures the current runtime metric floor projected onto
 // canonical Pulse metrics for VMware-backed hosts and VMs.
 type InventoryMetrics struct {
@@ -90,36 +105,38 @@ type InventoryHost struct {
 // InventoryVM is the canonical phase-1 VM summary returned by the vCenter
 // Automation API list endpoint.
 type InventoryVM struct {
-	VM                  string            `json:"vm"`
-	Name                string            `json:"name"`
-	PowerState          string            `json:"power_state"`
-	CPUCount            int               `json:"cpu_count,omitempty"`
-	MemorySizeMiB       int64             `json:"memory_size_mib,omitempty"`
-	DatacenterID        string            `json:"datacenter_id,omitempty"`
-	DatacenterName      string            `json:"datacenter_name,omitempty"`
-	ComputeResourceID   string            `json:"compute_resource_id,omitempty"`
-	ComputeResourceName string            `json:"compute_resource_name,omitempty"`
-	ClusterID           string            `json:"cluster_id,omitempty"`
-	ClusterName         string            `json:"cluster_name,omitempty"`
-	FolderID            string            `json:"folder_id,omitempty"`
-	FolderName          string            `json:"folder_name,omitempty"`
-	ResourcePoolID      string            `json:"resource_pool_id,omitempty"`
-	ResourcePoolName    string            `json:"resource_pool_name,omitempty"`
-	RuntimeHostID       string            `json:"runtime_host_id,omitempty"`
-	RuntimeHostName     string            `json:"runtime_host_name,omitempty"`
-	DatastoreIDs        []string          `json:"datastore_ids,omitempty"`
-	DatastoreNames      []string          `json:"datastore_names,omitempty"`
-	InstanceUUID        string            `json:"instance_uuid,omitempty"`
-	BIOSUUID            string            `json:"bios_uuid,omitempty"`
-	GuestOSFamily       string            `json:"guest_os_family,omitempty"`
-	GuestHostname       string            `json:"guest_hostname,omitempty"`
-	GuestIPAddresses    []string          `json:"guest_ip_addresses,omitempty"`
-	OverallStatus       string            `json:"overall_status,omitempty"`
-	TriggeredAlarms     []InventoryAlarm  `json:"triggered_alarms,omitempty"`
-	RecentTasks         []InventoryTask   `json:"recent_tasks,omitempty"`
-	RecentEvents        []InventoryEvent  `json:"recent_events,omitempty"`
-	SnapshotCount       int               `json:"snapshot_count,omitempty"`
-	Metrics             *InventoryMetrics `json:"metrics,omitempty"`
+	VM                  string                `json:"vm"`
+	Name                string                `json:"name"`
+	PowerState          string                `json:"power_state"`
+	CPUCount            int                   `json:"cpu_count,omitempty"`
+	MemorySizeMiB       int64                 `json:"memory_size_mib,omitempty"`
+	DatacenterID        string                `json:"datacenter_id,omitempty"`
+	DatacenterName      string                `json:"datacenter_name,omitempty"`
+	ComputeResourceID   string                `json:"compute_resource_id,omitempty"`
+	ComputeResourceName string                `json:"compute_resource_name,omitempty"`
+	ClusterID           string                `json:"cluster_id,omitempty"`
+	ClusterName         string                `json:"cluster_name,omitempty"`
+	FolderID            string                `json:"folder_id,omitempty"`
+	FolderName          string                `json:"folder_name,omitempty"`
+	ResourcePoolID      string                `json:"resource_pool_id,omitempty"`
+	ResourcePoolName    string                `json:"resource_pool_name,omitempty"`
+	RuntimeHostID       string                `json:"runtime_host_id,omitempty"`
+	RuntimeHostName     string                `json:"runtime_host_name,omitempty"`
+	DatastoreIDs        []string              `json:"datastore_ids,omitempty"`
+	DatastoreNames      []string              `json:"datastore_names,omitempty"`
+	InstanceUUID        string                `json:"instance_uuid,omitempty"`
+	BIOSUUID            string                `json:"bios_uuid,omitempty"`
+	GuestOSFamily       string                `json:"guest_os_family,omitempty"`
+	GuestHostname       string                `json:"guest_hostname,omitempty"`
+	GuestIPAddresses    []string              `json:"guest_ip_addresses,omitempty"`
+	OverallStatus       string                `json:"overall_status,omitempty"`
+	TriggeredAlarms     []InventoryAlarm      `json:"triggered_alarms,omitempty"`
+	RecentTasks         []InventoryTask       `json:"recent_tasks,omitempty"`
+	RecentEvents        []InventoryEvent      `json:"recent_events,omitempty"`
+	SnapshotCount       int                   `json:"snapshot_count,omitempty"`
+	CurrentSnapshotID   string                `json:"current_snapshot_id,omitempty"`
+	SnapshotTree        []InventoryVMSnapshot `json:"snapshot_tree,omitempty"`
+	Metrics             *InventoryMetrics     `json:"metrics,omitempty"`
 }
 
 // InventoryDatastore is the canonical phase-1 datastore summary returned by
@@ -465,6 +482,8 @@ func vmwareRecordsFromSnapshot(snapshot *InventorySnapshot, now func() time.Time
 				RecentTaskCount:     len(vm.RecentTasks),
 				RecentTaskSummary:   vmwareRecentTaskSummary(vm.RecentTasks),
 				SnapshotCount:       vm.SnapshotCount,
+				CurrentSnapshotID:   strings.TrimSpace(vm.CurrentSnapshotID),
+				SnapshotTree:        vmwareSnapshotTreeData(vm.SnapshotTree),
 			},
 			Tags: filterNonEmptyStrings(
 				"vmware",
@@ -622,6 +641,7 @@ func cloneInventoryVMs(in []InventoryVM) []InventoryVM {
 		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
 		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
 		out[i].RecentEvents = cloneInventoryEvents(in[i].RecentEvents)
+		out[i].SnapshotTree = cloneInventoryVMSnapshots(in[i].SnapshotTree)
 		out[i].Metrics = cloneInventoryMetrics(in[i].Metrics)
 	}
 	return out
@@ -674,6 +694,19 @@ func cloneInventoryEvents(in []InventoryEvent) []InventoryEvent {
 	return out
 }
 
+func cloneInventoryVMSnapshots(in []InventoryVMSnapshot) []InventoryVMSnapshot {
+	if in == nil {
+		return nil
+	}
+	out := make([]InventoryVMSnapshot, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].CreatedAt = cloneTimePointer(in[i].CreatedAt)
+		out[i].Children = cloneInventoryVMSnapshots(in[i].Children)
+	}
+	return out
+}
+
 func cloneInventoryEnrichmentIssues(in []InventoryEnrichmentIssue) []InventoryEnrichmentIssue {
 	if in == nil {
 		return nil
@@ -704,6 +737,14 @@ func cloneInventoryMetrics(in *InventoryMetrics) *InventoryMetrics {
 	out.NetOutBytesPerSecond = cloneFloat64Pointer(in.NetOutBytesPerSecond)
 	out.DiskReadBytesPerSecond = cloneFloat64Pointer(in.DiskReadBytesPerSecond)
 	out.DiskWriteBytesPerSecond = cloneFloat64Pointer(in.DiskWriteBytesPerSecond)
+	return &out
+}
+
+func cloneTimePointer(in *time.Time) *time.Time {
+	if in == nil {
+		return nil
+	}
+	out := in.UTC()
 	return &out
 }
 
@@ -973,6 +1014,29 @@ func vmwareDatastoreTopConsumers(datastore InventoryDatastore) []unifiedresource
 		return nil
 	}
 	return consumers
+}
+
+func vmwareSnapshotTreeData(snapshots []InventoryVMSnapshot) []unifiedresources.VMwareSnapshotData {
+	if len(snapshots) == 0 {
+		return nil
+	}
+	out := make([]unifiedresources.VMwareSnapshotData, 0, len(snapshots))
+	for _, snapshot := range snapshots {
+		item := unifiedresources.VMwareSnapshotData{
+			Snapshot:        strings.TrimSpace(snapshot.Snapshot),
+			Name:            strings.TrimSpace(snapshot.Name),
+			Description:     strings.TrimSpace(snapshot.Description),
+			ID:              snapshot.ID,
+			CreatedAt:       cloneTimePointer(snapshot.CreatedAt),
+			State:           strings.TrimSpace(snapshot.State),
+			Quiesced:        snapshot.Quiesced,
+			ReplaySupported: snapshot.ReplaySupported,
+			Current:         snapshot.Current,
+			Children:        vmwareSnapshotTreeData(snapshot.Children),
+		}
+		out = append(out, item)
+	}
+	return out
 }
 
 func diskMetric(total, used int64) *unifiedresources.MetricValue {

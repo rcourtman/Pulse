@@ -1155,9 +1155,14 @@ carry runtime-host, folder, resource-pool, datastore, and guest-identity
 metadata plus canonical parentage to the owning ESXi `agent`; datastores may
 carry datacenter/folder placement plus shared storage-node and workload
 consumer metadata through `storage.nodes`, `storage.consumerCount`, and
-`storage.topConsumers`. Those enrichments must remain subordinate to shared
-`agent`, `vm`, and `storage` resources rather than becoming a VMware-only
-topology graph or a separate provider detail drawer contract.
+`storage.topConsumers`. VMs may also carry VI JSON snapshot-tree context under
+`vmware.currentSnapshotId` and `vmware.snapshotTree`, including snapshot
+managed-object reference, display name, description, creation time, power
+state, quiesce flag, current marker, replay support, and child snapshots.
+Those enrichments must remain subordinate to shared `agent`, `vm`, and
+`storage` resources rather than becoming a VMware-only topology graph, recovery
+artifact, canonical identity alias, or separate provider detail drawer
+contract.
 TrueNAS disk telemetry now follows the same rule. API-backed TrueNAS disks must
 populate canonical `physicalDisk.temperature` and reuse the shared
 physical-disk risk semantics, so infrastructure, storage, charts, and AI read

@@ -33,7 +33,7 @@ import {
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
-import type { Resource } from '@/types/resource';
+import type { Resource, ResourceVMwareSnapshot } from '@/types/resource';
 import {
   filterVmwareVirtualMachines,
   mapVmwareVirtualMachineStatus,
@@ -115,6 +115,25 @@ const summarizeValues = (
   const visible = compact.slice(0, visibleCount);
   const suffix = compact.length > visible.length ? ` +${compact.length - visible.length}` : '';
   return { label: `${visible.join(', ')}${suffix}`, title: compact.join(', ') };
+};
+
+const countSnapshotTree = (snapshots: ResourceVMwareSnapshot[] | undefined): number =>
+  (snapshots ?? []).reduce(
+    (total, snapshot) => total + 1 + countSnapshotTree(snapshot.children),
+    0,
+  );
+
+const flattenSnapshotNames = (snapshots: ResourceVMwareSnapshot[] | undefined): string[] => {
+  const names: string[] = [];
+  for (const snapshot of snapshots ?? []) {
+    const name =
+      asTrimmedString(snapshot.name) ||
+      asTrimmedString(snapshot.snapshot) ||
+      (typeof snapshot.id === 'number' ? `Snapshot ${snapshot.id}` : '');
+    if (name) names.push(snapshot.current ? `${name} (current)` : name);
+    names.push(...flattenSnapshotNames(snapshot.children));
+  }
+  return names;
 };
 
 const formatGuest = (resource: Resource): { label: string; detail: string; title: string } => {
@@ -329,7 +348,13 @@ export const VsphereVirtualMachinesTable: Component<{
                           const datastores = createMemo(() =>
                             summarizeValues(meta()?.datastoreNames ?? [], '-', 1),
                           );
-                          const snapshots = () => Math.max(0, meta()?.snapshotCount ?? 0);
+                          const snapshots = () =>
+                            Math.max(
+                              0,
+                              meta()?.snapshotCount ?? countSnapshotTree(meta()?.snapshotTree),
+                            );
+                          const snapshotTitle = () =>
+                            flattenSnapshotNames(meta()?.snapshotTree).join(', ');
                           const metricsKey = () => buildMetricKeyForUnifiedResource(vm);
                           const cpuPercent = () => finiteMetric(vm.cpu?.current);
                           const memoryTotal = () => finiteMetric(vm.memory?.total) ?? 0;
@@ -459,6 +484,7 @@ export const VsphereVirtualMachinesTable: Component<{
                                 </TableCell>
                                 <TableCell
                                   class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
+                                  title={snapshotTitle()}
                                 >
                                   {snapshots()}
                                 </TableCell>

@@ -315,6 +315,27 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
           recentTaskCount: 1,
           recentTaskSummary: 'Create snapshot (success)',
           snapshotCount: 2,
+          currentSnapshotId: 'snapshot-202',
+          snapshotTree: [
+            {
+              snapshot: 'snapshot-201',
+              name: 'pre-upgrade',
+              description: 'Before application upgrade',
+              createdAt: '2026-03-28T18:15:00Z',
+              state: 'poweredOn',
+              quiesced: true,
+              children: [
+                {
+                  snapshot: 'snapshot-202',
+                  name: 'post-migration-checkpoint',
+                  createdAt: '2026-03-29T18:15:00Z',
+                  state: 'poweredOn',
+                  current: true,
+                  quiesced: false,
+                },
+              ],
+            },
+          ],
         },
       },
       vmware: {
@@ -336,6 +357,27 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
         recentTaskCount: 1,
         recentTaskSummary: 'Create snapshot (success)',
         snapshotCount: 2,
+        currentSnapshotId: 'snapshot-202',
+        snapshotTree: [
+          {
+            snapshot: 'snapshot-201',
+            name: 'pre-upgrade',
+            description: 'Before application upgrade',
+            createdAt: '2026-03-28T18:15:00Z',
+            state: 'poweredOn',
+            quiesced: true,
+            children: [
+              {
+                snapshot: 'snapshot-202',
+                name: 'post-migration-checkpoint',
+                createdAt: '2026-03-29T18:15:00Z',
+                state: 'poweredOn',
+                current: true,
+                quiesced: false,
+              },
+            ],
+          },
+        ],
       },
     });
 
@@ -361,6 +403,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(within(section).getByText('Placement')).toBeInTheDocument();
     expect(within(section).getByText('Guest')).toBeInTheDocument();
     expect(within(section).getByText('Signals')).toBeInTheDocument();
+    expect(within(section).getByText('Snapshot tree')).toBeInTheDocument();
     expect(within(section).getByText('vc.lab.local')).toBeInTheDocument();
     expect(within(section).getByText('Compute Cluster')).toBeInTheDocument();
     expect(within(section).getByText('esxi-01.lab.local')).toBeInTheDocument();
@@ -368,6 +411,9 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(within(section).getByText(/Create snapshot \(success\)/)).toBeInTheDocument();
     expect(within(section).getByText(/Host fan degraded/)).toBeInTheDocument();
     expect(within(section).getByText('2 snapshots')).toBeInTheDocument();
+    expect(within(section).getByText('pre-upgrade')).toBeInTheDocument();
+    expect(within(section).getByText('- post-migration-checkpoint')).toBeInTheDocument();
+    expect(within(section).getByText(/current · poweredOn/)).toBeInTheDocument();
   });
 
   it('keeps source provenance in the header when no source health issue is present', () => {

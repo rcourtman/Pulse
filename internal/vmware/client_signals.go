@@ -62,10 +62,19 @@ type viJSONEvent struct {
 }
 
 type viJSONSnapshotInfo struct {
+	CurrentSnapshot  *viJSONReference     `json:"currentSnapshot"`
 	RootSnapshotList []viJSONSnapshotTree `json:"rootSnapshotList"`
 }
 
 type viJSONSnapshotTree struct {
+	Snapshot          viJSONReference      `json:"snapshot"`
+	Name              string               `json:"name"`
+	Description       string               `json:"description"`
+	ID                int                  `json:"id"`
+	CreateTime        *time.Time           `json:"createTime"`
+	State             string               `json:"state"`
+	Quiesced          bool                 `json:"quiesced"`
+	ReplaySupported   bool                 `json:"replaySupported"`
 	ChildSnapshotList []viJSONSnapshotTree `json:"childSnapshotList"`
 }
 
@@ -117,7 +126,7 @@ func (c *Client) validateSignalFloor(
 		if _, err := c.collectManagedEntitySignals(ctx, release, sessionID, "VirtualMachine", vm.VM, perfManagerMoID, eventManagerMoID, cache, false); err != nil {
 			return err
 		}
-		if _, err := c.collectVMSnapshotCount(ctx, release, sessionID, vm.VM); err != nil && !isVIJSONNotFound(err) {
+		if _, _, err := c.collectVMSnapshotTree(ctx, release, sessionID, vm.VM); err != nil && !isVIJSONNotFound(err) {
 			return err
 		}
 		vmMetrics, err := c.collectVMPerformanceMetrics(ctx, release, sessionID, perfManagerMoID, perfCounters, vm)
@@ -221,12 +230,15 @@ func (c *Client) enrichInventorySnapshot(
 			snapshot.VMs[i].TriggeredAlarms = signals.Alarms
 			snapshot.VMs[i].RecentTasks = signals.RecentTasks
 			snapshot.VMs[i].RecentEvents = signals.RecentEvents
-			snapshot.VMs[i].SnapshotCount, err = c.collectVMSnapshotCount(ctx, release, sessionID, snapshot.VMs[i].VM)
+			snapshotTree, currentSnapshotID, err := c.collectVMSnapshotTree(ctx, release, sessionID, snapshot.VMs[i].VM)
 			if issue, ok := classifyInventoryEnrichmentIssue("signals", "vm", snapshot.VMs[i].VM, err); ok {
 				recordIssue(issue)
 			} else if err != nil && !isVIJSONNotFound(err) {
 				return err
 			}
+			snapshot.VMs[i].SnapshotTree = snapshotTree
+			snapshot.VMs[i].CurrentSnapshotID = currentSnapshotID
+			snapshot.VMs[i].SnapshotCount = countInventoryVMSnapshotTrees(snapshotTree)
 			metrics, err := c.collectVMPerformanceMetrics(ctx, release, sessionID, perfManagerMoID, perfCounters, snapshot.VMs[i])
 			if issue, ok := classifyInventoryEnrichmentIssue("signals", "vm", snapshot.VMs[i].VM, err); ok {
 				recordIssue(issue)
@@ -485,13 +497,20 @@ func (c *Client) collectRecentEvents(ctx context.Context, release, sessionID, ev
 	return events, nil
 }
 
-func (c *Client) collectVMSnapshotCount(ctx context.Context, release, sessionID, managedObjectID string) (int, error) {
+func (c *Client) collectVMSnapshotTree(ctx context.Context, release, sessionID, managedObjectID string) ([]InventoryVMSnapshot, string, error) {
 	var payload viJSONSnapshotInfo
 	path := fmt.Sprintf("/sdk/vim25/%s/VirtualMachine/%s/snapshot", release, managedObjectID)
 	if err := c.getVIJSONJSON(ctx, sessionID, path, "vmware vm snapshot tree", &payload); err != nil {
-		return 0, err
+		if isVIJSONNotFound(err) {
+			return nil, "", nil
+		}
+		return nil, "", err
 	}
-	return countSnapshotTrees(payload.RootSnapshotList), nil
+	currentSnapshotID := ""
+	if payload.CurrentSnapshot != nil {
+		currentSnapshotID = strings.TrimSpace(payload.CurrentSnapshot.Value)
+	}
+	return mapVIJSONSnapshotTrees(payload.RootSnapshotList, currentSnapshotID), currentSnapshotID, nil
 }
 
 func (c *Client) resolveAlarmName(ctx context.Context, release, sessionID, alarmID string, cache *alarmNameCache) (string, error) {
@@ -585,11 +604,39 @@ func inventoryEventSortTime(event InventoryEvent) time.Time {
 	return event.CreatedAt.UTC()
 }
 
-func countSnapshotTrees(roots []viJSONSnapshotTree) int {
+func mapVIJSONSnapshotTrees(roots []viJSONSnapshotTree, currentSnapshotID string) []InventoryVMSnapshot {
+	if len(roots) == 0 {
+		return nil
+	}
+	out := make([]InventoryVMSnapshot, 0, len(roots))
+	for _, root := range roots {
+		snapshotID := strings.TrimSpace(root.Snapshot.Value)
+		var createdAt *time.Time
+		if root.CreateTime != nil {
+			created := root.CreateTime.UTC()
+			createdAt = &created
+		}
+		out = append(out, InventoryVMSnapshot{
+			Snapshot:        snapshotID,
+			Name:            strings.TrimSpace(root.Name),
+			Description:     strings.TrimSpace(root.Description),
+			ID:              root.ID,
+			CreatedAt:       createdAt,
+			State:           strings.TrimSpace(root.State),
+			Quiesced:        root.Quiesced,
+			ReplaySupported: root.ReplaySupported,
+			Current:         snapshotID != "" && snapshotID == currentSnapshotID,
+			Children:        mapVIJSONSnapshotTrees(root.ChildSnapshotList, currentSnapshotID),
+		})
+	}
+	return out
+}
+
+func countInventoryVMSnapshotTrees(roots []InventoryVMSnapshot) int {
 	count := 0
 	for _, root := range roots {
 		count++
-		count += countSnapshotTrees(root.ChildSnapshotList)
+		count += countInventoryVMSnapshotTrees(root.Children)
 	}
 	return count
 }

@@ -106,7 +106,25 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 				State:     "success",
 				StartedAt: collectedAt.Add(-5 * time.Minute),
 			}},
-			SnapshotCount: 2,
+			SnapshotCount:     2,
+			CurrentSnapshotID: "snapshot-202",
+			SnapshotTree: []InventoryVMSnapshot{{
+				Snapshot:    "snapshot-201",
+				Name:        "pre-upgrade",
+				Description: "Before application upgrade",
+				ID:          101,
+				CreatedAt:   timePtr(collectedAt.Add(-48 * time.Hour)),
+				State:       "poweredOn",
+				Quiesced:    true,
+				Children: []InventoryVMSnapshot{{
+					Snapshot:  "snapshot-202",
+					Name:      "post-migration-checkpoint",
+					ID:        102,
+					CreatedAt: timePtr(collectedAt.Add(-24 * time.Hour)),
+					State:     "poweredOn",
+					Current:   true,
+				}},
+			}},
 		}},
 		Datastores: []InventoryDatastore{{
 			Datastore:          "datastore-11",
@@ -206,6 +224,12 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 	}
 	if got := vmRecord.Resource.VMware.SnapshotCount; got != 2 {
 		t.Fatalf("vm snapshot count = %d, want 2", got)
+	}
+	if got := vmRecord.Resource.VMware.CurrentSnapshotID; got != "snapshot-202" {
+		t.Fatalf("vm current snapshot id = %q, want snapshot-202", got)
+	}
+	if got := vmRecord.Resource.VMware.SnapshotTree; len(got) != 1 || got[0].Name != "pre-upgrade" || len(got[0].Children) != 1 || !got[0].Children[0].Current {
+		t.Fatalf("vm snapshot tree projection = %+v, want root pre-upgrade with current child", got)
 	}
 	if got := vmRecord.Resource.ParentName; got != "esxi-01.lab.local" {
 		t.Fatalf("vm parent name = %q, want esxi-01.lab.local", got)
@@ -356,5 +380,9 @@ func TestProviderActivityChanges_ProjectCanonicalTimelineEntries(t *testing.T) {
 }
 
 func boolPtr(value bool) *bool {
+	return &value
+}
+
+func timePtr(value time.Time) *time.Time {
 	return &value
 }

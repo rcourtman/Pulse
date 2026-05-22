@@ -35,7 +35,14 @@ const makeVM = (overrides: Partial<Resource> & Pick<Resource, 'id'>): Resource =
       guestHostname: 'warehouse-api-01.internal',
       guestIpAddresses: ['10.42.10.21'],
       datastoreNames: ['nvme-primary', 'backup-nfs'],
-      snapshotCount: 2,
+      snapshotTree: [
+        {
+          snapshot: 'snapshot-201',
+          name: 'pre-upgrade',
+          quiesced: true,
+          children: [{ snapshot: 'snapshot-202', name: 'post-upgrade', current: true }],
+        },
+      ],
     },
     ...overrides,
   }) as Resource;
@@ -91,6 +98,7 @@ describe('VsphereVirtualMachinesTable', () => {
     expect(screen.getByText('warehouse-api-01.internal')).toBeInTheDocument();
     expect(screen.getByText('nvme-primary +1')).toBeInTheDocument();
     expect(screen.getByText('Healthy')).toBeInTheDocument();
+    expect(screen.getByTitle('pre-upgrade, post-upgrade (current)')).toHaveTextContent('2');
 
     const row = screen.getByText('warehouse-api-01').closest('tr');
     expect(row).toHaveAttribute('aria-expanded', 'false');

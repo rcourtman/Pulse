@@ -825,6 +825,19 @@ export interface ResourcePMGMeta {
   lastUpdated?: string | number;
 }
 
+export interface ResourceVMwareSnapshot {
+  snapshot?: string;
+  name?: string;
+  description?: string;
+  id?: number;
+  createdAt?: string | number;
+  state?: string;
+  quiesced?: boolean;
+  replaySupported?: boolean;
+  current?: boolean;
+  children?: ResourceVMwareSnapshot[];
+}
+
 export interface ResourceVMwareMeta {
   connectionId?: string;
   connectionName?: string;
@@ -866,6 +879,8 @@ export interface ResourceVMwareMeta {
   recentTaskCount?: number;
   recentTaskSummary?: string;
   snapshotCount?: number;
+  currentSnapshotId?: string;
+  snapshotTree?: ResourceVMwareSnapshot[];
 }
 
 export interface ResourceAvailabilityMeta {

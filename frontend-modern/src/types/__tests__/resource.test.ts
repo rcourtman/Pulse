@@ -268,6 +268,24 @@ describe('Resource Helper Functions', () => {
         recentTaskCount: 1,
         recentTaskSummary: 'Clone VM task finished',
         snapshotCount: 3,
+        currentSnapshotId: 'snapshot-103',
+        snapshotTree: [
+          {
+            snapshot: 'snapshot-101',
+            name: 'baseline',
+            createdAt: '2026-03-30T18:10:00Z',
+            state: 'poweredOn',
+            quiesced: true,
+            children: [
+              {
+                snapshot: 'snapshot-103',
+                name: 'post-upgrade',
+                current: true,
+                quiesced: false,
+              },
+            ],
+          },
+        ],
       };
 
       expect(vmware.overallStatus).toBe('yellow');
@@ -278,6 +296,8 @@ describe('Resource Helper Functions', () => {
       expect(vmware.activeAlarmCount).toBe(2);
       expect(vmware.recentTaskSummary).toBe('Clone VM task finished');
       expect(vmware.snapshotCount).toBe(3);
+      expect(vmware.currentSnapshotId).toBe('snapshot-103');
+      expect(vmware.snapshotTree?.[0]?.children?.[0]?.current).toBe(true);
     });
   });
 

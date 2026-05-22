@@ -1,4 +1,4 @@
-import type { ResourceType, ResourceVMwareMeta } from '@/types/resource';
+import type { ResourceType, ResourceVMwareMeta, ResourceVMwareSnapshot } from '@/types/resource';
 
 export type ResourceDetailDrawerVMwareRowTone = 'default' | 'accent' | 'warning';
 
@@ -9,7 +9,7 @@ export type ResourceDetailDrawerVMwareRow = {
 };
 
 export type ResourceDetailDrawerVMwareSection = {
-  id: 'state' | 'placement' | 'guest' | 'signals';
+  id: 'state' | 'placement' | 'guest' | 'signals' | 'snapshots';
   label: string;
   rows: ResourceDetailDrawerVMwareRow[];
 };
@@ -22,6 +22,54 @@ const formatCount = (count: number, label: string): string =>
 const formatBoolLabel = (value?: boolean): string => {
   if (value === undefined) return '';
   return value ? 'Yes' : 'No';
+};
+
+const countSnapshotTree = (snapshots?: ResourceVMwareSnapshot[]): number =>
+  (snapshots ?? []).reduce(
+    (total, snapshot) => total + 1 + countSnapshotTree(snapshot.children),
+    0,
+  );
+
+const snapshotDisplayName = (snapshot: ResourceVMwareSnapshot): string =>
+  asTrimmedString(snapshot.name) ||
+  asTrimmedString(snapshot.snapshot) ||
+  (typeof snapshot.id === 'number' ? `Snapshot ${snapshot.id}` : 'Snapshot');
+
+const formatSnapshotDate = (value?: string | number): string => {
+  if (value === undefined || value === null || value === '') return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return asTrimmedString(String(value));
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(
+    date.getUTCDate(),
+  )} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())} UTC`;
+};
+
+const snapshotValue = (snapshot: ResourceVMwareSnapshot): string => {
+  const parts = [
+    snapshot.current ? 'current' : '',
+    asTrimmedString(snapshot.state),
+    formatSnapshotDate(snapshot.createdAt),
+    snapshot.quiesced === undefined ? '' : snapshot.quiesced ? 'quiesced' : 'not quiesced',
+    asTrimmedString(snapshot.description),
+  ].filter(Boolean);
+  return parts.join(' · ');
+};
+
+const flattenSnapshotRows = (
+  snapshots: ResourceVMwareSnapshot[] | undefined,
+  depth = 0,
+): ResourceDetailDrawerVMwareRow[] => {
+  const rows: ResourceDetailDrawerVMwareRow[] = [];
+  for (const snapshot of snapshots ?? []) {
+    rows.push({
+      label: `${depth > 0 ? `${'-'.repeat(depth)} ` : ''}${snapshotDisplayName(snapshot)}`,
+      value: snapshotValue(snapshot) || asTrimmedString(snapshot.snapshot),
+      tone: snapshot.current ? 'accent' : 'default',
+    });
+    rows.push(...flattenSnapshotRows(snapshot.children, depth + 1));
+  }
+  return rows;
 };
 
 const vmwareEntityLabel = (entityType?: string): string => {
@@ -84,8 +132,12 @@ export const buildVMwareDetailsSummary = (
   }
   parts.push('Read-only vCenter context');
 
-  if (resourceType === 'vm' && typeof vmware.snapshotCount === 'number') {
-    parts.push(formatCount(Math.max(0, vmware.snapshotCount), 'snapshot'));
+  const snapshotCount =
+    typeof vmware.snapshotCount === 'number'
+      ? Math.max(0, vmware.snapshotCount)
+      : countSnapshotTree(vmware.snapshotTree);
+  if (resourceType === 'vm' && snapshotCount > 0) {
+    parts.push(formatCount(snapshotCount, 'snapshot'));
   }
   if ((vmware.activeAlarmCount ?? 0) > 0) {
     parts.push(formatCount(vmware.activeAlarmCount ?? 0, 'alarm'));
@@ -228,16 +280,27 @@ export const buildVMwareDetailSections = (
       label: 'Snapshots',
       value:
         resourceType === 'vm' || typeof vmware.snapshotCount === 'number'
-          ? formatCount(Math.max(0, vmware.snapshotCount ?? 0), 'snapshot')
+          ? formatCount(
+              Math.max(
+                0,
+                typeof vmware.snapshotCount === 'number'
+                  ? vmware.snapshotCount
+                  : countSnapshotTree(vmware.snapshotTree),
+              ),
+              'snapshot',
+            )
           : '',
     },
   ]);
+
+  const snapshotRows = resourceType === 'vm' ? flattenSnapshotRows(vmware.snapshotTree) : [];
 
   const sections: ResourceDetailDrawerVMwareSection[] = [
     { id: 'state', label: 'State', rows: stateRows },
     { id: 'placement', label: 'Placement', rows: placementRows },
     { id: 'guest', label: 'Guest', rows: guestRows },
     { id: 'signals', label: 'Signals', rows: signalRows },
+    { id: 'snapshots', label: 'Snapshot tree', rows: snapshotRows },
   ];
 
   return sections.filter((section) => hasRows(section.rows));

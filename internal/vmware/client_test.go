@@ -78,6 +78,15 @@ func TestClientCollectInventoryEnrichesSignals(t *testing.T) {
 	if vm.SnapshotCount != 2 {
 		t.Fatalf("vm snapshot count = %d, want 2", vm.SnapshotCount)
 	}
+	if vm.CurrentSnapshotID != "snapshot-202" {
+		t.Fatalf("vm current snapshot id = %q, want snapshot-202", vm.CurrentSnapshotID)
+	}
+	if len(vm.SnapshotTree) != 1 || vm.SnapshotTree[0].Name != "pre-upgrade" || len(vm.SnapshotTree[0].Children) != 1 {
+		t.Fatalf("expected VM snapshot tree with one child, got %+v", vm.SnapshotTree)
+	}
+	if !vm.SnapshotTree[0].Quiesced || !vm.SnapshotTree[0].Children[0].Current {
+		t.Fatalf("expected quiesced root and current child snapshot, got %+v", vm.SnapshotTree)
+	}
 	if len(vm.RecentTasks) != 1 || vm.RecentTasks[0].State != "success" {
 		t.Fatalf("expected VM recent task info, got %+v", vm.RecentTasks)
 	}
@@ -563,8 +572,24 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 	mux.HandleFunc("/sdk/vim25/9.0.0.0/VirtualMachine/vm-201/snapshot", func(w http.ResponseWriter, r *http.Request) {
 		requireVISession(t, r)
 		writeJSON(w, map[string]any{
+			"currentSnapshot": map[string]any{"type": "VirtualMachineSnapshot", "value": "snapshot-202"},
 			"rootSnapshotList": []map[string]any{{
-				"childSnapshotList": []map[string]any{{"childSnapshotList": []map[string]any{}}},
+				"snapshot":    map[string]any{"type": "VirtualMachineSnapshot", "value": "snapshot-201"},
+				"name":        "pre-upgrade",
+				"description": "Before application upgrade",
+				"id":          101,
+				"createTime":  "2026-03-28T18:15:00Z",
+				"state":       "poweredOn",
+				"quiesced":    true,
+				"childSnapshotList": []map[string]any{{
+					"snapshot":          map[string]any{"type": "VirtualMachineSnapshot", "value": "snapshot-202"},
+					"name":              "post-migration-checkpoint",
+					"id":                102,
+					"createTime":        "2026-03-29T18:15:00Z",
+					"state":             "poweredOn",
+					"quiesced":          false,
+					"childSnapshotList": []map[string]any{},
+				}},
 			}},
 		})
 	})
