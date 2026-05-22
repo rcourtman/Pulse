@@ -184,13 +184,23 @@ const shareCountLabel = (row: TrueNASStorageTopologyRow): string => {
   return String(row.counts.shares);
 };
 
-const rowIndentClass = (depth: number): string => (depth > 0 ? 'pl-5 sm:pl-7' : '');
+export const getTrueNASStorageTopologyIndentClass = (depth: number): string => {
+  if (depth <= 0) return '';
+  if (depth === 1) return 'pl-5 sm:pl-7';
+  if (depth === 2) return 'pl-9 sm:pl-11';
+  return 'pl-12 sm:pl-16';
+};
 
 const ResourceCell: Component<{ row: TrueNASStorageTopologyRow }> = (props) => {
   const indicator = () => getSimpleStatusIndicator(props.row.resource.status);
   const name = () => resourceName(props.row.resource);
   return (
-    <div class={`flex min-w-0 items-center gap-2 ${rowIndentClass(props.row.depth)}`}>
+    <div
+      class={`flex min-w-0 items-center gap-2 ${getTrueNASStorageTopologyIndentClass(
+        props.row.depth,
+      )}`}
+      data-truenas-storage-indent-depth={props.row.depth}
+    >
       <StatusDot size="sm" variant={indicator().variant} title={indicator().label} />
       <div class="min-w-0">
         <div class="truncate font-medium text-base-content" title={name()}>
@@ -311,6 +321,7 @@ export const TrueNASStorageTopologyTable: Component<{
                           data-truenas-storage-row={row.id}
                           data-truenas-storage-kind={row.kind}
                           data-truenas-storage-resource={resource().id}
+                          data-truenas-storage-depth={row.depth}
                           onClick={() => drawer.toggle(resource())}
                           onKeyDown={drawer.handleActivationKey(resource())}
                           tabIndex={0}
