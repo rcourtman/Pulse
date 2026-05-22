@@ -185,6 +185,10 @@ regression protection.
    the same startup-only router rule: env opt-in may configure monitoring-owned
    checker/collector callbacks, but normal protected request setup must not run
    `pct`, scan LXC guests, or collect Docker inventory.
+   Global resource timeline routing follows the same protected-request hot-path
+   rule: `/api/resources/timeline` registration may wire the authenticated
+   handler, but router setup and auth gating must not execute resource-change
+   store reads or provider activity scans before the handler owns the request.
    Agent command-token validation follows the same bounded router rule:
    `internal/api/agent_exec_token_binding.go` may validate against the
    in-memory API token registry and persist a single first-use binding for a

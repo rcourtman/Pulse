@@ -37,6 +37,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 	r.mux.HandleFunc("/api/resources/storage-summary", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleStorageSummary)))
 	r.mux.HandleFunc("/api/resources/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleStats)))
 	r.mux.HandleFunc("/api/resources/k8s/namespaces", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleK8sNamespaces)))
+	r.mux.HandleFunc("/api/resources/timeline", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleListResourceTimeline)))
 	r.mux.HandleFunc("/api/resources/{id}/facets", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResourceFacets)))
 	r.mux.HandleFunc("/api/resources/{id}/timeline", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResourceTimeline)))
 	// Per-resource operator-set state. GET is read; PUT/DELETE are

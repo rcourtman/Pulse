@@ -70,6 +70,29 @@ func TestRouterMockMode_SeedsTrueNASAndVMwareSupplementalResources(t *testing.T)
 	}
 }
 
+func TestRouterMockMode_SeedsVMwareSupplementalActivity(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	t.Cleanup(func() {
+		mock.SetEnabled(previous)
+	})
+
+	adapter := mockSupplementalRecordsAdapter{source: unified.SourceVMware}
+	changes := adapter.SupplementalChanges(nil, "default")
+	if len(changes) == 0 {
+		t.Fatal("expected mock VMware supplemental activity changes")
+	}
+	if changes[0].Kind != unified.ChangeActivity || changes[0].SourceAdapter != unified.AdapterVMware {
+		t.Fatalf("unexpected mock VMware activity change: %#v", changes[0])
+	}
+	if changes[0].Metadata[unified.MetadataActivityType] == "" {
+		t.Fatalf("expected VMware activity metadata, got %#v", changes[0].Metadata)
+	}
+	if got := adapter.SupplementalChanges(nil, "org-b"); len(got) != 0 {
+		t.Fatalf("expected tenant-scoped mock activity to be empty for non-default org, got %#v", got)
+	}
+}
+
 func TestRouterMockMode_RestoresPlatformFeatureFlagsAfterDisable(t *testing.T) {
 	t.Setenv(truenas.FeatureTrueNAS, "false")
 	t.Setenv(vmware.FeatureVMware, "false")

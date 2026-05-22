@@ -10421,6 +10421,17 @@ func (a mockSupplementalRecordsAdapter) SupplementalRecords(_ *monitoring.Monito
 	return a.GetCurrentRecordsForOrg(orgID)
 }
 
+func (a mockSupplementalRecordsAdapter) GetCurrentChangesForOrg(orgID string) []unifiedresources.ResourceChange {
+	if strings.TrimSpace(orgID) != "" && strings.TrimSpace(orgID) != "default" {
+		return nil
+	}
+	return mock.SupplementalChanges(a.source)
+}
+
+func (a mockSupplementalRecordsAdapter) SupplementalChanges(_ *monitoring.Monitor, orgID string) []unifiedresources.ResourceChange {
+	return a.GetCurrentChangesForOrg(orgID)
+}
+
 func (a mockSupplementalRecordsAdapter) SnapshotOwnedSources() []unifiedresources.DataSource {
 	normalized := normalizeDataSourceAlias(a.source)
 	if normalized == "" {

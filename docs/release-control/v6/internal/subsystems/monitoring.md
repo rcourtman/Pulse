@@ -142,6 +142,13 @@ truth for live infrastructure data.
     on the owning top-level TrueNAS system resource instead of inventing a
     generic service resource type or rendering services as Docker/container
     rows.
+17. Add or change provider supplemental platform activity through the
+    provider-owned supplemental-change path and the canonical mock fixture
+    graph together. vSphere task/event activity must be authored by the VMware
+    provider or VMware mock fixture graph as `activity` resource changes with
+    `platform_event` provenance, then recorded by monitoring's supplemental
+    resource-change bridge. Monitoring must not create a frontend-only VMware
+    activity fixture or bypass the unified resource-change store.
 
 ## Forbidden Paths
 

@@ -131,6 +131,33 @@ describe('ResourceAPI', () => {
     );
   });
 
+  it('fetches the global resource timeline with canonical filters', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      resourceId: '',
+      recentChanges: [{ id: 'activity-1' }],
+      count: 1,
+    } as any);
+
+    const result = await ResourceAPI.getGlobalTimeline({
+      limit: 100,
+      kind: 'activity',
+      sourceType: 'platform_event',
+      sourceAdapter: 'vmware_adapter',
+    });
+
+    expect(apiFetchJSON).toHaveBeenCalledWith(
+      '/api/resources/timeline?limit=100&kind=activity&sourceType=platform_event&sourceAdapter=vmware_adapter',
+      {
+        cache: 'no-store',
+      },
+    );
+    expect(result).toEqual({
+      resourceId: '',
+      recentChanges: [{ id: 'activity-1' }],
+      count: 1,
+    });
+  });
+
   it('preserves timeline filters when the time window is valid', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       resourceId: 'vm:42',

@@ -1218,6 +1218,24 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("RecordChange node direct: %v", err)
 	}
+	if err := store.RecordChange(unified.ResourceChange{
+		ID:            "chg-vmware-activity",
+		ResourceID:    "vc-1:vm:vm-201",
+		ObservedAt:    now.Add(-15 * time.Second),
+		Kind:          unified.ChangeActivity,
+		SourceType:    unified.SourcePlatformEvent,
+		SourceAdapter: unified.AdapterVMware,
+		Confidence:    unified.ConfidenceHigh,
+		Reason:        "Reconfigure virtual machine (success)",
+		Metadata: map[string]any{
+			unified.MetadataActivityType: "vmware_task",
+			"vmwareConnectionId":         "vc-1",
+			"vmwareEntityType":           "vm",
+			"vmwareManagedObjectId":      "vm-201",
+		},
+	}); err != nil {
+		t.Fatalf("RecordChange VMware activity: %v", err)
+	}
 
 	t.Run("facets", func(t *testing.T) {
 		rec := httptest.NewRecorder()
@@ -1365,6 +1383,32 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		}
 		if got := payload.RecentChanges[0].RelatedResources; len(got) != 1 || got[0] != "node-1" {
 			t.Fatalf("unexpected adapter-filtered related resources: %#v", got)
+		}
+	})
+
+	t.Run("global filtered timeline", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/resources/timeline?kind=activity&sourceType=platform_event&sourceAdapter=vmware_adapter&limit=10", nil)
+		h.HandleListResourceTimeline(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var payload struct {
+			ResourceID    string                   `json:"resourceId"`
+			RecentChanges []unified.ResourceChange `json:"recentChanges"`
+			Count         int                      `json:"count"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode global timeline: %v", err)
+		}
+		if payload.ResourceID != "" || payload.Count != 1 || len(payload.RecentChanges) != 1 {
+			t.Fatalf("unexpected global timeline payload: %#v", payload)
+		}
+		if payload.RecentChanges[0].ID != "chg-vmware-activity" {
+			t.Fatalf("unexpected global timeline change: %#v", payload.RecentChanges[0])
+		}
+		if got := payload.RecentChanges[0].Metadata[unified.MetadataActivityType]; got != "vmware_task" {
+			t.Fatalf("unexpected VMware activity metadata: %#v", payload.RecentChanges[0].Metadata)
 		}
 	})
 

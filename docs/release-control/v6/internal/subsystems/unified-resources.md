@@ -177,6 +177,13 @@ reintroduce false Swarm capability surfaces.
     route type. Docker host resources must likewise prefer the reported agent
     id over host labels when building host-level Discovery targets, so detail
     drawers, websocket hydration, and API lookups use the same identity.
+    The global resource timeline is also owned at this boundary. `GET
+    /api/resources/timeline` may expose provider-wide `ResourceChange` records
+    for platform pages before a single resource drawer is selected, but those
+    records must still come from the canonical resource-change store and use
+    the same filter parser as per-resource timelines. Relationship-aware
+    expansion remains a per-resource timeline behavior; unscoped provider
+    activity must not infer related resources in the frontend.
 ## Extension Points
 
 1. Add new resource types and identity fields in `internal/unifiedresources/types.go`

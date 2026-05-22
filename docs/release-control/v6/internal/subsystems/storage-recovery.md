@@ -386,6 +386,11 @@ a separate Docker-only or TrueNAS-local inventory path.
    app-container/resource context only as workload inventory. It must not be
    reinterpreted as backup freshness, restore coverage, or storage protection
    evidence for the LXC guest.
+   Global resource timeline routing may also pass through shared
+   `internal/api/` handlers. Storage and recovery surfaces may read canonical
+   timeline records as adjacent evidence, but they must not reinterpret an
+   unscoped `/api/resources/timeline` provider activity row as backup
+   freshness, restore coverage, storage protection, or remediation authority.
    That same adjacent API/security boundary owns CSRF replacement-token
    concurrency for browser mutations. Storage and recovery forms may benefit
    from the shared retry behavior when parallel requests receive replacement

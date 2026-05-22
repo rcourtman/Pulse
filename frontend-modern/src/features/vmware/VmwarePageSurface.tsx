@@ -1,6 +1,7 @@
 import { useLocation } from '@solidjs/router';
 import CpuIcon from 'lucide-solid/icons/cpu';
-import { Show, createMemo, type Accessor } from 'solid-js';
+import { Show, createMemo, createResource, type Accessor } from 'solid-js';
+import { ResourceAPI } from '@/api/resources';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
@@ -39,7 +40,19 @@ export function VmwarePageSurface() {
     const segment = location.pathname.split('/').filter(Boolean)[1] as VmwarePageTabId | undefined;
     return segment && VALID_TABS.has(segment) ? segment : 'overview';
   });
-  const model = createMemo(() => buildVmwarePageModel(resources()));
+  const [activityTimeline, { refetch: refetchActivityTimeline }] = createResource(
+    () => (activeTab() === 'activity' ? 'vmware-activity' : undefined),
+    async () => {
+      const response = await ResourceAPI.getGlobalTimeline({
+        limit: 100,
+        kind: 'activity',
+        sourceType: 'platform_event',
+        sourceAdapter: 'vmware_adapter',
+      });
+      return response.recentChanges ?? [];
+    },
+  );
+  const model = createMemo(() => buildVmwarePageModel(resources(), activityTimeline() ?? []));
 
   return (
     <div data-testid="vmware-page" class="space-y-3">
@@ -91,12 +104,33 @@ export function VmwarePageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'activity'}>
-              <VsphereActivityTable
-                activity={model().activity}
-                emptyIcon={vmwareIcon()}
-                emptyTitle="No vSphere activity"
-                emptyDescription="Recent vCenter tasks and events appear here when the vCenter connection reports them."
-              />
+              <Show
+                when={!activityTimeline.error || model().activity.length > 0}
+                fallback={
+                  <PlatformErrorState
+                    title="Could not load vSphere activity"
+                    description="Refresh the vSphere activity timeline or check the API connection state."
+                    onRefresh={() => void refetchActivityTimeline()}
+                  />
+                }
+              >
+                <Show
+                  when={!activityTimeline.loading || model().activity.length > 0}
+                  fallback={
+                    <PlatformTableLoadingState
+                      title="Loading vSphere activity"
+                      description="Pulse is loading recent vCenter tasks and events."
+                    />
+                  }
+                >
+                  <VsphereActivityTable
+                    activity={model().activity}
+                    emptyIcon={vmwareIcon()}
+                    emptyTitle="No vSphere activity"
+                    emptyDescription="Recent vCenter tasks and events appear here when the vCenter connection reports them."
+                  />
+                </Show>
+              </Show>
             </Show>
           </Show>
         </Show>

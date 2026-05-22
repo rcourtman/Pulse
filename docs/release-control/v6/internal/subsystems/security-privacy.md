@@ -142,6 +142,12 @@ controls as normal product settings.
    pinned-fingerprint TLS clients keep one fail-closed security floor.
 9. Change operator-facing Resource Privacy/Data Handling posture through `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` and `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` together so resource classification, handling-boundary, redaction copy, and the route-backed/hidden-sidebar presentation stay governed as a trust surface.
 10. Change inside-guest runtime collection boundaries through `docs/AGENT_SECURITY.md`, `docs/UNIFIED_AGENT.md`, `cmd/pulse-agent/main.go`, `internal/api/router.go`, and `internal/config/config.go` together. Docker / Podman inventory inside a VM or LXC may come from a guest-agent or explicitly reported guest data; LXC Docker inventory may also be collected by a Proxmox host agent only through explicit server opt-in, with optional VMID allowlisting and a minimal summary command set that avoids `docker inspect`, environment, mount, file, command, and process collection. Local Unified Agent Docker / Podman disables must not be reversed by remote profile configuration.
+    Global resource timeline reads through `/api/resources/timeline` are
+    adjacent monitoring-read surfaces, not a privacy bypass. Provider activity
+    filters may expose backend-authored task/event metadata, but the endpoint
+    must keep normal API auth, resource-policy redaction, and inside-guest
+    runtime collection limits intact rather than expanding what collectors are
+    allowed to gather.
 
 ## Forbidden Paths
 

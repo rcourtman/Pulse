@@ -16,6 +16,16 @@ func (p *Provider) ActivityChanges() []unifiedresources.ResourceChange {
 	}
 
 	snapshot := p.Snapshot()
+	return activityChangesFromSnapshot(snapshot)
+}
+
+// FixtureActivityChanges projects VMware fixture activity into canonical
+// timeline changes without consulting the runtime feature flag.
+func FixtureActivityChanges(snapshot InventorySnapshot) []unifiedresources.ResourceChange {
+	return activityChangesFromSnapshot(&snapshot)
+}
+
+func activityChangesFromSnapshot(snapshot *InventorySnapshot) []unifiedresources.ResourceChange {
 	if snapshot == nil {
 		return nil
 	}

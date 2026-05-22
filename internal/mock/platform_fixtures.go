@@ -135,6 +135,20 @@ func SupplementalRecords(source unifiedresources.DataSource) []unifiedresources.
 	}
 }
 
+func SupplementalChanges(source unifiedresources.DataSource) []unifiedresources.ResourceChange {
+	if IsMockEnabled() {
+		return CurrentFixtureGraph().SupplementalChanges(source)
+	}
+
+	platformFixtures := defaultPlatformFixtures()
+	switch normalizeSupplementalSource(source) {
+	case unifiedresources.SourceVMware:
+		return vmware.FixtureActivityChanges(platformFixtures.VMware)
+	default:
+		return nil
+	}
+}
+
 func PlatformOwnedSources() []unifiedresources.DataSource {
 	return []unifiedresources.DataSource{
 		unifiedresources.SourceTrueNAS,
@@ -202,6 +216,15 @@ func (g FixtureGraph) SupplementalRecords(source unifiedresources.DataSource) []
 		return vmware.FixtureRecords(g.PlatformFixtures.VMware)
 	case unifiedresources.SourceAvailability:
 		return availabilityFixtureRecords(g.AvailabilityFixtures, availabilityFixturesFreshness(g.AvailabilityFixtures))
+	default:
+		return nil
+	}
+}
+
+func (g FixtureGraph) SupplementalChanges(source unifiedresources.DataSource) []unifiedresources.ResourceChange {
+	switch normalizeSupplementalSource(source) {
+	case unifiedresources.SourceVMware:
+		return vmware.FixtureActivityChanges(g.PlatformFixtures.VMware)
 	default:
 		return nil
 	}

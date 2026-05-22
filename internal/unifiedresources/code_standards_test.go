@@ -342,28 +342,40 @@ func TestCephPoolsProjectThroughCanonicalStoragePath(t *testing.T) {
 }
 
 func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "api", "resources.go"))
-	if err != nil {
-		t.Fatalf("failed to read resources.go: %v", err)
+	requiredSnippets := map[string][]string{
+		filepath.Join("..", "api", "resources.go"): {
+			"HandleGetResourceFacets",
+			"HandleGetResourceTimeline",
+			"HandleListResourceTimeline",
+			"unified.ParseResourceChangeFilters(r.URL.Query()[\"kind\"], r.URL.Query()[\"sourceType\"], r.URL.Query()[\"sourceAdapter\"])",
+			"filters.IncludeRelated = true",
+			"GetRecentChangesFiltered(resourceID, since, limit, filters)",
+			"CountRecentChangesFiltered(resourceID, since, filters)",
+			"CountRecentChangesByKindFiltered(resourceID, since, filters)",
+			"CountRecentChangesBySourceTypeFiltered(resourceID, since, filters)",
+			"sourceAdapter",
+			`strings.TrimSuffix(r.URL.Path, "/") == "/api/resources/timeline"`,
+			"strings.HasSuffix(r.URL.Path, \"/facets\")",
+			"strings.HasSuffix(r.URL.Path, \"/timeline\")",
+		},
+		filepath.Join("..", "..", "frontend-modern", "src", "api", "resources.ts"): {
+			"static async getGlobalTimeline(",
+			"`/api/resources/timeline${buildTimelineQuery(options)}`",
+			"static async getTimeline(",
+			"static async getFacetBundle(",
+		},
 	}
-	source := string(data)
 
-	requiredSnippets := []string{
-		"HandleGetResourceFacets",
-		"HandleGetResourceTimeline",
-		"unified.ParseResourceChangeFilters(r.URL.Query()[\"kind\"], r.URL.Query()[\"sourceType\"], r.URL.Query()[\"sourceAdapter\"])",
-		"filters.IncludeRelated = true",
-		"GetRecentChangesFiltered(resourceID, since, limit, filters)",
-		"CountRecentChangesFiltered(resourceID, since, filters)",
-		"CountRecentChangesByKindFiltered(resourceID, since, filters)",
-		"CountRecentChangesBySourceTypeFiltered(resourceID, since, filters)",
-		"sourceAdapter",
-		"strings.HasSuffix(r.URL.Path, \"/facets\")",
-		"strings.HasSuffix(r.URL.Path, \"/timeline\")",
-	}
-	for _, snippet := range requiredSnippets {
-		if !strings.Contains(source, snippet) {
-			t.Fatalf("internal/api/resources.go must expose canonical facet read snippet %q", snippet)
+	for name, snippets := range requiredSnippets {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", name, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must expose canonical resource timeline/facet snippet %q", name, snippet)
+			}
 		}
 	}
 }

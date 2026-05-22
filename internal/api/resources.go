@@ -301,8 +301,49 @@ type resourceFacetBundleResponse struct {
 	Counts        resourceFacetCountsResponse    `json:"counts"`
 }
 
+type resourceTimelineQueryOptions struct {
+	since   time.Time
+	limit   int
+	filters unified.ResourceChangeFilters
+}
+
+func parseResourceTimelineQuery(r *http.Request, defaultLimit int, includeRelated bool) (resourceTimelineQueryOptions, string) {
+	query := resourceTimelineQueryOptions{
+		limit: defaultLimit,
+	}
+
+	if raw := strings.TrimSpace(r.URL.Query().Get("since")); raw != "" {
+		parsed, parseErr := time.Parse(time.RFC3339, raw)
+		if parseErr != nil {
+			return query, "Invalid since value"
+		}
+		query.since = parsed.UTC()
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		parsed, parseErr := strconv.Atoi(raw)
+		if parseErr != nil || parsed <= 0 {
+			return query, "Invalid limit value"
+		}
+		query.limit = parsed
+	}
+
+	filters, err := unified.ParseResourceChangeFilters(r.URL.Query()["kind"], r.URL.Query()["sourceType"], r.URL.Query()["sourceAdapter"])
+	if err != nil {
+		return query, err.Error()
+	}
+	if includeRelated {
+		filters.IncludeRelated = true
+	}
+	query.filters = filters
+	return query, ""
+}
+
 // HandleResourceRoutes dispatches nested resource routes.
 func (h *ResourceHandlers) HandleResourceRoutes(w http.ResponseWriter, r *http.Request) {
+	if strings.TrimSuffix(r.URL.Path, "/") == "/api/resources/timeline" {
+		h.HandleListResourceTimeline(w, r)
+		return
+	}
 	if strings.HasSuffix(r.URL.Path, "/facets") {
 		h.HandleGetResourceFacets(w, r)
 		return
@@ -368,30 +409,14 @@ func (h *ResourceHandlers) HandleGetResourceFacets(w http.ResponseWriter, r *htt
 		return
 	}
 
-	since := time.Time{}
-	if raw := strings.TrimSpace(r.URL.Query().Get("since")); raw != "" {
-		parsed, parseErr := time.Parse(time.RFC3339, raw)
-		if parseErr != nil {
-			http.Error(w, "Invalid since value", http.StatusBadRequest)
-			return
-		}
-		since = parsed.UTC()
-	}
-	limit := 25
-	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
-		parsed, parseErr := strconv.Atoi(raw)
-		if parseErr != nil || parsed <= 0 {
-			http.Error(w, "Invalid limit value", http.StatusBadRequest)
-			return
-		}
-		limit = parsed
-	}
-	filters, err := unified.ParseResourceChangeFilters(r.URL.Query()["kind"], r.URL.Query()["sourceType"], r.URL.Query()["sourceAdapter"])
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	timelineQuery, parseError := parseResourceTimelineQuery(r, 25, true)
+	if parseError != "" {
+		http.Error(w, parseError, http.StatusBadRequest)
 		return
 	}
-	filters.IncludeRelated = true
+	since := timelineQuery.since
+	limit := timelineQuery.limit
+	filters := timelineQuery.filters
 
 	recentChanges, err := store.GetRecentChangesFiltered(resourceID, since, limit, filters)
 	if err != nil {
@@ -500,6 +525,49 @@ func (h *ResourceHandlers) HandleGetMetrics(w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(resource.Metrics)
 }
 
+// HandleListResourceTimeline handles GET /api/resources/timeline.
+func (h *ResourceHandlers) HandleListResourceTimeline(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	store, err := h.getStore(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	resourceID := ""
+	timelineQuery, parseError := parseResourceTimelineQuery(r, 100, false)
+	if parseError != "" {
+		http.Error(w, parseError, http.StatusBadRequest)
+		return
+	}
+	since := timelineQuery.since
+	limit := timelineQuery.limit
+	filters := timelineQuery.filters
+
+	changes, err := store.GetRecentChangesFiltered(resourceID, since, limit, filters)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+	changeCount, err := store.CountRecentChangesFiltered(resourceID, since, filters)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"resourceId":    resourceID,
+		"recentChanges": changes,
+		"count":         changeCount,
+	})
+}
+
 // HandleGetResourceTimeline handles GET /api/resources/{id}/timeline.
 func (h *ResourceHandlers) HandleGetResourceTimeline(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -523,30 +591,14 @@ func (h *ResourceHandlers) HandleGetResourceTimeline(w http.ResponseWriter, r *h
 		return
 	}
 
-	since := time.Time{}
-	if raw := strings.TrimSpace(r.URL.Query().Get("since")); raw != "" {
-		parsed, parseErr := time.Parse(time.RFC3339, raw)
-		if parseErr != nil {
-			http.Error(w, "Invalid since value", http.StatusBadRequest)
-			return
-		}
-		since = parsed.UTC()
-	}
-	limit := 100
-	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
-		parsed, parseErr := strconv.Atoi(raw)
-		if parseErr != nil || parsed <= 0 {
-			http.Error(w, "Invalid limit value", http.StatusBadRequest)
-			return
-		}
-		limit = parsed
-	}
-	filters, err := unified.ParseResourceChangeFilters(r.URL.Query()["kind"], r.URL.Query()["sourceType"], r.URL.Query()["sourceAdapter"])
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	timelineQuery, parseError := parseResourceTimelineQuery(r, 100, true)
+	if parseError != "" {
+		http.Error(w, parseError, http.StatusBadRequest)
 		return
 	}
-	filters.IncludeRelated = true
+	since := timelineQuery.since
+	limit := timelineQuery.limit
+	filters := timelineQuery.filters
 
 	changes, err := store.GetRecentChangesFiltered(resourceID, since, limit, filters)
 	if err != nil {

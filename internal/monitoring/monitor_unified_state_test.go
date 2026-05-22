@@ -326,7 +326,7 @@ func TestMonitorUnifiedResourceSnapshotFallsBackToSnapshotWhenStoreEmpty(t *test
 }
 
 func TestMonitorUnifiedResourceSnapshotIncludesRecentStandaloneHostContinuity(t *testing.T) {
-	now := time.Date(2026, 5, 13, 14, 30, 0, 0, time.UTC)
+	now := time.Now().UTC().Truncate(time.Second)
 	store := config.NewHostContinuityStore(t.TempDir(), nil)
 	if err := store.Upsert(config.HostContinuityEntry{
 		HostID:       "host-1",

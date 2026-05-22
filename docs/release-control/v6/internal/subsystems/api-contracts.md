@@ -568,6 +568,13 @@ the canonical monitored-system blocked payload.
    `capabilities` and canonical `relationships` alongside recent changes and
    grouped counts, so frontend detail surfaces consume one governed API payload
    instead of rebuilding capability or topology context from the list response.
+   Provider-wide timeline reads are part of the same API contract:
+   `GET /api/resources/timeline` returns the canonical resource timeline
+   response shape with an empty `resourceId`, uses the shared `since`, `limit`,
+   `kind`, `sourceType`, and `sourceAdapter` parser, and remains protected by
+   the monitoring-read scope. Platform pages may use it for API-authored
+   provider activity such as vSphere tasks and events, but they must not create
+   page-local activity stores or a second query vocabulary.
 7. Route unified-resource list ordering through `internal/api/resources.go`, `internal/api/contract_test.go`, and the owned unified-resource registry helpers together; list payloads must stay deterministic for equal-name resources by carrying one canonical `name -> type -> id` tie-break across cold seed, REST pagination, and websocket-backed refreshes instead of inheriting map order or page-local re-sorts
    That same shared API contract also owns the external resource `type`, canonical display name, and cluster identity published through `/api/resources` and `/api/state`; the websocket/state hydrate path must not emit legacy aliases or raw store labels once the unified resource contract has normalized them.
    Realtime `/api/state` and websocket `resources` snapshots must also collapse

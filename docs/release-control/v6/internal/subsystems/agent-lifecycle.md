@@ -340,6 +340,11 @@ profile and assignment columns, but embedded table framing must route through
    handlers and connection ledgers, but they must remain settings/API
    availability resources and must not create install commands, agent tokens, or
    host uninstall/stop-monitoring lifecycle actions.
+   Global resource timeline API changes are likewise adjacent when they touch
+   shared `internal/api/` route wiring: `/api/resources/timeline` may expose
+   monitoring-read provider activity for platform pages, but it must not create
+   setup-token authority, install-command state, fleet command execution, or
+   agent lifecycle enrollment semantics.
    Patrol autonomy API changes are likewise adjacent when they touch shared
    `internal/api/` route wiring: monitor-mode configuration and remediation
    entitlement payloads remain AI runtime/API-contract owned and must not create

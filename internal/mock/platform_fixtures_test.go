@@ -105,6 +105,16 @@ func TestSupplementalRecordsNormalizesVMwareAlias(t *testing.T) {
 	}
 }
 
+func TestSupplementalChangesNormalizesVMwareAlias(t *testing.T) {
+	changes := SupplementalChanges(unifiedresources.DataSource("vmware-vsphere"))
+	if len(changes) == 0 {
+		t.Fatal("expected activity changes for vmware-vsphere alias")
+	}
+	if changes[0].Kind != unifiedresources.ChangeActivity || changes[0].SourceAdapter != unifiedresources.AdapterVMware {
+		t.Fatalf("unexpected VMware activity change: %#v", changes[0])
+	}
+}
+
 func TestFixtureGraphProjectsAvailabilityFixturesAsNetworkEndpoints(t *testing.T) {
 	now := time.Date(2026, time.May, 6, 12, 0, 0, 0, time.UTC)
 

@@ -95,7 +95,10 @@ export type VmwareActivityRow = {
   sortTime: number;
 };
 
-export function buildVmwarePageModel(resources: Resource[]): VmwarePageModel {
+export function buildVmwarePageModel(
+  resources: Resource[],
+  activityChanges: ResourceChange[] = [],
+): VmwarePageModel {
   const vmwareResources = resources.filter(
     (resource) => isVmwarePlatform(resource) && VMWARE_RESOURCE_TYPES.has(resource.type),
   );
@@ -111,7 +114,7 @@ export function buildVmwarePageModel(resources: Resource[]): VmwarePageModel {
     )
     .sort(compareVmwareDatastores);
   const incidents = buildVmwareIncidentRows(vmwareResources);
-  const activity = buildVmwareActivityRows(vmwareResources);
+  const activity = buildVmwareActivityRows(vmwareResources, activityChanges);
 
   return {
     resources: vmwareResources,
@@ -140,6 +143,24 @@ const metadataString = (
     if (value) return value;
   }
   return '';
+};
+
+const addLookupKey = (keys: Set<string>, value: unknown): void => {
+  const key = normalize(value);
+  if (key) keys.add(key);
+};
+
+const vmwareSourceAlias = (
+  connectionId: unknown,
+  entityType: unknown,
+  managedObjectId: unknown,
+): string => {
+  const parts = [
+    trimString(connectionId),
+    trimString(entityType),
+    trimString(managedObjectId),
+  ].filter(Boolean);
+  return parts.join(':');
 };
 
 const vmwareDatastoreDisplayName = (resource: Resource): string =>
@@ -456,6 +477,75 @@ const parseActivitySortTime = (change: ResourceChange): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const vmwareActivityResourceKeys = (resource: Resource): Set<string> => {
+  const keys = new Set<string>();
+  addLookupKey(keys, resource.id);
+  addLookupKey(keys, resource.canonicalIdentity?.primaryId);
+  for (const alias of resource.canonicalIdentity?.aliases ?? []) {
+    addLookupKey(keys, alias);
+  }
+  const sourceAlias = vmwareSourceAlias(
+    resource.vmware?.connectionId,
+    resource.vmware?.entityType,
+    resource.vmware?.managedObjectId,
+  );
+  addLookupKey(keys, sourceAlias);
+  addLookupKey(keys, resource.vmware?.managedObjectId);
+  if (sourceAlias && resource.type === 'storage') {
+    addLookupKey(keys, `storage:${sourceAlias}`);
+  }
+  return keys;
+};
+
+const vmwareActivityChangeKeys = (change: ResourceChange): Set<string> => {
+  const keys = new Set<string>();
+  addLookupKey(keys, change.resourceId);
+  const metadata = change.metadata;
+  const sourceAlias = vmwareSourceAlias(
+    metadataString(metadata, 'vmwareConnectionId'),
+    metadataString(metadata, 'vmwareEntityType'),
+    metadataString(metadata, 'vmwareManagedObjectId'),
+  );
+  addLookupKey(keys, sourceAlias);
+  addLookupKey(keys, metadataString(metadata, 'vmwareManagedObjectId'));
+  if (sourceAlias) {
+    addLookupKey(keys, `storage:${sourceAlias}`);
+  }
+  return keys;
+};
+
+const buildVmwareActivityResourceIndex = (resources: Resource[]): Map<string, Resource> => {
+  const index = new Map<string, Resource>();
+  for (const resource of resources) {
+    for (const key of vmwareActivityResourceKeys(resource)) {
+      if (!index.has(key)) {
+        index.set(key, resource);
+      }
+    }
+  }
+  return index;
+};
+
+const resolveVmwareActivityResource = (
+  change: ResourceChange,
+  resourceIndex: Map<string, Resource>,
+): Resource | undefined => {
+  for (const key of vmwareActivityChangeKeys(change)) {
+    const resource = resourceIndex.get(key);
+    if (resource) return resource;
+  }
+  return undefined;
+};
+
+const activityChangeDedupeKey = (resource: Resource, change: ResourceChange): string =>
+  [
+    resource.id,
+    trimString(change.id),
+    trimString(change.resourceId),
+    trimString(change.observedAt),
+    trimString(change.reason),
+  ].join('|');
+
 const buildActivityRow = (
   resource: Resource,
   change: ResourceChange,
@@ -510,20 +600,42 @@ const buildActivityRow = (
   };
 };
 
-export function buildVmwareActivityRows(resources: Resource[]): VmwareActivityRow[] {
-  return resources
-    .flatMap((resource) =>
-      (resource.recentChanges ?? [])
-        .filter(isVmwareActivityChange)
-        .map((change, index) => buildActivityRow(resource, change, index)),
-    )
-    .sort((left, right) => {
-      const timeDelta = right.sortTime - left.sortTime;
-      if (timeDelta !== 0) return timeDelta;
-      const resourceDelta = left.resourceName.localeCompare(right.resourceName);
-      if (resourceDelta !== 0) return resourceDelta;
-      return left.id.localeCompare(right.id);
-    });
+export function buildVmwareActivityRows(
+  resources: Resource[],
+  activityChanges: ResourceChange[] = [],
+): VmwareActivityRow[] {
+  const resourceIndex = buildVmwareActivityResourceIndex(resources);
+  const seen = new Set<string>();
+  const rows: VmwareActivityRow[] = [];
+
+  const appendRow = (resource: Resource, change: ResourceChange) => {
+    if (!isVmwareActivityChange(change)) return;
+    const key = activityChangeDedupeKey(resource, change);
+    if (seen.has(key)) return;
+    seen.add(key);
+    rows.push(buildActivityRow(resource, change, rows.length));
+  };
+
+  for (const resource of resources) {
+    for (const change of resource.recentChanges ?? []) {
+      appendRow(resource, change);
+    }
+  }
+
+  for (const change of activityChanges) {
+    const resource = resolveVmwareActivityResource(change, resourceIndex);
+    if (resource) {
+      appendRow(resource, change);
+    }
+  }
+
+  return rows.sort((left, right) => {
+    const timeDelta = right.sortTime - left.sortTime;
+    if (timeDelta !== 0) return timeDelta;
+    const resourceDelta = left.resourceName.localeCompare(right.resourceName);
+    if (resourceDelta !== 0) return resourceDelta;
+    return left.id.localeCompare(right.id);
+  });
 }
 
 const vmwareDatastoreSearchHaystack = (resource: Resource): string =>

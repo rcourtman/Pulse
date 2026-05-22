@@ -65,6 +65,14 @@ const fetchFacet = async <T>(url: string): Promise<T> =>
   });
 
 export class ResourceAPI {
+  static async getGlobalTimeline(
+    options?: ResourceTimelineQueryOptions,
+  ): Promise<ResourceTimelineResponse> {
+    return fetchFacet<ResourceTimelineResponse>(
+      `/api/resources/timeline${buildTimelineQuery(options)}`,
+    );
+  }
+
   static async getTimeline(
     resourceId: string,
     options?: ResourceTimelineQueryOptions,
