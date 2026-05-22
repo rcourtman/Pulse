@@ -16,6 +16,7 @@ import {
   type VmwarePageTabId,
 } from './vmwarePageModel';
 import { VsphereAlertsTable } from './VsphereAlertsTable';
+import { VsphereActivityTable } from './VsphereActivityTable';
 import { VsphereDatastoresTable } from './VsphereDatastoresTable';
 import { VsphereVirtualMachinesTable } from './VsphereVirtualMachinesTable';
 
@@ -87,6 +88,14 @@ export function VmwarePageSurface() {
                 emptyIcon={vmwareIcon()}
                 emptyTitle="No vSphere datastores"
                 emptyDescription="Datastores appear here once the vCenter connection enumerates them."
+              />
+            </Show>
+            <Show when={activeTab() === 'activity'}>
+              <VsphereActivityTable
+                activity={model().activity}
+                emptyIcon={vmwareIcon()}
+                emptyTitle="No vSphere activity"
+                emptyDescription="Recent vCenter tasks and events appear here when the vCenter connection reports them."
               />
             </Show>
           </Show>

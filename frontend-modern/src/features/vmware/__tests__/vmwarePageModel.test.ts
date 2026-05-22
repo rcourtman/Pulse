@@ -3,9 +3,11 @@ import type { Resource } from '@/types/resource';
 import {
   VMWARE_TAB_SPECS,
   buildVmwarePageModel,
+  filterVmwareActivity,
   filterVmwareDatastores,
   filterVmwareIncidents,
   filterVmwareVirtualMachines,
+  mapVmwareActivityStateBucket,
   mapVmwareDatastoreStatus,
   mapVmwareIncidentSeverity,
   mapVmwareVirtualMachineStatus,
@@ -24,8 +26,12 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
 
 describe('vmwarePageModel', () => {
   it('declares the vSphere section set', () => {
-    expect(VMWARE_TAB_SPECS.map((tab) => tab.id)).toEqual(['overview', 'storage']);
-    expect(VMWARE_TAB_SPECS.map((tab) => tab.label)).toEqual(['Overview', 'Datastores']);
+    expect(VMWARE_TAB_SPECS.map((tab) => tab.id)).toEqual(['overview', 'storage', 'activity']);
+    expect(VMWARE_TAB_SPECS.map((tab) => tab.label)).toEqual([
+      'Overview',
+      'Datastores',
+      'Activity',
+    ]);
   });
 
   it('buckets canonical vSphere hosts, VMs, and datastores', () => {
@@ -239,5 +245,100 @@ describe('vmwarePageModel', () => {
     expect(
       filterVmwareIncidents(rows, 'production', 'critical').map((row) => row.resourceId),
     ).toEqual(['host-alarm']);
+  });
+
+  it('builds and filters vSphere activity from VMware resource changes', () => {
+    const vm = makeResource({
+      id: 'vm-201',
+      type: 'vm',
+      name: 'warehouse-api-01',
+      displayName: 'warehouse-api-01',
+      vmware: {
+        entityType: 'vm',
+        managedObjectId: 'vm-201',
+        connectionName: 'lab-vcenter',
+        vcenterHost: 'vcsa.lab.local',
+        datacenterName: 'Primary DC',
+        clusterName: 'Production Cluster',
+      },
+      recentChanges: [
+        {
+          id: 'activity-task-reconfigure',
+          observedAt: '2026-05-21T10:15:00Z',
+          occurredAt: '2026-05-21T10:15:00Z',
+          resourceId: 'vm-201',
+          kind: 'activity',
+          sourceType: 'platform_event',
+          sourceAdapter: 'vmware_adapter',
+          confidence: 'high',
+          reason: 'Reconfigure virtual machine (error)',
+          metadata: {
+            activity_type: 'vmware_task',
+            activity_native_id: 'task-901',
+            activity_title: 'Reconfigure virtual machine',
+            activity_state: 'error',
+            activity_message: 'Permission denied while reconfiguring VM',
+            vmwareTaskDescription: 'Reconfigure virtual machine CPU reservation',
+            vmwareManagedObjectId: 'vm-201',
+            vmwareEntityType: 'vm',
+          },
+        },
+        {
+          id: 'activity-event-powered-on',
+          observedAt: '2026-05-21T10:05:00Z',
+          occurredAt: '2026-05-21T10:05:00Z',
+          resourceId: 'vm-201',
+          kind: 'activity',
+          sourceType: 'platform_event',
+          sourceAdapter: 'vmware_adapter',
+          confidence: 'high',
+          actor: 'administrator@vsphere.local',
+          reason: 'VmPoweredOnEvent',
+          metadata: {
+            activity_type: 'vmware_event',
+            activity_native_id: 'event-501',
+            activity_title: 'VmPoweredOnEvent',
+            activity_message: 'Virtual machine warehouse-api-01 was powered on',
+            vmwareEventType: 'VmPoweredOnEvent',
+            vmwareEventMessage: 'Virtual machine warehouse-api-01 was powered on',
+            vmwareEventUser: 'administrator@vsphere.local',
+            vmwareManagedObjectId: 'vm-201',
+            vmwareEntityType: 'vm',
+          },
+        },
+        {
+          id: 'activity-agent',
+          observedAt: '2026-05-21T10:20:00Z',
+          resourceId: 'vm-201',
+          kind: 'activity',
+          sourceType: 'agent_action',
+          sourceAdapter: 'agent:ops-helper',
+          confidence: 'high',
+          reason: 'Agent note',
+        },
+      ],
+    });
+
+    const rows = buildVmwarePageModel([vm]).activity;
+
+    expect(mapVmwareActivityStateBucket('error')).toBe('failed');
+    expect(mapVmwareActivityStateBucket('success')).toBe('success');
+    expect(rows.map((row) => row.title)).toEqual([
+      'Reconfigure virtual machine',
+      'VmPoweredOnEvent',
+    ]);
+    expect(rows[0]).toMatchObject({
+      resourceName: 'warehouse-api-01',
+      activityKind: 'task',
+      stateBucket: 'failed',
+      nativeId: 'task-901',
+      managedObjectId: 'vm-201',
+    });
+    expect(filterVmwareActivity(rows, 'permission', 'failed').map((row) => row.nativeId)).toEqual([
+      'task-901',
+    ]);
+    expect(
+      filterVmwareActivity(rows, 'administrator', 'events').map((row) => row.nativeId),
+    ).toEqual(['event-501']);
   });
 });

@@ -1,7 +1,7 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
-import type { Resource, ResourceIncident, ResourceType } from '@/types/resource';
+import type { Resource, ResourceChange, ResourceIncident, ResourceType } from '@/types/resource';
 
-export type VmwarePageTabId = 'overview' | 'storage';
+export type VmwarePageTabId = 'overview' | 'storage' | 'activity';
 export type VmwareDatastoreStatusFilter =
   | 'all'
   | 'accessible'
@@ -17,6 +17,9 @@ export type VmwareVirtualMachineStatusFilter =
   | 'suspended'
   | 'unknown';
 export type VmwareIncidentSeverityFilter = 'all' | 'critical' | 'warning' | 'info';
+export type VmwareActivityStatusFilter = 'all' | 'tasks' | 'events' | 'failed';
+export type VmwareActivityKind = 'task' | 'event' | 'activity';
+export type VmwareActivityStateBucket = 'success' | 'running' | 'failed' | 'unknown';
 
 export type VmwareTabSpec = {
   id: VmwarePageTabId;
@@ -31,6 +34,7 @@ export type VmwareTabSpec = {
 export const VMWARE_TAB_SPECS: readonly VmwareTabSpec[] = [
   { id: 'overview', label: 'Overview', path: '/vmware/overview' },
   { id: 'storage', label: 'Datastores', path: '/vmware/storage' },
+  { id: 'activity', label: 'Activity', path: '/vmware/activity' },
 ] as const;
 
 const VMWARE_RESOURCE_TYPES = new Set<ResourceType>(['agent', 'vm', 'storage']);
@@ -44,6 +48,7 @@ export type VmwarePageModel = {
   vms: Resource[];
   datastores: Resource[];
   incidents: VmwareIncidentRow[];
+  activity: VmwareActivityRow[];
 };
 
 export type VmwareIncidentRow = {
@@ -66,6 +71,30 @@ export type VmwareIncidentRow = {
   priority: number;
 };
 
+export type VmwareActivityRow = {
+  id: string;
+  resource: Resource;
+  change: ResourceChange;
+  resourceId: string;
+  resourceName: string;
+  resourceType: ResourceType;
+  entityType: string;
+  managedObjectId: string;
+  activityKind: VmwareActivityKind;
+  activityType: string;
+  stateBucket: VmwareActivityStateBucket;
+  title: string;
+  state: string;
+  message: string;
+  description: string;
+  actor: string;
+  nativeId: string;
+  source: string;
+  occurredAt?: string;
+  observedAt: string;
+  sortTime: number;
+};
+
 export function buildVmwarePageModel(resources: Resource[]): VmwarePageModel {
   const vmwareResources = resources.filter(
     (resource) => isVmwarePlatform(resource) && VMWARE_RESOURCE_TYPES.has(resource.type),
@@ -82,6 +111,7 @@ export function buildVmwarePageModel(resources: Resource[]): VmwarePageModel {
     )
     .sort(compareVmwareDatastores);
   const incidents = buildVmwareIncidentRows(vmwareResources);
+  const activity = buildVmwareActivityRows(vmwareResources);
 
   return {
     resources: vmwareResources,
@@ -89,6 +119,7 @@ export function buildVmwarePageModel(resources: Resource[]): VmwarePageModel {
     vms,
     datastores,
     incidents,
+    activity,
   };
 }
 
@@ -98,6 +129,18 @@ const normalize = (value: unknown): string =>
 const trimString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
 const normalizeToken = (value: unknown): string => normalize(value).replace(/[\s_-]/g, '');
+
+const metadataString = (
+  metadata: Record<string, unknown> | undefined,
+  ...keys: string[]
+): string => {
+  if (!metadata) return '';
+  for (const key of keys) {
+    const value = trimString(metadata[key]);
+    if (value) return value;
+  }
+  return '';
+};
 
 const vmwareDatastoreDisplayName = (resource: Resource): string =>
   resource.displayName?.trim() || resource.name?.trim() || resource.id;
@@ -351,6 +394,138 @@ export function buildVmwareIncidentRows(resources: Resource[]): VmwareIncidentRo
   });
 }
 
+const isVmwareActivityChange = (change: ResourceChange): boolean => {
+  if (change.kind !== 'activity') return false;
+  if (trimString(change.sourceAdapter) === 'vmware_adapter') return true;
+  const activityType = metadataString(change.metadata, 'activity_type');
+  if (activityType.startsWith('vmware_')) return true;
+  return Boolean(
+    metadataString(
+      change.metadata,
+      'vmwareTask',
+      'vmwareTaskName',
+      'vmwareTaskState',
+      'vmwareEvent',
+      'vmwareEventType',
+      'vmwareEventMessage',
+    ),
+  );
+};
+
+const mapVmwareActivityKind = (
+  activityType: string,
+  metadata: Record<string, unknown> | undefined,
+): VmwareActivityKind => {
+  const normalized = normalizeToken(activityType);
+  if (
+    normalized.includes('task') ||
+    metadataString(metadata, 'vmwareTask', 'vmwareTaskName', 'vmwareTaskState')
+  ) {
+    return 'task';
+  }
+  if (
+    normalized.includes('event') ||
+    metadataString(metadata, 'vmwareEvent', 'vmwareEventType', 'vmwareEventMessage')
+  ) {
+    return 'event';
+  }
+  return 'activity';
+};
+
+export function mapVmwareActivityStateBucket(state: string): VmwareActivityStateBucket {
+  const normalized = normalizeToken(state);
+  if (
+    ['error', 'failed', 'failure', 'cancelled', 'canceled', 'timedout', 'timeout', 'red'].includes(
+      normalized,
+    )
+  ) {
+    return 'failed';
+  }
+  if (['running', 'queued', 'pending', 'inprogress', 'started'].includes(normalized)) {
+    return 'running';
+  }
+  if (['success', 'succeeded', 'complete', 'completed', 'ok', 'green'].includes(normalized)) {
+    return 'success';
+  }
+  return 'unknown';
+}
+
+const parseActivitySortTime = (change: ResourceChange): number => {
+  const value = trimString(change.occurredAt) || trimString(change.observedAt);
+  const parsed = value ? new Date(value).getTime() : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const buildActivityRow = (
+  resource: Resource,
+  change: ResourceChange,
+  index: number,
+): VmwareActivityRow => {
+  const metadata = change.metadata;
+  const activityType = metadataString(metadata, 'activity_type');
+  const activityKind = mapVmwareActivityKind(activityType, metadata);
+  const title =
+    metadataString(metadata, 'activity_title', 'vmwareTaskName', 'vmwareEventType') ||
+    trimString(change.reason) ||
+    'vSphere activity';
+  const state =
+    metadataString(metadata, 'activity_state', 'vmwareTaskState') || trimString(change.to);
+  const message =
+    metadataString(metadata, 'activity_message', 'vmwareTaskError', 'vmwareEventMessage') ||
+    trimString(change.reason);
+  const description = metadataString(metadata, 'vmwareTaskDescription', 'vmwareEventMessage');
+  const actor = trimString(change.actor) || metadataString(metadata, 'vmwareEventUser');
+  const nativeId = metadataString(metadata, 'activity_native_id', 'vmwareTask', 'vmwareEvent');
+  const observedAt = trimString(change.observedAt);
+  const occurredAt = trimString(change.occurredAt) || undefined;
+
+  return {
+    id: `${resource.id}:activity:${change.id || index}`,
+    resource,
+    change,
+    resourceId: resource.id,
+    resourceName: vmwareResourceDisplayName(resource),
+    resourceType: resource.type,
+    entityType:
+      metadataString(metadata, 'vmwareEntityType') ||
+      trimString(resource.vmware?.entityType) ||
+      resource.type,
+    managedObjectId:
+      metadataString(metadata, 'vmwareManagedObjectId') ||
+      trimString(resource.vmware?.managedObjectId) ||
+      resource.id,
+    activityKind,
+    activityType,
+    stateBucket: mapVmwareActivityStateBucket(state),
+    title,
+    state,
+    message,
+    description,
+    actor,
+    nativeId: nativeId || change.id,
+    source: trimString(change.sourceAdapter) || trimString(change.sourceType) || 'vmware',
+    occurredAt,
+    observedAt,
+    sortTime: parseActivitySortTime(change),
+  };
+};
+
+export function buildVmwareActivityRows(resources: Resource[]): VmwareActivityRow[] {
+  return resources
+    .flatMap((resource) =>
+      (resource.recentChanges ?? [])
+        .filter(isVmwareActivityChange)
+        .map((change, index) => buildActivityRow(resource, change, index)),
+    )
+    .sort((left, right) => {
+      const timeDelta = right.sortTime - left.sortTime;
+      if (timeDelta !== 0) return timeDelta;
+      const resourceDelta = left.resourceName.localeCompare(right.resourceName);
+      if (resourceDelta !== 0) return resourceDelta;
+      return left.id.localeCompare(right.id);
+    });
+}
+
 const vmwareDatastoreSearchHaystack = (resource: Resource): string =>
   [
     resource.id,
@@ -473,5 +648,49 @@ export function filterVmwareIncidents(
     if (severity !== 'all' && incident.severityBucket !== severity) return false;
     if (!needle) return true;
     return incidentSearchHaystack(incident).includes(needle);
+  });
+}
+
+const activitySearchHaystack = (row: VmwareActivityRow): string =>
+  [
+    row.id,
+    row.resourceId,
+    row.resourceName,
+    row.resourceType,
+    row.entityType,
+    row.managedObjectId,
+    row.activityKind,
+    row.activityType,
+    row.title,
+    row.state,
+    row.message,
+    row.description,
+    row.actor,
+    row.nativeId,
+    row.source,
+    row.resource.vmware?.connectionName,
+    row.resource.vmware?.vcenterHost,
+    row.resource.vmware?.datacenterName,
+    row.resource.vmware?.clusterName,
+    row.resource.vmware?.runtimeHostName,
+    ...(row.change.relatedResources ?? []),
+    ...(row.resource.tags ?? []),
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' ')
+    .toLowerCase();
+
+export function filterVmwareActivity(
+  activity: VmwareActivityRow[],
+  search: string,
+  status: VmwareActivityStatusFilter,
+): VmwareActivityRow[] {
+  const needle = normalize(search);
+  return activity.filter((row) => {
+    if (status === 'tasks' && row.activityKind !== 'task') return false;
+    if (status === 'events' && row.activityKind !== 'event') return false;
+    if (status === 'failed' && row.stateBucket !== 'failed') return false;
+    if (!needle) return true;
+    return activitySearchHaystack(row).includes(needle);
   });
 }
