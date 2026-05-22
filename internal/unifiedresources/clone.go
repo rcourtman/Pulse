@@ -267,7 +267,34 @@ func cloneVMwareData(in *VMwareData) *VMwareData {
 	out.DatastoreAccessible = cloneBoolPtr(in.DatastoreAccessible)
 	out.MultipleHostAccess = cloneBoolPtr(in.MultipleHostAccess)
 	out.GuestIPAddresses = cloneStringSlice(in.GuestIPAddresses)
+	out.SnapshotTree = cloneVMwareSnapshotDataSlice(in.SnapshotTree)
+	out.NetworkAdapters = cloneVMwareNetworkAdapterDataSlice(in.NetworkAdapters)
 	return &out
+}
+
+func cloneVMwareSnapshotDataSlice(in []VMwareSnapshotData) []VMwareSnapshotData {
+	if in == nil {
+		return nil
+	}
+	out := make([]VMwareSnapshotData, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].CreatedAt = cloneTimePtr(in[i].CreatedAt)
+		out[i].Children = cloneVMwareSnapshotDataSlice(in[i].Children)
+	}
+	return out
+}
+
+func cloneVMwareNetworkAdapterDataSlice(in []VMwareNetworkAdapterData) []VMwareNetworkAdapterData {
+	if in == nil {
+		return nil
+	}
+	out := make([]VMwareNetworkAdapterData, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].PCISlotNumber = cloneInt64Ptr(in[i].PCISlotNumber)
+	}
+	return out
 }
 
 func clonePMGRelayDomainMetaSlice(in []PMGRelayDomainMeta) []PMGRelayDomainMeta {

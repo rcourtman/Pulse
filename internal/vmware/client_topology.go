@@ -3,6 +3,7 @@ package vmware
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -21,6 +22,36 @@ type vcenterVMGuestIdentity struct {
 	Family   string `json:"family"`
 	HostName string `json:"host_name"`
 	IPAddr   string `json:"ip_address"`
+}
+
+type vcenterVMHardwareEthernetSummary struct {
+	NIC string `json:"nic"`
+}
+
+type vcenterVMHardwareEthernetBacking struct {
+	Type                  string `json:"type"`
+	Network               string `json:"network"`
+	NetworkName           string `json:"network_name"`
+	HostDevice            string `json:"host_device"`
+	DistributedSwitchUUID string `json:"distributed_switch_uuid"`
+	DistributedPort       string `json:"distributed_port"`
+	OpaqueNetworkType     string `json:"opaque_network_type"`
+	OpaqueNetworkID       string `json:"opaque_network_id"`
+}
+
+type vcenterVMHardwareEthernetInfo struct {
+	Label              string                           `json:"label"`
+	Type               string                           `json:"type"`
+	UPTCompatibility   bool                             `json:"upt_compatibility_enabled"`
+	UPTV2Compatibility bool                             `json:"upt_v2_compatibility_enabled"`
+	MACType            string                           `json:"mac_type"`
+	MACAddress         string                           `json:"mac_address"`
+	PCISlotNumber      *int64                           `json:"pci_slot_number"`
+	WakeOnLANEnabled   bool                             `json:"wake_on_lan_enabled"`
+	Backing            vcenterVMHardwareEthernetBacking `json:"backing"`
+	State              string                           `json:"state"`
+	StartConnected     bool                             `json:"start_connected"`
+	AllowGuestControl  bool                             `json:"allow_guest_control"`
 }
 
 type viJSONVirtualMachineRuntimeInfo struct {
@@ -272,6 +303,14 @@ func (c *Client) enrichVMTopology(
 		}
 	}
 
+	networkAdapters, err := c.collectVMEthernetAdapters(ctx, automationSessionID, vm.VM)
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "vm", vm.VM, err); ok {
+		recordIssue(issue)
+	} else if err != nil && !isAutomationNotFound(err) && !isAutomationUnavailable(err) {
+		return vm, nil, err
+	}
+	vm.NetworkAdapters = networkAdapters
+
 	var placement vmwarePlacement
 
 	parentRef, err := c.collectEntityReference(ctx, release, sessionID, "VirtualMachine", vm.VM, "parent", "vm parent placement")
@@ -445,6 +484,63 @@ func (c *Client) collectVMGuestIdentity(
 		return nil, err
 	}
 	return &payload, nil
+}
+
+func (c *Client) collectVMEthernetAdapters(
+	ctx context.Context,
+	automationSessionID string,
+	vmID string,
+) ([]InventoryVMNetworkAdapter, error) {
+	vmID = strings.TrimSpace(vmID)
+	if vmID == "" || strings.TrimSpace(automationSessionID) == "" {
+		return nil, nil
+	}
+
+	escapedVMID := url.PathEscape(vmID)
+	var summaries []vcenterVMHardwareEthernetSummary
+	path := fmt.Sprintf("/api/vcenter/vm/%s/hardware/ethernet", escapedVMID)
+	if err := c.getAutomationJSON(ctx, automationSessionID, path, "vm ethernet adapter list", &summaries); err != nil {
+		return nil, err
+	}
+	if len(summaries) == 0 {
+		return nil, nil
+	}
+
+	adapters := make([]InventoryVMNetworkAdapter, 0, len(summaries))
+	for _, summary := range summaries {
+		nic := strings.TrimSpace(summary.NIC)
+		if nic == "" {
+			continue
+		}
+		var info vcenterVMHardwareEthernetInfo
+		path := fmt.Sprintf("/api/vcenter/vm/%s/hardware/ethernet/%s", escapedVMID, url.PathEscape(nic))
+		if err := c.getAutomationJSON(ctx, automationSessionID, path, "vm ethernet adapter", &info); err != nil {
+			return nil, err
+		}
+		adapters = append(adapters, InventoryVMNetworkAdapter{
+			NIC:                   nic,
+			Label:                 strings.TrimSpace(info.Label),
+			Type:                  strings.TrimSpace(info.Type),
+			MACType:               strings.TrimSpace(info.MACType),
+			MACAddress:            strings.TrimSpace(info.MACAddress),
+			PCISlotNumber:         cloneInt64Pointer(info.PCISlotNumber),
+			BackingType:           strings.TrimSpace(info.Backing.Type),
+			NetworkID:             strings.TrimSpace(info.Backing.Network),
+			NetworkName:           strings.TrimSpace(info.Backing.NetworkName),
+			DistributedSwitchUUID: strings.TrimSpace(info.Backing.DistributedSwitchUUID),
+			DistributedPort:       strings.TrimSpace(info.Backing.DistributedPort),
+			OpaqueNetworkType:     strings.TrimSpace(info.Backing.OpaqueNetworkType),
+			OpaqueNetworkID:       strings.TrimSpace(info.Backing.OpaqueNetworkID),
+			HostDevice:            strings.TrimSpace(info.Backing.HostDevice),
+			State:                 strings.TrimSpace(info.State),
+			StartConnected:        info.StartConnected,
+			AllowGuestControl:     info.AllowGuestControl,
+			WakeOnLANEnabled:      info.WakeOnLANEnabled,
+			UPTCompatibility:      info.UPTCompatibility,
+			UPTV2Compatibility:    info.UPTV2Compatibility,
+		})
+	}
+	return adapters, nil
 }
 
 func (c *Client) collectVMRuntimeHostReference(

@@ -53,6 +53,31 @@ type InventoryVMSnapshot struct {
 	Children        []InventoryVMSnapshot `json:"children,omitempty"`
 }
 
+// InventoryVMNetworkAdapter preserves vCenter VM hardware Ethernet adapter
+// facts as read-only workload context.
+type InventoryVMNetworkAdapter struct {
+	NIC                   string `json:"nic,omitempty"`
+	Label                 string `json:"label,omitempty"`
+	Type                  string `json:"type,omitempty"`
+	MACType               string `json:"mac_type,omitempty"`
+	MACAddress            string `json:"mac_address,omitempty"`
+	PCISlotNumber         *int64 `json:"pci_slot_number,omitempty"`
+	BackingType           string `json:"backing_type,omitempty"`
+	NetworkID             string `json:"network_id,omitempty"`
+	NetworkName           string `json:"network_name,omitempty"`
+	DistributedSwitchUUID string `json:"distributed_switch_uuid,omitempty"`
+	DistributedPort       string `json:"distributed_port,omitempty"`
+	OpaqueNetworkType     string `json:"opaque_network_type,omitempty"`
+	OpaqueNetworkID       string `json:"opaque_network_id,omitempty"`
+	HostDevice            string `json:"host_device,omitempty"`
+	State                 string `json:"state,omitempty"`
+	StartConnected        bool   `json:"start_connected"`
+	AllowGuestControl     bool   `json:"allow_guest_control"`
+	WakeOnLANEnabled      bool   `json:"wake_on_lan_enabled"`
+	UPTCompatibility      bool   `json:"upt_compatibility_enabled,omitempty"`
+	UPTV2Compatibility    bool   `json:"upt_v2_compatibility_enabled,omitempty"`
+}
+
 // InventoryMetrics captures the current runtime metric floor projected onto
 // canonical Pulse metrics for VMware-backed hosts and VMs.
 type InventoryMetrics struct {
@@ -105,38 +130,39 @@ type InventoryHost struct {
 // InventoryVM is the canonical phase-1 VM summary returned by the vCenter
 // Automation API list endpoint.
 type InventoryVM struct {
-	VM                  string                `json:"vm"`
-	Name                string                `json:"name"`
-	PowerState          string                `json:"power_state"`
-	CPUCount            int                   `json:"cpu_count,omitempty"`
-	MemorySizeMiB       int64                 `json:"memory_size_mib,omitempty"`
-	DatacenterID        string                `json:"datacenter_id,omitempty"`
-	DatacenterName      string                `json:"datacenter_name,omitempty"`
-	ComputeResourceID   string                `json:"compute_resource_id,omitempty"`
-	ComputeResourceName string                `json:"compute_resource_name,omitempty"`
-	ClusterID           string                `json:"cluster_id,omitempty"`
-	ClusterName         string                `json:"cluster_name,omitempty"`
-	FolderID            string                `json:"folder_id,omitempty"`
-	FolderName          string                `json:"folder_name,omitempty"`
-	ResourcePoolID      string                `json:"resource_pool_id,omitempty"`
-	ResourcePoolName    string                `json:"resource_pool_name,omitempty"`
-	RuntimeHostID       string                `json:"runtime_host_id,omitempty"`
-	RuntimeHostName     string                `json:"runtime_host_name,omitempty"`
-	DatastoreIDs        []string              `json:"datastore_ids,omitempty"`
-	DatastoreNames      []string              `json:"datastore_names,omitempty"`
-	InstanceUUID        string                `json:"instance_uuid,omitempty"`
-	BIOSUUID            string                `json:"bios_uuid,omitempty"`
-	GuestOSFamily       string                `json:"guest_os_family,omitempty"`
-	GuestHostname       string                `json:"guest_hostname,omitempty"`
-	GuestIPAddresses    []string              `json:"guest_ip_addresses,omitempty"`
-	OverallStatus       string                `json:"overall_status,omitempty"`
-	TriggeredAlarms     []InventoryAlarm      `json:"triggered_alarms,omitempty"`
-	RecentTasks         []InventoryTask       `json:"recent_tasks,omitempty"`
-	RecentEvents        []InventoryEvent      `json:"recent_events,omitempty"`
-	SnapshotCount       int                   `json:"snapshot_count,omitempty"`
-	CurrentSnapshotID   string                `json:"current_snapshot_id,omitempty"`
-	SnapshotTree        []InventoryVMSnapshot `json:"snapshot_tree,omitempty"`
-	Metrics             *InventoryMetrics     `json:"metrics,omitempty"`
+	VM                  string                      `json:"vm"`
+	Name                string                      `json:"name"`
+	PowerState          string                      `json:"power_state"`
+	CPUCount            int                         `json:"cpu_count,omitempty"`
+	MemorySizeMiB       int64                       `json:"memory_size_mib,omitempty"`
+	DatacenterID        string                      `json:"datacenter_id,omitempty"`
+	DatacenterName      string                      `json:"datacenter_name,omitempty"`
+	ComputeResourceID   string                      `json:"compute_resource_id,omitempty"`
+	ComputeResourceName string                      `json:"compute_resource_name,omitempty"`
+	ClusterID           string                      `json:"cluster_id,omitempty"`
+	ClusterName         string                      `json:"cluster_name,omitempty"`
+	FolderID            string                      `json:"folder_id,omitempty"`
+	FolderName          string                      `json:"folder_name,omitempty"`
+	ResourcePoolID      string                      `json:"resource_pool_id,omitempty"`
+	ResourcePoolName    string                      `json:"resource_pool_name,omitempty"`
+	RuntimeHostID       string                      `json:"runtime_host_id,omitempty"`
+	RuntimeHostName     string                      `json:"runtime_host_name,omitempty"`
+	DatastoreIDs        []string                    `json:"datastore_ids,omitempty"`
+	DatastoreNames      []string                    `json:"datastore_names,omitempty"`
+	InstanceUUID        string                      `json:"instance_uuid,omitempty"`
+	BIOSUUID            string                      `json:"bios_uuid,omitempty"`
+	GuestOSFamily       string                      `json:"guest_os_family,omitempty"`
+	GuestHostname       string                      `json:"guest_hostname,omitempty"`
+	GuestIPAddresses    []string                    `json:"guest_ip_addresses,omitempty"`
+	OverallStatus       string                      `json:"overall_status,omitempty"`
+	TriggeredAlarms     []InventoryAlarm            `json:"triggered_alarms,omitempty"`
+	RecentTasks         []InventoryTask             `json:"recent_tasks,omitempty"`
+	RecentEvents        []InventoryEvent            `json:"recent_events,omitempty"`
+	SnapshotCount       int                         `json:"snapshot_count,omitempty"`
+	CurrentSnapshotID   string                      `json:"current_snapshot_id,omitempty"`
+	SnapshotTree        []InventoryVMSnapshot       `json:"snapshot_tree,omitempty"`
+	NetworkAdapters     []InventoryVMNetworkAdapter `json:"network_adapters,omitempty"`
+	Metrics             *InventoryMetrics           `json:"metrics,omitempty"`
 }
 
 // InventoryDatastore is the canonical phase-1 datastore summary returned by
@@ -484,6 +510,7 @@ func vmwareRecordsFromSnapshot(snapshot *InventorySnapshot, now func() time.Time
 				SnapshotCount:       vm.SnapshotCount,
 				CurrentSnapshotID:   strings.TrimSpace(vm.CurrentSnapshotID),
 				SnapshotTree:        vmwareSnapshotTreeData(vm.SnapshotTree),
+				NetworkAdapters:     vmwareNetworkAdaptersData(vm.NetworkAdapters),
 			},
 			Tags: filterNonEmptyStrings(
 				"vmware",
@@ -495,10 +522,11 @@ func vmwareRecordsFromSnapshot(snapshot *InventorySnapshot, now func() time.Time
 			),
 		}
 		identity := unifiedresources.ResourceIdentity{
-			MachineID:   firstNonEmptyTrimmed(vm.InstanceUUID, vm.BIOSUUID),
-			Hostnames:   uniqueSortedTrimmedStrings([]string{name, vm.GuestHostname}),
-			IPAddresses: uniqueSortedTrimmedStrings(vm.GuestIPAddresses),
-			ClusterName: vmwareClusterHint(vm.ClusterName, vm.ComputeResourceName),
+			MachineID:    firstNonEmptyTrimmed(vm.InstanceUUID, vm.BIOSUUID),
+			Hostnames:    uniqueSortedTrimmedStrings([]string{name, vm.GuestHostname}),
+			IPAddresses:  uniqueSortedTrimmedStrings(vm.GuestIPAddresses),
+			MACAddresses: uniqueSortedTrimmedStrings(vmwareNetworkAdapterMACAddresses(vm.NetworkAdapters)),
+			ClusterName:  vmwareClusterHint(vm.ClusterName, vm.ComputeResourceName),
 		}
 		records = append(records, unifiedresources.IngestRecord{
 			SourceID:       vmwareSourceID(snapshot.ConnectionID, "vm", vm.VM),
@@ -642,6 +670,7 @@ func cloneInventoryVMs(in []InventoryVM) []InventoryVM {
 		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
 		out[i].RecentEvents = cloneInventoryEvents(in[i].RecentEvents)
 		out[i].SnapshotTree = cloneInventoryVMSnapshots(in[i].SnapshotTree)
+		out[i].NetworkAdapters = cloneInventoryVMNetworkAdapters(in[i].NetworkAdapters)
 		out[i].Metrics = cloneInventoryMetrics(in[i].Metrics)
 	}
 	return out
@@ -703,6 +732,18 @@ func cloneInventoryVMSnapshots(in []InventoryVMSnapshot) []InventoryVMSnapshot {
 		out[i] = in[i]
 		out[i].CreatedAt = cloneTimePointer(in[i].CreatedAt)
 		out[i].Children = cloneInventoryVMSnapshots(in[i].Children)
+	}
+	return out
+}
+
+func cloneInventoryVMNetworkAdapters(in []InventoryVMNetworkAdapter) []InventoryVMNetworkAdapter {
+	if in == nil {
+		return nil
+	}
+	out := make([]InventoryVMNetworkAdapter, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].PCISlotNumber = cloneInt64Pointer(in[i].PCISlotNumber)
 	}
 	return out
 }
@@ -1037,6 +1078,52 @@ func vmwareSnapshotTreeData(snapshots []InventoryVMSnapshot) []unifiedresources.
 		out = append(out, item)
 	}
 	return out
+}
+
+func vmwareNetworkAdaptersData(adapters []InventoryVMNetworkAdapter) []unifiedresources.VMwareNetworkAdapterData {
+	if len(adapters) == 0 {
+		return nil
+	}
+	out := make([]unifiedresources.VMwareNetworkAdapterData, 0, len(adapters))
+	for _, adapter := range adapters {
+		item := unifiedresources.VMwareNetworkAdapterData{
+			NIC:                   strings.TrimSpace(adapter.NIC),
+			Label:                 strings.TrimSpace(adapter.Label),
+			Type:                  strings.TrimSpace(adapter.Type),
+			MACType:               strings.TrimSpace(adapter.MACType),
+			MACAddress:            strings.TrimSpace(adapter.MACAddress),
+			PCISlotNumber:         cloneInt64Pointer(adapter.PCISlotNumber),
+			BackingType:           strings.TrimSpace(adapter.BackingType),
+			NetworkID:             strings.TrimSpace(adapter.NetworkID),
+			NetworkName:           strings.TrimSpace(adapter.NetworkName),
+			DistributedSwitchUUID: strings.TrimSpace(adapter.DistributedSwitchUUID),
+			DistributedPort:       strings.TrimSpace(adapter.DistributedPort),
+			OpaqueNetworkType:     strings.TrimSpace(adapter.OpaqueNetworkType),
+			OpaqueNetworkID:       strings.TrimSpace(adapter.OpaqueNetworkID),
+			HostDevice:            strings.TrimSpace(adapter.HostDevice),
+			State:                 strings.TrimSpace(adapter.State),
+			StartConnected:        adapter.StartConnected,
+			AllowGuestControl:     adapter.AllowGuestControl,
+			WakeOnLANEnabled:      adapter.WakeOnLANEnabled,
+			UPTCompatibility:      adapter.UPTCompatibility,
+			UPTV2Compatibility:    adapter.UPTV2Compatibility,
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func vmwareNetworkAdapterMACAddresses(adapters []InventoryVMNetworkAdapter) []string {
+	if len(adapters) == 0 {
+		return nil
+	}
+	addresses := make([]string, 0, len(adapters))
+	for _, adapter := range adapters {
+		if mac := strings.TrimSpace(adapter.MACAddress); mac != "" {
+			addresses = append(addresses, mac)
+		}
+	}
+	return addresses
 }
 
 func diskMetric(total, used int64) *unifiedresources.MetricValue {

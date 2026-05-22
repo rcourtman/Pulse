@@ -34,6 +34,15 @@ const makeVM = (overrides: Partial<Resource> & Pick<Resource, 'id'>): Resource =
       guestOsFamily: 'LINUX',
       guestHostname: 'warehouse-api-01.internal',
       guestIpAddresses: ['10.42.10.21'],
+      networkAdapters: [
+        {
+          label: 'Network adapter 1',
+          type: 'VMXNET3',
+          macAddress: '00:50:56:aa:bb:cc',
+          networkName: 'VM Network',
+          state: 'CONNECTED',
+        },
+      ],
       datastoreNames: ['nvme-primary', 'backup-nfs'],
       snapshotTree: [
         {
@@ -88,6 +97,7 @@ describe('VsphereVirtualMachinesTable', () => {
     expect(within(table).getByText('Host')).toBeInTheDocument();
     expect(within(table).getByText('Pool')).toBeInTheDocument();
     expect(within(table).getByText('Guest')).toBeInTheDocument();
+    expect(within(table).getByText('Network')).toBeInTheDocument();
     expect(within(table).getByText('Snapshots')).toBeInTheDocument();
     expect(within(table).getByText('Health')).toBeInTheDocument();
     expect(within(table).queryByRole('columnheader', { name: 'ID' })).not.toBeInTheDocument();
@@ -96,6 +106,7 @@ describe('VsphereVirtualMachinesTable', () => {
     expect(screen.getAllByText('esxi-01.lab.local')).toHaveLength(2);
     expect(screen.getByText('Tier 1')).toBeInTheDocument();
     expect(screen.getByText('warehouse-api-01.internal')).toBeInTheDocument();
+    expect(screen.getByText('VM Network')).toBeInTheDocument();
     expect(screen.getByText('nvme-primary +1')).toBeInTheDocument();
     expect(screen.getByText('Healthy')).toBeInTheDocument();
     expect(screen.getByTitle('pre-upgrade, post-upgrade (current)')).toHaveTextContent('2');

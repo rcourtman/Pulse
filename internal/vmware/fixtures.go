@@ -208,6 +208,7 @@ func defaultFixturesPrimaryCluster(
 				OverallStatus:       "green",
 				SnapshotCount:       1,
 				CurrentSnapshotID:   "snapshot-201",
+				NetworkAdapters:     fixtureVMNetworkAdapters("vm-201", "VM Network", true),
 				SnapshotTree: []InventoryVMSnapshot{{
 					Snapshot:    "snapshot-201",
 					Name:        "pre-deploy-checkpoint",
@@ -264,6 +265,7 @@ func defaultFixturesPrimaryCluster(
 				OverallStatus:       "yellow",
 				SnapshotCount:       3,
 				CurrentSnapshotID:   "snapshot-213",
+				NetworkAdapters:     fixtureVMNetworkAdapters("vm-202", "Database Network", true),
 				SnapshotTree: []InventoryVMSnapshot{{
 					Snapshot:  "snapshot-211",
 					Name:      "baseline",
@@ -338,6 +340,7 @@ func defaultFixturesPrimaryCluster(
 				GuestIPAddresses:    []string{"10.42.10.44"},
 				OverallStatus:       "green",
 				SnapshotCount:       1,
+				NetworkAdapters:     fixtureVMNetworkAdapters("vm-203", "Web Network", true),
 				Metrics: &InventoryMetrics{
 					CPUPercent:              float64Ptr(22.1),
 					MemoryPercent:           float64Ptr(51.2),
@@ -376,6 +379,7 @@ func defaultFixturesPrimaryCluster(
 				GuestIPAddresses:    []string{"10.42.20.15"},
 				OverallStatus:       "green",
 				SnapshotCount:       2,
+				NetworkAdapters:     fixtureVMNetworkAdapters("vm-204", "Platform Network", true),
 				Metrics: &InventoryMetrics{
 					CPUPercent:              float64Ptr(27.8),
 					MemoryPercent:           float64Ptr(59.6),
@@ -414,6 +418,7 @@ func defaultFixturesPrimaryCluster(
 				GuestIPAddresses:    []string{"10.42.30.18"},
 				OverallStatus:       "green",
 				SnapshotCount:       0,
+				NetworkAdapters:     fixtureVMNetworkAdapters("vm-205", "Utility Network", true),
 				Metrics: &InventoryMetrics{
 					CPUPercent:              float64Ptr(16.8),
 					MemoryPercent:           float64Ptr(46.1),
@@ -716,6 +721,7 @@ func appendEdgeClusterFixtures(
 			GuestHostname:       v.Guest,
 			GuestIPAddresses:    guestIPs,
 			OverallStatus:       v.Status,
+			NetworkAdapters:     fixtureVMNetworkAdapters(v.ID, edgeVMNetworkName(v.Tier), v.PowerState == "POWERED_ON"),
 		}
 		if v.PowerState == "POWERED_ON" {
 			vm.Metrics = &InventoryMetrics{
@@ -785,6 +791,51 @@ func guestOSFamily(name string) string {
 	default:
 		return "LINUX"
 	}
+}
+
+func edgeVMNetworkName(tier string) string {
+	switch tier {
+	case "Stateful":
+		return "Edge Stateful"
+	case "Archive":
+		return "Edge Archive"
+	case "Workstations":
+		return "Edge Workstations"
+	case "Observability":
+		return "Edge Observability"
+	default:
+		return "Edge App"
+	}
+}
+
+func fixtureVMNetworkAdapters(vmID, networkName string, connected bool) []InventoryVMNetworkAdapter {
+	state := "NOT_CONNECTED"
+	if connected {
+		state = "CONNECTED"
+	}
+	return []InventoryVMNetworkAdapter{{
+		NIC:               "4000",
+		Label:             "Network adapter 1",
+		Type:              "VMXNET3",
+		MACType:           "GENERATED",
+		MACAddress:        fixtureVMMACAddress(vmID),
+		PCISlotNumber:     int64Ptr(160),
+		BackingType:       "STANDARD_PORTGROUP",
+		NetworkID:         "network-" + vmID,
+		NetworkName:       networkName,
+		State:             state,
+		StartConnected:    true,
+		AllowGuestControl: true,
+		WakeOnLANEnabled:  true,
+	}}
+}
+
+func fixtureVMMACAddress(vmID string) string {
+	var value int
+	for _, r := range vmID {
+		value += int(r)
+	}
+	return fmt.Sprintf("00:50:56:%02x:%02x:%02x", (value>>8)&0xff, value&0xff, (value+37)&0xff)
 }
 
 func inventorySnapshotTime(value time.Time) *time.Time {

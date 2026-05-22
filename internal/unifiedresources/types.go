@@ -995,48 +995,49 @@ type PMGData struct {
 // VMwareData contains VMware vSphere metadata for canonical agent, vm, and
 // storage resources projected from one vCenter connection.
 type VMwareData struct {
-	ConnectionID        string               `json:"connectionId,omitempty"`
-	ConnectionName      string               `json:"connectionName,omitempty"`
-	VCenterHost         string               `json:"vcenterHost,omitempty"`
-	ManagedObjectID     string               `json:"managedObjectId,omitempty"`
-	EntityType          string               `json:"entityType,omitempty"`
-	HostUUID            string               `json:"hostUuid,omitempty"`
-	DatacenterID        string               `json:"datacenterId,omitempty"`
-	DatacenterName      string               `json:"datacenterName,omitempty"`
-	ComputeResourceID   string               `json:"computeResourceId,omitempty"`
-	ComputeResourceName string               `json:"computeResourceName,omitempty"`
-	ClusterID           string               `json:"clusterId,omitempty"`
-	ClusterName         string               `json:"clusterName,omitempty"`
-	FolderID            string               `json:"folderId,omitempty"`
-	FolderName          string               `json:"folderName,omitempty"`
-	ResourcePoolID      string               `json:"resourcePoolId,omitempty"`
-	ResourcePoolName    string               `json:"resourcePoolName,omitempty"`
-	RuntimeHostID       string               `json:"runtimeHostId,omitempty"`
-	RuntimeHostName     string               `json:"runtimeHostName,omitempty"`
-	ConnectionState     string               `json:"connectionState,omitempty"`
-	PowerState          string               `json:"powerState,omitempty"`
-	OverallStatus       string               `json:"overallStatus,omitempty"`
-	CPUCount            int                  `json:"cpuCount,omitempty"`
-	MemorySizeMiB       int64                `json:"memorySizeMib,omitempty"`
-	DatastoreType       string               `json:"datastoreType,omitempty"`
-	DatastoreIDs        []string             `json:"datastoreIds,omitempty"`
-	DatastoreNames      []string             `json:"datastoreNames,omitempty"`
-	DatastoreURL        string               `json:"datastoreUrl,omitempty"`
-	DatastoreAccessible *bool                `json:"datastoreAccessible,omitempty"`
-	MultipleHostAccess  *bool                `json:"multipleHostAccess,omitempty"`
-	MaintenanceMode     string               `json:"maintenanceMode,omitempty"`
-	InstanceUUID        string               `json:"instanceUuid,omitempty"`
-	BIOSUUID            string               `json:"biosUuid,omitempty"`
-	GuestOSFamily       string               `json:"guestOsFamily,omitempty"`
-	GuestHostname       string               `json:"guestHostname,omitempty"`
-	GuestIPAddresses    []string             `json:"guestIpAddresses,omitempty"`
-	ActiveAlarmCount    int                  `json:"activeAlarmCount,omitempty"`
-	ActiveAlarmSummary  string               `json:"activeAlarmSummary,omitempty"`
-	RecentTaskCount     int                  `json:"recentTaskCount,omitempty"`
-	RecentTaskSummary   string               `json:"recentTaskSummary,omitempty"`
-	SnapshotCount       int                  `json:"snapshotCount,omitempty"`
-	CurrentSnapshotID   string               `json:"currentSnapshotId,omitempty"`
-	SnapshotTree        []VMwareSnapshotData `json:"snapshotTree,omitempty"`
+	ConnectionID        string                     `json:"connectionId,omitempty"`
+	ConnectionName      string                     `json:"connectionName,omitempty"`
+	VCenterHost         string                     `json:"vcenterHost,omitempty"`
+	ManagedObjectID     string                     `json:"managedObjectId,omitempty"`
+	EntityType          string                     `json:"entityType,omitempty"`
+	HostUUID            string                     `json:"hostUuid,omitempty"`
+	DatacenterID        string                     `json:"datacenterId,omitempty"`
+	DatacenterName      string                     `json:"datacenterName,omitempty"`
+	ComputeResourceID   string                     `json:"computeResourceId,omitempty"`
+	ComputeResourceName string                     `json:"computeResourceName,omitempty"`
+	ClusterID           string                     `json:"clusterId,omitempty"`
+	ClusterName         string                     `json:"clusterName,omitempty"`
+	FolderID            string                     `json:"folderId,omitempty"`
+	FolderName          string                     `json:"folderName,omitempty"`
+	ResourcePoolID      string                     `json:"resourcePoolId,omitempty"`
+	ResourcePoolName    string                     `json:"resourcePoolName,omitempty"`
+	RuntimeHostID       string                     `json:"runtimeHostId,omitempty"`
+	RuntimeHostName     string                     `json:"runtimeHostName,omitempty"`
+	ConnectionState     string                     `json:"connectionState,omitempty"`
+	PowerState          string                     `json:"powerState,omitempty"`
+	OverallStatus       string                     `json:"overallStatus,omitempty"`
+	CPUCount            int                        `json:"cpuCount,omitempty"`
+	MemorySizeMiB       int64                      `json:"memorySizeMib,omitempty"`
+	DatastoreType       string                     `json:"datastoreType,omitempty"`
+	DatastoreIDs        []string                   `json:"datastoreIds,omitempty"`
+	DatastoreNames      []string                   `json:"datastoreNames,omitempty"`
+	DatastoreURL        string                     `json:"datastoreUrl,omitempty"`
+	DatastoreAccessible *bool                      `json:"datastoreAccessible,omitempty"`
+	MultipleHostAccess  *bool                      `json:"multipleHostAccess,omitempty"`
+	MaintenanceMode     string                     `json:"maintenanceMode,omitempty"`
+	InstanceUUID        string                     `json:"instanceUuid,omitempty"`
+	BIOSUUID            string                     `json:"biosUuid,omitempty"`
+	GuestOSFamily       string                     `json:"guestOsFamily,omitempty"`
+	GuestHostname       string                     `json:"guestHostname,omitempty"`
+	GuestIPAddresses    []string                   `json:"guestIpAddresses,omitempty"`
+	ActiveAlarmCount    int                        `json:"activeAlarmCount,omitempty"`
+	ActiveAlarmSummary  string                     `json:"activeAlarmSummary,omitempty"`
+	RecentTaskCount     int                        `json:"recentTaskCount,omitempty"`
+	RecentTaskSummary   string                     `json:"recentTaskSummary,omitempty"`
+	SnapshotCount       int                        `json:"snapshotCount,omitempty"`
+	CurrentSnapshotID   string                     `json:"currentSnapshotId,omitempty"`
+	SnapshotTree        []VMwareSnapshotData       `json:"snapshotTree,omitempty"`
+	NetworkAdapters     []VMwareNetworkAdapterData `json:"networkAdapters,omitempty"`
 }
 
 // VMwareSnapshotData contains one node in the vSphere VM snapshot tree. It is
@@ -1052,6 +1053,31 @@ type VMwareSnapshotData struct {
 	ReplaySupported bool                 `json:"replaySupported,omitempty"`
 	Current         bool                 `json:"current,omitempty"`
 	Children        []VMwareSnapshotData `json:"children,omitempty"`
+}
+
+// VMwareNetworkAdapterData contains vCenter VM hardware Ethernet adapter facts
+// as read-only workload context, not a Pulse network-control model.
+type VMwareNetworkAdapterData struct {
+	NIC                   string `json:"nic,omitempty"`
+	Label                 string `json:"label,omitempty"`
+	Type                  string `json:"type,omitempty"`
+	MACType               string `json:"macType,omitempty"`
+	MACAddress            string `json:"macAddress,omitempty"`
+	PCISlotNumber         *int64 `json:"pciSlotNumber,omitempty"`
+	BackingType           string `json:"backingType,omitempty"`
+	NetworkID             string `json:"networkId,omitempty"`
+	NetworkName           string `json:"networkName,omitempty"`
+	DistributedSwitchUUID string `json:"distributedSwitchUuid,omitempty"`
+	DistributedPort       string `json:"distributedPort,omitempty"`
+	OpaqueNetworkType     string `json:"opaqueNetworkType,omitempty"`
+	OpaqueNetworkID       string `json:"opaqueNetworkId,omitempty"`
+	HostDevice            string `json:"hostDevice,omitempty"`
+	State                 string `json:"state,omitempty"`
+	StartConnected        bool   `json:"startConnected"`
+	AllowGuestControl     bool   `json:"allowGuestControl"`
+	WakeOnLANEnabled      bool   `json:"wakeOnLanEnabled"`
+	UPTCompatibility      bool   `json:"uptCompatibilityEnabled,omitempty"`
+	UPTV2Compatibility    bool   `json:"uptV2CompatibilityEnabled,omitempty"`
 }
 
 // TrueNASData contains TrueNAS-specific metadata for TrueNAS resources.

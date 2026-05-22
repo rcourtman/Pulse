@@ -1,4 +1,9 @@
-import type { ResourceType, ResourceVMwareMeta, ResourceVMwareSnapshot } from '@/types/resource';
+import type {
+  ResourceType,
+  ResourceVMwareMeta,
+  ResourceVMwareNetworkAdapter,
+  ResourceVMwareSnapshot,
+} from '@/types/resource';
 
 export type ResourceDetailDrawerVMwareRowTone = 'default' | 'accent' | 'warning';
 
@@ -9,7 +14,7 @@ export type ResourceDetailDrawerVMwareRow = {
 };
 
 export type ResourceDetailDrawerVMwareSection = {
-  id: 'state' | 'placement' | 'guest' | 'signals' | 'snapshots';
+  id: 'state' | 'placement' | 'guest' | 'network' | 'signals' | 'snapshots';
   label: string;
   rows: ResourceDetailDrawerVMwareRow[];
 };
@@ -71,6 +76,60 @@ const flattenSnapshotRows = (
   }
   return rows;
 };
+
+const adapterDisplayName = (adapter: ResourceVMwareNetworkAdapter): string =>
+  asTrimmedString(adapter.label) ||
+  asTrimmedString(adapter.nic) ||
+  asTrimmedString(adapter.macAddress) ||
+  'Network adapter';
+
+const adapterNetworkName = (adapter: ResourceVMwareNetworkAdapter): string =>
+  asTrimmedString(adapter.networkName) ||
+  asTrimmedString(adapter.networkId) ||
+  asTrimmedString(adapter.opaqueNetworkId) ||
+  asTrimmedString(adapter.hostDevice) ||
+  asTrimmedString(adapter.backingType);
+
+const adapterConnectionLabel = (adapter: ResourceVMwareNetworkAdapter): string => {
+  const parts = [
+    asTrimmedString(adapter.state),
+    adapter.startConnected === undefined
+      ? ''
+      : adapter.startConnected
+        ? 'starts connected'
+        : 'does not start connected',
+    adapter.allowGuestControl === undefined
+      ? ''
+      : adapter.allowGuestControl
+        ? 'guest control'
+        : 'no guest control',
+  ].filter(Boolean);
+  return parts.join(' · ');
+};
+
+const adapterValue = (adapter: ResourceVMwareNetworkAdapter): string => {
+  const parts = [
+    asTrimmedString(adapter.type),
+    adapterNetworkName(adapter),
+    asTrimmedString(adapter.macAddress),
+    adapterConnectionLabel(adapter),
+  ].filter(Boolean);
+  return parts.join(' · ');
+};
+
+const adapterTone = (adapter: ResourceVMwareNetworkAdapter): ResourceDetailDrawerVMwareRowTone =>
+  asTrimmedString(adapter.state).toLowerCase() === 'not_connected' ? 'warning' : 'default';
+
+const networkAdapterRows = (
+  adapters: ResourceVMwareNetworkAdapter[] | undefined,
+): ResourceDetailDrawerVMwareRow[] =>
+  (adapters ?? [])
+    .map((adapter) => ({
+      label: adapterDisplayName(adapter),
+      value: adapterValue(adapter),
+      tone: adapterTone(adapter),
+    }))
+    .filter((row) => row.value);
 
 const vmwareEntityLabel = (entityType?: string): string => {
   const normalized = asTrimmedString(entityType).toLowerCase();
@@ -138,6 +197,10 @@ export const buildVMwareDetailsSummary = (
       : countSnapshotTree(vmware.snapshotTree);
   if (resourceType === 'vm' && snapshotCount > 0) {
     parts.push(formatCount(snapshotCount, 'snapshot'));
+  }
+  const networkAdapterCount = vmware.networkAdapters?.length ?? 0;
+  if (resourceType === 'vm' && networkAdapterCount > 0) {
+    parts.push(formatCount(networkAdapterCount, 'vNIC'));
   }
   if ((vmware.activeAlarmCount ?? 0) > 0) {
     parts.push(formatCount(vmware.activeAlarmCount ?? 0, 'alarm'));
@@ -265,6 +328,8 @@ export const buildVMwareDetailSections = (
     },
   ]);
 
+  const networkRows = resourceType === 'vm' ? networkAdapterRows(vmware.networkAdapters) : [];
+
   const signalRows = filterNonEmptyRows([
     {
       label: 'Alarms',
@@ -299,6 +364,7 @@ export const buildVMwareDetailSections = (
     { id: 'state', label: 'State', rows: stateRows },
     { id: 'placement', label: 'Placement', rows: placementRows },
     { id: 'guest', label: 'Guest', rows: guestRows },
+    { id: 'network', label: 'Network', rows: networkRows },
     { id: 'signals', label: 'Signals', rows: signalRows },
     { id: 'snapshots', label: 'Snapshot tree', rows: snapshotRows },
   ];

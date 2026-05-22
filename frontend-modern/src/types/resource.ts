@@ -838,6 +838,29 @@ export interface ResourceVMwareSnapshot {
   children?: ResourceVMwareSnapshot[];
 }
 
+export interface ResourceVMwareNetworkAdapter {
+  nic?: string;
+  label?: string;
+  type?: string;
+  macType?: string;
+  macAddress?: string;
+  pciSlotNumber?: number;
+  backingType?: string;
+  networkId?: string;
+  networkName?: string;
+  distributedSwitchUuid?: string;
+  distributedPort?: string;
+  opaqueNetworkType?: string;
+  opaqueNetworkId?: string;
+  hostDevice?: string;
+  state?: string;
+  startConnected?: boolean;
+  allowGuestControl?: boolean;
+  wakeOnLanEnabled?: boolean;
+  uptCompatibilityEnabled?: boolean;
+  uptV2CompatibilityEnabled?: boolean;
+}
+
 export interface ResourceVMwareMeta {
   connectionId?: string;
   connectionName?: string;
@@ -881,6 +904,7 @@ export interface ResourceVMwareMeta {
   snapshotCount?: number;
   currentSnapshotId?: string;
   snapshotTree?: ResourceVMwareSnapshot[];
+  networkAdapters?: ResourceVMwareNetworkAdapter[];
 }
 
 export interface ResourceAvailabilityMeta {

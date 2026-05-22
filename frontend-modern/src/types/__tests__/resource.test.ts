@@ -269,6 +269,20 @@ describe('Resource Helper Functions', () => {
         recentTaskSummary: 'Clone VM task finished',
         snapshotCount: 3,
         currentSnapshotId: 'snapshot-103',
+        networkAdapters: [
+          {
+            nic: '4000',
+            label: 'Network adapter 1',
+            type: 'VMXNET3',
+            macAddress: '00:50:56:aa:bb:cc',
+            backingType: 'STANDARD_PORTGROUP',
+            networkId: 'network-101',
+            networkName: 'VM Network',
+            state: 'CONNECTED',
+            startConnected: true,
+            allowGuestControl: true,
+          },
+        ],
         snapshotTree: [
           {
             snapshot: 'snapshot-101',
@@ -297,6 +311,7 @@ describe('Resource Helper Functions', () => {
       expect(vmware.recentTaskSummary).toBe('Clone VM task finished');
       expect(vmware.snapshotCount).toBe(3);
       expect(vmware.currentSnapshotId).toBe('snapshot-103');
+      expect(vmware.networkAdapters?.[0]?.networkName).toBe('VM Network');
       expect(vmware.snapshotTree?.[0]?.children?.[0]?.current).toBe(true);
     });
   });

@@ -704,6 +704,23 @@ const vmwareVirtualMachineSearchHaystack = (resource: Resource): string =>
     resource.vmware?.guestHostname,
     resource.vmware?.guestIpAddresses?.join(' '),
     resource.vmware?.datastoreNames?.join(' '),
+    resource.vmware?.networkAdapters
+      ?.map((adapter) =>
+        [
+          adapter.label,
+          adapter.type,
+          adapter.macAddress,
+          adapter.backingType,
+          adapter.networkId,
+          adapter.networkName,
+          adapter.opaqueNetworkId,
+          adapter.hostDevice,
+          adapter.state,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      )
+      .join(' '),
     resource.vmware?.activeAlarmSummary,
     resource.vmware?.recentTaskSummary,
     ...(resource.tags ?? []),

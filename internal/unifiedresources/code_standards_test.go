@@ -1992,3 +1992,27 @@ func TestBroadcastStateUsesSharedCanonicalResourceContract(t *testing.T) {
 		}
 	}
 }
+
+func TestCloneVMwareDataKeepsNestedRuntimeDetailsIsolated(t *testing.T) {
+	repoRoot := filepath.Join("..", "..")
+	clonePath := filepath.Join(repoRoot, "internal", "unifiedresources", "clone.go")
+
+	cloneSource, err := os.ReadFile(clonePath)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", clonePath, err)
+	}
+	source := string(cloneSource)
+
+	requiredSnippets := []string{
+		"out.SnapshotTree = cloneVMwareSnapshotDataSlice(in.SnapshotTree)",
+		"out.NetworkAdapters = cloneVMwareNetworkAdapterDataSlice(in.NetworkAdapters)",
+		"out[i].CreatedAt = cloneTimePtr(in[i].CreatedAt)",
+		"out[i].Children = cloneVMwareSnapshotDataSlice(in[i].Children)",
+		"out[i].PCISlotNumber = cloneInt64Ptr(in[i].PCISlotNumber)",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("%s: VMware clone isolation must include %q", filepath.ToSlash(clonePath), snippet)
+		}
+	}
+}

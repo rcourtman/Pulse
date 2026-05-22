@@ -310,6 +310,18 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
           guestOsFamily: 'ubuntu64Guest',
           guestHostname: 'app-01.lab.local',
           guestIpAddresses: ['192.0.2.50'],
+          networkAdapters: [
+            {
+              nic: '4000',
+              label: 'Network adapter 1',
+              type: 'VMXNET3',
+              macAddress: '00:50:56:aa:bb:cc',
+              networkName: 'VM Network',
+              state: 'CONNECTED',
+              startConnected: true,
+              allowGuestControl: true,
+            },
+          ],
           activeAlarmCount: 1,
           activeAlarmSummary: 'Host fan degraded',
           recentTaskCount: 1,
@@ -352,6 +364,18 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
         guestOsFamily: 'ubuntu64Guest',
         guestHostname: 'app-01.lab.local',
         guestIpAddresses: ['192.0.2.50'],
+        networkAdapters: [
+          {
+            nic: '4000',
+            label: 'Network adapter 1',
+            type: 'VMXNET3',
+            macAddress: '00:50:56:aa:bb:cc',
+            networkName: 'VM Network',
+            state: 'CONNECTED',
+            startConnected: true,
+            allowGuestControl: true,
+          },
+        ],
         activeAlarmCount: 1,
         activeAlarmSummary: 'Host fan degraded',
         recentTaskCount: 1,
@@ -387,7 +411,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
 
     expect(getByTestId('resource-vmware-details-section')).toBeInTheDocument();
     expect(
-      getByText('Lab VC · Read-only vCenter context · 2 snapshots · 1 alarm · 1 task'),
+      getByText('Lab VC · Read-only vCenter context · 2 snapshots · 1 vNIC · 1 alarm · 1 task'),
     ).toBeInTheDocument();
     expect(queryByText('Compute Cluster')).toBeNull();
     expect(queryByText('Create snapshot (success)')).toBeNull();
@@ -402,12 +426,15 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(within(section).getByText('State')).toBeInTheDocument();
     expect(within(section).getByText('Placement')).toBeInTheDocument();
     expect(within(section).getByText('Guest')).toBeInTheDocument();
+    expect(within(section).getByText('Network')).toBeInTheDocument();
     expect(within(section).getByText('Signals')).toBeInTheDocument();
     expect(within(section).getByText('Snapshot tree')).toBeInTheDocument();
     expect(within(section).getByText('vc.lab.local')).toBeInTheDocument();
     expect(within(section).getByText('Compute Cluster')).toBeInTheDocument();
     expect(within(section).getByText('esxi-01.lab.local')).toBeInTheDocument();
     expect(within(section).getByText('ubuntu64Guest')).toBeInTheDocument();
+    expect(within(section).getByText('Network adapter 1')).toBeInTheDocument();
+    expect(within(section).getByText(/VMXNET3 · VM Network/)).toBeInTheDocument();
     expect(within(section).getByText(/Create snapshot \(success\)/)).toBeInTheDocument();
     expect(within(section).getByText(/Host fan degraded/)).toBeInTheDocument();
     expect(within(section).getByText('2 snapshots')).toBeInTheDocument();

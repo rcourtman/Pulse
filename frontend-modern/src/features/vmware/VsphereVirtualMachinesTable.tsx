@@ -33,7 +33,11 @@ import {
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
-import type { Resource, ResourceVMwareSnapshot } from '@/types/resource';
+import type {
+  Resource,
+  ResourceVMwareNetworkAdapter,
+  ResourceVMwareSnapshot,
+} from '@/types/resource';
 import {
   filterVmwareVirtualMachines,
   mapVmwareVirtualMachineStatus,
@@ -134,6 +138,35 @@ const flattenSnapshotNames = (snapshots: ResourceVMwareSnapshot[] | undefined): 
     names.push(...flattenSnapshotNames(snapshot.children));
   }
   return names;
+};
+
+const networkAdapterName = (adapter: ResourceVMwareNetworkAdapter): string =>
+  asTrimmedString(adapter.networkName) ||
+  asTrimmedString(adapter.networkId) ||
+  asTrimmedString(adapter.opaqueNetworkId) ||
+  asTrimmedString(adapter.hostDevice) ||
+  asTrimmedString(adapter.macAddress) ||
+  asTrimmedString(adapter.label) ||
+  '';
+
+const networkAdapterTitle = (adapter: ResourceVMwareNetworkAdapter): string =>
+  [
+    asTrimmedString(adapter.label),
+    asTrimmedString(adapter.type),
+    networkAdapterName(adapter),
+    asTrimmedString(adapter.macAddress),
+    asTrimmedString(adapter.state),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+const networkSummary = (
+  adapters: ResourceVMwareNetworkAdapter[] | undefined,
+): { label: string; title: string } => {
+  const names = (adapters ?? []).map(networkAdapterName).filter(Boolean);
+  const summary = summarizeValues(names, '-', 1);
+  const title = (adapters ?? []).map(networkAdapterTitle).filter(Boolean).join(' | ');
+  return { label: summary.label, title: title || summary.title };
 };
 
 const formatGuest = (resource: Resource): { label: string; detail: string; title: string } => {
@@ -265,7 +298,7 @@ export const VsphereVirtualMachinesTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title="Virtual Machines" />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1440px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1520px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
@@ -285,14 +318,19 @@ export const VsphereVirtualMachinesTable: Component<{
                     Cluster
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[10%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[8%]`}
                   >
                     Pool
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[12%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[10%]`}
                   >
                     Guest
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden xl:table-cell md:w-[9%]`}
+                  >
+                    Network
                   </TableHead>
                   <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[9%]`}>
                     CPU
@@ -316,11 +354,11 @@ export const VsphereVirtualMachinesTable: Component<{
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                <For each={groups()}>
-                  {(group) => (
-                    <>
-                      <TableRow class="bg-surface-alt/70 text-[11px] font-semibold text-base-content">
-                        <TableCell colSpan={11} class="px-2 py-1">
+	                <For each={groups()}>
+	                  {(group) => (
+	                    <>
+	                      <TableRow class="bg-surface-alt/70 text-[11px] font-semibold text-base-content">
+	                        <TableCell colSpan={12} class="px-2 py-1">
                           <span>{group.label}</span>
                           <Show when={group.cluster}>
                             <span class="ml-2 rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted">
@@ -345,6 +383,7 @@ export const VsphereVirtualMachinesTable: Component<{
                             '-';
                           const pool = () => asTrimmedString(meta()?.resourcePoolName) || '-';
                           const guest = createMemo(() => formatGuest(vm));
+                          const network = createMemo(() => networkSummary(meta()?.networkAdapters));
                           const datastores = createMemo(() =>
                             summarizeValues(meta()?.datastoreNames ?? [], '-', 1),
                           );
@@ -450,6 +489,12 @@ export const VsphereVirtualMachinesTable: Component<{
                                   </Show>
                                 </TableCell>
                                 <TableCell
+                                  class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content xl:table-cell`}
+                                  title={network().title}
+                                >
+                                  <span class="block truncate">{network().label}</span>
+                                </TableCell>
+                                <TableCell
                                   class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
                                 >
                                   <ResponsiveMetricCell
@@ -496,7 +541,7 @@ export const VsphereVirtualMachinesTable: Component<{
                                 resource={vm}
                                 open={isExpanded()}
                                 detailRowId={detailRowId()}
-                                colSpan={11}
+                                colSpan={12}
                                 resolveResourceLabel={resolveResourceLabel}
                                 onClose={() => drawer.close(vm)}
                               />

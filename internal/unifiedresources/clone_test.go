@@ -149,6 +149,55 @@ func TestCloneResource_MutateParentBySource(t *testing.T) {
 	}
 }
 
+func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
+	createdAt := time.Date(2026, time.March, 30, 18, 15, 0, 0, time.UTC)
+	pciSlot := int64(160)
+	original := &Resource{
+		ID: "vmware-vm-1",
+		VMware: &VMwareData{
+			SnapshotTree: []VMwareSnapshotData{{
+				Snapshot:  "snapshot-201",
+				Name:      "pre-upgrade",
+				CreatedAt: &createdAt,
+				Children: []VMwareSnapshotData{{
+					Snapshot: "snapshot-202",
+					Name:     "post-upgrade",
+				}},
+			}},
+			NetworkAdapters: []VMwareNetworkAdapterData{{
+				NIC:           "4000",
+				Label:         "Network adapter 1",
+				NetworkName:   "VM Network",
+				MACAddress:    "00:50:56:aa:bb:cc",
+				PCISlotNumber: &pciSlot,
+			}},
+		},
+	}
+
+	cloned := cloneResource(original)
+	cloned.VMware.SnapshotTree[0].Name = "mutated"
+	cloned.VMware.SnapshotTree[0].Children[0].Name = "mutated-child"
+	*cloned.VMware.SnapshotTree[0].CreatedAt = createdAt.Add(time.Hour)
+	cloned.VMware.NetworkAdapters[0].NetworkName = "mutated-network"
+	*cloned.VMware.NetworkAdapters[0].PCISlotNumber = 161
+
+	if original.VMware.SnapshotTree[0].Name != "pre-upgrade" {
+		t.Fatalf("mutating cloned VMware snapshot should not affect original: %+v", original.VMware.SnapshotTree)
+	}
+	if original.VMware.SnapshotTree[0].Children[0].Name != "post-upgrade" {
+		t.Fatalf("mutating cloned VMware child snapshot should not affect original: %+v", original.VMware.SnapshotTree)
+	}
+	if !original.VMware.SnapshotTree[0].CreatedAt.Equal(createdAt) {
+		t.Fatalf("mutating cloned VMware snapshot time should not affect original: %+v", original.VMware.SnapshotTree[0].CreatedAt)
+	}
+	if original.VMware.NetworkAdapters[0].NetworkName != "VM Network" {
+		t.Fatalf("mutating cloned VMware adapter should not affect original: %+v", original.VMware.NetworkAdapters)
+	}
+	if *original.VMware.NetworkAdapters[0].PCISlotNumber != 160 {
+		t.Fatalf("mutating cloned VMware adapter PCI slot should not affect original: %+v", original.VMware.NetworkAdapters[0].PCISlotNumber)
+	}
+}
+
 // --- cloneProxmoxData ---
 
 func TestCloneProxmoxData_Nil(t *testing.T) {

@@ -125,6 +125,22 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 					Current:   true,
 				}},
 			}},
+			NetworkAdapters: []InventoryVMNetworkAdapter{{
+				NIC:                   "4000",
+				Label:                 "Network adapter 1",
+				Type:                  "VMXNET3",
+				MACType:               "GENERATED",
+				MACAddress:            "00:50:56:aa:bb:cc",
+				PCISlotNumber:         int64Ptr(160),
+				BackingType:           "STANDARD_PORTGROUP",
+				NetworkID:             "network-101",
+				NetworkName:           "VM Network",
+				DistributedSwitchUUID: "50 2b d1",
+				State:                 "CONNECTED",
+				StartConnected:        true,
+				AllowGuestControl:     true,
+				WakeOnLANEnabled:      true,
+			}},
 		}},
 		Datastores: []InventoryDatastore{{
 			Datastore:          "datastore-11",
@@ -231,6 +247,12 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 	if got := vmRecord.Resource.VMware.SnapshotTree; len(got) != 1 || got[0].Name != "pre-upgrade" || len(got[0].Children) != 1 || !got[0].Children[0].Current {
 		t.Fatalf("vm snapshot tree projection = %+v, want root pre-upgrade with current child", got)
 	}
+	if got := vmRecord.Resource.VMware.NetworkAdapters; len(got) != 1 || got[0].NetworkName != "VM Network" || got[0].MACAddress != "00:50:56:aa:bb:cc" {
+		t.Fatalf("vm network adapter projection = %+v, want VM Network adapter with MAC", got)
+	}
+	if got := vmRecord.Resource.VMware.NetworkAdapters[0].PCISlotNumber; got == nil || *got != 160 {
+		t.Fatalf("vm network adapter pci slot = %+v, want 160", got)
+	}
 	if got := vmRecord.Resource.ParentName; got != "esxi-01.lab.local" {
 		t.Fatalf("vm parent name = %q, want esxi-01.lab.local", got)
 	}
@@ -248,6 +270,9 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 	}
 	if got := vmRecord.Identity.IPAddresses; len(got) != 1 || got[0] != "10.0.0.21" {
 		t.Fatalf("vm identity IPs = %#v, want [10.0.0.21]", got)
+	}
+	if got := vmRecord.Identity.MACAddresses; len(got) != 1 || got[0] != "00:50:56:aa:bb:cc" {
+		t.Fatalf("vm identity MACs = %#v, want [00:50:56:aa:bb:cc]", got)
 	}
 	if vmRecord.Resource.Metrics == nil || vmRecord.Resource.Metrics.CPU == nil || vmRecord.Resource.Metrics.Memory == nil {
 		t.Fatalf("expected VMware VM metrics, got %+v", vmRecord.Resource.Metrics)

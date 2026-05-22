@@ -9,6 +9,21 @@ describe('resourceDetailDrawerVmwareModel', () => {
   it('surfaces vSphere snapshot trees as read-only VM detail context', () => {
     const vmware: ResourceVMwareMeta = {
       connectionName: 'Lab VC',
+      networkAdapters: [
+        {
+          nic: '4000',
+          label: 'Network adapter 1',
+          type: 'VMXNET3',
+          macType: 'GENERATED',
+          macAddress: '00:50:56:aa:bb:cc',
+          backingType: 'STANDARD_PORTGROUP',
+          networkId: 'network-101',
+          networkName: 'VM Network',
+          state: 'CONNECTED',
+          startConnected: true,
+          allowGuestControl: true,
+        },
+      ],
       snapshotTree: [
         {
           snapshot: 'snapshot-201',
@@ -31,8 +46,20 @@ describe('resourceDetailDrawerVmwareModel', () => {
     };
 
     expect(buildVMwareDetailsSummary('vm', vmware)).toBe(
-      'Lab VC · Read-only vCenter context · 2 snapshots',
+      'Lab VC · Read-only vCenter context · 2 snapshots · 1 vNIC',
     );
+
+    const network = buildVMwareDetailSections('vm', vmware).find(
+      (section) => section.id === 'network',
+    );
+
+    expect(network?.rows).toEqual([
+      {
+        label: 'Network adapter 1',
+        value: 'VMXNET3 · VM Network · 00:50:56:aa:bb:cc · CONNECTED · starts connected · guest control',
+        tone: 'default',
+      },
+    ]);
 
     const snapshots = buildVMwareDetailSections('vm', vmware).find(
       (section) => section.id === 'snapshots',

@@ -491,6 +491,19 @@ func TestRefreshCanonicalIdentityIgnoresVMwarePlacementDetailAliases(t *testing.
 			InstanceUUID:        "vm-instance-uuid-1",
 			BIOSUUID:            "vm-bios-uuid-1",
 			CurrentSnapshotID:   "snapshot-202",
+			NetworkAdapters: []VMwareNetworkAdapterData{{
+				NIC:               "4000",
+				Label:             "Network adapter 1",
+				Type:              "VMXNET3",
+				MACType:           "GENERATED",
+				MACAddress:        "00:50:56:aa:bb:cc",
+				BackingType:       "STANDARD_PORTGROUP",
+				NetworkID:         "network-101",
+				NetworkName:       "VM Network",
+				State:             "CONNECTED",
+				StartConnected:    true,
+				AllowGuestControl: true,
+			}},
 			SnapshotTree: []VMwareSnapshotData{{
 				Snapshot:    "snapshot-201",
 				Name:        "pre-upgrade",
@@ -550,6 +563,15 @@ func TestRefreshCanonicalIdentityIgnoresVMwarePlacementDetailAliases(t *testing.
 		"post-upgrade",
 		"Before application upgrade",
 		"poweredOn",
+		"4000",
+		"Network adapter 1",
+		"VMXNET3",
+		"GENERATED",
+		"00:50:56:aa:bb:cc",
+		"STANDARD_PORTGROUP",
+		"network-101",
+		"VM Network",
+		"CONNECTED",
 	}
 	for _, disallowed := range disallowedAliases {
 		for _, alias := range resource.Canonical.Aliases {

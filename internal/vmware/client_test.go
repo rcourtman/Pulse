@@ -75,6 +75,22 @@ func TestClientCollectInventoryEnrichesSignals(t *testing.T) {
 	if vm.GuestHostname != "app-01.internal" || len(vm.GuestIPAddresses) != 1 || vm.GuestIPAddresses[0] != "10.0.0.21" {
 		t.Fatalf("expected VM guest identity enrichment, got host=%q ips=%v", vm.GuestHostname, vm.GuestIPAddresses)
 	}
+	if len(vm.NetworkAdapters) != 1 {
+		t.Fatalf("expected one VM network adapter, got %+v", vm.NetworkAdapters)
+	}
+	adapter := vm.NetworkAdapters[0]
+	if adapter.NIC != "4000" || adapter.Label != "Network adapter 1" || adapter.Type != "VMXNET3" {
+		t.Fatalf("unexpected VM network adapter identity: %+v", adapter)
+	}
+	if adapter.MACAddress != "00:50:56:aa:bb:cc" || adapter.NetworkName != "VM Network" || adapter.State != "CONNECTED" {
+		t.Fatalf("unexpected VM network adapter backing/state: %+v", adapter)
+	}
+	if adapter.PCISlotNumber == nil || *adapter.PCISlotNumber != 160 {
+		t.Fatalf("expected VM network adapter PCI slot, got %+v", adapter.PCISlotNumber)
+	}
+	if !adapter.StartConnected || !adapter.AllowGuestControl || !adapter.WakeOnLANEnabled {
+		t.Fatalf("expected VM network adapter connection flags, got %+v", adapter)
+	}
 	if vm.SnapshotCount != 2 {
 		t.Fatalf("vm snapshot count = %d, want 2", vm.SnapshotCount)
 	}
@@ -167,6 +183,9 @@ func TestClientCollectInventoryPreservesBaseInventoryWhenOptionalEnrichmentDegra
 	vm := snapshot.VMs[0]
 	if vm.GuestHostname != "" || len(vm.GuestIPAddresses) != 0 {
 		t.Fatalf("expected guest identity to stay empty after degraded topology read, got host=%q ips=%v", vm.GuestHostname, vm.GuestIPAddresses)
+	}
+	if len(vm.NetworkAdapters) != 1 || vm.NetworkAdapters[0].NetworkName != "VM Network" {
+		t.Fatalf("expected network adapter enrichment to survive degraded guest read, got %+v", vm.NetworkAdapters)
 	}
 	if vm.RuntimeHostName != "esxi-01.lab.local" || vm.ResourcePoolName != "Tier 1" {
 		t.Fatalf("expected other topology enrichment to survive degraded guest read, got host=%q pool=%q", vm.RuntimeHostName, vm.ResourcePoolName)
@@ -347,6 +366,33 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 			"family":     "LINUX",
 			"host_name":  "app-01.internal",
 			"ip_address": "10.0.0.21",
+		})
+	})
+	mux.HandleFunc("/api/vcenter/vm/vm-201/hardware/ethernet", func(w http.ResponseWriter, r *http.Request) {
+		requireAutomationSession(t, r)
+		writeJSON(w, []map[string]any{{"nic": "4000"}})
+	})
+	mux.HandleFunc("/api/vcenter/vm/vm-201/hardware/ethernet/4000", func(w http.ResponseWriter, r *http.Request) {
+		requireAutomationSession(t, r)
+		writeJSON(w, map[string]any{
+			"label":                        "Network adapter 1",
+			"type":                         "VMXNET3",
+			"upt_compatibility_enabled":    true,
+			"upt_v2_compatibility_enabled": false,
+			"mac_type":                     "GENERATED",
+			"mac_address":                  "00:50:56:aa:bb:cc",
+			"pci_slot_number":              160,
+			"wake_on_lan_enabled":          true,
+			"backing": map[string]any{
+				"type":                    "STANDARD_PORTGROUP",
+				"network":                 "network-101",
+				"network_name":            "VM Network",
+				"distributed_switch_uuid": "",
+				"distributed_port":        "",
+			},
+			"state":               "CONNECTED",
+			"start_connected":     true,
+			"allow_guest_control": true,
 		})
 	})
 
