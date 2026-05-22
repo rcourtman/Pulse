@@ -32,6 +32,14 @@ import {
   type TrueNASServiceRow,
   type TrueNASServiceStatusFilter,
 } from './truenasPageModel';
+import {
+  TrueNASInlineDetailTable,
+  compactTrueNASInlineDetailRows,
+  compactTrueNASInlineDetailSections,
+  makeTrueNASInlineDetailRow,
+  type TrueNASInlineDetailSection,
+  type TrueNASInlineDetailTone,
+} from './TrueNASInlineDetailTable';
 
 const TRUENAS_SERVICE_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASServiceStatusFilter>[] = [
   { value: 'all', label: 'All' },
@@ -82,44 +90,17 @@ const serviceStatusVariant = (
   return 'muted';
 };
 
-type ServiceDetailTone = 'default' | 'success' | 'warning' | 'danger' | 'muted';
-
-type ServiceDetailRow = {
-  label: string;
-  value: string;
-  title?: string;
-  tone?: ServiceDetailTone;
-};
-
-type ServiceDetailSection = {
-  label: string;
-  rows: ServiceDetailRow[];
-};
+type ServiceDetailTone = TrueNASInlineDetailTone;
+type ServiceDetailSection = TrueNASInlineDetailSection;
 
 const detailBool = (value?: boolean): string | null => {
   if (value === undefined) return null;
   return value ? 'Enabled' : 'Disabled';
 };
 
-const detailRow = (
-  label: string,
-  value?: string | null,
-  options: Pick<ServiceDetailRow, 'title' | 'tone'> = {},
-): ServiceDetailRow | null => {
-  const trimmed = value?.trim();
-  if (!trimmed || trimmed === '-') return null;
-  return { label, value: trimmed, ...options };
-};
-
-const compactDetailRows = (rows: Array<ServiceDetailRow | null>): ServiceDetailRow[] =>
-  rows.filter((row): row is ServiceDetailRow => Boolean(row));
-
-const compactDetailSections = (
-  sections: Array<ServiceDetailSection | null>,
-): ServiceDetailSection[] =>
-  sections.filter((section): section is ServiceDetailSection =>
-    Boolean(section && section.rows.length > 0),
-  );
+const detailRow = makeTrueNASInlineDetailRow;
+const compactDetailRows = compactTrueNASInlineDetailRows;
+const compactDetailSections = compactTrueNASInlineDetailSections;
 
 const serviceTone = (row: TrueNASServiceRow): ServiceDetailTone => {
   const status = mapTrueNASServiceStatus(row);
@@ -127,14 +108,6 @@ const serviceTone = (row: TrueNASServiceRow): ServiceDetailTone => {
   if (status === 'attention' || status === 'stopped') return 'warning';
   if (status === 'disabled') return 'muted';
   return 'default';
-};
-
-const detailValueToneClass = (tone: ServiceDetailTone | undefined): string => {
-  if (tone === 'success') return 'text-emerald-700 dark:text-emerald-300';
-  if (tone === 'warning') return 'text-amber-700 dark:text-amber-300';
-  if (tone === 'danger') return 'text-rose-700 dark:text-rose-300';
-  if (tone === 'muted') return 'text-muted';
-  return 'text-base-content';
 };
 
 const formatAllPIDs = (pids: number[] | undefined): { label: string | null; title?: string } => {
@@ -180,71 +153,19 @@ const buildServiceDetailSections = (row: TrueNASServiceRow): ServiceDetailSectio
   ]);
 };
 
-const ServiceDetailTable: Component<{ row: TrueNASServiceRow; onClose: () => void }> = (props) => {
-  const sections = createMemo(() => buildServiceDetailSections(props.row));
-
-  return (
-    <div
-      class="space-y-3"
-      data-testid="truenas-service-detail"
-      data-truenas-service-detail-for={props.row.id}
-    >
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
-            Service detail
-          </div>
-          <div class="mt-1 text-[10px] text-muted">
-            {formatServiceName(props.row.service.service)} ·{' '}
-            {titleCase(mapTrueNASServiceStatus(props.row))}
-          </div>
-        </div>
-        <button
-          type="button"
-          class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
-          onClick={props.onClose}
-        >
-          Close
-        </button>
-      </div>
-      <div class="overflow-hidden rounded border border-border bg-surface">
-        <Table class="w-full table-fixed text-[11px]">
-          <TableBody class="divide-y divide-border">
-            <For each={sections()}>
-              {(section) => (
-                <>
-                  <TableRow class="bg-surface-alt">
-                    <TableHead
-                      colspan={2}
-                      class="px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted"
-                    >
-                      {section.label}
-                    </TableHead>
-                  </TableRow>
-                  <For each={section.rows}>
-                    {(row) => (
-                      <TableRow>
-                        <TableCell class="w-[38%] px-2 py-1 align-top text-muted">
-                          {row.label}
-                        </TableCell>
-                        <TableCell
-                          class={`px-2 py-1 text-right align-top font-medium ${detailValueToneClass(row.tone)}`}
-                          title={row.title ?? row.value}
-                        >
-                          <span class="block truncate">{row.value}</span>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </For>
-                </>
-              )}
-            </For>
-          </TableBody>
-        </Table>
-      </div>
-    </div>
-  );
-};
+const ServiceDetailTable: Component<{ row: TrueNASServiceRow; onClose: () => void }> = (props) => (
+  <TrueNASInlineDetailTable
+    testId="truenas-service-detail"
+    detailFor={props.row.id}
+    detailKind="service"
+    title="Service detail"
+    summary={`${formatServiceName(props.row.service.service)} · ${titleCase(
+      mapTrueNASServiceStatus(props.row),
+    )}`}
+    sections={buildServiceDetailSections(props.row)}
+    onClose={props.onClose}
+  />
+);
 
 export const TrueNASServicesTable: Component<{
   services: TrueNASServiceRow[];
@@ -391,10 +312,7 @@ export const TrueNASServicesTable: Component<{
                                 class="px-2 py-3 sm:px-4 sm:py-4"
                                 onClick={(event) => event.stopPropagation()}
                               >
-                                <ServiceDetailTable
-                                  row={row}
-                                  onClose={() => detail.close(row)}
-                                />
+                                <ServiceDetailTable row={row} onClose={() => detail.close(row)} />
                               </div>
                             </TableCell>
                           </TableRow>

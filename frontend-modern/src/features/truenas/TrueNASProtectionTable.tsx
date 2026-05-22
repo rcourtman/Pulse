@@ -44,6 +44,14 @@ import {
   type TrueNASProtectionKind,
   type TrueNASProtectionStatusFilter,
 } from './truenasPageModel';
+import {
+  TrueNASInlineDetailTable,
+  compactTrueNASInlineDetailRows,
+  compactTrueNASInlineDetailSections,
+  makeTrueNASInlineDetailRow,
+  type TrueNASInlineDetailSection,
+  type TrueNASInlineDetailTone,
+} from './TrueNASInlineDetailTable';
 
 const TRUENAS_PROTECTION_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASProtectionStatusFilter>[] =
   [
@@ -177,19 +185,8 @@ const formatPointTime = (point: RecoveryPoint): string => {
 const sizeLabel = (point: RecoveryPoint): string =>
   typeof point.sizeBytes === 'number' && point.sizeBytes > 0 ? formatBytes(point.sizeBytes) : '-';
 
-type ProtectionDetailTone = 'default' | 'success' | 'warning' | 'danger' | 'muted';
-
-type ProtectionDetailRow = {
-  label: string;
-  value: string;
-  title?: string;
-  tone?: ProtectionDetailTone;
-};
-
-type ProtectionDetailSection = {
-  label: string;
-  rows: ProtectionDetailRow[];
-};
+type ProtectionDetailTone = TrueNASInlineDetailTone;
+type ProtectionDetailSection = TrueNASInlineDetailSection;
 
 const detailBool = (value?: boolean | null): string | null => {
   if (value == null) return null;
@@ -210,33 +207,9 @@ const detailDateTime = (value?: string | null): string | null => {
   });
 };
 
-const detailRow = (
-  label: string,
-  value?: string | null,
-  options: Pick<ProtectionDetailRow, 'title' | 'tone'> = {},
-): ProtectionDetailRow | null => {
-  const trimmed = value?.trim();
-  if (!trimmed || trimmed === '-') return null;
-  return { label, value: trimmed, ...options };
-};
-
-const compactDetailRows = (rows: Array<ProtectionDetailRow | null>): ProtectionDetailRow[] =>
-  rows.filter((row): row is ProtectionDetailRow => Boolean(row));
-
-const compactDetailSections = (
-  sections: Array<ProtectionDetailSection | null>,
-): ProtectionDetailSection[] =>
-  sections.filter((section): section is ProtectionDetailSection =>
-    Boolean(section && section.rows.length > 0),
-  );
-
-const detailValueToneClass = (tone: ProtectionDetailTone | undefined): string => {
-  if (tone === 'success') return 'text-emerald-700 dark:text-emerald-300';
-  if (tone === 'warning') return 'text-amber-700 dark:text-amber-300';
-  if (tone === 'danger') return 'text-rose-700 dark:text-rose-300';
-  if (tone === 'muted') return 'text-muted';
-  return 'text-base-content';
-};
+const detailRow = makeTrueNASInlineDetailRow;
+const compactDetailRows = compactTrueNASInlineDetailRows;
+const compactDetailSections = compactTrueNASInlineDetailSections;
 
 const outcomeTone = (point: RecoveryPoint): ProtectionDetailTone => {
   const outcome = normalizeRecoveryOutcome(point.outcome);
@@ -326,71 +299,19 @@ const DatasetCell: Component<{ point: RecoveryPoint }> = (props) => {
   );
 };
 
-const ProtectionDetailTable: Component<{ point: RecoveryPoint; onClose: () => void }> = (props) => {
-  const sections = createMemo(() => buildProtectionDetailSections(props.point));
-
-  return (
-    <div
-      class="space-y-3"
-      data-testid="truenas-protection-detail"
-      data-truenas-protection-detail-for={props.point.id}
-    >
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
-            Protection detail
-          </div>
-          <div class="mt-1 text-[10px] text-muted">
-            {kindLabel(mapTrueNASProtectionKind(props.point))} ·{' '}
-            {getRecoveryOutcomeLabel(normalizeRecoveryOutcome(props.point.outcome))}
-          </div>
-        </div>
-        <button
-          type="button"
-          class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
-          onClick={props.onClose}
-        >
-          Close
-        </button>
-      </div>
-      <div class="overflow-hidden rounded border border-border bg-surface">
-        <Table class="w-full table-fixed text-[11px]">
-          <TableBody class="divide-y divide-border">
-            <For each={sections()}>
-              {(section) => (
-                <>
-                  <TableRow class="bg-surface-alt">
-                    <TableHead
-                      colspan={2}
-                      class="px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted"
-                    >
-                      {section.label}
-                    </TableHead>
-                  </TableRow>
-                  <For each={section.rows}>
-                    {(row) => (
-                      <TableRow>
-                        <TableCell class="w-[38%] px-2 py-1 align-top text-muted">
-                          {row.label}
-                        </TableCell>
-                        <TableCell
-                          class={`px-2 py-1 text-right align-top font-medium ${detailValueToneClass(row.tone)}`}
-                          title={row.title ?? row.value}
-                        >
-                          <span class="block truncate">{row.value}</span>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </For>
-                </>
-              )}
-            </For>
-          </TableBody>
-        </Table>
-      </div>
-    </div>
-  );
-};
+const ProtectionDetailTable: Component<{ point: RecoveryPoint; onClose: () => void }> = (props) => (
+  <TrueNASInlineDetailTable
+    testId="truenas-protection-detail"
+    detailFor={props.point.id}
+    detailKind="protection"
+    title="Protection detail"
+    summary={`${kindLabel(mapTrueNASProtectionKind(props.point))} · ${getRecoveryOutcomeLabel(
+      normalizeRecoveryOutcome(props.point.outcome),
+    )}`}
+    sections={buildProtectionDetailSections(props.point)}
+    onClose={props.onClose}
+  />
+);
 
 export const TrueNASProtectionTable: Component<{
   points: RecoveryPoint[];
