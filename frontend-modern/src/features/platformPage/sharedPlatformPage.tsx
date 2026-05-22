@@ -138,7 +138,11 @@ export function PlatformErrorState(props: {
 // 'running' vs 'online', 'stopped' vs 'offline') collapse to one chip set.
 export type PlatformResourceStatusFilter = 'all' | 'online' | 'degraded' | 'offline';
 
-const statusDot = (className: string) => <span class={`h-2 w-2 rounded-full ${className}`} />;
+export const platformChipStatusDot = (className: string) => (
+  <span class={`h-2 w-2 rounded-full ${className}`} />
+);
+
+const statusDot = platformChipStatusDot;
 
 export const PLATFORM_STATUS_FILTER_OPTIONS: PlatformTableFilterOption<PlatformResourceStatusFilter>[] =
   [

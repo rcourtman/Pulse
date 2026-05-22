@@ -26,6 +26,7 @@ import {
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  platformChipStatusDot,
   type PlatformTableFilterOption,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -38,12 +39,12 @@ import type {
   Resource,
   ResourceVMwareNetworkAdapter,
   ResourceVMwareSnapshot,
-  ResourceVMwareTools,
   ResourceVMwareVirtualDisk,
 } from '@/types/resource';
 import {
   filterVmwareVirtualMachines,
-  mapVmwareVirtualMachineStatus,
+  formatVmwarePowerState,
+  getVmwarePowerStateVariant,
   type VmwareVirtualMachineStatusFilter,
 } from './vmwarePageModel';
 
@@ -53,11 +54,26 @@ const VSPHERE_VM_STATUS_OPTIONS: PlatformTableFilterOption<VmwareVirtualMachineS
     value: 'powered-on',
     label: 'Powered on',
     tone: 'success',
-    leading: statusDot('bg-emerald-500'),
+    leading: platformChipStatusDot('bg-emerald-500'),
   },
-  { value: 'attention', label: 'Attention', tone: 'warning', leading: statusDot('bg-amber-500') },
-  { value: 'powered-off', label: 'Powered off', tone: 'danger', leading: statusDot('bg-red-500') },
-  { value: 'suspended', label: 'Suspended', tone: 'warning' },
+  {
+    value: 'attention',
+    label: 'Attention',
+    tone: 'warning',
+    leading: platformChipStatusDot('bg-amber-500'),
+  },
+  {
+    value: 'powered-off',
+    label: 'Powered off',
+    tone: 'danger',
+    leading: platformChipStatusDot('bg-red-500'),
+  },
+  {
+    value: 'suspended',
+    label: 'Suspended',
+    tone: 'warning',
+    leading: platformChipStatusDot('bg-amber-500'),
+  },
   { value: 'unknown', label: 'Unknown' },
 ];
 
@@ -71,48 +87,20 @@ type VmwareVmGroup = {
 const finiteMetric = (value: number | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 
-function statusDot(className: string): JSX.Element {
-  return <span class={`h-2 w-2 rounded-full ${className}`} />;
-}
-
 const metricFallback = () => (
   <div class="flex justify-center">
     <span class="text-xs text-muted" aria-hidden="true">
-      -
+      —
     </span>
   </div>
 );
 
-const normalizeToken = (value: string | undefined): string =>
-  (value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_-]/g, '');
-
 const vmName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
 
-const formatVmwarePowerState = (value: string | undefined): string => {
-  const normalized = normalizeToken(value);
-  if (normalized === 'poweredon' || normalized === 'on') return 'On';
-  if (normalized === 'poweredoff' || normalized === 'off') return 'Off';
-  if (normalized === 'suspended') return 'Suspended';
-  return asTrimmedString(value) || 'Unknown';
-};
-
-const powerStateVariant = (
-  state: string | undefined,
-): 'success' | 'warning' | 'danger' | 'muted' => {
-  const normalized = normalizeToken(state);
-  if (normalized === 'poweredon' || normalized === 'on') return 'success';
-  if (normalized === 'poweredoff' || normalized === 'off') return 'danger';
-  if (normalized === 'suspended') return 'warning';
-  return 'muted';
-};
-
 const summarizeValues = (
   values: Array<string | undefined>,
-  empty = '-',
+  empty = '—',
   visibleCount = 2,
 ): { label: string; title: string } => {
   const compact = values
@@ -167,7 +155,7 @@ const networkSummary = (
   adapters: ResourceVMwareNetworkAdapter[] | undefined,
 ): { label: string; title: string } => {
   const names = (adapters ?? []).map(networkAdapterName).filter(Boolean);
-  const summary = summarizeValues(names, '-', 1);
+  const summary = summarizeValues(names, '—', 1);
   const title = (adapters ?? []).map(networkAdapterTitle).filter(Boolean).join(' | ');
   return { label: summary.label, title: title || summary.title };
 };
@@ -210,133 +198,11 @@ const formatGuest = (resource: Resource): { label: string; detail: string; title
   const host = asTrimmedString(resource.vmware?.guestHostname);
   const ips = summarizeValues(resource.vmware?.guestIpAddresses ?? [], '', 1);
   return {
-    label: family || host || ips.label || '-',
+    label: family || host || ips.label || '—',
     detail: host || ips.label,
     title: [family, host, ips.title].filter(Boolean).join(' | '),
   };
 };
-
-const healthLabel = (resource: Resource): string => {
-  const alarms = resource.vmware?.activeAlarmCount ?? 0;
-  if (alarms > 0) return `${alarms} alarm${alarms === 1 ? '' : 's'}`;
-  const overall = asTrimmedString(resource.vmware?.overallStatus);
-  if (!overall) return 'Unknown';
-  if (overall.toLowerCase() === 'green') return 'Healthy';
-  return overall.charAt(0).toUpperCase() + overall.slice(1).toLowerCase();
-};
-
-const healthPillClass = (resource: Resource): string => {
-  const status = mapVmwareVirtualMachineStatus(resource);
-  if (status === 'attention') {
-    const overall = asTrimmedString(resource.vmware?.overallStatus)?.toLowerCase();
-    if (overall === 'red') return 'border-red-300/50 bg-red-500/10 text-red-700 dark:text-red-300';
-    return 'border-amber-300/50 bg-amber-500/10 text-amber-700 dark:text-amber-300';
-  }
-  if (status === 'powered-on') {
-    return 'border-emerald-300/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
-  }
-  if (status === 'powered-off') {
-    return 'border-border bg-surface-alt text-muted';
-  }
-  return 'border-border bg-surface-alt text-muted';
-};
-
-const HealthPill: Component<{ resource: Resource }> = (props) => (
-  <span
-    class={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${healthPillClass(
-      props.resource,
-    )}`}
-  >
-    {healthLabel(props.resource)}
-  </span>
-);
-
-const VMWARE_TOKEN_ACRONYMS: Record<string, string> = {
-  API: 'API',
-  OS: 'OS',
-  VM: 'VM',
-  VMDK: 'VMDK',
-};
-
-const titleizeToken = (value: string | undefined): string =>
-  (value || '')
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => {
-      const upper = part.toUpperCase();
-      return (
-        VMWARE_TOKEN_ACRONYMS[upper] ?? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
-      );
-    })
-    .join(' ');
-
-const toolsTitle = (tools: ResourceVMwareTools | undefined): string =>
-  tools
-    ? [
-        tools.runState ? `Run state: ${titleizeToken(tools.runState)}` : '',
-        tools.versionStatus ? `Version status: ${titleizeToken(tools.versionStatus)}` : '',
-        asTrimmedString(tools.version),
-        tools.installType ? titleizeToken(tools.installType) : '',
-        tools.upgradePolicy ? `Policy: ${titleizeToken(tools.upgradePolicy)}` : '',
-        tools.guestRebootRequested ? 'Guest reboot requested' : '',
-      ]
-        .filter(Boolean)
-        .join(' | ')
-    : '';
-
-const toolsNeedsAttention = (tools: ResourceVMwareTools | undefined): boolean => {
-  const runState = normalizeToken(tools?.runState);
-  const versionStatus = normalizeToken(tools?.versionStatus);
-  return Boolean(
-    tools?.guestRebootRequested ||
-    (runState && !['running', 'started'].includes(runState)) ||
-    [
-      'notinstalled',
-      'tooold',
-      'toonew',
-      'old',
-      'blacklisted',
-      'unsupported',
-      'supportedold',
-    ].includes(versionStatus),
-  );
-};
-
-const toolsLabel = (tools: ResourceVMwareTools | undefined): string => {
-  if (!tools) return 'Unknown';
-  if (tools.guestRebootRequested) return 'Reboot';
-  const runState = normalizeToken(tools.runState);
-  const versionStatus = normalizeToken(tools.versionStatus);
-  if (['notinstalled'].includes(versionStatus)) return 'Missing';
-  if (['tooold', 'old', 'supportedold'].includes(versionStatus)) return 'Old';
-  if (runState && !['running', 'started'].includes(runState)) return titleizeToken(tools.runState);
-  if (versionStatus && !['current', 'ok'].includes(versionStatus)) {
-    return titleizeToken(tools.versionStatus);
-  }
-  if (runState) return titleizeToken(tools.runState);
-  return 'Unknown';
-};
-
-const toolsPillClass = (tools: ResourceVMwareTools | undefined): string => {
-  if (toolsNeedsAttention(tools)) {
-    return 'border-amber-300/50 bg-amber-500/10 text-amber-700 dark:text-amber-300';
-  }
-  if (normalizeToken(tools?.runState) === 'running') {
-    return 'border-emerald-300/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
-  }
-  return 'border-border bg-surface-alt text-muted';
-};
-
-const ToolsPill: Component<{ tools: ResourceVMwareTools | undefined }> = (props) => (
-  <span
-    class={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${toolsPillClass(
-      props.tools,
-    )}`}
-    title={toolsTitle(props.tools)}
-  >
-    {toolsLabel(props.tools)}
-  </span>
-);
 
 const vmGroupKey = (resource: Resource): string =>
   asTrimmedString(resource.vmware?.runtimeHostName) ||
@@ -421,7 +287,7 @@ export const VsphereVirtualMachinesTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title="Virtual Machines" />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1660px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1420px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
@@ -476,12 +342,6 @@ export const VsphereVirtualMachinesTable: Component<{
                   >
                     Snapshots
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[7%]`}>
-                    Tools
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[8%]`}>
-                    Health
-                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
@@ -489,7 +349,7 @@ export const VsphereVirtualMachinesTable: Component<{
                   {(group) => (
                     <>
                       <TableRow class="bg-surface-alt/70 text-[11px] font-semibold text-base-content">
-                        <TableCell colSpan={14} class="px-2 py-1">
+                        <TableCell colSpan={12} class="px-2 py-1">
                           <span>{group.label}</span>
                           <Show when={group.cluster}>
                             <span class="ml-2 rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted">
@@ -507,17 +367,17 @@ export const VsphereVirtualMachinesTable: Component<{
                           const host = () =>
                             asTrimmedString(meta()?.runtimeHostName) ||
                             asTrimmedString(vm.parentName) ||
-                            '-';
+                            '—';
                           const cluster = () =>
                             asTrimmedString(meta()?.clusterName) ||
                             asTrimmedString(meta()?.computeResourceName) ||
-                            '-';
+                            '—';
                           const clusterServices = () => formatVmwareClusterServices(meta());
-                          const pool = () => asTrimmedString(meta()?.resourcePoolName) || '-';
+                          const pool = () => asTrimmedString(meta()?.resourcePoolName) || '—';
                           const guest = createMemo(() => formatGuest(vm));
                           const network = createMemo(() => networkSummary(meta()?.networkAdapters));
                           const datastores = createMemo(() =>
-                            summarizeValues(meta()?.datastoreNames ?? [], '-', 1),
+                            summarizeValues(meta()?.datastoreNames ?? [], '—', 1),
                           );
                           const disks = () => virtualDiskCount(meta()?.virtualDisks);
                           const diskTitle = () => virtualDiskSummaryTitle(meta()?.virtualDisks);
@@ -562,29 +422,27 @@ export const VsphereVirtualMachinesTable: Component<{
                                       variant={indicator().variant}
                                       title={indicator().label}
                                     />
-                                    <div class="min-w-0">
-                                      <div
-                                        class="truncate font-medium text-base-content"
-                                        title={name()}
-                                      >
-                                        {name()}
-                                      </div>
-                                      <div
-                                        class="truncate text-[10px] text-muted"
-                                        title={meta()?.managedObjectId}
-                                      >
-                                        {meta()?.managedObjectId ||
-                                          meta()?.instanceUuid ||
-                                          'vSphere VM'}
-                                      </div>
-                                    </div>
+                                    <span
+                                      class="truncate font-medium text-base-content"
+                                      title={
+                                        [
+                                          name(),
+                                          meta()?.managedObjectId,
+                                          meta()?.instanceUuid,
+                                        ]
+                                          .filter(Boolean)
+                                          .join(' · ') || name()
+                                      }
+                                    >
+                                      {name()}
+                                    </span>
                                   </div>
                                 </TableCell>
                                 <TableCell class={getPlatformTableCellClassForKind('text')}>
                                   <div class="flex items-center gap-2">
                                     <StatusDot
                                       size="sm"
-                                      variant={powerStateVariant(meta()?.powerState)}
+                                      variant={getVmwarePowerStateVariant(meta()?.powerState)}
                                       title={meta()?.powerState || 'unknown'}
                                       ariaHidden
                                     />
@@ -601,14 +459,9 @@ export const VsphereVirtualMachinesTable: Component<{
                                 </TableCell>
                                 <TableCell
                                   class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                                  title={[cluster(), clusterServices()].filter(Boolean).join(' | ')}
+                                  title={[cluster(), clusterServices()].filter(Boolean).join(' · ')}
                                 >
                                   <span class="block truncate">{cluster()}</span>
-                                  <Show when={clusterServices()}>
-                                    <span class="block truncate text-[10px] text-muted">
-                                      {clusterServices()}
-                                    </span>
-                                  </Show>
                                 </TableCell>
                                 <TableCell
                                   class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
@@ -678,18 +531,12 @@ export const VsphereVirtualMachinesTable: Component<{
                                 >
                                   {snapshots()}
                                 </TableCell>
-                                <TableCell class={getPlatformTableCellClassForKind('badge')}>
-                                  <ToolsPill tools={meta()?.tools} />
-                                </TableCell>
-                                <TableCell class={getPlatformTableCellClassForKind('badge')}>
-                                  <HealthPill resource={vm} />
-                                </TableCell>
                               </TableRow>
                               <PlatformResourceDetailTableRow
                                 resource={vm}
                                 open={isExpanded()}
                                 detailRowId={detailRowId()}
-                                colSpan={14}
+                                colSpan={12}
                                 resolveResourceLabel={resolveResourceLabel}
                                 onClose={() => drawer.close(vm)}
                               />

@@ -2,6 +2,7 @@ import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
+import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import {
   Table,
   TableBody,
@@ -10,7 +11,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
-import { formatBytes, formatPercent } from '@/utils/format';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
@@ -22,6 +22,7 @@ import {
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  platformChipStatusDot,
   type PlatformTableFilterOption,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -33,16 +34,35 @@ import {
 import type { Resource } from '@/types/resource';
 import {
   filterVmwareDatastores,
-  mapVmwareDatastoreStatus,
   type VmwareDatastoreStatusFilter,
 } from './vmwarePageModel';
 
 const VSPHERE_DATASTORE_STATUS_OPTIONS: PlatformTableFilterOption<VmwareDatastoreStatusFilter>[] = [
   { value: 'all', label: 'All' },
-  { value: 'accessible', label: 'Accessible', tone: 'success' },
-  { value: 'attention', label: 'Attention', tone: 'warning' },
-  { value: 'inaccessible', label: 'Inaccessible', tone: 'danger' },
-  { value: 'maintenance', label: 'Maintenance', tone: 'warning' },
+  {
+    value: 'accessible',
+    label: 'Accessible',
+    tone: 'success',
+    leading: platformChipStatusDot('bg-emerald-500'),
+  },
+  {
+    value: 'attention',
+    label: 'Attention',
+    tone: 'warning',
+    leading: platformChipStatusDot('bg-amber-500'),
+  },
+  {
+    value: 'inaccessible',
+    label: 'Inaccessible',
+    tone: 'danger',
+    leading: platformChipStatusDot('bg-red-500'),
+  },
+  {
+    value: 'maintenance',
+    label: 'Maintenance',
+    tone: 'warning',
+    leading: platformChipStatusDot('bg-amber-500'),
+  },
   { value: 'unknown', label: 'Unknown' },
 ];
 
@@ -52,14 +72,14 @@ const datastoreName = (resource: Resource): string =>
 const datastoreType = (resource: Resource): string =>
   asTrimmedString(resource.vmware?.datastoreType) ||
   asTrimmedString(resource.storage?.type)?.toUpperCase() ||
-  '-';
+  '—';
 
 const compactList = (values: Array<string | undefined>): string[] =>
   values.map((value) => asTrimmedString(value)).filter((value): value is string => Boolean(value));
 
 const summarizeValues = (
   values: string[],
-  empty = '-',
+  empty = '—',
   visibleCount = 2,
 ): { label: string; title: string } => {
   if (values.length === 0) return { label: empty, title: '' };
@@ -69,94 +89,39 @@ const summarizeValues = (
 };
 
 const hostSummary = (resource: Resource): { label: string; title: string } =>
-  summarizeValues(compactList(resource.storage?.nodes ?? []), '-', 2);
+  summarizeValues(compactList(resource.storage?.nodes ?? []), '—', 2);
 
 const consumerSummary = (resource: Resource): { label: string; title: string } => {
   const consumers = resource.storage?.topConsumers?.map((consumer) => consumer.name) ?? [];
-  return summarizeValues(compactList(consumers), '-', 2);
+  return summarizeValues(compactList(consumers), '—', 2);
 };
 
 const consumerCount = (resource: Resource): number => resource.storage?.consumerCount ?? 0;
 
-const capacityPercent = (resource: Resource): number | undefined => {
+const capacityDisk = (resource: Resource) => {
+  const total = typeof resource.disk?.total === 'number' ? resource.disk.total : 0;
+  const used = typeof resource.disk?.used === 'number' ? resource.disk.used : 0;
+  const free =
+    typeof resource.disk?.free === 'number' ? resource.disk.free : Math.max(0, total - used);
+  const usage =
+    typeof resource.disk?.current === 'number' && Number.isFinite(resource.disk.current)
+      ? resource.disk.current
+      : total > 0
+        ? (used / total) * 100
+        : 0;
+  return { total, used, free, usage };
+};
+
+const hasCapacityMetric = (resource: Resource): boolean => {
   if (typeof resource.disk?.current === 'number' && Number.isFinite(resource.disk.current)) {
-    return resource.disk.current;
+    return true;
   }
-  if (
+  return (
     typeof resource.disk?.used === 'number' &&
     typeof resource.disk?.total === 'number' &&
     resource.disk.total > 0
-  ) {
-    return (resource.disk.used / resource.disk.total) * 100;
-  }
-  return undefined;
-};
-
-const capacityLabel = (resource: Resource): string => {
-  if (typeof resource.disk?.used === 'number' && typeof resource.disk?.total === 'number') {
-    return `${formatBytes(resource.disk.used)} / ${formatBytes(resource.disk.total)}`;
-  }
-  const percent = capacityPercent(resource);
-  return percent === undefined ? '-' : formatPercent(percent);
-};
-
-const CapacityCell: Component<{ resource: Resource }> = (props) => {
-  const percent = () => capacityPercent(props.resource);
-  return (
-    <div class="min-w-0">
-      <div class="truncate text-base-content" title={capacityLabel(props.resource)}>
-        {capacityLabel(props.resource)}
-      </div>
-      <Show when={percent() !== undefined}>
-        <div class="mt-1 h-1.5 overflow-hidden rounded bg-surface-alt">
-          <div
-            class="h-full rounded bg-emerald-500"
-            style={{ width: `${Math.max(0, Math.min(100, percent() ?? 0))}%` }}
-          />
-        </div>
-      </Show>
-    </div>
   );
 };
-
-const statusLabel = (resource: Resource): string => {
-  switch (mapVmwareDatastoreStatus(resource)) {
-    case 'accessible':
-      return 'Accessible';
-    case 'attention':
-      return 'Attention';
-    case 'inaccessible':
-      return 'Inaccessible';
-    case 'maintenance':
-      return 'Maintenance';
-    case 'unknown':
-      return 'Unknown';
-  }
-};
-
-const statusPillClass = (resource: Resource): string => {
-  switch (mapVmwareDatastoreStatus(resource)) {
-    case 'accessible':
-      return 'border-emerald-300/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
-    case 'attention':
-    case 'maintenance':
-      return 'border-amber-300/50 bg-amber-500/10 text-amber-700 dark:text-amber-300';
-    case 'inaccessible':
-      return 'border-red-300/50 bg-red-500/10 text-red-700 dark:text-red-300';
-    case 'unknown':
-      return 'border-border bg-surface-alt text-muted';
-  }
-};
-
-const StatusPill: Component<{ resource: Resource }> = (props) => (
-  <span
-    class={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${statusPillClass(
-      props.resource,
-    )}`}
-  >
-    {statusLabel(props.resource)}
-  </span>
-);
 
 export const VsphereDatastoresTable: Component<{
   datastores: Resource[];
@@ -244,9 +209,6 @@ export const VsphereDatastoresTable: Component<{
                   >
                     Datacenter
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[8%]`}>
-                    State
-                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
@@ -257,7 +219,16 @@ export const VsphereDatastoresTable: Component<{
                     const indicator = () => getSimpleStatusIndicator(datastore.status);
                     const name = () => datastoreName(datastore);
                     const datacenter = () =>
-                      asTrimmedString(datastore.vmware?.datacenterName) || '-';
+                      asTrimmedString(datastore.vmware?.datacenterName) || '—';
+                    const datastoreSubtitle = () =>
+                      asTrimmedString(datastore.vmware?.datastoreUrl) ||
+                      asTrimmedString(datastore.vmware?.folderName) ||
+                      asTrimmedString(datastore.vmware?.vcenterHost) ||
+                      '';
+                    const datastoreTitle = () =>
+                      [name(), datastoreSubtitle()].filter(Boolean).join(' · ') || name();
+                    const disk = createMemo(() => capacityDisk(datastore));
+                    const showCapacity = () => hasCapacityMetric(datastore);
                     const detailRowId = () => drawer.detailRowId(datastore);
                     const isExpanded = () => drawer.isExpanded(datastore);
                     return (
@@ -278,20 +249,12 @@ export const VsphereDatastoresTable: Component<{
                                 variant={indicator().variant}
                                 title={indicator().label}
                               />
-                              <div class="min-w-0">
-                                <div class="truncate font-medium text-base-content" title={name()}>
-                                  {name()}
-                                </div>
-                                <div
-                                  class="truncate text-[10px] text-muted"
-                                  title={datastore.vmware?.datastoreUrl}
-                                >
-                                  {datastore.vmware?.datastoreUrl ||
-                                    datastore.vmware?.folderName ||
-                                    datastore.vmware?.vcenterHost ||
-                                    'vSphere datastore'}
-                                </div>
-                              </div>
+                              <span
+                                class="truncate font-medium text-base-content"
+                                title={datastoreTitle()}
+                              >
+                                {name()}
+                              </span>
                             </div>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('text')}>
@@ -300,7 +263,18 @@ export const VsphereDatastoresTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>
-                            <CapacityCell resource={datastore} />
+                            <Show
+                              when={showCapacity()}
+                              fallback={
+                                <div class="flex justify-center">
+                                  <span class="text-xs text-muted" aria-hidden="true">
+                                    —
+                                  </span>
+                                </div>
+                              }
+                            >
+                              <StackedDiskBar aggregateDisk={disk()} />
+                            </Show>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
@@ -325,15 +299,12 @@ export const VsphereDatastoresTable: Component<{
                           >
                             <span class="block truncate">{datacenter()}</span>
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('badge')}>
-                            <StatusPill resource={datastore} />
-                          </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={datastore}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
-                          colSpan={8}
+                          colSpan={7}
                           resolveResourceLabel={resolveResourceLabel}
                           onClose={() => drawer.close(datastore)}
                         />

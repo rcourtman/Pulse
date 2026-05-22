@@ -65,12 +65,11 @@ describe('VsphereNetworksTable', () => {
     expect(within(table).getByText('Type')).toBeInTheDocument();
     expect(within(table).getByText('Hosts')).toBeInTheDocument();
     expect(within(table).getByText('Connected VMs')).toBeInTheDocument();
+    expect(within(table).queryByRole('columnheader', { name: 'State' })).not.toBeInTheDocument();
     expect(screen.getByText('STANDARD_PORTGROUP')).toBeInTheDocument();
     expect(screen.getByText('DISTRIBUTED_PORTGROUP')).toBeInTheDocument();
     expect(screen.getByText('esxi-01.lab.local, esxi-02.lab.local')).toBeInTheDocument();
     expect(screen.getByText('warehouse-api-01, etl-batch-01')).toBeInTheDocument();
-    expect(screen.getByText('Healthy')).toBeInTheDocument();
-    expect(screen.getByText('Attention')).toBeInTheDocument();
 
     const row = screen.getByText('VM Network').closest('tr');
     expect(row).toHaveAttribute('aria-expanded', 'false');

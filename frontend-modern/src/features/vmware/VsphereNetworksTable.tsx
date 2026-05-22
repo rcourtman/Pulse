@@ -21,6 +21,7 @@ import {
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  platformChipStatusDot,
   type PlatformTableFilterOption,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -32,14 +33,23 @@ import {
 import type { Resource } from '@/types/resource';
 import {
   filterVmwareNetworks,
-  mapVmwareNetworkStatus,
   type VmwareNetworkStatusFilter,
 } from './vmwarePageModel';
 
 const VSPHERE_NETWORK_STATUS_OPTIONS: PlatformTableFilterOption<VmwareNetworkStatusFilter>[] = [
   { value: 'all', label: 'All' },
-  { value: 'healthy', label: 'Healthy', tone: 'success' },
-  { value: 'attention', label: 'Attention', tone: 'warning' },
+  {
+    value: 'healthy',
+    label: 'Healthy',
+    tone: 'success',
+    leading: platformChipStatusDot('bg-emerald-500'),
+  },
+  {
+    value: 'attention',
+    label: 'Attention',
+    tone: 'warning',
+    leading: platformChipStatusDot('bg-amber-500'),
+  },
   { value: 'unknown', label: 'Unknown' },
 ];
 
@@ -47,14 +57,14 @@ const networkName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
 
 const networkType = (resource: Resource): string =>
-  asTrimmedString(resource.vmware?.networkType) || '-';
+  asTrimmedString(resource.vmware?.networkType) || '—';
 
 const compactList = (values: Array<string | undefined>): string[] =>
   values.map((value) => asTrimmedString(value)).filter((value): value is string => Boolean(value));
 
 const summarizeValues = (
   values: string[],
-  empty = '-',
+  empty = '—',
   visibleCount = 2,
 ): { label: string; title: string } => {
   if (values.length === 0) return { label: empty, title: '' };
@@ -64,45 +74,13 @@ const summarizeValues = (
 };
 
 const hostSummary = (resource: Resource): { label: string; title: string } =>
-  summarizeValues(compactList(resource.vmware?.networkHostNames ?? []), '-', 2);
+  summarizeValues(compactList(resource.vmware?.networkHostNames ?? []), '—', 2);
 
 const vmSummary = (resource: Resource): { label: string; title: string } =>
-  summarizeValues(compactList(resource.vmware?.networkVmNames ?? []), '-', 2);
+  summarizeValues(compactList(resource.vmware?.networkVmNames ?? []), '—', 2);
 
 const vmCount = (resource: Resource): number =>
   resource.vmware?.networkVmNames?.length ?? resource.vmware?.networkVmIds?.length ?? 0;
-
-const statusLabel = (resource: Resource): string => {
-  switch (mapVmwareNetworkStatus(resource)) {
-    case 'healthy':
-      return 'Healthy';
-    case 'attention':
-      return 'Attention';
-    case 'unknown':
-      return 'Unknown';
-  }
-};
-
-const statusPillClass = (resource: Resource): string => {
-  switch (mapVmwareNetworkStatus(resource)) {
-    case 'healthy':
-      return 'border-emerald-300/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
-    case 'attention':
-      return 'border-amber-300/50 bg-amber-500/10 text-amber-700 dark:text-amber-300';
-    case 'unknown':
-      return 'border-border bg-surface-alt text-muted';
-  }
-};
-
-const StatusPill: Component<{ resource: Resource }> = (props) => (
-  <span
-    class={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${statusPillClass(
-      props.resource,
-    )}`}
-  >
-    {statusLabel(props.resource)}
-  </span>
-);
 
 export const VsphereNetworksTable: Component<{
   networks: Resource[];
@@ -187,9 +165,6 @@ export const VsphereNetworksTable: Component<{
                   >
                     Datacenter
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[8%]`}>
-                    State
-                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
@@ -199,7 +174,14 @@ export const VsphereNetworksTable: Component<{
                     const vms = createMemo(() => vmSummary(network));
                     const indicator = () => getSimpleStatusIndicator(network.status);
                     const name = () => networkName(network);
-                    const datacenter = () => asTrimmedString(network.vmware?.datacenterName) || '-';
+                    const datacenter = () => asTrimmedString(network.vmware?.datacenterName) || '—';
+                    const networkSubtitle = () =>
+                      asTrimmedString(network.vmware?.managedObjectId) ||
+                      asTrimmedString(network.vmware?.folderName) ||
+                      asTrimmedString(network.vmware?.vcenterHost) ||
+                      '';
+                    const networkTitle = () =>
+                      [name(), networkSubtitle()].filter(Boolean).join(' · ') || name();
                     const detailRowId = () => drawer.detailRowId(network);
                     const isExpanded = () => drawer.isExpanded(network);
                     return (
@@ -220,20 +202,12 @@ export const VsphereNetworksTable: Component<{
                                 variant={indicator().variant}
                                 title={indicator().label}
                               />
-                              <div class="min-w-0">
-                                <div class="truncate font-medium text-base-content" title={name()}>
-                                  {name()}
-                                </div>
-                                <div
-                                  class="truncate text-[10px] text-muted"
-                                  title={network.vmware?.managedObjectId}
-                                >
-                                  {network.vmware?.managedObjectId ||
-                                    network.vmware?.folderName ||
-                                    network.vmware?.vcenterHost ||
-                                    'vSphere network'}
-                                </div>
-                              </div>
+                              <span
+                                class="truncate font-medium text-base-content"
+                                title={networkTitle()}
+                              >
+                                {name()}
+                              </span>
                             </div>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('text')}>
@@ -264,15 +238,12 @@ export const VsphereNetworksTable: Component<{
                           >
                             <span class="block truncate">{datacenter()}</span>
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('badge')}>
-                            <StatusPill resource={network} />
-                          </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={network}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
-                          colSpan={7}
+                          colSpan={6}
                           resolveResourceLabel={resolveResourceLabel}
                           onClose={() => drawer.close(network)}
                         />

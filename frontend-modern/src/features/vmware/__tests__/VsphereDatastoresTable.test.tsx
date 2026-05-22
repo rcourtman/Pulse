@@ -1,5 +1,9 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/components/Workloads/StackedDiskBar', () => ({
+  StackedDiskBar: () => <div data-testid="stacked-disk-bar" />,
+}));
 
 import { VsphereDatastoresTable } from '@/features/vmware/VsphereDatastoresTable';
 import type { Resource } from '@/types/resource';
@@ -75,10 +79,10 @@ describe('VsphereDatastoresTable', () => {
     expect(within(table).getByText('VMs')).toBeInTheDocument();
     expect(within(table).queryByText('Protection')).not.toBeInTheDocument();
     expect(within(table).queryByText('Growth (24h)')).not.toBeInTheDocument();
+    expect(within(table).queryByRole('columnheader', { name: 'State' })).not.toBeInTheDocument();
     expect(screen.getAllByText('esxi-01.lab.local, esxi-02.lab.local')).toHaveLength(2);
     expect(screen.getAllByText('warehouse-api-01, etl-batch-01')).toHaveLength(2);
-    expect(screen.getByText('Accessible')).toBeInTheDocument();
-    expect(screen.getByText('Inaccessible')).toBeInTheDocument();
+    expect(screen.getAllByTestId('stacked-disk-bar').length).toBeGreaterThan(0);
 
     const row = screen.getByText('nvme-primary').closest('tr');
     expect(row).toHaveAttribute('aria-expanded', 'false');

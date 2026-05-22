@@ -20,6 +20,7 @@ import {
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  platformChipStatusDot,
   type PlatformTableFilterOption,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -37,9 +38,24 @@ import {
 
 const VSPHERE_INCIDENT_STATUS_OPTIONS: PlatformTableFilterOption<VmwareIncidentSeverityFilter>[] = [
   { value: 'all', label: 'All' },
-  { value: 'critical', label: 'Critical', tone: 'danger' },
-  { value: 'warning', label: 'Warning', tone: 'warning' },
-  { value: 'info', label: 'Info', tone: 'success' },
+  {
+    value: 'critical',
+    label: 'Critical',
+    tone: 'danger',
+    leading: platformChipStatusDot('bg-red-500'),
+  },
+  {
+    value: 'warning',
+    label: 'Warning',
+    tone: 'warning',
+    leading: platformChipStatusDot('bg-amber-500'),
+  },
+  {
+    value: 'info',
+    label: 'Info',
+    tone: 'success',
+    leading: platformChipStatusDot('bg-emerald-500'),
+  },
 ];
 
 const severityVariant = (severity: VmwareIncidentRow['severityBucket']): StatusIndicatorVariant => {

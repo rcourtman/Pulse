@@ -283,6 +283,29 @@ export function mapVmwareIncidentSeverity(
   return 'info';
 }
 
+export function normalizeVmwarePowerStateToken(value: string | undefined): string {
+  return (value || '').trim().toLowerCase().replace(/[\s_-]/g, '');
+}
+
+export function formatVmwarePowerState(value: string | undefined): string {
+  const normalized = normalizeVmwarePowerStateToken(value);
+  if (normalized === 'poweredon' || normalized === 'on') return 'On';
+  if (normalized === 'poweredoff' || normalized === 'off') return 'Off';
+  if (normalized === 'suspended') return 'Suspended';
+  const trimmed = (value || '').trim();
+  return trimmed || 'Unknown';
+}
+
+export function getVmwarePowerStateVariant(
+  state: string | undefined,
+): 'success' | 'warning' | 'danger' | 'muted' {
+  const normalized = normalizeVmwarePowerStateToken(state);
+  if (normalized === 'poweredon' || normalized === 'on') return 'success';
+  if (normalized === 'poweredoff' || normalized === 'off') return 'danger';
+  if (normalized === 'suspended') return 'warning';
+  return 'muted';
+}
+
 export function mapVmwareVirtualMachineStatus(
   resource: Resource,
 ): Exclude<VmwareVirtualMachineStatusFilter, 'all'> {

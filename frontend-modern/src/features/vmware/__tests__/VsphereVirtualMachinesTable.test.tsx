@@ -121,8 +121,8 @@ describe('VsphereVirtualMachinesTable', () => {
     expect(within(table).getByText('Network')).toBeInTheDocument();
     expect(within(table).getByText('Disks')).toBeInTheDocument();
     expect(within(table).getByText('Snapshots')).toBeInTheDocument();
-    expect(within(table).getByText('Tools')).toBeInTheDocument();
-    expect(within(table).getByText('Health')).toBeInTheDocument();
+    expect(within(table).queryByRole('columnheader', { name: 'Tools' })).not.toBeInTheDocument();
+    expect(within(table).queryByRole('columnheader', { name: 'Health' })).not.toBeInTheDocument();
     expect(within(table).queryByRole('columnheader', { name: 'ID' })).not.toBeInTheDocument();
     expect(within(table).queryByRole('columnheader', { name: 'Uptime' })).not.toBeInTheDocument();
     expect(within(table).queryByRole('columnheader', { name: 'Backup' })).not.toBeInTheDocument();
@@ -134,8 +134,6 @@ describe('VsphereVirtualMachinesTable', () => {
     expect(screen.getByTitle(/Hard disk 1 · SCSI 0:1 · 100 GB · nvme-primary/)).toHaveTextContent(
       '1',
     );
-    expect(screen.getByTitle(/Run state: Running/)).toHaveTextContent('Running');
-    expect(screen.getByText('Healthy')).toBeInTheDocument();
     expect(screen.getByTitle('pre-upgrade, post-upgrade (current)')).toHaveTextContent('2');
 
     const row = screen.getByText('warehouse-api-01').closest('tr');

@@ -15,6 +15,10 @@ import {
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
+import {
+  formatVmwarePowerState,
+  getVmwarePowerStateVariant,
+} from './vmwarePageModel';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_TABLE_BODY_CLASS,
@@ -59,25 +63,6 @@ const metricFallback = () => (
     </span>
   </div>
 );
-
-const powerStateVariant = (
-  state: string | undefined,
-): 'success' | 'warning' | 'danger' | 'muted' => {
-  const normalized = (state || '').trim().toUpperCase();
-  if (normalized === 'POWERED_ON') return 'success';
-  if (normalized === 'POWERED_OFF') return 'muted';
-  if (normalized === 'SUSPENDED') return 'warning';
-  return 'muted';
-};
-
-const formatPowerState = (state: string | undefined): string => {
-  const normalized = (state || '').trim();
-  if (!normalized) return '—';
-  return normalized
-    .split('_')
-    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
-    .join(' ');
-};
 
 export const VsphereHostsTable: Component<{
   hosts: Resource[];
@@ -254,14 +239,9 @@ export const VsphereHostsTable: Component<{
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                            title={[cluster(), clusterServices()].filter(Boolean).join(' | ')}
+                            title={[cluster(), clusterServices()].filter(Boolean).join(' · ')}
                           >
                             <span class="block truncate">{cluster()}</span>
-                            <Show when={clusterServices()}>
-                              <span class="block truncate text-[10px] text-muted">
-                                {clusterServices()}
-                              </span>
-                            </Show>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden md:table-cell`}
@@ -269,12 +249,12 @@ export const VsphereHostsTable: Component<{
                             <div class="flex items-center gap-2">
                               <StatusDot
                                 size="sm"
-                                variant={powerStateVariant(meta()?.powerState)}
+                                variant={getVmwarePowerStateVariant(meta()?.powerState)}
                                 title={meta()?.powerState || 'unknown'}
                                 ariaHidden
                               />
                               <span class="text-base-content">
-                                {formatPowerState(meta()?.powerState)}
+                                {formatVmwarePowerState(meta()?.powerState)}
                               </span>
                             </div>
                           </TableCell>

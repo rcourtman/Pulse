@@ -20,6 +20,7 @@ import {
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  platformChipStatusDot,
   type PlatformTableFilterOption,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -38,14 +39,25 @@ import {
 
 const VSPHERE_ACTIVITY_STATUS_OPTIONS: PlatformTableFilterOption<VmwareActivityStatusFilter>[] = [
   { value: 'all', label: 'All' },
-  { value: 'tasks', label: 'Tasks', tone: 'success', leading: statusDot('bg-emerald-500') },
-  { value: 'events', label: 'Events', tone: 'info', leading: statusDot('bg-blue-500') },
-  { value: 'failed', label: 'Failed', tone: 'danger', leading: statusDot('bg-red-500') },
+  {
+    value: 'tasks',
+    label: 'Tasks',
+    tone: 'success',
+    leading: platformChipStatusDot('bg-emerald-500'),
+  },
+  {
+    value: 'events',
+    label: 'Events',
+    tone: 'info',
+    leading: platformChipStatusDot('bg-blue-500'),
+  },
+  {
+    value: 'failed',
+    label: 'Failed',
+    tone: 'danger',
+    leading: platformChipStatusDot('bg-red-500'),
+  },
 ];
-
-function statusDot(className: string): JSX.Element {
-  return <span class={`h-2 w-2 rounded-full ${className}`} />;
-}
 
 const formatResourceType = (type: ResourceType): string => {
   switch (type) {
