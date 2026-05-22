@@ -397,6 +397,63 @@ export function buildTrueNASStorageTopologyRows(
     return '';
   };
 
+  const owningDatasetId = (resource: Resource): string => {
+    let parentId = asTrimmedString(resource.parentId);
+    const visited = new Set<string>();
+    while (parentId && !visited.has(parentId)) {
+      const parent = resourceById.get(parentId);
+      if (parent && isTrueNASDatasetResource(parent)) return parent.id;
+      if (parent && isTrueNASPoolResource(parent)) return '';
+      visited.add(parentId);
+      parentId = asTrimmedString(parent?.parentId);
+    }
+
+    const resourceAliases = trueNASDatasetAliases(resource);
+    const resourcePoolId = owningPoolId(resource);
+    let bestMatch: { id: string; length: number } | undefined;
+    for (const candidate of datasets) {
+      if (candidate.id === resource.id) continue;
+      const candidatePoolId = owningPoolId(candidate);
+      if (resourcePoolId && candidatePoolId && resourcePoolId !== candidatePoolId) continue;
+
+      for (const candidateAlias of trueNASDatasetAliases(candidate)) {
+        for (const resourceAlias of resourceAliases) {
+          if (
+            resourceAlias !== candidateAlias &&
+            pathContainsOrDescendsFrom(resourceAlias, candidateAlias) &&
+            candidateAlias.length > (bestMatch?.length ?? 0)
+          ) {
+            bestMatch = { id: candidate.id, length: candidateAlias.length };
+          }
+        }
+      }
+    }
+    return bestMatch?.id ?? '';
+  };
+
+  const rootDatasetsByPool = new Map<string, Resource[]>();
+  const childDatasetsByDataset = new Map<string, Resource[]>();
+  const rootDatasets: Resource[] = [];
+  for (const dataset of datasets) {
+    const datasetParentId = owningDatasetId(dataset);
+    if (datasetParentId) {
+      const children = childDatasetsByDataset.get(datasetParentId) ?? [];
+      children.push(dataset);
+      childDatasetsByDataset.set(datasetParentId, children);
+      continue;
+    }
+
+    const poolId = owningPoolId(dataset);
+    if (poolId) {
+      const roots = rootDatasetsByPool.get(poolId) ?? [];
+      roots.push(dataset);
+      rootDatasetsByPool.set(poolId, roots);
+      continue;
+    }
+
+    rootDatasets.push(dataset);
+  }
+
   const rows: TrueNASStorageTopologyRow[] = [];
   const emitted = new Set<string>();
   const appendRow = (
@@ -416,19 +473,38 @@ export function buildTrueNASStorageTopologyRows(
     });
   };
 
+  const appendDatasetTree = (
+    dataset: Resource,
+    depth: number,
+    parentRowId: string | undefined,
+    visiting = new Set<string>(),
+  ) => {
+    if (emitted.has(dataset.id) || visiting.has(dataset.id)) return;
+    visiting.add(dataset.id);
+    const datasetRowId = `dataset:${dataset.id}`;
+    appendRow(dataset, 'dataset', depth, parentRowId);
+    for (const child of childDatasetsByDataset.get(dataset.id) ?? []) {
+      appendDatasetTree(child, depth + 1, datasetRowId, visiting);
+    }
+    visiting.delete(dataset.id);
+  };
+
   for (const pool of pools) {
     const poolRowId = `pool:${pool.id}`;
     appendRow(pool, 'pool', 0);
-    for (const dataset of datasets.filter((candidate) => owningPoolId(candidate) === pool.id)) {
-      appendRow(dataset, 'dataset', 1, poolRowId);
+    for (const dataset of rootDatasetsByPool.get(pool.id) ?? []) {
+      appendDatasetTree(dataset, 1, poolRowId);
     }
     for (const disk of disks.filter((candidate) => owningPoolId(candidate) === pool.id)) {
       appendRow(disk, 'disk', 1, poolRowId);
     }
   }
 
+  for (const dataset of rootDatasets) {
+    appendDatasetTree(dataset, 0, undefined);
+  }
   for (const dataset of datasets.filter((resource) => !emitted.has(resource.id))) {
-    appendRow(dataset, 'dataset', 0);
+    appendDatasetTree(dataset, 0, undefined);
   }
   for (const disk of disks.filter((resource) => !emitted.has(resource.id))) {
     appendRow(disk, 'disk', 0);

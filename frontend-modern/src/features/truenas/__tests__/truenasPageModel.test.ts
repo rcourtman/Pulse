@@ -415,6 +415,67 @@ describe('truenasPageModel', () => {
     expect(rows[3]?.parentRowId).toBe('pool:pool-tank');
   });
 
+  it('nests TrueNAS datasets under the closest dataset path ancestor', () => {
+    const pool = makeResource({
+      id: 'pool-tank',
+      type: 'storage',
+      name: 'tank',
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'ONLINE' },
+    });
+    const media = makeResource({
+      id: 'dataset-media',
+      type: 'storage',
+      name: 'tank/media',
+      storage: { topology: 'dataset', platform: 'truenas', path: '/mnt/tank/media' },
+    });
+    const photos = makeResource({
+      id: 'dataset-photos',
+      type: 'storage',
+      name: 'tank/media/photos',
+      storage: { topology: 'dataset', platform: 'truenas', path: '/mnt/tank/media/photos' },
+    });
+    const raw = makeResource({
+      id: 'dataset-raw',
+      type: 'storage',
+      name: 'tank/media/photos/raw',
+      storage: { topology: 'dataset', platform: 'truenas', path: '/mnt/tank/media/photos/raw' },
+    });
+    const share = makeResource({
+      id: 'share-raw',
+      type: 'network-share',
+      truenas: {
+        share: {
+          id: 'smb-raw',
+          name: 'Raw Photos',
+          protocol: 'SMB',
+          path: '/mnt/tank/media/photos/raw',
+          dataset: 'tank/media/photos/raw',
+        },
+      },
+    });
+
+    const resources = [pool, raw, media, photos, share];
+    const counts = buildTrueNASStorageChildCounts(resources);
+    const rows = buildTrueNASStorageTopologyRows(resources);
+
+    expect(counts.get(pool.id)).toEqual({ datasets: 3, shares: 1, disks: 0 });
+    expect(counts.get(media.id)).toEqual({ datasets: 2, shares: 1, disks: 0 });
+    expect(counts.get(photos.id)).toEqual({ datasets: 1, shares: 1, disks: 0 });
+    expect(counts.get(raw.id)).toEqual({ datasets: 0, shares: 1, disks: 0 });
+    expect(rows.map((row) => [row.id, row.depth, row.parentRowId])).toEqual([
+      ['pool:pool-tank', 0, undefined],
+      ['dataset:dataset-media', 1, 'pool:pool-tank'],
+      ['dataset:dataset-photos', 2, 'dataset:dataset-media'],
+      ['dataset:dataset-raw', 3, 'dataset:dataset-photos'],
+    ]);
+    expect(filterTrueNASStorageTopologyRows(rows, 'raw', 'all').map((row) => row.id)).toEqual([
+      'pool:pool-tank',
+      'dataset:dataset-media',
+      'dataset:dataset-photos',
+      'dataset:dataset-raw',
+    ]);
+  });
+
   it('keeps pool ancestors visible when filtering matching storage children', () => {
     const pool = makeResource({
       id: 'pool-tank',
