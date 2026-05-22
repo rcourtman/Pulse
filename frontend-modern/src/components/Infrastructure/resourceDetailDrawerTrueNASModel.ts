@@ -9,20 +9,20 @@ import type {
   ResourceTrueNASShareMeta,
   ResourceTrueNASVMMeta,
 } from '@/types/resource';
+import {
+  compactTrueNASDetailRows,
+  compactTrueNASDetailSections,
+  makeTrueNASDetailRow,
+  type TrueNASDetailRow,
+  type TrueNASDetailSection,
+  type TrueNASDetailTone,
+} from './trueNASDetailTableModel';
 
-export type ResourceDetailDrawerTrueNASRowTone = 'default' | 'accent' | 'warning' | 'success';
+export type ResourceDetailDrawerTrueNASRowTone = TrueNASDetailTone;
 
-export type ResourceDetailDrawerTrueNASRow = {
-  label: string;
-  value: string;
-  title?: string;
-  tone?: ResourceDetailDrawerTrueNASRowTone;
-};
+export type ResourceDetailDrawerTrueNASRow = TrueNASDetailRow;
 
-export type ResourceDetailDrawerTrueNASSection = {
-  label: string;
-  rows: ResourceDetailDrawerTrueNASRow[];
-};
+export type ResourceDetailDrawerTrueNASSection = TrueNASDetailSection;
 
 const asString = (value?: string | null): string | null => {
   const trimmed = value?.trim();
@@ -105,27 +105,9 @@ const yesNoValue = (value?: boolean): string | null => {
   return value ? 'Yes' : 'No';
 };
 
-const row = (
-  label: string,
-  value: string | null | undefined,
-  options: Pick<ResourceDetailDrawerTrueNASRow, 'title' | 'tone'> = {},
-): ResourceDetailDrawerTrueNASRow | null => {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-  return { label, value: trimmed, ...options };
-};
-
-const compactRows = (
-  rows: Array<ResourceDetailDrawerTrueNASRow | null>,
-): ResourceDetailDrawerTrueNASRow[] =>
-  rows.filter((entry): entry is ResourceDetailDrawerTrueNASRow => Boolean(entry));
-
-const compactSections = (
-  sections: Array<ResourceDetailDrawerTrueNASSection | null>,
-): ResourceDetailDrawerTrueNASSection[] =>
-  sections.filter((section): section is ResourceDetailDrawerTrueNASSection =>
-    Boolean(section && section.rows.length > 0),
-  );
+const row = makeTrueNASDetailRow;
+const compactRows = compactTrueNASDetailRows;
+const compactSections = compactTrueNASDetailSections;
 
 const isTrueNASScopedResource = (resource: Resource): boolean =>
   resource.platformType === 'truenas' ||

@@ -25,6 +25,7 @@ import { ResourceOperatorStateSection } from './ResourceOperatorStateSection';
 import { MaintenanceVerificationSection } from './MaintenanceVerificationSection';
 import { InlineResourceSummaryTables, ResourceSummaryCards } from './ResourceDetailSummary';
 import { ResourceInvestigationContextTables } from './ResourceInvestigationContextTables';
+import { TrueNASDetailSectionTable } from './TrueNASDetailTable';
 import {
   RESOURCE_CHANGE_KIND_ORDER,
   RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER,
@@ -42,7 +43,6 @@ import { buildPbsJobHealthEvidenceModel } from './resourceDetailDrawerServiceMod
 import { ResourceDetailDrawerSupportDisclosure as SupportDisclosure } from './ResourceDetailDrawerSupportDisclosure';
 import type { UseResourceDetailDrawerStateResult } from './useResourceDetailDrawerState';
 import type { ResourceDetailDrawerPresentation } from './resourceDetailDrawerPresentation';
-import type { ResourceDetailDrawerTrueNASSection } from './resourceDetailDrawerTrueNASModel';
 
 interface ResourceDetailDrawerOverviewTabProps {
   resource: Resource;
@@ -64,59 +64,6 @@ const vmwareRowToneClass = (tone?: 'default' | 'accent' | 'warning'): string => 
   }
 };
 
-const trueNASRowToneClass = (tone?: 'default' | 'accent' | 'warning' | 'success'): string => {
-  switch (tone) {
-    case 'accent':
-      return 'text-cyan-700 dark:text-cyan-300';
-    case 'warning':
-      return 'text-amber-700 dark:text-amber-300';
-    case 'success':
-      return 'text-emerald-700 dark:text-emerald-300';
-    default:
-      return 'text-base-content';
-  }
-};
-
-const TrueNASDetailSectionTables: Component<{
-  sections: ResourceDetailDrawerTrueNASSection[];
-}> = (props) => (
-  <div class="overflow-hidden rounded border border-border bg-surface">
-    <table class="w-full table-fixed text-[11px]">
-      <tbody class="divide-y divide-border">
-        <For each={props.sections}>
-          {(section) => (
-            <>
-              <tr class="bg-surface-alt">
-                <th
-                  colspan="2"
-                  class="px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted"
-                >
-                  {section.label}
-                </th>
-              </tr>
-              <For each={section.rows}>
-                {(row) => (
-                  <tr>
-                    <td class="w-[38%] px-2 py-1 align-top text-muted">{row.label}</td>
-                    <td
-                      class={`px-2 py-1 text-right align-top font-medium ${trueNASRowToneClass(
-                        row.tone,
-                      )}`}
-                      title={row.title ?? row.value}
-                    >
-                      <span class="block truncate">{row.value}</span>
-                    </td>
-                  </tr>
-                )}
-              </For>
-            </>
-          )}
-        </For>
-      </tbody>
-    </table>
-  </div>
-);
-
 const TrueNASDetailsDisclosure: Component<{
   drawer: UseResourceDetailDrawerStateResult;
   class?: string;
@@ -133,7 +80,7 @@ const TrueNASDetailsDisclosure: Component<{
     contentClass={props.contentClass ?? 'mt-3 space-y-3'}
     dataTestId="resource-truenas-details-section"
   >
-    <TrueNASDetailSectionTables sections={props.drawer.trueNASDetailSections()} />
+    <TrueNASDetailSectionTable sections={props.drawer.trueNASDetailSections()} />
   </SupportDisclosure>
 );
 

@@ -33,12 +33,12 @@ import {
 } from './truenasPageModel';
 import {
   TrueNASInlineDetailTable,
-  compactTrueNASInlineDetailRows,
-  compactTrueNASInlineDetailSections,
-  makeTrueNASInlineDetailRow,
-  type TrueNASInlineDetailSection,
-  type TrueNASInlineDetailTone,
-} from './TrueNASInlineDetailTable';
+  compactTrueNASDetailRows,
+  compactTrueNASDetailSections,
+  makeTrueNASDetailRow,
+  type TrueNASDetailSection,
+  type TrueNASDetailTone,
+} from '@/components/Infrastructure/TrueNASDetailTable';
 import type { Resource, ResourceType } from '@/types/resource';
 import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
 
@@ -124,8 +124,8 @@ const formatStartedAt = (value: string | undefined): string => {
   });
 };
 
-type AlertDetailTone = TrueNASInlineDetailTone;
-type AlertDetailSection = TrueNASInlineDetailSection;
+type AlertDetailTone = TrueNASDetailTone;
+type AlertDetailSection = TrueNASDetailSection;
 
 const detailDateTime = (value?: string): string | null => {
   if (!value) return null;
@@ -140,9 +140,9 @@ const detailDateTime = (value?: string): string | null => {
   });
 };
 
-const detailRow = makeTrueNASInlineDetailRow;
-const compactDetailRows = compactTrueNASInlineDetailRows;
-const compactDetailSections = compactTrueNASInlineDetailSections;
+const detailRow = makeTrueNASDetailRow;
+const compactDetailRows = compactTrueNASDetailRows;
+const compactDetailSections = compactTrueNASDetailSections;
 
 const alertTone = (severity: TrueNASIncidentRow['severityBucket']): AlertDetailTone => {
   if (severity === 'critical') return 'danger';

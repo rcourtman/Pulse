@@ -34,12 +34,12 @@ import {
 } from './truenasPageModel';
 import {
   TrueNASInlineDetailTable,
-  compactTrueNASInlineDetailRows,
-  compactTrueNASInlineDetailSections,
-  makeTrueNASInlineDetailRow,
-  type TrueNASInlineDetailSection,
-  type TrueNASInlineDetailTone,
-} from './TrueNASInlineDetailTable';
+  compactTrueNASDetailRows,
+  compactTrueNASDetailSections,
+  makeTrueNASDetailRow,
+  type TrueNASDetailSection,
+  type TrueNASDetailTone,
+} from '@/components/Infrastructure/TrueNASDetailTable';
 
 const TRUENAS_SERVICE_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASServiceStatusFilter>[] = [
   { value: 'all', label: 'All' },
@@ -90,17 +90,17 @@ const serviceStatusVariant = (
   return 'muted';
 };
 
-type ServiceDetailTone = TrueNASInlineDetailTone;
-type ServiceDetailSection = TrueNASInlineDetailSection;
+type ServiceDetailTone = TrueNASDetailTone;
+type ServiceDetailSection = TrueNASDetailSection;
 
 const detailBool = (value?: boolean): string | null => {
   if (value === undefined) return null;
   return value ? 'Enabled' : 'Disabled';
 };
 
-const detailRow = makeTrueNASInlineDetailRow;
-const compactDetailRows = compactTrueNASInlineDetailRows;
-const compactDetailSections = compactTrueNASInlineDetailSections;
+const detailRow = makeTrueNASDetailRow;
+const compactDetailRows = compactTrueNASDetailRows;
+const compactDetailSections = compactTrueNASDetailSections;
 
 const serviceTone = (row: TrueNASServiceRow): ServiceDetailTone => {
   const status = mapTrueNASServiceStatus(row);
