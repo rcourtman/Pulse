@@ -1,4 +1,5 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
+import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import type { Resource, ResourceChange, ResourceIncident, ResourceType } from '@/types/resource';
 
 export type VmwarePageTabId = 'overview' | 'storage' | 'health' | 'activity';
@@ -697,6 +698,7 @@ const vmwareVirtualMachineSearchHaystack = (resource: Resource): string =>
     resource.vmware?.managedObjectId,
     resource.vmware?.datacenterName,
     resource.vmware?.clusterName,
+    formatVmwareClusterServices(resource.vmware),
     resource.vmware?.computeResourceName,
     resource.vmware?.folderName,
     resource.vmware?.resourcePoolName,

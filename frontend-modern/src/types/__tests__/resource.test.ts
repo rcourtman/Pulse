@@ -255,6 +255,8 @@ describe('Resource Helper Functions', () => {
         entityType: 'vm',
         datacenterName: 'DC1',
         clusterName: 'Production Cluster',
+        clusterHaEnabled: true,
+        clusterDrsEnabled: false,
         folderName: 'Workloads',
         resourcePoolName: 'Tier 1',
         runtimeHostName: 'esxi-01.lab.local',
@@ -355,6 +357,8 @@ describe('Resource Helper Functions', () => {
 
       expect(vmware.overallStatus).toBe('yellow');
       expect(vmware.clusterName).toBe('Production Cluster');
+      expect(vmware.clusterHaEnabled).toBe(true);
+      expect(vmware.clusterDrsEnabled).toBe(false);
       expect(vmware.runtimeHostName).toBe('esxi-01.lab.local');
       expect(vmware.datastoreNames).toEqual(['primary-vmfs']);
       expect(vmware.guestIpAddresses).toEqual(['10.0.0.21']);

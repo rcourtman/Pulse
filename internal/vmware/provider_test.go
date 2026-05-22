@@ -30,6 +30,8 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 			ComputeResourceName: "Prod Compute",
 			ClusterID:           "domain-c101",
 			ClusterName:         "Prod Compute",
+			ClusterHAEnabled:    boolPtr(true),
+			ClusterDRSEnabled:   boolPtr(false),
 			FolderID:            "group-h4",
 			FolderName:          "Prod Hosts",
 			DatastoreIDs:        []string{"datastore-11"},
@@ -70,6 +72,8 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 			ComputeResourceName: "Prod Compute",
 			ClusterID:           "domain-c101",
 			ClusterName:         "Prod Compute",
+			ClusterHAEnabled:    boolPtr(true),
+			ClusterDRSEnabled:   boolPtr(false),
 			FolderID:            "group-v7",
 			FolderName:          "Production VMs",
 			ResourcePoolID:      "resgroup-22",
@@ -246,6 +250,12 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 	if got := hostRecord.Resource.VMware.ClusterName; got != "Prod Compute" {
 		t.Fatalf("host cluster name = %q, want Prod Compute", got)
 	}
+	if got := hostRecord.Resource.VMware.ClusterHAEnabled; got == nil || !*got {
+		t.Fatalf("host cluster HA enabled = %+v, want true", got)
+	}
+	if got := hostRecord.Resource.VMware.ClusterDRSEnabled; got == nil || *got {
+		t.Fatalf("host cluster DRS enabled = %+v, want false", got)
+	}
 	if got := hostRecord.Resource.VMware.DatastoreNames; len(got) != 1 || got[0] != "nvme-primary" {
 		t.Fatalf("host datastore names = %#v, want [nvme-primary]", got)
 	}
@@ -286,6 +296,12 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 	}
 	if got := vmRecord.Resource.VMware.ActiveAlarmSummary; got != "VM replication fault (red)" {
 		t.Fatalf("vm active alarm summary = %q, want %q", got, "VM replication fault (red)")
+	}
+	if got := vmRecord.Resource.VMware.ClusterHAEnabled; got == nil || !*got {
+		t.Fatalf("vm cluster HA enabled = %+v, want true", got)
+	}
+	if got := vmRecord.Resource.VMware.ClusterDRSEnabled; got == nil || *got {
+		t.Fatalf("vm cluster DRS enabled = %+v, want false", got)
 	}
 	if got := vmRecord.Resource.VMware.SnapshotCount; got != 2 {
 		t.Fatalf("vm snapshot count = %d, want 2", got)

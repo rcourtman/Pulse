@@ -14,6 +14,7 @@ import {
 } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_TABLE_BODY_CLASS,
@@ -159,13 +160,19 @@ export const VsphereHostsTable: Component<{
                   <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
                     Host
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[11%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[11%]`}
+                  >
                     Datacenter
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[12%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[12%]`}
+                  >
                     Cluster
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[9%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[9%]`}
+                  >
                     Power
                   </TableHead>
                   <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[13%]`}>
@@ -174,13 +181,19 @@ export const VsphereHostsTable: Component<{
                   <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[13%]`}>
                     Memory
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}
+                  >
                     Datastores
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[5%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[5%]`}
+                  >
                     VMs
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                  >
                     vCenter
                   </TableHead>
                 </TableRow>
@@ -192,6 +205,7 @@ export const VsphereHostsTable: Component<{
                     const name = () => asTrimmedString(host.name) || host.id;
                     const datacenter = () => asTrimmedString(meta()?.datacenterName) || '—';
                     const cluster = () => asTrimmedString(meta()?.clusterName) || '—';
+                    const clusterServices = () => formatVmwareClusterServices(meta());
                     const vcenter = () => asTrimmedString(meta()?.vcenterHost) || '—';
                     const datastoreCount = () =>
                       meta()?.datastoreIds?.length ?? meta()?.datastoreNames?.length ?? 0;
@@ -240,10 +254,18 @@ export const VsphereHostsTable: Component<{
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            title={[cluster(), clusterServices()].filter(Boolean).join(' | ')}
                           >
-                            {cluster()}
+                            <span class="block truncate">{cluster()}</span>
+                            <Show when={clusterServices()}>
+                              <span class="block truncate text-[10px] text-muted">
+                                {clusterServices()}
+                              </span>
+                            </Show>
                           </TableCell>
-                          <TableCell class={`${getPlatformTableCellClassForKind('text')} hidden md:table-cell`}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden md:table-cell`}
+                          >
                             <div class="flex items-center gap-2">
                               <StatusDot
                                 size="sm"

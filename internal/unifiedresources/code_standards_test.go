@@ -2007,6 +2007,8 @@ func TestCloneVMwareDataKeepsNestedRuntimeDetailsIsolated(t *testing.T) {
 		"out.SnapshotTree = cloneVMwareSnapshotDataSlice(in.SnapshotTree)",
 		"out.NetworkAdapters = cloneVMwareNetworkAdapterDataSlice(in.NetworkAdapters)",
 		"out.VirtualDisks = cloneVMwareVirtualDiskDataSlice(in.VirtualDisks)",
+		"out.ClusterHAEnabled = cloneBoolPtr(in.ClusterHAEnabled)",
+		"out.ClusterDRSEnabled = cloneBoolPtr(in.ClusterDRSEnabled)",
 		"out.Tools = cloneVMwareToolsData(in.Tools)",
 		"out.Hardware = cloneVMwareVMHardwareData(in.Hardware)",
 		"out[i].CreatedAt = cloneTimePtr(in[i].CreatedAt)",

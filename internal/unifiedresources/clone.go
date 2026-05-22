@@ -264,6 +264,8 @@ func cloneVMwareData(in *VMwareData) *VMwareData {
 	out := *in
 	out.DatastoreIDs = cloneStringSlice(in.DatastoreIDs)
 	out.DatastoreNames = cloneStringSlice(in.DatastoreNames)
+	out.ClusterHAEnabled = cloneBoolPtr(in.ClusterHAEnabled)
+	out.ClusterDRSEnabled = cloneBoolPtr(in.ClusterDRSEnabled)
 	out.DatastoreAccessible = cloneBoolPtr(in.DatastoreAccessible)
 	out.MultipleHostAccess = cloneBoolPtr(in.MultipleHostAccess)
 	out.GuestIPAddresses = cloneStringSlice(in.GuestIPAddresses)

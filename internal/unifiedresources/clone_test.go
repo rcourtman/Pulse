@@ -159,6 +159,8 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 	installAttempts := int64(1)
 	toolsVersionNumber := int64(12352)
 	guestRebootRequested := true
+	clusterHAEnabled := true
+	clusterDRSEnabled := false
 	instantCloneFrozen := false
 	bootDelayMilliseconds := int64(5000)
 	bootRetry := true
@@ -167,6 +169,8 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 	original := &Resource{
 		ID: "vmware-vm-1",
 		VMware: &VMwareData{
+			ClusterHAEnabled:  &clusterHAEnabled,
+			ClusterDRSEnabled: &clusterDRSEnabled,
 			SnapshotTree: []VMwareSnapshotData{{
 				Snapshot:  "snapshot-201",
 				Name:      "pre-upgrade",
@@ -227,6 +231,8 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 	cloned.VMware.VirtualDisks[0].DatastoreName = "mutated-datastore"
 	*cloned.VMware.VirtualDisks[0].SCSIUnit = 2
 	*cloned.VMware.VirtualDisks[0].CapacityBytes = 1
+	*cloned.VMware.ClusterHAEnabled = false
+	*cloned.VMware.ClusterDRSEnabled = true
 	*cloned.VMware.Tools.AutoUpdateSupported = false
 	*cloned.VMware.Tools.VersionNumber = 1
 	cloned.VMware.Tools.GuestRebootComponents[0] = "mutated"
@@ -258,6 +264,12 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 	}
 	if *original.VMware.VirtualDisks[0].CapacityBytes != 107374182400 {
 		t.Fatalf("mutating cloned VMware disk capacity should not affect original: %+v", original.VMware.VirtualDisks[0].CapacityBytes)
+	}
+	if original.VMware.ClusterHAEnabled == nil || !*original.VMware.ClusterHAEnabled {
+		t.Fatalf("mutating cloned VMware cluster HA flag should not affect original: %+v", original.VMware.ClusterHAEnabled)
+	}
+	if original.VMware.ClusterDRSEnabled == nil || *original.VMware.ClusterDRSEnabled {
+		t.Fatalf("mutating cloned VMware cluster DRS flag should not affect original: %+v", original.VMware.ClusterDRSEnabled)
 	}
 	if original.VMware.Tools.AutoUpdateSupported == nil || !*original.VMware.Tools.AutoUpdateSupported {
 		t.Fatalf("mutating cloned VMware Tools auto-update flag should not affect original: %+v", original.VMware.Tools.AutoUpdateSupported)

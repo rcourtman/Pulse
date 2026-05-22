@@ -173,6 +173,16 @@ type InventoryEnrichmentIssue struct {
 	Message    string `json:"message,omitempty"`
 }
 
+// InventoryCluster is the vCenter Automation API cluster summary. Pulse keeps
+// clusters as read-only topology metadata on hosts and VMs, not top-level
+// resources.
+type InventoryCluster struct {
+	Cluster    string `json:"cluster"`
+	Name       string `json:"name"`
+	HAEnabled  *bool  `json:"ha_enabled,omitempty"`
+	DRSEnabled *bool  `json:"drs_enabled,omitempty"`
+}
+
 // InventoryHost is the canonical phase-1 host summary returned by the vCenter
 // Automation API list endpoint.
 type InventoryHost struct {
@@ -187,6 +197,8 @@ type InventoryHost struct {
 	ComputeResourceName string            `json:"compute_resource_name,omitempty"`
 	ClusterID           string            `json:"cluster_id,omitempty"`
 	ClusterName         string            `json:"cluster_name,omitempty"`
+	ClusterHAEnabled    *bool             `json:"cluster_ha_enabled,omitempty"`
+	ClusterDRSEnabled   *bool             `json:"cluster_drs_enabled,omitempty"`
 	FolderID            string            `json:"folder_id,omitempty"`
 	FolderName          string            `json:"folder_name,omitempty"`
 	DatastoreIDs        []string          `json:"datastore_ids,omitempty"`
@@ -212,6 +224,8 @@ type InventoryVM struct {
 	ComputeResourceName string                      `json:"compute_resource_name,omitempty"`
 	ClusterID           string                      `json:"cluster_id,omitempty"`
 	ClusterName         string                      `json:"cluster_name,omitempty"`
+	ClusterHAEnabled    *bool                       `json:"cluster_ha_enabled,omitempty"`
+	ClusterDRSEnabled   *bool                       `json:"cluster_drs_enabled,omitempty"`
 	FolderID            string                      `json:"folder_id,omitempty"`
 	FolderName          string                      `json:"folder_name,omitempty"`
 	ResourcePoolID      string                      `json:"resource_pool_id,omitempty"`
@@ -276,6 +290,7 @@ type InventorySnapshot struct {
 	Hosts            []InventoryHost
 	VMs              []InventoryVM
 	Datastores       []InventoryDatastore
+	Clusters         []InventoryCluster
 	EnrichmentIssues []InventoryEnrichmentIssue
 }
 
@@ -498,6 +513,8 @@ func vmwareRecordsFromSnapshot(snapshot *InventorySnapshot, now func() time.Time
 				ComputeResourceName: strings.TrimSpace(host.ComputeResourceName),
 				ClusterID:           strings.TrimSpace(host.ClusterID),
 				ClusterName:         strings.TrimSpace(host.ClusterName),
+				ClusterHAEnabled:    cloneBoolPointer(host.ClusterHAEnabled),
+				ClusterDRSEnabled:   cloneBoolPointer(host.ClusterDRSEnabled),
 				FolderID:            strings.TrimSpace(host.FolderID),
 				FolderName:          strings.TrimSpace(host.FolderName),
 				ConnectionState:     strings.TrimSpace(host.ConnectionState),
@@ -560,6 +577,8 @@ func vmwareRecordsFromSnapshot(snapshot *InventorySnapshot, now func() time.Time
 				ComputeResourceName: strings.TrimSpace(vm.ComputeResourceName),
 				ClusterID:           strings.TrimSpace(vm.ClusterID),
 				ClusterName:         strings.TrimSpace(vm.ClusterName),
+				ClusterHAEnabled:    cloneBoolPointer(vm.ClusterHAEnabled),
+				ClusterDRSEnabled:   cloneBoolPointer(vm.ClusterDRSEnabled),
 				FolderID:            strings.TrimSpace(vm.FolderID),
 				FolderName:          strings.TrimSpace(vm.FolderName),
 				ResourcePoolID:      strings.TrimSpace(vm.ResourcePoolID),
@@ -698,6 +717,9 @@ func sortInventorySnapshot(snapshot *InventorySnapshot) {
 	sort.Slice(snapshot.Datastores, func(i, j int) bool {
 		return vmwareSortKey(snapshot.Datastores[i].Datastore, snapshot.Datastores[i].Name) < vmwareSortKey(snapshot.Datastores[j].Datastore, snapshot.Datastores[j].Name)
 	})
+	sort.Slice(snapshot.Clusters, func(i, j int) bool {
+		return vmwareSortKey(snapshot.Clusters[i].Cluster, snapshot.Clusters[i].Name) < vmwareSortKey(snapshot.Clusters[j].Cluster, snapshot.Clusters[j].Name)
+	})
 	sort.Slice(snapshot.EnrichmentIssues, func(i, j int) bool {
 		return inventoryEnrichmentIssueSortKey(snapshot.EnrichmentIssues[i]) <
 			inventoryEnrichmentIssueSortKey(snapshot.EnrichmentIssues[j])
@@ -712,6 +734,7 @@ func cloneInventorySnapshot(in *InventorySnapshot) *InventorySnapshot {
 	out.Hosts = cloneInventoryHosts(in.Hosts)
 	out.VMs = cloneInventoryVMs(in.VMs)
 	out.Datastores = cloneInventoryDatastores(in.Datastores)
+	out.Clusters = cloneInventoryClusters(in.Clusters)
 	out.EnrichmentIssues = cloneInventoryEnrichmentIssues(in.EnrichmentIssues)
 	return &out
 }
@@ -723,6 +746,8 @@ func cloneInventoryHosts(in []InventoryHost) []InventoryHost {
 	out := make([]InventoryHost, len(in))
 	for i := range in {
 		out[i] = in[i]
+		out[i].ClusterHAEnabled = cloneBoolPointer(in[i].ClusterHAEnabled)
+		out[i].ClusterDRSEnabled = cloneBoolPointer(in[i].ClusterDRSEnabled)
 		out[i].DatastoreIDs = cloneStringSlice(in[i].DatastoreIDs)
 		out[i].DatastoreNames = cloneStringSlice(in[i].DatastoreNames)
 		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
@@ -740,6 +765,8 @@ func cloneInventoryVMs(in []InventoryVM) []InventoryVM {
 	out := make([]InventoryVM, len(in))
 	for i := range in {
 		out[i] = in[i]
+		out[i].ClusterHAEnabled = cloneBoolPointer(in[i].ClusterHAEnabled)
+		out[i].ClusterDRSEnabled = cloneBoolPointer(in[i].ClusterDRSEnabled)
 		out[i].DatastoreIDs = cloneStringSlice(in[i].DatastoreIDs)
 		out[i].DatastoreNames = cloneStringSlice(in[i].DatastoreNames)
 		out[i].GuestIPAddresses = cloneStringSlice(in[i].GuestIPAddresses)
@@ -772,6 +799,19 @@ func cloneInventoryDatastores(in []InventoryDatastore) []InventoryDatastore {
 		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
 		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
 		out[i].RecentEvents = cloneInventoryEvents(in[i].RecentEvents)
+	}
+	return out
+}
+
+func cloneInventoryClusters(in []InventoryCluster) []InventoryCluster {
+	if in == nil {
+		return nil
+	}
+	out := make([]InventoryCluster, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].HAEnabled = cloneBoolPointer(in[i].HAEnabled)
+		out[i].DRSEnabled = cloneBoolPointer(in[i].DRSEnabled)
 	}
 	return out
 }

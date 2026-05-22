@@ -1007,6 +1007,8 @@ type VMwareData struct {
 	ComputeResourceName string                     `json:"computeResourceName,omitempty"`
 	ClusterID           string                     `json:"clusterId,omitempty"`
 	ClusterName         string                     `json:"clusterName,omitempty"`
+	ClusterHAEnabled    *bool                      `json:"clusterHaEnabled,omitempty"`
+	ClusterDRSEnabled   *bool                      `json:"clusterDrsEnabled,omitempty"`
 	FolderID            string                     `json:"folderId,omitempty"`
 	FolderName          string                     `json:"folderName,omitempty"`
 	ResourcePoolID      string                     `json:"resourcePoolId,omitempty"`

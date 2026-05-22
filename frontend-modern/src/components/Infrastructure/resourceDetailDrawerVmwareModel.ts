@@ -8,6 +8,7 @@ import type {
   ResourceVMwareTools,
   ResourceVMwareVirtualDisk,
 } from '@/types/resource';
+import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 
 export type ResourceDetailDrawerVMwareRowTone = 'default' | 'accent' | 'warning';
 
@@ -619,6 +620,10 @@ export const buildVMwareDetailSections = (
     {
       label: 'Cluster',
       value: asTrimmedString(vmware.clusterName),
+    },
+    {
+      label: 'Cluster services',
+      value: formatVmwareClusterServices(vmware),
     },
     {
       label: 'Compute resource',

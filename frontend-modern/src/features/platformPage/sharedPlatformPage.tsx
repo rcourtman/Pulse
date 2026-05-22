@@ -10,6 +10,7 @@ import { SearchInput } from '@/components/shared/SearchInput';
 import { TableCard } from '@/components/shared/TableCard';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import type { Resource, ResourceStatus } from '@/types/resource';
+import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import { getPlatformColumnAlign, type PlatformTableColumnKind } from './columnAlignment';
 
 export type { PlatformTableFilterOption };
@@ -209,6 +210,7 @@ const matchesPlatformSearch = (resource: Resource, search: string): boolean => {
     resource.vmware?.vcenterHost,
     resource.vmware?.runtimeHostName,
     resource.vmware?.clusterName,
+    formatVmwareClusterServices(resource.vmware),
     resource.vmware?.datastoreNames?.join(' '),
     ...(resource.tags ?? []),
   ]

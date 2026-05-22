@@ -13,6 +13,7 @@ func DefaultFixtures() InventorySnapshot {
 
 	snapshot := defaultFixturesPrimaryCluster(collectedAt, accessible, multipleHostAccess)
 	appendEdgeClusterFixtures(&snapshot, collectedAt, accessible, multipleHostAccess)
+	applyInventoryClusterServices(&snapshot)
 	return snapshot
 }
 
@@ -21,12 +22,20 @@ func defaultFixturesPrimaryCluster(
 	accessible bool,
 	multipleHostAccess bool,
 ) InventorySnapshot {
+	primaryHA := true
+	primaryDRS := true
 	return InventorySnapshot{
 		ConnectionID:   "vc-mock-1",
 		ConnectionName: "Lab vCenter",
 		VCenterHost:    "vcsa.lab.local",
 		VIRelease:      "8.0.3",
 		CollectedAt:    collectedAt,
+		Clusters: []InventoryCluster{{
+			Cluster:    "domain-c101",
+			Name:       "Production Cluster",
+			HAEnabled:  &primaryHA,
+			DRSEnabled: &primaryDRS,
+		}},
 		Hosts: []InventoryHost{
 			{
 				Host:                "host-101",
@@ -604,6 +613,15 @@ func appendEdgeClusterFixtures(
 		edgeFolderDSLbl    = "Edge Datastores"
 	)
 
+	edgeHA := true
+	edgeDRS := false
+	snapshot.Clusters = append(snapshot.Clusters, InventoryCluster{
+		Cluster:    edgeClusterID,
+		Name:       edgeClusterName,
+		HAEnabled:  &edgeHA,
+		DRSEnabled: &edgeDRS,
+	})
+
 	edgeDatastoreIDs := []string{"datastore-301", "datastore-302", "datastore-303", "datastore-304"}
 	edgeDatastoreNames := []string{"edge-nvme-tier", "edge-warm-nfs", "edge-vsan", "edge-cold-iscsi"}
 
@@ -799,6 +817,19 @@ func appendEdgeClusterFixtures(
 			URL:                ds.URL,
 			OverallStatus:      ds.Status,
 		})
+	}
+}
+
+func applyInventoryClusterServices(snapshot *InventorySnapshot) {
+	if snapshot == nil {
+		return
+	}
+	clustersByID := inventoryClusterDetailsByID(snapshot.Clusters)
+	for i := range snapshot.Hosts {
+		applyClusterServicesToHost(&snapshot.Hosts[i], clustersByID)
+	}
+	for i := range snapshot.VMs {
+		applyClusterServicesToVM(&snapshot.VMs[i], clustersByID)
 	}
 }
 

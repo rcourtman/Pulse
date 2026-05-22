@@ -937,6 +937,8 @@ export interface ResourceVMwareMeta {
   computeResourceName?: string;
   clusterId?: string;
   clusterName?: string;
+  clusterHaEnabled?: boolean;
+  clusterDrsEnabled?: boolean;
   folderId?: string;
   folderName?: string;
   resourcePoolId?: string;

@@ -1150,11 +1150,12 @@ resource kinds, or a parallel VMware incident model.
 That same topology contract now also has a concrete projection seam.
 `internal/vmware/provider.go` must preserve VMware placement and identity
 detail on the shared `vmware` facet only: hosts may carry datacenter,
-compute-resource, cluster, folder, and attached-datastore metadata; VMs may
-carry runtime-host, folder, resource-pool, datastore, guest-identity, VM
+compute-resource, cluster, cluster HA/DRS service state, folder, and
+attached-datastore metadata; VMs may carry runtime-host, cluster HA/DRS
+service state, folder, resource-pool, datastore, guest-identity, VM
 virtual-hardware configuration, VMware Tools runtime status, and VM hardware
-Ethernet adapter plus VM hardware disk metadata plus canonical parentage to the
-owning ESXi `agent`; datastores may
+Ethernet adapter plus VM hardware disk metadata plus canonical parentage to
+the owning ESXi `agent`; datastores may
 carry datacenter/folder placement plus shared storage-node and workload
 consumer metadata through `storage.nodes`, `storage.consumerCount`, and
 `storage.topConsumers`. VMs may also carry VI JSON snapshot-tree context under
@@ -1185,6 +1186,11 @@ CPU cores-per-socket and CPU hot-add/remove flags, and memory hot-add
 increment/limit settings. Those fields are API-native read-only VM
 configuration facts; they must not become Pulse VM-control authority, workload
 identity aliases, recovery protection posture, or a separate hardware resource.
+Cluster HA and DRS state belongs under `vmware.clusterHaEnabled` and
+`vmware.clusterDrsEnabled` for hosts and VMs whose placement resolves to that
+cluster. It is API-native monitoring context from the vCenter cluster summary,
+not a synthetic cluster resource, lifecycle command surface, scheduling policy
+model, or recovery/protection signal.
 Those enrichments must remain subordinate to shared `agent`, `vm`, and
 `storage` resources rather than becoming a VMware-only topology graph, recovery
 artifact, canonical identity alias, or separate provider detail drawer

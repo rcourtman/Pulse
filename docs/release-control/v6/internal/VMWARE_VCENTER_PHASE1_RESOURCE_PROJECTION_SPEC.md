@@ -1,6 +1,6 @@
 # VMware vCenter Phase-1 Resource Projection Spec
 
-Last updated: 2026-03-30
+Last updated: 2026-05-22
 Status: PLANNED
 Governance surfaces:
 - `status.json.candidate_lanes.platform-admission-execution`
@@ -25,8 +25,9 @@ Phase-1 VMware support is only valid if all of these stay true:
 3. ESXi hosts project as canonical `agent`
 4. virtual machines project as canonical `vm`
 5. datastores project as canonical `storage`
-6. datacenter, cluster, folder, resource pool, and `vCenter` itself remain
-   topology or relationship metadata, not top-level Pulse resources
+6. datacenter, cluster, cluster HA/DRS service state, folder, resource pool,
+   and `vCenter` itself remain topology or relationship metadata, not
+   top-level Pulse resources
 7. `physical-disk`, `system-container`, `app-container`, and recovery
    artifacts remain out of phase 1
 
@@ -60,7 +61,7 @@ distinct `vCenter` environments.
 | `Datastore` | `storage` | yes | yes | inventory, capacity/free-space, accessibility, relationships |
 | `vCenter` | none | no | no | connection and poll authority only |
 | `Datacenter` | none | metadata only | no | placement and topology context |
-| `ClusterComputeResource` | none | metadata only | no | placement and grouping context |
+| `ClusterComputeResource` | none | metadata only | no | placement, grouping, HA/DRS service context |
 | `Folder` | none | metadata only | no | inventory placement context |
 | `ResourcePool` | none | metadata only | no | workload placement context |
 | snapshot tree | none | read-side VM detail only | no | not a recovery artifact |
@@ -88,6 +89,10 @@ Phase-1 projection rule:
 4. cluster, datacenter, folder, and resource-pool context stay in
    VMware-specific platform metadata or relationships under that canonical
    `agent`
+5. when `GET /api/vcenter/cluster` exposes HA/DRS service state for the
+   resolved cluster, that state may be copied onto the host's `vmware` facet as
+   read-only monitoring context, not as a cluster resource or host control
+   capability
 
 Required secondary identity capture when available:
 
@@ -131,6 +136,10 @@ Phase-1 projection rule:
 5. host placement, folder placement, resource-pool membership, and datastore
    attachments stay as relationships or platform metadata under the canonical
    `vm`
+6. when `GET /api/vcenter/cluster` exposes HA/DRS service state for the
+   resolved cluster, that state may be copied onto the VM's `vmware` facet as
+   read-only placement context, not as VM identity, scheduling authority, or
+   recovery posture
 
 Snapshot boundary:
 
@@ -178,6 +187,10 @@ These VMware concepts remain metadata or relationships in phase 1:
 5. resource pool
 6. datastore cluster / storage pod
 7. network objects
+
+Cluster HA and DRS flags are properties of the cluster placement context. They
+may be rendered on canonical hosts and VMs whose placement resolves to that
+cluster, but the cluster itself remains topology metadata in phase 1.
 
 That means phase-1 VMware work must not add:
 
@@ -298,3 +311,5 @@ not compensate by inventing provider-local resource types or sidecar products.
     [Alarm Manager Get Alarm](https://developer.broadcom.com/xapis/virtual-infrastructure-json-api/latest/sdk/vim25/release/AlarmManager/moId/GetAlarm/post/)
 11. host-plus-child performance:
     [Performance Manager Query Perf Composite](https://developer.broadcom.com/xapis/virtual-infrastructure-json-api/latest/sdk/vim25/release/PerformanceManager/moId/QueryPerfComposite/post/)
+12. cluster inventory and HA/DRS service state:
+    [Vcenter Cluster list](https://developer.broadcom.com/xapis/vsphere-automation-api/latest/api/vcenter/cluster/get/)

@@ -16,6 +16,7 @@ import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { formatBytes } from '@/utils/format';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_CARD_CLASS,
@@ -511,6 +512,7 @@ export const VsphereVirtualMachinesTable: Component<{
                             asTrimmedString(meta()?.clusterName) ||
                             asTrimmedString(meta()?.computeResourceName) ||
                             '-';
+                          const clusterServices = () => formatVmwareClusterServices(meta());
                           const pool = () => asTrimmedString(meta()?.resourcePoolName) || '-';
                           const guest = createMemo(() => formatGuest(vm));
                           const network = createMemo(() => networkSummary(meta()?.networkAdapters));
@@ -599,9 +601,14 @@ export const VsphereVirtualMachinesTable: Component<{
                                 </TableCell>
                                 <TableCell
                                   class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                                  title={cluster()}
+                                  title={[cluster(), clusterServices()].filter(Boolean).join(' | ')}
                                 >
                                   <span class="block truncate">{cluster()}</span>
+                                  <Show when={clusterServices()}>
+                                    <span class="block truncate text-[10px] text-muted">
+                                      {clusterServices()}
+                                    </span>
+                                  </Show>
                                 </TableCell>
                                 <TableCell
                                   class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}

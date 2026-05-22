@@ -6,6 +6,33 @@ import {
 import type { ResourceVMwareMeta } from '@/types/resource';
 
 describe('resourceDetailDrawerVmwareModel', () => {
+  it('surfaces vCenter cluster service state in placement context', () => {
+    const vmware: ResourceVMwareMeta = {
+      datacenterName: 'Lab DC',
+      clusterName: 'Compute Cluster',
+      clusterHaEnabled: true,
+      clusterDrsEnabled: false,
+      computeResourceName: 'Compute Cluster',
+      resourcePoolName: 'Production',
+      runtimeHostName: 'esxi-01.lab.local',
+      datastoreNames: ['shared-vsan'],
+    };
+
+    const placement = buildVMwareDetailSections('vm', vmware).find(
+      (section) => section.id === 'placement',
+    );
+
+    expect(placement?.rows).toEqual([
+      { label: 'Datacenter', value: 'Lab DC' },
+      { label: 'Cluster', value: 'Compute Cluster' },
+      { label: 'Cluster services', value: 'HA enabled · DRS disabled' },
+      { label: 'Compute resource', value: 'Compute Cluster' },
+      { label: 'Resource pool', value: 'Production' },
+      { label: 'Runtime host', value: 'esxi-01.lab.local' },
+      { label: 'Datastores', value: 'shared-vsan' },
+    ]);
+  });
+
   it('surfaces vSphere snapshot trees as read-only VM detail context', () => {
     const vmware: ResourceVMwareMeta = {
       connectionName: 'Lab VC',

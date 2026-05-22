@@ -230,12 +230,21 @@ func (c *Client) enrichInventoryTopology(
 		datastoreNamesByID[strings.TrimSpace(datastore.Datastore)] = firstNonEmptyTrimmed(datastore.Name, datastore.Datastore)
 	}
 
+	var issues []InventoryEnrichmentIssue
+	clusters, err := c.collectClusterInventory(ctx, automationSessionID)
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "cluster", "", err); ok {
+		issues = append(issues, *issue)
+	} else if err != nil && !isAutomationNotFound(err) && !isAutomationUnavailable(err) {
+		return nil, err
+	}
+	snapshot.Clusters = clusters
+	clusterDetailsByID := inventoryClusterDetailsByID(clusters)
+
 	cache := newVMwareTopologyCache()
 	sem := make(chan struct{}, vmwareSignalEnrichmentConcurrency)
 	var wg sync.WaitGroup
 	var firstErr error
 	var firstErrMu sync.Mutex
-	var issues []InventoryEnrichmentIssue
 	var issuesMu sync.Mutex
 
 	recordIssues := func(values []InventoryEnrichmentIssue) {
@@ -267,7 +276,7 @@ func (c *Client) enrichInventoryTopology(
 	for i := range snapshot.Hosts {
 		i := i
 		run(func() error {
-			host, hostIssues, err := c.enrichHostTopology(ctx, release, sessionID, snapshot.Hosts[i], cache, datastoreNamesByID)
+			host, hostIssues, err := c.enrichHostTopology(ctx, release, sessionID, snapshot.Hosts[i], cache, datastoreNamesByID, clusterDetailsByID)
 			if err != nil {
 				return err
 			}
@@ -289,6 +298,7 @@ func (c *Client) enrichInventoryTopology(
 				cache,
 				hostNamesByID,
 				datastoreNamesByID,
+				clusterDetailsByID,
 			)
 			if err != nil {
 				return err
@@ -315,7 +325,7 @@ func (c *Client) enrichInventoryTopology(
 	wg.Wait()
 
 	firstErrMu.Lock()
-	err := firstErr
+	err = firstErr
 	firstErrMu.Unlock()
 	if err != nil {
 		return nil, err
@@ -333,6 +343,7 @@ func (c *Client) enrichHostTopology(
 	host InventoryHost,
 	cache *vmwareTopologyCache,
 	datastoreNamesByID map[string]string,
+	clusterDetailsByID map[string]InventoryCluster,
 ) (InventoryHost, []InventoryEnrichmentIssue, error) {
 	var issues []InventoryEnrichmentIssue
 	recordIssue := func(issue *InventoryEnrichmentIssue) {
@@ -349,6 +360,7 @@ func (c *Client) enrichHostTopology(
 		return host, nil, err
 	}
 	applyPlacementToHost(&host, placement)
+	applyClusterServicesToHost(&host, clusterDetailsByID)
 
 	datastoreRefs, err := c.collectEntityReferenceList(ctx, release, sessionID, "HostSystem", host.Host, "datastore", "host datastore attachments")
 	if issue, ok := classifyInventoryEnrichmentIssue("topology", "host", host.Host, err); ok {
@@ -371,6 +383,7 @@ func (c *Client) enrichVMTopology(
 	cache *vmwareTopologyCache,
 	hostNamesByID map[string]string,
 	datastoreNamesByID map[string]string,
+	clusterDetailsByID map[string]InventoryCluster,
 ) (InventoryVM, []InventoryEnrichmentIssue, error) {
 	var issues []InventoryEnrichmentIssue
 	recordIssue := func(issue *InventoryEnrichmentIssue) {
@@ -514,7 +527,40 @@ func (c *Client) enrichVMTopology(
 	vm.DatastoreNames = namesForReferences(datastoreRefs, datastoreNamesByID)
 
 	applyPlacementToVM(&vm, placement)
+	applyClusterServicesToVM(&vm, clusterDetailsByID)
 	return vm, issues, nil
+}
+
+func (c *Client) collectClusterInventory(
+	ctx context.Context,
+	automationSessionID string,
+) ([]InventoryCluster, error) {
+	if strings.TrimSpace(automationSessionID) == "" {
+		return nil, nil
+	}
+
+	var payload []InventoryCluster
+	if err := c.listAutomationResources(ctx, automationSessionID, "/api/vcenter/cluster", "cluster inventory", &payload); err != nil {
+		return nil, err
+	}
+
+	clusters := make([]InventoryCluster, 0, len(payload))
+	for _, cluster := range payload {
+		id := strings.TrimSpace(cluster.Cluster)
+		if id == "" {
+			continue
+		}
+		clusters = append(clusters, InventoryCluster{
+			Cluster:    id,
+			Name:       strings.TrimSpace(cluster.Name),
+			HAEnabled:  cloneBoolPointer(cluster.HAEnabled),
+			DRSEnabled: cloneBoolPointer(cluster.DRSEnabled),
+		})
+	}
+	sort.Slice(clusters, func(i, j int) bool {
+		return vmwareSortKey(clusters[i].Cluster, clusters[i].Name) < vmwareSortKey(clusters[j].Cluster, clusters[j].Name)
+	})
+	return clusters, nil
 }
 
 func (c *Client) enrichDatastoreTopology(
@@ -1133,6 +1179,23 @@ func applyPlacementToHost(host *InventoryHost, placement vmwarePlacement) {
 	host.FolderName = firstNonEmptyTrimmed(host.FolderName, placement.FolderName)
 }
 
+func applyClusterServicesToHost(host *InventoryHost, clustersByID map[string]InventoryCluster) {
+	if host == nil || len(clustersByID) == 0 {
+		return
+	}
+	cluster, ok := clustersByID[strings.TrimSpace(host.ClusterID)]
+	if !ok {
+		return
+	}
+	host.ClusterName = firstNonEmptyTrimmed(host.ClusterName, cluster.Name)
+	if cluster.HAEnabled != nil {
+		host.ClusterHAEnabled = cloneBoolPointer(cluster.HAEnabled)
+	}
+	if cluster.DRSEnabled != nil {
+		host.ClusterDRSEnabled = cloneBoolPointer(cluster.DRSEnabled)
+	}
+}
+
 func applyPlacementToVM(vm *InventoryVM, placement vmwarePlacement) {
 	if vm == nil {
 		return
@@ -1145,6 +1208,23 @@ func applyPlacementToVM(vm *InventoryVM, placement vmwarePlacement) {
 	vm.ClusterName = firstNonEmptyTrimmed(vm.ClusterName, placement.ClusterName)
 	vm.FolderID = firstNonEmptyTrimmed(vm.FolderID, placement.FolderID)
 	vm.FolderName = firstNonEmptyTrimmed(vm.FolderName, placement.FolderName)
+}
+
+func applyClusterServicesToVM(vm *InventoryVM, clustersByID map[string]InventoryCluster) {
+	if vm == nil || len(clustersByID) == 0 {
+		return
+	}
+	cluster, ok := clustersByID[strings.TrimSpace(vm.ClusterID)]
+	if !ok {
+		return
+	}
+	vm.ClusterName = firstNonEmptyTrimmed(vm.ClusterName, cluster.Name)
+	if cluster.HAEnabled != nil {
+		vm.ClusterHAEnabled = cloneBoolPointer(cluster.HAEnabled)
+	}
+	if cluster.DRSEnabled != nil {
+		vm.ClusterDRSEnabled = cloneBoolPointer(cluster.DRSEnabled)
+	}
 }
 
 func applyPlacementToDatastore(datastore *InventoryDatastore, placement vmwarePlacement) {
@@ -1185,6 +1265,26 @@ func mergePlacement(dst *vmwarePlacement, src vmwarePlacement) {
 	if dst.FolderName == "" {
 		dst.FolderName = strings.TrimSpace(src.FolderName)
 	}
+}
+
+func inventoryClusterDetailsByID(clusters []InventoryCluster) map[string]InventoryCluster {
+	if len(clusters) == 0 {
+		return nil
+	}
+	out := make(map[string]InventoryCluster, len(clusters))
+	for _, cluster := range clusters {
+		id := strings.TrimSpace(cluster.Cluster)
+		if id == "" {
+			continue
+		}
+		out[id] = InventoryCluster{
+			Cluster:    id,
+			Name:       strings.TrimSpace(cluster.Name),
+			HAEnabled:  cloneBoolPointer(cluster.HAEnabled),
+			DRSEnabled: cloneBoolPointer(cluster.DRSEnabled),
+		}
+	}
+	return out
 }
 
 func idsForReferences(refs []viJSONReference) []string {

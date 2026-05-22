@@ -761,9 +761,13 @@ func TestMergeVMwareDataMergesSignalFieldsWithoutDroppingExistingIdentity(t *tes
 		SnapshotCount:      1,
 	}
 	accessible := false
+	clusterHA := true
+	clusterDRS := false
 	bootRetry := true
 	incoming := &VMwareData{
 		ClusterName:         "Cluster A",
+		ClusterHAEnabled:    &clusterHA,
+		ClusterDRSEnabled:   &clusterDRS,
 		RuntimeHostName:     "esxi-01.lab.local",
 		DatastoreNames:      []string{"backup-nfs"},
 		DatastoreAccessible: &accessible,
@@ -819,6 +823,12 @@ func TestMergeVMwareDataMergesSignalFieldsWithoutDroppingExistingIdentity(t *tes
 	}
 	if got := merged.RuntimeHostName; got != "esxi-01.lab.local" {
 		t.Fatalf("runtime host name = %q, want esxi-01.lab.local", got)
+	}
+	if merged.ClusterHAEnabled == nil || !*merged.ClusterHAEnabled {
+		t.Fatalf("cluster HA enabled = %#v, want true", merged.ClusterHAEnabled)
+	}
+	if merged.ClusterDRSEnabled == nil || *merged.ClusterDRSEnabled {
+		t.Fatalf("cluster DRS enabled = %#v, want false", merged.ClusterDRSEnabled)
 	}
 	if got := merged.DatastoreNames; !reflect.DeepEqual(got, []string{"primary-vmfs", "backup-nfs"}) {
 		t.Fatalf("datastore names = %#v", got)

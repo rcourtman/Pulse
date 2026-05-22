@@ -43,6 +43,9 @@ func TestClientCollectInventoryEnrichesSignals(t *testing.T) {
 	if host.ClusterName != "Prod Compute" || host.DatacenterName != "DC1" {
 		t.Fatalf("expected host placement enrichment, got cluster=%q datacenter=%q", host.ClusterName, host.DatacenterName)
 	}
+	if host.ClusterHAEnabled == nil || !*host.ClusterHAEnabled || host.ClusterDRSEnabled == nil || *host.ClusterDRSEnabled {
+		t.Fatalf("expected host cluster service enrichment HA=true DRS=false, got ha=%+v drs=%+v", host.ClusterHAEnabled, host.ClusterDRSEnabled)
+	}
 	if len(host.DatastoreNames) != 1 || host.DatastoreNames[0] != "nvme-primary" {
 		t.Fatalf("expected host datastore names, got %+v", host.DatastoreNames)
 	}
@@ -68,6 +71,9 @@ func TestClientCollectInventoryEnrichesSignals(t *testing.T) {
 	}
 	if vm.RuntimeHostName != "esxi-01.lab.local" || vm.ResourcePoolName != "Tier 1" {
 		t.Fatalf("expected VM placement enrichment, got host=%q pool=%q", vm.RuntimeHostName, vm.ResourcePoolName)
+	}
+	if vm.ClusterHAEnabled == nil || !*vm.ClusterHAEnabled || vm.ClusterDRSEnabled == nil || *vm.ClusterDRSEnabled {
+		t.Fatalf("expected VM cluster service enrichment HA=true DRS=false, got ha=%+v drs=%+v", vm.ClusterHAEnabled, vm.ClusterDRSEnabled)
 	}
 	if vm.InstanceUUID != "vm-instance-201" || vm.BIOSUUID != "vm-bios-201" {
 		t.Fatalf("expected VM identity enrichment, got instance=%q bios=%q", vm.InstanceUUID, vm.BIOSUUID)
@@ -184,6 +190,7 @@ func TestClientCollectInventoryPreservesBaseInventoryWhenOptionalEnrichmentDegra
 	server := newVMwareTestServer(t, vmwareTestServerConfig{
 		denyHostOverallStatus:  true,
 		unavailableVMGuestInfo: true,
+		denyClusterInventory:   true,
 	})
 	defer server.Close()
 
@@ -208,14 +215,17 @@ func TestClientCollectInventoryPreservesBaseInventoryWhenOptionalEnrichmentDegra
 	if len(snapshot.Hosts) != 1 || len(snapshot.VMs) != 1 || len(snapshot.Datastores) != 1 {
 		t.Fatalf("unexpected inventory sizes: hosts=%d vms=%d datastores=%d", len(snapshot.Hosts), len(snapshot.VMs), len(snapshot.Datastores))
 	}
-	if len(snapshot.EnrichmentIssues) != 2 {
-		t.Fatalf("expected 2 enrichment issues, got %+v", snapshot.EnrichmentIssues)
+	if len(snapshot.EnrichmentIssues) != 3 {
+		t.Fatalf("expected 3 enrichment issues, got %+v", snapshot.EnrichmentIssues)
 	}
 	if snapshot.EnrichmentIssues[0].Category != "permission" || snapshot.EnrichmentIssues[0].Stage != "signals" {
 		t.Fatalf("unexpected first enrichment issue: %+v", snapshot.EnrichmentIssues[0])
 	}
-	if snapshot.EnrichmentIssues[1].Category != "unavailable" || snapshot.EnrichmentIssues[1].Stage != "topology" {
+	if snapshot.EnrichmentIssues[1].Category != "permission" || snapshot.EnrichmentIssues[1].Stage != "topology" || snapshot.EnrichmentIssues[1].EntityType != "cluster" {
 		t.Fatalf("unexpected second enrichment issue: %+v", snapshot.EnrichmentIssues[1])
+	}
+	if snapshot.EnrichmentIssues[2].Category != "unavailable" || snapshot.EnrichmentIssues[2].Stage != "topology" {
+		t.Fatalf("unexpected third enrichment issue: %+v", snapshot.EnrichmentIssues[2])
 	}
 
 	host := snapshot.Hosts[0]
@@ -227,6 +237,9 @@ func TestClientCollectInventoryPreservesBaseInventoryWhenOptionalEnrichmentDegra
 	}
 	if host.ClusterName != "Prod Compute" || host.DatacenterName != "DC1" {
 		t.Fatalf("expected host placement enrichment to survive degraded signal read, got cluster=%q datacenter=%q", host.ClusterName, host.DatacenterName)
+	}
+	if host.ClusterHAEnabled != nil || host.ClusterDRSEnabled != nil {
+		t.Fatalf("expected cluster services to stay empty after degraded cluster inventory read, got ha=%+v drs=%+v", host.ClusterHAEnabled, host.ClusterDRSEnabled)
 	}
 
 	vm := snapshot.VMs[0]
@@ -247,6 +260,9 @@ func TestClientCollectInventoryPreservesBaseInventoryWhenOptionalEnrichmentDegra
 	}
 	if vm.RuntimeHostName != "esxi-01.lab.local" || vm.ResourcePoolName != "Tier 1" {
 		t.Fatalf("expected other topology enrichment to survive degraded guest read, got host=%q pool=%q", vm.RuntimeHostName, vm.ResourcePoolName)
+	}
+	if vm.ClusterHAEnabled != nil || vm.ClusterDRSEnabled != nil {
+		t.Fatalf("expected VM cluster services to stay empty after degraded cluster inventory read, got ha=%+v drs=%+v", vm.ClusterHAEnabled, vm.ClusterDRSEnabled)
 	}
 }
 
@@ -352,6 +368,7 @@ func TestClientResolveVIJSONReleaseClassifiesUnsupportedVersionFloor(t *testing.
 type vmwareTestServerConfig struct {
 	omitHostOverallStatus  bool
 	denyHostOverallStatus  bool
+	denyClusterInventory   bool
 	unavailableVMGuestInfo bool
 }
 
@@ -403,6 +420,19 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 			Type:      "VMFS",
 			FreeSpace: 40,
 			Capacity:  100,
+		}})
+	})
+	mux.HandleFunc("/api/vcenter/cluster", func(w http.ResponseWriter, r *http.Request) {
+		requireAutomationSession(t, r)
+		if cfg.denyClusterInventory {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		writeJSON(w, []map[string]any{{
+			"cluster":     "domain-c101",
+			"name":        "Prod Compute",
+			"ha_enabled":  true,
+			"drs_enabled": false,
 		}})
 	})
 	mux.HandleFunc("/api/vcenter/vm/vm-201", func(w http.ResponseWriter, r *http.Request) {

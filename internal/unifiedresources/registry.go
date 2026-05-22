@@ -1748,6 +1748,12 @@ func mergeVMwareData(existing *VMwareData, incoming *VMwareData) *VMwareData {
 	if incoming.ClusterName != "" {
 		merged.ClusterName = incoming.ClusterName
 	}
+	if incoming.ClusterHAEnabled != nil {
+		merged.ClusterHAEnabled = cloneBoolPtr(incoming.ClusterHAEnabled)
+	}
+	if incoming.ClusterDRSEnabled != nil {
+		merged.ClusterDRSEnabled = cloneBoolPtr(incoming.ClusterDRSEnabled)
+	}
 	if incoming.FolderID != "" {
 		merged.FolderID = incoming.FolderID
 	}

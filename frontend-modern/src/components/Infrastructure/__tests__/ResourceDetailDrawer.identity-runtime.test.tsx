@@ -304,6 +304,8 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
           powerState: 'poweredOn',
           datacenterName: 'Lab DC',
           clusterName: 'Compute Cluster',
+          clusterHaEnabled: true,
+          clusterDrsEnabled: false,
           resourcePoolName: 'Production',
           runtimeHostName: 'esxi-01.lab.local',
           datastoreNames: ['shared-vsan'],
@@ -410,6 +412,8 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
         powerState: 'poweredOn',
         datacenterName: 'Lab DC',
         clusterName: 'Compute Cluster',
+        clusterHaEnabled: true,
+        clusterDrsEnabled: false,
         resourcePoolName: 'Production',
         runtimeHostName: 'esxi-01.lab.local',
         datastoreNames: ['shared-vsan'],
@@ -540,6 +544,8 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(within(section).getByText('Snapshot tree')).toBeInTheDocument();
     expect(within(section).getByText('vc.lab.local')).toBeInTheDocument();
     expect(within(section).getByText('Compute Cluster')).toBeInTheDocument();
+    expect(within(section).getByText('Cluster services')).toBeInTheDocument();
+    expect(within(section).getByText('HA enabled · DRS disabled')).toBeInTheDocument();
     expect(within(section).getByText('esxi-01.lab.local')).toBeInTheDocument();
     expect(within(section).getByText('ubuntu64Guest')).toBeInTheDocument();
     expect(within(section).getByText('Hardware version')).toBeInTheDocument();
