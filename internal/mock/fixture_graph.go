@@ -248,6 +248,7 @@ func cloneVMwareInventorySnapshot(in vmware.InventorySnapshot) vmware.InventoryS
 	out.Hosts = cloneVMwareInventoryHosts(in.Hosts)
 	out.VMs = cloneVMwareInventoryVMs(in.VMs)
 	out.Datastores = cloneVMwareInventoryDatastores(in.Datastores)
+	out.Networks = cloneVMwareInventoryNetworks(in.Networks)
 	out.EnrichmentIssues = append([]vmware.InventoryEnrichmentIssue(nil), in.EnrichmentIssues...)
 	return out
 }
@@ -305,6 +306,26 @@ func cloneVMwareInventoryDatastores(in []vmware.InventoryDatastore) []vmware.Inv
 		out[i].VMNames = append([]string(nil), in[i].VMNames...)
 		out[i].Accessible = cloneBoolPtr(in[i].Accessible)
 		out[i].MultipleHostAccess = cloneBoolPtr(in[i].MultipleHostAccess)
+		out[i].TriggeredAlarms = append([]vmware.InventoryAlarm(nil), in[i].TriggeredAlarms...)
+		out[i].RecentTasks = append([]vmware.InventoryTask(nil), in[i].RecentTasks...)
+		out[i].RecentEvents = append([]vmware.InventoryEvent(nil), in[i].RecentEvents...)
+	}
+
+	return out
+}
+
+func cloneVMwareInventoryNetworks(in []vmware.InventoryNetwork) []vmware.InventoryNetwork {
+	if in == nil {
+		return nil
+	}
+
+	out := make([]vmware.InventoryNetwork, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].HostIDs = append([]string(nil), in[i].HostIDs...)
+		out[i].HostNames = append([]string(nil), in[i].HostNames...)
+		out[i].VMIDs = append([]string(nil), in[i].VMIDs...)
+		out[i].VMNames = append([]string(nil), in[i].VMNames...)
 		out[i].TriggeredAlarms = append([]vmware.InventoryAlarm(nil), in[i].TriggeredAlarms...)
 		out[i].RecentTasks = append([]vmware.InventoryTask(nil), in[i].RecentTasks...)
 		out[i].RecentEvents = append([]vmware.InventoryEvent(nil), in[i].RecentEvents...)

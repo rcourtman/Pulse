@@ -450,7 +450,7 @@ acceptable phase-1 model for implementation and proof.
 
 | Platform         | Family | Entry point               | Primary mode | Optional augmentation                  | Canonical projections    | Admission state                                | Readiness stage   |
 | ---------------- | ------ | ------------------------- | ------------ | -------------------------------------- | ------------------------ | ---------------------------------------------- | ----------------- |
-| `vmware-vsphere` | VMware | `vCenter` only in phase 1 | `api-backed` | host or guest agent later, not phase 1 | `agent`, `vm`, `storage` | architecture locked, not yet in support matrix | `first-lab-ready` |
+| `vmware-vsphere` | VMware | `vCenter` only in phase 1 | `api-backed` | host or guest agent later, not phase 1 | `agent`, `vm`, `storage`, `network` | architecture locked, not yet in support matrix | `first-lab-ready` |
 
 ## VMware vSphere Proposed Phase-1 Floor
 

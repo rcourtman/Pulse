@@ -2,7 +2,7 @@ import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import type { Resource, ResourceChange, ResourceIncident, ResourceType } from '@/types/resource';
 
-export type VmwarePageTabId = 'overview' | 'storage' | 'health' | 'activity';
+export type VmwarePageTabId = 'overview' | 'storage' | 'networks' | 'health' | 'activity';
 export type VmwareDatastoreStatusFilter =
   | 'all'
   | 'accessible'
@@ -17,6 +17,7 @@ export type VmwareVirtualMachineStatusFilter =
   | 'powered-off'
   | 'suspended'
   | 'unknown';
+export type VmwareNetworkStatusFilter = 'all' | 'healthy' | 'attention' | 'unknown';
 export type VmwareIncidentSeverityFilter = 'all' | 'critical' | 'warning' | 'info';
 export type VmwareActivityStatusFilter = 'all' | 'tasks' | 'events' | 'failed';
 export type VmwareActivityKind = 'task' | 'event' | 'activity';
@@ -35,11 +36,12 @@ export type VmwareTabSpec = {
 export const VMWARE_TAB_SPECS: readonly VmwareTabSpec[] = [
   { id: 'overview', label: 'Overview', path: '/vmware/overview' },
   { id: 'storage', label: 'Datastores', path: '/vmware/storage' },
+  { id: 'networks', label: 'Networks', path: '/vmware/networks' },
   { id: 'health', label: 'Health', path: '/vmware/health' },
   { id: 'activity', label: 'Activity', path: '/vmware/activity' },
 ] as const;
 
-const VMWARE_RESOURCE_TYPES = new Set<ResourceType>(['agent', 'vm', 'storage']);
+const VMWARE_RESOURCE_TYPES = new Set<ResourceType>(['agent', 'vm', 'storage', 'network']);
 
 const isVmwarePlatform = (resource: Resource): boolean =>
   resolveResourcePlatformType(resource) === 'vmware-vsphere';
@@ -49,6 +51,7 @@ export type VmwarePageModel = {
   hosts: Resource[];
   vms: Resource[];
   datastores: Resource[];
+  networks: Resource[];
   incidents: VmwareIncidentRow[];
   activity: VmwareActivityRow[];
 };
@@ -115,6 +118,9 @@ export function buildVmwarePageModel(
         (resource.storage?.topology === 'datastore' || resource.vmware?.entityType === 'datastore'),
     )
     .sort(compareVmwareDatastores);
+  const networks = vmwareResources
+    .filter((resource) => resource.type === 'network' && resource.vmware?.entityType === 'network')
+    .sort(compareVmwareNetworks);
   const incidents = buildVmwareIncidentRows(vmwareResources);
   const activity = buildVmwareActivityRows(vmwareResources, activityChanges);
 
@@ -123,6 +129,7 @@ export function buildVmwarePageModel(
     hosts,
     vms,
     datastores,
+    networks,
     incidents,
     activity,
   };
@@ -202,6 +209,26 @@ const compareVmwareDatastores = (left: Resource, right: Resource): number => {
   const rankDelta = vmwareDatastoreStatusRank(left) - vmwareDatastoreStatusRank(right);
   if (rankDelta !== 0) return rankDelta;
   return vmwareDatastoreDisplayName(left).localeCompare(vmwareDatastoreDisplayName(right));
+};
+
+const vmwareNetworkDisplayName = (resource: Resource): string =>
+  resource.displayName?.trim() || resource.name?.trim() || resource.id;
+
+const vmwareNetworkStatusRank = (resource: Resource): number => {
+  switch (mapVmwareNetworkStatus(resource)) {
+    case 'attention':
+      return 0;
+    case 'unknown':
+      return 1;
+    case 'healthy':
+      return 2;
+  }
+};
+
+const compareVmwareNetworks = (left: Resource, right: Resource): number => {
+  const rankDelta = vmwareNetworkStatusRank(left) - vmwareNetworkStatusRank(right);
+  if (rankDelta !== 0) return rankDelta;
+  return vmwareNetworkDisplayName(left).localeCompare(vmwareNetworkDisplayName(right));
 };
 
 const vmwareVirtualMachineHostKey = (resource: Resource): string =>
@@ -310,6 +337,24 @@ export function mapVmwareDatastoreStatus(
   if (resource.vmware?.datastoreAccessible === true || ['online', 'running'].includes(status)) {
     return 'accessible';
   }
+  return 'unknown';
+}
+
+export function mapVmwareNetworkStatus(
+  resource: Resource,
+): Exclude<VmwareNetworkStatusFilter, 'all'> {
+  const status = normalize(resource.status);
+  const overall = normalize(resource.vmware?.overallStatus);
+  const activeAlarms = resource.vmware?.activeAlarmCount ?? 0;
+
+  if (
+    activeAlarms > 0 ||
+    ['red', 'yellow', 'degraded', 'warning', 'critical', 'paused'].includes(overall) ||
+    ['degraded', 'warning', 'critical', 'paused', 'offline'].includes(status)
+  ) {
+    return 'attention';
+  }
+  if (['online', 'running'].includes(status) || overall === 'green') return 'healthy';
   return 'unknown';
 }
 
@@ -683,6 +728,41 @@ export function filterVmwareDatastores(
     if (status !== 'all' && mapVmwareDatastoreStatus(datastore) !== status) return false;
     if (!needle) return true;
     return vmwareDatastoreSearchHaystack(datastore).includes(needle);
+  });
+}
+
+const vmwareNetworkSearchHaystack = (resource: Resource): string =>
+  [
+    resource.id,
+    resource.name,
+    resource.displayName,
+    resource.parentName,
+    resource.status,
+    resource.vmware?.connectionName,
+    resource.vmware?.vcenterHost,
+    resource.vmware?.managedObjectId,
+    resource.vmware?.datacenterName,
+    resource.vmware?.folderName,
+    resource.vmware?.networkType,
+    resource.vmware?.overallStatus,
+    resource.vmware?.networkHostNames?.join(' '),
+    resource.vmware?.networkVmNames?.join(' '),
+    ...(resource.tags ?? []),
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' ')
+    .toLowerCase();
+
+export function filterVmwareNetworks(
+  networks: Resource[],
+  search: string,
+  status: VmwareNetworkStatusFilter,
+): Resource[] {
+  const needle = normalize(search);
+  return networks.filter((network) => {
+    if (status !== 'all' && mapVmwareNetworkStatus(network) !== status) return false;
+    if (!needle) return true;
+    return vmwareNetworkSearchHaystack(network).includes(needle);
   });
 }
 

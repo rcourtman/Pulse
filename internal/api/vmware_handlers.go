@@ -750,6 +750,7 @@ func (h *VMwareHandlers) recordTestSuccess(connectionID string, summary *vmware.
 			Hosts:       summary.Hosts,
 			VMs:         summary.VMs,
 			Datastores:  summary.Datastores,
+			Networks:    summary.Networks,
 			VIRelease:   strings.TrimSpace(summary.VIRelease),
 		}
 	}

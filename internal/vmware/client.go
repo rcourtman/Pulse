@@ -81,6 +81,7 @@ type InventorySummary struct {
 	Hosts      int
 	VMs        int
 	Datastores int
+	Networks   int
 	VIRelease  string
 }
 
@@ -175,6 +176,7 @@ func (c *Client) TestConnection(ctx context.Context) (*InventorySummary, error) 
 		Hosts:      len(inventory.Hosts),
 		VMs:        len(inventory.VMs),
 		Datastores: len(inventory.Datastores),
+		Networks:   len(inventory.Networks),
 		VIRelease:  release,
 	}, nil
 }
@@ -239,10 +241,16 @@ func (c *Client) collectInventoryBaseWithSession(ctx context.Context) (*Inventor
 		return nil, "", err
 	}
 
+	var networks []InventoryNetwork
+	if err := c.listAutomationResources(ctx, automationSessionID, "/api/vcenter/network", "network inventory", &networks); err != nil {
+		return nil, "", err
+	}
+
 	return &InventorySnapshot{
 		Hosts:      hosts,
 		VMs:        vms,
 		Datastores: datastores,
+		Networks:   networks,
 	}, automationSessionID, nil
 }
 

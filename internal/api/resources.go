@@ -135,7 +135,7 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	allResources := registry.List()
+	allResources := presentationResourcesFromRegistry(registry)
 	resources := allResources
 	if unsupported := unsupportedResourceTypeFilterTokens(r.URL.Query().Get("type")); len(unsupported) > 0 {
 		http.Error(w, "unsupported type filter token(s): "+strings.Join(unsupported, ", "), http.StatusBadRequest)
@@ -152,11 +152,9 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 	paged = unified.RefreshCanonicalMetadataSlice(paged)
 	pruneResourcesForListResponse(paged)
 
-	// Build aggregations: use registry.Stats() for Total/ByStatus/BySource (unfiltered,
-	// no conversion needed), but recompute ByType from the full registry list so keys
-	// match the canonical REST resource contract.
-	stats := registry.Stats()
-	stats.ByType = computeResourceContractByType(allResources)
+	// Build aggregations from the same presentation resource set returned by
+	// the list, so top-level host coalescing cannot drift between counts and rows.
+	stats := computeResourceContractStats(allResources)
 	stats.PolicyPosture = resourcePolicyPostureAggregation(allResources)
 
 	applyResourceContractTypes(paged)
@@ -275,7 +273,7 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	resource, ok := registry.Get(resourceID)
+	resource, ok := presentationResourceByID(registry, resourceID)
 	if !ok {
 		http.Error(w, "Resource not found", http.StatusNotFound)
 		return
@@ -289,6 +287,29 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resourceCopy)
+}
+
+func presentationResourcesFromRegistry(registry *unified.ResourceRegistry) []unified.Resource {
+	if registry == nil {
+		return nil
+	}
+	return registry.ListForPresentation()
+}
+
+func presentationResourceByID(registry *unified.ResourceRegistry, resourceID string) (*unified.Resource, bool) {
+	resourceID = unified.CanonicalResourceID(resourceID)
+	if resourceID == "" || registry == nil {
+		return nil, false
+	}
+
+	for _, resource := range presentationResourcesFromRegistry(registry) {
+		if unified.CanonicalResourceID(resource.ID) == resourceID {
+			resourceCopy := resource
+			return &resourceCopy, true
+		}
+	}
+
+	return registry.Get(resourceID)
 }
 
 type resourceFacetCountsResponse = unified.ResourceFacetCounts
@@ -633,9 +654,8 @@ func (h *ResourceHandlers) HandleStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allResources := registry.List()
-	stats := registry.Stats()
-	stats.ByType = computeResourceContractByType(allResources)
+	allResources := presentationResourcesFromRegistry(registry)
+	stats := computeResourceContractStats(allResources)
 	stats.PolicyPosture = resourcePolicyPostureAggregation(allResources)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1855,6 +1875,8 @@ func resourceTypeFilterAdapter(token string) []unified.ResourceType {
 		return []unified.ResourceType{unified.ResourceTypeK8sDeployment}
 	case "storage":
 		return []unified.ResourceType{unified.ResourceTypeStorage}
+	case "network", "networks":
+		return []unified.ResourceType{unified.ResourceTypeNetwork}
 	case "pbs":
 		return []unified.ResourceType{unified.ResourceTypePBS}
 	case "pmg":
@@ -1975,6 +1997,23 @@ func computeResourceContractByType(resources []unified.Resource) map[unified.Res
 		m[resourceContractType(r)]++
 	}
 	return m
+}
+
+func computeResourceContractStats(resources []unified.Resource) unified.ResourceStats {
+	stats := unified.ResourceStats{
+		Total:    len(resources),
+		ByType:   make(map[unified.ResourceType]int, 8),
+		ByStatus: make(map[unified.ResourceStatus]int, 8),
+		BySource: make(map[unified.DataSource]int, 8),
+	}
+	for _, resource := range resources {
+		stats.ByType[resourceContractType(resource)]++
+		stats.ByStatus[resource.Status]++
+		for _, source := range resource.Sources {
+			stats.BySource[source]++
+		}
+	}
+	return stats
 }
 
 func resourcePolicyPostureAggregation(resources []unified.Resource) *unified.ResourcePolicyPostureSummary {

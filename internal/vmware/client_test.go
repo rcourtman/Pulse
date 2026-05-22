@@ -32,8 +32,8 @@ func TestClientCollectInventoryEnrichesSignals(t *testing.T) {
 	if snapshot == nil {
 		t.Fatal("expected inventory snapshot")
 	}
-	if len(snapshot.Hosts) != 1 || len(snapshot.VMs) != 1 || len(snapshot.Datastores) != 1 {
-		t.Fatalf("unexpected inventory sizes: hosts=%d vms=%d datastores=%d", len(snapshot.Hosts), len(snapshot.VMs), len(snapshot.Datastores))
+	if len(snapshot.Hosts) != 1 || len(snapshot.VMs) != 1 || len(snapshot.Datastores) != 1 || len(snapshot.Networks) != 1 {
+		t.Fatalf("unexpected inventory sizes: hosts=%d vms=%d datastores=%d networks=%d", len(snapshot.Hosts), len(snapshot.VMs), len(snapshot.Datastores), len(snapshot.Networks))
 	}
 
 	host := snapshot.Hosts[0]
@@ -184,6 +184,23 @@ func TestClientCollectInventoryEnrichesSignals(t *testing.T) {
 	if len(datastore.RecentEvents) != 1 || datastore.RecentEvents[0].Type != "DatastoreRenamedEvent" {
 		t.Fatalf("expected datastore recent event info, got %+v", datastore.RecentEvents)
 	}
+
+	network := snapshot.Networks[0]
+	if network.OverallStatus != "green" {
+		t.Fatalf("network overall status = %q, want green", network.OverallStatus)
+	}
+	if network.DatacenterName != "DC1" || network.FolderName != "Networks" {
+		t.Fatalf("expected network placement enrichment, got datacenter=%q folder=%q", network.DatacenterName, network.FolderName)
+	}
+	if len(network.HostNames) != 1 || network.HostNames[0] != "esxi-01.lab.local" {
+		t.Fatalf("expected network host attachment enrichment, got %+v", network.HostNames)
+	}
+	if len(network.VMNames) != 1 || network.VMNames[0] != "app-01" {
+		t.Fatalf("expected network VM attachment enrichment, got %+v", network.VMNames)
+	}
+	if len(network.RecentEvents) != 1 || network.RecentEvents[0].Type != "NetworkEvent" {
+		t.Fatalf("expected network recent event info, got %+v", network.RecentEvents)
+	}
 }
 
 func TestClientCollectInventoryPreservesBaseInventoryWhenOptionalEnrichmentDegrades(t *testing.T) {
@@ -212,8 +229,8 @@ func TestClientCollectInventoryPreservesBaseInventoryWhenOptionalEnrichmentDegra
 	if snapshot == nil {
 		t.Fatal("expected inventory snapshot")
 	}
-	if len(snapshot.Hosts) != 1 || len(snapshot.VMs) != 1 || len(snapshot.Datastores) != 1 {
-		t.Fatalf("unexpected inventory sizes: hosts=%d vms=%d datastores=%d", len(snapshot.Hosts), len(snapshot.VMs), len(snapshot.Datastores))
+	if len(snapshot.Hosts) != 1 || len(snapshot.VMs) != 1 || len(snapshot.Datastores) != 1 || len(snapshot.Networks) != 1 {
+		t.Fatalf("unexpected inventory sizes: hosts=%d vms=%d datastores=%d networks=%d", len(snapshot.Hosts), len(snapshot.VMs), len(snapshot.Datastores), len(snapshot.Networks))
 	}
 	if len(snapshot.EnrichmentIssues) != 3 {
 		t.Fatalf("expected 3 enrichment issues, got %+v", snapshot.EnrichmentIssues)
@@ -420,6 +437,14 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 			Type:      "VMFS",
 			FreeSpace: 40,
 			Capacity:  100,
+		}})
+	})
+	mux.HandleFunc("/api/vcenter/network", func(w http.ResponseWriter, r *http.Request) {
+		requireAutomationSession(t, r)
+		writeJSON(w, []InventoryNetwork{{
+			Network: "network-101",
+			Name:    "VM Network",
+			Type:    "STANDARD_PORTGROUP",
 		}})
 	})
 	mux.HandleFunc("/api/vcenter/cluster", func(w http.ResponseWriter, r *http.Request) {
@@ -717,6 +742,14 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 				"fullFormattedMessage": "Datastore metadata refreshed",
 				"eventTypeId":          "DatastoreRenamedEvent",
 			}})
+		case "Network":
+			writeJSON(w, []map[string]any{{
+				"key":                  401,
+				"userName":             "network-admin",
+				"createdTime":          "2026-03-30T18:07:00Z",
+				"fullFormattedMessage": "Network metadata refreshed",
+				"eventTypeId":          "NetworkEvent",
+			}})
 		default:
 			writeJSON(w, []map[string]any{})
 		}
@@ -856,6 +889,35 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 		writeJSON(w, []map[string]any{{"type": "VirtualMachine", "value": "vm-201"}})
 	})
 
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Network/network-101/overallStatus", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, "green")
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Network/network-101/triggeredAlarmState", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, []map[string]any{})
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Network/network-101/recentTask", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, []map[string]any{})
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Network/network-101/name", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, "VM Network")
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Network/network-101/parent", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, map[string]any{"type": "Folder", "value": "group-n4"})
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Network/network-101/host", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, []map[string]any{{"type": "HostSystem", "value": "host-101"}})
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Network/network-101/vm", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, []map[string]any{{"type": "VirtualMachine", "value": "vm-201"}})
+	})
+
 	mux.HandleFunc("/sdk/vim25/9.0.0.0/ClusterComputeResource/domain-c101/name", func(w http.ResponseWriter, r *http.Request) {
 		requireVISession(t, r)
 		writeJSON(w, "Prod Compute")
@@ -886,6 +948,14 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 		writeJSON(w, "Shared Datastores")
 	})
 	mux.HandleFunc("/sdk/vim25/9.0.0.0/Folder/group-s4/parent", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, map[string]any{"type": "Datacenter", "value": "datacenter-1"})
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Folder/group-n4/name", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, "Networks")
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Folder/group-n4/parent", func(w http.ResponseWriter, r *http.Request) {
 		requireVISession(t, r)
 		writeJSON(w, map[string]any{"type": "Datacenter", "value": "datacenter-1"})
 	})

@@ -77,6 +77,7 @@ describe('Resource Type Guards', () => {
       'pod',
       'jail',
       'storage',
+      'network',
     ];
 
     it.each(infrastructureTypes)('returns true for %s', (type) => {
@@ -102,6 +103,7 @@ describe('Resource Type Guards', () => {
       'agent',
       'docker-host',
       'network-endpoint',
+      'network',
       'storage',
       'pbs',
     ];
@@ -131,6 +133,7 @@ describe('Resource Type Guards', () => {
       'system-container',
       'docker-host',
       'network-endpoint',
+      'network',
     ];
 
     it.each(storageTypes)('returns true for %s', (type) => {
@@ -262,6 +265,9 @@ describe('Resource Helper Functions', () => {
         runtimeHostName: 'esxi-01.lab.local',
         overallStatus: 'yellow',
         datastoreNames: ['primary-vmfs'],
+        networkType: 'STANDARD_PORTGROUP',
+        networkHostNames: ['esxi-01.lab.local'],
+        networkVmNames: ['app-01'],
         instanceUuid: 'vm-instance-101',
         guestHostname: 'app-01.internal',
         guestIpAddresses: ['10.0.0.21'],
@@ -361,6 +367,9 @@ describe('Resource Helper Functions', () => {
       expect(vmware.clusterDrsEnabled).toBe(false);
       expect(vmware.runtimeHostName).toBe('esxi-01.lab.local');
       expect(vmware.datastoreNames).toEqual(['primary-vmfs']);
+      expect(vmware.networkType).toBe('STANDARD_PORTGROUP');
+      expect(vmware.networkHostNames).toEqual(['esxi-01.lab.local']);
+      expect(vmware.networkVmNames).toEqual(['app-01']);
       expect(vmware.guestIpAddresses).toEqual(['10.0.0.21']);
       expect(vmware.activeAlarmCount).toBe(2);
       expect(vmware.recentTaskSummary).toBe('Clone VM task finished');

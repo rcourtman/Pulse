@@ -6,10 +6,12 @@ import {
   filterVmwareActivity,
   filterVmwareDatastores,
   filterVmwareIncidents,
+  filterVmwareNetworks,
   filterVmwareVirtualMachines,
   mapVmwareActivityStateBucket,
   mapVmwareDatastoreStatus,
   mapVmwareIncidentSeverity,
+  mapVmwareNetworkStatus,
   mapVmwareVirtualMachineStatus,
 } from '../vmwarePageModel';
 
@@ -29,18 +31,20 @@ describe('vmwarePageModel', () => {
     expect(VMWARE_TAB_SPECS.map((tab) => tab.id)).toEqual([
       'overview',
       'storage',
+      'networks',
       'health',
       'activity',
     ]);
     expect(VMWARE_TAB_SPECS.map((tab) => tab.label)).toEqual([
       'Overview',
       'Datastores',
+      'Networks',
       'Health',
       'Activity',
     ]);
   });
 
-  it('buckets canonical vSphere hosts, VMs, and datastores', () => {
+  it('buckets canonical vSphere hosts, VMs, datastores, and networks', () => {
     const model = buildVmwarePageModel([
       makeResource({ id: 'esxi-host-1', type: 'agent' }),
       makeResource({ id: 'vsphere-vm-1', type: 'vm' }),
@@ -50,6 +54,11 @@ describe('vmwarePageModel', () => {
         storage: { topology: 'datastore', platform: 'vmware-vsphere' },
         vmware: { entityType: 'datastore' },
       }),
+      makeResource({
+        id: 'network-1',
+        type: 'network',
+        vmware: { entityType: 'network', networkType: 'STANDARD_PORTGROUP' },
+      }),
       makeResource({ id: 'legacy-provider-datastore', type: 'datastore' }),
       makeResource({ id: 'pve-vm', type: 'vm', platformType: 'proxmox-pve' }),
     ]);
@@ -57,8 +66,9 @@ describe('vmwarePageModel', () => {
     expect(model.hosts.map((r) => r.id)).toEqual(['esxi-host-1']);
     expect(model.vms.map((r) => r.id)).toEqual(['vsphere-vm-1']);
     expect(model.datastores.map((r) => r.id)).toEqual(['datastore-1']);
+    expect(model.networks.map((r) => r.id)).toEqual(['network-1']);
     expect(model.resources.map((r) => r.id).sort()).toEqual(
-      ['datastore-1', 'esxi-host-1', 'vsphere-vm-1'].sort(),
+      ['datastore-1', 'esxi-host-1', 'network-1', 'vsphere-vm-1'].sort(),
     );
   });
 
@@ -123,6 +133,49 @@ describe('vmwarePageModel', () => {
         (resource) => resource.id,
       ),
     ).toEqual(['ds-inaccessible']);
+  });
+
+  it('filters vSphere networks using vCenter network topology', () => {
+    const healthy = makeResource({
+      id: 'network-healthy',
+      type: 'network',
+      name: 'VM Network',
+      vmware: {
+        entityType: 'network',
+        networkType: 'STANDARD_PORTGROUP',
+        datacenterName: 'Primary DC',
+        networkHostNames: ['esxi-01.lab.local'],
+        networkVmNames: ['warehouse-api-01'],
+        overallStatus: 'green',
+      },
+    });
+    const attention = makeResource({
+      id: 'network-attention',
+      type: 'network',
+      name: 'Edge Stateful',
+      status: 'degraded',
+      vmware: {
+        entityType: 'network',
+        networkType: 'DISTRIBUTED_PORTGROUP',
+        datacenterName: 'Edge DC',
+        networkHostNames: ['esxi-06.lab.local'],
+        networkVmNames: ['mariadb-replica-01'],
+        activeAlarmCount: 1,
+      },
+    });
+
+    expect(mapVmwareNetworkStatus(healthy)).toBe('healthy');
+    expect(mapVmwareNetworkStatus(attention)).toBe('attention');
+    expect(
+      filterVmwareNetworks([healthy, attention], 'warehouse', 'healthy').map(
+        (resource) => resource.id,
+      ),
+    ).toEqual(['network-healthy']);
+    expect(
+      filterVmwareNetworks([healthy, attention], 'distributed', 'attention').map(
+        (resource) => resource.id,
+      ),
+    ).toEqual(['network-attention']);
   });
 
   it('filters vSphere VMs using vCenter VM metadata', () => {

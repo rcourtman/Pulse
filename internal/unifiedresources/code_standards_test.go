@@ -1918,11 +1918,11 @@ func TestResourceAPIHotPathUsesSingleRegistryListSnapshot(t *testing.T) {
 	source := string(data)
 	normalizedPath := filepath.ToSlash(path)
 
-	if strings.Count(source, "allResources := registry.List()") != 2 {
-		t.Fatalf("%s: expected HandleListResources and HandleStats to each seed exactly one registry list snapshot", normalizedPath)
+	if strings.Count(source, "allResources := presentationResourcesFromRegistry(registry)") != 2 {
+		t.Fatalf("%s: expected HandleListResources and HandleStats to each seed exactly one presentation resource snapshot", normalizedPath)
 	}
-	if strings.Count(source, "computeResourceContractByType(allResources)") != 2 {
-		t.Fatalf("%s: expected canonical by-type aggregations to reuse the seeded registry snapshot in both handlers", normalizedPath)
+	if strings.Count(source, "computeResourceContractStats(allResources)") != 2 {
+		t.Fatalf("%s: expected canonical aggregations to reuse the seeded presentation snapshot in both handlers", normalizedPath)
 	}
 	if strings.Contains(source, "computeResourceContractByType(registry.List())") {
 		t.Fatalf("%s: duplicate registry.List() hot-path aggregation detected", normalizedPath)
@@ -2009,6 +2009,8 @@ func TestCloneVMwareDataKeepsNestedRuntimeDetailsIsolated(t *testing.T) {
 		"out.VirtualDisks = cloneVMwareVirtualDiskDataSlice(in.VirtualDisks)",
 		"out.ClusterHAEnabled = cloneBoolPtr(in.ClusterHAEnabled)",
 		"out.ClusterDRSEnabled = cloneBoolPtr(in.ClusterDRSEnabled)",
+		"out.NetworkHostNames = cloneStringSlice(in.NetworkHostNames)",
+		"out.NetworkVMNames = cloneStringSlice(in.NetworkVMNames)",
 		"out.Tools = cloneVMwareToolsData(in.Tools)",
 		"out.Hardware = cloneVMwareVMHardwareData(in.Hardware)",
 		"out[i].CreatedAt = cloneTimePtr(in[i].CreatedAt)",

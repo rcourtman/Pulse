@@ -130,6 +130,7 @@ const (
 	ResourceTypePod             ResourceType = "pod"
 	ResourceTypeK8sDeployment   ResourceType = "k8s-deployment"
 	ResourceTypeStorage         ResourceType = "storage"
+	ResourceTypeNetwork         ResourceType = "network"
 	ResourceTypePBS             ResourceType = "pbs"
 	ResourceTypePMG             ResourceType = "pmg"
 	ResourceTypeCeph            ResourceType = "ceph"
@@ -992,8 +993,8 @@ type PMGData struct {
 	DomainStatsAsOf  time.Time                  `json:"domainStatsAsOf,omitempty"`
 }
 
-// VMwareData contains VMware vSphere metadata for canonical agent, vm, and
-// storage resources projected from one vCenter connection.
+// VMwareData contains VMware vSphere metadata for canonical agent, vm,
+// storage, and network resources projected from one vCenter connection.
 type VMwareData struct {
 	ConnectionID        string                     `json:"connectionId,omitempty"`
 	ConnectionName      string                     `json:"connectionName,omitempty"`
@@ -1027,6 +1028,11 @@ type VMwareData struct {
 	DatastoreAccessible *bool                      `json:"datastoreAccessible,omitempty"`
 	MultipleHostAccess  *bool                      `json:"multipleHostAccess,omitempty"`
 	MaintenanceMode     string                     `json:"maintenanceMode,omitempty"`
+	NetworkType         string                     `json:"networkType,omitempty"`
+	NetworkHostIDs      []string                   `json:"networkHostIds,omitempty"`
+	NetworkHostNames    []string                   `json:"networkHostNames,omitempty"`
+	NetworkVMIDs        []string                   `json:"networkVmIds,omitempty"`
+	NetworkVMNames      []string                   `json:"networkVmNames,omitempty"`
 	InstanceUUID        string                     `json:"instanceUuid,omitempty"`
 	BIOSUUID            string                     `json:"biosUuid,omitempty"`
 	GuestOSFamily       string                     `json:"guestOsFamily,omitempty"`

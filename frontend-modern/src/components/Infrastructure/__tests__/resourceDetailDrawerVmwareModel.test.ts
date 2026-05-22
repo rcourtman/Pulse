@@ -33,6 +33,35 @@ describe('resourceDetailDrawerVmwareModel', () => {
     ]);
   });
 
+  it('surfaces vCenter network resources as read-only topology context', () => {
+    const vmware: ResourceVMwareMeta = {
+      connectionName: 'Lab VC',
+      entityType: 'network',
+      overallStatus: 'yellow',
+      networkType: 'DISTRIBUTED_PORTGROUP',
+      datacenterName: 'Primary DC',
+      folderName: 'Networks',
+      networkHostNames: ['esxi-01.lab.local', 'esxi-02.lab.local'],
+      networkVmNames: ['warehouse-api-01', 'etl-batch-01'],
+      activeAlarmCount: 1,
+      activeAlarmSummary: 'Network uplink redundancy (yellow)',
+    };
+
+    expect(buildVMwareDetailsSummary('network', vmware)).toBe(
+      'Lab VC · Read-only vCenter context · 2 hosts · 2 VMs · 1 alarm',
+    );
+
+    const sections = buildVMwareDetailSections('network', vmware);
+    expect(sections.find((section) => section.id === 'state')?.rows).toContainEqual({
+      label: 'Network type',
+      value: 'Distributed Portgroup',
+    });
+    expect(sections.find((section) => section.id === 'network')?.rows).toEqual([
+      { label: 'Hosts', value: 'esxi-01.lab.local, esxi-02.lab.local' },
+      { label: 'VMs', value: 'warehouse-api-01, etl-batch-01' },
+    ]);
+  });
+
   it('surfaces vSphere snapshot trees as read-only VM detail context', () => {
     const vmware: ResourceVMwareMeta = {
       connectionName: 'Lab VC',

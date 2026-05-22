@@ -49,6 +49,7 @@ type VMwareConnectionFixture struct {
 	Hosts               int
 	VMs                 int
 	Datastores          int
+	Networks            int
 	VIRelease           string
 }
 
@@ -87,6 +88,7 @@ func DefaultVMwareConnectionFixture() VMwareConnectionFixture {
 		Hosts:               len(fixtures.Hosts),
 		VMs:                 len(fixtures.VMs),
 		Datastores:          len(fixtures.Datastores),
+		Networks:            len(fixtures.Networks),
 		VIRelease:           strings.TrimSpace(fixtures.VIRelease),
 	}
 }
@@ -295,6 +297,11 @@ func rebaseVMwarePlatformFixture(snapshot vmware.InventorySnapshot, target time.
 		rebaseVMwareAlarms(out.Datastores[i].TriggeredAlarms, snapshot.Datastores[i].TriggeredAlarms, shift, target)
 		rebaseVMwareTasks(out.Datastores[i].RecentTasks, snapshot.Datastores[i].RecentTasks, shift, target)
 		rebaseVMwareEvents(out.Datastores[i].RecentEvents, snapshot.Datastores[i].RecentEvents, shift, target)
+	}
+	for i := range out.Networks {
+		rebaseVMwareAlarms(out.Networks[i].TriggeredAlarms, snapshot.Networks[i].TriggeredAlarms, shift, target)
+		rebaseVMwareTasks(out.Networks[i].RecentTasks, snapshot.Networks[i].RecentTasks, shift, target)
+		rebaseVMwareEvents(out.Networks[i].RecentEvents, snapshot.Networks[i].RecentEvents, shift, target)
 	}
 
 	return out

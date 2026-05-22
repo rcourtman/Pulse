@@ -25,10 +25,11 @@ Phase-1 VMware support is only valid if all of these stay true:
 3. ESXi hosts project as canonical `agent`
 4. virtual machines project as canonical `vm`
 5. datastores project as canonical `storage`
-6. datacenter, cluster, cluster HA/DRS service state, folder, resource pool,
+6. vCenter networks project as canonical `network`
+7. datacenter, cluster, cluster HA/DRS service state, folder, resource pool,
    and `vCenter` itself remain topology or relationship metadata, not
    top-level Pulse resources
-7. `physical-disk`, `system-container`, `app-container`, and recovery
+8. `physical-disk`, `system-container`, `app-container`, and recovery
    artifacts remain out of phase 1
 
 ## Canonical Source Contract
@@ -59,6 +60,7 @@ distinct `vCenter` environments.
 | `HostSystem` / ESXi host | `agent` | yes | yes | host inventory, runtime state, health, metrics/history |
 | `VirtualMachine` | `vm` | yes | yes | workload inventory, runtime state, guest identity when available, snapshot-tree visibility |
 | `Datastore` | `storage` | yes | yes | inventory, capacity/free-space, accessibility, relationships |
+| `Network` | `network` | yes | yes | inventory, type, placement, host attachments, VM attachments, health signals |
 | `vCenter` | none | no | no | connection and poll authority only |
 | `Datacenter` | none | metadata only | no | placement and topology context |
 | `ClusterComputeResource` | none | metadata only | no | placement, grouping, HA/DRS service context |
@@ -176,6 +178,30 @@ official APIs. Exact phase-1 extraction of host mounts and VM-to-datastore
 usage needs live validation so Pulse does not promise more placement fidelity
 than the chosen collection path can actually deliver.
 
+## vCenter Network To `network`
+
+What the APIs clearly support:
+
+1. `GET /api/vcenter/network` returns network identifier, name, and type
+2. VI JSON `vim.Network` exposes inventory placement through `parent`, attached
+   hosts through `host`, and attached VMs through `vm`
+3. VI JSON managed-entity signal paths can expose overall status, alarms,
+   recent tasks, and recent events for network objects when the vCenter
+   account has permission
+
+Phase-1 projection rule:
+
+1. one vCenter network becomes one canonical `network`
+2. the provider-scoped network identifier is the VMware-side primary identity
+   for that resource inside the VMware source
+3. network type, datacenter/folder placement, host attachments, and VM
+   attachments belong under the shared `vmware` facet for read-side monitoring
+4. network rows are descriptive topology and health inventory; phase 1 must not
+   introduce switch, portgroup, distributed-switch, or network-control
+   resource types
+5. network telemetry/history remains out of scope unless a later governed slice
+   proves a shared `network` metrics contract
+
 ## Topology And Relationship Rules
 
 These VMware concepts remain metadata or relationships in phase 1:
@@ -186,7 +212,6 @@ These VMware concepts remain metadata or relationships in phase 1:
 4. folder
 5. resource pool
 6. datastore cluster / storage pod
-7. network objects
 
 Cluster HA and DRS flags are properties of the cluster placement context. They
 may be rendered on canonical hosts and VMs whose placement resolves to that
@@ -197,9 +222,10 @@ That means phase-1 VMware work must not add:
 1. `esxi-host`
 2. `vsphere-vm`
 3. `vsphere-datastore`
-4. `vsphere-cluster`
-5. `vsphere-datacenter`
-6. `vsphere-resource-pool`
+4. `vsphere-network`
+5. `vsphere-cluster`
+6. `vsphere-datacenter`
+7. `vsphere-resource-pool`
 
 If a future slice wants one of those to become top-level, it needs a separate
 governed admission decision because it would expand the shared Pulse resource
@@ -218,8 +244,8 @@ Phase-1 alert rule:
 
 1. VMware alarm and health signals may surface only through the shared alert
    and incident model
-2. alert-backed investigation must attach to canonical `agent`, `vm`, or
-   `storage` resources
+2. alert-backed investigation must attach to canonical `agent`, `vm`,
+   `storage`, or `network` resources
 3. cluster-, datacenter-, or folder-scoped VMware alarm context may inform the
    incident, but it must not create synthetic top-level VMware incident
    resources in phase 1
@@ -244,8 +270,10 @@ Phase-1 telemetry rule:
 2. VM telemetry must land on the shared `vm` metrics/history path
 3. datastore state or capacity-history signals must land on the shared
    `storage` path
-4. phase-1 VMware work must not create a `vmware-host`, `vmware-vm`, or
-   `vmware-datastore` history store
+4. vCenter network inventory may land on the shared `network` resource path,
+   but phase 1 does not claim network metrics/history
+5. phase-1 VMware work must not create a `vmware-host`, `vmware-vm`,
+   `vmware-datastore`, or `vmware-network` history store
 
 Validation note:
 
@@ -277,7 +305,8 @@ The architecture is stable, but these points still require live proof:
 
 1. exact cross-version identity floor for ESXi hosts when `host_uuid` is not
    available from the chosen supported version
-2. exact relationship extraction path for VM-to-datastore usage and
+2. exact relationship extraction path for VM-to-datastore usage,
+   network-to-host attachment, network-to-VM attachment, and
    datastore-to-host mount fidelity
 3. exact alarm-to-canonical-resource attachment rule for cluster- or
    datacenter-scoped alarms
@@ -313,3 +342,7 @@ not compensate by inventing provider-local resource types or sidecar products.
     [Performance Manager Query Perf Composite](https://developer.broadcom.com/xapis/virtual-infrastructure-json-api/latest/sdk/vim25/release/PerformanceManager/moId/QueryPerfComposite/post/)
 12. cluster inventory and HA/DRS service state:
     [Vcenter Cluster list](https://developer.broadcom.com/xapis/vsphere-automation-api/latest/api/vcenter/cluster/get/)
+13. network inventory:
+    [Vcenter Network list](https://developer.broadcom.com/xapis/vsphere-automation-api/latest/api/vcenter/network/get/)
+14. network placement and attachments:
+    [vim.Network](https://developer.broadcom.com/xapis/virtual-storage-lifecycle-management-api/latest/vim.Network.html)

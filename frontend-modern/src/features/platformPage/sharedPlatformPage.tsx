@@ -212,6 +212,9 @@ const matchesPlatformSearch = (resource: Resource, search: string): boolean => {
     resource.vmware?.clusterName,
     formatVmwareClusterServices(resource.vmware),
     resource.vmware?.datastoreNames?.join(' '),
+    resource.vmware?.networkType,
+    resource.vmware?.networkHostNames?.join(' '),
+    resource.vmware?.networkVmNames?.join(' '),
     ...(resource.tags ?? []),
   ]
     .filter((value): value is string => typeof value === 'string')

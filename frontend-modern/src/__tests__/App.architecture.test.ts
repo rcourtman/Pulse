@@ -50,14 +50,16 @@ describe('App architecture', () => {
     );
     expect(appSource).toContain("import('./components/Workloads/WorkloadsSurface')");
     expect(appSource).toContain("import('./components/Storage/Storage')");
+    expect(appSource).toContain("import('./components/Recovery/Recovery')");
     expect(appSource).toContain(
-      "import('./components/Recovery/Recovery')",
+      '<Route path={INFRASTRUCTURE_PATH} component={InfrastructurePage} />',
     );
-    expect(appSource).toContain('<Route path={INFRASTRUCTURE_PATH} component={InfrastructurePage} />');
     expect(appSource).toContain('<Route path={WORKLOADS_PATH} component={WorkloadsPage} />');
     expect(appSource).toContain('<Route path={STORAGE_PATH} component={StoragePage} />');
     expect(appSource).toContain('<Route path={RECOVERY_PATH} component={RecoveryPage} />');
-    expect(appSource).toContain('<Route path="/ceph" component={() => <Navigate href="/proxmox/ceph" />} />');
+    expect(appSource).toContain(
+      '<Route path="/ceph" component={() => <Navigate href="/proxmox/ceph" />} />',
+    );
     expect(appSource).toContain('await preloadRouteModule(route);');
     expect(appRuntimeStateSource).not.toContain('preloadLazyRoutes');
     expect(appRuntimeStateSource).not.toContain("import('@/pages/Alerts')");
@@ -82,6 +84,9 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain("id: 'kubernetes',");
     expect(appLayoutSource).toContain("id: 'truenas',");
     expect(appLayoutSource).toContain("id: 'vmware',");
+    expect(appLayoutSource).toContain(
+      "tooltip: 'VMware vSphere hosts, virtual machines, datastores, and networks'",
+    );
     // Governed platform/runtime primary nav: Infrastructure / Workloads /
     // Storage / Recovery are not duplicated as equal primary tab
     // entries, and the Docker / Podman route is presented as the Containers

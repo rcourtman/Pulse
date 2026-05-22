@@ -41,6 +41,7 @@ export interface VMwareConnectionObservedSummary {
   hosts: number;
   vms: number;
   datastores: number;
+  networks: number;
   viRelease?: string;
   degraded?: boolean;
   issueCount?: number;
@@ -120,6 +121,7 @@ const normalizeVMwareConnectionObservedSummary = (
     hosts: finiteNumberOrUndefined(observed.hosts) ?? 0,
     vms: finiteNumberOrUndefined(observed.vms) ?? 0,
     datastores: finiteNumberOrUndefined(observed.datastores) ?? 0,
+    networks: finiteNumberOrUndefined(observed.networks) ?? 0,
     viRelease: optionalTrimmedString(observed.viRelease),
     degraded: strictBoolean(observed.degraded),
     issueCount: finiteNumberOrUndefined(observed.issueCount),
@@ -162,9 +164,7 @@ const serializeVMwareConnectionInput = (input: VMwareConnectionInput) => ({
   ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
   ...(input.monitorVms !== undefined ? { monitorVms: input.monitorVms } : {}),
   ...(input.monitorHosts !== undefined ? { monitorHosts: input.monitorHosts } : {}),
-  ...(input.monitorDatastores !== undefined
-    ? { monitorDatastores: input.monitorDatastores }
-    : {}),
+  ...(input.monitorDatastores !== undefined ? { monitorDatastores: input.monitorDatastores } : {}),
 });
 
 export const isRedactedVMwareSecret = (value: string | null | undefined) =>

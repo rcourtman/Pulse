@@ -376,7 +376,7 @@ export function AppLayout(props: AppLayoutProps) {
         label: 'vSphere',
         route: ROOT_VMWARE_PATH,
         settingsRoute: '/settings/infrastructure',
-        tooltip: 'VMware vSphere hosts, virtual machines, and datastores',
+        tooltip: 'VMware vSphere hosts, virtual machines, datastores, and networks',
         enabled: isVisible('vmware'),
         live: isVisible('vmware'),
         icon: CpuIcon,

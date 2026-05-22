@@ -633,6 +633,30 @@ func (rr *ResourceRegistry) List() []Resource {
 	return out
 }
 
+// ListForPresentation returns resources in the canonical API/broadcast
+// presentation shape, including top-level host coalescing that respects manual
+// merge exclusions.
+func (rr *ResourceRegistry) ListForPresentation() []Resource {
+	resources := rr.List()
+
+	rr.mu.RLock()
+	exclusions := make(map[string]struct{}, len(rr.exclusions))
+	for key := range rr.exclusions {
+		exclusions[key] = struct{}{}
+	}
+	rr.mu.RUnlock()
+
+	return CoalescePresentationHostResourcesWithExclusions(resources, func(left, right Resource) bool {
+		leftID := CanonicalResourceID(left.ID)
+		rightID := CanonicalResourceID(right.ID)
+		if leftID == "" || rightID == "" {
+			return false
+		}
+		_, ok := exclusions[exclusionKey(leftID, rightID)]
+		return ok
+	})
+}
+
 // ListByType returns all resources of the provided type.
 //
 // The returned slice is sorted by resource ID to provide deterministic results.
@@ -1807,6 +1831,21 @@ func mergeVMwareData(existing *VMwareData, incoming *VMwareData) *VMwareData {
 	}
 	if incoming.MaintenanceMode != "" {
 		merged.MaintenanceMode = incoming.MaintenanceMode
+	}
+	if incoming.NetworkType != "" {
+		merged.NetworkType = incoming.NetworkType
+	}
+	if len(incoming.NetworkHostIDs) > 0 {
+		merged.NetworkHostIDs = uniqueStrings(append(cloneStringSlice(merged.NetworkHostIDs), incoming.NetworkHostIDs...))
+	}
+	if len(incoming.NetworkHostNames) > 0 {
+		merged.NetworkHostNames = uniqueStrings(append(cloneStringSlice(merged.NetworkHostNames), incoming.NetworkHostNames...))
+	}
+	if len(incoming.NetworkVMIDs) > 0 {
+		merged.NetworkVMIDs = uniqueStrings(append(cloneStringSlice(merged.NetworkVMIDs), incoming.NetworkVMIDs...))
+	}
+	if len(incoming.NetworkVMNames) > 0 {
+		merged.NetworkVMNames = uniqueStrings(append(cloneStringSlice(merged.NetworkVMNames), incoming.NetworkVMNames...))
 	}
 	if incoming.InstanceUUID != "" {
 		merged.InstanceUUID = incoming.InstanceUUID

@@ -24,7 +24,7 @@ describe('infrastructureOnboardingPresentation', () => {
     expect(vmware.governanceState).toBe('admitted');
     expect(vmware.readinessStage).toBe('first-lab-ready');
     expect(vmware.primaryMode).toBe('api-backed');
-    expect(vmware.canonicalProjections).toEqual(['agent', 'vm', 'storage']);
+    expect(vmware.canonicalProjections).toEqual(['agent', 'vm', 'storage', 'network']);
     expect(vmware.supportFloor).toMatchObject({
       setup: 'supported',
       visibility: 'supported',

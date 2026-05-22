@@ -268,6 +268,14 @@ filter chip or an explicit page-owned advanced selector. Platform-owned filter
 selectors must also exclude facet options from other platform scopes, even when
 the underlying shared surface is mounted from the same Workloads or Storage
 component.
+Platform sub-routes that add native provider inventory must stay on the shared
+platform page and table primitives. The vSphere Networks surface routes through
+`/vmware/networks`, the shared platform tab model, the command palette
+navigation model, and the canonical table/detail primitives rather than a card
+deck or VMware-local page shell. Its rows are canonical `network` resources in
+the shared reportable/resource vocabulary, so source badges, resource pickers,
+command-palette search, table chrome, and detail disclosure must all consume
+shared primitives before VMware-specific presentation logic.
 Patrol's primary assessment strip is descriptive only; it must not render a
 Patrol-authored recommended next step, suggested prompt chips, or a secondary
 action band inside the assessment shell. If the same assessment opens

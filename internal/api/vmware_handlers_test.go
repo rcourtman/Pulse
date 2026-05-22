@@ -481,6 +481,7 @@ func TestVMwareHandlers_HandleList_RedactsSensitiveFieldsAndIncludesRuntimeSumma
 		Hosts:      3,
 		VMs:        42,
 		Datastores: 6,
+		Networks:   5,
 		VIRelease:  "8.0.3",
 	}, recordedAt)
 
@@ -508,7 +509,7 @@ func TestVMwareHandlers_HandleList_RedactsSensitiveFieldsAndIncludesRuntimeSumma
 	if listed[0].Observed == nil {
 		t.Fatalf("expected observed summary, got nil")
 	}
-	if listed[0].Observed.Hosts != 3 || listed[0].Observed.VMs != 42 || listed[0].Observed.Datastores != 6 {
+	if listed[0].Observed.Hosts != 3 || listed[0].Observed.VMs != 42 || listed[0].Observed.Datastores != 6 || listed[0].Observed.Networks != 5 {
 		t.Fatalf("unexpected observed counts: %+v", listed[0].Observed)
 	}
 	if listed[0].Observed.VIRelease != "8.0.3" {
@@ -546,7 +547,7 @@ func TestVMwareHandlers_HandleList_ReturnsMockConnectionsInMockMode(t *testing.T
 	if listed[0].Poll == nil || listed[0].Poll.LastSuccessAt == nil {
 		t.Fatalf("expected mock VMware poll summary, got %+v", listed[0].Poll)
 	}
-	if listed[0].Observed == nil || listed[0].Observed.Hosts == 0 || listed[0].Observed.VMs == 0 {
+	if listed[0].Observed == nil || listed[0].Observed.Hosts == 0 || listed[0].Observed.VMs == 0 || listed[0].Observed.Networks == 0 {
 		t.Fatalf("expected populated mock VMware observed summary, got %+v", listed[0].Observed)
 	}
 }
@@ -1515,7 +1516,7 @@ func TestVMwareHandlers_HandleTestSavedConnection_UsesStoredSecretsAndUpdatesRun
 		gotConfig = cfg
 		return &fakeVMwareClient{
 			testConnection: func(context.Context) (*vmware.InventorySummary, error) {
-				return &vmware.InventorySummary{Hosts: 4, VMs: 25, Datastores: 5, VIRelease: "8.0.3"}, nil
+				return &vmware.InventorySummary{Hosts: 4, VMs: 25, Datastores: 5, Networks: 7, VIRelease: "8.0.3"}, nil
 			},
 		}, nil
 	}
@@ -1545,7 +1546,7 @@ func TestVMwareHandlers_HandleTestSavedConnection_UsesStoredSecretsAndUpdatesRun
 	if len(listed) != 1 || listed[0].Poll == nil || listed[0].Poll.LastSuccessAt == nil {
 		t.Fatalf("expected saved retest to update runtime status, got %+v", listed)
 	}
-	if listed[0].Observed == nil || listed[0].Observed.VMs != 25 {
+	if listed[0].Observed == nil || listed[0].Observed.VMs != 25 || listed[0].Observed.Networks != 7 {
 		t.Fatalf("expected saved retest to update observed summary, got %+v", listed[0].Observed)
 	}
 }

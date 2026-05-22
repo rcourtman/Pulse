@@ -43,6 +43,10 @@ func activityChangesFromSnapshot(snapshot *InventorySnapshot) []unifiedresources
 		resourceID := vmwareSourceID(snapshot.ConnectionID, "datastore", datastore.Datastore)
 		changes = append(changes, entityActivityChanges(resourceID, snapshot.ConnectionID, "datastore", datastore.Datastore, datastore.RecentTasks, datastore.RecentEvents)...)
 	}
+	for _, network := range snapshot.Networks {
+		resourceID := vmwareSourceID(snapshot.ConnectionID, "network", network.Network)
+		changes = append(changes, entityActivityChanges(resourceID, snapshot.ConnectionID, "network", network.Network, network.RecentTasks, network.RecentEvents)...)
+	}
 
 	sort.SliceStable(changes, func(i, j int) bool {
 		if !changes[i].ObservedAt.Equal(changes[j].ObservedAt) {

@@ -38,6 +38,9 @@ const asTrimmedString = (value?: string | null): string => (value || '').trim();
 const formatCount = (count: number, label: string): string =>
   `${count} ${label}${count === 1 ? '' : 's'}`;
 
+const summarizeList = (values: string[] | undefined): string =>
+  (values ?? []).map(asTrimmedString).filter(Boolean).join(', ');
+
 const formatBoolLabel = (value?: boolean): string => {
   if (value === undefined) return '';
   return value ? 'Yes' : 'No';
@@ -483,6 +486,8 @@ const vmwareEntityLabel = (entityType?: string): string => {
       return 'VM';
     case 'datastore':
       return 'Datastore';
+    case 'network':
+      return 'Network';
     default:
       return asTrimmedString(entityType);
   }
@@ -539,6 +544,12 @@ export const buildVMwareDetailsSummary = (
   const virtualDiskCount = vmware.virtualDisks?.length ?? 0;
   if (resourceType === 'vm' && virtualDiskCount > 0) {
     parts.push(formatCount(virtualDiskCount, 'disk'));
+  }
+  if (resourceType === 'network') {
+    const hostCount = vmware.networkHostNames?.length ?? vmware.networkHostIds?.length ?? 0;
+    const vmCount = vmware.networkVmNames?.length ?? vmware.networkVmIds?.length ?? 0;
+    if (hostCount > 0) parts.push(formatCount(hostCount, 'host'));
+    if (vmCount > 0) parts.push(formatCount(vmCount, 'VM'));
   }
   const hardware = resourceType === 'vm' ? hardwareSummary(vmware.hardware) : '';
   if (hardware) {
@@ -610,6 +621,10 @@ export const buildVMwareDetailSections = (
       value: asTrimmedString(vmware.maintenanceMode),
       tone: getWarningTone(Boolean(asTrimmedString(vmware.maintenanceMode))),
     },
+    {
+      label: 'Network type',
+      value: formatEnumLabel(vmware.networkType),
+    },
   ]);
 
   const placementRows = filterNonEmptyRows([
@@ -678,7 +693,19 @@ export const buildVMwareDetailSections = (
     },
   ]);
 
-  const networkRows = resourceType === 'vm' ? networkAdapterRows(vmware.networkAdapters) : [];
+  const networkRows =
+    resourceType === 'vm'
+      ? networkAdapterRows(vmware.networkAdapters)
+      : filterNonEmptyRows([
+          {
+            label: 'Hosts',
+            value: summarizeList(vmware.networkHostNames),
+          },
+          {
+            label: 'VMs',
+            value: summarizeList(vmware.networkVmNames),
+          },
+        ]);
   const vmwareHardwareRows = resourceType === 'vm' ? hardwareRows(vmware) : [];
   const vmwareToolsRows = resourceType === 'vm' ? toolsRows(vmware.tools) : [];
   const diskRows = resourceType === 'vm' ? virtualDiskRows(vmware.virtualDisks) : [];

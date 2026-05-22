@@ -139,6 +139,7 @@ func classifyResourceSensitivity(resource Resource) ResourceSensitivity {
 		ResourceTypeK8sDeployment,
 		ResourceTypeDockerService,
 		ResourceTypeStorage,
+		ResourceTypeNetwork,
 		ResourceTypePBS,
 		ResourceTypePhysicalDisk,
 		ResourceTypeCeph,
@@ -272,6 +273,8 @@ func resourceSummaryType(resource Resource) string {
 		return "kubernetes deployment"
 	case ResourceTypeStorage:
 		return "storage"
+	case ResourceTypeNetwork:
+		return "network"
 	case ResourceTypePBS:
 		return "backup server"
 	case ResourceTypePMG:

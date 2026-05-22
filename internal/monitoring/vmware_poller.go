@@ -42,6 +42,7 @@ type VMwareConnectionObservedSummary struct {
 	Hosts       int                             `json:"hosts"`
 	VMs         int                             `json:"vms"`
 	Datastores  int                             `json:"datastores"`
+	Networks    int                             `json:"networks"`
 	VIRelease   string                          `json:"viRelease,omitempty"`
 	Degraded    bool                            `json:"degraded,omitempty"`
 	IssueCount  int                             `json:"issueCount,omitempty"`
@@ -867,6 +868,7 @@ func (p *VMwarePoller) RecordConnectionTestSuccess(orgID, connID string, summary
 			Hosts:       summary.Hosts,
 			VMs:         summary.VMs,
 			Datastores:  summary.Datastores,
+			Networks:    summary.Networks,
 			VIRelease:   strings.TrimSpace(summary.VIRelease),
 		}
 		status.observedIssueKey = ""
@@ -901,6 +903,7 @@ func buildVMwareObservedSummary(snapshot *vmware.InventorySnapshot) *VMwareConne
 		Hosts:       len(snapshot.Hosts),
 		VMs:         len(snapshot.VMs),
 		Datastores:  len(snapshot.Datastores),
+		Networks:    len(snapshot.Networks),
 		VIRelease:   strings.TrimSpace(snapshot.VIRelease),
 	}
 	if len(snapshot.EnrichmentIssues) > 0 {
@@ -977,6 +980,7 @@ func cloneVMwareObservedSummary(value *VMwareConnectionObservedSummary) *VMwareC
 		Hosts:       value.Hosts,
 		VMs:         value.VMs,
 		Datastores:  value.Datastores,
+		Networks:    value.Networks,
 		VIRelease:   strings.TrimSpace(value.VIRelease),
 		Degraded:    value.Degraded,
 		IssueCount:  value.IssueCount,

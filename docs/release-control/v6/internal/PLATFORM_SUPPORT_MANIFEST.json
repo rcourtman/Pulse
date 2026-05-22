@@ -299,7 +299,8 @@
       "canonical_projections": [
         "agent",
         "vm",
-        "storage"
+        "storage",
+        "network"
       ],
       "support_floor": {
         "setup": "supported",

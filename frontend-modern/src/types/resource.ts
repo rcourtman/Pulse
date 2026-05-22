@@ -41,6 +41,7 @@ export type ResourceType =
   | 'k8s-deployment' // Kubernetes deployment
   | 'k8s-service' // Kubernetes service
   | 'storage' // Storage resource
+  | 'network' // Virtual/network topology resource
   | 'datastore' // PBS datastore
   | 'pool' // ZFS/Ceph pool
   | 'dataset' // ZFS dataset
@@ -957,6 +958,11 @@ export interface ResourceVMwareMeta {
   datastoreAccessible?: boolean;
   multipleHostAccess?: boolean;
   maintenanceMode?: string;
+  networkType?: string;
+  networkHostIds?: string[];
+  networkHostNames?: string[];
+  networkVmIds?: string[];
+  networkVmNames?: string[];
   instanceUuid?: string;
   biosUuid?: string;
   guestOsFamily?: string;

@@ -322,6 +322,19 @@ func (c *Client) enrichInventoryTopology(
 		})
 	}
 
+	for i := range snapshot.Networks {
+		i := i
+		run(func() error {
+			network, networkIssues, err := c.enrichNetworkTopology(ctx, release, sessionID, snapshot.Networks[i], cache, hostNamesByID, vmNamesByID)
+			if err != nil {
+				return err
+			}
+			recordIssues(networkIssues)
+			snapshot.Networks[i] = network
+			return nil
+		})
+	}
+
 	wg.Wait()
 
 	firstErrMu.Lock()
@@ -561,6 +574,52 @@ func (c *Client) collectClusterInventory(
 		return vmwareSortKey(clusters[i].Cluster, clusters[i].Name) < vmwareSortKey(clusters[j].Cluster, clusters[j].Name)
 	})
 	return clusters, nil
+}
+
+func (c *Client) enrichNetworkTopology(
+	ctx context.Context,
+	release string,
+	sessionID string,
+	network InventoryNetwork,
+	cache *vmwareTopologyCache,
+	hostNamesByID map[string]string,
+	vmNamesByID map[string]string,
+) (InventoryNetwork, []InventoryEnrichmentIssue, error) {
+	var issues []InventoryEnrichmentIssue
+	recordIssue := func(issue *InventoryEnrichmentIssue) {
+		if issue != nil {
+			issues = append(issues, *issue)
+		}
+	}
+
+	ref := viJSONReference{Type: "Network", Value: strings.TrimSpace(network.Network)}
+	placement, err := cache.resolvePlacement(ctx, c, release, sessionID, ref)
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "network", network.Network, err); ok {
+		recordIssue(issue)
+	} else if err != nil && !isVIJSONNotFound(err) {
+		return network, nil, err
+	}
+	applyPlacementToNetwork(&network, placement)
+
+	hostRefs, err := c.collectEntityReferenceList(ctx, release, sessionID, "Network", network.Network, "host", "network host attachments")
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "network", network.Network, err); ok {
+		recordIssue(issue)
+	} else if err != nil && !isVIJSONNotFound(err) {
+		return network, nil, err
+	}
+	network.HostIDs = idsForReferences(hostRefs)
+	network.HostNames = namesForReferences(hostRefs, hostNamesByID)
+
+	vmRefs, err := c.collectEntityReferenceList(ctx, release, sessionID, "Network", network.Network, "vm", "network vm attachments")
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "network", network.Network, err); ok {
+		recordIssue(issue)
+	} else if err != nil && !isVIJSONNotFound(err) {
+		return network, nil, err
+	}
+	network.VMIDs = idsForReferences(vmRefs)
+	network.VMNames = namesForReferences(vmRefs, vmNamesByID)
+
+	return network, issues, nil
 }
 
 func (c *Client) enrichDatastoreTopology(
@@ -1235,6 +1294,16 @@ func applyPlacementToDatastore(datastore *InventoryDatastore, placement vmwarePl
 	datastore.DatacenterName = firstNonEmptyTrimmed(datastore.DatacenterName, placement.DatacenterName)
 	datastore.FolderID = firstNonEmptyTrimmed(datastore.FolderID, placement.FolderID)
 	datastore.FolderName = firstNonEmptyTrimmed(datastore.FolderName, placement.FolderName)
+}
+
+func applyPlacementToNetwork(network *InventoryNetwork, placement vmwarePlacement) {
+	if network == nil {
+		return
+	}
+	network.DatacenterID = firstNonEmptyTrimmed(network.DatacenterID, placement.DatacenterID)
+	network.DatacenterName = firstNonEmptyTrimmed(network.DatacenterName, placement.DatacenterName)
+	network.FolderID = firstNonEmptyTrimmed(network.FolderID, placement.FolderID)
+	network.FolderName = firstNonEmptyTrimmed(network.FolderName, placement.FolderName)
 }
 
 func mergePlacement(dst *vmwarePlacement, src vmwarePlacement) {

@@ -203,6 +203,7 @@ describe('platform overview layout guardrails', () => {
     expect(vmwarePageSurfaceSource).toContain('<VsphereVirtualMachinesTable');
     expect(vmwarePageSurfaceSource).not.toContain('<WorkloadsSurface');
     expect(vmwarePageSurfaceSource).toContain('<VsphereDatastoresTable');
+    expect(vmwarePageSurfaceSource).toContain('<VsphereNetworksTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereActivityTable');
     expect(vmwarePageSurfaceSource).not.toContain('<StorageSurface');
     expect(vmwarePageSurfaceSource).not.toContain('forcedView="pools"');

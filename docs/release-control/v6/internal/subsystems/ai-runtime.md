@@ -138,6 +138,13 @@ runtime cost control, and shared AI transport surfaces.
     `AppLayout.tsx` and via the canonical Patrol path, and platform pages
     must not replicate Patrol findings, Assistant prompts, or AI launcher
     affordances inside their own chrome.
+    The vSphere Networks sub-route follows the same AI runtime boundary as the
+    vSphere overview, datastore, health, and activity routes. Network rows may
+    seed Assistant or Patrol context only as shared `network` unified-resource
+    references read through `/api/resources*` and the common handoff payloads;
+    the VMware page must not introduce VMware-local AI prompts, a provider
+    model picker, or a vSphere-specific chat/runtime route just because
+    networks are now rendered as a first-class API-native table.
 
 ## Forbidden Paths
 

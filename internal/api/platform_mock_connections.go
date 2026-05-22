@@ -72,6 +72,7 @@ func mockVMwareConnectionResponses() []vmwareConnectionResponse {
 			Hosts:       fixture.Hosts,
 			VMs:         fixture.VMs,
 			Datastores:  fixture.Datastores,
+			Networks:    fixture.Networks,
 			VIRelease:   fixture.VIRelease,
 		},
 	}}

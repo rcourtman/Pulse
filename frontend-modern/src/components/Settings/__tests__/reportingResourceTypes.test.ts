@@ -10,6 +10,7 @@ describe('toReportingResourceType', () => {
     expect(toReportingResourceType('docker-host')).toBe('docker-host');
     expect(toReportingResourceType('network-endpoint')).toBe('network-endpoint');
     expect(toReportingResourceType('storage')).toBe('storage');
+    expect(toReportingResourceType('network')).toBe('network');
   });
 
   it('adapts kubernetes resource kinds to the current reporting API token at the edge', () => {

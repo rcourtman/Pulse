@@ -140,6 +140,12 @@ cloud-specific enforcement rules.
    zero-delta and removal-only TrueNAS or VMware previews as non-consuming or
    capacity-freeing changes rather than warning users that a disabled connection
    still grows monitored-system usage.
+   VMware vSphere network inventory is product navigation and resource context,
+   not a separate commercial unit. The `/vmware/networks` route may display
+   API-native network rows and those rows may contribute to connection
+   previews, but cloud-paid surfaces must continue to meter only the governed
+   monitored-system grouping result. Network child-resource volume must not
+   become a hosted usage cap, upgrade prompt, or billing-admission condition.
    That same shared signup boundary also owns the public privacy floor:
    syntactically valid `/api/public/signup` requests resolve to one uniform
    `202 Accepted` Pulse Account response whether provisioning/email side

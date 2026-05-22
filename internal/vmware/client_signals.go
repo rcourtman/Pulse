@@ -143,6 +143,12 @@ func (c *Client) validateSignalFloor(
 			return err
 		}
 	}
+	if len(snapshot.Networks) > 0 {
+		network := snapshot.Networks[0]
+		if _, err := c.collectManagedEntitySignals(ctx, release, sessionID, "Network", network.Network, perfManagerMoID, eventManagerMoID, cache, false); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -263,6 +269,23 @@ func (c *Client) enrichInventorySnapshot(
 			snapshot.Datastores[i].TriggeredAlarms = signals.Alarms
 			snapshot.Datastores[i].RecentTasks = signals.RecentTasks
 			snapshot.Datastores[i].RecentEvents = signals.RecentEvents
+			return nil
+		})
+	}
+
+	for i := range snapshot.Networks {
+		i := i
+		run(func() error {
+			signals, err := c.collectManagedEntitySignals(ctx, release, sessionID, "Network", snapshot.Networks[i].Network, perfManagerMoID, eventManagerMoID, cache, true)
+			if issue, ok := classifyInventoryEnrichmentIssue("signals", "network", snapshot.Networks[i].Network, err); ok {
+				recordIssue(issue)
+			} else if err != nil {
+				return err
+			}
+			snapshot.Networks[i].OverallStatus = signals.OverallStatus
+			snapshot.Networks[i].TriggeredAlarms = signals.Alarms
+			snapshot.Networks[i].RecentTasks = signals.RecentTasks
+			snapshot.Networks[i].RecentEvents = signals.RecentEvents
 			return nil
 		})
 	}

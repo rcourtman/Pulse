@@ -250,13 +250,11 @@ func TestBroadcastResourceProjectionCoalescesSplitHostIdentities(t *testing.T) {
 
 	for _, snippet := range []string{
 		"metricsTargetResolver := broadcastMetricsTargetResolver(unifiedView.readState)",
-		"broadcastResources := coalesceBroadcastResources(unifiedView.resources)",
+		"broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)",
 		"frontendState.Resources = convertResourcesForBroadcast(broadcastResources, metricsTargetResolver)",
 		"frontendState.ConnectedInfrastructure = buildConnectedInfrastructure(broadcastResources, snapshot)",
-		"func coalesceBroadcastResources(resources []unifiedresources.Resource) []unifiedresources.Resource {",
 		"func attachBroadcastMetricsTargets(",
-		"func shouldMergeBroadcastHostResources(left, right unifiedresources.Resource) bool {",
-		"broadcastHasSource(sources, unifiedresources.SourceAgent) && broadcastHasRuntimePlatformSource(sources)",
+		"allResources = unifiedresources.CoalescePresentationHostResources(allResources)",
 	} {
 		if !strings.Contains(source, snippet) {
 			t.Fatalf("monitor.go must contain %q", snippet)

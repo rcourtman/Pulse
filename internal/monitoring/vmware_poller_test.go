@@ -206,6 +206,7 @@ func TestVMwarePollerConnectionSummariesCaptureFailuresWithoutClearingObservedSu
 		Hosts:      2,
 		VMs:        14,
 		Datastores: 3,
+		Networks:   5,
 		VIRelease:  "8.0.3",
 	}, successAt)
 	poller.RecordConnectionTestFailure("default", connection.ID, &vmware.ConnectionError{
@@ -220,7 +221,7 @@ func TestVMwarePollerConnectionSummariesCaptureFailuresWithoutClearingObservedSu
 	if summary.Poll.ConsecutiveFailures != 1 || summary.Poll.LastError.Category != "permission" {
 		t.Fatalf("unexpected poll failure details: %+v", summary.Poll)
 	}
-	if summary.Observed == nil || summary.Observed.VMs != 14 || summary.Observed.VIRelease != "8.0.3" {
+	if summary.Observed == nil || summary.Observed.VMs != 14 || summary.Observed.Networks != 5 || summary.Observed.VIRelease != "8.0.3" {
 		t.Fatalf("expected observed summary to be preserved after failure, got %+v", summary.Observed)
 	}
 }

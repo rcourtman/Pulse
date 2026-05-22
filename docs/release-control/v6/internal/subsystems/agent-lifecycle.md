@@ -180,6 +180,15 @@ impact previews, or cross-organization sharing only through the API and
 unified-resource contracts; lifecycle code must not treat that share as an
 agent install target, a command-agent authority, or a reason to widen setup
 tokens.
+VMware vSphere `network` resources follow that same lifecycle boundary. A
+vCenter connection may project networks into platform tables, resource
+pickers, Assistant context, or monitored-system previews through the shared
+resource contract, but those rows are provider inventory facts only. Lifecycle
+surfaces must not interpret a vSphere network as a host enrollment candidate,
+Pulse Agent install target, fleet command authority, or setup-token scope. When
+host-shaped records are coalesced for presentation, lifecycle consumers must
+use the API/unified-resource presentation result and must not create their own
+merge that bypasses registry-owned report exclusions.
 
 The node setup modal boundary must keep guided setup and manual credential
 submission separate. For new PVE/PBS setup, API Inventory and Host Telemetry

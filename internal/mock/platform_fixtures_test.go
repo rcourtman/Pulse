@@ -28,6 +28,9 @@ func TestUnifiedResourceSnapshotIncludesPlatformFixtures(t *testing.T) {
 	if len(graph.PlatformFixtures.VMware.Hosts) == 0 {
 		t.Fatal("expected canonical mock graph to include VMware host fixtures")
 	}
+	if len(graph.PlatformFixtures.VMware.Networks) == 0 {
+		t.Fatal("expected canonical mock graph to include VMware network fixtures")
+	}
 
 	resources, freshness := UnifiedResourceSnapshot()
 	if len(resources) == 0 {
@@ -40,17 +43,30 @@ func TestUnifiedResourceSnapshotIncludesPlatformFixtures(t *testing.T) {
 	wantNames := map[string]bool{
 		graph.PlatformFixtures.TrueNAS.System.Hostname: false,
 		graph.PlatformFixtures.VMware.Hosts[0].Name:    false,
+		graph.PlatformFixtures.VMware.Networks[0].Name: false,
 		legacyName: false,
 	}
+	vmwareNetworkProjected := false
 	for _, resource := range resources {
 		if _, ok := wantNames[resource.Name]; ok {
 			wantNames[resource.Name] = true
+		}
+		if resource.Name == graph.PlatformFixtures.VMware.Networks[0].Name &&
+			resource.Type == unifiedresources.ResourceTypeNetwork &&
+			slices.Contains(resource.Sources, unifiedresources.SourceVMware) {
+			vmwareNetworkProjected = true
 		}
 	}
 	for name, found := range wantNames {
 		if !found {
 			t.Fatalf("expected mock unified resources to include %q", name)
 		}
+	}
+	if !vmwareNetworkProjected {
+		t.Fatalf(
+			"expected VMware fixture network %q to project as a canonical VMware network resource",
+			graph.PlatformFixtures.VMware.Networks[0].Name,
+		)
 	}
 }
 

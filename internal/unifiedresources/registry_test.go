@@ -750,6 +750,7 @@ func TestMergeVMwareDataMergesSignalFieldsWithoutDroppingExistingIdentity(t *tes
 		DatacenterName:     "DC1",
 		ClusterName:        "Cluster A",
 		DatastoreNames:     []string{"primary-vmfs"},
+		NetworkHostNames:   []string{"esxi-01.lab.local"},
 		ConnectionState:    "connected",
 		PowerState:         "poweredOn",
 		OverallStatus:      "green",
@@ -770,6 +771,9 @@ func TestMergeVMwareDataMergesSignalFieldsWithoutDroppingExistingIdentity(t *tes
 		ClusterDRSEnabled:   &clusterDRS,
 		RuntimeHostName:     "esxi-01.lab.local",
 		DatastoreNames:      []string{"backup-nfs"},
+		NetworkType:         "STANDARD_PORTGROUP",
+		NetworkHostNames:    []string{"esxi-02.lab.local"},
+		NetworkVMNames:      []string{"app-01"},
 		DatastoreAccessible: &accessible,
 		GuestIPAddresses:    []string{"10.0.0.21"},
 		OverallStatus:       "yellow",
@@ -832,6 +836,15 @@ func TestMergeVMwareDataMergesSignalFieldsWithoutDroppingExistingIdentity(t *tes
 	}
 	if got := merged.DatastoreNames; !reflect.DeepEqual(got, []string{"primary-vmfs", "backup-nfs"}) {
 		t.Fatalf("datastore names = %#v", got)
+	}
+	if got := merged.NetworkType; got != "STANDARD_PORTGROUP" {
+		t.Fatalf("network type = %q, want STANDARD_PORTGROUP", got)
+	}
+	if got := merged.NetworkHostNames; !reflect.DeepEqual(got, []string{"esxi-01.lab.local", "esxi-02.lab.local"}) {
+		t.Fatalf("network host names = %#v", got)
+	}
+	if got := merged.NetworkVMNames; !reflect.DeepEqual(got, []string{"app-01"}) {
+		t.Fatalf("network VM names = %#v", got)
 	}
 	if merged.DatastoreAccessible == nil || *merged.DatastoreAccessible {
 		t.Fatalf("datastore accessible = %#v, want false", merged.DatastoreAccessible)

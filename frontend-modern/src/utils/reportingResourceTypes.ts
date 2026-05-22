@@ -12,6 +12,7 @@ export type ReportingResourceType =
   | 'datastore'
   | 'pool'
   | 'dataset'
+  | 'network'
   | 'network-share'
   | 'network-endpoint'
   | 'pbs'

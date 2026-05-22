@@ -562,7 +562,7 @@ AI-only summary payloads, or page-local heuristics.
 8. Keep provider-backed signal metadata on shared canonical resource fields.
    VMware status, alarm, task, and snapshot signals must flow through shared
    `vmware` metadata plus shared `resource-incident` timeline entries on
-   canonical `agent`, `vm`, and `storage` resources instead of creating
+   canonical `agent`, `vm`, `storage`, and `network` resources instead of creating
    provider-only resource kinds, identities, or history schemas.
 9. Keep summary-surface emphasis on canonical resource IDs. Infrastructure
    summary row-hover, chart-hover, and route-focus behavior must keep using the
@@ -1001,9 +1001,9 @@ That same VMware contract now also includes the shared source boundary. When
 runtime work starts, VMware-backed records must flow through one canonical
 VMware source key plus `platformType: vmware-vsphere`, not through separate
 `vcenter` and `esxi` source forks or provider-local raw type aliases. One
-host, VM, or datastore from VMware should therefore still look like one shared
-Pulse `agent`, `vm`, or `storage` resource to downstream selectors, drawers,
-alerts, AI, and route filters.
+host, VM, datastore, or network from VMware should therefore still look like
+one shared Pulse `agent`, `vm`, `storage`, or `network` resource to downstream
+selectors, drawers, alerts, AI, and route filters.
 That shared source boundary now also has a concrete frontend/runtime adapter
 floor. `internal/unifiedresources/types.go`, `internal/unifiedresources/registry.go`,
 `internal/unifiedresources/views.go`, `frontend-modern/src/hooks/useUnifiedResources.ts`,
@@ -1139,14 +1139,15 @@ VM `instance_uuid` / `bios_uuid` and host UUID when available belong under the
 shared canonical identity model for future merge or assistant reasoning, not
 inside a VMware-only dedupe lane.
 That same VMware contract now also includes the topology rule. `vCenter`,
-datacenter, cluster, folder, resource pool, datastore cluster, and network
-objects may enrich canonical `agent`, `vm`, and `storage` resources as
+datacenter, cluster, folder, resource pool, and datastore cluster objects may
+enrich canonical `agent`, `vm`, `storage`, and `network` resources as
 placement metadata or relationships, but they must not appear as synthetic
 top-level VMware resource types just to mirror the upstream inventory tree.
 Snapshot trees and VMware alarm/event/task context are also governed by that
-same rule: they may enrich canonical `vm`, `agent`, or `storage` resources and
-their timelines, but they do not become shared recovery artifacts, new
-resource kinds, or a parallel VMware incident model.
+same rule: they may enrich canonical `vm`, `agent`, `storage`, or `network`
+resources and their timelines, but they do not become shared recovery
+artifacts, new provider-local resource kinds, or a parallel VMware incident
+model.
 That same topology contract now also has a concrete projection seam.
 `internal/vmware/provider.go` must preserve VMware placement and identity
 detail on the shared `vmware` facet only: hosts may carry datacenter,
@@ -1158,7 +1159,10 @@ Ethernet adapter plus VM hardware disk metadata plus canonical parentage to
 the owning ESXi `agent`; datastores may
 carry datacenter/folder placement plus shared storage-node and workload
 consumer metadata through `storage.nodes`, `storage.consumerCount`, and
-`storage.topConsumers`. VMs may also carry VI JSON snapshot-tree context under
+`storage.topConsumers`; networks may carry network type, datacenter/folder
+placement, host attachments, VM attachments, and VMware health/task/event
+signal summaries under the shared `vmware` facet on canonical `network`
+resources. VMs may also carry VI JSON snapshot-tree context under
 `vmware.currentSnapshotId` and `vmware.snapshotTree`, including snapshot
 managed-object reference, display name, description, creation time, power
 state, quiesce flag, current marker, replay support, and child snapshots.
@@ -1191,9 +1195,9 @@ Cluster HA and DRS state belongs under `vmware.clusterHaEnabled` and
 cluster. It is API-native monitoring context from the vCenter cluster summary,
 not a synthetic cluster resource, lifecycle command surface, scheduling policy
 model, or recovery/protection signal.
-Those enrichments must remain subordinate to shared `agent`, `vm`, and
-`storage` resources rather than becoming a VMware-only topology graph, recovery
-artifact, canonical identity alias, or separate provider detail drawer
+Those enrichments must remain subordinate to shared `agent`, `vm`, `storage`,
+and `network` resources rather than becoming a VMware-only topology graph,
+recovery artifact, canonical identity alias, or separate provider detail drawer
 contract.
 TrueNAS disk telemetry now follows the same rule. API-backed TrueNAS disks must
 populate canonical `physicalDisk.temperature` and reuse the shared

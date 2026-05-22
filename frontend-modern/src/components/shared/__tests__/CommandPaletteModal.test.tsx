@@ -39,6 +39,7 @@ const infrastructureVisibility = () =>
     makeResource({ id: 'pve-1', type: 'agent', platformType: 'proxmox-pve' }),
     makeResource({ id: 'docker-1', type: 'docker-host', platformType: 'docker' }),
     makeResource({ id: 'k8s-1', type: 'k8s-cluster', platformType: 'kubernetes' }),
+    makeResource({ id: 'vc-1', type: 'network', platformType: 'vmware-vsphere' }),
   ]);
 
 describe('CommandPaletteModal', () => {
@@ -74,13 +75,14 @@ describe('CommandPaletteModal', () => {
     expect(commandPaletteModelSource).toContain("id: 'nav-kubernetes'");
     expect(commandPaletteModelSource).toContain("id: 'nav-truenas'");
     expect(commandPaletteModelSource).toContain("id: 'nav-vmware'");
+    expect(commandPaletteModelSource).toContain("id: 'nav-vmware-networks'");
     expect(commandPaletteModelSource).not.toContain("id: 'nav-infrastructure'");
     expect(commandPaletteModelSource).not.toContain("id: 'nav-workloads'");
     expect(commandPaletteModelSource).not.toContain("id: 'nav-storage'");
     expect(commandPaletteModelSource).not.toContain("id: 'nav-recovery'");
   });
 
-  it('renders the platform entries, container runtime lens, and dedicated Kubernetes pods command', () => {
+  it('renders platform entries, runtime lens commands, and vSphere network inventory', () => {
     render(() => (
       <CommandPaletteModal
         isOpen={true}
@@ -93,6 +95,9 @@ describe('CommandPaletteModal', () => {
     expect(screen.getByText('Go to Containers')).toBeInTheDocument();
     expect(screen.getByText('Go to Kubernetes Pods')).toBeInTheDocument();
     expect(screen.getByText('/kubernetes/pods')).toBeInTheDocument();
+    expect(screen.getByText('Go to vSphere')).toBeInTheDocument();
+    expect(screen.getByText('Go to vSphere Networks')).toBeInTheDocument();
+    expect(screen.getByText('/vmware/networks')).toBeInTheDocument();
   });
 
   it('navigates to the Kubernetes pods sub-tab', async () => {
@@ -108,6 +113,22 @@ describe('CommandPaletteModal', () => {
     await fireEvent.click(screen.getByText('Go to Kubernetes Pods'));
 
     expect(navigateMock).toHaveBeenCalledWith('/kubernetes/pods');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('navigates to the vSphere networks sub-tab', async () => {
+    const onClose = vi.fn();
+    render(() => (
+      <CommandPaletteModal
+        isOpen={true}
+        onClose={onClose}
+        infrastructureVisibility={infrastructureVisibility}
+      />
+    ));
+
+    await fireEvent.click(screen.getByText('Go to vSphere Networks'));
+
+    expect(navigateMock).toHaveBeenCalledWith('/vmware/networks');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -147,5 +168,6 @@ describe('CommandPaletteModal', () => {
     expect(screen.queryByText('Go to Kubernetes')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to TrueNAS')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to vSphere')).not.toBeInTheDocument();
+    expect(screen.queryByText('Go to vSphere Networks')).not.toBeInTheDocument();
   });
 });

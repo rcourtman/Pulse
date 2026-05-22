@@ -221,11 +221,31 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 				StartedAt: collectedAt.Add(-4 * time.Minute),
 			}},
 		}},
+		Networks: []InventoryNetwork{{
+			Network:        "network-101",
+			Name:           "VM Network",
+			Type:           "STANDARD_PORTGROUP",
+			DatacenterID:   "datacenter-1",
+			DatacenterName: "DC1",
+			FolderID:       "group-n4",
+			FolderName:     "Networks",
+			HostIDs:        []string{"host-101"},
+			HostNames:      []string{"esxi-01.lab.local"},
+			VMIDs:          []string{"vm-201"},
+			VMNames:        []string{"app-01"},
+			OverallStatus:  "yellow",
+			TriggeredAlarms: []InventoryAlarm{{
+				Alarm:         "alarm-41",
+				Name:          "Network uplink redundancy",
+				OverallStatus: "yellow",
+				TriggeredAt:   collectedAt.Add(-6 * time.Minute),
+			}},
+		}},
 	})
 
 	records := provider.Records()
-	if len(records) != 3 {
-		t.Fatalf("expected 3 VMware records, got %d", len(records))
+	if len(records) != 4 {
+		t.Fatalf("expected 4 VMware records, got %d", len(records))
 	}
 
 	hostRecord := records[0]
@@ -419,6 +439,29 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 	if datastoreRecord.Resource.VMware.DatastoreAccessible == nil || !*datastoreRecord.Resource.VMware.DatastoreAccessible {
 		t.Fatalf("datastore accessible = %#v, want true", datastoreRecord.Resource.VMware.DatastoreAccessible)
 	}
+
+	networkRecord := records[3]
+	if networkRecord.SourceID != "vc-1:network:network-101" {
+		t.Fatalf("network source id = %q, want vc-1:network:network-101", networkRecord.SourceID)
+	}
+	if networkRecord.Resource.Type != unifiedresources.ResourceTypeNetwork {
+		t.Fatalf("network resource type = %q, want %q", networkRecord.Resource.Type, unifiedresources.ResourceTypeNetwork)
+	}
+	if networkRecord.Resource.Status != unifiedresources.StatusWarning {
+		t.Fatalf("network status = %q, want %q", networkRecord.Resource.Status, unifiedresources.StatusWarning)
+	}
+	if networkRecord.Resource.VMware == nil || networkRecord.Resource.VMware.NetworkType != "STANDARD_PORTGROUP" {
+		t.Fatalf("expected VMware network metadata, got %+v", networkRecord.Resource.VMware)
+	}
+	if got := networkRecord.Resource.VMware.NetworkHostNames; len(got) != 1 || got[0] != "esxi-01.lab.local" {
+		t.Fatalf("network host names = %#v, want [esxi-01.lab.local]", got)
+	}
+	if got := networkRecord.Resource.VMware.NetworkVMNames; len(got) != 1 || got[0] != "app-01" {
+		t.Fatalf("network VM names = %#v, want [app-01]", got)
+	}
+	if len(networkRecord.Resource.Incidents) != 1 || networkRecord.Resource.Incidents[0].Code != "vmware_alarm_state" {
+		t.Fatalf("expected VMware network incident projection, got %+v", networkRecord.Resource.Incidents)
+	}
 }
 
 func TestProviderActivityChanges_ProjectCanonicalTimelineEntries(t *testing.T) {
@@ -464,11 +507,22 @@ func TestProviderActivityChanges_ProjectCanonicalTimelineEntries(t *testing.T) {
 				CreatedAt: collectedAt.Add(-3 * time.Minute),
 			}},
 		}},
+		Networks: []InventoryNetwork{{
+			Network: "network-101",
+			Name:    "VM Network",
+			RecentEvents: []InventoryEvent{{
+				Event:     "event-401",
+				Type:      "NetworkEvent",
+				Message:   "Network metadata refreshed",
+				User:      "network-admin",
+				CreatedAt: collectedAt.Add(-4 * time.Minute),
+			}},
+		}},
 	})
 
 	changes := provider.ActivityChanges()
-	if len(changes) != 3 {
-		t.Fatalf("expected 3 VMware activity changes, got %d", len(changes))
+	if len(changes) != 4 {
+		t.Fatalf("expected 4 VMware activity changes, got %d", len(changes))
 	}
 	if changes[0].Kind != unifiedresources.ChangeActivity {
 		t.Fatalf("latest change kind = %q, want %q", changes[0].Kind, unifiedresources.ChangeActivity)
@@ -493,6 +547,9 @@ func TestProviderActivityChanges_ProjectCanonicalTimelineEntries(t *testing.T) {
 	}
 	if got := changes[2].Metadata["vmwareEventUser"]; got != "storage-admin" {
 		t.Fatalf("datastore change user = %#v, want storage-admin", got)
+	}
+	if got := changes[3].Metadata["vmwareEntityType"]; got != "network" {
+		t.Fatalf("network change entity type = %#v, want network", got)
 	}
 }
 

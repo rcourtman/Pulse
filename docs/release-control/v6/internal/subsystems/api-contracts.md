@@ -1521,6 +1521,16 @@ the canonical monitored-system blocked payload.
 
 ## Current State
 
+VMware vSphere phase-1 inventory now reaches the product through shared API
+contracts rather than provider-local read routes. `/api/vmware/connections`
+owns saved vCenter connection health and observed counts, while canonical
+`agent`, `vm`, `storage`, and `network` resources flow through
+`/api/resources`, `/api/resources/stats`, `/api/state`, and shared Assistant
+mention payloads. Host-shaped presentation also shares the
+`ResourceRegistry.ListForPresentation` / `CoalescePresentationHostResources`
+boundary so state and resource list responses agree without bypassing
+registry-owned report exclusions.
+
 TrueNAS platform-connections responses treat native VMs and network shares as
 first-class observed contribution facets alongside systems, pools, datasets,
 apps, disks, and recovery artifacts. The frontend TrueNAS API client must
@@ -2622,9 +2632,9 @@ implementation contract under `internal/api/vmware_handlers.go`,
 `internal/api/router.go`, `internal/api/router_routes_registration.go`, and
 `frontend-modern/src/api/vmware.ts`. The list response must carry one redacted
 stored connection shape plus canonical `poll` health and `observed`
-contribution summary (`hosts`, `vms`, `datastores`, `viRelease`) so the shared
-settings workspace can render VMware status without another provider-local
-inventory route. When base inventory succeeds but optional signal or topology
+contribution summary (`hosts`, `vms`, `datastores`, `networks`, `viRelease`) so
+the shared settings workspace can render VMware status without another
+provider-local inventory route. When base inventory succeeds but optional signal or topology
 reads degrade, that same `observed` payload must carry the canonical
 partial-success shape (`degraded`, `issueCount`, summarized `issues`) instead
 of collapsing the whole connection to `poll.lastError` or pretending the
@@ -2683,8 +2693,8 @@ helpers without dropping them on edit-save.
 That same VMware API boundary now also owns the phase-1 runtime negative
 space around inventory projection. `internal/api/router.go` may wire VMware's
 supplemental ingest into the shared `/api/resources` surface so canonical
-`agent`, `vm`, and `storage` records can appear elsewhere in Pulse, but the
-public backend contract must still stop at `/api/vmware/connections*` for
+`agent`, `vm`, `storage`, and `network` records can appear elsewhere in Pulse,
+but the public backend contract must still stop at `/api/vmware/connections*` for
 provider-local routes. Phase 1 must not add public `/api/vmware/resources`,
 `/api/vmware/history`, `/api/vmware/alerts`, or VMware-specific recovery
 transport just because the internal poller now projects VMware-backed
@@ -2693,10 +2703,12 @@ That same shared API contract now also owns Assistant mention transport for
 those canonical resources. `frontend-modern/src/api/aiChat.ts`,
 `internal/api/ai_handler.go`, and `internal/api/ai_handlers.go` must preserve
 structured mention payloads for canonical `agent`, `vm`, `storage`, and
-`app-container` resources as shared unified-resource IDs plus shared mention
-types, so VMware-backed reads stay on `/api/ai/*` and `/api/resources*`
-instead of introducing VMware-only mention payloads or provider-local
-inventory reads under `/api/vmware/*`.
+`network` resources as shared unified-resource IDs plus shared mention types,
+so VMware-backed reads stay on `/api/ai/*` and `/api/resources*` instead of
+introducing VMware-only mention payloads or provider-local inventory reads
+under `/api/vmware/*`. Runtime-specific container/app mentions remain shared
+unified-resource mentions as well; VMware network inventory does not create a
+provider-local mention family.
 That same `/api/ai/chat` payload boundary owns per-request execution-mode
 overrides. Dashboard Pulse Brief and other scoped handoffs may include
 `autonomous_mode:false` on the chat request to force approval-required command
@@ -4391,6 +4403,15 @@ registry-clone work on the hot path. That same governed resource contract now
 also includes backend-derived `policy` and `aiSafeSummary` fields, and list,
 detail, and child payloads must source those values from canonical unified
 resource metadata rather than from frontend- or AI-local heuristics.
+`/api/resources`, `/api/resources/stats`, and `/api/state` also share the same
+presentation coalescing boundary for host-shaped resources. When multiple
+authoritative reports describe the same host identity, resource handlers and
+state serialization must consume `ResourceRegistry.ListForPresentation` or the
+shared `CoalescePresentationHostResources` helper rather than reimplementing a
+route-local merge. Report-merge exclusions created from canonical ingestion
+remain authoritative at that boundary, so presentation coalescing may remove
+duplicate host fragments but must not rejoin resources the registry has already
+recorded as intentionally separate.
 That same resource-handler seed contract must also stay on canonical unified
 resource ownership for tenant-scoped requests: once a tenant state provider
 implements `UnifiedResourceSnapshotForTenant`, `/api/resources` may not fall

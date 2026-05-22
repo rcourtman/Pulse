@@ -171,6 +171,8 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 		VMware: &VMwareData{
 			ClusterHAEnabled:  &clusterHAEnabled,
 			ClusterDRSEnabled: &clusterDRSEnabled,
+			NetworkHostNames:  []string{"esxi-01.lab.local"},
+			NetworkVMNames:    []string{"app-01"},
 			SnapshotTree: []VMwareSnapshotData{{
 				Snapshot:  "snapshot-201",
 				Name:      "pre-upgrade",
@@ -233,6 +235,8 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 	*cloned.VMware.VirtualDisks[0].CapacityBytes = 1
 	*cloned.VMware.ClusterHAEnabled = false
 	*cloned.VMware.ClusterDRSEnabled = true
+	cloned.VMware.NetworkHostNames[0] = "mutated-host"
+	cloned.VMware.NetworkVMNames[0] = "mutated-vm"
 	*cloned.VMware.Tools.AutoUpdateSupported = false
 	*cloned.VMware.Tools.VersionNumber = 1
 	cloned.VMware.Tools.GuestRebootComponents[0] = "mutated"
@@ -252,6 +256,12 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 	}
 	if original.VMware.NetworkAdapters[0].NetworkName != "VM Network" {
 		t.Fatalf("mutating cloned VMware adapter should not affect original: %+v", original.VMware.NetworkAdapters)
+	}
+	if original.VMware.NetworkHostNames[0] != "esxi-01.lab.local" {
+		t.Fatalf("mutating cloned VMware network hosts should not affect original: %+v", original.VMware.NetworkHostNames)
+	}
+	if original.VMware.NetworkVMNames[0] != "app-01" {
+		t.Fatalf("mutating cloned VMware network VMs should not affect original: %+v", original.VMware.NetworkVMNames)
 	}
 	if *original.VMware.NetworkAdapters[0].PCISlotNumber != 160 {
 		t.Fatalf("mutating cloned VMware adapter PCI slot should not affect original: %+v", original.VMware.NetworkAdapters[0].PCISlotNumber)

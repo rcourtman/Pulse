@@ -19,12 +19,14 @@ import {
 import { VsphereAlertsTable } from './VsphereAlertsTable';
 import { VsphereActivityTable } from './VsphereActivityTable';
 import { VsphereDatastoresTable } from './VsphereDatastoresTable';
+import { VsphereNetworksTable } from './VsphereNetworksTable';
 import { VsphereVirtualMachinesTable } from './VsphereVirtualMachinesTable';
 
 // vSphere phase 1 projects ESXi hosts as canonical `agent`, virtual machines
-// as canonical `vm`, and datastores as canonical `storage`; provider-native
-// topology stays in VMware metadata under those shared resources.
-const VMWARE_RESOURCE_QUERY = 'type=agent,vm,storage';
+// as canonical `vm`, datastores as canonical `storage`, and vCenter networks
+// as canonical `network`; provider-native topology stays in VMware metadata
+// under those shared resources.
+const VMWARE_RESOURCE_QUERY = 'type=agent,vm,storage,network';
 const VALID_TABS = new Set<VmwarePageTabId>(VMWARE_TAB_SPECS.map((tab) => tab.id));
 
 const vmwareIcon = () => <CpuIcon class="h-6 w-6 text-slate-400" />;
@@ -101,6 +103,15 @@ export function VmwarePageSurface() {
                 emptyIcon={vmwareIcon()}
                 emptyTitle="No vSphere datastores"
                 emptyDescription="Datastores appear here once the vCenter connection enumerates them."
+              />
+            </Show>
+            <Show when={activeTab() === 'networks'}>
+              <VsphereNetworksTable
+                networks={model().networks}
+                scope={model().resources}
+                emptyIcon={vmwareIcon()}
+                emptyTitle="No vSphere networks"
+                emptyDescription="Networks appear here once the vCenter connection enumerates them."
               />
             </Show>
             <Show when={activeTab() === 'health'}>

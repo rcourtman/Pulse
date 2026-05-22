@@ -1655,7 +1655,7 @@ func TestContract_VMwareSavedConnectionTestsUpdateRuntimeSummary(t *testing.T) {
 	handler.newClient = func(cfg vmware.ClientConfig) (vmwareClient, error) {
 		return &fakeVMwareClient{
 			testConnection: func(context.Context) (*vmware.InventorySummary, error) {
-				return &vmware.InventorySummary{Hosts: 3, VMs: 20, Datastores: 4, VIRelease: "8.0.3"}, nil
+				return &vmware.InventorySummary{Hosts: 3, VMs: 20, Datastores: 4, Networks: 6, VIRelease: "8.0.3"}, nil
 			},
 		}, nil
 	}
@@ -1671,7 +1671,7 @@ func TestContract_VMwareSavedConnectionTestsUpdateRuntimeSummary(t *testing.T) {
 	if summary.Poll == nil || summary.Poll.LastSuccessAt == nil {
 		t.Fatalf("expected saved manual test to refresh runtime summary, got %+v", summary.Poll)
 	}
-	if summary.Observed == nil || summary.Observed.VMs != 20 {
+	if summary.Observed == nil || summary.Observed.VMs != 20 || summary.Observed.Networks != 6 {
 		t.Fatalf("expected saved manual test to refresh observed summary, got %+v", summary.Observed)
 	}
 }
@@ -1700,6 +1700,7 @@ func TestContract_VMwareConnectionListCarriesObservedSummary(t *testing.T) {
 		Hosts:      4,
 		VMs:        24,
 		Datastores: 6,
+		Networks:   8,
 		VIRelease:  "8.0.3",
 	}, collectedAt)
 
@@ -1735,6 +1736,9 @@ func TestContract_VMwareConnectionListCarriesObservedSummary(t *testing.T) {
 	}
 	if got := responses[0].Observed.Datastores; got != 6 {
 		t.Fatalf("observed datastores = %d, want 6", got)
+	}
+	if got := responses[0].Observed.Networks; got != 8 {
+		t.Fatalf("observed networks = %d, want 8", got)
 	}
 	if got := responses[0].Observed.VIRelease; got != "8.0.3" {
 		t.Fatalf("observed viRelease = %q, want 8.0.3", got)
@@ -2492,6 +2496,7 @@ func TestContract_PlatformMockToggleRebindsRuntimeConnectionsAndResources(t *tes
 	assertResourceCount("/api/resources?source=truenas&type=app-container", len(truenas.DefaultFixtures().Apps))
 	assertResourceCount("/api/resources?source=truenas&type=network-share", len(truenas.DefaultFixtures().Shares))
 	assertResourceCount("/api/resources?source=vmware-vsphere&type=storage", len(vmware.DefaultFixtures().Datastores))
+	assertResourceCount("/api/resources?source=vmware-vsphere&type=network", len(vmware.DefaultFixtures().Networks))
 }
 
 func TestContract_PlatformMockConnectionListsUseSharedFixtureMetadata(t *testing.T) {

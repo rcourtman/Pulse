@@ -183,6 +183,27 @@ type InventoryCluster struct {
 	DRSEnabled *bool  `json:"drs_enabled,omitempty"`
 }
 
+// InventoryNetwork is the vCenter Automation API network summary enriched with
+// VI JSON topology. Pulse keeps networks as first-class read-side resources
+// because vCenter exposes them as inventory objects used by hosts and VMs.
+type InventoryNetwork struct {
+	Network         string           `json:"network"`
+	Name            string           `json:"name"`
+	Type            string           `json:"type"`
+	DatacenterID    string           `json:"datacenter_id,omitempty"`
+	DatacenterName  string           `json:"datacenter_name,omitempty"`
+	FolderID        string           `json:"folder_id,omitempty"`
+	FolderName      string           `json:"folder_name,omitempty"`
+	HostIDs         []string         `json:"host_ids,omitempty"`
+	HostNames       []string         `json:"host_names,omitempty"`
+	VMIDs           []string         `json:"vm_ids,omitempty"`
+	VMNames         []string         `json:"vm_names,omitempty"`
+	OverallStatus   string           `json:"overall_status,omitempty"`
+	TriggeredAlarms []InventoryAlarm `json:"triggered_alarms,omitempty"`
+	RecentTasks     []InventoryTask  `json:"recent_tasks,omitempty"`
+	RecentEvents    []InventoryEvent `json:"recent_events,omitempty"`
+}
+
 // InventoryHost is the canonical phase-1 host summary returned by the vCenter
 // Automation API list endpoint.
 type InventoryHost struct {
@@ -291,6 +312,7 @@ type InventorySnapshot struct {
 	VMs              []InventoryVM
 	Datastores       []InventoryDatastore
 	Clusters         []InventoryCluster
+	Networks         []InventoryNetwork
 	EnrichmentIssues []InventoryEnrichmentIssue
 }
 
@@ -474,7 +496,7 @@ func vmwareRecordsFromSnapshot(snapshot *InventorySnapshot, now func() time.Time
 
 	connectionName := firstNonEmptyTrimmed(snapshot.ConnectionName, snapshot.VCenterHost, snapshot.ConnectionID)
 	vcenterHost := strings.TrimSpace(snapshot.VCenterHost)
-	records := make([]unifiedresources.IngestRecord, 0, len(snapshot.Hosts)+len(snapshot.VMs)+len(snapshot.Datastores))
+	records := make([]unifiedresources.IngestRecord, 0, len(snapshot.Hosts)+len(snapshot.VMs)+len(snapshot.Datastores)+len(snapshot.Networks))
 	hostSourceIDsByManagedObject := make(map[string]string, len(snapshot.Hosts))
 	for _, host := range snapshot.Hosts {
 		hostID := strings.TrimSpace(host.Host)
@@ -701,6 +723,56 @@ func vmwareRecordsFromSnapshot(snapshot *InventorySnapshot, now func() time.Time
 		})
 	}
 
+	for _, network := range snapshot.Networks {
+		name := firstNonEmptyTrimmed(network.Name, network.Network)
+		if name == "" {
+			continue
+		}
+		incidents := networkIncidents(network)
+		resource := unifiedresources.Resource{
+			Type:       unifiedresources.ResourceTypeNetwork,
+			Technology: "vmware",
+			Name:       name,
+			Status:     unifiedresources.IncidentsStatus(networkStatus(network), incidents),
+			LastSeen:   collectedAt,
+			UpdatedAt:  collectedAt,
+			Incidents:  incidents,
+			VMware: &unifiedresources.VMwareData{
+				ConnectionID:       strings.TrimSpace(snapshot.ConnectionID),
+				ConnectionName:     connectionName,
+				VCenterHost:        vcenterHost,
+				ManagedObjectID:    strings.TrimSpace(network.Network),
+				EntityType:         "network",
+				DatacenterID:       strings.TrimSpace(network.DatacenterID),
+				DatacenterName:     strings.TrimSpace(network.DatacenterName),
+				FolderID:           strings.TrimSpace(network.FolderID),
+				FolderName:         strings.TrimSpace(network.FolderName),
+				NetworkType:        strings.TrimSpace(network.Type),
+				NetworkHostIDs:     cloneStringSlice(network.HostIDs),
+				NetworkHostNames:   cloneStringSlice(network.HostNames),
+				NetworkVMIDs:       cloneStringSlice(network.VMIDs),
+				NetworkVMNames:     cloneStringSlice(network.VMNames),
+				OverallStatus:      strings.TrimSpace(network.OverallStatus),
+				ActiveAlarmCount:   len(network.TriggeredAlarms),
+				ActiveAlarmSummary: vmwareAlarmSummary(network.TriggeredAlarms),
+				RecentTaskCount:    len(network.RecentTasks),
+				RecentTaskSummary:  vmwareRecentTaskSummary(network.RecentTasks),
+			},
+			Tags: filterNonEmptyStrings(
+				"vmware",
+				"vsphere",
+				"network",
+				"source:vcenter",
+				tagWithValue("connection", strings.ToLower(connectionName)),
+				tagWithValue("type", strings.ToLower(strings.TrimSpace(network.Type))),
+			),
+		}
+		records = append(records, unifiedresources.IngestRecord{
+			SourceID: vmwareSourceID(snapshot.ConnectionID, "network", network.Network),
+			Resource: resource,
+		})
+	}
+
 	return records
 }
 
@@ -720,6 +792,9 @@ func sortInventorySnapshot(snapshot *InventorySnapshot) {
 	sort.Slice(snapshot.Clusters, func(i, j int) bool {
 		return vmwareSortKey(snapshot.Clusters[i].Cluster, snapshot.Clusters[i].Name) < vmwareSortKey(snapshot.Clusters[j].Cluster, snapshot.Clusters[j].Name)
 	})
+	sort.Slice(snapshot.Networks, func(i, j int) bool {
+		return vmwareSortKey(snapshot.Networks[i].Network, snapshot.Networks[i].Name) < vmwareSortKey(snapshot.Networks[j].Network, snapshot.Networks[j].Name)
+	})
 	sort.Slice(snapshot.EnrichmentIssues, func(i, j int) bool {
 		return inventoryEnrichmentIssueSortKey(snapshot.EnrichmentIssues[i]) <
 			inventoryEnrichmentIssueSortKey(snapshot.EnrichmentIssues[j])
@@ -735,6 +810,7 @@ func cloneInventorySnapshot(in *InventorySnapshot) *InventorySnapshot {
 	out.VMs = cloneInventoryVMs(in.VMs)
 	out.Datastores = cloneInventoryDatastores(in.Datastores)
 	out.Clusters = cloneInventoryClusters(in.Clusters)
+	out.Networks = cloneInventoryNetworks(in.Networks)
 	out.EnrichmentIssues = cloneInventoryEnrichmentIssues(in.EnrichmentIssues)
 	return &out
 }
@@ -812,6 +888,24 @@ func cloneInventoryClusters(in []InventoryCluster) []InventoryCluster {
 		out[i] = in[i]
 		out[i].HAEnabled = cloneBoolPointer(in[i].HAEnabled)
 		out[i].DRSEnabled = cloneBoolPointer(in[i].DRSEnabled)
+	}
+	return out
+}
+
+func cloneInventoryNetworks(in []InventoryNetwork) []InventoryNetwork {
+	if in == nil {
+		return nil
+	}
+	out := make([]InventoryNetwork, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].HostIDs = cloneStringSlice(in[i].HostIDs)
+		out[i].HostNames = cloneStringSlice(in[i].HostNames)
+		out[i].VMIDs = cloneStringSlice(in[i].VMIDs)
+		out[i].VMNames = cloneStringSlice(in[i].VMNames)
+		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
+		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
+		out[i].RecentEvents = cloneInventoryEvents(in[i].RecentEvents)
 	}
 	return out
 }
@@ -1028,6 +1122,13 @@ func datastoreStatus(datastore InventoryDatastore) unifiedresources.ResourceStat
 	return unifiedresources.StatusOnline
 }
 
+func networkStatus(network InventoryNetwork) unifiedresources.ResourceStatus {
+	if strings.TrimSpace(network.Network) == "" && strings.TrimSpace(network.Name) == "" {
+		return unifiedresources.StatusUnknown
+	}
+	return unifiedresources.StatusOnline
+}
+
 func hostIncidents(host InventoryHost) []unifiedresources.ResourceIncident {
 	return appendVMwareAlarmsAndHealthIncidents("host", host.Host, strings.TrimSpace(host.OverallStatus), host.TriggeredAlarms)
 }
@@ -1038,6 +1139,10 @@ func vmIncidents(vm InventoryVM) []unifiedresources.ResourceIncident {
 
 func datastoreIncidents(datastore InventoryDatastore) []unifiedresources.ResourceIncident {
 	return appendVMwareAlarmsAndHealthIncidents("datastore", datastore.Datastore, strings.TrimSpace(datastore.OverallStatus), datastore.TriggeredAlarms)
+}
+
+func networkIncidents(network InventoryNetwork) []unifiedresources.ResourceIncident {
+	return appendVMwareAlarmsAndHealthIncidents("network", network.Network, strings.TrimSpace(network.OverallStatus), network.TriggeredAlarms)
 }
 
 func appendVMwareAlarmsAndHealthIncidents(entityType, managedObjectID, overallStatus string, alarms []InventoryAlarm) []unifiedresources.ResourceIncident {
@@ -1119,6 +1224,8 @@ func vmwareEntityLabel(entityType string) string {
 		return "VM"
 	case "datastore":
 		return "Datastore"
+	case "network":
+		return "Network"
 	default:
 		return "Resource"
 	}

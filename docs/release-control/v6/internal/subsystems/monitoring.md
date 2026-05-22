@@ -306,9 +306,10 @@ That same VMware monitoring boundary now also includes the canonical telemetry
 rule. ESXi host metrics and history belong on the shared `agent` path, VM
 metrics and history belong on the shared `vm` path, and datastore
 capacity/accessibility history belongs on the shared `storage` path. VMware
-phase-1 work must not create `vmware-host`, `vmware-vm`, or
-`vmware-datastore` history stores just because the collection APIs differ from
-other platforms.
+network inventory belongs on the shared `network` resource path, but phase 1
+does not claim VMware network metrics or history. VMware phase-1 work must not
+create `vmware-host`, `vmware-vm`, `vmware-datastore`, or `vmware-network`
+history stores just because the collection APIs differ from other platforms.
 That same VMware monitoring boundary now also includes the source and identity
 rule. Runtime collection may authenticate to `vCenter`, call multiple VMware
 API families, and gather several object classes, but the emitted state must
@@ -592,19 +593,19 @@ parallel VMware event store or provider-only incident timeline.
 That same VMware monitoring boundary also includes the topology-signal rule.
 Signals collected from non-projected VMware topology objects such as clusters,
 folders, or datacenters may inform investigation only when they can be
-attached honestly to canonical `agent`, `vm`, or `storage` resources; the
-collector must not solve that ambiguity by creating VMware-only top-level
-incident targets.
+attached honestly to canonical `agent`, `vm`, `storage`, or `network`
+resources; the collector must not solve that ambiguity by creating VMware-only
+top-level incident targets.
 That same monitoring boundary now also has a concrete detail-enrichment seam.
 `internal/vmware/client.go`, `internal/vmware/client_topology.go`, and
 `internal/vmware/provider.go` may use the official vCenter Automation API plus
 VI JSON `name`, `parent`, `runtime`, `resourcePool`, `datastore`, `host`,
-`vm`, and datastore-summary paths to enrich canonical VMware-backed resources
+`vm`, `Network.host`, `Network.vm`, and datastore-summary paths to enrich canonical VMware-backed resources
 with placement, guest identity, and storage consumer context. That
 enrichment remains best-effort provider detail on the shared VMware source: it
 must not create a second topology cache, a VMware-only placement store, or a
-parallel guest-identity model outside the canonical `agent` / `vm` / `storage`
-resource graph.
+parallel guest-identity model outside the canonical `agent` / `vm` /
+`storage` / `network` resource graph.
 
 The monitor adapter now also acts as the canonical bridge from live registry
 rebuilds and supplemental ingest into the unified-resource timeline. That means

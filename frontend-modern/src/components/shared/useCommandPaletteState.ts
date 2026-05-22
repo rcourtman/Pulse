@@ -30,6 +30,7 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
         kubernetesPodsPath: buildKubernetesPath('pods'),
         trueNasPath: buildTrueNASPath(),
         vmwarePath: buildVmwarePath(),
+        vmwareNetworksPath: buildVmwarePath('networks'),
       },
       infrastructureVisibility: props.infrastructureVisibility(),
       navigate,

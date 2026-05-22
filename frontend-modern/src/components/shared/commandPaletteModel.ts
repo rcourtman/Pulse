@@ -25,6 +25,7 @@ export type CommandPaletteCommandPaths = {
   kubernetesPodsPath: string;
   trueNasPath: string;
   vmwarePath: string;
+  vmwareNetworksPath: string;
 };
 
 export function buildCommandPaletteCommands(options: {
@@ -88,14 +89,23 @@ export function buildCommandPaletteCommands(options: {
   }
 
   if (primaryInfrastructureNavigationIsVisible(options.infrastructureVisibility, 'vmware')) {
-    commands.push({
-      id: 'nav-vmware',
-      label: 'Go to vSphere',
-      description: options.paths.vmwarePath,
-      shortcut: 'g v',
-      keywords: ['vmware', 'vsphere', 'esxi', 'vms', 'datastores'],
-      action: () => options.navigate(options.paths.vmwarePath),
-    });
+    commands.push(
+      {
+        id: 'nav-vmware',
+        label: 'Go to vSphere',
+        description: options.paths.vmwarePath,
+        shortcut: 'g v',
+        keywords: ['vmware', 'vsphere', 'esxi', 'vms', 'datastores', 'networks'],
+        action: () => options.navigate(options.paths.vmwarePath),
+      },
+      {
+        id: 'nav-vmware-networks',
+        label: 'Go to vSphere Networks',
+        description: options.paths.vmwareNetworksPath,
+        keywords: ['vmware', 'vsphere', 'esxi', 'networks', 'portgroups'],
+        action: () => options.navigate(options.paths.vmwareNetworksPath),
+      },
+    );
   }
 
   commands.push(

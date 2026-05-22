@@ -191,6 +191,7 @@ func TestParseResourceTypesNodeAlias(t *testing.T) {
 		{name: "unsupported k8s-pod ignored by parser", input: "k8s-pod", want: map[unified.ResourceType]struct{}{}},
 		{name: "unsupported deployment alias ignored by parser", input: "deployment", want: map[unified.ResourceType]struct{}{}},
 		{name: "pool", input: "pool", want: map[unified.ResourceType]struct{}{unified.ResourceTypeCeph: {}}},
+		{name: "network", input: "network", want: map[unified.ResourceType]struct{}{unified.ResourceTypeNetwork: {}}},
 		{name: "network share", input: "network-share", want: map[unified.ResourceType]struct{}{unified.ResourceTypeNetworkShare: {}}},
 		{name: "vm", input: "vm", want: map[unified.ResourceType]struct{}{unified.ResourceTypeVM: {}}},
 		// CSV with multiple types

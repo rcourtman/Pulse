@@ -242,7 +242,7 @@ func TestVMwareFixturesRemainAdmittedAtPhase1Floor(t *testing.T) {
 	if vmwareManifest.PrimaryMode != "api-backed" {
 		t.Fatalf("vmware primary mode = %q, want api-backed", vmwareManifest.PrimaryMode)
 	}
-	if diff := diffPlatformSets([]string{"agent", "storage", "vm"}, vmwareManifest.CanonicalProjections); diff != "" {
+	if diff := diffPlatformSets([]string{"agent", "network", "storage", "vm"}, vmwareManifest.CanonicalProjections); diff != "" {
 		t.Fatalf("vmware canonical projections drifted from the support model:\n%s", diff)
 	}
 	if got := vmwareManifest.SupportFloor["recovery"]; got != "n/a" {
@@ -259,7 +259,7 @@ func TestVMwareFixturesRemainAdmittedAtPhase1Floor(t *testing.T) {
 	if fixture.CollectedAt.IsZero() {
 		t.Fatal("expected VMware mock connection fixture freshness")
 	}
-	if fixture.Hosts == 0 || fixture.VMs == 0 || fixture.Datastores == 0 {
+	if fixture.Hosts == 0 || fixture.VMs == 0 || fixture.Datastores == 0 || fixture.Networks == 0 {
 		t.Fatalf("expected VMware mock connection fixture to describe canonical inventory, got %+v", fixture)
 	}
 }
