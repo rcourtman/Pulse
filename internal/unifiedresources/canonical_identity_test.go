@@ -474,6 +474,10 @@ func TestRefreshCanonicalIdentityIgnoresVMwarePlacementDetailAliases(t *testing.
 	installAttempts := int64(1)
 	toolsVersionNumber := int64(12352)
 	guestRebootRequested := true
+	bootDelayMilliseconds := int64(5000)
+	bootRetry := true
+	coresPerSocket := int64(2)
+	memoryHotAddLimitMiB := int64(16384)
 	resource := Resource{
 		ID:   "vmware-vm-1",
 		Type: ResourceTypeVM,
@@ -534,6 +538,21 @@ func TestRefreshCanonicalIdentityIgnoresVMwarePlacementDetailAliases(t *testing.
 				RunState:              "RUNNING",
 				GuestRebootRequested:  &guestRebootRequested,
 				GuestRebootComponents: []string{"drivers"},
+			},
+			Hardware: &VMwareVMHardwareData{
+				GuestOS:               "UBUNTU_64",
+				Version:               "VMX_20",
+				UpgradePolicy:         "AFTER_CLEAN_SHUTDOWN",
+				UpgradeVersion:        "VMX_21",
+				UpgradeStatus:         "PENDING",
+				UpgradeErrorMessage:   "Virtual hardware upgrade failed",
+				BootType:              "EFI",
+				BootNetworkProtocol:   "IPV4",
+				BootDelayMilliseconds: &bootDelayMilliseconds,
+				BootRetry:             &bootRetry,
+				BootDevices:           []VMwareBootDeviceData{{Type: "DISK", Disks: []string{"2000"}}},
+				CPUCoresPerSocket:     &coresPerSocket,
+				MemoryHotAddLimitMiB:  &memoryHotAddLimitMiB,
 			},
 			SnapshotTree: []VMwareSnapshotData{{
 				Snapshot:    "snapshot-201",
@@ -615,6 +634,14 @@ func TestRefreshCanonicalIdentityIgnoresVMwarePlacementDetailAliases(t *testing.
 		"OPEN_VM_TOOLS",
 		"RUNNING",
 		"drivers",
+		"UBUNTU_64",
+		"VMX_20",
+		"AFTER_CLEAN_SHUTDOWN",
+		"VMX_21",
+		"PENDING",
+		"Virtual hardware upgrade failed",
+		"EFI",
+		"IPV4",
 	}
 	for _, disallowed := range disallowedAliases {
 		for _, alias := range resource.Canonical.Aliases {

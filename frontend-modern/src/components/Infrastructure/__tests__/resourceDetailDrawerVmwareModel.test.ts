@@ -50,6 +50,33 @@ describe('resourceDetailDrawerVmwareModel', () => {
         guestRebootComponents: ['drivers'],
         guestRebootRequestTime: '2026-03-30T18:20:00Z',
       },
+      hardware: {
+        guestOs: 'UBUNTU_64',
+        instantCloneFrozen: false,
+        version: 'VMX_20',
+        upgradePolicy: 'AFTER_CLEAN_SHUTDOWN',
+        upgradeVersion: 'VMX_21',
+        upgradeStatus: 'PENDING',
+        bootType: 'EFI',
+        efiLegacyBoot: false,
+        bootNetworkProtocol: 'IPV4',
+        bootDelayMilliseconds: 5000,
+        bootRetry: true,
+        bootRetryDelayMilliseconds: 10000,
+        enterSetupMode: false,
+        bootDevices: [
+          { type: 'DISK', disks: ['2000'] },
+          { type: 'ETHERNET', nic: '4000' },
+        ],
+        cpuCoresPerSocket: 2,
+        cpuHotAddEnabled: true,
+        cpuHotRemoveEnabled: false,
+        memoryHotAddEnabled: true,
+        memoryHotAddIncrementMib: 256,
+        memoryHotAddLimitMib: 16384,
+      },
+      cpuCount: 4,
+      memorySizeMib: 8192,
       snapshotTree: [
         {
           snapshot: 'snapshot-201',
@@ -72,8 +99,36 @@ describe('resourceDetailDrawerVmwareModel', () => {
     };
 
     expect(buildVMwareDetailsSummary('vm', vmware)).toBe(
-      'Lab VC · Read-only vCenter context · 2 snapshots · 1 vNIC · 1 disk · Tools reboot requested',
+      'Lab VC · Read-only vCenter context · 2 snapshots · 1 vNIC · 1 disk · Hardware pending · Tools reboot requested',
     );
+
+    const hardware = buildVMwareDetailSections('vm', vmware).find(
+      (section) => section.id === 'hardware',
+    );
+
+    expect(hardware?.rows).toEqual([
+      { label: 'Guest OS', value: 'Ubuntu 64' },
+      { label: 'Hardware version', value: 'VMX 20' },
+      { label: 'Upgrade status', value: 'Pending', tone: 'warning' },
+      { label: 'Upgrade policy', value: 'After Clean Shutdown' },
+      { label: 'Upgrade target', value: 'VMX 21' },
+      { label: 'Instant clone frozen', value: 'No', tone: 'default' },
+      { label: 'CPU topology', value: '4 vCPU · 2 cores/socket' },
+      { label: 'CPU hot-add', value: 'Yes' },
+      { label: 'CPU hot-remove', value: 'No' },
+      { label: 'Memory size', value: '8 GB' },
+      { label: 'Memory hot-add', value: 'Yes' },
+      { label: 'Memory hot-add increment', value: '256 MB' },
+      { label: 'Memory hot-add limit', value: '16 GB' },
+      { label: 'Boot type', value: 'EFI' },
+      { label: 'EFI legacy boot', value: 'No' },
+      { label: 'Boot network protocol', value: 'IPv4' },
+      { label: 'Boot delay', value: '5000 ms' },
+      { label: 'Boot retry', value: 'Yes' },
+      { label: 'Boot retry delay', value: '10000 ms' },
+      { label: 'Enter setup mode', value: 'No', tone: 'default' },
+      { label: 'Boot order', value: 'Disk 2000 -> Ethernet 4000' },
+    ]);
 
     const tools = buildVMwareDetailSections('vm', vmware).find((section) => section.id === 'tools');
 

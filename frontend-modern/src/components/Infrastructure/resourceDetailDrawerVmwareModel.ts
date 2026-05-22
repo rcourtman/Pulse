@@ -1,5 +1,7 @@
 import type {
   ResourceType,
+  ResourceVMwareBootDevice,
+  ResourceVMwareHardware,
   ResourceVMwareMeta,
   ResourceVMwareNetworkAdapter,
   ResourceVMwareSnapshot,
@@ -16,7 +18,16 @@ export type ResourceDetailDrawerVMwareRow = {
 };
 
 export type ResourceDetailDrawerVMwareSection = {
-  id: 'state' | 'placement' | 'guest' | 'tools' | 'disks' | 'network' | 'signals' | 'snapshots';
+  id:
+    | 'state'
+    | 'placement'
+    | 'guest'
+    | 'hardware'
+    | 'tools'
+    | 'disks'
+    | 'network'
+    | 'signals'
+    | 'snapshots';
   label: string;
   rows: ResourceDetailDrawerVMwareRow[];
 };
@@ -39,6 +50,10 @@ const VMWARE_ENUM_ACRONYMS: Record<string, string> = {
   OS: 'OS',
   VM: 'VM',
   VMDK: 'VMDK',
+  VMX: 'VMX',
+  EFI: 'EFI',
+  IPV4: 'IPv4',
+  IPV6: 'IPv6',
 };
 
 const formatEnumLabel = (value?: string | null): string => {
@@ -67,6 +82,16 @@ const formatCapacityBytes = (value?: number): string => {
   }
   const precision = unitIndex === 0 || size >= 10 ? 0 : 1;
   return `${size.toFixed(precision)} ${units[unitIndex]}`;
+};
+
+const formatMiB = (value?: number): string => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '';
+  return formatCapacityBytes(value * 1024 * 1024).replace(/\.0 ([A-Z]+)/, ' $1');
+};
+
+const formatMilliseconds = (value?: number): string => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '';
+  return `${value} ms`;
 };
 
 const countSnapshotTree = (snapshots?: ResourceVMwareSnapshot[]): number =>
@@ -177,6 +202,148 @@ const filterNonEmptyRows = (
 
 const getWarningTone = (hasWarning: boolean): ResourceDetailDrawerVMwareRowTone =>
   hasWarning ? 'warning' : 'default';
+
+const hardwareSummary = (hardware?: ResourceVMwareHardware): string => {
+  if (!hardware) return '';
+  const upgradeStatus = asTrimmedString(hardware.upgradeStatus);
+  if (upgradeStatus && !['NONE', 'OK'].includes(upgradeStatus.toUpperCase())) {
+    return `Hardware ${formatEnumLabel(upgradeStatus).toLowerCase()}`;
+  }
+  return formatEnumLabel(hardware.version);
+};
+
+const bootDeviceLabel = (device: ResourceVMwareBootDevice): string => {
+  const type = formatEnumLabel(device.type);
+  const details = [
+    asTrimmedString(device.nic),
+    ...(device.disks ?? []).map((disk) => asTrimmedString(disk)),
+  ].filter(Boolean);
+  return details.length > 0 ? `${type} ${details.join(', ')}` : type;
+};
+
+const bootOrderLabel = (devices?: ResourceVMwareBootDevice[]): string =>
+  (devices ?? []).map(bootDeviceLabel).filter(Boolean).join(' -> ');
+
+const cpuTopologyLabel = (vmware: ResourceVMwareMeta): string => {
+  const parts = [];
+  if (
+    typeof vmware.cpuCount === 'number' &&
+    Number.isFinite(vmware.cpuCount) &&
+    vmware.cpuCount > 0
+  ) {
+    parts.push(`${vmware.cpuCount} vCPU`);
+  }
+  if (
+    typeof vmware.hardware?.cpuCoresPerSocket === 'number' &&
+    Number.isFinite(vmware.hardware.cpuCoresPerSocket) &&
+    vmware.hardware.cpuCoresPerSocket > 0
+  ) {
+    parts.push(`${vmware.hardware.cpuCoresPerSocket} cores/socket`);
+  }
+  return parts.join(' · ');
+};
+
+const hardwareRows = (vmware?: ResourceVMwareMeta): ResourceDetailDrawerVMwareRow[] => {
+  if (!vmware?.hardware) return [];
+  const hardware = vmware.hardware;
+  return filterNonEmptyRows([
+    {
+      label: 'Guest OS',
+      value: formatEnumLabel(hardware.guestOs),
+    },
+    {
+      label: 'Hardware version',
+      value: formatEnumLabel(hardware.version),
+    },
+    {
+      label: 'Upgrade status',
+      value: formatEnumLabel(hardware.upgradeStatus),
+      tone: getWarningTone(
+        Boolean(asTrimmedString(hardware.upgradeStatus)) &&
+          !['NONE', 'OK'].includes(asTrimmedString(hardware.upgradeStatus).toUpperCase()),
+      ),
+    },
+    {
+      label: 'Upgrade policy',
+      value: formatEnumLabel(hardware.upgradePolicy),
+    },
+    {
+      label: 'Upgrade target',
+      value: formatEnumLabel(hardware.upgradeVersion),
+    },
+    {
+      label: 'Upgrade error',
+      value: asTrimmedString(hardware.upgradeErrorMessage),
+      tone: 'warning',
+    },
+    {
+      label: 'Instant clone frozen',
+      value: formatBoolLabel(hardware.instantCloneFrozen),
+      tone: getWarningTone(hardware.instantCloneFrozen === true),
+    },
+    {
+      label: 'CPU topology',
+      value: cpuTopologyLabel(vmware),
+    },
+    {
+      label: 'CPU hot-add',
+      value: formatBoolLabel(hardware.cpuHotAddEnabled),
+    },
+    {
+      label: 'CPU hot-remove',
+      value: formatBoolLabel(hardware.cpuHotRemoveEnabled),
+    },
+    {
+      label: 'Memory size',
+      value: formatMiB(vmware?.memorySizeMib),
+    },
+    {
+      label: 'Memory hot-add',
+      value: formatBoolLabel(hardware.memoryHotAddEnabled),
+    },
+    {
+      label: 'Memory hot-add increment',
+      value: formatMiB(hardware.memoryHotAddIncrementMib),
+    },
+    {
+      label: 'Memory hot-add limit',
+      value: formatMiB(hardware.memoryHotAddLimitMib),
+    },
+    {
+      label: 'Boot type',
+      value: formatEnumLabel(hardware.bootType),
+    },
+    {
+      label: 'EFI legacy boot',
+      value: formatBoolLabel(hardware.efiLegacyBoot),
+    },
+    {
+      label: 'Boot network protocol',
+      value: formatEnumLabel(hardware.bootNetworkProtocol),
+    },
+    {
+      label: 'Boot delay',
+      value: formatMilliseconds(hardware.bootDelayMilliseconds),
+    },
+    {
+      label: 'Boot retry',
+      value: formatBoolLabel(hardware.bootRetry),
+    },
+    {
+      label: 'Boot retry delay',
+      value: formatMilliseconds(hardware.bootRetryDelayMilliseconds),
+    },
+    {
+      label: 'Enter setup mode',
+      value: formatBoolLabel(hardware.enterSetupMode),
+      tone: getWarningTone(hardware.enterSetupMode === true),
+    },
+    {
+      label: 'Boot order',
+      value: bootOrderLabel(hardware.bootDevices),
+    },
+  ]);
+};
 
 const toolsSummary = (tools?: ResourceVMwareTools): string => {
   if (!tools) return '';
@@ -372,6 +539,10 @@ export const buildVMwareDetailsSummary = (
   if (resourceType === 'vm' && virtualDiskCount > 0) {
     parts.push(formatCount(virtualDiskCount, 'disk'));
   }
+  const hardware = resourceType === 'vm' ? hardwareSummary(vmware.hardware) : '';
+  if (hardware) {
+    parts.push(hardware);
+  }
   const tools = resourceType === 'vm' ? toolsSummary(vmware.tools) : '';
   if (tools) {
     parts.push(tools);
@@ -503,6 +674,7 @@ export const buildVMwareDetailSections = (
   ]);
 
   const networkRows = resourceType === 'vm' ? networkAdapterRows(vmware.networkAdapters) : [];
+  const vmwareHardwareRows = resourceType === 'vm' ? hardwareRows(vmware) : [];
   const vmwareToolsRows = resourceType === 'vm' ? toolsRows(vmware.tools) : [];
   const diskRows = resourceType === 'vm' ? virtualDiskRows(vmware.virtualDisks) : [];
 
@@ -540,6 +712,7 @@ export const buildVMwareDetailSections = (
     { id: 'state', label: 'State', rows: stateRows },
     { id: 'placement', label: 'Placement', rows: placementRows },
     { id: 'guest', label: 'Guest', rows: guestRows },
+    { id: 'hardware', label: 'Virtual hardware', rows: vmwareHardwareRows },
     { id: 'tools', label: 'VMware Tools', rows: vmwareToolsRows },
     { id: 'disks', label: 'Virtual disks', rows: diskRows },
     { id: 'network', label: 'Network', rows: networkRows },

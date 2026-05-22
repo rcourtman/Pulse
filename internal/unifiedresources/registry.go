@@ -1832,6 +1832,24 @@ func mergeVMwareData(existing *VMwareData, incoming *VMwareData) *VMwareData {
 	if incoming.SnapshotCount > 0 {
 		merged.SnapshotCount = incoming.SnapshotCount
 	}
+	if incoming.CurrentSnapshotID != "" {
+		merged.CurrentSnapshotID = incoming.CurrentSnapshotID
+	}
+	if len(incoming.SnapshotTree) > 0 {
+		merged.SnapshotTree = cloneVMwareSnapshotDataSlice(incoming.SnapshotTree)
+	}
+	if len(incoming.NetworkAdapters) > 0 {
+		merged.NetworkAdapters = cloneVMwareNetworkAdapterDataSlice(incoming.NetworkAdapters)
+	}
+	if len(incoming.VirtualDisks) > 0 {
+		merged.VirtualDisks = cloneVMwareVirtualDiskDataSlice(incoming.VirtualDisks)
+	}
+	if incoming.Tools != nil {
+		merged.Tools = cloneVMwareToolsData(incoming.Tools)
+	}
+	if incoming.Hardware != nil {
+		merged.Hardware = cloneVMwareVMHardwareData(incoming.Hardware)
+	}
 
 	return &merged
 }

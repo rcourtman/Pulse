@@ -211,6 +211,7 @@ func defaultFixturesPrimaryCluster(
 				NetworkAdapters:     fixtureVMNetworkAdapters("vm-201", "VM Network", true),
 				VirtualDisks:        fixtureVMVirtualDisks("vm-201", "nvme-primary", 128_000_000_000),
 				Tools:               fixtureVMTools("POWERED_ON", "green"),
+				Hardware:            fixtureVMHardware("UBUNTU_64", "VMX_20", true),
 				SnapshotTree: []InventoryVMSnapshot{{
 					Snapshot:    "snapshot-201",
 					Name:        "pre-deploy-checkpoint",
@@ -270,6 +271,7 @@ func defaultFixturesPrimaryCluster(
 				NetworkAdapters:     fixtureVMNetworkAdapters("vm-202", "Database Network", true),
 				VirtualDisks:        fixtureVMVirtualDisks("vm-202", "nvme-primary", 256_000_000_000),
 				Tools:               fixtureVMTools("POWERED_ON", "yellow"),
+				Hardware:            fixtureVMHardware("RHEL_8_64", "VMX_19", true),
 				SnapshotTree: []InventoryVMSnapshot{{
 					Snapshot:  "snapshot-211",
 					Name:      "baseline",
@@ -347,6 +349,7 @@ func defaultFixturesPrimaryCluster(
 				NetworkAdapters:     fixtureVMNetworkAdapters("vm-203", "Web Network", true),
 				VirtualDisks:        fixtureVMVirtualDisks("vm-203", "analytics-vsan", 96_000_000_000),
 				Tools:               fixtureVMTools("POWERED_ON", "green"),
+				Hardware:            fixtureVMHardware("UBUNTU_64", "VMX_20", true),
 				Metrics: &InventoryMetrics{
 					CPUPercent:              float64Ptr(22.1),
 					MemoryPercent:           float64Ptr(51.2),
@@ -388,6 +391,7 @@ func defaultFixturesPrimaryCluster(
 				NetworkAdapters:     fixtureVMNetworkAdapters("vm-204", "Platform Network", true),
 				VirtualDisks:        fixtureVMVirtualDisks("vm-204", "analytics-vsan", 192_000_000_000),
 				Tools:               fixtureVMTools("POWERED_ON", "green"),
+				Hardware:            fixtureVMHardware("UBUNTU_64", "VMX_20", true),
 				Metrics: &InventoryMetrics{
 					CPUPercent:              float64Ptr(27.8),
 					MemoryPercent:           float64Ptr(59.6),
@@ -429,6 +433,7 @@ func defaultFixturesPrimaryCluster(
 				NetworkAdapters:     fixtureVMNetworkAdapters("vm-205", "Utility Network", true),
 				VirtualDisks:        fixtureVMVirtualDisks("vm-205", "analytics-vsan", 80_000_000_000),
 				Tools:               fixtureVMTools("POWERED_ON", "green"),
+				Hardware:            fixtureVMHardware("WINDOWS_2019_64", "VMX_19", true),
 				Metrics: &InventoryMetrics{
 					CPUPercent:              float64Ptr(16.8),
 					MemoryPercent:           float64Ptr(46.1),
@@ -468,6 +473,7 @@ func defaultFixturesPrimaryCluster(
 				OverallStatus:       "gray",
 				VirtualDisks:        fixtureVMVirtualDisks("vm-206", "archive-tier", 64_000_000_000),
 				Tools:               fixtureVMTools("POWERED_OFF", "gray"),
+				Hardware:            fixtureVMHardware("OTHER_64", "VMX_17", false),
 			},
 		},
 		Datastores: []InventoryDatastore{
@@ -736,6 +742,7 @@ func appendEdgeClusterFixtures(
 			NetworkAdapters:     fixtureVMNetworkAdapters(v.ID, edgeVMNetworkName(v.Tier), v.PowerState == "POWERED_ON"),
 			VirtualDisks:        fixtureVMVirtualDisks(v.ID, firstNonEmptyTrimmed(dsNames...), int64(v.MemMiB)*1024*1024*4),
 			Tools:               fixtureVMTools(v.PowerState, v.Status),
+			Hardware:            fixtureVMHardware("UBUNTU_64", "VMX_20", v.PowerState == "POWERED_ON"),
 		}
 		if v.PowerState == "POWERED_ON" {
 			vm.Metrics = &InventoryMetrics{
@@ -881,6 +888,42 @@ func fixtureVMTools(powerState, status string) *InventoryVMTools {
 		VersionStatus:       versionStatus,
 		InstallType:         "OPEN_VM_TOOLS",
 		RunState:            runState,
+	}
+}
+
+func fixtureVMHardware(guestOS, version string, hotAddEnabled bool) *InventoryVMHardware {
+	instantCloneFrozen := false
+	efiLegacyBoot := false
+	bootDelayMilliseconds := int64(0)
+	bootRetry := false
+	bootRetryDelayMilliseconds := int64(10000)
+	enterSetupMode := false
+	coresPerSocket := int64(2)
+	memoryHotAddIncrementMiB := int64(256)
+	memoryHotAddLimitMiB := int64(16 * 1024)
+	return &InventoryVMHardware{
+		GuestOS:                    guestOS,
+		InstantCloneFrozen:         boolPointer(instantCloneFrozen),
+		Version:                    version,
+		UpgradePolicy:              "NEVER",
+		UpgradeStatus:              "NONE",
+		BootType:                   "EFI",
+		EFILegacyBoot:              &efiLegacyBoot,
+		BootNetworkProtocol:        "IPV4",
+		BootDelayMilliseconds:      &bootDelayMilliseconds,
+		BootRetry:                  &bootRetry,
+		BootRetryDelayMilliseconds: &bootRetryDelayMilliseconds,
+		EnterSetupMode:             &enterSetupMode,
+		BootDevices: []InventoryVMBootDevice{{
+			Type:  "DISK",
+			Disks: []string{"2000"},
+		}},
+		CPUCoresPerSocket:        &coresPerSocket,
+		CPUHotAddEnabled:         boolPointer(hotAddEnabled),
+		CPUHotRemoveEnabled:      boolPointer(false),
+		MemoryHotAddEnabled:      boolPointer(hotAddEnabled),
+		MemoryHotAddIncrementMiB: &memoryHotAddIncrementMiB,
+		MemoryHotAddLimitMiB:     &memoryHotAddLimitMiB,
 	}
 }
 

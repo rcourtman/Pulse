@@ -309,6 +309,31 @@ describe('Resource Helper Functions', () => {
           guestRebootComponents: ['drivers'],
           guestRebootRequestTime: '2026-03-30T18:20:00Z',
         },
+        hardware: {
+          guestOs: 'UBUNTU_64',
+          instantCloneFrozen: false,
+          version: 'VMX_20',
+          upgradePolicy: 'AFTER_CLEAN_SHUTDOWN',
+          upgradeVersion: 'VMX_21',
+          upgradeStatus: 'PENDING',
+          bootType: 'EFI',
+          efiLegacyBoot: false,
+          bootNetworkProtocol: 'IPV4',
+          bootDelayMilliseconds: 5000,
+          bootRetry: true,
+          bootRetryDelayMilliseconds: 10000,
+          enterSetupMode: false,
+          bootDevices: [
+            { type: 'DISK', disks: ['2000'] },
+            { type: 'ETHERNET', nic: '4000' },
+          ],
+          cpuCoresPerSocket: 2,
+          cpuHotAddEnabled: true,
+          cpuHotRemoveEnabled: false,
+          memoryHotAddEnabled: true,
+          memoryHotAddIncrementMib: 256,
+          memoryHotAddLimitMib: 16384,
+        },
         snapshotTree: [
           {
             snapshot: 'snapshot-101',
@@ -344,6 +369,10 @@ describe('Resource Helper Functions', () => {
       expect(vmware.tools?.versionStatus).toBe('CURRENT');
       expect(vmware.tools?.version).toBe('12.4.0');
       expect(vmware.tools?.guestRebootComponents).toEqual(['drivers']);
+      expect(vmware.hardware?.version).toBe('VMX_20');
+      expect(vmware.hardware?.upgradeStatus).toBe('PENDING');
+      expect(vmware.hardware?.bootDevices?.[1]?.nic).toBe('4000');
+      expect(vmware.hardware?.memoryHotAddLimitMib).toBe(16384);
       expect(vmware.snapshotTree?.[0]?.children?.[0]?.current).toBe(true);
     });
   });

@@ -132,6 +132,11 @@ const normalize = (value: unknown): string =>
 
 const trimString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
+const enumSearchValue = (value: unknown): string => {
+  const trimmed = trimString(value);
+  return trimmed ? `${trimmed} ${trimmed.replace(/[_-]/g, ' ')}` : '';
+};
+
 const normalizeToken = (value: unknown): string => normalize(value).replace(/[\s_-]/g, '');
 
 const metadataString = (
@@ -736,6 +741,23 @@ const vmwareVirtualMachineSearchHaystack = (resource: Resource): string =>
       resource.vmware?.tools?.upgradePolicy,
       resource.vmware?.tools?.errorMessage,
       resource.vmware?.tools?.guestRebootComponents?.join(' '),
+    ]
+      .filter(Boolean)
+      .join(' '),
+    [
+      enumSearchValue(resource.vmware?.hardware?.guestOs),
+      enumSearchValue(resource.vmware?.hardware?.version),
+      enumSearchValue(resource.vmware?.hardware?.upgradePolicy),
+      enumSearchValue(resource.vmware?.hardware?.upgradeVersion),
+      enumSearchValue(resource.vmware?.hardware?.upgradeStatus),
+      resource.vmware?.hardware?.upgradeErrorMessage,
+      enumSearchValue(resource.vmware?.hardware?.bootType),
+      enumSearchValue(resource.vmware?.hardware?.bootNetworkProtocol),
+      resource.vmware?.hardware?.bootDevices
+        ?.map((device) =>
+          [device.type, device.nic, device.disks?.join(' ')].filter(Boolean).join(' '),
+        )
+        .join(' '),
     ]
       .filter(Boolean)
       .join(' '),

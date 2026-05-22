@@ -163,6 +163,67 @@ describe('toDiscoveryConfig', () => {
     });
   });
 
+  it('does not synthesize service discovery for VMware VMs without a backend target', () => {
+    const resource: Resource = {
+      ...baseResource(),
+      id: 'vm-270aaf3d37cc7501',
+      type: 'vm',
+      name: 'warehouse-api-01',
+      platformType: 'vmware-vsphere',
+      platformScopes: ['vmware-vsphere'],
+      sources: ['vmware'],
+      parentName: 'redacted by policy',
+      platformData: {
+        sources: ['vmware'],
+        vmware: {
+          connectionName: 'Lab vCenter',
+          clusterName: 'redacted by policy',
+          runtimeHostName: 'esxi-01.lab.local',
+        },
+      },
+      vmware: {
+        connectionName: 'Lab vCenter',
+        entityType: 'VirtualMachine',
+        managedObjectId: 'vm-201',
+      },
+    };
+
+    expect(toDiscoveryConfig(resource)).toBeNull();
+  });
+
+  it('still uses explicit backend discovery targets for VMware VMs', () => {
+    const resource: Resource = {
+      ...baseResource(),
+      id: 'vm-270aaf3d37cc7501',
+      type: 'vm',
+      name: 'warehouse-api-01',
+      platformType: 'vmware-vsphere',
+      platformScopes: ['vmware-vsphere'],
+      sources: ['vmware'],
+      discoveryTarget: {
+        resourceType: 'vm',
+        agentId: 'guest-agent-01',
+        resourceId: 'vm-201',
+        hostname: 'warehouse-api-01.internal',
+      },
+      vmware: {
+        connectionName: 'Lab vCenter',
+        entityType: 'VirtualMachine',
+        managedObjectId: 'vm-201',
+      },
+    };
+
+    expect(toDiscoveryConfig(resource)).toEqual({
+      resourceType: 'vm',
+      agentId: 'guest-agent-01',
+      resourceId: 'vm-201',
+      hostname: 'warehouse-api-01.internal',
+      metadataKind: 'guest',
+      metadataId: 'vm-201',
+      targetLabel: 'guest',
+    });
+  });
+
   it('prefers docker hostSourceId for app-container fallback agentId', () => {
     const resource: Resource = {
       ...baseResource(),

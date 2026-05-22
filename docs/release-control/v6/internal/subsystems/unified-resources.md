@@ -1151,9 +1151,10 @@ That same topology contract now also has a concrete projection seam.
 `internal/vmware/provider.go` must preserve VMware placement and identity
 detail on the shared `vmware` facet only: hosts may carry datacenter,
 compute-resource, cluster, folder, and attached-datastore metadata; VMs may
-carry runtime-host, folder, resource-pool, datastore, guest-identity, VMware
-Tools runtime status, and VM hardware Ethernet adapter plus VM hardware disk
-metadata plus canonical parentage to the owning ESXi `agent`; datastores may
+carry runtime-host, folder, resource-pool, datastore, guest-identity, VM
+virtual-hardware configuration, VMware Tools runtime status, and VM hardware
+Ethernet adapter plus VM hardware disk metadata plus canonical parentage to the
+owning ESXi `agent`; datastores may
 carry datacenter/folder placement plus shared storage-node and workload
 consumer metadata through `storage.nodes`, `storage.consumerCount`, and
 `storage.topConsumers`. VMs may also carry VI JSON snapshot-tree context under
@@ -1176,6 +1177,14 @@ request flag, requesting components, and request time. Those fields are
 operator-facing monitoring facts from vCenter's VM Tools API; they must not be
 promoted into lifecycle control, recovery status, workload identity, or a
 separate guest-runtime resource.
+VM virtual-hardware configuration belongs under `vmware.hardware`, including
+vCenter VM guest OS, instant-clone frozen flag, virtual hardware version,
+hardware upgrade policy/version/status/error, boot type, EFI legacy boot,
+network boot protocol, boot delay/retry/setup-mode flags, boot-device order,
+CPU cores-per-socket and CPU hot-add/remove flags, and memory hot-add
+increment/limit settings. Those fields are API-native read-only VM
+configuration facts; they must not become Pulse VM-control authority, workload
+identity aliases, recovery protection posture, or a separate hardware resource.
 Those enrichments must remain subordinate to shared `agent`, `vm`, and
 `storage` resources rather than becoming a VMware-only topology graph, recovery
 artifact, canonical identity alias, or separate provider detail drawer

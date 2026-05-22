@@ -165,6 +165,31 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 				GuestRebootComponents:  []string{"drivers"},
 				GuestRebootRequestTime: "2026-03-30T18:20:00Z",
 			},
+			Hardware: &InventoryVMHardware{
+				GuestOS:                    "UBUNTU_64",
+				InstantCloneFrozen:         boolPtr(false),
+				Version:                    "VMX_20",
+				UpgradePolicy:              "AFTER_CLEAN_SHUTDOWN",
+				UpgradeVersion:             "VMX_21",
+				UpgradeStatus:              "PENDING",
+				BootType:                   "EFI",
+				EFILegacyBoot:              boolPtr(false),
+				BootNetworkProtocol:        "IPV4",
+				BootDelayMilliseconds:      int64Ptr(5000),
+				BootRetry:                  boolPtr(true),
+				BootRetryDelayMilliseconds: int64Ptr(10000),
+				EnterSetupMode:             boolPtr(false),
+				BootDevices: []InventoryVMBootDevice{
+					{Type: "DISK", Disks: []string{"2000"}},
+					{Type: "ETHERNET", NIC: "4000"},
+				},
+				CPUCoresPerSocket:        int64Ptr(2),
+				CPUHotAddEnabled:         boolPtr(true),
+				CPUHotRemoveEnabled:      boolPtr(false),
+				MemoryHotAddEnabled:      boolPtr(true),
+				MemoryHotAddIncrementMiB: int64Ptr(256),
+				MemoryHotAddLimitMiB:     int64Ptr(16384),
+			},
 		}},
 		Datastores: []InventoryDatastore{{
 			Datastore:          "datastore-11",
@@ -294,6 +319,15 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 	}
 	if got := vmRecord.Resource.VMware.Tools.GuestRebootComponents; len(got) != 1 || got[0] != "drivers" {
 		t.Fatalf("vm tools reboot components = %+v, want [drivers]", got)
+	}
+	if got := vmRecord.Resource.VMware.Hardware; got == nil || got.Version != "VMX_20" || got.UpgradeStatus != "PENDING" {
+		t.Fatalf("vm hardware projection = %+v, want VMX_20 pending", got)
+	}
+	if got := vmRecord.Resource.VMware.Hardware.BootDevices; len(got) != 2 || got[0].Disks[0] != "2000" || got[1].NIC != "4000" {
+		t.Fatalf("vm hardware boot devices = %+v, want disk and ethernet entries", got)
+	}
+	if got := vmRecord.Resource.VMware.Hardware.MemoryHotAddLimitMiB; got == nil || *got != 16384 {
+		t.Fatalf("vm hardware memory hot-add limit = %+v, want 16384", got)
 	}
 	if got := vmRecord.Resource.ParentName; got != "esxi-01.lab.local" {
 		t.Fatalf("vm parent name = %q, want esxi-01.lab.local", got)

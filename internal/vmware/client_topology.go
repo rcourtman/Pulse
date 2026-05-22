@@ -14,8 +14,54 @@ type vcenterVMIdentity struct {
 	InstanceUUID string `json:"instance_uuid"`
 }
 
+type vcenterVMHardwareInfo struct {
+	Version             string                       `json:"version"`
+	UpgradePolicy       string                       `json:"upgrade_policy"`
+	UpgradeVersion      string                       `json:"upgrade_version"`
+	UpgradeStatus       string                       `json:"upgrade_status"`
+	UpgradeErrorMessage *vcenterVMLocalizableMessage `json:"upgrade_error"`
+}
+
+type vcenterVMBootInfo struct {
+	Type            string `json:"type"`
+	EFILegacyBoot   *bool  `json:"efi_legacy_boot"`
+	NetworkProtocol string `json:"network_protocol"`
+	Delay           *int64 `json:"delay"`
+	Retry           *bool  `json:"retry"`
+	RetryDelay      *int64 `json:"retry_delay"`
+	EnterSetupMode  *bool  `json:"enter_setup_mode"`
+}
+
+type vcenterVMBootDeviceInfo struct {
+	Type  string   `json:"type"`
+	NIC   string   `json:"nic"`
+	Disks []string `json:"disks"`
+}
+
+type vcenterVMCPUInfo struct {
+	Count            *int64 `json:"count"`
+	CoresPerSocket   *int64 `json:"cores_per_socket"`
+	HotAddEnabled    *bool  `json:"hot_add_enabled"`
+	HotRemoveEnabled *bool  `json:"hot_remove_enabled"`
+}
+
+type vcenterVMMemoryInfo struct {
+	SizeMiB                *int64 `json:"size_mib"`
+	HotAddEnabled          *bool  `json:"hot_add_enabled"`
+	HotAddIncrementSizeMiB *int64 `json:"hot_add_increment_size_mib"`
+	HotAddLimitMiB         *int64 `json:"hot_add_limit_mib"`
+}
+
 type vcenterVMInfo struct {
-	Identity *vcenterVMIdentity `json:"identity"`
+	GuestOS            string                    `json:"guest_os"`
+	Identity           *vcenterVMIdentity        `json:"identity"`
+	PowerState         string                    `json:"power_state"`
+	InstantCloneFrozen *bool                     `json:"instant_clone_frozen"`
+	Hardware           *vcenterVMHardwareInfo    `json:"hardware"`
+	Boot               *vcenterVMBootInfo        `json:"boot"`
+	BootDevices        []vcenterVMBootDeviceInfo `json:"boot_devices"`
+	CPU                *vcenterVMCPUInfo         `json:"cpu"`
+	Memory             *vcenterVMMemoryInfo      `json:"memory"`
 }
 
 type vcenterVMGuestIdentity struct {
@@ -343,6 +389,13 @@ func (c *Client) enrichVMTopology(
 		vm.InstanceUUID = strings.TrimSpace(vmInfo.Identity.InstanceUUID)
 		vm.BIOSUUID = strings.TrimSpace(vmInfo.Identity.BIOSUUID)
 	}
+	if vmInfo != nil && vmInfo.CPU != nil && vmInfo.CPU.Count != nil && *vmInfo.CPU.Count > 0 {
+		vm.CPUCount = int(*vmInfo.CPU.Count)
+	}
+	if vmInfo != nil && vmInfo.Memory != nil && vmInfo.Memory.SizeMiB != nil && *vmInfo.Memory.SizeMiB > 0 {
+		vm.MemorySizeMiB = *vmInfo.Memory.SizeMiB
+	}
+	vm.Hardware = inventoryVMHardwareFromInfo(vmInfo)
 
 	guestIdentity, err := c.collectVMGuestIdentity(ctx, automationSessionID, vm.VM)
 	if issue, ok := classifyInventoryEnrichmentIssue("topology", "vm", vm.VM, err); ok {
@@ -533,11 +586,92 @@ func (c *Client) collectVMAutomationInfo(
 		return nil, nil
 	}
 	var payload vcenterVMInfo
-	path := fmt.Sprintf("/api/vcenter/vm/%s", vmID)
+	path := fmt.Sprintf("/api/vcenter/vm/%s", url.PathEscape(vmID))
 	if err := c.getAutomationJSON(ctx, automationSessionID, path, "vm detail", &payload); err != nil {
 		return nil, err
 	}
 	return &payload, nil
+}
+
+func inventoryVMHardwareFromInfo(info *vcenterVMInfo) *InventoryVMHardware {
+	if info == nil {
+		return nil
+	}
+	hardware := &InventoryVMHardware{
+		GuestOS:            strings.TrimSpace(info.GuestOS),
+		InstantCloneFrozen: cloneBoolPointer(info.InstantCloneFrozen),
+	}
+	if info.Hardware != nil {
+		hardware.Version = strings.TrimSpace(info.Hardware.Version)
+		hardware.UpgradePolicy = strings.TrimSpace(info.Hardware.UpgradePolicy)
+		hardware.UpgradeVersion = strings.TrimSpace(info.Hardware.UpgradeVersion)
+		hardware.UpgradeStatus = strings.TrimSpace(info.Hardware.UpgradeStatus)
+		hardware.UpgradeErrorMessage = localizableMessageText(info.Hardware.UpgradeErrorMessage)
+	}
+	if info.Boot != nil {
+		hardware.BootType = strings.TrimSpace(info.Boot.Type)
+		hardware.EFILegacyBoot = cloneBoolPointer(info.Boot.EFILegacyBoot)
+		hardware.BootNetworkProtocol = strings.TrimSpace(info.Boot.NetworkProtocol)
+		hardware.BootDelayMilliseconds = cloneInt64Pointer(info.Boot.Delay)
+		hardware.BootRetry = cloneBoolPointer(info.Boot.Retry)
+		hardware.BootRetryDelayMilliseconds = cloneInt64Pointer(info.Boot.RetryDelay)
+		hardware.EnterSetupMode = cloneBoolPointer(info.Boot.EnterSetupMode)
+	}
+	hardware.BootDevices = inventoryVMBootDevicesFromInfo(info.BootDevices)
+	if info.CPU != nil {
+		hardware.CPUCoresPerSocket = cloneInt64Pointer(info.CPU.CoresPerSocket)
+		hardware.CPUHotAddEnabled = cloneBoolPointer(info.CPU.HotAddEnabled)
+		hardware.CPUHotRemoveEnabled = cloneBoolPointer(info.CPU.HotRemoveEnabled)
+	}
+	if info.Memory != nil {
+		hardware.MemoryHotAddEnabled = cloneBoolPointer(info.Memory.HotAddEnabled)
+		hardware.MemoryHotAddIncrementMiB = cloneInt64Pointer(info.Memory.HotAddIncrementSizeMiB)
+		hardware.MemoryHotAddLimitMiB = cloneInt64Pointer(info.Memory.HotAddLimitMiB)
+	}
+	if inventoryVMHardwareEmpty(hardware) {
+		return nil
+	}
+	return hardware
+}
+
+func inventoryVMBootDevicesFromInfo(devices []vcenterVMBootDeviceInfo) []InventoryVMBootDevice {
+	if len(devices) == 0 {
+		return nil
+	}
+	out := make([]InventoryVMBootDevice, 0, len(devices))
+	for _, device := range devices {
+		out = append(out, InventoryVMBootDevice{
+			Type:  strings.TrimSpace(device.Type),
+			NIC:   strings.TrimSpace(device.NIC),
+			Disks: cloneStringSlice(device.Disks),
+		})
+	}
+	return out
+}
+
+func inventoryVMHardwareEmpty(hardware *InventoryVMHardware) bool {
+	return hardware == nil ||
+		(hardware.GuestOS == "" &&
+			hardware.InstantCloneFrozen == nil &&
+			hardware.Version == "" &&
+			hardware.UpgradePolicy == "" &&
+			hardware.UpgradeVersion == "" &&
+			hardware.UpgradeStatus == "" &&
+			hardware.UpgradeErrorMessage == "" &&
+			hardware.BootType == "" &&
+			hardware.EFILegacyBoot == nil &&
+			hardware.BootNetworkProtocol == "" &&
+			hardware.BootDelayMilliseconds == nil &&
+			hardware.BootRetry == nil &&
+			hardware.BootRetryDelayMilliseconds == nil &&
+			hardware.EnterSetupMode == nil &&
+			len(hardware.BootDevices) == 0 &&
+			hardware.CPUCoresPerSocket == nil &&
+			hardware.CPUHotAddEnabled == nil &&
+			hardware.CPUHotRemoveEnabled == nil &&
+			hardware.MemoryHotAddEnabled == nil &&
+			hardware.MemoryHotAddIncrementMiB == nil &&
+			hardware.MemoryHotAddLimitMiB == nil)
 }
 
 func (c *Client) collectVMGuestIdentity(

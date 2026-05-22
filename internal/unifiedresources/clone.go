@@ -271,6 +271,7 @@ func cloneVMwareData(in *VMwareData) *VMwareData {
 	out.NetworkAdapters = cloneVMwareNetworkAdapterDataSlice(in.NetworkAdapters)
 	out.VirtualDisks = cloneVMwareVirtualDiskDataSlice(in.VirtualDisks)
 	out.Tools = cloneVMwareToolsData(in.Tools)
+	out.Hardware = cloneVMwareVMHardwareData(in.Hardware)
 	return &out
 }
 
@@ -330,6 +331,39 @@ func cloneVMwareToolsData(in *VMwareToolsData) *VMwareToolsData {
 	out.GuestRebootRequested = cloneBoolPtr(in.GuestRebootRequested)
 	out.GuestRebootComponents = cloneStringSlice(in.GuestRebootComponents)
 	return &out
+}
+
+func cloneVMwareVMHardwareData(in *VMwareVMHardwareData) *VMwareVMHardwareData {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.InstantCloneFrozen = cloneBoolPtr(in.InstantCloneFrozen)
+	out.EFILegacyBoot = cloneBoolPtr(in.EFILegacyBoot)
+	out.BootDelayMilliseconds = cloneInt64Ptr(in.BootDelayMilliseconds)
+	out.BootRetry = cloneBoolPtr(in.BootRetry)
+	out.BootRetryDelayMilliseconds = cloneInt64Ptr(in.BootRetryDelayMilliseconds)
+	out.EnterSetupMode = cloneBoolPtr(in.EnterSetupMode)
+	out.BootDevices = cloneVMwareBootDeviceDataSlice(in.BootDevices)
+	out.CPUCoresPerSocket = cloneInt64Ptr(in.CPUCoresPerSocket)
+	out.CPUHotAddEnabled = cloneBoolPtr(in.CPUHotAddEnabled)
+	out.CPUHotRemoveEnabled = cloneBoolPtr(in.CPUHotRemoveEnabled)
+	out.MemoryHotAddEnabled = cloneBoolPtr(in.MemoryHotAddEnabled)
+	out.MemoryHotAddIncrementMiB = cloneInt64Ptr(in.MemoryHotAddIncrementMiB)
+	out.MemoryHotAddLimitMiB = cloneInt64Ptr(in.MemoryHotAddLimitMiB)
+	return &out
+}
+
+func cloneVMwareBootDeviceDataSlice(in []VMwareBootDeviceData) []VMwareBootDeviceData {
+	if in == nil {
+		return nil
+	}
+	out := make([]VMwareBootDeviceData, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].Disks = cloneStringSlice(in[i].Disks)
+	}
+	return out
 }
 
 func clonePMGRelayDomainMetaSlice(in []PMGRelayDomainMeta) []PMGRelayDomainMeta {

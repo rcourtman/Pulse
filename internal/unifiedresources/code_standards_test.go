@@ -2008,11 +2008,14 @@ func TestCloneVMwareDataKeepsNestedRuntimeDetailsIsolated(t *testing.T) {
 		"out.NetworkAdapters = cloneVMwareNetworkAdapterDataSlice(in.NetworkAdapters)",
 		"out.VirtualDisks = cloneVMwareVirtualDiskDataSlice(in.VirtualDisks)",
 		"out.Tools = cloneVMwareToolsData(in.Tools)",
+		"out.Hardware = cloneVMwareVMHardwareData(in.Hardware)",
 		"out[i].CreatedAt = cloneTimePtr(in[i].CreatedAt)",
 		"out[i].Children = cloneVMwareSnapshotDataSlice(in[i].Children)",
 		"out[i].PCISlotNumber = cloneInt64Ptr(in[i].PCISlotNumber)",
 		"out[i].CapacityBytes = cloneInt64Ptr(in[i].CapacityBytes)",
 		"out.GuestRebootComponents = cloneStringSlice(in.GuestRebootComponents)",
+		"out.BootDevices = cloneVMwareBootDeviceDataSlice(in.BootDevices)",
+		"out[i].Disks = cloneStringSlice(in[i].Disks)",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {

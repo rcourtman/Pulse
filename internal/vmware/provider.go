@@ -115,6 +115,40 @@ type InventoryVMTools struct {
 	GuestRebootRequestTime string   `json:"guest_reboot_request_time,omitempty"`
 }
 
+// InventoryVMBootDevice preserves one vCenter VM boot-device entry as
+// read-only virtual hardware context.
+type InventoryVMBootDevice struct {
+	Type  string   `json:"type,omitempty"`
+	NIC   string   `json:"nic,omitempty"`
+	Disks []string `json:"disks,omitempty"`
+}
+
+// InventoryVMHardware preserves vCenter VM hardware, CPU, memory, and boot
+// configuration as read-only VM context.
+type InventoryVMHardware struct {
+	GuestOS                    string                  `json:"guest_os,omitempty"`
+	InstantCloneFrozen         *bool                   `json:"instant_clone_frozen,omitempty"`
+	Version                    string                  `json:"version,omitempty"`
+	UpgradePolicy              string                  `json:"upgrade_policy,omitempty"`
+	UpgradeVersion             string                  `json:"upgrade_version,omitempty"`
+	UpgradeStatus              string                  `json:"upgrade_status,omitempty"`
+	UpgradeErrorMessage        string                  `json:"upgrade_error_message,omitempty"`
+	BootType                   string                  `json:"boot_type,omitempty"`
+	EFILegacyBoot              *bool                   `json:"efi_legacy_boot,omitempty"`
+	BootNetworkProtocol        string                  `json:"boot_network_protocol,omitempty"`
+	BootDelayMilliseconds      *int64                  `json:"boot_delay_milliseconds,omitempty"`
+	BootRetry                  *bool                   `json:"boot_retry,omitempty"`
+	BootRetryDelayMilliseconds *int64                  `json:"boot_retry_delay_milliseconds,omitempty"`
+	EnterSetupMode             *bool                   `json:"enter_setup_mode,omitempty"`
+	BootDevices                []InventoryVMBootDevice `json:"boot_devices,omitempty"`
+	CPUCoresPerSocket          *int64                  `json:"cpu_cores_per_socket,omitempty"`
+	CPUHotAddEnabled           *bool                   `json:"cpu_hot_add_enabled,omitempty"`
+	CPUHotRemoveEnabled        *bool                   `json:"cpu_hot_remove_enabled,omitempty"`
+	MemoryHotAddEnabled        *bool                   `json:"memory_hot_add_enabled,omitempty"`
+	MemoryHotAddIncrementMiB   *int64                  `json:"memory_hot_add_increment_mib,omitempty"`
+	MemoryHotAddLimitMiB       *int64                  `json:"memory_hot_add_limit_mib,omitempty"`
+}
+
 // InventoryMetrics captures the current runtime metric floor projected onto
 // canonical Pulse metrics for VMware-backed hosts and VMs.
 type InventoryMetrics struct {
@@ -201,6 +235,7 @@ type InventoryVM struct {
 	NetworkAdapters     []InventoryVMNetworkAdapter `json:"network_adapters,omitempty"`
 	VirtualDisks        []InventoryVMVirtualDisk    `json:"virtual_disks,omitempty"`
 	Tools               *InventoryVMTools           `json:"tools,omitempty"`
+	Hardware            *InventoryVMHardware        `json:"hardware,omitempty"`
 	Metrics             *InventoryMetrics           `json:"metrics,omitempty"`
 }
 
@@ -552,6 +587,7 @@ func vmwareRecordsFromSnapshot(snapshot *InventorySnapshot, now func() time.Time
 				NetworkAdapters:     vmwareNetworkAdaptersData(vm.NetworkAdapters),
 				VirtualDisks:        vmwareVirtualDisksData(vm.VirtualDisks),
 				Tools:               vmwareToolsData(vm.Tools),
+				Hardware:            vmwareVMHardwareData(vm.Hardware),
 			},
 			Tags: filterNonEmptyStrings(
 				"vmware",
@@ -714,6 +750,7 @@ func cloneInventoryVMs(in []InventoryVM) []InventoryVM {
 		out[i].NetworkAdapters = cloneInventoryVMNetworkAdapters(in[i].NetworkAdapters)
 		out[i].VirtualDisks = cloneInventoryVMVirtualDisks(in[i].VirtualDisks)
 		out[i].Tools = cloneInventoryVMTools(in[i].Tools)
+		out[i].Hardware = cloneInventoryVMHardware(in[i].Hardware)
 		out[i].Metrics = cloneInventoryMetrics(in[i].Metrics)
 	}
 	return out
@@ -822,6 +859,39 @@ func cloneInventoryVMTools(in *InventoryVMTools) *InventoryVMTools {
 	out.GuestRebootRequested = cloneBoolPointer(in.GuestRebootRequested)
 	out.GuestRebootComponents = cloneStringSlice(in.GuestRebootComponents)
 	return &out
+}
+
+func cloneInventoryVMHardware(in *InventoryVMHardware) *InventoryVMHardware {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.InstantCloneFrozen = cloneBoolPointer(in.InstantCloneFrozen)
+	out.EFILegacyBoot = cloneBoolPointer(in.EFILegacyBoot)
+	out.BootDelayMilliseconds = cloneInt64Pointer(in.BootDelayMilliseconds)
+	out.BootRetry = cloneBoolPointer(in.BootRetry)
+	out.BootRetryDelayMilliseconds = cloneInt64Pointer(in.BootRetryDelayMilliseconds)
+	out.EnterSetupMode = cloneBoolPointer(in.EnterSetupMode)
+	out.BootDevices = cloneInventoryVMBootDevices(in.BootDevices)
+	out.CPUCoresPerSocket = cloneInt64Pointer(in.CPUCoresPerSocket)
+	out.CPUHotAddEnabled = cloneBoolPointer(in.CPUHotAddEnabled)
+	out.CPUHotRemoveEnabled = cloneBoolPointer(in.CPUHotRemoveEnabled)
+	out.MemoryHotAddEnabled = cloneBoolPointer(in.MemoryHotAddEnabled)
+	out.MemoryHotAddIncrementMiB = cloneInt64Pointer(in.MemoryHotAddIncrementMiB)
+	out.MemoryHotAddLimitMiB = cloneInt64Pointer(in.MemoryHotAddLimitMiB)
+	return &out
+}
+
+func cloneInventoryVMBootDevices(in []InventoryVMBootDevice) []InventoryVMBootDevice {
+	if in == nil {
+		return nil
+	}
+	out := make([]InventoryVMBootDevice, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].Disks = cloneStringSlice(in[i].Disks)
+	}
+	return out
 }
 
 func cloneInventoryEnrichmentIssues(in []InventoryEnrichmentIssue) []InventoryEnrichmentIssue {
@@ -1235,6 +1305,50 @@ func vmwareToolsData(tools *InventoryVMTools) *unifiedresources.VMwareToolsData 
 		GuestRebootComponents:  cloneStringSlice(tools.GuestRebootComponents),
 		GuestRebootRequestTime: strings.TrimSpace(tools.GuestRebootRequestTime),
 	}
+}
+
+func vmwareVMHardwareData(hardware *InventoryVMHardware) *unifiedresources.VMwareVMHardwareData {
+	if hardware == nil {
+		return nil
+	}
+	return &unifiedresources.VMwareVMHardwareData{
+		GuestOS:                    strings.TrimSpace(hardware.GuestOS),
+		InstantCloneFrozen:         cloneBoolPointer(hardware.InstantCloneFrozen),
+		Version:                    strings.TrimSpace(hardware.Version),
+		UpgradePolicy:              strings.TrimSpace(hardware.UpgradePolicy),
+		UpgradeVersion:             strings.TrimSpace(hardware.UpgradeVersion),
+		UpgradeStatus:              strings.TrimSpace(hardware.UpgradeStatus),
+		UpgradeErrorMessage:        strings.TrimSpace(hardware.UpgradeErrorMessage),
+		BootType:                   strings.TrimSpace(hardware.BootType),
+		EFILegacyBoot:              cloneBoolPointer(hardware.EFILegacyBoot),
+		BootNetworkProtocol:        strings.TrimSpace(hardware.BootNetworkProtocol),
+		BootDelayMilliseconds:      cloneInt64Pointer(hardware.BootDelayMilliseconds),
+		BootRetry:                  cloneBoolPointer(hardware.BootRetry),
+		BootRetryDelayMilliseconds: cloneInt64Pointer(hardware.BootRetryDelayMilliseconds),
+		EnterSetupMode:             cloneBoolPointer(hardware.EnterSetupMode),
+		BootDevices:                vmwareBootDevicesData(hardware.BootDevices),
+		CPUCoresPerSocket:          cloneInt64Pointer(hardware.CPUCoresPerSocket),
+		CPUHotAddEnabled:           cloneBoolPointer(hardware.CPUHotAddEnabled),
+		CPUHotRemoveEnabled:        cloneBoolPointer(hardware.CPUHotRemoveEnabled),
+		MemoryHotAddEnabled:        cloneBoolPointer(hardware.MemoryHotAddEnabled),
+		MemoryHotAddIncrementMiB:   cloneInt64Pointer(hardware.MemoryHotAddIncrementMiB),
+		MemoryHotAddLimitMiB:       cloneInt64Pointer(hardware.MemoryHotAddLimitMiB),
+	}
+}
+
+func vmwareBootDevicesData(devices []InventoryVMBootDevice) []unifiedresources.VMwareBootDeviceData {
+	if len(devices) == 0 {
+		return nil
+	}
+	out := make([]unifiedresources.VMwareBootDeviceData, 0, len(devices))
+	for _, device := range devices {
+		out = append(out, unifiedresources.VMwareBootDeviceData{
+			Type:  strings.TrimSpace(device.Type),
+			NIC:   strings.TrimSpace(device.NIC),
+			Disks: cloneStringSlice(device.Disks),
+		})
+	}
+	return out
 }
 
 func vmwareNetworkAdapterMACAddresses(adapters []InventoryVMNetworkAdapter) []string {

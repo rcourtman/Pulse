@@ -347,6 +347,33 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
             guestRebootComponents: ['drivers'],
             guestRebootRequestTime: '2026-03-30T18:20:00Z',
           },
+          hardware: {
+            guestOs: 'UBUNTU_64',
+            instantCloneFrozen: false,
+            version: 'VMX_20',
+            upgradePolicy: 'AFTER_CLEAN_SHUTDOWN',
+            upgradeVersion: 'VMX_21',
+            upgradeStatus: 'PENDING',
+            bootType: 'EFI',
+            efiLegacyBoot: false,
+            bootNetworkProtocol: 'IPV4',
+            bootDelayMilliseconds: 5000,
+            bootRetry: true,
+            bootRetryDelayMilliseconds: 10000,
+            enterSetupMode: false,
+            bootDevices: [
+              { type: 'DISK', disks: ['2000'] },
+              { type: 'ETHERNET', nic: '4000' },
+            ],
+            cpuCoresPerSocket: 2,
+            cpuHotAddEnabled: true,
+            cpuHotRemoveEnabled: false,
+            memoryHotAddEnabled: true,
+            memoryHotAddIncrementMib: 256,
+            memoryHotAddLimitMib: 16384,
+          },
+          cpuCount: 4,
+          memorySizeMib: 8192,
           activeAlarmCount: 1,
           activeAlarmSummary: 'Host fan degraded',
           recentTaskCount: 1,
@@ -426,6 +453,33 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
           guestRebootComponents: ['drivers'],
           guestRebootRequestTime: '2026-03-30T18:20:00Z',
         },
+        hardware: {
+          guestOs: 'UBUNTU_64',
+          instantCloneFrozen: false,
+          version: 'VMX_20',
+          upgradePolicy: 'AFTER_CLEAN_SHUTDOWN',
+          upgradeVersion: 'VMX_21',
+          upgradeStatus: 'PENDING',
+          bootType: 'EFI',
+          efiLegacyBoot: false,
+          bootNetworkProtocol: 'IPV4',
+          bootDelayMilliseconds: 5000,
+          bootRetry: true,
+          bootRetryDelayMilliseconds: 10000,
+          enterSetupMode: false,
+          bootDevices: [
+            { type: 'DISK', disks: ['2000'] },
+            { type: 'ETHERNET', nic: '4000' },
+          ],
+          cpuCoresPerSocket: 2,
+          cpuHotAddEnabled: true,
+          cpuHotRemoveEnabled: false,
+          memoryHotAddEnabled: true,
+          memoryHotAddIncrementMib: 256,
+          memoryHotAddLimitMib: 16384,
+        },
+        cpuCount: 4,
+        memorySizeMib: 8192,
         activeAlarmCount: 1,
         activeAlarmSummary: 'Host fan degraded',
         recentTaskCount: 1,
@@ -462,7 +516,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByTestId('resource-vmware-details-section')).toBeInTheDocument();
     expect(
       getByText(
-        'Lab VC · Read-only vCenter context · 2 snapshots · 1 vNIC · 1 disk · Tools reboot requested · 1 alarm · 1 task',
+        'Lab VC · Read-only vCenter context · 2 snapshots · 1 vNIC · 1 disk · Hardware pending · Tools reboot requested · 1 alarm · 1 task',
       ),
     ).toBeInTheDocument();
     expect(queryByText('Compute Cluster')).toBeNull();
@@ -478,6 +532,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(within(section).getByText('State')).toBeInTheDocument();
     expect(within(section).getByText('Placement')).toBeInTheDocument();
     expect(within(section).getByText('Guest')).toBeInTheDocument();
+    expect(within(section).getByText('Virtual hardware')).toBeInTheDocument();
     expect(within(section).getByText('VMware Tools')).toBeInTheDocument();
     expect(within(section).getByText('Virtual disks')).toBeInTheDocument();
     expect(within(section).getByText('Network')).toBeInTheDocument();
@@ -487,6 +542,14 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(within(section).getByText('Compute Cluster')).toBeInTheDocument();
     expect(within(section).getByText('esxi-01.lab.local')).toBeInTheDocument();
     expect(within(section).getByText('ubuntu64Guest')).toBeInTheDocument();
+    expect(within(section).getByText('Hardware version')).toBeInTheDocument();
+    expect(within(section).getByText('VMX 20')).toBeInTheDocument();
+    expect(within(section).getByText('Upgrade status')).toBeInTheDocument();
+    expect(within(section).getByText('Pending')).toBeInTheDocument();
+    expect(within(section).getByText('CPU topology')).toBeInTheDocument();
+    expect(within(section).getByText('4 vCPU · 2 cores/socket')).toBeInTheDocument();
+    expect(within(section).getByText('Boot order')).toBeInTheDocument();
+    expect(within(section).getByText('Disk 2000 -> Ethernet 4000')).toBeInTheDocument();
     expect(within(section).getByText('Run state')).toBeInTheDocument();
     expect(within(section).getByText('Running')).toBeInTheDocument();
     expect(within(section).getByText('Version status')).toBeInTheDocument();

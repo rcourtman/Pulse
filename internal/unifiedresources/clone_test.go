@@ -159,6 +159,11 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 	installAttempts := int64(1)
 	toolsVersionNumber := int64(12352)
 	guestRebootRequested := true
+	instantCloneFrozen := false
+	bootDelayMilliseconds := int64(5000)
+	bootRetry := true
+	coresPerSocket := int64(2)
+	memoryHotAddLimitMiB := int64(16384)
 	original := &Resource{
 		ID: "vmware-vm-1",
 		VMware: &VMwareData{
@@ -199,6 +204,17 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 				GuestRebootRequested:  &guestRebootRequested,
 				GuestRebootComponents: []string{"tools"},
 			},
+			Hardware: &VMwareVMHardwareData{
+				GuestOS:               "UBUNTU_64",
+				InstantCloneFrozen:    &instantCloneFrozen,
+				Version:               "VMX_20",
+				UpgradeStatus:         "PENDING",
+				BootDelayMilliseconds: &bootDelayMilliseconds,
+				BootRetry:             &bootRetry,
+				BootDevices:           []VMwareBootDeviceData{{Type: "DISK", Disks: []string{"2000"}}},
+				CPUCoresPerSocket:     &coresPerSocket,
+				MemoryHotAddLimitMiB:  &memoryHotAddLimitMiB,
+			},
 		},
 	}
 
@@ -214,6 +230,10 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 	*cloned.VMware.Tools.AutoUpdateSupported = false
 	*cloned.VMware.Tools.VersionNumber = 1
 	cloned.VMware.Tools.GuestRebootComponents[0] = "mutated"
+	*cloned.VMware.Hardware.InstantCloneFrozen = true
+	*cloned.VMware.Hardware.BootDelayMilliseconds = 1
+	cloned.VMware.Hardware.BootDevices[0].Disks[0] = "mutated"
+	*cloned.VMware.Hardware.MemoryHotAddLimitMiB = 1
 
 	if original.VMware.SnapshotTree[0].Name != "pre-upgrade" {
 		t.Fatalf("mutating cloned VMware snapshot should not affect original: %+v", original.VMware.SnapshotTree)
@@ -247,6 +267,18 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 	}
 	if original.VMware.Tools.GuestRebootComponents[0] != "tools" {
 		t.Fatalf("mutating cloned VMware Tools reboot components should not affect original: %+v", original.VMware.Tools.GuestRebootComponents)
+	}
+	if original.VMware.Hardware.InstantCloneFrozen == nil || *original.VMware.Hardware.InstantCloneFrozen {
+		t.Fatalf("mutating cloned VMware hardware frozen flag should not affect original: %+v", original.VMware.Hardware.InstantCloneFrozen)
+	}
+	if original.VMware.Hardware.BootDelayMilliseconds == nil || *original.VMware.Hardware.BootDelayMilliseconds != 5000 {
+		t.Fatalf("mutating cloned VMware hardware boot delay should not affect original: %+v", original.VMware.Hardware.BootDelayMilliseconds)
+	}
+	if original.VMware.Hardware.BootDevices[0].Disks[0] != "2000" {
+		t.Fatalf("mutating cloned VMware hardware boot devices should not affect original: %+v", original.VMware.Hardware.BootDevices)
+	}
+	if original.VMware.Hardware.MemoryHotAddLimitMiB == nil || *original.VMware.Hardware.MemoryHotAddLimitMiB != 16384 {
+		t.Fatalf("mutating cloned VMware hardware memory limit should not affect original: %+v", original.VMware.Hardware.MemoryHotAddLimitMiB)
 	}
 }
 

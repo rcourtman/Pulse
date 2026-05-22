@@ -139,6 +139,12 @@ describe('vmwarePageModel', () => {
         guestHostname: 'warehouse-api-01.internal',
         guestIpAddresses: ['10.42.10.21'],
         datastoreNames: ['nvme-primary'],
+        hardware: {
+          guestOs: 'UBUNTU_64',
+          version: 'VMX_20',
+          upgradeStatus: 'PENDING',
+          bootDevices: [{ type: 'ETHERNET', nic: '4000' }],
+        },
       },
     });
     const attention = makeResource({
@@ -185,6 +191,11 @@ describe('vmwarePageModel', () => {
         (resource) => resource.id,
       ),
     ).toEqual(['vm-powered-off']);
+    expect(
+      filterVmwareVirtualMachines([poweredOn, attention, poweredOff], 'vmx 20', 'all').map(
+        (resource) => resource.id,
+      ),
+    ).toEqual(['vm-powered-on']);
   });
 
   it('builds and filters vSphere health signals from resource incidents', () => {

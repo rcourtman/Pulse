@@ -43,12 +43,14 @@ type KubernetesPlatformData = {
 };
 
 type PlatformData = {
+  sources?: string[];
   agent?: {
     hostname?: string;
   };
   docker?: DockerPlatformData;
   kubernetes?: KubernetesPlatformData;
   proxmox?: ProxmoxPlatformData;
+  vmware?: unknown;
 };
 
 const asString = (value: unknown): string | undefined =>
@@ -56,6 +58,26 @@ const asString = (value: unknown): string | undefined =>
 
 const asNumber = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+const isDiscoveryLookupValue = (value: unknown): value is string => {
+  const candidate = asString(value);
+  return Boolean(candidate && candidate.toLowerCase() !== 'redacted by policy');
+};
+
+const hasSource = (resource: Resource, platformData: PlatformData | undefined, source: string) => {
+  const normalizedSource = source.toLowerCase();
+  return [
+    ...(Array.isArray(resource.sources) ? resource.sources : []),
+    ...(Array.isArray(platformData?.sources) ? platformData.sources : []),
+    ...(Array.isArray(resource.platformScopes) ? resource.platformScopes : []),
+  ].some((candidate) => asString(candidate)?.toLowerCase() === normalizedSource);
+};
+
+const hasVMwareScope = (resource: Resource, platformData: PlatformData | undefined): boolean =>
+  resource.platformType === 'vmware-vsphere' ||
+  hasSource(resource, platformData, 'vmware') ||
+  hasSource(resource, platformData, 'vmware-vsphere') ||
+  Boolean(resource.vmware || platformData?.vmware);
 
 const getPreferredHostLabel = (resource: Resource): string =>
   getPreferredResourceHostname(resource) ||
@@ -67,12 +89,15 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
   const explicitDiscoveryAgentId = asString(
     (explicitDiscoveryTarget as { agentId?: unknown } | undefined)?.agentId,
   );
+  const explicitDiscoveryResourceId = asString(
+    (explicitDiscoveryTarget as { resourceId?: unknown } | undefined)?.resourceId,
+  );
 
   if (
     explicitDiscoveryTarget &&
     explicitDiscoveryTarget.resourceType &&
-    explicitDiscoveryAgentId &&
-    explicitDiscoveryTarget.resourceId
+    isDiscoveryLookupValue(explicitDiscoveryAgentId) &&
+    isDiscoveryLookupValue(explicitDiscoveryResourceId)
   ) {
     const explicitResourceType = canonicalDiscoveryResourceType(
       explicitDiscoveryTarget.resourceType,
@@ -104,10 +129,10 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
       return {
         resourceType,
         agentId: explicitDiscoveryAgentId,
-        resourceId: explicitDiscoveryTarget.resourceId,
+        resourceId: explicitDiscoveryResourceId,
         hostname,
         metadataKind: isHostDiscovery ? 'agent' : 'guest',
-        metadataId: explicitDiscoveryTarget.resourceId,
+        metadataId: explicitDiscoveryResourceId,
         targetLabel,
       };
     }
@@ -177,6 +202,9 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     case 'pmg':
     case 'k8s-cluster':
     case 'k8s-node':
+      if (!isDiscoveryLookupValue(agentLookupId)) {
+        return null;
+      }
       return {
         resourceType: 'agent',
         agentId: agentLookupId,
@@ -187,6 +215,12 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         targetLabel: 'agent',
       };
     case 'vm':
+      if (hasVMwareScope(resource, platformData) && !(proxmoxNodeName && vmidResourceId)) {
+        return null;
+      }
+      if (!isDiscoveryLookupValue(workloadAgentId)) {
+        return null;
+      }
       return {
         resourceType: 'vm',
         agentId: workloadAgentId,
@@ -198,6 +232,9 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
       };
     case 'system-container':
     case 'oci-container':
+      if (!isDiscoveryLookupValue(workloadAgentId)) {
+        return null;
+      }
       return {
         resourceType: 'system-container',
         agentId: workloadAgentId,
@@ -208,6 +245,9 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         targetLabel: 'guest',
       };
     case 'app-container':
+      if (!isDiscoveryLookupValue(workloadAgentId)) {
+        return null;
+      }
       return {
         resourceType: 'app-container',
         agentId: workloadAgentId,
@@ -220,6 +260,9 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     case 'pod':
     case 'k8s-deployment':
     case 'k8s-service':
+      if (!isDiscoveryLookupValue(workloadAgentId)) {
+        return null;
+      }
       return {
         resourceType: 'pod',
         agentId: workloadAgentId,

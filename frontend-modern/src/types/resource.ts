@@ -894,6 +894,36 @@ export interface ResourceVMwareTools {
   guestRebootRequestTime?: string | number;
 }
 
+export interface ResourceVMwareBootDevice {
+  type?: string;
+  nic?: string;
+  disks?: string[];
+}
+
+export interface ResourceVMwareHardware {
+  guestOs?: string;
+  instantCloneFrozen?: boolean;
+  version?: string;
+  upgradePolicy?: string;
+  upgradeVersion?: string;
+  upgradeStatus?: string;
+  upgradeErrorMessage?: string;
+  bootType?: string;
+  efiLegacyBoot?: boolean;
+  bootNetworkProtocol?: string;
+  bootDelayMilliseconds?: number;
+  bootRetry?: boolean;
+  bootRetryDelayMilliseconds?: number;
+  enterSetupMode?: boolean;
+  bootDevices?: ResourceVMwareBootDevice[];
+  cpuCoresPerSocket?: number;
+  cpuHotAddEnabled?: boolean;
+  cpuHotRemoveEnabled?: boolean;
+  memoryHotAddEnabled?: boolean;
+  memoryHotAddIncrementMib?: number;
+  memoryHotAddLimitMib?: number;
+}
+
 export interface ResourceVMwareMeta {
   connectionId?: string;
   connectionName?: string;
@@ -940,6 +970,7 @@ export interface ResourceVMwareMeta {
   networkAdapters?: ResourceVMwareNetworkAdapter[];
   virtualDisks?: ResourceVMwareVirtualDisk[];
   tools?: ResourceVMwareTools;
+  hardware?: ResourceVMwareHardware;
 }
 
 export interface ResourceAvailabilityMeta {

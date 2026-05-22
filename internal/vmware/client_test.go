@@ -75,6 +75,24 @@ func TestClientCollectInventoryEnrichesSignals(t *testing.T) {
 	if vm.GuestHostname != "app-01.internal" || len(vm.GuestIPAddresses) != 1 || vm.GuestIPAddresses[0] != "10.0.0.21" {
 		t.Fatalf("expected VM guest identity enrichment, got host=%q ips=%v", vm.GuestHostname, vm.GuestIPAddresses)
 	}
+	if vm.Hardware == nil {
+		t.Fatalf("expected VM hardware enrichment")
+	}
+	if vm.Hardware.Version != "VMX_20" || vm.Hardware.UpgradePolicy != "AFTER_CLEAN_SHUTDOWN" || vm.Hardware.UpgradeStatus != "PENDING" {
+		t.Fatalf("unexpected VM hardware upgrade context: %+v", vm.Hardware)
+	}
+	if vm.Hardware.GuestOS != "UBUNTU_64" {
+		t.Fatalf("expected VM hardware guest OS, got %+v", vm.Hardware.GuestOS)
+	}
+	if vm.CPUCount != 6 || vm.Hardware.CPUCoresPerSocket == nil || *vm.Hardware.CPUCoresPerSocket != 3 {
+		t.Fatalf("expected VM CPU topology from VM detail, got cpu=%d hardware=%+v", vm.CPUCount, vm.Hardware)
+	}
+	if vm.MemorySizeMiB != 12288 || vm.Hardware.MemoryHotAddLimitMiB == nil || *vm.Hardware.MemoryHotAddLimitMiB != 24576 {
+		t.Fatalf("expected VM memory detail from VM detail, got memory=%d hardware=%+v", vm.MemorySizeMiB, vm.Hardware)
+	}
+	if len(vm.Hardware.BootDevices) != 2 || vm.Hardware.BootDevices[0].Disks[0] != "2000" || vm.Hardware.BootDevices[1].NIC != "4000" {
+		t.Fatalf("expected VM boot device order, got %+v", vm.Hardware.BootDevices)
+	}
 	if vm.Tools == nil {
 		t.Fatalf("expected VM tools enrichment")
 	}
@@ -214,6 +232,9 @@ func TestClientCollectInventoryPreservesBaseInventoryWhenOptionalEnrichmentDegra
 	vm := snapshot.VMs[0]
 	if vm.GuestHostname != "" || len(vm.GuestIPAddresses) != 0 {
 		t.Fatalf("expected guest identity to stay empty after degraded topology read, got host=%q ips=%v", vm.GuestHostname, vm.GuestIPAddresses)
+	}
+	if vm.Hardware == nil || vm.Hardware.Version != "VMX_20" {
+		t.Fatalf("expected hardware enrichment to survive degraded guest read, got %+v", vm.Hardware)
 	}
 	if vm.Tools == nil || vm.Tools.RunState != "RUNNING" {
 		t.Fatalf("expected tools enrichment to survive degraded guest read, got %+v", vm.Tools)
@@ -387,9 +408,43 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 	mux.HandleFunc("/api/vcenter/vm/vm-201", func(w http.ResponseWriter, r *http.Request) {
 		requireAutomationSession(t, r)
 		writeJSON(w, map[string]any{
+			"guest_os":             "UBUNTU_64",
+			"power_state":          "POWERED_ON",
+			"instant_clone_frozen": false,
 			"identity": map[string]any{
 				"bios_uuid":     "vm-bios-201",
 				"instance_uuid": "vm-instance-201",
+			},
+			"hardware": map[string]any{
+				"version":         "VMX_20",
+				"upgrade_policy":  "AFTER_CLEAN_SHUTDOWN",
+				"upgrade_version": "VMX_21",
+				"upgrade_status":  "PENDING",
+			},
+			"boot": map[string]any{
+				"type":             "EFI",
+				"efi_legacy_boot":  false,
+				"network_protocol": "IPV4",
+				"delay":            5000,
+				"retry":            true,
+				"retry_delay":      10000,
+				"enter_setup_mode": false,
+			},
+			"boot_devices": []map[string]any{
+				{"type": "DISK", "disks": []string{"2000"}},
+				{"type": "ETHERNET", "nic": "4000"},
+			},
+			"cpu": map[string]any{
+				"count":              6,
+				"cores_per_socket":   3,
+				"hot_add_enabled":    true,
+				"hot_remove_enabled": false,
+			},
+			"memory": map[string]any{
+				"size_mib":                   12288,
+				"hot_add_enabled":            true,
+				"hot_add_increment_size_mib": 256,
+				"hot_add_limit_mib":          24576,
 			},
 		})
 	})

@@ -761,6 +761,7 @@ func TestMergeVMwareDataMergesSignalFieldsWithoutDroppingExistingIdentity(t *tes
 		SnapshotCount:      1,
 	}
 	accessible := false
+	bootRetry := true
 	incoming := &VMwareData{
 		ClusterName:         "Cluster A",
 		RuntimeHostName:     "esxi-01.lab.local",
@@ -773,6 +774,19 @@ func TestMergeVMwareDataMergesSignalFieldsWithoutDroppingExistingIdentity(t *tes
 		RecentTaskCount:     2,
 		RecentTaskSummary:   "vMotion task completed",
 		SnapshotCount:       4,
+		CurrentSnapshotID:   "snapshot-202",
+		SnapshotTree:        []VMwareSnapshotData{{Snapshot: "snapshot-202", Name: "pre-maintenance"}},
+		NetworkAdapters:     []VMwareNetworkAdapterData{{NIC: "4000", NetworkName: "VM Network"}},
+		VirtualDisks:        []VMwareVirtualDiskData{{Disk: "2000", Label: "Hard disk 1"}},
+		Tools:               &VMwareToolsData{RunState: "RUNNING", VersionStatus: "CURRENT"},
+		Hardware: &VMwareVMHardwareData{
+			Version:   "VMX_20",
+			BootRetry: &bootRetry,
+			BootDevices: []VMwareBootDeviceData{{
+				Type:  "DISK",
+				Disks: []string{"2000"},
+			}},
+		},
 	}
 
 	merged := mergeVMwareData(existing, incoming)
@@ -817,6 +831,24 @@ func TestMergeVMwareDataMergesSignalFieldsWithoutDroppingExistingIdentity(t *tes
 	}
 	if got := merged.GuestIPAddresses; !reflect.DeepEqual(got, []string{"10.0.0.21"}) {
 		t.Fatalf("guest ip addresses = %#v", got)
+	}
+	if got := merged.CurrentSnapshotID; got != "snapshot-202" {
+		t.Fatalf("current snapshot id = %q, want snapshot-202", got)
+	}
+	if got := merged.SnapshotTree; len(got) != 1 || got[0].Name != "pre-maintenance" {
+		t.Fatalf("snapshot tree = %#v", got)
+	}
+	if got := merged.NetworkAdapters; len(got) != 1 || got[0].NetworkName != "VM Network" {
+		t.Fatalf("network adapters = %#v", got)
+	}
+	if got := merged.VirtualDisks; len(got) != 1 || got[0].Label != "Hard disk 1" {
+		t.Fatalf("virtual disks = %#v", got)
+	}
+	if got := merged.Tools; got == nil || got.RunState != "RUNNING" {
+		t.Fatalf("tools = %#v", got)
+	}
+	if got := merged.Hardware; got == nil || got.Version != "VMX_20" || got.BootDevices[0].Disks[0] != "2000" {
+		t.Fatalf("hardware = %#v", got)
 	}
 }
 

@@ -1040,6 +1040,7 @@ type VMwareData struct {
 	NetworkAdapters     []VMwareNetworkAdapterData `json:"networkAdapters,omitempty"`
 	VirtualDisks        []VMwareVirtualDiskData    `json:"virtualDisks,omitempty"`
 	Tools               *VMwareToolsData           `json:"tools,omitempty"`
+	Hardware            *VMwareVMHardwareData      `json:"hardware,omitempty"`
 }
 
 // VMwareSnapshotData contains one node in the vSphere VM snapshot tree. It is
@@ -1116,6 +1117,40 @@ type VMwareToolsData struct {
 	GuestRebootRequested   *bool    `json:"guestRebootRequested,omitempty"`
 	GuestRebootComponents  []string `json:"guestRebootComponents,omitempty"`
 	GuestRebootRequestTime string   `json:"guestRebootRequestTime,omitempty"`
+}
+
+// VMwareBootDeviceData contains one vCenter VM boot-device entry as read-only
+// virtual hardware context.
+type VMwareBootDeviceData struct {
+	Type  string   `json:"type,omitempty"`
+	NIC   string   `json:"nic,omitempty"`
+	Disks []string `json:"disks,omitempty"`
+}
+
+// VMwareVMHardwareData contains vCenter VM virtual hardware, CPU, memory, and
+// boot configuration facts as read-only VM context.
+type VMwareVMHardwareData struct {
+	GuestOS                    string                 `json:"guestOs,omitempty"`
+	InstantCloneFrozen         *bool                  `json:"instantCloneFrozen,omitempty"`
+	Version                    string                 `json:"version,omitempty"`
+	UpgradePolicy              string                 `json:"upgradePolicy,omitempty"`
+	UpgradeVersion             string                 `json:"upgradeVersion,omitempty"`
+	UpgradeStatus              string                 `json:"upgradeStatus,omitempty"`
+	UpgradeErrorMessage        string                 `json:"upgradeErrorMessage,omitempty"`
+	BootType                   string                 `json:"bootType,omitempty"`
+	EFILegacyBoot              *bool                  `json:"efiLegacyBoot,omitempty"`
+	BootNetworkProtocol        string                 `json:"bootNetworkProtocol,omitempty"`
+	BootDelayMilliseconds      *int64                 `json:"bootDelayMilliseconds,omitempty"`
+	BootRetry                  *bool                  `json:"bootRetry,omitempty"`
+	BootRetryDelayMilliseconds *int64                 `json:"bootRetryDelayMilliseconds,omitempty"`
+	EnterSetupMode             *bool                  `json:"enterSetupMode,omitempty"`
+	BootDevices                []VMwareBootDeviceData `json:"bootDevices,omitempty"`
+	CPUCoresPerSocket          *int64                 `json:"cpuCoresPerSocket,omitempty"`
+	CPUHotAddEnabled           *bool                  `json:"cpuHotAddEnabled,omitempty"`
+	CPUHotRemoveEnabled        *bool                  `json:"cpuHotRemoveEnabled,omitempty"`
+	MemoryHotAddEnabled        *bool                  `json:"memoryHotAddEnabled,omitempty"`
+	MemoryHotAddIncrementMiB   *int64                 `json:"memoryHotAddIncrementMib,omitempty"`
+	MemoryHotAddLimitMiB       *int64                 `json:"memoryHotAddLimitMib,omitempty"`
 }
 
 // TrueNASData contains TrueNAS-specific metadata for TrueNAS resources.
