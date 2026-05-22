@@ -129,11 +129,12 @@ export const getInfrastructureAgentHostProfileSupportText = (): string =>
 
 export const getInfrastructureGovernanceBadgeLabel = (
   governanceState: PlatformGovernanceState,
-  _readinessStage: PlatformReadinessStage,
+  readinessStage: PlatformReadinessStage,
 ): string | null => {
   if (governanceState === 'supported') return null;
   if (governanceState === 'presentation-only') return 'Presentation only';
-  return null;
+  if (readinessStage === 'first-lab-ready') return 'Preview';
+  return 'Preview';
 };
 
 const SOURCE_STRATEGY_PRESENTATION: Record<
@@ -533,10 +534,9 @@ export const getInfrastructureSupportSummaryBadges = (): {
     ...getInfrastructureApiProductsByGovernanceState('supported').map((product) => product.label),
     ...INFRASTRUCTURE_AGENT_DISCOVERY_LABELS,
   ],
-  // No platforms currently sit in the admitted staging area; the type is
-  // narrowed to the live governance states, so the admission-path summary
-  // is empty until a future platform is admitted-but-not-yet-supported.
-  currentAdmissionPath: [],
+  currentAdmissionPath: getInfrastructureApiProductsByGovernanceState('admitted').map(
+    (product) => product.label,
+  ),
   installPath: [...INFRASTRUCTURE_AGENT_HOST_LABELS, ...INFRASTRUCTURE_AGENT_DISCOVERY_LABELS],
 });
 
@@ -544,7 +544,7 @@ export const getInfrastructureEmptyStateSummary = (): string =>
   'Choose an infrastructure source to start monitoring your environment.';
 
 export const getInfrastructureEmptyStateDetail = (): string =>
-  'Supported source types include VMware vCenter, TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, network endpoints, and standalone hosts through Pulse Agent. Docker and Kubernetes are discovered from supported agent hosts.';
+  'Supported source types include TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, network endpoints, and standalone hosts through Pulse Agent. VMware vCenter is available as a preview platform pending live support proof. Docker and Kubernetes are discovered from supported agent hosts.';
 
 export const getInfrastructureCoverageCompleteActionPresentation =
   (): InfrastructureCoverageCompleteActionPresentation => ({

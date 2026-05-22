@@ -261,7 +261,6 @@ Rules:
 4. `proxmox-pbs`
 5. `proxmox-pmg`
 6. `truenas`
-7. `vmware-vsphere`
 
 ### Runtime lenses
 
@@ -269,7 +268,7 @@ Rules:
 
 ### Admitted platforms (not yet supported)
 
-(none)
+1. `vmware-vsphere`
 
 ### Presentation-only platform vocabulary
 
@@ -309,7 +308,6 @@ Support floor fields are recorded in this order: `setup`, `visibility`,
 | `proxmox-pbs` | `platform` | `supported` | `supported` | `api-backed` | `platform-connections` | `pbs`, `storage` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
 | `proxmox-pmg` | `platform` | `supported` | `supported` | `api-backed` | `platform-connections` | `pmg` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=n/a`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
 | `truenas` | `platform` | `supported` | `supported` | `api-backed` | `platform-connections` | `agent`, `vm`, `app-container`, `network-share`, `storage`, `physical-disk` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
-| `vmware-vsphere` | `platform` | `supported` | `supported` | `api-backed` | `platform-connections` | `agent`, `vm`, `storage` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
 
 Presentation-only platform vocabulary uses `governance=presentation-only`,
 `surface_kind=presentation-only`, `readiness=presentation-only`,
@@ -369,7 +367,6 @@ or runtime platform fallbacks that are not declared in this document.
 | `proxmox-pbs`    | platform      | Proxmox            | api-backed   | host agent may augment into hybrid    | `pbs`, `storage`                                                      |
 | `proxmox-pmg`    | platform      | Proxmox            | api-backed   | none today                            | `pmg`                                                                 |
 | `truenas`        | platform      | TrueNAS            | api-backed   | host agent may augment into hybrid    | `agent`, `vm`, `app-container`, `network-share`, `storage`, `physical-disk` |
-| `vmware-vsphere` | platform      | VMware             | api-backed   | host or guest agent later, not phase 1 | `agent`, `vm`, `storage`                                             |
 
 | Platform         | Setup                                  | Visibility | Workloads | Storage   | Recovery  | Alerts    | Assistant read | Assistant control |
 | ---------------- | -------------------------------------- | ---------- | --------- | --------- | --------- | --------- | -------------- | ----------------- |
@@ -380,7 +377,6 @@ or runtime platform fallbacks that are not declared in this document.
 | `proxmox-pbs`    | platform connections                   | supported  | `n/a`     | supported | supported | supported | supported      | read-only         |
 | `proxmox-pmg`    | platform connections                   | supported  | `n/a`     | `n/a`     | `n/a`     | supported | supported      | read-only         |
 | `truenas`        | platform connections                   | supported  | supported | supported | supported | supported | supported      | supported         |
-| `vmware-vsphere` | platform connections                   | supported  | supported | supported | `n/a`     | supported | supported      | read-only         |
 
 ## Current Inconsistencies To Treat Explicitly
 
@@ -426,10 +422,10 @@ open-decision or resolved-decision update instead of starting runtime code.
 
 ## VMware vSphere Admission Model
 
-Pulse now has a resolved architecture recommendation for any future VMware
-vSphere work. This does not admit `vmware-vsphere` into the current support
-matrix yet. It defines the only acceptable phase-1 model if implementation
-starts.
+Pulse now has a resolved architecture recommendation for VMware vSphere work.
+This admits `vmware-vsphere` only at the `first-lab-ready` checkpoint; it does
+not place VMware in the current support matrix yet. It defines the only
+acceptable phase-1 model for implementation and proof.
 
 1. treat VMware as one separate first-class platform id,
    `vmware-vsphere`, not as another Proxmox subtype and not as a generic

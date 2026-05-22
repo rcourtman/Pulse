@@ -685,7 +685,7 @@ describe('settings architecture guardrails', () => {
       'getInfrastructureSupportSummaryBadges',
     );
     expect(infrastructureOnboardingPresentationSource).toContain(
-      'Supported source types include VMware vCenter',
+      'VMware vCenter is available as a preview platform',
     );
 
     expect(nodeCredentialSlotSource).toContain('useNodeModalState(modalProps)');

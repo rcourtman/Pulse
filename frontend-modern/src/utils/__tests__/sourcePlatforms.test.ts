@@ -11,6 +11,7 @@ import {
   resolveSourceTypeFromSources,
 } from '@/utils/sourcePlatforms';
 import {
+  ADMITTED_PLATFORM_IDS,
   AGENT_HOST_PROFILE_IDS,
   PLATFORM_TYPE_KEYS,
   PRESENTATION_ONLY_PLATFORM_IDS,
@@ -160,8 +161,9 @@ describe('sourcePlatforms', () => {
   });
 
   describe('governed platform support projection', () => {
-    it('keeps VMware on the supported vCenter-backed floor', () => {
-      expect(getSourcePlatformReadinessStage('vmware')).toBe('supported');
+    it('keeps VMware on the admitted vCenter-backed floor until live proof lands', () => {
+      expect(ADMITTED_PLATFORM_IDS).toEqual(['vmware-vsphere']);
+      expect(getSourcePlatformReadinessStage('vmware')).toBe('first-lab-ready');
       expect(getSourcePlatformCanonicalProjections('vmware')).toEqual(['agent', 'vm', 'storage']);
       expect(getSourcePlatformSupportFloor('vmware')).toMatchObject({
         setup: 'supported',
@@ -197,6 +199,7 @@ describe('sourcePlatforms', () => {
       expect(SUPPORTED_RUNTIME_LENS_IDS).toEqual(['docker']);
       expect(SUPPORTED_OWNING_PLATFORM_IDS).toContain('proxmox-pve');
       expect(SUPPORTED_OWNING_PLATFORM_IDS).not.toContain('docker');
+      expect(SUPPORTED_OWNING_PLATFORM_IDS).not.toContain('vmware-vsphere');
     });
   });
 

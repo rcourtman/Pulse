@@ -489,7 +489,10 @@ describe('InfrastructureWorkspace', () => {
     expect(
       screen.getByText('Choose an infrastructure source to start monitoring your environment.'),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Supported source types include VMware vCenter/i)).toBeInTheDocument();
+    expect(screen.getByText(/Supported source types include TrueNAS SCALE/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/VMware vCenter is available as a preview platform/i),
+    ).toBeInTheDocument();
     expect(screen.getByText(/standalone hosts through Pulse Agent/i)).toBeInTheDocument();
   });
 

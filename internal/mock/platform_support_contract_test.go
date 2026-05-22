@@ -172,8 +172,12 @@ func TestPlatformSupportManifestMatchesSupportModel(t *testing.T) {
 	); diff != "" {
 		t.Fatalf("agent host profile storage-family drifted from the canonical support model:\n%s", diff)
 	}
-	if diff := diffPlatformSets(supportedSurfaces, manifest.DefaultInfrastructureSourceOrder); diff != "" {
-		t.Fatalf("default infrastructure source ordering drifted from the canonical supported platform set:\n%s", diff)
+	defaultInfrastructureSources := uniqueSortedPlatforms(append(
+		append([]string(nil), supportedSurfaces...),
+		admitted...,
+	))
+	if diff := diffPlatformSets(defaultInfrastructureSources, manifest.DefaultInfrastructureSourceOrder); diff != "" {
+		t.Fatalf("default infrastructure source ordering drifted from the canonical supported/admitted platform set:\n%s", diff)
 	}
 }
 
@@ -182,14 +186,13 @@ func TestMockCoverageMatchesCurrentSupportedPlatformSet(t *testing.T) {
 	supported := manifestPlatformsByState(t, manifest, "supported")
 
 	checkers := map[string]func(*testing.T, FixtureGraph){
-		"agent":          assertAgentMockCoverage,
-		"docker":         assertDockerMockCoverage,
-		"kubernetes":     assertKubernetesMockCoverage,
-		"proxmox-pbs":    assertProxmoxPBSMockCoverage,
-		"proxmox-pmg":    assertProxmoxPMGMockCoverage,
-		"proxmox-pve":    assertProxmoxPVEMockCoverage,
-		"truenas":        assertTrueNASMockCoverage,
-		"vmware-vsphere": assertVMwareMockCoverage,
+		"agent":       assertAgentMockCoverage,
+		"docker":      assertDockerMockCoverage,
+		"kubernetes":  assertKubernetesMockCoverage,
+		"proxmox-pbs": assertProxmoxPBSMockCoverage,
+		"proxmox-pmg": assertProxmoxPMGMockCoverage,
+		"proxmox-pve": assertProxmoxPVEMockCoverage,
+		"truenas":     assertTrueNASMockCoverage,
 	}
 
 	if diff := diffPlatformSets(supported, sortedPlatformKeys(checkers)); diff != "" {
@@ -203,24 +206,24 @@ func TestMockCoverageMatchesCurrentSupportedPlatformSet(t *testing.T) {
 	}
 }
 
-func TestVMwareFixturesRemainSupportedAtPhase1Floor(t *testing.T) {
+func TestVMwareFixturesRemainAdmittedAtPhase1Floor(t *testing.T) {
 	model := loadPlatformSupportModel(t)
 	manifest := loadPlatformSupportManifest(t)
 	supported := manifestPlatformsByState(t, manifest, "supported")
 	admitted := manifestPlatformsByState(t, manifest, "admitted")
 	presentationOnly := manifestPlatformsByState(t, manifest, "presentation-only")
 
-	if !containsPlatform(supported, "vmware-vsphere") {
-		t.Fatal("vmware-vsphere must appear in the current supported platform set after promotion from first-lab-ready")
+	if containsPlatform(supported, "vmware-vsphere") {
+		t.Fatal("vmware-vsphere must not appear in the current supported platform set before live vCenter proof")
 	}
-	if containsPlatform(admitted, "vmware-vsphere") {
-		t.Fatal("vmware-vsphere must not remain in the admitted set after promotion to supported")
+	if !containsPlatform(admitted, "vmware-vsphere") {
+		t.Fatal("vmware-vsphere must remain in the admitted set until live vCenter proof promotes it")
 	}
 	if containsPlatform(presentationOnly, "vmware-vsphere") {
-		t.Fatal("vmware-vsphere must not regress into presentation-only vocabulary once supported")
+		t.Fatal("vmware-vsphere must not regress into presentation-only vocabulary while admitted")
 	}
-	if !strings.Contains(model, "| `vmware-vsphere` |") {
-		t.Fatal("expected platform support model to keep the vmware-vsphere support row")
+	if !strings.Contains(model, "| `vmware-vsphere` | VMware | `vCenter` only in phase 1 |") {
+		t.Fatal("expected platform support model to keep the vmware-vsphere admission row")
 	}
 	vmwareOnboardingPaths, ok := manifestPlatformOnboardingPaths(manifest)["vmware-vsphere"]
 	if !ok {
@@ -230,8 +233,11 @@ func TestVMwareFixturesRemainSupportedAtPhase1Floor(t *testing.T) {
 		t.Fatalf("vmware-vsphere onboarding path drifted from the support model:\n%s", diff)
 	}
 	vmwareManifest := requireManifestPlatform(t, manifest, "vmware-vsphere")
-	if vmwareManifest.ReadinessStage != "supported" {
-		t.Fatalf("vmware readiness stage = %q, want supported", vmwareManifest.ReadinessStage)
+	if vmwareManifest.GovernanceState != "admitted" {
+		t.Fatalf("vmware governance state = %q, want admitted", vmwareManifest.GovernanceState)
+	}
+	if vmwareManifest.ReadinessStage != "first-lab-ready" {
+		t.Fatalf("vmware readiness stage = %q, want first-lab-ready", vmwareManifest.ReadinessStage)
 	}
 	if vmwareManifest.PrimaryMode != "api-backed" {
 		t.Fatalf("vmware primary mode = %q, want api-backed", vmwareManifest.PrimaryMode)
@@ -247,15 +253,7 @@ func TestVMwareFixturesRemainSupportedAtPhase1Floor(t *testing.T) {
 	}
 
 	graph := buildFixtureGraph(DefaultConfig, time.Date(2026, time.April, 10, 12, 0, 0, 0, time.UTC))
-	if len(graph.PlatformFixtures.VMware.Hosts) == 0 {
-		t.Fatal("expected VMware mock fixtures to include hosts")
-	}
-	if len(graph.PlatformFixtures.VMware.VMs) == 0 {
-		t.Fatal("expected VMware mock fixtures to include VMs")
-	}
-	if len(graph.PlatformFixtures.VMware.Datastores) == 0 {
-		t.Fatal("expected VMware mock fixtures to include datastores")
-	}
+	assertVMwareMockCoverage(t, graph)
 
 	fixture := DefaultVMwareConnectionFixture()
 	if fixture.CollectedAt.IsZero() {

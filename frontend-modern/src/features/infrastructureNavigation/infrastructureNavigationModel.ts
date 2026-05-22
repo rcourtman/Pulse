@@ -1,6 +1,7 @@
 import type { Accessor } from 'solid-js';
 import type { Resource, ResourceType } from '@/types/resource';
 import {
+  ADMITTED_PLATFORM_IDS,
   SUPPORTED_PLATFORM_IDS,
   getSourcePlatformManifestEntry,
   type SourcePlatformManifestEntry,
@@ -35,7 +36,10 @@ export const PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS: Record<
   vmware: ['vmware-vsphere'],
 };
 
-const SUPPORTED_PLATFORM_ID_SET = new Set<string>(SUPPORTED_PLATFORM_IDS);
+const NAVIGABLE_PLATFORM_ID_SET = new Set<string>([
+  ...SUPPORTED_PLATFORM_IDS,
+  ...ADMITTED_PLATFORM_IDS,
+]);
 
 const KUBERNETES_RESOURCE_TYPES = new Set<ResourceType>([
   'k8s-cluster',
@@ -127,7 +131,7 @@ export function collectResourcePlatformEvidence(resource: Resource): string[] {
   return [...ids];
 }
 
-export function buildSupportedResourceInfrastructureScopeSet(
+export function buildNavigableResourceInfrastructureScopeSet(
   resources: readonly Resource[],
 ): Set<string> {
   const present = new Set<string>();
@@ -136,7 +140,7 @@ export function buildSupportedResourceInfrastructureScopeSet(
       const manifestEntry = getSourcePlatformManifestEntry(
         platformId,
       ) as SourcePlatformManifestEntry | null;
-      if (!manifestEntry || !SUPPORTED_PLATFORM_ID_SET.has(manifestEntry.id)) continue;
+      if (!manifestEntry || !NAVIGABLE_PLATFORM_ID_SET.has(manifestEntry.id)) continue;
       present.add(manifestEntry.id);
     }
   }
@@ -146,22 +150,22 @@ export function buildSupportedResourceInfrastructureScopeSet(
 export function buildPrimaryInfrastructureNavigationVisibility(
   resources: readonly Resource[],
 ): InfrastructureNavigationVisibility {
-  const presentSupportedScopes = buildSupportedResourceInfrastructureScopeSet(resources);
+  const presentNavigableScopes = buildNavigableResourceInfrastructureScopeSet(resources);
   return {
     proxmox: PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS.proxmox.some((id) =>
-      presentSupportedScopes.has(id),
+      presentNavigableScopes.has(id),
     ),
     docker: PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS.docker.some((id) =>
-      presentSupportedScopes.has(id),
+      presentNavigableScopes.has(id),
     ),
     kubernetes: PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS.kubernetes.some((id) =>
-      presentSupportedScopes.has(id),
+      presentNavigableScopes.has(id),
     ),
     truenas: PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS.truenas.some((id) =>
-      presentSupportedScopes.has(id),
+      presentNavigableScopes.has(id),
     ),
     vmware: PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS.vmware.some((id) =>
-      presentSupportedScopes.has(id),
+      presentNavigableScopes.has(id),
     ),
   };
 }

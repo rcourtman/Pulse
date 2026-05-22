@@ -290,8 +290,8 @@
       "id": "vmware-vsphere",
       "family": "VMware",
       "surface_kind": "platform",
-      "governance_state": "supported",
-      "readiness_stage": "supported",
+      "governance_state": "admitted",
+      "readiness_stage": "first-lab-ready",
       "primary_mode": "api-backed",
       "onboarding_paths": [
         "platform-connections"

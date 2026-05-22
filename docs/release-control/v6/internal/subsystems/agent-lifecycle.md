@@ -210,7 +210,11 @@ projections, and support-floor posture.
 those facts into source-strategy copy, but it must not turn an admitted
 `first-lab-ready` platform such as VMware into a product-level supported
 claim, invent platform-local projections, or classify assistant control beyond
-the manifest's support-floor row.
+the manifest's support-floor row. Admitted API platforms may remain available
+inside the add-flow source picker and source-manager summaries, but their
+operator-facing badge must be preview/admission language and empty-state copy
+must keep them separate from the supported-source list until the governed live
+proof promotes the platform.
 That same lifecycle-owned helper must keep first-class platform APIs separate
 from governed Pulse Agent host profiles. Host/appliance compatibility such as
 Unraid is presented as an agent install/profile path sourced from the manifest

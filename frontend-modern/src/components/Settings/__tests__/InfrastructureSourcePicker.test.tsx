@@ -7,7 +7,7 @@ describe('InfrastructureSourcePicker', () => {
     cleanup();
   });
 
-  it('labels admitted VMware as Early support and keeps Pulse Agent on the host profile path', () => {
+  it('labels admitted VMware as Preview and keeps Pulse Agent on the host profile path', () => {
     render(() => <InfrastructureSourcePicker onSelectStep={vi.fn()} />);
 
     expect(screen.getByPlaceholderText('Search platforms, hosts, services...')).toBeInTheDocument();
@@ -17,10 +17,10 @@ describe('InfrastructureSourcePicker', () => {
     expect(screen.getByText('Choose how Pulse should connect')).toBeInTheDocument();
     expect(screen.getByText('Or pick a specific platform')).toBeInTheDocument();
     // VMware lives behind 'Show more platforms' since it is a less common
-    // homelab choice; expand the long tail to verify the Early support
-    // badge still renders for it.
+    // homelab choice; expand the long tail to verify the Preview badge still
+    // renders for it.
     fireEvent.click(screen.getByRole('button', { name: /Show \d+ more platforms?/i }));
-    expect(screen.getByText('Early support')).toBeInTheDocument();
+    expect(screen.getByText('Preview')).toBeInTheDocument();
     expect(screen.queryByText('Available now')).toBeNull();
     expect(screen.getByText('Unraid')).toBeInTheDocument();
     expect(screen.getByText('Linux, macOS, Windows host')).toBeInTheDocument();

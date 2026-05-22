@@ -377,6 +377,9 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
     supported_ids = [
         platform["id"] for platform in platforms if platform["governanceState"] == "supported"
     ]
+    admitted_ids = [
+        platform["id"] for platform in platforms if platform["governanceState"] == "admitted"
+    ]
     supported_owning_platform_ids = [
         platform["id"]
         for platform in platforms
@@ -387,11 +390,11 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
         for platform in platforms
         if platform["governanceState"] == "supported" and platform["surfaceKind"] == "runtime-lens"
     ]
-    supported_id_set = set(supported_ids)
+    infrastructure_source_id_set = set([*supported_ids, *admitted_ids])
     for platform_id in default_order:
-        if platform_id not in supported_id_set:
+        if platform_id not in infrastructure_source_id_set:
             raise ValueError(
-                "default_infrastructure_source_order may only contain supported platforms; "
+                "default_infrastructure_source_order may only contain supported or admitted platforms; "
                 f"got {platform_id}"
             )
 
@@ -458,9 +461,6 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
     storage_family_by_id = {
         platform["id"]: platform["storageFamily"] for platform in platforms
     }
-    admitted_ids = [
-        platform["id"] for platform in platforms if platform["governanceState"] == "admitted"
-    ]
     presentation_only_ids = [
         platform["id"]
         for platform in platforms

@@ -21,7 +21,7 @@ const resource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 describe('infrastructureNavigationModel', () => {
-  it('shows primary infrastructure destinations only when supported resource evidence is present', () => {
+  it('shows primary infrastructure destinations only when supported or admitted resource evidence is present', () => {
     expect(buildPrimaryInfrastructureNavigationVisibility([])).toEqual({
       proxmox: false,
       docker: false,
