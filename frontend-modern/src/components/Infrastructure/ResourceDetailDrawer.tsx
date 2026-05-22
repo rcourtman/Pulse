@@ -21,6 +21,7 @@ interface ResourceDetailDrawerProps {
   presentation?: ResourceDetailDrawerPresentation;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   initialShowTrueNASDetails?: boolean;
+  initialShowVMwareDetails?: boolean;
 }
 
 const TabAvailabilityNotice: Component<{ message: string }> = (props) => (
@@ -50,6 +51,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     presentation: presentation(),
     resolveResourceLabel: props.resolveResourceLabel,
     initialShowTrueNASDetails: props.initialShowTrueNASDetails,
+    initialShowVMwareDetails: props.initialShowVMwareDetails,
   });
   const headingId = () => `resource-detail-drawer-heading-${props.resource.id}`;
 
@@ -273,6 +275,7 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
       presentation={props.presentation}
       resolveResourceLabel={props.resolveResourceLabel}
       initialShowTrueNASDetails={props.initialShowTrueNASDetails}
+      initialShowVMwareDetails={props.initialShowVMwareDetails}
     />
   );
 };

@@ -1,4 +1,5 @@
 import type {
+  Resource,
   ResourceType,
   ResourceVMwareBootDevice,
   ResourceVMwareHardware,
@@ -754,3 +755,6 @@ export const buildVMwareDetailSections = (
 
   return sections.filter((section) => hasRows(section.rows));
 };
+
+export const hasVMwareDetailSections = (resource: Resource): boolean =>
+  buildVMwareDetailSections(resource.type, resource.vmware).length > 0;

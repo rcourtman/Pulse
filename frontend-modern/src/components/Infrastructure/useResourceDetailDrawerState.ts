@@ -13,6 +13,7 @@ export interface UseResourceDetailDrawerStateOptions {
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   presentation?: ResourceDetailDrawerPresentation;
   initialShowTrueNASDetails?: boolean;
+  initialShowVMwareDetails?: boolean;
 }
 
 export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerStateOptions) => {
@@ -27,7 +28,9 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   const [showDiscoveryContext, setShowDiscoveryContext] = createSignal(false);
   const [showHostDetails, setShowHostDetails] = createSignal(false);
   const [showServiceDetails, setShowServiceDetails] = createSignal(false);
-  const [showVMwareDetails, setShowVMwareDetails] = createSignal(false);
+  const [showVMwareDetails, setShowVMwareDetails] = createSignal(
+    options.initialShowVMwareDetails === true,
+  );
   const [showTrueNASDetails, setShowTrueNASDetails] = createSignal(
     options.initialShowTrueNASDetails === true,
   );

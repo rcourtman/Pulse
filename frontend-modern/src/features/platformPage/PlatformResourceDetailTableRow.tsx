@@ -1,6 +1,7 @@
 import { Show, createSignal, type Component, type JSX } from 'solid-js';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 import { hasTrueNASDetailSections } from '@/components/Infrastructure/resourceDetailDrawerTrueNASModel';
+import { hasVMwareDetailSections } from '@/components/Infrastructure/resourceDetailDrawerVmwareModel';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import type { Resource } from '@/types/resource';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
@@ -71,10 +72,13 @@ export const PlatformResourceDetailTableRow: Component<{
   colSpan: number;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   initialShowTrueNASDetails?: boolean;
+  initialShowVMwareDetails?: boolean;
   onClose?: () => void;
 }> = (props) => {
   const initialShowTrueNASDetails = () =>
     props.initialShowTrueNASDetails ?? hasTrueNASDetailSections(props.resource);
+  const initialShowVMwareDetails = () =>
+    props.initialShowVMwareDetails ?? hasVMwareDetailSections(props.resource);
 
   return (
     <Show when={props.open}>
@@ -93,6 +97,7 @@ export const PlatformResourceDetailTableRow: Component<{
               presentation="table-row"
               resolveResourceLabel={props.resolveResourceLabel}
               initialShowTrueNASDetails={initialShowTrueNASDetails()}
+              initialShowVMwareDetails={initialShowVMwareDetails()}
               onClose={props.onClose}
             />
           </div>
