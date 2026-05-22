@@ -354,6 +354,67 @@ describe('truenasPageModel', () => {
     expect(rows[2]?.parentRowId).toBe('pool:pool-tank');
   });
 
+  it('infers TrueNAS storage topology ownership from native pool and dataset labels', () => {
+    const archivePool = makeResource({
+      id: 'pool-archive',
+      type: 'storage',
+      name: 'archive',
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'ONLINE' },
+    });
+    const tankPool = makeResource({
+      id: 'pool-tank',
+      type: 'storage',
+      name: 'tank',
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'ONLINE' },
+    });
+    const dataset = makeResource({
+      id: 'dataset-media',
+      type: 'storage',
+      name: 'tank/media',
+      storage: { topology: 'dataset', platform: 'truenas', path: '/mnt/tank/media' },
+    });
+    const share = makeResource({
+      id: 'share-media',
+      type: 'network-share',
+      truenas: {
+        share: {
+          id: 'smb-1',
+          name: 'Media',
+          protocol: 'SMB',
+          path: '/mnt/tank/media',
+          dataset: 'tank/media',
+        },
+      },
+    });
+    const disk = makeResource({
+      id: 'disk-sda',
+      type: 'physical_disk',
+      name: 'sda',
+      physicalDisk: {
+        storageGroup: 'tank',
+        devPath: '/dev/sda',
+        serial: 'serial-123',
+        health: 'PASSED',
+      },
+    });
+
+    const resources = [archivePool, tankPool, dataset, share, disk];
+    const counts = buildTrueNASStorageChildCounts(resources);
+    const rows = buildTrueNASStorageTopologyRows(resources);
+
+    expect(counts.get(archivePool.id)).toEqual({ datasets: 0, shares: 0, disks: 0 });
+    expect(counts.get(tankPool.id)).toEqual({ datasets: 1, shares: 1, disks: 1 });
+    expect(counts.get(dataset.id)).toEqual({ datasets: 0, shares: 1, disks: 0 });
+    expect(rows.map((row) => row.id)).toEqual([
+      'pool:pool-archive',
+      'pool:pool-tank',
+      'dataset:dataset-media',
+      'disk:disk-sda',
+    ]);
+    expect(rows[2]?.parentRowId).toBe('pool:pool-tank');
+    expect(rows[3]?.parentRowId).toBe('pool:pool-tank');
+  });
+
   it('keeps pool ancestors visible when filtering matching storage children', () => {
     const pool = makeResource({
       id: 'pool-tank',

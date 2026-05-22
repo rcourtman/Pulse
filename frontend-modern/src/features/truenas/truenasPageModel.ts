@@ -182,6 +182,65 @@ const isTrueNASPoolResource = (resource: Resource): boolean =>
 const isTrueNASDatasetResource = (resource: Resource): boolean =>
   resource.type === 'dataset' || resource.storage?.topology === 'dataset';
 
+const normalizeTrueNASStoragePath = (value?: string | null): string => {
+  const trimmed = asTrimmedString(value);
+  if (!trimmed) return '';
+  return trimmed
+    .replace(/^\/mnt\//i, '')
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '')
+    .toLowerCase();
+};
+
+const firstTrueNASStoragePathSegment = (value?: string | null): string => {
+  const normalized = normalizeTrueNASStoragePath(value);
+  return normalized.split('/').filter(Boolean)[0] ?? '';
+};
+
+const trueNASPoolAliases = (resource: Resource): Set<string> =>
+  new Set(
+    [
+      normalizeTrueNASStoragePath(resource.storage?.pool),
+      normalizeTrueNASStoragePath(resource.storage?.path),
+      normalizeTrueNASStoragePath(resource.name),
+      normalizeTrueNASStoragePath(resource.displayName),
+    ].filter(Boolean),
+  );
+
+const trueNASDatasetAliases = (resource: Resource): Set<string> =>
+  new Set(
+    [
+      normalizeTrueNASStoragePath(resource.storage?.path),
+      normalizeTrueNASStoragePath(resource.name),
+      normalizeTrueNASStoragePath(resource.displayName),
+    ].filter(Boolean),
+  );
+
+const trueNASResourceDatasetAliases = (resource: Resource): Set<string> =>
+  new Set(
+    [
+      normalizeTrueNASStoragePath(resource.truenas?.share?.dataset),
+      normalizeTrueNASStoragePath(resource.truenas?.share?.path),
+      normalizeTrueNASStoragePath(resource.storage?.path),
+      normalizeTrueNASStoragePath(resource.name),
+      normalizeTrueNASStoragePath(resource.displayName),
+    ].filter(Boolean),
+  );
+
+const inferTrueNASPoolName = (resource: Resource): string =>
+  normalizeTrueNASStoragePath(resource.physicalDisk?.storageGroup) ||
+  firstTrueNASStoragePathSegment(resource.truenas?.share?.dataset) ||
+  firstTrueNASStoragePathSegment(resource.truenas?.share?.path) ||
+  normalizeTrueNASStoragePath(resource.storage?.pool) ||
+  firstTrueNASStoragePathSegment(resource.storage?.path) ||
+  firstTrueNASStoragePathSegment(resource.name) ||
+  firstTrueNASStoragePathSegment(resource.displayName);
+
+const pathContainsOrDescendsFrom = (candidate: string, ancestor: string): boolean =>
+  Boolean(
+    candidate && ancestor && (candidate === ancestor || candidate.startsWith(`${ancestor}/`)),
+  );
+
 export function buildTrueNASSystemChildCounts(
   resources: Resource[],
   systems: Resource[],
@@ -263,11 +322,32 @@ export function buildTrueNASStorageChildCounts(
     return false;
   };
 
+  const hasInferredStorageRelationship = (resource: Resource, storage: Resource): boolean => {
+    if (isTrueNASPoolResource(storage)) {
+      const poolName = inferTrueNASPoolName(resource);
+      return poolName ? trueNASPoolAliases(storage).has(poolName) : false;
+    }
+    if (!isTrueNASDatasetResource(storage)) return false;
+    const datasetAliases = trueNASDatasetAliases(storage);
+    const resourceAliases = trueNASResourceDatasetAliases(resource);
+    for (const datasetAlias of datasetAliases) {
+      for (const resourceAlias of resourceAliases) {
+        if (pathContainsOrDescendsFrom(resourceAlias, datasetAlias)) return true;
+      }
+    }
+    return false;
+  };
+
   for (const storage of storageResources) {
     const counts = countsByStorage.get(storage.id);
     if (!counts) continue;
     for (const resource of trueNasResources) {
-      if (resource.id === storage.id || !hasAncestor(resource, storage.id)) continue;
+      if (
+        resource.id === storage.id ||
+        (!hasAncestor(resource, storage.id) && !hasInferredStorageRelationship(resource, storage))
+      ) {
+        continue;
+      }
       if (isTrueNASDatasetResource(resource)) {
         counts.datasets += 1;
       } else if (resource.type === 'network-share') {
@@ -308,6 +388,12 @@ export function buildTrueNASStorageTopologyRows(
       visited.add(parentId);
       parentId = asTrimmedString(parent?.parentId);
     }
+    const poolName = inferTrueNASPoolName(resource);
+    if (poolName) {
+      const inferredPool = pools.find((pool) => trueNASPoolAliases(pool).has(poolName));
+      if (inferredPool) return inferredPool.id;
+    }
+    if (pools.length === 1 && !isTrueNASPoolResource(resource)) return pools[0]?.id ?? '';
     return '';
   };
 
