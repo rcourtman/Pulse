@@ -603,6 +603,60 @@ func TestResourceRegistry_IngestsVMwareSourceAsCanonicalResources(t *testing.T) 
 	}
 }
 
+func TestResourceRegistry_PreservesVMwareSourceOwnedDatastoreConsumers(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 30, 18, 45, 0, 0, time.UTC)
+
+	rr.IngestRecords(SourceVMware, []IngestRecord{
+		{
+			SourceID: "vc-1:datastore:datastore-201",
+			Resource: Resource{
+				Type:     ResourceTypeStorage,
+				Name:     "nvme-primary",
+				Status:   StatusOnline,
+				LastSeen: now,
+				Storage: &StorageMeta{
+					Type:          "vmfs",
+					Platform:      "vmware-vsphere",
+					Topology:      "datastore",
+					ConsumerCount: 2,
+					ConsumerTypes: []string{string(ResourceTypeVM)},
+					TopConsumers: []StorageConsumerMeta{
+						{ResourceType: ResourceTypeVM, Name: "warehouse-api-01"},
+						{ResourceType: ResourceTypeVM, Name: "etl-batch-01"},
+					},
+				},
+				VMware: &VMwareData{
+					ConnectionID:    "vc-1",
+					ManagedObjectID: "datastore-201",
+					EntityType:      "datastore",
+				},
+			},
+		},
+	})
+
+	datastores := rr.ListByType(ResourceTypeStorage)
+	if len(datastores) != 1 {
+		t.Fatalf("expected 1 VMware datastore, got %d", len(datastores))
+	}
+	datastore := datastores[0]
+	if datastore.Storage == nil {
+		t.Fatalf("expected VMware datastore storage metadata, got %+v", datastore)
+	}
+	if got := datastore.Storage.ConsumerCount; got != 2 {
+		t.Fatalf("consumer count = %d, want 2", got)
+	}
+	if got := datastore.Storage.ConsumerTypes; len(got) != 1 || got[0] != string(ResourceTypeVM) {
+		t.Fatalf("consumer types = %#v, want [vm]", got)
+	}
+	if len(datastore.Storage.TopConsumers) != 2 {
+		t.Fatalf("top consumers = %#v, want 2 VMware VM consumers", datastore.Storage.TopConsumers)
+	}
+	if datastore.Storage.TopConsumers[0].Name != "warehouse-api-01" {
+		t.Fatalf("first top consumer = %#v, want warehouse-api-01", datastore.Storage.TopConsumers[0])
+	}
+}
+
 func TestBuildMetricsTargetForRegistryFallsBackToStoredMetricsTarget(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 31, 10, 0, 0, 0, time.UTC)

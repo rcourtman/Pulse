@@ -1,7 +1,6 @@
 import { useLocation } from '@solidjs/router';
 import CpuIcon from 'lucide-solid/icons/cpu';
 import { Show, createMemo, type Accessor } from 'solid-js';
-import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
 import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
@@ -21,10 +20,11 @@ import {
   type VmwarePageModel,
   type VmwarePageTabId,
 } from './vmwarePageModel';
+import { VsphereDatastoresTable } from './VsphereDatastoresTable';
 
-// `datastore` is not a first-class type token at the API boundary; vSphere
-// datastores are emitted as canonical `storage` rows. Including it
-// triggers a 400 from `/api/resources`.
+// vSphere phase 1 projects ESXi hosts as canonical `agent`, virtual machines
+// as canonical `vm`, and datastores as canonical `storage`; provider-native
+// topology stays in VMware metadata under those shared resources.
 const VMWARE_RESOURCE_QUERY = 'type=agent,vm,storage';
 const VMWARE_PLATFORM_FILTER = 'vmware-vsphere';
 const VALID_TABS = new Set<VmwarePageTabId>(VMWARE_TAB_SPECS.map((tab) => tab.id));
@@ -91,15 +91,12 @@ export function VmwarePageSurface() {
               <VmwareOverview model={model} />
             </Show>
             <Show when={activeTab() === 'storage'}>
-              <StorageSurface
-                embedded
-                tableOnly
-                showFilterToolbar
-                forcedSourceFilter={VMWARE_PLATFORM_FILTER}
-                suppressNodeFilter
-                filterAriaLabel="vSphere datastore filters"
-                filterSearchPlaceholder="Search vSphere datastores by name, host, or capacity group"
-                filterSearchEmptyMessage="Recent vSphere datastore searches appear here."
+              <VsphereDatastoresTable
+                datastores={model().datastores}
+                scope={model().resources}
+                emptyIcon={vmwareIcon()}
+                emptyTitle="No vSphere datastores"
+                emptyDescription="Datastores appear here once the vCenter connection enumerates them."
               />
             </Show>
           </Show>

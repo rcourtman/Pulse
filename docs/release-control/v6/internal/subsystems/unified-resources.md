@@ -115,6 +115,7 @@ cross-source deduplication.
 91. `internal/unifiedresources/policy_posture.go`
 92. `internal/unifiedresources/clone.go`
 93. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerPresentation.ts`
+94. `internal/unifiedresources/storage_consumers.go`
 
 ## Shared Boundaries
 
@@ -403,6 +404,13 @@ AI-only summary payloads, or page-local heuristics.
    `internal/unifiedresources/registry.go` so matcher seeding, manual links,
    and merge semantics stay unified-resource-owned instead of being rebuilt in
    consumers.
+   Storage consumer projection is unified-resource-owned through
+   `internal/unifiedresources/storage_consumers.go`. When a provider publishes
+   source-native storage consumer metadata that cannot be derived from shared
+   Proxmox/PBS relationship indexes, refresh must preserve that source-owned
+   consumer count, consumer type list, and top-consumer summary on the
+   canonical storage resource unless a stronger shared consumer projection has
+   already populated those fields in the same refresh.
    Operator-facing storage posture wording is part of that same ownership:
    when multiple storage-risk reasons exist, shared posture helpers must prefer
    the most decision-useful protection loss summary such as lost parity over a

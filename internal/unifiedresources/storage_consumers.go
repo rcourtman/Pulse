@@ -28,6 +28,12 @@ type storageConsumerSummary struct {
 	DiskCount    int
 }
 
+type sourceOwnedStorageConsumers struct {
+	ConsumerCount int
+	ConsumerTypes []string
+	TopConsumers  []StorageConsumerMeta
+}
+
 type pbsDatastoreIndexKey struct {
 	instance string
 	name     string
@@ -39,6 +45,7 @@ type pbsBackupWorkloadIndex struct {
 }
 
 func (rr *ResourceRegistry) refreshStorageConsumersLocked() {
+	sourceOwned := preserveSourceOwnedStorageConsumers(rr.resources)
 	for _, resource := range rr.resources {
 		if resource.Storage == nil {
 			continue
@@ -57,6 +64,40 @@ func (rr *ResourceRegistry) refreshStorageConsumersLocked() {
 
 	addPBSStorageConsumers(consumersByStorage, rr.resources, rr.pbsBackups)
 	applyStorageConsumers(rr.resources, consumersByStorage)
+	applySourceOwnedStorageConsumers(rr.resources, sourceOwned)
+}
+
+func preserveSourceOwnedStorageConsumers(resources map[string]*Resource) map[string]sourceOwnedStorageConsumers {
+	preserved := make(map[string]sourceOwnedStorageConsumers)
+	for id, resource := range resources {
+		if resource == nil || resource.Storage == nil || !hasDataSource(resource.Sources, SourceVMware) {
+			continue
+		}
+		if resource.Storage.ConsumerCount <= 0 && len(resource.Storage.ConsumerTypes) == 0 && len(resource.Storage.TopConsumers) == 0 {
+			continue
+		}
+		preserved[id] = sourceOwnedStorageConsumers{
+			ConsumerCount: resource.Storage.ConsumerCount,
+			ConsumerTypes: cloneStringSlice(resource.Storage.ConsumerTypes),
+			TopConsumers:  cloneStorageConsumerMetaSlice(resource.Storage.TopConsumers),
+		}
+	}
+	return preserved
+}
+
+func applySourceOwnedStorageConsumers(resources map[string]*Resource, preserved map[string]sourceOwnedStorageConsumers) {
+	for id, sourceOwned := range preserved {
+		resource := resources[id]
+		if resource == nil || resource.Storage == nil {
+			continue
+		}
+		if resource.Storage.ConsumerCount > 0 || len(resource.Storage.ConsumerTypes) > 0 || len(resource.Storage.TopConsumers) > 0 {
+			continue
+		}
+		resource.Storage.ConsumerCount = sourceOwned.ConsumerCount
+		resource.Storage.ConsumerTypes = cloneStringSlice(sourceOwned.ConsumerTypes)
+		resource.Storage.TopConsumers = cloneStorageConsumerMetaSlice(sourceOwned.TopConsumers)
+	}
 }
 
 func addProxmoxStorageConsumers(consumersByStorage map[string]map[string]*storageConsumerSummary, resources map[string]*Resource, index storageConsumerIndex) {

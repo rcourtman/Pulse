@@ -24,6 +24,7 @@ import truenasStorageTopologyTableSource from '@/features/truenas/TrueNASStorage
 import truenasSystemsTableSource from '@/features/truenas/TrueNASSystemsTable.tsx?raw';
 import truenasVirtualMachinesTableSource from '@/features/truenas/TrueNASVirtualMachinesTable.tsx?raw';
 import vmwarePageSurfaceSource from '@/features/vmware/VmwarePageSurface.tsx?raw';
+import vsphereDatastoresTableSource from '@/features/vmware/VsphereDatastoresTable.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
 
 const platformTableSources = [
@@ -40,6 +41,7 @@ const platformTableSources = [
   truenasStorageTopologyTableSource,
   truenasSystemsTableSource,
   truenasVirtualMachinesTableSource,
+  vsphereDatastoresTableSource,
   vsphereHostsTableSource,
 ];
 
@@ -191,8 +193,8 @@ describe('platform overview layout guardrails', () => {
     expect(truenasVirtualMachinesTableSource).toContain('md:min-w-[960px]');
     expect(vmwarePageSurfaceSource).toContain('<VsphereHostsTable');
     expect(vmwarePageSurfaceSource).toContain('<WorkloadsSurface');
-    expect(vmwarePageSurfaceSource).toContain('<StorageSurface');
-    expect(vmwarePageSurfaceSource).toContain('suppressNodeFilter');
+    expect(vmwarePageSurfaceSource).toContain('<VsphereDatastoresTable');
+    expect(vmwarePageSurfaceSource).not.toContain('<StorageSurface');
     expect(vmwarePageSurfaceSource).not.toContain('forcedView="pools"');
     expect(proxmoxPageSurfaceSource).toContain('suppressNodeFilter');
   });
