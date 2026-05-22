@@ -3,6 +3,7 @@ import type {
   ResourceVMwareMeta,
   ResourceVMwareNetworkAdapter,
   ResourceVMwareSnapshot,
+  ResourceVMwareVirtualDisk,
 } from '@/types/resource';
 
 export type ResourceDetailDrawerVMwareRowTone = 'default' | 'accent' | 'warning';
@@ -14,7 +15,7 @@ export type ResourceDetailDrawerVMwareRow = {
 };
 
 export type ResourceDetailDrawerVMwareSection = {
-  id: 'state' | 'placement' | 'guest' | 'network' | 'signals' | 'snapshots';
+  id: 'state' | 'placement' | 'guest' | 'disks' | 'network' | 'signals' | 'snapshots';
   label: string;
   rows: ResourceDetailDrawerVMwareRow[];
 };
@@ -27,6 +28,19 @@ const formatCount = (count: number, label: string): string =>
 const formatBoolLabel = (value?: boolean): string => {
   if (value === undefined) return '';
   return value ? 'Yes' : 'No';
+};
+
+const formatCapacityBytes = (value?: number): string => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  let size = value;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  const precision = unitIndex === 0 || size >= 10 ? 0 : 1;
+  return `${size.toFixed(precision)} ${units[unitIndex]}`;
 };
 
 const countSnapshotTree = (snapshots?: ResourceVMwareSnapshot[]): number =>
@@ -131,6 +145,50 @@ const networkAdapterRows = (
     }))
     .filter((row) => row.value);
 
+const virtualDiskDisplayName = (disk: ResourceVMwareVirtualDisk): string =>
+  asTrimmedString(disk.label) || asTrimmedString(disk.disk) || 'Virtual disk';
+
+const formatVirtualDiskAddress = (disk: ResourceVMwareVirtualDisk): string => {
+  const type = asTrimmedString(disk.type).toUpperCase();
+  if (type === 'SCSI' && disk.scsiBus !== undefined && disk.scsiUnit !== undefined) {
+    return `SCSI ${disk.scsiBus}:${disk.scsiUnit}`;
+  }
+  if (type === 'SATA' && disk.sataBus !== undefined && disk.sataUnit !== undefined) {
+    return `SATA ${disk.sataBus}:${disk.sataUnit}`;
+  }
+  if (type === 'NVME' && disk.nvmeBus !== undefined && disk.nvmeUnit !== undefined) {
+    return `NVMe ${disk.nvmeBus}:${disk.nvmeUnit}`;
+  }
+  if (type === 'IDE' && disk.idePrimary !== undefined && disk.ideMaster !== undefined) {
+    return `IDE ${disk.idePrimary ? 'primary' : 'secondary'} ${
+      disk.ideMaster ? 'master' : 'slave'
+    }`;
+  }
+  return type;
+};
+
+const virtualDiskValue = (disk: ResourceVMwareVirtualDisk): string => {
+  const parts = [
+    formatVirtualDiskAddress(disk),
+    formatCapacityBytes(disk.capacityBytes),
+    asTrimmedString(disk.datastoreName),
+    asTrimmedString(disk.backingType),
+    asTrimmedString(disk.vmdkFile),
+  ].filter(Boolean);
+  return parts.join(' · ');
+};
+
+const virtualDiskRows = (
+  disks: ResourceVMwareVirtualDisk[] | undefined,
+): ResourceDetailDrawerVMwareRow[] =>
+  (disks ?? [])
+    .map((disk) => ({
+      label: virtualDiskDisplayName(disk),
+      value: virtualDiskValue(disk),
+      tone: 'default' as ResourceDetailDrawerVMwareRowTone,
+    }))
+    .filter((row) => row.value);
+
 const vmwareEntityLabel = (entityType?: string): string => {
   const normalized = asTrimmedString(entityType).toLowerCase();
   switch (normalized) {
@@ -201,6 +259,10 @@ export const buildVMwareDetailsSummary = (
   const networkAdapterCount = vmware.networkAdapters?.length ?? 0;
   if (resourceType === 'vm' && networkAdapterCount > 0) {
     parts.push(formatCount(networkAdapterCount, 'vNIC'));
+  }
+  const virtualDiskCount = vmware.virtualDisks?.length ?? 0;
+  if (resourceType === 'vm' && virtualDiskCount > 0) {
+    parts.push(formatCount(virtualDiskCount, 'disk'));
   }
   if ((vmware.activeAlarmCount ?? 0) > 0) {
     parts.push(formatCount(vmware.activeAlarmCount ?? 0, 'alarm'));
@@ -329,6 +391,7 @@ export const buildVMwareDetailSections = (
   ]);
 
   const networkRows = resourceType === 'vm' ? networkAdapterRows(vmware.networkAdapters) : [];
+  const diskRows = resourceType === 'vm' ? virtualDiskRows(vmware.virtualDisks) : [];
 
   const signalRows = filterNonEmptyRows([
     {
@@ -364,6 +427,7 @@ export const buildVMwareDetailSections = (
     { id: 'state', label: 'State', rows: stateRows },
     { id: 'placement', label: 'Placement', rows: placementRows },
     { id: 'guest', label: 'Guest', rows: guestRows },
+    { id: 'disks', label: 'Virtual disks', rows: diskRows },
     { id: 'network', label: 'Network', rows: networkRows },
     { id: 'signals', label: 'Signals', rows: signalRows },
     { id: 'snapshots', label: 'Snapshot tree', rows: snapshotRows },

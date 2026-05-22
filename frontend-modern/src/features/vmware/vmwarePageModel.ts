@@ -721,6 +721,13 @@ const vmwareVirtualMachineSearchHaystack = (resource: Resource): string =>
           .join(' '),
       )
       .join(' '),
+    resource.vmware?.virtualDisks
+      ?.map((disk) =>
+        [disk.disk, disk.label, disk.type, disk.backingType, disk.vmdkFile, disk.datastoreName]
+          .filter(Boolean)
+          .join(' '),
+      )
+      .join(' '),
     resource.vmware?.activeAlarmSummary,
     resource.vmware?.recentTaskSummary,
     ...(resource.tags ?? []),

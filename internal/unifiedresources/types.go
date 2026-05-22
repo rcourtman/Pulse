@@ -1038,6 +1038,7 @@ type VMwareData struct {
 	CurrentSnapshotID   string                     `json:"currentSnapshotId,omitempty"`
 	SnapshotTree        []VMwareSnapshotData       `json:"snapshotTree,omitempty"`
 	NetworkAdapters     []VMwareNetworkAdapterData `json:"networkAdapters,omitempty"`
+	VirtualDisks        []VMwareVirtualDiskData    `json:"virtualDisks,omitempty"`
 }
 
 // VMwareSnapshotData contains one node in the vSphere VM snapshot tree. It is
@@ -1078,6 +1079,26 @@ type VMwareNetworkAdapterData struct {
 	WakeOnLANEnabled      bool   `json:"wakeOnLanEnabled"`
 	UPTCompatibility      bool   `json:"uptCompatibilityEnabled,omitempty"`
 	UPTV2Compatibility    bool   `json:"uptV2CompatibilityEnabled,omitempty"`
+}
+
+// VMwareVirtualDiskData contains vCenter VM hardware disk facts as read-only
+// workload context, not a Pulse storage/recovery model.
+type VMwareVirtualDiskData struct {
+	Disk          string `json:"disk,omitempty"`
+	Label         string `json:"label,omitempty"`
+	Type          string `json:"type,omitempty"`
+	IDEPrimary    *bool  `json:"idePrimary,omitempty"`
+	IDEMaster     *bool  `json:"ideMaster,omitempty"`
+	SCSIBus       *int64 `json:"scsiBus,omitempty"`
+	SCSIUnit      *int64 `json:"scsiUnit,omitempty"`
+	SATABus       *int64 `json:"sataBus,omitempty"`
+	SATAUnit      *int64 `json:"sataUnit,omitempty"`
+	NVMEBus       *int64 `json:"nvmeBus,omitempty"`
+	NVMEUnit      *int64 `json:"nvmeUnit,omitempty"`
+	BackingType   string `json:"backingType,omitempty"`
+	VMDKFile      string `json:"vmdkFile,omitempty"`
+	DatastoreName string `json:"datastoreName,omitempty"`
+	CapacityBytes *int64 `json:"capacityBytes,omitempty"`
 }
 
 // TrueNASData contains TrueNAS-specific metadata for TrueNAS resources.

@@ -141,6 +141,17 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 				AllowGuestControl:     true,
 				WakeOnLANEnabled:      true,
 			}},
+			VirtualDisks: []InventoryVMVirtualDisk{{
+				Disk:          "2000",
+				Label:         "Hard disk 1",
+				Type:          "SCSI",
+				SCSIBus:       int64Ptr(0),
+				SCSIUnit:      int64Ptr(1),
+				BackingType:   "VMDK_FILE",
+				VMDKFile:      "[nvme-primary] app-01/app-01.vmdk",
+				DatastoreName: "nvme-primary",
+				CapacityBytes: int64Ptr(107374182400),
+			}},
 		}},
 		Datastores: []InventoryDatastore{{
 			Datastore:          "datastore-11",
@@ -252,6 +263,15 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 	}
 	if got := vmRecord.Resource.VMware.NetworkAdapters[0].PCISlotNumber; got == nil || *got != 160 {
 		t.Fatalf("vm network adapter pci slot = %+v, want 160", got)
+	}
+	if got := vmRecord.Resource.VMware.VirtualDisks; len(got) != 1 || got[0].Label != "Hard disk 1" || got[0].VMDKFile != "[nvme-primary] app-01/app-01.vmdk" {
+		t.Fatalf("vm virtual disk projection = %+v, want hard disk backing on nvme-primary", got)
+	}
+	if got := vmRecord.Resource.VMware.VirtualDisks[0].SCSIUnit; got == nil || *got != 1 {
+		t.Fatalf("vm virtual disk scsi unit = %+v, want 1", got)
+	}
+	if got := vmRecord.Resource.VMware.VirtualDisks[0].CapacityBytes; got == nil || *got != 107374182400 {
+		t.Fatalf("vm virtual disk capacity = %+v, want 107374182400", got)
 	}
 	if got := vmRecord.Resource.ParentName; got != "esxi-01.lab.local" {
 		t.Fatalf("vm parent name = %q, want esxi-01.lab.local", got)

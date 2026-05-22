@@ -467,6 +467,9 @@ func TestRefreshCanonicalIdentityScopesVMwareManagedObjectsByConnection(t *testi
 }
 
 func TestRefreshCanonicalIdentityIgnoresVMwarePlacementDetailAliases(t *testing.T) {
+	scsiBus := int64(0)
+	scsiUnit := int64(1)
+	capacityBytes := int64(107374182400)
 	resource := Resource{
 		ID:   "vmware-vm-1",
 		Type: ResourceTypeVM,
@@ -503,6 +506,17 @@ func TestRefreshCanonicalIdentityIgnoresVMwarePlacementDetailAliases(t *testing.
 				State:             "CONNECTED",
 				StartConnected:    true,
 				AllowGuestControl: true,
+			}},
+			VirtualDisks: []VMwareVirtualDiskData{{
+				Disk:          "2000",
+				Label:         "Hard disk 1",
+				Type:          "SCSI",
+				SCSIBus:       &scsiBus,
+				SCSIUnit:      &scsiUnit,
+				BackingType:   "VMDK_FILE",
+				VMDKFile:      "[vmfs-prod-01] db-vm/db-vm.vmdk",
+				DatastoreName: "vmfs-prod-01",
+				CapacityBytes: &capacityBytes,
 			}},
 			SnapshotTree: []VMwareSnapshotData{{
 				Snapshot:    "snapshot-201",
@@ -572,6 +586,11 @@ func TestRefreshCanonicalIdentityIgnoresVMwarePlacementDetailAliases(t *testing.
 		"network-101",
 		"VM Network",
 		"CONNECTED",
+		"2000",
+		"Hard disk 1",
+		"SCSI",
+		"VMDK_FILE",
+		"[vmfs-prod-01] db-vm/db-vm.vmdk",
 	}
 	for _, disallowed := range disallowedAliases {
 		for _, alias := range resource.Canonical.Aliases {

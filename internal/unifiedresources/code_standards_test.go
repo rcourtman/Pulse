@@ -2006,9 +2006,11 @@ func TestCloneVMwareDataKeepsNestedRuntimeDetailsIsolated(t *testing.T) {
 	requiredSnippets := []string{
 		"out.SnapshotTree = cloneVMwareSnapshotDataSlice(in.SnapshotTree)",
 		"out.NetworkAdapters = cloneVMwareNetworkAdapterDataSlice(in.NetworkAdapters)",
+		"out.VirtualDisks = cloneVMwareVirtualDiskDataSlice(in.VirtualDisks)",
 		"out[i].CreatedAt = cloneTimePtr(in[i].CreatedAt)",
 		"out[i].Children = cloneVMwareSnapshotDataSlice(in[i].Children)",
 		"out[i].PCISlotNumber = cloneInt64Ptr(in[i].PCISlotNumber)",
+		"out[i].CapacityBytes = cloneInt64Ptr(in[i].CapacityBytes)",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {

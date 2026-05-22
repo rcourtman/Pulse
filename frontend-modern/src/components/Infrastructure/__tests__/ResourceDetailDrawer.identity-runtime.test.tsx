@@ -322,6 +322,19 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
               allowGuestControl: true,
             },
           ],
+          virtualDisks: [
+            {
+              disk: '2000',
+              label: 'Hard disk 1',
+              type: 'SCSI',
+              scsiBus: 0,
+              scsiUnit: 1,
+              backingType: 'VMDK_FILE',
+              vmdkFile: '[shared-vsan] app-01/app-01.vmdk',
+              datastoreName: 'shared-vsan',
+              capacityBytes: 107374182400,
+            },
+          ],
           activeAlarmCount: 1,
           activeAlarmSummary: 'Host fan degraded',
           recentTaskCount: 1,
@@ -376,6 +389,19 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
             allowGuestControl: true,
           },
         ],
+        virtualDisks: [
+          {
+            disk: '2000',
+            label: 'Hard disk 1',
+            type: 'SCSI',
+            scsiBus: 0,
+            scsiUnit: 1,
+            backingType: 'VMDK_FILE',
+            vmdkFile: '[shared-vsan] app-01/app-01.vmdk',
+            datastoreName: 'shared-vsan',
+            capacityBytes: 107374182400,
+          },
+        ],
         activeAlarmCount: 1,
         activeAlarmSummary: 'Host fan degraded',
         recentTaskCount: 1,
@@ -411,7 +437,9 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
 
     expect(getByTestId('resource-vmware-details-section')).toBeInTheDocument();
     expect(
-      getByText('Lab VC · Read-only vCenter context · 2 snapshots · 1 vNIC · 1 alarm · 1 task'),
+      getByText(
+        'Lab VC · Read-only vCenter context · 2 snapshots · 1 vNIC · 1 disk · 1 alarm · 1 task',
+      ),
     ).toBeInTheDocument();
     expect(queryByText('Compute Cluster')).toBeNull();
     expect(queryByText('Create snapshot (success)')).toBeNull();
@@ -426,6 +454,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(within(section).getByText('State')).toBeInTheDocument();
     expect(within(section).getByText('Placement')).toBeInTheDocument();
     expect(within(section).getByText('Guest')).toBeInTheDocument();
+    expect(within(section).getByText('Virtual disks')).toBeInTheDocument();
     expect(within(section).getByText('Network')).toBeInTheDocument();
     expect(within(section).getByText('Signals')).toBeInTheDocument();
     expect(within(section).getByText('Snapshot tree')).toBeInTheDocument();
@@ -433,6 +462,8 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(within(section).getByText('Compute Cluster')).toBeInTheDocument();
     expect(within(section).getByText('esxi-01.lab.local')).toBeInTheDocument();
     expect(within(section).getByText('ubuntu64Guest')).toBeInTheDocument();
+    expect(within(section).getByText('Hard disk 1')).toBeInTheDocument();
+    expect(within(section).getByText(/SCSI 0:1 · 100 GB · shared-vsan/)).toBeInTheDocument();
     expect(within(section).getByText('Network adapter 1')).toBeInTheDocument();
     expect(within(section).getByText(/VMXNET3 · VM Network/)).toBeInTheDocument();
     expect(within(section).getByText(/Create snapshot \(success\)/)).toBeInTheDocument();

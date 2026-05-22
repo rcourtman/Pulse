@@ -24,6 +24,19 @@ describe('resourceDetailDrawerVmwareModel', () => {
           allowGuestControl: true,
         },
       ],
+      virtualDisks: [
+        {
+          disk: '2000',
+          label: 'Hard disk 1',
+          type: 'SCSI',
+          scsiBus: 0,
+          scsiUnit: 1,
+          backingType: 'VMDK_FILE',
+          vmdkFile: '[nvme-primary] app-01/app-01.vmdk',
+          datastoreName: 'nvme-primary',
+          capacityBytes: 107374182400,
+        },
+      ],
       snapshotTree: [
         {
           snapshot: 'snapshot-201',
@@ -46,8 +59,18 @@ describe('resourceDetailDrawerVmwareModel', () => {
     };
 
     expect(buildVMwareDetailsSummary('vm', vmware)).toBe(
-      'Lab VC · Read-only vCenter context · 2 snapshots · 1 vNIC',
+      'Lab VC · Read-only vCenter context · 2 snapshots · 1 vNIC · 1 disk',
     );
+
+    const disks = buildVMwareDetailSections('vm', vmware).find((section) => section.id === 'disks');
+
+    expect(disks?.rows).toEqual([
+      {
+        label: 'Hard disk 1',
+        value: 'SCSI 0:1 · 100 GB · nvme-primary · VMDK_FILE · [nvme-primary] app-01/app-01.vmdk',
+        tone: 'default',
+      },
+    ]);
 
     const network = buildVMwareDetailSections('vm', vmware).find(
       (section) => section.id === 'network',
@@ -56,7 +79,8 @@ describe('resourceDetailDrawerVmwareModel', () => {
     expect(network?.rows).toEqual([
       {
         label: 'Network adapter 1',
-        value: 'VMXNET3 · VM Network · 00:50:56:aa:bb:cc · CONNECTED · starts connected · guest control',
+        value:
+          'VMXNET3 · VM Network · 00:50:56:aa:bb:cc · CONNECTED · starts connected · guest control',
         tone: 'default',
       },
     ]);

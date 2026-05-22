@@ -78,6 +78,26 @@ type InventoryVMNetworkAdapter struct {
 	UPTV2Compatibility    bool   `json:"upt_v2_compatibility_enabled,omitempty"`
 }
 
+// InventoryVMVirtualDisk preserves vCenter VM hardware disk facts as read-only
+// workload context.
+type InventoryVMVirtualDisk struct {
+	Disk          string `json:"disk,omitempty"`
+	Label         string `json:"label,omitempty"`
+	Type          string `json:"type,omitempty"`
+	IDEPrimary    *bool  `json:"ide_primary,omitempty"`
+	IDEMaster     *bool  `json:"ide_master,omitempty"`
+	SCSIBus       *int64 `json:"scsi_bus,omitempty"`
+	SCSIUnit      *int64 `json:"scsi_unit,omitempty"`
+	SATABus       *int64 `json:"sata_bus,omitempty"`
+	SATAUnit      *int64 `json:"sata_unit,omitempty"`
+	NVMEBus       *int64 `json:"nvme_bus,omitempty"`
+	NVMEUnit      *int64 `json:"nvme_unit,omitempty"`
+	BackingType   string `json:"backing_type,omitempty"`
+	VMDKFile      string `json:"vmdk_file,omitempty"`
+	DatastoreName string `json:"datastore_name,omitempty"`
+	CapacityBytes *int64 `json:"capacity_bytes,omitempty"`
+}
+
 // InventoryMetrics captures the current runtime metric floor projected onto
 // canonical Pulse metrics for VMware-backed hosts and VMs.
 type InventoryMetrics struct {
@@ -162,6 +182,7 @@ type InventoryVM struct {
 	CurrentSnapshotID   string                      `json:"current_snapshot_id,omitempty"`
 	SnapshotTree        []InventoryVMSnapshot       `json:"snapshot_tree,omitempty"`
 	NetworkAdapters     []InventoryVMNetworkAdapter `json:"network_adapters,omitempty"`
+	VirtualDisks        []InventoryVMVirtualDisk    `json:"virtual_disks,omitempty"`
 	Metrics             *InventoryMetrics           `json:"metrics,omitempty"`
 }
 
@@ -511,6 +532,7 @@ func vmwareRecordsFromSnapshot(snapshot *InventorySnapshot, now func() time.Time
 				CurrentSnapshotID:   strings.TrimSpace(vm.CurrentSnapshotID),
 				SnapshotTree:        vmwareSnapshotTreeData(vm.SnapshotTree),
 				NetworkAdapters:     vmwareNetworkAdaptersData(vm.NetworkAdapters),
+				VirtualDisks:        vmwareVirtualDisksData(vm.VirtualDisks),
 			},
 			Tags: filterNonEmptyStrings(
 				"vmware",
@@ -671,6 +693,7 @@ func cloneInventoryVMs(in []InventoryVM) []InventoryVM {
 		out[i].RecentEvents = cloneInventoryEvents(in[i].RecentEvents)
 		out[i].SnapshotTree = cloneInventoryVMSnapshots(in[i].SnapshotTree)
 		out[i].NetworkAdapters = cloneInventoryVMNetworkAdapters(in[i].NetworkAdapters)
+		out[i].VirtualDisks = cloneInventoryVMVirtualDisks(in[i].VirtualDisks)
 		out[i].Metrics = cloneInventoryMetrics(in[i].Metrics)
 	}
 	return out
@@ -744,6 +767,26 @@ func cloneInventoryVMNetworkAdapters(in []InventoryVMNetworkAdapter) []Inventory
 	for i := range in {
 		out[i] = in[i]
 		out[i].PCISlotNumber = cloneInt64Pointer(in[i].PCISlotNumber)
+	}
+	return out
+}
+
+func cloneInventoryVMVirtualDisks(in []InventoryVMVirtualDisk) []InventoryVMVirtualDisk {
+	if in == nil {
+		return nil
+	}
+	out := make([]InventoryVMVirtualDisk, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].IDEPrimary = cloneBoolPointer(in[i].IDEPrimary)
+		out[i].IDEMaster = cloneBoolPointer(in[i].IDEMaster)
+		out[i].SCSIBus = cloneInt64Pointer(in[i].SCSIBus)
+		out[i].SCSIUnit = cloneInt64Pointer(in[i].SCSIUnit)
+		out[i].SATABus = cloneInt64Pointer(in[i].SATABus)
+		out[i].SATAUnit = cloneInt64Pointer(in[i].SATAUnit)
+		out[i].NVMEBus = cloneInt64Pointer(in[i].NVMEBus)
+		out[i].NVMEUnit = cloneInt64Pointer(in[i].NVMEUnit)
+		out[i].CapacityBytes = cloneInt64Pointer(in[i].CapacityBytes)
 	}
 	return out
 }
@@ -1107,6 +1150,34 @@ func vmwareNetworkAdaptersData(adapters []InventoryVMNetworkAdapter) []unifiedre
 			WakeOnLANEnabled:      adapter.WakeOnLANEnabled,
 			UPTCompatibility:      adapter.UPTCompatibility,
 			UPTV2Compatibility:    adapter.UPTV2Compatibility,
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func vmwareVirtualDisksData(disks []InventoryVMVirtualDisk) []unifiedresources.VMwareVirtualDiskData {
+	if len(disks) == 0 {
+		return nil
+	}
+	out := make([]unifiedresources.VMwareVirtualDiskData, 0, len(disks))
+	for _, disk := range disks {
+		item := unifiedresources.VMwareVirtualDiskData{
+			Disk:          strings.TrimSpace(disk.Disk),
+			Label:         strings.TrimSpace(disk.Label),
+			Type:          strings.TrimSpace(disk.Type),
+			IDEPrimary:    cloneBoolPointer(disk.IDEPrimary),
+			IDEMaster:     cloneBoolPointer(disk.IDEMaster),
+			SCSIBus:       cloneInt64Pointer(disk.SCSIBus),
+			SCSIUnit:      cloneInt64Pointer(disk.SCSIUnit),
+			SATABus:       cloneInt64Pointer(disk.SATABus),
+			SATAUnit:      cloneInt64Pointer(disk.SATAUnit),
+			NVMEBus:       cloneInt64Pointer(disk.NVMEBus),
+			NVMEUnit:      cloneInt64Pointer(disk.NVMEUnit),
+			BackingType:   strings.TrimSpace(disk.BackingType),
+			VMDKFile:      strings.TrimSpace(disk.VMDKFile),
+			DatastoreName: strings.TrimSpace(disk.DatastoreName),
+			CapacityBytes: cloneInt64Pointer(disk.CapacityBytes),
 		}
 		out = append(out, item)
 	}

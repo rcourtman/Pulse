@@ -1152,7 +1152,7 @@ That same topology contract now also has a concrete projection seam.
 detail on the shared `vmware` facet only: hosts may carry datacenter,
 compute-resource, cluster, folder, and attached-datastore metadata; VMs may
 carry runtime-host, folder, resource-pool, datastore, guest-identity, and VM
-hardware Ethernet adapter metadata plus canonical parentage to the owning
+hardware Ethernet adapter plus VM hardware disk metadata plus canonical parentage to the owning
 ESXi `agent`; datastores may
 carry datacenter/folder placement plus shared storage-node and workload
 consumer metadata through `storage.nodes`, `storage.consumerCount`, and
@@ -1165,6 +1165,10 @@ VM hardware Ethernet adapter context belongs under
 type, MAC address/type, PCI slot, backing type, backing network id/name,
 distributed switch/port or opaque-network references, connection state,
 start-connected, guest-control, Wake-on-LAN, and UPT compatibility flags.
+VM hardware disk context belongs under `vmware.virtualDisks`, including the
+vCenter disk id, label, host-bus adapter type, IDE/SCSI/SATA/NVMe placement,
+backing type, VMDK file path, bracketed datastore name when the VMDK path
+provides it, and capacity in bytes.
 Those enrichments must remain subordinate to shared `agent`, `vm`, and
 `storage` resources rather than becoming a VMware-only topology graph, recovery
 artifact, canonical identity alias, or separate provider detail drawer

@@ -209,6 +209,7 @@ func defaultFixturesPrimaryCluster(
 				SnapshotCount:       1,
 				CurrentSnapshotID:   "snapshot-201",
 				NetworkAdapters:     fixtureVMNetworkAdapters("vm-201", "VM Network", true),
+				VirtualDisks:        fixtureVMVirtualDisks("vm-201", "nvme-primary", 128_000_000_000),
 				SnapshotTree: []InventoryVMSnapshot{{
 					Snapshot:    "snapshot-201",
 					Name:        "pre-deploy-checkpoint",
@@ -266,6 +267,7 @@ func defaultFixturesPrimaryCluster(
 				SnapshotCount:       3,
 				CurrentSnapshotID:   "snapshot-213",
 				NetworkAdapters:     fixtureVMNetworkAdapters("vm-202", "Database Network", true),
+				VirtualDisks:        fixtureVMVirtualDisks("vm-202", "nvme-primary", 256_000_000_000),
 				SnapshotTree: []InventoryVMSnapshot{{
 					Snapshot:  "snapshot-211",
 					Name:      "baseline",
@@ -341,6 +343,7 @@ func defaultFixturesPrimaryCluster(
 				OverallStatus:       "green",
 				SnapshotCount:       1,
 				NetworkAdapters:     fixtureVMNetworkAdapters("vm-203", "Web Network", true),
+				VirtualDisks:        fixtureVMVirtualDisks("vm-203", "analytics-vsan", 96_000_000_000),
 				Metrics: &InventoryMetrics{
 					CPUPercent:              float64Ptr(22.1),
 					MemoryPercent:           float64Ptr(51.2),
@@ -380,6 +383,7 @@ func defaultFixturesPrimaryCluster(
 				OverallStatus:       "green",
 				SnapshotCount:       2,
 				NetworkAdapters:     fixtureVMNetworkAdapters("vm-204", "Platform Network", true),
+				VirtualDisks:        fixtureVMVirtualDisks("vm-204", "analytics-vsan", 192_000_000_000),
 				Metrics: &InventoryMetrics{
 					CPUPercent:              float64Ptr(27.8),
 					MemoryPercent:           float64Ptr(59.6),
@@ -419,6 +423,7 @@ func defaultFixturesPrimaryCluster(
 				OverallStatus:       "green",
 				SnapshotCount:       0,
 				NetworkAdapters:     fixtureVMNetworkAdapters("vm-205", "Utility Network", true),
+				VirtualDisks:        fixtureVMVirtualDisks("vm-205", "analytics-vsan", 80_000_000_000),
 				Metrics: &InventoryMetrics{
 					CPUPercent:              float64Ptr(16.8),
 					MemoryPercent:           float64Ptr(46.1),
@@ -456,6 +461,7 @@ func defaultFixturesPrimaryCluster(
 				GuestHostname:       "batch-worker-01.internal",
 				GuestIPAddresses:    []string{},
 				OverallStatus:       "gray",
+				VirtualDisks:        fixtureVMVirtualDisks("vm-206", "archive-tier", 64_000_000_000),
 			},
 		},
 		Datastores: []InventoryDatastore{
@@ -722,6 +728,7 @@ func appendEdgeClusterFixtures(
 			GuestIPAddresses:    guestIPs,
 			OverallStatus:       v.Status,
 			NetworkAdapters:     fixtureVMNetworkAdapters(v.ID, edgeVMNetworkName(v.Tier), v.PowerState == "POWERED_ON"),
+			VirtualDisks:        fixtureVMVirtualDisks(v.ID, firstNonEmptyTrimmed(dsNames...), int64(v.MemMiB)*1024*1024*4),
 		}
 		if v.PowerState == "POWERED_ON" {
 			vm.Metrics = &InventoryMetrics{
@@ -827,6 +834,24 @@ func fixtureVMNetworkAdapters(vmID, networkName string, connected bool) []Invent
 		StartConnected:    true,
 		AllowGuestControl: true,
 		WakeOnLANEnabled:  true,
+	}}
+}
+
+func fixtureVMVirtualDisks(vmID, datastoreName string, capacityBytes int64) []InventoryVMVirtualDisk {
+	if capacityBytes <= 0 {
+		capacityBytes = 64_000_000_000
+	}
+	datastoreName = firstNonEmptyTrimmed(datastoreName, "vmfs-primary")
+	return []InventoryVMVirtualDisk{{
+		Disk:          "2000",
+		Label:         "Hard disk 1",
+		Type:          "SCSI",
+		SCSIBus:       int64Ptr(0),
+		SCSIUnit:      int64Ptr(0),
+		BackingType:   "VMDK_FILE",
+		VMDKFile:      fmt.Sprintf("[%s] %s/%s.vmdk", datastoreName, vmID, vmID),
+		DatastoreName: datastoreName,
+		CapacityBytes: int64Ptr(capacityBytes),
 	}}
 }
 

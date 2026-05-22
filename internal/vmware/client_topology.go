@@ -54,6 +54,36 @@ type vcenterVMHardwareEthernetInfo struct {
 	AllowGuestControl  bool                             `json:"allow_guest_control"`
 }
 
+type vcenterVMHardwareDiskSummary struct {
+	Disk string `json:"disk"`
+}
+
+type vcenterVMHardwareDiskBacking struct {
+	Type     string `json:"type"`
+	VMDKFile string `json:"vmdk_file"`
+}
+
+type vcenterVMHardwareDiskIDEAddress struct {
+	Primary *bool `json:"primary"`
+	Master  *bool `json:"master"`
+}
+
+type vcenterVMHardwareDiskBusUnitAddress struct {
+	Bus  *int64 `json:"bus"`
+	Unit *int64 `json:"unit"`
+}
+
+type vcenterVMHardwareDiskInfo struct {
+	Label    string                               `json:"label"`
+	Type     string                               `json:"type"`
+	IDE      *vcenterVMHardwareDiskIDEAddress     `json:"ide"`
+	SCSI     *vcenterVMHardwareDiskBusUnitAddress `json:"scsi"`
+	SATA     *vcenterVMHardwareDiskBusUnitAddress `json:"sata"`
+	NVME     *vcenterVMHardwareDiskBusUnitAddress `json:"nvme"`
+	Backing  vcenterVMHardwareDiskBacking         `json:"backing"`
+	Capacity *int64                               `json:"capacity"`
+}
+
 type viJSONVirtualMachineRuntimeInfo struct {
 	Host *viJSONReference `json:"host"`
 }
@@ -311,6 +341,14 @@ func (c *Client) enrichVMTopology(
 	}
 	vm.NetworkAdapters = networkAdapters
 
+	virtualDisks, err := c.collectVMHardwareDisks(ctx, automationSessionID, vm.VM)
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "vm", vm.VM, err); ok {
+		recordIssue(issue)
+	} else if err != nil && !isAutomationNotFound(err) && !isAutomationUnavailable(err) {
+		return vm, nil, err
+	}
+	vm.VirtualDisks = virtualDisks
+
 	var placement vmwarePlacement
 
 	parentRef, err := c.collectEntityReference(ctx, release, sessionID, "VirtualMachine", vm.VM, "parent", "vm parent placement")
@@ -543,6 +581,70 @@ func (c *Client) collectVMEthernetAdapters(
 	return adapters, nil
 }
 
+func (c *Client) collectVMHardwareDisks(
+	ctx context.Context,
+	automationSessionID string,
+	vmID string,
+) ([]InventoryVMVirtualDisk, error) {
+	vmID = strings.TrimSpace(vmID)
+	if vmID == "" || strings.TrimSpace(automationSessionID) == "" {
+		return nil, nil
+	}
+
+	escapedVMID := url.PathEscape(vmID)
+	var summaries []vcenterVMHardwareDiskSummary
+	path := fmt.Sprintf("/api/vcenter/vm/%s/hardware/disk", escapedVMID)
+	if err := c.getAutomationJSON(ctx, automationSessionID, path, "vm hardware disk list", &summaries); err != nil {
+		return nil, err
+	}
+	if len(summaries) == 0 {
+		return nil, nil
+	}
+
+	disks := make([]InventoryVMVirtualDisk, 0, len(summaries))
+	for _, summary := range summaries {
+		diskID := strings.TrimSpace(summary.Disk)
+		if diskID == "" {
+			continue
+		}
+		var info vcenterVMHardwareDiskInfo
+		path := fmt.Sprintf("/api/vcenter/vm/%s/hardware/disk/%s", escapedVMID, url.PathEscape(diskID))
+		if err := c.getAutomationJSON(ctx, automationSessionID, path, "vm hardware disk", &info); err != nil {
+			return nil, err
+		}
+		disk := InventoryVMVirtualDisk{
+			Disk:          diskID,
+			Label:         strings.TrimSpace(info.Label),
+			Type:          strings.TrimSpace(info.Type),
+			BackingType:   strings.TrimSpace(info.Backing.Type),
+			VMDKFile:      strings.TrimSpace(info.Backing.VMDKFile),
+			DatastoreName: vmdkDatastoreName(info.Backing.VMDKFile),
+			CapacityBytes: cloneInt64Pointer(info.Capacity),
+		}
+		if info.IDE != nil {
+			disk.IDEPrimary = cloneBoolPointer(info.IDE.Primary)
+			disk.IDEMaster = cloneBoolPointer(info.IDE.Master)
+		}
+		if info.SCSI != nil {
+			disk.SCSIBus = cloneInt64Pointer(info.SCSI.Bus)
+			disk.SCSIUnit = cloneInt64Pointer(info.SCSI.Unit)
+		}
+		if info.SATA != nil {
+			disk.SATABus = cloneInt64Pointer(info.SATA.Bus)
+			disk.SATAUnit = cloneInt64Pointer(info.SATA.Unit)
+		}
+		if info.NVME != nil {
+			disk.NVMEBus = cloneInt64Pointer(info.NVME.Bus)
+			disk.NVMEUnit = cloneInt64Pointer(info.NVME.Unit)
+		}
+		disks = append(disks, disk)
+	}
+	sort.Slice(disks, func(i, j int) bool {
+		return vmwareSortKey(disks[i].Disk, disks[i].Label) < vmwareSortKey(disks[j].Disk, disks[j].Label)
+	})
+	return disks, nil
+}
+
 func (c *Client) collectVMRuntimeHostReference(
 	ctx context.Context,
 	release string,
@@ -577,6 +679,18 @@ func (c *Client) collectDatastoreSummary(
 		return nil, err
 	}
 	return &summary, nil
+}
+
+func vmdkDatastoreName(vmdkFile string) string {
+	value := strings.TrimSpace(vmdkFile)
+	if !strings.HasPrefix(value, "[") {
+		return ""
+	}
+	end := strings.Index(value, "]")
+	if end <= 1 {
+		return ""
+	}
+	return strings.TrimSpace(value[1:end])
 }
 
 func (c *Client) collectEntityReference(

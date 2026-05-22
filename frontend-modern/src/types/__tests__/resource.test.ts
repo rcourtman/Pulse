@@ -283,6 +283,19 @@ describe('Resource Helper Functions', () => {
             allowGuestControl: true,
           },
         ],
+        virtualDisks: [
+          {
+            disk: '2000',
+            label: 'Hard disk 1',
+            type: 'SCSI',
+            scsiBus: 0,
+            scsiUnit: 1,
+            backingType: 'VMDK_FILE',
+            vmdkFile: '[primary-vmfs] app-01/app-01.vmdk',
+            datastoreName: 'primary-vmfs',
+            capacityBytes: 107374182400,
+          },
+        ],
         snapshotTree: [
           {
             snapshot: 'snapshot-101',
@@ -312,6 +325,8 @@ describe('Resource Helper Functions', () => {
       expect(vmware.snapshotCount).toBe(3);
       expect(vmware.currentSnapshotId).toBe('snapshot-103');
       expect(vmware.networkAdapters?.[0]?.networkName).toBe('VM Network');
+      expect(vmware.virtualDisks?.[0]?.vmdkFile).toBe('[primary-vmfs] app-01/app-01.vmdk');
+      expect(vmware.virtualDisks?.[0]?.capacityBytes).toBe(107374182400);
       expect(vmware.snapshotTree?.[0]?.children?.[0]?.current).toBe(true);
     });
   });

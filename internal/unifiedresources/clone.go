@@ -269,6 +269,7 @@ func cloneVMwareData(in *VMwareData) *VMwareData {
 	out.GuestIPAddresses = cloneStringSlice(in.GuestIPAddresses)
 	out.SnapshotTree = cloneVMwareSnapshotDataSlice(in.SnapshotTree)
 	out.NetworkAdapters = cloneVMwareNetworkAdapterDataSlice(in.NetworkAdapters)
+	out.VirtualDisks = cloneVMwareVirtualDiskDataSlice(in.VirtualDisks)
 	return &out
 }
 
@@ -293,6 +294,26 @@ func cloneVMwareNetworkAdapterDataSlice(in []VMwareNetworkAdapterData) []VMwareN
 	for i := range in {
 		out[i] = in[i]
 		out[i].PCISlotNumber = cloneInt64Ptr(in[i].PCISlotNumber)
+	}
+	return out
+}
+
+func cloneVMwareVirtualDiskDataSlice(in []VMwareVirtualDiskData) []VMwareVirtualDiskData {
+	if in == nil {
+		return nil
+	}
+	out := make([]VMwareVirtualDiskData, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].IDEPrimary = cloneBoolPtr(in[i].IDEPrimary)
+		out[i].IDEMaster = cloneBoolPtr(in[i].IDEMaster)
+		out[i].SCSIBus = cloneInt64Ptr(in[i].SCSIBus)
+		out[i].SCSIUnit = cloneInt64Ptr(in[i].SCSIUnit)
+		out[i].SATABus = cloneInt64Ptr(in[i].SATABus)
+		out[i].SATAUnit = cloneInt64Ptr(in[i].SATAUnit)
+		out[i].NVMEBus = cloneInt64Ptr(in[i].NVMEBus)
+		out[i].NVMEUnit = cloneInt64Ptr(in[i].NVMEUnit)
+		out[i].CapacityBytes = cloneInt64Ptr(in[i].CapacityBytes)
 	}
 	return out
 }

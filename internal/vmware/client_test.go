@@ -91,6 +91,22 @@ func TestClientCollectInventoryEnrichesSignals(t *testing.T) {
 	if !adapter.StartConnected || !adapter.AllowGuestControl || !adapter.WakeOnLANEnabled {
 		t.Fatalf("expected VM network adapter connection flags, got %+v", adapter)
 	}
+	if len(vm.VirtualDisks) != 1 {
+		t.Fatalf("expected one VM virtual disk, got %+v", vm.VirtualDisks)
+	}
+	disk := vm.VirtualDisks[0]
+	if disk.Disk != "2000" || disk.Label != "Hard disk 1" || disk.Type != "SCSI" {
+		t.Fatalf("unexpected VM virtual disk identity: %+v", disk)
+	}
+	if disk.SCSIBus == nil || *disk.SCSIBus != 0 || disk.SCSIUnit == nil || *disk.SCSIUnit != 1 {
+		t.Fatalf("expected VM virtual disk SCSI address, got bus=%+v unit=%+v", disk.SCSIBus, disk.SCSIUnit)
+	}
+	if disk.BackingType != "VMDK_FILE" || disk.VMDKFile != "[nvme-primary] app-01/app-01.vmdk" || disk.DatastoreName != "nvme-primary" {
+		t.Fatalf("unexpected VM virtual disk backing: %+v", disk)
+	}
+	if disk.CapacityBytes == nil || *disk.CapacityBytes != 107374182400 {
+		t.Fatalf("expected VM virtual disk capacity, got %+v", disk.CapacityBytes)
+	}
 	if vm.SnapshotCount != 2 {
 		t.Fatalf("vm snapshot count = %d, want 2", vm.SnapshotCount)
 	}
@@ -186,6 +202,9 @@ func TestClientCollectInventoryPreservesBaseInventoryWhenOptionalEnrichmentDegra
 	}
 	if len(vm.NetworkAdapters) != 1 || vm.NetworkAdapters[0].NetworkName != "VM Network" {
 		t.Fatalf("expected network adapter enrichment to survive degraded guest read, got %+v", vm.NetworkAdapters)
+	}
+	if len(vm.VirtualDisks) != 1 || vm.VirtualDisks[0].DatastoreName != "nvme-primary" {
+		t.Fatalf("expected virtual disk enrichment to survive degraded guest read, got %+v", vm.VirtualDisks)
 	}
 	if vm.RuntimeHostName != "esxi-01.lab.local" || vm.ResourcePoolName != "Tier 1" {
 		t.Fatalf("expected other topology enrichment to survive degraded guest read, got host=%q pool=%q", vm.RuntimeHostName, vm.ResourcePoolName)
@@ -393,6 +412,26 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 			"state":               "CONNECTED",
 			"start_connected":     true,
 			"allow_guest_control": true,
+		})
+	})
+	mux.HandleFunc("/api/vcenter/vm/vm-201/hardware/disk", func(w http.ResponseWriter, r *http.Request) {
+		requireAutomationSession(t, r)
+		writeJSON(w, []map[string]any{{"disk": "2000"}})
+	})
+	mux.HandleFunc("/api/vcenter/vm/vm-201/hardware/disk/2000", func(w http.ResponseWriter, r *http.Request) {
+		requireAutomationSession(t, r)
+		writeJSON(w, map[string]any{
+			"label": "Hard disk 1",
+			"type":  "SCSI",
+			"scsi": map[string]any{
+				"bus":  0,
+				"unit": 1,
+			},
+			"backing": map[string]any{
+				"type":      "VMDK_FILE",
+				"vmdk_file": "[nvme-primary] app-01/app-01.vmdk",
+			},
+			"capacity": 107374182400,
 		})
 	})
 

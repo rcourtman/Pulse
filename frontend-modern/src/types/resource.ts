@@ -861,6 +861,24 @@ export interface ResourceVMwareNetworkAdapter {
   uptV2CompatibilityEnabled?: boolean;
 }
 
+export interface ResourceVMwareVirtualDisk {
+  disk?: string;
+  label?: string;
+  type?: string;
+  idePrimary?: boolean;
+  ideMaster?: boolean;
+  scsiBus?: number;
+  scsiUnit?: number;
+  sataBus?: number;
+  sataUnit?: number;
+  nvmeBus?: number;
+  nvmeUnit?: number;
+  backingType?: string;
+  vmdkFile?: string;
+  datastoreName?: string;
+  capacityBytes?: number;
+}
+
 export interface ResourceVMwareMeta {
   connectionId?: string;
   connectionName?: string;
@@ -905,6 +923,7 @@ export interface ResourceVMwareMeta {
   currentSnapshotId?: string;
   snapshotTree?: ResourceVMwareSnapshot[];
   networkAdapters?: ResourceVMwareNetworkAdapter[];
+  virtualDisks?: ResourceVMwareVirtualDisk[];
 }
 
 export interface ResourceAvailabilityMeta {

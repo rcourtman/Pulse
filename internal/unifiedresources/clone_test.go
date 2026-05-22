@@ -152,6 +152,9 @@ func TestCloneResource_MutateParentBySource(t *testing.T) {
 func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 	createdAt := time.Date(2026, time.March, 30, 18, 15, 0, 0, time.UTC)
 	pciSlot := int64(160)
+	scsiBus := int64(0)
+	scsiUnit := int64(1)
+	diskCapacity := int64(107374182400)
 	original := &Resource{
 		ID: "vmware-vm-1",
 		VMware: &VMwareData{
@@ -171,6 +174,17 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 				MACAddress:    "00:50:56:aa:bb:cc",
 				PCISlotNumber: &pciSlot,
 			}},
+			VirtualDisks: []VMwareVirtualDiskData{{
+				Disk:          "2000",
+				Label:         "Hard disk 1",
+				Type:          "SCSI",
+				SCSIBus:       &scsiBus,
+				SCSIUnit:      &scsiUnit,
+				BackingType:   "VMDK_FILE",
+				VMDKFile:      "[nvme-primary] app-01/app-01.vmdk",
+				DatastoreName: "nvme-primary",
+				CapacityBytes: &diskCapacity,
+			}},
 		},
 	}
 
@@ -180,6 +194,9 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 	*cloned.VMware.SnapshotTree[0].CreatedAt = createdAt.Add(time.Hour)
 	cloned.VMware.NetworkAdapters[0].NetworkName = "mutated-network"
 	*cloned.VMware.NetworkAdapters[0].PCISlotNumber = 161
+	cloned.VMware.VirtualDisks[0].DatastoreName = "mutated-datastore"
+	*cloned.VMware.VirtualDisks[0].SCSIUnit = 2
+	*cloned.VMware.VirtualDisks[0].CapacityBytes = 1
 
 	if original.VMware.SnapshotTree[0].Name != "pre-upgrade" {
 		t.Fatalf("mutating cloned VMware snapshot should not affect original: %+v", original.VMware.SnapshotTree)
@@ -195,6 +212,15 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 	}
 	if *original.VMware.NetworkAdapters[0].PCISlotNumber != 160 {
 		t.Fatalf("mutating cloned VMware adapter PCI slot should not affect original: %+v", original.VMware.NetworkAdapters[0].PCISlotNumber)
+	}
+	if original.VMware.VirtualDisks[0].DatastoreName != "nvme-primary" {
+		t.Fatalf("mutating cloned VMware disk should not affect original: %+v", original.VMware.VirtualDisks)
+	}
+	if *original.VMware.VirtualDisks[0].SCSIUnit != 1 {
+		t.Fatalf("mutating cloned VMware disk unit should not affect original: %+v", original.VMware.VirtualDisks[0].SCSIUnit)
+	}
+	if *original.VMware.VirtualDisks[0].CapacityBytes != 107374182400 {
+		t.Fatalf("mutating cloned VMware disk capacity should not affect original: %+v", original.VMware.VirtualDisks[0].CapacityBytes)
 	}
 }
 

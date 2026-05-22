@@ -37,6 +37,7 @@ import type {
   Resource,
   ResourceVMwareNetworkAdapter,
   ResourceVMwareSnapshot,
+  ResourceVMwareVirtualDisk,
 } from '@/types/resource';
 import {
   filterVmwareVirtualMachines,
@@ -169,6 +170,39 @@ const networkSummary = (
   return { label: summary.label, title: title || summary.title };
 };
 
+const virtualDiskAddress = (disk: ResourceVMwareVirtualDisk): string => {
+  const type = (asTrimmedString(disk.type) || '').toUpperCase();
+  if (type === 'SCSI' && disk.scsiBus !== undefined && disk.scsiUnit !== undefined) {
+    return `SCSI ${disk.scsiBus}:${disk.scsiUnit}`;
+  }
+  if (type === 'SATA' && disk.sataBus !== undefined && disk.sataUnit !== undefined) {
+    return `SATA ${disk.sataBus}:${disk.sataUnit}`;
+  }
+  if (type === 'NVME' && disk.nvmeBus !== undefined && disk.nvmeUnit !== undefined) {
+    return `NVMe ${disk.nvmeBus}:${disk.nvmeUnit}`;
+  }
+  return type;
+};
+
+const virtualDiskTitle = (disk: ResourceVMwareVirtualDisk): string =>
+  [
+    asTrimmedString(disk.label) || asTrimmedString(disk.disk),
+    virtualDiskAddress(disk),
+    typeof disk.capacityBytes === 'number' && Number.isFinite(disk.capacityBytes)
+      ? formatBytes(disk.capacityBytes)
+      : '',
+    asTrimmedString(disk.datastoreName),
+    asTrimmedString(disk.vmdkFile),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+const virtualDiskCount = (disks: ResourceVMwareVirtualDisk[] | undefined): number =>
+  disks?.length ?? 0;
+
+const virtualDiskSummaryTitle = (disks: ResourceVMwareVirtualDisk[] | undefined): string =>
+  (disks ?? []).map(virtualDiskTitle).filter(Boolean).join(' | ');
+
 const formatGuest = (resource: Resource): { label: string; detail: string; title: string } => {
   const family = asTrimmedString(resource.vmware?.guestOsFamily);
   const host = asTrimmedString(resource.vmware?.guestHostname);
@@ -298,7 +332,7 @@ export const VsphereVirtualMachinesTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title="Virtual Machines" />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1520px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1580px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
@@ -346,6 +380,11 @@ export const VsphereVirtualMachinesTable: Component<{
                   <TableHead
                     class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
                   >
+                    Disks
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
+                  >
                     Snapshots
                   </TableHead>
                   <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[8%]`}>
@@ -354,11 +393,11 @@ export const VsphereVirtualMachinesTable: Component<{
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-	                <For each={groups()}>
-	                  {(group) => (
-	                    <>
-	                      <TableRow class="bg-surface-alt/70 text-[11px] font-semibold text-base-content">
-	                        <TableCell colSpan={12} class="px-2 py-1">
+                <For each={groups()}>
+                  {(group) => (
+                    <>
+                      <TableRow class="bg-surface-alt/70 text-[11px] font-semibold text-base-content">
+                        <TableCell colSpan={13} class="px-2 py-1">
                           <span>{group.label}</span>
                           <Show when={group.cluster}>
                             <span class="ml-2 rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted">
@@ -387,6 +426,8 @@ export const VsphereVirtualMachinesTable: Component<{
                           const datastores = createMemo(() =>
                             summarizeValues(meta()?.datastoreNames ?? [], '-', 1),
                           );
+                          const disks = () => virtualDiskCount(meta()?.virtualDisks);
+                          const diskTitle = () => virtualDiskSummaryTitle(meta()?.virtualDisks);
                           const snapshots = () =>
                             Math.max(
                               0,
@@ -529,6 +570,12 @@ export const VsphereVirtualMachinesTable: Component<{
                                 </TableCell>
                                 <TableCell
                                   class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
+                                  title={diskTitle()}
+                                >
+                                  {disks()}
+                                </TableCell>
+                                <TableCell
+                                  class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
                                   title={snapshotTitle()}
                                 >
                                   {snapshots()}
@@ -541,7 +588,7 @@ export const VsphereVirtualMachinesTable: Component<{
                                 resource={vm}
                                 open={isExpanded()}
                                 detailRowId={detailRowId()}
-                                colSpan={12}
+                                colSpan={13}
                                 resolveResourceLabel={resolveResourceLabel}
                                 onClose={() => drawer.close(vm)}
                               />

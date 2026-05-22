@@ -44,6 +44,19 @@ const makeVM = (overrides: Partial<Resource> & Pick<Resource, 'id'>): Resource =
         },
       ],
       datastoreNames: ['nvme-primary', 'backup-nfs'],
+      virtualDisks: [
+        {
+          disk: '2000',
+          label: 'Hard disk 1',
+          type: 'SCSI',
+          scsiBus: 0,
+          scsiUnit: 1,
+          backingType: 'VMDK_FILE',
+          vmdkFile: '[nvme-primary] warehouse-api-01/warehouse-api-01.vmdk',
+          datastoreName: 'nvme-primary',
+          capacityBytes: 107374182400,
+        },
+      ],
       snapshotTree: [
         {
           snapshot: 'snapshot-201',
@@ -98,6 +111,7 @@ describe('VsphereVirtualMachinesTable', () => {
     expect(within(table).getByText('Pool')).toBeInTheDocument();
     expect(within(table).getByText('Guest')).toBeInTheDocument();
     expect(within(table).getByText('Network')).toBeInTheDocument();
+    expect(within(table).getByText('Disks')).toBeInTheDocument();
     expect(within(table).getByText('Snapshots')).toBeInTheDocument();
     expect(within(table).getByText('Health')).toBeInTheDocument();
     expect(within(table).queryByRole('columnheader', { name: 'ID' })).not.toBeInTheDocument();
@@ -108,6 +122,9 @@ describe('VsphereVirtualMachinesTable', () => {
     expect(screen.getByText('warehouse-api-01.internal')).toBeInTheDocument();
     expect(screen.getByText('VM Network')).toBeInTheDocument();
     expect(screen.getByText('nvme-primary +1')).toBeInTheDocument();
+    expect(screen.getByTitle(/Hard disk 1 · SCSI 0:1 · 100 GB · nvme-primary/)).toHaveTextContent(
+      '1',
+    );
     expect(screen.getByText('Healthy')).toBeInTheDocument();
     expect(screen.getByTitle('pre-upgrade, post-upgrade (current)')).toHaveTextContent('2');
 
