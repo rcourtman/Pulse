@@ -22,9 +22,7 @@ import {
   type PlatformTableFilterOption,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
-  PlatformResourceDetailTableRow,
   createPlatformResourceDetailState,
-  createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { StatusIndicatorVariant } from '@/utils/status';
@@ -118,6 +116,169 @@ const formatStartedAt = (value: string | undefined): string => {
   });
 };
 
+type AlertDetailTone = 'default' | 'danger' | 'warning' | 'muted';
+
+type AlertDetailRow = {
+  label: string;
+  value: string;
+  title?: string;
+  tone?: AlertDetailTone;
+};
+
+type AlertDetailSection = {
+  label: string;
+  rows: AlertDetailRow[];
+};
+
+const detailDateTime = (value?: string): string | null => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const detailRow = (
+  label: string,
+  value?: string | null,
+  options: Pick<AlertDetailRow, 'title' | 'tone'> = {},
+): AlertDetailRow | null => {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed === '-') return null;
+  return { label, value: trimmed, ...options };
+};
+
+const compactDetailRows = (rows: Array<AlertDetailRow | null>): AlertDetailRow[] =>
+  rows.filter((row): row is AlertDetailRow => Boolean(row));
+
+const compactDetailSections = (sections: Array<AlertDetailSection | null>): AlertDetailSection[] =>
+  sections.filter((section): section is AlertDetailSection =>
+    Boolean(section && section.rows.length > 0),
+  );
+
+const alertTone = (severity: TrueNASIncidentRow['severityBucket']): AlertDetailTone => {
+  if (severity === 'critical') return 'danger';
+  if (severity === 'warning') return 'warning';
+  return 'muted';
+};
+
+const detailValueToneClass = (tone: AlertDetailTone | undefined): string => {
+  if (tone === 'danger') return 'text-rose-700 dark:text-rose-300';
+  if (tone === 'warning') return 'text-amber-700 dark:text-amber-300';
+  if (tone === 'muted') return 'text-muted';
+  return 'text-base-content';
+};
+
+const buildAlertDetailSections = (incident: TrueNASIncidentRow): AlertDetailSection[] => {
+  const parentName = incident.resource.parentName?.trim();
+  return compactDetailSections([
+    {
+      label: 'Alert',
+      rows: compactDetailRows([
+        detailRow('Severity', severityLabel(incident.severity), {
+          tone: alertTone(incident.severityBucket),
+        }),
+        detailRow('Summary', incident.summary),
+        detailRow('Label', incident.label),
+        detailRow('Code', formatCode(incident.code), { title: incident.code }),
+        detailRow('Category', formatCode(incident.category)),
+      ]),
+    },
+    {
+      label: 'Source',
+      rows: compactDetailRows([
+        detailRow('Provider', incident.source),
+        detailRow('Started', detailDateTime(incident.startedAt)),
+      ]),
+    },
+    {
+      label: 'Affected resource',
+      rows: compactDetailRows([
+        detailRow('Name', incident.resourceName),
+        detailRow('Type', formatResourceType(incident.resourceType)),
+        detailRow('Parent', parentName),
+        detailRow('Resource ID', incident.resourceId),
+      ]),
+    },
+    {
+      label: 'Action',
+      rows: compactDetailRows([detailRow('Recommended', incident.action)]),
+    },
+  ]);
+};
+
+const AlertDetailTable: Component<{ incident: TrueNASIncidentRow; onClose: () => void }> = (
+  props,
+) => {
+  const sections = () => buildAlertDetailSections(props.incident);
+
+  return (
+    <div
+      class="space-y-3"
+      data-testid="truenas-alert-detail"
+      data-truenas-alert-detail-for={props.incident.id}
+    >
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
+            Alert detail
+          </div>
+          <div class="mt-1 text-[10px] text-muted">
+            {severityLabel(props.incident.severity)} · {formatCode(props.incident.code)}
+          </div>
+        </div>
+        <button
+          type="button"
+          class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
+          onClick={props.onClose}
+        >
+          Close
+        </button>
+      </div>
+      <div class="overflow-hidden rounded border border-border bg-surface">
+        <Table class="w-full table-fixed text-[11px]">
+          <TableBody class="divide-y divide-border">
+            <For each={sections()}>
+              {(section) => (
+                <>
+                  <TableRow class="bg-surface-alt">
+                    <TableHead
+                      colspan={2}
+                      class="px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted"
+                    >
+                      {section.label}
+                    </TableHead>
+                  </TableRow>
+                  <For each={section.rows}>
+                    {(row) => (
+                      <TableRow>
+                        <TableCell class="w-[38%] px-2 py-1 align-top text-muted">
+                          {row.label}
+                        </TableCell>
+                        <TableCell
+                          class={`px-2 py-1 text-right align-top font-medium ${detailValueToneClass(row.tone)}`}
+                          title={row.title ?? row.value}
+                        >
+                          <span class="block truncate">{row.value}</span>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </For>
+                </>
+              )}
+            </For>
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+};
+
 export const TrueNASAlertsTable: Component<{
   incidents: TrueNASIncidentRow[];
   scope: readonly Resource[];
@@ -132,7 +293,6 @@ export const TrueNASAlertsTable: Component<{
     filter: filterTrueNASIncidents,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'truenas-alert-drawer' });
-  const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
   const filteredEmptyState = () => getAlertFilteredEmptyState('TrueNAS alerts', 'severity');
 
   return (
@@ -282,14 +442,28 @@ export const TrueNASAlertsTable: Component<{
                             </span>
                           </TableCell>
                         </TableRow>
-                        <PlatformResourceDetailTableRow
-                          resource={incident.resource}
-                          open={isExpanded()}
-                          detailRowId={detailRowId()}
-                          colSpan={6}
-                          resolveResourceLabel={resolveResourceLabel}
-                          onClose={() => drawer.close(incident)}
-                        />
+                        <Show when={isExpanded()}>
+                          <TableRow
+                            data-inline-detail-for={incident.id}
+                            data-truenas-alert-detail-row={incident.id}
+                          >
+                            <TableCell
+                              id={detailRowId()}
+                              colspan={6}
+                              class="border-b border-border bg-surface-alt p-0"
+                            >
+                              <div
+                                class="px-2 py-3 sm:px-4 sm:py-4"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <AlertDetailTable
+                                  incident={incident}
+                                  onClose={() => drawer.close(incident)}
+                                />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        </Show>
                       </>
                     );
                   }}
