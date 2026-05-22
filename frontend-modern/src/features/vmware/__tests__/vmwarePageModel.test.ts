@@ -26,10 +26,16 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
 
 describe('vmwarePageModel', () => {
   it('declares the vSphere section set', () => {
-    expect(VMWARE_TAB_SPECS.map((tab) => tab.id)).toEqual(['overview', 'storage', 'activity']);
+    expect(VMWARE_TAB_SPECS.map((tab) => tab.id)).toEqual([
+      'overview',
+      'storage',
+      'health',
+      'activity',
+    ]);
     expect(VMWARE_TAB_SPECS.map((tab) => tab.label)).toEqual([
       'Overview',
       'Datastores',
+      'Health',
       'Activity',
     ]);
   });

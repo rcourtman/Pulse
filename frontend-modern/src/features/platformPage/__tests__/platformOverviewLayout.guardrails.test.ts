@@ -199,6 +199,7 @@ describe('platform overview layout guardrails', () => {
     expect(truenasVirtualMachinesTableSource).toContain('md:min-w-[960px]');
     expect(vmwarePageSurfaceSource).toContain('<VsphereHostsTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereAlertsTable');
+    expect(vmwarePageSurfaceSource).toContain("activeTab() === 'health'");
     expect(vmwarePageSurfaceSource).toContain('<VsphereVirtualMachinesTable');
     expect(vmwarePageSurfaceSource).not.toContain('<WorkloadsSurface');
     expect(vmwarePageSurfaceSource).toContain('<VsphereDatastoresTable');

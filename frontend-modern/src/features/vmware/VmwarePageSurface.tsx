@@ -103,6 +103,14 @@ export function VmwarePageSurface() {
                 emptyDescription="Datastores appear here once the vCenter connection enumerates them."
               />
             </Show>
+            <Show when={activeTab() === 'health'}>
+              <VsphereAlertsTable
+                incidents={model().incidents}
+                emptyIcon={vmwareIcon()}
+                emptyTitle="No active vSphere health signals"
+                emptyDescription="vSphere triggered alarms and overall health signals appear here when vCenter reports them."
+              />
+            </Show>
             <Show when={activeTab() === 'activity'}>
               <Show
                 when={!activityTimeline.error || model().activity.length > 0}
@@ -154,14 +162,6 @@ function VmwareOverview(props: VmwareOverviewProps) {
         emptyDescription="Hosts appear here once the vCenter connection enumerates them."
         showToolbar={false}
       />
-      <Show when={props.model().incidents.length > 0}>
-        <VsphereAlertsTable
-          incidents={props.model().incidents}
-          emptyIcon={vmwareIcon()}
-          emptyTitle="No active vSphere health signals"
-          emptyDescription="vSphere triggered alarms and overall health signals appear here when vCenter reports them."
-        />
-      </Show>
       <VsphereVirtualMachinesTable
         vms={props.model().vms}
         scope={props.model().resources}

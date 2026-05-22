@@ -1,7 +1,7 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import type { Resource, ResourceChange, ResourceIncident, ResourceType } from '@/types/resource';
 
-export type VmwarePageTabId = 'overview' | 'storage' | 'activity';
+export type VmwarePageTabId = 'overview' | 'storage' | 'health' | 'activity';
 export type VmwareDatastoreStatusFilter =
   | 'all'
   | 'accessible'
@@ -34,6 +34,7 @@ export type VmwareTabSpec = {
 export const VMWARE_TAB_SPECS: readonly VmwareTabSpec[] = [
   { id: 'overview', label: 'Overview', path: '/vmware/overview' },
   { id: 'storage', label: 'Datastores', path: '/vmware/storage' },
+  { id: 'health', label: 'Health', path: '/vmware/health' },
   { id: 'activity', label: 'Activity', path: '/vmware/activity' },
 ] as const;
 
