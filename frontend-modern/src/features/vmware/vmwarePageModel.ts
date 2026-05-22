@@ -728,6 +728,17 @@ const vmwareVirtualMachineSearchHaystack = (resource: Resource): string =>
           .join(' '),
       )
       .join(' '),
+    [
+      resource.vmware?.tools?.runState,
+      resource.vmware?.tools?.versionStatus,
+      resource.vmware?.tools?.version,
+      resource.vmware?.tools?.installType,
+      resource.vmware?.tools?.upgradePolicy,
+      resource.vmware?.tools?.errorMessage,
+      resource.vmware?.tools?.guestRebootComponents?.join(' '),
+    ]
+      .filter(Boolean)
+      .join(' '),
     resource.vmware?.activeAlarmSummary,
     resource.vmware?.recentTaskSummary,
     ...(resource.tags ?? []),

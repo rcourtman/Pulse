@@ -335,6 +335,18 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
               capacityBytes: 107374182400,
             },
           ],
+          tools: {
+            runState: 'RUNNING',
+            versionStatus: 'CURRENT',
+            version: '12.4.0',
+            installType: 'OPEN_VM_TOOLS',
+            upgradePolicy: 'MANUAL',
+            autoUpdateSupported: true,
+            installAttemptCount: 1,
+            guestRebootRequested: true,
+            guestRebootComponents: ['drivers'],
+            guestRebootRequestTime: '2026-03-30T18:20:00Z',
+          },
           activeAlarmCount: 1,
           activeAlarmSummary: 'Host fan degraded',
           recentTaskCount: 1,
@@ -402,6 +414,18 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
             capacityBytes: 107374182400,
           },
         ],
+        tools: {
+          runState: 'RUNNING',
+          versionStatus: 'CURRENT',
+          version: '12.4.0',
+          installType: 'OPEN_VM_TOOLS',
+          upgradePolicy: 'MANUAL',
+          autoUpdateSupported: true,
+          installAttemptCount: 1,
+          guestRebootRequested: true,
+          guestRebootComponents: ['drivers'],
+          guestRebootRequestTime: '2026-03-30T18:20:00Z',
+        },
         activeAlarmCount: 1,
         activeAlarmSummary: 'Host fan degraded',
         recentTaskCount: 1,
@@ -438,7 +462,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByTestId('resource-vmware-details-section')).toBeInTheDocument();
     expect(
       getByText(
-        'Lab VC · Read-only vCenter context · 2 snapshots · 1 vNIC · 1 disk · 1 alarm · 1 task',
+        'Lab VC · Read-only vCenter context · 2 snapshots · 1 vNIC · 1 disk · Tools reboot requested · 1 alarm · 1 task',
       ),
     ).toBeInTheDocument();
     expect(queryByText('Compute Cluster')).toBeNull();
@@ -454,6 +478,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(within(section).getByText('State')).toBeInTheDocument();
     expect(within(section).getByText('Placement')).toBeInTheDocument();
     expect(within(section).getByText('Guest')).toBeInTheDocument();
+    expect(within(section).getByText('VMware Tools')).toBeInTheDocument();
     expect(within(section).getByText('Virtual disks')).toBeInTheDocument();
     expect(within(section).getByText('Network')).toBeInTheDocument();
     expect(within(section).getByText('Signals')).toBeInTheDocument();
@@ -462,6 +487,13 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(within(section).getByText('Compute Cluster')).toBeInTheDocument();
     expect(within(section).getByText('esxi-01.lab.local')).toBeInTheDocument();
     expect(within(section).getByText('ubuntu64Guest')).toBeInTheDocument();
+    expect(within(section).getByText('Run state')).toBeInTheDocument();
+    expect(within(section).getByText('Running')).toBeInTheDocument();
+    expect(within(section).getByText('Version status')).toBeInTheDocument();
+    expect(within(section).getByText('Current')).toBeInTheDocument();
+    expect(within(section).getByText('Open VM Tools')).toBeInTheDocument();
+    expect(within(section).getByText('Guest reboot')).toBeInTheDocument();
+    expect(within(section).getByText('Requested')).toBeInTheDocument();
     expect(within(section).getByText('Hard disk 1')).toBeInTheDocument();
     expect(within(section).getByText(/SCSI 0:1 · 100 GB · shared-vsan/)).toBeInTheDocument();
     expect(within(section).getByText('Network adapter 1')).toBeInTheDocument();

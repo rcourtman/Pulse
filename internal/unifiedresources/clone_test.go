@@ -155,6 +155,10 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 	scsiBus := int64(0)
 	scsiUnit := int64(1)
 	diskCapacity := int64(107374182400)
+	autoUpdateSupported := true
+	installAttempts := int64(1)
+	toolsVersionNumber := int64(12352)
+	guestRebootRequested := true
 	original := &Resource{
 		ID: "vmware-vm-1",
 		VMware: &VMwareData{
@@ -185,6 +189,16 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 				DatastoreName: "nvme-primary",
 				CapacityBytes: &diskCapacity,
 			}},
+			Tools: &VMwareToolsData{
+				AutoUpdateSupported:   &autoUpdateSupported,
+				InstallAttemptCount:   &installAttempts,
+				VersionNumber:         &toolsVersionNumber,
+				Version:               "12.4.0",
+				VersionStatus:         "CURRENT",
+				RunState:              "RUNNING",
+				GuestRebootRequested:  &guestRebootRequested,
+				GuestRebootComponents: []string{"tools"},
+			},
 		},
 	}
 
@@ -197,6 +211,9 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 	cloned.VMware.VirtualDisks[0].DatastoreName = "mutated-datastore"
 	*cloned.VMware.VirtualDisks[0].SCSIUnit = 2
 	*cloned.VMware.VirtualDisks[0].CapacityBytes = 1
+	*cloned.VMware.Tools.AutoUpdateSupported = false
+	*cloned.VMware.Tools.VersionNumber = 1
+	cloned.VMware.Tools.GuestRebootComponents[0] = "mutated"
 
 	if original.VMware.SnapshotTree[0].Name != "pre-upgrade" {
 		t.Fatalf("mutating cloned VMware snapshot should not affect original: %+v", original.VMware.SnapshotTree)
@@ -221,6 +238,15 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 	}
 	if *original.VMware.VirtualDisks[0].CapacityBytes != 107374182400 {
 		t.Fatalf("mutating cloned VMware disk capacity should not affect original: %+v", original.VMware.VirtualDisks[0].CapacityBytes)
+	}
+	if original.VMware.Tools.AutoUpdateSupported == nil || !*original.VMware.Tools.AutoUpdateSupported {
+		t.Fatalf("mutating cloned VMware Tools auto-update flag should not affect original: %+v", original.VMware.Tools.AutoUpdateSupported)
+	}
+	if original.VMware.Tools.VersionNumber == nil || *original.VMware.Tools.VersionNumber != 12352 {
+		t.Fatalf("mutating cloned VMware Tools version number should not affect original: %+v", original.VMware.Tools.VersionNumber)
+	}
+	if original.VMware.Tools.GuestRebootComponents[0] != "tools" {
+		t.Fatalf("mutating cloned VMware Tools reboot components should not affect original: %+v", original.VMware.Tools.GuestRebootComponents)
 	}
 }
 

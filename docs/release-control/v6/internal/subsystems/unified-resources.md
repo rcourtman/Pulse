@@ -1151,9 +1151,9 @@ That same topology contract now also has a concrete projection seam.
 `internal/vmware/provider.go` must preserve VMware placement and identity
 detail on the shared `vmware` facet only: hosts may carry datacenter,
 compute-resource, cluster, folder, and attached-datastore metadata; VMs may
-carry runtime-host, folder, resource-pool, datastore, guest-identity, and VM
-hardware Ethernet adapter plus VM hardware disk metadata plus canonical parentage to the owning
-ESXi `agent`; datastores may
+carry runtime-host, folder, resource-pool, datastore, guest-identity, VMware
+Tools runtime status, and VM hardware Ethernet adapter plus VM hardware disk
+metadata plus canonical parentage to the owning ESXi `agent`; datastores may
 carry datacenter/folder placement plus shared storage-node and workload
 consumer metadata through `storage.nodes`, `storage.consumerCount`, and
 `storage.topConsumers`. VMs may also carry VI JSON snapshot-tree context under
@@ -1169,6 +1169,13 @@ VM hardware disk context belongs under `vmware.virtualDisks`, including the
 vCenter disk id, label, host-bus adapter type, IDE/SCSI/SATA/NVMe placement,
 backing type, VMDK file path, bracketed datastore name when the VMDK path
 provides it, and capacity in bytes.
+VMware Tools context belongs under `vmware.tools`, including Tools run state,
+version status, version number/string, install type, upgrade policy,
+auto-update support, install-attempt count, last install error, guest reboot
+request flag, requesting components, and request time. Those fields are
+operator-facing monitoring facts from vCenter's VM Tools API; they must not be
+promoted into lifecycle control, recovery status, workload identity, or a
+separate guest-runtime resource.
 Those enrichments must remain subordinate to shared `agent`, `vm`, and
 `storage` resources rather than becoming a VMware-only topology graph, recovery
 artifact, canonical identity alias, or separate provider detail drawer

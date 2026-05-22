@@ -37,6 +37,7 @@ import type {
   Resource,
   ResourceVMwareNetworkAdapter,
   ResourceVMwareSnapshot,
+  ResourceVMwareTools,
   ResourceVMwareVirtualDisk,
 } from '@/types/resource';
 import {
@@ -249,6 +250,93 @@ const HealthPill: Component<{ resource: Resource }> = (props) => (
   </span>
 );
 
+const VMWARE_TOKEN_ACRONYMS: Record<string, string> = {
+  API: 'API',
+  OS: 'OS',
+  VM: 'VM',
+  VMDK: 'VMDK',
+};
+
+const titleizeToken = (value: string | undefined): string =>
+  (value || '')
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => {
+      const upper = part.toUpperCase();
+      return (
+        VMWARE_TOKEN_ACRONYMS[upper] ?? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+      );
+    })
+    .join(' ');
+
+const toolsTitle = (tools: ResourceVMwareTools | undefined): string =>
+  tools
+    ? [
+        tools.runState ? `Run state: ${titleizeToken(tools.runState)}` : '',
+        tools.versionStatus ? `Version status: ${titleizeToken(tools.versionStatus)}` : '',
+        asTrimmedString(tools.version),
+        tools.installType ? titleizeToken(tools.installType) : '',
+        tools.upgradePolicy ? `Policy: ${titleizeToken(tools.upgradePolicy)}` : '',
+        tools.guestRebootRequested ? 'Guest reboot requested' : '',
+      ]
+        .filter(Boolean)
+        .join(' | ')
+    : '';
+
+const toolsNeedsAttention = (tools: ResourceVMwareTools | undefined): boolean => {
+  const runState = normalizeToken(tools?.runState);
+  const versionStatus = normalizeToken(tools?.versionStatus);
+  return Boolean(
+    tools?.guestRebootRequested ||
+    (runState && !['running', 'started'].includes(runState)) ||
+    [
+      'notinstalled',
+      'tooold',
+      'toonew',
+      'old',
+      'blacklisted',
+      'unsupported',
+      'supportedold',
+    ].includes(versionStatus),
+  );
+};
+
+const toolsLabel = (tools: ResourceVMwareTools | undefined): string => {
+  if (!tools) return 'Unknown';
+  if (tools.guestRebootRequested) return 'Reboot';
+  const runState = normalizeToken(tools.runState);
+  const versionStatus = normalizeToken(tools.versionStatus);
+  if (['notinstalled'].includes(versionStatus)) return 'Missing';
+  if (['tooold', 'old', 'supportedold'].includes(versionStatus)) return 'Old';
+  if (runState && !['running', 'started'].includes(runState)) return titleizeToken(tools.runState);
+  if (versionStatus && !['current', 'ok'].includes(versionStatus)) {
+    return titleizeToken(tools.versionStatus);
+  }
+  if (runState) return titleizeToken(tools.runState);
+  return 'Unknown';
+};
+
+const toolsPillClass = (tools: ResourceVMwareTools | undefined): string => {
+  if (toolsNeedsAttention(tools)) {
+    return 'border-amber-300/50 bg-amber-500/10 text-amber-700 dark:text-amber-300';
+  }
+  if (normalizeToken(tools?.runState) === 'running') {
+    return 'border-emerald-300/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+  }
+  return 'border-border bg-surface-alt text-muted';
+};
+
+const ToolsPill: Component<{ tools: ResourceVMwareTools | undefined }> = (props) => (
+  <span
+    class={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${toolsPillClass(
+      props.tools,
+    )}`}
+    title={toolsTitle(props.tools)}
+  >
+    {toolsLabel(props.tools)}
+  </span>
+);
+
 const vmGroupKey = (resource: Resource): string =>
   asTrimmedString(resource.vmware?.runtimeHostName) ||
   asTrimmedString(resource.parentName) ||
@@ -332,7 +420,7 @@ export const VsphereVirtualMachinesTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title="Virtual Machines" />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1580px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1660px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
@@ -387,6 +475,9 @@ export const VsphereVirtualMachinesTable: Component<{
                   >
                     Snapshots
                   </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[7%]`}>
+                    Tools
+                  </TableHead>
                   <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[8%]`}>
                     Health
                   </TableHead>
@@ -397,7 +488,7 @@ export const VsphereVirtualMachinesTable: Component<{
                   {(group) => (
                     <>
                       <TableRow class="bg-surface-alt/70 text-[11px] font-semibold text-base-content">
-                        <TableCell colSpan={13} class="px-2 py-1">
+                        <TableCell colSpan={14} class="px-2 py-1">
                           <span>{group.label}</span>
                           <Show when={group.cluster}>
                             <span class="ml-2 rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted">
@@ -581,6 +672,9 @@ export const VsphereVirtualMachinesTable: Component<{
                                   {snapshots()}
                                 </TableCell>
                                 <TableCell class={getPlatformTableCellClassForKind('badge')}>
+                                  <ToolsPill tools={meta()?.tools} />
+                                </TableCell>
+                                <TableCell class={getPlatformTableCellClassForKind('badge')}>
                                   <HealthPill resource={vm} />
                                 </TableCell>
                               </TableRow>
@@ -588,7 +682,7 @@ export const VsphereVirtualMachinesTable: Component<{
                                 resource={vm}
                                 open={isExpanded()}
                                 detailRowId={detailRowId()}
-                                colSpan={13}
+                                colSpan={14}
                                 resolveResourceLabel={resolveResourceLabel}
                                 onClose={() => drawer.close(vm)}
                               />

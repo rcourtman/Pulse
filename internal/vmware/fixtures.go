@@ -210,6 +210,7 @@ func defaultFixturesPrimaryCluster(
 				CurrentSnapshotID:   "snapshot-201",
 				NetworkAdapters:     fixtureVMNetworkAdapters("vm-201", "VM Network", true),
 				VirtualDisks:        fixtureVMVirtualDisks("vm-201", "nvme-primary", 128_000_000_000),
+				Tools:               fixtureVMTools("POWERED_ON", "green"),
 				SnapshotTree: []InventoryVMSnapshot{{
 					Snapshot:    "snapshot-201",
 					Name:        "pre-deploy-checkpoint",
@@ -268,6 +269,7 @@ func defaultFixturesPrimaryCluster(
 				CurrentSnapshotID:   "snapshot-213",
 				NetworkAdapters:     fixtureVMNetworkAdapters("vm-202", "Database Network", true),
 				VirtualDisks:        fixtureVMVirtualDisks("vm-202", "nvme-primary", 256_000_000_000),
+				Tools:               fixtureVMTools("POWERED_ON", "yellow"),
 				SnapshotTree: []InventoryVMSnapshot{{
 					Snapshot:  "snapshot-211",
 					Name:      "baseline",
@@ -344,6 +346,7 @@ func defaultFixturesPrimaryCluster(
 				SnapshotCount:       1,
 				NetworkAdapters:     fixtureVMNetworkAdapters("vm-203", "Web Network", true),
 				VirtualDisks:        fixtureVMVirtualDisks("vm-203", "analytics-vsan", 96_000_000_000),
+				Tools:               fixtureVMTools("POWERED_ON", "green"),
 				Metrics: &InventoryMetrics{
 					CPUPercent:              float64Ptr(22.1),
 					MemoryPercent:           float64Ptr(51.2),
@@ -384,6 +387,7 @@ func defaultFixturesPrimaryCluster(
 				SnapshotCount:       2,
 				NetworkAdapters:     fixtureVMNetworkAdapters("vm-204", "Platform Network", true),
 				VirtualDisks:        fixtureVMVirtualDisks("vm-204", "analytics-vsan", 192_000_000_000),
+				Tools:               fixtureVMTools("POWERED_ON", "green"),
 				Metrics: &InventoryMetrics{
 					CPUPercent:              float64Ptr(27.8),
 					MemoryPercent:           float64Ptr(59.6),
@@ -424,6 +428,7 @@ func defaultFixturesPrimaryCluster(
 				SnapshotCount:       0,
 				NetworkAdapters:     fixtureVMNetworkAdapters("vm-205", "Utility Network", true),
 				VirtualDisks:        fixtureVMVirtualDisks("vm-205", "analytics-vsan", 80_000_000_000),
+				Tools:               fixtureVMTools("POWERED_ON", "green"),
 				Metrics: &InventoryMetrics{
 					CPUPercent:              float64Ptr(16.8),
 					MemoryPercent:           float64Ptr(46.1),
@@ -462,6 +467,7 @@ func defaultFixturesPrimaryCluster(
 				GuestIPAddresses:    []string{},
 				OverallStatus:       "gray",
 				VirtualDisks:        fixtureVMVirtualDisks("vm-206", "archive-tier", 64_000_000_000),
+				Tools:               fixtureVMTools("POWERED_OFF", "gray"),
 			},
 		},
 		Datastores: []InventoryDatastore{
@@ -729,6 +735,7 @@ func appendEdgeClusterFixtures(
 			OverallStatus:       v.Status,
 			NetworkAdapters:     fixtureVMNetworkAdapters(v.ID, edgeVMNetworkName(v.Tier), v.PowerState == "POWERED_ON"),
 			VirtualDisks:        fixtureVMVirtualDisks(v.ID, firstNonEmptyTrimmed(dsNames...), int64(v.MemMiB)*1024*1024*4),
+			Tools:               fixtureVMTools(v.PowerState, v.Status),
 		}
 		if v.PowerState == "POWERED_ON" {
 			vm.Metrics = &InventoryMetrics{
@@ -853,6 +860,32 @@ func fixtureVMVirtualDisks(vmID, datastoreName string, capacityBytes int64) []In
 		DatastoreName: datastoreName,
 		CapacityBytes: int64Ptr(capacityBytes),
 	}}
+}
+
+func fixtureVMTools(powerState, status string) *InventoryVMTools {
+	autoUpdateSupported := true
+	versionNumber := int64(12352)
+	runState := "RUNNING"
+	versionStatus := "CURRENT"
+	if powerState != "POWERED_ON" {
+		runState = "NOT_RUNNING"
+	}
+	if status == "yellow" {
+		versionStatus = "SUPPORTED_OLD"
+	}
+	return &InventoryVMTools{
+		AutoUpdateSupported: boolPointer(autoUpdateSupported),
+		VersionNumber:       &versionNumber,
+		Version:             "12.4.0",
+		UpgradePolicy:       "MANUAL",
+		VersionStatus:       versionStatus,
+		InstallType:         "OPEN_VM_TOOLS",
+		RunState:            runState,
+	}
+}
+
+func boolPointer(value bool) *bool {
+	return &value
 }
 
 func fixtureVMMACAddress(vmID string) string {

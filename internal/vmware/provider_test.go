@@ -152,6 +152,19 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 				DatastoreName: "nvme-primary",
 				CapacityBytes: int64Ptr(107374182400),
 			}},
+			Tools: &InventoryVMTools{
+				AutoUpdateSupported:    boolPtr(true),
+				InstallAttemptCount:    int64Ptr(1),
+				VersionNumber:          int64Ptr(12352),
+				Version:                "12.4.0",
+				UpgradePolicy:          "MANUAL",
+				VersionStatus:          "CURRENT",
+				InstallType:            "OPEN_VM_TOOLS",
+				RunState:               "RUNNING",
+				GuestRebootRequested:   boolPtr(true),
+				GuestRebootComponents:  []string{"drivers"},
+				GuestRebootRequestTime: "2026-03-30T18:20:00Z",
+			},
 		}},
 		Datastores: []InventoryDatastore{{
 			Datastore:          "datastore-11",
@@ -272,6 +285,15 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 	}
 	if got := vmRecord.Resource.VMware.VirtualDisks[0].CapacityBytes; got == nil || *got != 107374182400 {
 		t.Fatalf("vm virtual disk capacity = %+v, want 107374182400", got)
+	}
+	if got := vmRecord.Resource.VMware.Tools; got == nil || got.RunState != "RUNNING" || got.VersionStatus != "CURRENT" || got.Version != "12.4.0" {
+		t.Fatalf("vm tools projection = %+v, want running/current 12.4.0", got)
+	}
+	if got := vmRecord.Resource.VMware.Tools.GuestRebootRequested; got == nil || !*got {
+		t.Fatalf("vm tools guest reboot requested = %+v, want true", got)
+	}
+	if got := vmRecord.Resource.VMware.Tools.GuestRebootComponents; len(got) != 1 || got[0] != "drivers" {
+		t.Fatalf("vm tools reboot components = %+v, want [drivers]", got)
 	}
 	if got := vmRecord.Resource.ParentName; got != "esxi-01.lab.local" {
 		t.Fatalf("vm parent name = %q, want esxi-01.lab.local", got)

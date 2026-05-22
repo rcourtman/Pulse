@@ -3,6 +3,7 @@ import type {
   ResourceVMwareMeta,
   ResourceVMwareNetworkAdapter,
   ResourceVMwareSnapshot,
+  ResourceVMwareTools,
   ResourceVMwareVirtualDisk,
 } from '@/types/resource';
 
@@ -15,7 +16,7 @@ export type ResourceDetailDrawerVMwareRow = {
 };
 
 export type ResourceDetailDrawerVMwareSection = {
-  id: 'state' | 'placement' | 'guest' | 'disks' | 'network' | 'signals' | 'snapshots';
+  id: 'state' | 'placement' | 'guest' | 'tools' | 'disks' | 'network' | 'signals' | 'snapshots';
   label: string;
   rows: ResourceDetailDrawerVMwareRow[];
 };
@@ -28,6 +29,31 @@ const formatCount = (count: number, label: string): string =>
 const formatBoolLabel = (value?: boolean): string => {
   if (value === undefined) return '';
   return value ? 'Yes' : 'No';
+};
+
+const VMWARE_ENUM_ACRONYMS: Record<string, string> = {
+  API: 'API',
+  BIOS: 'BIOS',
+  CPU: 'CPU',
+  IP: 'IP',
+  OS: 'OS',
+  VM: 'VM',
+  VMDK: 'VMDK',
+};
+
+const formatEnumLabel = (value?: string | null): string => {
+  const normalized = asTrimmedString(value);
+  if (!normalized) return '';
+  return normalized
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => {
+      const upper = part.toUpperCase();
+      return (
+        VMWARE_ENUM_ACRONYMS[upper] ?? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+      );
+    })
+    .join(' ');
 };
 
 const formatCapacityBytes = (value?: number): string => {
@@ -145,6 +171,95 @@ const networkAdapterRows = (
     }))
     .filter((row) => row.value);
 
+const filterNonEmptyRows = (
+  rows: ResourceDetailDrawerVMwareRow[],
+): ResourceDetailDrawerVMwareRow[] => rows.filter((row) => row.value);
+
+const getWarningTone = (hasWarning: boolean): ResourceDetailDrawerVMwareRowTone =>
+  hasWarning ? 'warning' : 'default';
+
+const toolsSummary = (tools?: ResourceVMwareTools): string => {
+  if (!tools) return '';
+  if (tools.guestRebootRequested) return 'Tools reboot requested';
+  const versionStatus = asTrimmedString(tools.versionStatus);
+  if (versionStatus && !['CURRENT', 'OK'].includes(versionStatus.toUpperCase())) {
+    return `Tools ${formatEnumLabel(versionStatus).toLowerCase()}`;
+  }
+  const runState = asTrimmedString(tools.runState);
+  if (runState) return `Tools ${formatEnumLabel(runState).toLowerCase()}`;
+  return '';
+};
+
+const toolsRows = (tools?: ResourceVMwareTools): ResourceDetailDrawerVMwareRow[] => {
+  if (!tools) return [];
+  return filterNonEmptyRows([
+    {
+      label: 'Run state',
+      value: formatEnumLabel(tools.runState),
+      tone: getWarningTone(
+        Boolean(asTrimmedString(tools.runState)) &&
+          !['RUNNING', 'STARTED'].includes(asTrimmedString(tools.runState).toUpperCase()),
+      ),
+    },
+    {
+      label: 'Version status',
+      value: formatEnumLabel(tools.versionStatus),
+      tone: getWarningTone(
+        Boolean(asTrimmedString(tools.versionStatus)) &&
+          !['CURRENT', 'OK'].includes(asTrimmedString(tools.versionStatus).toUpperCase()),
+      ),
+    },
+    {
+      label: 'Version',
+      value: asTrimmedString(tools.version),
+    },
+    {
+      label: 'Install type',
+      value: formatEnumLabel(tools.installType),
+    },
+    {
+      label: 'Upgrade policy',
+      value: formatEnumLabel(tools.upgradePolicy),
+    },
+    {
+      label: 'Auto update supported',
+      value: formatBoolLabel(tools.autoUpdateSupported),
+    },
+    {
+      label: 'Install attempts',
+      value:
+        typeof tools.installAttemptCount === 'number' && Number.isFinite(tools.installAttemptCount)
+          ? String(tools.installAttemptCount)
+          : '',
+    },
+    {
+      label: 'Guest reboot',
+      value:
+        tools.guestRebootRequested === undefined
+          ? ''
+          : tools.guestRebootRequested
+            ? 'Requested'
+            : 'Not requested',
+      tone: getWarningTone(tools.guestRebootRequested === true),
+    },
+    {
+      label: 'Reboot components',
+      value: (tools.guestRebootComponents ?? []).filter(Boolean).join(', '),
+      tone: getWarningTone((tools.guestRebootComponents ?? []).length > 0),
+    },
+    {
+      label: 'Reboot requested at',
+      value: formatSnapshotDate(tools.guestRebootRequestTime),
+      tone: getWarningTone(Boolean(tools.guestRebootRequestTime)),
+    },
+    {
+      label: 'Last install error',
+      value: asTrimmedString(tools.errorMessage),
+      tone: 'warning',
+    },
+  ]);
+};
+
 const virtualDiskDisplayName = (disk: ResourceVMwareVirtualDisk): string =>
   asTrimmedString(disk.label) || asTrimmedString(disk.disk) || 'Virtual disk';
 
@@ -219,19 +334,12 @@ const buildSignalValue = (count: number | undefined, label: string, summary?: st
 
 const hasRows = (rows: ResourceDetailDrawerVMwareRow[]): boolean => rows.length > 0;
 
-const filterNonEmptyRows = (
-  rows: ResourceDetailDrawerVMwareRow[],
-): ResourceDetailDrawerVMwareRow[] => rows.filter((row) => row.value);
-
 const getStatusTone = (status?: string | null): ResourceDetailDrawerVMwareRowTone => {
   const normalized = asTrimmedString(status).toLowerCase();
   if (normalized === 'red') return 'warning';
   if (normalized) return 'accent';
   return 'default';
 };
-
-const getWarningTone = (hasWarning: boolean): ResourceDetailDrawerVMwareRowTone =>
-  hasWarning ? 'warning' : 'default';
 
 const getAccentTone = (hasAccent: boolean): ResourceDetailDrawerVMwareRowTone =>
   hasAccent ? 'accent' : 'default';
@@ -263,6 +371,10 @@ export const buildVMwareDetailsSummary = (
   const virtualDiskCount = vmware.virtualDisks?.length ?? 0;
   if (resourceType === 'vm' && virtualDiskCount > 0) {
     parts.push(formatCount(virtualDiskCount, 'disk'));
+  }
+  const tools = resourceType === 'vm' ? toolsSummary(vmware.tools) : '';
+  if (tools) {
+    parts.push(tools);
   }
   if ((vmware.activeAlarmCount ?? 0) > 0) {
     parts.push(formatCount(vmware.activeAlarmCount ?? 0, 'alarm'));
@@ -391,6 +503,7 @@ export const buildVMwareDetailSections = (
   ]);
 
   const networkRows = resourceType === 'vm' ? networkAdapterRows(vmware.networkAdapters) : [];
+  const vmwareToolsRows = resourceType === 'vm' ? toolsRows(vmware.tools) : [];
   const diskRows = resourceType === 'vm' ? virtualDiskRows(vmware.virtualDisks) : [];
 
   const signalRows = filterNonEmptyRows([
@@ -427,6 +540,7 @@ export const buildVMwareDetailSections = (
     { id: 'state', label: 'State', rows: stateRows },
     { id: 'placement', label: 'Placement', rows: placementRows },
     { id: 'guest', label: 'Guest', rows: guestRows },
+    { id: 'tools', label: 'VMware Tools', rows: vmwareToolsRows },
     { id: 'disks', label: 'Virtual disks', rows: diskRows },
     { id: 'network', label: 'Network', rows: networkRows },
     { id: 'signals', label: 'Signals', rows: signalRows },

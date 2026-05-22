@@ -270,6 +270,7 @@ func cloneVMwareData(in *VMwareData) *VMwareData {
 	out.SnapshotTree = cloneVMwareSnapshotDataSlice(in.SnapshotTree)
 	out.NetworkAdapters = cloneVMwareNetworkAdapterDataSlice(in.NetworkAdapters)
 	out.VirtualDisks = cloneVMwareVirtualDiskDataSlice(in.VirtualDisks)
+	out.Tools = cloneVMwareToolsData(in.Tools)
 	return &out
 }
 
@@ -316,6 +317,19 @@ func cloneVMwareVirtualDiskDataSlice(in []VMwareVirtualDiskData) []VMwareVirtual
 		out[i].CapacityBytes = cloneInt64Ptr(in[i].CapacityBytes)
 	}
 	return out
+}
+
+func cloneVMwareToolsData(in *VMwareToolsData) *VMwareToolsData {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.AutoUpdateSupported = cloneBoolPtr(in.AutoUpdateSupported)
+	out.InstallAttemptCount = cloneInt64Ptr(in.InstallAttemptCount)
+	out.VersionNumber = cloneInt64Ptr(in.VersionNumber)
+	out.GuestRebootRequested = cloneBoolPtr(in.GuestRebootRequested)
+	out.GuestRebootComponents = cloneStringSlice(in.GuestRebootComponents)
+	return &out
 }
 
 func clonePMGRelayDomainMetaSlice(in []PMGRelayDomainMeta) []PMGRelayDomainMeta {

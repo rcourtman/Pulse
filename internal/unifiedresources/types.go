@@ -1039,6 +1039,7 @@ type VMwareData struct {
 	SnapshotTree        []VMwareSnapshotData       `json:"snapshotTree,omitempty"`
 	NetworkAdapters     []VMwareNetworkAdapterData `json:"networkAdapters,omitempty"`
 	VirtualDisks        []VMwareVirtualDiskData    `json:"virtualDisks,omitempty"`
+	Tools               *VMwareToolsData           `json:"tools,omitempty"`
 }
 
 // VMwareSnapshotData contains one node in the vSphere VM snapshot tree. It is
@@ -1099,6 +1100,22 @@ type VMwareVirtualDiskData struct {
 	VMDKFile      string `json:"vmdkFile,omitempty"`
 	DatastoreName string `json:"datastoreName,omitempty"`
 	CapacityBytes *int64 `json:"capacityBytes,omitempty"`
+}
+
+// VMwareToolsData contains VMware Tools runtime facts as read-only VM context.
+type VMwareToolsData struct {
+	AutoUpdateSupported    *bool    `json:"autoUpdateSupported,omitempty"`
+	InstallAttemptCount    *int64   `json:"installAttemptCount,omitempty"`
+	ErrorMessage           string   `json:"errorMessage,omitempty"`
+	VersionNumber          *int64   `json:"versionNumber,omitempty"`
+	Version                string   `json:"version,omitempty"`
+	UpgradePolicy          string   `json:"upgradePolicy,omitempty"`
+	VersionStatus          string   `json:"versionStatus,omitempty"`
+	InstallType            string   `json:"installType,omitempty"`
+	RunState               string   `json:"runState,omitempty"`
+	GuestRebootRequested   *bool    `json:"guestRebootRequested,omitempty"`
+	GuestRebootComponents  []string `json:"guestRebootComponents,omitempty"`
+	GuestRebootRequestTime string   `json:"guestRebootRequestTime,omitempty"`
 }
 
 // TrueNASData contains TrueNAS-specific metadata for TrueNAS resources.

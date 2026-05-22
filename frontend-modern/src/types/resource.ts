@@ -879,6 +879,21 @@ export interface ResourceVMwareVirtualDisk {
   capacityBytes?: number;
 }
 
+export interface ResourceVMwareTools {
+  autoUpdateSupported?: boolean;
+  installAttemptCount?: number;
+  errorMessage?: string;
+  versionNumber?: number;
+  version?: string;
+  upgradePolicy?: string;
+  versionStatus?: string;
+  installType?: string;
+  runState?: string;
+  guestRebootRequested?: boolean;
+  guestRebootComponents?: string[];
+  guestRebootRequestTime?: string | number;
+}
+
 export interface ResourceVMwareMeta {
   connectionId?: string;
   connectionName?: string;
@@ -924,6 +939,7 @@ export interface ResourceVMwareMeta {
   snapshotTree?: ResourceVMwareSnapshot[];
   networkAdapters?: ResourceVMwareNetworkAdapter[];
   virtualDisks?: ResourceVMwareVirtualDisk[];
+  tools?: ResourceVMwareTools;
 }
 
 export interface ResourceAvailabilityMeta {

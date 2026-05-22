@@ -296,6 +296,19 @@ describe('Resource Helper Functions', () => {
             capacityBytes: 107374182400,
           },
         ],
+        tools: {
+          runState: 'RUNNING',
+          versionStatus: 'CURRENT',
+          version: '12.4.0',
+          versionNumber: 12352,
+          installType: 'OPEN_VM_TOOLS',
+          upgradePolicy: 'MANUAL',
+          autoUpdateSupported: true,
+          installAttemptCount: 1,
+          guestRebootRequested: true,
+          guestRebootComponents: ['drivers'],
+          guestRebootRequestTime: '2026-03-30T18:20:00Z',
+        },
         snapshotTree: [
           {
             snapshot: 'snapshot-101',
@@ -327,6 +340,10 @@ describe('Resource Helper Functions', () => {
       expect(vmware.networkAdapters?.[0]?.networkName).toBe('VM Network');
       expect(vmware.virtualDisks?.[0]?.vmdkFile).toBe('[primary-vmfs] app-01/app-01.vmdk');
       expect(vmware.virtualDisks?.[0]?.capacityBytes).toBe(107374182400);
+      expect(vmware.tools?.runState).toBe('RUNNING');
+      expect(vmware.tools?.versionStatus).toBe('CURRENT');
+      expect(vmware.tools?.version).toBe('12.4.0');
+      expect(vmware.tools?.guestRebootComponents).toEqual(['drivers']);
       expect(vmware.snapshotTree?.[0]?.children?.[0]?.current).toBe(true);
     });
   });

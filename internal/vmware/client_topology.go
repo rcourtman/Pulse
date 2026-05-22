@@ -24,6 +24,31 @@ type vcenterVMGuestIdentity struct {
 	IPAddr   string `json:"ip_address"`
 }
 
+type vcenterVMLocalizableMessage struct {
+	ID             string `json:"id"`
+	DefaultMessage string `json:"default_message"`
+	Localized      string `json:"localized"`
+}
+
+type vcenterVMToolsGuestRebootStatus struct {
+	RebootRequested      *bool    `json:"reboot_requested"`
+	RequestingComponents []string `json:"requesting_components"`
+	RequestTimestamp     string   `json:"request_timestamp"`
+}
+
+type vcenterVMToolsInfo struct {
+	AutoUpdateSupported *bool                            `json:"auto_update_supported"`
+	InstallAttemptCount *int64                           `json:"install_attempt_count"`
+	Error               *vcenterVMLocalizableMessage     `json:"error"`
+	VersionNumber       *int64                           `json:"version_number"`
+	Version             string                           `json:"version"`
+	UpgradePolicy       string                           `json:"upgrade_policy"`
+	VersionStatus       string                           `json:"version_status"`
+	InstallType         string                           `json:"install_type"`
+	RunState            string                           `json:"run_state"`
+	GuestRebootStatus   *vcenterVMToolsGuestRebootStatus `json:"guest_reboot_status"`
+}
+
 type vcenterVMHardwareEthernetSummary struct {
 	NIC string `json:"nic"`
 }
@@ -333,6 +358,14 @@ func (c *Client) enrichVMTopology(
 		}
 	}
 
+	tools, err := c.collectVMTools(ctx, automationSessionID, vm.VM)
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "vm", vm.VM, err); ok {
+		recordIssue(issue)
+	} else if err != nil && !isAutomationNotFound(err) && !isAutomationUnavailable(err) {
+		return vm, nil, err
+	}
+	vm.Tools = tools
+
 	networkAdapters, err := c.collectVMEthernetAdapters(ctx, automationSessionID, vm.VM)
 	if issue, ok := classifyInventoryEnrichmentIssue("topology", "vm", vm.VM, err); ok {
 		recordIssue(issue)
@@ -524,6 +557,39 @@ func (c *Client) collectVMGuestIdentity(
 	return &payload, nil
 }
 
+func (c *Client) collectVMTools(
+	ctx context.Context,
+	automationSessionID string,
+	vmID string,
+) (*InventoryVMTools, error) {
+	vmID = strings.TrimSpace(vmID)
+	if vmID == "" || strings.TrimSpace(automationSessionID) == "" {
+		return nil, nil
+	}
+	var payload vcenterVMToolsInfo
+	path := fmt.Sprintf("/api/vcenter/vm/%s/tools", url.PathEscape(vmID))
+	if err := c.getAutomationJSON(ctx, automationSessionID, path, "vm tools", &payload); err != nil {
+		return nil, err
+	}
+	tools := &InventoryVMTools{
+		AutoUpdateSupported: cloneBoolPointer(payload.AutoUpdateSupported),
+		InstallAttemptCount: cloneInt64Pointer(payload.InstallAttemptCount),
+		ErrorMessage:        localizableMessageText(payload.Error),
+		VersionNumber:       cloneInt64Pointer(payload.VersionNumber),
+		Version:             strings.TrimSpace(payload.Version),
+		UpgradePolicy:       strings.TrimSpace(payload.UpgradePolicy),
+		VersionStatus:       strings.TrimSpace(payload.VersionStatus),
+		InstallType:         strings.TrimSpace(payload.InstallType),
+		RunState:            strings.TrimSpace(payload.RunState),
+	}
+	if payload.GuestRebootStatus != nil {
+		tools.GuestRebootRequested = cloneBoolPointer(payload.GuestRebootStatus.RebootRequested)
+		tools.GuestRebootComponents = cloneStringSlice(payload.GuestRebootStatus.RequestingComponents)
+		tools.GuestRebootRequestTime = strings.TrimSpace(payload.GuestRebootStatus.RequestTimestamp)
+	}
+	return tools, nil
+}
+
 func (c *Client) collectVMEthernetAdapters(
 	ctx context.Context,
 	automationSessionID string,
@@ -691,6 +757,13 @@ func vmdkDatastoreName(vmdkFile string) string {
 		return ""
 	}
 	return strings.TrimSpace(value[1:end])
+}
+
+func localizableMessageText(message *vcenterVMLocalizableMessage) string {
+	if message == nil {
+		return ""
+	}
+	return firstNonEmptyTrimmed(message.Localized, message.DefaultMessage, message.ID)
 }
 
 func (c *Client) collectEntityReference(

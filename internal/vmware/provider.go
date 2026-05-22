@@ -98,6 +98,23 @@ type InventoryVMVirtualDisk struct {
 	CapacityBytes *int64 `json:"capacity_bytes,omitempty"`
 }
 
+// InventoryVMTools preserves VMware Tools runtime facts as read-only VM
+// context.
+type InventoryVMTools struct {
+	AutoUpdateSupported    *bool    `json:"auto_update_supported,omitempty"`
+	InstallAttemptCount    *int64   `json:"install_attempt_count,omitempty"`
+	ErrorMessage           string   `json:"error_message,omitempty"`
+	VersionNumber          *int64   `json:"version_number,omitempty"`
+	Version                string   `json:"version,omitempty"`
+	UpgradePolicy          string   `json:"upgrade_policy,omitempty"`
+	VersionStatus          string   `json:"version_status,omitempty"`
+	InstallType            string   `json:"install_type,omitempty"`
+	RunState               string   `json:"run_state,omitempty"`
+	GuestRebootRequested   *bool    `json:"guest_reboot_requested,omitempty"`
+	GuestRebootComponents  []string `json:"guest_reboot_components,omitempty"`
+	GuestRebootRequestTime string   `json:"guest_reboot_request_time,omitempty"`
+}
+
 // InventoryMetrics captures the current runtime metric floor projected onto
 // canonical Pulse metrics for VMware-backed hosts and VMs.
 type InventoryMetrics struct {
@@ -183,6 +200,7 @@ type InventoryVM struct {
 	SnapshotTree        []InventoryVMSnapshot       `json:"snapshot_tree,omitempty"`
 	NetworkAdapters     []InventoryVMNetworkAdapter `json:"network_adapters,omitempty"`
 	VirtualDisks        []InventoryVMVirtualDisk    `json:"virtual_disks,omitempty"`
+	Tools               *InventoryVMTools           `json:"tools,omitempty"`
 	Metrics             *InventoryMetrics           `json:"metrics,omitempty"`
 }
 
@@ -533,6 +551,7 @@ func vmwareRecordsFromSnapshot(snapshot *InventorySnapshot, now func() time.Time
 				SnapshotTree:        vmwareSnapshotTreeData(vm.SnapshotTree),
 				NetworkAdapters:     vmwareNetworkAdaptersData(vm.NetworkAdapters),
 				VirtualDisks:        vmwareVirtualDisksData(vm.VirtualDisks),
+				Tools:               vmwareToolsData(vm.Tools),
 			},
 			Tags: filterNonEmptyStrings(
 				"vmware",
@@ -694,6 +713,7 @@ func cloneInventoryVMs(in []InventoryVM) []InventoryVM {
 		out[i].SnapshotTree = cloneInventoryVMSnapshots(in[i].SnapshotTree)
 		out[i].NetworkAdapters = cloneInventoryVMNetworkAdapters(in[i].NetworkAdapters)
 		out[i].VirtualDisks = cloneInventoryVMVirtualDisks(in[i].VirtualDisks)
+		out[i].Tools = cloneInventoryVMTools(in[i].Tools)
 		out[i].Metrics = cloneInventoryMetrics(in[i].Metrics)
 	}
 	return out
@@ -789,6 +809,19 @@ func cloneInventoryVMVirtualDisks(in []InventoryVMVirtualDisk) []InventoryVMVirt
 		out[i].CapacityBytes = cloneInt64Pointer(in[i].CapacityBytes)
 	}
 	return out
+}
+
+func cloneInventoryVMTools(in *InventoryVMTools) *InventoryVMTools {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.AutoUpdateSupported = cloneBoolPointer(in.AutoUpdateSupported)
+	out.InstallAttemptCount = cloneInt64Pointer(in.InstallAttemptCount)
+	out.VersionNumber = cloneInt64Pointer(in.VersionNumber)
+	out.GuestRebootRequested = cloneBoolPointer(in.GuestRebootRequested)
+	out.GuestRebootComponents = cloneStringSlice(in.GuestRebootComponents)
+	return &out
 }
 
 func cloneInventoryEnrichmentIssues(in []InventoryEnrichmentIssue) []InventoryEnrichmentIssue {
@@ -1182,6 +1215,26 @@ func vmwareVirtualDisksData(disks []InventoryVMVirtualDisk) []unifiedresources.V
 		out = append(out, item)
 	}
 	return out
+}
+
+func vmwareToolsData(tools *InventoryVMTools) *unifiedresources.VMwareToolsData {
+	if tools == nil {
+		return nil
+	}
+	return &unifiedresources.VMwareToolsData{
+		AutoUpdateSupported:    cloneBoolPointer(tools.AutoUpdateSupported),
+		InstallAttemptCount:    cloneInt64Pointer(tools.InstallAttemptCount),
+		ErrorMessage:           strings.TrimSpace(tools.ErrorMessage),
+		VersionNumber:          cloneInt64Pointer(tools.VersionNumber),
+		Version:                strings.TrimSpace(tools.Version),
+		UpgradePolicy:          strings.TrimSpace(tools.UpgradePolicy),
+		VersionStatus:          strings.TrimSpace(tools.VersionStatus),
+		InstallType:            strings.TrimSpace(tools.InstallType),
+		RunState:               strings.TrimSpace(tools.RunState),
+		GuestRebootRequested:   cloneBoolPointer(tools.GuestRebootRequested),
+		GuestRebootComponents:  cloneStringSlice(tools.GuestRebootComponents),
+		GuestRebootRequestTime: strings.TrimSpace(tools.GuestRebootRequestTime),
+	}
 }
 
 func vmwareNetworkAdapterMACAddresses(adapters []InventoryVMNetworkAdapter) []string {

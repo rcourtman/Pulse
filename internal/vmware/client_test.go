@@ -75,6 +75,21 @@ func TestClientCollectInventoryEnrichesSignals(t *testing.T) {
 	if vm.GuestHostname != "app-01.internal" || len(vm.GuestIPAddresses) != 1 || vm.GuestIPAddresses[0] != "10.0.0.21" {
 		t.Fatalf("expected VM guest identity enrichment, got host=%q ips=%v", vm.GuestHostname, vm.GuestIPAddresses)
 	}
+	if vm.Tools == nil {
+		t.Fatalf("expected VM tools enrichment")
+	}
+	if vm.Tools.RunState != "RUNNING" || vm.Tools.VersionStatus != "CURRENT" || vm.Tools.Version != "12.4.0" {
+		t.Fatalf("unexpected VM tools status: %+v", vm.Tools)
+	}
+	if vm.Tools.AutoUpdateSupported == nil || !*vm.Tools.AutoUpdateSupported {
+		t.Fatalf("expected VM tools auto-update support, got %+v", vm.Tools.AutoUpdateSupported)
+	}
+	if vm.Tools.InstallAttemptCount == nil || *vm.Tools.InstallAttemptCount != 1 {
+		t.Fatalf("expected VM tools install attempt count, got %+v", vm.Tools.InstallAttemptCount)
+	}
+	if vm.Tools.GuestRebootRequested == nil || !*vm.Tools.GuestRebootRequested || len(vm.Tools.GuestRebootComponents) != 1 || vm.Tools.GuestRebootComponents[0] != "drivers" {
+		t.Fatalf("expected VM tools reboot request context, got %+v", vm.Tools)
+	}
 	if len(vm.NetworkAdapters) != 1 {
 		t.Fatalf("expected one VM network adapter, got %+v", vm.NetworkAdapters)
 	}
@@ -199,6 +214,9 @@ func TestClientCollectInventoryPreservesBaseInventoryWhenOptionalEnrichmentDegra
 	vm := snapshot.VMs[0]
 	if vm.GuestHostname != "" || len(vm.GuestIPAddresses) != 0 {
 		t.Fatalf("expected guest identity to stay empty after degraded topology read, got host=%q ips=%v", vm.GuestHostname, vm.GuestIPAddresses)
+	}
+	if vm.Tools == nil || vm.Tools.RunState != "RUNNING" {
+		t.Fatalf("expected tools enrichment to survive degraded guest read, got %+v", vm.Tools)
 	}
 	if len(vm.NetworkAdapters) != 1 || vm.NetworkAdapters[0].NetworkName != "VM Network" {
 		t.Fatalf("expected network adapter enrichment to survive degraded guest read, got %+v", vm.NetworkAdapters)
@@ -385,6 +403,24 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 			"family":     "LINUX",
 			"host_name":  "app-01.internal",
 			"ip_address": "10.0.0.21",
+		})
+	})
+	mux.HandleFunc("/api/vcenter/vm/vm-201/tools", func(w http.ResponseWriter, r *http.Request) {
+		requireAutomationSession(t, r)
+		writeJSON(w, map[string]any{
+			"auto_update_supported": true,
+			"install_attempt_count": 1,
+			"version_number":        12352,
+			"version":               "12.4.0",
+			"upgrade_policy":        "MANUAL",
+			"version_status":        "CURRENT",
+			"install_type":          "OPEN_VM_TOOLS",
+			"run_state":             "RUNNING",
+			"guest_reboot_status": map[string]any{
+				"reboot_requested":      true,
+				"requesting_components": []string{"drivers"},
+				"request_timestamp":     "2026-03-30T18:20:00Z",
+			},
 		})
 	})
 	mux.HandleFunc("/api/vcenter/vm/vm-201/hardware/ethernet", func(w http.ResponseWriter, r *http.Request) {

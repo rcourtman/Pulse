@@ -470,6 +470,10 @@ func TestRefreshCanonicalIdentityIgnoresVMwarePlacementDetailAliases(t *testing.
 	scsiBus := int64(0)
 	scsiUnit := int64(1)
 	capacityBytes := int64(107374182400)
+	autoUpdateSupported := true
+	installAttempts := int64(1)
+	toolsVersionNumber := int64(12352)
+	guestRebootRequested := true
 	resource := Resource{
 		ID:   "vmware-vm-1",
 		Type: ResourceTypeVM,
@@ -518,6 +522,19 @@ func TestRefreshCanonicalIdentityIgnoresVMwarePlacementDetailAliases(t *testing.
 				DatastoreName: "vmfs-prod-01",
 				CapacityBytes: &capacityBytes,
 			}},
+			Tools: &VMwareToolsData{
+				AutoUpdateSupported:   &autoUpdateSupported,
+				InstallAttemptCount:   &installAttempts,
+				ErrorMessage:          "Tools upgrade failed",
+				VersionNumber:         &toolsVersionNumber,
+				Version:               "12.4.0",
+				UpgradePolicy:         "MANUAL",
+				VersionStatus:         "CURRENT",
+				InstallType:           "OPEN_VM_TOOLS",
+				RunState:              "RUNNING",
+				GuestRebootRequested:  &guestRebootRequested,
+				GuestRebootComponents: []string{"drivers"},
+			},
 			SnapshotTree: []VMwareSnapshotData{{
 				Snapshot:    "snapshot-201",
 				Name:        "pre-upgrade",
@@ -591,6 +608,13 @@ func TestRefreshCanonicalIdentityIgnoresVMwarePlacementDetailAliases(t *testing.
 		"SCSI",
 		"VMDK_FILE",
 		"[vmfs-prod-01] db-vm/db-vm.vmdk",
+		"Tools upgrade failed",
+		"12.4.0",
+		"MANUAL",
+		"CURRENT",
+		"OPEN_VM_TOOLS",
+		"RUNNING",
+		"drivers",
 	}
 	for _, disallowed := range disallowedAliases {
 		for _, alias := range resource.Canonical.Aliases {

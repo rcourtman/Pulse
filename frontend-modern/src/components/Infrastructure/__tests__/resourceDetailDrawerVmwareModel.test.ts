@@ -37,6 +37,19 @@ describe('resourceDetailDrawerVmwareModel', () => {
           capacityBytes: 107374182400,
         },
       ],
+      tools: {
+        autoUpdateSupported: true,
+        installAttemptCount: 1,
+        versionNumber: 12352,
+        version: '12.4.0',
+        upgradePolicy: 'MANUAL',
+        versionStatus: 'CURRENT',
+        installType: 'OPEN_VM_TOOLS',
+        runState: 'RUNNING',
+        guestRebootRequested: true,
+        guestRebootComponents: ['drivers'],
+        guestRebootRequestTime: '2026-03-30T18:20:00Z',
+      },
       snapshotTree: [
         {
           snapshot: 'snapshot-201',
@@ -59,8 +72,23 @@ describe('resourceDetailDrawerVmwareModel', () => {
     };
 
     expect(buildVMwareDetailsSummary('vm', vmware)).toBe(
-      'Lab VC · Read-only vCenter context · 2 snapshots · 1 vNIC · 1 disk',
+      'Lab VC · Read-only vCenter context · 2 snapshots · 1 vNIC · 1 disk · Tools reboot requested',
     );
+
+    const tools = buildVMwareDetailSections('vm', vmware).find((section) => section.id === 'tools');
+
+    expect(tools?.rows).toEqual([
+      { label: 'Run state', value: 'Running', tone: 'default' },
+      { label: 'Version status', value: 'Current', tone: 'default' },
+      { label: 'Version', value: '12.4.0' },
+      { label: 'Install type', value: 'Open VM Tools' },
+      { label: 'Upgrade policy', value: 'Manual' },
+      { label: 'Auto update supported', value: 'Yes' },
+      { label: 'Install attempts', value: '1' },
+      { label: 'Guest reboot', value: 'Requested', tone: 'warning' },
+      { label: 'Reboot components', value: 'drivers', tone: 'warning' },
+      { label: 'Reboot requested at', value: '2026-03-30 18:20 UTC', tone: 'warning' },
+    ]);
 
     const disks = buildVMwareDetailSections('vm', vmware).find((section) => section.id === 'disks');
 
