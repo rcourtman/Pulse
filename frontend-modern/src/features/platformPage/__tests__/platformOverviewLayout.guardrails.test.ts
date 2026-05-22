@@ -24,6 +24,7 @@ import truenasStorageTopologyTableSource from '@/features/truenas/TrueNASStorage
 import truenasSystemsTableSource from '@/features/truenas/TrueNASSystemsTable.tsx?raw';
 import truenasVirtualMachinesTableSource from '@/features/truenas/TrueNASVirtualMachinesTable.tsx?raw';
 import vmwarePageSurfaceSource from '@/features/vmware/VmwarePageSurface.tsx?raw';
+import vsphereAlertsTableSource from '@/features/vmware/VsphereAlertsTable.tsx?raw';
 import vsphereDatastoresTableSource from '@/features/vmware/VsphereDatastoresTable.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
 import vsphereVirtualMachinesTableSource from '@/features/vmware/VsphereVirtualMachinesTable.tsx?raw';
@@ -42,6 +43,7 @@ const platformTableSources = [
   truenasStorageTopologyTableSource,
   truenasSystemsTableSource,
   truenasVirtualMachinesTableSource,
+  vsphereAlertsTableSource,
   vsphereDatastoresTableSource,
   vsphereHostsTableSource,
   vsphereVirtualMachinesTableSource,
@@ -194,6 +196,7 @@ describe('platform overview layout guardrails', () => {
     expect(truenasStorageTopologyTableSource).toContain('md:min-w-[960px]');
     expect(truenasVirtualMachinesTableSource).toContain('md:min-w-[960px]');
     expect(vmwarePageSurfaceSource).toContain('<VsphereHostsTable');
+    expect(vmwarePageSurfaceSource).toContain('<VsphereAlertsTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereVirtualMachinesTable');
     expect(vmwarePageSurfaceSource).not.toContain('<WorkloadsSurface');
     expect(vmwarePageSurfaceSource).toContain('<VsphereDatastoresTable');

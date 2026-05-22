@@ -4,8 +4,10 @@ import {
   VMWARE_TAB_SPECS,
   buildVmwarePageModel,
   filterVmwareDatastores,
+  filterVmwareIncidents,
   filterVmwareVirtualMachines,
   mapVmwareDatastoreStatus,
+  mapVmwareIncidentSeverity,
   mapVmwareVirtualMachineStatus,
 } from '../vmwarePageModel';
 
@@ -171,5 +173,71 @@ describe('vmwarePageModel', () => {
         (resource) => resource.id,
       ),
     ).toEqual(['vm-powered-off']);
+  });
+
+  it('builds and filters vSphere health signals from resource incidents', () => {
+    const hostAlarm = makeResource({
+      id: 'host-alarm',
+      type: 'agent',
+      name: 'esxi-01.lab.local',
+      displayName: 'esxi-01.lab.local',
+      status: 'degraded',
+      vmware: {
+        entityType: 'host',
+        managedObjectId: 'host-101',
+        connectionName: 'lab-vcenter',
+        vcenterHost: 'vcsa.lab.local',
+        datacenterName: 'Primary DC',
+        clusterName: 'Production Cluster',
+      },
+      incidents: [
+        {
+          provider: 'vmware',
+          nativeId: 'alarm-401',
+          code: 'vmware_alarm_state',
+          severity: 'critical',
+          source: 'vmware',
+          summary: 'Host host-101 has VMware alarm Host connection and power state (red)',
+          startedAt: '2026-05-21T14:30:00Z',
+        },
+      ],
+    });
+    const datastoreHealth = makeResource({
+      id: 'datastore-health',
+      type: 'storage',
+      name: 'edge-cold-iscsi',
+      status: 'degraded',
+      incidentSeverity: 'yellow',
+      incidentCode: 'vmware_health_state',
+      incidentSummary: 'Datastore datastore-304 has VMware overall status yellow',
+      storage: { topology: 'datastore', platform: 'vmware-vsphere' },
+      vmware: {
+        entityType: 'datastore',
+        managedObjectId: 'datastore-304',
+        activeAlarmSummary: 'Datastore usage on disk',
+      },
+    });
+
+    const rows = buildVmwarePageModel([datastoreHealth, hostAlarm]).incidents;
+
+    expect(mapVmwareIncidentSeverity('red')).toBe('critical');
+    expect(mapVmwareIncidentSeverity('yellow')).toBe('warning');
+    expect(rows.map((row) => row.id)).toEqual([
+      'host-alarm:incident:alarm-401:0',
+      'datastore-health:incident:rollup',
+    ]);
+    expect(rows[0]).toMatchObject({
+      resourceName: 'esxi-01.lab.local',
+      entityType: 'host',
+      managedObjectId: 'host-101',
+      severityBucket: 'critical',
+      label: 'vSphere Alarm',
+    });
+    expect(
+      filterVmwareIncidents(rows, 'datastore-304', 'warning').map((row) => row.resourceId),
+    ).toEqual(['datastore-health']);
+    expect(
+      filterVmwareIncidents(rows, 'production', 'critical').map((row) => row.resourceId),
+    ).toEqual(['host-alarm']);
   });
 });

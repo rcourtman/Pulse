@@ -15,6 +15,7 @@ import {
   type VmwarePageModel,
   type VmwarePageTabId,
 } from './vmwarePageModel';
+import { VsphereAlertsTable } from './VsphereAlertsTable';
 import { VsphereDatastoresTable } from './VsphereDatastoresTable';
 import { VsphereVirtualMachinesTable } from './VsphereVirtualMachinesTable';
 
@@ -110,6 +111,14 @@ function VmwareOverview(props: VmwareOverviewProps) {
         emptyDescription="Hosts appear here once the vCenter connection enumerates them."
         showToolbar={false}
       />
+      <Show when={props.model().incidents.length > 0}>
+        <VsphereAlertsTable
+          incidents={props.model().incidents}
+          emptyIcon={vmwareIcon()}
+          emptyTitle="No active vSphere health signals"
+          emptyDescription="vSphere triggered alarms and overall health signals appear here when vCenter reports them."
+        />
+      </Show>
       <VsphereVirtualMachinesTable
         vms={props.model().vms}
         scope={props.model().resources}

@@ -1,5 +1,5 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
-import type { Resource, ResourceType } from '@/types/resource';
+import type { Resource, ResourceIncident, ResourceType } from '@/types/resource';
 
 export type VmwarePageTabId = 'overview' | 'storage';
 export type VmwareDatastoreStatusFilter =
@@ -16,6 +16,7 @@ export type VmwareVirtualMachineStatusFilter =
   | 'powered-off'
   | 'suspended'
   | 'unknown';
+export type VmwareIncidentSeverityFilter = 'all' | 'critical' | 'warning' | 'info';
 
 export type VmwareTabSpec = {
   id: VmwarePageTabId;
@@ -42,6 +43,27 @@ export type VmwarePageModel = {
   hosts: Resource[];
   vms: Resource[];
   datastores: Resource[];
+  incidents: VmwareIncidentRow[];
+};
+
+export type VmwareIncidentRow = {
+  id: string;
+  resource: Resource;
+  resourceId: string;
+  resourceName: string;
+  resourceType: ResourceType;
+  entityType: string;
+  managedObjectId: string;
+  severity: string;
+  severityBucket: Exclude<VmwareIncidentSeverityFilter, 'all'>;
+  code: string;
+  source: string;
+  summary: string;
+  label: string;
+  category: string;
+  startedAt?: string;
+  action: string;
+  priority: number;
 };
 
 export function buildVmwarePageModel(resources: Resource[]): VmwarePageModel {
@@ -59,17 +81,21 @@ export function buildVmwarePageModel(resources: Resource[]): VmwarePageModel {
         (resource.storage?.topology === 'datastore' || resource.vmware?.entityType === 'datastore'),
     )
     .sort(compareVmwareDatastores);
+  const incidents = buildVmwareIncidentRows(vmwareResources);
 
   return {
     resources: vmwareResources,
     hosts,
     vms,
     datastores,
+    incidents,
   };
 }
 
 const normalize = (value: unknown): string =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+const trimString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
 const normalizeToken = (value: unknown): string => normalize(value).replace(/[\s_-]/g, '');
 
@@ -78,6 +104,13 @@ const vmwareDatastoreDisplayName = (resource: Resource): string =>
 
 const vmwareVirtualMachineDisplayName = (resource: Resource): string =>
   resource.displayName?.trim() || resource.name?.trim() || resource.id;
+
+const vmwareResourceDisplayName = (resource: Resource): string =>
+  trimString(resource.displayName) ||
+  trimString(resource.name) ||
+  trimString(resource.vmware?.runtimeHostName) ||
+  trimString(resource.vmware?.managedObjectId) ||
+  resource.id;
 
 const vmwareDatastoreStatusRank = (resource: Resource): number => {
   switch (mapVmwareDatastoreStatus(resource)) {
@@ -129,6 +162,28 @@ const compareVmwareVirtualMachines = (left: Resource, right: Resource): number =
     vmwareVirtualMachineDisplayName(right),
   );
 };
+
+const incidentSeverityRank = (severity: string): number => {
+  switch (mapVmwareIncidentSeverity(severity)) {
+    case 'critical':
+      return 3;
+    case 'warning':
+      return 2;
+    case 'info':
+      return 1;
+  }
+};
+
+export function mapVmwareIncidentSeverity(
+  severity: string | undefined,
+): Exclude<VmwareIncidentSeverityFilter, 'all'> {
+  const normalized = normalize(severity);
+  if (['critical', 'crit', 'fatal', 'error', 'failed', 'failure', 'red'].includes(normalized)) {
+    return 'critical';
+  }
+  if (['warning', 'warn', 'alert', 'degraded', 'yellow'].includes(normalized)) return 'warning';
+  return 'info';
+}
 
 export function mapVmwareVirtualMachineStatus(
   resource: Resource,
@@ -185,6 +240,115 @@ export function mapVmwareDatastoreStatus(
     return 'accessible';
   }
   return 'unknown';
+}
+
+const titleize = (value: string): string =>
+  value
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+
+const hasIncidentSignal = (incident: ResourceIncident): boolean =>
+  Boolean(trimString(incident.code) || trimString(incident.summary));
+
+const hasIncidentRollup = (resource: Resource): boolean =>
+  (resource.incidentCount ?? 0) > 0 ||
+  Boolean(
+    trimString(resource.incidentCode) ||
+    trimString(resource.incidentSummary) ||
+    trimString(resource.incidentLabel),
+  );
+
+const vmwareIncidentLabel = (resource: Resource, incident: ResourceIncident): string => {
+  const label = trimString(resource.incidentLabel);
+  if (label) return label;
+  const code = trimString(incident.code);
+  if (code === 'vmware_alarm_state') return 'vSphere Alarm';
+  if (code === 'vmware_health_state') return 'vSphere Health';
+  return code ? titleize(code.replace(/^vmware_/, '')) : 'vSphere Health';
+};
+
+const buildIncidentRow = (
+  resource: Resource,
+  incident: ResourceIncident,
+  index: number,
+): VmwareIncidentRow => {
+  const severity = trimString(incident.severity) || trimString(resource.incidentSeverity) || 'info';
+  const code = trimString(incident.code) || trimString(resource.incidentCode) || 'vmware_alert';
+  const summary =
+    trimString(incident.summary) ||
+    trimString(resource.incidentSummary) ||
+    vmwareIncidentLabel(resource, incident);
+  const nativeId = trimString(incident.nativeId);
+  const rowKey = nativeId || code || String(index);
+
+  return {
+    id: `${resource.id}:incident:${rowKey}:${index}`,
+    resource,
+    resourceId: resource.id,
+    resourceName: vmwareResourceDisplayName(resource),
+    resourceType: resource.type,
+    entityType: trimString(resource.vmware?.entityType) || resource.type,
+    managedObjectId: trimString(resource.vmware?.managedObjectId) || resource.id,
+    severity,
+    severityBucket: mapVmwareIncidentSeverity(severity),
+    code,
+    source: trimString(incident.source) || trimString(incident.provider) || 'vmware',
+    summary,
+    label: vmwareIncidentLabel(resource, incident),
+    category: trimString(resource.incidentCategory) || 'vcenter-health',
+    startedAt: incident.startedAt,
+    action: trimString(resource.incidentAction) || 'Investigate in vCenter',
+    priority: resource.incidentPriority ?? incidentSeverityRank(severity) * 1000,
+  };
+};
+
+const buildRollupIncidentRow = (resource: Resource): VmwareIncidentRow => {
+  const severity = trimString(resource.incidentSeverity) || 'info';
+  const code = trimString(resource.incidentCode) || 'vmware_alert';
+  const count = resource.incidentCount ?? 0;
+  const summary =
+    trimString(resource.incidentSummary) ||
+    trimString(resource.incidentLabel) ||
+    `${count || 1} active vSphere alert${count === 1 ? '' : 's'}`;
+  const incident: ResourceIncident = {
+    code,
+    severity,
+    summary,
+    source: 'vmware',
+  };
+
+  return {
+    ...buildIncidentRow(resource, incident, 0),
+    id: `${resource.id}:incident:rollup`,
+  };
+};
+
+export function buildVmwareIncidentRows(resources: Resource[]): VmwareIncidentRow[] {
+  const rows: VmwareIncidentRow[] = [];
+  for (const resource of resources) {
+    const incidents = (resource.incidents ?? []).filter(hasIncidentSignal);
+    if (incidents.length > 0) {
+      incidents.forEach((incident, index) =>
+        rows.push(buildIncidentRow(resource, incident, index)),
+      );
+      continue;
+    }
+    if (hasIncidentRollup(resource)) {
+      rows.push(buildRollupIncidentRow(resource));
+    }
+  }
+
+  return rows.sort((a, b) => {
+    const severityDelta = incidentSeverityRank(b.severity) - incidentSeverityRank(a.severity);
+    if (severityDelta !== 0) return severityDelta;
+    const priorityDelta = b.priority - a.priority;
+    if (priorityDelta !== 0) return priorityDelta;
+    const entityDelta = a.entityType.localeCompare(b.entityType);
+    if (entityDelta !== 0) return entityDelta;
+    return a.resourceName.localeCompare(b.resourceName);
+  });
 }
 
 const vmwareDatastoreSearchHaystack = (resource: Resource): string =>
@@ -270,5 +434,44 @@ export function filterVmwareVirtualMachines(
     if (status !== 'all' && mapVmwareVirtualMachineStatus(vm) !== status) return false;
     if (!needle) return true;
     return vmwareVirtualMachineSearchHaystack(vm).includes(needle);
+  });
+}
+
+const incidentSearchHaystack = (row: VmwareIncidentRow): string =>
+  [
+    row.resourceId,
+    row.resourceName,
+    row.resourceType,
+    row.entityType,
+    row.managedObjectId,
+    row.severity,
+    row.code,
+    row.source,
+    row.summary,
+    row.label,
+    row.category,
+    row.action,
+    row.resource.vmware?.connectionName,
+    row.resource.vmware?.vcenterHost,
+    row.resource.vmware?.datacenterName,
+    row.resource.vmware?.clusterName,
+    row.resource.vmware?.runtimeHostName,
+    row.resource.vmware?.activeAlarmSummary,
+    ...(row.resource.tags ?? []),
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' ')
+    .toLowerCase();
+
+export function filterVmwareIncidents(
+  incidents: VmwareIncidentRow[],
+  search: string,
+  severity: VmwareIncidentSeverityFilter,
+): VmwareIncidentRow[] {
+  const needle = normalize(search);
+  return incidents.filter((incident) => {
+    if (severity !== 'all' && incident.severityBucket !== severity) return false;
+    if (!needle) return true;
+    return incidentSearchHaystack(incident).includes(needle);
   });
 }
