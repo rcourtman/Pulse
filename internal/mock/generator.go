@@ -2533,6 +2533,14 @@ func ensureMockNodeHostLinks(data *models.StateSnapshot) {
 
 	now := time.Now()
 
+	hostsByLinkedNodeID := make(map[string]int, len(data.Hosts))
+	for i := range data.Hosts {
+		linkedNodeID := strings.TrimSpace(data.Hosts[i].LinkedNodeID)
+		if linkedNodeID != "" {
+			hostsByLinkedNodeID[linkedNodeID] = i
+		}
+	}
+
 	for i := range data.Hosts {
 		host := &data.Hosts[i]
 		host.LinkedNodeID = ""
@@ -2559,19 +2567,21 @@ func ensureMockNodeHostLinks(data *models.StateSnapshot) {
 		}
 	}
 
+	nextHostIndex := len(data.Hosts)
 	for i := range data.Nodes {
 		node := &data.Nodes[i]
-		hostID := ""
-		if i < len(data.Hosts) {
-			hostID = data.Hosts[i].ID
-		}
-		linkedHost := buildMockLinkedHostFromNode(*node, hostID, i, now)
-		if i < len(data.Hosts) {
-			data.Hosts[i] = linkedHost
+		hostIndex, exists := hostsByLinkedNodeID[node.ID]
+		if exists && hostIndex >= 0 && hostIndex < len(data.Hosts) {
+			linkedHost := buildMockLinkedHostFromNode(*node, data.Hosts[hostIndex].ID, hostIndex, now)
+			data.Hosts[hostIndex] = linkedHost
+			node.LinkedAgentID = linkedHost.ID
 		} else {
+			linkedHost := buildMockLinkedHostFromNode(*node, "", nextHostIndex, now)
 			data.Hosts = append(data.Hosts, linkedHost)
+			hostsByLinkedNodeID[node.ID] = len(data.Hosts) - 1
+			nextHostIndex++
+			node.LinkedAgentID = linkedHost.ID
 		}
-		node.LinkedAgentID = linkedHost.ID
 	}
 }
 

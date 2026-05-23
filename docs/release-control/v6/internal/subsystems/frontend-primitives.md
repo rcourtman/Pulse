@@ -1023,7 +1023,11 @@ not a replacement status card, CTA band, or page-local nested card.
     and keyboard shortcut must all route through `buildAgentsPath()` and the
     `PrimaryInfrastructureNavId` evidence gate; they must not create a generic
     Hosts, Nodes, Other, or mixed-systems bucket, and they must not include
-    provider-owned platform nodes that are not canonical agent resources.
+    provider-owned platform nodes that are not canonical agent resources. The
+    Agents page is a platform page, not a legacy Infrastructure page: it must
+    use the shared platform tab, toolbar, table-card, and kind-aligned column
+    primitives, and it must not reintroduce the old top-of-page
+    InfrastructureSummary chart strip.
 
 ## Forbidden Paths
 

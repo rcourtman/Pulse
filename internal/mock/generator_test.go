@@ -97,14 +97,12 @@ func TestBuildFixtureStateIncludesSwarmServices(t *testing.T) {
 func TestBuildFixtureStateIncludesHostAgents(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.GenericHostCount = 5
+	cfg.K8sClusterCount = 0
 	cfg.RandomMetrics = false
 
 	data := buildFixtureState(cfg)
 
-	expectedMin := cfg.GenericHostCount
-	if cfg.NodeCount > expectedMin {
-		expectedMin = cfg.NodeCount
-	}
+	expectedMin := cfg.GenericHostCount + cfg.NodeCount
 	if len(data.Hosts) < expectedMin {
 		t.Fatalf("expected at least %d host agents, got %d", expectedMin, len(data.Hosts))
 	}
@@ -119,6 +117,33 @@ func TestBuildFixtureStateIncludesHostAgents(t *testing.T) {
 		if host.Status == "" {
 			t.Fatalf("host agent missing status: %+v", host)
 		}
+	}
+}
+
+func TestBuildFixtureStatePreservesStandaloneHostAgentsWhenLinkingNodes(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.NodeCount = 3
+	cfg.GenericHostCount = 4
+	cfg.K8sClusterCount = 0
+	cfg.RandomMetrics = false
+
+	data := buildFixtureState(cfg)
+
+	standalone := 0
+	proxmoxLinked := 0
+	for _, host := range data.Hosts {
+		if host.LinkedNodeID != "" {
+			proxmoxLinked++
+		} else {
+			standalone++
+		}
+	}
+
+	if standalone != cfg.GenericHostCount {
+		t.Fatalf("expected %d standalone agent hosts, got %d", cfg.GenericHostCount, standalone)
+	}
+	if proxmoxLinked != cfg.NodeCount {
+		t.Fatalf("expected %d Proxmox-linked agent hosts, got %d", cfg.NodeCount, proxmoxLinked)
 	}
 }
 

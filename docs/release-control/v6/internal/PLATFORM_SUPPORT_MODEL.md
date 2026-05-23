@@ -162,10 +162,13 @@ Current agent-backed primary platforms:
 
 The authenticated shell may label the `agent` destination as `Agents`. That
 surface is the Pulse-managed host platform, not a generic mixed-systems bucket:
-navigation and rows must be gated to canonical `platformType="agent"` host
-resources, while Proxmox, VMware, TrueNAS, Kubernetes, and runtime-lens
-resources remain owned by their respective platform contracts and may cross-link
-to related agent facets.
+navigation and rows must be gated to agent-primary `type="agent"` machine
+resources with no stronger platform owner. A Proxmox, VMware, TrueNAS, or
+Kubernetes host that also has the Pulse agent installed remains owned by that
+platform page; the agent contributes health, temperature, SMART, command, and
+check-in facets there instead of creating a second operational row in Agents.
+Standalone Mac, Windows, Linux, Unraid, and other bare-agent machines remain
+Agents-page members.
 
 Current agent-backed runtime lenses:
 

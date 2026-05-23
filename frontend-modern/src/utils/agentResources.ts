@@ -15,6 +15,14 @@ const AGENT_PROFILE_ASSIGNABLE_TYPES = new Set<ResourceType>([
   'pmg',
   'k8s-cluster',
 ]);
+const AGENT_PROVIDER_OWNER_PLATFORM_IDS = new Set<string>([
+  'proxmox-pve',
+  'proxmox-pbs',
+  'proxmox-pmg',
+  'kubernetes',
+  'truenas',
+  'vmware-vsphere',
+]);
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
@@ -58,11 +66,71 @@ type ResourceClusterNameLike = KubernetesContextLike & {
 export const getPlatformDataRecord = (resource: Resource): Record<string, unknown> | undefined =>
   resource.platformData ? (resource.platformData as Record<string, unknown>) : undefined;
 
-const hasPlatformSource = (resource: Resource, source: string): boolean => {
-  const sources = getPlatformDataRecord(resource)?.sources;
-  if (!Array.isArray(sources)) return false;
-  return sources.some((value) => normalizeSourcePlatformKey(value) === source);
+const hasSourceListPlatform = (values: unknown, source: string): boolean => {
+  if (!Array.isArray(values)) return false;
+  return values.some(
+    (value) => typeof value === 'string' && normalizeSourcePlatformKey(value) === source,
+  );
 };
+
+const getSourceStatusRecord = (resource: Resource): Record<string, unknown> | undefined =>
+  asRecord(getPlatformDataRecord(resource)?.sourceStatus);
+
+const hasSourceStatusPlatform = (resource: Resource, source: string): boolean => {
+  const sourceStatus = getSourceStatusRecord(resource);
+  if (!sourceStatus) return false;
+  return Object.keys(sourceStatus).some((value) => normalizeSourcePlatformKey(value) === source);
+};
+
+const hasExplicitSourceEvidence = (resource: Resource): boolean => {
+  const platformData = getPlatformDataRecord(resource);
+  return Boolean(
+    resource.sources?.length ||
+      (Array.isArray(platformData?.sources) && platformData.sources.length > 0) ||
+      Object.keys(getSourceStatusRecord(resource) || {}).length > 0,
+  );
+};
+
+const hasPlatformSource = (resource: Resource, source: string): boolean =>
+  hasSourceListPlatform(resource.sources, source) ||
+  hasSourceListPlatform(getPlatformDataRecord(resource)?.sources, source);
+
+const hasProviderOwnerPlatformEvidence = (resource: Resource): boolean => {
+  const platformData = getPlatformDataRecord(resource);
+  const candidates: unknown[] = [
+    resource.platformType,
+    ...(Array.isArray(resource.platformScopes) ? resource.platformScopes : []),
+    ...(Array.isArray(platformData?.platformScopes) ? platformData.platformScopes : []),
+    ...(Array.isArray(resource.sources) ? resource.sources : []),
+    ...(Array.isArray(platformData?.sources) ? platformData.sources : []),
+    ...Object.keys(getSourceStatusRecord(resource) || {}),
+  ];
+
+  return candidates.some((value) => {
+    if (typeof value !== 'string') return false;
+    const normalized = normalizeSourcePlatformKey(value);
+    return normalized ? AGENT_PROVIDER_OWNER_PLATFORM_IDS.has(normalized) : false;
+  });
+};
+
+export const hasPulseAgentSourceEvidence = (resource: Resource): boolean => {
+  if (hasPlatformSource(resource, 'agent') || hasSourceStatusPlatform(resource, 'agent')) {
+    return true;
+  }
+
+  if (hasExplicitSourceEvidence(resource)) {
+    return false;
+  }
+
+  return resource.sourceType === 'agent' || resource.sourceType === 'hybrid';
+};
+
+export const isPulseAgentPlatformResource = (resource: Resource): boolean =>
+  resource.type === 'agent' &&
+  !hasProviderOwnerPlatformEvidence(resource) &&
+  (hasPulseAgentSourceEvidence(resource) ||
+    (!hasExplicitSourceEvidence(resource) &&
+      normalizeSourcePlatformKey(resource.platformType) === 'agent'));
 
 export const getPlatformAgentRecord = (resource: Resource): Record<string, unknown> | undefined =>
   asRecord(getPlatformDataRecord(resource)?.agent);

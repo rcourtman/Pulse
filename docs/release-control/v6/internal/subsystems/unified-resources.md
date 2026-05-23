@@ -118,6 +118,7 @@ cross-source deduplication.
 94. `internal/unifiedresources/storage_consumers.go`
 95. `frontend-modern/src/features/agents/agentsPageModel.ts`
 96. `frontend-modern/src/features/agents/AgentsPageSurface.tsx`
+97. `frontend-modern/src/features/agents/AgentsMachinesTable.tsx`
 
 ## Shared Boundaries
 
@@ -519,12 +520,15 @@ AI-only summary payloads, or page-local heuristics.
     derive every internal link from those builders so the canonical resource
     URL vocabulary stays single-sourced; ad hoc string concatenation of
     platform routes inside feature directories is not permitted.
-    The `Agents` route is the canonical browser projection of unified-resource
-    agent rows: membership must require `resource.type === "agent"` and a
-    normalized `platformType === "agent"`. Provider-owned nodes from Proxmox,
-    VMware, TrueNAS, Kubernetes, or runtime lenses may link to related agent
-    facets, but they must not become Agents-page members through hostname,
-    source, or incidental agent metadata alone.
+    The `Agents` route is the canonical browser projection of Pulse-managed
+    unified-resource agent rows: membership must require
+    `resource.type === "agent"`, canonical Pulse-agent source evidence from
+    resource sources or source status, and no stronger provider-owner evidence
+    from Proxmox, VMware, TrueNAS, or Kubernetes. Source-less legacy snapshots
+    may fall back to a normalized `platformType === "agent"`, but
+    provider-owned nodes must not become Agents-page members through hostname,
+    `agent` platform scope, or agent telemetry alone; those facts surface as
+    facets on the owning provider page.
     The default tab for each platform path must point at a sub-tab whose
     canonical unified-resource projection actually populates. The
     canonical TrueNAS adapter (`internal/truenas/provider.go::

@@ -5,7 +5,7 @@ import {
   filterResources,
   tokenizeSearch,
 } from '@/components/Infrastructure/infrastructureSelectors';
-import { normalizeSourcePlatformKey } from '@/utils/sourcePlatforms';
+import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 
 export interface AgentsPageModel {
   resources: Resource[];
@@ -20,7 +20,7 @@ export interface AgentsPageFilterModel {
 }
 
 export const isAgentsPageResource = (resource: Resource): boolean =>
-  resource.type === 'agent' && normalizeSourcePlatformKey(resource.platformType) === 'agent';
+  isPulseAgentPlatformResource(resource);
 
 export function buildAgentsPageModel(resources: readonly Resource[]): AgentsPageModel {
   return {

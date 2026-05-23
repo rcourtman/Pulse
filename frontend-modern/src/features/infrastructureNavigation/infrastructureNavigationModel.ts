@@ -1,5 +1,6 @@
 import type { Accessor } from 'solid-js';
 import type { Resource, ResourceType } from '@/types/resource';
+import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 import {
   ADMITTED_PLATFORM_IDS,
   SUPPORTED_PLATFORM_IDS,
@@ -57,9 +58,6 @@ const KUBERNETES_RESOURCE_TYPES = new Set<ResourceType>([
   'k8s-service',
 ]);
 const DOCKER_RESOURCE_TYPES = new Set<ResourceType>(['docker-host', 'docker-service']);
-
-const isPrimaryAgentPlatformResource = (resource: Resource): boolean =>
-  resource.type === 'agent' && normalizeSourcePlatformKey(resource.platformType) === 'agent';
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
@@ -163,7 +161,7 @@ export function buildPrimaryInfrastructureNavigationVisibility(
 ): InfrastructureNavigationVisibility {
   const presentNavigableScopes = buildNavigableResourceInfrastructureScopeSet(resources);
   return {
-    agents: resources.some(isPrimaryAgentPlatformResource),
+    agents: resources.some(isPulseAgentPlatformResource),
     proxmox: PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS.proxmox.some((id) =>
       presentNavigableScopes.has(id),
     ),

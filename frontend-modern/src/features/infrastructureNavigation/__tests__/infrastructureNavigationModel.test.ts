@@ -131,6 +131,45 @@ describe('infrastructureNavigationModel', () => {
     ).toBe(false);
   });
 
+  it('shows Agents for agent-primary machine source evidence', () => {
+    expect(
+      buildPrimaryInfrastructureNavigationVisibility([
+        resource({
+          id: 'mac-mini-1',
+          type: 'agent',
+          platformType: 'agent',
+          sourceType: 'agent',
+          sources: ['agent'],
+          platformScopes: ['agent'],
+        }),
+      ]).agents,
+    ).toBe(true);
+  });
+
+  it('does not show Agents for provider-owned host rows even when the agent source is present', () => {
+    expect(
+      buildPrimaryInfrastructureNavigationVisibility([
+        resource({
+          id: 'pve-node-1',
+          type: 'agent',
+          platformType: 'proxmox-pve',
+          sourceType: 'hybrid',
+          sources: ['proxmox', 'agent'],
+          platformScopes: ['agent', 'proxmox-pve'],
+        }),
+        resource({
+          id: 'esxi-host-1',
+          type: 'agent',
+          platformType: 'vmware-vsphere',
+          sourceType: 'api',
+          sources: ['vmware'],
+          platformScopes: ['agent', 'vmware-vsphere'],
+          agent: { agentId: 'vc-host-101', platform: 'vmware-vsphere' },
+        }),
+      ]).agents,
+    ).toBe(false);
+  });
+
   it('selects the first visible platform using the canonical primary navigation order', () => {
     expect(
       selectFirstVisiblePrimaryInfrastructureNavigationId({

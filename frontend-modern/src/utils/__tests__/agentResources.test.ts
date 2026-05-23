@@ -10,8 +10,10 @@ import {
   getPreferredResourceClusterName,
   hasDockerWorkloadsScope,
   hasAgentFacet,
+  hasPulseAgentSourceEvidence,
   isAgentFacetInfrastructureResource,
   isAgentProfileAssignableResource,
+  isPulseAgentPlatformResource,
   isTrueNASSystemResource,
 } from '@/utils/agentResources';
 
@@ -362,6 +364,106 @@ describe('agentResources', () => {
         makeResource({
           type: 'agent',
           platformType: 'agent',
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('admits only agent-primary machines to the Agents platform page', () => {
+    expect(
+      isPulseAgentPlatformResource(
+        makeResource({
+          type: 'agent',
+          platformType: 'agent',
+          sourceType: 'agent',
+          sources: ['agent'],
+          platformScopes: ['agent'],
+        }),
+      ),
+    ).toBe(true);
+
+    expect(
+      isPulseAgentPlatformResource(
+        makeResource({
+          type: 'agent',
+          platformType: 'agent',
+          sourceType: 'hybrid',
+          sources: ['agent', 'docker'],
+          platformScopes: ['agent', 'docker'],
+        }),
+      ),
+    ).toBe(true);
+
+    expect(
+      isPulseAgentPlatformResource(
+        makeResource({
+          type: 'agent',
+          platformType: 'proxmox-pve',
+          sourceType: 'hybrid',
+          sources: ['proxmox', 'agent'],
+          platformScopes: ['agent', 'proxmox-pve'],
+        }),
+      ),
+    ).toBe(false);
+
+    expect(
+      isPulseAgentPlatformResource(
+        makeResource({
+          type: 'agent',
+          platformType: 'vmware-vsphere',
+          sourceType: 'api',
+          sources: ['vmware'],
+          platformScopes: ['agent', 'vmware-vsphere'],
+          agent: { agentId: 'vc-host-101', platform: 'vmware-vsphere' },
+        }),
+      ),
+    ).toBe(false);
+
+    expect(
+      isPulseAgentPlatformResource(
+        makeResource({
+          type: 'pod',
+          platformType: 'agent',
+          sourceType: 'agent',
+          sources: ['agent'],
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('keeps legacy source-less agent platform rows visible without admitting provider evidence', () => {
+    expect(
+      hasPulseAgentSourceEvidence(
+        makeResource({
+          type: 'agent',
+          platformType: 'agent',
+          sourceType: 'agent',
+          sources: undefined,
+        }),
+      ),
+    ).toBe(true);
+
+    expect(
+      isPulseAgentPlatformResource(
+        makeResource({
+          type: 'agent',
+          platformType: 'agent',
+          sourceType: 'api',
+          sources: undefined,
+        }),
+      ),
+    ).toBe(true);
+
+    expect(
+      isPulseAgentPlatformResource(
+        makeResource({
+          type: 'agent',
+          platformType: 'agent',
+          sourceType: 'agent',
+          sources: undefined,
+          platformData: {
+            sourceStatus: { kubernetes: { status: 'online' } },
+          },
         }),
       ),
     ).toBe(false);

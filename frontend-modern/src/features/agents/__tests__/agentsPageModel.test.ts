@@ -17,15 +17,51 @@ const resource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 describe('agentsPageModel', () => {
-  it('strictly projects only canonical agent platform resources', () => {
+  it('projects agent-primary machine resources without admitting provider-owned host rows', () => {
     const model = buildAgentsPageModel([
-      resource({ id: 'mac-mini', platformType: 'agent', type: 'agent' }),
-      resource({ id: 'pve-node', platformType: 'proxmox-pve', type: 'agent' }),
-      resource({ id: 'k8s-pod', platformType: 'agent', type: 'pod' }),
-      resource({ id: 'docker-host', platformType: 'docker', type: 'docker-host' }),
+      resource({ id: 'mac-mini', platformType: 'agent', type: 'agent', sources: ['agent'] }),
+      resource({
+        id: 'linux-docker-host',
+        platformType: 'agent',
+        platformScopes: ['agent', 'docker'],
+        type: 'agent',
+        sourceType: 'hybrid',
+        sources: ['agent', 'docker'],
+      }),
+      resource({
+        id: 'pve-node',
+        platformType: 'proxmox-pve',
+        type: 'agent',
+        sourceType: 'hybrid',
+        sources: ['proxmox', 'agent'],
+      }),
+      resource({
+        id: 'esxi-host',
+        platformType: 'vmware-vsphere',
+        platformScopes: ['agent', 'vmware-vsphere'],
+        type: 'agent',
+        sourceType: 'api',
+        sources: ['vmware'],
+        agent: { agentId: 'vc-host-101', platform: 'vmware-vsphere' },
+      }),
+      resource({ id: 'k8s-pod', platformType: 'agent', type: 'pod', sources: ['agent'] }),
+      resource({
+        id: 'docker-host',
+        platformType: 'docker',
+        type: 'docker-host',
+        sources: ['agent'],
+      }),
     ]);
 
-    expect(model.resources.map((item) => item.id)).toEqual(['mac-mini']);
+    expect(model.resources.map((item) => item.id)).toEqual(['mac-mini', 'linux-docker-host']);
+  });
+
+  it('keeps legacy source-less agent platform rows visible', () => {
+    const model = buildAgentsPageModel([
+      resource({ id: 'legacy-agent', platformType: 'agent', type: 'agent', sources: undefined }),
+    ]);
+
+    expect(model.resources.map((item) => item.id)).toEqual(['legacy-agent']);
   });
 
   it('filters agent resources by status and local identity search', () => {
