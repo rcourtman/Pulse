@@ -170,7 +170,7 @@ describe('infrastructureNavigationModel', () => {
     ).toBe(false);
   });
 
-  it('selects the first visible platform using the canonical primary navigation order', () => {
+  it('selects provider platforms before Agents using the canonical primary navigation order', () => {
     expect(
       selectFirstVisiblePrimaryInfrastructureNavigationId({
         agents: true,
@@ -180,7 +180,7 @@ describe('infrastructureNavigationModel', () => {
         truenas: false,
         vmware: false,
       }),
-    ).toBe('agents');
+    ).toBe('proxmox');
 
     expect(
       selectFirstVisiblePrimaryInfrastructureNavigationId({
@@ -192,6 +192,17 @@ describe('infrastructureNavigationModel', () => {
         vmware: false,
       }),
     ).toBe('kubernetes');
+
+    expect(
+      selectFirstVisiblePrimaryInfrastructureNavigationId({
+        agents: true,
+        proxmox: false,
+        docker: false,
+        kubernetes: false,
+        truenas: false,
+        vmware: false,
+      }),
+    ).toBe('agents');
 
     expect(
       selectFirstVisiblePrimaryInfrastructureNavigationId({

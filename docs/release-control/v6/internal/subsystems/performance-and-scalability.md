@@ -622,7 +622,10 @@ shell clickable behind another overlay.
     hot path; presentation-only platforms must not be registered. Preload
     entries may warm route modules, but they must not trigger additional
     unfiltered resource fetches, metrics-history fan-out, or provider scans
-    before the destination page owns its normal data query.
+    before the destination page owns its normal data query. The preload order
+    follows the provider-first shell order as a hot-path hint: Proxmox remains
+    ahead of Agents when both surfaces are available, while Agents stays in
+    the preload set so agent-only estates still get a warm first destination.
     Platform pages that embed `WorkloadsSurface` reuse the canonical
     workloads filter toolbar through the `showFilterToolbar` +
     `suppressPlatformFilter` props in `WorkloadsSurfaceProps`. The page

@@ -10,8 +10,8 @@ describe('route preloading', () => {
 
   it('keeps all cold top-level app shell targets in the shared preload set', () => {
     expect([...APP_SHELL_ROUTE_PRELOAD_PATHS]).toEqual([
-      buildAgentsPath(),
       buildProxmoxPath(),
+      buildAgentsPath(),
       PATROL_PATH,
       '/alerts',
       '/settings',

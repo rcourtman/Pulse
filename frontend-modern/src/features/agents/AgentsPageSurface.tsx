@@ -70,8 +70,8 @@ export function AgentsPageSurface() {
             fallback={
               <PlatformTableEmptyState
                 icon={agentsIcon()}
-                title="No Pulse Agent machines"
-                description="Install the Pulse Agent on Linux, macOS, Windows, Unraid, or another host to populate this platform page."
+                title="No standalone Pulse Agent machines"
+                description="Install the Pulse Agent on Linux, macOS, Windows, or Unraid systems that are not already represented by a platform integration."
                 actions={
                   <button
                     type="button"
@@ -88,8 +88,8 @@ export function AgentsPageSurface() {
             <AgentsMachinesTable
               resources={model().resources}
               emptyIcon={agentsIcon()}
-              emptyTitle="No Pulse Agent machines"
-              emptyDescription="Install the Pulse Agent on Linux, macOS, Windows, Unraid, or another host to populate this platform page."
+              emptyTitle="No standalone Pulse Agent machines"
+              emptyDescription="Install the Pulse Agent on Linux, macOS, Windows, or Unraid systems that are not already represented by a platform integration."
             />
           </Show>
         </Show>

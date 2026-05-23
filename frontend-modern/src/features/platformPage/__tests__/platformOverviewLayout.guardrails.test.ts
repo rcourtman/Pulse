@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import agentsMachinesTableSource from '@/features/agents/AgentsMachinesTable.tsx?raw';
+import agentsPageModelSource from '@/features/agents/agentsPageModel.ts?raw';
 import agentsPageSurfaceSource from '@/features/agents/AgentsPageSurface.tsx?raw';
 import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
 import dockerPageSurfaceSource from '@/features/docker/DockerPageSurface.tsx?raw';
@@ -221,6 +222,8 @@ describe('platform overview layout guardrails', () => {
     expect(agentsPageSurfaceSource).not.toContain('UnifiedResourceTable');
     expect(agentsMachinesTableSource).toContain('PlatformResourceDetailTableRow');
     expect(agentsMachinesTableSource).not.toContain('ResourceDetailDrawer');
+    expect(agentsPageModelSource).not.toContain('infrastructureSelectors');
+    expect(agentsPageModelSource).not.toContain('buildAgentsPageFilterModel');
   });
 
   it('keeps TrueNAS overview inventory in tables instead of summary cards', () => {

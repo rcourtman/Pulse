@@ -36,17 +36,6 @@ export function buildCommandPaletteCommands(options: {
 }): CommandPaletteModalCommand[] {
   const commands: CommandPaletteModalCommand[] = [];
 
-  if (primaryInfrastructureNavigationIsVisible(options.infrastructureVisibility, 'agents')) {
-    commands.push({
-      id: 'nav-agents',
-      label: 'Go to Agents',
-      description: options.paths.agentsPath,
-      shortcut: 'g e',
-      keywords: ['agents', 'hosts', 'machines', 'linux', 'macos', 'windows', 'unraid'],
-      action: () => options.navigate(options.paths.agentsPath),
-    });
-  }
-
   if (primaryInfrastructureNavigationIsVisible(options.infrastructureVisibility, 'proxmox')) {
     commands.push({
       id: 'nav-proxmox',
@@ -118,6 +107,17 @@ export function buildCommandPaletteCommands(options: {
         action: () => options.navigate(options.paths.vmwareNetworksPath),
       },
     );
+  }
+
+  if (primaryInfrastructureNavigationIsVisible(options.infrastructureVisibility, 'agents')) {
+    commands.push({
+      id: 'nav-agents',
+      label: 'Go to Agents',
+      description: options.paths.agentsPath,
+      shortcut: 'g e',
+      keywords: ['agents', 'hosts', 'machines', 'linux', 'macos', 'windows', 'unraid'],
+      action: () => options.navigate(options.paths.agentsPath),
+    });
   }
 
   commands.push(

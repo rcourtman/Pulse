@@ -525,6 +525,11 @@ or other self-hosted uncapped continuity plans.
     The presence of an `Agents` tab is not a new commercial usage unit:
     hosted and paid surfaces continue to meter the governed monitored-system
     grouping result rather than counting primary navigation destinations.
+    Agents is also not the paid or hosted estate landing default when concrete
+    provider/runtime platform evidence exists; the authenticated shell order
+    and post-auth landing fallback must prefer Proxmox, Containers,
+    Kubernetes, TrueNAS, and vSphere ahead of Agents, with Agents first only in
+    an agent-only estate.
 
 ## Forbidden Paths
 

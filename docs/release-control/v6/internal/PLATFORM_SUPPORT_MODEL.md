@@ -168,7 +168,12 @@ Kubernetes host that also has the Pulse agent installed remains owned by that
 platform page; the agent contributes health, temperature, SMART, command, and
 check-in facets there instead of creating a second operational row in Agents.
 Standalone Mac, Windows, Linux, Unraid, and other bare-agent machines remain
-Agents-page members.
+Agents-page members. Agents is a conditional primary destination, but it is
+not the provider-estate landing default: authenticated landing, desktop tab
+ordering, mobile tab ordering, preload priority, and command-palette ordering
+must prefer concrete provider/runtime pages first when those pages have current
+resource evidence. Agents may be the first/default destination only in an
+agent-only estate.
 
 Current agent-backed runtime lenses:
 

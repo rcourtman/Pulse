@@ -92,7 +92,7 @@ describe('App architecture', () => {
       "tooltip: 'VMware vSphere hosts, virtual machines, datastores, and networks'",
     );
     expect(appLayoutSource).toContain(
-      "tooltip: 'Pulse Agent managed machines, OS telemetry, storage, and command eligibility'",
+      "tooltip: 'Standalone Pulse Agent machines, OS telemetry, storage, and command eligibility'",
     );
     // Governed platform/runtime primary nav: Infrastructure / Workloads /
     // Storage / Recovery are not duplicated as equal primary tab

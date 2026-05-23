@@ -1027,7 +1027,14 @@ not a replacement status card, CTA band, or page-local nested card.
     Agents page is a platform page, not a legacy Infrastructure page: it must
     use the shared platform tab, toolbar, table-card, and kind-aligned column
     primitives, and it must not reintroduce the old top-of-page
-    InfrastructureSummary chart strip.
+    InfrastructureSummary chart strip. Agents must also remain secondary in
+    the shell hierarchy when provider/runtime platform evidence exists:
+    `PRIMARY_INFRASTRUCTURE_NAV_IDS`, desktop primary tabs, mobile primary
+    priority, app-shell preload order, authenticated landing fallback, and
+    command-palette ordering must prefer Proxmox, Containers, Kubernetes,
+    TrueNAS, and vSphere ahead of Agents. Agents may win those first/default
+    positions only when the current estate has standalone Pulse Agent machines
+    and no provider/runtime platform evidence.
 
 ## Forbidden Paths
 

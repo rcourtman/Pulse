@@ -333,17 +333,6 @@ export function AppLayout(props: AppLayoutProps) {
       primaryInfrastructureNavigationIsVisible(visible, id as PrimaryInfrastructureNavId);
     const allPrimaryTabs: PrimaryTab[] = [
       {
-        id: 'agents',
-        label: 'Agents',
-        route: ROOT_AGENTS_PATH,
-        settingsRoute: '/settings/infrastructure',
-        tooltip: 'Pulse Agent managed machines, OS telemetry, storage, and command eligibility',
-        enabled: isVisible('agents'),
-        live: isVisible('agents'),
-        icon: ServerIcon,
-        alwaysShow: false,
-      },
-      {
         id: 'proxmox',
         label: 'Proxmox',
         route: ROOT_PROXMOX_PATH,
@@ -396,6 +385,17 @@ export function AppLayout(props: AppLayoutProps) {
         enabled: isVisible('vmware'),
         live: isVisible('vmware'),
         icon: CpuIcon,
+        alwaysShow: false,
+      },
+      {
+        id: 'agents',
+        label: 'Agents',
+        route: ROOT_AGENTS_PATH,
+        settingsRoute: '/settings/infrastructure',
+        tooltip: 'Standalone Pulse Agent machines, OS telemetry, storage, and command eligibility',
+        enabled: isVisible('agents'),
+        live: isVisible('agents'),
+        icon: ServerIcon,
         alwaysShow: false,
       },
     ];

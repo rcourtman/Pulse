@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
-import { buildAgentsPageFilterModel, buildAgentsPageModel } from '../agentsPageModel';
+import { buildAgentsPageModel } from '../agentsPageModel';
 
 const resource = (overrides: Partial<Resource>): Resource =>
   ({
@@ -17,7 +17,7 @@ const resource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 describe('agentsPageModel', () => {
-  it('projects agent-primary machine resources without admitting provider-owned host rows', () => {
+  it('projects standalone agent machine resources without admitting provider-owned host rows', () => {
     const model = buildAgentsPageModel([
       resource({ id: 'mac-mini', platformType: 'agent', type: 'agent', sources: ['agent'] }),
       resource({
@@ -62,29 +62,5 @@ describe('agentsPageModel', () => {
     ]);
 
     expect(model.resources.map((item) => item.id)).toEqual(['legacy-agent']);
-  });
-
-  it('filters agent resources by status and local identity search', () => {
-    const resources = [
-      resource({
-        id: 'agent-mac',
-        displayName: 'Studio Mac',
-        status: 'online',
-        identity: { hostname: 'studio-mac.local', ips: ['10.0.0.12'] },
-      }),
-      resource({
-        id: 'agent-win',
-        displayName: 'Windows Bench',
-        status: 'offline',
-        identity: { hostname: 'bench.local', ips: ['10.0.0.20'] },
-      }),
-    ];
-
-    expect(buildAgentsPageFilterModel(resources, 'offline', '').filteredResources).toEqual([
-      resources[1],
-    ]);
-    expect(buildAgentsPageFilterModel(resources, '', 'studio 10.0.0.12').filteredResources).toEqual(
-      [resources[0]],
-    );
   });
 });

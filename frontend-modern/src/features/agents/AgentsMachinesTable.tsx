@@ -146,13 +146,13 @@ export const AgentsMachinesTable: Component<{
         <PlatformTableToolbar
           search={tableState.search}
           onSearchChange={tableState.setSearch}
-          searchPlaceholder="Search agent machines"
+          searchPlaceholder="Search standalone machines"
           status={tableState.status()}
           onStatusChange={tableState.setStatus}
           statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
           visible={tableState.visible()}
           total={tableState.total()}
-          rowNoun="machines"
+          rowNoun="standalone machines"
         />
 
         <Show
@@ -161,7 +161,7 @@ export const AgentsMachinesTable: Component<{
             <PlatformTableEmptyState
               icon={props.emptyIcon}
               title="No machines match current filters"
-              description="Adjust the search or status filter to see more agent-primary machines."
+              description="Adjust the search or status filter to see more standalone Pulse Agent machines."
             />
           }
         >

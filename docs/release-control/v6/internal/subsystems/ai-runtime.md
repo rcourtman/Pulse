@@ -150,7 +150,11 @@ runtime cost control, and shared AI transport surfaces.
     `agent` platform, but the page must not add an agent-specific Assistant
     prompt surface, AI launcher, model picker, or browser-owned model context.
     Agent rows may seed Assistant or Patrol only through the shared unified
-    resource handoff contracts.
+    resource handoff contracts. Agents also stays behind provider/runtime
+    platform pages in the primary shell order; moving Agents after Proxmox,
+    Containers, Kubernetes, TrueNAS, and vSphere must not change Patrol or
+    Assistant utility-tab ordering, launcher visibility, or shared keyboard
+    handling in `frontend-modern/src/AppLayout.tsx`.
 
 ## Forbidden Paths
 

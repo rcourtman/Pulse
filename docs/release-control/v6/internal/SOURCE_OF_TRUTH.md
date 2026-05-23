@@ -148,6 +148,11 @@ platform owner. Source-less legacy state may fall back to
 `platformType="agent"`, but Proxmox, vSphere, TrueNAS, Kubernetes, and other
 provider-owned host rows remain on their owning platform pages even when a
 Pulse agent reports supplemental telemetry such as temperature or SMART data.
+Agents must not become the authenticated landing page or first primary
+navigation destination when provider-platform evidence such as Proxmox,
+Docker / Podman, Kubernetes, TrueNAS, or vSphere is present; it is the
+standalone Pulse Agent machine surface and may be the fallback only for
+agent-only estates.
 The same model also sets the current posture for platform breadth: `truenas`
 is at the declared support floor summarized below, and `vmware-vsphere` is the
 current admitted strategic next-platform direction while its support claim

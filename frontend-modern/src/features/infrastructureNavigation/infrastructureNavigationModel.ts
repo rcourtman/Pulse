@@ -25,12 +25,12 @@ export type InfrastructureNavigationShortcut = {
 };
 
 export const PRIMARY_INFRASTRUCTURE_NAV_IDS: readonly PrimaryInfrastructureNavId[] = [
-  'agents',
   'proxmox',
   'docker',
   'kubernetes',
   'truenas',
   'vmware',
+  'agents',
 ] as const;
 
 export const PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS: Record<

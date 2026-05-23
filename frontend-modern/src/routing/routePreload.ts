@@ -23,8 +23,8 @@ const SETTINGS_PATH = '/settings';
 const routePreloadCache = new Map<string, Promise<void>>();
 
 export const APP_SHELL_ROUTE_PRELOAD_PATHS = [
-  ROOT_AGENTS_PATH,
   ROOT_PROXMOX_PATH,
+  ROOT_AGENTS_PATH,
   PATROL_PATH,
   ALERTS_PATH,
   SETTINGS_PATH,

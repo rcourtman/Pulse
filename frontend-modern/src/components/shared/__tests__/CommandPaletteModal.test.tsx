@@ -102,6 +102,11 @@ describe('CommandPaletteModal', () => {
     expect(screen.getByText('Go to vSphere')).toBeInTheDocument();
     expect(screen.getByText('Go to vSphere Networks')).toBeInTheDocument();
     expect(screen.getByText('/vmware/networks')).toBeInTheDocument();
+
+    const commandLabels = screen.getAllByRole('button').map((button) => button.textContent ?? '');
+    expect(commandLabels.findIndex((label) => label.includes('Go to Proxmox'))).toBeLessThan(
+      commandLabels.findIndex((label) => label.includes('Go to Agents')),
+    );
   });
 
   it('navigates to the Kubernetes pods sub-tab', async () => {
