@@ -56,8 +56,23 @@ const VSPHERE_NETWORK_STATUS_OPTIONS: PlatformTableFilterOption<VmwareNetworkSta
 const networkName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
 
-const networkType = (resource: Resource): string =>
-  asTrimmedString(resource.vmware?.networkType) || '—';
+// vCenter exposes the network type as a raw enum like `STANDARD_PORTGROUP`,
+// `DISTRIBUTED_PORTGROUP`, or `OPAQUE_NETWORK`. The Datastores table shows
+// raw enums too (NFS41 / VMFS / vSAN) but those are recognizable shorthand
+// every vSphere operator already speaks; the network enums are not. Map the
+// known ones to the names vCenter itself uses in the UI, and leave any
+// unknown future enum value as-is (uppercased) rather than guessing.
+const NETWORK_TYPE_LABELS: Record<string, string> = {
+  STANDARD_PORTGROUP: 'Standard port group',
+  DISTRIBUTED_PORTGROUP: 'vDS port group',
+  OPAQUE_NETWORK: 'NSX network',
+};
+
+const networkType = (resource: Resource): string => {
+  const raw = asTrimmedString(resource.vmware?.networkType);
+  if (!raw) return '—';
+  return NETWORK_TYPE_LABELS[raw.toUpperCase()] ?? raw;
+};
 
 const compactList = (values: Array<string | undefined>): string[] =>
   values.map((value) => asTrimmedString(value)).filter((value): value is string => Boolean(value));

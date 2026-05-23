@@ -66,8 +66,11 @@ describe('VsphereNetworksTable', () => {
     expect(within(table).getByText('Hosts')).toBeInTheDocument();
     expect(within(table).getByText('Connected VMs')).toBeInTheDocument();
     expect(within(table).queryByRole('columnheader', { name: 'State' })).not.toBeInTheDocument();
-    expect(screen.getByText('STANDARD_PORTGROUP')).toBeInTheDocument();
-    expect(screen.getByText('DISTRIBUTED_PORTGROUP')).toBeInTheDocument();
+    // vCenter's raw enums (STANDARD_PORTGROUP / DISTRIBUTED_PORTGROUP) are
+    // mapped to operator-friendly labels matching the names vCenter uses
+    // in its own UI; the raw enum is no longer surfaced.
+    expect(screen.getByText('Standard port group')).toBeInTheDocument();
+    expect(screen.getByText('vDS port group')).toBeInTheDocument();
     expect(screen.getByText('esxi-01.lab.local, esxi-02.lab.local')).toBeInTheDocument();
     expect(screen.getByText('warehouse-api-01, etl-batch-01')).toBeInTheDocument();
 
