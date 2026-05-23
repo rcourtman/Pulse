@@ -6486,7 +6486,7 @@
     },
     {
       "id": "first-session-post-rc-polish",
-      "summary": "Track broader first-session polish and parity work that is intentionally outside the RC stabilization floor after the default landing surface moved to Infrastructure; future first-session orientation belongs to Infrastructure and Add infrastructure, not a dashboard-home surface.",
+      "summary": "Track broader first-session polish and parity work that is intentionally outside the RC stabilization floor after the default landing surface moved from Dashboard to provider-first platform handoff; future first-session orientation belongs to the selected provider/runtime platform plus Add infrastructure, not a dashboard-home or legacy Infrastructure default surface.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-03-13",
@@ -7148,7 +7148,7 @@
     },
     {
       "id": "dashboard-home-estate-orientation-contract",
-      "summary": "Superseded by `infrastructure-default-landing-surface`: Dashboard no longer remains the default landing surface or a preserved overview path. The prior estate-orientation requirement now belongs to Infrastructure and Add infrastructure.",
+      "summary": "Superseded by `provider-first-platform-landing-surface`: Dashboard no longer remains the default landing surface or a preserved overview path. The prior estate-orientation requirement now belongs to provider-first platform handoff and Add infrastructure, not a dashboard-home or legacy Infrastructure default surface.",
       "kind": "contract",
       "decided_at": "2026-04-23",
       "subsystem_ids": [
