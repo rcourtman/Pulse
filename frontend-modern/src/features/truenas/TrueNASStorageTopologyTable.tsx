@@ -22,6 +22,7 @@ import {
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  platformChipStatusDot,
   type PlatformTableFilterOption,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -42,9 +43,24 @@ import {
 
 const TRUENAS_STORAGE_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASStorageStatusFilter>[] = [
   { value: 'all', label: 'All' },
-  { value: 'healthy', label: 'Healthy', tone: 'success' },
-  { value: 'attention', label: 'Attention', tone: 'warning' },
-  { value: 'offline', label: 'Offline', tone: 'danger' },
+  {
+    value: 'healthy',
+    label: 'Healthy',
+    tone: 'success',
+    leading: platformChipStatusDot('bg-emerald-500'),
+  },
+  {
+    value: 'attention',
+    label: 'Attention',
+    tone: 'warning',
+    leading: platformChipStatusDot('bg-amber-500'),
+  },
+  {
+    value: 'offline',
+    label: 'Offline',
+    tone: 'danger',
+    leading: platformChipStatusDot('bg-red-500'),
+  },
 ];
 
 const titleCase = (value: string | undefined): string => {
@@ -60,22 +76,6 @@ const kindLabel = (kind: TrueNASStorageTopologyKind): string => {
   if (kind === 'pool') return 'Pool';
   if (kind === 'dataset') return 'Dataset';
   return 'Disk';
-};
-
-const stateLabel = (row: TrueNASStorageTopologyRow): string => {
-  if (row.kind === 'pool') {
-    return (
-      asTrimmedString(row.resource.storage?.zfsPoolState)?.toUpperCase() ||
-      titleCase(row.resource.status)
-    );
-  }
-  if (row.kind === 'disk') {
-    return (
-      asTrimmedString(row.resource.physicalDisk?.health)?.toUpperCase() ||
-      titleCase(row.resource.status)
-    );
-  }
-  return titleCase(row.resource.status);
 };
 
 const subtitle = (row: TrueNASStorageTopologyRow): string => {
@@ -179,11 +179,6 @@ const diskCountLabel = (row: TrueNASStorageTopologyRow): string => {
   return '-';
 };
 
-const shareCountLabel = (row: TrueNASStorageTopologyRow): string => {
-  if (row.kind === 'disk') return '-';
-  return String(row.counts.shares);
-};
-
 export const getTrueNASStorageTopologyIndentClass = (depth: number): string => {
   if (depth <= 0) return '';
   if (depth === 1) return 'pl-5 sm:pl-7';
@@ -268,28 +263,18 @@ export const TrueNASStorageTopologyTable: Component<{
           }
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-            <TableCardHeader title="Storage Topology" />
+            <TableCardHeader title="Storage" />
             <Table class="min-w-full table-fixed text-xs md:min-w-[960px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[27%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[32%]`}>
                     Resource
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[9%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[10%]`}>
                     Kind
                   </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden sm:table-cell md:w-[10%]`}
-                  >
-                    State
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[22%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[28%]`}>
                     Usage / Size
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
-                  >
-                    Shares
                   </TableHead>
                   <TableHead
                     class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
@@ -297,11 +282,11 @@ export const TrueNASStorageTopologyTable: Component<{
                     Disks
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell md:w-[6%]`}
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell md:w-[8%]`}
                   >
                     Temp
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[10%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[14%]`}>
                     Health
                   </TableHead>
                 </TableRow>
@@ -332,18 +317,8 @@ export const TrueNASStorageTopologyTable: Component<{
                           <TableCell class={getPlatformTableCellClassForKind('text')}>
                             <span class="text-base-content">{kindLabel(row.kind)}</span>
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
-                          >
-                            <span class="font-mono text-[11px]">{stateLabel(row)}</span>
-                          </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>
                             <CapacityCell row={row} />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
-                          >
-                            {shareCountLabel(row)}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
@@ -363,7 +338,7 @@ export const TrueNASStorageTopologyTable: Component<{
                           resource={resource()}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
-                          colSpan={8}
+                          colSpan={6}
                           resolveResourceLabel={resolveResourceLabel}
                           onClose={() => drawer.close(resource())}
                         />
