@@ -278,11 +278,12 @@ regression protection.
    workload rows.
    The retired dashboard overview route must not return as a hot-path
    orientation shortcut. First-viewport system count, health, source coverage,
-   and freshness now belong to Infrastructure and Add infrastructure, derived
-   from their existing runtime/resource state rather than a dashboard-specific
-   compact summary fallback. Any future brief-style Assistant handoff needs a
-   newly governed owner and must not add route-global polling, model/settings
-   fetches, or chart/history reads to the authenticated root path.
+   and freshness now belong to the provider-first platform landing surface and
+   Add infrastructure, derived from their existing runtime/resource state
+   rather than a dashboard-specific compact summary fallback. Any future
+   brief-style Assistant handoff needs a newly governed owner and must not add
+   route-global polling, model/settings fetches, or chart/history reads to the
+   authenticated root path.
 6. Normalize workload view-mode aliases through `frontend-modern/src/utils/workloads.ts` instead of keeping local URL/storage parsing in `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
 7. Deduplicate workload rows by canonical workload ID from `frontend-modern/src/utils/workloads.ts` rather than via local pass-through wrappers in `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
 8. Render workload row identity directly from the shared canonical workload helper so row selection, hover, and fallback metadata lookup stay aligned with the same workload contract

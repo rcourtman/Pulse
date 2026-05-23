@@ -2450,20 +2450,22 @@ navigation instead of reviving a standalone operations page.
 that are unavailable in demo mode.
 
 The dashboard overview route and its feature-owned summary surfaces are
-retired. Authenticated root entry now lands on Infrastructure, so first-
-viewport estate orientation belongs to the Infrastructure page and Add
-infrastructure flow rather than a separate dashboard shell. Future overview or
-brief-style surfaces must be governed as new product surfaces before they add
-route-level data orchestration, section anchors, or Assistant prompt handoffs;
-they must not restore `frontend-modern/src/pages/Dashboard.tsx`,
+retired. Authenticated root entry now lands on the first visible
+provider/runtime platform, so first-viewport estate orientation belongs to that
+platform page plus the Add infrastructure flow rather than a separate dashboard
+or legacy Infrastructure shell. Future overview or brief-style surfaces must
+be governed as new product surfaces before they add route-level data
+orchestration, section anchors, or Assistant prompt handoffs; they must not
+restore `frontend-modern/src/pages/Dashboard.tsx`,
 `frontend-modern/src/features/dashboardOverview/`, or deleted dashboard-only
 presentation helpers as compatibility paths.
 The primary navigation active-tab contract follows that retirement boundary:
 retired or unknown routes such as `/dashboard` must not be coerced into the
-Infrastructure tab just because Infrastructure is the authenticated landing
-surface. Shared desktop and mobile navigation must tolerate a missing active tab
-for those paths while still highlighting canonical active routes such as
-Infrastructure, Workloads, Storage, Recovery, Alerts, Patrol, and Settings.
+nearest platform tab just because the authenticated shell has a provider-first
+landing fallback. Shared desktop and mobile navigation must tolerate a missing
+active tab for those paths while still highlighting canonical active routes
+such as Proxmox, Containers, Kubernetes, TrueNAS, vSphere, Agents, Alerts,
+Patrol, and Settings.
 The recovery feature shell now also depends on the shared
 `frontend-modern/src/components/shared/Subtabs.tsx` primitive for its primary
 protected-items versus recovery-events workspace switch. The recovery lane may
