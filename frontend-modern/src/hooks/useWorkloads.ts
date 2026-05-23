@@ -378,11 +378,20 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
         ? resource.proxmox.vmid
         : 0;
   const rawDisplayId = resource.id;
+  // vCenter identifies VMs by managed object reference (e.g. `vm-206`),
+  // not a numeric vmid. When the resource has no Proxmox-shaped numeric
+  // vmid, fall back to the vSphere MoRef so the workload table's ID
+  // column shows the identifier operators recognize from vCenter rather
+  // than rendering blank.
+  const vsphereDisplayId =
+    workloadType === 'vm' && vmid <= 0
+      ? (resource.vmware?.managedObjectId ?? '').trim() || undefined
+      : undefined;
   const displayId =
     workloadType === 'vm' || workloadType === 'system-container'
       ? vmid > 0
         ? String(vmid)
-        : undefined
+        : vsphereDisplayId
       : rawDisplayId
         ? rawDisplayId.length > 12
           ? rawDisplayId.slice(0, 12)
