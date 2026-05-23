@@ -46,6 +46,13 @@ const VALID_TABS = new Set<VmwarePageTabId>(VMWARE_TAB_SPECS.map((tab) => tab.id
 const VMWARE_PLATFORM_FILTER = 'vmware-vsphere';
 const VMWARE_WORKLOAD_STATUS_STORAGE_SCOPE = 'vmware';
 const VMWARE_WORKLOAD_COLUMN_VISIBILITY_SCOPE = 'vmware-vms';
+// vCenter performance counters expose VM disk throughput (diskRead /
+// diskWrite) but not guest filesystem usage. Surfacing that would require
+// the vSphere adapter to pull guestInfo.guestDiskInfo from VMware Tools,
+// which it doesn't do today. Hide the Disk column by default rather than
+// render an always-empty cell; users can still toggle it on if a future
+// adapter change starts populating metrics.disk for vSphere VMs.
+const VMWARE_WORKLOAD_DEFAULT_HIDDEN_COLUMN_IDS: readonly string[] = ['disk'];
 const VMWARE_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
   { value: 'all', label: 'All' },
   { value: 'running', label: 'Powered on' },
@@ -233,6 +240,7 @@ function VmwareOverview(props: VmwareOverviewProps) {
     allowEmbeddedScopeFilters: true,
     statusModeStorageScope: VMWARE_WORKLOAD_STATUS_STORAGE_SCOPE,
     columnVisibilityStorageScope: VMWARE_WORKLOAD_COLUMN_VISIBILITY_SCOPE,
+    additionalDefaultHiddenColumnIds: [...VMWARE_WORKLOAD_DEFAULT_HIDDEN_COLUMN_IDS],
     compactGroupHeaders: true,
     groupNodeDrawerMode: 'disabled',
     metricDisplayMode: props.metricDisplayMode,
