@@ -27,26 +27,28 @@ export function PlatformSectionTabs<TabId extends string>(props: {
   ariaLabel: string;
 }) {
   return (
-    <nav
-      class="flex flex-wrap items-center gap-1 border-b border-border"
-      aria-label={props.ariaLabel}
-    >
-      <For each={props.tabs}>
-        {(tab) => (
-          <A
-            href={tab.path}
-            class={`inline-flex min-h-10 items-center border-b-2 px-3 text-sm font-medium transition-colors ${
-              props.active === tab.id
-                ? 'border-blue-500 text-blue-600 dark:text-blue-300'
-                : 'border-transparent text-muted hover:border-border hover:text-base-content'
-            }`}
-            aria-current={props.active === tab.id ? 'page' : undefined}
-          >
-            {tab.label}
-          </A>
-        )}
-      </For>
-    </nav>
+    <Show when={props.tabs.length > 1}>
+      <nav
+        class="flex flex-wrap items-center gap-1 border-b border-border"
+        aria-label={props.ariaLabel}
+      >
+        <For each={props.tabs}>
+          {(tab) => (
+            <A
+              href={tab.path}
+              class={`inline-flex min-h-10 items-center border-b-2 px-3 text-sm font-medium transition-colors ${
+                props.active === tab.id
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-300'
+                  : 'border-transparent text-muted hover:border-border hover:text-base-content'
+              }`}
+              aria-current={props.active === tab.id ? 'page' : undefined}
+            >
+              {tab.label}
+            </A>
+          )}
+        </For>
+      </nav>
+    </Show>
   );
 }
 
