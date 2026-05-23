@@ -14,6 +14,7 @@ import {
 } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { formatUptime } from '@/utils/format';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import {
   formatVmwarePowerState,
@@ -142,42 +143,52 @@ export const VsphereHostsTable: Component<{
                     integer-count columns to what their content actually
                     needs. Mobile widths are unchanged.
                   */}
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[16%]`}>
                     Host
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[11%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[6%]`}
+                  >
+                    Version
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
                   >
                     Datacenter
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[12%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
                   >
                     Cluster
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[9%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[7%]`}
                   >
                     Power
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[13%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[12%]`}>
                     CPU
                   </TableHead>
                   <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[13%]`}>
                     Memory
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[7%]`}
                   >
                     Datastores
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[5%]`}
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[4%]`}
                   >
                     VMs
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[6%]`}
+                  >
+                    Uptime
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[9%]`}
                   >
                     vCenter
                   </TableHead>
@@ -192,6 +203,19 @@ export const VsphereHostsTable: Component<{
                     const cluster = () => asTrimmedString(meta()?.clusterName) || '—';
                     const clusterServices = () => formatVmwareClusterServices(meta());
                     const vcenter = () => asTrimmedString(meta()?.vcenterHost) || '—';
+                    // ESXi version from agent.osVersion (canonical projection of
+                    // HostSystem.config.product.fullName); uptime from the
+                    // sys.uptime.latest PerformanceManager counter routed onto
+                    // canonical Resource.Uptime.
+                    const esxiVersion = () => asTrimmedString(host.agent?.osVersion) || '—';
+                    const uptimeLabel = () =>
+                      typeof host.uptime === 'number' && host.uptime > 0
+                        ? formatUptime(host.uptime, true)
+                        : '—';
+                    const uptimeFull = () =>
+                      typeof host.uptime === 'number' && host.uptime > 0
+                        ? formatUptime(host.uptime)
+                        : '';
                     const datastoreCount = () =>
                       meta()?.datastoreIds?.length ?? meta()?.datastoreNames?.length ?? 0;
                     const vmCount = () =>
@@ -231,6 +255,12 @@ export const VsphereHostsTable: Component<{
                                 {name()}
                               </span>
                             </div>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                            title={esxiVersion()}
+                          >
+                            <span class="block truncate">{esxiVersion()}</span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
@@ -295,6 +325,12 @@ export const VsphereHostsTable: Component<{
                             {vmCount()}
                           </TableCell>
                           <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell whitespace-nowrap`}
+                            title={uptimeFull()}
+                          >
+                            {uptimeLabel()}
+                          </TableCell>
+                          <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
                           >
                             <span class="inline-block max-w-[12rem] truncate" title={vcenter()}>
@@ -306,7 +342,7 @@ export const VsphereHostsTable: Component<{
                           resource={host}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
-                          colSpan={9}
+                          colSpan={11}
                           resolveResourceLabel={resolveResourceLabel}
                           onClose={() => drawer.close(host)}
                         />

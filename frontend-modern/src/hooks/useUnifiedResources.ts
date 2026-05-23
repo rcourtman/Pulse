@@ -139,6 +139,7 @@ type APIResource = {
   type?: string;
   name?: string;
   status?: string;
+  uptime?: number;
   lastSeen?: string;
   parentName?: string;
   sources?: string[];
@@ -727,7 +728,13 @@ const toResource = (v2: APIResource): Resource => {
       v2.proxmox?.uptime ??
       v2.pbs?.uptimeSeconds ??
       v2.pmg?.uptimeSeconds ??
-      v2.kubernetes?.uptimeSeconds,
+      v2.kubernetes?.uptimeSeconds ??
+      // Canonical Resource.Uptime is the universal fallback — vSphere
+      // adapters populate only this field (no platform-specific carve-out
+      // for hosts/datastores/networks), so the chain has to land here for
+      // ESXi host uptime to surface on the unified-resources side. Same
+      // fallback shape as the workloads mapping in useWorkloads.ts.
+      v2.uptime,
     temperature:
       v2.agent?.temperature ??
       v2.proxmox?.temperature ??

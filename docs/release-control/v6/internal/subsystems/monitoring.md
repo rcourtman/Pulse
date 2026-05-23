@@ -582,6 +582,16 @@ enrichment issue rather than failing the poll. Mock fixtures
 (`internal/mock/platform_fixtures.go`) must synthesize the same fields per
 powered-on VM and drop them for powered-off VMs so the demo estate
 exercises the same workload-table contract as live vCenter would.
+That same broadcast converter owns the canonical Resource.Uptime
+fallback. `monitorUptime` walks platform-specific carve-outs
+(`Agent.UptimeSeconds`, `Proxmox.Uptime`, `Docker.UptimeSeconds`,
+`Kubernetes.UptimeSeconds`, `PBS.UptimeSeconds`, `PMG.UptimeSeconds`,
+`TrueNAS.UptimeSeconds`) before falling back to `Resource.Uptime`. The
+vSphere adapter populates only the canonical field for ESXi hosts and
+VMs, so without that final fallback the websocket payload would silently
+drop uptime for VMware-backed rows even though the REST contract carries
+it. Carve-outs still take precedence so existing platforms keep their
+prior behavior.
 That same poller-owned partial-success model must also keep runtime
 observability non-noisy. Repeated polls with the same degraded optional-read
 issue classes should not emit a fresh warning every interval; monitoring

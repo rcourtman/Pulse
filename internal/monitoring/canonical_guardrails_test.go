@@ -2021,3 +2021,44 @@ func TestPollersHonorDisabledInstanceFlag(t *testing.T) {
 		}
 	}
 }
+
+// TestMonitorUptimeFallsBackToCanonicalResourceUptime locks the contract
+// that the websocket broadcast converter must surface canonical
+// Resource.Uptime when no platform-specific carve-out is populated. The
+// vSphere adapter writes uptime onto Resource.Uptime only (no
+// vmware-specific UptimeSeconds), so without this fallback WS broadcasts
+// would silently drop uptime for VMware-backed rows even though the
+// canonical REST `/api/resources` payload exposes it.
+func TestMonitorUptimeFallsBackToCanonicalResourceUptime(t *testing.T) {
+	t.Run("falls through to Resource.Uptime when no source carve-out is set", func(t *testing.T) {
+		resource := unifiedresources.Resource{Uptime: 123456}
+		got := monitorUptime(resource)
+		if got == nil || *got != 123456 {
+			t.Fatalf("monitorUptime() = %v, want 123456 from canonical Resource.Uptime", got)
+		}
+	})
+
+	t.Run("agent / proxmox / docker / k8s carve-outs keep precedence", func(t *testing.T) {
+		resource := unifiedresources.Resource{
+			Uptime: 999999,
+			Agent:  &unifiedresources.AgentData{UptimeSeconds: 100},
+		}
+		got := monitorUptime(resource)
+		if got == nil || *got != 100 {
+			t.Fatalf("monitorUptime() = %v, want 100 from agent (precedence over canonical Uptime)", got)
+		}
+
+		resource.Agent = nil
+		resource.Proxmox = &unifiedresources.ProxmoxData{Uptime: 200}
+		got = monitorUptime(resource)
+		if got == nil || *got != 200 {
+			t.Fatalf("monitorUptime() = %v, want 200 from proxmox (precedence over canonical Uptime)", got)
+		}
+	})
+
+	t.Run("returns nil when nothing populates", func(t *testing.T) {
+		if got := monitorUptime(unifiedresources.Resource{}); got != nil {
+			t.Fatalf("monitorUptime() = %v, want nil when all sources empty", got)
+		}
+	})
+}

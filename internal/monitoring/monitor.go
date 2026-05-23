@@ -5504,6 +5504,16 @@ func monitorUptime(resource unifiedresources.Resource) *int64 {
 		value := resource.TrueNAS.UptimeSeconds
 		return &value
 	}
+	// Canonical Resource.Uptime is the universal fallback. The vSphere
+	// adapter populates only this field for ESXi hosts and VMs (no
+	// vmware-specific UptimeSeconds carve-out), so without this fall the
+	// websocket broadcast layer would drop uptime for VMware-backed rows
+	// even though the REST `/api/resources` payload exposes it on
+	// `resource.uptime` directly.
+	if resource.Uptime > 0 {
+		value := resource.Uptime
+		return &value
+	}
 	return nil
 }
 

@@ -801,6 +801,39 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('falls back to canonical resource.uptime when no platform-specific field is set (vSphere)', async () => {
+    // vSphere ESXi hosts and VMs populate only the canonical
+    // Resource.Uptime field — there's no vmware-specific UptimeSeconds
+    // carve-out. The toResource mapping must land on v2.uptime so the
+    // unified-resources contract surfaces uptime for VMware-backed rows.
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            sources: ['vmware'],
+            agent: undefined,
+            proxmox: undefined,
+            uptime: 9876543,
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({ query: 'type=agent', cacheKey: 'vsphere-host-uptime' });
+    });
+
+    await result!.refetch();
+    expect(result!.resources()[0]?.uptime).toBe(9876543);
+
+    dispose();
+  });
+
   it('falls back to proxmox temperature when agent temperature is unavailable', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,

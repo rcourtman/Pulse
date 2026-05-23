@@ -671,6 +671,14 @@ AI-only summary payloads, or page-local heuristics.
     broader cache already reflects canonical resource truth, and fresh empty
     snapshots must remain cacheable instead of regressing route handoffs back
     to transient full-page loading shells.
+    That same `toResource` mapping owns canonical-field fallback for the
+    per-resource scalars the frontend reads. `Resource.uptime` must fall
+    back to the canonical `v2.uptime` field after the platform-specific
+    carve-outs (`agent.uptimeSeconds`, `proxmox.uptime`, `pbs.uptimeSeconds`,
+    `pmg.uptimeSeconds`, `kubernetes.uptimeSeconds`). The vSphere adapter
+    populates only the canonical field on the REST contract, so without
+    landing on `v2.uptime` ESXi hosts and VMware-backed VMs lose uptime on
+    the unified-resources side even though the API payload carries it.
     That same shared cache boundary must normalize route/query type filters
     through the canonical frontend-to-`ResourceType` resolver before slicing
     the snapshot, so compatibility values such as `disk` / `physical_disk`
