@@ -109,6 +109,11 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
     suppressPlatformFilter: true,
     allowEmbeddedScopeFilters: true,
     columnVisibilityStorageScope: KUBERNETES_WORKLOAD_COLUMN_SCOPE,
+    // Backup column is driven exclusively by Proxmox vzdump / PBS data
+    // (`resource.proxmox.lastBackup` in useWorkloads); Kubernetes
+    // workloads have no equivalent source at this integration layer, so
+    // the column would always render blank. Hide by default.
+    additionalDefaultHiddenColumnIds: ['backup'],
     compactGroupHeaders: true,
   });
   const showSharedFilterToolbar = createMemo(

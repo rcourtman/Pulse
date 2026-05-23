@@ -103,7 +103,7 @@ describe('dockerPageModel', () => {
       buildDockerContainerDefaultHiddenColumnIds([
         makeResource({ id: 'ctr-1', type: 'app-container' }),
       ]),
-    ).toEqual(['disk', 'tags', 'netIo', 'diskIo']);
+    ).toEqual(['disk', 'tags', 'backup', 'netIo', 'diskIo']);
   });
 
   it('keeps Docker container I/O columns default-visible once telemetry exists', () => {
@@ -116,7 +116,7 @@ describe('dockerPageModel', () => {
           diskIO: { readRate: 0, writeRate: 0 },
         }),
       ]),
-    ).toEqual(['disk', 'tags']);
+    ).toEqual(['disk', 'tags', 'backup']);
   });
 
   it('decides Docker container network and disk I/O defaults independently', () => {
@@ -128,7 +128,7 @@ describe('dockerPageModel', () => {
           network: { rxBytes: 128, txBytes: 64 },
         }),
       ]),
-    ).toEqual(['disk', 'tags', 'diskIo']);
+    ).toEqual(['disk', 'tags', 'backup', 'diskIo']);
 
     expect(
       buildDockerContainerDefaultHiddenColumnIds([
@@ -138,7 +138,7 @@ describe('dockerPageModel', () => {
           diskIO: { readRate: 128, writeRate: 64 },
         }),
       ]),
-    ).toEqual(['disk', 'tags', 'netIo']);
+    ).toEqual(['disk', 'tags', 'backup', 'netIo']);
   });
 
   it('builds host-identity badges for Docker workload group rows', () => {

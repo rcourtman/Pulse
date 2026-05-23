@@ -46,6 +46,14 @@ const VALID_TABS = new Set<VmwarePageTabId>(VMWARE_TAB_SPECS.map((tab) => tab.id
 const VMWARE_PLATFORM_FILTER = 'vmware-vsphere';
 const VMWARE_WORKLOAD_STATUS_STORAGE_SCOPE = 'vmware';
 const VMWARE_WORKLOAD_COLUMN_VISIBILITY_SCOPE = 'vmware-vms';
+// Backup column on the workload table is driven exclusively by Proxmox
+// vzdump / PBS data (`resource.proxmox.lastBackup` in useWorkloads).
+// vCenter has no native backup concept — vSphere backups happen in
+// third-party products (Veeam, Commvault, Rubrik, Cohesity, Dell
+// PowerProtect) or VMware's separately-licensed Live Recovery / SRM,
+// none of which surface through vCenter's inventory API. Hide the
+// column by default rather than render a permanently blank cell.
+const VMWARE_WORKLOAD_DEFAULT_HIDDEN_COLUMN_IDS: readonly string[] = ['backup'];
 const VMWARE_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
   { value: 'all', label: 'All' },
   { value: 'running', label: 'Powered on' },
@@ -233,6 +241,7 @@ function VmwareOverview(props: VmwareOverviewProps) {
     allowEmbeddedScopeFilters: true,
     statusModeStorageScope: VMWARE_WORKLOAD_STATUS_STORAGE_SCOPE,
     columnVisibilityStorageScope: VMWARE_WORKLOAD_COLUMN_VISIBILITY_SCOPE,
+    additionalDefaultHiddenColumnIds: [...VMWARE_WORKLOAD_DEFAULT_HIDDEN_COLUMN_IDS],
     compactGroupHeaders: true,
     groupNodeDrawerMode: 'disabled',
     metricDisplayMode: props.metricDisplayMode,

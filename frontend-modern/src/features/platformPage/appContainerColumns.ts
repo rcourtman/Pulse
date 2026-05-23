@@ -1,6 +1,12 @@
 import type { Resource } from '@/types/resource';
 
-export const APP_CONTAINER_BASE_DEFAULT_HIDDEN_COLUMNS = ['disk', 'tags'] as const;
+// Default-hidden columns for app-container workloads. `disk` and `tags` are
+// existing hides; `backup` is added because the workload-table Backup column
+// is driven exclusively by `resource.proxmox.lastBackup`, which Proxmox VE
+// populates from its vzdump scheduler / PBS integration. App containers
+// (Docker, Podman, TrueNAS apps) have no equivalent source — the cell is
+// not just empty, the concept doesn't exist at this integration layer.
+export const APP_CONTAINER_BASE_DEFAULT_HIDDEN_COLUMNS = ['disk', 'tags', 'backup'] as const;
 
 export const APP_CONTAINER_COLUMN_LABEL_OVERRIDES = {
   disk: 'Writable layer',
