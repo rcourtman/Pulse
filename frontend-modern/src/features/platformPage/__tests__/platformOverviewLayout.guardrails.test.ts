@@ -28,7 +28,6 @@ import vsphereActivityTableSource from '@/features/vmware/VsphereActivityTable.t
 import vsphereAlertsTableSource from '@/features/vmware/VsphereAlertsTable.tsx?raw';
 import vsphereDatastoresTableSource from '@/features/vmware/VsphereDatastoresTable.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
-import vsphereVirtualMachinesTableSource from '@/features/vmware/VsphereVirtualMachinesTable.tsx?raw';
 
 const platformTableSources = [
   proxmoxNodesTableSource,
@@ -48,7 +47,6 @@ const platformTableSources = [
   vsphereAlertsTableSource,
   vsphereDatastoresTableSource,
   vsphereHostsTableSource,
-  vsphereVirtualMachinesTableSource,
 ];
 
 const platformToolbarTableSources = [
@@ -200,8 +198,10 @@ describe('platform overview layout guardrails', () => {
     expect(vmwarePageSurfaceSource).toContain('<VsphereHostsTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereAlertsTable');
     expect(vmwarePageSurfaceSource).toContain("activeTab() === 'health'");
-    expect(vmwarePageSurfaceSource).toContain('<VsphereVirtualMachinesTable');
-    expect(vmwarePageSurfaceSource).not.toContain('<WorkloadsSurface');
+    expect(vmwarePageSurfaceSource).not.toContain('<VsphereVirtualMachinesTable');
+    expect(vmwarePageSurfaceSource).toContain('<WorkloadsSurface');
+    expect(vmwarePageSurfaceSource).toContain("forcedPlatform={VMWARE_PLATFORM_FILTER}");
+    expect(vmwarePageSurfaceSource).toContain("forcedViewMode=\"vm\"");
     expect(vmwarePageSurfaceSource).toContain('<VsphereDatastoresTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereNetworksTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereActivityTable');
