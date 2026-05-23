@@ -160,6 +160,13 @@ Current agent-backed primary platforms:
 1. `agent` for unified-agent hosts
 2. `kubernetes`
 
+The authenticated shell may label the `agent` destination as `Agents`. That
+surface is the Pulse-managed host platform, not a generic mixed-systems bucket:
+navigation and rows must be gated to canonical `platformType="agent"` host
+resources, while Proxmox, VMware, TrueNAS, Kubernetes, and runtime-lens
+resources remain owned by their respective platform contracts and may cross-link
+to related agent facets.
+
 Current agent-backed runtime lenses:
 
 1. `docker` for the Docker / Podman container-runtime lens

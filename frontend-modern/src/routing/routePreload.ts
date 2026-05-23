@@ -1,4 +1,6 @@
 import {
+  AGENTS_PATH,
+  buildAgentsPath,
   buildProxmoxPath,
   DOCKER_PATH,
   KUBERNETES_PATH,
@@ -15,11 +17,13 @@ type RoutePreloader = {
 };
 
 const ROOT_PROXMOX_PATH = buildProxmoxPath();
+const ROOT_AGENTS_PATH = buildAgentsPath();
 const ALERTS_PATH = '/alerts';
 const SETTINGS_PATH = '/settings';
 const routePreloadCache = new Map<string, Promise<void>>();
 
 export const APP_SHELL_ROUTE_PRELOAD_PATHS = [
+  ROOT_AGENTS_PATH,
   ROOT_PROXMOX_PATH,
   PATROL_PATH,
   ALERTS_PATH,
@@ -37,52 +41,49 @@ function normalizeRoute(route: string): string {
 
 const ROUTE_PRELOADERS: readonly RoutePreloader[] = [
   {
+    id: 'agents',
+    matches: (route) => route === AGENTS_PATH || route.startsWith(`${AGENTS_PATH}/`),
+    preload: () => import('@/pages/Agents').then(() => undefined),
+  },
+  {
     id: 'proxmox',
     matches: (route) => route === PROXMOX_PATH || route.startsWith(`${PROXMOX_PATH}/`),
-    preload: () =>
-      import('@/pages/Proxmox').then(() => undefined),
+    preload: () => import('@/pages/Proxmox').then(() => undefined),
   },
   {
     id: 'docker',
     matches: (route) => route === DOCKER_PATH || route.startsWith(`${DOCKER_PATH}/`),
-    preload: () =>
-      import('@/pages/Docker').then(() => undefined),
+    preload: () => import('@/pages/Docker').then(() => undefined),
   },
   {
     id: 'kubernetes',
     matches: (route) => route === KUBERNETES_PATH || route.startsWith(`${KUBERNETES_PATH}/`),
-    preload: () =>
-      import('@/pages/Kubernetes').then(() => undefined),
+    preload: () => import('@/pages/Kubernetes').then(() => undefined),
   },
   {
     id: 'truenas',
     matches: (route) => route === TRUENAS_PATH || route.startsWith(`${TRUENAS_PATH}/`),
-    preload: () =>
-      import('@/pages/TrueNAS').then(() => undefined),
+    preload: () => import('@/pages/TrueNAS').then(() => undefined),
   },
   {
     id: 'vmware',
     matches: (route) => route === VMWARE_PATH || route.startsWith(`${VMWARE_PATH}/`),
-    preload: () =>
-      import('@/pages/Vmware').then(() => undefined),
+    preload: () => import('@/pages/Vmware').then(() => undefined),
   },
   {
     id: 'alerts',
     matches: (route) => route === ALERTS_PATH || route.startsWith(`${ALERTS_PATH}/`),
-    preload: () =>
-      import('@/pages/Alerts').then(() => undefined),
+    preload: () => import('@/pages/Alerts').then(() => undefined),
   },
   {
     id: 'patrol',
     matches: (route) => route === PATROL_PATH || route.startsWith(`${PATROL_PATH}/`),
-    preload: () =>
-      import('@/pages/AIIntelligence').then(() => undefined),
+    preload: () => import('@/pages/AIIntelligence').then(() => undefined),
   },
   {
     id: 'settings',
     matches: (route) => route === SETTINGS_PATH || route.startsWith(`${SETTINGS_PATH}/`),
-    preload: () =>
-      import('@/components/Settings/Settings').then(() => undefined),
+    preload: () => import('@/components/Settings/Settings').then(() => undefined),
   },
 ] as const;
 

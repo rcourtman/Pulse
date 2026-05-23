@@ -35,6 +35,7 @@ export type MobileNavBarProps = {
 };
 
 const MOBILE_NAV_PRIMARY_PRIORITY = [
+  'agents',
   'proxmox',
   'docker',
   'kubernetes',

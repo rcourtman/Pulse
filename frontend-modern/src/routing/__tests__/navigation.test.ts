@@ -5,6 +5,8 @@ describe('navigation routing helpers', () => {
   it('maps paths to the correct primary tab', () => {
     expect(getActiveTabForPath('/unknown')).toBeNull();
     expect(getActiveTabForPath('/dashboard')).toBeNull();
+    expect(getActiveTabForPath('/agents')).toBe('agents');
+    expect(getActiveTabForPath('/agents/overview')).toBe('agents');
     expect(getActiveTabForPath('/proxmox')).toBe('proxmox');
     expect(getActiveTabForPath('/proxmox/storage')).toBe('proxmox');
     // Legacy top-level routes (/infrastructure, /workloads, /storage,

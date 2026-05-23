@@ -1,6 +1,4 @@
-import {
-  normalizeSourcePlatformQueryValue,
-} from '@/utils/sourcePlatforms';
+import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { normalizeStorageSourceKey } from '@/utils/storageSources';
 import { normalizeRecoveryItemTypeQueryValue } from '@/utils/recoveryItemTypePresentation';
 import { canonicalizeWorkloadFilterType } from '@/utils/workloads';
@@ -18,6 +16,8 @@ export const WORKLOADS_QUERY_PARAMS = {
 } as const;
 
 export const WORKLOADS_PATH = '/workloads';
+export const AGENTS_PATH = '/agents';
+export const AGENTS_DEFAULT_TAB = 'overview';
 export const PROXMOX_PATH = '/proxmox';
 export const PROXMOX_DEFAULT_TAB = 'overview';
 export const DOCKER_PATH = '/docker';
@@ -192,6 +192,11 @@ export const buildWorkloadsPath = (options: WorkloadsLinkOptions = {}): string =
 export const buildProxmoxPath = (tab: string = PROXMOX_DEFAULT_TAB): string => {
   const normalized = tab.trim().replace(/^\/+|\/+$/g, '');
   return normalized ? `${PROXMOX_PATH}/${normalized}` : PROXMOX_PATH;
+};
+
+export const buildAgentsPath = (tab: string = AGENTS_DEFAULT_TAB): string => {
+  const normalized = tab.trim().replace(/^\/+|\/+$/g, '');
+  return normalized ? `${AGENTS_PATH}/${normalized}` : AGENTS_PATH;
 };
 
 export const buildDockerPath = (tab: string = DOCKER_DEFAULT_TAB): string => {

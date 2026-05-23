@@ -19,6 +19,7 @@ export type CommandPaletteModalCommand = {
 };
 
 export type CommandPaletteCommandPaths = {
+  agentsPath: string;
   proxmoxPath: string;
   dockerPath: string;
   kubernetesPath: string;
@@ -34,6 +35,17 @@ export function buildCommandPaletteCommands(options: {
   navigate: (path: string) => void;
 }): CommandPaletteModalCommand[] {
   const commands: CommandPaletteModalCommand[] = [];
+
+  if (primaryInfrastructureNavigationIsVisible(options.infrastructureVisibility, 'agents')) {
+    commands.push({
+      id: 'nav-agents',
+      label: 'Go to Agents',
+      description: options.paths.agentsPath,
+      shortcut: 'g e',
+      keywords: ['agents', 'hosts', 'machines', 'linux', 'macos', 'windows', 'unraid'],
+      action: () => options.navigate(options.paths.agentsPath),
+    });
+  }
 
   if (primaryInfrastructureNavigationIsVisible(options.infrastructureVisibility, 'proxmox')) {
     commands.push({

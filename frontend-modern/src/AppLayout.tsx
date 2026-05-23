@@ -7,6 +7,7 @@ import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
 import ContainerIcon from 'lucide-solid/icons/container';
+import ServerIcon from 'lucide-solid/icons/server';
 import ShipWheelIcon from 'lucide-solid/icons/ship-wheel';
 import DatabaseIcon from 'lucide-solid/icons/database';
 import CpuIcon from 'lucide-solid/icons/cpu';
@@ -35,6 +36,7 @@ import { logger } from '@/utils/logger';
 import { getActiveTabForPath } from '@/routing/navigation';
 import { preloadRouteModule } from '@/routing/routePreload';
 import {
+  buildAgentsPath,
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
@@ -49,6 +51,7 @@ import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentat
 import { AI_CHAT_LAUNCHER_ARIA_LABEL, getAIChatLauncherTitle } from '@/utils/aiChatPresentation';
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
 
+const ROOT_AGENTS_PATH = buildAgentsPath();
 const ROOT_PROXMOX_PATH = buildProxmoxPath();
 const ROOT_DOCKER_PATH = buildDockerPath();
 const ROOT_KUBERNETES_PATH = buildKubernetesPath();
@@ -203,6 +206,7 @@ export function AppLayout(props: AppLayoutProps) {
   // identify the current Pulse surface instead of every page reading
   // as the bare app name.
   const tabTitleByActive: Record<NonNullable<ReturnType<typeof getActiveTabForPath>>, string> = {
+    agents: 'Agents',
     proxmox: 'Proxmox',
     docker: 'Containers',
     kubernetes: 'Kubernetes',
@@ -225,6 +229,7 @@ export function AppLayout(props: AppLayoutProps) {
     buildPrimaryInfrastructureNavigationVisibility(props.state().resources || []),
   );
   const primaryInfrastructureRouteById: Record<PrimaryInfrastructureNavId, string> = {
+    agents: ROOT_AGENTS_PATH,
     proxmox: ROOT_PROXMOX_PATH,
     docker: ROOT_DOCKER_PATH,
     kubernetes: ROOT_KUBERNETES_PATH,
@@ -327,6 +332,17 @@ export function AppLayout(props: AppLayoutProps) {
     const isVisible = (id: PrimaryTab['id']) =>
       primaryInfrastructureNavigationIsVisible(visible, id as PrimaryInfrastructureNavId);
     const allPrimaryTabs: PrimaryTab[] = [
+      {
+        id: 'agents',
+        label: 'Agents',
+        route: ROOT_AGENTS_PATH,
+        settingsRoute: '/settings/infrastructure',
+        tooltip: 'Pulse Agent managed machines, OS telemetry, storage, and command eligibility',
+        enabled: isVisible('agents'),
+        live: isVisible('agents'),
+        icon: ServerIcon,
+        alwaysShow: false,
+      },
       {
         id: 'proxmox',
         label: 'Proxmox',

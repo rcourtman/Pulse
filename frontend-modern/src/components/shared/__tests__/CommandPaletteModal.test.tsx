@@ -36,6 +36,7 @@ const makeResource = (overrides: Partial<Resource>): Resource =>
 
 const infrastructureVisibility = () =>
   buildPrimaryInfrastructureNavigationVisibility([
+    makeResource({ id: 'agent-1', type: 'agent', platformType: 'agent' }),
     makeResource({ id: 'pve-1', type: 'agent', platformType: 'proxmox-pve' }),
     makeResource({ id: 'docker-1', type: 'docker-host', platformType: 'docker' }),
     makeResource({ id: 'k8s-1', type: 'k8s-cluster', platformType: 'kubernetes' }),
@@ -56,6 +57,7 @@ describe('CommandPaletteModal', () => {
 
     expect(commandPaletteStateSource).toContain('useNavigate');
     expect(commandPaletteStateSource).toContain('createSignal');
+    expect(commandPaletteStateSource).toContain('buildAgentsPath');
     expect(commandPaletteStateSource).toContain('buildProxmoxPath');
     expect(commandPaletteStateSource).toContain('export function useCommandPaletteState');
 
@@ -70,6 +72,7 @@ describe('CommandPaletteModal', () => {
     expect(commandPaletteModelSource).toContain('buildCommandPaletteCommands');
     expect(commandPaletteModelSource).toContain('normalizeCommandPaletteQuery');
     expect(commandPaletteModelSource).toContain('filterCommandPaletteCommands');
+    expect(commandPaletteModelSource).toContain("id: 'nav-agents'");
     expect(commandPaletteModelSource).toContain("id: 'nav-proxmox'");
     expect(commandPaletteModelSource).toContain("id: 'nav-docker'");
     expect(commandPaletteModelSource).toContain("id: 'nav-kubernetes'");
@@ -91,6 +94,7 @@ describe('CommandPaletteModal', () => {
       />
     ));
 
+    expect(screen.getByText('Go to Agents')).toBeInTheDocument();
     expect(screen.getByText('Go to Proxmox')).toBeInTheDocument();
     expect(screen.getByText('Go to Containers')).toBeInTheDocument();
     expect(screen.getByText('Go to Kubernetes Pods')).toBeInTheDocument();
@@ -164,6 +168,7 @@ describe('CommandPaletteModal', () => {
     ));
 
     expect(screen.getByText('Go to Proxmox')).toBeInTheDocument();
+    expect(screen.queryByText('Go to Agents')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Containers')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Kubernetes')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to TrueNAS')).not.toBeInTheDocument();

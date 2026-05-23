@@ -1018,6 +1018,12 @@ not a replacement status card, CTA band, or page-local nested card.
     that platform-first set so mobile and desktop primary navigation stay
     aligned; legacy Infrastructure / Workloads / Storage / Recovery entries
     are intentionally absent from that priority list.
+    The support-manifest `agent` platform may be presented as `Agents` in the
+    same shell. Its primary tab, mobile priority, command-palette destination,
+    and keyboard shortcut must all route through `buildAgentsPath()` and the
+    `PrimaryInfrastructureNavId` evidence gate; they must not create a generic
+    Hosts, Nodes, Other, or mixed-systems bucket, and they must not include
+    provider-owned platform nodes that are not canonical agent resources.
 
 ## Forbidden Paths
 

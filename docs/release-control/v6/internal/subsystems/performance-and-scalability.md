@@ -614,12 +614,15 @@ shell clickable behind another overlay.
     dashboard hot path.
     Platform-first top-level pages must remain in the app-shell route
     preload registry. `frontend-modern/src/routing/routePreload.ts` carries
-    a `ROUTE_PRELOADERS` entry per supported platform (Proxmox plus the
-    Docker, Kubernetes, TrueNAS, and vSphere families) so first-paint
+    a `ROUTE_PRELOADERS` entry per supported platform (Agents, Proxmox plus
+    the Docker, Kubernetes, TrueNAS, and vSphere families) so first-paint
     navigation between platform tabs stays warm and does not depend on a
     cold dynamic import after the user clicks. New supported platform
     families must extend that registry rather than skipping the preload
-    hot path; presentation-only platforms must not be registered.
+    hot path; presentation-only platforms must not be registered. Preload
+    entries may warm route modules, but they must not trigger additional
+    unfiltered resource fetches, metrics-history fan-out, or provider scans
+    before the destination page owns its normal data query.
     Platform pages that embed `WorkloadsSurface` reuse the canonical
     workloads filter toolbar through the `showFilterToolbar` +
     `suppressPlatformFilter` props in `WorkloadsSurfaceProps`. The page

@@ -117,6 +117,7 @@ describe('AppLayout navigation icons', () => {
 
   it('shows platform and runtime lens tabs with supported infrastructure evidence', () => {
     renderLayout([
+      makeResource({ id: 'agent-1', type: 'agent', platformType: 'agent' }),
       makeResource({ id: 'pve-1', type: 'agent', platformType: 'proxmox-pve' }),
       makeResource({ id: 'docker-1', type: 'docker-host', platformType: 'docker' }),
       makeResource({ id: 'vcenter-1', type: 'vm', platformType: 'vmware-vsphere' }),
@@ -126,6 +127,9 @@ describe('AppLayout navigation icons', () => {
     const infrastructureGroup = desktopNav.querySelector('[aria-label="Infrastructure"]');
     expect(infrastructureGroup).toBeTruthy();
 
+    expect(
+      within(infrastructureGroup as HTMLElement).getByRole('tab', { name: 'Agents' }),
+    ).toBeTruthy();
     expect(
       within(infrastructureGroup as HTMLElement).getByRole('tab', { name: 'Proxmox' }),
     ).toBeTruthy();

@@ -45,9 +45,8 @@ describe('App architecture', () => {
     expect(routePreloadSource).not.toContain('ROOT_WORKLOADS_PATH');
     expect(routePreloadSource).not.toContain('RECOVERY_ROUTE_PATH');
     expect(routePreloadSource).not.toContain('STORAGE_PATH');
-    expect(appSource).toContain(
-      "const InfrastructurePage = lazy(() => import('./features/infrastructure/InfrastructurePageSurface'));",
-    );
+    expect(appSource).toContain('const InfrastructurePage = lazy(');
+    expect(appSource).toContain("import('./features/infrastructure/InfrastructurePageSurface')");
     expect(appSource).toContain("import('./components/Workloads/WorkloadsSurface')");
     expect(appSource).toContain("import('./components/Storage/Storage')");
     expect(appSource).toContain("import('./components/Recovery/Recovery')");
@@ -66,6 +65,9 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).not.toContain("import('@/components/Settings/Settings')");
     expect(appSource).toContain('const timeoutId = window.setTimeout(() => {');
     expect(appSource).toContain('void preloadAppShellRoutes();');
+    expect(appSource).toContain("const AgentsPage = lazy(() => import('./pages/Agents'));");
+    expect(appSource).toContain('<Route path={AGENTS_PATH} component={AgentsPage} />');
+    expect(appSource).toContain('<Route path={`${AGENTS_PATH}/*`} component={AgentsPage} />');
     expect(appSource).toContain('<Route path={PROXMOX_PATH} component={ProxmoxPage} />');
     expect(appSource).toContain('<Route path={`${PROXMOX_PATH}/*`} component={ProxmoxPage} />');
     expect(appSource).toContain("const DockerPage = lazy(() => import('./pages/Docker'));");
@@ -76,16 +78,21 @@ describe('App architecture', () => {
     expect(appSource).toContain('<Route path={KUBERNETES_PATH} component={KubernetesPage} />');
     expect(appSource).toContain('<Route path={TRUENAS_PATH} component={TrueNASPage} />');
     expect(appSource).toContain('<Route path={VMWARE_PATH} component={VmwarePage} />');
+    expect(routePreloadSource).toContain("id: 'agents',");
     expect(routePreloadSource).toContain("id: 'docker',");
     expect(routePreloadSource).toContain("id: 'kubernetes',");
     expect(routePreloadSource).toContain("id: 'truenas',");
     expect(routePreloadSource).toContain("id: 'vmware',");
+    expect(appLayoutSource).toContain("id: 'agents',");
     expect(appLayoutSource).toContain("id: 'docker',");
     expect(appLayoutSource).toContain("id: 'kubernetes',");
     expect(appLayoutSource).toContain("id: 'truenas',");
     expect(appLayoutSource).toContain("id: 'vmware',");
     expect(appLayoutSource).toContain(
       "tooltip: 'VMware vSphere hosts, virtual machines, datastores, and networks'",
+    );
+    expect(appLayoutSource).toContain(
+      "tooltip: 'Pulse Agent managed machines, OS telemetry, storage, and command eligibility'",
     );
     // Governed platform/runtime primary nav: Infrastructure / Workloads /
     // Storage / Recovery are not duplicated as equal primary tab
@@ -331,11 +338,13 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).not.toContain('function AppLayout(');
     expect(routePreloadSource).toContain('const ROUTE_PRELOADERS: readonly RoutePreloader[] = [');
     expect(routePreloadSource).toContain('export const APP_SHELL_ROUTE_PRELOAD_PATHS = [');
+    expect(routePreloadSource).toContain("id: 'agents',");
     expect(routePreloadSource).toContain("id: 'proxmox',");
     expect(routePreloadSource).toContain("id: 'patrol',");
     expect(routePreloadSource).toContain(
       'const routePreloadCache = new Map<string, Promise<void>>();',
     );
+    expect(routePreloadSource).toContain("import('@/pages/Agents')");
     expect(routePreloadSource).toContain("import('@/pages/Proxmox')");
     expect(routePreloadSource).not.toContain("import('@/pages/Infrastructure')");
     expect(routePreloadSource).not.toContain("import('@/pages/Workloads')");

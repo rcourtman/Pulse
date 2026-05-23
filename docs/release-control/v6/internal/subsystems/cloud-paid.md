@@ -499,8 +499,9 @@ or other self-hosted uncapped continuity plans.
     directly replyable by customers.
     `App.tsx` and `AppLayout.tsx` own the governed platform/runtime primary
     navigation. `App.tsx` registers one top-level route per supported platform
-    or runtime family (Proxmox, the Docker / Podman container-runtime lens,
-    Kubernetes, TrueNAS, vSphere) using the canonical path constants from
+    or runtime family (Agents for the support-manifest `agent` platform,
+    Proxmox, the Docker / Podman container-runtime lens, Kubernetes, TrueNAS,
+    vSphere) using the canonical path constants from
     `frontend-modern/src/routing/resourceLinks.ts`. The `PrimaryTab` list in
     `AppLayout.tsx` must enumerate exactly those supported platform/runtime
     destinations, but product navigation is support-and-evidence gated:
@@ -517,10 +518,13 @@ or other self-hosted uncapped continuity plans.
     `WorkloadsSurface`, `StorageSurface`, `RecoverySurface`, or
     `UnifiedResourceTable` in `embedded tableOnly` mode with a forced
     platform/source filter. The shell must not introduce dashboard cards,
-    bespoke per-family tables, or synthetic placeholder data, and must not
-    reintroduce Infrastructure / Workloads / Storage / Recovery as equal
+    bespoke per-family tables, synthetic placeholder data, or reintroduce
+    Infrastructure / Workloads / Storage / Recovery as equal
     primary navigation entries without a governed contract decision recorded
     here.
+    The presence of an `Agents` tab is not a new commercial usage unit:
+    hosted and paid surfaces continue to meter the governed monitored-system
+    grouping result rather than counting primary navigation destinations.
 
 ## Forbidden Paths
 

@@ -23,6 +23,7 @@ const resource = (overrides: Partial<Resource>): Resource =>
 describe('infrastructureNavigationModel', () => {
   it('shows primary infrastructure destinations only when supported or admitted resource evidence is present', () => {
     expect(buildPrimaryInfrastructureNavigationVisibility([])).toEqual({
+      agents: false,
       proxmox: false,
       docker: false,
       kubernetes: false,
@@ -32,6 +33,7 @@ describe('infrastructureNavigationModel', () => {
 
     expect(
       buildPrimaryInfrastructureNavigationVisibility([
+        resource({ id: 'agent-1', platformType: 'agent', type: 'agent' }),
         resource({ id: 'pve-1', platformType: 'proxmox-pve', type: 'agent' }),
         resource({
           id: 'pod-1',
@@ -43,6 +45,7 @@ describe('infrastructureNavigationModel', () => {
         resource({ id: 'vcenter-1', platformType: 'vmware-vsphere', type: 'vm' }),
       ]),
     ).toEqual({
+      agents: true,
       proxmox: true,
       docker: false,
       kubernetes: true,
@@ -92,6 +95,7 @@ describe('infrastructureNavigationModel', () => {
         }),
       ]),
     ).toEqual({
+      agents: false,
       proxmox: false,
       docker: false,
       kubernetes: false,
@@ -118,9 +122,30 @@ describe('infrastructureNavigationModel', () => {
     });
   });
 
+  it('does not show Agents for incidental agent platform hints on non-agent resources', () => {
+    expect(
+      buildPrimaryInfrastructureNavigationVisibility([
+        resource({ id: 'pod-1', type: 'pod', platformType: 'agent' }),
+        resource({ id: 'pve-node-1', type: 'agent', platformType: 'proxmox-pve' }),
+      ]).agents,
+    ).toBe(false);
+  });
+
   it('selects the first visible platform using the canonical primary navigation order', () => {
     expect(
       selectFirstVisiblePrimaryInfrastructureNavigationId({
+        agents: true,
+        proxmox: true,
+        docker: false,
+        kubernetes: false,
+        truenas: false,
+        vmware: false,
+      }),
+    ).toBe('agents');
+
+    expect(
+      selectFirstVisiblePrimaryInfrastructureNavigationId({
+        agents: false,
         proxmox: false,
         docker: false,
         kubernetes: true,
@@ -131,6 +156,7 @@ describe('infrastructureNavigationModel', () => {
 
     expect(
       selectFirstVisiblePrimaryInfrastructureNavigationId({
+        agents: false,
         proxmox: false,
         docker: false,
         kubernetes: false,

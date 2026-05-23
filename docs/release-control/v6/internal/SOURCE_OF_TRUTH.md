@@ -140,6 +140,11 @@ Under that governed platform model, `kubernetes` is a first-class top-level
 orchestrator platform, while `docker` is the first-class Docker / Podman
 container-runtime lens and `podman` stays a runtime variant inside that lens
 rather than becoming its own top-level platform.
+The `agent` platform is the first-class Pulse-managed host surface and may be
+presented in the authenticated shell as `Agents`; it is not a generic
+mixed-systems page, and membership must stay gated to canonical
+`platformType="agent"` host resources rather than provider-owned nodes,
+workloads, or unknown resources.
 The same model also sets the current posture for platform breadth: `truenas`
 is at the declared support floor summarized below, and `vmware-vsphere` is the
 current admitted strategic next-platform direction while its support claim

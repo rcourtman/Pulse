@@ -54,11 +54,17 @@ export function PlatformTableEmptyState(props: {
   icon: JSX.Element;
   title: string;
   description: string;
+  actions?: JSX.Element;
 }) {
   return (
     <TableCard>
       <div class="p-6">
-        <EmptyState icon={props.icon} title={props.title} description={props.description} />
+        <EmptyState
+          icon={props.icon}
+          title={props.title}
+          description={props.description}
+          actions={props.actions}
+        />
       </div>
     </TableCard>
   );

@@ -1,6 +1,7 @@
 import { useNavigate } from '@solidjs/router';
 import { createEffect, createMemo, createSignal } from 'solid-js';
 import {
+  buildAgentsPath,
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
@@ -24,6 +25,7 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
   const commands = createMemo(() =>
     buildCommandPaletteCommands({
       paths: {
+        agentsPath: buildAgentsPath(),
         proxmoxPath: buildProxmoxPath(),
         dockerPath: buildDockerPath(),
         kubernetesPath: buildKubernetesPath(),

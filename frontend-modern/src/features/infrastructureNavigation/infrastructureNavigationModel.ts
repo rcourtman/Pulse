@@ -8,7 +8,13 @@ import {
 } from '@/utils/platformSupportManifest';
 import { normalizeSourcePlatformKey, resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 
-export type PrimaryInfrastructureNavId = 'proxmox' | 'docker' | 'kubernetes' | 'truenas' | 'vmware';
+export type PrimaryInfrastructureNavId =
+  | 'agents'
+  | 'proxmox'
+  | 'docker'
+  | 'kubernetes'
+  | 'truenas'
+  | 'vmware';
 
 export type InfrastructureNavigationVisibility = Record<PrimaryInfrastructureNavId, boolean>;
 
@@ -18,6 +24,7 @@ export type InfrastructureNavigationShortcut = {
 };
 
 export const PRIMARY_INFRASTRUCTURE_NAV_IDS: readonly PrimaryInfrastructureNavId[] = [
+  'agents',
   'proxmox',
   'docker',
   'kubernetes',
@@ -29,6 +36,7 @@ export const PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS: Record<
   PrimaryInfrastructureNavId,
   readonly string[]
 > = {
+  agents: ['agent'],
   proxmox: ['proxmox-pve', 'proxmox-pbs', 'proxmox-pmg'],
   docker: ['docker'],
   kubernetes: ['kubernetes'],
@@ -49,6 +57,9 @@ const KUBERNETES_RESOURCE_TYPES = new Set<ResourceType>([
   'k8s-service',
 ]);
 const DOCKER_RESOURCE_TYPES = new Set<ResourceType>(['docker-host', 'docker-service']);
+
+const isPrimaryAgentPlatformResource = (resource: Resource): boolean =>
+  resource.type === 'agent' && normalizeSourcePlatformKey(resource.platformType) === 'agent';
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
@@ -152,6 +163,7 @@ export function buildPrimaryInfrastructureNavigationVisibility(
 ): InfrastructureNavigationVisibility {
   const presentNavigableScopes = buildNavigableResourceInfrastructureScopeSet(resources);
   return {
+    agents: resources.some(isPrimaryAgentPlatformResource),
     proxmox: PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS.proxmox.some((id) =>
       presentNavigableScopes.has(id),
     ),
@@ -205,6 +217,7 @@ export function filterInfrastructureNavigationShortcuts(
 
 export function createEmptyInfrastructureNavigationVisibility(): InfrastructureNavigationVisibility {
   return {
+    agents: false,
     proxmox: false,
     docker: false,
     kubernetes: false,

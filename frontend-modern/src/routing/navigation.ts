@@ -1,4 +1,5 @@
 import {
+  AGENTS_PATH,
   DOCKER_PATH,
   KUBERNETES_PATH,
   PATROL_PATH,
@@ -8,6 +9,7 @@ import {
 } from './resourceLinks';
 
 export type AppTabId =
+  | 'agents'
   | 'proxmox'
   | 'docker'
   | 'kubernetes'
@@ -20,6 +22,7 @@ export type AppTabId =
 export type ActiveAppTabId = AppTabId | null;
 
 export function getActiveTabForPath(path: string): ActiveAppTabId {
+  if (path.startsWith(AGENTS_PATH)) return 'agents';
   if (path.startsWith(PROXMOX_PATH)) return 'proxmox';
   if (path.startsWith(DOCKER_PATH)) return 'docker';
   if (path.startsWith(KUBERNETES_PATH)) return 'kubernetes';

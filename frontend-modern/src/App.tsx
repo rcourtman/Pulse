@@ -39,6 +39,7 @@ import { aiChatStore } from './stores/aiChat';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import {
+  AGENTS_PATH,
   DOCKER_PATH,
   INFRASTRUCTURE_PATH,
   KUBERNETES_PATH,
@@ -48,6 +49,7 @@ import {
   TRUENAS_PATH,
   VMWARE_PATH,
   WORKLOADS_PATH,
+  buildAgentsPath,
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
@@ -81,7 +83,9 @@ const AlertsPage = lazy(() =>
   import('./pages/Alerts').then((module) => ({ default: module.Alerts })),
 );
 const SettingsPage = lazy(() => import('./components/Settings/Settings'));
-const InfrastructurePage = lazy(() => import('./features/infrastructure/InfrastructurePageSurface'));
+const InfrastructurePage = lazy(
+  () => import('./features/infrastructure/InfrastructurePageSurface'),
+);
 const WorkloadsPage = lazy(() =>
   import('./components/Workloads/WorkloadsSurface').then((module) => ({
     default: () => <module.WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />,
@@ -98,6 +102,7 @@ const RecoveryPage = lazy(() =>
   })),
 );
 const ProxmoxPage = lazy(() => import('./pages/Proxmox'));
+const AgentsPage = lazy(() => import('./pages/Agents'));
 const DockerPage = lazy(() => import('./pages/Docker'));
 const KubernetesPage = lazy(() => import('./pages/Kubernetes'));
 const TrueNASPage = lazy(() => import('./pages/TrueNAS'));
@@ -117,6 +122,7 @@ const ROOT_PATROL_PATH = PATROL_PATH;
 const STORAGE_PATH = buildStoragePath();
 
 const PRIMARY_INFRASTRUCTURE_ROUTE_BY_ID: Record<PrimaryInfrastructureNavId, string> = {
+  agents: buildAgentsPath(),
   proxmox: buildProxmoxPath(),
   docker: buildDockerPath(),
   kubernetes: buildKubernetesPath(),
@@ -559,6 +565,8 @@ function App() {
       <Route path={`${RECOVERY_PATH}/*`} component={RecoveryPage} />
       <Route path="/ceph" component={() => <Navigate href="/proxmox/ceph" />} />
       <Route path="/ceph/*" component={() => <Navigate href="/proxmox/ceph" />} />
+      <Route path={AGENTS_PATH} component={AgentsPage} />
+      <Route path={`${AGENTS_PATH}/*`} component={AgentsPage} />
       <Route path={PROXMOX_PATH} component={ProxmoxPage} />
       <Route path={`${PROXMOX_PATH}/*`} component={ProxmoxPage} />
       <Route path={DOCKER_PATH} component={DockerPage} />

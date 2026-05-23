@@ -116,6 +116,8 @@ cross-source deduplication.
 92. `internal/unifiedresources/clone.go`
 93. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerPresentation.ts`
 94. `internal/unifiedresources/storage_consumers.go`
+95. `frontend-modern/src/features/agents/agentsPageModel.ts`
+96. `frontend-modern/src/features/agents/AgentsPageSurface.tsx`
 
 ## Shared Boundaries
 
@@ -510,12 +512,19 @@ AI-only summary payloads, or page-local heuristics.
     rather than spawning page-local policy summary shells.
 16. Keep platform/runtime top-level route paths on the canonical resource-link
     helper. `frontend-modern/src/routing/resourceLinks.ts` owns the
-    `DOCKER_PATH`, `KUBERNETES_PATH`, `TRUENAS_PATH`, `VMWARE_PATH` constants
-    and the `buildDockerPath`, `buildKubernetesPath`, `buildTrueNASPath`,
-    `buildVmwarePath` builders. Per-platform surfaces and tab specs must
+    `AGENTS_PATH`, `DOCKER_PATH`, `KUBERNETES_PATH`, `TRUENAS_PATH`,
+    `VMWARE_PATH` constants and the `buildAgentsPath`, `buildDockerPath`,
+    `buildKubernetesPath`, `buildTrueNASPath`, `buildVmwarePath` builders.
+    Per-platform surfaces and tab specs must
     derive every internal link from those builders so the canonical resource
     URL vocabulary stays single-sourced; ad hoc string concatenation of
     platform routes inside feature directories is not permitted.
+    The `Agents` route is the canonical browser projection of unified-resource
+    agent rows: membership must require `resource.type === "agent"` and a
+    normalized `platformType === "agent"`. Provider-owned nodes from Proxmox,
+    VMware, TrueNAS, Kubernetes, or runtime lenses may link to related agent
+    facets, but they must not become Agents-page members through hostname,
+    source, or incidental agent metadata alone.
     The default tab for each platform path must point at a sub-tab whose
     canonical unified-resource projection actually populates. The
     canonical TrueNAS adapter (`internal/truenas/provider.go::

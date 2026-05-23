@@ -190,6 +190,9 @@ export const STORAGE_KEYS = {
   WORKLOADS_METRIC_HISTORY_RANGE: 'workloadsMetricHistoryRange',
   INFRASTRUCTURE_SUMMARY_RANGE: 'infrastructureSummaryRange',
   INFRASTRUCTURE_SUMMARY_COLLAPSED: 'infrastructureSummaryCollapsed',
+  AGENTS_SEARCH_HISTORY: 'agentsSearchHistory',
+  AGENTS_SUMMARY_RANGE: 'agentsSummaryRange',
+  AGENTS_SUMMARY_COLLAPSED: 'agentsSummaryCollapsed',
 
   // Storage search
   STORAGE_SEARCH_HISTORY: 'storageSearchHistory',

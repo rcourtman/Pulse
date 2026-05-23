@@ -145,6 +145,12 @@ runtime cost control, and shared AI transport surfaces.
     the VMware page must not introduce VMware-local AI prompts, a provider
     model picker, or a vSphere-specific chat/runtime route just because
     networks are now rendered as a first-class API-native table.
+    The `Agents` top-level platform page follows the same AI runtime boundary:
+    route registration and primary-tab chrome may expose the support-manifest
+    `agent` platform, but the page must not add an agent-specific Assistant
+    prompt surface, AI launcher, model picker, or browser-owned model context.
+    Agent rows may seed Assistant or Patrol only through the shared unified
+    resource handoff contracts.
 
 ## Forbidden Paths
 

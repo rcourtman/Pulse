@@ -1,6 +1,7 @@
 import { createSignal, onCleanup, type Accessor } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import {
+  buildAgentsPath,
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
@@ -86,6 +87,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
       options.infrastructureVisibility?.() ?? createEmptyInfrastructureNavigationVisibility();
     const infrastructureRoutes = filterInfrastructureNavigationShortcuts(
       {
+        agents: { key: 'e', route: buildAgentsPath() },
         proxmox: { key: 'p', route: buildProxmoxPath() },
         docker: { key: 'd', route: buildDockerPath() },
         kubernetes: { key: 'k', route: buildKubernetesPath() },
