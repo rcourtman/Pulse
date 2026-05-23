@@ -9,6 +9,21 @@ import {
   PlatformTableEmptyState,
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
+import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
+import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
+import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
+import {
+  DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
+  type WorkloadsStatusOption,
+  type WorkloadsMetricDisplayMode,
+} from '@/components/Workloads/workloadsFilterModel';
+import {
+  WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE,
+  isWorkloadTableMetricHistoryRange,
+  type WorkloadTableMetricHistoryRange,
+} from '@/components/Workloads/workloadMetricHistoryModel';
+import { usePersistentSignal } from '@/hooks/usePersistentSignal';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 import { VsphereHostsTable } from './VsphereHostsTable';
 import {
   VMWARE_TAB_SPECS,
@@ -20,7 +35,6 @@ import { VsphereAlertsTable } from './VsphereAlertsTable';
 import { VsphereActivityTable } from './VsphereActivityTable';
 import { VsphereDatastoresTable } from './VsphereDatastoresTable';
 import { VsphereNetworksTable } from './VsphereNetworksTable';
-import { VsphereVirtualMachinesTable } from './VsphereVirtualMachinesTable';
 
 // vSphere phase 1 projects ESXi hosts as canonical `agent`, virtual machines
 // as canonical `vm`, datastores as canonical `storage`, and vCenter networks
@@ -28,6 +42,16 @@ import { VsphereVirtualMachinesTable } from './VsphereVirtualMachinesTable';
 // under those shared resources.
 const VMWARE_RESOURCE_QUERY = 'type=agent,vm,storage,network';
 const VALID_TABS = new Set<VmwarePageTabId>(VMWARE_TAB_SPECS.map((tab) => tab.id));
+
+const VMWARE_PLATFORM_FILTER = 'vmware-vsphere';
+const VMWARE_WORKLOAD_STATUS_STORAGE_SCOPE = 'vmware';
+const VMWARE_WORKLOAD_COLUMN_VISIBILITY_SCOPE = 'vmware-vms';
+const VMWARE_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
+  { value: 'all', label: 'All' },
+  { value: 'running', label: 'Powered on' },
+  { value: 'degraded', label: 'Attention' },
+  { value: 'stopped', label: 'Powered off' },
+];
 
 const vmwareIcon = () => <CpuIcon class="h-6 w-6 text-slate-400" />;
 
@@ -55,6 +79,28 @@ export function VmwarePageSurface() {
     },
   );
   const model = createMemo(() => buildVmwarePageModel(resources(), activityTimeline() ?? []));
+
+  // Hosts table on top and the embedded WorkloadsSurface below share the
+  // bars/sparklines toggle (and the sparkline history range that ships with
+  // it). Owning the persistent signals at the page level keeps the same shape
+  // Proxmox uses, so the in-toolbar segmented control drives both.
+  const [metricDisplayMode, setMetricDisplayMode] = usePersistentSignal<WorkloadsMetricDisplayMode>(
+    STORAGE_KEYS.WORKLOADS_METRIC_DISPLAY_MODE,
+    DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
+    {
+      deserialize: (raw) =>
+        raw === 'bars' || raw === 'sparklines' ? raw : DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
+    },
+  );
+  const [metricHistoryRange, setMetricHistoryRange] =
+    usePersistentSignal<WorkloadTableMetricHistoryRange>(
+      STORAGE_KEYS.WORKLOADS_METRIC_HISTORY_RANGE,
+      WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE,
+      {
+        deserialize: (raw) =>
+          isWorkloadTableMetricHistoryRange(raw) ? raw : WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE,
+      },
+    );
 
   return (
     <div data-testid="vmware-page" class="space-y-3">
@@ -94,7 +140,13 @@ export function VmwarePageSurface() {
             }
           >
             <Show when={activeTab() === 'overview'}>
-              <VmwareOverview model={model} />
+              <VmwareOverview
+                model={model}
+                metricDisplayMode={metricDisplayMode}
+                setMetricDisplayMode={setMetricDisplayMode}
+                metricHistoryRange={metricHistoryRange}
+                setMetricHistoryRange={setMetricHistoryRange}
+              />
             </Show>
             <Show when={activeTab() === 'storage'}>
               <VsphereDatastoresTable
@@ -160,9 +212,41 @@ export function VmwarePageSurface() {
 
 interface VmwareOverviewProps {
   model: Accessor<VmwarePageModel>;
+  metricDisplayMode: Accessor<WorkloadsMetricDisplayMode>;
+  setMetricDisplayMode: (value: WorkloadsMetricDisplayMode) => void;
+  metricHistoryRange: Accessor<WorkloadTableMetricHistoryRange>;
+  setMetricHistoryRange: (value: WorkloadTableMetricHistoryRange) => void;
 }
 
 function VmwareOverview(props: VmwareOverviewProps) {
+  const workloadsState = useWorkloadsState({
+    vms: [],
+    containers: [],
+    nodes: [],
+    useWorkloads: true,
+    embedded: true,
+    tableOnly: true,
+    forcedPlatform: VMWARE_PLATFORM_FILTER,
+    forcedViewMode: 'vm',
+    showFilterToolbar: true,
+    suppressPlatformFilter: true,
+    allowEmbeddedScopeFilters: true,
+    statusModeStorageScope: VMWARE_WORKLOAD_STATUS_STORAGE_SCOPE,
+    columnVisibilityStorageScope: VMWARE_WORKLOAD_COLUMN_VISIBILITY_SCOPE,
+    compactGroupHeaders: true,
+    groupNodeDrawerMode: 'disabled',
+    metricDisplayMode: props.metricDisplayMode,
+    onMetricDisplayModeChange: props.setMetricDisplayMode,
+    metricHistoryRange: props.metricHistoryRange,
+    onMetricHistoryRangeChange: props.setMetricHistoryRange,
+  });
+  const showSharedFilterToolbar = createMemo(
+    () =>
+      workloadsState.surfaceConnected() &&
+      workloadsState.surfaceInitialDataReceived() &&
+      workloadsState.allGuests().length > 0,
+  );
+
   return (
     <div class="space-y-4">
       <VsphereHostsTable
@@ -173,12 +257,57 @@ function VmwareOverview(props: VmwareOverviewProps) {
         emptyDescription="Hosts appear here once the vCenter connection enumerates them."
         showToolbar={false}
       />
-      <VsphereVirtualMachinesTable
-        vms={props.model().vms}
-        scope={props.model().resources}
-        emptyIcon={vmwareIcon()}
-        emptyTitle="No vSphere VMs"
-        emptyDescription="Virtual machines appear here once the vCenter connection enumerates them."
+      <Show when={showSharedFilterToolbar()}>
+        <div data-summary-clear-ignore>
+          <WorkloadsFilter
+            search={workloadsState.search}
+            setSearch={workloadsState.setSearch}
+            viewMode={workloadsState.viewMode}
+            setViewMode={workloadsState.setViewMode}
+            statusMode={workloadsState.statusMode}
+            setStatusMode={workloadsState.setStatusMode}
+            groupingMode={workloadsState.groupingMode}
+            setGroupingMode={workloadsState.setGroupingMode}
+            setSortKey={workloadsState.setSortKey}
+            setSortDirection={workloadsState.setSortDirection}
+            onBeforeAutoFocus={workloadsState.handleBeforeAutoFocus}
+            ariaLabel="vSphere workload filters"
+            searchPlaceholder="Search vSphere VMs by name, host, cluster, or status"
+            searchEmptyMessage="Recent vSphere workload searches appear here."
+            statusOptions={VMWARE_WORKLOAD_STATUS_OPTIONS}
+            columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
+            containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
+            hostFilter={undefined}
+            namespaceFilter={undefined}
+            platformFilter={undefined}
+            metricDisplayMode={workloadsState.workloadMetricDisplayMode}
+            setMetricDisplayMode={workloadsState.setWorkloadMetricDisplayMode}
+            metricHistoryRange={workloadsState.workloadMetricHistoryRange}
+            setMetricHistoryRange={workloadsState.setWorkloadMetricHistoryRange}
+            forcedPlatform={VMWARE_PLATFORM_FILTER}
+            pinnedSelectionActive={() =>
+              Boolean(
+                workloadsState.selectedGuestId() || workloadsState.focusedSummaryWorkloadGroupId(),
+              )
+            }
+            onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}
+          />
+        </div>
+      </Show>
+      <WorkloadsSurface
+        state={workloadsState}
+        vms={[]}
+        containers={[]}
+        nodes={[]}
+        useWorkloads
+        embedded
+        tableOnly
+        forcedPlatform={VMWARE_PLATFORM_FILTER}
+        forcedViewMode="vm"
+        compactGroupHeaders
+        groupNodeDrawerMode="disabled"
+        emptyStateTitle="No vSphere VMs"
+        emptyStateDescription="Virtual machines appear here once the vCenter connection enumerates them."
       />
     </div>
   );
