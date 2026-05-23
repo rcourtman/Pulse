@@ -1493,12 +1493,12 @@ That same authenticated route shell also owns the canonical post-auth landing
 path. `frontend-modern/src/App.tsx` and
 `frontend-modern/src/pages/RuntimeHome.tsx` must send authenticated `/`
 through the runtime-home landing contract first: existing operators and
-self-hosted sessions land on the governed Infrastructure route, while hosted
-workspaces with no connected infrastructure stay on the same Infrastructure
-and Add infrastructure ownership path before the workspace normalizes back to
-the single `/settings/infrastructure` shell. That same shared landing contract
-must not regress into a root-only settings redirect or a dashboard-only
-shortcut that strands first-time hosted tenants.
+self-hosted sessions land on the first visible provider/runtime platform in
+the canonical shell order, with Agents only for agent-only estates. Hosted
+workspaces with no connected infrastructure may still fall through to the
+single `/settings/infrastructure` ownership path, but the shell must not
+regress into a root-only settings redirect, legacy Infrastructure default, or
+dashboard-only shortcut that strands first-time hosted tenants.
 That same landing contract also owns authenticated `/login`: once the browser
 has a valid session, `frontend-modern/src/App.tsx` must route `/login`
 through that same runtime-home landing boundary instead of leaving the
@@ -1507,7 +1507,10 @@ Authenticated app-shell route and chart prewarming may run from
 `frontend-modern/src/App.tsx` and `frontend-modern/src/useAppRuntimeState.ts`
 only as auth-neutral performance work: it must not change hosted organization
 bootstrap, presentation-policy loading, commercial posture loading, or upgrade
-prompt visibility.
+prompt visibility. The runtime bootstrap must not prewarm retired
+Infrastructure or Workloads summary-chart caches as a generic authenticated
+side effect; route-module warming stays in `App.tsx`, and chart payloads belong
+to the route or interaction that renders them.
 The Pro license settings surface now follows the same rule as well. Changes to
 `frontend-modern/src/components/Settings/ProLicensePanel.tsx` must carry this
 contract and the dedicated Pro-license proof file instead of remaining an

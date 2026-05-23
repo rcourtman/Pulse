@@ -7183,7 +7183,7 @@
     },
     {
       "id": "infrastructure-default-landing-surface",
-      "summary": "Pulse v6 lands authenticated users directly on Infrastructure. The Dashboard page, route, primary-nav item, dashboard summary API, and dashboard-specific overview widgets are retired rather than preserved as a wallboard or compatibility surface; first-session and setup completion handoffs must route users into Infrastructure or Add infrastructure.",
+      "summary": "Superseded by `provider-first-platform-landing-surface`: the 2026-04-29 Dashboard retirement moved authenticated users off Dashboard and onto Infrastructure/Add infrastructure, but current v6 runtime handoff now belongs to provider-first platform selection rather than legacy Infrastructure.",
       "kind": "contract",
       "decided_at": "2026-04-29",
       "subsystem_ids": [
@@ -7260,6 +7260,18 @@
         "L13",
         "L15",
         "L16"
+      ]
+    },
+    {
+      "id": "provider-first-platform-landing-surface",
+      "summary": "Pulse v6 authenticated root and login handoff lands on the first visible provider or runtime platform in canonical shell order: Proxmox, Containers, Kubernetes, TrueNAS, vSphere, then Agents only for agent-only estates. Agents is the standalone Pulse-agent-primary machine surface, not the primary estate landing when provider evidence exists; legacy Infrastructure remains route-compatible rather than the default operational surface.",
+      "kind": "contract",
+      "decided_at": "2026-05-23",
+      "subsystem_ids": [
+        "frontend-primitives"
+      ],
+      "lane_ids": [
+        "L8"
       ]
     }
   ]

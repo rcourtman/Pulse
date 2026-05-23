@@ -22,12 +22,12 @@ export type AppTabId =
 export type ActiveAppTabId = AppTabId | null;
 
 export function getActiveTabForPath(path: string): ActiveAppTabId {
-  if (path.startsWith(AGENTS_PATH)) return 'agents';
   if (path.startsWith(PROXMOX_PATH)) return 'proxmox';
   if (path.startsWith(DOCKER_PATH)) return 'docker';
   if (path.startsWith(KUBERNETES_PATH)) return 'kubernetes';
   if (path.startsWith(TRUENAS_PATH)) return 'truenas';
   if (path.startsWith(VMWARE_PATH)) return 'vmware';
+  if (path.startsWith(AGENTS_PATH)) return 'agents';
   if (path.startsWith('/alerts')) return 'alerts';
   if (path.startsWith(PATROL_PATH) || path.startsWith('/ai')) return 'ai';
   if (path.startsWith('/settings')) return 'settings';

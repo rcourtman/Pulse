@@ -808,9 +808,11 @@ a separate Docker-only or TrueNAS-local inventory path.
     plane boundary.
     Authenticated `/login` must follow that same shared app-shell contract:
     once login succeeds, `frontend-modern/src/App.tsx` must hand the browser
-    back to the governed Infrastructure landing route instead of leaving
+    back to the governed provider-first landing route instead of leaving
     storage/recovery-adjacent authenticated shells on a page-local not-found
-    route.
+    route. Agents may only be that landing target in agent-only estates; legacy
+    Infrastructure remains route-compatible and must not be restored as the
+    default storage/recovery-adjacent operational surface.
     Authenticated-shell demo organization suppression on `frontend-modern/src/App.tsx`
     may hide top-bar org chrome for public demo posture, but it must not leak
     into storage/recovery preview route ownership, first-session recovery copy,
@@ -826,7 +828,10 @@ a separate Docker-only or TrueNAS-local inventory path.
     App-shell route preloading may include Storage and Recovery modules so
     top-level tabs are warm after authentication, but it must not fetch storage
     summary charts, recovery history, provider state, or preview data from
-    `frontend-modern/src/App.tsx` itself.
+    `frontend-modern/src/App.tsx` itself. The shared runtime bootstrap must
+    likewise avoid prewarming retired Infrastructure or Workloads chart caches
+    as a generic authenticated-shell side effect; storage/recovery chart data
+    stays owned by the route or interaction that renders it.
     The shared app shell's authenticated landing and primary-tab routing may
     use the infrastructure navigation model that includes both owning platform
     pages and runtime lenses such as Containers. Storage and recovery route

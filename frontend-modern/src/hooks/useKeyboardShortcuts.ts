@@ -87,12 +87,12 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
       options.infrastructureVisibility?.() ?? createEmptyInfrastructureNavigationVisibility();
     const infrastructureRoutes = filterInfrastructureNavigationShortcuts(
       {
-        agents: { key: 'e', route: buildAgentsPath() },
         proxmox: { key: 'p', route: buildProxmoxPath() },
         docker: { key: 'd', route: buildDockerPath() },
         kubernetes: { key: 'k', route: buildKubernetesPath() },
         truenas: { key: 'n', route: buildTrueNASPath() },
         vmware: { key: 'v', route: buildVmwarePath() },
+        agents: { key: 'e', route: buildAgentsPath() },
       },
       infrastructureVisibility,
     );

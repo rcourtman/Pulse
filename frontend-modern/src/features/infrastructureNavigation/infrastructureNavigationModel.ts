@@ -10,12 +10,12 @@ import {
 import { normalizeSourcePlatformKey, resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 
 export type PrimaryInfrastructureNavId =
-  | 'agents'
   | 'proxmox'
   | 'docker'
   | 'kubernetes'
   | 'truenas'
-  | 'vmware';
+  | 'vmware'
+  | 'agents';
 
 export type InfrastructureNavigationVisibility = Record<PrimaryInfrastructureNavId, boolean>;
 
@@ -37,12 +37,12 @@ export const PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS: Record<
   PrimaryInfrastructureNavId,
   readonly string[]
 > = {
-  agents: ['agent'],
   proxmox: ['proxmox-pve', 'proxmox-pbs', 'proxmox-pmg'],
   docker: ['docker'],
   kubernetes: ['kubernetes'],
   truenas: ['truenas'],
   vmware: ['vmware-vsphere'],
+  agents: ['agent'],
 };
 
 const NAVIGABLE_PLATFORM_ID_SET = new Set<string>([
@@ -161,7 +161,6 @@ export function buildPrimaryInfrastructureNavigationVisibility(
 ): InfrastructureNavigationVisibility {
   const presentNavigableScopes = buildNavigableResourceInfrastructureScopeSet(resources);
   return {
-    agents: resources.some(isPulseAgentPlatformResource),
     proxmox: PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS.proxmox.some((id) =>
       presentNavigableScopes.has(id),
     ),
@@ -177,6 +176,7 @@ export function buildPrimaryInfrastructureNavigationVisibility(
     vmware: PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS.vmware.some((id) =>
       presentNavigableScopes.has(id),
     ),
+    agents: resources.some(isPulseAgentPlatformResource),
   };
 }
 
@@ -215,12 +215,12 @@ export function filterInfrastructureNavigationShortcuts(
 
 export function createEmptyInfrastructureNavigationVisibility(): InfrastructureNavigationVisibility {
   return {
-    agents: false,
     proxmox: false,
     docker: false,
     kubernetes: false,
     truenas: false,
     vmware: false,
+    agents: false,
   };
 }
 

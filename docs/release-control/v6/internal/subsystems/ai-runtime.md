@@ -678,6 +678,10 @@ platform routes (`/proxmox/overview`, `/proxmox/storage`, `/kubernetes/pods`,
 etc.) as canonical anchors rather than the retired top-level paths; adding a
 platform tab through the same shell files must not fork Assistant or Patrol
 shell state or smuggle in AI-owned platform reads.
+Post-auth `/` and `/login` resolution follows that same provider-first
+platform order, with Agents only as the agent-only fallback, so the
+assistant-capable shell never treats Agents or legacy Infrastructure as the
+default estate surface when provider evidence exists.
 
 The route-backed Proxmox platform tab is app-shell navigation only. Adding the
 tab through `frontend-modern/src/App.tsx` and
@@ -1043,9 +1047,9 @@ availability plus reset behavior must stay independent of that settings-nav
 presentation choice.
 Authenticated `/login` recovery belongs to that same route shell boundary:
 once login succeeds, `frontend-modern/src/App.tsx` must resolve `/login`
-through the canonical post-auth landing route instead of leaving the
-assistant-capable authenticated shell stranded on a route that only exists for
-logged-out presentation.
+through the canonical provider-first post-auth landing route instead of leaving
+the assistant-capable authenticated shell stranded on a route that only exists
+for logged-out presentation.
 App-shell route preloading may include the Patrol route module, but it must
 remain module-only. It must not prefetch AI settings, model state, findings,
 chat sessions, or assistant context while the drawer is closed.

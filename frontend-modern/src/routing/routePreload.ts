@@ -41,11 +41,6 @@ function normalizeRoute(route: string): string {
 
 const ROUTE_PRELOADERS: readonly RoutePreloader[] = [
   {
-    id: 'agents',
-    matches: (route) => route === AGENTS_PATH || route.startsWith(`${AGENTS_PATH}/`),
-    preload: () => import('@/pages/Agents').then(() => undefined),
-  },
-  {
     id: 'proxmox',
     matches: (route) => route === PROXMOX_PATH || route.startsWith(`${PROXMOX_PATH}/`),
     preload: () => import('@/pages/Proxmox').then(() => undefined),
@@ -69,6 +64,11 @@ const ROUTE_PRELOADERS: readonly RoutePreloader[] = [
     id: 'vmware',
     matches: (route) => route === VMWARE_PATH || route.startsWith(`${VMWARE_PATH}/`),
     preload: () => import('@/pages/Vmware').then(() => undefined),
+  },
+  {
+    id: 'agents',
+    matches: (route) => route === AGENTS_PATH || route.startsWith(`${AGENTS_PATH}/`),
+    preload: () => import('@/pages/Agents').then(() => undefined),
   },
   {
     id: 'alerts',

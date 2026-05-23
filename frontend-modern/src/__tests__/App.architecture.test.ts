@@ -65,6 +65,9 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).not.toContain("import('@/components/Settings/Settings')");
     expect(appSource).toContain('const timeoutId = window.setTimeout(() => {');
     expect(appSource).toContain('void preloadAppShellRoutes();');
+    expect(appRuntimeStateSource).not.toContain('fetchInfrastructureSummaryAndCache');
+    expect(appRuntimeStateSource).not.toContain('fetchWorkloadsSummaryAndCache');
+    expect(appRuntimeStateSource).not.toContain('requestIdleCallback');
     expect(appSource).toContain("const AgentsPage = lazy(() => import('./pages/Agents'));");
     expect(appSource).toContain('<Route path={AGENTS_PATH} component={AgentsPage} />');
     expect(appSource).toContain('<Route path={`${AGENTS_PATH}/*`} component={AgentsPage} />');
@@ -83,6 +86,9 @@ describe('App architecture', () => {
     expect(routePreloadSource).toContain("id: 'kubernetes',");
     expect(routePreloadSource).toContain("id: 'truenas',");
     expect(routePreloadSource).toContain("id: 'vmware',");
+    expect(routePreloadSource.indexOf("id: 'proxmox',")).toBeLessThan(
+      routePreloadSource.indexOf("id: 'agents',"),
+    );
     expect(appLayoutSource).toContain("id: 'agents',");
     expect(appLayoutSource).toContain("id: 'docker',");
     expect(appLayoutSource).toContain("id: 'kubernetes',");
@@ -327,9 +333,8 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).toContain(
       "eventBus.on('websocket_reconnected', handleWebSocketReconnected);",
     );
-    expect(appRuntimeStateSource).toContain(
-      'const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();',
-    );
+    expect(appRuntimeStateSource).not.toContain('buildInfrastructurePath');
+    expect(appRuntimeStateSource).not.toContain('buildWorkloadsPath');
     expect(appRuntimeStateSource).not.toContain("const ROOT_DASHBOARD_PATH = '/dashboard';");
     expect(appRuntimeStateSource).not.toContain(
       "import { startMetricsCollector } from '@/stores/metricsCollector';",

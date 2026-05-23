@@ -102,11 +102,11 @@ const RecoveryPage = lazy(() =>
   })),
 );
 const ProxmoxPage = lazy(() => import('./pages/Proxmox'));
-const AgentsPage = lazy(() => import('./pages/Agents'));
 const DockerPage = lazy(() => import('./pages/Docker'));
 const KubernetesPage = lazy(() => import('./pages/Kubernetes'));
 const TrueNASPage = lazy(() => import('./pages/TrueNAS'));
 const VmwarePage = lazy(() => import('./pages/Vmware'));
+const AgentsPage = lazy(() => import('./pages/Agents'));
 const AIIntelligencePage = lazy(() =>
   import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
 );
@@ -122,12 +122,12 @@ const ROOT_PATROL_PATH = PATROL_PATH;
 const STORAGE_PATH = buildStoragePath();
 
 const PRIMARY_INFRASTRUCTURE_ROUTE_BY_ID: Record<PrimaryInfrastructureNavId, string> = {
-  agents: buildAgentsPath(),
   proxmox: buildProxmoxPath(),
   docker: buildDockerPath(),
   kubernetes: buildKubernetesPath(),
   truenas: buildTrueNASPath(),
   vmware: buildVmwarePath(),
+  agents: buildAgentsPath(),
 };
 
 function getDefaultWorkspaceRoute(
@@ -565,8 +565,6 @@ function App() {
       <Route path={`${RECOVERY_PATH}/*`} component={RecoveryPage} />
       <Route path="/ceph" component={() => <Navigate href="/proxmox/ceph" />} />
       <Route path="/ceph/*" component={() => <Navigate href="/proxmox/ceph" />} />
-      <Route path={AGENTS_PATH} component={AgentsPage} />
-      <Route path={`${AGENTS_PATH}/*`} component={AgentsPage} />
       <Route path={PROXMOX_PATH} component={ProxmoxPage} />
       <Route path={`${PROXMOX_PATH}/*`} component={ProxmoxPage} />
       <Route path={DOCKER_PATH} component={DockerPage} />
@@ -577,6 +575,8 @@ function App() {
       <Route path={`${TRUENAS_PATH}/*`} component={TrueNASPage} />
       <Route path={VMWARE_PATH} component={VmwarePage} />
       <Route path={`${VMWARE_PATH}/*`} component={VmwarePage} />
+      <Route path={AGENTS_PATH} component={AgentsPage} />
+      <Route path={`${AGENTS_PATH}/*`} component={AgentsPage} />
 
       <Route path="/alerts/*" component={AlertsPage} />
       <Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />

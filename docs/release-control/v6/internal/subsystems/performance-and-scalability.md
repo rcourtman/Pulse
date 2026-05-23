@@ -626,6 +626,12 @@ shell clickable behind another overlay.
     follows the provider-first shell order as a hot-path hint: Proxmox remains
     ahead of Agents when both surfaces are available, while Agents stays in
     the preload set so agent-only estates still get a warm first destination.
+    The authenticated app shell must not separately prewarm retired
+    Infrastructure or Workloads chart caches as a generic side effect; those
+    chart fetches belong to the route that renders the chart surface or to the
+    scoped table metric-history interaction that requested them. Platform
+    landing should stay route-module warm and data-light until the selected
+    platform page owns its normal resource/table query.
     Platform pages that embed `WorkloadsSurface` reuse the canonical
     workloads filter toolbar through the `showFilterToolbar` +
     `suppressPlatformFilter` props in `WorkloadsSurfaceProps`. The page

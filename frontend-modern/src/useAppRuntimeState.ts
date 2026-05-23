@@ -10,7 +10,6 @@ import {
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import { logger } from '@/utils/logger';
 import { STORAGE_KEYS } from '@/utils/localStorage';
-import type { TimeRange } from '@/api/charts';
 import type { VersionInfo } from '@/api/updates';
 import type { Organization } from '@/api/orgs';
 import { OrgsAPI } from '@/api/orgs';
@@ -26,16 +25,6 @@ import {
 import { eventBus } from '@/stores/events';
 import { showToast } from '@/utils/toast';
 import { updateStore } from '@/stores/updates';
-import {
-  fetchInfrastructureSummaryAndCache,
-  hasFreshInfrastructureSummaryCache,
-} from '@/utils/infrastructureSummaryCache';
-import {
-  WORKLOAD_CHART_DEFAULT_POINT_LIMIT,
-  fetchWorkloadsSummaryAndCache,
-  hasFreshWorkloadsSummaryCache,
-} from '@/utils/workloadsSummaryCache';
-import { buildInfrastructurePath, buildWorkloadsPath } from '@/routing/resourceLinks';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import {
   applyThemeClass,
@@ -76,9 +65,6 @@ export type AppConnectionStatus = {
   tone: 'healthy' | 'warning' | 'offline';
 };
 
-const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
-const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
-
 const isPreAuthLoginBootstrapPath = (pathname: string): boolean =>
   pathname === '/' || pathname === '/login';
 
@@ -99,10 +85,6 @@ export const useAppRuntimeState = () => {
 
   const alertsActivation = useAlertsActivation();
   let hasFetchedVersionInfo = false;
-  let hasPrewarmedInfrastructureCharts = false;
-  let hasPrewarmedWorkloadsCharts = false;
-
-  const getAppShellChartRangeForPrewarm = (): TimeRange => '1h';
 
   const hasLocalAuthBootstrapHint = (): boolean => {
     if (hasStoredAuthSession()) {
@@ -118,74 +100,6 @@ export const useAppRuntimeState = () => {
     } catch {
       return false;
     }
-  };
-
-  const shouldPrewarmBackgroundCharts = (activeRoutePath: string): boolean => {
-    if (typeof window === 'undefined') return false;
-
-    const connection = (
-      navigator as unknown as { connection?: { saveData?: boolean; effectiveType?: string } }
-    ).connection;
-    if (connection?.saveData) return false;
-    const effectiveType = connection?.effectiveType;
-    if (
-      typeof effectiveType === 'string' &&
-      (effectiveType === 'slow-2g' || effectiveType === '2g')
-    ) {
-      return false;
-    }
-
-    const pathname = window.location.pathname;
-    if (!pathname) return true;
-    if (pathname === activeRoutePath) return false;
-    return true;
-  };
-
-  const shouldPrewarmInfrastructure = (): boolean =>
-    shouldPrewarmBackgroundCharts(ROOT_INFRASTRUCTURE_PATH);
-
-  const shouldPrewarmWorkloads = (): boolean => shouldPrewarmBackgroundCharts(ROOT_WORKLOADS_PATH);
-
-  const prewarmInfrastructureCharts = () => {
-    if (hasPrewarmedInfrastructureCharts || !shouldPrewarmInfrastructure()) {
-      return;
-    }
-
-    const range = getAppShellChartRangeForPrewarm();
-    if (hasFreshInfrastructureSummaryCache(range)) {
-      hasPrewarmedInfrastructureCharts = true;
-      return;
-    }
-
-    hasPrewarmedInfrastructureCharts = true;
-    void fetchInfrastructureSummaryAndCache(range, { caller: 'App prewarm' }).catch(() => {
-      // Non-blocking prewarm; ignore failures.
-    });
-  };
-
-  const prewarmWorkloadsCharts = () => {
-    if (hasPrewarmedWorkloadsCharts || !shouldPrewarmWorkloads()) {
-      return;
-    }
-
-    const range = getAppShellChartRangeForPrewarm();
-    if (hasFreshWorkloadsSummaryCache(range)) {
-      hasPrewarmedWorkloadsCharts = true;
-      return;
-    }
-
-    hasPrewarmedWorkloadsCharts = true;
-    void fetchWorkloadsSummaryAndCache(range, {
-      caller: 'App workloads prewarm',
-      maxPoints: WORKLOAD_CHART_DEFAULT_POINT_LIMIT,
-    }).catch(() => {
-      // Non-blocking prewarm; ignore failures.
-    });
-  };
-
-  const prewarmAppShellCharts = () => {
-    prewarmInfrastructureCharts();
-    prewarmWorkloadsCharts();
   };
 
   const fallbackState: State = {
@@ -525,39 +439,6 @@ export const useAppRuntimeState = () => {
     if (updateTime > 0) {
       setLastUpdateText(formatLastUpdate(updateTime));
     }
-  });
-
-  createEffect(() => {
-    if (
-      isLoading() ||
-      needsAuth() ||
-      (hasPrewarmedInfrastructureCharts && hasPrewarmedWorkloadsCharts)
-    ) {
-      return;
-    }
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    if (typeof window.requestIdleCallback === 'function') {
-      const id = window.requestIdleCallback(
-        () => {
-          prewarmAppShellCharts();
-        },
-        { timeout: 2_000 },
-      );
-      onCleanup(() => {
-        window.cancelIdleCallback(id);
-      });
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      prewarmAppShellCharts();
-    }, 500);
-    onCleanup(() => {
-      window.clearTimeout(timeout);
-    });
   });
 
   const syncVersionInfoFromUpdateStore = async () => {

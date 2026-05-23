@@ -51,12 +51,12 @@ import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentat
 import { AI_CHAT_LAUNCHER_ARIA_LABEL, getAIChatLauncherTitle } from '@/utils/aiChatPresentation';
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
 
-const ROOT_AGENTS_PATH = buildAgentsPath();
 const ROOT_PROXMOX_PATH = buildProxmoxPath();
 const ROOT_DOCKER_PATH = buildDockerPath();
 const ROOT_KUBERNETES_PATH = buildKubernetesPath();
 const ROOT_TRUENAS_PATH = buildTrueNASPath();
 const ROOT_VMWARE_PATH = buildVmwarePath();
+const ROOT_AGENTS_PATH = buildAgentsPath();
 const ROOT_ALERTS_PATH = '/alerts';
 const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
 const AI_CHAT_LAUNCHER_BUTTON_CLASS =
@@ -206,12 +206,12 @@ export function AppLayout(props: AppLayoutProps) {
   // identify the current Pulse surface instead of every page reading
   // as the bare app name.
   const tabTitleByActive: Record<NonNullable<ReturnType<typeof getActiveTabForPath>>, string> = {
-    agents: 'Agents',
     proxmox: 'Proxmox',
     docker: 'Containers',
     kubernetes: 'Kubernetes',
     truenas: 'TrueNAS',
     vmware: 'vSphere',
+    agents: 'Agents',
     alerts: 'Alerts',
     ai: 'Patrol',
     settings: 'Settings',
@@ -229,12 +229,12 @@ export function AppLayout(props: AppLayoutProps) {
     buildPrimaryInfrastructureNavigationVisibility(props.state().resources || []),
   );
   const primaryInfrastructureRouteById: Record<PrimaryInfrastructureNavId, string> = {
-    agents: ROOT_AGENTS_PATH,
     proxmox: ROOT_PROXMOX_PATH,
     docker: ROOT_DOCKER_PATH,
     kubernetes: ROOT_KUBERNETES_PATH,
     truenas: ROOT_TRUENAS_PATH,
     vmware: ROOT_VMWARE_PATH,
+    agents: ROOT_AGENTS_PATH,
   };
   const primaryWorkspacePath = createMemo(() => {
     const navId = selectFirstVisiblePrimaryInfrastructureNavigationId(
