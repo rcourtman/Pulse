@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Resource } from '@/types/resource';
+import { AgentsMachinesTable } from '@/features/agents/AgentsMachinesTable';
 import { KubernetesClustersTable } from '@/features/kubernetes/KubernetesClustersTable';
 import { KubernetesNodesTable } from '@/features/kubernetes/KubernetesNodesTable';
 import { TrueNASStorageTopologyTable } from '@/features/truenas/TrueNASStorageTopologyTable';
@@ -32,6 +33,10 @@ vi.mock('@/components/shared/responsive', () => ({
 
 vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
   StackedMemoryBar: () => <div data-testid="stacked-memory-bar" />,
+}));
+
+vi.mock('@/components/Workloads/StackedDiskBar', () => ({
+  StackedDiskBar: () => <div data-testid="stacked-disk-bar" />,
 }));
 
 const makeResource = ({
@@ -82,6 +87,37 @@ afterEach(() => {
 });
 
 describe('platform resource table drawers', () => {
+  it('opens canonical resource details from Agent machine rows', async () => {
+    const machine = makeResource({
+      id: 'agent:mac-mini',
+      type: 'agent',
+      name: 'mac-mini',
+      platformType: 'agent',
+      sourceType: 'agent',
+      agent: {
+        hostname: 'mac-mini.local',
+        osName: 'macOS',
+        osVersion: '15.2',
+        agentVersion: '6.0.0',
+        platform: 'darwin',
+        uptimeSeconds: 96_000,
+      },
+    });
+
+    render(() => (
+      <AgentsMachinesTable
+        resources={[machine]}
+        emptyIcon={<span />}
+        emptyTitle="No machines"
+        emptyDescription="No machines"
+      />
+    ));
+
+    const row = screen.getByText('mac-mini').closest('tr');
+    expect(row).toBeTruthy();
+    await expectRowOpensResourceDrawer(row!, machine.id);
+  });
+
   it('opens canonical resource details from TrueNAS system rows', async () => {
     const system = makeResource({
       id: 'agent:truenas-main',

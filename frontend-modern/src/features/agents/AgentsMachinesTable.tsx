@@ -1,5 +1,4 @@
 import { For, Show, type Component, type JSX } from 'solid-js';
-import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
@@ -15,6 +14,7 @@ import {
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import {
+  PlatformResourceDetailTableRow,
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -343,26 +343,13 @@ export const AgentsMachinesTable: Component<{
                             {formatLastSeen(machine.lastSeen)}
                           </TableCell>
                         </TableRow>
-                        <Show when={isExpanded()}>
-                          <TableRow data-inline-agent-machine-detail-for={machine.id}>
-                            <TableCell
-                              id={detailRowId()}
-                              colspan={detailColspan}
-                              class="border-b border-border bg-surface-alt p-0"
-                            >
-                              <div
-                                class="px-2 py-3 sm:px-4 sm:py-4"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <ResourceDetailDrawer
-                                  resource={machine}
-                                  presentation="table-row"
-                                  onClose={() => drawer.close(machine)}
-                                />
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        </Show>
+                        <PlatformResourceDetailTableRow
+                          resource={machine}
+                          open={isExpanded()}
+                          detailRowId={detailRowId()}
+                          colSpan={detailColspan}
+                          onClose={() => drawer.close(machine)}
+                        />
                       </>
                     );
                   }}

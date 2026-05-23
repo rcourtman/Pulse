@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import agentsMachinesTableSource from '@/features/agents/AgentsMachinesTable.tsx?raw';
+import agentsPageSurfaceSource from '@/features/agents/AgentsPageSurface.tsx?raw';
 import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
 import dockerPageSurfaceSource from '@/features/docker/DockerPageSurface.tsx?raw';
 import dockerServicesTableSource from '@/features/docker/DockerServicesTable.tsx?raw';
@@ -30,6 +32,7 @@ import vsphereDatastoresTableSource from '@/features/vmware/VsphereDatastoresTab
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
 
 const platformTableSources = [
+  agentsMachinesTableSource,
   proxmoxNodesTableSource,
   dockerHostsTableSource,
   dockerServicesTableSource,
@@ -50,6 +53,7 @@ const platformTableSources = [
 ];
 
 const platformToolbarTableSources = [
+  agentsMachinesTableSource,
   dockerHostsTableSource,
   dockerServicesTableSource,
   kubernetesClustersTableSource,
@@ -60,6 +64,7 @@ const platformToolbarTableSources = [
 ];
 
 const overviewSurfaceSources = [
+  agentsPageSurfaceSource,
   proxmoxPageSurfaceSource,
   dockerPageSurfaceSource,
   kubernetesPageSurfaceSource,
@@ -157,7 +162,7 @@ describe('platform overview layout guardrails', () => {
 
   it('keeps provider overview pages in the parent-table plus child-inventory stack', () => {
     for (const source of overviewSurfaceSources) {
-      expect(source).toContain('<div class="space-y-4">');
+      expect(source).toMatch(/<div[^>]*class="space-y-4"/);
       expect(source).toContain('<PlatformSectionTabs');
       expect(source).toContain('<PlatformTableLoadingState');
       expect(source).toContain('PlatformTableEmptyState');
@@ -208,6 +213,14 @@ describe('platform overview layout guardrails', () => {
     expect(vmwarePageSurfaceSource).not.toContain('<StorageSurface');
     expect(vmwarePageSurfaceSource).not.toContain('forcedView="pools"');
     expect(proxmoxPageSurfaceSource).toContain('suppressNodeFilter');
+    expect(agentsPageSurfaceSource).toContain('<AgentsMachinesTable');
+    expect(agentsPageSurfaceSource).not.toContain('InfrastructureSummary');
+    expect(agentsPageSurfaceSource).not.toContain('StickySummarySection');
+    expect(agentsPageSurfaceSource).not.toContain('ChartVisibilityToggleButton');
+    expect(agentsPageSurfaceSource).not.toContain('FilterBar');
+    expect(agentsPageSurfaceSource).not.toContain('UnifiedResourceTable');
+    expect(agentsMachinesTableSource).toContain('PlatformResourceDetailTableRow');
+    expect(agentsMachinesTableSource).not.toContain('ResourceDetailDrawer');
   });
 
   it('keeps TrueNAS overview inventory in tables instead of summary cards', () => {
@@ -270,5 +283,17 @@ describe('platform overview layout guardrails', () => {
       /getPlatformTableHeadClassForKind\('numeric-value'\)[\s\S]{0,200}?VMs/,
     );
     expect(vsphereHostsTableSource).toContain('hidden md:table-cell');
+    expect(agentsMachinesTableSource).toMatch(
+      /getPlatformTableHeadClassForKind\('name'\)[\s\S]{0,200}?Machine/,
+    );
+    expect(agentsMachinesTableSource).toMatch(
+      /getPlatformTableHeadClassForKind\('metric-bar'\)[\s\S]{0,200}?CPU/,
+    );
+    expect(agentsMachinesTableSource).toMatch(
+      /getPlatformTableHeadClassForKind\('metric-bar'\)[\s\S]{0,200}?Memory/,
+    );
+    expect(agentsMachinesTableSource).toMatch(
+      /getPlatformTableHeadClassForKind\('metric-bar'\)[\s\S]{0,200}?Disk/,
+    );
   });
 });

@@ -43,7 +43,7 @@ export function AgentsPageSurface() {
   });
 
   return (
-    <div data-testid="agents-page" class="space-y-3">
+    <div data-testid="agents-page" class="space-y-4">
       <PlatformSectionTabs tabs={AGENTS_TAB_SPECS} active="overview" ariaLabel="Agents sections" />
 
       <Show
