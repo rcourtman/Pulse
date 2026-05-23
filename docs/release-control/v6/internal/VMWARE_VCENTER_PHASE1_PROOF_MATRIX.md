@@ -1,6 +1,6 @@
 # VMware vCenter Phase-1 Proof Matrix
 
-Last updated: 2026-03-31
+Last updated: 2026-05-23
 Status: ACTIVE
 Governance surfaces:
 - `status.json.candidate_lanes.platform-admission-execution`
@@ -91,9 +91,12 @@ That dated record should summarize:
 
 1. the environment alias and `LOCAL_CAPABILITIES.md` entry used
 2. `vCenter` version and build information
-3. the exact privilege bundle used for the pass
-4. pass/fail notes for `VC-0` through `VC-7`
-5. captured evidence for projection, alerts/history, and Assistant read
+3. the exact privilege bundle used for the pass, including the privilege
+   required for `GET /api/vcenter/vm/{vm}/guest/local-filesystem` (the
+   guest filesystem read added for `VC-8`'s operational metric surface)
+4. pass/fail notes for `VC-0` through `VC-8`
+5. captured evidence for projection, alerts/history, Assistant read, and
+   the new uptime / guest disk usage cells on the canonical workload table
 6. explicit confirmation that direct `ESXi`, recovery support, and control
    stayed out of scope
 
@@ -166,6 +169,7 @@ Current state as of 2026-03-31:
 | `VC-5` | Alerts and history floor | Shared alerts can surface VMware alarm and history context |
 | `VC-6` | Assistant read floor | Assistant can inspect canonical VMware-backed resources without VMware-specific tools |
 | `VC-7` | Exclusion integrity | No direct `ESXi`, recovery, or control claim leaks into the shipped behavior or wording |
+| `VC-8` | Operational metric surface | Host and VM uptime plus VM guest filesystem usage land on the canonical workload table for VMware-backed resources without silent gaps |
 
 ## Execution Steps
 
@@ -314,6 +318,96 @@ Current automated coverage:
 2. `tests/integration/tests/41-vmware-phase1-exclusion-integrity.spec.ts`
 3. `internal/ai/tools/tools_query_test.go`
 4. `internal/ai/tools/control_resource_test.go`
+
+### `VC-8` Operational Metric Surface
+
+Phase-1's resource projection (`VC-3`) and storage/snapshot visibility
+(`VC-4`) prove that VMware-backed entities land as canonical types and that
+datastore + snapshot context is readable. They do not, by themselves,
+prove that the operational columns the canonical workload table renders for
+every other platform — host uptime, VM uptime, VM guest filesystem usage —
+actually populate against a real `vCenter`. This scenario locks that gap
+explicitly so it cannot slip behind the existing projection pass.
+
+The new code paths under proof here are:
+
+1. PerformanceManager counter additions in `internal/vmware/client_metrics.go`:
+   `sys.uptime.latest` for hosts and VMs, and `sys.osUptime.latest` for VMs.
+   The mapping prefers guest OS uptime (Tools-reported) and falls back to
+   VMX-process uptime when the guest counter is absent.
+2. New per-VM REST collector in `internal/vmware/client_topology.go`:
+   `GET /api/vcenter/vm/{vm}/guest/local-filesystem`, aggregated across mount
+   points into `InventoryMetrics.DiskTotalBytes` / `DiskUsedBytes` /
+   `DiskPercent` and projected onto canonical `ResourceMetrics.Disk`.
+3. Canonical projection in `internal/vmware/provider.go`: `UptimeSeconds`
+   lands on `Resource.Uptime` for hosts and VMs; the disk fields land on
+   `metrics.disk` so the shared workload table renders the same shape every
+   other platform uses.
+
+Steps:
+
+1. Confirm the candidate vCenter service account can read
+   `PerformanceManager.perfCounter` and successfully query
+   `sys.uptime.latest` against a sample host and VM.
+2. Confirm the same account can issue
+   `GET /api/vcenter/vm/{vm}/guest/local-filesystem` against a
+   powered-on VM with VMware Tools running, and that the response decodes
+   as `map[string]VmGuestLocalFilesystemInfo` (each entry carrying
+   `capacity` and `free_space`).
+3. Open the vSphere overview page; confirm a powered-on VM row renders a
+   real "N days" Uptime cell and a non-empty DISK column with both percent
+   and human-readable bytes.
+4. Confirm a powered-off VM, a VM with VMware Tools stopped, and a VM the
+   service account is not permitted to read for guest operations each
+   surface their gap correctly: Uptime / DISK stay blank (not "0" or
+   "0 B / 0 B") and the snapshot's enrichment-issues array records a
+   non-fatal `unavailable` (Tools missing) or `permission` (insufficient
+   privilege) entry rather than failing the entire poll.
+5. Confirm `sys.osUptime.latest` is collected when the vCenter is
+   configured at statistics level 4 (real-time interval), and that
+   the fallback to `sys.uptime.latest` engages cleanly when the level-4
+   counter is not exposed.
+
+Pass when:
+
+1. Host and VM `Resource.Uptime` populate against the live vCenter for
+   any powered-on entity that vCenter would normally surface uptime for.
+2. `metrics.disk` on a powered-on VM with Tools running carries a
+   non-zero `Total` and a `Percent` derived from real guest filesystem
+   reads, with at least one realistic mount point present.
+3. The shared workload table renders these on the vSphere overview without
+   the operator having to toggle the Columns menu.
+4. Missing-data cases (Tools stopped, VM powered off, privilege gap) flow
+   through the existing non-fatal enrichment-issue path with an
+   actionable category (`unavailable` for Tools, `permission` for
+   privilege) rather than failing the whole poll.
+5. The exact privilege required for
+   `GET /api/vcenter/vm/{vm}/guest/local-filesystem` is captured in the
+   dated proof record so the documented "minimum privilege bundle" can be
+   tightened from "guessed" to "verified."
+
+Current automated coverage:
+
+1. `internal/vmware/client_test.go`'s degraded-enrichment test exercises
+   the new endpoint's happy path (multi-mount filesystem response) and
+   the `unavailableVMGuestInfo` Tools-not-running 503 path.
+2. `internal/mock/platform_fixtures_test.go` asserts the synthesized
+   uptime + guest disk values flow through the canonical projection for
+   powered-on VMs and drop cleanly for powered-off VMs.
+3. `frontend-modern/src/hooks/__tests__/useWorkloads.test.ts` asserts
+   the `Resource.Uptime` fallback so vSphere uptime lands on
+   `WorkloadGuest.uptime` despite vSphere not populating a
+   platform-specific carve-out.
+
+Open unknown (track in the dated proof record):
+
+The exact vCenter privilege required for the guest local-filesystem read.
+Public documentation does not pin this down, and Pulse's existing
+"minimum privilege bundle" entry in
+`VMWARE_VCENTER_PHASE1_ONBOARDING_SPEC.md` already names privilege
+verification as a live-environment unknown. The first real `VC-8` pass
+should capture the exact privilege name so subsequent customer setup
+docs can ship it explicitly.
 
 ## Evidence To Capture
 

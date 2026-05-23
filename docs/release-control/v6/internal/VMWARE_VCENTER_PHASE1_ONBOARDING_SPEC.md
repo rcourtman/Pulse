@@ -147,7 +147,11 @@ of being hard-coded into a support claim up front:
 2. whether certificate/thumbprint pinning should be required, optional, or
    deferred behind the shared TLS contract
 3. the exact minimum privilege set required for inventory, datastore, alarm,
-   event, snapshot, and performance reads
+   event, snapshot, performance, and guest filesystem reads (the last of
+   these covers the `GET /api/vcenter/vm/{vm}/guest/local-filesystem`
+   endpoint that backs the canonical workload-table DISK column for
+   VMware-backed VMs; first real `VC-8` pass must pin its exact privilege
+   so customer setup docs can drop the guess)
 
 The session-shape contract is now narrower than that unknown. The companion
 backend contract in

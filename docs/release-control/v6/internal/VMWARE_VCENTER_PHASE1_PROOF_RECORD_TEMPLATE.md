@@ -1,7 +1,7 @@
 # VMware vCenter Phase-1 Proof Record Template
 
 Use this template when the first real VMware `vCenter` environment is available
-and `VC-0` through `VC-7` from
+and `VC-0` through `VC-8` from
 `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_PROOF_MATRIX.md` are
 being exercised.
 
@@ -173,6 +173,34 @@ Observed:
 - assistant control still read-only / absent: `yes` or `no`
 - broader VMware admin-plane promises absent: `yes` or `no`
 
+## Operational Metric Surface (`VC-8`)
+
+Observed:
+
+- `sys.uptime.latest` PerformanceManager counter discovered and queryable:
+  `pass` or `fail`
+- `sys.osUptime.latest` PerformanceManager counter discovered and queryable
+  when statistics level 4 is enabled (real-time interval): `pass`, `fail`,
+  or `not-applicable`
+- `Resource.Uptime` populated on hosts: `pass` or `fail`
+- `Resource.Uptime` populated on powered-on VMs: `pass` or `fail`
+- `GET /api/vcenter/vm/{vm}/guest/local-filesystem` returned
+  `map[string]VmGuestLocalFilesystemInfo` for a powered-on VM with Tools
+  running: `pass` or `fail`
+- `metrics.disk` populated on at least one powered-on VM with realistic
+  `Total` / `Used` / `Percent`: `pass` or `fail`
+- Powered-off VM / Tools-stopped VM / privilege-gap cases each surface
+  through the non-fatal enrichment-issue path with an actionable
+  category (`unavailable` for Tools, `permission` for privilege) rather
+  than failing the whole poll: `pass` or `fail`
+- Workload table renders Uptime + DISK cells on the vSphere overview
+  without requiring the operator to toggle the Columns menu: `pass` or
+  `fail`
+- Exact privilege required for guest local-filesystem endpoint observed
+  and captured below: `pass` or `fail`
+- guest local-filesystem privilege observed: `...`
+- notes: `...`
+
 ## Captured Evidence
 
 - connection-list screenshots or payloads: `...`
@@ -181,6 +209,9 @@ Observed:
 - Assistant read transcript or screenshots: `...`
 - version/build evidence: `...`
 - privilege bundle evidence: `...`
+- vSphere overview screenshot showing populated Uptime + DISK cells: `...`
+- enrichment-issues array payload for a Tools-stopped VM and a
+  privilege-restricted VM: `...`
 
 ## Outcome
 

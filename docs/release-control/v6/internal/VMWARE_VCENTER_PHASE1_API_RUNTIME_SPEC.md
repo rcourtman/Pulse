@@ -223,3 +223,11 @@ need live proof before VMware can be called supported:
    [Performance Manager Query Perf Composite](https://developer.broadcom.com/xapis/virtual-infrastructure-json-api/latest/sdk/vim25/release/PerformanceManager/moId/QueryPerfComposite/post/)
 5. recent-task context:
    [Virtual Machine Get Recent Task](https://developer.broadcom.com/xapis/virtual-infrastructure-json-api/latest/sdk/vim25/release/VirtualMachine/moId/recentTask/get/)
+6. guest filesystem usage (drives the `VC-8` workload-table Uptime + DISK
+   columns; requires VMware Tools running in the guest):
+   [Get Guest Local Filesystem](https://developer.vmware.com/apis/vsphere-automation/latest/vcenter/api/vcenter/vm/vm/guest/local-filesystem/get/)
+7. PerformanceManager counter group/name/rollup conventions for
+   `sys.uptime.latest` (host + VM, VMX-process uptime, stats level 1) and
+   `sys.osUptime.latest` (VM only, guest OS uptime via Tools, stats level
+   4 / real-time interval):
+   [PerformanceManager objects and methods](https://techdocs.broadcom.com/us/en/vmware-cis/vsphere/vsphere-sdks-tools/8-0/web-services-sdk-programming-guide/vsphere-performance/performancemanager-objects-and-methods.html)
