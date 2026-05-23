@@ -130,6 +130,7 @@ type APIResource = {
   };
   vmware?: {
     connectionName?: string;
+    vcenterHost?: string;
     datacenterName?: string;
     clusterName?: string;
     runtimeHostName?: string;
@@ -513,6 +514,15 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     platformType,
     platformScopes,
     discoveryTarget,
+    vmware:
+      platformType === 'vmware-vsphere' && resource.vmware
+        ? {
+            connectionName: resource.vmware.connectionName,
+            vcenterHost: resource.vmware.vcenterHost,
+            datacenterName: resource.vmware.datacenterName,
+            clusterName: resource.vmware.clusterName,
+          }
+        : undefined,
   };
 };
 

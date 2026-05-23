@@ -32,4 +32,16 @@ export type WorkloadGuest = (VM | Container) & {
   // Canonical discovery ownership. API-backed platforms such as TrueNAS should
   // only expose Discovery when the unified resource contract supplies a target.
   discoveryTarget?: ResourceDiscoveryTarget;
+  // vSphere placement context surfaced in the workload drawer's vSphere
+  // card. Only populated for resources with platformScopes containing
+  // `vmware-vsphere`. Kept narrow on purpose — operational state like
+  // Tools / snapshots / disks lives in the unified resource payload and
+  // hasn't been mapped onto WorkloadGuest because the workload drawer
+  // hasn't asked for it yet.
+  vmware?: {
+    connectionName?: string;
+    vcenterHost?: string;
+    datacenterName?: string;
+    clusterName?: string;
+  };
 };

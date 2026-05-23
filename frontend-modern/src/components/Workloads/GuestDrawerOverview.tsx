@@ -156,6 +156,63 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
           </div>
         </div>
 
+        {/* vSphere placement card: vCenter / Datacenter / Cluster live on
+              WorkloadGuest.vmware and aren't surfaced by System (Node already
+              shows the runtime host). Render only when the workload is a
+              vSphere VM and at least one of these fields is populated. */}
+        <Show
+          when={
+            (props.guest.platformScopes?.includes('vmware-vsphere') ?? false) &&
+            (props.guest.vmware?.connectionName ||
+              props.guest.vmware?.vcenterHost ||
+              props.guest.vmware?.datacenterName ||
+              props.guest.vmware?.clusterName)
+          }
+        >
+          <div class="rounded border border-border bg-surface p-3 shadow-sm">
+            <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+              vSphere
+            </h3>
+            <div class="space-y-1.5 text-[11px]">
+              <Show when={props.guest.vmware?.connectionName || props.guest.vmware?.vcenterHost}>
+                <div class="flex items-center justify-between gap-2 min-w-0">
+                  <span class="text-muted shrink-0">vCenter</span>
+                  <span
+                    class="font-medium text-base-content truncate"
+                    title={
+                      props.guest.vmware?.vcenterHost || props.guest.vmware?.connectionName || ''
+                    }
+                  >
+                    {props.guest.vmware?.connectionName || props.guest.vmware?.vcenterHost}
+                  </span>
+                </div>
+              </Show>
+              <Show when={props.guest.vmware?.datacenterName}>
+                <div class="flex items-center justify-between gap-2 min-w-0">
+                  <span class="text-muted shrink-0">Datacenter</span>
+                  <span
+                    class="font-medium text-base-content truncate"
+                    title={props.guest.vmware?.datacenterName || ''}
+                  >
+                    {props.guest.vmware?.datacenterName}
+                  </span>
+                </div>
+              </Show>
+              <Show when={props.guest.vmware?.clusterName}>
+                <div class="flex items-center justify-between gap-2 min-w-0">
+                  <span class="text-muted shrink-0">Cluster</span>
+                  <span
+                    class="font-medium text-base-content truncate"
+                    title={props.guest.vmware?.clusterName || ''}
+                  >
+                    {props.guest.vmware?.clusterName}
+                  </span>
+                </div>
+              </Show>
+            </div>
+          </div>
+        </Show>
+
         <Show when={props.hasOsInfo || props.ipAddresses.length > 0}>
           <div class="rounded border border-border bg-surface p-3 shadow-sm">
             <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
