@@ -95,6 +95,8 @@ type APIResource = {
     balloon?: number;
     isOci?: boolean;
     osTemplate?: string;
+    osName?: string;
+    osVersion?: string;
   };
   agent?: {
     hostname?: string;
@@ -137,6 +139,7 @@ type APIResource = {
     runtimeHostName?: string;
     managedObjectId?: string;
     powerState?: string;
+    guestOsFamily?: string;
   };
   discoveryTarget?: {
     resourceType?: string;
@@ -462,8 +465,16 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     disks: normalizeDiskArray(resource.proxmox?.disks ?? resource.agent?.disks),
     diskStatusReason: undefined,
     ipAddresses: resource.identity?.ipAddresses ?? [],
-    osName: resource.agent?.osName,
-    osVersion: resource.agent?.osVersion,
+    // Guest OS info: agent.osName/osVersion is the universal fallback the
+    // workload table reads. Proxmox writes to resource.proxmox.osName /
+    // osVersion (qemu-guest-agent os-info); vSphere surfaces a coarse
+    // family on resource.vmware.guestOsFamily (e.g. "LINUX", "WINDOWS"
+    // — there's no analogous "OS version" carve-out). Falling back here
+    // lights up the OS column for both platforms without changing what
+    // already-populated agent-driven rows render.
+    osName:
+      resource.agent?.osName ?? resource.proxmox?.osName ?? resource.vmware?.guestOsFamily,
+    osVersion: resource.agent?.osVersion ?? resource.proxmox?.osVersion,
     agentVersion: resource.agent?.agentVersion,
     networkInterfaces: mapNetworkInterfaces(resource.agent?.networkInterfaces),
     networkIn: resource.metrics?.netIn?.value ?? 0,
