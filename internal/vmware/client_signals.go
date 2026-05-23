@@ -154,6 +154,7 @@ func (c *Client) validateSignalFloor(
 
 func (c *Client) enrichInventorySnapshot(
 	ctx context.Context,
+	automationSessionID string,
 	release string,
 	sessionID string,
 	perfManagerMoID string,
@@ -250,6 +251,28 @@ func (c *Client) enrichInventorySnapshot(
 				recordIssue(issue)
 			} else if err != nil {
 				return err
+			}
+			// Aggregate guest filesystem usage from VMware Tools. 503 means
+			// Tools is not currently reporting (powered off, Tools missing,
+			// or guest agent not started); classify as a non-fatal issue
+			// and continue without disk usage. Hosts have no equivalent
+			// because ESXi exposes no `guest` shape.
+			diskTotal, diskUsed, diskPercent, diskOK, diskErr := c.collectVMGuestLocalFilesystem(ctx, automationSessionID, snapshot.VMs[i].VM)
+			if issue, ok := classifyInventoryEnrichmentIssue("signals", "vm", snapshot.VMs[i].VM, diskErr); ok {
+				recordIssue(issue)
+			} else if diskErr != nil && !isAutomationNotFound(diskErr) && !isAutomationUnavailable(diskErr) {
+				return diskErr
+			}
+			if diskOK {
+				if metrics == nil {
+					metrics = &InventoryMetrics{}
+				}
+				total := diskTotal
+				used := diskUsed
+				metrics.DiskTotalBytes = &total
+				metrics.DiskUsedBytes = &used
+				percent := diskPercent
+				metrics.DiskPercent = &percent
 			}
 			snapshot.VMs[i].Metrics = metrics
 			return nil

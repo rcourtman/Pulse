@@ -287,6 +287,54 @@ func TestBuildFixtureGraphRefreshesPlatformFixtureMetricsFromCanonicalModel(t *t
 	if got, want := *host.Metrics.CPUPercent, SampleMetric("agent", "vc-mock-1:host:host-101", "cpu", now); math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected refreshed VMware host cpu %.6f, got %.6f", want, got)
 	}
+	// Mock fixture must also synthesize uptime so the workloads table
+	// renders real "N days" cells for vSphere hosts and VMs instead of
+	// blank "0s" placeholders. Hosts get sys.uptime-style uptime only;
+	// guest disk usage is VM-only because ESXi exposes no `guest` shape.
+	if host.Metrics.UptimeSeconds == nil || *host.Metrics.UptimeSeconds <= 0 {
+		t.Fatalf("expected refreshed VMware host uptime seconds, got %+v", host.Metrics.UptimeSeconds)
+	}
+	if host.Metrics.DiskTotalBytes != nil || host.Metrics.DiskUsedBytes != nil || host.Metrics.DiskPercent != nil {
+		t.Fatalf("expected VMware host guest filesystem fields to stay nil, got total=%+v used=%+v percent=%+v", host.Metrics.DiskTotalBytes, host.Metrics.DiskUsedBytes, host.Metrics.DiskPercent)
+	}
+
+	var poweredOnVM *struct{}
+	for _, vm := range graph.PlatformFixtures.VMware.VMs {
+		if vm.PowerState != "POWERED_ON" || vm.Metrics == nil {
+			continue
+		}
+		if vm.Metrics.UptimeSeconds == nil || *vm.Metrics.UptimeSeconds <= 0 {
+			t.Fatalf("expected powered-on VMware VM %q to surface uptime, got %+v", vm.Name, vm.Metrics.UptimeSeconds)
+		}
+		if vm.Metrics.DiskTotalBytes == nil || *vm.Metrics.DiskTotalBytes <= 0 {
+			t.Fatalf("expected powered-on VMware VM %q to surface guest disk total, got %+v", vm.Name, vm.Metrics.DiskTotalBytes)
+		}
+		if vm.Metrics.DiskUsedBytes == nil || *vm.Metrics.DiskUsedBytes < 0 {
+			t.Fatalf("expected powered-on VMware VM %q to surface guest disk used, got %+v", vm.Name, vm.Metrics.DiskUsedBytes)
+		}
+		if vm.Metrics.DiskPercent == nil {
+			t.Fatalf("expected powered-on VMware VM %q to surface guest disk percent", vm.Name)
+		}
+		marker := struct{}{}
+		poweredOnVM = &marker
+		break
+	}
+	if poweredOnVM == nil {
+		t.Fatal("expected at least one powered-on VMware VM fixture to assert uptime + guest disk projection")
+	}
+
+	for _, vm := range graph.PlatformFixtures.VMware.VMs {
+		if vm.PowerState != "POWERED_OFF" || vm.Metrics == nil {
+			continue
+		}
+		if vm.Metrics.UptimeSeconds != nil {
+			t.Fatalf("expected powered-off VMware VM %q to drop uptime, got %+v", vm.Name, vm.Metrics.UptimeSeconds)
+		}
+		if vm.Metrics.DiskTotalBytes != nil || vm.Metrics.DiskUsedBytes != nil || vm.Metrics.DiskPercent != nil {
+			t.Fatalf("expected powered-off VMware VM %q to drop guest disk fields, got total=%+v used=%+v percent=%+v", vm.Name, vm.Metrics.DiskTotalBytes, vm.Metrics.DiskUsedBytes, vm.Metrics.DiskPercent)
+		}
+		break
+	}
 
 	datastore := graph.PlatformFixtures.VMware.Datastores[0]
 	wantFree := datastore.Capacity - bytesFromPercent(datastore.Capacity, SampleMetric("storage", "vc-mock-1:datastore:"+datastore.Datastore, "usage", now))

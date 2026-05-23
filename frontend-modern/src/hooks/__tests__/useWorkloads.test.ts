@@ -319,6 +319,52 @@ describe('useWorkloads', () => {
     dispose();
   });
 
+  it('falls back to canonical resource.uptime when no platform-specific carve-out exists (vSphere)', async () => {
+    // vSphere VMs surface uptime only on the canonical Resource.Uptime
+    // field; there is no proxmox/agent/docker/kubernetes carve-out. The
+    // useWorkloads mapping must land on resource.uptime so the workloads
+    // table renders real "N days" cells rather than the blank "0s"
+    // placeholder.
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [
+        {
+          ...sampleResource,
+          id: 'vmware-vm-uptime',
+          name: 'lab-app-01',
+          status: 'online',
+          uptime: 12345678,
+          sources: ['vmware'],
+          parentName: 'esxi-01',
+          proxmox: undefined,
+          vmware: {
+            managedObjectId: 'vm-901',
+            runtimeHostName: 'esxi-01',
+            clusterName: 'Compute-A',
+            connectionName: 'Production vCenter',
+            powerState: 'poweredOn',
+          },
+        },
+      ],
+      meta: { totalPages: 1 },
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled);
+    });
+
+    await flushAsync();
+    await waitForWorkloadCount(() => result!.workloads().length, 1);
+
+    const vm = result!.workloads().find((workload) => workload.name === 'lab-app-01');
+    expect(vm?.uptime).toBe(12345678);
+
+    dispose();
+  });
+
   it('preserves canonical discovery targets for workloads instead of inferring them from platform type', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       data: [

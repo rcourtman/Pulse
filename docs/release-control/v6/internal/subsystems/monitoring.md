@@ -567,6 +567,21 @@ runtime failure. The client should preserve the usable base snapshot, record
 degraded enrichment issues on the snapshot, and let the poller publish those
 as `observed.degraded` plus summarized issue metadata instead of clearing the
 observed contribution or pretending the refresh was fully healthy.
+That same VMware inventory floor also owns operator-visible uptime and guest
+filesystem usage. `vmware.InventoryMetrics` carries `UptimeSeconds`,
+`DiskUsedBytes`, `DiskTotalBytes`, and `DiskPercent` for hosts and VMs so the
+canonical `Resource.Uptime` field and `ResourceMetrics.Disk` series populate
+on vSphere-backed workloads — without these the workloads table renders
+empty "0s" and blank disk cells for every vSphere row. Real collection uses
+PerformanceManager `sys.uptime.latest` (host + VM) plus
+`sys.osUptime.latest` for VMs (Tools-reported guest OS uptime; preferred
+when present), and `GET /api/vcenter/vm/{vm}/guest/local-filesystem`
+aggregated across mount points for disk usage. A 503 from that REST
+endpoint (Tools not running) is recorded as a non-fatal `unavailable`
+enrichment issue rather than failing the poll. Mock fixtures
+(`internal/mock/platform_fixtures.go`) must synthesize the same fields per
+powered-on VM and drop them for powered-off VMs so the demo estate
+exercises the same workload-table contract as live vCenter would.
 That same poller-owned partial-success model must also keep runtime
 observability non-noisy. Repeated polls with the same degraded optional-read
 issue classes should not emit a fresh warning every interval; monitoring

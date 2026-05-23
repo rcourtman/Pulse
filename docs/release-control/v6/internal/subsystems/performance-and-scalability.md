@@ -166,6 +166,13 @@ regression protection.
    `frontend-modern/src/hooks/useWorkloads.ts` must consume canonical
    `platformScopes`; page surfaces must not rebuild platform membership with
    ad hoc source or runtime scans.
+   The same `useWorkloads.ts` mapping owns canonical-field fallback for
+   per-row scalars the workload table reads. `WorkloadGuest.uptime` must
+   fall back to the canonical `Resource.Uptime` field after the
+   platform-specific carve-outs (`proxmox.uptime`, `agent.uptimeSeconds`,
+   `docker.uptimeSeconds`, `kubernetes.uptimeSeconds`); platforms whose
+   adapters only populate the canonical field — vSphere is the working
+   example — would otherwise render blank uptime cells for every row.
 4. Keep shared auth gating in `internal/api/router.go` cheap and local: pre-auth quick-setup and recovery routing may short-circuit on loopback/session/token checks, but they must not trigger chart, metrics, or broad persistence fan-out on the protected request hot path.
    The same rule applies to public setup-script lifecycle routes: `/api/auto-register`
    and `/api/auto-unregister` may bypass the global auth wall so their handlers can

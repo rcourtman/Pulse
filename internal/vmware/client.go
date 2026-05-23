@@ -200,7 +200,7 @@ func (c *Client) CollectInventory(ctx context.Context) (*InventorySnapshot, erro
 	if err != nil {
 		return nil, err
 	}
-	signalIssues, err := c.enrichInventorySnapshot(ctx, release, sessionID, refs.PerfManagerMoID, refs.EventManagerMoID, perfCounters, inventory)
+	signalIssues, err := c.enrichInventorySnapshot(ctx, automationSessionID, release, sessionID, refs.PerfManagerMoID, refs.EventManagerMoID, perfCounters, inventory)
 	if err != nil {
 		return nil, err
 	}

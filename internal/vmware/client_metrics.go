@@ -70,6 +70,15 @@ const (
 	vmwarePerfLogicalNetOut          = "net_out"
 	vmwarePerfLogicalDiskRead        = "disk_read"
 	vmwarePerfLogicalDiskWrite       = "disk_write"
+	// sys.uptime.latest returns total seconds since last system startup
+	// (VMX-process clock for VMs, kernel uptime for ESXi hosts). Stats
+	// level 1, available on every interval.
+	vmwarePerfLogicalSysUptime = "sys_uptime"
+	// sys.osUptime.latest returns guest OS uptime via VMware Tools, in
+	// seconds. VM-only and stats level 4, so it may be absent from the
+	// historical rollups vCenter exposes by default; treat its presence
+	// as preferred over sys.uptime, otherwise fall back.
+	vmwarePerfLogicalGuestOSUptime = "guest_os_uptime"
 )
 
 var vmwareHostPerfCounters = []perfCounterDefinition{
@@ -80,6 +89,7 @@ var vmwareHostPerfCounters = []perfCounterDefinition{
 	{logical: vmwarePerfLogicalNetOut, group: "net", name: "bytesTx", rollup: "average"},
 	{logical: vmwarePerfLogicalDiskRead, group: "disk", name: "read", rollup: "average"},
 	{logical: vmwarePerfLogicalDiskWrite, group: "disk", name: "write", rollup: "average"},
+	{logical: vmwarePerfLogicalSysUptime, group: "sys", name: "uptime", rollup: "latest"},
 }
 
 var vmwareVMPerfCounters = []perfCounterDefinition{
@@ -89,6 +99,8 @@ var vmwareVMPerfCounters = []perfCounterDefinition{
 	{logical: vmwarePerfLogicalNetOut, group: "net", name: "bytesTx", rollup: "average"},
 	{logical: vmwarePerfLogicalDiskRead, group: "disk", name: "read", rollup: "average"},
 	{logical: vmwarePerfLogicalDiskWrite, group: "disk", name: "write", rollup: "average"},
+	{logical: vmwarePerfLogicalSysUptime, group: "sys", name: "uptime", rollup: "latest"},
+	{logical: vmwarePerfLogicalGuestOSUptime, group: "sys", name: "osUptime", rollup: "latest"},
 }
 
 func (c *Client) loadPerfCounterCatalog(ctx context.Context, release, sessionID, perfManagerMoID string) (perfCounterCatalog, error) {
@@ -425,6 +437,15 @@ func inventoryMetricsFromPerf(
 	if accumulator, ok := accumulators[vmwarePerfLogicalDiskWrite]; ok && accumulator.count > 0 {
 		metrics.DiskWriteBytesPerSecond = float64Ptr(accumulator.sum * 1024.0)
 	}
+	// Uptime: prefer guest OS uptime (VMware Tools) when present, otherwise
+	// fall back to VMX-process / host uptime. Both counters are in seconds.
+	// PerformanceManager sums across entity series, but uptime is a single
+	// value per entity, so the average is the value itself.
+	if accumulator, ok := accumulators[vmwarePerfLogicalGuestOSUptime]; ok && accumulator.count > 0 {
+		metrics.UptimeSeconds = int64Ptr(int64(math.Round(accumulator.sum / float64(accumulator.count))))
+	} else if accumulator, ok := accumulators[vmwarePerfLogicalSysUptime]; ok && accumulator.count > 0 {
+		metrics.UptimeSeconds = int64Ptr(int64(math.Round(accumulator.sum / float64(accumulator.count))))
+	}
 
 	if !hasInventoryMetrics(metrics) {
 		return nil
@@ -474,7 +495,11 @@ func hasInventoryMetrics(metrics *InventoryMetrics) bool {
 		metrics.NetInBytesPerSecond != nil ||
 		metrics.NetOutBytesPerSecond != nil ||
 		metrics.DiskReadBytesPerSecond != nil ||
-		metrics.DiskWriteBytesPerSecond != nil
+		metrics.DiskWriteBytesPerSecond != nil ||
+		metrics.UptimeSeconds != nil ||
+		metrics.DiskTotalBytes != nil ||
+		metrics.DiskUsedBytes != nil ||
+		metrics.DiskPercent != nil
 }
 
 func float64Ptr(value float64) *float64 {

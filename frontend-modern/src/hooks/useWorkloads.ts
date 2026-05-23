@@ -55,6 +55,7 @@ type APIResource = {
   type?: string;
   name?: string;
   status?: string;
+  uptime?: number;
   lastSeen?: string;
   sources?: string[];
   platformScopes?: string[];
@@ -474,6 +475,11 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
       resource.agent?.uptimeSeconds ??
       resource.docker?.uptimeSeconds ??
       resource.kubernetes?.uptimeSeconds ??
+      // Canonical Resource.Uptime is the universal fallback — vSphere's
+      // adapter populates only this field (no platform-specific
+      // vmware.uptime carve-out), so the chain has to land here for VMware
+      // VMs to surface uptime in the workloads table.
+      resource.uptime ??
       0,
     template: resource.proxmox?.template ?? false,
     lastBackup: (() => {

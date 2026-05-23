@@ -150,7 +150,19 @@ type InventoryVMHardware struct {
 }
 
 // InventoryMetrics captures the current runtime metric floor projected onto
-// canonical Pulse metrics for VMware-backed hosts and VMs.
+// canonical Pulse metrics for VMware-backed hosts and VMs. Sources:
+//   - Throughput / utilisation (cpu, mem, net*, disk*BytesPerSecond) come from
+//     VI/JSON PerformanceManager rollups (see client_metrics.go).
+//   - UptimeSeconds comes from PerformanceManager counters: prefer
+//     sys.osUptime.latest for VMs (guest OS uptime, requires VMware Tools)
+//     with fall back to sys.uptime.latest (VMX-process uptime; also the only
+//     uptime source for ESXi hosts).
+//   - DiskUsedBytes / DiskTotalBytes / DiskPercent are aggregated from the
+//     vSphere Automation REST endpoint
+//     `GET /api/vcenter/vm/{vm}/guest/local-filesystem`, which returns a map
+//     of mount-point -> {capacity, free_space} when VMware Tools is running.
+//     Host-level guest disk usage does not exist in vSphere; these fields
+//     stay nil for hosts.
 type InventoryMetrics struct {
 	CPUPercent              *float64 `json:"cpu_percent,omitempty"`
 	MemoryPercent           *float64 `json:"memory_percent,omitempty"`
@@ -160,6 +172,10 @@ type InventoryMetrics struct {
 	NetOutBytesPerSecond    *float64 `json:"net_out_bytes_per_second,omitempty"`
 	DiskReadBytesPerSecond  *float64 `json:"disk_read_bytes_per_second,omitempty"`
 	DiskWriteBytesPerSecond *float64 `json:"disk_write_bytes_per_second,omitempty"`
+	UptimeSeconds           *int64   `json:"uptime_seconds,omitempty"`
+	DiskUsedBytes           *int64   `json:"disk_used_bytes,omitempty"`
+	DiskTotalBytes          *int64   `json:"disk_total_bytes,omitempty"`
+	DiskPercent             *float64 `json:"disk_percent,omitempty"`
 }
 
 // InventoryEnrichmentIssue captures one optional VMware read that degraded a
@@ -519,6 +535,7 @@ func vmwareRecordsFromSnapshot(snapshot *InventorySnapshot, now func() time.Time
 			Status:     unifiedresources.IncidentsStatus(hostStatus(host), incidents),
 			LastSeen:   collectedAt,
 			UpdatedAt:  collectedAt,
+			Uptime:     inventoryUptimeSeconds(host.Metrics),
 			Incidents:  incidents,
 			Metrics:    inventoryMetricsResourceMetrics(host.Metrics),
 			Agent:      vmwareHostAgentData(snapshot, host),
@@ -584,6 +601,7 @@ func vmwareRecordsFromSnapshot(snapshot *InventorySnapshot, now func() time.Time
 			Status:     unifiedresources.IncidentsStatus(vmStatus(vm), incidents),
 			LastSeen:   collectedAt,
 			UpdatedAt:  collectedAt,
+			Uptime:     inventoryUptimeSeconds(vm.Metrics),
 			Incidents:  incidents,
 			Metrics:    inventoryMetricsResourceMetrics(vm.Metrics),
 			ParentName: strings.TrimSpace(vm.RuntimeHostName),
@@ -1058,6 +1076,10 @@ func cloneInventoryMetrics(in *InventoryMetrics) *InventoryMetrics {
 	out.NetOutBytesPerSecond = cloneFloat64Pointer(in.NetOutBytesPerSecond)
 	out.DiskReadBytesPerSecond = cloneFloat64Pointer(in.DiskReadBytesPerSecond)
 	out.DiskWriteBytesPerSecond = cloneFloat64Pointer(in.DiskWriteBytesPerSecond)
+	out.UptimeSeconds = cloneInt64Pointer(in.UptimeSeconds)
+	out.DiskUsedBytes = cloneInt64Pointer(in.DiskUsedBytes)
+	out.DiskTotalBytes = cloneInt64Pointer(in.DiskTotalBytes)
+	out.DiskPercent = cloneFloat64Pointer(in.DiskPercent)
 	return &out
 }
 
@@ -1584,13 +1606,41 @@ func inventoryMetricsResourceMetrics(in *InventoryMetrics) *unifiedresources.Res
 			Source: unifiedresources.SourceVMware,
 		}
 	}
+	// Guest filesystem capacity / usage from /api/vcenter/vm/{vm}/guest/local-filesystem.
+	// Total/Used populate only when both are known; Percent populates from the
+	// adapter's computed value (or derived from used/total if absent).
+	if in.DiskTotalBytes != nil || in.DiskPercent != nil {
+		disk := &unifiedresources.MetricValue{
+			Unit:   "bytes",
+			Source: unifiedresources.SourceVMware,
+		}
+		if in.DiskUsedBytes != nil {
+			used := *in.DiskUsedBytes
+			disk.Used = &used
+		}
+		if in.DiskTotalBytes != nil {
+			total := *in.DiskTotalBytes
+			disk.Total = &total
+		}
+		switch {
+		case in.DiskPercent != nil:
+			disk.Percent = *in.DiskPercent
+			disk.Value = *in.DiskPercent
+		case in.DiskUsedBytes != nil && in.DiskTotalBytes != nil && *in.DiskTotalBytes > 0:
+			percent := float64(*in.DiskUsedBytes) / float64(*in.DiskTotalBytes) * 100
+			disk.Percent = percent
+			disk.Value = percent
+		}
+		metrics.Disk = disk
+	}
 
 	if metrics.CPU == nil &&
 		metrics.Memory == nil &&
 		metrics.NetIn == nil &&
 		metrics.NetOut == nil &&
 		metrics.DiskRead == nil &&
-		metrics.DiskWrite == nil {
+		metrics.DiskWrite == nil &&
+		metrics.Disk == nil {
 		return nil
 	}
 	return metrics
@@ -1643,6 +1693,22 @@ func inventoryMetricFloat64(metrics *InventoryMetrics, pick func(*InventoryMetri
 		return 0
 	}
 	return *value
+}
+
+// inventoryUptimeSeconds returns the uptime stamp on the InventoryMetrics
+// payload, or 0 when unknown. Pulse's canonical Resource.Uptime is int64
+// seconds; the vSphere adapter prefers guest OS uptime (sys.osUptime.latest
+// from VMware Tools) and falls back to VMX-process uptime
+// (sys.uptime.latest) for VMs without Tools and for ESXi hosts.
+func inventoryUptimeSeconds(metrics *InventoryMetrics) int64 {
+	if metrics == nil || metrics.UptimeSeconds == nil {
+		return 0
+	}
+	value := *metrics.UptimeSeconds
+	if value < 0 {
+		return 0
+	}
+	return value
 }
 
 func cloneFloat64Pointer(in *float64) *float64 {

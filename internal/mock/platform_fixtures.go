@@ -409,6 +409,14 @@ func refreshVMwarePlatformFixture(snapshot vmware.InventorySnapshot, at time.Tim
 			*out.VMs[i].Metrics.NetOutBytesPerSecond = 0
 			*out.VMs[i].Metrics.DiskReadBytesPerSecond = 0
 			*out.VMs[i].Metrics.DiskWriteBytesPerSecond = 0
+			// A powered-off VM has no current uptime, and VMware Tools is
+			// obviously not reporting guest filesystem usage. Drop the
+			// pointers entirely so the frontend renders "—" rather than 0,
+			// matching how Pulse signals "no data" for an offline guest.
+			out.VMs[i].Metrics.UptimeSeconds = nil
+			out.VMs[i].Metrics.DiskUsedBytes = nil
+			out.VMs[i].Metrics.DiskTotalBytes = nil
+			out.VMs[i].Metrics.DiskPercent = nil
 		}
 	}
 	for i := range out.Datastores {
@@ -526,6 +534,74 @@ func refreshVMwareInventoryMetrics(metrics *vmware.InventoryMetrics, resourceCla
 	if memoryTotal > 0 {
 		*ensureInt64Ptr(&metrics.MemoryUsedBytes) = bytesFromPercent(memoryTotal, *metrics.MemoryPercent)
 	}
+
+	// Uptime: a per-resource stable base age (1-30 days) that climbs forward
+	// with `at`. Matches what a real vCenter would report from
+	// sys.uptime.latest (and sys.osUptime.latest for VMs with Tools running).
+	*ensureInt64Ptr(&metrics.UptimeSeconds) = mockUptimeSeconds(resourceClass, resourceID, at)
+
+	// Guest filesystem usage: only meaningful for VMs (hosts don't have a
+	// `guest` shape in vSphere). For VMs we synthesize a stable total
+	// capacity and let SampleMetric oscillate usage naturally so the table
+	// renders realistic-looking bars instead of always-empty cells.
+	if resourceClass == "vm" {
+		total := mockGuestDiskTotalBytes(resourceID)
+		usage := clampFloat(SampleMetric(resourceClass, resourceID, "diskusage", at), 0, 100)
+		*ensureInt64Ptr(&metrics.DiskTotalBytes) = total
+		*ensureInt64Ptr(&metrics.DiskUsedBytes) = bytesFromPercent(total, usage)
+		*ensureFloat64Ptr(&metrics.DiskPercent) = usage
+	}
+}
+
+// mockUptimeSeconds returns a stable, slowly-incrementing uptime for a
+// vSphere mock resource. The base age is derived from the resource ID so
+// each host / VM has its own multi-day uptime, then `at` shifts it forward
+// so the column ticks naturally between snapshots.
+func mockUptimeSeconds(resourceClass, resourceID string, at time.Time) int64 {
+	seed := fnv64a(resourceClass + "|" + resourceID + "|uptime")
+	// Base age between 1 hour and 30 days
+	const minSeconds = uint64(3600)
+	const maxSeconds = uint64(30 * 24 * 60 * 60)
+	span := maxSeconds - minSeconds
+	baseSeconds := int64(minSeconds + (seed % span))
+	if at.IsZero() {
+		return baseSeconds
+	}
+	// Anchor the climb at a stable epoch so successive refreshes ramp up
+	// without resetting; use 2026-01-01 UTC.
+	anchor := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	if at.Before(anchor) {
+		return baseSeconds
+	}
+	return baseSeconds + int64(at.Sub(anchor)/time.Second)
+}
+
+// mockGuestDiskTotalBytes returns a per-VM stable guest filesystem total
+// (between 32 GiB and 256 GiB) so the same VM always appears at the same
+// size across refreshes.
+func mockGuestDiskTotalBytes(resourceID string) int64 {
+	const (
+		minGiB = int64(32)
+		maxGiB = int64(256)
+	)
+	seed := fnv64a(resourceID + "|disktotal")
+	gib := minGiB + int64(seed%uint64(maxGiB-minGiB+1))
+	return gib * 1024 * 1024 * 1024
+}
+
+// fnv64a is a tiny deterministic hash so mock helpers can derive stable
+// per-resource seeds without pulling in a math/rand source.
+func fnv64a(input string) uint64 {
+	const (
+		offset uint64 = 14695981039346656037
+		prime  uint64 = 1099511628211
+	)
+	hash := offset
+	for i := 0; i < len(input); i++ {
+		hash ^= uint64(input[i])
+		hash *= prime
+	}
+	return hash
 }
 
 func ensureFloat64Ptr(target **float64) *float64 {

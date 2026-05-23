@@ -796,6 +796,69 @@ func (c *Client) collectVMGuestIdentity(
 	return &payload, nil
 }
 
+// vcenterVMGuestLocalFilesystemInfo mirrors vSphere Automation REST
+// `VmGuestLocalFilesystemInfo`. The endpoint returns a JSON map keyed by
+// the filesystem mount-point string. Documented at
+// https://developer.vmware.com/apis/vsphere-automation/latest/vcenter/api/vcenter/vm/vm/guest/local-filesystem/get/
+// Fields:
+//   - capacity / free_space: integer bytes (required by the schema).
+//   - filesystem: optional string (e.g. "ntfs", "ext4").
+//   - mappings: optional `VirtualDiskMapping` array tying the filesystem
+//     back to a virtual disk; not yet consumed here.
+type vcenterVMGuestLocalFilesystemInfo struct {
+	Capacity   int64  `json:"capacity"`
+	FreeSpace  int64  `json:"free_space"`
+	Filesystem string `json:"filesystem,omitempty"`
+}
+
+// collectVMGuestLocalFilesystem fetches `/api/vcenter/vm/{vm}/guest/local-filesystem`
+// and aggregates capacity / used bytes across every reported guest
+// filesystem. Returns ok=false when the VM has no guest filesystem data
+// (Tools not running, VM powered off, filesystem list empty); the caller
+// should not mutate metrics in that case. A 503 from vCenter ("guest
+// agent not running") is surfaced as an "unavailable" ConnectionError so
+// the enrichment classifier treats it as a soft issue rather than a hard
+// collection failure.
+func (c *Client) collectVMGuestLocalFilesystem(
+	ctx context.Context,
+	automationSessionID string,
+	vmID string,
+) (totalBytes int64, usedBytes int64, percent float64, ok bool, err error) {
+	vmID = strings.TrimSpace(vmID)
+	if vmID == "" || strings.TrimSpace(automationSessionID) == "" {
+		return 0, 0, 0, false, nil
+	}
+	var payload map[string]vcenterVMGuestLocalFilesystemInfo
+	path := fmt.Sprintf("/api/vcenter/vm/%s/guest/local-filesystem", url.PathEscape(vmID))
+	if err := c.getAutomationJSON(ctx, automationSessionID, path, "vm guest local filesystem", &payload); err != nil {
+		return 0, 0, 0, false, err
+	}
+	if len(payload) == 0 {
+		return 0, 0, 0, false, nil
+	}
+	for _, info := range payload {
+		if info.Capacity <= 0 {
+			continue
+		}
+		totalBytes += info.Capacity
+		used := info.Capacity - info.FreeSpace
+		if used < 0 {
+			used = 0
+		}
+		usedBytes += used
+	}
+	if totalBytes <= 0 {
+		return 0, 0, 0, false, nil
+	}
+	percent = float64(usedBytes) / float64(totalBytes) * 100
+	if percent < 0 {
+		percent = 0
+	} else if percent > 100 {
+		percent = 100
+	}
+	return totalBytes, usedBytes, percent, true, nil
+}
+
 func (c *Client) collectVMTools(
 	ctx context.Context,
 	automationSessionID string,

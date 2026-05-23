@@ -232,17 +232,37 @@ func TestClientCollectInventoryPreservesBaseInventoryWhenOptionalEnrichmentDegra
 	if len(snapshot.Hosts) != 1 || len(snapshot.VMs) != 1 || len(snapshot.Datastores) != 1 || len(snapshot.Networks) != 1 {
 		t.Fatalf("unexpected inventory sizes: hosts=%d vms=%d datastores=%d networks=%d", len(snapshot.Hosts), len(snapshot.VMs), len(snapshot.Datastores), len(snapshot.Networks))
 	}
-	if len(snapshot.EnrichmentIssues) != 3 {
-		t.Fatalf("expected 3 enrichment issues, got %+v", snapshot.EnrichmentIssues)
+	// The unavailableVMGuestInfo knob now degrades two REST reads: the
+	// guest identity endpoint (topology stage) and the guest local
+	// filesystem endpoint (signals stage). That plus the per-stage
+	// permission denials gives four issues.
+	if len(snapshot.EnrichmentIssues) != 4 {
+		t.Fatalf("expected 4 enrichment issues, got %+v", snapshot.EnrichmentIssues)
 	}
-	if snapshot.EnrichmentIssues[0].Category != "permission" || snapshot.EnrichmentIssues[0].Stage != "signals" {
-		t.Fatalf("unexpected first enrichment issue: %+v", snapshot.EnrichmentIssues[0])
+	seen := make(map[string]InventoryEnrichmentIssue, len(snapshot.EnrichmentIssues))
+	for _, issue := range snapshot.EnrichmentIssues {
+		key := issue.Stage + "/" + issue.EntityType + "/" + issue.Category
+		seen[key] = issue
 	}
-	if snapshot.EnrichmentIssues[1].Category != "permission" || snapshot.EnrichmentIssues[1].Stage != "topology" || snapshot.EnrichmentIssues[1].EntityType != "cluster" {
-		t.Fatalf("unexpected second enrichment issue: %+v", snapshot.EnrichmentIssues[1])
+	if issue, ok := seen["signals/host/permission"]; !ok {
+		t.Fatalf("expected signals/host permission issue, got %+v", snapshot.EnrichmentIssues)
+	} else if !strings.Contains(issue.Message, "overall status") {
+		t.Fatalf("unexpected signals/host permission message: %+v", issue)
 	}
-	if snapshot.EnrichmentIssues[2].Category != "unavailable" || snapshot.EnrichmentIssues[2].Stage != "topology" {
-		t.Fatalf("unexpected third enrichment issue: %+v", snapshot.EnrichmentIssues[2])
+	if issue, ok := seen["signals/vm/unavailable"]; !ok {
+		t.Fatalf("expected signals/vm unavailable issue for guest local filesystem, got %+v", snapshot.EnrichmentIssues)
+	} else if !strings.Contains(issue.Message, "guest local filesystem") {
+		t.Fatalf("unexpected signals/vm unavailable message: %+v", issue)
+	}
+	if issue, ok := seen["topology/cluster/permission"]; !ok {
+		t.Fatalf("expected topology/cluster permission issue, got %+v", snapshot.EnrichmentIssues)
+	} else if !strings.Contains(issue.Message, "cluster inventory") {
+		t.Fatalf("unexpected topology/cluster message: %+v", issue)
+	}
+	if issue, ok := seen["topology/vm/unavailable"]; !ok {
+		t.Fatalf("expected topology/vm unavailable issue for guest identity, got %+v", snapshot.EnrichmentIssues)
+	} else if !strings.Contains(issue.Message, "guest identity") {
+		t.Fatalf("unexpected topology/vm unavailable message: %+v", issue)
 	}
 
 	host := snapshot.Hosts[0]
@@ -513,6 +533,27 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 			"family":     "LINUX",
 			"host_name":  "app-01.internal",
 			"ip_address": "10.0.0.21",
+		})
+	})
+	mux.HandleFunc("/api/vcenter/vm/vm-201/guest/local-filesystem", func(w http.ResponseWriter, r *http.Request) {
+		requireAutomationSession(t, r)
+		// VMware Tools reports guest filesystem usage; the unavailable knob
+		// stands in for "Tools not running" which vCenter signals via 503.
+		if cfg.unavailableVMGuestInfo {
+			http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		writeJSON(w, map[string]any{
+			"/": map[string]any{
+				"capacity":   int64(50 * 1024 * 1024 * 1024),
+				"free_space": int64(20 * 1024 * 1024 * 1024),
+				"filesystem": "ext4",
+			},
+			"/var": map[string]any{
+				"capacity":   int64(20 * 1024 * 1024 * 1024),
+				"free_space": int64(5 * 1024 * 1024 * 1024),
+				"filesystem": "ext4",
+			},
 		})
 	})
 	mux.HandleFunc("/api/vcenter/vm/vm-201/tools", func(w http.ResponseWriter, r *http.Request) {
