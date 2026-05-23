@@ -1,5 +1,6 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import {
@@ -10,9 +11,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
-import { formatBytes, formatPercent } from '@/utils/format';
+import { formatBytes } from '@/utils/format';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_CARD_CLASS,
@@ -98,35 +100,39 @@ const capacityPercent = (resource: Resource): number | undefined => {
   return undefined;
 };
 
-const capacityLabel = (row: TrueNASStorageTopologyRow): string => {
-  if (row.kind === 'disk') {
-    const size = row.resource.physicalDisk?.sizeBytes;
-    return typeof size === 'number' && size > 0 ? formatBytes(size) : '-';
-  }
+const diskSizeLabel = (row: TrueNASStorageTopologyRow): string => {
+  const size = row.resource.physicalDisk?.sizeBytes;
+  return typeof size === 'number' && size > 0 ? formatBytes(size) : '-';
+};
+
+const capacitySublabel = (row: TrueNASStorageTopologyRow): string | undefined => {
   if (typeof row.resource.disk?.used === 'number' && typeof row.resource.disk?.total === 'number') {
     return `${formatBytes(row.resource.disk.used)} / ${formatBytes(row.resource.disk.total)}`;
   }
-  const percent = capacityPercent(row.resource);
-  return percent === undefined ? '-' : formatPercent(percent);
+  return undefined;
 };
 
 const CapacityCell: Component<{ row: TrueNASStorageTopologyRow }> = (props) => {
-  const percent = () =>
-    props.row.kind === 'disk' ? undefined : capacityPercent(props.row.resource);
+  if (props.row.kind === 'disk') {
+    return (
+      <span class="text-base-content tabular-nums" title={diskSizeLabel(props.row)}>
+        {diskSizeLabel(props.row)}
+      </span>
+    );
+  }
+  const percent = () => capacityPercent(props.row.resource);
+  const sublabel = () => capacitySublabel(props.row);
+  const metricsKey = () => buildMetricKeyForUnifiedResource(props.row.resource);
   return (
-    <div class="min-w-0">
-      <div class="truncate text-base-content" title={capacityLabel(props.row)}>
-        {capacityLabel(props.row)}
-      </div>
-      <Show when={percent() !== undefined}>
-        <div class="mt-1 h-1.5 overflow-hidden rounded bg-surface-alt">
-          <div
-            class="h-full rounded bg-emerald-500"
-            style={{ width: `${Math.max(0, Math.min(100, percent() ?? 0))}%` }}
-          />
-        </div>
-      </Show>
-    </div>
+    <ResponsiveMetricCell
+      class="w-full"
+      value={percent() ?? 0}
+      type="disk"
+      sublabel={sublabel()}
+      resourceId={metricsKey()}
+      isRunning={percent() !== undefined}
+      showMobile={false}
+    />
   );
 };
 
