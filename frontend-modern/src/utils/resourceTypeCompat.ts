@@ -9,6 +9,7 @@ export type CanonicalFrontendResourceType =
   | 'storage'
   | 'disk'
   | 'docker-host'
+  | 'network'
   | 'network-share'
   | 'pbs'
   | 'pmg'
@@ -67,6 +68,7 @@ export const canonicalizeFrontendResourceType = (
     case 'storage':
     case 'disk':
     case 'docker-host':
+    case 'network':
     case 'network-share':
     case 'pbs':
     case 'pmg':
