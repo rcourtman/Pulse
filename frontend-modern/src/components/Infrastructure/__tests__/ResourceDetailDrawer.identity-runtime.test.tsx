@@ -554,13 +554,13 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(within(section).getByText('Pending')).toBeInTheDocument();
     expect(within(section).getByText('CPU topology')).toBeInTheDocument();
     expect(within(section).getByText('4 vCPU · 2 cores/socket')).toBeInTheDocument();
-    expect(within(section).getByText('Boot order')).toBeInTheDocument();
-    expect(within(section).getByText('Disk 2000 -> Ethernet 4000')).toBeInTheDocument();
+    // Boot order, install type, and the default-case Version status row no
+    // longer render: they live in the raw API payload and the drawer keeps
+    // hardware/tools sections focused on actionable operator state.
+    expect(within(section).queryByText('Boot order')).toBeNull();
+    expect(within(section).queryByText('Open VM Tools')).toBeNull();
     expect(within(section).getByText('Run state')).toBeInTheDocument();
     expect(within(section).getByText('Running')).toBeInTheDocument();
-    expect(within(section).getByText('Version status')).toBeInTheDocument();
-    expect(within(section).getByText('Current')).toBeInTheDocument();
-    expect(within(section).getByText('Open VM Tools')).toBeInTheDocument();
     expect(within(section).getByText('Guest reboot')).toBeInTheDocument();
     expect(within(section).getByText('Requested')).toBeInTheDocument();
     expect(within(section).getByText('Hard disk 1')).toBeInTheDocument();

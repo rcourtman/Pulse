@@ -1,6 +1,5 @@
 import type {
   ResourceType,
-  ResourceVMwareBootDevice,
   ResourceVMwareHardware,
   ResourceVMwareMeta,
   ResourceVMwareNetworkAdapter,
@@ -91,11 +90,6 @@ const formatCapacityBytes = (value?: number): string => {
 const formatMiB = (value?: number): string => {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '';
   return formatCapacityBytes(value * 1024 * 1024).replace(/\.0 ([A-Z]+)/, ' $1');
-};
-
-const formatMilliseconds = (value?: number): string => {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '';
-  return `${value} ms`;
 };
 
 const countSnapshotTree = (snapshots?: ResourceVMwareSnapshot[]): number =>
@@ -216,18 +210,6 @@ const hardwareSummary = (hardware?: ResourceVMwareHardware): string => {
   return formatEnumLabel(hardware.version);
 };
 
-const bootDeviceLabel = (device: ResourceVMwareBootDevice): string => {
-  const type = formatEnumLabel(device.type);
-  const details = [
-    asTrimmedString(device.nic),
-    ...(device.disks ?? []).map((disk) => asTrimmedString(disk)),
-  ].filter(Boolean);
-  return details.length > 0 ? `${type} ${details.join(', ')}` : type;
-};
-
-const bootOrderLabel = (devices?: ResourceVMwareBootDevice[]): string =>
-  (devices ?? []).map(bootDeviceLabel).filter(Boolean).join(' -> ');
-
 const cpuTopologyLabel = (vmware: ResourceVMwareMeta): string => {
   const parts = [];
   if (
@@ -250,6 +232,9 @@ const cpuTopologyLabel = (vmware: ResourceVMwareMeta): string => {
 const hardwareRows = (vmware?: ResourceVMwareMeta): ResourceDetailDrawerVMwareRow[] => {
   if (!vmware?.hardware) return [];
   const hardware = vmware.hardware;
+  const upgradeStatus = asTrimmedString(hardware.upgradeStatus).toUpperCase();
+  const upgradeAttention =
+    Boolean(upgradeStatus) && !['NONE', 'OK'].includes(upgradeStatus);
   return filterNonEmptyRows([
     {
       label: 'Guest OS',
@@ -260,20 +245,23 @@ const hardwareRows = (vmware?: ResourceVMwareMeta): ResourceDetailDrawerVMwareRo
       value: formatEnumLabel(hardware.version),
     },
     {
+      label: 'CPU topology',
+      value: cpuTopologyLabel(vmware),
+    },
+    {
+      label: 'Memory size',
+      value: formatMiB(vmware?.memorySizeMib),
+    },
+    // Upgrade and clone status only surface when something is actionable;
+    // when everything is in the default state these rows resolve to empty
+    // strings and filterNonEmptyRows drops them. Capability toggles
+    // (CPU/memory hot-add, boot config) live in the raw API and stay out
+    // of the operator drawer because they don't change minute to minute
+    // and operators don't act on them from Pulse.
+    {
       label: 'Upgrade status',
-      value: formatEnumLabel(hardware.upgradeStatus),
-      tone: getWarningTone(
-        Boolean(asTrimmedString(hardware.upgradeStatus)) &&
-          !['NONE', 'OK'].includes(asTrimmedString(hardware.upgradeStatus).toUpperCase()),
-      ),
-    },
-    {
-      label: 'Upgrade policy',
-      value: formatEnumLabel(hardware.upgradePolicy),
-    },
-    {
-      label: 'Upgrade target',
-      value: formatEnumLabel(hardware.upgradeVersion),
+      value: upgradeAttention ? formatEnumLabel(hardware.upgradeStatus) : '',
+      tone: getWarningTone(upgradeAttention),
     },
     {
       label: 'Upgrade error',
@@ -282,69 +270,13 @@ const hardwareRows = (vmware?: ResourceVMwareMeta): ResourceDetailDrawerVMwareRo
     },
     {
       label: 'Instant clone frozen',
-      value: formatBoolLabel(hardware.instantCloneFrozen),
+      value: hardware.instantCloneFrozen === true ? formatBoolLabel(true) : '',
       tone: getWarningTone(hardware.instantCloneFrozen === true),
     },
     {
-      label: 'CPU topology',
-      value: cpuTopologyLabel(vmware),
-    },
-    {
-      label: 'CPU hot-add',
-      value: formatBoolLabel(hardware.cpuHotAddEnabled),
-    },
-    {
-      label: 'CPU hot-remove',
-      value: formatBoolLabel(hardware.cpuHotRemoveEnabled),
-    },
-    {
-      label: 'Memory size',
-      value: formatMiB(vmware?.memorySizeMib),
-    },
-    {
-      label: 'Memory hot-add',
-      value: formatBoolLabel(hardware.memoryHotAddEnabled),
-    },
-    {
-      label: 'Memory hot-add increment',
-      value: formatMiB(hardware.memoryHotAddIncrementMib),
-    },
-    {
-      label: 'Memory hot-add limit',
-      value: formatMiB(hardware.memoryHotAddLimitMib),
-    },
-    {
-      label: 'Boot type',
-      value: formatEnumLabel(hardware.bootType),
-    },
-    {
-      label: 'EFI legacy boot',
-      value: formatBoolLabel(hardware.efiLegacyBoot),
-    },
-    {
-      label: 'Boot network protocol',
-      value: formatEnumLabel(hardware.bootNetworkProtocol),
-    },
-    {
-      label: 'Boot delay',
-      value: formatMilliseconds(hardware.bootDelayMilliseconds),
-    },
-    {
-      label: 'Boot retry',
-      value: formatBoolLabel(hardware.bootRetry),
-    },
-    {
-      label: 'Boot retry delay',
-      value: formatMilliseconds(hardware.bootRetryDelayMilliseconds),
-    },
-    {
       label: 'Enter setup mode',
-      value: formatBoolLabel(hardware.enterSetupMode),
+      value: hardware.enterSetupMode === true ? formatBoolLabel(true) : '',
       tone: getWarningTone(hardware.enterSetupMode === true),
-    },
-    {
-      label: 'Boot order',
-      value: bootOrderLabel(hardware.bootDevices),
     },
   ]);
 };
@@ -363,6 +295,14 @@ const toolsSummary = (tools?: ResourceVMwareTools): string => {
 
 const toolsRows = (tools?: ResourceVMwareTools): ResourceDetailDrawerVMwareRow[] => {
   if (!tools) return [];
+  const versionStatus = asTrimmedString(tools.versionStatus).toUpperCase();
+  const versionAttention =
+    Boolean(versionStatus) && !['CURRENT', 'OK'].includes(versionStatus);
+  // Drawer surfaces what an operator scans for: is Tools running, is its
+  // version current, has the guest asked for a reboot, did the last install
+  // error. Install metadata (install type, upgrade policy, auto-update
+  // capability, attempt count, reboot components / time) stays in the raw
+  // API; we only surface it when something is actionable.
   return filterNonEmptyRows([
     {
       label: 'Run state',
@@ -374,54 +314,17 @@ const toolsRows = (tools?: ResourceVMwareTools): ResourceDetailDrawerVMwareRow[]
     },
     {
       label: 'Version status',
-      value: formatEnumLabel(tools.versionStatus),
-      tone: getWarningTone(
-        Boolean(asTrimmedString(tools.versionStatus)) &&
-          !['CURRENT', 'OK'].includes(asTrimmedString(tools.versionStatus).toUpperCase()),
-      ),
+      value: versionAttention ? formatEnumLabel(tools.versionStatus) : '',
+      tone: getWarningTone(versionAttention),
     },
     {
       label: 'Version',
       value: asTrimmedString(tools.version),
     },
     {
-      label: 'Install type',
-      value: formatEnumLabel(tools.installType),
-    },
-    {
-      label: 'Upgrade policy',
-      value: formatEnumLabel(tools.upgradePolicy),
-    },
-    {
-      label: 'Auto update supported',
-      value: formatBoolLabel(tools.autoUpdateSupported),
-    },
-    {
-      label: 'Install attempts',
-      value:
-        typeof tools.installAttemptCount === 'number' && Number.isFinite(tools.installAttemptCount)
-          ? String(tools.installAttemptCount)
-          : '',
-    },
-    {
       label: 'Guest reboot',
-      value:
-        tools.guestRebootRequested === undefined
-          ? ''
-          : tools.guestRebootRequested
-            ? 'Requested'
-            : 'Not requested',
+      value: tools.guestRebootRequested === true ? 'Requested' : '',
       tone: getWarningTone(tools.guestRebootRequested === true),
-    },
-    {
-      label: 'Reboot components',
-      value: (tools.guestRebootComponents ?? []).filter(Boolean).join(', '),
-      tone: getWarningTone((tools.guestRebootComponents ?? []).length > 0),
-    },
-    {
-      label: 'Reboot requested at',
-      value: formatSnapshotDate(tools.guestRebootRequestTime),
-      tone: getWarningTone(Boolean(tools.guestRebootRequestTime)),
     },
     {
       label: 'Last install error',
@@ -595,13 +498,13 @@ export const buildVMwareDetailSections = (
       value: asTrimmedString(vmware.overallStatus),
       tone: getStatusTone(vmware.overallStatus),
     },
-    {
-      label: 'Power',
-      value: asTrimmedString(vmware.powerState),
-    },
+    // Power state is already conveyed by the workload row's status dot and
+    // the SYSTEM card. We only resurface Connection state here because it
+    // matters when an ESXi host is disconnected and the row dot alone can't
+    // tell you why.
     {
       label: 'Connection state',
-      value: asTrimmedString(vmware.connectionState),
+      value: formatEnumLabel(vmware.connectionState),
     },
     {
       label: 'Datastore type',
@@ -662,19 +565,11 @@ export const buildVMwareDetailSections = (
     },
   ]);
 
+  // UUID fields (host / instance / BIOS) and datastoreUrl are API-shaped
+  // identifiers an operator never types or compares from the drawer; they
+  // are still available in the raw resource payload. Keep guest identity
+  // human-readable.
   const guestRows = filterNonEmptyRows([
-    {
-      label: 'Host UUID',
-      value: asTrimmedString(vmware.hostUuid),
-    },
-    {
-      label: 'Instance UUID',
-      value: asTrimmedString(vmware.instanceUuid),
-    },
-    {
-      label: 'BIOS UUID',
-      value: asTrimmedString(vmware.biosUuid),
-    },
     {
       label: 'Guest OS',
       value: asTrimmedString(vmware.guestOsFamily),
@@ -686,10 +581,6 @@ export const buildVMwareDetailSections = (
     {
       label: 'Guest IPs',
       value: (vmware.guestIpAddresses ?? []).filter(Boolean).join(', '),
-    },
-    {
-      label: 'Datastore URL',
-      value: asTrimmedString(vmware.datastoreUrl),
     },
   ]);
 

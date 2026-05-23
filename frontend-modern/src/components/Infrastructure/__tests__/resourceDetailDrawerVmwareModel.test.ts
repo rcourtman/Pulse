@@ -162,43 +162,30 @@ describe('resourceDetailDrawerVmwareModel', () => {
       (section) => section.id === 'hardware',
     );
 
+    // Hardware section is deliberately pruned to operator-actionable rows.
+    // Capability toggles (CPU/memory hot-add) and boot configuration (EFI
+    // legacy boot, boot delay, boot retry, boot order, setup mode default)
+    // stay in the raw API payload; the drawer only surfaces them when
+    // they're in an attention state (Upgrade status pending,
+    // Instant clone frozen, Enter setup mode toggled).
     expect(hardware?.rows).toEqual([
       { label: 'Guest OS', value: 'Ubuntu 64' },
       { label: 'Hardware version', value: 'VMX 20' },
-      { label: 'Upgrade status', value: 'Pending', tone: 'warning' },
-      { label: 'Upgrade policy', value: 'After Clean Shutdown' },
-      { label: 'Upgrade target', value: 'VMX 21' },
-      { label: 'Instant clone frozen', value: 'No', tone: 'default' },
       { label: 'CPU topology', value: '4 vCPU · 2 cores/socket' },
-      { label: 'CPU hot-add', value: 'Yes' },
-      { label: 'CPU hot-remove', value: 'No' },
       { label: 'Memory size', value: '8 GB' },
-      { label: 'Memory hot-add', value: 'Yes' },
-      { label: 'Memory hot-add increment', value: '256 MB' },
-      { label: 'Memory hot-add limit', value: '16 GB' },
-      { label: 'Boot type', value: 'EFI' },
-      { label: 'EFI legacy boot', value: 'No' },
-      { label: 'Boot network protocol', value: 'IPv4' },
-      { label: 'Boot delay', value: '5000 ms' },
-      { label: 'Boot retry', value: 'Yes' },
-      { label: 'Boot retry delay', value: '10000 ms' },
-      { label: 'Enter setup mode', value: 'No', tone: 'default' },
-      { label: 'Boot order', value: 'Disk 2000 -> Ethernet 4000' },
+      { label: 'Upgrade status', value: 'Pending', tone: 'warning' },
     ]);
 
     const tools = buildVMwareDetailSections('vm', vmware).find((section) => section.id === 'tools');
 
+    // Tools section is pruned to operator-actionable rows: Run state,
+    // Version status (only when not current), Version, Guest reboot (only
+    // when requested), and Last install error. Install metadata stays in
+    // the raw payload.
     expect(tools?.rows).toEqual([
       { label: 'Run state', value: 'Running', tone: 'default' },
-      { label: 'Version status', value: 'Current', tone: 'default' },
       { label: 'Version', value: '12.4.0' },
-      { label: 'Install type', value: 'Open VM Tools' },
-      { label: 'Upgrade policy', value: 'Manual' },
-      { label: 'Auto update supported', value: 'Yes' },
-      { label: 'Install attempts', value: '1' },
       { label: 'Guest reboot', value: 'Requested', tone: 'warning' },
-      { label: 'Reboot components', value: 'drivers', tone: 'warning' },
-      { label: 'Reboot requested at', value: '2026-03-30 18:20 UTC', tone: 'warning' },
     ]);
 
     const disks = buildVMwareDetailSections('vm', vmware).find((section) => section.id === 'disks');
