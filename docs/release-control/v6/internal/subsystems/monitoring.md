@@ -200,11 +200,15 @@ truth for live infrastructure data.
     payload key names. Mock/demo Kubernetes inventory must also seed
     representative Service rows with ClusterIP, external IP, ServicePort,
     targetPort, nodePort, and selector metadata, plus Ingress, EndpointSlice,
-    storage-class, persistent-volume, and persistent-volume-claim rows so the
-    native services, networking, and storage tabs exercise the same
+    storage-class, persistent-volume, and persistent-volume-claim rows. They
+    must also seed StatefulSet, DaemonSet, Job, and CronJob controller rows with
+    their API-native target, current, ready/succeeded, availability, exception,
+    service-name, schedule, and timing fields so the native services,
+    networking, storage, and workload-controller tabs exercise the same
     report/resource contract as live agents. Monitoring must preserve those
     objects as native cluster inventory instead of flattening them into pods,
-    deployments, or generic networking, storage, or configuration rows.
+    deployments, or generic networking, storage, configuration, or controller
+    rows.
 
 ## Forbidden Paths
 
@@ -575,10 +579,11 @@ exercise table density, sorting, grouping, drawer behavior, and
 responsive layout out of the box: 5 Proxmox cluster + standalone nodes
 with 6 VMs and 8 LXCs each, 5 Docker/Podman hosts with 14 containers
 each, 4 standalone Pulse-managed hosts, and 3 Kubernetes clusters
-(production + staging + edge) with 5 nodes, 40 pods, and 14
-deployments each so the Kubernetes platform-page overview tab shows
-multiple clusters and the nodes/pods/deployments tabs exercise
-multi-cluster grouping. Bumps to those defaults must keep the
+(production + staging + edge) with 5 nodes, 40 pods, 14
+deployments each, and curated native controller inventory so the
+Kubernetes platform-page overview tab shows multiple clusters and the
+nodes/pods/deployments/controller tabs exercise multi-cluster grouping.
+Bumps to those defaults must keep the
 curated demo scenario's per-node hostname seasoning in
 `demo_scenarios.go` aligned (today: pve1..pve6 with regional labels,
 shared-fabric storage names, and per-node fallback naming) so the

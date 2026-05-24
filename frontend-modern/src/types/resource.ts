@@ -868,11 +868,11 @@ export interface ResourceKubernetesMeta {
   temperature?: number;
   pendingUninstall?: boolean;
   metricCapabilities?: ResourceKubernetesMetricCapabilities;
-  // Deployment-only fields populated by the canonical adapter for
-  // `k8s-deployment` resources. Surfaced on the Kubernetes platform-page
-  // Deployments table where CPU/memory/uptime/temperature columns from
-  // the generic infrastructure table are not the meaningful operator
-  // columns; replica counts are.
+  // Workload-controller fields populated by the canonical Kubernetes
+  // adapter for Deployment, StatefulSet, DaemonSet, Job, and CronJob
+  // resources. Surfaced on Kubernetes platform-page native tables where
+  // CPU/memory/uptime/temperature columns from the generic infrastructure
+  // table are not the meaningful operator columns.
   deploymentUid?: string;
   replicaSetUid?: string;
   statefulSetUid?: string;

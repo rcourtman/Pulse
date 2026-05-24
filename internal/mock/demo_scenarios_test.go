@@ -57,6 +57,11 @@ func TestBuildFixtureGraphAppliesCuratedDemoScenarioAcrossEstate(t *testing.T) {
 	if !kubernetesNativeInventoryExists(graph) {
 		t.Fatal("expected curated kubernetes native API inventory in canonical demo graph")
 	}
+	for _, want := range []string{"platform-observability", "node-exporter", "nightly-backfill-28918234", "cron-nightly-backfill"} {
+		if !kubernetesControllerExists(graph, want) {
+			t.Fatalf("expected curated kubernetes controller %q in canonical demo graph", want)
+		}
+	}
 	for _, want := range []string{"shared-backup-fabric", "west-a-service-pool"} {
 		if !storageNameExists(graph, want) {
 			t.Fatalf("expected curated storage name %q in canonical demo graph", want)
@@ -353,12 +358,42 @@ func kubernetesDeploymentExists(graph FixtureGraph, want string) bool {
 	return false
 }
 
+func kubernetesControllerExists(graph FixtureGraph, want string) bool {
+	for _, cluster := range graph.State.KubernetesClusters {
+		for _, statefulSet := range cluster.StatefulSets {
+			if statefulSet.Name == want {
+				return true
+			}
+		}
+		for _, daemonSet := range cluster.DaemonSets {
+			if daemonSet.Name == want {
+				return true
+			}
+		}
+		for _, job := range cluster.Jobs {
+			if job.Name == want {
+				return true
+			}
+		}
+		for _, cronJob := range cluster.CronJobs {
+			if cronJob.Name == want {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func kubernetesNativeInventoryExists(graph FixtureGraph) bool {
 	if len(graph.State.KubernetesClusters) == 0 {
 		return false
 	}
 	for _, cluster := range graph.State.KubernetesClusters {
 		if len(cluster.Namespaces) == 0 ||
+			len(cluster.StatefulSets) == 0 ||
+			len(cluster.DaemonSets) == 0 ||
+			len(cluster.Jobs) == 0 ||
+			len(cluster.CronJobs) == 0 ||
 			len(cluster.Services) == 0 ||
 			len(cluster.EndpointSlices) == 0 ||
 			len(cluster.NetworkPolicies) == 0 ||
@@ -380,6 +415,12 @@ func kubernetesNativeInventoryExists(graph FixtureGraph) bool {
 		if !cluster.Secrets[0].MetadataOnly ||
 			cluster.Secrets[0].Type != "" ||
 			len(cluster.Secrets[0].DataKeys) != 0 {
+			return false
+		}
+		if cluster.StatefulSets[0].ServiceName == "" ||
+			cluster.DaemonSets[0].DesiredNumberScheduled == 0 ||
+			cluster.Jobs[0].DesiredCompletions == 0 ||
+			cluster.CronJobs[0].Schedule == "" {
 			return false
 		}
 		if cluster.HorizontalPodAutoscalers[0].TargetKind == "" ||

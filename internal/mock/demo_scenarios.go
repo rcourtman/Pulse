@@ -659,6 +659,34 @@ func applyDemoKubernetesNativeInventory(cluster *models.KubernetesCluster, now t
 	cluster.PersistentVolumeClaims = []models.KubernetesPersistentVolumeClaim{
 		{UID: cluster.ID + "-pvc-checkout-postgres", Name: "checkout-postgres-data", Namespace: "services", Phase: "Bound", StorageClass: "fast-ssd", RequestedBytes: int64(80) << 30, CapacityBytes: int64(80) << 30, AccessModes: []string{"ReadWriteOnce"}, VolumeName: cluster.ID + "-pv-checkout-postgres", CreatedAt: createdAt, Labels: labels("checkout-postgres")},
 	}
+	readyNodeCount := 0
+	for _, node := range cluster.Nodes {
+		if node.Ready {
+			readyNodeCount++
+		}
+	}
+	desiredNodeCount := int32(len(cluster.Nodes))
+	readyDaemonCount := int32(readyNodeCount)
+	unavailableDaemonCount := desiredNodeCount - readyDaemonCount
+	if unavailableDaemonCount < 0 {
+		unavailableDaemonCount = 0
+	}
+	jobStartedAt := now.Add(-42 * time.Minute)
+	jobCompletedAt := now.Add(-37 * time.Minute)
+	lastCronScheduleAt := now.Add(-7 * time.Minute)
+	lastCronSuccessAt := now.Add(-67 * time.Minute)
+	cluster.StatefulSets = []models.KubernetesStatefulSet{
+		{UID: cluster.ID + "-sts-platform-observability", Name: "platform-observability", Namespace: "monitoring", DesiredReplicas: 2, CurrentReplicas: 2, ReadyReplicas: 2, UpdatedReplicas: 2, AvailableReplicas: 2, ServiceName: "platform-observability", Labels: labels("platform-observability")},
+	}
+	cluster.DaemonSets = []models.KubernetesDaemonSet{
+		{UID: cluster.ID + "-ds-node-exporter", Name: "node-exporter", Namespace: "monitoring", DesiredNumberScheduled: desiredNodeCount, CurrentNumberScheduled: desiredNodeCount, NumberReady: readyDaemonCount, UpdatedNumberScheduled: readyDaemonCount, NumberAvailable: readyDaemonCount, NumberUnavailable: unavailableDaemonCount, Labels: labels("node-exporter")},
+	}
+	cluster.Jobs = []models.KubernetesJob{
+		{UID: cluster.ID + "-job-nightly-backfill", Name: "nightly-backfill-28918234", Namespace: "services", DesiredCompletions: 1, Succeeded: 1, Active: 0, Failed: 0, StartTime: &jobStartedAt, CompletionTime: &jobCompletedAt, Labels: labels("nightly-backfill")},
+	}
+	cluster.CronJobs = []models.KubernetesCronJob{
+		{UID: cluster.ID + "-cron-nightly-backfill", Name: "cron-nightly-backfill", Namespace: "services", Schedule: "0 2 * * *", Active: 1, LastScheduleTime: &lastCronScheduleAt, LastSuccessfulTime: &lastCronSuccessAt, Labels: labels("nightly-backfill")},
+	}
 	cluster.NetworkPolicies = []models.KubernetesNetworkPolicy{
 		{UID: cluster.ID + "-netpol-default-deny", Name: "default-deny", Namespace: "services", PolicyTypes: []string{"Ingress", "Egress"}, IngressRuleCount: 1, EgressRuleCount: 1, CreatedAt: createdAt, Labels: labels("default-deny")},
 	}

@@ -16,9 +16,9 @@ import {
 import { KubernetesAutoscalingTable } from './KubernetesAutoscalingTable';
 import { KubernetesClustersTable } from './KubernetesClustersTable';
 import { KubernetesConfigTable } from './KubernetesConfigTable';
+import { KubernetesControllersTable } from './KubernetesControllersTable';
 import { KubernetesDeploymentsTable } from './KubernetesDeploymentsTable';
 import { KubernetesEventsTable } from './KubernetesEventsTable';
-import { KubernetesInventoryTable } from './KubernetesInventoryTable';
 import { KubernetesNetworkingTable } from './KubernetesNetworkingTable';
 import { KubernetesNodesTable } from './KubernetesNodesTable';
 import { KubernetesPolicyTable } from './KubernetesPolicyTable';
@@ -313,9 +313,8 @@ function KubernetesWorkloadStack(
         />
       </Show>
       <Show when={filteredControllers().length > 0}>
-        <KubernetesInventoryTable
+        <KubernetesControllersTable
           resources={filteredControllers()}
-          variant="controllers"
           emptyIcon={k8sIcon()}
           emptyTitle="No controllers reported"
           emptyDescription="StatefulSets, DaemonSets, Jobs, and CronJobs appear here when the agent reports them."

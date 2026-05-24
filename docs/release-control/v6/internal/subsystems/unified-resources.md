@@ -130,7 +130,7 @@ cross-source deduplication.
 106. `frontend-modern/src/features/agents/AgentsPageSurface.tsx`
 107. `frontend-modern/src/features/agents/AgentsMachinesTable.tsx`
 108. `internal/platformsupport/manifest_generated.go`
-109. `frontend-modern/src/features/kubernetes/KubernetesInventoryTable.tsx`
+109. `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx`
 110. `frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx`
 111. `frontend-modern/src/features/kubernetes/kubernetesPageModel.ts`
 112. `frontend-modern/src/features/kubernetes/KubernetesClustersTable.tsx`
@@ -145,6 +145,14 @@ cross-source deduplication.
 121. `frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx`
 
 ## Shared Boundaries
+
+Kubernetes workload-controller presentation is API-native, not generic inventory.
+`frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx` owns
+StatefulSet, DaemonSet, Job, and CronJob rows on `/kubernetes/workloads` and
+must preserve the Kubernetes API status semantics for desired replica/node/job
+targets, current or active counts, ready/succeeded counts, availability,
+misscheduled/unavailable/failed/suspended exceptions, service names, schedules,
+and controller timing fields instead of falling back to infrastructure columns.
 
 Container runtime navigation is a unified-resource consumer boundary: the
 `/docker` route is the Docker / Podman runtime lens, not an exclusive owning

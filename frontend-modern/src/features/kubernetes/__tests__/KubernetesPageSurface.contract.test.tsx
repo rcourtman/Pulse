@@ -58,6 +58,10 @@ vi.mock('../KubernetesConfigTable', () => ({
   KubernetesConfigTable: () => <div data-testid="config-table" />,
 }));
 
+vi.mock('../KubernetesControllersTable', () => ({
+  KubernetesControllersTable: () => <div data-testid="controllers-table" />,
+}));
+
 vi.mock('../KubernetesNodesTable', () => ({
   KubernetesNodesTable: () => <div data-testid="nodes-table" />,
 }));

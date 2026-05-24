@@ -421,6 +421,10 @@ func assertKubernetesMockCoverage(t *testing.T, graph FixtureGraph) {
 	nodeCount := 0
 	deploymentCount := 0
 	podCount := 0
+	statefulSetCount := 0
+	daemonSetCount := 0
+	jobCount := 0
+	cronJobCount := 0
 	serviceCount := 0
 	ingressCount := 0
 	endpointSliceCount := 0
@@ -431,6 +435,10 @@ func assertKubernetesMockCoverage(t *testing.T, graph FixtureGraph) {
 		nodeCount += len(cluster.Nodes)
 		deploymentCount += len(cluster.Deployments)
 		podCount += len(cluster.Pods)
+		statefulSetCount += len(cluster.StatefulSets)
+		daemonSetCount += len(cluster.DaemonSets)
+		jobCount += len(cluster.Jobs)
+		cronJobCount += len(cluster.CronJobs)
 		serviceCount += len(cluster.Services)
 		ingressCount += len(cluster.Ingresses)
 		endpointSliceCount += len(cluster.EndpointSlices)
@@ -444,6 +452,15 @@ func assertKubernetesMockCoverage(t *testing.T, graph FixtureGraph) {
 			nodeCount,
 			deploymentCount,
 			podCount,
+		)
+	}
+	if statefulSetCount == 0 || daemonSetCount == 0 || jobCount == 0 || cronJobCount == 0 {
+		t.Fatalf(
+			"expected kubernetes fixtures to include workload controllers; got statefulSets=%d daemonSets=%d jobs=%d cronJobs=%d",
+			statefulSetCount,
+			daemonSetCount,
+			jobCount,
+			cronJobCount,
 		)
 	}
 	if serviceCount == 0 || ingressCount == 0 || endpointSliceCount == 0 {
