@@ -18,6 +18,7 @@ describe('kubernetesPageModel', () => {
   it('declares API-native Kubernetes sections', () => {
     expect(KUBERNETES_TAB_SPECS.map((tab) => tab.id)).toEqual([
       'overview',
+      'nodes',
       'workloads',
       'services',
       'storage',

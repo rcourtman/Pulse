@@ -124,6 +124,11 @@ cross-source deduplication.
 100. `frontend-modern/src/features/agents/AgentsMachinesTable.tsx`
 101. `internal/platformsupport/manifest_generated.go`
 102. `frontend-modern/src/features/kubernetes/KubernetesInventoryTable.tsx`
+103. `frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx`
+104. `frontend-modern/src/features/kubernetes/kubernetesPageModel.ts`
+105. `frontend-modern/src/features/kubernetes/KubernetesClustersTable.tsx`
+106. `frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx`
+107. `frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx`
 
 ## Shared Boundaries
 
@@ -250,7 +255,7 @@ reintroduce false Swarm capability surfaces.
    libpod-native source can populate a native contract instead of deriving pods
    from Docker-compatible container labels.
    Kubernetes inventory likewise projects native API objects as first-class
-   unified resources: namespaces, Services, ReplicaSets, StatefulSets,
+   unified resources: Nodes, namespaces, Services, ReplicaSets, StatefulSets,
    DaemonSets, Jobs, CronJobs, Ingresses, EndpointSlices, NetworkPolicies,
    PersistentVolumes, PersistentVolumeClaims, StorageClasses, ConfigMaps,
    Secrets, ServiceAccounts, ResourceQuotas, LimitRanges,
@@ -263,6 +268,9 @@ reintroduce false Swarm capability surfaces.
    carry key names, but Secret values are outside the unified resource contract.
    Because Secret names and key names can disclose intent, `k8s-secret` policy
    metadata must classify them as `restricted` with `local-only` routing.
+   Kubernetes Node inventory is an API-native resource surface, not merely
+   overview chrome: `/kubernetes/nodes` must expose the bespoke node table while
+   the overview may still include the same rows for cluster orientation.
 2. Add typed accessors and views in `internal/unifiedresources/views.go`
 3. Add source ingestion/adaptation in the adapter layer only
    Frontend resource platform contracts in

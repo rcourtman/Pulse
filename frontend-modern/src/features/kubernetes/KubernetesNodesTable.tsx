@@ -140,7 +140,7 @@ export const KubernetesNodesTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title={props.title ?? 'Nodes'} />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1280px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1100px] 2xl:min-w-[1280px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   {/*
@@ -149,22 +149,31 @@ export const KubernetesNodesTable: Component<{
                     -style values, Capacity gets room for "6 cores /
                     51.0 GB" strings, CPU and Memory bars share an
                     equal slice, and the short-text columns (Cluster,
-                    Roles, Kubelet, Uptime) trim accordingly. Mobile
-                    widths are unchanged.
+                    Roles, Kubelet, Uptime) trim accordingly. Wide
+                    desktop gets extra room without forcing normal desktop
+                    viewports to hide Capacity behind horizontal scroll.
                   */}
                   <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[15%]`}>
                     Node
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                  >
                     Cluster
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                  >
                     Roles
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[8%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[8%]`}
+                  >
                     Kubelet
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[15%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[15%]`}
+                  >
                     Runtime
                   </TableHead>
                   <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[11%]`}>
@@ -173,10 +182,14 @@ export const KubernetesNodesTable: Component<{
                   <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[11%]`}>
                     Memory
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
+                  >
                     Uptime
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[14%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[14%]`}
+                  >
                     Capacity
                   </TableHead>
                 </TableRow>

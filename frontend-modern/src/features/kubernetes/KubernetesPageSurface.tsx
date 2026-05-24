@@ -98,6 +98,14 @@ export function KubernetesPageSurface() {
             <Show when={activeTab() === 'overview'}>
               <KubernetesOverview model={model} />
             </Show>
+            <Show when={activeTab() === 'nodes'}>
+              <KubernetesNodesTable
+                resources={model().nodes}
+                emptyIcon={k8sIcon()}
+                emptyTitle="No nodes reported"
+                emptyDescription="Kubernetes nodes appear here as soon as the agent enumerates Node resources."
+              />
+            </Show>
             <Show when={activeTab() === 'workloads'}>
               <KubernetesWorkloads model={model} />
             </Show>

@@ -177,7 +177,9 @@ represented until the collector has a libpod-native source. Kubernetes config
 tables must preserve the same trust boundary for metadata-only ConfigMap and
 Secret rows: the shared table wording may indicate metadata-only inventory, but
 must not imply payload fields were read when the agent used Kubernetes
-metadata-only API responses.
+metadata-only API responses. Kubernetes Node inventory must also be reachable
+through a dedicated native tab, not only the overview stack, while retaining the
+shared `PlatformSectionTabs` shell.
 
 1. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `security-privacy`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
    The panel may own shell placement and local action layout, but

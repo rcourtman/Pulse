@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 
@@ -7,6 +7,7 @@ import { KubernetesPageSurface } from '../KubernetesPageSurface';
 
 const mockUseUnifiedResources = vi.fn();
 const mockUseWorkloadsState = vi.fn();
+const mockPathname = vi.hoisted(() => vi.fn(() => '/'));
 const mockWorkloadsSurface = vi.fn((props: WorkloadsSurfaceProps) => (
   <div
     data-testid="kubernetes-workloads-surface"
@@ -21,6 +22,14 @@ const mockWorkloadsSurface = vi.fn((props: WorkloadsSurfaceProps) => (
 vi.mock('@/hooks/useUnifiedResources', () => ({
   useUnifiedResources: (...args: unknown[]) => mockUseUnifiedResources(...args),
 }));
+
+vi.mock('@solidjs/router', async () => {
+  const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
+  return {
+    ...actual,
+    useLocation: () => ({ pathname: mockPathname() }),
+  };
+});
 
 vi.mock('@/components/Workloads/useWorkloadsState', () => ({
   useWorkloadsState: (...args: unknown[]) => mockUseWorkloadsState(...args),
@@ -50,6 +59,14 @@ vi.mock('../KubernetesDeploymentsTable', () => ({
 }));
 
 describe('KubernetesPageSurface contract', () => {
+  beforeEach(() => {
+    mockPathname.mockReturnValue('/');
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('pins the embedded workloads surface to the pod-native Kubernetes columns', () => {
     mockUseUnifiedResources.mockReturnValue({
       resources: () => [
@@ -128,5 +145,62 @@ describe('KubernetesPageSurface contract', () => {
         forcedViewMode: 'pod',
       }),
     );
+  });
+
+  it('promotes Kubernetes node inventory to a dedicated API-native tab', () => {
+    mockPathname.mockReturnValue('/kubernetes/nodes');
+    mockUseUnifiedResources.mockReturnValue({
+      resources: () => [
+        {
+          id: 'node-1',
+          type: 'k8s-node',
+          name: 'worker-1',
+          displayName: 'worker-1',
+          platformId: 'cluster-1',
+          platformType: 'kubernetes',
+          sourceType: 'agent',
+          sources: ['kubernetes'],
+          status: 'online',
+          lastSeen: 1_700_000_000_000,
+        },
+      ],
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    });
+    mockUseWorkloadsState.mockReturnValue({
+      allGuests: () => [],
+      clearPinnedSummaryScope: vi.fn(),
+      containerRuntimeFilterConfig: () => undefined,
+      focusedSummaryWorkloadGroupId: () => null,
+      groupingMode: () => 'grouped',
+      handleBeforeAutoFocus: vi.fn(),
+      search: () => '',
+      selectedGuestId: () => null,
+      setGroupingMode: vi.fn(),
+      setMetricDisplayMode: vi.fn(),
+      setSearch: vi.fn(),
+      setSortDirection: vi.fn(),
+      setSortKey: vi.fn(),
+      setStatusMode: vi.fn(),
+      setViewMode: vi.fn(),
+      setWorkloadMetricHistoryRange: vi.fn(),
+      statusMode: () => 'all',
+      surfaceConnected: () => false,
+      surfaceInitialDataReceived: () => false,
+      viewMode: () => 'pod',
+      workloadMetricDisplayMode: () => 'bars',
+      workloadMetricHistoryRange: () => '1h',
+      workloadsFilterColumnVisibility: () => undefined,
+    });
+
+    render(() => (
+      <Router>
+        <Route path="/" component={KubernetesPageSurface} />
+      </Router>
+    ));
+
+    expect(screen.getByTestId('nodes-table')).toBeInTheDocument();
+    expect(screen.queryByTestId('kubernetes-workloads-surface')).not.toBeInTheDocument();
   });
 });
