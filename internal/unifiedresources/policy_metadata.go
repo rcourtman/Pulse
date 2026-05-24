@@ -130,6 +130,9 @@ func classifyResourceSensitivity(resource Resource) ResourceSensitivity {
 	if resource.PMG != nil {
 		return ResourceSensitivityRestricted
 	}
+	if CanonicalResourceType(resource.Type) == ResourceTypeK8sSecret {
+		return ResourceSensitivityRestricted
+	}
 
 	switch CanonicalResourceType(resource.Type) {
 	case ResourceTypeVM,
@@ -152,6 +155,10 @@ func classifyResourceSensitivity(resource Resource) ResourceSensitivity {
 		ResourceTypeK8sStorageClass,
 		ResourceTypeK8sConfigMap,
 		ResourceTypeK8sServiceAccount,
+		ResourceTypeK8sResourceQuota,
+		ResourceTypeK8sLimitRange,
+		ResourceTypeK8sPDB,
+		ResourceTypeK8sHPA,
 		ResourceTypeK8sEvent,
 		ResourceTypeDockerService,
 		ResourceTypeDockerSwarmNode,
@@ -318,8 +325,18 @@ func resourceSummaryType(resource Resource) string {
 		return "kubernetes storage class"
 	case ResourceTypeK8sConfigMap:
 		return "kubernetes configmap"
+	case ResourceTypeK8sSecret:
+		return "kubernetes secret"
 	case ResourceTypeK8sServiceAccount:
 		return "kubernetes serviceaccount"
+	case ResourceTypeK8sResourceQuota:
+		return "kubernetes resource quota"
+	case ResourceTypeK8sLimitRange:
+		return "kubernetes limit range"
+	case ResourceTypeK8sPDB:
+		return "kubernetes pod disruption budget"
+	case ResourceTypeK8sHPA:
+		return "kubernetes horizontal pod autoscaler"
 	case ResourceTypeK8sEvent:
 		return "kubernetes event"
 	case ResourceTypeStorage:

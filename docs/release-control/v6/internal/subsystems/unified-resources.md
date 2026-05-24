@@ -242,8 +242,14 @@ reintroduce false Swarm capability surfaces.
    unified resources: namespaces, Services, ReplicaSets, StatefulSets,
    DaemonSets, Jobs, CronJobs, Ingresses, EndpointSlices, NetworkPolicies,
    PersistentVolumes, PersistentVolumeClaims, StorageClasses, ConfigMaps,
-   ServiceAccounts, and Events must preserve their API identity and source
-   metadata through clone, merge, REST, websocket, and frontend decode paths.
+   Secrets, ServiceAccounts, ResourceQuotas, LimitRanges,
+   PodDisruptionBudgets, HorizontalPodAutoscalers, and Events must preserve
+   their API identity and source metadata through clone, merge, REST,
+   websocket, and frontend decode paths. `k8s-secret` resources must expose
+   metadata, type, and key names only; secret values are outside the unified
+   resource contract. Because Secret names and key names can disclose intent,
+   `k8s-secret` policy metadata must classify them as `restricted` with
+   `local-only` routing.
 2. Add typed accessors and views in `internal/unifiedresources/views.go`
 3. Add source ingestion/adaptation in the adapter layer only
    Frontend resource platform contracts in
@@ -384,7 +390,7 @@ AI-only summary payloads, or page-local heuristics.
    `AgentData` or `ProxmoxData` must populate those top-level fields
    from the nested source values, and adapters for resource types that
    have no native uptime/temperature concept (e.g. `k8s-deployment`,
-   `k8s-replicaset`, `k8s-configmap`,
+   `k8s-replicaset`, `k8s-configmap`, `k8s-secret`,
    `docker-service`, `k8s-cluster` aggregates) must leave them unset so
    bespoke platform-page tables can hide the column entirely.
    Kubernetes deployment metrics live on the canonical adapter through

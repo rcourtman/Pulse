@@ -58,7 +58,12 @@ export type ResourceType =
   | 'k8s-persistent-volume-claim' // Kubernetes persistent volume claim
   | 'k8s-storage-class' // Kubernetes storage class
   | 'k8s-configmap' // Kubernetes config map
+  | 'k8s-secret' // Kubernetes secret metadata
   | 'k8s-serviceaccount' // Kubernetes service account
+  | 'k8s-resource-quota' // Kubernetes resource quota
+  | 'k8s-limit-range' // Kubernetes limit range
+  | 'k8s-pod-disruption-budget' // Kubernetes pod disruption budget
+  | 'k8s-horizontal-pod-autoscaler' // Kubernetes horizontal pod autoscaler
   | 'k8s-event' // Kubernetes event
   | 'storage' // Storage resource
   | 'network' // Virtual/network topology resource
@@ -871,7 +876,12 @@ export interface ResourceKubernetesMeta {
   persistentVolumeClaimUid?: string;
   storageClassUid?: string;
   configMapUid?: string;
+  secretUid?: string;
   serviceAccountUid?: string;
+  resourceQuotaUid?: string;
+  limitRangeUid?: string;
+  podDisruptionBudgetUid?: string;
+  horizontalPodAutoscalerUid?: string;
   eventUid?: string;
   namespaceUid?: string;
   desiredReplicas?: number;
@@ -932,9 +942,24 @@ export interface ResourceKubernetesMeta {
   dataKeys?: string[];
   binaryDataKeys?: string[];
   immutable?: boolean;
+  secretType?: string;
   automountServiceAccountToken?: boolean;
   secretCount?: number;
   imagePullSecrets?: string[];
+  hard?: Record<string, string>;
+  used?: Record<string, string>;
+  limitTypes?: string[];
+  minAvailable?: string;
+  maxUnavailable?: string;
+  desiredHealthy?: number;
+  currentHealthy?: number;
+  disruptionsAllowed?: number;
+  expectedPods?: number;
+  targetKind?: string;
+  targetName?: string;
+  minReplicas?: number;
+  maxReplicas?: number;
+  metricTypes?: string[];
   capacityBytes?: number;
   requestedBytes?: number;
   accessModes?: string[];

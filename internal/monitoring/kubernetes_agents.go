@@ -266,42 +266,52 @@ func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *co
 	persistentVolumeClaims := convertKubernetesPersistentVolumeClaims(report.PersistentVolumeClaims)
 	storageClasses := convertKubernetesStorageClasses(report.StorageClasses)
 	configMaps := convertKubernetesConfigMaps(report.ConfigMaps)
+	secrets := convertKubernetesSecrets(report.Secrets)
 	serviceAccounts := convertKubernetesServiceAccounts(report.ServiceAccounts)
+	resourceQuotas := convertKubernetesResourceQuotas(report.ResourceQuotas)
+	limitRanges := convertKubernetesLimitRanges(report.LimitRanges)
+	podDisruptionBudgets := convertKubernetesPodDisruptionBudgets(report.PodDisruptionBudgets)
+	horizontalPodAutoscalers := convertKubernetesHorizontalPodAutoscalers(report.HorizontalPodAutoscalers)
 	events := convertKubernetesEvents(report.Events)
 
 	agentVersion := normalizeAgentVersion(report.Agent.Version)
 
 	cluster := models.KubernetesCluster{
-		ID:                     identifier,
-		AgentID:                agentID,
-		Name:                   name,
-		DisplayName:            displayName,
-		Server:                 strings.TrimSpace(report.Cluster.Server),
-		Context:                strings.TrimSpace(report.Cluster.Context),
-		Version:                strings.TrimSpace(report.Cluster.Version),
-		Status:                 "online",
-		LastSeen:               timestamp,
-		IntervalSeconds:        report.Agent.IntervalSeconds,
-		AgentVersion:           agentVersion,
-		Nodes:                  nodes,
-		Namespaces:             namespaces,
-		Pods:                   pods,
-		Deployments:            deployments,
-		ReplicaSets:            replicaSets,
-		StatefulSets:           statefulSets,
-		DaemonSets:             daemonSets,
-		Services:               services,
-		Jobs:                   jobs,
-		CronJobs:               cronJobs,
-		Ingresses:              ingresses,
-		EndpointSlices:         endpointSlices,
-		NetworkPolicies:        networkPolicies,
-		PersistentVolumes:      persistentVolumes,
-		PersistentVolumeClaims: persistentVolumeClaims,
-		StorageClasses:         storageClasses,
-		ConfigMaps:             configMaps,
-		ServiceAccounts:        serviceAccounts,
-		Events:                 events,
+		ID:                       identifier,
+		AgentID:                  agentID,
+		Name:                     name,
+		DisplayName:              displayName,
+		Server:                   strings.TrimSpace(report.Cluster.Server),
+		Context:                  strings.TrimSpace(report.Cluster.Context),
+		Version:                  strings.TrimSpace(report.Cluster.Version),
+		Status:                   "online",
+		LastSeen:                 timestamp,
+		IntervalSeconds:          report.Agent.IntervalSeconds,
+		AgentVersion:             agentVersion,
+		Nodes:                    nodes,
+		Namespaces:               namespaces,
+		Pods:                     pods,
+		Deployments:              deployments,
+		ReplicaSets:              replicaSets,
+		StatefulSets:             statefulSets,
+		DaemonSets:               daemonSets,
+		Services:                 services,
+		Jobs:                     jobs,
+		CronJobs:                 cronJobs,
+		Ingresses:                ingresses,
+		EndpointSlices:           endpointSlices,
+		NetworkPolicies:          networkPolicies,
+		PersistentVolumes:        persistentVolumes,
+		PersistentVolumeClaims:   persistentVolumeClaims,
+		StorageClasses:           storageClasses,
+		ConfigMaps:               configMaps,
+		Secrets:                  secrets,
+		ServiceAccounts:          serviceAccounts,
+		ResourceQuotas:           resourceQuotas,
+		LimitRanges:              limitRanges,
+		PodDisruptionBudgets:     podDisruptionBudgets,
+		HorizontalPodAutoscalers: horizontalPodAutoscalers,
+		Events:                   events,
 	}
 
 	if tokenRecord != nil {
@@ -636,6 +646,26 @@ func convertKubernetesConfigMaps(configMaps []agentsk8s.ConfigMap) []models.Kube
 	return out
 }
 
+func convertKubernetesSecrets(secrets []agentsk8s.Secret) []models.KubernetesSecret {
+	if len(secrets) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesSecret, 0, len(secrets))
+	for _, secret := range secrets {
+		out = append(out, models.KubernetesSecret{
+			UID:       strings.TrimSpace(secret.UID),
+			Name:      strings.TrimSpace(secret.Name),
+			Namespace: strings.TrimSpace(secret.Namespace),
+			Type:      strings.TrimSpace(secret.Type),
+			DataKeys:  append([]string(nil), secret.DataKeys...),
+			Immutable: secret.Immutable,
+			CreatedAt: secret.CreatedAt,
+			Labels:    cloneStringMap(secret.Labels),
+		}.NormalizeCollections())
+	}
+	return out
+}
+
 func convertKubernetesServiceAccounts(accounts []agentsk8s.ServiceAccount) []models.KubernetesServiceAccount {
 	if len(accounts) == 0 {
 		return nil
@@ -651,6 +681,90 @@ func convertKubernetesServiceAccounts(accounts []agentsk8s.ServiceAccount) []mod
 			ImagePullSecrets:             append([]string(nil), account.ImagePullSecrets...),
 			CreatedAt:                    account.CreatedAt,
 			Labels:                       cloneStringMap(account.Labels),
+		}.NormalizeCollections())
+	}
+	return out
+}
+
+func convertKubernetesResourceQuotas(quotas []agentsk8s.ResourceQuota) []models.KubernetesResourceQuota {
+	if len(quotas) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesResourceQuota, 0, len(quotas))
+	for _, quota := range quotas {
+		out = append(out, models.KubernetesResourceQuota{
+			UID:       strings.TrimSpace(quota.UID),
+			Name:      strings.TrimSpace(quota.Name),
+			Namespace: strings.TrimSpace(quota.Namespace),
+			Hard:      cloneStringMap(quota.Hard),
+			Used:      cloneStringMap(quota.Used),
+			CreatedAt: quota.CreatedAt,
+			Labels:    cloneStringMap(quota.Labels),
+		}.NormalizeCollections())
+	}
+	return out
+}
+
+func convertKubernetesLimitRanges(limitRanges []agentsk8s.LimitRange) []models.KubernetesLimitRange {
+	if len(limitRanges) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesLimitRange, 0, len(limitRanges))
+	for _, limitRange := range limitRanges {
+		out = append(out, models.KubernetesLimitRange{
+			UID:        strings.TrimSpace(limitRange.UID),
+			Name:       strings.TrimSpace(limitRange.Name),
+			Namespace:  strings.TrimSpace(limitRange.Namespace),
+			LimitTypes: append([]string(nil), limitRange.LimitTypes...),
+			CreatedAt:  limitRange.CreatedAt,
+			Labels:     cloneStringMap(limitRange.Labels),
+		}.NormalizeCollections())
+	}
+	return out
+}
+
+func convertKubernetesPodDisruptionBudgets(budgets []agentsk8s.PodDisruptionBudget) []models.KubernetesPodDisruptionBudget {
+	if len(budgets) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesPodDisruptionBudget, 0, len(budgets))
+	for _, budget := range budgets {
+		out = append(out, models.KubernetesPodDisruptionBudget{
+			UID:                strings.TrimSpace(budget.UID),
+			Name:               strings.TrimSpace(budget.Name),
+			Namespace:          strings.TrimSpace(budget.Namespace),
+			MinAvailable:       strings.TrimSpace(budget.MinAvailable),
+			MaxUnavailable:     strings.TrimSpace(budget.MaxUnavailable),
+			DesiredHealthy:     budget.DesiredHealthy,
+			CurrentHealthy:     budget.CurrentHealthy,
+			DisruptionsAllowed: budget.DisruptionsAllowed,
+			ExpectedPods:       budget.ExpectedPods,
+			CreatedAt:          budget.CreatedAt,
+			Labels:             cloneStringMap(budget.Labels),
+		}.NormalizeCollections())
+	}
+	return out
+}
+
+func convertKubernetesHorizontalPodAutoscalers(autoscalers []agentsk8s.HorizontalPodAutoscaler) []models.KubernetesHorizontalPodAutoscaler {
+	if len(autoscalers) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesHorizontalPodAutoscaler, 0, len(autoscalers))
+	for _, autoscaler := range autoscalers {
+		out = append(out, models.KubernetesHorizontalPodAutoscaler{
+			UID:             strings.TrimSpace(autoscaler.UID),
+			Name:            strings.TrimSpace(autoscaler.Name),
+			Namespace:       strings.TrimSpace(autoscaler.Namespace),
+			TargetKind:      strings.TrimSpace(autoscaler.TargetKind),
+			TargetName:      strings.TrimSpace(autoscaler.TargetName),
+			MinReplicas:     autoscaler.MinReplicas,
+			MaxReplicas:     autoscaler.MaxReplicas,
+			CurrentReplicas: autoscaler.CurrentReplicas,
+			DesiredReplicas: autoscaler.DesiredReplicas,
+			MetricTypes:     append([]string(nil), autoscaler.MetricTypes...),
+			CreatedAt:       autoscaler.CreatedAt,
+			Labels:          cloneStringMap(autoscaler.Labels),
 		}.NormalizeCollections())
 	}
 	return out

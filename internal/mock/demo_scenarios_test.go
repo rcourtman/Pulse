@@ -54,6 +54,9 @@ func TestBuildFixtureGraphAppliesCuratedDemoScenarioAcrossEstate(t *testing.T) {
 			t.Fatalf("expected curated kubernetes deployment %q in canonical demo graph", want)
 		}
 	}
+	if !kubernetesNativeInventoryExists(graph) {
+		t.Fatal("expected curated kubernetes native API inventory in canonical demo graph")
+	}
 	for _, want := range []string{"shared-backup-fabric", "west-a-service-pool"} {
 		if !storageNameExists(graph, want) {
 			t.Fatalf("expected curated storage name %q in canonical demo graph", want)
@@ -348,6 +351,37 @@ func kubernetesDeploymentExists(graph FixtureGraph, want string) bool {
 		}
 	}
 	return false
+}
+
+func kubernetesNativeInventoryExists(graph FixtureGraph) bool {
+	if len(graph.State.KubernetesClusters) == 0 {
+		return false
+	}
+	for _, cluster := range graph.State.KubernetesClusters {
+		if len(cluster.Namespaces) == 0 ||
+			len(cluster.Services) == 0 ||
+			len(cluster.EndpointSlices) == 0 ||
+			len(cluster.NetworkPolicies) == 0 ||
+			len(cluster.ConfigMaps) == 0 ||
+			len(cluster.Secrets) == 0 ||
+			len(cluster.ServiceAccounts) == 0 ||
+			len(cluster.ResourceQuotas) == 0 ||
+			len(cluster.LimitRanges) == 0 ||
+			len(cluster.PodDisruptionBudgets) == 0 ||
+			len(cluster.HorizontalPodAutoscalers) == 0 ||
+			len(cluster.Events) == 0 {
+			return false
+		}
+		if cluster.Secrets[0].Type == "" || len(cluster.Secrets[0].DataKeys) == 0 {
+			return false
+		}
+		if cluster.HorizontalPodAutoscalers[0].TargetKind == "" ||
+			cluster.HorizontalPodAutoscalers[0].TargetName == "" ||
+			len(cluster.HorizontalPodAutoscalers[0].MetricTypes) == 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func storageNameExists(graph FixtureGraph, want string) bool {

@@ -130,9 +130,18 @@ func TestApplyKubernetesReportPreservesNativeAPIInventory(t *testing.T) {
 		}},
 		StorageClasses:  []agentsk8s.StorageClass{{UID: "sc-1", Name: "fast", Provisioner: "csi.example.test", ReclaimPolicy: "Delete", VolumeBindingMode: "WaitForFirstConsumer", AllowVolumeExpansion: &allowExpansion, ParameterKeys: []string{"type"}}},
 		ConfigMaps:      []agentsk8s.ConfigMap{{UID: "cm-1", Name: "checkout-config", Namespace: "services", DataKeys: []string{"app.yaml"}, BinaryDataKeys: []string{"logo.png"}, Immutable: true}},
+		Secrets:         []agentsk8s.Secret{{UID: "sec-1", Name: "checkout-secret", Namespace: "services", Type: "Opaque", DataKeys: []string{"token"}, Immutable: true}},
 		ServiceAccounts: []agentsk8s.ServiceAccount{{UID: "sa-1", Name: "checkout", Namespace: "services", AutomountServiceAccountToken: &automountToken, SecretCount: 1, ImagePullSecrets: []string{"pull-secret"}}},
-		Events:          []agentsk8s.Event{{UID: "evt-1", Name: "checkout.1", Namespace: "services", Type: "Warning", Reason: "BackOff", Message: "retrying", InvolvedKind: "Pod", InvolvedName: "checkout-0", Count: 2}},
-		Timestamp:       now,
+		ResourceQuotas:  []agentsk8s.ResourceQuota{{UID: "rq-1", Name: "services-quota", Namespace: "services", Hard: map[string]string{"pods": "10"}, Used: map[string]string{"pods": "3"}}},
+		LimitRanges:     []agentsk8s.LimitRange{{UID: "lr-1", Name: "services-limits", Namespace: "services", LimitTypes: []string{"Container"}}},
+		PodDisruptionBudgets: []agentsk8s.PodDisruptionBudget{{
+			UID: "pdb-1", Name: "checkout-pdb", Namespace: "services", MinAvailable: "1", DesiredHealthy: 1, CurrentHealthy: 1, DisruptionsAllowed: 1, ExpectedPods: 2,
+		}},
+		HorizontalPodAutoscalers: []agentsk8s.HorizontalPodAutoscaler{{
+			UID: "hpa-1", Name: "checkout-hpa", Namespace: "services", TargetKind: "Deployment", TargetName: "checkout", MinReplicas: 2, MaxReplicas: 10, CurrentReplicas: 2, DesiredReplicas: 3, MetricTypes: []string{"Resource:cpu"},
+		}},
+		Events:    []agentsk8s.Event{{UID: "evt-1", Name: "checkout.1", Namespace: "services", Type: "Warning", Reason: "BackOff", Message: "retrying", InvolvedKind: "Pod", InvolvedName: "checkout-0", Count: 2}},
+		Timestamp: now,
 	}
 
 	cluster, err := monitor.ApplyKubernetesReport(report, nil)
@@ -181,8 +190,23 @@ func TestApplyKubernetesReportPreservesNativeAPIInventory(t *testing.T) {
 	if len(cluster.ConfigMaps) != 1 || cluster.ConfigMaps[0].DataKeys[0] != "app.yaml" || !cluster.ConfigMaps[0].Immutable {
 		t.Fatalf("expected configmap inventory, got %+v", cluster.ConfigMaps)
 	}
+	if len(cluster.Secrets) != 1 || cluster.Secrets[0].Type != "Opaque" || cluster.Secrets[0].DataKeys[0] != "token" || !cluster.Secrets[0].Immutable {
+		t.Fatalf("expected secret metadata inventory, got %+v", cluster.Secrets)
+	}
 	if len(cluster.ServiceAccounts) != 1 || cluster.ServiceAccounts[0].SecretCount != 1 || cluster.ServiceAccounts[0].AutomountServiceAccountToken == nil || !*cluster.ServiceAccounts[0].AutomountServiceAccountToken {
 		t.Fatalf("expected serviceaccount inventory, got %+v", cluster.ServiceAccounts)
+	}
+	if len(cluster.ResourceQuotas) != 1 || cluster.ResourceQuotas[0].Hard["pods"] != "10" || cluster.ResourceQuotas[0].Used["pods"] != "3" {
+		t.Fatalf("expected resourcequota inventory, got %+v", cluster.ResourceQuotas)
+	}
+	if len(cluster.LimitRanges) != 1 || cluster.LimitRanges[0].LimitTypes[0] != "Container" {
+		t.Fatalf("expected limitrange inventory, got %+v", cluster.LimitRanges)
+	}
+	if len(cluster.PodDisruptionBudgets) != 1 || cluster.PodDisruptionBudgets[0].ExpectedPods != 2 || cluster.PodDisruptionBudgets[0].MinAvailable != "1" {
+		t.Fatalf("expected poddisruptionbudget inventory, got %+v", cluster.PodDisruptionBudgets)
+	}
+	if len(cluster.HorizontalPodAutoscalers) != 1 || cluster.HorizontalPodAutoscalers[0].TargetName != "checkout" || cluster.HorizontalPodAutoscalers[0].MetricTypes[0] != "Resource:cpu" {
+		t.Fatalf("expected horizontalpodautoscaler inventory, got %+v", cluster.HorizontalPodAutoscalers)
 	}
 	if len(cluster.Events) != 1 || cluster.Events[0].Reason != "BackOff" || cluster.Events[0].Count != 2 {
 		t.Fatalf("expected event inventory, got %+v", cluster.Events)

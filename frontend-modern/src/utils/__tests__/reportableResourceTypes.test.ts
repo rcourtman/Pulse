@@ -38,7 +38,12 @@ describe('reportableResourceTypes', () => {
       'k8s-persistent-volume-claim',
       'k8s-storage-class',
       'k8s-configmap',
+      'k8s-secret',
       'k8s-serviceaccount',
+      'k8s-resource-quota',
+      'k8s-limit-range',
+      'k8s-pod-disruption-budget',
+      'k8s-horizontal-pod-autoscaler',
       'k8s-event',
     ] as const;
 

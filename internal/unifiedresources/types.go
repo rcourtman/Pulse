@@ -148,7 +148,12 @@ const (
 	ResourceTypeK8sPVC            ResourceType = "k8s-persistent-volume-claim"
 	ResourceTypeK8sStorageClass   ResourceType = "k8s-storage-class"
 	ResourceTypeK8sConfigMap      ResourceType = "k8s-configmap"
+	ResourceTypeK8sSecret         ResourceType = "k8s-secret"
 	ResourceTypeK8sServiceAccount ResourceType = "k8s-serviceaccount"
+	ResourceTypeK8sResourceQuota  ResourceType = "k8s-resource-quota"
+	ResourceTypeK8sLimitRange     ResourceType = "k8s-limit-range"
+	ResourceTypeK8sPDB            ResourceType = "k8s-pod-disruption-budget"
+	ResourceTypeK8sHPA            ResourceType = "k8s-horizontal-pod-autoscaler"
 	ResourceTypeK8sEvent          ResourceType = "k8s-event"
 	ResourceTypeStorage           ResourceType = "storage"
 	ResourceTypeNetwork           ResourceType = "network"
@@ -1504,7 +1509,12 @@ type K8sData struct {
 	PersistentVolumeClaimUID     string                 `json:"persistentVolumeClaimUid,omitempty"`
 	StorageClassUID              string                 `json:"storageClassUid,omitempty"`
 	ConfigMapUID                 string                 `json:"configMapUid,omitempty"`
+	SecretUID                    string                 `json:"secretUid,omitempty"`
 	ServiceAccountUID            string                 `json:"serviceAccountUid,omitempty"`
+	ResourceQuotaUID             string                 `json:"resourceQuotaUid,omitempty"`
+	LimitRangeUID                string                 `json:"limitRangeUid,omitempty"`
+	PodDisruptionBudgetUID       string                 `json:"podDisruptionBudgetUid,omitempty"`
+	HorizontalPodAutoscalerUID   string                 `json:"horizontalPodAutoscalerUid,omitempty"`
 	EventUID                     string                 `json:"eventUid,omitempty"`
 	NamespaceUID                 string                 `json:"namespaceUid,omitempty"`
 	DesiredReplicas              int32                  `json:"desiredReplicas,omitempty"`
@@ -1554,9 +1564,24 @@ type K8sData struct {
 	DataKeys                     []string               `json:"dataKeys,omitempty"`
 	BinaryDataKeys               []string               `json:"binaryDataKeys,omitempty"`
 	Immutable                    bool                   `json:"immutable,omitempty"`
+	SecretType                   string                 `json:"secretType,omitempty"`
 	AutomountServiceAccountToken *bool                  `json:"automountServiceAccountToken,omitempty"`
 	SecretCount                  int                    `json:"secretCount,omitempty"`
 	ImagePullSecrets             []string               `json:"imagePullSecrets,omitempty"`
+	Hard                         map[string]string      `json:"hard,omitempty"`
+	Used                         map[string]string      `json:"used,omitempty"`
+	LimitTypes                   []string               `json:"limitTypes,omitempty"`
+	MinAvailable                 string                 `json:"minAvailable,omitempty"`
+	MaxUnavailable               string                 `json:"maxUnavailable,omitempty"`
+	DesiredHealthy               int32                  `json:"desiredHealthy,omitempty"`
+	CurrentHealthy               int32                  `json:"currentHealthy,omitempty"`
+	DisruptionsAllowed           int32                  `json:"disruptionsAllowed,omitempty"`
+	ExpectedPods                 int32                  `json:"expectedPods,omitempty"`
+	TargetKind                   string                 `json:"targetKind,omitempty"`
+	TargetName                   string                 `json:"targetName,omitempty"`
+	MinReplicas                  int32                  `json:"minReplicas,omitempty"`
+	MaxReplicas                  int32                  `json:"maxReplicas,omitempty"`
+	MetricTypes                  []string               `json:"metricTypes,omitempty"`
 	CapacityBytes                int64                  `json:"capacityBytes,omitempty"`
 	RequestedBytes               int64                  `json:"requestedBytes,omitempty"`
 	AccessModes                  []string               `json:"accessModes,omitempty"`

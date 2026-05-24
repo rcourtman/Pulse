@@ -778,6 +778,20 @@ func cloneKubernetesConfigMaps(src []KubernetesConfigMap) []KubernetesConfigMap 
 	return dest
 }
 
+func cloneKubernetesSecrets(src []KubernetesSecret) []KubernetesSecret {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesSecret, len(src))
+	for i, secret := range src {
+		copy := secret
+		copy.DataKeys = append([]string(nil), secret.DataKeys...)
+		copy.Labels = cloneStringMap(secret.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
 func cloneKubernetesServiceAccounts(src []KubernetesServiceAccount) []KubernetesServiceAccount {
 	if len(src) == 0 {
 		return nil
@@ -788,6 +802,62 @@ func cloneKubernetesServiceAccounts(src []KubernetesServiceAccount) []Kubernetes
 		copy.AutomountServiceAccountToken = cloneBoolPtr(account.AutomountServiceAccountToken)
 		copy.ImagePullSecrets = append([]string(nil), account.ImagePullSecrets...)
 		copy.Labels = cloneStringMap(account.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneKubernetesResourceQuotas(src []KubernetesResourceQuota) []KubernetesResourceQuota {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesResourceQuota, len(src))
+	for i, quota := range src {
+		copy := quota
+		copy.Hard = cloneStringMap(quota.Hard)
+		copy.Used = cloneStringMap(quota.Used)
+		copy.Labels = cloneStringMap(quota.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneKubernetesLimitRanges(src []KubernetesLimitRange) []KubernetesLimitRange {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesLimitRange, len(src))
+	for i, limitRange := range src {
+		copy := limitRange
+		copy.LimitTypes = append([]string(nil), limitRange.LimitTypes...)
+		copy.Labels = cloneStringMap(limitRange.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneKubernetesPodDisruptionBudgets(src []KubernetesPodDisruptionBudget) []KubernetesPodDisruptionBudget {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesPodDisruptionBudget, len(src))
+	for i, budget := range src {
+		copy := budget
+		copy.Labels = cloneStringMap(budget.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneKubernetesHorizontalPodAutoscalers(src []KubernetesHorizontalPodAutoscaler) []KubernetesHorizontalPodAutoscaler {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesHorizontalPodAutoscaler, len(src))
+	for i, autoscaler := range src {
+		copy := autoscaler
+		copy.MetricTypes = append([]string(nil), autoscaler.MetricTypes...)
+		copy.Labels = cloneStringMap(autoscaler.Labels)
 		dest[i] = copy.NormalizeCollections()
 	}
 	return dest
@@ -827,7 +897,12 @@ func cloneKubernetesCluster(src KubernetesCluster) KubernetesCluster {
 	dest.PersistentVolumeClaims = cloneKubernetesPersistentVolumeClaims(src.PersistentVolumeClaims)
 	dest.StorageClasses = cloneKubernetesStorageClasses(src.StorageClasses)
 	dest.ConfigMaps = cloneKubernetesConfigMaps(src.ConfigMaps)
+	dest.Secrets = cloneKubernetesSecrets(src.Secrets)
 	dest.ServiceAccounts = cloneKubernetesServiceAccounts(src.ServiceAccounts)
+	dest.ResourceQuotas = cloneKubernetesResourceQuotas(src.ResourceQuotas)
+	dest.LimitRanges = cloneKubernetesLimitRanges(src.LimitRanges)
+	dest.PodDisruptionBudgets = cloneKubernetesPodDisruptionBudgets(src.PodDisruptionBudgets)
+	dest.HorizontalPodAutoscalers = cloneKubernetesHorizontalPodAutoscalers(src.HorizontalPodAutoscalers)
 	dest.Events = cloneKubernetesEvents(src.Events)
 	dest.TokenLastUsedAt = cloneTimePtr(src.TokenLastUsedAt)
 	return dest.NormalizeCollections()

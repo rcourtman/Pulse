@@ -124,8 +124,10 @@ page native inventory. It must accept canonical Docker / Podman runtime tokens
 `k8s-daemonset`, `k8s-job`, `k8s-cronjob`, `k8s-ingress`,
 `k8s-endpoint-slice`, `k8s-network-policy`, `k8s-persistent-volume`,
 `k8s-persistent-volume-claim`, `k8s-storage-class`, `k8s-configmap`,
-`k8s-serviceaccount`, `k8s-event`) whenever unified resources can publish
-those records. Docker node and Swarm node aliases may normalize to the
+`k8s-secret`, `k8s-serviceaccount`, `k8s-resource-quota`,
+`k8s-limit-range`, `k8s-pod-disruption-budget`,
+`k8s-horizontal-pod-autoscaler`, `k8s-event`) whenever unified resources can
+publish those records. Docker node and Swarm node aliases may normalize to the
 canonical `docker-swarm-node` token, but unsupported legacy aliases should
 continue to fail closed instead of silently widening platform queries.
 

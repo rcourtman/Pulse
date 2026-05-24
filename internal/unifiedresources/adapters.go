@@ -2873,6 +2873,31 @@ func resourceFromKubernetesConfigMap(cluster models.KubernetesCluster, configMap
 	return resource, namespacedKubernetesIdentity(clusterName, configMap.Namespace, configMap.Name)
 }
 
+func resourceFromKubernetesSecret(cluster models.KubernetesCluster, secret models.KubernetesSecret, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(secret.Labels)
+	data := baseKubernetesData(cluster, clusterName, "Secret", capabilities)
+	data.SecretUID = secret.UID
+	data.ResourceUID = secret.UID
+	data.Namespace = secret.Namespace
+	data.SecretType = secret.Type
+	data.DataKeys = append([]string(nil), secret.DataKeys...)
+	data.Immutable = secret.Immutable
+	data.Labels = labels
+	data.CreatedAt = zeroTimeToPtr(secret.CreatedAt)
+	resource := Resource{
+		Type:       ResourceTypeK8sSecret,
+		Technology: "kubernetes",
+		Name:       secret.Name,
+		Status:     StatusOnline,
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+		Tags:       labelsToTags(labels),
+	}
+	return resource, namespacedKubernetesIdentity(clusterName, secret.Namespace, secret.Name)
+}
+
 func resourceFromKubernetesServiceAccount(cluster models.KubernetesCluster, account models.KubernetesServiceAccount, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
 	clusterName := kubernetesClusterDisplayName(cluster)
 	labels := cloneLabelMap(account.Labels)
@@ -2896,6 +2921,110 @@ func resourceFromKubernetesServiceAccount(cluster models.KubernetesCluster, acco
 		Tags:       labelsToTags(labels),
 	}
 	return resource, namespacedKubernetesIdentity(clusterName, account.Namespace, account.Name)
+}
+
+func resourceFromKubernetesResourceQuota(cluster models.KubernetesCluster, quota models.KubernetesResourceQuota, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(quota.Labels)
+	data := baseKubernetesData(cluster, clusterName, "ResourceQuota", capabilities)
+	data.ResourceQuotaUID = quota.UID
+	data.ResourceUID = quota.UID
+	data.Namespace = quota.Namespace
+	data.Hard = cloneStringMap(quota.Hard)
+	data.Used = cloneStringMap(quota.Used)
+	data.Labels = labels
+	data.CreatedAt = zeroTimeToPtr(quota.CreatedAt)
+	resource := Resource{
+		Type:       ResourceTypeK8sResourceQuota,
+		Technology: "kubernetes",
+		Name:       quota.Name,
+		Status:     StatusOnline,
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+		Tags:       labelsToTags(labels),
+	}
+	return resource, namespacedKubernetesIdentity(clusterName, quota.Namespace, quota.Name)
+}
+
+func resourceFromKubernetesLimitRange(cluster models.KubernetesCluster, limitRange models.KubernetesLimitRange, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(limitRange.Labels)
+	data := baseKubernetesData(cluster, clusterName, "LimitRange", capabilities)
+	data.LimitRangeUID = limitRange.UID
+	data.ResourceUID = limitRange.UID
+	data.Namespace = limitRange.Namespace
+	data.LimitTypes = append([]string(nil), limitRange.LimitTypes...)
+	data.Labels = labels
+	data.CreatedAt = zeroTimeToPtr(limitRange.CreatedAt)
+	resource := Resource{
+		Type:       ResourceTypeK8sLimitRange,
+		Technology: "kubernetes",
+		Name:       limitRange.Name,
+		Status:     StatusOnline,
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+		Tags:       labelsToTags(labels),
+	}
+	return resource, namespacedKubernetesIdentity(clusterName, limitRange.Namespace, limitRange.Name)
+}
+
+func resourceFromKubernetesPodDisruptionBudget(cluster models.KubernetesCluster, budget models.KubernetesPodDisruptionBudget, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(budget.Labels)
+	data := baseKubernetesData(cluster, clusterName, "PodDisruptionBudget", capabilities)
+	data.PodDisruptionBudgetUID = budget.UID
+	data.ResourceUID = budget.UID
+	data.Namespace = budget.Namespace
+	data.MinAvailable = budget.MinAvailable
+	data.MaxUnavailable = budget.MaxUnavailable
+	data.DesiredHealthy = budget.DesiredHealthy
+	data.CurrentHealthy = budget.CurrentHealthy
+	data.DisruptionsAllowed = budget.DisruptionsAllowed
+	data.ExpectedPods = budget.ExpectedPods
+	data.Labels = labels
+	data.CreatedAt = zeroTimeToPtr(budget.CreatedAt)
+	resource := Resource{
+		Type:       ResourceTypeK8sPDB,
+		Technology: "kubernetes",
+		Name:       budget.Name,
+		Status:     statusFromKubernetesPodDisruptionBudget(budget),
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+		Tags:       labelsToTags(labels),
+	}
+	return resource, namespacedKubernetesIdentity(clusterName, budget.Namespace, budget.Name)
+}
+
+func resourceFromKubernetesHorizontalPodAutoscaler(cluster models.KubernetesCluster, autoscaler models.KubernetesHorizontalPodAutoscaler, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(autoscaler.Labels)
+	data := baseKubernetesData(cluster, clusterName, "HorizontalPodAutoscaler", capabilities)
+	data.HorizontalPodAutoscalerUID = autoscaler.UID
+	data.ResourceUID = autoscaler.UID
+	data.Namespace = autoscaler.Namespace
+	data.TargetKind = autoscaler.TargetKind
+	data.TargetName = autoscaler.TargetName
+	data.MinReplicas = autoscaler.MinReplicas
+	data.MaxReplicas = autoscaler.MaxReplicas
+	data.CurrentReplicas = autoscaler.CurrentReplicas
+	data.DesiredReplicas = autoscaler.DesiredReplicas
+	data.MetricTypes = append([]string(nil), autoscaler.MetricTypes...)
+	data.Labels = labels
+	data.CreatedAt = zeroTimeToPtr(autoscaler.CreatedAt)
+	resource := Resource{
+		Type:       ResourceTypeK8sHPA,
+		Technology: "kubernetes",
+		Name:       autoscaler.Name,
+		Status:     statusFromKubernetesHorizontalPodAutoscaler(autoscaler),
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+		Tags:       labelsToTags(labels),
+	}
+	return resource, namespacedKubernetesIdentity(clusterName, autoscaler.Namespace, autoscaler.Name)
 }
 
 func resourceFromKubernetesEvent(cluster models.KubernetesCluster, event models.KubernetesEvent, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {

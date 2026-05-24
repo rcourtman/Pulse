@@ -102,6 +102,16 @@ describe('KubernetesPageSurface contract', () => {
       </Router>
     ));
 
+    expect(mockUseUnifiedResources).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: expect.stringContaining('k8s-secret'),
+      }),
+    );
+    expect(mockUseUnifiedResources).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: expect.stringContaining('k8s-horizontal-pod-autoscaler'),
+      }),
+    );
     expect(screen.getByTestId('kubernetes-workloads-surface')).toHaveAttribute(
       'data-forced-platform',
       'kubernetes',

@@ -167,8 +167,11 @@ truth for live infrastructure data.
     `internal/monitoring/kubernetes_agents.go`. The Kubernetes agent may read
     Namespaces, Services, ReplicaSets, StatefulSets, DaemonSets, Jobs,
     CronJobs, Ingresses, EndpointSlices, NetworkPolicies, PersistentVolumes,
-    PersistentVolumeClaims, StorageClasses, ConfigMaps, ServiceAccounts, and
-    Events as bounded best-effort inventory, but monitoring must preserve those
+    PersistentVolumeClaims, StorageClasses, ConfigMaps, Secrets, ServiceAccounts,
+    ResourceQuotas, LimitRanges, PodDisruptionBudgets,
+    HorizontalPodAutoscalers, and Events as bounded best-effort inventory.
+    Secret values must not be collected; only metadata, type, and key names are
+    allowed. Monitoring must preserve those
     objects as native cluster inventory instead of flattening them into pods,
     deployments, or generic storage/configuration rows.
 

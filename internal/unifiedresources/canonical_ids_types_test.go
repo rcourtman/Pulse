@@ -116,9 +116,34 @@ func TestContractResourceType(t *testing.T) {
 			want:     ResourceTypeK8sConfigMap,
 		},
 		{
+			name:     "kubernetes secret passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeK8sSecret, Kubernetes: &K8sData{SecretType: "Opaque", DataKeys: []string{"token"}}},
+			want:     ResourceTypeK8sSecret,
+		},
+		{
 			name:     "kubernetes serviceaccount passthrough remains canonical",
 			resource: Resource{Type: ResourceTypeK8sServiceAccount, Kubernetes: &K8sData{SecretCount: 1}},
 			want:     ResourceTypeK8sServiceAccount,
+		},
+		{
+			name:     "kubernetes resource quota passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeK8sResourceQuota, Kubernetes: &K8sData{Hard: map[string]string{"pods": "10"}}},
+			want:     ResourceTypeK8sResourceQuota,
+		},
+		{
+			name:     "kubernetes limit range passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeK8sLimitRange, Kubernetes: &K8sData{LimitTypes: []string{"Container"}}},
+			want:     ResourceTypeK8sLimitRange,
+		},
+		{
+			name:     "kubernetes pod disruption budget passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeK8sPDB, Kubernetes: &K8sData{ExpectedPods: 2}},
+			want:     ResourceTypeK8sPDB,
+		},
+		{
+			name:     "kubernetes horizontal pod autoscaler passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeK8sHPA, Kubernetes: &K8sData{TargetName: "checkout"}},
+			want:     ResourceTypeK8sHPA,
 		},
 		{
 			name:     "kubernetes event passthrough remains canonical",

@@ -1255,7 +1255,12 @@ func TestIsUnsupportedOrganizationShareResourceType(t *testing.T) {
 		{name: "kubernetes persistent volume claim supported", in: "k8s-persistent-volume-claim", want: false},
 		{name: "kubernetes storage class supported", in: "k8s-storage-class", want: false},
 		{name: "kubernetes configmap supported", in: "k8s-configmap", want: false},
+		{name: "kubernetes secret supported", in: "k8s-secret", want: false},
 		{name: "kubernetes serviceaccount supported", in: "k8s-serviceaccount", want: false},
+		{name: "kubernetes resource quota supported", in: "k8s-resource-quota", want: false},
+		{name: "kubernetes limit range supported", in: "k8s-limit-range", want: false},
+		{name: "kubernetes pod disruption budget supported", in: "k8s-pod-disruption-budget", want: false},
+		{name: "kubernetes horizontal pod autoscaler supported", in: "k8s-horizontal-pod-autoscaler", want: false},
 		{name: "kubernetes event supported", in: "k8s-event", want: false},
 		{name: "network share supported", in: "network-share", want: false},
 	}

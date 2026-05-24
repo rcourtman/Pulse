@@ -610,10 +610,65 @@ func applyDemoKubernetesScenario(state *models.StateSnapshot, now time.Time) {
 			}
 		}
 
+		applyDemoKubernetesNativeInventory(cluster, now)
 		initializeMockKubernetesClusterUsage(cluster, now, false)
 	}
 
 	syncMockKubernetesNodeHosts(state)
+}
+
+func applyDemoKubernetesNativeInventory(cluster *models.KubernetesCluster, now time.Time) {
+	if cluster == nil {
+		return
+	}
+	createdAt := now.Add(-36 * time.Hour)
+	labels := func(component string) map[string]string {
+		return map[string]string{
+			"app.kubernetes.io/part-of": "pulse-demo-estate",
+			"app.kubernetes.io/name":    component,
+			"environment":               "production",
+		}
+	}
+
+	cluster.Namespaces = []models.KubernetesNamespace{
+		{UID: cluster.ID + "-ns-apps", Name: "apps", Phase: "Active", CreatedAt: createdAt, Labels: map[string]string{"environment": "production"}},
+		{UID: cluster.ID + "-ns-services", Name: "services", Phase: "Active", CreatedAt: createdAt, Labels: map[string]string{"environment": "production"}},
+		{UID: cluster.ID + "-ns-monitoring", Name: "monitoring", Phase: "Active", CreatedAt: createdAt, Labels: map[string]string{"environment": "production"}},
+	}
+	cluster.Services = []models.KubernetesService{
+		{UID: cluster.ID + "-svc-checkout-web", Name: "checkout-web", Namespace: "apps", ServiceType: "ClusterIP", ClusterIP: "10.96.12.10", Ports: []models.KubernetesServicePort{{Name: "http", Protocol: "TCP", Port: 80, TargetPort: "8080"}}, Selector: map[string]string{"app.kubernetes.io/name": "checkout-web"}, CreatedAt: createdAt, Labels: labels("checkout-web")},
+		{UID: cluster.ID + "-svc-checkout-api", Name: "checkout-api", Namespace: "services", ServiceType: "ClusterIP", ClusterIP: "10.96.18.24", Ports: []models.KubernetesServicePort{{Name: "http", Protocol: "TCP", Port: 8080, TargetPort: "8080"}}, Selector: map[string]string{"app.kubernetes.io/name": "checkout-api"}, CreatedAt: createdAt, Labels: labels("checkout-api")},
+	}
+	cluster.EndpointSlices = []models.KubernetesEndpointSlice{
+		{UID: cluster.ID + "-eps-checkout-api", Name: "checkout-api-abc12", Namespace: "services", AddressType: "IPv4", ServiceName: "checkout-api", EndpointCount: 3, ReadyEndpointCount: 3, Ports: []models.KubernetesEndpointPort{{Name: "http", Protocol: "TCP", Port: 8080, AppProtocol: "kubernetes.io/http"}}, CreatedAt: createdAt, Labels: labels("checkout-api")},
+	}
+	cluster.NetworkPolicies = []models.KubernetesNetworkPolicy{
+		{UID: cluster.ID + "-netpol-default-deny", Name: "default-deny", Namespace: "services", PolicyTypes: []string{"Ingress", "Egress"}, IngressRuleCount: 1, EgressRuleCount: 1, CreatedAt: createdAt, Labels: labels("default-deny")},
+	}
+	cluster.ConfigMaps = []models.KubernetesConfigMap{
+		{UID: cluster.ID + "-cm-checkout-api", Name: "checkout-api-config", Namespace: "services", DataKeys: []string{"app.yaml", "feature-flags.yaml"}, CreatedAt: createdAt, Labels: labels("checkout-api")},
+	}
+	cluster.Secrets = []models.KubernetesSecret{
+		{UID: cluster.ID + "-secret-checkout-api", Name: "checkout-api-runtime", Namespace: "services", Type: "Opaque", DataKeys: []string{"database-url", "session-key"}, CreatedAt: createdAt, Labels: labels("checkout-api")},
+	}
+	cluster.ServiceAccounts = []models.KubernetesServiceAccount{
+		{UID: cluster.ID + "-sa-checkout-api", Name: "checkout-api", Namespace: "services", SecretCount: 1, ImagePullSecrets: []string{"registry-pull"}, CreatedAt: createdAt, Labels: labels("checkout-api")},
+	}
+	cluster.ResourceQuotas = []models.KubernetesResourceQuota{
+		{UID: cluster.ID + "-quota-services", Name: "services-quota", Namespace: "services", Hard: map[string]string{"pods": "80", "requests.cpu": "24", "requests.memory": "96Gi"}, Used: map[string]string{"pods": "34", "requests.cpu": "11", "requests.memory": "42Gi"}, CreatedAt: createdAt, Labels: labels("services-quota")},
+	}
+	cluster.LimitRanges = []models.KubernetesLimitRange{
+		{UID: cluster.ID + "-limits-services", Name: "services-defaults", Namespace: "services", LimitTypes: []string{"Container", "Pod"}, CreatedAt: createdAt, Labels: labels("services-defaults")},
+	}
+	cluster.PodDisruptionBudgets = []models.KubernetesPodDisruptionBudget{
+		{UID: cluster.ID + "-pdb-checkout-api", Name: "checkout-api", Namespace: "services", MinAvailable: "2", DesiredHealthy: 2, CurrentHealthy: 3, DisruptionsAllowed: 1, ExpectedPods: 3, CreatedAt: createdAt, Labels: labels("checkout-api")},
+	}
+	cluster.HorizontalPodAutoscalers = []models.KubernetesHorizontalPodAutoscaler{
+		{UID: cluster.ID + "-hpa-checkout-api", Name: "checkout-api", Namespace: "services", TargetKind: "Deployment", TargetName: "checkout-api", MinReplicas: 3, MaxReplicas: 12, CurrentReplicas: 3, DesiredReplicas: 4, MetricTypes: []string{"Resource:cpu", "Resource:memory"}, CreatedAt: createdAt, Labels: labels("checkout-api")},
+	}
+	cluster.Events = []models.KubernetesEvent{
+		{UID: cluster.ID + "-event-payments-worker", Name: "payments-worker.1", Namespace: "services", EventType: "Warning", Reason: "BackOff", Message: "Back-off restarting failed container", InvolvedKind: "Pod", InvolvedName: "payments-worker-58484d44f7-f6gzh", Count: 7, EventTime: &createdAt},
+	}
 }
 
 func applyDemoHostScenario(state *models.StateSnapshot, now time.Time) {

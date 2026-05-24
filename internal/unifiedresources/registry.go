@@ -335,8 +335,23 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 		for _, configMap := range cluster.ConfigMaps {
 			rr.ingestKubernetesConfigMap(cluster, configMap, clusterID, capabilities)
 		}
+		for _, secret := range cluster.Secrets {
+			rr.ingestKubernetesSecret(cluster, secret, clusterID, capabilities)
+		}
 		for _, account := range cluster.ServiceAccounts {
 			rr.ingestKubernetesServiceAccount(cluster, account, clusterID, capabilities)
+		}
+		for _, quota := range cluster.ResourceQuotas {
+			rr.ingestKubernetesResourceQuota(cluster, quota, clusterID, capabilities)
+		}
+		for _, limitRange := range cluster.LimitRanges {
+			rr.ingestKubernetesLimitRange(cluster, limitRange, clusterID, capabilities)
+		}
+		for _, budget := range cluster.PodDisruptionBudgets {
+			rr.ingestKubernetesPodDisruptionBudget(cluster, budget, clusterID, capabilities)
+		}
+		for _, autoscaler := range cluster.HorizontalPodAutoscalers {
+			rr.ingestKubernetesHorizontalPodAutoscaler(cluster, autoscaler, clusterID, capabilities)
 		}
 		for _, event := range cluster.Events {
 			rr.ingestKubernetesEvent(cluster, event, clusterID, capabilities)
@@ -692,8 +707,18 @@ func (rr *ResourceRegistry) seedSourceIDForResourceLocked(resource *Resource, so
 			return seededKubernetesTypedSourceID(clusterSourceID, "storageclass", resource, resource.Kubernetes.StorageClassUID)
 		case ResourceTypeK8sConfigMap:
 			return seededKubernetesTypedSourceID(clusterSourceID, "configmap", resource, resource.Kubernetes.ConfigMapUID)
+		case ResourceTypeK8sSecret:
+			return seededKubernetesTypedSourceID(clusterSourceID, "secret", resource, resource.Kubernetes.SecretUID)
 		case ResourceTypeK8sServiceAccount:
 			return seededKubernetesTypedSourceID(clusterSourceID, "serviceaccount", resource, resource.Kubernetes.ServiceAccountUID)
+		case ResourceTypeK8sResourceQuota:
+			return seededKubernetesTypedSourceID(clusterSourceID, "resourcequota", resource, resource.Kubernetes.ResourceQuotaUID)
+		case ResourceTypeK8sLimitRange:
+			return seededKubernetesTypedSourceID(clusterSourceID, "limitrange", resource, resource.Kubernetes.LimitRangeUID)
+		case ResourceTypeK8sPDB:
+			return seededKubernetesTypedSourceID(clusterSourceID, "poddisruptionbudget", resource, resource.Kubernetes.PodDisruptionBudgetUID)
+		case ResourceTypeK8sHPA:
+			return seededKubernetesTypedSourceID(clusterSourceID, "horizontalpodautoscaler", resource, resource.Kubernetes.HorizontalPodAutoscalerUID)
 		case ResourceTypeK8sEvent:
 			return seededKubernetesTypedSourceID(clusterSourceID, "event", resource, resource.Kubernetes.EventUID)
 		}
@@ -1551,12 +1576,72 @@ func (rr *ResourceRegistry) ingestKubernetesConfigMap(cluster models.KubernetesC
 	rr.ingest(SourceK8s, sourceID, resource, identity)
 }
 
+func (rr *ResourceRegistry) ingestKubernetesSecret(cluster models.KubernetesCluster, secret models.KubernetesSecret, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesSecret(cluster, secret, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesSecretSourceID(kubernetesClusterSourceID(cluster), secret)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
 func (rr *ResourceRegistry) ingestKubernetesServiceAccount(cluster models.KubernetesCluster, account models.KubernetesServiceAccount, clusterResourceID string, capabilities *K8sMetricCapabilities) {
 	resource, identity := resourceFromKubernetesServiceAccount(cluster, account, capabilities)
 	if clusterResourceID != "" {
 		resource.ParentID = &clusterResourceID
 	}
 	sourceID := kubernetesServiceAccountSourceID(kubernetesClusterSourceID(cluster), account)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesResourceQuota(cluster models.KubernetesCluster, quota models.KubernetesResourceQuota, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesResourceQuota(cluster, quota, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesResourceQuotaSourceID(kubernetesClusterSourceID(cluster), quota)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesLimitRange(cluster models.KubernetesCluster, limitRange models.KubernetesLimitRange, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesLimitRange(cluster, limitRange, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesLimitRangeSourceID(kubernetesClusterSourceID(cluster), limitRange)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesPodDisruptionBudget(cluster models.KubernetesCluster, budget models.KubernetesPodDisruptionBudget, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesPodDisruptionBudget(cluster, budget, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesPodDisruptionBudgetSourceID(kubernetesClusterSourceID(cluster), budget)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesHorizontalPodAutoscaler(cluster models.KubernetesCluster, autoscaler models.KubernetesHorizontalPodAutoscaler, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesHorizontalPodAutoscaler(cluster, autoscaler, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesHorizontalPodAutoscalerSourceID(kubernetesClusterSourceID(cluster), autoscaler)
 	if sourceID == "" {
 		return
 	}
@@ -2884,8 +2969,28 @@ func kubernetesConfigMapSourceID(clusterSourceID string, configMap models.Kubern
 	return canonicalKubernetesTypedSourceID(clusterSourceID, "configmap", configMap.UID, configMap.Namespace, configMap.Name)
 }
 
+func kubernetesSecretSourceID(clusterSourceID string, secret models.KubernetesSecret) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "secret", secret.UID, secret.Namespace, secret.Name)
+}
+
 func kubernetesServiceAccountSourceID(clusterSourceID string, account models.KubernetesServiceAccount) string {
 	return canonicalKubernetesTypedSourceID(clusterSourceID, "serviceaccount", account.UID, account.Namespace, account.Name)
+}
+
+func kubernetesResourceQuotaSourceID(clusterSourceID string, quota models.KubernetesResourceQuota) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "resourcequota", quota.UID, quota.Namespace, quota.Name)
+}
+
+func kubernetesLimitRangeSourceID(clusterSourceID string, limitRange models.KubernetesLimitRange) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "limitrange", limitRange.UID, limitRange.Namespace, limitRange.Name)
+}
+
+func kubernetesPodDisruptionBudgetSourceID(clusterSourceID string, budget models.KubernetesPodDisruptionBudget) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "poddisruptionbudget", budget.UID, budget.Namespace, budget.Name)
+}
+
+func kubernetesHorizontalPodAutoscalerSourceID(clusterSourceID string, autoscaler models.KubernetesHorizontalPodAutoscaler) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "horizontalpodautoscaler", autoscaler.UID, autoscaler.Namespace, autoscaler.Name)
 }
 
 func kubernetesEventSourceID(clusterSourceID string, event models.KubernetesEvent) string {

@@ -994,25 +994,30 @@ type KubernetesCluster struct {
 	IntervalSeconds   int       `json:"intervalSeconds"`
 	AgentVersion      string    `json:"agentVersion,omitempty"`
 
-	Nodes                  []KubernetesNode                  `json:"nodes,omitempty"`
-	Namespaces             []KubernetesNamespace             `json:"namespaces,omitempty"`
-	Pods                   []KubernetesPod                   `json:"pods,omitempty"`
-	Deployments            []KubernetesDeployment            `json:"deployments,omitempty"`
-	ReplicaSets            []KubernetesReplicaSet            `json:"replicaSets,omitempty"`
-	StatefulSets           []KubernetesStatefulSet           `json:"statefulSets,omitempty"`
-	DaemonSets             []KubernetesDaemonSet             `json:"daemonSets,omitempty"`
-	Services               []KubernetesService               `json:"services,omitempty"`
-	Jobs                   []KubernetesJob                   `json:"jobs,omitempty"`
-	CronJobs               []KubernetesCronJob               `json:"cronJobs,omitempty"`
-	Ingresses              []KubernetesIngress               `json:"ingresses,omitempty"`
-	EndpointSlices         []KubernetesEndpointSlice         `json:"endpointSlices,omitempty"`
-	NetworkPolicies        []KubernetesNetworkPolicy         `json:"networkPolicies,omitempty"`
-	PersistentVolumes      []KubernetesPersistentVolume      `json:"persistentVolumes,omitempty"`
-	PersistentVolumeClaims []KubernetesPersistentVolumeClaim `json:"persistentVolumeClaims,omitempty"`
-	StorageClasses         []KubernetesStorageClass          `json:"storageClasses,omitempty"`
-	ConfigMaps             []KubernetesConfigMap             `json:"configMaps,omitempty"`
-	ServiceAccounts        []KubernetesServiceAccount        `json:"serviceAccounts,omitempty"`
-	Events                 []KubernetesEvent                 `json:"events,omitempty"`
+	Nodes                    []KubernetesNode                    `json:"nodes,omitempty"`
+	Namespaces               []KubernetesNamespace               `json:"namespaces,omitempty"`
+	Pods                     []KubernetesPod                     `json:"pods,omitempty"`
+	Deployments              []KubernetesDeployment              `json:"deployments,omitempty"`
+	ReplicaSets              []KubernetesReplicaSet              `json:"replicaSets,omitempty"`
+	StatefulSets             []KubernetesStatefulSet             `json:"statefulSets,omitempty"`
+	DaemonSets               []KubernetesDaemonSet               `json:"daemonSets,omitempty"`
+	Services                 []KubernetesService                 `json:"services,omitempty"`
+	Jobs                     []KubernetesJob                     `json:"jobs,omitempty"`
+	CronJobs                 []KubernetesCronJob                 `json:"cronJobs,omitempty"`
+	Ingresses                []KubernetesIngress                 `json:"ingresses,omitempty"`
+	EndpointSlices           []KubernetesEndpointSlice           `json:"endpointSlices,omitempty"`
+	NetworkPolicies          []KubernetesNetworkPolicy           `json:"networkPolicies,omitempty"`
+	PersistentVolumes        []KubernetesPersistentVolume        `json:"persistentVolumes,omitempty"`
+	PersistentVolumeClaims   []KubernetesPersistentVolumeClaim   `json:"persistentVolumeClaims,omitempty"`
+	StorageClasses           []KubernetesStorageClass            `json:"storageClasses,omitempty"`
+	ConfigMaps               []KubernetesConfigMap               `json:"configMaps,omitempty"`
+	Secrets                  []KubernetesSecret                  `json:"secrets,omitempty"`
+	ServiceAccounts          []KubernetesServiceAccount          `json:"serviceAccounts,omitempty"`
+	ResourceQuotas           []KubernetesResourceQuota           `json:"resourceQuotas,omitempty"`
+	LimitRanges              []KubernetesLimitRange              `json:"limitRanges,omitempty"`
+	PodDisruptionBudgets     []KubernetesPodDisruptionBudget     `json:"podDisruptionBudgets,omitempty"`
+	HorizontalPodAutoscalers []KubernetesHorizontalPodAutoscaler `json:"horizontalPodAutoscalers,omitempty"`
+	Events                   []KubernetesEvent                   `json:"events,omitempty"`
 
 	// Token information
 	TokenID         string     `json:"tokenId,omitempty"`
@@ -1127,11 +1132,41 @@ func (c KubernetesCluster) NormalizeCollections() KubernetesCluster {
 	for i := range c.ConfigMaps {
 		c.ConfigMaps[i] = c.ConfigMaps[i].NormalizeCollections()
 	}
+	if c.Secrets == nil {
+		c.Secrets = []KubernetesSecret{}
+	}
+	for i := range c.Secrets {
+		c.Secrets[i] = c.Secrets[i].NormalizeCollections()
+	}
 	if c.ServiceAccounts == nil {
 		c.ServiceAccounts = []KubernetesServiceAccount{}
 	}
 	for i := range c.ServiceAccounts {
 		c.ServiceAccounts[i] = c.ServiceAccounts[i].NormalizeCollections()
+	}
+	if c.ResourceQuotas == nil {
+		c.ResourceQuotas = []KubernetesResourceQuota{}
+	}
+	for i := range c.ResourceQuotas {
+		c.ResourceQuotas[i] = c.ResourceQuotas[i].NormalizeCollections()
+	}
+	if c.LimitRanges == nil {
+		c.LimitRanges = []KubernetesLimitRange{}
+	}
+	for i := range c.LimitRanges {
+		c.LimitRanges[i] = c.LimitRanges[i].NormalizeCollections()
+	}
+	if c.PodDisruptionBudgets == nil {
+		c.PodDisruptionBudgets = []KubernetesPodDisruptionBudget{}
+	}
+	for i := range c.PodDisruptionBudgets {
+		c.PodDisruptionBudgets[i] = c.PodDisruptionBudgets[i].NormalizeCollections()
+	}
+	if c.HorizontalPodAutoscalers == nil {
+		c.HorizontalPodAutoscalers = []KubernetesHorizontalPodAutoscaler{}
+	}
+	for i := range c.HorizontalPodAutoscalers {
+		c.HorizontalPodAutoscalers[i] = c.HorizontalPodAutoscalers[i].NormalizeCollections()
 	}
 	if c.Events == nil {
 		c.Events = []KubernetesEvent{}
@@ -1566,6 +1601,27 @@ func (c KubernetesConfigMap) NormalizeCollections() KubernetesConfigMap {
 	return c
 }
 
+type KubernetesSecret struct {
+	UID       string            `json:"uid"`
+	Name      string            `json:"name"`
+	Namespace string            `json:"namespace"`
+	Type      string            `json:"type,omitempty"`
+	DataKeys  []string          `json:"dataKeys,omitempty"`
+	Immutable bool              `json:"immutable,omitempty"`
+	CreatedAt time.Time         `json:"createdAt,omitempty"`
+	Labels    map[string]string `json:"labels,omitempty"`
+}
+
+func (s KubernetesSecret) NormalizeCollections() KubernetesSecret {
+	if s.DataKeys == nil {
+		s.DataKeys = []string{}
+	}
+	if s.Labels == nil {
+		s.Labels = map[string]string{}
+	}
+	return s
+}
+
 type KubernetesServiceAccount struct {
 	UID                          string            `json:"uid"`
 	Name                         string            `json:"name"`
@@ -1585,6 +1641,94 @@ func (s KubernetesServiceAccount) NormalizeCollections() KubernetesServiceAccoun
 		s.Labels = map[string]string{}
 	}
 	return s
+}
+
+type KubernetesResourceQuota struct {
+	UID       string            `json:"uid"`
+	Name      string            `json:"name"`
+	Namespace string            `json:"namespace"`
+	Hard      map[string]string `json:"hard,omitempty"`
+	Used      map[string]string `json:"used,omitempty"`
+	CreatedAt time.Time         `json:"createdAt,omitempty"`
+	Labels    map[string]string `json:"labels,omitempty"`
+}
+
+func (q KubernetesResourceQuota) NormalizeCollections() KubernetesResourceQuota {
+	if q.Hard == nil {
+		q.Hard = map[string]string{}
+	}
+	if q.Used == nil {
+		q.Used = map[string]string{}
+	}
+	if q.Labels == nil {
+		q.Labels = map[string]string{}
+	}
+	return q
+}
+
+type KubernetesLimitRange struct {
+	UID        string            `json:"uid"`
+	Name       string            `json:"name"`
+	Namespace  string            `json:"namespace"`
+	LimitTypes []string          `json:"limitTypes,omitempty"`
+	CreatedAt  time.Time         `json:"createdAt,omitempty"`
+	Labels     map[string]string `json:"labels,omitempty"`
+}
+
+func (l KubernetesLimitRange) NormalizeCollections() KubernetesLimitRange {
+	if l.LimitTypes == nil {
+		l.LimitTypes = []string{}
+	}
+	if l.Labels == nil {
+		l.Labels = map[string]string{}
+	}
+	return l
+}
+
+type KubernetesPodDisruptionBudget struct {
+	UID                string            `json:"uid"`
+	Name               string            `json:"name"`
+	Namespace          string            `json:"namespace"`
+	MinAvailable       string            `json:"minAvailable,omitempty"`
+	MaxUnavailable     string            `json:"maxUnavailable,omitempty"`
+	DesiredHealthy     int32             `json:"desiredHealthy,omitempty"`
+	CurrentHealthy     int32             `json:"currentHealthy,omitempty"`
+	DisruptionsAllowed int32             `json:"disruptionsAllowed,omitempty"`
+	ExpectedPods       int32             `json:"expectedPods,omitempty"`
+	CreatedAt          time.Time         `json:"createdAt,omitempty"`
+	Labels             map[string]string `json:"labels,omitempty"`
+}
+
+func (p KubernetesPodDisruptionBudget) NormalizeCollections() KubernetesPodDisruptionBudget {
+	if p.Labels == nil {
+		p.Labels = map[string]string{}
+	}
+	return p
+}
+
+type KubernetesHorizontalPodAutoscaler struct {
+	UID             string            `json:"uid"`
+	Name            string            `json:"name"`
+	Namespace       string            `json:"namespace"`
+	TargetKind      string            `json:"targetKind,omitempty"`
+	TargetName      string            `json:"targetName,omitempty"`
+	MinReplicas     int32             `json:"minReplicas,omitempty"`
+	MaxReplicas     int32             `json:"maxReplicas,omitempty"`
+	CurrentReplicas int32             `json:"currentReplicas,omitempty"`
+	DesiredReplicas int32             `json:"desiredReplicas,omitempty"`
+	MetricTypes     []string          `json:"metricTypes,omitempty"`
+	CreatedAt       time.Time         `json:"createdAt,omitempty"`
+	Labels          map[string]string `json:"labels,omitempty"`
+}
+
+func (h KubernetesHorizontalPodAutoscaler) NormalizeCollections() KubernetesHorizontalPodAutoscaler {
+	if h.MetricTypes == nil {
+		h.MetricTypes = []string{}
+	}
+	if h.Labels == nil {
+		h.Labels = map[string]string{}
+	}
+	return h
 }
 
 type KubernetesEvent struct {

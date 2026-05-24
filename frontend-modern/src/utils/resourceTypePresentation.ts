@@ -134,8 +134,28 @@ const RESOURCE_TYPE_PRESENTATION: Partial<Record<ResourceType | string, Resource
       label: 'ConfigMap',
       badgeClasses: DEFAULT_BADGE_CLASSES,
     },
+    'k8s-secret': {
+      label: 'Secret',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
     'k8s-serviceaccount': {
       label: 'ServiceAccount',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'k8s-resource-quota': {
+      label: 'ResourceQuota',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'k8s-limit-range': {
+      label: 'LimitRange',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'k8s-pod-disruption-budget': {
+      label: 'PodDisruptionBudget',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'k8s-horizontal-pod-autoscaler': {
+      label: 'HPA',
       badgeClasses: DEFAULT_BADGE_CLASSES,
     },
     'k8s-event': {

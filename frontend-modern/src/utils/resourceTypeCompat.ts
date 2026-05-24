@@ -35,7 +35,12 @@ export type CanonicalFrontendResourceType =
   | 'k8s-persistent-volume-claim'
   | 'k8s-storage-class'
   | 'k8s-configmap'
+  | 'k8s-secret'
   | 'k8s-serviceaccount'
+  | 'k8s-resource-quota'
+  | 'k8s-limit-range'
+  | 'k8s-pod-disruption-budget'
+  | 'k8s-horizontal-pod-autoscaler'
   | 'k8s-event'
   | 'network-endpoint';
 
@@ -123,7 +128,12 @@ export const canonicalizeFrontendResourceType = (
     case 'k8s-persistent-volume-claim':
     case 'k8s-storage-class':
     case 'k8s-configmap':
+    case 'k8s-secret':
     case 'k8s-serviceaccount':
+    case 'k8s-resource-quota':
+    case 'k8s-limit-range':
+    case 'k8s-pod-disruption-budget':
+    case 'k8s-horizontal-pod-autoscaler':
     case 'k8s-event':
     case 'network-endpoint':
       return normalized;

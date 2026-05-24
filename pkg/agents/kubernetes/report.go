@@ -5,29 +5,34 @@ import "time"
 // Report represents a single heartbeat from the Kubernetes agent to Pulse.
 // It is designed to be useful without requiring Metrics Server (metrics.k8s.io).
 type Report struct {
-	Agent                  AgentInfo               `json:"agent"`
-	Cluster                ClusterInfo             `json:"cluster"`
-	Nodes                  []Node                  `json:"nodes,omitempty"`
-	Namespaces             []Namespace             `json:"namespaces,omitempty"`
-	Pods                   []Pod                   `json:"pods,omitempty"`
-	Deployments            []Deployment            `json:"deployments,omitempty"`
-	ReplicaSets            []ReplicaSet            `json:"replicaSets,omitempty"`
-	StatefulSets           []StatefulSet           `json:"statefulSets,omitempty"`
-	DaemonSets             []DaemonSet             `json:"daemonSets,omitempty"`
-	Services               []Service               `json:"services,omitempty"`
-	Jobs                   []Job                   `json:"jobs,omitempty"`
-	CronJobs               []CronJob               `json:"cronJobs,omitempty"`
-	Ingresses              []Ingress               `json:"ingresses,omitempty"`
-	EndpointSlices         []EndpointSlice         `json:"endpointSlices,omitempty"`
-	NetworkPolicies        []NetworkPolicy         `json:"networkPolicies,omitempty"`
-	PersistentVolumes      []PersistentVolume      `json:"persistentVolumes,omitempty"`
-	PersistentVolumeClaims []PersistentVolumeClaim `json:"persistentVolumeClaims,omitempty"`
-	StorageClasses         []StorageClass          `json:"storageClasses,omitempty"`
-	ConfigMaps             []ConfigMap             `json:"configMaps,omitempty"`
-	ServiceAccounts        []ServiceAccount        `json:"serviceAccounts,omitempty"`
-	Events                 []Event                 `json:"events,omitempty"`
-	Recovery               *RecoveryReport         `json:"recovery,omitempty"`
-	Timestamp              time.Time               `json:"timestamp"`
+	Agent                    AgentInfo                 `json:"agent"`
+	Cluster                  ClusterInfo               `json:"cluster"`
+	Nodes                    []Node                    `json:"nodes,omitempty"`
+	Namespaces               []Namespace               `json:"namespaces,omitempty"`
+	Pods                     []Pod                     `json:"pods,omitempty"`
+	Deployments              []Deployment              `json:"deployments,omitempty"`
+	ReplicaSets              []ReplicaSet              `json:"replicaSets,omitempty"`
+	StatefulSets             []StatefulSet             `json:"statefulSets,omitempty"`
+	DaemonSets               []DaemonSet               `json:"daemonSets,omitempty"`
+	Services                 []Service                 `json:"services,omitempty"`
+	Jobs                     []Job                     `json:"jobs,omitempty"`
+	CronJobs                 []CronJob                 `json:"cronJobs,omitempty"`
+	Ingresses                []Ingress                 `json:"ingresses,omitempty"`
+	EndpointSlices           []EndpointSlice           `json:"endpointSlices,omitempty"`
+	NetworkPolicies          []NetworkPolicy           `json:"networkPolicies,omitempty"`
+	PersistentVolumes        []PersistentVolume        `json:"persistentVolumes,omitempty"`
+	PersistentVolumeClaims   []PersistentVolumeClaim   `json:"persistentVolumeClaims,omitempty"`
+	StorageClasses           []StorageClass            `json:"storageClasses,omitempty"`
+	ConfigMaps               []ConfigMap               `json:"configMaps,omitempty"`
+	Secrets                  []Secret                  `json:"secrets,omitempty"`
+	ServiceAccounts          []ServiceAccount          `json:"serviceAccounts,omitempty"`
+	ResourceQuotas           []ResourceQuota           `json:"resourceQuotas,omitempty"`
+	LimitRanges              []LimitRange              `json:"limitRanges,omitempty"`
+	PodDisruptionBudgets     []PodDisruptionBudget     `json:"podDisruptionBudgets,omitempty"`
+	HorizontalPodAutoscalers []HorizontalPodAutoscaler `json:"horizontalPodAutoscalers,omitempty"`
+	Events                   []Event                   `json:"events,omitempty"`
+	Recovery                 *RecoveryReport           `json:"recovery,omitempty"`
+	Timestamp                time.Time                 `json:"timestamp"`
 }
 
 // AgentInfo describes the reporting agent instance.
@@ -335,6 +340,19 @@ type ConfigMap struct {
 	Labels         map[string]string `json:"labels,omitempty"`
 }
 
+// Secret represents Kubernetes Secret metadata at report time.
+// Secret values are intentionally omitted; only key names and type metadata are reported.
+type Secret struct {
+	UID       string            `json:"uid"`
+	Name      string            `json:"name"`
+	Namespace string            `json:"namespace"`
+	Type      string            `json:"type,omitempty"`
+	DataKeys  []string          `json:"dataKeys,omitempty"`
+	Immutable bool              `json:"immutable,omitempty"`
+	CreatedAt time.Time         `json:"createdAt,omitempty"`
+	Labels    map[string]string `json:"labels,omitempty"`
+}
+
 // ServiceAccount represents Kubernetes ServiceAccount metadata at report time.
 type ServiceAccount struct {
 	UID                          string            `json:"uid"`
@@ -345,6 +363,58 @@ type ServiceAccount struct {
 	ImagePullSecrets             []string          `json:"imagePullSecrets,omitempty"`
 	CreatedAt                    time.Time         `json:"createdAt,omitempty"`
 	Labels                       map[string]string `json:"labels,omitempty"`
+}
+
+// ResourceQuota represents Kubernetes ResourceQuota metadata and observed usage.
+type ResourceQuota struct {
+	UID       string            `json:"uid"`
+	Name      string            `json:"name"`
+	Namespace string            `json:"namespace"`
+	Hard      map[string]string `json:"hard,omitempty"`
+	Used      map[string]string `json:"used,omitempty"`
+	CreatedAt time.Time         `json:"createdAt,omitempty"`
+	Labels    map[string]string `json:"labels,omitempty"`
+}
+
+// LimitRange represents Kubernetes LimitRange metadata at report time.
+type LimitRange struct {
+	UID        string            `json:"uid"`
+	Name       string            `json:"name"`
+	Namespace  string            `json:"namespace"`
+	LimitTypes []string          `json:"limitTypes,omitempty"`
+	CreatedAt  time.Time         `json:"createdAt,omitempty"`
+	Labels     map[string]string `json:"labels,omitempty"`
+}
+
+// PodDisruptionBudget represents Kubernetes PodDisruptionBudget policy and status.
+type PodDisruptionBudget struct {
+	UID                string            `json:"uid"`
+	Name               string            `json:"name"`
+	Namespace          string            `json:"namespace"`
+	MinAvailable       string            `json:"minAvailable,omitempty"`
+	MaxUnavailable     string            `json:"maxUnavailable,omitempty"`
+	DesiredHealthy     int32             `json:"desiredHealthy,omitempty"`
+	CurrentHealthy     int32             `json:"currentHealthy,omitempty"`
+	DisruptionsAllowed int32             `json:"disruptionsAllowed,omitempty"`
+	ExpectedPods       int32             `json:"expectedPods,omitempty"`
+	CreatedAt          time.Time         `json:"createdAt,omitempty"`
+	Labels             map[string]string `json:"labels,omitempty"`
+}
+
+// HorizontalPodAutoscaler represents Kubernetes autoscaling/v2 HPA metadata and status.
+type HorizontalPodAutoscaler struct {
+	UID             string            `json:"uid"`
+	Name            string            `json:"name"`
+	Namespace       string            `json:"namespace"`
+	TargetKind      string            `json:"targetKind,omitempty"`
+	TargetName      string            `json:"targetName,omitempty"`
+	MinReplicas     int32             `json:"minReplicas,omitempty"`
+	MaxReplicas     int32             `json:"maxReplicas,omitempty"`
+	CurrentReplicas int32             `json:"currentReplicas,omitempty"`
+	DesiredReplicas int32             `json:"desiredReplicas,omitempty"`
+	MetricTypes     []string          `json:"metricTypes,omitempty"`
+	CreatedAt       time.Time         `json:"createdAt,omitempty"`
+	Labels          map[string]string `json:"labels,omitempty"`
 }
 
 // Event represents a Kubernetes event at report time.

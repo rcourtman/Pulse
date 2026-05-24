@@ -31,7 +31,12 @@ describe('canonicalResourceTypes', () => {
     expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-persistent-volume-claim');
     expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-storage-class');
     expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-configmap');
+    expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-secret');
     expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-serviceaccount');
+    expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-resource-quota');
+    expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-limit-range');
+    expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-pod-disruption-budget');
+    expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-horizontal-pod-autoscaler');
     expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-event');
   });
 

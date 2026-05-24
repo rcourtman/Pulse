@@ -51,7 +51,12 @@ export function toReportingResourceType(resourceType: ResourceType): ReportingRe
     case 'k8s-persistent-volume-claim':
     case 'k8s-storage-class':
     case 'k8s-configmap':
+    case 'k8s-secret':
     case 'k8s-serviceaccount':
+    case 'k8s-resource-quota':
+    case 'k8s-limit-range':
+    case 'k8s-pod-disruption-budget':
+    case 'k8s-horizontal-pod-autoscaler':
     case 'k8s-event':
       return 'k8s';
     case 'physical_disk':

@@ -73,6 +73,33 @@ func TestRefreshPolicyMetadata_ClassifiesInfrastructureAsInternal(t *testing.T) 
 	}
 }
 
+func TestRefreshPolicyMetadata_ClassifiesKubernetesSecretAsRestricted(t *testing.T) {
+	resource := Resource{
+		ID:     "k8s-secret-1",
+		Name:   "checkout-api-runtime",
+		Type:   ResourceTypeK8sSecret,
+		Status: StatusOnline,
+		Kubernetes: &K8sData{
+			ResourceKind: "Secret",
+			Namespace:    "services",
+			SecretType:   "Opaque",
+			DataKeys:     []string{"database-url", "session-key"},
+		},
+	}
+
+	RefreshPolicyMetadata(&resource)
+
+	if resource.Policy == nil {
+		t.Fatal("expected policy metadata")
+	}
+	if got := resource.Policy.Sensitivity; got != ResourceSensitivityRestricted {
+		t.Fatalf("sensitivity = %q, want %q", got, ResourceSensitivityRestricted)
+	}
+	if got := resource.Policy.Routing.Scope; got != ResourceRoutingScopeLocalOnly {
+		t.Fatalf("routing scope = %q, want %q", got, ResourceRoutingScopeLocalOnly)
+	}
+}
+
 func TestRefreshCanonicalMetadata(t *testing.T) {
 	resource := Resource{
 		ID:     "agent-1",

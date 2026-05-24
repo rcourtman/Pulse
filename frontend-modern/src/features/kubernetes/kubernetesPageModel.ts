@@ -8,6 +8,8 @@ export type KubernetesPageTabId =
   | 'storage'
   | 'networking'
   | 'config'
+  | 'policy'
+  | 'autoscaling'
   | 'events';
 
 export type KubernetesTabSpec = {
@@ -23,6 +25,8 @@ export const KUBERNETES_TAB_SPECS: readonly KubernetesTabSpec[] = [
   { id: 'storage', label: 'Storage', path: '/kubernetes/storage' },
   { id: 'networking', label: 'Networking', path: '/kubernetes/networking' },
   { id: 'config', label: 'Config', path: '/kubernetes/config' },
+  { id: 'policy', label: 'Policy', path: '/kubernetes/policy' },
+  { id: 'autoscaling', label: 'Autoscaling', path: '/kubernetes/autoscaling' },
   { id: 'events', label: 'Events', path: '/kubernetes/events' },
 ] as const;
 
@@ -45,7 +49,12 @@ const KUBERNETES_RESOURCE_TYPES = new Set<ResourceType>([
   'k8s-persistent-volume-claim',
   'k8s-storage-class',
   'k8s-configmap',
+  'k8s-secret',
   'k8s-serviceaccount',
+  'k8s-resource-quota',
+  'k8s-limit-range',
+  'k8s-pod-disruption-budget',
+  'k8s-horizontal-pod-autoscaler',
   'k8s-event',
 ]);
 
@@ -84,12 +93,19 @@ export type KubernetesPageModel = {
   persistentVolumeClaims: Resource[];
   storageClasses: Resource[];
   configMaps: Resource[];
+  secrets: Resource[];
   serviceAccounts: Resource[];
+  resourceQuotas: Resource[];
+  limitRanges: Resource[];
+  podDisruptionBudgets: Resource[];
+  horizontalPodAutoscalers: Resource[];
   events: Resource[];
   workloads: Resource[];
   storage: Resource[];
   networking: Resource[];
   config: Resource[];
+  policy: Resource[];
+  autoscaling: Resource[];
 };
 
 export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageModel {
@@ -116,8 +132,15 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
   );
   const storageClasses = k8sResources.filter((resource) => resource.type === 'k8s-storage-class');
   const configMaps = k8sResources.filter((resource) => resource.type === 'k8s-configmap');
-  const serviceAccounts = k8sResources.filter(
-    (resource) => resource.type === 'k8s-serviceaccount',
+  const secrets = k8sResources.filter((resource) => resource.type === 'k8s-secret');
+  const serviceAccounts = k8sResources.filter((resource) => resource.type === 'k8s-serviceaccount');
+  const resourceQuotas = k8sResources.filter((resource) => resource.type === 'k8s-resource-quota');
+  const limitRanges = k8sResources.filter((resource) => resource.type === 'k8s-limit-range');
+  const podDisruptionBudgets = k8sResources.filter(
+    (resource) => resource.type === 'k8s-pod-disruption-budget',
+  );
+  const horizontalPodAutoscalers = k8sResources.filter(
+    (resource) => resource.type === 'k8s-horizontal-pod-autoscaler',
   );
   const events = k8sResources.filter((resource) => resource.type === 'k8s-event');
   const workloads = [
@@ -130,8 +153,10 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
     ...pods,
   ];
   const storage = [...storageClasses, ...persistentVolumes, ...persistentVolumeClaims];
-  const networking = [...services, ...ingresses, ...endpointSlices, ...networkPolicies];
-  const config = [...namespaces, ...configMaps, ...serviceAccounts];
+  const networking = [...services, ...ingresses, ...endpointSlices];
+  const config = [...namespaces, ...configMaps, ...secrets, ...serviceAccounts];
+  const policy = [...networkPolicies, ...podDisruptionBudgets, ...resourceQuotas, ...limitRanges];
+  const autoscaling = [...horizontalPodAutoscalers];
 
   return {
     resources: k8sResources,
@@ -153,11 +178,18 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
     persistentVolumeClaims,
     storageClasses,
     configMaps,
+    secrets,
     serviceAccounts,
+    resourceQuotas,
+    limitRanges,
+    podDisruptionBudgets,
+    horizontalPodAutoscalers,
     events,
     workloads,
     storage,
     networking,
     config,
+    policy,
+    autoscaling,
   };
 }

@@ -25,7 +25,12 @@ describe('resourceTypePresentation', () => {
     expect(getResourceTypeLabel('k8s-persistent-volume-claim')).toBe('PVC');
     expect(getResourceTypeLabel('k8s-storage-class')).toBe('StorageClass');
     expect(getResourceTypeLabel('k8s-configmap')).toBe('ConfigMap');
+    expect(getResourceTypeLabel('k8s-secret')).toBe('Secret');
     expect(getResourceTypeLabel('k8s-serviceaccount')).toBe('ServiceAccount');
+    expect(getResourceTypeLabel('k8s-resource-quota')).toBe('ResourceQuota');
+    expect(getResourceTypeLabel('k8s-limit-range')).toBe('LimitRange');
+    expect(getResourceTypeLabel('k8s-pod-disruption-budget')).toBe('PodDisruptionBudget');
+    expect(getResourceTypeLabel('k8s-horizontal-pod-autoscaler')).toBe('HPA');
     expect(getResourceTypeLabel('k8s-event')).toBe('Event');
   });
 

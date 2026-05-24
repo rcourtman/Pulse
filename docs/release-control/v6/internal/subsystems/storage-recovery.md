@@ -161,8 +161,10 @@ context, but restore entitlement, storage risk, and recovery-point ownership
 remain on the storage/recovery and provider contracts rather than on Docker
 volume rows or Kubernetes PV/PVC/StorageClass rows. Other Kubernetes native
 inventory objects that flow through the shared resource decoder, such as
-ConfigMaps and ServiceAccounts, remain platform configuration evidence only and
-must not become storage/recovery ownership, restore scope, or secret material.
+ConfigMaps, Secrets, ServiceAccounts, ResourceQuotas, LimitRanges,
+PodDisruptionBudgets, and HorizontalPodAutoscalers, remain platform
+configuration, policy, or autoscaling evidence only and must not become
+storage/recovery ownership, restore scope, or secret material.
 Docker engine `/system/df` storage-usage buckets are host-level runtime
 capacity evidence for the Docker page and unified-resource Docker host facet;
 they are not storage/recovery resources, recovery-point sources, or restore

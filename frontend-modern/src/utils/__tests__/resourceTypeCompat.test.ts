@@ -33,15 +33,22 @@ describe('resourceTypeCompat', () => {
     expect(canonicalizeFrontendResourceType('k8s-ingress')).toBe('k8s-ingress');
     expect(canonicalizeFrontendResourceType('k8s-endpoint-slice')).toBe('k8s-endpoint-slice');
     expect(canonicalizeFrontendResourceType('k8s-network-policy')).toBe('k8s-network-policy');
-    expect(canonicalizeFrontendResourceType('k8s-persistent-volume')).toBe(
-      'k8s-persistent-volume',
-    );
+    expect(canonicalizeFrontendResourceType('k8s-persistent-volume')).toBe('k8s-persistent-volume');
     expect(canonicalizeFrontendResourceType('k8s-persistent-volume-claim')).toBe(
       'k8s-persistent-volume-claim',
     );
     expect(canonicalizeFrontendResourceType('k8s-storage-class')).toBe('k8s-storage-class');
     expect(canonicalizeFrontendResourceType('k8s-configmap')).toBe('k8s-configmap');
+    expect(canonicalizeFrontendResourceType('k8s-secret')).toBe('k8s-secret');
     expect(canonicalizeFrontendResourceType('k8s-serviceaccount')).toBe('k8s-serviceaccount');
+    expect(canonicalizeFrontendResourceType('k8s-resource-quota')).toBe('k8s-resource-quota');
+    expect(canonicalizeFrontendResourceType('k8s-limit-range')).toBe('k8s-limit-range');
+    expect(canonicalizeFrontendResourceType('k8s-pod-disruption-budget')).toBe(
+      'k8s-pod-disruption-budget',
+    );
+    expect(canonicalizeFrontendResourceType('k8s-horizontal-pod-autoscaler')).toBe(
+      'k8s-horizontal-pod-autoscaler',
+    );
     expect(canonicalizeFrontendResourceType('k8s-event')).toBe('k8s-event');
   });
 

@@ -22,6 +22,11 @@ describe('toReportingResourceType', () => {
     expect(toReportingResourceType('k8s-network-policy')).toBe('k8s');
     expect(toReportingResourceType('k8s-storage-class')).toBe('k8s');
     expect(toReportingResourceType('k8s-configmap')).toBe('k8s');
+    expect(toReportingResourceType('k8s-secret')).toBe('k8s');
     expect(toReportingResourceType('k8s-serviceaccount')).toBe('k8s');
+    expect(toReportingResourceType('k8s-resource-quota')).toBe('k8s');
+    expect(toReportingResourceType('k8s-limit-range')).toBe('k8s');
+    expect(toReportingResourceType('k8s-pod-disruption-budget')).toBe('k8s');
+    expect(toReportingResourceType('k8s-horizontal-pod-autoscaler')).toBe('k8s');
   });
 });

@@ -25,10 +25,12 @@ import (
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
 	"github.com/rs/zerolog"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sresource "k8s.io/apimachinery/pkg/api/resource"
@@ -486,6 +488,10 @@ func (a *Agent) collectReport(ctx context.Context) (agentsk8s.Report, error) {
 	if err != nil {
 		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes cronjobs unavailable, continuing without cronjob inventory")
 	}
+	horizontalPodAutoscalers, err := a.collectHorizontalPodAutoscalers(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes horizontalpodautoscalers unavailable, continuing without autoscaling inventory")
+	}
 	ingresses, err := a.collectIngresses(ctx)
 	if err != nil {
 		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes ingresses unavailable, continuing without ingress inventory")
@@ -497,6 +503,10 @@ func (a *Agent) collectReport(ctx context.Context) (agentsk8s.Report, error) {
 	networkPolicies, err := a.collectNetworkPolicies(ctx)
 	if err != nil {
 		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes network policies unavailable, continuing without network policy inventory")
+	}
+	podDisruptionBudgets, err := a.collectPodDisruptionBudgets(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes poddisruptionbudgets unavailable, continuing without disruption budget inventory")
 	}
 	persistentVolumes, err := a.collectPersistentVolumes(ctx)
 	if err != nil {
@@ -514,9 +524,21 @@ func (a *Agent) collectReport(ctx context.Context) (agentsk8s.Report, error) {
 	if err != nil {
 		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes configmaps unavailable, continuing without configmap inventory")
 	}
+	secrets, err := a.collectSecrets(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes secrets unavailable, continuing without secret metadata inventory")
+	}
 	serviceAccounts, err := a.collectServiceAccounts(ctx)
 	if err != nil {
 		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes serviceaccounts unavailable, continuing without serviceaccount inventory")
+	}
+	resourceQuotas, err := a.collectResourceQuotas(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes resourcequotas unavailable, continuing without quota inventory")
+	}
+	limitRanges, err := a.collectLimitRanges(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes limitranges unavailable, continuing without limit range inventory")
 	}
 	events, err := a.collectEvents(ctx)
 	if err != nil {
@@ -549,27 +571,32 @@ func (a *Agent) collectReport(ctx context.Context) (agentsk8s.Report, error) {
 			Context: a.clusterContext,
 			Version: a.clusterVersion,
 		},
-		Nodes:                  nodes,
-		Namespaces:             namespaces,
-		Pods:                   pods,
-		Deployments:            deployments,
-		ReplicaSets:            replicaSets,
-		StatefulSets:           statefulSets,
-		DaemonSets:             daemonSets,
-		Services:               services,
-		Jobs:                   jobs,
-		CronJobs:               cronJobs,
-		Ingresses:              ingresses,
-		EndpointSlices:         endpointSlices,
-		NetworkPolicies:        networkPolicies,
-		PersistentVolumes:      persistentVolumes,
-		PersistentVolumeClaims: persistentVolumeClaims,
-		StorageClasses:         storageClasses,
-		ConfigMaps:             configMaps,
-		ServiceAccounts:        serviceAccounts,
-		Events:                 events,
-		Recovery:               recoveryReport,
-		Timestamp:              time.Now().UTC(),
+		Nodes:                    nodes,
+		Namespaces:               namespaces,
+		Pods:                     pods,
+		Deployments:              deployments,
+		ReplicaSets:              replicaSets,
+		StatefulSets:             statefulSets,
+		DaemonSets:               daemonSets,
+		Services:                 services,
+		Jobs:                     jobs,
+		CronJobs:                 cronJobs,
+		HorizontalPodAutoscalers: horizontalPodAutoscalers,
+		Ingresses:                ingresses,
+		EndpointSlices:           endpointSlices,
+		NetworkPolicies:          networkPolicies,
+		PodDisruptionBudgets:     podDisruptionBudgets,
+		PersistentVolumes:        persistentVolumes,
+		PersistentVolumeClaims:   persistentVolumeClaims,
+		StorageClasses:           storageClasses,
+		ConfigMaps:               configMaps,
+		Secrets:                  secrets,
+		ServiceAccounts:          serviceAccounts,
+		ResourceQuotas:           resourceQuotas,
+		LimitRanges:              limitRanges,
+		Events:                   events,
+		Recovery:                 recoveryReport,
+		Timestamp:                time.Now().UTC(),
 	}, nil
 }
 
@@ -2037,6 +2064,98 @@ func sortedStringKeys[T any](src map[string]T) []string {
 	return out
 }
 
+func resourceListToStringMap(src corev1.ResourceList) map[string]string {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(src))
+	for name, quantity := range src {
+		key := strings.TrimSpace(string(name))
+		if key == "" {
+			continue
+		}
+		out[key] = quantity.String()
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func limitRangeTypes(limitRange corev1.LimitRange) []string {
+	if len(limitRange.Spec.Limits) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(limitRange.Spec.Limits))
+	for _, limit := range limitRange.Spec.Limits {
+		limitType := strings.TrimSpace(string(limit.Type))
+		if limitType != "" {
+			seen[limitType] = struct{}{}
+		}
+	}
+	if len(seen) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(seen))
+	for limitType := range seen {
+		out = append(out, limitType)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func hpaMinReplicas(hpa autoscalingv2.HorizontalPodAutoscaler) int32 {
+	if hpa.Spec.MinReplicas == nil {
+		return 1
+	}
+	return *hpa.Spec.MinReplicas
+}
+
+func hpaMetricTypes(hpa autoscalingv2.HorizontalPodAutoscaler) []string {
+	if len(hpa.Spec.Metrics) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(hpa.Spec.Metrics))
+	for _, metric := range hpa.Spec.Metrics {
+		label := strings.TrimSpace(string(metric.Type))
+		switch metric.Type {
+		case autoscalingv2.ResourceMetricSourceType:
+			if metric.Resource != nil && metric.Resource.Name != "" {
+				label = label + ":" + string(metric.Resource.Name)
+			}
+		case autoscalingv2.ContainerResourceMetricSourceType:
+			if metric.ContainerResource != nil && metric.ContainerResource.Name != "" {
+				label = label + ":" + string(metric.ContainerResource.Name)
+			}
+		case autoscalingv2.ExternalMetricSourceType:
+			if metric.External != nil && metric.External.Metric.Name != "" {
+				label = label + ":" + metric.External.Metric.Name
+			}
+		case autoscalingv2.PodsMetricSourceType:
+			if metric.Pods != nil && metric.Pods.Metric.Name != "" {
+				label = label + ":" + metric.Pods.Metric.Name
+			}
+		case autoscalingv2.ObjectMetricSourceType:
+			if metric.Object != nil && metric.Object.Metric.Name != "" {
+				label = label + ":" + metric.Object.Metric.Name
+			}
+		}
+		label = strings.TrimSpace(label)
+		if label != "" {
+			seen[label] = struct{}{}
+		}
+	}
+	if len(seen) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(seen))
+	for label := range seen {
+		out = append(out, label)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func statefulSetDesiredReplicas(statefulSet appsv1.StatefulSet) int32 {
 	if statefulSet.Spec.Replicas == nil {
 		return 0
@@ -2818,6 +2937,251 @@ func (a *Agent) collectServiceAccounts(ctx context.Context) ([]agentsk8s.Service
 					ImagePullSecrets:             serviceAccountImagePullSecrets(account),
 					CreatedAt:                    account.CreationTimestamp.Time,
 					Labels:                       copyKubernetesStringMap(account.Labels),
+				})
+				if len(items) >= maxInventoryItems {
+					return items, nil
+				}
+			}
+			if list.Continue == "" {
+				break
+			}
+			opts.Continue = list.Continue
+		}
+	}
+	return items, nil
+}
+
+func (a *Agent) collectSecrets(ctx context.Context) ([]agentsk8s.Secret, error) {
+	items := make([]agentsk8s.Secret, 0)
+	for _, namespace := range a.inventoryNamespaces() {
+		opts := metav1.ListOptions{Limit: listPageSize}
+		for {
+			var list *corev1.SecretList
+			action := "list secrets"
+			if namespace != metav1.NamespaceAll {
+				action = fmt.Sprintf("list secrets in namespace %q", namespace)
+			}
+			err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+				var err error
+				list, err = a.kubeClient.CoreV1().Secrets(namespace).List(callCtx, opts)
+				return err
+			})
+			if err != nil {
+				return nil, err
+			}
+			for _, secret := range list.Items {
+				if !a.namespaceAllowed(secret.Namespace) {
+					continue
+				}
+				immutable := false
+				if secret.Immutable != nil {
+					immutable = *secret.Immutable
+				}
+				items = append(items, agentsk8s.Secret{
+					UID:       string(secret.UID),
+					Name:      secret.Name,
+					Namespace: secret.Namespace,
+					Type:      string(secret.Type),
+					DataKeys:  sortedStringKeys(secret.Data),
+					Immutable: immutable,
+					CreatedAt: secret.CreationTimestamp.Time,
+					Labels:    copyKubernetesStringMap(secret.Labels),
+				})
+				if len(items) >= maxInventoryItems {
+					return items, nil
+				}
+			}
+			if list.Continue == "" {
+				break
+			}
+			opts.Continue = list.Continue
+		}
+	}
+	return items, nil
+}
+
+func (a *Agent) collectResourceQuotas(ctx context.Context) ([]agentsk8s.ResourceQuota, error) {
+	items := make([]agentsk8s.ResourceQuota, 0)
+	for _, namespace := range a.inventoryNamespaces() {
+		opts := metav1.ListOptions{Limit: listPageSize}
+		for {
+			var list *corev1.ResourceQuotaList
+			action := "list resourcequotas"
+			if namespace != metav1.NamespaceAll {
+				action = fmt.Sprintf("list resourcequotas in namespace %q", namespace)
+			}
+			err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+				var err error
+				list, err = a.kubeClient.CoreV1().ResourceQuotas(namespace).List(callCtx, opts)
+				return err
+			})
+			if err != nil {
+				return nil, err
+			}
+			for _, quota := range list.Items {
+				if !a.namespaceAllowed(quota.Namespace) {
+					continue
+				}
+				hard := resourceListToStringMap(quota.Status.Hard)
+				if len(hard) == 0 {
+					hard = resourceListToStringMap(quota.Spec.Hard)
+				}
+				items = append(items, agentsk8s.ResourceQuota{
+					UID:       string(quota.UID),
+					Name:      quota.Name,
+					Namespace: quota.Namespace,
+					Hard:      hard,
+					Used:      resourceListToStringMap(quota.Status.Used),
+					CreatedAt: quota.CreationTimestamp.Time,
+					Labels:    copyKubernetesStringMap(quota.Labels),
+				})
+				if len(items) >= maxInventoryItems {
+					return items, nil
+				}
+			}
+			if list.Continue == "" {
+				break
+			}
+			opts.Continue = list.Continue
+		}
+	}
+	return items, nil
+}
+
+func (a *Agent) collectLimitRanges(ctx context.Context) ([]agentsk8s.LimitRange, error) {
+	items := make([]agentsk8s.LimitRange, 0)
+	for _, namespace := range a.inventoryNamespaces() {
+		opts := metav1.ListOptions{Limit: listPageSize}
+		for {
+			var list *corev1.LimitRangeList
+			action := "list limitranges"
+			if namespace != metav1.NamespaceAll {
+				action = fmt.Sprintf("list limitranges in namespace %q", namespace)
+			}
+			err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+				var err error
+				list, err = a.kubeClient.CoreV1().LimitRanges(namespace).List(callCtx, opts)
+				return err
+			})
+			if err != nil {
+				return nil, err
+			}
+			for _, limitRange := range list.Items {
+				if !a.namespaceAllowed(limitRange.Namespace) {
+					continue
+				}
+				items = append(items, agentsk8s.LimitRange{
+					UID:        string(limitRange.UID),
+					Name:       limitRange.Name,
+					Namespace:  limitRange.Namespace,
+					LimitTypes: limitRangeTypes(limitRange),
+					CreatedAt:  limitRange.CreationTimestamp.Time,
+					Labels:     copyKubernetesStringMap(limitRange.Labels),
+				})
+				if len(items) >= maxInventoryItems {
+					return items, nil
+				}
+			}
+			if list.Continue == "" {
+				break
+			}
+			opts.Continue = list.Continue
+		}
+	}
+	return items, nil
+}
+
+func (a *Agent) collectPodDisruptionBudgets(ctx context.Context) ([]agentsk8s.PodDisruptionBudget, error) {
+	items := make([]agentsk8s.PodDisruptionBudget, 0)
+	for _, namespace := range a.inventoryNamespaces() {
+		opts := metav1.ListOptions{Limit: listPageSize}
+		for {
+			var list *policyv1.PodDisruptionBudgetList
+			action := "list poddisruptionbudgets"
+			if namespace != metav1.NamespaceAll {
+				action = fmt.Sprintf("list poddisruptionbudgets in namespace %q", namespace)
+			}
+			err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+				var err error
+				list, err = a.kubeClient.PolicyV1().PodDisruptionBudgets(namespace).List(callCtx, opts)
+				return err
+			})
+			if err != nil {
+				return nil, err
+			}
+			for _, budget := range list.Items {
+				if !a.namespaceAllowed(budget.Namespace) {
+					continue
+				}
+				minAvailable := ""
+				if budget.Spec.MinAvailable != nil {
+					minAvailable = strings.TrimSpace(budget.Spec.MinAvailable.String())
+				}
+				maxUnavailable := ""
+				if budget.Spec.MaxUnavailable != nil {
+					maxUnavailable = strings.TrimSpace(budget.Spec.MaxUnavailable.String())
+				}
+				items = append(items, agentsk8s.PodDisruptionBudget{
+					UID:                string(budget.UID),
+					Name:               budget.Name,
+					Namespace:          budget.Namespace,
+					MinAvailable:       minAvailable,
+					MaxUnavailable:     maxUnavailable,
+					DesiredHealthy:     budget.Status.DesiredHealthy,
+					CurrentHealthy:     budget.Status.CurrentHealthy,
+					DisruptionsAllowed: budget.Status.DisruptionsAllowed,
+					ExpectedPods:       budget.Status.ExpectedPods,
+					CreatedAt:          budget.CreationTimestamp.Time,
+					Labels:             copyKubernetesStringMap(budget.Labels),
+				})
+				if len(items) >= maxInventoryItems {
+					return items, nil
+				}
+			}
+			if list.Continue == "" {
+				break
+			}
+			opts.Continue = list.Continue
+		}
+	}
+	return items, nil
+}
+
+func (a *Agent) collectHorizontalPodAutoscalers(ctx context.Context) ([]agentsk8s.HorizontalPodAutoscaler, error) {
+	items := make([]agentsk8s.HorizontalPodAutoscaler, 0)
+	for _, namespace := range a.inventoryNamespaces() {
+		opts := metav1.ListOptions{Limit: listPageSize}
+		for {
+			var list *autoscalingv2.HorizontalPodAutoscalerList
+			action := "list horizontalpodautoscalers"
+			if namespace != metav1.NamespaceAll {
+				action = fmt.Sprintf("list horizontalpodautoscalers in namespace %q", namespace)
+			}
+			err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+				var err error
+				list, err = a.kubeClient.AutoscalingV2().HorizontalPodAutoscalers(namespace).List(callCtx, opts)
+				return err
+			})
+			if err != nil {
+				return nil, err
+			}
+			for _, hpa := range list.Items {
+				if !a.namespaceAllowed(hpa.Namespace) {
+					continue
+				}
+				items = append(items, agentsk8s.HorizontalPodAutoscaler{
+					UID:             string(hpa.UID),
+					Name:            hpa.Name,
+					Namespace:       hpa.Namespace,
+					TargetKind:      hpa.Spec.ScaleTargetRef.Kind,
+					TargetName:      hpa.Spec.ScaleTargetRef.Name,
+					MinReplicas:     hpaMinReplicas(hpa),
+					MaxReplicas:     hpa.Spec.MaxReplicas,
+					CurrentReplicas: hpa.Status.CurrentReplicas,
+					DesiredReplicas: hpa.Status.DesiredReplicas,
+					MetricTypes:     hpaMetricTypes(hpa),
+					CreatedAt:       hpa.CreationTimestamp.Time,
+					Labels:          copyKubernetesStringMap(hpa.Labels),
 				})
 				if len(items) >= maxInventoryItems {
 					return items, nil

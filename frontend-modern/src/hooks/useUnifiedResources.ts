@@ -543,7 +543,12 @@ const resolveType = (value?: string): ResourceType => {
     case 'k8s-persistent-volume-claim':
     case 'k8s-storage-class':
     case 'k8s-configmap':
+    case 'k8s-secret':
     case 'k8s-serviceaccount':
+    case 'k8s-resource-quota':
+    case 'k8s-limit-range':
+    case 'k8s-pod-disruption-budget':
+    case 'k8s-horizontal-pod-autoscaler':
     case 'k8s-event':
     case 'vm':
     case 'system-container':
@@ -608,8 +613,18 @@ const resolveType = (value?: string): ResourceType => {
       return 'k8s-storage-class';
     case 'k8s-configmap':
       return 'k8s-configmap';
+    case 'k8s-secret':
+      return 'k8s-secret';
     case 'k8s-serviceaccount':
       return 'k8s-serviceaccount';
+    case 'k8s-resource-quota':
+      return 'k8s-resource-quota';
+    case 'k8s-limit-range':
+      return 'k8s-limit-range';
+    case 'k8s-pod-disruption-budget':
+      return 'k8s-pod-disruption-budget';
+    case 'k8s-horizontal-pod-autoscaler':
+      return 'k8s-horizontal-pod-autoscaler';
     case 'k8s-event':
       return 'k8s-event';
     case 'storage':

@@ -348,6 +348,29 @@ func statusFromKubernetesEvent(event models.KubernetesEvent) ResourceStatus {
 	return StatusOnline
 }
 
+func statusFromKubernetesPodDisruptionBudget(budget models.KubernetesPodDisruptionBudget) ResourceStatus {
+	if budget.ExpectedPods <= 0 {
+		return StatusUnknown
+	}
+	if budget.CurrentHealthy >= budget.DesiredHealthy {
+		return StatusOnline
+	}
+	if budget.CurrentHealthy <= 0 {
+		return StatusOffline
+	}
+	return StatusWarning
+}
+
+func statusFromKubernetesHorizontalPodAutoscaler(autoscaler models.KubernetesHorizontalPodAutoscaler) ResourceStatus {
+	if autoscaler.MaxReplicas > 0 && autoscaler.DesiredReplicas > autoscaler.MaxReplicas {
+		return StatusWarning
+	}
+	if autoscaler.DesiredReplicas > 0 && autoscaler.CurrentReplicas <= 0 {
+		return StatusOffline
+	}
+	return StatusOnline
+}
+
 func statusFromReplicaAvailability(desired, ready int32) ResourceStatus {
 	if desired <= 0 {
 		if ready > 0 {

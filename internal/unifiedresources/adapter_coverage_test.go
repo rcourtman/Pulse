@@ -495,9 +495,34 @@ func TestKubernetesNativeInventoryAdapters(t *testing.T) {
 		t.Fatalf("unexpected configmap resource: %+v", configMap)
 	}
 
+	secret, _ := resourceFromKubernetesSecret(cluster, models.KubernetesSecret{Name: "checkout-secret", Namespace: "services", Type: "Opaque", DataKeys: []string{"token"}, Immutable: true}, nil)
+	if secret.Type != ResourceTypeK8sSecret || secret.Kubernetes == nil || secret.Kubernetes.SecretType != "Opaque" || secret.Kubernetes.DataKeys[0] != "token" || !secret.Kubernetes.Immutable {
+		t.Fatalf("unexpected secret resource: %+v", secret)
+	}
+
 	serviceAccount, _ := resourceFromKubernetesServiceAccount(cluster, models.KubernetesServiceAccount{Name: "checkout", Namespace: "services", AutomountServiceAccountToken: &automountToken, SecretCount: 1, ImagePullSecrets: []string{"pull-secret"}}, nil)
 	if serviceAccount.Type != ResourceTypeK8sServiceAccount || serviceAccount.Kubernetes == nil || serviceAccount.Kubernetes.SecretCount != 1 || serviceAccount.Kubernetes.AutomountServiceAccountToken == nil || !*serviceAccount.Kubernetes.AutomountServiceAccountToken {
 		t.Fatalf("unexpected serviceaccount resource: %+v", serviceAccount)
+	}
+
+	resourceQuota, _ := resourceFromKubernetesResourceQuota(cluster, models.KubernetesResourceQuota{Name: "services-quota", Namespace: "services", Hard: map[string]string{"pods": "10"}, Used: map[string]string{"pods": "4"}}, nil)
+	if resourceQuota.Type != ResourceTypeK8sResourceQuota || resourceQuota.Kubernetes == nil || resourceQuota.Kubernetes.Hard["pods"] != "10" || resourceQuota.Kubernetes.Used["pods"] != "4" {
+		t.Fatalf("unexpected resource quota resource: %+v", resourceQuota)
+	}
+
+	limitRange, _ := resourceFromKubernetesLimitRange(cluster, models.KubernetesLimitRange{Name: "services-limits", Namespace: "services", LimitTypes: []string{"Container"}}, nil)
+	if limitRange.Type != ResourceTypeK8sLimitRange || limitRange.Kubernetes == nil || limitRange.Kubernetes.LimitTypes[0] != "Container" {
+		t.Fatalf("unexpected limit range resource: %+v", limitRange)
+	}
+
+	pdb, _ := resourceFromKubernetesPodDisruptionBudget(cluster, models.KubernetesPodDisruptionBudget{Name: "checkout-pdb", Namespace: "services", MinAvailable: "1", DesiredHealthy: 1, CurrentHealthy: 1, DisruptionsAllowed: 1, ExpectedPods: 2}, nil)
+	if pdb.Type != ResourceTypeK8sPDB || pdb.Status != StatusOnline || pdb.Kubernetes == nil || pdb.Kubernetes.MinAvailable != "1" || pdb.Kubernetes.ExpectedPods != 2 {
+		t.Fatalf("unexpected pdb resource: %+v", pdb)
+	}
+
+	hpa, _ := resourceFromKubernetesHorizontalPodAutoscaler(cluster, models.KubernetesHorizontalPodAutoscaler{Name: "checkout-hpa", Namespace: "services", TargetKind: "Deployment", TargetName: "checkout", MinReplicas: 2, MaxReplicas: 10, CurrentReplicas: 3, DesiredReplicas: 4, MetricTypes: []string{"Resource:cpu"}}, nil)
+	if hpa.Type != ResourceTypeK8sHPA || hpa.Status != StatusOnline || hpa.Kubernetes == nil || hpa.Kubernetes.TargetName != "checkout" || hpa.Kubernetes.MetricTypes[0] != "Resource:cpu" {
+		t.Fatalf("unexpected hpa resource: %+v", hpa)
 	}
 
 	event, _ := resourceFromKubernetesEvent(cluster, models.KubernetesEvent{Name: "checkout.1", Namespace: "services", EventType: "Warning", Reason: "BackOff", Count: 2}, nil)

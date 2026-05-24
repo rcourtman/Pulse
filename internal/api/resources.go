@@ -1911,8 +1911,18 @@ func resourceTypeFilterAdapter(token string) []unified.ResourceType {
 		return []unified.ResourceType{unified.ResourceTypeK8sStorageClass}
 	case "k8s-configmap", "k8s-configmaps":
 		return []unified.ResourceType{unified.ResourceTypeK8sConfigMap}
+	case "k8s-secret", "k8s-secrets":
+		return []unified.ResourceType{unified.ResourceTypeK8sSecret}
 	case "k8s-serviceaccount", "k8s-serviceaccounts":
 		return []unified.ResourceType{unified.ResourceTypeK8sServiceAccount}
+	case "k8s-resource-quota", "k8s-resource-quotas":
+		return []unified.ResourceType{unified.ResourceTypeK8sResourceQuota}
+	case "k8s-limit-range", "k8s-limit-ranges":
+		return []unified.ResourceType{unified.ResourceTypeK8sLimitRange}
+	case "k8s-pod-disruption-budget", "k8s-pod-disruption-budgets":
+		return []unified.ResourceType{unified.ResourceTypeK8sPDB}
+	case "k8s-horizontal-pod-autoscaler", "k8s-horizontal-pod-autoscalers", "k8s-hpa", "k8s-hpas":
+		return []unified.ResourceType{unified.ResourceTypeK8sHPA}
 	case "k8s-event", "k8s-events":
 		return []unified.ResourceType{unified.ResourceTypeK8sEvent}
 	case "storage":

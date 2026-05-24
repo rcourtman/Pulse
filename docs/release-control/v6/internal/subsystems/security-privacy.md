@@ -214,6 +214,12 @@ magic-link storage root. `internal/crypto/crypto.go`,
 magic-link HMAC keys, and the magic-link SQLite store path through the shared
 secure storage helpers so symlink, oversize, and non-regular file paths fail
 closed instead of slipping past directory-only hardening.
+Kubernetes Secret inventory is part of that same secret-handling boundary.
+Agent collectors and unified-resource projections may expose Secret metadata,
+type, labels, and data key names for platform inventory, but they must not read,
+store, serialize, search, or display Secret data values. Secret inventory
+policy metadata must remain `restricted` and `local-only` because names and key
+names can still reveal deployment intent.
 
 Security-facing settings remain intentionally shared with `frontend-primitives`
 because shell framing and presentation consistency still belong there, but the

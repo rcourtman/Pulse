@@ -93,8 +93,23 @@ func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
 				ConfigMaps: []models.KubernetesConfigMap{{
 					UID: "configmap-uid-1", Name: "api-config", Namespace: "default", DataKeys: []string{"app.yaml"},
 				}},
+				Secrets: []models.KubernetesSecret{{
+					UID: "secret-uid-1", Name: "api-secret", Namespace: "default", Type: "Opaque", DataKeys: []string{"token"},
+				}},
 				ServiceAccounts: []models.KubernetesServiceAccount{{
 					UID: "serviceaccount-uid-1", Name: "api", Namespace: "default", AutomountServiceAccountToken: &automountToken, SecretCount: 1,
+				}},
+				ResourceQuotas: []models.KubernetesResourceQuota{{
+					UID: "resourcequota-uid-1", Name: "api-quota", Namespace: "default", Hard: map[string]string{"pods": "10"}, Used: map[string]string{"pods": "2"},
+				}},
+				LimitRanges: []models.KubernetesLimitRange{{
+					UID: "limitrange-uid-1", Name: "api-limits", Namespace: "default", LimitTypes: []string{"Container"},
+				}},
+				PodDisruptionBudgets: []models.KubernetesPodDisruptionBudget{{
+					UID: "pdb-uid-1", Name: "api-pdb", Namespace: "default", MinAvailable: "1", DesiredHealthy: 1, CurrentHealthy: 1, ExpectedPods: 2,
+				}},
+				HorizontalPodAutoscalers: []models.KubernetesHorizontalPodAutoscaler{{
+					UID: "hpa-uid-1", Name: "api-hpa", Namespace: "default", TargetKind: "Deployment", TargetName: "api", MinReplicas: 2, MaxReplicas: 10, CurrentReplicas: 2, DesiredReplicas: 3, MetricTypes: []string{"Resource:cpu"},
 				}},
 				Events: []models.KubernetesEvent{{UID: "event-uid-1", Name: "api.1", Namespace: "default", EventType: "Warning", Reason: "BackOff", Count: 2}},
 			},
@@ -105,8 +120,8 @@ func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
 	registry.IngestSnapshot(snapshot)
 
 	resources := registry.List()
-	if len(resources) != 20 {
-		t.Fatalf("expected 20 kubernetes resources, got %d", len(resources))
+	if len(resources) != 25 {
+		t.Fatalf("expected 25 kubernetes resources, got %d", len(resources))
 	}
 
 	var clusterResource *Resource
@@ -144,7 +159,12 @@ func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
 		ResourceTypeK8sPVC,
 		ResourceTypeK8sStorageClass,
 		ResourceTypeK8sConfigMap,
+		ResourceTypeK8sSecret,
 		ResourceTypeK8sServiceAccount,
+		ResourceTypeK8sResourceQuota,
+		ResourceTypeK8sLimitRange,
+		ResourceTypeK8sPDB,
+		ResourceTypeK8sHPA,
 		ResourceTypeK8sEvent,
 	} {
 		if seenTypes[resourceType] != 1 {

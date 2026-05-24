@@ -29,7 +29,7 @@ import {
 // Nodes section of the Overview stack; the page model filters them down to
 // those tagged kubernetes.
 const KUBERNETES_RESOURCE_QUERY =
-  'type=k8s-cluster,k8s-node,pod,k8s-deployment,k8s-replicaset,k8s-namespace,k8s-service,k8s-statefulset,k8s-daemonset,k8s-job,k8s-cronjob,k8s-ingress,k8s-endpoint-slice,k8s-network-policy,k8s-persistent-volume,k8s-persistent-volume-claim,k8s-storage-class,k8s-configmap,k8s-serviceaccount,k8s-event,agent';
+  'type=k8s-cluster,k8s-node,pod,k8s-deployment,k8s-replicaset,k8s-namespace,k8s-service,k8s-statefulset,k8s-daemonset,k8s-job,k8s-cronjob,k8s-ingress,k8s-endpoint-slice,k8s-network-policy,k8s-persistent-volume,k8s-persistent-volume-claim,k8s-storage-class,k8s-configmap,k8s-secret,k8s-serviceaccount,k8s-resource-quota,k8s-limit-range,k8s-pod-disruption-budget,k8s-horizontal-pod-autoscaler,k8s-event,agent';
 const KUBERNETES_PLATFORM_FILTER = 'kubernetes';
 const KUBERNETES_WORKLOAD_FORCED_VIEW_MODE = 'pod';
 const KUBERNETES_WORKLOAD_COLUMN_SCOPE = 'kubernetes-pods';
@@ -125,7 +125,7 @@ export function KubernetesPageSurface() {
                 variant="networking"
                 emptyIcon={k8sIcon()}
                 emptyTitle="No networking resources reported"
-                emptyDescription="Services, ingresses, endpoint slices, and network policies appear here once the agent can read networking inventory."
+                emptyDescription="Services, ingresses, and endpoint slices appear here once the agent can read networking inventory."
               />
             </Show>
             <Show when={activeTab() === 'config'}>
@@ -134,7 +134,25 @@ export function KubernetesPageSurface() {
                 variant="config"
                 emptyIcon={k8sIcon()}
                 emptyTitle="No config resources reported"
-                emptyDescription="Namespaces, ConfigMaps, and ServiceAccounts appear here once the agent can read cluster configuration inventory."
+                emptyDescription="Namespaces, ConfigMaps, Secrets, and ServiceAccounts appear here once the agent can read cluster configuration inventory."
+              />
+            </Show>
+            <Show when={activeTab() === 'policy'}>
+              <KubernetesInventoryTable
+                resources={model().policy}
+                variant="policy"
+                emptyIcon={k8sIcon()}
+                emptyTitle="No policy resources reported"
+                emptyDescription="NetworkPolicies, PodDisruptionBudgets, ResourceQuotas, and LimitRanges appear here once the agent can read policy inventory."
+              />
+            </Show>
+            <Show when={activeTab() === 'autoscaling'}>
+              <KubernetesInventoryTable
+                resources={model().autoscaling}
+                variant="autoscaling"
+                emptyIcon={k8sIcon()}
+                emptyTitle="No autoscaling resources reported"
+                emptyDescription="HorizontalPodAutoscalers appear here once the agent can read autoscaling inventory."
               />
             </Show>
             <Show when={activeTab() === 'events'}>
