@@ -853,6 +853,16 @@ export interface ResourceKubernetesMetricCapabilities {
   podDiskIo?: boolean;
 }
 
+export interface ResourceKubernetesPodContainerStatus {
+  name?: string;
+  image?: string;
+  ready?: boolean;
+  restartCount?: number;
+  state?: string;
+  reason?: string;
+  message?: string;
+}
+
 export interface ResourceKubernetesMeta {
   clusterId?: string;
   agentId?: string;
@@ -868,11 +878,19 @@ export interface ResourceKubernetesMeta {
   temperature?: number;
   pendingUninstall?: boolean;
   metricCapabilities?: ResourceKubernetesMetricCapabilities;
-  // Workload-controller fields populated by the canonical Kubernetes
-  // adapter for Deployment, StatefulSet, DaemonSet, Job, and CronJob
-  // resources. Surfaced on Kubernetes platform-page native tables where
-  // CPU/memory/uptime/temperature columns from the generic infrastructure
-  // table are not the meaningful operator columns.
+  // Pod and workload-controller fields populated by the canonical
+  // Kubernetes adapter. Surfaced on Kubernetes platform-page native tables
+  // where CPU/memory/uptime/temperature columns from the generic
+  // infrastructure table are not the meaningful operator columns.
+  podPhase?: string;
+  podReason?: string;
+  podMessage?: string;
+  podContainers?: ResourceKubernetesPodContainerStatus[];
+  restarts?: number;
+  ownerKind?: string;
+  ownerName?: string;
+  image?: string;
+  labels?: Record<string, string>;
   deploymentUid?: string;
   replicaSetUid?: string;
   statefulSetUid?: string;

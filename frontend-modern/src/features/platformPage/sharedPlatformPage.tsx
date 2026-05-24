@@ -219,6 +219,11 @@ const matchesPlatformSearch = (resource: Resource, search: string): boolean => {
     resource.kubernetes?.context,
     resource.kubernetes?.namespace,
     resource.kubernetes?.podName,
+    resource.kubernetes?.podPhase,
+    resource.kubernetes?.podReason,
+    resource.kubernetes?.ownerKind,
+    resource.kubernetes?.ownerName,
+    resource.kubernetes?.image,
     resource.kubernetes?.nodeName,
     resource.kubernetes?.resourceKind,
     resource.kubernetes?.serviceType,
@@ -248,6 +253,12 @@ const matchesPlatformSearch = (resource: Resource, search: string): boolean => {
     ...(resource.kubernetes?.hosts ?? []),
     ...(resource.kubernetes?.addresses ?? []),
     ...(resource.kubernetes?.accessModes ?? []),
+    ...(resource.kubernetes?.podContainers?.flatMap((container) => [
+      container.name,
+      container.image,
+      container.state,
+      container.reason,
+    ]) ?? []),
     ...(resource.tags ?? []),
   ]
     .filter((value): value is string => typeof value === 'string')

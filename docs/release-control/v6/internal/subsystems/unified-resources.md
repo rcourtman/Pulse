@@ -136,23 +136,28 @@ cross-source deduplication.
 112. `frontend-modern/src/features/kubernetes/KubernetesClustersTable.tsx`
 113. `frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx`
 114. `frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx`
-115. `frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx`
-116. `frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx`
-117. `frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx`
-118. `frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx`
-119. `frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx`
-120. `frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx`
-121. `frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx`
+115. `frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx`
+116. `frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx`
+117. `frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx`
+118. `frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx`
+119. `frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx`
+120. `frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx`
+121. `frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx`
+122. `frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx`
 
 ## Shared Boundaries
 
-Kubernetes workload-controller presentation is API-native, not generic inventory.
-`frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx` owns
-StatefulSet, DaemonSet, Job, and CronJob rows on `/kubernetes/workloads` and
-must preserve the Kubernetes API status semantics for desired replica/node/job
-targets, current or active counts, ready/succeeded counts, availability,
-misscheduled/unavailable/failed/suspended exceptions, service names, schedules,
-and controller timing fields instead of falling back to infrastructure columns.
+Kubernetes workload presentation is API-native, not generic inventory. Pods
+render through `frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx`
+on `/kubernetes/pods` with Pod phase, container readiness, restart, owner,
+node, image, and age fields from the Kubernetes API projection. StatefulSet,
+DaemonSet, Job, and CronJob rows render through
+`frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx` on
+`/kubernetes/controllers` and must preserve the Kubernetes API status semantics
+for desired replica/node/job targets, current or active counts, ready/succeeded
+counts, availability, misscheduled/unavailable/failed/suspended exceptions,
+service names, schedules, and controller timing fields instead of falling back
+to infrastructure columns.
 
 Container runtime navigation is a unified-resource consumer boundary: the
 `/docker` route is the Docker / Podman runtime lens, not an exclusive owning

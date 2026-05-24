@@ -1191,6 +1191,11 @@ recovery scope, or a storage/recovery-owned secret source.
 
 ## Current State
 
+Kubernetes pod metadata decoded by `frontend-modern/src/hooks/useUnifiedResources.ts`
+is shared inventory context for storage/recovery handoffs only; Pod phase,
+container readiness, owner, image, and restart fields do not become protection
+state or recovery-local workload taxonomy.
+
 The Storage and Recovery cross-jump builders
 (`buildStorageHrefForResource`, `buildRecoveryHrefForResource`) were deleted
 from `frontend-modern/src/routing/resourceLinks.ts` on 2026-05-16 alongside

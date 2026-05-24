@@ -4,7 +4,9 @@ import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 export type KubernetesPageTabId =
   | 'overview'
   | 'nodes'
-  | 'workloads'
+  | 'pods'
+  | 'deployments'
+  | 'controllers'
   | 'services'
   | 'storage'
   | 'networking'
@@ -22,7 +24,9 @@ export type KubernetesTabSpec = {
 export const KUBERNETES_TAB_SPECS: readonly KubernetesTabSpec[] = [
   { id: 'overview', label: 'Overview', path: '/kubernetes/overview' },
   { id: 'nodes', label: 'Nodes', path: '/kubernetes/nodes' },
-  { id: 'workloads', label: 'Workloads', path: '/kubernetes/workloads' },
+  { id: 'pods', label: 'Pods', path: '/kubernetes/pods' },
+  { id: 'deployments', label: 'Deployments', path: '/kubernetes/deployments' },
+  { id: 'controllers', label: 'Controllers', path: '/kubernetes/controllers' },
   { id: 'services', label: 'Services', path: '/kubernetes/services' },
   { id: 'storage', label: 'Storage', path: '/kubernetes/storage' },
   { id: 'networking', label: 'Networking', path: '/kubernetes/networking' },

@@ -812,7 +812,10 @@ not a replacement status card, CTA band, or page-local nested card.
    the container-runtime lens and may be labelled `Containers` in the shell,
    while shared source badges, filters, and runtime management copy continue
    to use `Docker / Podman` where the capability itself is being named.
-   Kubernetes controller rows on `/kubernetes/workloads` must render through
+   Kubernetes pods on `/kubernetes/pods` must render through
+   `frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx` with
+   Pod-native phase, readiness, restart, owner, node, image, and age columns.
+   Kubernetes controller rows on `/kubernetes/controllers` must render through
    `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx`
    rather than a generic infrastructure or inventory table. The table boundary
    preserves platform-native API fields for StatefulSets, DaemonSets, Jobs, and

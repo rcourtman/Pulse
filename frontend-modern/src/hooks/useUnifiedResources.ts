@@ -122,6 +122,26 @@ type APIKubernetesData = {
   clusterName?: string;
   context?: string;
   nodeName?: string;
+  namespace?: string;
+  podName?: string;
+  podUid?: string;
+  podPhase?: string;
+  podReason?: string;
+  podMessage?: string;
+  podContainers?: Array<{
+    name?: string;
+    image?: string;
+    ready?: boolean;
+    restartCount?: number;
+    state?: string;
+    reason?: string;
+    message?: string;
+  }>;
+  restarts?: number;
+  ownerKind?: string;
+  ownerName?: string;
+  image?: string;
+  labels?: Record<string, string>;
   uptimeSeconds?: number;
   temperature?: number;
   metricCapabilities?: {

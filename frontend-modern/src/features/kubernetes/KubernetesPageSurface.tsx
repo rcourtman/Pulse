@@ -1,18 +1,14 @@
 import { useLocation } from '@solidjs/router';
 import ShipWheelIcon from 'lucide-solid/icons/ship-wheel';
 import { Show, createMemo, type Accessor } from 'solid-js';
-import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
-import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
-import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
-import type { WorkloadsStatusOption } from '@/components/Workloads/workloadsFilterModel';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
-import { resourceMatchesSearch } from '@/utils/resourceSearchMatch';
 import {
   PlatformErrorState,
   PlatformSectionTabs,
   PlatformTableEmptyState,
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
+import type { Resource } from '@/types/resource';
 import { KubernetesAutoscalingTable } from './KubernetesAutoscalingTable';
 import { KubernetesClustersTable } from './KubernetesClustersTable';
 import { KubernetesConfigTable } from './KubernetesConfigTable';
@@ -21,6 +17,7 @@ import { KubernetesDeploymentsTable } from './KubernetesDeploymentsTable';
 import { KubernetesEventsTable } from './KubernetesEventsTable';
 import { KubernetesNetworkingTable } from './KubernetesNetworkingTable';
 import { KubernetesNodesTable } from './KubernetesNodesTable';
+import { KubernetesPodsTable } from './KubernetesPodsTable';
 import { KubernetesPolicyTable } from './KubernetesPolicyTable';
 import { KubernetesServicesTable } from './KubernetesServicesTable';
 import { KubernetesStorageTable } from './KubernetesStorageTable';
@@ -37,15 +34,6 @@ import {
 // those tagged kubernetes.
 const KUBERNETES_RESOURCE_QUERY =
   'type=k8s-cluster,k8s-node,pod,k8s-deployment,k8s-replicaset,k8s-namespace,k8s-service,k8s-statefulset,k8s-daemonset,k8s-job,k8s-cronjob,k8s-ingress,k8s-endpoint-slice,k8s-network-policy,k8s-persistent-volume,k8s-persistent-volume-claim,k8s-storage-class,k8s-configmap,k8s-secret,k8s-serviceaccount,k8s-resource-quota,k8s-limit-range,k8s-pod-disruption-budget,k8s-horizontal-pod-autoscaler,k8s-event,agent';
-const KUBERNETES_PLATFORM_FILTER = 'kubernetes';
-const KUBERNETES_WORKLOAD_FORCED_VIEW_MODE = 'pod';
-const KUBERNETES_WORKLOAD_COLUMN_SCOPE = 'kubernetes-pods';
-const KUBERNETES_POD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
-  { value: 'all', label: 'All' },
-  { value: 'running', label: 'Running' },
-  { value: 'degraded', label: 'Needs attention' },
-  { value: 'stopped', label: 'Not running' },
-];
 const VALID_TABS = new Set<KubernetesPageTabId>(KUBERNETES_TAB_SPECS.map((tab) => tab.id));
 
 const k8sIcon = () => <ShipWheelIcon class="h-6 w-6 text-slate-400" />;
@@ -58,12 +46,14 @@ export function KubernetesPageSurface() {
     initialHydration: 'prefer-ws-then-rest',
   });
   const activeTab = createMemo<KubernetesPageTabId>(() => {
-    const segment = location.pathname.split('/').filter(Boolean)[1] as
-      | KubernetesPageTabId
-      | undefined;
-    return segment && VALID_TABS.has(segment) ? segment : 'overview';
+    const segment = location.pathname.split('/').filter(Boolean)[1];
+    if (segment === 'workloads') return 'pods';
+    return segment && VALID_TABS.has(segment as KubernetesPageTabId)
+      ? (segment as KubernetesPageTabId)
+      : 'overview';
   });
   const model = createMemo(() => buildKubernetesPageModel(resources()));
+  const controllerResources = createMemo(() => getKubernetesControllerResources(model()));
 
   return (
     <div data-testid="kubernetes-page" class="space-y-3">
@@ -103,7 +93,7 @@ export function KubernetesPageSurface() {
             }
           >
             <Show when={activeTab() === 'overview'}>
-              <KubernetesOverview model={model} />
+              <KubernetesOverview model={model} controllers={controllerResources} />
             </Show>
             <Show when={activeTab() === 'nodes'}>
               <KubernetesNodesTable
@@ -113,8 +103,29 @@ export function KubernetesPageSurface() {
                 emptyDescription="Kubernetes nodes appear here as soon as the agent enumerates Node resources."
               />
             </Show>
-            <Show when={activeTab() === 'workloads'}>
-              <KubernetesWorkloads model={model} />
+            <Show when={activeTab() === 'pods'}>
+              <KubernetesPodsTable
+                resources={model().pods}
+                emptyIcon={k8sIcon()}
+                emptyTitle="No pods reported"
+                emptyDescription="Pods appear here once the agent can read Pod resources."
+              />
+            </Show>
+            <Show when={activeTab() === 'deployments'}>
+              <KubernetesDeploymentsTable
+                resources={model().deployments}
+                emptyIcon={k8sIcon()}
+                emptyTitle="No deployments reported"
+                emptyDescription="Deployments appear here once the agent can read Deployment resources."
+              />
+            </Show>
+            <Show when={activeTab() === 'controllers'}>
+              <KubernetesControllersTable
+                resources={controllerResources()}
+                emptyIcon={k8sIcon()}
+                emptyTitle="No workload controllers reported"
+                emptyDescription="StatefulSets, DaemonSets, Jobs, and CronJobs appear here when the agent reports them."
+              />
             </Show>
             <Show when={activeTab() === 'services'}>
               <KubernetesServicesTable
@@ -181,158 +192,61 @@ export function KubernetesPageSurface() {
 
 interface KubernetesOverviewProps {
   model: Accessor<KubernetesPageModel>;
+  controllers: Accessor<Resource[]>;
 }
+
+const getKubernetesControllerResources = (model: KubernetesPageModel): Resource[] => [
+  ...model.statefulSets,
+  ...model.daemonSets,
+  ...model.jobs,
+  ...model.cronJobs,
+];
 
 function KubernetesOverview(props: KubernetesOverviewProps) {
-  return <KubernetesWorkloadStack model={props.model} mode="overview" />;
-}
-
-function KubernetesWorkloads(props: KubernetesOverviewProps) {
-  return <KubernetesWorkloadStack model={props.model} mode="workloads" />;
-}
-
-function KubernetesWorkloadStack(
-  props: KubernetesOverviewProps & { mode: 'overview' | 'workloads' },
-) {
-  const workloadsState = useWorkloadsState({
-    vms: [],
-    containers: [],
-    nodes: [],
-    useWorkloads: true,
-    embedded: true,
-    tableOnly: true,
-    forcedPlatform: KUBERNETES_PLATFORM_FILTER,
-    forcedViewMode: KUBERNETES_WORKLOAD_FORCED_VIEW_MODE,
-    showFilterToolbar: true,
-    suppressPlatformFilter: true,
-    allowEmbeddedScopeFilters: true,
-    columnVisibilityStorageScope: KUBERNETES_WORKLOAD_COLUMN_SCOPE,
-    // Backup column is driven exclusively by Proxmox vzdump / PBS data
-    // (`resource.proxmox.lastBackup` in useWorkloads); Kubernetes
-    // workloads have no equivalent source at this integration layer, so
-    // the column would always render blank. Hide by default.
-    additionalDefaultHiddenColumnIds: ['backup'],
-    compactGroupHeaders: true,
-  });
-  const showSharedFilterToolbar = createMemo(
-    () =>
-      workloadsState.surfaceConnected() &&
-      workloadsState.surfaceInitialDataReceived() &&
-      workloadsState.allGuests().length > 0,
-  );
-  const searchTerm = createMemo(() => workloadsState.search().trim());
-  const filteredClusters = createMemo(() => {
-    if (!searchTerm()) return props.model().clusters;
-    return props.model().clusters.filter((cluster) => resourceMatchesSearch(cluster, searchTerm()));
-  });
-  const filteredNodes = createMemo(() => {
-    if (!searchTerm()) return props.model().nodes;
-    return props.model().nodes.filter((node) => resourceMatchesSearch(node, searchTerm()));
-  });
-  const filteredDeployments = createMemo(() => {
-    if (!searchTerm()) return props.model().deployments;
-    return props
-      .model()
-      .deployments.filter((deployment) => resourceMatchesSearch(deployment, searchTerm()));
-  });
-  const filteredControllers = createMemo(() => {
-    const controllers = [
-      ...props.model().statefulSets,
-      ...props.model().daemonSets,
-      ...props.model().jobs,
-      ...props.model().cronJobs,
-    ];
-    if (!searchTerm()) return controllers;
-    return controllers.filter((controller) => resourceMatchesSearch(controller, searchTerm()));
-  });
-
   return (
     <div class="space-y-4">
-      <Show when={showSharedFilterToolbar()}>
-        <div data-summary-clear-ignore>
-          <WorkloadsFilter
-            search={workloadsState.search}
-            setSearch={workloadsState.setSearch}
-            viewMode={workloadsState.viewMode}
-            setViewMode={workloadsState.setViewMode}
-            statusMode={workloadsState.statusMode}
-            setStatusMode={workloadsState.setStatusMode}
-            groupingMode={workloadsState.groupingMode}
-            setGroupingMode={workloadsState.setGroupingMode}
-            setSortKey={workloadsState.setSortKey}
-            setSortDirection={workloadsState.setSortDirection}
-            onBeforeAutoFocus={workloadsState.handleBeforeAutoFocus}
-            ariaLabel="Kubernetes pod filters"
-            searchPlaceholder="Search pods by name, namespace, image, cluster, or node"
-            searchEmptyMessage="Recent Kubernetes pod searches appear here."
-            statusOptions={KUBERNETES_POD_STATUS_OPTIONS}
-            columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
-            containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
-            hostFilter={undefined}
-            namespaceFilter={undefined}
-            platformFilter={undefined}
-            suppressTypeFilter
-            metricDisplayMode={workloadsState.workloadMetricDisplayMode}
-            setMetricDisplayMode={workloadsState.setWorkloadMetricDisplayMode}
-            metricHistoryRange={workloadsState.workloadMetricHistoryRange}
-            setMetricHistoryRange={workloadsState.setWorkloadMetricHistoryRange}
-            forcedPlatform={KUBERNETES_PLATFORM_FILTER}
-            pinnedSelectionActive={() =>
-              Boolean(
-                workloadsState.selectedGuestId() || workloadsState.focusedSummaryWorkloadGroupId(),
-              )
-            }
-            onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}
-          />
-        </div>
-      </Show>
-      <Show when={props.mode === 'overview'}>
-        <KubernetesClustersTable
-          clusters={filteredClusters()}
-          scope={props.model().resources}
+      <KubernetesClustersTable
+        clusters={props.model().clusters}
+        scope={props.model().resources}
+        emptyIcon={k8sIcon()}
+        emptyTitle="No clusters reported"
+        emptyDescription="Kubernetes clusters appear here once at least one agent reports cluster context."
+        showToolbar={false}
+      />
+      <KubernetesNodesTable
+        resources={props.model().nodes}
+        emptyIcon={k8sIcon()}
+        emptyTitle="No nodes reported"
+        emptyDescription="Kubernetes nodes appear here as soon as the agent enumerates them."
+        showToolbar={false}
+      />
+      <Show when={props.model().pods.length > 0}>
+        <KubernetesPodsTable
+          resources={props.model().pods}
           emptyIcon={k8sIcon()}
-          emptyTitle="No clusters reported"
-          emptyDescription="Kubernetes clusters appear here once at least one agent reports cluster context."
-          showToolbar={false}
-        />
-        <KubernetesNodesTable
-          resources={filteredNodes()}
-          emptyIcon={k8sIcon()}
-          emptyTitle="No nodes reported"
-          emptyDescription="Kubernetes nodes appear here as soon as the agent enumerates them."
+          emptyTitle="No pods reported"
+          emptyDescription="Pods appear here once the agent can read Pod resources."
           showToolbar={false}
         />
       </Show>
       <Show when={props.model().deployments.length > 0}>
         <KubernetesDeploymentsTable
-          resources={filteredDeployments()}
+          resources={props.model().deployments}
           emptyIcon={k8sIcon()}
           emptyTitle="No deployments reported"
           emptyDescription="Deployments appear here once the cluster reports them."
           showToolbar={false}
         />
       </Show>
-      <Show when={filteredControllers().length > 0}>
+      <Show when={props.controllers().length > 0}>
         <KubernetesControllersTable
-          resources={filteredControllers()}
+          resources={props.controllers()}
           emptyIcon={k8sIcon()}
           emptyTitle="No controllers reported"
           emptyDescription="StatefulSets, DaemonSets, Jobs, and CronJobs appear here when the agent reports them."
           showToolbar={false}
         />
       </Show>
-      <WorkloadsSurface
-        state={workloadsState}
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
-        embedded
-        tableOnly
-        forcedPlatform={KUBERNETES_PLATFORM_FILTER}
-        forcedViewMode={KUBERNETES_WORKLOAD_FORCED_VIEW_MODE}
-        compactGroupHeaders
-      />
     </div>
   );
 }

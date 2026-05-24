@@ -19,7 +19,9 @@ describe('kubernetesPageModel', () => {
     expect(KUBERNETES_TAB_SPECS.map((tab) => tab.id)).toEqual([
       'overview',
       'nodes',
-      'workloads',
+      'pods',
+      'deployments',
+      'controllers',
       'services',
       'storage',
       'networking',
