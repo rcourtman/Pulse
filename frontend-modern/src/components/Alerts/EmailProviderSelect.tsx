@@ -1,4 +1,4 @@
-import { createSignal, createEffect, Show, For } from 'solid-js';
+import { createSignal, createEffect, Show, For, untrack } from 'solid-js';
 import { NotificationsAPI } from '@/api/notifications';
 import { logger } from '@/utils/logger';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
@@ -41,6 +41,8 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
   const [providers, setProviders] = createSignal<EmailProvider[]>([]);
   const [showAdvanced, setShowAdvanced] = createSignal(false);
   const [showInstructions, setShowInstructions] = createSignal(false);
+  const [recipientsText, setRecipientsText] = createSignal(props.config.to.join('\n'));
+  let recipientsTextareaRef: HTMLTextAreaElement | undefined;
 
   // Load email providers once
   createEffect(async () => {
@@ -82,6 +84,19 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
 
   const currentProvider = () => providers().find((p) => p.name === props.config.provider);
   const instructionBoxClass = "mt-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-900 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200";
+  const parseRecipients = (value: string) =>
+    value
+      .split(/\r?\n/)
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+
+  createEffect(() => {
+    const next = props.config.to.join('\n');
+    if (document.activeElement === recipientsTextareaRef) return;
+    if (untrack(recipientsText) !== next) {
+      setRecipientsText(next);
+    }
+  });
 
   return (
     <div class="space-y-4 text-sm overflow-hidden">
@@ -220,15 +235,21 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
       </div>
 
       <div class={formField}>
-        <label class={labelClass()}>Recipients (one per line)</label>
+        <label for="email-recipients" class={labelClass()}>Recipients (one per line)</label>
         <textarea
-          value={props.config.to.join('\n')}
+          id="email-recipients"
+          ref={recipientsTextareaRef}
+          value={recipientsText()}
           onInput={(e) => {
-            const recipients = e.currentTarget.value
-              .split('\n')
-              .map((entry) => entry.trim())
-              .filter((entry) => entry.length > 0);
-            props.onChange({ ...props.config, to: recipients });
+            const value = e.currentTarget.value;
+            setRecipientsText(value);
+            props.onChange({ ...props.config, to: parseRecipients(value) });
+          }}
+          onBlur={() => {
+            const next = props.config.to.join('\n');
+            if (recipientsText() !== next) {
+              setRecipientsText(next);
+            }
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
