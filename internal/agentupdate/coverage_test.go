@@ -555,8 +555,13 @@ func TestGetUpdatedFromVersion(t *testing.T) {
 func TestPerformUpdateWrapper(t *testing.T) {
 	t.Run("ExecPathError", func(t *testing.T) {
 		origExec := osExecutableFn
-		t.Cleanup(func() { osExecutableFn = origExec })
+		origArgs := osArgsFn
+		t.Cleanup(func() {
+			osExecutableFn = origExec
+			osArgsFn = origArgs
+		})
 		osExecutableFn = func() (string, error) { return "", errors.New("fail") }
+		osArgsFn = func() []string { return nil }
 
 		u := newUpdaterForTest("http://example")
 		if err := u.performUpdate(context.Background()); err == nil {
@@ -589,6 +594,37 @@ func TestPerformUpdateWrapper(t *testing.T) {
 
 		if err := u.performUpdate(context.Background()); err != nil {
 			t.Fatalf("expected update success, got %v", err)
+		}
+	})
+
+	t.Run("FallbackToAbsoluteArgv0", func(t *testing.T) {
+		data := testBinary()
+		check := checksum(data)
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Checksum-Sha256", check)
+			_, _ = w.Write(data)
+		}))
+		t.Cleanup(server.Close)
+
+		_, execPath := writeTempExec(t)
+		u := newUpdaterForTest(server.URL)
+		u.client = server.Client()
+
+		origExec := osExecutableFn
+		origArgs := osArgsFn
+		origRestart := restartProcessFn
+		t.Cleanup(func() {
+			osExecutableFn = origExec
+			osArgsFn = origArgs
+			restartProcessFn = origRestart
+		})
+		osExecutableFn = func() (string, error) { return "", errors.New("no such file or directory") }
+		osArgsFn = func() []string { return []string{execPath} }
+		restartProcessFn = func(string) error { return nil }
+
+		if err := u.performUpdate(context.Background()); err != nil {
+			t.Fatalf("expected update success via argv[0] fallback, got %v", err)
 		}
 	})
 }

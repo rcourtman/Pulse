@@ -1900,7 +1900,8 @@ EOF
 
 name="pulse_agent"
 rcvar="pulse_agent_enable"
-pidfile="/var/run/${name}.pid"
+supervisor_pidfile="/var/run/${name}.pid"
+child_pidfile="/var/run/${name}.child.pid"
 
 command="RUNTIME_BINARY_PLACEHOLDER"
 command_args="EXEC_ARGS_PLACEHOLDER"
@@ -1912,18 +1913,38 @@ status_cmd="${name}_status"
 pulse_agent_start()
 {
     if checkyesno ${rcvar}; then
+        if [ -f "${supervisor_pidfile}" ] && kill -0 "$(cat "${supervisor_pidfile}")" 2>/dev/null; then
+            echo "${name} is already running as supervisor pid $(cat "${supervisor_pidfile}")."
+            return 0
+        fi
         echo "Starting ${name}."
         SSL_CERT_FILE_PLACEHOLDER
-        /usr/sbin/daemon -r -p ${pidfile} -f ${command} ${command_args}
+        rm -f "${supervisor_pidfile}" "${child_pidfile}"
+        /usr/sbin/daemon -r -P ${supervisor_pidfile} -p ${child_pidfile} -f ${command} ${command_args}
     fi
 }
 
 pulse_agent_stop()
 {
-    if [ -f ${pidfile} ]; then
+    if [ -f "${supervisor_pidfile}" ]; then
+        supervisor_pid=$(cat "${supervisor_pidfile}")
         echo "Stopping ${name}."
-        kill $(cat ${pidfile}) 2>/dev/null
-        rm -f ${pidfile}
+        supervisor_parent=$(ps -o ppid= -p "${supervisor_pid}" 2>/dev/null | tr -d '[:space:]')
+        if [ -n "${supervisor_parent}" ] && [ "${supervisor_parent}" != "1" ]; then
+            parent_comm=$(ps -o comm= -p "${supervisor_parent}" 2>/dev/null | tr -d '[:space:]')
+            case "${parent_comm}" in
+                daemon|*/daemon) kill "${supervisor_parent}" 2>/dev/null || true ;;
+            esac
+        fi
+        kill "${supervisor_pid}" 2>/dev/null || true
+        sleep 1
+        if [ -f "${child_pidfile}" ]; then
+            child_pid=$(cat "${child_pidfile}")
+            if kill -0 "${child_pid}" 2>/dev/null; then
+                kill "${child_pid}" 2>/dev/null || true
+            fi
+        fi
+        rm -f "${supervisor_pidfile}" "${child_pidfile}"
     else
         echo "${name} is not running."
     fi
@@ -1931,8 +1952,10 @@ pulse_agent_stop()
 
 pulse_agent_status()
 {
-    if [ -f ${pidfile} ] && kill -0 $(cat ${pidfile}) 2>/dev/null; then
-        echo "${name} is running as pid $(cat ${pidfile})."
+    if [ -f "${supervisor_pidfile}" ] && kill -0 "$(cat "${supervisor_pidfile}")" 2>/dev/null; then
+        echo "${name} is running as supervisor pid $(cat "${supervisor_pidfile}")."
+    elif [ -f "${child_pidfile}" ] && kill -0 "$(cat "${child_pidfile}")" 2>/dev/null; then
+        echo "${name} child is running without a supervisor as pid $(cat "${child_pidfile}")."
     else
         echo "${name} is not running."
         return 1
@@ -2192,6 +2215,15 @@ if [[ "$OS" == "freebsd" ]] || [[ -f /etc/rc.subr ]]; then
     RCSCRIPT="/usr/local/etc/rc.d/${AGENT_NAME}"
     log_info "Configuring FreeBSD rc.d service at $RCSCRIPT..."
 
+    if [[ -x "$RCSCRIPT" ]]; then
+        log_info "Stopping existing ${AGENT_NAME} service..."
+        "$RCSCRIPT" stop 2>/dev/null || true
+        sleep 1
+    fi
+    if command -v pkill >/dev/null 2>&1; then
+        pkill -f "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+    fi
+
     # Build command line args
     build_exec_args
 
@@ -2207,7 +2239,8 @@ if [[ "$OS" == "freebsd" ]] || [[ -f /etc/rc.subr ]]; then
 
 name="pulse_agent"
 rcvar="pulse_agent_enable"
-pidfile="/var/run/${name}.pid"
+supervisor_pidfile="/var/run/${name}.pid"
+child_pidfile="/var/run/${name}.child.pid"
 
 # These placeholders are replaced by sed below
 command="INSTALL_DIR_PLACEHOLDER/BINARY_NAME_PLACEHOLDER"
@@ -2220,18 +2253,38 @@ status_cmd="${name}_status"
 pulse_agent_start()
 {
     if checkyesno ${rcvar}; then
+        if [ -f "${supervisor_pidfile}" ] && kill -0 "$(cat "${supervisor_pidfile}")" 2>/dev/null; then
+            echo "${name} is already running as supervisor pid $(cat "${supervisor_pidfile}")."
+            return 0
+        fi
         echo "Starting ${name}."
         SSL_CERT_FILE_PLACEHOLDER
-        /usr/sbin/daemon -r -p ${pidfile} -f ${command} ${command_args}
+        rm -f "${supervisor_pidfile}" "${child_pidfile}"
+        /usr/sbin/daemon -r -P ${supervisor_pidfile} -p ${child_pidfile} -f ${command} ${command_args}
     fi
 }
 
 pulse_agent_stop()
 {
-    if [ -f ${pidfile} ]; then
+    if [ -f "${supervisor_pidfile}" ]; then
+        supervisor_pid=$(cat "${supervisor_pidfile}")
         echo "Stopping ${name}."
-        kill $(cat ${pidfile}) 2>/dev/null
-        rm -f ${pidfile}
+        supervisor_parent=$(ps -o ppid= -p "${supervisor_pid}" 2>/dev/null | tr -d '[:space:]')
+        if [ -n "${supervisor_parent}" ] && [ "${supervisor_parent}" != "1" ]; then
+            parent_comm=$(ps -o comm= -p "${supervisor_parent}" 2>/dev/null | tr -d '[:space:]')
+            case "${parent_comm}" in
+                daemon|*/daemon) kill "${supervisor_parent}" 2>/dev/null || true ;;
+            esac
+        fi
+        kill "${supervisor_pid}" 2>/dev/null || true
+        sleep 1
+        if [ -f "${child_pidfile}" ]; then
+            child_pid=$(cat "${child_pidfile}")
+            if kill -0 "${child_pid}" 2>/dev/null; then
+                kill "${child_pid}" 2>/dev/null || true
+            fi
+        fi
+        rm -f "${supervisor_pidfile}" "${child_pidfile}"
     else
         echo "${name} is not running."
     fi
@@ -2239,8 +2292,10 @@ pulse_agent_stop()
 
 pulse_agent_status()
 {
-    if [ -f ${pidfile} ] && kill -0 $(cat ${pidfile}) 2>/dev/null; then
-        echo "${name} is running as pid $(cat ${pidfile})."
+    if [ -f "${supervisor_pidfile}" ] && kill -0 "$(cat "${supervisor_pidfile}")" 2>/dev/null; then
+        echo "${name} is running as supervisor pid $(cat "${supervisor_pidfile}")."
+    elif [ -f "${child_pidfile}" ] && kill -0 "$(cat "${child_pidfile}")" 2>/dev/null; then
+        echo "${name} child is running without a supervisor as pid $(cat "${child_pidfile}")."
     else
         echo "${name} is not running."
         return 1
