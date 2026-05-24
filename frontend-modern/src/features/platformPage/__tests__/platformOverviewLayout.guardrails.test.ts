@@ -6,6 +6,7 @@ import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
 import dockerPageSurfaceSource from '@/features/docker/DockerPageSurface.tsx?raw';
 import dockerServicesTableSource from '@/features/docker/DockerServicesTable.tsx?raw';
 import kubernetesClustersTableSource from '@/features/kubernetes/KubernetesClustersTable.tsx?raw';
+import kubernetesConfigTableSource from '@/features/kubernetes/KubernetesConfigTable.tsx?raw';
 import kubernetesDeploymentsTableSource from '@/features/kubernetes/KubernetesDeploymentsTable.tsx?raw';
 import kubernetesNodesTableSource from '@/features/kubernetes/KubernetesNodesTable.tsx?raw';
 import kubernetesPageSurfaceSource from '@/features/kubernetes/KubernetesPageSurface.tsx?raw';
@@ -38,6 +39,7 @@ const platformTableSources = [
   dockerHostsTableSource,
   dockerServicesTableSource,
   kubernetesClustersTableSource,
+  kubernetesConfigTableSource,
   kubernetesNodesTableSource,
   kubernetesDeploymentsTableSource,
   truenasAlertsTableSource,
@@ -58,6 +60,7 @@ const platformToolbarTableSources = [
   dockerHostsTableSource,
   dockerServicesTableSource,
   kubernetesClustersTableSource,
+  kubernetesConfigTableSource,
   kubernetesNodesTableSource,
   kubernetesDeploymentsTableSource,
   truenasSystemsTableSource,
@@ -178,6 +181,7 @@ describe('platform overview layout guardrails', () => {
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesClustersTable');
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesNodesTable');
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesDeploymentsTable');
+    expect(kubernetesPageSurfaceSource).toContain('<KubernetesConfigTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASSystemsTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASAlertsTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASVirtualMachinesTable');
@@ -206,8 +210,8 @@ describe('platform overview layout guardrails', () => {
     expect(vmwarePageSurfaceSource).toContain("activeTab() === 'health'");
     expect(vmwarePageSurfaceSource).not.toContain('<VsphereVirtualMachinesTable');
     expect(vmwarePageSurfaceSource).toContain('<WorkloadsSurface');
-    expect(vmwarePageSurfaceSource).toContain("forcedPlatform={VMWARE_PLATFORM_FILTER}");
-    expect(vmwarePageSurfaceSource).toContain("forcedViewMode=\"vm\"");
+    expect(vmwarePageSurfaceSource).toContain('forcedPlatform={VMWARE_PLATFORM_FILTER}');
+    expect(vmwarePageSurfaceSource).toContain('forcedViewMode="vm"');
     expect(vmwarePageSurfaceSource).toContain('<VsphereDatastoresTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereNetworksTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereActivityTable');

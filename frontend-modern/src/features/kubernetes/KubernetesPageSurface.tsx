@@ -14,6 +14,7 @@ import {
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
 import { KubernetesClustersTable } from './KubernetesClustersTable';
+import { KubernetesConfigTable } from './KubernetesConfigTable';
 import { KubernetesDeploymentsTable } from './KubernetesDeploymentsTable';
 import { KubernetesInventoryTable } from './KubernetesInventoryTable';
 import { KubernetesNetworkingTable } from './KubernetesNetworkingTable';
@@ -137,9 +138,8 @@ export function KubernetesPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'config'}>
-              <KubernetesInventoryTable
+              <KubernetesConfigTable
                 resources={model().config}
-                variant="config"
                 emptyIcon={k8sIcon()}
                 emptyTitle="No config resources reported"
                 emptyDescription="Namespaces, ConfigMaps, Secrets, and ServiceAccounts appear here once the agent can read cluster configuration inventory."

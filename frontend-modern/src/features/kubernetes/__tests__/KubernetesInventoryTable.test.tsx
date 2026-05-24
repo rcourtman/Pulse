@@ -27,43 +27,33 @@ afterEach(() => {
 });
 
 describe('KubernetesInventoryTable', () => {
-  it('marks metadata-only config and secret rows without implying payload fields were read', () => {
+  it('renders remaining policy inventory fields in the generic table', () => {
     render(() => (
       <KubernetesInventoryTable
         resources={[
           makeResource({
-            id: 'api-config',
-            type: 'k8s-configmap',
+            id: 'default-deny',
+            type: 'k8s-network-policy',
             kubernetes: {
               namespace: 'apps',
-              resourceKind: 'ConfigMap',
-              dataKeys: ['app.yaml'],
-              metadataOnly: true,
-            },
-          }),
-          makeResource({
-            id: 'api-secret',
-            type: 'k8s-secret',
-            kubernetes: {
-              namespace: 'apps',
-              resourceKind: 'Secret',
-              dataKeys: ['token'],
-              metadataOnly: true,
+              resourceKind: 'NetworkPolicy',
+              policyTypes: ['Ingress', 'Egress'],
+              ingressRuleCount: 1,
+              egressRuleCount: 2,
             },
           }),
         ]}
-        variant="config"
+        variant="policy"
         emptyIcon={<span />}
-        emptyTitle="No config"
-        emptyDescription="No config"
+        emptyTitle="No policy"
+        emptyDescription="No policy"
         showToolbar={false}
       />
     ));
 
-    expect(screen.getAllByText('Metadata-only')).toHaveLength(2);
-    expect(screen.getAllByText('Payload omitted')).toHaveLength(2);
-    expect(screen.queryByText('app.yaml')).not.toBeInTheDocument();
-    expect(screen.queryByText('token')).not.toBeInTheDocument();
-    expect(screen.queryByText('Mutable')).not.toBeInTheDocument();
+    expect(screen.getByText('Spec')).toBeInTheDocument();
+    expect(screen.getByText('Detail')).toBeInTheDocument();
+    expect(screen.getByText('Ingress, Egress')).toBeInTheDocument();
+    expect(screen.getByText('1 ingress, 2 egress')).toBeInTheDocument();
   });
 });

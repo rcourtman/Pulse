@@ -132,6 +132,7 @@ cross-source deduplication.
 108. `frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx`
 109. `frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx`
 110. `frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx`
+111. `frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx`
 
 ## Shared Boundaries
 
@@ -292,6 +293,14 @@ reintroduce false Swarm capability surfaces.
    Ingress class, hosts and addresses, EndpointSlice address type, ready
    endpoint counts, endpoint ports, and service targets instead of routing
    those API objects through the generic Kubernetes inventory table.
+   Kubernetes config inventory is likewise API-native and trust-sensitive:
+   `/kubernetes/config` must render Namespace, ConfigMap, Secret, and
+   ServiceAccount rows through a config-specific table that preserves
+   cluster/namespace scope, Namespace lifecycle phase, ConfigMap/Secret
+   immutable and type metadata, ServiceAccount token/image-pull/secret
+   references, and metadata-only collection wording. That table must not render
+   ConfigMap or Secret payload values, and metadata-only rows must not expose
+   key names as if payload fields had been read.
 2. Add typed accessors and views in `internal/unifiedresources/views.go`
 3. Add source ingestion/adaptation in the adapter layer only
    Frontend resource platform contracts in

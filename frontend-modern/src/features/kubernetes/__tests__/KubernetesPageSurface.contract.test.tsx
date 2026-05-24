@@ -50,6 +50,10 @@ vi.mock('../KubernetesClustersTable', () => ({
   KubernetesClustersTable: () => <div data-testid="clusters-table" />,
 }));
 
+vi.mock('../KubernetesConfigTable', () => ({
+  KubernetesConfigTable: () => <div data-testid="config-table" />,
+}));
+
 vi.mock('../KubernetesNodesTable', () => ({
   KubernetesNodesTable: () => <div data-testid="nodes-table" />,
 }));
@@ -384,6 +388,63 @@ describe('KubernetesPageSurface contract', () => {
     ));
 
     expect(screen.getByTestId('networking-table')).toBeInTheDocument();
+    expect(screen.queryByTestId('kubernetes-workloads-surface')).not.toBeInTheDocument();
+  });
+
+  it('renders Kubernetes config inventory through the config-native table', () => {
+    mockPathname.mockReturnValue('/kubernetes/config');
+    mockUseUnifiedResources.mockReturnValue({
+      resources: () => [
+        {
+          id: 'checkout-api-config',
+          type: 'k8s-configmap',
+          name: 'checkout-api-config',
+          displayName: 'checkout-api-config',
+          platformId: 'cluster-1',
+          platformType: 'kubernetes',
+          sourceType: 'agent',
+          sources: ['kubernetes'],
+          status: 'online',
+          lastSeen: 1_700_000_000_000,
+        },
+      ],
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    });
+    mockUseWorkloadsState.mockReturnValue({
+      allGuests: () => [],
+      clearPinnedSummaryScope: vi.fn(),
+      containerRuntimeFilterConfig: () => undefined,
+      focusedSummaryWorkloadGroupId: () => null,
+      groupingMode: () => 'grouped',
+      handleBeforeAutoFocus: vi.fn(),
+      search: () => '',
+      selectedGuestId: () => null,
+      setGroupingMode: vi.fn(),
+      setMetricDisplayMode: vi.fn(),
+      setSearch: vi.fn(),
+      setSortDirection: vi.fn(),
+      setSortKey: vi.fn(),
+      setStatusMode: vi.fn(),
+      setViewMode: vi.fn(),
+      setWorkloadMetricHistoryRange: vi.fn(),
+      statusMode: () => 'all',
+      surfaceConnected: () => false,
+      surfaceInitialDataReceived: () => false,
+      viewMode: () => 'pod',
+      workloadMetricDisplayMode: () => 'bars',
+      workloadMetricHistoryRange: () => '1h',
+      workloadsFilterColumnVisibility: () => undefined,
+    });
+
+    render(() => (
+      <Router>
+        <Route path="/" component={KubernetesPageSurface} />
+      </Router>
+    ));
+
+    expect(screen.getByTestId('config-table')).toBeInTheDocument();
     expect(screen.queryByTestId('kubernetes-workloads-surface')).not.toBeInTheDocument();
   });
 });

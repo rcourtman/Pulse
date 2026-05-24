@@ -28,7 +28,7 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 
-type KubernetesInventoryVariant = 'controllers' | 'config' | 'policy' | 'autoscaling' | 'events';
+type KubernetesInventoryVariant = 'controllers' | 'policy' | 'autoscaling' | 'events';
 
 const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
 const numberValue = (value: number | undefined): JSX.Element => (
@@ -43,8 +43,6 @@ const tableTitle = (variant: KubernetesInventoryVariant, explicit?: string): str
   switch (variant) {
     case 'controllers':
       return 'Controllers';
-    case 'config':
-      return 'Config';
     case 'policy':
       return 'Policy';
     case 'autoscaling':
@@ -147,14 +145,6 @@ const KubernetesInventoryHeader: Component<{ variant: KubernetesInventoryVariant
         Detail
       </TableHead>
     </Show>
-    <Show when={props.variant === 'config'}>
-      <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[14%]`}>State</TableHead>
-      <TableHead
-        class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[31%]`}
-      >
-        Detail
-      </TableHead>
-    </Show>
     <Show when={props.variant === 'policy'}>
       <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[15%]`}>Spec</TableHead>
       <TableHead
@@ -214,39 +204,6 @@ const KubernetesInventoryRow: Component<{
   const name = () => asTrimmedString(props.resource.name) || props.resource.id;
   const namespace = () => textValue(props.resource.kubernetes?.namespace);
   const kind = () => k8sKind(props.resource);
-  const configState = () =>
-    textValue(
-      props.resource.kubernetes?.phase ||
-        (props.resource.type === 'k8s-configmap'
-          ? props.resource.kubernetes?.metadataOnly
-            ? 'Metadata-only'
-            : props.resource.kubernetes?.immutable
-              ? 'Immutable'
-              : 'Mutable'
-          : undefined) ||
-        (props.resource.type === 'k8s-secret'
-          ? props.resource.kubernetes?.metadataOnly
-            ? 'Metadata-only'
-            : props.resource.kubernetes?.secretType ||
-              (props.resource.kubernetes?.immutable ? 'Immutable' : 'Mutable')
-          : undefined) ||
-        (props.resource.type === 'k8s-serviceaccount'
-          ? props.resource.kubernetes?.automountServiceAccountToken === false
-            ? 'No auto token'
-            : 'Auto token'
-          : undefined),
-    );
-  const configDetail = () =>
-    textValue(
-      (props.resource.kubernetes?.metadataOnly ? 'Payload omitted' : undefined) ||
-        props.resource.kubernetes?.dataKeys?.join(', ') ||
-        props.resource.kubernetes?.binaryDataKeys?.join(', ') ||
-        props.resource.kubernetes?.imagePullSecrets?.join(', ') ||
-        (typeof props.resource.kubernetes?.secretCount === 'number'
-          ? `${props.resource.kubernetes.secretCount} secrets`
-          : undefined) ||
-        props.resource.kubernetes?.clusterName,
-    );
   const quotaDetail = () => {
     const hard = props.resource.kubernetes?.hard ?? {};
     const used = props.resource.kubernetes?.used ?? {};
@@ -349,16 +306,6 @@ const KubernetesInventoryRow: Component<{
           class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
         >
           {detail()}
-        </TableCell>
-      </Show>
-      <Show when={props.variant === 'config'}>
-        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          {configState()}
-        </TableCell>
-        <TableCell
-          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-        >
-          {configDetail()}
         </TableCell>
       </Show>
       <Show when={props.variant === 'policy'}>
