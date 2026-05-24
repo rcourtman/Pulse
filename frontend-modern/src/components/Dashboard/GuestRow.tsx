@@ -673,7 +673,7 @@ export function GuestRow(props: GuestRowProps) {
       case 'agent-timeout':
         return 'Guest agent timeout. Agent may need to be restarted.';
       case 'permission-denied':
-        return 'Permission denied. Check that your Pulse user/token has VM.Monitor permission (PVE 8) or VM.GuestAgent.Audit permission (PVE 9).';
+        return 'Permission denied. Check that your Pulse user/token has VM.GuestAgent.Audit and VM.GuestAgent.FileRead permissions, or legacy VM.Monitor on older Proxmox 8 systems.';
       case 'agent-disabled':
         return 'Guest agent is disabled in VM configuration. Enable it in VM Options.';
       case 'no-filesystems':

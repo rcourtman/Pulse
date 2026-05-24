@@ -129,8 +129,8 @@ Next steps:
   • If the guest agent is disabled, enable it in the VM Options tab (set "QEMU Guest Agent" to "Enabled").
   • Inside the guest OS, ensure the qemu-guest-agent service is installed, running, and has access to disk information.
   • Verify the pulse_monitor@pam user (or your service account) has proper permissions:
-    - Proxmox 9: VM.GuestAgent.Audit privilege (Pulse setup adds via PulseMonitor role)
-    - Proxmox 8: VM.Monitor privilege (Pulse setup adds via PulseMonitor role)
+    - Preferred: VM.GuestAgent.Audit plus VM.GuestAgent.FileRead when available (Pulse setup adds via PulseMonitor role)
+    - Legacy fallback: VM.Monitor on older Proxmox 8 systems
     - Sys.Audit is recommended for Ceph metrics and included when available
     - Both API tokens and passwords work fine for guest agent access
 

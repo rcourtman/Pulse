@@ -682,7 +682,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 										Str("instance", instanceName).
 										Str("vm", vm.Name).
 										Int("vmid", vm.VMID).
-										Msg("Permission denied accessing guest agent. Verify Pulse user has VM.Monitor (PVE 8) or VM.GuestAgent.Audit+VM.GuestAgent.FileRead (PVE 9) permissions")
+										Msg("Permission denied accessing guest agent. Verify Pulse user has VM.GuestAgent.Audit+VM.GuestAgent.FileRead permissions, or legacy VM.Monitor on older Proxmox 8 systems")
 								} else if strings.Contains(errStr, "500") {
 									// Generic 500 error without clear indicators - likely agent unavailable
 									// Refs #596: Proxmox returns 500 errors when guest agent isn't installed/running

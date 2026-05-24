@@ -4541,8 +4541,10 @@ fi
 echo "Setting up permissions..."
 pveum aclmod / -user pulse-monitor@pam -role PVEAuditor%s
 
-# Detect Proxmox version and apply appropriate permissions
-# Method 1: Try to check if VM.Monitor exists (reliable for PVE 8 and below)
+# Detect Proxmox privileges and apply appropriate permissions
+# VM.Monitor is deprecated for the Proxmox 9 upgrade path, so prefer the
+# newer guest-agent privileges whenever they are available and fall back to
+# VM.Monitor only on older PVE 8 systems.
 HAS_VM_MONITOR=false
 if pveum role list 2>/dev/null | grep -q "VM.Monitor" || 
    pveum role add TestMonitor -privs VM.Monitor 2>/dev/null; then
@@ -4550,7 +4552,7 @@ if pveum role list 2>/dev/null | grep -q "VM.Monitor" ||
     pveum role delete TestMonitor 2>/dev/null || true
 fi
 
-# Detect availability of newer guest agent privileges (PVE 9+)
+# Detect availability of newer guest agent privileges
 HAS_VM_GUEST_AGENT_AUDIT=false
 if pveum role list 2>/dev/null | grep -q "VM.GuestAgent.Audit"; then
     HAS_VM_GUEST_AGENT_AUDIT=true
@@ -4561,7 +4563,7 @@ else
     fi
 fi
 
-# VM.GuestAgent.FileRead (PVE 9+): needed for reading /proc/meminfo
+# VM.GuestAgent.FileRead: needed for reading /proc/meminfo
 # via the guest agent for accurate memory reporting
 HAS_VM_GUEST_AGENT_FILE_READ=false
 if pveum role list 2>/dev/null | grep -q "VM.GuestAgent.FileRead"; then
@@ -4597,15 +4599,13 @@ if [ "$HAS_SYS_AUDIT" = true ]; then
     EXTRA_PRIVS+=("Sys.Audit")
 fi
 
-if [ "$HAS_VM_MONITOR" = true ]; then
-    # PVE 8 or below - VM.Monitor exists
-    EXTRA_PRIVS+=("VM.Monitor")
-elif [ "$HAS_VM_GUEST_AGENT_AUDIT" = true ]; then
-    # PVE 9+ - VM.Monitor removed, prefer VM.GuestAgent.Audit for guest data
+if [ "$HAS_VM_GUEST_AGENT_AUDIT" = true ]; then
     EXTRA_PRIVS+=("VM.GuestAgent.Audit")
     if [ "$HAS_VM_GUEST_AGENT_FILE_READ" = true ]; then
         EXTRA_PRIVS+=("VM.GuestAgent.FileRead")
     fi
+elif [ "$HAS_VM_MONITOR" = true ]; then
+    EXTRA_PRIVS+=("VM.Monitor")
 fi
 
 	if [ ${#EXTRA_PRIVS[@]} -gt 0 ]; then

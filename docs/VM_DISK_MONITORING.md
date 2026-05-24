@@ -17,14 +17,14 @@ Monitor actual disk usage inside your VMs using the QEMU Guest Agent.
 ## ⚙️ Requirements
 
 *   **QEMU Guest Agent**: Must be installed and running inside the VM.
-*   **Proxmox Permissions**: `VM.Monitor` (Proxmox 8) or `VM.GuestAgent.Audit` (Proxmox 9+).
+*   **Proxmox Permissions**: `VM.GuestAgent.Audit` plus `VM.GuestAgent.FileRead` when available, with `VM.Monitor` only as a legacy fallback on older Proxmox 8 systems.
 
 ## 🔧 Troubleshooting
 
 | Issue | Solution |
 | :--- | :--- |
 | **Disk shows "-"** | Hover over the dash for details. Common causes: Agent not running, disabled in config, or permission denied. |
-| **Permission Denied** | Ensure your Proxmox token/user has `VM.GuestAgent.Audit` (PVE 9+) or `VM.Monitor` (PVE 8). |
+| **Permission Denied** | Ensure your Proxmox token/user has `VM.GuestAgent.Audit` plus `VM.GuestAgent.FileRead` where available, or `VM.Monitor` on older Proxmox 8 systems. |
 | **Agent Timeout** | Increase the guest-agent filesystem timeout if network or guest responsiveness is slow: `GUEST_AGENT_FSINFO_TIMEOUT=30s`. |
 | **Windows VMs** | Ensure the **QEMU Guest Agent** service is running in Windows Services. |
 

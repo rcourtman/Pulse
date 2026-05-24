@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -142,6 +143,39 @@ func TestPVESetupScript_ConfiguresPulseMonitorRoleSafely(t *testing.T) {
 		if !containsString(script, snippet) {
 			t.Fatalf("expected generated script to contain:\n%s\n\nGot (first 500 chars):\n%s", snippet, truncate(script, 500))
 		}
+	}
+}
+
+func TestPVESetupScript_PrefersGuestAgentPrivileges(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handlers := newTestConfigHandlers(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/setup-script?type=pve&host=http://SENTINEL_HOST:8006&pulse_url=http://SENTINEL_URL:7656", nil)
+	rr := httptest.NewRecorder()
+
+	handlers.HandleSetupScript(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d (%s)", rr.Code, rr.Body.String())
+	}
+
+	script := rr.Body.String()
+	guestIdx := strings.Index(script, `if [ "$HAS_VM_GUEST_AGENT_AUDIT" = true ]; then`)
+	monitorIdx := strings.Index(script, `elif [ "$HAS_VM_MONITOR" = true ]; then`)
+	if guestIdx < 0 || monitorIdx < 0 {
+		t.Fatalf("expected generated script to contain guest-agent preference with VM.Monitor fallback")
+	}
+	if guestIdx > monitorIdx {
+		t.Fatalf("expected generated script to prefer VM.GuestAgent.Audit before VM.Monitor fallback")
+	}
+	if !containsString(script, `EXTRA_PRIVS+=("VM.GuestAgent.FileRead")`) {
+		t.Fatalf("expected generated script to include VM.GuestAgent.FileRead when available")
 	}
 }
 

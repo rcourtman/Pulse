@@ -110,10 +110,9 @@ pveum user permissions <user>@pam
 At minimum, ensure the user/token has read access for inventory and metrics:
 
 - `Sys.Audit`
-- `VM.Monitor`
+- `VM.GuestAgent.Audit` and `VM.GuestAgent.FileRead` when available
+- `VM.Monitor` only as a legacy fallback on older Proxmox 8 systems
 - `Datastore.Audit`
-
-For VM disk usage via QEMU guest agent, also ensure `VM.GuestAgent.Audit` (PVE 9+).
 
 ### Recovery Mode
 If you are completely locked out, you can trigger a recovery token from localhost:

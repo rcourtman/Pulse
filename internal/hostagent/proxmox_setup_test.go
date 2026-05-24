@@ -554,6 +554,113 @@ func TestProxmoxSetup_PVEPrivilegeProbe_FallsBackToGuestAgentAudit(t *testing.T)
 	}
 }
 
+func TestProxmoxSetup_PVEPrivilegeProbe_PrefersGuestAgentAudit(t *testing.T) {
+	mc := &mockCollector{}
+	var pulseMonitorPrivs string
+
+	mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+		if name != "pveum" {
+			return "", nil
+		}
+
+		if len(arg) >= 5 && arg[0] == "role" && (arg[1] == "modify" || arg[1] == "add") && arg[2] == proxmoxMonitorRole {
+			for i := 0; i < len(arg)-1; i++ {
+				if arg[i] == "-privs" {
+					pulseMonitorPrivs = arg[i+1]
+				}
+			}
+			return "", nil
+		}
+
+		if len(arg) > 2 && arg[0] == "user" && arg[1] == "token" && arg[2] == "add" {
+			return "│ value │ my-token │", nil
+		}
+
+		return "", nil
+	}
+
+	p := &ProxmoxSetup{
+		logger:    zerolog.Nop(),
+		collector: mc,
+	}
+
+	tokenID, tokenValue, err := p.setupPVEToken(context.Background(), "pulse-test")
+	if err != nil {
+		t.Fatalf("setupPVEToken returned error: %v", err)
+	}
+	if tokenID == "" || tokenValue == "" {
+		t.Fatalf("expected tokenID and tokenValue to be set, got tokenID=%q tokenValue=%q", tokenID, tokenValue)
+	}
+
+	if !strings.Contains(pulseMonitorPrivs, "VM.GuestAgent.Audit") {
+		t.Fatalf("expected PulseMonitor privileges to include VM.GuestAgent.Audit, got %q", pulseMonitorPrivs)
+	}
+	if !strings.Contains(pulseMonitorPrivs, "VM.GuestAgent.FileRead") {
+		t.Fatalf("expected PulseMonitor privileges to include VM.GuestAgent.FileRead, got %q", pulseMonitorPrivs)
+	}
+	if strings.Contains(pulseMonitorPrivs, "VM.Monitor") {
+		t.Fatalf("did not expect PulseMonitor privileges to include deprecated VM.Monitor when guest-agent privileges are available, got %q", pulseMonitorPrivs)
+	}
+}
+
+func TestProxmoxSetup_PVEPrivilegeProbe_UsesLegacyVMMonitorFallback(t *testing.T) {
+	mc := &mockCollector{}
+	var pulseMonitorPrivs string
+
+	mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+		if name != "pveum" {
+			return "", nil
+		}
+
+		if len(arg) >= 5 && arg[0] == "role" && arg[1] == "add" && strings.HasPrefix(arg[2], "PulseTmpPrivCheck_") {
+			for i := 0; i < len(arg)-1; i++ {
+				if arg[i] == "-privs" {
+					priv := arg[i+1]
+					if priv == "VM.GuestAgent.Audit" || priv == "VM.GuestAgent.FileRead" {
+						return "", fmt.Errorf("unknown privilege")
+					}
+					return "", nil
+				}
+			}
+		}
+
+		if len(arg) >= 5 && arg[0] == "role" && (arg[1] == "modify" || arg[1] == "add") && arg[2] == proxmoxMonitorRole {
+			for i := 0; i < len(arg)-1; i++ {
+				if arg[i] == "-privs" {
+					pulseMonitorPrivs = arg[i+1]
+				}
+			}
+			return "", nil
+		}
+
+		if len(arg) > 2 && arg[0] == "user" && arg[1] == "token" && arg[2] == "add" {
+			return "│ value │ my-token │", nil
+		}
+
+		return "", nil
+	}
+
+	p := &ProxmoxSetup{
+		logger:    zerolog.Nop(),
+		collector: mc,
+	}
+
+	tokenID, tokenValue, err := p.setupPVEToken(context.Background(), "pulse-test")
+	if err != nil {
+		t.Fatalf("setupPVEToken returned error: %v", err)
+	}
+	if tokenID == "" || tokenValue == "" {
+		t.Fatalf("expected tokenID and tokenValue to be set, got tokenID=%q tokenValue=%q", tokenID, tokenValue)
+	}
+
+	if !strings.Contains(pulseMonitorPrivs, "VM.Monitor") {
+		t.Fatalf("expected PulseMonitor privileges to include legacy VM.Monitor fallback, got %q", pulseMonitorPrivs)
+	}
+	if strings.Contains(pulseMonitorPrivs, "VM.GuestAgent.Audit") {
+		t.Fatalf("did not expect VM.GuestAgent.Audit when privilege probe fails, got %q", pulseMonitorPrivs)
+	}
+}
+
 func TestProxmoxSetup_RunAll(t *testing.T) {
 	mc := &mockCollector{}
 

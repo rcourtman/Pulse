@@ -1349,7 +1349,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 			} else if strings.Contains(errStr, "403") || strings.Contains(errStr, "401") {
 				result.Recommendations = append(result.Recommendations,
 					"Ensure API token has PVEAuditor role for baseline access",
-					"Add VM.GuestAgent.Audit+VM.GuestAgent.FileRead (PVE 9) or VM.Monitor (PVE 8) privileges; Pulse setup adds these via the PulseMonitor role",
+					"Add VM.GuestAgent.Audit+VM.GuestAgent.FileRead when available, or VM.Monitor only on older Proxmox 8 systems; Pulse setup adds these via the PulseMonitor role",
 					"Include Sys.Audit when available for Ceph metrics",
 				)
 			} else {
@@ -1379,7 +1379,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 					result.TestResult = "Permission denied accessing guest agent"
 					result.Recommendations = append(result.Recommendations,
 						"Ensure API token has PVEAuditor role for baseline access",
-						"Add VM.GuestAgent.Audit+VM.GuestAgent.FileRead (PVE 9) or VM.Monitor (PVE 8) privileges; Pulse setup adds these via the PulseMonitor role",
+						"Add VM.GuestAgent.Audit+VM.GuestAgent.FileRead when available, or VM.Monitor only on older Proxmox 8 systems; Pulse setup adds these via the PulseMonitor role",
 						"Include Sys.Audit when available for Ceph metrics")
 				} else if errors.Is(err, context.DeadlineExceeded) || strings.Contains(errStr, "context deadline exceeded") {
 					result.TestResult = "Guest agent request timed out"
