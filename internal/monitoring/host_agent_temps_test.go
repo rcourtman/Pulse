@@ -181,23 +181,49 @@ func TestShouldSkipTemperatureSSHCollection(t *testing.T) {
 		}
 	})
 
-	t.Run("cpu only host agent temp does not skip", func(t *testing.T) {
+	t.Run("recent cpu only host agent temp skips", func(t *testing.T) {
 		host := &models.Temperature{
 			Available:  true,
 			HasCPU:     true,
 			CPUPackage: 55,
+			LastUpdate: time.Now(),
+		}
+		if !shouldSkipTemperatureSSHCollection(host) {
+			t.Fatal("expected current CPU-only host agent temp to skip SSH collection")
+		}
+	})
+
+	t.Run("stale cpu only host agent temp does not skip", func(t *testing.T) {
+		host := &models.Temperature{
+			Available:  true,
+			HasCPU:     true,
+			CPUPackage: 55,
+			LastUpdate: time.Now().Add(-3 * time.Minute),
 		}
 		if shouldSkipTemperatureSSHCollection(host) {
-			t.Fatal("expected CPU-only host agent temp not to skip SSH collection")
+			t.Fatal("expected stale host agent temp not to skip SSH collection")
+		}
+	})
+
+	t.Run("unavailable host agent temp does not skip", func(t *testing.T) {
+		host := &models.Temperature{
+			Available:  false,
+			HasCPU:     true,
+			CPUPackage: 55,
+			LastUpdate: time.Now(),
+		}
+		if shouldSkipTemperatureSSHCollection(host) {
+			t.Fatal("expected unavailable host agent temp not to skip SSH collection")
 		}
 	})
 
 	t.Run("host agent smart data skips", func(t *testing.T) {
 		host := &models.Temperature{
-			Available: true,
-			HasCPU:    true,
-			HasSMART:  true,
-			SMART:     []models.DiskTemp{{Device: "/dev/sda", Temperature: 35}},
+			Available:  true,
+			HasCPU:     true,
+			HasSMART:   true,
+			SMART:      []models.DiskTemp{{Device: "/dev/sda", Temperature: 35}},
+			LastUpdate: time.Now(),
 		}
 		if !shouldSkipTemperatureSSHCollection(host) {
 			t.Fatal("expected SMART-capable host agent temp to skip SSH collection")

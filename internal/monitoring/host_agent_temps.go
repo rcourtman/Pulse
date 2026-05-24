@@ -26,9 +26,11 @@ func shouldSkipTemperatureSSHCollection(hostAgentTemp *models.Temperature) bool 
 		return false
 	}
 
-	// Host agent CPU/NVMe readings are preferred, but we still need SSH when the
-	// host agent has not provided SMART disk temperatures yet.
-	return hostAgentTemp.HasSMART
+	if !hostAgentTemp.Available || !isHostAgentTemperatureRecent(hostAgentTemp.LastUpdate) {
+		return false
+	}
+
+	return hostAgentTemp.HasCPU || hostAgentTemp.HasGPU || hostAgentTemp.HasNVMe || hostAgentTemp.HasSMART
 }
 
 // getHostAgentTemperatureByID looks for a matching host agent by node ID first,

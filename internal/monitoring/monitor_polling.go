@@ -2631,9 +2631,9 @@ func (m *Monitor) pollPVENode(
 				sshHost = node.Node
 			}
 
-			// Skip SSH only when the host agent already has SMART data too.
-			// If the host agent only has CPU/NVMe readings, SSH can still
-			// augment the node with SMART disk temperatures.
+			// Legacy SSH is only a fallback now. If a current host agent already
+			// reports temperatures, do not keep probing SSH and producing auth
+			// warnings for nodes that no longer need the legacy transport.
 			skipSSHCollection := shouldSkipTemperatureSSHCollection(hostAgentTemp)
 
 			if !skipSSHCollection {
