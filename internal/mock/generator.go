@@ -1309,6 +1309,7 @@ func generateKubernetesClusters(config MockConfig) []models.KubernetesCluster {
 		nodes := generateKubernetesNodes(clusterID, nodeCount)
 		pods := generateKubernetesPods(clusterID, nodes, podCount)
 		deployments := generateKubernetesDeployments(clusterID, deploymentCount)
+		services, ingresses, endpointSlices := generateKubernetesNetworkingInventory(clusterID, now)
 		storageClasses, persistentVolumes, persistentVolumeClaims := generateKubernetesStorageInventory(clusterID, now)
 
 		lastSeen := now.Add(-time.Duration(rand.Intn(20)) * time.Second)
@@ -1333,6 +1334,9 @@ func generateKubernetesClusters(config MockConfig) []models.KubernetesCluster {
 			Nodes:                  nodes,
 			Pods:                   pods,
 			Deployments:            deployments,
+			Services:               services,
+			Ingresses:              ingresses,
+			EndpointSlices:         endpointSlices,
 			PersistentVolumes:      persistentVolumes,
 			PersistentVolumeClaims: persistentVolumeClaims,
 			StorageClasses:         storageClasses,
@@ -1344,6 +1348,62 @@ func generateKubernetesClusters(config MockConfig) []models.KubernetesCluster {
 	}
 
 	return clusters
+}
+
+func generateKubernetesNetworkingInventory(
+	clusterID string,
+	now time.Time,
+) ([]models.KubernetesService, []models.KubernetesIngress, []models.KubernetesEndpointSlice) {
+	createdAt := now.Add(-68 * time.Hour)
+	labels := map[string]string{
+		"app.kubernetes.io/name":    "checkout-api",
+		"app.kubernetes.io/part-of": "pulse-demo-estate",
+	}
+	services := []models.KubernetesService{
+		{
+			UID:         clusterID + "-svc-checkout-api",
+			Name:        "checkout-api",
+			Namespace:   "services",
+			ServiceType: "ClusterIP",
+			ClusterIP:   "10.96.18.24",
+			Ports: []models.KubernetesServicePort{
+				{Name: "http", Protocol: "TCP", Port: 8080, TargetPort: "8080"},
+			},
+			Selector:  map[string]string{"app.kubernetes.io/name": "checkout-api"},
+			CreatedAt: createdAt,
+			Labels:    cloneStringMap(labels),
+		},
+	}
+	ingresses := []models.KubernetesIngress{
+		{
+			UID:       clusterID + "-ing-checkout-api",
+			Name:      "checkout-api",
+			Namespace: "services",
+			ClassName: "nginx",
+			Hosts:     []string{"checkout.example.test"},
+			Addresses: []string{"198.51.100.24"},
+			CreatedAt: createdAt.Add(10 * time.Minute),
+			Labels:    cloneStringMap(labels),
+		},
+	}
+	endpointSlices := []models.KubernetesEndpointSlice{
+		{
+			UID:                clusterID + "-eps-checkout-api",
+			Name:               "checkout-api-abc12",
+			Namespace:          "services",
+			AddressType:        "IPv4",
+			ServiceName:        "checkout-api",
+			EndpointCount:      3,
+			ReadyEndpointCount: 3,
+			Ports: []models.KubernetesEndpointPort{
+				{Name: "http", Protocol: "TCP", Port: 8080, AppProtocol: "kubernetes.io/http"},
+			},
+			CreatedAt: createdAt.Add(15 * time.Minute),
+			Labels:    cloneStringMap(labels),
+		},
+	}
+
+	return services, ingresses, endpointSlices
 }
 
 func generateKubernetesStorageInventory(

@@ -31,7 +31,6 @@ import type { Resource } from '@/types/resource';
 type KubernetesInventoryVariant =
   | 'controllers'
   | 'services'
-  | 'networking'
   | 'config'
   | 'policy'
   | 'autoscaling'
@@ -57,8 +56,6 @@ const tableTitle = (variant: KubernetesInventoryVariant, explicit?: string): str
       return 'Controllers';
     case 'services':
       return 'Services';
-    case 'networking':
-      return 'Networking';
     case 'config':
       return 'Config';
     case 'policy':
@@ -150,7 +147,7 @@ const KubernetesInventoryHeader: Component<{ variant: KubernetesInventoryVariant
     >
       Namespace
     </TableHead>
-    <Show when={props.variant === 'services' || props.variant === 'networking'}>
+    <Show when={props.variant === 'services'}>
       <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[14%]`}>Type</TableHead>
       <TableHead
         class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[20%]`}
@@ -409,7 +406,7 @@ const KubernetesInventoryRow: Component<{
       >
         {namespace()}
       </TableCell>
-      <Show when={props.variant === 'services' || props.variant === 'networking'}>
+      <Show when={props.variant === 'services'}>
         <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
           {networkType()}
         </TableCell>

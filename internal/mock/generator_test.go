@@ -429,6 +429,30 @@ func TestBuildFixtureStateIncludesKubernetesStorageInventory(t *testing.T) {
 	}
 }
 
+func TestBuildFixtureStateIncludesKubernetesNetworkingInventory(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.K8sClusterCount = 1
+	cfg.K8sNodesPerCluster = 3
+	cfg.K8sPodsPerCluster = 8
+	cfg.RandomMetrics = false
+
+	data := buildFixtureState(cfg)
+	if len(data.KubernetesClusters) != 1 {
+		t.Fatalf("expected exactly one kubernetes cluster, got %d", len(data.KubernetesClusters))
+	}
+
+	cluster := data.KubernetesClusters[0]
+	if len(cluster.Services) == 0 {
+		t.Fatal("expected kubernetes service inventory")
+	}
+	if len(cluster.Ingresses) == 0 {
+		t.Fatal("expected kubernetes ingress inventory")
+	}
+	if len(cluster.EndpointSlices) == 0 {
+		t.Fatal("expected kubernetes endpoint slice inventory")
+	}
+}
+
 func TestMockStateIncludesHostAgents(t *testing.T) {
 	SetEnabled(true)
 	t.Cleanup(func() {

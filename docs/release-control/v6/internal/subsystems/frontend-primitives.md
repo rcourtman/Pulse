@@ -182,7 +182,10 @@ through a dedicated native tab, not only the overview stack, while retaining the
 shared `PlatformSectionTabs` shell. Kubernetes storage inventory must likewise
 stay on the shared tab, toolbar, table, table-alignment, and inline-detail
 primitives while the unified-resource owner supplies StorageClass,
-PersistentVolume, and PersistentVolumeClaim-specific columns.
+PersistentVolume, and PersistentVolumeClaim-specific columns. Kubernetes
+networking inventory follows that same primitive boundary while the
+unified-resource owner supplies Service, Ingress, and EndpointSlice-specific
+columns.
 
 1. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `security-privacy`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
    The panel may own shell placement and local action layout, but

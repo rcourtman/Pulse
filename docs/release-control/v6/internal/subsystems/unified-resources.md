@@ -130,6 +130,7 @@ cross-source deduplication.
 106. `frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx`
 107. `frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx`
 108. `frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx`
+109. `frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx`
 
 ## Shared Boundaries
 
@@ -278,6 +279,13 @@ reintroduce false Swarm capability surfaces.
    or phase, class, size/request, access/reclaim policy, provisioner, and
    PV/PVC binding targets instead of routing those API objects through the
    generic Kubernetes inventory table.
+   Kubernetes networking inventory follows the same native-table rule:
+   `/kubernetes/networking` must render Service, Ingress, and EndpointSlice
+   rows through a networking-specific table that preserves cluster/namespace
+   scope, Service type, ClusterIP/external IPs, service ports, selectors,
+   Ingress class, hosts and addresses, EndpointSlice address type, ready
+   endpoint counts, endpoint ports, and service targets instead of routing
+   those API objects through the generic Kubernetes inventory table.
 2. Add typed accessors and views in `internal/unifiedresources/views.go`
 3. Add source ingestion/adaptation in the adapter layer only
    Frontend resource platform contracts in

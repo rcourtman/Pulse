@@ -421,6 +421,9 @@ func assertKubernetesMockCoverage(t *testing.T, graph FixtureGraph) {
 	nodeCount := 0
 	deploymentCount := 0
 	podCount := 0
+	serviceCount := 0
+	ingressCount := 0
+	endpointSliceCount := 0
 	storageClassCount := 0
 	persistentVolumeCount := 0
 	persistentVolumeClaimCount := 0
@@ -428,6 +431,9 @@ func assertKubernetesMockCoverage(t *testing.T, graph FixtureGraph) {
 		nodeCount += len(cluster.Nodes)
 		deploymentCount += len(cluster.Deployments)
 		podCount += len(cluster.Pods)
+		serviceCount += len(cluster.Services)
+		ingressCount += len(cluster.Ingresses)
+		endpointSliceCount += len(cluster.EndpointSlices)
 		storageClassCount += len(cluster.StorageClasses)
 		persistentVolumeCount += len(cluster.PersistentVolumes)
 		persistentVolumeClaimCount += len(cluster.PersistentVolumeClaims)
@@ -438,6 +444,14 @@ func assertKubernetesMockCoverage(t *testing.T, graph FixtureGraph) {
 			nodeCount,
 			deploymentCount,
 			podCount,
+		)
+	}
+	if serviceCount == 0 || ingressCount == 0 || endpointSliceCount == 0 {
+		t.Fatalf(
+			"expected kubernetes fixtures to include services, ingresses, and endpoint slices; got services=%d ingresses=%d endpointSlices=%d",
+			serviceCount,
+			ingressCount,
+			endpointSliceCount,
 		)
 	}
 	if storageClassCount == 0 || persistentVolumeCount == 0 || persistentVolumeClaimCount == 0 {

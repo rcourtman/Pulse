@@ -16,6 +16,7 @@ import {
 import { KubernetesClustersTable } from './KubernetesClustersTable';
 import { KubernetesDeploymentsTable } from './KubernetesDeploymentsTable';
 import { KubernetesInventoryTable } from './KubernetesInventoryTable';
+import { KubernetesNetworkingTable } from './KubernetesNetworkingTable';
 import { KubernetesNodesTable } from './KubernetesNodesTable';
 import { KubernetesStorageTable } from './KubernetesStorageTable';
 import {
@@ -128,9 +129,8 @@ export function KubernetesPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'networking'}>
-              <KubernetesInventoryTable
+              <KubernetesNetworkingTable
                 resources={model().networking}
-                variant="networking"
                 emptyIcon={k8sIcon()}
                 emptyTitle="No networking resources reported"
                 emptyDescription="Services, ingresses, and endpoint slices appear here once the agent can read networking inventory."

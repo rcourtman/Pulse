@@ -645,6 +645,9 @@ func applyDemoKubernetesNativeInventory(cluster *models.KubernetesCluster, now t
 	cluster.EndpointSlices = []models.KubernetesEndpointSlice{
 		{UID: cluster.ID + "-eps-checkout-api", Name: "checkout-api-abc12", Namespace: "services", AddressType: "IPv4", ServiceName: "checkout-api", EndpointCount: 3, ReadyEndpointCount: 3, Ports: []models.KubernetesEndpointPort{{Name: "http", Protocol: "TCP", Port: 8080, AppProtocol: "kubernetes.io/http"}}, CreatedAt: createdAt, Labels: labels("checkout-api")},
 	}
+	cluster.Ingresses = []models.KubernetesIngress{
+		{UID: cluster.ID + "-ing-checkout-web", Name: "checkout-web", Namespace: "apps", ClassName: "nginx", Hosts: []string{"checkout.demo.pulse.local"}, Addresses: []string{"198.51.100.24"}, CreatedAt: createdAt, Labels: labels("checkout-web")},
+	}
 	allowExpansion := true
 	cluster.StorageClasses = []models.KubernetesStorageClass{
 		{UID: cluster.ID + "-sc-fast-ssd", Name: "fast-ssd", Provisioner: "csi.pulse-demo.local", ReclaimPolicy: "Delete", VolumeBindingMode: "WaitForFirstConsumer", AllowVolumeExpansion: &allowExpansion, ParameterKeys: []string{"type", "iops", "encrypted"}, CreatedAt: createdAt, Labels: labels("fast-ssd")},

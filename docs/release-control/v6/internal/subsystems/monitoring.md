@@ -63,8 +63,9 @@ truth for live infrastructure data.
 39. `internal/models/converters.go`
 40. `internal/models/deepcopy.go`
 41. `internal/mock/generator.go`
-42. `internal/kubernetesagent/agent.go`
-43. `pkg/agents/kubernetes/report.go`
+42. `internal/mock/demo_scenarios.go`
+43. `internal/kubernetesagent/agent.go`
+44. `pkg/agents/kubernetes/report.go`
 
 ## Shared Boundaries
 
@@ -197,11 +198,12 @@ truth for live infrastructure data.
     the report contract. Mock/demo Kubernetes ConfigMap and Secret inventory
     must mirror the current metadata-only trust boundary rather than seeding
     payload key names. Mock/demo Kubernetes inventory must also seed
-    representative storage-class, persistent-volume, and persistent-volume-claim
-    rows so the native storage tab exercises the same report/resource contract
-    as live agents. Monitoring must preserve those objects as native cluster
+    representative Service, Ingress, EndpointSlice, storage-class,
+    persistent-volume, and persistent-volume-claim rows so the native
+    networking and storage tabs exercise the same report/resource contract as
+    live agents. Monitoring must preserve those objects as native cluster
     inventory instead of flattening them into pods, deployments, or generic
-    storage/configuration rows.
+    networking, storage, or configuration rows.
 
 ## Forbidden Paths
 
