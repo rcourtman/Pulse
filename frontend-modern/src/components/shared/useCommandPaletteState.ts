@@ -29,7 +29,7 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
         proxmoxPath: buildProxmoxPath(),
         dockerPath: buildDockerPath(),
         kubernetesPath: buildKubernetesPath(),
-        kubernetesPodsPath: buildKubernetesPath('pods'),
+        kubernetesWorkloadsPath: buildKubernetesPath('workloads'),
         trueNasPath: buildTrueNASPath(),
         vmwarePath: buildVmwarePath(),
         vmwareNetworksPath: buildVmwarePath('networks'),

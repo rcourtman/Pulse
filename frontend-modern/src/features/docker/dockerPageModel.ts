@@ -20,14 +20,9 @@ export type DockerPageTabId =
   | 'overview'
   | 'containers'
   | 'images'
-  | 'volumes'
-  | 'networks'
   | 'storage'
-  | 'swarm-nodes'
-  | 'services'
-  | 'tasks'
-  | 'secrets'
-  | 'configs';
+  | 'networks'
+  | 'swarm';
 
 export const DOCKER_TAB_SPECS: readonly {
   id: DockerPageTabId;
@@ -37,17 +32,29 @@ export const DOCKER_TAB_SPECS: readonly {
   { id: 'overview', label: 'Overview', path: '/docker/overview' },
   { id: 'containers', label: 'Containers', path: '/docker/containers' },
   { id: 'images', label: 'Images', path: '/docker/images' },
-  { id: 'volumes', label: 'Volumes', path: '/docker/volumes' },
-  { id: 'networks', label: 'Networks', path: '/docker/networks' },
   { id: 'storage', label: 'Storage', path: '/docker/storage' },
-  { id: 'swarm-nodes', label: 'Swarm Nodes', path: '/docker/swarm-nodes' },
-  { id: 'services', label: 'Services', path: '/docker/services' },
-  { id: 'tasks', label: 'Tasks', path: '/docker/tasks' },
-  { id: 'secrets', label: 'Secrets', path: '/docker/secrets' },
-  { id: 'configs', label: 'Configs', path: '/docker/configs' },
+  { id: 'networks', label: 'Networks', path: '/docker/networks' },
+  { id: 'swarm', label: 'Swarm', path: '/docker/swarm' },
 ] as const;
 
 const asTrimmedString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+const DOCKER_ROUTE_TAB_ALIASES: Record<string, DockerPageTabId> = {
+  configs: 'swarm',
+  secrets: 'swarm',
+  services: 'swarm',
+  'swarm-nodes': 'swarm',
+  tasks: 'swarm',
+  volumes: 'storage',
+};
+
+export const resolveDockerPageTabId = (segment: string | undefined): DockerPageTabId => {
+  const normalized = asTrimmedString(segment).toLowerCase();
+  if (!normalized) return 'overview';
+  const direct = DOCKER_TAB_SPECS.find((tab) => tab.id === normalized);
+  if (direct) return direct.id;
+  return DOCKER_ROUTE_TAB_ALIASES[normalized] ?? 'overview';
+};
 
 const isDockerPlatform = (resource: Resource): boolean =>
   resolveResourcePlatformType(resource) === 'docker';

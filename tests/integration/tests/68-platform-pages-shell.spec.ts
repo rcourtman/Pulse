@@ -60,14 +60,20 @@ const PLATFORM_PAGES: readonly PlatformPageCase[] = [
     tabPaths: [
       '/kubernetes/overview',
       '/kubernetes/nodes',
-      '/kubernetes/pods',
-      '/kubernetes/deployments',
+      '/kubernetes/workloads',
+      '/kubernetes/services',
+      '/kubernetes/storage',
+      '/kubernetes/configuration',
+      '/kubernetes/events',
     ],
     populatedTabPaths: [
       '/kubernetes/overview',
       '/kubernetes/nodes',
-      '/kubernetes/pods',
-      '/kubernetes/deployments',
+      '/kubernetes/workloads',
+      '/kubernetes/services',
+      '/kubernetes/storage',
+      '/kubernetes/configuration',
+      '/kubernetes/events',
     ],
   },
   {
@@ -108,8 +114,20 @@ const PLATFORM_PAGES: readonly PlatformPageCase[] = [
     rootPath: '/vmware',
     testId: 'vmware-page',
     ariaLabel: 'VMware sections',
-    tabPaths: ['/vmware/overview', '/vmware/vms', '/vmware/storage'],
-    populatedTabPaths: ['/vmware/overview', '/vmware/vms', '/vmware/storage'],
+    tabPaths: [
+      '/vmware/overview',
+      '/vmware/storage',
+      '/vmware/networks',
+      '/vmware/health',
+      '/vmware/activity',
+    ],
+    populatedTabPaths: [
+      '/vmware/overview',
+      '/vmware/storage',
+      '/vmware/networks',
+      '/vmware/health',
+      '/vmware/activity',
+    ],
   },
 ];
 
@@ -179,7 +197,7 @@ test.describe('Platform pages shell', () => {
     });
   }
 
-  test('docker page renders as a single unified surface without sub-tabs', async ({
+  test('docker page renders container runtime workflow tabs', async ({
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop shell smoke');
@@ -190,7 +208,20 @@ test.describe('Platform pages shell', () => {
     const pageRoot = page.getByTestId('docker-page');
     await expect(pageRoot).toBeVisible({ timeout: 30_000 });
 
-    await expect(page.getByRole('navigation', { name: 'Docker sections' })).toHaveCount(0);
+    const sectionNav = page.getByRole('navigation', {
+      name: 'Container runtime sections',
+    });
+    await expect(sectionNav).toBeVisible();
+    for (const tabPath of [
+      '/docker/overview',
+      '/docker/containers',
+      '/docker/images',
+      '/docker/storage',
+      '/docker/networks',
+      '/docker/swarm',
+    ]) {
+      await expect(sectionNav.locator(`a[href="${tabPath}"]`)).toBeVisible();
+    }
   });
 
   test('every platform sub-tab exposes v5-style operator controls', async ({
@@ -198,28 +229,35 @@ test.describe('Platform pages shell', () => {
   }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop chrome audit');
 
-    // Every populated sub-tab — embedded canonical Workloads/Storage AND
+    // Every populated inventory tab — embedded canonical Workloads/Storage AND
     // UnifiedResourceTable-backed infra views — must render an operator
-    // search input under platform-page chrome. The shared
+    // search input under platform-page chrome. Overview stacks are summary
+    // surfaces and intentionally keep their table toolbars suppressed. The shared
     // PlatformResourceTable wrapper provides the toolbar for the
     // UnifiedResourceTable-backed tabs; the embedded surfaces use their
     // own canonical FilterBar via `showFilterToolbar`.
     const cases: ReadonlyArray<{ path: string; testId: string }> = [
-      { path: '/docker/overview', testId: 'docker-page' },
-      { path: '/kubernetes/overview', testId: 'kubernetes-page' },
+      { path: '/docker/containers', testId: 'docker-page' },
+      { path: '/docker/images', testId: 'docker-page' },
+      { path: '/docker/storage', testId: 'docker-page' },
+      { path: '/docker/networks', testId: 'docker-page' },
+      { path: '/docker/swarm', testId: 'docker-page' },
       { path: '/kubernetes/nodes', testId: 'kubernetes-page' },
-      { path: '/kubernetes/pods', testId: 'kubernetes-page' },
-      { path: '/kubernetes/deployments', testId: 'kubernetes-page' },
-      { path: '/truenas/overview', testId: 'truenas-page' },
+      { path: '/kubernetes/workloads', testId: 'kubernetes-page' },
+      { path: '/kubernetes/services', testId: 'kubernetes-page' },
+      { path: '/kubernetes/storage', testId: 'kubernetes-page' },
+      { path: '/kubernetes/configuration', testId: 'kubernetes-page' },
+      { path: '/kubernetes/events', testId: 'kubernetes-page' },
       { path: '/truenas/storage', testId: 'truenas-page' },
       { path: '/truenas/services', testId: 'truenas-page' },
       { path: '/truenas/apps', testId: 'truenas-page' },
       { path: '/truenas/vms', testId: 'truenas-page' },
       { path: '/truenas/shares', testId: 'truenas-page' },
       { path: '/truenas/protection', testId: 'truenas-page' },
-      { path: '/vmware/overview', testId: 'vmware-page' },
-      { path: '/vmware/vms', testId: 'vmware-page' },
       { path: '/vmware/storage', testId: 'vmware-page' },
+      { path: '/vmware/networks', testId: 'vmware-page' },
+      { path: '/vmware/health', testId: 'vmware-page' },
+      { path: '/vmware/activity', testId: 'vmware-page' },
     ];
 
     for (const c of cases) {

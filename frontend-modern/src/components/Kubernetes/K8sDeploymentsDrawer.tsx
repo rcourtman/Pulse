@@ -168,7 +168,7 @@ export const K8sDeploymentsDrawer: Component<{
 
   const openPods = (_ns?: string) => {
     if (!clusterName()) return;
-    navigate(buildKubernetesPath('pods'));
+    navigate(buildKubernetesPath('workloads'));
   };
 
   const headingId = () => `k8s-deployments-drawer-heading-${clusterName() || 'cluster'}`;

@@ -431,6 +431,15 @@ func assertKubernetesMockCoverage(t *testing.T, graph FixtureGraph) {
 	storageClassCount := 0
 	persistentVolumeCount := 0
 	persistentVolumeClaimCount := 0
+	configMapCount := 0
+	secretCount := 0
+	serviceAccountCount := 0
+	networkPolicyCount := 0
+	resourceQuotaCount := 0
+	limitRangeCount := 0
+	podDisruptionBudgetCount := 0
+	horizontalPodAutoscalerCount := 0
+	eventCount := 0
 	for _, cluster := range graph.State.KubernetesClusters {
 		nodeCount += len(cluster.Nodes)
 		deploymentCount += len(cluster.Deployments)
@@ -445,6 +454,15 @@ func assertKubernetesMockCoverage(t *testing.T, graph FixtureGraph) {
 		storageClassCount += len(cluster.StorageClasses)
 		persistentVolumeCount += len(cluster.PersistentVolumes)
 		persistentVolumeClaimCount += len(cluster.PersistentVolumeClaims)
+		configMapCount += len(cluster.ConfigMaps)
+		secretCount += len(cluster.Secrets)
+		serviceAccountCount += len(cluster.ServiceAccounts)
+		networkPolicyCount += len(cluster.NetworkPolicies)
+		resourceQuotaCount += len(cluster.ResourceQuotas)
+		limitRangeCount += len(cluster.LimitRanges)
+		podDisruptionBudgetCount += len(cluster.PodDisruptionBudgets)
+		horizontalPodAutoscalerCount += len(cluster.HorizontalPodAutoscalers)
+		eventCount += len(cluster.Events)
 	}
 	if nodeCount == 0 || deploymentCount == 0 || podCount == 0 {
 		t.Fatalf(
@@ -477,6 +495,30 @@ func assertKubernetesMockCoverage(t *testing.T, graph FixtureGraph) {
 			storageClassCount,
 			persistentVolumeCount,
 			persistentVolumeClaimCount,
+		)
+	}
+	if configMapCount == 0 || secretCount == 0 || serviceAccountCount == 0 {
+		t.Fatalf(
+			"expected kubernetes fixtures to include configuration resources; got configMaps=%d secrets=%d serviceAccounts=%d",
+			configMapCount,
+			secretCount,
+			serviceAccountCount,
+		)
+	}
+	if networkPolicyCount == 0 || resourceQuotaCount == 0 || limitRangeCount == 0 || podDisruptionBudgetCount == 0 {
+		t.Fatalf(
+			"expected kubernetes fixtures to include policy resources; got networkPolicies=%d resourceQuotas=%d limitRanges=%d pdbs=%d",
+			networkPolicyCount,
+			resourceQuotaCount,
+			limitRangeCount,
+			podDisruptionBudgetCount,
+		)
+	}
+	if horizontalPodAutoscalerCount == 0 || eventCount == 0 {
+		t.Fatalf(
+			"expected kubernetes fixtures to include autoscaling and event resources; got hpas=%d events=%d",
+			horizontalPodAutoscalerCount,
+			eventCount,
 		)
 	}
 }

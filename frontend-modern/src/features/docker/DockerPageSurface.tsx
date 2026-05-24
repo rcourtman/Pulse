@@ -19,11 +19,16 @@ import { DockerStorageUsageTable } from './DockerStorageUsageTable';
 import { DockerSwarmNodesTable } from './DockerSwarmNodesTable';
 import { DockerTasksTable } from './DockerTasksTable';
 import { DockerVolumesTable } from './DockerVolumesTable';
-import { DOCKER_TAB_SPECS, buildDockerPageModel, type DockerPageTabId } from './dockerPageModel';
+import {
+  DOCKER_TAB_SPECS,
+  buildDockerPageModel,
+  resolveDockerPageTabId,
+  type DockerPageModel,
+  type DockerPageTabId,
+} from './dockerPageModel';
 
 const DOCKER_RESOURCE_QUERY =
   'type=agent,docker-host,app-container,docker-service,docker-image,docker-volume,docker-network,docker-task,docker-swarm-node,docker-secret,docker-config';
-const VALID_TABS = new Set<DockerPageTabId>(DOCKER_TAB_SPECS.map((tab) => tab.id));
 
 const dockerIcon = () => <ContainerIcon class="h-6 w-6 text-slate-400" />;
 
@@ -35,8 +40,8 @@ export function DockerPageSurface() {
     initialHydration: 'prefer-ws-then-rest',
   });
   const activeTab = createMemo<DockerPageTabId>(() => {
-    const segment = location.pathname.split('/').filter(Boolean)[1] as DockerPageTabId | undefined;
-    return segment && VALID_TABS.has(segment) ? segment : 'overview';
+    const segment = location.pathname.split('/').filter(Boolean)[1];
+    return resolveDockerPageTabId(segment);
   });
   const model = createMemo(() => buildDockerPageModel(resources()));
   const showServicesSection = createMemo(() => model().services.length > 0);
@@ -104,14 +109,6 @@ export function DockerPageSurface() {
                 emptyDescription="Images appear here when a Docker or Podman host reports local image inventory."
               />
             </Show>
-            <Show when={activeTab() === 'volumes'}>
-              <DockerVolumesTable
-                resources={model().volumes}
-                emptyIcon={dockerIcon()}
-                emptyTitle="No volumes"
-                emptyDescription="Volumes appear here when the container runtime reports volume inventory."
-              />
-            </Show>
             <Show when={activeTab() === 'networks'}>
               <DockerNetworksTable
                 resources={model().networks}
@@ -121,54 +118,10 @@ export function DockerPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'storage'}>
-              <DockerStorageUsageTable
-                hosts={model().hosts}
-                sourceCount={model().hosts.length}
-                emptyIcon={dockerIcon()}
-                emptyTitle="No engine storage usage"
-                emptyDescription="Docker / Podman storage usage appears here when hosts report the engine disk-usage snapshot."
-              />
+              <DockerStorage model={model()} />
             </Show>
-            <Show when={activeTab() === 'swarm-nodes'}>
-              <DockerSwarmNodesTable
-                resources={model().nodes}
-                emptyIcon={dockerIcon()}
-                emptyTitle="No Swarm nodes"
-                emptyDescription="Swarm nodes appear here when a Docker manager reports the cluster node inventory."
-              />
-            </Show>
-            <Show when={activeTab() === 'services'}>
-              <DockerServicesTable
-                resources={model().services}
-                sourceCount={model().services.length}
-                emptyIcon={dockerIcon()}
-                emptyTitle="No Swarm services"
-                emptyDescription="Docker Swarm services appear here when a Swarm manager reports them."
-              />
-            </Show>
-            <Show when={activeTab() === 'tasks'}>
-              <DockerTasksTable
-                resources={model().tasks}
-                emptyIcon={dockerIcon()}
-                emptyTitle="No Swarm tasks"
-                emptyDescription="Swarm tasks appear here when a Swarm manager reports replica task inventory."
-              />
-            </Show>
-            <Show when={activeTab() === 'secrets'}>
-              <DockerSecretsTable
-                resources={model().secrets}
-                emptyIcon={dockerIcon()}
-                emptyTitle="No Swarm secrets"
-                emptyDescription="Swarm secret metadata appears here when a Docker manager reports the secrets API."
-              />
-            </Show>
-            <Show when={activeTab() === 'configs'}>
-              <DockerConfigsTable
-                resources={model().configs}
-                emptyIcon={dockerIcon()}
-                emptyTitle="No Swarm configs"
-                emptyDescription="Swarm config metadata appears here when a Docker manager reports the configs API."
-              />
+            <Show when={activeTab() === 'swarm'}>
+              <DockerSwarm model={model()} />
             </Show>
           </Show>
         </Show>
@@ -178,6 +131,94 @@ export function DockerPageSurface() {
 }
 
 export default DockerPageSurface;
+
+function DockerStorage(props: { model: DockerPageModel }) {
+  return (
+    <div class="space-y-4">
+      <DockerStorageUsageTable
+        hosts={props.model.hosts}
+        sourceCount={props.model.hosts.length}
+        emptyIcon={dockerIcon()}
+        emptyTitle="No Docker or Podman storage usage"
+        emptyDescription="Engine disk-usage snapshots appear here when a Docker or Podman host reports them."
+      />
+      <DockerVolumesTable
+        resources={props.model.volumes}
+        emptyIcon={dockerIcon()}
+        emptyTitle="No volumes"
+        emptyDescription="Volumes appear here when the container runtime reports volume inventory."
+      />
+    </div>
+  );
+}
+
+function DockerSwarm(props: { model: DockerPageModel }) {
+  const hasSwarmInventory = createMemo(
+    () =>
+      props.model.services.length > 0 ||
+      props.model.tasks.length > 0 ||
+      props.model.nodes.length > 0 ||
+      props.model.secrets.length > 0 ||
+      props.model.configs.length > 0,
+  );
+
+  return (
+    <Show
+      when={hasSwarmInventory()}
+      fallback={
+        <PlatformTableEmptyState
+          icon={dockerIcon()}
+          title="No Swarm inventory"
+          description="Docker Swarm services, tasks, nodes, secrets, and configs appear here when a Swarm manager reports them."
+        />
+      }
+    >
+      <div class="space-y-4">
+        <Show when={props.model.services.length > 0}>
+          <DockerServicesTable
+            resources={props.model.services}
+            sourceCount={props.model.services.length}
+            emptyIcon={dockerIcon()}
+            emptyTitle="No Swarm services"
+            emptyDescription="Docker Swarm services appear here when a Swarm manager reports them."
+          />
+        </Show>
+        <Show when={props.model.tasks.length > 0}>
+          <DockerTasksTable
+            resources={props.model.tasks}
+            emptyIcon={dockerIcon()}
+            emptyTitle="No Swarm tasks"
+            emptyDescription="Docker Swarm tasks appear here when a Swarm manager reports task state."
+          />
+        </Show>
+        <Show when={props.model.nodes.length > 0}>
+          <DockerSwarmNodesTable
+            resources={props.model.nodes}
+            emptyIcon={dockerIcon()}
+            emptyTitle="No Swarm nodes"
+            emptyDescription="Swarm nodes appear here when a Swarm manager reports cluster membership."
+          />
+        </Show>
+        <Show when={props.model.secrets.length > 0}>
+          <DockerSecretsTable
+            resources={props.model.secrets}
+            emptyIcon={dockerIcon()}
+            emptyTitle="No Swarm secrets"
+            emptyDescription="Docker Swarm secrets appear here when a Swarm manager reports secret metadata."
+          />
+        </Show>
+        <Show when={props.model.configs.length > 0}>
+          <DockerConfigsTable
+            resources={props.model.configs}
+            emptyIcon={dockerIcon()}
+            emptyTitle="No Swarm configs"
+            emptyDescription="Docker Swarm configs appear here when a Swarm manager reports config metadata."
+          />
+        </Show>
+      </div>
+    </Show>
+  );
+}
 
 function DockerOverview(props: {
   hosts: ReturnType<typeof buildDockerPageModel>['hosts'];

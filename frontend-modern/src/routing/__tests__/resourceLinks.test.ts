@@ -58,9 +58,10 @@ describe('resource link routing contract', () => {
 
     expect(KUBERNETES_PATH).toBe('/kubernetes');
     expect(buildKubernetesPath()).toBe('/kubernetes/overview');
+    expect(buildKubernetesPath('workloads')).toBe('/kubernetes/workloads');
+    expect(buildKubernetesPath('services')).toBe('/kubernetes/services');
+    expect(buildKubernetesPath('configuration')).toBe('/kubernetes/configuration');
     expect(buildKubernetesPath('pods')).toBe('/kubernetes/pods');
-    expect(buildKubernetesPath('deployments')).toBe('/kubernetes/deployments');
-    expect(buildKubernetesPath('controllers')).toBe('/kubernetes/controllers');
 
     expect(TRUENAS_PATH).toBe('/truenas');
     expect(buildTrueNASPath()).toBe('/truenas/overview');

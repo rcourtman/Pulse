@@ -756,7 +756,7 @@ describe('K8sDeploymentsDrawer', () => {
   });
 
   describe('navigation', () => {
-    it('"Open Pods" button navigates to the Kubernetes Pods sub-tab', async () => {
+    it('"Open Pods" button navigates to the Kubernetes Workloads tab', async () => {
       mockApiResponse([makeDeployment()]);
       render(() => <K8sDeploymentsDrawer cluster="my-cluster" />);
 
@@ -768,10 +768,10 @@ describe('K8sDeploymentsDrawer', () => {
       fireEvent.click(openPodsBtn);
 
       expect(navigateMock).toHaveBeenCalledTimes(1);
-      expect(navigateMock).toHaveBeenCalledWith('/kubernetes/pods');
+      expect(navigateMock).toHaveBeenCalledWith('/kubernetes/workloads');
     });
 
-    it('"Open Pods" routes to the Kubernetes Pods sub-tab regardless of selected namespace', async () => {
+    it('"Open Pods" routes to the Kubernetes Workloads tab regardless of selected namespace', async () => {
       mockApiResponse([
         makeDeployment({ id: '1', name: 'dep-a', kubernetes: { namespace: 'production' } }),
         makeDeployment({ id: '2', name: 'dep-b', kubernetes: { namespace: 'staging' } }),
@@ -783,7 +783,7 @@ describe('K8sDeploymentsDrawer', () => {
       });
 
       // Selecting a namespace narrows the in-drawer view but no longer
-      // forwards as a URL filter (the platform-first Kubernetes Pods tab
+      // forwards as a URL filter (the platform-first Kubernetes Workloads tab
       // does not consume legacy ?namespace= query params).
       const select = screen.getByLabelText('Namespace');
       fireEvent.change(select, { target: { value: 'production' } });
@@ -792,10 +792,10 @@ describe('K8sDeploymentsDrawer', () => {
       fireEvent.click(openPodsBtn);
 
       expect(navigateMock).toHaveBeenCalledTimes(1);
-      expect(navigateMock).toHaveBeenCalledWith('/kubernetes/pods');
+      expect(navigateMock).toHaveBeenCalledWith('/kubernetes/workloads');
     });
 
-    it('"View Pods" button on a row navigates to the Kubernetes Pods sub-tab', async () => {
+    it('"View Pods" button on a row navigates to the Kubernetes Workloads tab', async () => {
       mockApiResponse([
         makeDeployment({ id: '1', name: 'dep-a', kubernetes: { namespace: 'kube-system' } }),
       ]);
@@ -809,7 +809,7 @@ describe('K8sDeploymentsDrawer', () => {
       fireEvent.click(viewPodsBtn);
 
       expect(navigateMock).toHaveBeenCalledTimes(1);
-      expect(navigateMock).toHaveBeenCalledWith('/kubernetes/pods');
+      expect(navigateMock).toHaveBeenCalledWith('/kubernetes/workloads');
     });
 
     it('does not navigate when cluster is empty', async () => {

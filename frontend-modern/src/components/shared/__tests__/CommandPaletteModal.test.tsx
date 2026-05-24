@@ -76,6 +76,7 @@ describe('CommandPaletteModal', () => {
     expect(commandPaletteModelSource).toContain("id: 'nav-proxmox'");
     expect(commandPaletteModelSource).toContain("id: 'nav-docker'");
     expect(commandPaletteModelSource).toContain("id: 'nav-kubernetes'");
+    expect(commandPaletteModelSource).toContain("id: 'nav-kubernetes-workloads'");
     expect(commandPaletteModelSource).toContain("id: 'nav-truenas'");
     expect(commandPaletteModelSource).toContain("id: 'nav-vmware'");
     expect(commandPaletteModelSource).toContain("id: 'nav-vmware-networks'");
@@ -97,8 +98,8 @@ describe('CommandPaletteModal', () => {
     expect(screen.getByText('Go to Agents')).toBeInTheDocument();
     expect(screen.getByText('Go to Proxmox')).toBeInTheDocument();
     expect(screen.getByText('Go to Containers')).toBeInTheDocument();
-    expect(screen.getByText('Go to Kubernetes Pods')).toBeInTheDocument();
-    expect(screen.getByText('/kubernetes/pods')).toBeInTheDocument();
+    expect(screen.getByText('Go to Kubernetes Workloads')).toBeInTheDocument();
+    expect(screen.getByText('/kubernetes/workloads')).toBeInTheDocument();
     expect(screen.getByText('Go to vSphere')).toBeInTheDocument();
     expect(screen.getByText('Go to vSphere Networks')).toBeInTheDocument();
     expect(screen.getByText('/vmware/networks')).toBeInTheDocument();
@@ -109,7 +110,7 @@ describe('CommandPaletteModal', () => {
     );
   });
 
-  it('navigates to the Kubernetes pods sub-tab', async () => {
+  it('navigates to the Kubernetes workloads tab', async () => {
     const onClose = vi.fn();
     render(() => (
       <CommandPaletteModal
@@ -119,9 +120,9 @@ describe('CommandPaletteModal', () => {
       />
     ));
 
-    await fireEvent.click(screen.getByText('Go to Kubernetes Pods'));
+    await fireEvent.click(screen.getByText('Go to Kubernetes Workloads'));
 
-    expect(navigateMock).toHaveBeenCalledWith('/kubernetes/pods');
+    expect(navigateMock).toHaveBeenCalledWith('/kubernetes/workloads');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -155,7 +156,7 @@ describe('CommandPaletteModal', () => {
     await fireEvent.input(input, { target: { value: 'kubernetes pods' } });
     await fireEvent.keyDown(input, { key: 'Enter' });
 
-    expect(navigateMock).toHaveBeenCalledWith('/kubernetes/pods');
+    expect(navigateMock).toHaveBeenCalledWith('/kubernetes/workloads');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 

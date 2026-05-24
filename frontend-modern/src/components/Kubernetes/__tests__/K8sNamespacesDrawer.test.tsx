@@ -33,7 +33,7 @@ describe('K8sNamespacesDrawer', () => {
     cleanup();
   });
 
-  it('navigates to the Kubernetes Pods sub-tab from the cluster summary', async () => {
+  it('navigates to the Kubernetes Workloads tab from the cluster summary', async () => {
     apiFetchJSONMock.mockResolvedValueOnce(makeResponse([{ namespace: 'default' }]));
 
     render(() => <K8sNamespacesDrawer cluster="cluster-a" />);
@@ -44,10 +44,10 @@ describe('K8sNamespacesDrawer', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Open All Pods' }));
 
-    expect(navigateMock).toHaveBeenCalledWith('/kubernetes/pods');
+    expect(navigateMock).toHaveBeenCalledWith('/kubernetes/workloads');
   });
 
-  it('navigates to the Kubernetes Pods sub-tab from a namespace row', async () => {
+  it('navigates to the Kubernetes Workloads tab from a namespace row', async () => {
     apiFetchJSONMock.mockResolvedValueOnce(makeResponse([{ namespace: 'kube-system' }]));
 
     render(() => <K8sNamespacesDrawer cluster="cluster-a" />);
@@ -58,7 +58,7 @@ describe('K8sNamespacesDrawer', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Open Pods' }));
 
-    expect(navigateMock).toHaveBeenCalledWith('/kubernetes/pods');
+    expect(navigateMock).toHaveBeenCalledWith('/kubernetes/workloads');
   });
 
   it('uses the shared platform table spacing and divider contract', async () => {

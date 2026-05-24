@@ -4,15 +4,10 @@ import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 export type KubernetesPageTabId =
   | 'overview'
   | 'nodes'
-  | 'pods'
-  | 'deployments'
-  | 'controllers'
+  | 'workloads'
   | 'services'
   | 'storage'
-  | 'networking'
-  | 'config'
-  | 'policy'
-  | 'autoscaling'
+  | 'configuration'
   | 'events';
 
 export type KubernetesTabSpec = {
@@ -24,17 +19,32 @@ export type KubernetesTabSpec = {
 export const KUBERNETES_TAB_SPECS: readonly KubernetesTabSpec[] = [
   { id: 'overview', label: 'Overview', path: '/kubernetes/overview' },
   { id: 'nodes', label: 'Nodes', path: '/kubernetes/nodes' },
-  { id: 'pods', label: 'Pods', path: '/kubernetes/pods' },
-  { id: 'deployments', label: 'Deployments', path: '/kubernetes/deployments' },
-  { id: 'controllers', label: 'Controllers', path: '/kubernetes/controllers' },
+  { id: 'workloads', label: 'Workloads', path: '/kubernetes/workloads' },
   { id: 'services', label: 'Services', path: '/kubernetes/services' },
   { id: 'storage', label: 'Storage', path: '/kubernetes/storage' },
-  { id: 'networking', label: 'Networking', path: '/kubernetes/networking' },
-  { id: 'config', label: 'Config', path: '/kubernetes/config' },
-  { id: 'policy', label: 'Policy', path: '/kubernetes/policy' },
-  { id: 'autoscaling', label: 'Autoscaling', path: '/kubernetes/autoscaling' },
+  { id: 'configuration', label: 'Configuration', path: '/kubernetes/configuration' },
   { id: 'events', label: 'Events', path: '/kubernetes/events' },
 ] as const;
+
+const asTrimmedString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+const KUBERNETES_ROUTE_TAB_ALIASES: Record<string, KubernetesPageTabId> = {
+  autoscaling: 'workloads',
+  config: 'configuration',
+  controllers: 'workloads',
+  deployments: 'workloads',
+  networking: 'services',
+  pods: 'workloads',
+  policy: 'configuration',
+};
+
+export const resolveKubernetesPageTabId = (segment: string | undefined): KubernetesPageTabId => {
+  const normalized = asTrimmedString(segment).toLowerCase();
+  if (!normalized) return 'overview';
+  const direct = KUBERNETES_TAB_SPECS.find((tab) => tab.id === normalized);
+  if (direct) return direct.id;
+  return KUBERNETES_ROUTE_TAB_ALIASES[normalized] ?? 'overview';
+};
 
 const KUBERNETES_RESOURCE_TYPES = new Set<ResourceType>([
   'k8s-cluster',
@@ -109,6 +119,7 @@ export type KubernetesPageModel = {
   workloads: Resource[];
   storage: Resource[];
   networking: Resource[];
+  serviceNetworking: Resource[];
   config: Resource[];
   policy: Resource[];
   autoscaling: Resource[];
@@ -160,6 +171,7 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
   ];
   const storage = [...storageClasses, ...persistentVolumes, ...persistentVolumeClaims];
   const networking = [...services, ...ingresses, ...endpointSlices];
+  const serviceNetworking = [...ingresses, ...endpointSlices];
   const config = [...namespaces, ...configMaps, ...secrets, ...serviceAccounts];
   const policy = [...networkPolicies, ...podDisruptionBudgets, ...resourceQuotas, ...limitRanges];
   const autoscaling = [...horizontalPodAutoscalers];
@@ -194,6 +206,7 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
     workloads,
     storage,
     networking,
+    serviceNetworking,
     config,
     policy,
     autoscaling,

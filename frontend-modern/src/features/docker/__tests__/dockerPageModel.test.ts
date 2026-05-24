@@ -6,6 +6,7 @@ import {
   buildDockerPageModel,
   getDockerHostSystemBadge,
   hasDockerSwarmEvidence,
+  resolveDockerPageTabId,
 } from '../dockerPageModel';
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource => ({
@@ -69,20 +70,28 @@ describe('dockerPageModel', () => {
     );
   });
 
-  it('declares bespoke Docker storage and Swarm node tabs', () => {
+  it('declares operator workflow tabs for Docker runtime inventory', () => {
     expect(DOCKER_TAB_SPECS.map((tab) => tab.id)).toEqual([
       'overview',
       'containers',
       'images',
-      'volumes',
-      'networks',
       'storage',
-      'swarm-nodes',
-      'services',
-      'tasks',
-      'secrets',
-      'configs',
+      'networks',
+      'swarm',
     ]);
+  });
+
+  it('keeps legacy Docker object routes mapped to workflow tabs', () => {
+    expect(resolveDockerPageTabId(undefined)).toBe('overview');
+    expect(resolveDockerPageTabId('containers')).toBe('containers');
+    expect(resolveDockerPageTabId('volumes')).toBe('storage');
+    expect(resolveDockerPageTabId('storage')).toBe('storage');
+    expect(resolveDockerPageTabId('services')).toBe('swarm');
+    expect(resolveDockerPageTabId('tasks')).toBe('swarm');
+    expect(resolveDockerPageTabId('swarm-nodes')).toBe('swarm');
+    expect(resolveDockerPageTabId('secrets')).toBe('swarm');
+    expect(resolveDockerPageTabId('configs')).toBe('swarm');
+    expect(resolveDockerPageTabId('unknown')).toBe('overview');
   });
 
   it('excludes non-Docker hosts that share the agent type', () => {

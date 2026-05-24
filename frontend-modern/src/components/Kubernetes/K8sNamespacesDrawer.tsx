@@ -87,7 +87,7 @@ export const K8sNamespacesDrawer: Component<{
 
   const openPods = (_namespace: string | null) => {
     if (!clusterName()) return;
-    navigate(buildKubernetesPath('pods'));
+    navigate(buildKubernetesPath('workloads'));
   };
 
   const headingId = () => `k8s-namespaces-drawer-heading-${clusterName() || 'cluster'}`;

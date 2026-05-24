@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
-import { KUBERNETES_TAB_SPECS, buildKubernetesPageModel } from '../kubernetesPageModel';
+import {
+  KUBERNETES_TAB_SPECS,
+  buildKubernetesPageModel,
+  resolveKubernetesPageTabId,
+} from '../kubernetesPageModel';
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource => ({
   name: resource.id,
@@ -15,21 +19,29 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
 });
 
 describe('kubernetesPageModel', () => {
-  it('declares API-native Kubernetes sections', () => {
+  it('declares operator workflow tabs for Kubernetes inventory', () => {
     expect(KUBERNETES_TAB_SPECS.map((tab) => tab.id)).toEqual([
       'overview',
       'nodes',
-      'pods',
-      'deployments',
-      'controllers',
+      'workloads',
       'services',
       'storage',
-      'networking',
-      'config',
-      'policy',
-      'autoscaling',
+      'configuration',
       'events',
     ]);
+  });
+
+  it('keeps legacy Kubernetes object routes mapped to workflow tabs', () => {
+    expect(resolveKubernetesPageTabId(undefined)).toBe('overview');
+    expect(resolveKubernetesPageTabId('nodes')).toBe('nodes');
+    expect(resolveKubernetesPageTabId('pods')).toBe('workloads');
+    expect(resolveKubernetesPageTabId('deployments')).toBe('workloads');
+    expect(resolveKubernetesPageTabId('controllers')).toBe('workloads');
+    expect(resolveKubernetesPageTabId('autoscaling')).toBe('workloads');
+    expect(resolveKubernetesPageTabId('networking')).toBe('services');
+    expect(resolveKubernetesPageTabId('config')).toBe('configuration');
+    expect(resolveKubernetesPageTabId('policy')).toBe('configuration');
+    expect(resolveKubernetesPageTabId('unknown')).toBe('overview');
   });
 
   it('buckets clusters, nodes, workloads, services, storage, networking, config, policy, autoscaling, and events', () => {
@@ -92,6 +104,7 @@ describe('kubernetesPageModel', () => {
     );
     expect(model.storage.map((r) => r.id).sort()).toEqual(['pv-1', 'pvc-1', 'sc-1']);
     expect(model.networking.map((r) => r.id).sort()).toEqual(['eps-1', 'ing-1', 'svc-1'].sort());
+    expect(model.serviceNetworking.map((r) => r.id).sort()).toEqual(['eps-1', 'ing-1']);
     expect(model.config.map((r) => r.id).sort()).toEqual(
       ['cm-1', 'ns-1', 'sa-1', 'secret-1'].sort(),
     );

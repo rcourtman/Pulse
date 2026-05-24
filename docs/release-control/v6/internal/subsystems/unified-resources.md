@@ -979,10 +979,10 @@ in the same pass. The K8s Namespaces and Deployments drawer "Open Pods" /
 "View Pods" buttons
 (`frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx`,
 `frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx`) now
-route to `/kubernetes/pods` rather than building
+route to `/kubernetes/workloads` rather than building
 `/workloads?type=pod&context=...&namespace=...` URLs; the legacy
 context/namespace query filter does not carry forward because the new
-Kubernetes Pods sub-tab does not consume those parameters. New drawer or
+Kubernetes Workloads tab does not consume those parameters. New drawer or
 correlation surfaces must anchor on platform routes (or stay-in-place drawer
 expansion) instead of resurrecting the retired top-level paths.
 
@@ -2098,13 +2098,22 @@ Unsupported secondary tabs now also use the same terse availability notices
 (`PMG resources only.`, `Kubernetes clusters only.`, `Docker runtimes with
 Swarm only.`) instead of explanatory sentences, so mismatch fallback state
 stays readable without turning support surfaces into inline documentation.
-Docker platform subtabs now follow canonical resource evidence as well:
-`Containers` is visible only when Docker/Podman app-container resources exist,
-`Storage` is backed by host-level Docker/Podman `/system/df` usage buckets,
-`Swarm services` is visible only when canonical `docker-service` resources
-exist, and `Swarm nodes` is backed by canonical `docker-swarm-node` resources
-from Docker manager node inventory. Inactive standalone Docker Swarm metadata
-is not a tab, host role, or service-surface signal.
+Docker and Kubernetes platform subtabs now follow canonical resource evidence
+inside workflow-level navigation instead of exposing one visible tab per API
+kind. Docker / Podman keeps top-level `Overview`, `Containers`, `Images`,
+`Storage`, `Networks`, and `Swarm` tabs: `Storage` is backed by host-level
+Docker/Podman `/system/df` usage buckets plus canonical `docker-volume` rows,
+and `Swarm` is backed by canonical `docker-service`, `docker-task`,
+`docker-swarm-node`, `docker-secret`, and `docker-config` rows from manager
+inventory. Kubernetes keeps top-level `Overview`, `Nodes`, `Workloads`,
+`Services`, `Storage`, `Configuration`, and `Events` tabs: `Workloads` groups
+Pods, Deployments, controller resources, and HorizontalPodAutoscalers;
+`Services` groups Service rows with ingress and endpoint-slice rows without
+duplicating Services in the networking table; and `Configuration` groups
+metadata-only config rows with policy, quota, limit, and disruption-budget
+rows. Legacy object-specific routes may resolve to the owning workflow tab, but
+top-level tab visibility is governed by the workflow model. Inactive standalone
+Docker Swarm metadata is not a tab, host role, or service-surface signal.
 The frontend Docker facet contract covers host runtime telemetry, runtime
 container projection, and Swarm service/task/node projection. Host resources
 may expose runtime/version, OS, temperature, uptime,

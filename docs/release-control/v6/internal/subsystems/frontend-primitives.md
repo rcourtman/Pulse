@@ -169,11 +169,22 @@ Platform page subnavigation is a shared frontend primitive. Docker / Podman
 and Kubernetes platform pages may add native API-backed sections, but the tabs
 must use `PlatformSectionTabs`, canonical table alignment helpers, and shared
 resource type presentation/reporting helpers rather than page-local tab shells,
-alignment classes, or ad hoc report-category coercion. Docker / Podman native
-subsections now include runtime containers, engine storage usage, Swarm node
-inventory, and metadata-only Swarm secret/config inventory where the documented
-Docker APIs report those resources; Podman-only libpod pod inventory must not
-be represented until the collector has a libpod-native source. Kubernetes config
+alignment classes, or ad hoc report-category coercion. Platform tabs are
+workflow-level navigation, not one visible tab per API resource kind: Docker /
+Podman exposes `Overview`, `Containers`, `Images`, `Storage`, `Networks`, and
+`Swarm`, while Kubernetes exposes `Overview`, `Nodes`, `Workloads`, `Services`,
+`Storage`, `Configuration`, and `Events`. API-native tables remain bespoke under
+those workflows, so Docker `Storage` owns engine disk usage plus volumes and
+Docker `Swarm` owns services, tasks, nodes, secrets, and configs; Kubernetes
+`Workloads` owns Pods, Deployments, controllers, and autoscaling, `Services`
+owns Services plus ingress/endpoint inventory, and `Configuration` owns config
+plus policy inventory. Legacy object-specific URLs may resolve to the owning
+workflow tab, but they must not reappear as top-level platform navigation unless
+the product IA is intentionally changed. Docker / Podman native subsections now
+include runtime containers, engine storage usage, Swarm node inventory, and
+metadata-only Swarm secret/config inventory where the documented Docker APIs
+report those resources; Podman-only libpod pod inventory must not be represented
+until the collector has a libpod-native source. Kubernetes config
 inventory must preserve the same trust boundary for metadata-only ConfigMap
 and Secret rows: the shared table wording may indicate metadata-only inventory,
 but must not imply payload fields were read when the agent used Kubernetes

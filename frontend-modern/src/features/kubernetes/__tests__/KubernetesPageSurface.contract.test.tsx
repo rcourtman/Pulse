@@ -145,7 +145,7 @@ describe('KubernetesPageSurface contract', () => {
     vi.clearAllMocks();
   });
 
-  it('declares Pods, Deployments, and Controllers as API-native workload tabs', () => {
+  it('declares workflow tabs while querying API-native Kubernetes resources', () => {
     setResources([
       makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
       makeResource({ id: 'pod-1', type: 'pod' }),
@@ -172,78 +172,89 @@ describe('KubernetesPageSurface contract', () => {
     );
     expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute(
       'data-tabs',
-      'overview,nodes,pods,deployments,controllers,services,storage,networking,config,policy,autoscaling,events',
+      'overview,nodes,workloads,services,storage,configuration,events',
     );
-    expect(screen.getByTestId('platform-section-tabs').getAttribute('data-tabs')).not.toContain(
-      'workloads',
-    );
+    expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'overview');
     expect(screen.getByTestId('pods-table')).toHaveAttribute('data-rows', '1');
     expect(screen.getByTestId('deployments-table')).toHaveAttribute('data-rows', '1');
     expect(screen.getByTestId('controllers-table')).toHaveAttribute('data-rows', '1');
   });
 
-  it('renders Kubernetes pods through the pod-native table', () => {
-    mockPathname.mockReturnValue('/kubernetes/pods');
-    setResources([makeResource({ id: 'checkout-api', type: 'pod' })]);
-
-    renderSurface();
-
-    expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'pods');
-    expect(screen.getByTestId('pods-table')).toHaveAttribute('data-rows', '1');
-    expect(screen.queryByTestId('deployments-table')).not.toBeInTheDocument();
-  });
-
-  it('maps the legacy Kubernetes workloads route to the pod-native tab', () => {
+  it('groups workload API tables under the Workloads tab', () => {
     mockPathname.mockReturnValue('/kubernetes/workloads');
-    setResources([makeResource({ id: 'checkout-api', type: 'pod' })]);
-
-    renderSurface();
-
-    expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'pods');
-    expect(screen.getByTestId('pods-table')).toHaveAttribute('data-rows', '1');
-  });
-
-  it('renders Kubernetes deployments through the deployment-native table', () => {
-    mockPathname.mockReturnValue('/kubernetes/deployments');
-    setResources([makeResource({ id: 'checkout-api', type: 'k8s-deployment' })]);
-
-    renderSurface();
-
-    expect(screen.getByTestId('deployments-table')).toHaveAttribute('data-rows', '1');
-    expect(screen.queryByTestId('pods-table')).not.toBeInTheDocument();
-  });
-
-  it('renders Kubernetes workload controllers through the controller-native table', () => {
-    mockPathname.mockReturnValue('/kubernetes/controllers');
     setResources([
+      makeResource({ id: 'checkout-api', type: 'pod' }),
+      makeResource({ id: 'checkout-deployment', type: 'k8s-deployment' }),
       makeResource({ id: 'checkout-stateful', type: 'k8s-statefulset' }),
-      makeResource({ id: 'node-exporter', type: 'k8s-daemonset' }),
-      makeResource({ id: 'nightly-import', type: 'k8s-job' }),
-      makeResource({ id: 'billing-rollup', type: 'k8s-cronjob' }),
-      makeResource({ id: 'deployment-1', type: 'k8s-deployment' }),
+      makeResource({ id: 'checkout-hpa', type: 'k8s-horizontal-pod-autoscaler' }),
     ]);
 
     renderSurface();
 
-    expect(screen.getByTestId('controllers-table')).toHaveAttribute('data-rows', '4');
-    expect(screen.queryByTestId('deployments-table')).not.toBeInTheDocument();
+    expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'workloads');
+    expect(screen.getByTestId('pods-table')).toHaveAttribute('data-rows', '1');
+    expect(screen.getByTestId('deployments-table')).toHaveAttribute('data-rows', '1');
+    expect(screen.getByTestId('controllers-table')).toHaveAttribute('data-rows', '1');
+    expect(screen.getByTestId('autoscaling-table')).toHaveAttribute('data-rows', '1');
   });
 
-  it.each([
-    ['/kubernetes/nodes', 'k8s-node', 'nodes-table'],
-    ['/kubernetes/services', 'k8s-service', 'services-table'],
-    ['/kubernetes/storage', 'k8s-storage-class', 'storage-table'],
-    ['/kubernetes/networking', 'k8s-ingress', 'networking-table'],
-    ['/kubernetes/config', 'k8s-configmap', 'config-table'],
-    ['/kubernetes/policy', 'k8s-network-policy', 'policy-table'],
-    ['/kubernetes/autoscaling', 'k8s-horizontal-pod-autoscaler', 'autoscaling-table'],
-    ['/kubernetes/events', 'k8s-event', 'events-table'],
-  ] as const)('renders %s through its API-native table', (path, type, testId) => {
-    mockPathname.mockReturnValue(path);
-    setResources([makeResource({ id: `${type}-1`, type })]);
+  it('groups Services, ingress, and endpoints under the Services tab without duplicating services in networking', () => {
+    mockPathname.mockReturnValue('/kubernetes/services');
+    setResources([
+      makeResource({ id: 'checkout-service', type: 'k8s-service' }),
+      makeResource({ id: 'checkout-ingress', type: 'k8s-ingress' }),
+      makeResource({ id: 'checkout-endpoints', type: 'k8s-endpoint-slice' }),
+    ]);
 
     renderSurface();
 
-    expect(screen.getByTestId(testId)).toHaveAttribute('data-rows', '1');
+    expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'services');
+    expect(screen.getByTestId('services-table')).toHaveAttribute('data-rows', '1');
+    expect(screen.getByTestId('networking-table')).toHaveAttribute('data-rows', '2');
   });
+
+  it('groups config and policy API tables under the Configuration tab', () => {
+    mockPathname.mockReturnValue('/kubernetes/configuration');
+    setResources([
+      makeResource({ id: 'checkout-config', type: 'k8s-configmap' }),
+      makeResource({ id: 'checkout-policy', type: 'k8s-network-policy' }),
+    ]);
+
+    renderSurface();
+
+    expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute(
+      'data-active',
+      'configuration',
+    );
+    expect(screen.getByTestId('config-table')).toHaveAttribute('data-rows', '1');
+    expect(screen.getByTestId('policy-table')).toHaveAttribute('data-rows', '1');
+  });
+
+  it.each([
+    ['/kubernetes/nodes', 'k8s-node', 'nodes', 'nodes-table'],
+    ['/kubernetes/pods', 'pod', 'workloads', 'pods-table'],
+    ['/kubernetes/deployments', 'k8s-deployment', 'workloads', 'deployments-table'],
+    ['/kubernetes/controllers', 'k8s-statefulset', 'workloads', 'controllers-table'],
+    ['/kubernetes/autoscaling', 'k8s-horizontal-pod-autoscaler', 'workloads', 'autoscaling-table'],
+    ['/kubernetes/services', 'k8s-service', 'services', 'services-table'],
+    ['/kubernetes/networking', 'k8s-ingress', 'services', 'networking-table'],
+    ['/kubernetes/storage', 'k8s-storage-class', 'storage', 'storage-table'],
+    ['/kubernetes/config', 'k8s-configmap', 'configuration', 'config-table'],
+    ['/kubernetes/policy', 'k8s-network-policy', 'configuration', 'policy-table'],
+    ['/kubernetes/events', 'k8s-event', 'events', 'events-table'],
+  ] as const)(
+    'maps %s to the %s workflow and renders its API-native table',
+    (path, type, expectedActive, testId) => {
+      mockPathname.mockReturnValue(path);
+      setResources([makeResource({ id: `${type}-1`, type })]);
+
+      renderSurface();
+
+      expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute(
+        'data-active',
+        expectedActive,
+      );
+      expect(screen.getByTestId(testId)).toHaveAttribute('data-rows', '1');
+    },
+  );
 });

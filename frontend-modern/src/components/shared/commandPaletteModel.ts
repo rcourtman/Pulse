@@ -23,7 +23,7 @@ export type CommandPaletteCommandPaths = {
   proxmoxPath: string;
   dockerPath: string;
   kubernetesPath: string;
-  kubernetesPodsPath: string;
+  kubernetesWorkloadsPath: string;
   trueNasPath: string;
   vmwarePath: string;
   vmwareNetworksPath: string;
@@ -69,11 +69,11 @@ export function buildCommandPaletteCommands(options: {
         action: () => options.navigate(options.paths.kubernetesPath),
       },
       {
-        id: 'nav-kubernetes-pods',
-        label: 'Go to Kubernetes Pods',
-        description: options.paths.kubernetesPodsPath,
-        keywords: ['k8s', 'kubernetes', 'pods', 'workloads'],
-        action: () => options.navigate(options.paths.kubernetesPodsPath),
+        id: 'nav-kubernetes-workloads',
+        label: 'Go to Kubernetes Workloads',
+        description: options.paths.kubernetesWorkloadsPath,
+        keywords: ['k8s', 'kubernetes', 'pods', 'deployments', 'controllers', 'workloads'],
+        action: () => options.navigate(options.paths.kubernetesWorkloadsPath),
       },
     );
   }
