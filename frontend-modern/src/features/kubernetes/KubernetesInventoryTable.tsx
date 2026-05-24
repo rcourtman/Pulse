@@ -28,7 +28,7 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 
-type KubernetesInventoryVariant = 'controllers' | 'policy' | 'autoscaling' | 'events';
+type KubernetesInventoryVariant = 'controllers' | 'autoscaling' | 'events';
 
 const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
 const numberValue = (value: number | undefined): JSX.Element => (
@@ -43,8 +43,6 @@ const tableTitle = (variant: KubernetesInventoryVariant, explicit?: string): str
   switch (variant) {
     case 'controllers':
       return 'Controllers';
-    case 'policy':
-      return 'Policy';
     case 'autoscaling':
       return 'Autoscaling';
     case 'events':
@@ -145,14 +143,6 @@ const KubernetesInventoryHeader: Component<{ variant: KubernetesInventoryVariant
         Detail
       </TableHead>
     </Show>
-    <Show when={props.variant === 'policy'}>
-      <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[15%]`}>Spec</TableHead>
-      <TableHead
-        class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[30%]`}
-      >
-        Detail
-      </TableHead>
-    </Show>
     <Show when={props.variant === 'autoscaling'}>
       <TableHead
         class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[22%]`}
@@ -204,52 +194,6 @@ const KubernetesInventoryRow: Component<{
   const name = () => asTrimmedString(props.resource.name) || props.resource.id;
   const namespace = () => textValue(props.resource.kubernetes?.namespace);
   const kind = () => k8sKind(props.resource);
-  const quotaDetail = () => {
-    const hard = props.resource.kubernetes?.hard ?? {};
-    const used = props.resource.kubernetes?.used ?? {};
-    const keys = Object.keys(hard).sort();
-    if (keys.length === 0) return undefined;
-    return keys
-      .slice(0, 4)
-      .map((key) => `${key} ${used[key] ?? '0'}/${hard[key]}`)
-      .join(', ');
-  };
-  const policySpec = () =>
-    textValue(
-      props.resource.kubernetes?.policyTypes?.join(', ') ||
-        props.resource.kubernetes?.limitTypes?.join(', ') ||
-        (props.resource.type === 'k8s-pod-disruption-budget'
-          ? [
-              props.resource.kubernetes?.minAvailable
-                ? `min ${props.resource.kubernetes.minAvailable}`
-                : undefined,
-              props.resource.kubernetes?.maxUnavailable
-                ? `max unavailable ${props.resource.kubernetes.maxUnavailable}`
-                : undefined,
-            ]
-              .filter(Boolean)
-              .join(', ')
-          : undefined) ||
-        (props.resource.type === 'k8s-resource-quota' ? 'Quota' : undefined),
-    );
-  const policyDetail = () =>
-    textValue(
-      quotaDetail() ||
-        (props.resource.type === 'k8s-pod-disruption-budget'
-          ? `${props.resource.kubernetes?.currentHealthy ?? 0}/${props.resource.kubernetes?.desiredHealthy ?? 0} healthy, ${props.resource.kubernetes?.disruptionsAllowed ?? 0} disruptions`
-          : undefined) ||
-        [
-          typeof props.resource.kubernetes?.ingressRuleCount === 'number'
-            ? `${props.resource.kubernetes.ingressRuleCount} ingress`
-            : undefined,
-          typeof props.resource.kubernetes?.egressRuleCount === 'number'
-            ? `${props.resource.kubernetes.egressRuleCount} egress`
-            : undefined,
-        ]
-          .filter(Boolean)
-          .join(', ') ||
-        props.resource.kubernetes?.limitTypes?.join(', '),
-    );
   const autoscalingTarget = () =>
     textValue(
       [props.resource.kubernetes?.targetKind, props.resource.kubernetes?.targetName]
@@ -306,16 +250,6 @@ const KubernetesInventoryRow: Component<{
           class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
         >
           {detail()}
-        </TableCell>
-      </Show>
-      <Show when={props.variant === 'policy'}>
-        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          {policySpec()}
-        </TableCell>
-        <TableCell
-          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-        >
-          {policyDetail()}
         </TableCell>
       </Show>
       <Show when={props.variant === 'autoscaling'}>

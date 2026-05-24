@@ -70,6 +70,10 @@ vi.mock('../KubernetesNetworkingTable', () => ({
   KubernetesNetworkingTable: () => <div data-testid="networking-table" />,
 }));
 
+vi.mock('../KubernetesPolicyTable', () => ({
+  KubernetesPolicyTable: () => <div data-testid="policy-table" />,
+}));
+
 vi.mock('../KubernetesStorageTable', () => ({
   KubernetesStorageTable: () => <div data-testid="storage-table" />,
 }));
@@ -445,6 +449,63 @@ describe('KubernetesPageSurface contract', () => {
     ));
 
     expect(screen.getByTestId('config-table')).toBeInTheDocument();
+    expect(screen.queryByTestId('kubernetes-workloads-surface')).not.toBeInTheDocument();
+  });
+
+  it('renders Kubernetes policy inventory through the policy-native table', () => {
+    mockPathname.mockReturnValue('/kubernetes/policy');
+    mockUseUnifiedResources.mockReturnValue({
+      resources: () => [
+        {
+          id: 'default-deny',
+          type: 'k8s-network-policy',
+          name: 'default-deny',
+          displayName: 'default-deny',
+          platformId: 'cluster-1',
+          platformType: 'kubernetes',
+          sourceType: 'agent',
+          sources: ['kubernetes'],
+          status: 'online',
+          lastSeen: 1_700_000_000_000,
+        },
+      ],
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    });
+    mockUseWorkloadsState.mockReturnValue({
+      allGuests: () => [],
+      clearPinnedSummaryScope: vi.fn(),
+      containerRuntimeFilterConfig: () => undefined,
+      focusedSummaryWorkloadGroupId: () => null,
+      groupingMode: () => 'grouped',
+      handleBeforeAutoFocus: vi.fn(),
+      search: () => '',
+      selectedGuestId: () => null,
+      setGroupingMode: vi.fn(),
+      setMetricDisplayMode: vi.fn(),
+      setSearch: vi.fn(),
+      setSortDirection: vi.fn(),
+      setSortKey: vi.fn(),
+      setStatusMode: vi.fn(),
+      setViewMode: vi.fn(),
+      setWorkloadMetricHistoryRange: vi.fn(),
+      statusMode: () => 'all',
+      surfaceConnected: () => false,
+      surfaceInitialDataReceived: () => false,
+      viewMode: () => 'pod',
+      workloadMetricDisplayMode: () => 'bars',
+      workloadMetricHistoryRange: () => '1h',
+      workloadsFilterColumnVisibility: () => undefined,
+    });
+
+    render(() => (
+      <Router>
+        <Route path="/" component={KubernetesPageSurface} />
+      </Router>
+    ));
+
+    expect(screen.getByTestId('policy-table')).toBeInTheDocument();
     expect(screen.queryByTestId('kubernetes-workloads-surface')).not.toBeInTheDocument();
   });
 });

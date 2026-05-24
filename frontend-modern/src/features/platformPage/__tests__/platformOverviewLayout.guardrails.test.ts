@@ -8,8 +8,12 @@ import dockerServicesTableSource from '@/features/docker/DockerServicesTable.tsx
 import kubernetesClustersTableSource from '@/features/kubernetes/KubernetesClustersTable.tsx?raw';
 import kubernetesConfigTableSource from '@/features/kubernetes/KubernetesConfigTable.tsx?raw';
 import kubernetesDeploymentsTableSource from '@/features/kubernetes/KubernetesDeploymentsTable.tsx?raw';
+import kubernetesNetworkingTableSource from '@/features/kubernetes/KubernetesNetworkingTable.tsx?raw';
 import kubernetesNodesTableSource from '@/features/kubernetes/KubernetesNodesTable.tsx?raw';
 import kubernetesPageSurfaceSource from '@/features/kubernetes/KubernetesPageSurface.tsx?raw';
+import kubernetesPolicyTableSource from '@/features/kubernetes/KubernetesPolicyTable.tsx?raw';
+import kubernetesServicesTableSource from '@/features/kubernetes/KubernetesServicesTable.tsx?raw';
+import kubernetesStorageTableSource from '@/features/kubernetes/KubernetesStorageTable.tsx?raw';
 import proxmoxBackupsTableSource from '@/features/proxmox/ProxmoxBackupsTable.tsx?raw';
 import proxmoxCephClusterDrawerSource from '@/features/proxmox/ProxmoxCephClusterDrawer.tsx?raw';
 import proxmoxCephTableSource from '@/features/proxmox/ProxmoxCephTable.tsx?raw';
@@ -42,6 +46,10 @@ const platformTableSources = [
   kubernetesConfigTableSource,
   kubernetesNodesTableSource,
   kubernetesDeploymentsTableSource,
+  kubernetesNetworkingTableSource,
+  kubernetesPolicyTableSource,
+  kubernetesServicesTableSource,
+  kubernetesStorageTableSource,
   truenasAlertsTableSource,
   truenasAppsTableSource,
   truenasNetworkSharesTableSource,
@@ -63,6 +71,10 @@ const platformToolbarTableSources = [
   kubernetesConfigTableSource,
   kubernetesNodesTableSource,
   kubernetesDeploymentsTableSource,
+  kubernetesNetworkingTableSource,
+  kubernetesPolicyTableSource,
+  kubernetesServicesTableSource,
+  kubernetesStorageTableSource,
   truenasSystemsTableSource,
   vsphereHostsTableSource,
 ];
@@ -181,7 +193,11 @@ describe('platform overview layout guardrails', () => {
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesClustersTable');
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesNodesTable');
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesDeploymentsTable');
+    expect(kubernetesPageSurfaceSource).toContain('<KubernetesServicesTable');
+    expect(kubernetesPageSurfaceSource).toContain('<KubernetesStorageTable');
+    expect(kubernetesPageSurfaceSource).toContain('<KubernetesNetworkingTable');
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesConfigTable');
+    expect(kubernetesPageSurfaceSource).toContain('<KubernetesPolicyTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASSystemsTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASAlertsTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASVirtualMachinesTable');

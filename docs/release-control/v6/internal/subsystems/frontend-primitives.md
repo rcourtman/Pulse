@@ -189,6 +189,10 @@ unified-resource owner supplies StorageClass, PersistentVolume, and
 PersistentVolumeClaim-specific columns. Kubernetes networking inventory also
 follows that same primitive boundary while the unified-resource owner supplies
 Service, Ingress, and EndpointSlice-specific columns.
+Kubernetes policy inventory follows that same primitive boundary while the
+unified-resource owner supplies NetworkPolicy policy type and rule-count
+columns, PodDisruptionBudget budget and observed health columns, ResourceQuota
+hard/used quota columns, and LimitRange item-type columns.
 
 1. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `security-privacy`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
    The panel may own shell placement and local action layout, but

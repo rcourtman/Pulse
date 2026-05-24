@@ -133,6 +133,7 @@ cross-source deduplication.
 109. `frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx`
 110. `frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx`
 111. `frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx`
+112. `frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx`
 
 ## Shared Boundaries
 
@@ -144,6 +145,13 @@ inactive standalone Swarm metadata must not be interpreted as host-role or
 service-surface proof. The unified-resource adapter is the backend fail-closed
 layer for that rule, so persisted or older-agent inactive Swarm payloads cannot
 reintroduce false Swarm capability surfaces.
+
+Kubernetes policy inventory is a unified-resource consumer boundary: the
+`/kubernetes/policy` route must render NetworkPolicy, PodDisruptionBudget,
+ResourceQuota, and LimitRange rows through a policy-native table that preserves
+API-specific policy types, ingress/egress rule counts, disruption-budget health
+and allowed disruptions, quota hard/used maps, and LimitRange item types instead
+of collapsing those resources into generic detail text.
 
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `performance-and-scalability`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx` shared with `performance-and-scalability`: the infrastructure summary surface is both a canonical unified-resource consumer and a fleet-scale summary chart hot-path boundary.

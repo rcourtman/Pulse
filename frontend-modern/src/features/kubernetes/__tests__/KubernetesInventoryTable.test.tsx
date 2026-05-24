@@ -27,33 +27,41 @@ afterEach(() => {
 });
 
 describe('KubernetesInventoryTable', () => {
-  it('renders remaining policy inventory fields in the generic table', () => {
+  it('renders autoscaling inventory fields in the remaining generic table', () => {
     render(() => (
       <KubernetesInventoryTable
         resources={[
           makeResource({
-            id: 'default-deny',
-            type: 'k8s-network-policy',
+            id: 'checkout-api-hpa',
+            type: 'k8s-horizontal-pod-autoscaler',
             kubernetes: {
               namespace: 'apps',
-              resourceKind: 'NetworkPolicy',
-              policyTypes: ['Ingress', 'Egress'],
-              ingressRuleCount: 1,
-              egressRuleCount: 2,
+              resourceKind: 'HorizontalPodAutoscaler',
+              targetKind: 'Deployment',
+              targetName: 'checkout-api',
+              minReplicas: 2,
+              maxReplicas: 10,
+              currentReplicas: 4,
+              desiredReplicas: 5,
+              metricTypes: ['Resource', 'Pods'],
             },
           }),
         ]}
-        variant="policy"
+        variant="autoscaling"
         emptyIcon={<span />}
-        emptyTitle="No policy"
-        emptyDescription="No policy"
+        emptyTitle="No autoscaling"
+        emptyDescription="No autoscaling"
         showToolbar={false}
       />
     ));
 
-    expect(screen.getByText('Spec')).toBeInTheDocument();
-    expect(screen.getByText('Detail')).toBeInTheDocument();
-    expect(screen.getByText('Ingress, Egress')).toBeInTheDocument();
-    expect(screen.getByText('1 ingress, 2 egress')).toBeInTheDocument();
+    expect(screen.getByText('Target')).toBeInTheDocument();
+    expect(screen.getByText('Min')).toBeInTheDocument();
+    expect(screen.getByText('Max')).toBeInTheDocument();
+    expect(screen.getByText('Current')).toBeInTheDocument();
+    expect(screen.getByText('Desired')).toBeInTheDocument();
+    expect(screen.getByText('Metrics')).toBeInTheDocument();
+    expect(screen.getByText('Deployment/checkout-api')).toBeInTheDocument();
+    expect(screen.getByText('Resource, Pods')).toBeInTheDocument();
   });
 });

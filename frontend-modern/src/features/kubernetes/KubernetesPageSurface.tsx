@@ -19,6 +19,7 @@ import { KubernetesDeploymentsTable } from './KubernetesDeploymentsTable';
 import { KubernetesInventoryTable } from './KubernetesInventoryTable';
 import { KubernetesNetworkingTable } from './KubernetesNetworkingTable';
 import { KubernetesNodesTable } from './KubernetesNodesTable';
+import { KubernetesPolicyTable } from './KubernetesPolicyTable';
 import { KubernetesServicesTable } from './KubernetesServicesTable';
 import { KubernetesStorageTable } from './KubernetesStorageTable';
 import {
@@ -146,9 +147,8 @@ export function KubernetesPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'policy'}>
-              <KubernetesInventoryTable
+              <KubernetesPolicyTable
                 resources={model().policy}
-                variant="policy"
                 emptyIcon={k8sIcon()}
                 emptyTitle="No policy resources reported"
                 emptyDescription="NetworkPolicies, PodDisruptionBudgets, ResourceQuotas, and LimitRanges appear here once the agent can read policy inventory."
