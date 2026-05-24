@@ -28,23 +28,12 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 
-type KubernetesInventoryVariant =
-  | 'controllers'
-  | 'services'
-  | 'config'
-  | 'policy'
-  | 'autoscaling'
-  | 'events';
+type KubernetesInventoryVariant = 'controllers' | 'config' | 'policy' | 'autoscaling' | 'events';
 
 const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
 const numberValue = (value: number | undefined): JSX.Element => (
   <span class="tabular-nums">{value ?? 0}</span>
 );
-const joinValues = (values: readonly (string | undefined)[] | undefined): string =>
-  (values ?? [])
-    .map((value) => asTrimmedString(value))
-    .filter((value): value is string => typeof value === 'string' && value.length > 0)
-    .join(', ') || '—';
 
 const k8sKind = (resource: Resource): string =>
   resource.kubernetes?.resourceKind || getResourceTypeLabel(resource.type) || resource.type;
@@ -54,8 +43,6 @@ const tableTitle = (variant: KubernetesInventoryVariant, explicit?: string): str
   switch (variant) {
     case 'controllers':
       return 'Controllers';
-    case 'services':
-      return 'Services';
     case 'config':
       return 'Config';
     case 'policy':
@@ -147,19 +134,6 @@ const KubernetesInventoryHeader: Component<{ variant: KubernetesInventoryVariant
     >
       Namespace
     </TableHead>
-    <Show when={props.variant === 'services'}>
-      <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[14%]`}>Type</TableHead>
-      <TableHead
-        class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[20%]`}
-      >
-        Address
-      </TableHead>
-      <TableHead
-        class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[25%]`}
-      >
-        Ports / Hosts
-      </TableHead>
-    </Show>
     <Show when={props.variant === 'controllers'}>
       <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[10%]`}>
         Desired
@@ -240,48 +214,6 @@ const KubernetesInventoryRow: Component<{
   const name = () => asTrimmedString(props.resource.name) || props.resource.id;
   const namespace = () => textValue(props.resource.kubernetes?.namespace);
   const kind = () => k8sKind(props.resource);
-  const address = () =>
-    textValue(
-      props.resource.kubernetes?.clusterIp ||
-        props.resource.kubernetes?.addresses?.[0] ||
-        props.resource.kubernetes?.externalIps?.[0] ||
-        (typeof props.resource.kubernetes?.endpointCount === 'number'
-          ? `${props.resource.kubernetes.endpointCount} endpoints`
-          : undefined),
-    );
-  const ports = () =>
-    joinValues(
-      props.resource.kubernetes?.servicePorts?.length
-        ? props.resource.kubernetes.servicePorts.map((port) => {
-            const protocol = port.protocol ? `/${port.protocol.toLowerCase()}` : '';
-            const target = port.targetPort ? `:${port.targetPort}` : '';
-            return port.port ? `${port.port}${target}${protocol}` : undefined;
-          })
-        : props.resource.kubernetes?.endpointPorts?.length
-          ? props.resource.kubernetes.endpointPorts.map((port) => {
-              const protocol = port.protocol ? `/${port.protocol.toLowerCase()}` : '';
-              return port.port ? `${port.port}${protocol}` : undefined;
-            })
-          : props.resource.kubernetes?.hosts?.length
-            ? props.resource.kubernetes.hosts
-            : props.resource.kubernetes?.policyTypes?.length
-              ? props.resource.kubernetes.policyTypes
-              : [
-                  typeof props.resource.kubernetes?.ingressRuleCount === 'number'
-                    ? `${props.resource.kubernetes.ingressRuleCount} ingress`
-                    : undefined,
-                  typeof props.resource.kubernetes?.egressRuleCount === 'number'
-                    ? `${props.resource.kubernetes.egressRuleCount} egress`
-                    : undefined,
-                ],
-    );
-  const networkType = () =>
-    textValue(
-      props.resource.kubernetes?.serviceType ||
-        props.resource.kubernetes?.className ||
-        props.resource.kubernetes?.addressType ||
-        props.resource.kubernetes?.policyTypes?.join(', '),
-    );
   const configState = () =>
     textValue(
       props.resource.kubernetes?.phase ||
@@ -406,21 +338,6 @@ const KubernetesInventoryRow: Component<{
       >
         {namespace()}
       </TableCell>
-      <Show when={props.variant === 'services'}>
-        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          {networkType()}
-        </TableCell>
-        <TableCell
-          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-        >
-          {address()}
-        </TableCell>
-        <TableCell
-          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-        >
-          {ports()}
-        </TableCell>
-      </Show>
       <Show when={props.variant === 'controllers'}>
         <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}>
           {numberValue(desired())}

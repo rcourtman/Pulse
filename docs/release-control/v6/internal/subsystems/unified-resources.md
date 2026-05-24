@@ -131,6 +131,7 @@ cross-source deduplication.
 107. `frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx`
 108. `frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx`
 109. `frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx`
+110. `frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx`
 
 ## Shared Boundaries
 
@@ -273,6 +274,11 @@ reintroduce false Swarm capability surfaces.
    Kubernetes Node inventory is an API-native resource surface, not merely
    overview chrome: `/kubernetes/nodes` must expose the bespoke node table while
    the overview may still include the same rows for cluster orientation.
+   Kubernetes Service inventory is likewise API-native: `/kubernetes/services`
+   must render Service rows through a service-specific table that preserves
+   cluster/namespace scope, Service type, ClusterIP, external IP metadata,
+   ServicePort/targetPort/nodePort publication, and selectors instead of
+   routing those API objects through the generic Kubernetes inventory table.
    Kubernetes storage inventory is likewise API-native: `/kubernetes/storage`
    must render StorageClass, PersistentVolume, and PersistentVolumeClaim rows
    through a storage-specific table that preserves cluster scope, binding mode

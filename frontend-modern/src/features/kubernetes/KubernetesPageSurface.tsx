@@ -18,6 +18,7 @@ import { KubernetesDeploymentsTable } from './KubernetesDeploymentsTable';
 import { KubernetesInventoryTable } from './KubernetesInventoryTable';
 import { KubernetesNetworkingTable } from './KubernetesNetworkingTable';
 import { KubernetesNodesTable } from './KubernetesNodesTable';
+import { KubernetesServicesTable } from './KubernetesServicesTable';
 import { KubernetesStorageTable } from './KubernetesStorageTable';
 import {
   KUBERNETES_TAB_SPECS,
@@ -112,9 +113,8 @@ export function KubernetesPageSurface() {
               <KubernetesWorkloads model={model} />
             </Show>
             <Show when={activeTab() === 'services'}>
-              <KubernetesInventoryTable
+              <KubernetesServicesTable
                 resources={model().services}
-                variant="services"
                 emptyIcon={k8sIcon()}
                 emptyTitle="No services reported"
                 emptyDescription="Services appear here once the agent can read Service resources."

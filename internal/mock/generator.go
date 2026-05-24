@@ -1355,8 +1355,12 @@ func generateKubernetesNetworkingInventory(
 	now time.Time,
 ) ([]models.KubernetesService, []models.KubernetesIngress, []models.KubernetesEndpointSlice) {
 	createdAt := now.Add(-68 * time.Hour)
-	labels := map[string]string{
+	apiLabels := map[string]string{
 		"app.kubernetes.io/name":    "checkout-api",
+		"app.kubernetes.io/part-of": "pulse-demo-estate",
+	}
+	webLabels := map[string]string{
+		"app.kubernetes.io/name":    "checkout-web",
 		"app.kubernetes.io/part-of": "pulse-demo-estate",
 	}
 	services := []models.KubernetesService{
@@ -1371,7 +1375,21 @@ func generateKubernetesNetworkingInventory(
 			},
 			Selector:  map[string]string{"app.kubernetes.io/name": "checkout-api"},
 			CreatedAt: createdAt,
-			Labels:    cloneStringMap(labels),
+			Labels:    cloneStringMap(apiLabels),
+		},
+		{
+			UID:         clusterID + "-svc-checkout-public",
+			Name:        "checkout-public",
+			Namespace:   "apps",
+			ServiceType: "NodePort",
+			ClusterIP:   "10.96.12.20",
+			ExternalIPs: []string{"203.0.113.24"},
+			Ports: []models.KubernetesServicePort{
+				{Name: "https", Protocol: "TCP", Port: 443, TargetPort: "8443", NodePort: 30443},
+			},
+			Selector:  map[string]string{"app.kubernetes.io/name": "checkout-web"},
+			CreatedAt: createdAt.Add(5 * time.Minute),
+			Labels:    cloneStringMap(webLabels),
 		},
 	}
 	ingresses := []models.KubernetesIngress{
@@ -1383,7 +1401,7 @@ func generateKubernetesNetworkingInventory(
 			Hosts:     []string{"checkout.example.test"},
 			Addresses: []string{"198.51.100.24"},
 			CreatedAt: createdAt.Add(10 * time.Minute),
-			Labels:    cloneStringMap(labels),
+			Labels:    cloneStringMap(apiLabels),
 		},
 	}
 	endpointSlices := []models.KubernetesEndpointSlice{
@@ -1399,7 +1417,7 @@ func generateKubernetesNetworkingInventory(
 				{Name: "http", Protocol: "TCP", Port: 8080, AppProtocol: "kubernetes.io/http"},
 			},
 			CreatedAt: createdAt.Add(15 * time.Minute),
-			Labels:    cloneStringMap(labels),
+			Labels:    cloneStringMap(apiLabels),
 		},
 	}
 

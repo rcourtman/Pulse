@@ -445,6 +445,20 @@ func TestBuildFixtureStateIncludesKubernetesNetworkingInventory(t *testing.T) {
 	if len(cluster.Services) == 0 {
 		t.Fatal("expected kubernetes service inventory")
 	}
+	foundPublishedService := false
+	for _, service := range cluster.Services {
+		if service.ServiceType != "NodePort" || len(service.ExternalIPs) == 0 {
+			continue
+		}
+		for _, port := range service.Ports {
+			if port.NodePort > 0 {
+				foundPublishedService = true
+			}
+		}
+	}
+	if !foundPublishedService {
+		t.Fatal("expected kubernetes service inventory to include node-port/external service metadata")
+	}
 	if len(cluster.Ingresses) == 0 {
 		t.Fatal("expected kubernetes ingress inventory")
 	}

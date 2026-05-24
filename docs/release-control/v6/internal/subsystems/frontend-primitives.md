@@ -179,11 +179,13 @@ Secret rows: the shared table wording may indicate metadata-only inventory, but
 must not imply payload fields were read when the agent used Kubernetes
 metadata-only API responses. Kubernetes Node inventory must also be reachable
 through a dedicated native tab, not only the overview stack, while retaining the
-shared `PlatformSectionTabs` shell. Kubernetes storage inventory must likewise
+shared `PlatformSectionTabs` shell. Kubernetes Service inventory must likewise
 stay on the shared tab, toolbar, table, table-alignment, and inline-detail
-primitives while the unified-resource owner supplies StorageClass,
+primitives while the unified-resource owner supplies Service type, virtual IP,
+published port, and selector columns. Kubernetes storage inventory follows that
+same primitive boundary while the unified-resource owner supplies StorageClass,
 PersistentVolume, and PersistentVolumeClaim-specific columns. Kubernetes
-networking inventory follows that same primitive boundary while the
+networking inventory also follows that same primitive boundary while the
 unified-resource owner supplies Service, Ingress, and EndpointSlice-specific
 columns.
 

@@ -198,12 +198,13 @@ truth for live infrastructure data.
     the report contract. Mock/demo Kubernetes ConfigMap and Secret inventory
     must mirror the current metadata-only trust boundary rather than seeding
     payload key names. Mock/demo Kubernetes inventory must also seed
-    representative Service, Ingress, EndpointSlice, storage-class,
-    persistent-volume, and persistent-volume-claim rows so the native
-    networking and storage tabs exercise the same report/resource contract as
-    live agents. Monitoring must preserve those objects as native cluster
-    inventory instead of flattening them into pods, deployments, or generic
-    networking, storage, or configuration rows.
+    representative Service rows with ClusterIP, external IP, ServicePort,
+    targetPort, nodePort, and selector metadata, plus Ingress, EndpointSlice,
+    storage-class, persistent-volume, and persistent-volume-claim rows so the
+    native services, networking, and storage tabs exercise the same
+    report/resource contract as live agents. Monitoring must preserve those
+    objects as native cluster inventory instead of flattening them into pods,
+    deployments, or generic networking, storage, or configuration rows.
 
 ## Forbidden Paths
 

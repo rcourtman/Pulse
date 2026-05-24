@@ -640,6 +640,7 @@ func applyDemoKubernetesNativeInventory(cluster *models.KubernetesCluster, now t
 	}
 	cluster.Services = []models.KubernetesService{
 		{UID: cluster.ID + "-svc-checkout-web", Name: "checkout-web", Namespace: "apps", ServiceType: "ClusterIP", ClusterIP: "10.96.12.10", Ports: []models.KubernetesServicePort{{Name: "http", Protocol: "TCP", Port: 80, TargetPort: "8080"}}, Selector: map[string]string{"app.kubernetes.io/name": "checkout-web"}, CreatedAt: createdAt, Labels: labels("checkout-web")},
+		{UID: cluster.ID + "-svc-checkout-public", Name: "checkout-public", Namespace: "apps", ServiceType: "NodePort", ClusterIP: "10.96.12.20", ExternalIPs: []string{"203.0.113.24"}, Ports: []models.KubernetesServicePort{{Name: "https", Protocol: "TCP", Port: 443, TargetPort: "8443", NodePort: 30443}}, Selector: map[string]string{"app.kubernetes.io/name": "checkout-web"}, CreatedAt: createdAt, Labels: labels("checkout-web")},
 		{UID: cluster.ID + "-svc-checkout-api", Name: "checkout-api", Namespace: "services", ServiceType: "ClusterIP", ClusterIP: "10.96.18.24", Ports: []models.KubernetesServicePort{{Name: "http", Protocol: "TCP", Port: 8080, TargetPort: "8080"}}, Selector: map[string]string{"app.kubernetes.io/name": "checkout-api"}, CreatedAt: createdAt, Labels: labels("checkout-api")},
 	}
 	cluster.EndpointSlices = []models.KubernetesEndpointSlice{
