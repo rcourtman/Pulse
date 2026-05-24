@@ -39,6 +39,8 @@ type fakeDockerClient struct {
 	serviceListFn             func(ctx context.Context, opts dockerServiceListOptions) ([]swarmtypes.Service, error)
 	taskListFn                func(ctx context.Context, opts dockerTaskListOptions) ([]swarmtypes.Task, error)
 	nodeListFn                func(ctx context.Context, opts dockerNodeListOptions) ([]swarmtypes.Node, error)
+	secretListFn              func(ctx context.Context, opts dockerSecretListOptions) ([]swarmtypes.Secret, error)
+	configListFn              func(ctx context.Context, opts dockerConfigListOptions) ([]swarmtypes.Config, error)
 	imageInspectWithRawFn     func(ctx context.Context, imageID string) (image.InspectResponse, []byte, error)
 	closeFn                   func() error
 }
@@ -178,6 +180,20 @@ func (f *fakeDockerClient) NodeList(ctx context.Context, opts dockerNodeListOpti
 		return nil, nil
 	}
 	return f.nodeListFn(ctx, opts)
+}
+
+func (f *fakeDockerClient) SecretList(ctx context.Context, opts dockerSecretListOptions) ([]swarmtypes.Secret, error) {
+	if f.secretListFn == nil {
+		return nil, nil
+	}
+	return f.secretListFn(ctx, opts)
+}
+
+func (f *fakeDockerClient) ConfigList(ctx context.Context, opts dockerConfigListOptions) ([]swarmtypes.Config, error) {
+	if f.configListFn == nil {
+		return nil, nil
+	}
+	return f.configListFn(ctx, opts)
 }
 
 func (f *fakeDockerClient) ImageInspectWithRaw(ctx context.Context, imageID string) (image.InspectResponse, []byte, error) {

@@ -74,6 +74,14 @@ const RESOURCE_TYPE_PRESENTATION: Partial<Record<ResourceType | string, Resource
       label: 'Swarm Node',
       badgeClasses: DEFAULT_BADGE_CLASSES,
     },
+    'docker-secret': {
+      label: 'Swarm Secret',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'docker-config': {
+      label: 'Swarm Config',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
     'k8s-deployment': {
       label: 'K8s Deployment',
       badgeClasses: DEFAULT_BADGE_CLASSES,

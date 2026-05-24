@@ -182,15 +182,16 @@ agent install target, a command-agent authority, or a reason to widen setup
 tokens.
 Docker / Podman native inventory and Kubernetes native API inventory follow
 that same lifecycle boundary. Images, volumes, networks, Swarm tasks,
-Swarm nodes, engine storage-usage buckets, Kubernetes Services, controllers,
-EndpointSlices, NetworkPolicies, PV/PVC records, StorageClasses, ConfigMaps,
-Secrets, ServiceAccounts, ResourceQuotas, LimitRanges, PodDisruptionBudgets,
-HorizontalPodAutoscalers, ingresses, namespaces, and events may appear as
-API/unified-resource evidence, but lifecycle surfaces must not treat those
-child inventory rows as agent enrollment candidates, install targets, fleet
-command authorities, or setup-token scopes. Podman libpod pod records are not
-part of that lifecycle-visible inventory until a libpod-native collector owns
-them explicitly; Docker-compatible Podman container labels remain runtime
+Swarm nodes, Swarm secrets, Swarm configs, engine storage-usage buckets,
+Kubernetes Services, controllers, EndpointSlices, NetworkPolicies, PV/PVC
+records, StorageClasses, ConfigMaps, Secrets, ServiceAccounts, ResourceQuotas,
+LimitRanges, PodDisruptionBudgets, HorizontalPodAutoscalers, ingresses,
+namespaces, and events may appear as API/unified-resource evidence, but
+lifecycle surfaces must not treat those child inventory rows as agent
+enrollment candidates, install targets, fleet command authorities, setup-token
+scopes, credential grants, or command material. Podman libpod pod records are
+not part of that lifecycle-visible inventory until a libpod-native collector
+owns them explicitly; Docker-compatible Podman container labels remain runtime
 metadata only.
 VMware vSphere `network` resources follow that same lifecycle boundary. A
 vCenter connection may project networks into platform tables, resource

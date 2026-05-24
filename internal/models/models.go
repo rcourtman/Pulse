@@ -659,6 +659,8 @@ type DockerHost struct {
 	Services          []DockerService          `json:"services,omitempty"`
 	Tasks             []DockerTask             `json:"tasks,omitempty"`
 	Nodes             []DockerNode             `json:"nodes,omitempty"`
+	Secrets           []DockerSecret           `json:"secrets,omitempty"`
+	Configs           []DockerConfig           `json:"configs,omitempty"`
 	StorageUsage      *DockerStorageUsage      `json:"storageUsage,omitempty"`
 	Swarm             *DockerSwarmInfo         `json:"swarm,omitempty"`
 	Security          *DockerHostSecurity      `json:"security,omitempty"`
@@ -730,6 +732,18 @@ func (h DockerHost) NormalizeCollections() DockerHost {
 	}
 	for i := range h.Nodes {
 		h.Nodes[i] = h.Nodes[i].NormalizeCollections()
+	}
+	if h.Secrets == nil {
+		h.Secrets = []DockerSecret{}
+	}
+	for i := range h.Secrets {
+		h.Secrets[i] = h.Secrets[i].NormalizeCollections()
+	}
+	if h.Configs == nil {
+		h.Configs = []DockerConfig{}
+	}
+	for i := range h.Configs {
+		h.Configs[i] = h.Configs[i].NormalizeCollections()
 	}
 	if h.Security != nil {
 		security := h.Security.NormalizeCollections()
@@ -1840,6 +1854,41 @@ func (n DockerNode) NormalizeCollections() DockerNode {
 		n.EngineLabels = map[string]string{}
 	}
 	return n
+}
+
+// DockerSecret summarises Docker Swarm secret metadata.
+type DockerSecret struct {
+	ID               string            `json:"id"`
+	Name             string            `json:"name"`
+	Labels           map[string]string `json:"labels,omitempty"`
+	DriverName       string            `json:"driverName,omitempty"`
+	TemplatingDriver string            `json:"templatingDriver,omitempty"`
+	CreatedAt        time.Time         `json:"createdAt,omitempty"`
+	UpdatedAt        *time.Time        `json:"updatedAt,omitempty"`
+}
+
+func (s DockerSecret) NormalizeCollections() DockerSecret {
+	if s.Labels == nil {
+		s.Labels = map[string]string{}
+	}
+	return s
+}
+
+// DockerConfig summarises Docker Swarm config metadata.
+type DockerConfig struct {
+	ID               string            `json:"id"`
+	Name             string            `json:"name"`
+	Labels           map[string]string `json:"labels,omitempty"`
+	TemplatingDriver string            `json:"templatingDriver,omitempty"`
+	CreatedAt        time.Time         `json:"createdAt,omitempty"`
+	UpdatedAt        *time.Time        `json:"updatedAt,omitempty"`
+}
+
+func (c DockerConfig) NormalizeCollections() DockerConfig {
+	if c.Labels == nil {
+		c.Labels = map[string]string{}
+	}
+	return c
 }
 
 // DockerSwarmInfo captures node-level swarm metadata.

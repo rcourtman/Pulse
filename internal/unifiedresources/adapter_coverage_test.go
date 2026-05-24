@@ -420,6 +420,27 @@ func TestDockerNativeInventoryAdapters(t *testing.T) {
 	if nodeResource.Type != ResourceTypeDockerSwarmNode || nodeResource.Docker == nil || nodeResource.Docker.NodeID != "node-1" || nodeResource.Docker.NodeRole != "manager" || nodeIdentity.Hostnames[0] != "manager-1" {
 		t.Fatalf("unexpected swarm node resource: resource=%+v identity=%+v", nodeResource, nodeIdentity)
 	}
+
+	secretResource, secretIdentity := resourceFromDockerSecret(models.DockerSecret{
+		ID:               "secret-1",
+		Name:             "db-password",
+		DriverName:       "builtin",
+		TemplatingDriver: "golang",
+		Labels:           map[string]string{"stack": "backend"},
+	}, host)
+	if secretResource.Type != ResourceTypeDockerSecret || secretResource.Docker == nil || secretResource.Docker.SecretID != "secret-1" || secretResource.Docker.Driver != "builtin" || secretIdentity.Hostnames[0] != "db-password" {
+		t.Fatalf("unexpected swarm secret resource: resource=%+v identity=%+v", secretResource, secretIdentity)
+	}
+
+	configResource, configIdentity := resourceFromDockerConfig(models.DockerConfig{
+		ID:               "config-1",
+		Name:             "nginx-conf",
+		TemplatingDriver: "golang",
+		Labels:           map[string]string{"stack": "frontend"},
+	}, host)
+	if configResource.Type != ResourceTypeDockerConfig || configResource.Docker == nil || configResource.Docker.ConfigID != "config-1" || configResource.Docker.TemplatingDriver != "golang" || configIdentity.Hostnames[0] != "nginx-conf" {
+		t.Fatalf("unexpected swarm config resource: resource=%+v identity=%+v", configResource, configIdentity)
+	}
 }
 
 func TestKubernetesNativeInventoryAdapters(t *testing.T) {

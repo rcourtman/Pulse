@@ -472,6 +472,34 @@ func cloneDockerNodes(src []DockerNode) []DockerNode {
 	return dest
 }
 
+func cloneDockerSecrets(src []DockerSecret) []DockerSecret {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]DockerSecret, len(src))
+	for i, secret := range src {
+		secretCopy := secret
+		secretCopy.Labels = cloneStringMap(secret.Labels)
+		secretCopy.UpdatedAt = cloneTimePtr(secret.UpdatedAt)
+		dest[i] = secretCopy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneDockerConfigs(src []DockerConfig) []DockerConfig {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]DockerConfig, len(src))
+	for i, config := range src {
+		configCopy := config
+		configCopy.Labels = cloneStringMap(config.Labels)
+		configCopy.UpdatedAt = cloneTimePtr(config.UpdatedAt)
+		dest[i] = configCopy.NormalizeCollections()
+	}
+	return dest
+}
+
 func cloneDockerSwarmInfo(src *DockerSwarmInfo) *DockerSwarmInfo {
 	if src == nil {
 		return nil
@@ -514,6 +542,8 @@ func cloneDockerHost(src DockerHost) DockerHost {
 	dest.Services = cloneDockerServices(src.Services)
 	dest.Tasks = cloneDockerTasks(src.Tasks)
 	dest.Nodes = cloneDockerNodes(src.Nodes)
+	dest.Secrets = cloneDockerSecrets(src.Secrets)
+	dest.Configs = cloneDockerConfigs(src.Configs)
 	dest.StorageUsage = cloneDockerStorageUsage(src.StorageUsage)
 	dest.Swarm = cloneDockerSwarmInfo(src.Swarm)
 	dest.Security = cloneDockerHostSecurity(src.Security)

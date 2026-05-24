@@ -2141,6 +2141,8 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 		var swarmInfo *models.DockerSwarmInfo
 		var services []models.DockerService
 		var tasks []models.DockerTask
+		var secrets []models.DockerSecret
+		var configs []models.DockerConfig
 		if !isPodman {
 			// ClusterID/ClusterName are required for the unified resource
 			// adapter to project Swarm services as docker-service rows
@@ -2163,6 +2165,7 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 				swarmInfo.ControlAvailable = true
 				swarmInfo.Scope = "cluster"
 				services, tasks = generateDockerServicesAndTasks(hostname, containers, now)
+				secrets, configs = generateDockerSwarmSecretsAndConfigs(hostname, now)
 				if len(services) == 0 {
 					swarmInfo.Scope = "node"
 				}
@@ -2267,6 +2270,8 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 			Containers:        containers,
 			Services:          services,
 			Tasks:             tasks,
+			Secrets:           secrets,
+			Configs:           configs,
 			Swarm:             swarmInfo,
 			Temperature:       temperature,
 			NetInRate:         SampleMetric("dockerHost", hostID, "netin", now),
@@ -5899,4 +5904,62 @@ func generateDockerServicesAndTasks(hostname string, containers []models.DockerC
 	})
 
 	return services, tasks
+}
+
+func generateDockerSwarmSecretsAndConfigs(hostname string, now time.Time) ([]models.DockerSecret, []models.DockerConfig) {
+	if now.IsZero() {
+		now = time.Now()
+	}
+	createdBase := now.Add(-72 * time.Hour)
+	updated := now.Add(-6 * time.Hour)
+	secretUpdated := updated.Add(20 * time.Minute)
+	configUpdated := updated.Add(45 * time.Minute)
+
+	secrets := []models.DockerSecret{
+		{
+			ID:         fmt.Sprintf("secret-%s-db-password", hostname),
+			Name:       "db-password",
+			DriverName: "builtin",
+			Labels: map[string]string{
+				"com.docker.stack.namespace": "backend",
+				"pulse.demo.scope":           "database",
+			},
+			CreatedAt: createdBase,
+			UpdatedAt: &secretUpdated,
+		},
+		{
+			ID:         fmt.Sprintf("secret-%s-api-token", hostname),
+			Name:       "api-token",
+			DriverName: "vault",
+			Labels: map[string]string{
+				"com.docker.stack.namespace": "ops",
+			},
+			CreatedAt: createdBase.Add(2 * time.Hour),
+			UpdatedAt: &secretUpdated,
+		},
+	}
+
+	configs := []models.DockerConfig{
+		{
+			ID:               fmt.Sprintf("config-%s-nginx", hostname),
+			Name:             "nginx-conf",
+			TemplatingDriver: "golang",
+			Labels: map[string]string{
+				"com.docker.stack.namespace": "frontend",
+			},
+			CreatedAt: createdBase.Add(30 * time.Minute),
+			UpdatedAt: &configUpdated,
+		},
+		{
+			ID:   fmt.Sprintf("config-%s-app-env", hostname),
+			Name: "app-env",
+			Labels: map[string]string{
+				"com.docker.stack.namespace": "backend",
+			},
+			CreatedAt: createdBase.Add(90 * time.Minute),
+			UpdatedAt: &configUpdated,
+		},
+	}
+
+	return secrets, configs
 }

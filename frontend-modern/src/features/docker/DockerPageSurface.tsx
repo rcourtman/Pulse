@@ -28,7 +28,7 @@ import {
 } from './dockerPageModel';
 
 const DOCKER_RESOURCE_QUERY =
-  'type=agent,docker-host,app-container,docker-service,docker-image,docker-volume,docker-network,docker-task,docker-swarm-node';
+  'type=agent,docker-host,app-container,docker-service,docker-image,docker-volume,docker-network,docker-task,docker-swarm-node,docker-secret,docker-config';
 const DOCKER_PLATFORM_FILTER = 'docker';
 const DOCKER_WORKLOAD_FORCED_VIEW_MODE = 'app-container';
 const DOCKER_WORKLOAD_DEFAULT_SORT_KEY = 'name';
@@ -215,6 +215,24 @@ export function DockerPageSurface() {
                 emptyIcon={dockerIcon()}
                 emptyTitle="No Swarm tasks"
                 emptyDescription="Swarm tasks appear here when a Swarm manager reports replica task inventory."
+              />
+            </Show>
+            <Show when={activeTab() === 'secrets'}>
+              <DockerInventoryTable
+                resources={model().secrets}
+                variant="secrets"
+                emptyIcon={dockerIcon()}
+                emptyTitle="No Swarm secrets"
+                emptyDescription="Swarm secret metadata appears here when a Docker manager reports the secrets API."
+              />
+            </Show>
+            <Show when={activeTab() === 'configs'}>
+              <DockerInventoryTable
+                resources={model().configs}
+                variant="configs"
+                emptyIcon={dockerIcon()}
+                emptyTitle="No Swarm configs"
+                emptyDescription="Swarm config metadata appears here when a Docker manager reports the configs API."
               />
             </Show>
           </Show>

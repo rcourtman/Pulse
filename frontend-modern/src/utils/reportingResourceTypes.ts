@@ -28,6 +28,8 @@ export function toReportingResourceType(resourceType: ResourceType): ReportingRe
     case 'docker-image':
     case 'docker-task':
     case 'docker-swarm-node':
+    case 'docker-secret':
+    case 'docker-config':
       return 'app-container';
     case 'docker-volume':
       return 'storage';

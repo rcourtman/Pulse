@@ -130,6 +130,8 @@ const (
 	ResourceTypeDockerNetwork     ResourceType = "docker-network"
 	ResourceTypeDockerTask        ResourceType = "docker-task"
 	ResourceTypeDockerSwarmNode   ResourceType = "docker-swarm-node"
+	ResourceTypeDockerSecret      ResourceType = "docker-secret"
+	ResourceTypeDockerConfig      ResourceType = "docker-config"
 	ResourceTypeK8sCluster        ResourceType = "k8s-cluster"
 	ResourceTypeK8sNode           ResourceType = "k8s-node"
 	ResourceTypePod               ResourceType = "pod"
@@ -843,6 +845,8 @@ type DockerData struct {
 	VolumeCount           int                             `json:"volumeCount,omitempty"`
 	NetworkCount          int                             `json:"networkCount,omitempty"`
 	NodeCount             int                             `json:"nodeCount,omitempty"`
+	SecretCount           int                             `json:"secretCount,omitempty"`
+	ConfigCount           int                             `json:"configCount,omitempty"`
 	UpdatesAvailableCount int                             `json:"updatesAvailableCount,omitempty"`
 	UpdatesLastCheckedAt  *time.Time                      `json:"updatesLastCheckedAt,omitempty"`
 	ImagesUsage           *DockerStorageUsageMeta         `json:"imagesUsage,omitempty"`
@@ -931,6 +935,15 @@ type DockerData struct {
 	MemoryBytes         int64             `json:"memoryBytes,omitempty"`
 	EngineLabels        map[string]string `json:"engineLabels,omitempty"`
 
+	// Swarm secret/config fields (populated when Resource.Type == ResourceTypeDockerSecret or ResourceTypeDockerConfig)
+	SecretID         string     `json:"secretId,omitempty"`
+	SecretName       string     `json:"secretName,omitempty"`
+	ConfigID         string     `json:"configId,omitempty"`
+	ConfigName       string     `json:"configName,omitempty"`
+	TemplatingDriver string     `json:"templatingDriver,omitempty"`
+	ObjectCreatedAt  *time.Time `json:"objectCreatedAt,omitempty"`
+	ObjectUpdatedAt  *time.Time `json:"objectUpdatedAt,omitempty"`
+
 	Swarm             *DockerSwarmInfo   `json:"swarm,omitempty"`
 	NetworkInterfaces []NetworkInterface `json:"networkInterfaces,omitempty"`
 	Disks             []DiskInfo         `json:"disks,omitempty"`
@@ -943,6 +956,8 @@ type DockerData struct {
 	Services    []models.DockerService   `json:"-"`
 	Tasks       []models.DockerTask      `json:"-"`
 	Nodes       []models.DockerNode      `json:"-"`
+	Secrets     []models.DockerSecret    `json:"-"`
+	Configs     []models.DockerConfig    `json:"-"`
 }
 
 // PBSData contains Proxmox Backup Server data.

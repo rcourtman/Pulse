@@ -193,6 +193,8 @@ func TestParseResourceTypesNodeAlias(t *testing.T) {
 		{name: "docker task", input: "docker-task", want: map[unified.ResourceType]struct{}{unified.ResourceTypeDockerTask: {}}},
 		{name: "docker swarm node", input: "docker-swarm-node", want: map[unified.ResourceType]struct{}{unified.ResourceTypeDockerSwarmNode: {}}},
 		{name: "docker node alias", input: "docker-node", want: map[unified.ResourceType]struct{}{unified.ResourceTypeDockerSwarmNode: {}}},
+		{name: "docker secret", input: "docker-secret", want: map[unified.ResourceType]struct{}{unified.ResourceTypeDockerSecret: {}}},
+		{name: "docker config", input: "docker-config", want: map[unified.ResourceType]struct{}{unified.ResourceTypeDockerConfig: {}}},
 		{name: "k8s namespace", input: "k8s-namespace", want: map[unified.ResourceType]struct{}{unified.ResourceTypeK8sNamespace: {}}},
 		{name: "k8s service", input: "k8s-service", want: map[unified.ResourceType]struct{}{unified.ResourceTypeK8sService: {}}},
 		{name: "k8s statefulset", input: "k8s-statefulset", want: map[unified.ResourceType]struct{}{unified.ResourceTypeK8sStatefulSet: {}}},

@@ -216,6 +216,8 @@ func cloneDockerData(in *DockerData) *DockerData {
 	out.Subnets = cloneDockerNetworkSubnetMetaSlice(in.Subnets)
 	out.StartedAt = cloneTimePtr(in.StartedAt)
 	out.CompletedAt = cloneTimePtr(in.CompletedAt)
+	out.ObjectCreatedAt = cloneTimePtr(in.ObjectCreatedAt)
+	out.ObjectUpdatedAt = cloneTimePtr(in.ObjectUpdatedAt)
 	out.Command = cloneDockerHostCommandStatus(in.Command)
 	out.Swarm = cloneDockerSwarmInfo(in.Swarm)
 	out.NetworkInterfaces = cloneNetworkInterfaces(in.NetworkInterfaces)
@@ -227,6 +229,8 @@ func cloneDockerData(in *DockerData) *DockerData {
 	out.Services = append([]models.DockerService(nil), in.Services...)
 	out.Tasks = append([]models.DockerTask(nil), in.Tasks...)
 	out.Nodes = append([]models.DockerNode(nil), in.Nodes...)
+	out.Secrets = append([]models.DockerSecret(nil), in.Secrets...)
+	out.Configs = append([]models.DockerConfig(nil), in.Configs...)
 	return &out
 }
 

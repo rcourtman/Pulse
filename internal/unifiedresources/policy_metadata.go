@@ -130,7 +130,8 @@ func classifyResourceSensitivity(resource Resource) ResourceSensitivity {
 	if resource.PMG != nil {
 		return ResourceSensitivityRestricted
 	}
-	if CanonicalResourceType(resource.Type) == ResourceTypeK8sSecret {
+	if CanonicalResourceType(resource.Type) == ResourceTypeK8sSecret ||
+		CanonicalResourceType(resource.Type) == ResourceTypeDockerSecret {
 		return ResourceSensitivityRestricted
 	}
 
@@ -162,6 +163,7 @@ func classifyResourceSensitivity(resource Resource) ResourceSensitivity {
 		ResourceTypeK8sEvent,
 		ResourceTypeDockerService,
 		ResourceTypeDockerSwarmNode,
+		ResourceTypeDockerConfig,
 		ResourceTypeStorage,
 		ResourceTypeNetwork,
 		ResourceTypePBS,
@@ -289,6 +291,10 @@ func resourceSummaryType(resource Resource) string {
 		return "docker service"
 	case ResourceTypeDockerSwarmNode:
 		return "docker swarm node"
+	case ResourceTypeDockerSecret:
+		return "docker swarm secret"
+	case ResourceTypeDockerConfig:
+		return "docker swarm config"
 	case ResourceTypeK8sCluster:
 		return "kubernetes cluster"
 	case ResourceTypeK8sNode:

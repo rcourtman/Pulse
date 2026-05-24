@@ -119,7 +119,8 @@ checks, merge tenants, or become the source of truth for telemetry freshness.
 The `/api/resources` type filter is the REST contract boundary for platform
 page native inventory. It must accept canonical Docker / Podman runtime tokens
 (`docker-image`, `docker-volume`, `docker-network`, `docker-task`,
-`docker-swarm-node`) and canonical Kubernetes API object tokens
+`docker-swarm-node`, `docker-secret`, `docker-config`) and canonical
+Kubernetes API object tokens
 (`k8s-namespace`, `k8s-service`, `k8s-replicaset`, `k8s-statefulset`,
 `k8s-daemonset`, `k8s-job`, `k8s-cronjob`, `k8s-ingress`,
 `k8s-endpoint-slice`, `k8s-network-policy`, `k8s-persistent-volume`,
@@ -128,8 +129,9 @@ page native inventory. It must accept canonical Docker / Podman runtime tokens
 `k8s-limit-range`, `k8s-pod-disruption-budget`,
 `k8s-horizontal-pod-autoscaler`, `k8s-event`) whenever unified resources can
 publish those records. Docker node and Swarm node aliases may normalize to the
-canonical `docker-swarm-node` token, but unsupported legacy aliases should
-continue to fail closed instead of silently widening platform queries.
+canonical `docker-swarm-node` token, and Swarm secret/config aliases may
+normalize to `docker-secret` and `docker-config`, but unsupported legacy aliases
+should continue to fail closed instead of silently widening platform queries.
 
 Discovery read endpoints are a canonical API payload boundary even when Pulse
 is running in mock mode. `/api/discovery`, typed discovery detail/progress

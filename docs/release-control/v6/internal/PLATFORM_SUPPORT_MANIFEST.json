@@ -87,7 +87,9 @@
         "docker-network",
         "docker-service",
         "docker-task",
-        "docker-swarm-node"
+        "docker-swarm-node",
+        "docker-secret",
+        "docker-config"
       ],
       "support_floor": {
         "setup": "supported",

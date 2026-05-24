@@ -17,6 +17,8 @@ describe('canonicalResourceTypes', () => {
     expect(CANONICAL_RESOURCE_TYPES).toContain('docker-network');
     expect(CANONICAL_RESOURCE_TYPES).toContain('docker-task');
     expect(CANONICAL_RESOURCE_TYPES).toContain('docker-swarm-node');
+    expect(CANONICAL_RESOURCE_TYPES).toContain('docker-secret');
+    expect(CANONICAL_RESOURCE_TYPES).toContain('docker-config');
     expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-namespace');
     expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-service');
     expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-replicaset');
@@ -51,6 +53,8 @@ describe('canonicalResourceTypes', () => {
     expect(isCanonicalResourceType('network-endpoint')).toBe(true);
     expect(isCanonicalResourceType('docker-image')).toBe(true);
     expect(isCanonicalResourceType('docker-swarm-node')).toBe(true);
+    expect(isCanonicalResourceType('docker-secret')).toBe(true);
+    expect(isCanonicalResourceType('docker-config')).toBe(true);
     expect(isCanonicalResourceType('k8s-event')).toBe(true);
     expect(isCanonicalResourceType('host')).toBe(false);
     expect(isCanonicalResourceType('lxc')).toBe(false);

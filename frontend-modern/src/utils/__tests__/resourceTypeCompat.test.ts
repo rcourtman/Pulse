@@ -23,6 +23,10 @@ describe('resourceTypeCompat', () => {
     expect(canonicalizeFrontendResourceType('docker-swarm-node')).toBe('docker-swarm-node');
     expect(canonicalizeFrontendResourceType('docker-node')).toBe('docker-swarm-node');
     expect(canonicalizeFrontendResourceType('swarm_node')).toBe('docker-swarm-node');
+    expect(canonicalizeFrontendResourceType('docker-secret')).toBe('docker-secret');
+    expect(canonicalizeFrontendResourceType('swarm_secret')).toBe('docker-secret');
+    expect(canonicalizeFrontendResourceType('docker-config')).toBe('docker-config');
+    expect(canonicalizeFrontendResourceType('swarm_config')).toBe('docker-config');
     expect(canonicalizeFrontendResourceType('k8s-namespace')).toBe('k8s-namespace');
     expect(canonicalizeFrontendResourceType('k8s-service')).toBe('k8s-service');
     expect(canonicalizeFrontendResourceType('k8s-replicaset')).toBe('k8s-replicaset');

@@ -190,6 +190,76 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 		}
 	}
 
+	type dockerSecretCandidate struct {
+		host   models.DockerHost
+		secret models.DockerSecret
+	}
+	secretByID := make(map[string]dockerSecretCandidate)
+	for _, dh := range snapshot.DockerHosts {
+		if dh.Swarm == nil {
+			continue
+		}
+		for _, secret := range dh.Secrets {
+			sourceID := dockerSecretSourceID(dh, secret)
+			if sourceID == "" {
+				continue
+			}
+			existing, ok := secretByID[sourceID]
+			if !ok {
+				secretByID[sourceID] = dockerSecretCandidate{host: dh, secret: secret}
+				continue
+			}
+			replace := false
+			if existing.secret.DriverName == "" && secret.DriverName != "" {
+				replace = true
+			}
+			if !replace && dh.LastSeen.After(existing.host.LastSeen) {
+				replace = true
+			}
+			if replace {
+				secretByID[sourceID] = dockerSecretCandidate{host: dh, secret: secret}
+			}
+		}
+	}
+	for _, candidate := range secretByID {
+		rr.ingestDockerSecret(candidate.secret, candidate.host)
+	}
+
+	type dockerConfigCandidate struct {
+		host   models.DockerHost
+		config models.DockerConfig
+	}
+	configByID := make(map[string]dockerConfigCandidate)
+	for _, dh := range snapshot.DockerHosts {
+		if dh.Swarm == nil {
+			continue
+		}
+		for _, config := range dh.Configs {
+			sourceID := dockerConfigSourceID(dh, config)
+			if sourceID == "" {
+				continue
+			}
+			existing, ok := configByID[sourceID]
+			if !ok {
+				configByID[sourceID] = dockerConfigCandidate{host: dh, config: config}
+				continue
+			}
+			replace := false
+			if existing.config.TemplatingDriver == "" && config.TemplatingDriver != "" {
+				replace = true
+			}
+			if !replace && dh.LastSeen.After(existing.host.LastSeen) {
+				replace = true
+			}
+			if replace {
+				configByID[sourceID] = dockerConfigCandidate{host: dh, config: config}
+			}
+		}
+	}
+	for _, candidate := range configByID {
+		rr.ingestDockerConfig(candidate.config, candidate.host)
+	}
+
 	// Swarm services are cluster-scoped; multiple nodes can report identical
 	// service lists. Deduplicate by a stable source ID to avoid churn.
 	type dockerServiceCandidate struct {
@@ -632,6 +702,38 @@ func (rr *ResourceRegistry) seedSourceIDForResourceLocked(resource *Resource, so
 				return ""
 			}
 			return hostSourceID + "/swarm-node/" + nodeID
+		case ResourceTypeDockerSecret:
+			secretID := strings.TrimSpace(resource.Docker.SecretID)
+			if secretID == "" {
+				secretID = strings.TrimSpace(resource.Name)
+			}
+			if secretID == "" {
+				return ""
+			}
+			if clusterKey := dockerSwarmClusterKeyFromMeta(resource.Docker.Swarm); clusterKey != "" {
+				return fmt.Sprintf("%s:secret:%s", clusterKey, secretID)
+			}
+			hostSourceID := strings.TrimSpace(resource.Docker.HostSourceID)
+			if hostSourceID == "" {
+				return ""
+			}
+			return hostSourceID + "/secret/" + secretID
+		case ResourceTypeDockerConfig:
+			configID := strings.TrimSpace(resource.Docker.ConfigID)
+			if configID == "" {
+				configID = strings.TrimSpace(resource.Name)
+			}
+			if configID == "" {
+				return ""
+			}
+			if clusterKey := dockerSwarmClusterKeyFromMeta(resource.Docker.Swarm); clusterKey != "" {
+				return fmt.Sprintf("%s:config:%s", clusterKey, configID)
+			}
+			hostSourceID := strings.TrimSpace(resource.Docker.HostSourceID)
+			if hostSourceID == "" {
+				return ""
+			}
+			return hostSourceID + "/config/" + configID
 		default:
 			return strings.TrimSpace(resource.Docker.HostSourceID)
 		}
@@ -1390,6 +1492,24 @@ func (rr *ResourceRegistry) ingestDockerSwarmNode(node models.DockerNode, host m
 		resource.ParentID = &parentID
 	}
 	sourceID := dockerSwarmNodeSourceID(host, node)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceDocker, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestDockerSecret(secret models.DockerSecret, host models.DockerHost) {
+	resource, identity := resourceFromDockerSecret(secret, host)
+	sourceID := dockerSecretSourceID(host, secret)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceDocker, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestDockerConfig(config models.DockerConfig, host models.DockerHost) {
+	resource, identity := resourceFromDockerConfig(config, host)
+	sourceID := dockerConfigSourceID(host, config)
 	if sourceID == "" {
 		return
 	}
@@ -3231,6 +3351,42 @@ func dockerSwarmNodeSourceID(host models.DockerHost, node models.DockerNode) str
 		return ""
 	}
 	return hostID + "/swarm-node/" + nodeID
+}
+
+func dockerSecretSourceID(host models.DockerHost, secret models.DockerSecret) string {
+	secretID := strings.TrimSpace(secret.ID)
+	if secretID == "" {
+		secretID = strings.TrimSpace(secret.Name)
+	}
+	if secretID == "" {
+		return ""
+	}
+	if cluster := dockerSwarmClusterKey(host); cluster != "" {
+		return fmt.Sprintf("%s:secret:%s", cluster, secretID)
+	}
+	hostID := strings.TrimSpace(host.ID)
+	if hostID == "" {
+		return ""
+	}
+	return hostID + "/secret/" + secretID
+}
+
+func dockerConfigSourceID(host models.DockerHost, config models.DockerConfig) string {
+	configID := strings.TrimSpace(config.ID)
+	if configID == "" {
+		configID = strings.TrimSpace(config.Name)
+	}
+	if configID == "" {
+		return ""
+	}
+	if cluster := dockerSwarmClusterKey(host); cluster != "" {
+		return fmt.Sprintf("%s:config:%s", cluster, configID)
+	}
+	hostID := strings.TrimSpace(host.ID)
+	if hostID == "" {
+		return ""
+	}
+	return hostID + "/config/" + configID
 }
 
 func mergeIdentity(existing ResourceIdentity, incoming ResourceIdentity) ResourceIdentity {

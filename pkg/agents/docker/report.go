@@ -21,6 +21,8 @@ type Report struct {
 	Services     []Service     `json:"services,omitempty"`
 	Tasks        []Task        `json:"tasks,omitempty"`
 	Nodes        []Node        `json:"nodes,omitempty"`
+	Secrets      []Secret      `json:"secrets,omitempty"`
+	Configs      []Config      `json:"configs,omitempty"`
 	StorageUsage *StorageUsage `json:"storageUsage,omitempty"`
 	Timestamp    time.Time     `json:"timestamp"`
 }
@@ -312,4 +314,27 @@ type Node struct {
 	EngineLabels        map[string]string `json:"engineLabels,omitempty"`
 	CreatedAt           time.Time         `json:"createdAt,omitempty"`
 	UpdatedAt           *time.Time        `json:"updatedAt,omitempty"`
+}
+
+// Secret summarises Docker Swarm secret metadata. Secret payload data is never
+// collected or serialized in Pulse reports.
+type Secret struct {
+	ID               string            `json:"id"`
+	Name             string            `json:"name"`
+	Labels           map[string]string `json:"labels,omitempty"`
+	DriverName       string            `json:"driverName,omitempty"`
+	TemplatingDriver string            `json:"templatingDriver,omitempty"`
+	CreatedAt        time.Time         `json:"createdAt,omitempty"`
+	UpdatedAt        *time.Time        `json:"updatedAt,omitempty"`
+}
+
+// Config summarises Docker Swarm config metadata. Config payload data is never
+// collected or serialized in Pulse reports.
+type Config struct {
+	ID               string            `json:"id"`
+	Name             string            `json:"name"`
+	Labels           map[string]string `json:"labels,omitempty"`
+	TemplatingDriver string            `json:"templatingDriver,omitempty"`
+	CreatedAt        time.Time         `json:"createdAt,omitempty"`
+	UpdatedAt        *time.Time        `json:"updatedAt,omitempty"`
 }

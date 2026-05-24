@@ -458,6 +458,7 @@ func TestApplyHostReportAllowsTokenReuseAcrossHosts(t *testing.T) {
 func TestApplyDockerReportPreservesNativeRuntimeInventory(t *testing.T) {
 	monitor := newTestMonitor(t)
 	now := time.Date(2026, 5, 24, 8, 0, 0, 0, time.UTC)
+	updatedAt := now.Add(time.Minute)
 	report := agentsdocker.Report{
 		Agent: agentsdocker.AgentInfo{ID: "docker-agent-1", Version: "1.0.0", IntervalSeconds: 30},
 		Host: agentsdocker.HostInfo{
@@ -487,6 +488,12 @@ func TestApplyDockerReportPreservesNativeRuntimeInventory(t *testing.T) {
 			Volumes:    agentsdocker.StorageUsageBucket{TotalCount: 1, ActiveCount: 1, TotalSizeBytes: 2048},
 			Containers: agentsdocker.StorageUsageBucket{TotalCount: 2, ActiveCount: 2},
 		},
+		Secrets: []agentsdocker.Secret{{
+			ID: "secret1", Name: "api-token", DriverName: "vault", TemplatingDriver: "", CreatedAt: now, UpdatedAt: &updatedAt, Labels: map[string]string{"stack": "ops"},
+		}},
+		Configs: []agentsdocker.Config{{
+			ID: "config1", Name: "nginx-conf", TemplatingDriver: "golang", CreatedAt: now, UpdatedAt: &updatedAt, Labels: map[string]string{"stack": "frontend"},
+		}},
 		Timestamp: now,
 	}
 
@@ -505,6 +512,12 @@ func TestApplyDockerReportPreservesNativeRuntimeInventory(t *testing.T) {
 	}
 	if host.StorageUsage == nil || host.StorageUsage.Images.ReclaimableBytes != 512 {
 		t.Fatalf("expected storage usage inventory, got %+v", host.StorageUsage)
+	}
+	if len(host.Secrets) != 1 || host.Secrets[0].Name != "api-token" || host.Secrets[0].DriverName != "vault" {
+		t.Fatalf("expected secret metadata inventory, got %+v", host.Secrets)
+	}
+	if len(host.Configs) != 1 || host.Configs[0].Name != "nginx-conf" || host.Configs[0].TemplatingDriver != "golang" {
+		t.Fatalf("expected config metadata inventory, got %+v", host.Configs)
 	}
 }
 

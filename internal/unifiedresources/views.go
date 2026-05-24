@@ -1569,6 +1569,20 @@ func (v DockerHostView) Nodes() []models.DockerNode {
 	return append([]models.DockerNode(nil), v.r.Docker.Nodes...)
 }
 
+func (v DockerHostView) Secrets() []models.DockerSecret {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return append([]models.DockerSecret(nil), v.r.Docker.Secrets...)
+}
+
+func (v DockerHostView) Configs() []models.DockerConfig {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return append([]models.DockerConfig(nil), v.r.Docker.Configs...)
+}
+
 func (v DockerHostView) NetworkInterfaces() []NetworkInterface {
 	if v.r == nil || v.r.Docker == nil {
 		return nil

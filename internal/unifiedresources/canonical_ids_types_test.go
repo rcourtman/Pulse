@@ -86,6 +86,16 @@ func TestContractResourceType(t *testing.T) {
 			want:     ResourceTypeDockerVolume,
 		},
 		{
+			name:     "docker secret passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeDockerSecret, Docker: &DockerData{SecretID: "secret1", SecretName: "api-token"}},
+			want:     ResourceTypeDockerSecret,
+		},
+		{
+			name:     "docker config passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeDockerConfig, Docker: &DockerData{ConfigID: "config1", ConfigName: "nginx-conf"}},
+			want:     ResourceTypeDockerConfig,
+		},
+		{
 			name:     "kubernetes service passthrough remains canonical",
 			resource: Resource{Type: ResourceTypeK8sService, Kubernetes: &K8sData{ServiceType: "ClusterIP"}},
 			want:     ResourceTypeK8sService,

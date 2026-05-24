@@ -85,6 +85,12 @@ func TestBuildFixtureStateIncludesSwarmServices(t *testing.T) {
 		if len(host.Tasks) == 0 {
 			t.Fatalf("expected tasks for service host %s", host.ID)
 		}
+		if len(host.Secrets) == 0 {
+			t.Fatalf("expected secrets for service host %s", host.ID)
+		}
+		if len(host.Configs) == 0 {
+			t.Fatalf("expected configs for service host %s", host.ID)
+		}
 		found = true
 		break
 	}

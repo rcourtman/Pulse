@@ -427,6 +427,55 @@ func convertDockerNodes(nodes []agentsdocker.Node) []models.DockerNode {
 	return result
 }
 
+func convertDockerSecrets(secrets []agentsdocker.Secret) []models.DockerSecret {
+	if len(secrets) == 0 {
+		return nil
+	}
+
+	result := make([]models.DockerSecret, 0, len(secrets))
+	for _, secret := range secrets {
+		modelSecret := models.DockerSecret{
+			ID:               strings.TrimSpace(secret.ID),
+			Name:             strings.TrimSpace(secret.Name),
+			Labels:           cloneStringMap(secret.Labels),
+			DriverName:       strings.TrimSpace(secret.DriverName),
+			TemplatingDriver: strings.TrimSpace(secret.TemplatingDriver),
+			CreatedAt:        secret.CreatedAt,
+		}
+		if secret.UpdatedAt != nil && !secret.UpdatedAt.IsZero() {
+			updated := *secret.UpdatedAt
+			modelSecret.UpdatedAt = &updated
+		}
+		result = append(result, modelSecret.NormalizeCollections())
+	}
+
+	return result
+}
+
+func convertDockerConfigs(configs []agentsdocker.Config) []models.DockerConfig {
+	if len(configs) == 0 {
+		return nil
+	}
+
+	result := make([]models.DockerConfig, 0, len(configs))
+	for _, config := range configs {
+		modelConfig := models.DockerConfig{
+			ID:               strings.TrimSpace(config.ID),
+			Name:             strings.TrimSpace(config.Name),
+			Labels:           cloneStringMap(config.Labels),
+			TemplatingDriver: strings.TrimSpace(config.TemplatingDriver),
+			CreatedAt:        config.CreatedAt,
+		}
+		if config.UpdatedAt != nil && !config.UpdatedAt.IsZero() {
+			updated := *config.UpdatedAt
+			modelConfig.UpdatedAt = &updated
+		}
+		result = append(result, modelConfig.NormalizeCollections())
+	}
+
+	return result
+}
+
 func normalizeAgentVersion(version string) string {
 	version = strings.TrimSpace(version)
 	if version == "" {

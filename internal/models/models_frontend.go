@@ -169,6 +169,8 @@ type DockerHostFrontend struct {
 	Services          []DockerServiceFrontend     `json:"services"`
 	Tasks             []DockerTaskFrontend        `json:"tasks"`
 	Nodes             []DockerNodeFrontend        `json:"nodes"`
+	Secrets           []DockerSecretFrontend      `json:"secrets"`
+	Configs           []DockerConfigFrontend      `json:"configs"`
 	Swarm             *DockerSwarmFrontend        `json:"swarm,omitempty"`
 	Security          *DockerHostSecurityFrontend `json:"security,omitempty"`
 	TokenID           string                      `json:"tokenId,omitempty"`
@@ -201,11 +203,23 @@ func (h DockerHostFrontend) NormalizeCollections() DockerHostFrontend {
 	if h.Nodes == nil {
 		h.Nodes = []DockerNodeFrontend{}
 	}
+	if h.Secrets == nil {
+		h.Secrets = []DockerSecretFrontend{}
+	}
+	if h.Configs == nil {
+		h.Configs = []DockerConfigFrontend{}
+	}
 	for i := range h.Containers {
 		h.Containers[i] = h.Containers[i].NormalizeCollections()
 	}
 	for i := range h.Services {
 		h.Services[i] = h.Services[i].NormalizeCollections()
+	}
+	for i := range h.Secrets {
+		h.Secrets[i] = h.Secrets[i].NormalizeCollections()
+	}
+	for i := range h.Configs {
+		h.Configs[i] = h.Configs[i].NormalizeCollections()
 	}
 	if h.Security != nil {
 		security := h.Security.NormalizeCollections()
@@ -607,6 +621,41 @@ type DockerNodeFrontend struct {
 	EngineLabels        map[string]string `json:"engineLabels,omitempty"`
 	CreatedAt           *int64            `json:"createdAt,omitempty"`
 	UpdatedAt           *int64            `json:"updatedAt,omitempty"`
+}
+
+// DockerSecretFrontend represents Docker Swarm secret metadata for the frontend.
+type DockerSecretFrontend struct {
+	ID               string            `json:"id"`
+	Name             string            `json:"name"`
+	Labels           map[string]string `json:"labels"`
+	DriverName       string            `json:"driverName,omitempty"`
+	TemplatingDriver string            `json:"templatingDriver,omitempty"`
+	CreatedAt        *int64            `json:"createdAt,omitempty"`
+	UpdatedAt        *int64            `json:"updatedAt,omitempty"`
+}
+
+func (s DockerSecretFrontend) NormalizeCollections() DockerSecretFrontend {
+	if s.Labels == nil {
+		s.Labels = map[string]string{}
+	}
+	return s
+}
+
+// DockerConfigFrontend represents Docker Swarm config metadata for the frontend.
+type DockerConfigFrontend struct {
+	ID               string            `json:"id"`
+	Name             string            `json:"name"`
+	Labels           map[string]string `json:"labels"`
+	TemplatingDriver string            `json:"templatingDriver,omitempty"`
+	CreatedAt        *int64            `json:"createdAt,omitempty"`
+	UpdatedAt        *int64            `json:"updatedAt,omitempty"`
+}
+
+func (c DockerConfigFrontend) NormalizeCollections() DockerConfigFrontend {
+	if c.Labels == nil {
+		c.Labels = map[string]string{}
+	}
+	return c
 }
 
 // DockerSwarmFrontend summarises node-level swarm details.

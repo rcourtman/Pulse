@@ -220,6 +220,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 "memory-source-runtime",
                 "docker-collect-runtime",
                 "docker-swarm-runtime",
+                "docker-runtime-report-model",
                 "proxmox-zfs-runtime",
                 "proxmox-ceph-runtime",
                 "container-entrypoint-runtime",
@@ -238,6 +239,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "test_prefixes": [],
                     "exact_files": [
                         "internal/monitoring/canonical_guardrails_test.go",
+                        "internal/monitoring/monitor_host_agents_test.go",
                         "internal/unifiedresources/code_standards_test.go",
                     ],
                 }
@@ -270,6 +272,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/dockeragent/agent_collect_test.go",
                         "internal/dockeragent/agent_cpu_test.go",
                         "internal/dockeragent/agent_internal_test.go",
+                        "internal/dockeragent/swarm_coverage_test.go",
                     ],
                 }
             ],
@@ -764,6 +767,8 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
                         "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
                         "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
+                        "frontend-modern/src/features/docker/__tests__/DockerPageSurface.test.tsx",
+                        "frontend-modern/src/features/docker/__tests__/dockerPageModel.test.ts",
                         "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",
                         "frontend-modern/src/features/infrastructure/__tests__/infrastructurePageModel.test.ts",
                         "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",

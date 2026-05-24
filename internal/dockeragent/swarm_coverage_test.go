@@ -342,19 +342,69 @@ func TestMapSwarmNode(t *testing.T) {
 	}
 }
 
+func TestMapSwarmSecretAndConfigOmitPayloadData(t *testing.T) {
+	createdAt := time.Date(2024, 3, 4, 5, 6, 7, 0, time.UTC)
+	updatedAt := createdAt.Add(5 * time.Minute)
+
+	secret := mapSwarmSecret(&swarmtypes.Secret{
+		ID: "secret-1",
+		Meta: swarmtypes.Meta{
+			CreatedAt: createdAt,
+			UpdatedAt: updatedAt,
+		},
+		Spec: swarmtypes.SecretSpec{
+			Annotations: swarmtypes.Annotations{
+				Name:   "db-password",
+				Labels: map[string]string{"stack": "backend"},
+			},
+			Data:       []byte("must-not-be-reported"),
+			Driver:     &swarmtypes.Driver{Name: "vault", Options: map[string]string{"path": "secret/db"}},
+			Templating: &swarmtypes.Driver{Name: "golang"},
+		},
+	})
+	if secret.ID != "secret-1" || secret.Name != "db-password" || secret.DriverName != "vault" || secret.TemplatingDriver != "golang" {
+		t.Fatalf("unexpected mapped secret metadata: %+v", secret)
+	}
+	if secret.Labels["stack"] != "backend" || secret.CreatedAt.IsZero() || secret.UpdatedAt == nil {
+		t.Fatalf("expected secret labels and timestamps, got %+v", secret)
+	}
+
+	config := mapSwarmConfig(&swarmtypes.Config{
+		ID: "config-1",
+		Meta: swarmtypes.Meta{
+			CreatedAt: createdAt,
+			UpdatedAt: updatedAt,
+		},
+		Spec: swarmtypes.ConfigSpec{
+			Annotations: swarmtypes.Annotations{
+				Name:   "nginx-conf",
+				Labels: map[string]string{"stack": "frontend"},
+			},
+			Data:       []byte("must-not-be-reported"),
+			Templating: &swarmtypes.Driver{Name: "golang"},
+		},
+	})
+	if config.ID != "config-1" || config.Name != "nginx-conf" || config.TemplatingDriver != "golang" {
+		t.Fatalf("unexpected mapped config metadata: %+v", config)
+	}
+	if config.Labels["stack"] != "frontend" || config.CreatedAt.IsZero() || config.UpdatedAt == nil {
+		t.Fatalf("expected config labels and timestamps, got %+v", config)
+	}
+}
+
 func TestCollectSwarmData(t *testing.T) {
 	t.Run("unsupported swarm returns nils", func(t *testing.T) {
 		agent := &Agent{supportsSwarm: false}
-		services, tasks, nodes, info := agent.collectSwarmData(context.Background(), systemtypes.Info{}, nil)
-		if services != nil || tasks != nil || nodes != nil || info != nil {
+		services, tasks, nodes, secrets, configs, info := agent.collectSwarmData(context.Background(), systemtypes.Info{}, nil)
+		if services != nil || tasks != nil || nodes != nil || secrets != nil || configs != nil || info != nil {
 			t.Fatal("expected nil outputs when swarm unsupported")
 		}
 	})
 
 	t.Run("empty swarm info returns nil", func(t *testing.T) {
 		agent := &Agent{supportsSwarm: true}
-		services, tasks, nodes, info := agent.collectSwarmData(context.Background(), systemtypes.Info{}, nil)
-		if services != nil || tasks != nil || nodes != nil || info != nil {
+		services, tasks, nodes, secrets, configs, info := agent.collectSwarmData(context.Background(), systemtypes.Info{}, nil)
+		if services != nil || tasks != nil || nodes != nil || secrets != nil || configs != nil || info != nil {
 			t.Fatal("expected nil outputs for empty swarm info")
 		}
 	})
@@ -367,8 +417,8 @@ func TestCollectSwarmData(t *testing.T) {
 			},
 		}
 
-		services, tasks, nodes, swarmInfo := agent.collectSwarmData(context.Background(), info, nil)
-		if services != nil || tasks != nil || nodes != nil || swarmInfo != nil {
+		services, tasks, nodes, secrets, configs, swarmInfo := agent.collectSwarmData(context.Background(), info, nil)
+		if services != nil || tasks != nil || nodes != nil || secrets != nil || configs != nil || swarmInfo != nil {
 			t.Fatal("expected standalone inactive swarm state to be ignored")
 		}
 	})
@@ -382,8 +432,8 @@ func TestCollectSwarmData(t *testing.T) {
 			},
 		}
 
-		services, tasks, nodes, swarmInfo := agent.collectSwarmData(context.Background(), info, nil)
-		if services != nil || tasks != nil || nodes != nil {
+		services, tasks, nodes, secrets, configs, swarmInfo := agent.collectSwarmData(context.Background(), info, nil)
+		if services != nil || tasks != nil || nodes != nil || secrets != nil || configs != nil {
 			t.Fatal("expected nil services/tasks for pending swarm")
 		}
 		if swarmInfo == nil || swarmInfo.NodeID != "node1" {
@@ -435,9 +485,12 @@ func TestCollectSwarmData(t *testing.T) {
 			},
 		}
 
-		services, tasks, nodes, swarmInfo := agent.collectSwarmData(context.Background(), info, containers)
+		services, tasks, nodes, secrets, configs, swarmInfo := agent.collectSwarmData(context.Background(), info, containers)
 		if len(tasks) != 1 || len(services) != 1 {
 			t.Fatalf("expected derived tasks/services, got %d/%d", len(tasks), len(services))
+		}
+		if len(secrets) != 0 || len(configs) != 0 {
+			t.Fatalf("expected no secrets/configs after manager collection error, got %+v/%+v", secrets, configs)
 		}
 		if len(nodes) != 1 || nodes[0].ID != "node1" {
 			t.Fatalf("expected derived local node, got %+v", nodes)
@@ -488,6 +541,18 @@ func TestCollectSwarmData(t *testing.T) {
 						{ID: "task1", ServiceID: "svc2", Slot: 1, DesiredState: swarmtypes.TaskStateRunning, Status: swarmtypes.TaskStatus{State: swarmtypes.TaskStateRunning}},
 					}, nil
 				},
+				secretListFn: func(context.Context, dockerSecretListOptions) ([]swarmtypes.Secret, error) {
+					return []swarmtypes.Secret{
+						{ID: "secret-z", Spec: swarmtypes.SecretSpec{Annotations: swarmtypes.Annotations{Name: "zeta-secret"}}},
+						{ID: "secret-a", Spec: swarmtypes.SecretSpec{Annotations: swarmtypes.Annotations{Name: "alpha-secret"}}},
+					}, nil
+				},
+				configListFn: func(context.Context, dockerConfigListOptions) ([]swarmtypes.Config, error) {
+					return []swarmtypes.Config{
+						{ID: "config-z", Spec: swarmtypes.ConfigSpec{Annotations: swarmtypes.Annotations{Name: "zeta-config"}}},
+						{ID: "config-a", Spec: swarmtypes.ConfigSpec{Annotations: swarmtypes.Annotations{Name: "alpha-config"}}},
+					}, nil
+				},
 			},
 		}
 
@@ -499,9 +564,15 @@ func TestCollectSwarmData(t *testing.T) {
 			},
 		}
 
-		services, tasks, nodes, swarmInfo := agent.collectSwarmData(context.Background(), info, nil)
+		services, tasks, nodes, secrets, configs, swarmInfo := agent.collectSwarmData(context.Background(), info, nil)
 		if len(tasks) != 2 || len(services) != 2 {
 			t.Fatalf("expected manager tasks/services, got %d/%d", len(tasks), len(services))
+		}
+		if len(secrets) != 2 || secrets[0].Name != "alpha-secret" {
+			t.Fatalf("expected sorted manager secret inventory, got %+v", secrets)
+		}
+		if len(configs) != 2 || configs[0].Name != "alpha-config" {
+			t.Fatalf("expected sorted manager config inventory, got %+v", configs)
 		}
 		if len(nodes) != 1 || nodes[0].ID != "node-manager" || nodes[0].Hostname != "manager-1" {
 			t.Fatalf("expected manager node inventory, got %+v", nodes)
@@ -543,7 +614,7 @@ func TestCollectSwarmData(t *testing.T) {
 			},
 		}
 
-		services, tasks, nodes, swarmInfo := agent.collectSwarmData(context.Background(), info, containers)
+		services, tasks, nodes, _, _, swarmInfo := agent.collectSwarmData(context.Background(), info, containers)
 		if services != nil {
 			t.Fatal("expected services to be nil when disabled")
 		}
@@ -582,7 +653,7 @@ func TestCollectSwarmData(t *testing.T) {
 			},
 		}
 
-		services, tasks, nodes, swarmInfo := agent.collectSwarmData(context.Background(), info, nil)
+		services, tasks, nodes, _, _, swarmInfo := agent.collectSwarmData(context.Background(), info, nil)
 		if services != nil || tasks != nil {
 			t.Fatal("expected nil services/tasks when disabled")
 		}
@@ -629,7 +700,7 @@ func TestCollectSwarmData(t *testing.T) {
 			},
 		}
 
-		services, tasks, nodes, swarmInfo := agent.collectSwarmData(context.Background(), info, nil)
+		services, tasks, nodes, _, _, swarmInfo := agent.collectSwarmData(context.Background(), info, nil)
 		if swarmInfo == nil {
 			t.Fatalf("expected swarm info")
 		}

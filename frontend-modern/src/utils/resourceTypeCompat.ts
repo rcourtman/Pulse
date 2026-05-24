@@ -14,6 +14,8 @@ export type CanonicalFrontendResourceType =
   | 'docker-network'
   | 'docker-task'
   | 'docker-swarm-node'
+  | 'docker-secret'
+  | 'docker-config'
   | 'network'
   | 'network-share'
   | 'pbs'
@@ -79,6 +81,16 @@ export const canonicalizeFrontendResourceType = (
     case 'swarm-nodes':
     case 'swarm_nodes':
       return 'docker-swarm-node';
+    case 'swarm-secret':
+    case 'swarm_secret':
+    case 'swarm-secrets':
+    case 'swarm_secrets':
+      return 'docker-secret';
+    case 'swarm-config':
+    case 'swarm_config':
+    case 'swarm-configs':
+    case 'swarm_configs':
+      return 'docker-config';
     case 'k8s':
     case 'kubernetes':
     case 'k8s-pod':
@@ -107,6 +119,8 @@ export const canonicalizeFrontendResourceType = (
     case 'docker-network':
     case 'docker-task':
     case 'docker-swarm-node':
+    case 'docker-secret':
+    case 'docker-config':
     case 'network':
     case 'network-share':
     case 'pbs':

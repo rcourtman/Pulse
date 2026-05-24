@@ -56,6 +56,13 @@ truth for live infrastructure data.
 32. `internal/monitoring/scheduler.go`
 33. `internal/monitoring/docker_detection.go`
 34. `internal/mock/fixture_graph.go`
+35. `internal/dockeragent/docker_client.go`
+36. `pkg/agents/docker/report.go`
+37. `internal/models/models.go`
+38. `internal/models/models_frontend.go`
+39. `internal/models/converters.go`
+40. `internal/models/deepcopy.go`
+41. `internal/mock/generator.go`
 
 ## Shared Boundaries
 
@@ -68,21 +75,27 @@ truth for live infrastructure data.
 3. Add typed read access through `internal/unifiedresources/views.go`
 4. Add unified supplemental ingest through `internal/monitoring/poll_providers.go`
 5. Add or change container startup ownership/bootstrap behavior for hosted or managed Pulse runtime mounts through `docker-entrypoint.sh`
-6. Add or change Docker Swarm manager service, task, or node runtime collection through `internal/dockeragent/swarm.go`
+6. Add or change Docker Swarm manager service, task, node, secret, or config runtime collection through `internal/dockeragent/swarm.go`
    Swarm node inventory is manager-sourced through the documented nodes API
    when available and falls back to the local `system/info` Swarm node
    metadata when a worker or non-manager runtime cannot list cluster nodes.
    Manager-side list failures are warnings, not host-report failures.
+   Swarm secret and config inventory is metadata-only: the collector may
+   preserve object id, name, labels, driver/template metadata, and timestamps,
+   but it must never copy or serialize secret/config payload bytes from the
+   Docker API.
 7. Add or change Docker or Podman container stats compatibility and runtime metric semantics through `internal/dockeragent/collect.go`
    Docker / Podman collection now owns native runtime inventory as well as
    container metrics. It may collect image summaries, volume summaries,
-   network summaries, Swarm services, Swarm tasks, Swarm nodes, and daemon
-   storage-usage buckets from the documented runtime API, then publish those
+   network summaries, Swarm services, Swarm tasks, Swarm nodes, Swarm secrets,
+   Swarm configs, and daemon storage-usage buckets from the documented runtime
+   API, then publish those
    records through the Docker agent report for unified-resource ingestion.
-   Failures in image, volume, network, node, or storage-usage collection are
-   best-effort warnings and must not make the whole host report fail when
-   container/runtime health data is otherwise usable. Podman libpod pods remain
-   outside this collector until a libpod-native collector owns that API shape.
+   Failures in image, volume, network, node, secret, config, or storage-usage
+   collection are best-effort warnings and must not make the whole host report
+   fail when container/runtime health data is otherwise usable. Podman libpod
+   pods remain outside this collector until a libpod-native collector owns that
+   API shape.
 8. Add or change Proxmox Ceph compatibility payload decoding through `pkg/proxmox/ceph.go`
 9. Add or change Proxmox ZFS compatibility payload decoding and vdev-role normalization through `pkg/proxmox/zfs.go`
 10. Add or change mock chart synthesis, seeded history continuity, or mock-owned
@@ -120,6 +133,10 @@ truth for live infrastructure data.
     workloads, then exposed through API-owned Discovery handlers. Monitoring
     must not create a second frontend-only fixture path for service versions,
     config paths, bind mounts, ports, or suggested URLs.
+    Mock Docker runtime inventory must use the same authored Docker host graph
+    for Swarm services, tasks, nodes, secrets, and configs so platform pages and
+    browser proof exercise the live report/resource contracts rather than a
+    frontend-only demo inventory.
 16. Add or change TrueNAS supplemental inventory only through the native
     TrueNAS provider path and unified-resource projection. TrueNAS apps are
     API-owned application records: `app.query` is the preferred live inventory
@@ -185,7 +202,7 @@ truth for live infrastructure data.
 
 1. Update this contract when monitoring truth ownership changes
 2. Tighten guardrails when `GetState()`-centric paths are removed
-3. Keep discovery-provider, host-agent ingest, guest-memory trust, metrics-history, storage-risk, Docker/Podman container collection, Proxmox Ceph and ZFS compatibility, Docker Swarm collection, and container bootstrap proof routes explicit in `registry.json`
+3. Keep discovery-provider, host-agent ingest, guest-memory trust, metrics-history, storage-risk, Docker/Podman container collection, Docker report/model payloads, Proxmox Ceph and ZFS compatibility, Docker Swarm collection, mock runtime fixtures, and container bootstrap proof routes explicit in `registry.json`
 4. Update related read-state or monitor tests when new collector paths land
 5. Keep platform ingestion semantics aligned with
    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`: hybrid is a

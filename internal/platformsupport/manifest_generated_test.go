@@ -2,6 +2,18 @@ package platformsupport
 
 import "testing"
 
+func TestManifestGeneratedSourceMetadataIsStable(t *testing.T) {
+	if ManifestSourcePath != "docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json" {
+		t.Fatalf("manifest source path = %q", ManifestSourcePath)
+	}
+	if ManifestSchemaVersion != 2 {
+		t.Fatalf("manifest schema version = %d, want 2", ManifestSchemaVersion)
+	}
+	if len(ManifestSourceSHA256) != 64 {
+		t.Fatalf("manifest source sha length = %d, want 64", len(ManifestSourceSHA256))
+	}
+}
+
 func TestAgentHostProfileResolverUsesManifestTokens(t *testing.T) {
 	profile, ok := AgentHostProfileForIdentity(" Unraid ")
 	if !ok {

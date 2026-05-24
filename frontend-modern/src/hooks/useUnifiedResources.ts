@@ -526,6 +526,8 @@ const resolveType = (value?: string): ResourceType => {
     case 'docker-network':
     case 'docker-task':
     case 'docker-swarm-node':
+    case 'docker-secret':
+    case 'docker-config':
     case 'k8s-cluster':
     case 'k8s-node':
     case 'k8s-deployment':
@@ -583,6 +585,10 @@ const resolveType = (value?: string): ResourceType => {
       return 'docker-task';
     case 'docker-swarm-node':
       return 'docker-swarm-node';
+    case 'docker-secret':
+      return 'docker-secret';
+    case 'docker-config':
+      return 'docker-config';
     case 'k8s-deployment':
       return 'k8s-deployment';
     case 'k8s-replicaset':

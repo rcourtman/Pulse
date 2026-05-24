@@ -3585,14 +3585,14 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             api_match["matched_contract_references"],
-	            [
-                    {
-                        "heading": "## Shared Boundaries",
-                        "path": "internal/api/access_control_handlers.go",
-                        "line": 244,
-                        "heading_line": 109,
-                    }
-                ],
+            [
+                {
+                    "heading": "## Shared Boundaries",
+                    "path": "internal/api/access_control_handlers.go",
+                    "line": 246,
+                    "heading_line": 109,
+                }
+            ],
         )
 
         organization_match = by_subsystem["organization-settings"]
@@ -3628,7 +3628,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Extension Points",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 91,
+                    "line": 92,
                     "heading_line": 70,
                 },
             ],
@@ -4474,6 +4474,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 [
                     "internal/mock/canonical_api_guardrails_test.go",
                     "internal/mock/demo_scenarios_test.go",
+                    "internal/mock/generator_test.go",
                     "internal/mock/platform_fixtures_test.go",
                     "tests/integration/tests/43-platform-mock-runtime.spec.ts",
                 ],
@@ -4805,6 +4806,8 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
                 "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
                 "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
+                "frontend-modern/src/features/docker/__tests__/DockerPageSurface.test.tsx",
+                "frontend-modern/src/features/docker/__tests__/dockerPageModel.test.ts",
                 "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",
                 "frontend-modern/src/features/infrastructure/__tests__/infrastructurePageModel.test.ts",
                 "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",

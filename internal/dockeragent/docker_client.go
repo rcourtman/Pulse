@@ -122,6 +122,14 @@ type dockerNodeListOptions struct {
 	Filters dockerFilters
 }
 
+type dockerSecretListOptions struct {
+	Filters dockerFilters
+}
+
+type dockerConfigListOptions struct {
+	Filters dockerFilters
+}
+
 type dockerClient interface {
 	Info(ctx context.Context) (systemtypes.Info, error)
 	DaemonHost() string
@@ -143,6 +151,8 @@ type dockerClient interface {
 	ServiceList(ctx context.Context, options dockerServiceListOptions) ([]swarmtypes.Service, error)
 	TaskList(ctx context.Context, options dockerTaskListOptions) ([]swarmtypes.Task, error)
 	NodeList(ctx context.Context, options dockerNodeListOptions) ([]swarmtypes.Node, error)
+	SecretList(ctx context.Context, options dockerSecretListOptions) ([]swarmtypes.Secret, error)
+	ConfigList(ctx context.Context, options dockerConfigListOptions) ([]swarmtypes.Config, error)
 	ImageInspectWithRaw(ctx context.Context, imageID string) (image.InspectResponse, []byte, error)
 	Close() error
 }
@@ -317,6 +327,22 @@ func (m *mobyDockerClient) TaskList(ctx context.Context, options dockerTaskListO
 
 func (m *mobyDockerClient) NodeList(ctx context.Context, options dockerNodeListOptions) ([]swarmtypes.Node, error) {
 	result, err := m.Client.NodeList(ctx, client.NodeListOptions{Filters: options.Filters.toClientFilters()})
+	if err != nil {
+		return nil, err
+	}
+	return result.Items, nil
+}
+
+func (m *mobyDockerClient) SecretList(ctx context.Context, options dockerSecretListOptions) ([]swarmtypes.Secret, error) {
+	result, err := m.Client.SecretList(ctx, client.SecretListOptions{Filters: options.Filters.toClientFilters()})
+	if err != nil {
+		return nil, err
+	}
+	return result.Items, nil
+}
+
+func (m *mobyDockerClient) ConfigList(ctx context.Context, options dockerConfigListOptions) ([]swarmtypes.Config, error) {
+	result, err := m.Client.ConfigList(ctx, client.ConfigListOptions{Filters: options.Filters.toClientFilters()})
 	if err != nil {
 		return nil, err
 	}

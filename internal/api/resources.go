@@ -1867,6 +1867,10 @@ func resourceTypeFilterAdapter(token string) []unified.ResourceType {
 		return []unified.ResourceType{unified.ResourceTypeDockerTask}
 	case "docker-swarm-node", "docker-swarm-nodes", "docker-node", "docker-nodes", "swarm-node", "swarm-nodes":
 		return []unified.ResourceType{unified.ResourceTypeDockerSwarmNode}
+	case "docker-secret", "docker-secrets", "swarm-secret", "swarm-secrets":
+		return []unified.ResourceType{unified.ResourceTypeDockerSecret}
+	case "docker-config", "docker-configs", "swarm-config", "swarm-configs":
+		return []unified.ResourceType{unified.ResourceTypeDockerConfig}
 	case "vm", "vms":
 		return []unified.ResourceType{unified.ResourceTypeVM}
 	case "system-container", "system-containers", "oci-container":

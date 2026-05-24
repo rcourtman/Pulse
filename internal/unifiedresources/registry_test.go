@@ -3881,6 +3881,8 @@ func TestRegistryIngestSnapshotPublishesDockerNativeInventory(t *testing.T) {
 			Tasks: []models.DockerTask{{
 				ID: "task-1", ServiceID: "svc-1", ServiceName: "api", Slot: 1, DesiredState: "running", CurrentState: "running",
 			}},
+			Secrets: []models.DockerSecret{{ID: "secret-1", Name: "db-password", DriverName: "builtin"}},
+			Configs: []models.DockerConfig{{ID: "config-1", Name: "nginx-conf", TemplatingDriver: "golang"}},
 			Swarm: &models.DockerSwarmInfo{
 				NodeID:     "node-1",
 				NodeRole:   "manager",
@@ -3902,6 +3904,8 @@ func TestRegistryIngestSnapshotPublishesDockerNativeInventory(t *testing.T) {
 		ResourceTypeDockerNetwork,
 		ResourceTypeDockerTask,
 		ResourceTypeDockerSwarmNode,
+		ResourceTypeDockerSecret,
+		ResourceTypeDockerConfig,
 	} {
 		if counts[resourceType] != 1 {
 			t.Fatalf("expected one %s resource, got counts %#v", resourceType, counts)

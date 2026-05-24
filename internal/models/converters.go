@@ -274,6 +274,20 @@ func (d DockerHost) ToFrontend() DockerHostFrontend {
 		}
 	}
 
+	if len(d.Secrets) > 0 {
+		h.Secrets = make([]DockerSecretFrontend, len(d.Secrets))
+		for i, secret := range d.Secrets {
+			h.Secrets[i] = secret.ToFrontend()
+		}
+	}
+
+	if len(d.Configs) > 0 {
+		h.Configs = make([]DockerConfigFrontend, len(d.Configs))
+		for i, config := range d.Configs {
+			h.Configs[i] = config.ToFrontend()
+		}
+	}
+
 	if d.Swarm != nil {
 		sw := d.Swarm.ToFrontend()
 		h.Swarm = &sw
@@ -766,6 +780,55 @@ func (n DockerNode) ToFrontend() DockerNodeFrontend {
 		node.UpdatedAt = &ts
 	}
 	return node
+}
+
+// ToFrontend converts a DockerSecret to DockerSecretFrontend.
+func (s DockerSecret) ToFrontend() DockerSecretFrontend {
+	secret := DockerSecretFrontend{
+		ID:               s.ID,
+		Name:             s.Name,
+		DriverName:       s.DriverName,
+		TemplatingDriver: s.TemplatingDriver,
+	}
+	if len(s.Labels) > 0 {
+		secret.Labels = make(map[string]string, len(s.Labels))
+		for key, value := range s.Labels {
+			secret.Labels[key] = value
+		}
+	}
+	if !s.CreatedAt.IsZero() {
+		ts := s.CreatedAt.Unix() * 1000
+		secret.CreatedAt = &ts
+	}
+	if s.UpdatedAt != nil && !s.UpdatedAt.IsZero() {
+		ts := s.UpdatedAt.Unix() * 1000
+		secret.UpdatedAt = &ts
+	}
+	return secret.NormalizeCollections()
+}
+
+// ToFrontend converts a DockerConfig to DockerConfigFrontend.
+func (c DockerConfig) ToFrontend() DockerConfigFrontend {
+	config := DockerConfigFrontend{
+		ID:               c.ID,
+		Name:             c.Name,
+		TemplatingDriver: c.TemplatingDriver,
+	}
+	if len(c.Labels) > 0 {
+		config.Labels = make(map[string]string, len(c.Labels))
+		for key, value := range c.Labels {
+			config.Labels[key] = value
+		}
+	}
+	if !c.CreatedAt.IsZero() {
+		ts := c.CreatedAt.Unix() * 1000
+		config.CreatedAt = &ts
+	}
+	if c.UpdatedAt != nil && !c.UpdatedAt.IsZero() {
+		ts := c.UpdatedAt.Unix() * 1000
+		config.UpdatedAt = &ts
+	}
+	return config.NormalizeCollections()
 }
 
 // ToFrontend converts DockerSwarmInfo to DockerSwarmFrontend.

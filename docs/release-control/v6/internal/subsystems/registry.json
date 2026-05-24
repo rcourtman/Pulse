@@ -3584,10 +3584,17 @@
       "owned_files": [
         "docker-entrypoint.sh",
         "internal/dockeragent/collect.go",
+        "internal/dockeragent/docker_client.go",
         "internal/dockeragent/swarm.go",
         "internal/mock/demo_scenarios.go",
         "internal/mock/fixture_graph.go",
+        "internal/mock/generator.go",
         "internal/mock/platform_fixtures.go",
+        "internal/models/converters.go",
+        "internal/models/deepcopy.go",
+        "internal/models/models.go",
+        "internal/models/models_frontend.go",
+        "pkg/agents/docker/report.go",
         "pkg/proxmox/ceph.go",
         "pkg/proxmox/zfs.go"
       ],
@@ -3737,7 +3744,8 @@
             "exact_files": [
               "internal/dockeragent/agent_collect_test.go",
               "internal/dockeragent/agent_cpu_test.go",
-              "internal/dockeragent/agent_internal_test.go"
+              "internal/dockeragent/agent_internal_test.go",
+              "internal/dockeragent/swarm_coverage_test.go"
             ]
           },
           {
@@ -3745,6 +3753,7 @@
             "label": "docker swarm runtime proof",
             "match_prefixes": [],
             "match_files": [
+              "internal/dockeragent/docker_client.go",
               "internal/dockeragent/swarm.go"
             ],
             "allow_same_subsystem_tests": false,
@@ -3752,6 +3761,26 @@
             "exact_files": [
               "internal/dockeragent/swarm_coverage_test.go",
               "internal/dockeragent/swarm_test.go"
+            ]
+          },
+          {
+            "id": "docker-runtime-report-model",
+            "label": "docker runtime report model proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/models/converters.go",
+              "internal/models/deepcopy.go",
+              "internal/models/models.go",
+              "internal/models/models_frontend.go",
+              "pkg/agents/docker/report.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/dockeragent/swarm_coverage_test.go",
+              "internal/monitoring/monitor_host_agents_test.go",
+              "internal/unifiedresources/adapter_coverage_test.go",
+              "internal/unifiedresources/registry_test.go"
             ]
           },
           {
@@ -3802,6 +3831,7 @@
             "match_files": [
               "internal/mock/demo_scenarios.go",
               "internal/mock/fixture_graph.go",
+              "internal/mock/generator.go",
               "internal/mock/platform_fixtures.go"
             ],
             "allow_same_subsystem_tests": false,
@@ -3809,6 +3839,7 @@
             "exact_files": [
               "internal/mock/canonical_api_guardrails_test.go",
               "internal/mock/demo_scenarios_test.go",
+              "internal/mock/generator_test.go",
               "internal/mock/platform_fixtures_test.go",
               "tests/integration/tests/43-platform-mock-runtime.spec.ts"
             ]
@@ -3824,6 +3855,7 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/monitoring/canonical_guardrails_test.go",
+              "internal/monitoring/monitor_host_agents_test.go",
               "internal/unifiedresources/code_standards_test.go"
             ]
           }
@@ -5008,6 +5040,9 @@
         "frontend-modern/src/components/PMG/PMGInstanceDrawer.tsx",
         "frontend-modern/src/components/PMG/PMGInstancePanel.tsx",
         "frontend-modern/src/components/PMG/ServiceHealthBadge.tsx",
+        "frontend-modern/src/features/docker/DockerInventoryTable.tsx",
+        "frontend-modern/src/features/docker/dockerPageModel.ts",
+        "frontend-modern/src/features/docker/DockerPageSurface.tsx",
         "frontend-modern/src/features/infrastructure/infrastructurePageModel.ts",
         "frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx",
         "frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts",
@@ -5032,7 +5067,8 @@
         "frontend-modern/src/utils/sourcePlatforms.ts",
         "frontend-modern/src/utils/sourceTypePresentation.ts",
         "frontend-modern/src/utils/workloadTypePresentation.ts",
-        "internal/api/resources.go"
+        "internal/api/resources.go",
+        "internal/platformsupport/manifest_generated.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": true,
@@ -5131,6 +5167,9 @@
               "frontend-modern/src/components/PMG/MailGateway.tsx",
               "frontend-modern/src/components/PMG/PMGInstanceDrawer.tsx",
               "frontend-modern/src/components/PMG/PMGInstancePanel.tsx",
+              "frontend-modern/src/features/docker/DockerInventoryTable.tsx",
+              "frontend-modern/src/features/docker/dockerPageModel.ts",
+              "frontend-modern/src/features/docker/DockerPageSurface.tsx",
               "frontend-modern/src/features/infrastructure/infrastructurePageModel.ts",
               "frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx",
               "frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts",
@@ -5158,6 +5197,8 @@
               "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
+              "frontend-modern/src/features/docker/__tests__/dockerPageModel.test.ts",
+              "frontend-modern/src/features/docker/__tests__/DockerPageSurface.test.tsx",
               "frontend-modern/src/features/infrastructure/__tests__/infrastructurePageModel.test.ts",
               "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",
               "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
@@ -5207,6 +5248,19 @@
             "exact_files": [
               "frontend-modern/src/types/__tests__/resource.test.ts",
               "frontend-modern/src/utils/__tests__/sourcePlatforms.test.ts"
+            ]
+          },
+          {
+            "id": "platform-support-backend-projection",
+            "label": "platform support backend projection proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/platformsupport/manifest_generated.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/platformsupport/manifest_generated_test.go"
             ]
           },
           {

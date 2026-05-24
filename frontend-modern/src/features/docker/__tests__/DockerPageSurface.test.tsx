@@ -134,6 +134,16 @@ describe('DockerPageSurface', () => {
         query: expect.stringContaining('docker-swarm-node'),
       }),
     );
+    expect(mocks.useUnifiedResources).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: expect.stringContaining('docker-secret'),
+      }),
+    );
+    expect(mocks.useUnifiedResources).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: expect.stringContaining('docker-config'),
+      }),
+    );
     expect(mocks.useWorkloadsState).toHaveBeenCalledWith(
       expect.objectContaining({
         compactGroupHeaders: true,

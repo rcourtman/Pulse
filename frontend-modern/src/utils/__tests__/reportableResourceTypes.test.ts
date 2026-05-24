@@ -24,6 +24,8 @@ describe('reportableResourceTypes', () => {
       'docker-network',
       'docker-task',
       'docker-swarm-node',
+      'docker-secret',
+      'docker-config',
       'k8s-namespace',
       'k8s-service',
       'k8s-replicaset',

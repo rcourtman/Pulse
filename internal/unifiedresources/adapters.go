@@ -1155,6 +1155,8 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 		VolumeCount:           len(host.Volumes),
 		NetworkCount:          len(host.Networks),
 		NodeCount:             len(host.Nodes),
+		SecretCount:           len(host.Secrets),
+		ConfigCount:           len(host.Configs),
 		UpdatesAvailableCount: updatesAvailableCount,
 		UpdatesLastCheckedAt:  updatesLastCheckedPtr,
 		TokenID:               host.TokenID,
@@ -1175,6 +1177,8 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 		Services:              append([]models.DockerService(nil), host.Services...),
 		Tasks:                 append([]models.DockerTask(nil), host.Tasks...),
 		Nodes:                 append([]models.DockerNode(nil), host.Nodes...),
+		Secrets:               append([]models.DockerSecret(nil), host.Secrets...),
+		Configs:               append([]models.DockerConfig(nil), host.Configs...),
 	}
 	if host.StorageUsage != nil {
 		docker.ImagesUsage = dockerStorageUsageMeta(host.StorageUsage.Images)
@@ -2228,6 +2232,79 @@ func resourceFromDockerSwarmNode(node models.DockerNode, host models.DockerHost)
 	}
 	identity := ResourceIdentity{
 		Hostnames: uniqueStrings([]string{name, strings.TrimSpace(node.ID)}),
+	}
+	if clusterName != "" {
+		identity.ClusterName = clusterName
+		identity.Hostnames = uniqueStrings(append(identity.Hostnames, clusterName+":"+name))
+	}
+	return resource, identity
+}
+
+func resourceFromDockerSecret(secret models.DockerSecret, host models.DockerHost) (Resource, ResourceIdentity) {
+	name := firstNonEmpty(strings.TrimSpace(secret.Name), shortDigest(secret.ID), secret.ID)
+	clusterName := dockerSwarmClusterKeyFromMeta(convertSwarm(host.Swarm))
+	labels := cloneLabelMap(secret.Labels)
+	docker := &DockerData{
+		HostSourceID:     host.ID,
+		Hostname:         strings.TrimSpace(host.Hostname),
+		SecretID:         strings.TrimSpace(secret.ID),
+		SecretName:       strings.TrimSpace(secret.Name),
+		Driver:           strings.TrimSpace(secret.DriverName),
+		TemplatingDriver: strings.TrimSpace(secret.TemplatingDriver),
+		ObjectCreatedAt:  timePtr(secret.CreatedAt),
+		ObjectUpdatedAt:  secret.UpdatedAt,
+		Runtime:          "docker",
+		Labels:           labels,
+		Swarm:            convertSwarm(host.Swarm),
+	}
+	resource := Resource{
+		Type:       ResourceTypeDockerSecret,
+		Technology: "docker",
+		Name:       name,
+		Status:     StatusOnline,
+		LastSeen:   host.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Docker:     docker,
+		Tags:       labelsToTags(labels),
+	}
+	identity := ResourceIdentity{
+		Hostnames: uniqueStrings([]string{name, strings.TrimSpace(secret.ID)}),
+	}
+	if clusterName != "" {
+		identity.ClusterName = clusterName
+		identity.Hostnames = uniqueStrings(append(identity.Hostnames, clusterName+":"+name))
+	}
+	return resource, identity
+}
+
+func resourceFromDockerConfig(config models.DockerConfig, host models.DockerHost) (Resource, ResourceIdentity) {
+	name := firstNonEmpty(strings.TrimSpace(config.Name), shortDigest(config.ID), config.ID)
+	clusterName := dockerSwarmClusterKeyFromMeta(convertSwarm(host.Swarm))
+	labels := cloneLabelMap(config.Labels)
+	docker := &DockerData{
+		HostSourceID:     host.ID,
+		Hostname:         strings.TrimSpace(host.Hostname),
+		ConfigID:         strings.TrimSpace(config.ID),
+		ConfigName:       strings.TrimSpace(config.Name),
+		TemplatingDriver: strings.TrimSpace(config.TemplatingDriver),
+		ObjectCreatedAt:  timePtr(config.CreatedAt),
+		ObjectUpdatedAt:  config.UpdatedAt,
+		Runtime:          "docker",
+		Labels:           labels,
+		Swarm:            convertSwarm(host.Swarm),
+	}
+	resource := Resource{
+		Type:       ResourceTypeDockerConfig,
+		Technology: "docker",
+		Name:       name,
+		Status:     StatusOnline,
+		LastSeen:   host.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Docker:     docker,
+		Tags:       labelsToTags(labels),
+	}
+	identity := ResourceIdentity{
+		Hostnames: uniqueStrings([]string{name, strings.TrimSpace(config.ID)}),
 	}
 	if clusterName != "" {
 		identity.ClusterName = clusterName

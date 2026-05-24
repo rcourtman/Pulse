@@ -43,6 +43,8 @@ export type ResourceType =
   | 'docker-network' // Docker/Podman network
   | 'docker-task' // Docker Swarm task
   | 'docker-swarm-node' // Docker Swarm node
+  | 'docker-secret' // Docker Swarm secret metadata
+  | 'docker-config' // Docker Swarm config metadata
   | 'k8s-deployment' // Kubernetes deployment
   | 'k8s-replicaset' // Kubernetes replica set
   | 'k8s-service' // Kubernetes service
@@ -591,6 +593,8 @@ export interface ResourceDockerMeta {
   volumeCount?: number;
   networkCount?: number;
   nodeCount?: number;
+  secretCount?: number;
+  configCount?: number;
   updatesAvailableCount?: number;
   updatesLastCheckedAt?: string;
   imagesUsage?: DockerStorageUsageMeta;
@@ -666,6 +670,13 @@ export interface ResourceDockerMeta {
   nanoCpus?: number;
   memoryBytes?: number;
   engineLabels?: Record<string, string>;
+  secretId?: string;
+  secretName?: string;
+  configId?: string;
+  configName?: string;
+  templatingDriver?: string;
+  objectCreatedAt?: string;
+  objectUpdatedAt?: string;
   slot?: number;
   desiredState?: string;
   currentState?: string;

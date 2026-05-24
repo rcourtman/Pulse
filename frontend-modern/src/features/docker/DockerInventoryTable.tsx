@@ -28,7 +28,14 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 
-type DockerInventoryVariant = 'images' | 'volumes' | 'networks' | 'nodes' | 'tasks';
+type DockerInventoryVariant =
+  | 'images'
+  | 'volumes'
+  | 'networks'
+  | 'nodes'
+  | 'tasks'
+  | 'secrets'
+  | 'configs';
 
 const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
 const numberValue = (value: number | undefined): JSX.Element => (
@@ -63,6 +70,10 @@ const dockerTableTitle = (variant: DockerInventoryVariant, explicit?: string): s
       return 'Swarm Nodes';
     case 'tasks':
       return 'Swarm Tasks';
+    case 'secrets':
+      return 'Swarm Secrets';
+    case 'configs':
+      return 'Swarm Configs';
   }
 };
 
@@ -78,6 +89,10 @@ const searchPlaceholder = (variant: DockerInventoryVariant): string => {
       return 'Search Swarm nodes';
     case 'tasks':
       return 'Search Swarm tasks';
+    case 'secrets':
+      return 'Search Swarm secrets';
+    case 'configs':
+      return 'Search Swarm configs';
   }
 };
 
@@ -259,6 +274,47 @@ const DockerInventoryHeader: Component<{ variant: DockerInventoryVariant }> = (p
       </TableRow>
     );
   }
+  if (props.variant === 'secrets') {
+    return (
+      <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+        <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[30%]`}>
+          Secret
+        </TableHead>
+        <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[16%]`}>
+          Driver
+        </TableHead>
+        <TableHead
+          class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[18%]`}
+        >
+          Template
+        </TableHead>
+        <TableHead
+          class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[20%]`}
+        >
+          Labels
+        </TableHead>
+        <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[16%]`}>Host</TableHead>
+      </TableRow>
+    );
+  }
+  if (props.variant === 'configs') {
+    return (
+      <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+        <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[34%]`}>
+          Config
+        </TableHead>
+        <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[18%]`}>
+          Template
+        </TableHead>
+        <TableHead
+          class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[28%]`}
+        >
+          Labels
+        </TableHead>
+        <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[20%]`}>Host</TableHead>
+      </TableRow>
+    );
+  }
   return (
     <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
       <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>Task</TableHead>
@@ -288,6 +344,14 @@ const DockerInventoryRow: Component<{ resource: Resource; variant: DockerInvento
   const indicator = () => getSimpleStatusIndicator(props.resource.status);
   const name = () => asTrimmedString(props.resource.name) || props.resource.id;
   const host = () => textValue(props.resource.docker?.hostname);
+  const labelSummary = () => {
+    const labels = props.resource.docker?.labels;
+    if (!labels || Object.keys(labels).length === 0) return '—';
+    return Object.entries(labels)
+      .slice(0, 3)
+      .map(([key, value]) => `${key}=${value}`)
+      .join(', ');
+  };
 
   return (
     <TableRow class="text-[11px] sm:text-xs">
@@ -402,9 +466,7 @@ const DockerInventoryRow: Component<{ resource: Resource; variant: DockerInvento
           class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
         >
           {textValue(
-            props.resource.docker?.leader
-              ? 'leader'
-              : props.resource.docker?.managerReachability,
+            props.resource.docker?.leader ? 'leader' : props.resource.docker?.managerReachability,
           )}
         </TableCell>
         <TableCell
@@ -419,6 +481,41 @@ const DockerInventoryRow: Component<{ resource: Resource; variant: DockerInvento
         </TableCell>
         <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}>
           {byteValue(props.resource.docker?.memoryBytes)}
+        </TableCell>
+      </Show>
+      <Show when={props.variant === 'secrets'}>
+        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+          {textValue(props.resource.docker?.driver)}
+        </TableCell>
+        <TableCell
+          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+        >
+          {textValue(props.resource.docker?.templatingDriver)}
+        </TableCell>
+        <TableCell
+          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+        >
+          <span class="inline-block max-w-[18rem] truncate" title={labelSummary()}>
+            {labelSummary()}
+          </span>
+        </TableCell>
+        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+          {host()}
+        </TableCell>
+      </Show>
+      <Show when={props.variant === 'configs'}>
+        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+          {textValue(props.resource.docker?.templatingDriver)}
+        </TableCell>
+        <TableCell
+          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+        >
+          <span class="inline-block max-w-[24rem] truncate" title={labelSummary()}>
+            {labelSummary()}
+          </span>
+        </TableCell>
+        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+          {host()}
         </TableCell>
       </Show>
     </TableRow>

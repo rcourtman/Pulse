@@ -66,13 +66,13 @@ func hasReportableSwarmInfo(info systemtypes.Info) bool {
 				strings.TrimSpace(swarm.Cluster.Spec.Annotations.Name) != ""))
 }
 
-func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, containers []agentsdocker.Container) ([]agentsdocker.Service, []agentsdocker.Task, []agentsdocker.Node, *agentsdocker.SwarmInfo) {
+func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, containers []agentsdocker.Container) ([]agentsdocker.Service, []agentsdocker.Task, []agentsdocker.Node, []agentsdocker.Secret, []agentsdocker.Config, *agentsdocker.SwarmInfo) {
 	if !a.supportsSwarm {
-		return nil, nil, nil, nil
+		return nil, nil, nil, nil, nil, nil
 	}
 
 	if !hasReportableSwarmInfo(info) {
-		return nil, nil, nil, nil
+		return nil, nil, nil, nil, nil, nil
 	}
 
 	scope := a.resolvedSwarmScope(info)
@@ -101,12 +101,14 @@ func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, con
 	includeTasks := a.cfg.IncludeTasks
 
 	if info.Swarm.LocalNodeState != swarmtypes.LocalNodeStateActive {
-		return nil, nil, nil, swarmInfo
+		return nil, nil, nil, nil, nil, swarmInfo
 	}
 
 	var services []agentsdocker.Service
 	var tasks []agentsdocker.Task
 	var nodes []agentsdocker.Node
+	var secrets []agentsdocker.Secret
+	var configs []agentsdocker.Config
 
 	if info.Swarm.ControlAvailable {
 		managerNodes, err := a.collectSwarmNodes(ctx)
@@ -114,6 +116,18 @@ func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, con
 			a.logger.Warn().Err(err).Msg("failed to collect swarm nodes from manager")
 		} else {
 			nodes = managerNodes
+		}
+		managerSecrets, err := a.collectSwarmSecrets(ctx)
+		if err != nil {
+			a.logger.Warn().Err(err).Msg("failed to collect swarm secrets from manager")
+		} else {
+			secrets = managerSecrets
+		}
+		managerConfigs, err := a.collectSwarmConfigs(ctx)
+		if err != nil {
+			a.logger.Warn().Err(err).Msg("failed to collect swarm configs from manager")
+		} else {
+			configs = managerConfigs
 		}
 	}
 	if len(nodes) == 0 {
@@ -179,6 +193,22 @@ func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, con
 			return nodes[i].Hostname < nodes[j].Hostname
 		})
 	}
+	if len(secrets) > 0 {
+		sort.Slice(secrets, func(i, j int) bool {
+			if secrets[i].Name == secrets[j].Name {
+				return secrets[i].ID < secrets[j].ID
+			}
+			return secrets[i].Name < secrets[j].Name
+		})
+	}
+	if len(configs) > 0 {
+		sort.Slice(configs, func(i, j int) bool {
+			if configs[i].Name == configs[j].Name {
+				return configs[i].ID < configs[j].ID
+			}
+			return configs[i].Name < configs[j].Name
+		})
+	}
 
 	swarmInfo.Scope = effectiveScope
 
@@ -189,7 +219,7 @@ func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, con
 		tasks = nil
 	}
 
-	return services, tasks, nodes, swarmInfo
+	return services, tasks, nodes, secrets, configs, swarmInfo
 }
 
 func (a *Agent) collectSwarmNodes(ctx context.Context) ([]agentsdocker.Node, error) {
@@ -213,6 +243,52 @@ func (a *Agent) collectSwarmNodes(ctx context.Context) ([]agentsdocker.Node, err
 		nodes = append(nodes, node)
 	}
 	return nodes, nil
+}
+
+func (a *Agent) collectSwarmSecrets(ctx context.Context) ([]agentsdocker.Secret, error) {
+	if a == nil || a.docker == nil {
+		return nil, nil
+	}
+
+	secretList, err := dockerCallWithRetry(ctx, dockerSwarmListCallTimeout, func(callCtx context.Context) ([]swarmtypes.Secret, error) {
+		return a.docker.SecretList(callCtx, dockerSecretListOptions{})
+	})
+	if err != nil {
+		return nil, annotateDockerConnectionError(err)
+	}
+
+	secrets := make([]agentsdocker.Secret, 0, len(secretList))
+	for i := range secretList {
+		secret := mapSwarmSecret(&secretList[i])
+		if strings.TrimSpace(secret.ID) == "" && strings.TrimSpace(secret.Name) == "" {
+			continue
+		}
+		secrets = append(secrets, secret)
+	}
+	return secrets, nil
+}
+
+func (a *Agent) collectSwarmConfigs(ctx context.Context) ([]agentsdocker.Config, error) {
+	if a == nil || a.docker == nil {
+		return nil, nil
+	}
+
+	configList, err := dockerCallWithRetry(ctx, dockerSwarmListCallTimeout, func(callCtx context.Context) ([]swarmtypes.Config, error) {
+		return a.docker.ConfigList(callCtx, dockerConfigListOptions{})
+	})
+	if err != nil {
+		return nil, annotateDockerConnectionError(err)
+	}
+
+	configs := make([]agentsdocker.Config, 0, len(configList))
+	for i := range configList {
+		config := mapSwarmConfig(&configList[i])
+		if strings.TrimSpace(config.ID) == "" && strings.TrimSpace(config.Name) == "" {
+			continue
+		}
+		configs = append(configs, config)
+	}
+	return configs, nil
 }
 
 func (a *Agent) collectSwarmDataFromManager(ctx context.Context, info systemtypes.Info, scope string, containers map[string]agentsdocker.Container, includeServices, includeTasks bool) ([]agentsdocker.Service, []agentsdocker.Task, error) {
@@ -457,6 +533,51 @@ func mapSwarmNode(node *swarmtypes.Node) agentsdocker.Node {
 		result.Leader = node.ManagerStatus.Leader
 	}
 
+	return result
+}
+
+func mapSwarmSecret(secret *swarmtypes.Secret) agentsdocker.Secret {
+	if secret == nil {
+		return agentsdocker.Secret{}
+	}
+
+	result := agentsdocker.Secret{
+		ID:        strings.TrimSpace(secret.ID),
+		Name:      strings.TrimSpace(secret.Spec.Annotations.Name),
+		Labels:    copyStringMap(secret.Spec.Annotations.Labels),
+		CreatedAt: secret.Meta.CreatedAt,
+	}
+	if secret.Spec.Driver != nil {
+		result.DriverName = strings.TrimSpace(secret.Spec.Driver.Name)
+	}
+	if secret.Spec.Templating != nil {
+		result.TemplatingDriver = strings.TrimSpace(secret.Spec.Templating.Name)
+	}
+	if !secret.Meta.UpdatedAt.IsZero() {
+		updated := secret.Meta.UpdatedAt
+		result.UpdatedAt = &updated
+	}
+	return result
+}
+
+func mapSwarmConfig(config *swarmtypes.Config) agentsdocker.Config {
+	if config == nil {
+		return agentsdocker.Config{}
+	}
+
+	result := agentsdocker.Config{
+		ID:        strings.TrimSpace(config.ID),
+		Name:      strings.TrimSpace(config.Spec.Annotations.Name),
+		Labels:    copyStringMap(config.Spec.Annotations.Labels),
+		CreatedAt: config.Meta.CreatedAt,
+	}
+	if config.Spec.Templating != nil {
+		result.TemplatingDriver = strings.TrimSpace(config.Spec.Templating.Name)
+	}
+	if !config.Meta.UpdatedAt.IsZero() {
+		updated := config.Meta.UpdatedAt
+		result.UpdatedAt = &updated
+	}
 	return result
 }
 

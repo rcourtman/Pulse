@@ -63,7 +63,7 @@ const makeDockerService = (overrides: Partial<Resource> = {}): Resource => ({
 });
 
 describe('dockerPageModel', () => {
-  it('buckets Docker hosts, containers, images, volumes, networks, nodes, tasks, and Swarm services from canonical resources', () => {
+  it('buckets Docker hosts, containers, images, volumes, networks, nodes, tasks, secrets, configs, and Swarm services from canonical resources', () => {
     const model = buildDockerPageModel([
       makeResource({ id: 'docker-host-1', type: 'agent' }),
       makeResource({
@@ -77,6 +77,8 @@ describe('dockerPageModel', () => {
       makeResource({ id: 'network-1', type: 'docker-network' }),
       makeResource({ id: 'node-1', type: 'docker-swarm-node' }),
       makeResource({ id: 'task-1', type: 'docker-task' }),
+      makeResource({ id: 'secret-1', type: 'docker-secret' }),
+      makeResource({ id: 'config-1', type: 'docker-config' }),
       makeResource({
         id: 'pve-node-1',
         type: 'agent',
@@ -92,13 +94,17 @@ describe('dockerPageModel', () => {
     expect(model.networks.map((resource) => resource.id)).toEqual(['network-1']);
     expect(model.nodes.map((resource) => resource.id)).toEqual(['node-1']);
     expect(model.tasks.map((resource) => resource.id)).toEqual(['task-1']);
+    expect(model.secrets.map((resource) => resource.id)).toEqual(['secret-1']);
+    expect(model.configs.map((resource) => resource.id)).toEqual(['config-1']);
     expect(model.resources.map((resource) => resource.id).sort()).toEqual(
       [
+        'config-1',
         'ctr-1',
         'docker-host-1',
         'image-1',
         'network-1',
         'node-1',
+        'secret-1',
         'svc-1',
         'task-1',
         'volume-1',
@@ -117,6 +123,8 @@ describe('dockerPageModel', () => {
       'swarm-nodes',
       'services',
       'tasks',
+      'secrets',
+      'configs',
     ]);
   });
 

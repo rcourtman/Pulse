@@ -81,13 +81,14 @@ create, review, and approve cross-organization shares.
    Organization resource shares may reference the canonical Docker / Podman
    and Kubernetes inventory resource types exposed by `/api/resources`, but the
    organization layer only validates the bounded resource-type vocabulary. It
-   must not reinterpret a Docker image/volume/network/task/Swarm-node row or Kubernetes
+   must not reinterpret a Docker image/volume/network/task/Swarm-node/Swarm
+   secret/Swarm config row or Kubernetes
    Service/controller/storage/networking/config/event row, including
    ReplicaSets, EndpointSlices, NetworkPolicies, StorageClasses, ConfigMaps,
    Secrets, ServiceAccounts, ResourceQuotas, LimitRanges,
    PodDisruptionBudgets, or HorizontalPodAutoscalers, as a broader
-   organization role, agent enrollment authority, secret-sharing channel, or
-   command capability.
+   organization role, agent enrollment authority, secret-sharing channel,
+   config-sharing channel, or command capability.
 5. Keep RBAC role, assignment, and admin recovery transport aligned through `internal/api/access_control_handlers.go` and `internal/api/enterprise_extension_rbac_admin.go`
 
 ## Forbidden Paths

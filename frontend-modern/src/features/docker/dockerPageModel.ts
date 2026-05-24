@@ -16,6 +16,8 @@ const DOCKER_VOLUME_TYPES = new Set<ResourceType>(['docker-volume']);
 const DOCKER_NETWORK_TYPES = new Set<ResourceType>(['docker-network']);
 const DOCKER_TASK_TYPES = new Set<ResourceType>(['docker-task']);
 const DOCKER_SWARM_NODE_TYPES = new Set<ResourceType>(['docker-swarm-node']);
+const DOCKER_SECRET_TYPES = new Set<ResourceType>(['docker-secret']);
+const DOCKER_CONFIG_TYPES = new Set<ResourceType>(['docker-config']);
 
 export type DockerPageTabId =
   | 'overview'
@@ -26,7 +28,9 @@ export type DockerPageTabId =
   | 'storage'
   | 'swarm-nodes'
   | 'services'
-  | 'tasks';
+  | 'tasks'
+  | 'secrets'
+  | 'configs';
 
 export const DOCKER_TAB_SPECS: readonly {
   id: DockerPageTabId;
@@ -42,6 +46,8 @@ export const DOCKER_TAB_SPECS: readonly {
   { id: 'swarm-nodes', label: 'Swarm Nodes', path: '/docker/swarm-nodes' },
   { id: 'services', label: 'Services', path: '/docker/services' },
   { id: 'tasks', label: 'Tasks', path: '/docker/tasks' },
+  { id: 'secrets', label: 'Secrets', path: '/docker/secrets' },
+  { id: 'configs', label: 'Configs', path: '/docker/configs' },
 ] as const;
 
 const asTrimmedString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
@@ -83,6 +89,8 @@ export type DockerPageModel = {
   networks: Resource[];
   nodes: Resource[];
   tasks: Resource[];
+  secrets: Resource[];
+  configs: Resource[];
 };
 
 export interface DockerPageFilters {
@@ -154,6 +162,8 @@ export function buildDockerPageModel(resources: Resource[]): DockerPageModel {
       DOCKER_VOLUME_TYPES.has(resource.type) ||
       DOCKER_NETWORK_TYPES.has(resource.type) ||
       DOCKER_SWARM_NODE_TYPES.has(resource.type) ||
+      DOCKER_SECRET_TYPES.has(resource.type) ||
+      DOCKER_CONFIG_TYPES.has(resource.type) ||
       DOCKER_TASK_TYPES.has(resource.type),
   );
 
@@ -169,6 +179,8 @@ export function buildDockerPageModel(resources: Resource[]): DockerPageModel {
   const networks = dockerResources.filter((resource) => DOCKER_NETWORK_TYPES.has(resource.type));
   const nodes = dockerResources.filter((resource) => DOCKER_SWARM_NODE_TYPES.has(resource.type));
   const tasks = dockerResources.filter((resource) => DOCKER_TASK_TYPES.has(resource.type));
+  const secrets = dockerResources.filter((resource) => DOCKER_SECRET_TYPES.has(resource.type));
+  const configs = dockerResources.filter((resource) => DOCKER_CONFIG_TYPES.has(resource.type));
 
   return {
     resources: dockerResources,
@@ -180,6 +192,8 @@ export function buildDockerPageModel(resources: Resource[]): DockerPageModel {
     networks,
     nodes,
     tasks,
+    secrets,
+    configs,
   };
 }
 
@@ -205,6 +219,11 @@ const resourceSearchCandidates = (resource: Resource): Array<string | undefined>
   resource.docker?.mountpoint,
   resource.docker?.scope,
   resource.docker?.taskId,
+  resource.docker?.secretId,
+  resource.docker?.secretName,
+  resource.docker?.configId,
+  resource.docker?.configName,
+  resource.docker?.templatingDriver,
   resource.docker?.serviceName,
   resource.docker?.nodeId,
   resource.docker?.nodeName,
