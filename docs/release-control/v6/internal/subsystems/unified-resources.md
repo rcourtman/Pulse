@@ -134,6 +134,7 @@ cross-source deduplication.
 110. `frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx`
 111. `frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx`
 112. `frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx`
+113. `frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx`
 
 ## Shared Boundaries
 
@@ -152,6 +153,12 @@ ResourceQuota, and LimitRange rows through a policy-native table that preserves
 API-specific policy types, ingress/egress rule counts, disruption-budget health
 and allowed disruptions, quota hard/used maps, and LimitRange item types instead
 of collapsing those resources into generic detail text.
+
+Kubernetes autoscaling inventory is a unified-resource consumer boundary: the
+`/kubernetes/autoscaling` route must render HorizontalPodAutoscaler rows through
+an autoscaling-native table that preserves the API scale target, min/max replica
+bounds, current and desired replicas, and metric source types instead of routing
+HPA rows through the generic controller/event inventory table.
 
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `performance-and-scalability`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx` shared with `performance-and-scalability`: the infrastructure summary surface is both a canonical unified-resource consumer and a fleet-scale summary chart hot-path boundary.

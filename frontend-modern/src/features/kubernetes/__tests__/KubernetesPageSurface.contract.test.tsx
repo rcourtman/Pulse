@@ -46,6 +46,10 @@ vi.mock('@/features/platformPage/sharedPlatformPage', () => ({
   PlatformTableLoadingState: () => <div data-testid="platform-table-loading-state" />,
 }));
 
+vi.mock('../KubernetesAutoscalingTable', () => ({
+  KubernetesAutoscalingTable: () => <div data-testid="autoscaling-table" />,
+}));
+
 vi.mock('../KubernetesClustersTable', () => ({
   KubernetesClustersTable: () => <div data-testid="clusters-table" />,
 }));
@@ -506,6 +510,63 @@ describe('KubernetesPageSurface contract', () => {
     ));
 
     expect(screen.getByTestId('policy-table')).toBeInTheDocument();
+    expect(screen.queryByTestId('kubernetes-workloads-surface')).not.toBeInTheDocument();
+  });
+
+  it('renders Kubernetes autoscaling inventory through the autoscaling-native table', () => {
+    mockPathname.mockReturnValue('/kubernetes/autoscaling');
+    mockUseUnifiedResources.mockReturnValue({
+      resources: () => [
+        {
+          id: 'checkout-api-hpa',
+          type: 'k8s-horizontal-pod-autoscaler',
+          name: 'checkout-api-hpa',
+          displayName: 'checkout-api-hpa',
+          platformId: 'cluster-1',
+          platformType: 'kubernetes',
+          sourceType: 'agent',
+          sources: ['kubernetes'],
+          status: 'online',
+          lastSeen: 1_700_000_000_000,
+        },
+      ],
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    });
+    mockUseWorkloadsState.mockReturnValue({
+      allGuests: () => [],
+      clearPinnedSummaryScope: vi.fn(),
+      containerRuntimeFilterConfig: () => undefined,
+      focusedSummaryWorkloadGroupId: () => null,
+      groupingMode: () => 'grouped',
+      handleBeforeAutoFocus: vi.fn(),
+      search: () => '',
+      selectedGuestId: () => null,
+      setGroupingMode: vi.fn(),
+      setMetricDisplayMode: vi.fn(),
+      setSearch: vi.fn(),
+      setSortDirection: vi.fn(),
+      setSortKey: vi.fn(),
+      setStatusMode: vi.fn(),
+      setViewMode: vi.fn(),
+      setWorkloadMetricHistoryRange: vi.fn(),
+      statusMode: () => 'all',
+      surfaceConnected: () => false,
+      surfaceInitialDataReceived: () => false,
+      viewMode: () => 'pod',
+      workloadMetricDisplayMode: () => 'bars',
+      workloadMetricHistoryRange: () => '1h',
+      workloadsFilterColumnVisibility: () => undefined,
+    });
+
+    render(() => (
+      <Router>
+        <Route path="/" component={KubernetesPageSurface} />
+      </Router>
+    ));
+
+    expect(screen.getByTestId('autoscaling-table')).toBeInTheDocument();
     expect(screen.queryByTestId('kubernetes-workloads-surface')).not.toBeInTheDocument();
   });
 });

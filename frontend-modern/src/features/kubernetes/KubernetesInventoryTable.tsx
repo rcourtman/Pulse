@@ -28,7 +28,7 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 
-type KubernetesInventoryVariant = 'controllers' | 'autoscaling' | 'events';
+type KubernetesInventoryVariant = 'controllers' | 'events';
 
 const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
 const numberValue = (value: number | undefined): JSX.Element => (
@@ -43,8 +43,6 @@ const tableTitle = (variant: KubernetesInventoryVariant, explicit?: string): str
   switch (variant) {
     case 'controllers':
       return 'Controllers';
-    case 'autoscaling':
-      return 'Autoscaling';
     case 'events':
       return 'Events';
   }
@@ -143,30 +141,6 @@ const KubernetesInventoryHeader: Component<{ variant: KubernetesInventoryVariant
         Detail
       </TableHead>
     </Show>
-    <Show when={props.variant === 'autoscaling'}>
-      <TableHead
-        class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[22%]`}
-      >
-        Target
-      </TableHead>
-      <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[10%]`}>
-        Min
-      </TableHead>
-      <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[10%]`}>
-        Max
-      </TableHead>
-      <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[10%]`}>
-        Current
-      </TableHead>
-      <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[10%]`}>
-        Desired
-      </TableHead>
-      <TableHead
-        class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[19%]`}
-      >
-        Metrics
-      </TableHead>
-    </Show>
     <Show when={props.variant === 'events'}>
       <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[13%]`}>Reason</TableHead>
       <TableHead
@@ -194,13 +168,6 @@ const KubernetesInventoryRow: Component<{
   const name = () => asTrimmedString(props.resource.name) || props.resource.id;
   const namespace = () => textValue(props.resource.kubernetes?.namespace);
   const kind = () => k8sKind(props.resource);
-  const autoscalingTarget = () =>
-    textValue(
-      [props.resource.kubernetes?.targetKind, props.resource.kubernetes?.targetName]
-        .filter(Boolean)
-        .join('/'),
-    );
-  const autoscalingMetrics = () => textValue(props.resource.kubernetes?.metricTypes?.join(', '));
   const desired = () =>
     props.resource.kubernetes?.desiredReplicas ??
     props.resource.kubernetes?.desiredNumberScheduled ??
@@ -250,30 +217,6 @@ const KubernetesInventoryRow: Component<{
           class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
         >
           {detail()}
-        </TableCell>
-      </Show>
-      <Show when={props.variant === 'autoscaling'}>
-        <TableCell
-          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-        >
-          {autoscalingTarget()}
-        </TableCell>
-        <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}>
-          {numberValue(props.resource.kubernetes?.minReplicas)}
-        </TableCell>
-        <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}>
-          {numberValue(props.resource.kubernetes?.maxReplicas)}
-        </TableCell>
-        <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}>
-          {numberValue(props.resource.kubernetes?.currentReplicas)}
-        </TableCell>
-        <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}>
-          {numberValue(props.resource.kubernetes?.desiredReplicas)}
-        </TableCell>
-        <TableCell
-          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-        >
-          {autoscalingMetrics()}
         </TableCell>
       </Show>
       <Show when={props.variant === 'events'}>

@@ -27,41 +27,39 @@ afterEach(() => {
 });
 
 describe('KubernetesInventoryTable', () => {
-  it('renders autoscaling inventory fields in the remaining generic table', () => {
+  it('renders event inventory fields in the remaining generic table', () => {
     render(() => (
       <KubernetesInventoryTable
         resources={[
           makeResource({
-            id: 'checkout-api-hpa',
-            type: 'k8s-horizontal-pod-autoscaler',
+            id: 'event-1',
+            type: 'k8s-event',
             kubernetes: {
               namespace: 'apps',
-              resourceKind: 'HorizontalPodAutoscaler',
-              targetKind: 'Deployment',
-              targetName: 'checkout-api',
-              minReplicas: 2,
-              maxReplicas: 10,
-              currentReplicas: 4,
-              desiredReplicas: 5,
-              metricTypes: ['Resource', 'Pods'],
+              resourceKind: 'Event',
+              reason: 'FailedScheduling',
+              involvedKind: 'Pod',
+              involvedName: 'checkout-api-123',
+              count: 3,
+              message: '0/3 nodes are available',
             },
           }),
         ]}
-        variant="autoscaling"
+        variant="events"
         emptyIcon={<span />}
-        emptyTitle="No autoscaling"
-        emptyDescription="No autoscaling"
+        emptyTitle="No events"
+        emptyDescription="No events"
         showToolbar={false}
       />
     ));
 
-    expect(screen.getByText('Target')).toBeInTheDocument();
-    expect(screen.getByText('Min')).toBeInTheDocument();
-    expect(screen.getByText('Max')).toBeInTheDocument();
-    expect(screen.getByText('Current')).toBeInTheDocument();
-    expect(screen.getByText('Desired')).toBeInTheDocument();
-    expect(screen.getByText('Metrics')).toBeInTheDocument();
-    expect(screen.getByText('Deployment/checkout-api')).toBeInTheDocument();
-    expect(screen.getByText('Resource, Pods')).toBeInTheDocument();
+    expect(screen.getByText('Reason')).toBeInTheDocument();
+    expect(screen.getByText('Object')).toBeInTheDocument();
+    expect(screen.getByText('Count')).toBeInTheDocument();
+    expect(screen.getByText('Message')).toBeInTheDocument();
+    expect(screen.getByText('FailedScheduling')).toBeInTheDocument();
+    expect(screen.getByText('Pod/checkout-api-123')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('0/3 nodes are available')).toBeInTheDocument();
   });
 });

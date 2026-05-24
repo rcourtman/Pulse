@@ -772,6 +772,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/features/docker/__tests__/dockerPageModel.test.ts",
                         "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",
                         "frontend-modern/src/features/infrastructure/__tests__/infrastructurePageModel.test.ts",
+                        "frontend-modern/src/features/kubernetes/__tests__/KubernetesAutoscalingTable.test.tsx",
                         "frontend-modern/src/features/kubernetes/__tests__/KubernetesClustersTable.test.tsx",
                         "frontend-modern/src/features/kubernetes/__tests__/KubernetesConfigTable.test.tsx",
                         "frontend-modern/src/features/kubernetes/__tests__/KubernetesInventoryTable.test.tsx",

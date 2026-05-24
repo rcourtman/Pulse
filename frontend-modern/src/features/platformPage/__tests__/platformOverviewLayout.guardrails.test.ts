@@ -5,6 +5,7 @@ import agentsPageSurfaceSource from '@/features/agents/AgentsPageSurface.tsx?raw
 import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
 import dockerPageSurfaceSource from '@/features/docker/DockerPageSurface.tsx?raw';
 import dockerServicesTableSource from '@/features/docker/DockerServicesTable.tsx?raw';
+import kubernetesAutoscalingTableSource from '@/features/kubernetes/KubernetesAutoscalingTable.tsx?raw';
 import kubernetesClustersTableSource from '@/features/kubernetes/KubernetesClustersTable.tsx?raw';
 import kubernetesConfigTableSource from '@/features/kubernetes/KubernetesConfigTable.tsx?raw';
 import kubernetesDeploymentsTableSource from '@/features/kubernetes/KubernetesDeploymentsTable.tsx?raw';
@@ -42,6 +43,7 @@ const platformTableSources = [
   proxmoxNodesTableSource,
   dockerHostsTableSource,
   dockerServicesTableSource,
+  kubernetesAutoscalingTableSource,
   kubernetesClustersTableSource,
   kubernetesConfigTableSource,
   kubernetesNodesTableSource,
@@ -67,6 +69,7 @@ const platformToolbarTableSources = [
   agentsMachinesTableSource,
   dockerHostsTableSource,
   dockerServicesTableSource,
+  kubernetesAutoscalingTableSource,
   kubernetesClustersTableSource,
   kubernetesConfigTableSource,
   kubernetesNodesTableSource,
@@ -198,6 +201,7 @@ describe('platform overview layout guardrails', () => {
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesNetworkingTable');
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesConfigTable');
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesPolicyTable');
+    expect(kubernetesPageSurfaceSource).toContain('<KubernetesAutoscalingTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASSystemsTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASAlertsTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASVirtualMachinesTable');

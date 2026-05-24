@@ -13,6 +13,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
+import { KubernetesAutoscalingTable } from './KubernetesAutoscalingTable';
 import { KubernetesClustersTable } from './KubernetesClustersTable';
 import { KubernetesConfigTable } from './KubernetesConfigTable';
 import { KubernetesDeploymentsTable } from './KubernetesDeploymentsTable';
@@ -155,9 +156,8 @@ export function KubernetesPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'autoscaling'}>
-              <KubernetesInventoryTable
+              <KubernetesAutoscalingTable
                 resources={model().autoscaling}
-                variant="autoscaling"
                 emptyIcon={k8sIcon()}
                 emptyTitle="No autoscaling resources reported"
                 emptyDescription="HorizontalPodAutoscalers appear here once the agent can read autoscaling inventory."
