@@ -48,6 +48,49 @@ func TestStoreWriteBatchAndQuery(t *testing.T) {
 	}
 }
 
+func TestStoreWriteBatchUpsertsDuplicateMetricTimestamps(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-duplicates.db")
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	ts := time.Now().UTC().Truncate(time.Second)
+
+	store.writeBatch([]bufferedMetric{
+		{resourceType: "vm", resourceID: "vm-101", metricType: "cpu", value: 1.5, timestamp: ts, tier: TierRaw},
+		{resourceType: "vm", resourceID: "vm-101", metricType: "cpu", value: 2.5, timestamp: ts.Add(500 * time.Millisecond), tier: TierRaw},
+		{resourceType: "vm", resourceID: "vm-101", metricType: "memory", value: 42, timestamp: ts, tier: TierRaw},
+	})
+	store.writeBatch([]bufferedMetric{
+		{resourceType: "vm", resourceID: "vm-101", metricType: "cpu", value: 3.5, timestamp: ts, tier: TierRaw},
+	})
+
+	points, err := store.Query("vm", "vm-101", "cpu", ts.Add(-time.Second), ts.Add(time.Second), 0)
+	if err != nil {
+		t.Fatalf("Query returned error: %v", err)
+	}
+	if len(points) != 1 {
+		t.Fatalf("expected one coalesced CPU point, got %d: %+v", len(points), points)
+	}
+	if points[0].Value != 3.5 {
+		t.Fatalf("expected latest duplicate CPU value to win, got %v", points[0].Value)
+	}
+
+	all, err := store.QueryAll("vm", "vm-101", ts.Add(-time.Second), ts.Add(time.Second), 0)
+	if err != nil {
+		t.Fatalf("QueryAll returned error: %v", err)
+	}
+	if len(all["cpu"]) != 1 || len(all["memory"]) != 1 {
+		t.Fatalf("expected CPU duplicate to coalesce without dropping other metrics, got %+v", all)
+	}
+}
+
 func TestStoreSelectTierAndStats(t *testing.T) {
 	dir := t.TempDir()
 	cfg := DefaultConfig(dir)

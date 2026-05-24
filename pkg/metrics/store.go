@@ -73,6 +73,14 @@ type bufferedMetric struct {
 	tier         Tier
 }
 
+type metricWriteKey struct {
+	resourceType string
+	resourceID   string
+	metricType   string
+	timestamp    int64
+	tier         Tier
+}
+
 type writeRequest struct {
 	metrics []bufferedMetric
 	done    chan struct{}
@@ -460,6 +468,7 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 	if len(metrics) == 0 {
 		return
 	}
+	metrics = coalesceMetricsByKey(metrics)
 
 	var tx *sql.Tx
 	var err error
@@ -481,6 +490,8 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 	stmt, err := tx.Prepare(`
 		INSERT INTO metrics (resource_type, resource_id, metric_type, value, timestamp, tier)
 		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(resource_type, resource_id, metric_type, timestamp, tier)
+		DO UPDATE SET value = excluded.value, min_value = excluded.min_value, max_value = excluded.max_value
 	`)
 	if err != nil {
 		tx.Rollback()
@@ -505,6 +516,35 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 	}
 
 	log.Debug().Int("count", len(metrics)).Msg("Wrote metrics batch")
+}
+
+func coalesceMetricsByKey(metrics []bufferedMetric) []bufferedMetric {
+	if len(metrics) < 2 {
+		return metrics
+	}
+
+	positions := make(map[metricWriteKey]int, len(metrics))
+	coalesced := make([]bufferedMetric, 0, len(metrics))
+
+	for _, metric := range metrics {
+		key := metricWriteKey{
+			resourceType: metric.resourceType,
+			resourceID:   metric.resourceID,
+			metricType:   metric.metricType,
+			timestamp:    metric.timestamp.Unix(),
+			tier:         metric.tier,
+		}
+
+		if index, ok := positions[key]; ok {
+			coalesced[index] = metric
+			continue
+		}
+
+		positions[key] = len(coalesced)
+		coalesced = append(coalesced, metric)
+	}
+
+	return coalesced
 }
 
 // coalesceQueuedBatches drains any already-queued write batches so the worker
