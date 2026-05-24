@@ -34,7 +34,7 @@ import type { Resource } from '@/types/resource';
 // dashes for those columns on docker-service rows. This service-native
 // table reuses canonical shared primitives (Card, Table, SearchInput,
 // FilterButtonGroup, StatusDot) but surfaces operator columns that the
-// data actually backs: image, mode, replica counts, ports, host.
+// data actually backs: image, mode, replica counts, update state, ports, host.
 
 const formatPorts = (ports: Resource['docker'] extends infer T ? T : never): string => {
   const entries =
@@ -62,6 +62,21 @@ const formatPorts = (ports: Resource['docker'] extends infer T ? T : never): str
 const replicaCount = (value: number | undefined): JSX.Element => (
   <span class="tabular-nums">{value ?? 0}</span>
 );
+
+const formatServiceUpdate = (
+  update: NonNullable<Resource['docker']>['serviceUpdate'],
+): { label: string; title: string } => {
+  const state = asTrimmedString(update?.state);
+  const message = asTrimmedString(update?.message);
+  const completedAt = asTrimmedString(update?.completedAt);
+  if (!state && !message && !completedAt) {
+    return { label: 'Stable', title: 'No active service update reported' };
+  }
+
+  const label = state || 'Updating';
+  const title = [state, message, completedAt].filter(Boolean).join(' | ') || label;
+  return { label, title };
+};
 
 export const DockerServicesTable: Component<{
   resources: Resource[];
@@ -124,34 +139,51 @@ export const DockerServicesTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title={props.title ?? 'Swarm Services'} />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1080px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1320px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   {/*
                     Desktop widths: Service and Image take the lion's share
                     because their content is long (registry refs, fully
                     qualified service names). Mode / Desired / Running trim
-                    to short text and 1-2 digit counts. Ports and Host get
-                    a middle slice for port lists and hostnames. Mobile
-                    widths are unchanged.
+                    to short text and 1-2 digit counts. Update, Ports, and
+                    Host get middle slices for rollout state, port lists, and
+                    hostnames. Mobile widths are unchanged.
                   */}
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
                     Service
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[25%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[22%]`}
+                  >
                     Image
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[9%]`}>Mode</TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[8%]`}>
+                    Mode
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
+                  >
                     Desired
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}
+                  >
                     Running
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[12%]`}
+                  >
+                    Update
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+                  >
                     Ports
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                  >
                     Host
                   </TableHead>
                 </TableRow>
@@ -164,8 +196,9 @@ export const DockerServicesTable: Component<{
                     const mode = () => asTrimmedString(service.docker?.mode) || '—';
                     const host = () => asTrimmedString(service.docker?.hostname) || '—';
                     const indicator = () => getSimpleStatusIndicator(service.status);
+                    const update = () => formatServiceUpdate(service.docker?.serviceUpdate);
                     return (
-                      <TableRow class="text-[11px] sm:text-xs">
+                      <TableRow class="text-[11px] sm:text-xs" data-docker-service-row={service.id}>
                         <TableCell class={getPlatformTableCellClassForKind('name')}>
                           <div class="flex min-w-0 items-center gap-2">
                             <StatusDot
@@ -186,7 +219,9 @@ export const DockerServicesTable: Component<{
                             {image()}
                           </span>
                         </TableCell>
-                        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                        >
                           {mode()}
                         </TableCell>
                         <TableCell
@@ -198,6 +233,13 @@ export const DockerServicesTable: Component<{
                           class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                         >
                           {replicaCount(service.docker?.runningTasks)}
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                        >
+                          <span class="truncate inline-block max-w-[10rem]" title={update().title}>
+                            {update().label}
+                          </span>
                         </TableCell>
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}

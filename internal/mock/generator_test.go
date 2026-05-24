@@ -370,6 +370,36 @@ func TestBuildFixtureStatePopulatesKubernetesUsageMetrics(t *testing.T) {
 	}
 }
 
+func TestBuildFixtureStateIncludesKubernetesDeploymentAPIMetadata(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.K8sClusterCount = 1
+	cfg.K8sNodesPerCluster = 3
+	cfg.K8sPodsPerCluster = 8
+	cfg.K8sDeploymentsPerCluster = 6
+	cfg.RandomMetrics = false
+
+	data := buildFixtureState(cfg)
+	if len(data.KubernetesClusters) != 1 {
+		t.Fatalf("expected exactly one kubernetes cluster, got %d", len(data.KubernetesClusters))
+	}
+
+	cluster := data.KubernetesClusters[0]
+	if len(cluster.Deployments) == 0 {
+		t.Fatal("expected kubernetes deployment inventory")
+	}
+	for _, deployment := range cluster.Deployments {
+		if deployment.UID == "" {
+			t.Fatalf("deployment missing uid: %+v", deployment)
+		}
+		if deployment.CreatedAt.IsZero() {
+			t.Fatalf("deployment missing creation metadata: %+v", deployment)
+		}
+		if deployment.ObservedGeneration == 0 {
+			t.Fatalf("deployment missing observed generation: %+v", deployment)
+		}
+	}
+}
+
 func TestBuildFixtureStateCreatesHostEntriesForKubernetesNodes(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.K8sClusterCount = 1

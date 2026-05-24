@@ -205,7 +205,13 @@ network, Swarm node, task, secret, and config columns through dedicated native
 tables. The Docker containers tab must use the native
 `DockerContainersTable` for container state, health, restart, image, port,
 network, mount, update, and host/runtime columns rather than embedding
-`WorkloadsSurface`.
+`WorkloadsSurface`. Swarm services must surface the API-reported rollout/update
+state in the native services table, and engine storage rows must expose a
+stable row hook so platform-page browser proof can verify the storage tab is
+hydrated from runtime disk-usage data. Kubernetes deployments must surface the
+API-native observed generation and metadata age columns through the shared
+table shell without page-local alignment helpers or generic infrastructure
+columns.
 
 1. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `security-privacy`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
    The panel may own shell placement and local action layout, but

@@ -1276,14 +1276,16 @@ type KubernetesPodContainer struct {
 }
 
 type KubernetesDeployment struct {
-	UID               string            `json:"uid"`
-	Name              string            `json:"name"`
-	Namespace         string            `json:"namespace"`
-	DesiredReplicas   int32             `json:"desiredReplicas,omitempty"`
-	UpdatedReplicas   int32             `json:"updatedReplicas,omitempty"`
-	ReadyReplicas     int32             `json:"readyReplicas,omitempty"`
-	AvailableReplicas int32             `json:"availableReplicas,omitempty"`
-	Labels            map[string]string `json:"labels,omitempty"`
+	UID                string            `json:"uid"`
+	Name               string            `json:"name"`
+	Namespace          string            `json:"namespace"`
+	CreatedAt          time.Time         `json:"createdAt,omitempty"`
+	DesiredReplicas    int32             `json:"desiredReplicas,omitempty"`
+	UpdatedReplicas    int32             `json:"updatedReplicas,omitempty"`
+	ReadyReplicas      int32             `json:"readyReplicas,omitempty"`
+	AvailableReplicas  int32             `json:"availableReplicas,omitempty"`
+	ObservedGeneration int64             `json:"observedGeneration,omitempty"`
+	Labels             map[string]string `json:"labels,omitempty"`
 }
 
 func (d KubernetesDeployment) NormalizeCollections() KubernetesDeployment {

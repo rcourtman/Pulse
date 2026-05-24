@@ -158,7 +158,11 @@ DaemonSet, Job, and CronJob rows render through
 for desired replica/node/job targets, current or active counts, ready/succeeded
 counts, availability, misscheduled/unavailable/failed/suspended exceptions,
 service names, schedules, and controller timing fields instead of falling back
-to infrastructure columns.
+to infrastructure columns. Deployment rows render through
+`frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx` with
+Deployment status replica counts, `status.observedGeneration`, and metadata
+creation age carried by the canonical Kubernetes resource facet rather than
+page-local derivation or generic host columns.
 
 Container runtime navigation is a unified-resource consumer boundary: the
 `/docker` route is the Docker / Podman runtime lens, not an exclusive owning
@@ -192,7 +196,10 @@ Docker / Podman runtime inventory is a unified-resource consumer boundary: the
 container runtime page must render Engine container, image, volume, network,
 Swarm node, task, secret, and config resources through API-object-native tables
 that preserve the fields documented by the Docker Engine API instead of routing
-those rows through a variant-switched generic inventory table.
+those rows through a variant-switched generic inventory table. Swarm service
+rows must preserve the service update status emitted by the Docker adapter, and
+engine storage rows must stay host-scoped with table proof hooks so browser
+proof can distinguish a populated disk-usage tab from an empty fixture.
 
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `performance-and-scalability`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx` shared with `performance-and-scalability`: the infrastructure summary surface is both a canonical unified-resource consumer and a fleet-scale summary chart hot-path boundary.

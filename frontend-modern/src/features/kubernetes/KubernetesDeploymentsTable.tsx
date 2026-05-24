@@ -12,6 +12,7 @@ import {
 } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { formatRelativeTime } from '@/utils/format';
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_CARD_CLASS,
@@ -33,11 +34,15 @@ import type { Resource } from '@/types/resource';
 // render as dashes. This deployment-native table reuses canonical shared
 // primitives (Card, Table, SearchInput, FilterButtonGroup, StatusDot) but
 // surfaces deployment-meaningful columns only: namespace, cluster,
-// desired / updated / ready / available replicas.
+// desired / updated / ready / available replicas, observed generation, and
+// metadata age.
 
 const replicaCount = (value: number | undefined): JSX.Element => (
   <span class="tabular-nums">{value ?? 0}</span>
 );
+
+const formatAge = (createdAt: string | undefined): string =>
+  formatRelativeTime(createdAt, { compact: true, emptyText: '—' }) || '—';
 
 export const KubernetesDeploymentsTable: Component<{
   resources: Resource[];
@@ -91,36 +96,58 @@ export const KubernetesDeploymentsTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title={props.title ?? 'Deployments'} />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1080px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1320px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   {/*
                     Desktop widths: Deployment, Namespace, and Cluster take
                     the biggest shares because their content can be long.
-                    The four integer-count columns (Desired / Updated /
-                    Ready / Available) trim to what their headers plus
+                    The integer-count columns (Desired / Updated / Ready /
+                    Available / Observed) trim to what their headers plus
                     1-2 digit values need. Mobile widths are unchanged.
                   */}
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[27%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>
                     Deployment
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[21%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[17%]`}
+                  >
                     Namespace
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[16%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+                  >
                     Cluster
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
+                  >
                     Desired
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
+                  >
                     Updated
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[9%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[7%]`}
+                  >
                     Ready
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[9%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[9%]`}
+                  >
                     Available
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}
+                  >
+                    Observed
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[6%]`}
+                  >
+                    Age
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -134,8 +161,12 @@ export const KubernetesDeploymentsTable: Component<{
                       asTrimmedString(deployment.kubernetes?.clusterId) ||
                       '—';
                     const indicator = () => getSimpleStatusIndicator(deployment.status);
+                    const age = () => formatAge(deployment.kubernetes?.createdAt);
                     return (
-                      <TableRow class="text-[11px] sm:text-xs">
+                      <TableRow
+                        class="text-[11px] sm:text-xs"
+                        data-kubernetes-deployment-row={deployment.id}
+                      >
                         <TableCell class={getPlatformTableCellClassForKind('name')}>
                           <div class="flex min-w-0 items-center gap-2">
                             <StatusDot
@@ -178,6 +209,18 @@ export const KubernetesDeploymentsTable: Component<{
                           class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                         >
                           {replicaCount(deployment.kubernetes?.availableReplicas)}
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                        >
+                          {replicaCount(deployment.kubernetes?.observedGeneration)}
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                        >
+                          <span class="tabular-nums" title={deployment.kubernetes?.createdAt || ''}>
+                            {age()}
+                          </span>
                         </TableCell>
                       </TableRow>
                     );

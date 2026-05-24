@@ -639,6 +639,11 @@ export interface ResourceDockerMeta {
     lastChecked?: string;
     error?: string;
   };
+  serviceUpdate?: {
+    state?: string;
+    message?: string;
+    completedAt?: string;
+  };
   mode?: string;
   desiredTasks?: number;
   runningTasks?: number;

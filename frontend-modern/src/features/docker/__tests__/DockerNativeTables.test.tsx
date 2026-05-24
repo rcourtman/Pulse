@@ -7,6 +7,8 @@ import { DockerConfigsTable } from '../DockerConfigsTable';
 import { DockerImagesTable } from '../DockerImagesTable';
 import { DockerNetworksTable } from '../DockerNetworksTable';
 import { DockerSecretsTable } from '../DockerSecretsTable';
+import { DockerServicesTable } from '../DockerServicesTable';
+import { DockerStorageUsageTable } from '../DockerStorageUsageTable';
 import { DockerSwarmNodesTable } from '../DockerSwarmNodesTable';
 import { DockerTasksTable } from '../DockerTasksTable';
 import { DockerVolumesTable } from '../DockerVolumesTable';
@@ -230,6 +232,103 @@ describe('Docker native tables', () => {
     expect(screen.getByText('26.1.4')).toBeInTheDocument();
     expect(screen.getByText('4')).toBeInTheDocument();
     expect(screen.getByText('10.0.0.11')).toBeInTheDocument();
+  });
+
+  it('renders Docker Swarm service API fields including update status', () => {
+    render(() => (
+      <DockerServicesTable
+        resources={[
+          makeResource({
+            id: 'service-1',
+            type: 'docker-service',
+            name: 'checkout-api',
+            docker: {
+              hostname: 'manager-1',
+              image: 'registry.example.com/checkout-api:2026.05',
+              mode: 'replicated',
+              desiredTasks: 4,
+              runningTasks: 2,
+              endpointPorts: [
+                { protocol: 'tcp', targetPort: 8080, publishedPort: 18080, publishMode: 'ingress' },
+              ],
+              serviceUpdate: {
+                state: 'rollback_started',
+                message: 'Service replicas below desired',
+              },
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No services"
+        emptyDescription="No services"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByText('Update')).toBeInTheDocument();
+    expect(screen.getByText('checkout-api')).toBeInTheDocument();
+    expect(screen.getByText('registry.example.com/checkout-api:2026.05')).toBeInTheDocument();
+    expect(screen.getByText('replicated')).toBeInTheDocument();
+    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('rollback_started')).toBeInTheDocument();
+    expect(screen.getByText('18080:8080/tcp')).toBeInTheDocument();
+    expect(screen.getByText('manager-1')).toBeInTheDocument();
+    expect(document.querySelector('[data-docker-service-row="service-1"]')).not.toBeNull();
+  });
+
+  it('renders Docker engine storage usage fields from the disk usage API shape', () => {
+    render(() => (
+      <DockerStorageUsageTable
+        hosts={[
+          makeResource({
+            id: 'host-1',
+            type: 'agent',
+            name: 'edge-01',
+            docker: {
+              imagesUsage: {
+                totalCount: 6,
+                activeCount: 4,
+                totalSizeBytes: 2 * 1024 * 1024 * 1024,
+                reclaimableBytes: 512 * 1024 * 1024,
+              },
+              containersUsage: {
+                totalCount: 8,
+                activeCount: 5,
+                totalSizeBytes: 3 * 1024 * 1024 * 1024,
+                reclaimableBytes: 256 * 1024 * 1024,
+              },
+              volumesUsage: {
+                totalCount: 3,
+                activeCount: 2,
+                totalSizeBytes: 12 * 1024 * 1024 * 1024,
+                reclaimableBytes: 1024 * 1024 * 1024,
+              },
+              buildCacheUsage: {
+                totalCount: 4,
+                activeCount: 1,
+                totalSizeBytes: 5 * 1024 * 1024 * 1024,
+                reclaimableBytes: 4 * 1024 * 1024 * 1024,
+              },
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No storage"
+        emptyDescription="No storage"
+      />
+    ));
+
+    expect(screen.getByText('Images')).toBeInTheDocument();
+    expect(screen.getByText('Containers')).toBeInTheDocument();
+    expect(screen.getByText('Volumes')).toBeInTheDocument();
+    expect(screen.getByText('Build Cache')).toBeInTheDocument();
+    expect(screen.getByText('edge-01')).toBeInTheDocument();
+    expect(screen.getByText('2.00 GB')).toBeInTheDocument();
+    expect(screen.getByText('6 total, 4 active, 512 MB reclaimable')).toBeInTheDocument();
+    expect(screen.getByText('5.00 GB')).toBeInTheDocument();
+    expect(screen.getByText('4 total, 1 active, 4.00 GB reclaimable')).toBeInTheDocument();
+    expect(document.querySelector('[data-docker-storage-row="host-1"]')).not.toBeNull();
   });
 
   it('renders Docker Swarm task API fields', () => {

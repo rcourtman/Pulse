@@ -113,6 +113,18 @@ func TestApplyKubernetesReportPreservesNativeAPIInventory(t *testing.T) {
 			Selector:    map[string]string{"app": "checkout"},
 			CreatedAt:   now,
 		}},
+		Deployments: []agentsk8s.Deployment{{
+			UID:                "deploy-1",
+			Name:               "checkout-api",
+			Namespace:          "services",
+			CreatedAt:          now,
+			DesiredReplicas:    4,
+			UpdatedReplicas:    3,
+			ReadyReplicas:      2,
+			AvailableReplicas:  2,
+			ObservedGeneration: 12,
+			Labels:             map[string]string{"app": "checkout"},
+		}},
 		StatefulSets: []agentsk8s.StatefulSet{{UID: "sts-1", Name: "db", Namespace: "services", DesiredReplicas: 3, ReadyReplicas: 2, ServiceName: "db-headless"}},
 		DaemonSets:   []agentsk8s.DaemonSet{{UID: "ds-1", Name: "node-agent", Namespace: "kube-system", DesiredNumberScheduled: 3, NumberReady: 3}},
 		Jobs:         []agentsk8s.Job{{UID: "job-1", Name: "backup", Namespace: "services", DesiredCompletions: 1, Succeeded: 1}},
@@ -156,6 +168,9 @@ func TestApplyKubernetesReportPreservesNativeAPIInventory(t *testing.T) {
 	}
 	if len(cluster.ReplicaSets) != 1 || cluster.ReplicaSets[0].OwnerName != "checkout" || cluster.ReplicaSets[0].FullyLabeledReplicas != 3 {
 		t.Fatalf("expected replicaset inventory, got %+v", cluster.ReplicaSets)
+	}
+	if len(cluster.Deployments) != 1 || cluster.Deployments[0].CreatedAt.IsZero() || cluster.Deployments[0].ObservedGeneration != 12 {
+		t.Fatalf("expected deployment API metadata inventory, got %+v", cluster.Deployments)
 	}
 	if len(cluster.StatefulSets) != 1 || cluster.StatefulSets[0].ReadyReplicas != 2 {
 		t.Fatalf("expected statefulset inventory, got %+v", cluster.StatefulSets)

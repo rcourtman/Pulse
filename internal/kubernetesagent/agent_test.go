@@ -145,12 +145,18 @@ func TestCollectPods_FiltersProblemsAndSorts(t *testing.T) {
 func TestCollectDeployments_FiltersProblems(t *testing.T) {
 	replicas := int32(3)
 	okReplicas := int32(2)
+	createdAt := metav1.NewTime(time.Date(2026, 5, 24, 15, 0, 0, 0, time.UTC))
 
 	clientset := fake.NewSimpleClientset(
 		&appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "bad"},
-			Spec:       appsv1.DeploymentSpec{Replicas: &replicas},
-			Status:     appsv1.DeploymentStatus{AvailableReplicas: 2, ReadyReplicas: 2, UpdatedReplicas: 2},
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:         "a",
+				Name:              "bad",
+				UID:               "deploy-uid-1",
+				CreationTimestamp: createdAt,
+			},
+			Spec:   appsv1.DeploymentSpec{Replicas: &replicas},
+			Status: appsv1.DeploymentStatus{AvailableReplicas: 2, ReadyReplicas: 2, UpdatedReplicas: 2, ObservedGeneration: 8},
 		},
 		&appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "ok"},
@@ -180,6 +186,9 @@ func TestCollectDeployments_FiltersProblems(t *testing.T) {
 	}
 	if deps[0].Name != "bad" {
 		t.Fatalf("unexpected deployment: %+v", deps[0])
+	}
+	if deps[0].UID != "deploy-uid-1" || !deps[0].CreatedAt.Equal(createdAt.Time) || deps[0].ObservedGeneration != 8 {
+		t.Fatalf("deployment API metadata not captured: %+v", deps[0])
 	}
 }
 

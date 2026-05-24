@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -146,6 +148,44 @@ func TestCollectNativePolicyConfigAndAutoscalingInventory(t *testing.T) {
 	}
 	if len(autoscalers) != 1 || autoscalers[0].TargetName != "api" || autoscalers[0].MinReplicas != 2 || autoscalers[0].MaxReplicas != 10 || autoscalers[0].MetricTypes[0] != "Resource:cpu" {
 		t.Fatalf("unexpected autoscalers: %+v", autoscalers)
+	}
+}
+
+func TestCollectDeploymentInventoryPreservesAPIMetadata(t *testing.T) {
+	replicas := int32(4)
+	createdAt := metav1.NewTime(time.Date(2026, 5, 24, 15, 0, 0, 0, time.UTC))
+	clientset := fake.NewSimpleClientset(&appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:               "deployment-uid-1",
+			Namespace:         "services",
+			Name:              "checkout-api",
+			CreationTimestamp: createdAt,
+			Labels:            map[string]string{"app": "checkout"},
+		},
+		Spec: appsv1.DeploymentSpec{Replicas: &replicas},
+		Status: appsv1.DeploymentStatus{
+			ObservedGeneration: 12,
+			UpdatedReplicas:    3,
+			ReadyReplicas:      2,
+			AvailableReplicas:  2,
+		},
+	})
+	a := &Agent{kubeClient: clientset}
+
+	deployments, err := a.collectDeployments(context.Background())
+	if err != nil {
+		t.Fatalf("collectDeployments: %v", err)
+	}
+	if len(deployments) != 1 {
+		t.Fatalf("expected one deployment, got %+v", deployments)
+	}
+
+	deployment := deployments[0]
+	if deployment.UID != "deployment-uid-1" || deployment.Name != "checkout-api" || deployment.Namespace != "services" {
+		t.Fatalf("deployment identity metadata not preserved: %+v", deployment)
+	}
+	if !deployment.CreatedAt.Equal(createdAt.Time) || deployment.ObservedGeneration != 12 {
+		t.Fatalf("deployment API metadata not preserved: %+v", deployment)
 	}
 }
 

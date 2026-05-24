@@ -671,16 +671,30 @@ func TestResourceFromKubernetesDeployment_PopulatesMetricsUnderMockMode(t *testi
 		Name: "production",
 	}
 	deployment := models.KubernetesDeployment{
-		UID:               "dep-uid-1",
-		Name:              "checkout-api",
-		Namespace:         "services",
-		DesiredReplicas:   3,
-		UpdatedReplicas:   3,
-		ReadyReplicas:     2,
-		AvailableReplicas: 2,
+		UID:                "dep-uid-1",
+		Name:               "checkout-api",
+		Namespace:          "services",
+		CreatedAt:          time.Date(2026, 5, 24, 15, 0, 0, 0, time.UTC),
+		DesiredReplicas:    3,
+		UpdatedReplicas:    3,
+		ReadyReplicas:      2,
+		AvailableReplicas:  2,
+		ObservedGeneration: 12,
 	}
 
 	resource, _ := resourceFromKubernetesDeployment(cluster, deployment, nil)
+	if resource.Kubernetes == nil {
+		t.Fatal("expected kubernetes payload")
+	}
+	if resource.Kubernetes.ResourceKind != "Deployment" || resource.Kubernetes.ResourceUID != "dep-uid-1" {
+		t.Fatalf("deployment resource identity fields = kind %q uid %q", resource.Kubernetes.ResourceKind, resource.Kubernetes.ResourceUID)
+	}
+	if resource.Kubernetes.ObservedGeneration != 12 {
+		t.Fatalf("observedGeneration = %d, want 12", resource.Kubernetes.ObservedGeneration)
+	}
+	if resource.Kubernetes.CreatedAt == nil || !resource.Kubernetes.CreatedAt.Equal(deployment.CreatedAt) {
+		t.Fatalf("createdAt = %+v, want %s", resource.Kubernetes.CreatedAt, deployment.CreatedAt)
+	}
 	if resource.Metrics == nil {
 		t.Fatal("expected mock-mode deployment to carry synthetic Metrics, got nil")
 	}

@@ -440,14 +440,16 @@ func (c KubernetesCluster) ToFrontend() KubernetesClusterFrontend {
 				labels[k] = v
 			}
 			cluster.Deployments[i] = KubernetesDeploymentFrontend{
-				UID:               d.UID,
-				Name:              d.Name,
-				Namespace:         d.Namespace,
-				DesiredReplicas:   d.DesiredReplicas,
-				UpdatedReplicas:   d.UpdatedReplicas,
-				ReadyReplicas:     d.ReadyReplicas,
-				AvailableReplicas: d.AvailableReplicas,
-				Labels:            labels,
+				UID:                d.UID,
+				Name:               d.Name,
+				Namespace:          d.Namespace,
+				CreatedAt:          timeToUnixMillis(d.CreatedAt),
+				DesiredReplicas:    d.DesiredReplicas,
+				UpdatedReplicas:    d.UpdatedReplicas,
+				ReadyReplicas:      d.ReadyReplicas,
+				AvailableReplicas:  d.AvailableReplicas,
+				ObservedGeneration: d.ObservedGeneration,
+				Labels:             labels,
 			}.NormalizeCollections()
 		}
 	}

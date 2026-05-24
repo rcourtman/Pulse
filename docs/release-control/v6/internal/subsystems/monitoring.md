@@ -94,6 +94,10 @@ truth for live infrastructure data.
    Swarm configs, and daemon storage-usage buckets from the documented runtime
    API, then publish those
    records through the Docker agent report for unified-resource ingestion.
+   Swarm service records must preserve documented service update status
+   (`UpdateStatus.State`, message, and completion time when reported) so the
+   container runtime surface can distinguish stable services from active or
+   failed rollouts without inventing frontend-only state.
    Failures in image, volume, network, node, secret, config, or storage-usage
    collection are best-effort warnings and must not make the whole host report
    fail when container/runtime health data is otherwise usable. Podman libpod
@@ -205,10 +209,13 @@ truth for live infrastructure data.
     their API-native target, current, ready/succeeded, availability, exception,
     service-name, schedule, and timing fields so the native services,
     networking, storage, and workload-controller tabs exercise the same
-    report/resource contract as live agents. Monitoring must preserve those
-    objects as native cluster inventory instead of flattening them into pods,
-    deployments, or generic networking, storage, configuration, or controller
-    rows.
+    report/resource contract as live agents. Deployment inventory must preserve
+    Kubernetes object metadata creation time and `status.observedGeneration`
+    from the agent report through monitoring models so the frontend can show
+    API-native age and generation evidence instead of reconstructing those
+    fields locally. Monitoring must preserve those objects as native cluster
+    inventory instead of flattening them into pods, deployments, or generic
+    networking, storage, configuration, or controller rows.
 
 ## Forbidden Paths
 

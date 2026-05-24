@@ -241,14 +241,16 @@ func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *co
 			labels[k] = v
 		}
 		deployments = append(deployments, models.KubernetesDeployment{
-			UID:               strings.TrimSpace(d.UID),
-			Name:              strings.TrimSpace(d.Name),
-			Namespace:         strings.TrimSpace(d.Namespace),
-			DesiredReplicas:   d.DesiredReplicas,
-			UpdatedReplicas:   d.UpdatedReplicas,
-			ReadyReplicas:     d.ReadyReplicas,
-			AvailableReplicas: d.AvailableReplicas,
-			Labels:            labels,
+			UID:                strings.TrimSpace(d.UID),
+			Name:               strings.TrimSpace(d.Name),
+			Namespace:          strings.TrimSpace(d.Namespace),
+			CreatedAt:          d.CreatedAt,
+			DesiredReplicas:    d.DesiredReplicas,
+			UpdatedReplicas:    d.UpdatedReplicas,
+			ReadyReplicas:      d.ReadyReplicas,
+			AvailableReplicas:  d.AvailableReplicas,
+			ObservedGeneration: d.ObservedGeneration,
+			Labels:             labels,
 		})
 	}
 

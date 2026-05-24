@@ -1308,7 +1308,7 @@ func generateKubernetesClusters(config MockConfig) []models.KubernetesCluster {
 
 		nodes := generateKubernetesNodes(clusterID, nodeCount)
 		pods := generateKubernetesPods(clusterID, nodes, podCount)
-		deployments := generateKubernetesDeployments(clusterID, deploymentCount)
+		deployments := generateKubernetesDeployments(clusterID, deploymentCount, now)
 		services, ingresses, endpointSlices := generateKubernetesNetworkingInventory(clusterID, now)
 		storageClasses, persistentVolumes, persistentVolumeClaims := generateKubernetesStorageInventory(clusterID, now)
 
@@ -2142,7 +2142,7 @@ func generateKubernetesPods(clusterID string, nodes []models.KubernetesNode, cou
 	return pods
 }
 
-func generateKubernetesDeployments(clusterID string, count int) []models.KubernetesDeployment {
+func generateKubernetesDeployments(clusterID string, count int, now time.Time) []models.KubernetesDeployment {
 	if count <= 0 {
 		return []models.KubernetesDeployment{}
 	}
@@ -2166,13 +2166,15 @@ func generateKubernetesDeployments(clusterID string, count int) []models.Kuberne
 		}
 
 		deployments = append(deployments, models.KubernetesDeployment{
-			UID:               fmt.Sprintf("%s-%s", name, mockStableHexString(10, clusterID, namespace, name, fmt.Sprintf("%d", i), "k8s-deployment-uid")),
-			Name:              name,
-			Namespace:         namespace,
-			DesiredReplicas:   desired,
-			UpdatedReplicas:   updated,
-			ReadyReplicas:     ready,
-			AvailableReplicas: available,
+			UID:                fmt.Sprintf("%s-%s", name, mockStableHexString(10, clusterID, namespace, name, fmt.Sprintf("%d", i), "k8s-deployment-uid")),
+			Name:               name,
+			Namespace:          namespace,
+			CreatedAt:          now.Add(-time.Duration(6+i*3+rand.Intn(48)) * time.Hour),
+			DesiredReplicas:    desired,
+			UpdatedReplicas:    updated,
+			ReadyReplicas:      ready,
+			AvailableReplicas:  available,
+			ObservedGeneration: int64(1 + i + rand.Intn(20)),
 			Labels: map[string]string{
 				"app.kubernetes.io/name": prefix,
 				"cluster":                clusterID,

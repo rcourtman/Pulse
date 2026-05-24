@@ -49,11 +49,13 @@ func TestKubernetesClusterToFrontend(t *testing.T) {
 		},
 		Deployments: []KubernetesDeployment{
 			{
-				UID:             "dep-1",
-				Name:            "deploy-a",
-				Namespace:       "ns",
-				DesiredReplicas: 2,
-				Labels:          map[string]string{"tier": "web"},
+				UID:                "dep-1",
+				Name:               "deploy-a",
+				Namespace:          "ns",
+				CreatedAt:          now,
+				DesiredReplicas:    2,
+				ObservedGeneration: 7,
+				Labels:             map[string]string{"tier": "web"},
 			},
 		},
 	}
@@ -73,6 +75,9 @@ func TestKubernetesClusterToFrontend(t *testing.T) {
 	}
 	if len(frontend.Deployments) != 1 || frontend.Deployments[0].Name != "deploy-a" {
 		t.Fatalf("Deployments = %#v, want 1 deployment", frontend.Deployments)
+	}
+	if frontend.Deployments[0].CreatedAt != now.Unix()*1000 || frontend.Deployments[0].ObservedGeneration != 7 {
+		t.Fatalf("Deployment API metadata = %#v", frontend.Deployments[0])
 	}
 }
 

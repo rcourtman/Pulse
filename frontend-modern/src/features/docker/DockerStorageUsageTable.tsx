@@ -31,10 +31,10 @@ import type { DockerStorageUsageMeta, Resource } from '@/types/resource';
 const hasStorageBucket = (bucket?: DockerStorageUsageMeta): boolean =>
   Boolean(
     bucket &&
-      ((bucket.totalCount ?? 0) > 0 ||
-        (bucket.activeCount ?? 0) > 0 ||
-        (bucket.totalSizeBytes ?? 0) > 0 ||
-        (bucket.reclaimableBytes ?? 0) > 0),
+    ((bucket.totalCount ?? 0) > 0 ||
+      (bucket.activeCount ?? 0) > 0 ||
+      (bucket.totalSizeBytes ?? 0) > 0 ||
+      (bucket.reclaimableBytes ?? 0) > 0),
   );
 
 const hasEngineStorageUsage = (host: Resource): boolean =>
@@ -80,9 +80,7 @@ export const DockerStorageUsageTable: Component<{
       fallback={
         <PlatformTableEmptyState
           icon={props.emptyIcon}
-          title={
-            hasFilteredSourceRows() ? 'No engine storage usage reported' : props.emptyTitle
-          }
+          title={hasFilteredSourceRows() ? 'No engine storage usage reported' : props.emptyTitle}
           description={
             hasFilteredSourceRows()
               ? 'Hosts are present, but none have reported the Docker / Podman disk-usage snapshot yet.'
@@ -150,7 +148,7 @@ export const DockerStorageUsageTable: Component<{
                     const name = () => asTrimmedString(host.name) || host.id;
                     const indicator = () => getSimpleStatusIndicator(host.status);
                     return (
-                      <TableRow class="text-[11px] sm:text-xs">
+                      <TableRow class="text-[11px] sm:text-xs" data-docker-storage-row={host.id}>
                         <TableCell class={getPlatformTableCellClassForKind('name')}>
                           <div class="flex min-w-0 items-center gap-2">
                             <StatusDot

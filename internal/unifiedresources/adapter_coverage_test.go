@@ -397,6 +397,39 @@ func TestDockerNativeInventoryAdapters(t *testing.T) {
 		t.Fatalf("unexpected network resource: %+v", networkResource)
 	}
 
+	completedAt := now.Add(5 * time.Minute)
+	serviceResource, _ := resourceFromDockerService(models.DockerService{
+		ID:           "service-1",
+		Name:         "checkout-api",
+		Image:        "registry.example.com/checkout-api:2026.05",
+		Mode:         "replicated",
+		DesiredTasks: 4,
+		RunningTasks: 2,
+		UpdateStatus: &models.DockerServiceUpdate{
+			State:       "rollback_started",
+			Message:     "Service replicas below desired",
+			CompletedAt: &completedAt,
+		},
+		EndpointPorts: []models.DockerServicePort{{
+			Protocol:      "tcp",
+			TargetPort:    8080,
+			PublishedPort: 18080,
+			PublishMode:   "ingress",
+		}},
+	}, host)
+	if serviceResource.Type != ResourceTypeDockerService || serviceResource.Docker == nil || serviceResource.Docker.ServiceUpdate == nil {
+		t.Fatalf("unexpected service resource: %+v", serviceResource)
+	}
+	if serviceResource.Docker.ServiceUpdate.State != "rollback_started" || serviceResource.Docker.ServiceUpdate.Message != "Service replicas below desired" {
+		t.Fatalf("service update status not preserved: %+v", serviceResource.Docker.ServiceUpdate)
+	}
+	if serviceResource.Docker.ServiceUpdate.CompletedAt == nil || !serviceResource.Docker.ServiceUpdate.CompletedAt.Equal(completedAt) {
+		t.Fatalf("service update completion time = %+v, want %s", serviceResource.Docker.ServiceUpdate.CompletedAt, completedAt)
+	}
+	if len(serviceResource.Docker.EndpointPorts) != 1 || serviceResource.Docker.EndpointPorts[0].PublishedPort != 18080 {
+		t.Fatalf("service endpoint ports not preserved: %+v", serviceResource.Docker.EndpointPorts)
+	}
+
 	taskResource, taskIdentity := resourceFromDockerTask(models.DockerTask{
 		ID: "task-1", ServiceName: "api", ServiceID: "svc-1", Slot: 2, DesiredState: "running", CurrentState: "running", NodeName: "edge",
 	}, host)

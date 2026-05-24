@@ -125,14 +125,16 @@ type PodContainer struct {
 
 // Deployment represents a Kubernetes deployment at report time.
 type Deployment struct {
-	UID               string            `json:"uid"`
-	Name              string            `json:"name"`
-	Namespace         string            `json:"namespace"`
-	DesiredReplicas   int32             `json:"desiredReplicas,omitempty"`
-	UpdatedReplicas   int32             `json:"updatedReplicas,omitempty"`
-	ReadyReplicas     int32             `json:"readyReplicas,omitempty"`
-	AvailableReplicas int32             `json:"availableReplicas,omitempty"`
-	Labels            map[string]string `json:"labels,omitempty"`
+	UID                string            `json:"uid"`
+	Name               string            `json:"name"`
+	Namespace          string            `json:"namespace"`
+	CreatedAt          time.Time         `json:"createdAt,omitempty"`
+	DesiredReplicas    int32             `json:"desiredReplicas,omitempty"`
+	UpdatedReplicas    int32             `json:"updatedReplicas,omitempty"`
+	ReadyReplicas      int32             `json:"readyReplicas,omitempty"`
+	AvailableReplicas  int32             `json:"availableReplicas,omitempty"`
+	ObservedGeneration int64             `json:"observedGeneration,omitempty"`
+	Labels             map[string]string `json:"labels,omitempty"`
 }
 
 // ReplicaSet represents a Kubernetes replica set at report time.

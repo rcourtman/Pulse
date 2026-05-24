@@ -1921,14 +1921,16 @@ func (a *Agent) collectDeployments(ctx context.Context) ([]agentsk8s.Deployment,
 				}
 
 				items = insertDeploymentSortedBounded(items, agentsk8s.Deployment{
-					UID:               string(dep.UID),
-					Name:              dep.Name,
-					Namespace:         dep.Namespace,
-					DesiredReplicas:   desiredReplicas(dep),
-					UpdatedReplicas:   dep.Status.UpdatedReplicas,
-					ReadyReplicas:     dep.Status.ReadyReplicas,
-					AvailableReplicas: dep.Status.AvailableReplicas,
-					Labels:            labelsCopy,
+					UID:                string(dep.UID),
+					Name:               dep.Name,
+					Namespace:          dep.Namespace,
+					CreatedAt:          dep.CreationTimestamp.Time,
+					DesiredReplicas:    desiredReplicas(dep),
+					UpdatedReplicas:    dep.Status.UpdatedReplicas,
+					ReadyReplicas:      dep.Status.ReadyReplicas,
+					AvailableReplicas:  dep.Status.AvailableReplicas,
+					ObservedGeneration: dep.Status.ObservedGeneration,
+					Labels:             labelsCopy,
 				}, maxDeployments)
 			}
 
