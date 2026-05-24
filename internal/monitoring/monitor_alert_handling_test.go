@@ -251,6 +251,98 @@ func TestHandleAlertResolved_SendsRecoveryOutsideQuietHours(t *testing.T) {
 	}
 }
 
+func TestHandleAlertResolved_SendsRecoveryForGuestPoweredOffState(t *testing.T) {
+	received := make(chan []byte, 2)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		body, _ := io.ReadAll(r.Body)
+		select {
+		case received <- body:
+		default:
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	notifMgr := notifications.NewNotificationManagerWithDataDir("http://pulse.example", t.TempDir())
+	if err := notifMgr.UpdateAllowedPrivateCIDRs("127.0.0.1/32,::1/128"); err != nil {
+		t.Fatalf("UpdateAllowedPrivateCIDRs: %v", err)
+	}
+	notifMgr.AddWebhook(notifications.WebhookConfig{
+		ID:      "test-webhook",
+		Name:    "test-webhook",
+		URL:     srv.URL,
+		Enabled: true,
+		Service: "generic",
+	})
+	notifMgr.SetNotifyOnResolve(true)
+	notifMgr.SetGroupingWindow(0)
+
+	alertMgr := alerts.NewManager()
+	cfg := alertMgr.GetConfig()
+	cfg.Enabled = true
+	cfg.ActivationState = alerts.ActivationActive
+	cfg.Schedule.QuietHours.Enabled = false
+	alertMgr.UpdateConfig(cfg)
+
+	m := &Monitor{
+		alertManager:    alertMgr,
+		notificationMgr: notifMgr,
+	}
+	alertMgr.SetAlertCallback(m.handleAlertFired)
+	alertMgr.SetResolvedCallback(m.handleAlertResolved)
+
+	vm := models.VM{
+		ID:       "vm-powered-off",
+		Name:     "powered-off-vm",
+		Node:     "node-1",
+		Instance: "inst-1",
+		Status:   "stopped",
+	}
+	alertID := "guest-powered-off-" + vm.ID
+
+	alertMgr.CheckGuest(vm, vm.Instance)
+	alertMgr.CheckGuest(vm, vm.Instance)
+
+	select {
+	case <-received:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("timed out waiting for initial powered-off notification webhook")
+	}
+
+	resolved := alertMgr.GetResolvedAlert(alertID)
+	if resolved != nil {
+		t.Fatalf("did not expect powered-off alert %q to be resolved before the VM starts", alertID)
+	}
+
+	activeAlerts := alertMgr.GetActiveAlerts()
+	if len(activeAlerts) != 1 || activeAlerts[0].ID != alertID {
+		t.Fatalf("expected active powered-off alert %q, got %#v", alertID, activeAlerts)
+	}
+	if activeAlerts[0].LastNotified == nil {
+		t.Fatalf("expected powered-off alert %q to record firing notification time", alertID)
+	}
+
+	vm.Status = "running"
+	alertMgr.CheckGuest(vm, vm.Instance)
+
+	select {
+	case body := <-received:
+		var payload map[string]interface{}
+		if err := json.Unmarshal(body, &payload); err != nil {
+			t.Fatalf("failed to parse webhook payload: %v", err)
+		}
+		if payload["event"] != "resolved" {
+			t.Fatalf("expected webhook event=resolved, got %v", payload["event"])
+		}
+		if payload["alertId"] != alertID {
+			t.Fatalf("expected webhook alertId=%q, got %v", alertID, payload["alertId"])
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("timed out waiting for powered-off recovery notification webhook")
+	}
+}
+
 func TestHandleAlertResolved_SuppressesRecoveryWhenAlertWasNeverNotified(t *testing.T) {
 	received := make(chan []byte, 1)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
