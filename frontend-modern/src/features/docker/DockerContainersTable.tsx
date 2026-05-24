@@ -1,4 +1,4 @@
-import { For, Show, type Component } from 'solid-js';
+import { For, Show, createMemo, type Component } from 'solid-js';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import {
@@ -31,6 +31,7 @@ import {
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
+import { compareDockerContainers, mapDockerContainerStatus } from './dockerPageModel';
 import type { Resource } from '@/types/resource';
 
 type DockerPort = NonNullable<NonNullable<Resource['docker']>['ports']>[number];
@@ -195,6 +196,7 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterDockerContainerResources,
   });
+  const sortedRows = createMemo(() => [...tableState.filtered()].sort(compareDockerContainers));
 
   return (
     <Show
@@ -287,8 +289,9 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(resource) => {
+                    const indicator = mapDockerContainerStatus(resource);
                     const image = () => dockerTextValue(resource.docker?.image);
                     const state = () => containerState(resource);
                     const health = () => dockerTextValue(resource.docker?.health);
@@ -305,7 +308,7 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                         class="text-[11px] sm:text-xs"
                         data-docker-container-row={resource.id}
                       >
-                        <DockerResourceNameCell resource={resource} />
+                        <DockerResourceNameCell resource={resource} indicator={indicator} />
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                         >

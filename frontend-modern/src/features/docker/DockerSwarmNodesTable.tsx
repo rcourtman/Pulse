@@ -1,4 +1,4 @@
-import { For, Show, type Component } from 'solid-js';
+import { For, Show, createMemo, type Component } from 'solid-js';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import {
@@ -29,6 +29,7 @@ import {
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
+import { compareDockerSwarmNodes, mapDockerSwarmNodeStatus } from './dockerPageModel';
 
 export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) => {
   const tableState = createPlatformTableFilterState({
@@ -36,6 +37,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterPlatformResources,
   });
+  const sortedRows = createMemo(() => [...tableState.filtered()].sort(compareDockerSwarmNodes));
 
   return (
     <Show
@@ -115,7 +117,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(resource) => {
                     const managerReachability = () =>
                       dockerTextValue(
@@ -127,7 +129,10 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                         class="text-[11px] sm:text-xs"
                         data-docker-swarm-node-row={resource.id}
                       >
-                        <DockerResourceNameCell resource={resource} />
+                        <DockerResourceNameCell
+                          resource={resource}
+                          indicator={mapDockerSwarmNodeStatus(resource)}
+                        />
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                         >

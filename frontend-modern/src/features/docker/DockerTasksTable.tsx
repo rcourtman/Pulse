@@ -1,4 +1,4 @@
-import { For, Show, type Component } from 'solid-js';
+import { For, Show, createMemo, type Component } from 'solid-js';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import {
@@ -28,6 +28,7 @@ import {
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
+import { compareDockerTasks, mapDockerTaskStatus } from './dockerPageModel';
 
 export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
   const tableState = createPlatformTableFilterState({
@@ -35,6 +36,7 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterPlatformResources,
   });
+  const sortedRows = createMemo(() => [...tableState.filtered()].sort(compareDockerTasks));
 
   return (
     <Show
@@ -109,10 +111,13 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(resource) => (
                     <TableRow class="text-[11px] sm:text-xs" data-docker-task-row={resource.id}>
-                      <DockerResourceNameCell resource={resource} />
+                      <DockerResourceNameCell
+                        resource={resource}
+                        indicator={mapDockerTaskStatus(resource)}
+                      />
                       <TableCell
                         class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                       >

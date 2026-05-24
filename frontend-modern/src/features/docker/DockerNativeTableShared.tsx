@@ -2,7 +2,7 @@ import { type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell } from '@/components/shared/Table';
 import { formatBytes } from '@/utils/format';
-import { getSimpleStatusIndicator } from '@/utils/status';
+import { getSimpleStatusIndicator, type StatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { getPlatformTableCellClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
@@ -55,8 +55,15 @@ export const dockerHostName = (resource: Resource): string =>
 const dockerResourceName = (resource: Resource): string =>
   asTrimmedString(resource.name) || asTrimmedString(resource.displayName) || resource.id;
 
-export const DockerResourceNameCell: Component<{ resource: Resource }> = (props) => {
-  const indicator = () => getSimpleStatusIndicator(props.resource.status);
+export const DockerResourceNameCell: Component<{
+  resource: Resource;
+  // When set, the row pulls its StatusDot variant and tooltip text from a
+  // domain-specific mapper (mapDockerContainerStatus, mapDockerTaskStatus,
+  // etc.) rather than from the generic resource.status triad.
+  indicator?: StatusIndicator;
+}> = (props) => {
+  const resolvedIndicator = (): StatusIndicator =>
+    props.indicator ?? getSimpleStatusIndicator(props.resource.status);
   const name = () => dockerResourceName(props.resource);
 
   return (
@@ -64,8 +71,8 @@ export const DockerResourceNameCell: Component<{ resource: Resource }> = (props)
       <div class="flex min-w-0 items-center gap-2">
         <StatusDot
           size="sm"
-          variant={indicator().variant}
-          title={props.resource.status || 'unknown'}
+          variant={resolvedIndicator().variant}
+          title={resolvedIndicator().label}
           ariaHidden
         />
         <span class="truncate font-semibold text-base-content" title={name()}>

@@ -1,4 +1,4 @@
-import { For, Show, type Component, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
@@ -10,7 +10,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
-import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_TABLE_BODY_CLASS,
@@ -26,6 +25,7 @@ import {
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
+import { compareDockerServices, mapDockerServiceStatus } from './dockerPageModel';
 
 // Docker Swarm services are cluster-scoped declarations, not running
 // processes — they have no CPU / Memory / Disk / Disk I/O / Uptime /
@@ -92,6 +92,7 @@ export const DockerServicesTable: Component<{
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterPlatformResources,
   });
+  const sortedRows = createMemo(() => [...tableState.filtered()].sort(compareDockerServices));
 
   const hasFilteredSourceRows = () => (props.sourceCount ?? props.resources.length) > 0;
 
@@ -189,13 +190,13 @@ export const DockerServicesTable: Component<{
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(service) => {
                     const name = () => asTrimmedString(service.name) || service.id;
                     const image = () => asTrimmedString(service.docker?.image) || '—';
                     const mode = () => asTrimmedString(service.docker?.mode) || '—';
                     const host = () => asTrimmedString(service.docker?.hostname) || '—';
-                    const indicator = () => getSimpleStatusIndicator(service.status);
+                    const indicator = () => mapDockerServiceStatus(service);
                     const update = () => formatServiceUpdate(service.docker?.serviceUpdate);
                     return (
                       <TableRow class="text-[11px] sm:text-xs" data-docker-service-row={service.id}>
@@ -204,7 +205,7 @@ export const DockerServicesTable: Component<{
                             <StatusDot
                               size="sm"
                               variant={indicator().variant}
-                              title={service.status || 'unknown'}
+                              title={indicator().label}
                               ariaHidden
                             />
                             <span class="truncate font-semibold text-base-content" title={name()}>

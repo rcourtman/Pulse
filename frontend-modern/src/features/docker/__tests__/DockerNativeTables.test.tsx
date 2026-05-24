@@ -96,6 +96,49 @@ describe('Docker native tables', () => {
     expect(screen.getByText('Available')).toBeInTheDocument();
   });
 
+  it('renders container rows with status mapped from containerState + health + exitCode, attention rows first', () => {
+    render(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'happy',
+            type: 'app-container',
+            docker: { containerState: 'running', health: 'healthy' },
+          }),
+          makeResource({
+            id: 'dead',
+            type: 'app-container',
+            docker: { containerState: 'dead' },
+          }),
+          makeResource({
+            id: 'restart',
+            type: 'app-container',
+            docker: { containerState: 'restarting' },
+          }),
+          makeResource({
+            id: 'exited',
+            type: 'app-container',
+            docker: { containerState: 'exited', exitCode: 137 },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    const rows = Array.from(
+      document.querySelectorAll('[data-docker-container-row]'),
+    ).map((row) => row.getAttribute('data-docker-container-row'));
+    // Two danger rows tied -> name-sorted; then warning; then success.
+    expect(rows).toEqual(['dead', 'exited', 'restart', 'happy']);
+    expect(screen.getByTitle('Dead')).toHaveClass('bg-red-500');
+    expect(screen.getByTitle('Exited (137)')).toHaveClass('bg-red-500');
+    expect(screen.getByTitle('Restarting')).toHaveClass('bg-amber-500');
+    expect(screen.getByTitle('Healthy')).toHaveClass('bg-emerald-500');
+  });
+
   it('renders Docker image API fields', () => {
     render(() => (
       <DockerImagesTable

@@ -4,11 +4,19 @@ import type { Resource } from '@/types/resource';
 import {
   DOCKER_TAB_SPECS,
   buildDockerPageModel,
+  compareDockerContainers,
+  compareDockerServices,
+  compareDockerSwarmNodes,
+  compareDockerTasks,
   getDockerHostSystemBadge,
   getDockerPageTabSpecs,
   hasDockerEngineStorageUsage,
   hasDockerSwarmEvidence,
   hasDockerSwarmInventory,
+  mapDockerContainerStatus,
+  mapDockerServiceStatus,
+  mapDockerSwarmNodeStatus,
+  mapDockerTaskStatus,
   resolveDockerPageTabId,
 } from '../dockerPageModel';
 
@@ -268,5 +276,359 @@ describe('dockerPageModel', () => {
         }),
       ),
     ).toBe(true);
+  });
+
+  describe('mapDockerContainerStatus', () => {
+    it('escalates dead, OOMKilled, and unhealthy containers to danger', () => {
+      expect(
+        mapDockerContainerStatus(
+          makeResource({ id: 'c-dead', type: 'app-container', docker: { containerState: 'dead' } }),
+        ).variant,
+      ).toBe('danger');
+      expect(
+        mapDockerContainerStatus(
+          makeResource({
+            id: 'c-oom',
+            type: 'app-container',
+            docker: { containerState: 'oomkilled' },
+          }),
+        ),
+      ).toEqual({ variant: 'danger', label: 'OOMKilled' });
+      expect(
+        mapDockerContainerStatus(
+          makeResource({
+            id: 'c-unhealthy',
+            type: 'app-container',
+            docker: { containerState: 'running', health: 'unhealthy' },
+          }),
+        ),
+      ).toEqual({ variant: 'danger', label: 'Unhealthy' });
+    });
+
+    it('flags exited containers with non-zero exit codes as danger', () => {
+      expect(
+        mapDockerContainerStatus(
+          makeResource({
+            id: 'c-exit-1',
+            type: 'app-container',
+            docker: { containerState: 'exited', exitCode: 137 },
+          }),
+        ),
+      ).toEqual({ variant: 'danger', label: 'Exited (137)' });
+      expect(
+        mapDockerContainerStatus(
+          makeResource({
+            id: 'c-exit-0',
+            type: 'app-container',
+            docker: { containerState: 'exited', exitCode: 0 },
+          }),
+        ),
+      ).toEqual({ variant: 'muted', label: 'Exited' });
+    });
+
+    it('treats restarting and health=starting as warning', () => {
+      expect(
+        mapDockerContainerStatus(
+          makeResource({
+            id: 'c-restart',
+            type: 'app-container',
+            docker: { containerState: 'restarting' },
+          }),
+        ).variant,
+      ).toBe('warning');
+      expect(
+        mapDockerContainerStatus(
+          makeResource({
+            id: 'c-starting',
+            type: 'app-container',
+            docker: { containerState: 'running', health: 'starting' },
+          }),
+        ).variant,
+      ).toBe('warning');
+    });
+
+    it('returns success for healthy running containers', () => {
+      expect(
+        mapDockerContainerStatus(
+          makeResource({
+            id: 'c-ok',
+            type: 'app-container',
+            docker: { containerState: 'running', health: 'healthy' },
+          }),
+        ),
+      ).toEqual({ variant: 'success', label: 'Healthy' });
+      expect(
+        mapDockerContainerStatus(
+          makeResource({
+            id: 'c-no-health',
+            type: 'app-container',
+            docker: { containerState: 'running' },
+          }),
+        ),
+      ).toEqual({ variant: 'success', label: 'Running' });
+    });
+  });
+
+  describe('mapDockerServiceStatus', () => {
+    it('classifies services by running vs desired tasks', () => {
+      expect(
+        mapDockerServiceStatus(
+          makeResource({
+            id: 'svc-ok',
+            type: 'docker-service',
+            docker: { desiredTasks: 3, runningTasks: 3 },
+          }),
+        ).variant,
+      ).toBe('success');
+      expect(
+        mapDockerServiceStatus(
+          makeResource({
+            id: 'svc-partial',
+            type: 'docker-service',
+            docker: { desiredTasks: 3, runningTasks: 1 },
+          }),
+        ),
+      ).toEqual({ variant: 'warning', label: '1 / 3 running' });
+      expect(
+        mapDockerServiceStatus(
+          makeResource({
+            id: 'svc-zero',
+            type: 'docker-service',
+            docker: { desiredTasks: 3, runningTasks: 0 },
+          }),
+        ),
+      ).toEqual({ variant: 'danger', label: '0 / 3 running' });
+      expect(
+        mapDockerServiceStatus(
+          makeResource({
+            id: 'svc-scaled',
+            type: 'docker-service',
+            docker: { desiredTasks: 0, runningTasks: 0 },
+          }),
+        ).variant,
+      ).toBe('muted');
+    });
+
+    it('flags paused rollbacks as warning even when replicas match', () => {
+      expect(
+        mapDockerServiceStatus(
+          makeResource({
+            id: 'svc-rollback',
+            type: 'docker-service',
+            docker: {
+              desiredTasks: 3,
+              runningTasks: 3,
+              serviceUpdate: { state: 'paused' },
+            },
+          }),
+        ),
+      ).toEqual({ variant: 'warning', label: 'Rollback paused' });
+    });
+  });
+
+  describe('mapDockerTaskStatus', () => {
+    it('classifies tasks by current state', () => {
+      expect(
+        mapDockerTaskStatus(
+          makeResource({ id: 't-run', type: 'docker-task', docker: { currentState: 'running' } }),
+        ).variant,
+      ).toBe('success');
+      expect(
+        mapDockerTaskStatus(
+          makeResource({ id: 't-fail', type: 'docker-task', docker: { currentState: 'failed' } }),
+        ).variant,
+      ).toBe('danger');
+      expect(
+        mapDockerTaskStatus(
+          makeResource({
+            id: 't-prep',
+            type: 'docker-task',
+            docker: { currentState: 'preparing' },
+          }),
+        ).variant,
+      ).toBe('warning');
+      expect(
+        mapDockerTaskStatus(
+          makeResource({
+            id: 't-shutdown',
+            type: 'docker-task',
+            docker: { currentState: 'shutdown', desiredState: 'shutdown' },
+          }),
+        ).variant,
+      ).toBe('muted');
+    });
+  });
+
+  describe('mapDockerSwarmNodeStatus', () => {
+    it('flags unreachable managers as danger', () => {
+      expect(
+        mapDockerSwarmNodeStatus(
+          makeResource({
+            id: 'n-mgr-down',
+            type: 'docker-swarm-node',
+            docker: { nodeRole: 'manager', managerReachability: 'unreachable' },
+          }),
+        ),
+      ).toEqual({ variant: 'danger', label: 'Manager unreachable' });
+    });
+
+    it('treats drain as warning and pause as muted', () => {
+      expect(
+        mapDockerSwarmNodeStatus(
+          makeResource({
+            id: 'n-drain',
+            type: 'docker-swarm-node',
+            docker: { availability: 'drain' },
+          }),
+        ).variant,
+      ).toBe('warning');
+      expect(
+        mapDockerSwarmNodeStatus(
+          makeResource({
+            id: 'n-pause',
+            type: 'docker-swarm-node',
+            docker: { availability: 'pause' },
+          }),
+        ).variant,
+      ).toBe('muted');
+    });
+
+    it('marks leader nodes with a Leader label', () => {
+      expect(
+        mapDockerSwarmNodeStatus(
+          makeResource({
+            id: 'n-leader',
+            type: 'docker-swarm-node',
+            status: 'online',
+            docker: { availability: 'active', leader: true },
+          }),
+        ),
+      ).toEqual({ variant: 'success', label: 'Leader' });
+    });
+  });
+
+  describe('rank comparators float attention rows above healthy rows', () => {
+    it('orders containers danger → warning → muted → success', () => {
+      const healthy = makeResource({
+        id: 'happy',
+        type: 'app-container',
+        docker: { containerState: 'running', health: 'healthy' },
+      });
+      const restarting = makeResource({
+        id: 'restarting',
+        type: 'app-container',
+        docker: { containerState: 'restarting' },
+      });
+      const dead = makeResource({
+        id: 'dead',
+        type: 'app-container',
+        docker: { containerState: 'dead' },
+      });
+      const stopped = makeResource({
+        id: 'stopped',
+        type: 'app-container',
+        docker: { containerState: 'exited', exitCode: 0 },
+      });
+      expect(
+        [healthy, restarting, dead, stopped].sort(compareDockerContainers).map((r) => r.id),
+      ).toEqual(['dead', 'restarting', 'stopped', 'happy']);
+    });
+
+    it('orders Swarm services by replica health', () => {
+      const ok = makeResource({
+        id: 'svc-ok',
+        type: 'docker-service',
+        docker: { desiredTasks: 2, runningTasks: 2 },
+      });
+      const partial = makeResource({
+        id: 'svc-partial',
+        type: 'docker-service',
+        docker: { desiredTasks: 2, runningTasks: 1 },
+      });
+      const down = makeResource({
+        id: 'svc-down',
+        type: 'docker-service',
+        docker: { desiredTasks: 2, runningTasks: 0 },
+      });
+      expect([ok, partial, down].sort(compareDockerServices).map((r) => r.id)).toEqual([
+        'svc-down',
+        'svc-partial',
+        'svc-ok',
+      ]);
+    });
+
+    it('orders tasks failed → preparing → running', () => {
+      const run = makeResource({
+        id: 't-run',
+        type: 'docker-task',
+        docker: { currentState: 'running' },
+      });
+      const prep = makeResource({
+        id: 't-prep',
+        type: 'docker-task',
+        docker: { currentState: 'preparing' },
+      });
+      const fail = makeResource({
+        id: 't-fail',
+        type: 'docker-task',
+        docker: { currentState: 'failed' },
+      });
+      expect([run, prep, fail].sort(compareDockerTasks).map((r) => r.id)).toEqual([
+        't-fail',
+        't-prep',
+        't-run',
+      ]);
+    });
+
+    it('orders Swarm nodes by manager reachability and availability', () => {
+      const ok = makeResource({
+        id: 'n-ok',
+        type: 'docker-swarm-node',
+        status: 'online',
+        docker: { availability: 'active', managerReachability: 'reachable' },
+      });
+      const drain = makeResource({
+        id: 'n-drain',
+        type: 'docker-swarm-node',
+        status: 'online',
+        docker: { availability: 'drain' },
+      });
+      const down = makeResource({
+        id: 'n-mgr-down',
+        type: 'docker-swarm-node',
+        docker: { nodeRole: 'manager', managerReachability: 'unreachable' },
+      });
+      expect([ok, drain, down].sort(compareDockerSwarmNodes).map((r) => r.id)).toEqual([
+        'n-mgr-down',
+        'n-drain',
+        'n-ok',
+      ]);
+    });
+
+    it('emits pre-sorted buckets from buildDockerPageModel', () => {
+      const happy = makeResource({
+        id: 'c-happy',
+        type: 'app-container',
+        docker: { containerState: 'running' },
+      });
+      const dead = makeResource({
+        id: 'c-dead',
+        type: 'app-container',
+        docker: { containerState: 'dead' },
+      });
+      const svcOk = makeResource({
+        id: 'svc-ok',
+        type: 'docker-service',
+        docker: { desiredTasks: 2, runningTasks: 2 },
+      });
+      const svcDown = makeResource({
+        id: 'svc-down',
+        type: 'docker-service',
+        docker: { desiredTasks: 2, runningTasks: 0 },
+      });
+      const model = buildDockerPageModel([happy, dead, svcOk, svcDown]);
+      expect(model.containers.map((r) => r.id)).toEqual(['c-dead', 'c-happy']);
+      expect(model.services.map((r) => r.id)).toEqual(['svc-down', 'svc-ok']);
+    });
   });
 });
