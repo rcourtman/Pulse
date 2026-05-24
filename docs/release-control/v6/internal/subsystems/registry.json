@@ -3586,6 +3586,7 @@
         "internal/dockeragent/collect.go",
         "internal/dockeragent/docker_client.go",
         "internal/dockeragent/swarm.go",
+        "internal/kubernetesagent/agent.go",
         "internal/mock/demo_scenarios.go",
         "internal/mock/fixture_graph.go",
         "internal/mock/generator.go",
@@ -3595,6 +3596,7 @@
         "internal/models/models.go",
         "internal/models/models_frontend.go",
         "pkg/agents/docker/report.go",
+        "pkg/agents/kubernetes/report.go",
         "pkg/proxmox/ceph.go",
         "pkg/proxmox/zfs.go"
       ],
@@ -3761,6 +3763,23 @@
             "exact_files": [
               "internal/dockeragent/swarm_coverage_test.go",
               "internal/dockeragent/swarm_test.go"
+            ]
+          },
+          {
+            "id": "kubernetes-native-agent-runtime",
+            "label": "kubernetes native agent inventory proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/kubernetesagent/agent.go",
+              "pkg/agents/kubernetes/report.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/kubernetesagent/agent_inventory_test.go",
+              "internal/monitoring/kubernetes_agents_test.go",
+              "internal/unifiedresources/adapter_coverage_test.go",
+              "internal/unifiedresources/kubernetes_registry_test.go"
             ]
           },
           {
@@ -5047,6 +5066,7 @@
         "frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx",
         "frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts",
         "frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts",
+        "frontend-modern/src/features/kubernetes/KubernetesInventoryTable.tsx",
         "frontend-modern/src/hooks/useUnifiedResources.ts",
         "frontend-modern/src/routing/resourceLinks.ts",
         "frontend-modern/src/types/resource.ts",
@@ -5174,6 +5194,7 @@
               "frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx",
               "frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts",
               "frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts",
+              "frontend-modern/src/features/kubernetes/KubernetesInventoryTable.tsx",
               "frontend-modern/src/hooks/useUnifiedResources.ts",
               "frontend-modern/src/routing/resourceLinks.ts",
               "frontend-modern/src/types/resource.ts",
@@ -5201,6 +5222,7 @@
               "frontend-modern/src/features/docker/__tests__/DockerPageSurface.test.tsx",
               "frontend-modern/src/features/infrastructure/__tests__/infrastructurePageModel.test.ts",
               "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",
+              "frontend-modern/src/features/kubernetes/__tests__/KubernetesInventoryTable.test.tsx",
               "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
               "frontend-modern/src/routing/__tests__/resourceLinks.test.ts",
               "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",

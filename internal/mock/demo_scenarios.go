@@ -646,10 +646,10 @@ func applyDemoKubernetesNativeInventory(cluster *models.KubernetesCluster, now t
 		{UID: cluster.ID + "-netpol-default-deny", Name: "default-deny", Namespace: "services", PolicyTypes: []string{"Ingress", "Egress"}, IngressRuleCount: 1, EgressRuleCount: 1, CreatedAt: createdAt, Labels: labels("default-deny")},
 	}
 	cluster.ConfigMaps = []models.KubernetesConfigMap{
-		{UID: cluster.ID + "-cm-checkout-api", Name: "checkout-api-config", Namespace: "services", DataKeys: []string{"app.yaml", "feature-flags.yaml"}, CreatedAt: createdAt, Labels: labels("checkout-api")},
+		{UID: cluster.ID + "-cm-checkout-api", Name: "checkout-api-config", Namespace: "services", MetadataOnly: true, CreatedAt: createdAt, Labels: labels("checkout-api")},
 	}
 	cluster.Secrets = []models.KubernetesSecret{
-		{UID: cluster.ID + "-secret-checkout-api", Name: "checkout-api-runtime", Namespace: "services", Type: "Opaque", DataKeys: []string{"database-url", "session-key"}, CreatedAt: createdAt, Labels: labels("checkout-api")},
+		{UID: cluster.ID + "-secret-checkout-api", Name: "checkout-api-runtime", Namespace: "services", MetadataOnly: true, CreatedAt: createdAt, Labels: labels("checkout-api")},
 	}
 	cluster.ServiceAccounts = []models.KubernetesServiceAccount{
 		{UID: cluster.ID + "-sa-checkout-api", Name: "checkout-api", Namespace: "services", SecretCount: 1, ImagePullSecrets: []string{"registry-pull"}, CreatedAt: createdAt, Labels: labels("checkout-api")},

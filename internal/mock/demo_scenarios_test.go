@@ -372,7 +372,14 @@ func kubernetesNativeInventoryExists(graph FixtureGraph) bool {
 			len(cluster.Events) == 0 {
 			return false
 		}
-		if cluster.Secrets[0].Type == "" || len(cluster.Secrets[0].DataKeys) == 0 {
+		if !cluster.ConfigMaps[0].MetadataOnly ||
+			len(cluster.ConfigMaps[0].DataKeys) != 0 ||
+			len(cluster.ConfigMaps[0].BinaryDataKeys) != 0 {
+			return false
+		}
+		if !cluster.Secrets[0].MetadataOnly ||
+			cluster.Secrets[0].Type != "" ||
+			len(cluster.Secrets[0].DataKeys) != 0 {
 			return false
 		}
 		if cluster.HorizontalPodAutoscalers[0].TargetKind == "" ||

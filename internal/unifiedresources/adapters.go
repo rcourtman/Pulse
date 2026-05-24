@@ -2935,6 +2935,7 @@ func resourceFromKubernetesConfigMap(cluster models.KubernetesCluster, configMap
 	data.DataKeys = append([]string(nil), configMap.DataKeys...)
 	data.BinaryDataKeys = append([]string(nil), configMap.BinaryDataKeys...)
 	data.Immutable = configMap.Immutable
+	data.MetadataOnly = configMap.MetadataOnly
 	data.Labels = labels
 	data.CreatedAt = zeroTimeToPtr(configMap.CreatedAt)
 	resource := Resource{
@@ -2960,6 +2961,7 @@ func resourceFromKubernetesSecret(cluster models.KubernetesCluster, secret model
 	data.SecretType = secret.Type
 	data.DataKeys = append([]string(nil), secret.DataKeys...)
 	data.Immutable = secret.Immutable
+	data.MetadataOnly = secret.MetadataOnly
 	data.Labels = labels
 	data.CreatedAt = zeroTimeToPtr(secret.CreatedAt)
 	resource := Resource{

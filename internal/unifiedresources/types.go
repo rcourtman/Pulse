@@ -1579,6 +1579,7 @@ type K8sData struct {
 	DataKeys                     []string               `json:"dataKeys,omitempty"`
 	BinaryDataKeys               []string               `json:"binaryDataKeys,omitempty"`
 	Immutable                    bool                   `json:"immutable,omitempty"`
+	MetadataOnly                 bool                   `json:"metadataOnly,omitempty"`
 	SecretType                   string                 `json:"secretType,omitempty"`
 	AutomountServiceAccountToken *bool                  `json:"automountServiceAccountToken,omitempty"`
 	SecretCount                  int                    `json:"secretCount,omitempty"`

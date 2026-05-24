@@ -121,13 +121,13 @@ func TestContractResourceType(t *testing.T) {
 			want:     ResourceTypeK8sStorageClass,
 		},
 		{
-			name:     "kubernetes configmap passthrough remains canonical",
-			resource: Resource{Type: ResourceTypeK8sConfigMap, Kubernetes: &K8sData{DataKeys: []string{"app.yaml"}}},
+			name:     "kubernetes metadata-only configmap passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeK8sConfigMap, Kubernetes: &K8sData{MetadataOnly: true}},
 			want:     ResourceTypeK8sConfigMap,
 		},
 		{
-			name:     "kubernetes secret passthrough remains canonical",
-			resource: Resource{Type: ResourceTypeK8sSecret, Kubernetes: &K8sData{SecretType: "Opaque", DataKeys: []string{"token"}}},
+			name:     "kubernetes metadata-only secret passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeK8sSecret, Kubernetes: &K8sData{MetadataOnly: true}},
 			want:     ResourceTypeK8sSecret,
 		},
 		{

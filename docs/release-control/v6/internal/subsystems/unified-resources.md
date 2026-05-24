@@ -123,6 +123,7 @@ cross-source deduplication.
 99. `frontend-modern/src/features/agents/AgentsPageSurface.tsx`
 100. `frontend-modern/src/features/agents/AgentsMachinesTable.tsx`
 101. `internal/platformsupport/manifest_generated.go`
+102. `frontend-modern/src/features/kubernetes/KubernetesInventoryTable.tsx`
 
 ## Shared Boundaries
 
@@ -255,11 +256,13 @@ reintroduce false Swarm capability surfaces.
    Secrets, ServiceAccounts, ResourceQuotas, LimitRanges,
    PodDisruptionBudgets, HorizontalPodAutoscalers, and Events must preserve
    their API identity and source metadata through clone, merge, REST,
-   websocket, and frontend decode paths. `k8s-secret` resources must expose
-   metadata, type, and key names only; secret values are outside the unified
-   resource contract. Because Secret names and key names can disclose intent,
-   `k8s-secret` policy metadata must classify them as `restricted` with
-   `local-only` routing.
+   websocket, and frontend decode paths. `k8s-configmap` and `k8s-secret`
+   resources must preserve the `metadataOnly` flag when the agent used the
+   Kubernetes metadata-only API path; current agents must not fetch ConfigMap
+   or Secret payload values merely to build inventory rows. Older reports may
+   carry key names, but Secret values are outside the unified resource contract.
+   Because Secret names and key names can disclose intent, `k8s-secret` policy
+   metadata must classify them as `restricted` with `local-only` routing.
 2. Add typed accessors and views in `internal/unifiedresources/views.go`
 3. Add source ingestion/adaptation in the adapter layer only
    Frontend resource platform contracts in

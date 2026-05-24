@@ -129,8 +129,8 @@ func TestApplyKubernetesReportPreservesNativeAPIInventory(t *testing.T) {
 			UID: "pvc-1", Name: "checkout-data", Namespace: "services", Phase: " Bound ", StorageClass: "fast", RequestedBytes: 10_000, CapacityBytes: 10_000, AccessModes: []string{"ReadWriteOnce"}, VolumeName: "pv-checkout", CreatedAt: now,
 		}},
 		StorageClasses:  []agentsk8s.StorageClass{{UID: "sc-1", Name: "fast", Provisioner: "csi.example.test", ReclaimPolicy: "Delete", VolumeBindingMode: "WaitForFirstConsumer", AllowVolumeExpansion: &allowExpansion, ParameterKeys: []string{"type"}}},
-		ConfigMaps:      []agentsk8s.ConfigMap{{UID: "cm-1", Name: "checkout-config", Namespace: "services", DataKeys: []string{"app.yaml"}, BinaryDataKeys: []string{"logo.png"}, Immutable: true}},
-		Secrets:         []agentsk8s.Secret{{UID: "sec-1", Name: "checkout-secret", Namespace: "services", Type: "Opaque", DataKeys: []string{"token"}, Immutable: true}},
+		ConfigMaps:      []agentsk8s.ConfigMap{{UID: "cm-1", Name: "checkout-config", Namespace: "services", DataKeys: []string{"app.yaml"}, BinaryDataKeys: []string{"logo.png"}, Immutable: true, MetadataOnly: true}},
+		Secrets:         []agentsk8s.Secret{{UID: "sec-1", Name: "checkout-secret", Namespace: "services", Type: "Opaque", DataKeys: []string{"token"}, Immutable: true, MetadataOnly: true}},
 		ServiceAccounts: []agentsk8s.ServiceAccount{{UID: "sa-1", Name: "checkout", Namespace: "services", AutomountServiceAccountToken: &automountToken, SecretCount: 1, ImagePullSecrets: []string{"pull-secret"}}},
 		ResourceQuotas:  []agentsk8s.ResourceQuota{{UID: "rq-1", Name: "services-quota", Namespace: "services", Hard: map[string]string{"pods": "10"}, Used: map[string]string{"pods": "3"}}},
 		LimitRanges:     []agentsk8s.LimitRange{{UID: "lr-1", Name: "services-limits", Namespace: "services", LimitTypes: []string{"Container"}}},
@@ -187,10 +187,10 @@ func TestApplyKubernetesReportPreservesNativeAPIInventory(t *testing.T) {
 	if len(cluster.StorageClasses) != 1 || cluster.StorageClasses[0].Provisioner != "csi.example.test" || cluster.StorageClasses[0].AllowVolumeExpansion == nil || !*cluster.StorageClasses[0].AllowVolumeExpansion {
 		t.Fatalf("expected storage class inventory, got %+v", cluster.StorageClasses)
 	}
-	if len(cluster.ConfigMaps) != 1 || cluster.ConfigMaps[0].DataKeys[0] != "app.yaml" || !cluster.ConfigMaps[0].Immutable {
+	if len(cluster.ConfigMaps) != 1 || cluster.ConfigMaps[0].DataKeys[0] != "app.yaml" || !cluster.ConfigMaps[0].Immutable || !cluster.ConfigMaps[0].MetadataOnly {
 		t.Fatalf("expected configmap inventory, got %+v", cluster.ConfigMaps)
 	}
-	if len(cluster.Secrets) != 1 || cluster.Secrets[0].Type != "Opaque" || cluster.Secrets[0].DataKeys[0] != "token" || !cluster.Secrets[0].Immutable {
+	if len(cluster.Secrets) != 1 || cluster.Secrets[0].Type != "Opaque" || cluster.Secrets[0].DataKeys[0] != "token" || !cluster.Secrets[0].Immutable || !cluster.Secrets[0].MetadataOnly {
 		t.Fatalf("expected secret metadata inventory, got %+v", cluster.Secrets)
 	}
 	if len(cluster.ServiceAccounts) != 1 || cluster.ServiceAccounts[0].SecretCount != 1 || cluster.ServiceAccounts[0].AutomountServiceAccountToken == nil || !*cluster.ServiceAccounts[0].AutomountServiceAccountToken {

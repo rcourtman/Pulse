@@ -36,7 +36,9 @@ import (
 	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -76,8 +78,9 @@ type Agent struct {
 	logger     zerolog.Logger
 	httpClient *http.Client
 
-	kubeClient kubernetes.Interface
-	restCfg    *rest.Config
+	kubeClient     kubernetes.Interface
+	metadataClient metadata.Interface
+	restCfg        *rest.Config
 
 	agentID      string
 	agentVersion string
@@ -113,6 +116,11 @@ const (
 	reportUserAgent                    = "pulse-kubernetes-agent/"
 	maxMetricsResponseBodyBytes  int64 = 32 * 1024 * 1024 // 32 MB
 	maxRecoveryResponseBodyBytes int64 = 8 * 1024 * 1024  // 8 MB (recovery APIs can be large)
+)
+
+var (
+	configMapsGVR = schema.GroupVersionResource{Version: "v1", Resource: "configmaps"}
+	secretsGVR    = schema.GroupVersionResource{Version: "v1", Resource: "secrets"}
 )
 
 func New(cfg Config) (*Agent, error) {
@@ -162,6 +170,10 @@ func New(cfg Config) (*Agent, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create kubernetes client: %w", err)
 	}
+	metadataClient, err := metadata.NewForConfig(restCfg)
+	if err != nil {
+		return nil, fmt.Errorf("create kubernetes metadata client: %w", err)
+	}
 
 	agentVersion := strings.TrimSpace(cfg.AgentVersion)
 	if agentVersion == "" {
@@ -202,6 +214,7 @@ func New(cfg Config) (*Agent, error) {
 		logger:            *logger,
 		httpClient:        httpClient,
 		kubeClient:        kubeClient,
+		metadataClient:    metadataClient,
 		restCfg:           restCfg,
 		agentID:           agentID,
 		agentVersion:      agentVersion,
@@ -1986,6 +1999,46 @@ func (a *Agent) inventoryNamespaces() []string {
 	return namespaces
 }
 
+func (a *Agent) collectPartialObjectMetadata(ctx context.Context, resource schema.GroupVersionResource, actionResource string) ([]metav1.PartialObjectMetadata, error) {
+	if a.metadataClient == nil {
+		return nil, fmt.Errorf("kubernetes metadata client unavailable")
+	}
+
+	items := make([]metav1.PartialObjectMetadata, 0)
+	for _, namespace := range a.inventoryNamespaces() {
+		opts := metav1.ListOptions{Limit: listPageSize}
+		for {
+			var list *metav1.PartialObjectMetadataList
+			action := "list " + actionResource + " metadata"
+			if namespace != metav1.NamespaceAll {
+				action = fmt.Sprintf("list %s metadata in namespace %q", actionResource, namespace)
+			}
+			err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+				var err error
+				list, err = a.metadataClient.Resource(resource).Namespace(namespace).List(callCtx, opts)
+				return err
+			})
+			if err != nil {
+				return nil, err
+			}
+			for _, item := range list.Items {
+				if !a.namespaceAllowed(item.Namespace) {
+					continue
+				}
+				items = append(items, item)
+				if len(items) >= maxInventoryItems {
+					return items, nil
+				}
+			}
+			if list.Continue == "" {
+				break
+			}
+			opts.Continue = list.Continue
+		}
+	}
+	return items, nil
+}
+
 func copyKubernetesStringMap(src map[string]string) map[string]string {
 	if len(src) == 0 {
 		return nil
@@ -2858,50 +2911,20 @@ func (a *Agent) collectStorageClasses(ctx context.Context) ([]agentsk8s.StorageC
 }
 
 func (a *Agent) collectConfigMaps(ctx context.Context) ([]agentsk8s.ConfigMap, error) {
-	items := make([]agentsk8s.ConfigMap, 0)
-	for _, namespace := range a.inventoryNamespaces() {
-		opts := metav1.ListOptions{Limit: listPageSize}
-		for {
-			var list *corev1.ConfigMapList
-			action := "list configmaps"
-			if namespace != metav1.NamespaceAll {
-				action = fmt.Sprintf("list configmaps in namespace %q", namespace)
-			}
-			err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
-				var err error
-				list, err = a.kubeClient.CoreV1().ConfigMaps(namespace).List(callCtx, opts)
-				return err
-			})
-			if err != nil {
-				return nil, err
-			}
-			for _, configMap := range list.Items {
-				if !a.namespaceAllowed(configMap.Namespace) {
-					continue
-				}
-				immutable := false
-				if configMap.Immutable != nil {
-					immutable = *configMap.Immutable
-				}
-				items = append(items, agentsk8s.ConfigMap{
-					UID:            string(configMap.UID),
-					Name:           configMap.Name,
-					Namespace:      configMap.Namespace,
-					DataKeys:       sortedStringKeys(configMap.Data),
-					BinaryDataKeys: sortedStringKeys(configMap.BinaryData),
-					Immutable:      immutable,
-					CreatedAt:      configMap.CreationTimestamp.Time,
-					Labels:         copyKubernetesStringMap(configMap.Labels),
-				})
-				if len(items) >= maxInventoryItems {
-					return items, nil
-				}
-			}
-			if list.Continue == "" {
-				break
-			}
-			opts.Continue = list.Continue
-		}
+	metadataItems, err := a.collectPartialObjectMetadata(ctx, configMapsGVR, "configmaps")
+	if err != nil {
+		return nil, err
+	}
+	items := make([]agentsk8s.ConfigMap, 0, len(metadataItems))
+	for _, configMap := range metadataItems {
+		items = append(items, agentsk8s.ConfigMap{
+			UID:          string(configMap.UID),
+			Name:         configMap.Name,
+			Namespace:    configMap.Namespace,
+			MetadataOnly: true,
+			CreatedAt:    configMap.CreationTimestamp.Time,
+			Labels:       copyKubernetesStringMap(configMap.Labels),
+		})
 	}
 	return items, nil
 }
@@ -2952,50 +2975,20 @@ func (a *Agent) collectServiceAccounts(ctx context.Context) ([]agentsk8s.Service
 }
 
 func (a *Agent) collectSecrets(ctx context.Context) ([]agentsk8s.Secret, error) {
-	items := make([]agentsk8s.Secret, 0)
-	for _, namespace := range a.inventoryNamespaces() {
-		opts := metav1.ListOptions{Limit: listPageSize}
-		for {
-			var list *corev1.SecretList
-			action := "list secrets"
-			if namespace != metav1.NamespaceAll {
-				action = fmt.Sprintf("list secrets in namespace %q", namespace)
-			}
-			err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
-				var err error
-				list, err = a.kubeClient.CoreV1().Secrets(namespace).List(callCtx, opts)
-				return err
-			})
-			if err != nil {
-				return nil, err
-			}
-			for _, secret := range list.Items {
-				if !a.namespaceAllowed(secret.Namespace) {
-					continue
-				}
-				immutable := false
-				if secret.Immutable != nil {
-					immutable = *secret.Immutable
-				}
-				items = append(items, agentsk8s.Secret{
-					UID:       string(secret.UID),
-					Name:      secret.Name,
-					Namespace: secret.Namespace,
-					Type:      string(secret.Type),
-					DataKeys:  sortedStringKeys(secret.Data),
-					Immutable: immutable,
-					CreatedAt: secret.CreationTimestamp.Time,
-					Labels:    copyKubernetesStringMap(secret.Labels),
-				})
-				if len(items) >= maxInventoryItems {
-					return items, nil
-				}
-			}
-			if list.Continue == "" {
-				break
-			}
-			opts.Continue = list.Continue
-		}
+	metadataItems, err := a.collectPartialObjectMetadata(ctx, secretsGVR, "secrets")
+	if err != nil {
+		return nil, err
+	}
+	items := make([]agentsk8s.Secret, 0, len(metadataItems))
+	for _, secret := range metadataItems {
+		items = append(items, agentsk8s.Secret{
+			UID:          string(secret.UID),
+			Name:         secret.Name,
+			Namespace:    secret.Namespace,
+			MetadataOnly: true,
+			CreatedAt:    secret.CreationTimestamp.Time,
+			Labels:       copyKubernetesStringMap(secret.Labels),
+		})
 	}
 	return items, nil
 }

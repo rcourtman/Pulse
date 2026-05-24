@@ -2,6 +2,7 @@ package kubernetesagent
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -9,20 +10,16 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
+	metadatafake "k8s.io/client-go/metadata/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 func TestCollectNativePolicyConfigAndAutoscalingInventory(t *testing.T) {
-	immutable := true
 	minAvailable := intstr.FromInt(1)
 	clientset := fake.NewSimpleClientset(
-		&corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{UID: "secret-uid", Namespace: "apps", Name: "api-secret"},
-			Type:       corev1.SecretTypeOpaque,
-			Immutable:  &immutable,
-			Data:       map[string][]byte{"token": []byte("super-secret")},
-		},
 		&corev1.ResourceQuota{
 			ObjectMeta: metav1.ObjectMeta{UID: "quota-uid", Namespace: "apps", Name: "apps-quota"},
 			Spec: corev1.ResourceQuotaSpec{
@@ -69,13 +66,53 @@ func TestCollectNativePolicyConfigAndAutoscalingInventory(t *testing.T) {
 			Status: autoscalingv2.HorizontalPodAutoscalerStatus{CurrentReplicas: 2, DesiredReplicas: 3},
 		},
 	)
-	a := &Agent{kubeClient: clientset}
+	clientset.PrependReactor("list", "configmaps", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("full configmap payload list should not be called")
+	})
+	clientset.PrependReactor("list", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("full secret payload list should not be called")
+	})
+
+	metadataScheme := metadatafake.NewTestScheme()
+	metav1.AddMetaToScheme(metadataScheme)
+	metadataClient := metadatafake.NewSimpleMetadataClient(
+		metadataScheme,
+		&metav1.PartialObjectMetadata{
+			TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+			ObjectMeta: metav1.ObjectMeta{
+				UID:               "configmap-uid",
+				Namespace:         "apps",
+				Name:              "api-config",
+				CreationTimestamp: metav1.Now(),
+				Labels:            map[string]string{"app": "api"},
+			},
+		},
+		&metav1.PartialObjectMetadata{
+			TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"},
+			ObjectMeta: metav1.ObjectMeta{
+				UID:               "secret-uid",
+				Namespace:         "apps",
+				Name:              "api-secret",
+				CreationTimestamp: metav1.Now(),
+				Labels:            map[string]string{"app": "api"},
+			},
+		},
+	)
+	a := &Agent{kubeClient: clientset, metadataClient: metadataClient}
+
+	configMaps, err := a.collectConfigMaps(context.Background())
+	if err != nil {
+		t.Fatalf("collectConfigMaps: %v", err)
+	}
+	if len(configMaps) != 1 || configMaps[0].Name != "api-config" || !configMaps[0].MetadataOnly || len(configMaps[0].DataKeys) != 0 || len(configMaps[0].BinaryDataKeys) != 0 {
+		t.Fatalf("unexpected configmaps: %+v", configMaps)
+	}
 
 	secrets, err := a.collectSecrets(context.Background())
 	if err != nil {
 		t.Fatalf("collectSecrets: %v", err)
 	}
-	if len(secrets) != 1 || secrets[0].Type != string(corev1.SecretTypeOpaque) || len(secrets[0].DataKeys) != 1 || secrets[0].DataKeys[0] != "token" || !secrets[0].Immutable {
+	if len(secrets) != 1 || secrets[0].Name != "api-secret" || !secrets[0].MetadataOnly || secrets[0].Type != "" || len(secrets[0].DataKeys) != 0 || secrets[0].Immutable {
 		t.Fatalf("unexpected secrets: %+v", secrets)
 	}
 

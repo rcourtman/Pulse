@@ -63,6 +63,8 @@ truth for live infrastructure data.
 39. `internal/models/converters.go`
 40. `internal/models/deepcopy.go`
 41. `internal/mock/generator.go`
+42. `internal/kubernetesagent/agent.go`
+43. `pkg/agents/kubernetes/report.go`
 
 ## Shared Boundaries
 
@@ -187,10 +189,15 @@ truth for live infrastructure data.
     PersistentVolumeClaims, StorageClasses, ConfigMaps, Secrets, ServiceAccounts,
     ResourceQuotas, LimitRanges, PodDisruptionBudgets,
     HorizontalPodAutoscalers, and Events as bounded best-effort inventory.
-    Secret values must not be collected; only metadata, type, and key names are
-    allowed. Monitoring must preserve those
-    objects as native cluster inventory instead of flattening them into pods,
-    deployments, or generic storage/configuration rows.
+    ConfigMap and Secret payload values must not be collected for inventory.
+    Current agents must prefer the Kubernetes metadata-only API path for
+    ConfigMap and Secret inventory and mark those rows as metadata-only; older
+    agent reports may still carry key names, but Secret values remain outside
+    the report contract. Mock/demo Kubernetes ConfigMap and Secret inventory
+    must mirror the current metadata-only trust boundary rather than seeding
+    payload key names. Monitoring must preserve those objects as native cluster
+    inventory instead of flattening them into pods, deployments, or generic
+    storage/configuration rows.
 
 ## Forbidden Paths
 

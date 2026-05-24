@@ -173,7 +173,11 @@ alignment classes, or ad hoc report-category coercion. Docker / Podman native
 subsections now include engine storage usage, Swarm node inventory, and
 metadata-only Swarm secret/config inventory where the documented Docker APIs
 report those resources; Podman-only libpod pod inventory must not be
-represented until the collector has a libpod-native source.
+represented until the collector has a libpod-native source. Kubernetes config
+tables must preserve the same trust boundary for metadata-only ConfigMap and
+Secret rows: the shared table wording may indicate metadata-only inventory, but
+must not imply payload fields were read when the agent used Kubernetes
+metadata-only API responses.
 
 1. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `security-privacy`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
    The panel may own shell placement and local action layout, but

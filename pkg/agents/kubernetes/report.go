@@ -328,7 +328,9 @@ type StorageClass struct {
 }
 
 // ConfigMap represents Kubernetes ConfigMap metadata at report time.
-// Data values are intentionally omitted; only keys are reported.
+// ConfigMap payload values are intentionally omitted. Current agents prefer
+// Kubernetes metadata-only API responses and therefore do not need to receive
+// ConfigMap data values at all; older reports may include key names only.
 type ConfigMap struct {
 	UID            string            `json:"uid"`
 	Name           string            `json:"name"`
@@ -336,21 +338,25 @@ type ConfigMap struct {
 	DataKeys       []string          `json:"dataKeys,omitempty"`
 	BinaryDataKeys []string          `json:"binaryDataKeys,omitempty"`
 	Immutable      bool              `json:"immutable,omitempty"`
+	MetadataOnly   bool              `json:"metadataOnly,omitempty"`
 	CreatedAt      time.Time         `json:"createdAt,omitempty"`
 	Labels         map[string]string `json:"labels,omitempty"`
 }
 
 // Secret represents Kubernetes Secret metadata at report time.
-// Secret values are intentionally omitted; only key names and type metadata are reported.
+// Secret payload values are intentionally omitted. Current agents use
+// Kubernetes metadata-only API responses for Secret inventory; older reports
+// may include type and key names, but never Secret values.
 type Secret struct {
-	UID       string            `json:"uid"`
-	Name      string            `json:"name"`
-	Namespace string            `json:"namespace"`
-	Type      string            `json:"type,omitempty"`
-	DataKeys  []string          `json:"dataKeys,omitempty"`
-	Immutable bool              `json:"immutable,omitempty"`
-	CreatedAt time.Time         `json:"createdAt,omitempty"`
-	Labels    map[string]string `json:"labels,omitempty"`
+	UID          string            `json:"uid"`
+	Name         string            `json:"name"`
+	Namespace    string            `json:"namespace"`
+	Type         string            `json:"type,omitempty"`
+	DataKeys     []string          `json:"dataKeys,omitempty"`
+	Immutable    bool              `json:"immutable,omitempty"`
+	MetadataOnly bool              `json:"metadataOnly,omitempty"`
+	CreatedAt    time.Time         `json:"createdAt,omitempty"`
+	Labels       map[string]string `json:"labels,omitempty"`
 }
 
 // ServiceAccount represents Kubernetes ServiceAccount metadata at report time.

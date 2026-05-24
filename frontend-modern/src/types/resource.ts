@@ -953,6 +953,7 @@ export interface ResourceKubernetesMeta {
   dataKeys?: string[];
   binaryDataKeys?: string[];
   immutable?: boolean;
+  metadataOnly?: boolean;
   secretType?: string;
   automountServiceAccountToken?: boolean;
   secretCount?: number;

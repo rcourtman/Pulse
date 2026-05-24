@@ -330,13 +330,17 @@ const KubernetesInventoryRow: Component<{
     textValue(
       props.resource.kubernetes?.phase ||
         (props.resource.type === 'k8s-configmap'
-          ? props.resource.kubernetes?.immutable
-            ? 'Immutable'
-            : 'Mutable'
+          ? props.resource.kubernetes?.metadataOnly
+            ? 'Metadata-only'
+            : props.resource.kubernetes?.immutable
+              ? 'Immutable'
+              : 'Mutable'
           : undefined) ||
         (props.resource.type === 'k8s-secret'
-          ? props.resource.kubernetes?.secretType ||
-            (props.resource.kubernetes?.immutable ? 'Immutable' : 'Mutable')
+          ? props.resource.kubernetes?.metadataOnly
+            ? 'Metadata-only'
+            : props.resource.kubernetes?.secretType ||
+              (props.resource.kubernetes?.immutable ? 'Immutable' : 'Mutable')
           : undefined) ||
         (props.resource.type === 'k8s-serviceaccount'
           ? props.resource.kubernetes?.automountServiceAccountToken === false
@@ -346,7 +350,8 @@ const KubernetesInventoryRow: Component<{
     );
   const configDetail = () =>
     textValue(
-      props.resource.kubernetes?.dataKeys?.join(', ') ||
+      (props.resource.kubernetes?.metadataOnly ? 'Payload omitted' : undefined) ||
+        props.resource.kubernetes?.dataKeys?.join(', ') ||
         props.resource.kubernetes?.binaryDataKeys?.join(', ') ||
         props.resource.kubernetes?.imagePullSecrets?.join(', ') ||
         (typeof props.resource.kubernetes?.secretCount === 'number'

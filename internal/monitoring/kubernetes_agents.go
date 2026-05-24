@@ -639,6 +639,7 @@ func convertKubernetesConfigMaps(configMaps []agentsk8s.ConfigMap) []models.Kube
 			DataKeys:       append([]string(nil), configMap.DataKeys...),
 			BinaryDataKeys: append([]string(nil), configMap.BinaryDataKeys...),
 			Immutable:      configMap.Immutable,
+			MetadataOnly:   configMap.MetadataOnly,
 			CreatedAt:      configMap.CreatedAt,
 			Labels:         cloneStringMap(configMap.Labels),
 		}.NormalizeCollections())
@@ -653,14 +654,15 @@ func convertKubernetesSecrets(secrets []agentsk8s.Secret) []models.KubernetesSec
 	out := make([]models.KubernetesSecret, 0, len(secrets))
 	for _, secret := range secrets {
 		out = append(out, models.KubernetesSecret{
-			UID:       strings.TrimSpace(secret.UID),
-			Name:      strings.TrimSpace(secret.Name),
-			Namespace: strings.TrimSpace(secret.Namespace),
-			Type:      strings.TrimSpace(secret.Type),
-			DataKeys:  append([]string(nil), secret.DataKeys...),
-			Immutable: secret.Immutable,
-			CreatedAt: secret.CreatedAt,
-			Labels:    cloneStringMap(secret.Labels),
+			UID:          strings.TrimSpace(secret.UID),
+			Name:         strings.TrimSpace(secret.Name),
+			Namespace:    strings.TrimSpace(secret.Namespace),
+			Type:         strings.TrimSpace(secret.Type),
+			DataKeys:     append([]string(nil), secret.DataKeys...),
+			Immutable:    secret.Immutable,
+			MetadataOnly: secret.MetadataOnly,
+			CreatedAt:    secret.CreatedAt,
+			Labels:       cloneStringMap(secret.Labels),
 		}.NormalizeCollections())
 	}
 	return out

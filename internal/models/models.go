@@ -1598,6 +1598,7 @@ type KubernetesConfigMap struct {
 	DataKeys       []string          `json:"dataKeys,omitempty"`
 	BinaryDataKeys []string          `json:"binaryDataKeys,omitempty"`
 	Immutable      bool              `json:"immutable,omitempty"`
+	MetadataOnly   bool              `json:"metadataOnly,omitempty"`
 	CreatedAt      time.Time         `json:"createdAt,omitempty"`
 	Labels         map[string]string `json:"labels,omitempty"`
 }
@@ -1616,14 +1617,15 @@ func (c KubernetesConfigMap) NormalizeCollections() KubernetesConfigMap {
 }
 
 type KubernetesSecret struct {
-	UID       string            `json:"uid"`
-	Name      string            `json:"name"`
-	Namespace string            `json:"namespace"`
-	Type      string            `json:"type,omitempty"`
-	DataKeys  []string          `json:"dataKeys,omitempty"`
-	Immutable bool              `json:"immutable,omitempty"`
-	CreatedAt time.Time         `json:"createdAt,omitempty"`
-	Labels    map[string]string `json:"labels,omitempty"`
+	UID          string            `json:"uid"`
+	Name         string            `json:"name"`
+	Namespace    string            `json:"namespace"`
+	Type         string            `json:"type,omitempty"`
+	DataKeys     []string          `json:"dataKeys,omitempty"`
+	Immutable    bool              `json:"immutable,omitempty"`
+	MetadataOnly bool              `json:"metadataOnly,omitempty"`
+	CreatedAt    time.Time         `json:"createdAt,omitempty"`
+	Labels       map[string]string `json:"labels,omitempty"`
 }
 
 func (s KubernetesSecret) NormalizeCollections() KubernetesSecret {

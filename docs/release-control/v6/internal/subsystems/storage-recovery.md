@@ -164,7 +164,10 @@ inventory objects that flow through the shared resource decoder, such as
 ConfigMaps, Secrets, ServiceAccounts, ResourceQuotas, LimitRanges,
 PodDisruptionBudgets, and HorizontalPodAutoscalers, remain platform
 configuration, policy, or autoscaling evidence only and must not become
-storage/recovery ownership, restore scope, or secret material.
+storage/recovery ownership, restore scope, or secret material. If those
+ConfigMap or Secret rows are marked `metadataOnly`, storage and recovery may
+surface that trust state as context only; they must not infer payload
+availability, key names, or restore inputs from the row.
 Docker engine `/system/df` storage-usage buckets are host-level runtime
 capacity evidence for the Docker page and unified-resource Docker host facet;
 they are not storage/recovery resources, recovery-point sources, or restore

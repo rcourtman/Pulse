@@ -511,13 +511,13 @@ func TestKubernetesNativeInventoryAdapters(t *testing.T) {
 		t.Fatalf("unexpected storage class resource: %+v", storageClass)
 	}
 
-	configMap, _ := resourceFromKubernetesConfigMap(cluster, models.KubernetesConfigMap{Name: "checkout-config", Namespace: "services", DataKeys: []string{"app.yaml"}, BinaryDataKeys: []string{"logo.png"}, Immutable: true}, nil)
-	if configMap.Type != ResourceTypeK8sConfigMap || configMap.Kubernetes == nil || configMap.Kubernetes.DataKeys[0] != "app.yaml" || !configMap.Kubernetes.Immutable {
+	configMap, _ := resourceFromKubernetesConfigMap(cluster, models.KubernetesConfigMap{Name: "checkout-config", Namespace: "services", DataKeys: []string{"app.yaml"}, BinaryDataKeys: []string{"logo.png"}, Immutable: true, MetadataOnly: true}, nil)
+	if configMap.Type != ResourceTypeK8sConfigMap || configMap.Kubernetes == nil || configMap.Kubernetes.DataKeys[0] != "app.yaml" || !configMap.Kubernetes.Immutable || !configMap.Kubernetes.MetadataOnly {
 		t.Fatalf("unexpected configmap resource: %+v", configMap)
 	}
 
-	secret, _ := resourceFromKubernetesSecret(cluster, models.KubernetesSecret{Name: "checkout-secret", Namespace: "services", Type: "Opaque", DataKeys: []string{"token"}, Immutable: true}, nil)
-	if secret.Type != ResourceTypeK8sSecret || secret.Kubernetes == nil || secret.Kubernetes.SecretType != "Opaque" || secret.Kubernetes.DataKeys[0] != "token" || !secret.Kubernetes.Immutable {
+	secret, _ := resourceFromKubernetesSecret(cluster, models.KubernetesSecret{Name: "checkout-secret", Namespace: "services", Type: "Opaque", DataKeys: []string{"token"}, Immutable: true, MetadataOnly: true}, nil)
+	if secret.Type != ResourceTypeK8sSecret || secret.Kubernetes == nil || secret.Kubernetes.SecretType != "Opaque" || secret.Kubernetes.DataKeys[0] != "token" || !secret.Kubernetes.Immutable || !secret.Kubernetes.MetadataOnly {
 		t.Fatalf("unexpected secret resource: %+v", secret)
 	}
 
