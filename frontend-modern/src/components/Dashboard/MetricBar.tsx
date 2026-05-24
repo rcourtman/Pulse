@@ -3,8 +3,7 @@ import { Sparkline } from '@/components/shared/Sparkline';
 import { useMetricsViewMode } from '@/stores/metricsViewMode';
 import { getMetricHistoryForRange, getMetricsVersion } from '@/stores/metricsHistory';
 import {
-  getDefaultMetricDisplayThresholds,
-  getMetricSeverity,
+  getMetricVisualSeverity,
   type MetricDisplayThresholds,
 } from '@/utils/alertThresholds';
 
@@ -60,10 +59,7 @@ export function MetricBar(props: MetricBarProps) {
   // Get color based on percentage and metric type (matching original)
   const severity = createMemo(() => {
     const metric = props.type || 'generic';
-    const thresholds = props.thresholds === undefined
-      ? getDefaultMetricDisplayThresholds(metric)
-      : props.thresholds;
-    return getMetricSeverity(props.value, thresholds);
+    return getMetricVisualSeverity(props.value, metric, props.thresholds);
   });
 
   // Map color to CSS classes

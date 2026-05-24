@@ -221,3 +221,12 @@ export const getMetricSeverity = (
   }
   return 'green';
 };
+
+export const getMetricVisualSeverity = (
+  value: number,
+  metric: DisplayMetricBarType,
+  thresholds: MetricDisplayThresholds | null | undefined,
+): MetricSeverity => {
+  const displayThresholds = thresholds ?? getDefaultMetricDisplayThresholds(metric);
+  return getMetricSeverity(value, displayThresholds);
+};

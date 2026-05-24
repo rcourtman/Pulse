@@ -6,8 +6,7 @@ import { useMetricsViewMode } from '@/stores/metricsViewMode';
 import { getMetricHistoryForRange, getMetricsVersion } from '@/stores/metricsHistory';
 import type { AnomalyReport } from '@/types/aiIntelligence';
 import {
-    getDefaultMetricDisplayThresholds,
-    getMetricSeverity,
+    getMetricVisualSeverity,
     type MetricDisplayThresholds,
 } from '@/utils/alertThresholds';
 
@@ -44,13 +43,7 @@ const getMemoryColor = (
     percent: number,
     thresholds?: MetricDisplayThresholds | null,
 ): string => {
-    const resolvedThresholds = thresholds === undefined
-        ? getDefaultMetricDisplayThresholds('memory')
-        : thresholds;
-    const severity = getMetricSeverity(
-        percent,
-        resolvedThresholds,
-    );
+    const severity = getMetricVisualSeverity(percent, 'memory', thresholds);
     if (severity === 'red') return 'rgba(239, 68, 68, 0.7)';   // red
     if (severity === 'yellow') return 'rgba(234, 179, 8, 0.7)';   // yellow/orange
     return 'rgba(34, 197, 94, 0.6)';                      // green

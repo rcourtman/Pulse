@@ -154,6 +154,20 @@ describe('MetricBar', () => {
         expect(bar).toBeInTheDocument();
     });
 
+    it('uses default display colors when notification thresholds are disabled', () => {
+        const result = render(() => (
+            <MetricBar
+                value={100}
+                label="100%"
+                type="memory"
+                thresholds={null}
+            />
+        ));
+
+        const bar = result.container.querySelector('.bg-red-500\\/60');
+        expect(bar).toBeInTheDocument();
+    });
+
     it('toggles sparkline view mode', () => {
         mockUseMetricsViewMode.mockReturnValue({
             viewMode: () => 'sparklines',

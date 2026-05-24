@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getDefaultMetricDisplayThresholds,
   getMetricSeverity,
+  getMetricVisualSeverity,
   resolveMetricDisplayThresholds,
 } from '../alertThresholds';
 import type { AlertConfig } from '@/types/alerts';
@@ -74,5 +75,10 @@ describe('alertThresholds', () => {
     expect(getMetricSeverity(79, thresholds)).toBe('green');
     expect(getMetricSeverity(80, thresholds)).toBe('yellow');
     expect(getMetricSeverity(85, thresholds)).toBe('red');
+  });
+
+  it('keeps visual severity when notification threshold is disabled', () => {
+    expect(getMetricSeverity(100, null)).toBe('green');
+    expect(getMetricVisualSeverity(100, 'memory', null)).toBe('red');
   });
 });

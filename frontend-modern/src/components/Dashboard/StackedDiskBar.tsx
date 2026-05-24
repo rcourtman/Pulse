@@ -4,8 +4,7 @@ import type { Disk } from '@/types/api';
 import { formatBytes, formatPercent } from '@/utils/format';
 import type { AnomalyReport } from '@/types/aiIntelligence';
 import {
-  getDefaultMetricDisplayThresholds,
-  getMetricSeverity,
+  getMetricVisualSeverity,
   type MetricDisplayThresholds,
 } from '@/utils/alertThresholds';
 
@@ -45,13 +44,7 @@ function getUsageColor(
   percentage: number,
   thresholds?: MetricDisplayThresholds | null,
 ): string {
-  const resolvedThresholds = thresholds === undefined
-    ? getDefaultMetricDisplayThresholds('disk')
-    : thresholds;
-  const severity = getMetricSeverity(
-    percentage,
-    resolvedThresholds,
-  );
+  const severity = getMetricVisualSeverity(percentage, 'disk', thresholds);
   if (severity === 'red') return 'rgba(239, 68, 68, 0.6)';  // red
   if (severity === 'yellow') return 'rgba(234, 179, 8, 0.6)';  // yellow
   return 'rgba(34, 197, 94, 0.6)'; // green
@@ -138,10 +131,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
       const usedPercent = (disk.used / total) * 100;
       const diskPercent = disk.total > 0 ? (disk.used / disk.total) * 100 : 0;
       // Use warning/critical colors for high usage, otherwise use the color palette
-      const color = getMetricSeverity(
-        diskPercent,
-        props.thresholds === undefined ? getDefaultMetricDisplayThresholds('disk') : props.thresholds,
-      ) !== 'green'
+      const color = getMetricVisualSeverity(diskPercent, 'disk', props.thresholds) !== 'green'
         ? getUsageColor(diskPercent, props.thresholds)
         :
           SEGMENT_COLORS[idx % SEGMENT_COLORS.length];
@@ -207,7 +197,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
   const barColor = createMemo(() => {
     const info = maxDiskInfo();
     if (aggregateMode() && hasMultipleDisks() && info) {
-      return getUsageColor(info.percent);
+      return getUsageColor(info.percent, props.thresholds);
     }
     return getUsageColor(overallPercent(), props.thresholds);
   });
@@ -227,10 +217,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
           percent: measured ? formatPercent(percent) : '—',
           color: useUsageColors
             ? getUsageColor(percent, props.thresholds)
-            : getMetricSeverity(
-              percent,
-              props.thresholds === undefined ? getDefaultMetricDisplayThresholds('disk') : props.thresholds,
-            ) !== 'green'
+            : getMetricVisualSeverity(percent, 'disk', props.thresholds) !== 'green'
               ? getUsageColor(percent, props.thresholds)
               : SEGMENT_COLORS[idx % SEGMENT_COLORS.length],
         };

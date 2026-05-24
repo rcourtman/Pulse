@@ -6,8 +6,7 @@ import { getMetricHistoryForRange, getMetricsVersion } from '@/stores/metricsHis
 import { Sparkline } from '@/components/shared/Sparkline';
 import type { AnomalyReport } from '@/types/aiIntelligence';
 import {
-    getDefaultMetricDisplayThresholds,
-    getMetricSeverity,
+    getMetricVisualSeverity,
     type MetricDisplayThresholds,
 } from '@/utils/alertThresholds';
 
@@ -36,13 +35,7 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
 
     // Bar color based on usage
     const severity = createMemo(() => {
-        const thresholds = props.thresholds === undefined
-            ? getDefaultMetricDisplayThresholds('cpu')
-            : props.thresholds;
-        return getMetricSeverity(
-            props.usage,
-            thresholds,
-        );
+        return getMetricVisualSeverity(props.usage, 'cpu', props.thresholds);
     });
 
     const barColor = createMemo(() => {

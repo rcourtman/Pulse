@@ -2,8 +2,7 @@ import { Component, Show, createMemo, JSX } from 'solid-js';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { formatPercent } from '@/utils/format';
 import {
-  getDefaultMetricDisplayThresholds,
-  getMetricSeverity,
+  getMetricVisualSeverity,
   type MetricDisplayThresholds,
 } from '@/utils/alertThresholds';
 
@@ -47,10 +46,7 @@ function getMetricColorClass(
   type: 'cpu' | 'memory' | 'disk',
   thresholds?: MetricDisplayThresholds | null,
 ): string {
-  const resolvedThresholds = thresholds === undefined
-    ? getDefaultMetricDisplayThresholds(type)
-    : thresholds;
-  const severity = getMetricSeverity(value, resolvedThresholds);
+  const severity = getMetricVisualSeverity(value, type, thresholds);
   if (severity === 'red') return 'text-red-600 dark:text-red-400 font-bold';
   if (severity === 'yellow') return 'text-orange-600 dark:text-orange-400 font-medium';
   return 'text-gray-600 dark:text-gray-400';
