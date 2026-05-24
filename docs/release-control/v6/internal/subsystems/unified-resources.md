@@ -226,10 +226,18 @@ reintroduce false Swarm capability surfaces.
    preserving service name, boot enablement, runtime state, and process IDs
    through clone, merge, transport, and frontend decode paths.
    Docker / Podman inventory extends that same canonical type contract beyond
-   containers and Swarm services. Runtime image, volume, network, task, and
-   storage-usage evidence must enter through `DockerData` and the typed Docker
-   resource records (`docker-image`, `docker-volume`, `docker-network`,
-   `docker-task`) rather than being inferred inside the container page.
+   containers and Swarm services. Runtime image, volume, network, task, Swarm
+   node, and storage-usage evidence must enter through `DockerData` and the
+   typed Docker resource records (`docker-image`, `docker-volume`,
+   `docker-network`, `docker-task`, `docker-swarm-node`) rather than being
+   inferred inside the container page. Swarm node records must preserve node
+   id, hostname, role, availability, state, manager reachability, manager
+   address, leader state, engine version, platform, resource capacity, labels,
+   and engine labels under the owning Docker host or Swarm cluster identity.
+   Host `/system/df` buckets remain Docker host facet data, not generic storage
+   resources. Podman libpod pod records must not be projected until a
+   libpod-native source can populate a native contract instead of deriving pods
+   from Docker-compatible container labels.
    Kubernetes inventory likewise projects native API objects as first-class
    unified resources: namespaces, Services, ReplicaSets, StatefulSets,
    DaemonSets, Jobs, CronJobs, Ingresses, EndpointSlices, NetworkPolicies,
@@ -1974,15 +1982,18 @@ Swarm only.`) instead of explanatory sentences, so mismatch fallback state
 stays readable without turning support surfaces into inline documentation.
 Docker platform subtabs now follow canonical resource evidence as well:
 `Containers` is visible only when Docker/Podman app-container resources exist,
-and `Swarm services` is visible only when canonical `docker-service` resources
-exist. Inactive standalone Docker Swarm metadata is not a tab, host role, or
-service-surface signal.
+`Storage` is backed by host-level Docker/Podman `/system/df` usage buckets,
+`Swarm services` is visible only when canonical `docker-service` resources
+exist, and `Swarm nodes` is backed by canonical `docker-swarm-node` resources
+from Docker manager node inventory. Inactive standalone Docker Swarm metadata
+is not a tab, host role, or service-surface signal.
 The frontend Docker facet contract covers both host runtime telemetry and
-Swarm service projection. Host resources may expose runtime/version, OS,
-temperature, uptime, container counts, update state, command metadata, and
-Swarm local-state/control evidence through `ResourceDockerMeta`; Docker
-platform pages must consume those canonical fields rather than keeping
-page-local host-runtime shape aliases.
+Swarm service/task/node projection. Host resources may expose runtime/version,
+OS, temperature, uptime, container/image/volume/network/node counts, update
+state, command metadata, engine storage usage buckets, and Swarm
+local-state/control evidence through `ResourceDockerMeta`; Docker platform
+pages must consume those canonical fields rather than keeping page-local
+host-runtime shape aliases.
 Canonical resources now also carry `platformScopes`, the normalized
 platform-page membership list consumed by workload filters. `platformType`
 remains the primary display/source family, while `platformScopes` captures

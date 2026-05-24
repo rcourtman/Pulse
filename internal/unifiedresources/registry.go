@@ -230,6 +230,45 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 	for _, candidate := range serviceByID {
 		rr.ingestDockerService(candidate.service, candidate.host)
 	}
+
+	type dockerNodeCandidate struct {
+		host models.DockerHost
+		node models.DockerNode
+	}
+	nodeByID := make(map[string]dockerNodeCandidate)
+	for _, dh := range snapshot.DockerHosts {
+		if dh.Swarm == nil {
+			continue
+		}
+		for _, node := range dh.Nodes {
+			sourceID := dockerSwarmNodeSourceID(dh, node)
+			if sourceID == "" {
+				continue
+			}
+			existing, ok := nodeByID[sourceID]
+			if !ok {
+				nodeByID[sourceID] = dockerNodeCandidate{host: dh, node: node}
+				continue
+			}
+			replace := false
+			if existing.node.EngineVersion == "" && node.EngineVersion != "" {
+				replace = true
+			}
+			if existing.node.ManagerReachability == "" && node.ManagerReachability != "" {
+				replace = true
+			}
+			if !replace && dh.LastSeen.After(existing.host.LastSeen) {
+				replace = true
+			}
+			if replace {
+				nodeByID[sourceID] = dockerNodeCandidate{host: dh, node: node}
+			}
+		}
+	}
+	for _, candidate := range nodeByID {
+		rr.ingestDockerSwarmNode(candidate.node, candidate.host)
+	}
+
 	for _, dh := range snapshot.DockerHosts {
 		for _, task := range dh.Tasks {
 			rr.ingestDockerTask(task, dh)
@@ -562,6 +601,22 @@ func (rr *ResourceRegistry) seedSourceIDForResourceLocked(resource *Resource, so
 				return ""
 			}
 			return hostSourceID + "/task/" + taskID
+		case ResourceTypeDockerSwarmNode:
+			nodeID := strings.TrimSpace(resource.Docker.NodeID)
+			if nodeID == "" {
+				nodeID = strings.TrimSpace(resource.Name)
+			}
+			if nodeID == "" {
+				return ""
+			}
+			if clusterKey := dockerSwarmClusterKeyFromMeta(resource.Docker.Swarm); clusterKey != "" {
+				return fmt.Sprintf("%s:node:%s", clusterKey, nodeID)
+			}
+			hostSourceID := strings.TrimSpace(resource.Docker.HostSourceID)
+			if hostSourceID == "" {
+				return ""
+			}
+			return hostSourceID + "/swarm-node/" + nodeID
 		default:
 			return strings.TrimSpace(resource.Docker.HostSourceID)
 		}
@@ -1298,6 +1353,18 @@ func (rr *ResourceRegistry) ingestDockerTask(task models.DockerTask, host models
 		resource.ParentID = &parentID
 	}
 	sourceID := dockerTaskSourceID(host, task)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceDocker, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestDockerSwarmNode(node models.DockerNode, host models.DockerHost) {
+	resource, identity := resourceFromDockerSwarmNode(node, host)
+	if parentID := rr.sourceResourceID(SourceDocker, host.ID); parentID != "" {
+		resource.ParentID = &parentID
+	}
+	sourceID := dockerSwarmNodeSourceID(host, node)
 	if sourceID == "" {
 		return
 	}
@@ -3041,6 +3108,24 @@ func dockerTaskSourceID(host models.DockerHost, task models.DockerTask) string {
 		return ""
 	}
 	return hostID + "/task/" + taskID
+}
+
+func dockerSwarmNodeSourceID(host models.DockerHost, node models.DockerNode) string {
+	nodeID := strings.TrimSpace(node.ID)
+	if nodeID == "" {
+		nodeID = strings.TrimSpace(node.Hostname)
+	}
+	if nodeID == "" {
+		return ""
+	}
+	if cluster := dockerSwarmClusterKey(host); cluster != "" {
+		return fmt.Sprintf("%s:node:%s", cluster, nodeID)
+	}
+	hostID := strings.TrimSpace(host.ID)
+	if hostID == "" {
+		return ""
+	}
+	return hostID + "/swarm-node/" + nodeID
 }
 
 func mergeIdentity(existing ResourceIdentity, incoming ResourceIdentity) ResourceIdentity {

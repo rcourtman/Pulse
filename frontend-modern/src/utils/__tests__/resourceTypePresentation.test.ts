@@ -15,6 +15,7 @@ describe('resourceTypePresentation', () => {
     expect(getResourceTypeLabel('docker-volume')).toBe('Volume');
     expect(getResourceTypeLabel('docker-network')).toBe('Network');
     expect(getResourceTypeLabel('docker-task')).toBe('Swarm Task');
+    expect(getResourceTypeLabel('docker-swarm-node')).toBe('Swarm Node');
     expect(getResourceTypeLabel('k8s-service')).toBe('K8s Service');
     expect(getResourceTypeLabel('k8s-replicaset')).toBe('ReplicaSet');
     expect(getResourceTypeLabel('k8s-ingress')).toBe('Ingress');

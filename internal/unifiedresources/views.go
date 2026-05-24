@@ -1562,6 +1562,13 @@ func (v DockerHostView) Tasks() []models.DockerTask {
 	return append([]models.DockerTask(nil), v.r.Docker.Tasks...)
 }
 
+func (v DockerHostView) Nodes() []models.DockerNode {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return append([]models.DockerNode(nil), v.r.Docker.Nodes...)
+}
+
 func (v DockerHostView) NetworkInterfaces() []NetworkInterface {
 	if v.r == nil || v.r.Docker == nil {
 		return nil

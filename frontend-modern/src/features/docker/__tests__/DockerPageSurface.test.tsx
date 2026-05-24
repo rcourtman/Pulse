@@ -13,6 +13,10 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
   useUnifiedResources: mocks.useUnifiedResources,
 }));
 
+vi.mock('@solidjs/router', () => ({
+  useLocation: () => ({ pathname: '/docker/overview' }),
+}));
+
 vi.mock('@/components/Workloads/useWorkloadsState', () => ({
   useWorkloadsState: mocks.useWorkloadsState,
 }));
@@ -125,6 +129,11 @@ describe('DockerPageSurface', () => {
   it('keeps host drawer ownership on the Docker hosts table instead of workload groups', () => {
     render(() => <DockerPageSurface />);
 
+    expect(mocks.useUnifiedResources).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: expect.stringContaining('docker-swarm-node'),
+      }),
+    );
     expect(mocks.useWorkloadsState).toHaveBeenCalledWith(
       expect.objectContaining({
         compactGroupHeaders: true,

@@ -267,6 +267,13 @@ func (d DockerHost) ToFrontend() DockerHostFrontend {
 		}
 	}
 
+	if len(d.Nodes) > 0 {
+		h.Nodes = make([]DockerNodeFrontend, len(d.Nodes))
+		for i, node := range d.Nodes {
+			h.Nodes[i] = node.ToFrontend()
+		}
+	}
+
 	if d.Swarm != nil {
 		sw := d.Swarm.ToFrontend()
 		h.Swarm = &sw
@@ -721,6 +728,44 @@ func (t DockerTask) ToFrontend() DockerTaskFrontend {
 	}
 
 	return task
+}
+
+// ToFrontend converts a DockerNode to DockerNodeFrontend.
+func (n DockerNode) ToFrontend() DockerNodeFrontend {
+	node := DockerNodeFrontend{
+		ID:                  n.ID,
+		Hostname:            n.Hostname,
+		Role:                n.Role,
+		Availability:        n.Availability,
+		State:               n.State,
+		Message:             n.Message,
+		Address:             n.Address,
+		ManagerReachability: n.ManagerReachability,
+		ManagerAddress:      n.ManagerAddress,
+		Leader:              n.Leader,
+		EngineVersion:       n.EngineVersion,
+		OS:                  n.OS,
+		Architecture:        n.Architecture,
+		NanoCPUs:            n.NanoCPUs,
+		MemoryBytes:         n.MemoryBytes,
+		Labels:              make(map[string]string, len(n.Labels)),
+		EngineLabels:        make(map[string]string, len(n.EngineLabels)),
+	}
+	for key, value := range n.Labels {
+		node.Labels[key] = value
+	}
+	for key, value := range n.EngineLabels {
+		node.EngineLabels[key] = value
+	}
+	if !n.CreatedAt.IsZero() {
+		ts := n.CreatedAt.Unix() * 1000
+		node.CreatedAt = &ts
+	}
+	if n.UpdatedAt != nil && !n.UpdatedAt.IsZero() {
+		ts := n.UpdatedAt.Unix() * 1000
+		node.UpdatedAt = &ts
+	}
+	return node
 }
 
 // ToFrontend converts DockerSwarmInfo to DockerSwarmFrontend.

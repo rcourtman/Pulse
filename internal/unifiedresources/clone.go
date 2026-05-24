@@ -206,6 +206,7 @@ func cloneDockerData(in *DockerData) *DockerData {
 	out.BuildCacheUsage = cloneDockerStorageUsageMeta(in.BuildCacheUsage)
 	out.Ports = cloneDockerPortMetaSlice(in.Ports)
 	out.Labels = cloneStringMap(in.Labels)
+	out.EngineLabels = cloneStringMap(in.EngineLabels)
 	out.Networks = cloneDockerNetworkMetaSlice(in.Networks)
 	out.Mounts = cloneDockerMountMetaSlice(in.Mounts)
 	out.UpdateStatus = cloneDockerUpdateStatusMeta(in.UpdateStatus)
@@ -225,6 +226,7 @@ func cloneDockerData(in *DockerData) *DockerData {
 	out.NetworksRaw = append([]models.DockerNetwork(nil), in.NetworksRaw...)
 	out.Services = append([]models.DockerService(nil), in.Services...)
 	out.Tasks = append([]models.DockerTask(nil), in.Tasks...)
+	out.Nodes = append([]models.DockerNode(nil), in.Nodes...)
 	return &out
 }
 

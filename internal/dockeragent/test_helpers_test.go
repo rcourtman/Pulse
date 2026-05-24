@@ -38,6 +38,7 @@ type fakeDockerClient struct {
 	diskUsageFn               func(ctx context.Context, opts dockerDiskUsageOptions) (client.DiskUsageResult, error)
 	serviceListFn             func(ctx context.Context, opts dockerServiceListOptions) ([]swarmtypes.Service, error)
 	taskListFn                func(ctx context.Context, opts dockerTaskListOptions) ([]swarmtypes.Task, error)
+	nodeListFn                func(ctx context.Context, opts dockerNodeListOptions) ([]swarmtypes.Node, error)
 	imageInspectWithRawFn     func(ctx context.Context, imageID string) (image.InspectResponse, []byte, error)
 	closeFn                   func() error
 }
@@ -170,6 +171,13 @@ func (f *fakeDockerClient) TaskList(ctx context.Context, opts dockerTaskListOpti
 		return nil, errors.New("unexpected TaskList call")
 	}
 	return f.taskListFn(ctx, opts)
+}
+
+func (f *fakeDockerClient) NodeList(ctx context.Context, opts dockerNodeListOptions) ([]swarmtypes.Node, error) {
+	if f.nodeListFn == nil {
+		return nil, nil
+	}
+	return f.nodeListFn(ctx, opts)
 }
 
 func (f *fakeDockerClient) ImageInspectWithRaw(ctx context.Context, imageID string) (image.InspectResponse, []byte, error) {

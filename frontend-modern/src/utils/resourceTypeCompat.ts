@@ -13,6 +13,7 @@ export type CanonicalFrontendResourceType =
   | 'docker-volume'
   | 'docker-network'
   | 'docker-task'
+  | 'docker-swarm-node'
   | 'network'
   | 'network-share'
   | 'pbs'
@@ -64,6 +65,15 @@ export const canonicalizeFrontendResourceType = (
     case 'dockerhost':
     case 'docker_host':
       return 'docker-host';
+    case 'docker-node':
+    case 'docker_node':
+    case 'docker-nodes':
+    case 'docker_nodes':
+    case 'swarm-node':
+    case 'swarm_node':
+    case 'swarm-nodes':
+    case 'swarm_nodes':
+      return 'docker-swarm-node';
     case 'k8s':
     case 'kubernetes':
     case 'k8s-pod':
@@ -91,6 +101,7 @@ export const canonicalizeFrontendResourceType = (
     case 'docker-volume':
     case 'docker-network':
     case 'docker-task':
+    case 'docker-swarm-node':
     case 'network':
     case 'network-share':
     case 'pbs':

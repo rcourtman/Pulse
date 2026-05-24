@@ -20,6 +20,7 @@ type Report struct {
 	Networks     []Network     `json:"networks,omitempty"`
 	Services     []Service     `json:"services,omitempty"`
 	Tasks        []Task        `json:"tasks,omitempty"`
+	Nodes        []Node        `json:"nodes,omitempty"`
 	StorageUsage *StorageUsage `json:"storageUsage,omitempty"`
 	Timestamp    time.Time     `json:"timestamp"`
 }
@@ -288,4 +289,27 @@ type Task struct {
 	UpdatedAt     *time.Time `json:"updatedAt,omitempty"`
 	StartedAt     *time.Time `json:"startedAt,omitempty"`
 	CompletedAt   *time.Time `json:"completedAt,omitempty"`
+}
+
+// Node summarises a Docker Swarm node returned by the manager-side nodes API.
+type Node struct {
+	ID                  string            `json:"id"`
+	Hostname            string            `json:"hostname,omitempty"`
+	Role                string            `json:"role,omitempty"`
+	Availability        string            `json:"availability,omitempty"`
+	State               string            `json:"state,omitempty"`
+	Message             string            `json:"message,omitempty"`
+	Address             string            `json:"address,omitempty"`
+	ManagerReachability string            `json:"managerReachability,omitempty"`
+	ManagerAddress      string            `json:"managerAddress,omitempty"`
+	Leader              bool              `json:"leader,omitempty"`
+	EngineVersion       string            `json:"engineVersion,omitempty"`
+	OS                  string            `json:"os,omitempty"`
+	Architecture        string            `json:"architecture,omitempty"`
+	NanoCPUs            int64             `json:"nanoCpus,omitempty"`
+	MemoryBytes         int64             `json:"memoryBytes,omitempty"`
+	Labels              map[string]string `json:"labels,omitempty"`
+	EngineLabels        map[string]string `json:"engineLabels,omitempty"`
+	CreatedAt           time.Time         `json:"createdAt,omitempty"`
+	UpdatedAt           *time.Time        `json:"updatedAt,omitempty"`
 }

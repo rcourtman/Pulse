@@ -154,6 +154,7 @@ func classifyResourceSensitivity(resource Resource) ResourceSensitivity {
 		ResourceTypeK8sServiceAccount,
 		ResourceTypeK8sEvent,
 		ResourceTypeDockerService,
+		ResourceTypeDockerSwarmNode,
 		ResourceTypeStorage,
 		ResourceTypeNetwork,
 		ResourceTypePBS,
@@ -279,6 +280,8 @@ func resourceSummaryType(resource Resource) string {
 		return "application container"
 	case ResourceTypeDockerService:
 		return "docker service"
+	case ResourceTypeDockerSwarmNode:
+		return "docker swarm node"
 	case ResourceTypeK8sCluster:
 		return "kubernetes cluster"
 	case ResourceTypeK8sNode:

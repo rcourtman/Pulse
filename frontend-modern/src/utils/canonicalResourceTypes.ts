@@ -16,6 +16,7 @@ export const CANONICAL_RESOURCE_TYPES = [
   'docker-volume',
   'docker-network',
   'docker-task',
+  'docker-swarm-node',
   'k8s-deployment',
   'k8s-replicaset',
   'k8s-service',

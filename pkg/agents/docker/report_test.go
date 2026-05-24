@@ -388,6 +388,38 @@ func TestTask_Fields(t *testing.T) {
 	}
 }
 
+func TestNode_Fields(t *testing.T) {
+	now := time.Now()
+	node := Node{
+		ID:                  "node123",
+		Hostname:            "manager-1",
+		Role:                "manager",
+		Availability:        "active",
+		State:               "ready",
+		ManagerReachability: "reachable",
+		Leader:              true,
+		EngineVersion:       "27.5.1",
+		NanoCPUs:            4_000_000_000,
+		MemoryBytes:         16 * 1024 * 1024 * 1024,
+		Labels:              map[string]string{"zone": "rack-a"},
+		EngineLabels:        map[string]string{"engine": "primary"},
+		CreatedAt:           now,
+	}
+
+	if node.ID != "node123" {
+		t.Errorf("ID = %q, want node123", node.ID)
+	}
+	if node.Role != "manager" || node.State != "ready" {
+		t.Errorf("unexpected node state: %+v", node)
+	}
+	if !node.Leader || node.ManagerReachability != "reachable" {
+		t.Errorf("unexpected manager fields: %+v", node)
+	}
+	if node.Labels["zone"] != "rack-a" || node.EngineLabels["engine"] != "primary" {
+		t.Errorf("unexpected labels: %+v / %+v", node.Labels, node.EngineLabels)
+	}
+}
+
 func TestCommand_Fields(t *testing.T) {
 	cmd := Command{
 		ID:   "cmd-123",

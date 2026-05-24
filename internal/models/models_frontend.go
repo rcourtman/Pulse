@@ -168,6 +168,7 @@ type DockerHostFrontend struct {
 	Containers        []DockerContainerFrontend   `json:"containers"`
 	Services          []DockerServiceFrontend     `json:"services"`
 	Tasks             []DockerTaskFrontend        `json:"tasks"`
+	Nodes             []DockerNodeFrontend        `json:"nodes"`
 	Swarm             *DockerSwarmFrontend        `json:"swarm,omitempty"`
 	Security          *DockerHostSecurityFrontend `json:"security,omitempty"`
 	TokenID           string                      `json:"tokenId,omitempty"`
@@ -196,6 +197,9 @@ func (h DockerHostFrontend) NormalizeCollections() DockerHostFrontend {
 	}
 	if h.Tasks == nil {
 		h.Tasks = []DockerTaskFrontend{}
+	}
+	if h.Nodes == nil {
+		h.Nodes = []DockerNodeFrontend{}
 	}
 	for i := range h.Containers {
 		h.Containers[i] = h.Containers[i].NormalizeCollections()
@@ -580,6 +584,29 @@ type DockerTaskFrontend struct {
 	UpdatedAt     *int64 `json:"updatedAt,omitempty"`
 	StartedAt     *int64 `json:"startedAt,omitempty"`
 	CompletedAt   *int64 `json:"completedAt,omitempty"`
+}
+
+// DockerNodeFrontend represents a Swarm node.
+type DockerNodeFrontend struct {
+	ID                  string            `json:"id"`
+	Hostname            string            `json:"hostname,omitempty"`
+	Role                string            `json:"role,omitempty"`
+	Availability        string            `json:"availability,omitempty"`
+	State               string            `json:"state,omitempty"`
+	Message             string            `json:"message,omitempty"`
+	Address             string            `json:"address,omitempty"`
+	ManagerReachability string            `json:"managerReachability,omitempty"`
+	ManagerAddress      string            `json:"managerAddress,omitempty"`
+	Leader              bool              `json:"leader,omitempty"`
+	EngineVersion       string            `json:"engineVersion,omitempty"`
+	OS                  string            `json:"os,omitempty"`
+	Architecture        string            `json:"architecture,omitempty"`
+	NanoCPUs            int64             `json:"nanoCpus,omitempty"`
+	MemoryBytes         int64             `json:"memoryBytes,omitempty"`
+	Labels              map[string]string `json:"labels,omitempty"`
+	EngineLabels        map[string]string `json:"engineLabels,omitempty"`
+	CreatedAt           *int64            `json:"createdAt,omitempty"`
+	UpdatedAt           *int64            `json:"updatedAt,omitempty"`
 }
 
 // DockerSwarmFrontend summarises node-level swarm details.

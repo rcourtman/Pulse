@@ -175,6 +175,57 @@ func TestRefreshCanonicalIdentityUsesAvailabilityTargetIdentity(t *testing.T) {
 	}
 }
 
+func TestRefreshCanonicalIdentityUsesDockerSwarmNodeIdentity(t *testing.T) {
+	resource := Resource{
+		ID:   "docker-swarm-node-resource-1",
+		Type: ResourceTypeDockerSwarmNode,
+		Name: "manager-1",
+		Identity: ResourceIdentity{
+			Hostnames: []string{"manager-1"},
+		},
+		Docker: &DockerData{
+			HostSourceID: "docker-host-1",
+			Hostname:     "docker-host",
+			NodeID:       "node-1",
+			NodeName:     "manager-1",
+			NodeRole:     "manager",
+			Swarm: &DockerSwarmInfo{
+				ClusterID:   "cluster-1",
+				ClusterName: "prod-swarm",
+			},
+		},
+	}
+
+	RefreshCanonicalIdentity(&resource)
+
+	if resource.Canonical == nil {
+		t.Fatalf("expected canonical identity")
+	}
+	if got := resource.Canonical.DisplayName; got != "manager-1" {
+		t.Fatalf("displayName = %q, want manager-1", got)
+	}
+	if got := resource.Canonical.PrimaryID; got != "docker-swarm-node:cluster-1:node-1" {
+		t.Fatalf("primaryId = %q, want docker-swarm-node:cluster-1:node-1", got)
+	}
+
+	wantAliases := []string{
+		"docker-swarm-node:cluster-1:node-1",
+		"node-1",
+		"manager-1",
+		"docker-host-1",
+		"docker-host",
+		"docker-swarm-node-resource-1",
+	}
+	if len(resource.Canonical.Aliases) != len(wantAliases) {
+		t.Fatalf("aliases len = %d, want %d (%v)", len(resource.Canonical.Aliases), len(wantAliases), resource.Canonical.Aliases)
+	}
+	for i, want := range wantAliases {
+		if got := resource.Canonical.Aliases[i]; got != want {
+			t.Fatalf("alias[%d] = %q, want %q", i, got, want)
+		}
+	}
+}
+
 func TestRefreshCanonicalIdentityPrefersProxmoxNodePrimaryIDForAgentResources(t *testing.T) {
 	resource := Resource{
 		ID:   "agent-1",

@@ -66,13 +66,13 @@ func hasReportableSwarmInfo(info systemtypes.Info) bool {
 				strings.TrimSpace(swarm.Cluster.Spec.Annotations.Name) != ""))
 }
 
-func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, containers []agentsdocker.Container) ([]agentsdocker.Service, []agentsdocker.Task, *agentsdocker.SwarmInfo) {
+func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, containers []agentsdocker.Container) ([]agentsdocker.Service, []agentsdocker.Task, []agentsdocker.Node, *agentsdocker.SwarmInfo) {
 	if !a.supportsSwarm {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	if !hasReportableSwarmInfo(info) {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	scope := a.resolvedSwarmScope(info)
@@ -101,11 +101,24 @@ func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, con
 	includeTasks := a.cfg.IncludeTasks
 
 	if info.Swarm.LocalNodeState != swarmtypes.LocalNodeStateActive {
-		return nil, nil, swarmInfo
+		return nil, nil, nil, swarmInfo
 	}
 
 	var services []agentsdocker.Service
 	var tasks []agentsdocker.Task
+	var nodes []agentsdocker.Node
+
+	if info.Swarm.ControlAvailable {
+		managerNodes, err := a.collectSwarmNodes(ctx)
+		if err != nil {
+			a.logger.Warn().Err(err).Msg("failed to collect swarm nodes from manager")
+		} else {
+			nodes = managerNodes
+		}
+	}
+	if len(nodes) == 0 {
+		nodes = deriveLocalSwarmNode(info, firstNonEmptyString(a.hostName, info.Name))
+	}
 
 	containerIndex := buildContainerIndex(containers)
 
@@ -158,6 +171,15 @@ func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, con
 		})
 	}
 
+	if len(nodes) > 0 {
+		sort.Slice(nodes, func(i, j int) bool {
+			if nodes[i].Hostname == nodes[j].Hostname {
+				return nodes[i].ID < nodes[j].ID
+			}
+			return nodes[i].Hostname < nodes[j].Hostname
+		})
+	}
+
 	swarmInfo.Scope = effectiveScope
 
 	if !includeServices {
@@ -167,7 +189,30 @@ func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, con
 		tasks = nil
 	}
 
-	return services, tasks, swarmInfo
+	return services, tasks, nodes, swarmInfo
+}
+
+func (a *Agent) collectSwarmNodes(ctx context.Context) ([]agentsdocker.Node, error) {
+	if a == nil || a.docker == nil {
+		return nil, nil
+	}
+
+	nodeList, err := dockerCallWithRetry(ctx, dockerSwarmListCallTimeout, func(callCtx context.Context) ([]swarmtypes.Node, error) {
+		return a.docker.NodeList(callCtx, dockerNodeListOptions{})
+	})
+	if err != nil {
+		return nil, annotateDockerConnectionError(err)
+	}
+
+	nodes := make([]agentsdocker.Node, 0, len(nodeList))
+	for i := range nodeList {
+		node := mapSwarmNode(&nodeList[i])
+		if strings.TrimSpace(node.ID) == "" && strings.TrimSpace(node.Hostname) == "" {
+			continue
+		}
+		nodes = append(nodes, node)
+	}
+	return nodes, nil
 }
 
 func (a *Agent) collectSwarmDataFromManager(ctx context.Context, info systemtypes.Info, scope string, containers map[string]agentsdocker.Container, includeServices, includeTasks bool) ([]agentsdocker.Service, []agentsdocker.Task, error) {
@@ -380,6 +425,65 @@ func mapSwarmTask(task *swarmtypes.Task, svc *swarmtypes.Service, containers map
 	}
 
 	return result
+}
+
+func mapSwarmNode(node *swarmtypes.Node) agentsdocker.Node {
+	result := agentsdocker.Node{
+		ID:            strings.TrimSpace(node.ID),
+		Hostname:      strings.TrimSpace(node.Description.Hostname),
+		Role:          strings.TrimSpace(string(node.Spec.Role)),
+		Availability:  strings.TrimSpace(string(node.Spec.Availability)),
+		State:         strings.TrimSpace(string(node.Status.State)),
+		Message:       strings.TrimSpace(node.Status.Message),
+		Address:       strings.TrimSpace(node.Status.Addr),
+		EngineVersion: strings.TrimSpace(node.Description.Engine.EngineVersion),
+		OS:            strings.TrimSpace(node.Description.Platform.OS),
+		Architecture:  strings.TrimSpace(node.Description.Platform.Architecture),
+		NanoCPUs:      node.Description.Resources.NanoCPUs,
+		MemoryBytes:   node.Description.Resources.MemoryBytes,
+		Labels:        copyStringMap(node.Spec.Annotations.Labels),
+		EngineLabels:  copyStringMap(node.Description.Engine.Labels),
+		CreatedAt:     node.Meta.CreatedAt,
+	}
+
+	if !node.Meta.UpdatedAt.IsZero() {
+		updated := node.Meta.UpdatedAt
+		result.UpdatedAt = &updated
+	}
+
+	if node.ManagerStatus != nil {
+		result.ManagerReachability = strings.TrimSpace(string(node.ManagerStatus.Reachability))
+		result.ManagerAddress = strings.TrimSpace(node.ManagerStatus.Addr)
+		result.Leader = node.ManagerStatus.Leader
+	}
+
+	return result
+}
+
+func deriveLocalSwarmNode(info systemtypes.Info, hostname string) []agentsdocker.Node {
+	nodeID := strings.TrimSpace(info.Swarm.NodeID)
+	if nodeID == "" {
+		return nil
+	}
+
+	role := "worker"
+	if info.Swarm.ControlAvailable {
+		role = "manager"
+	}
+
+	node := agentsdocker.Node{
+		ID:            nodeID,
+		Hostname:      strings.TrimSpace(hostname),
+		Role:          role,
+		State:         string(info.Swarm.LocalNodeState),
+		Message:       strings.TrimSpace(info.Swarm.Error),
+		EngineVersion: strings.TrimSpace(info.ServerVersion),
+		OS:            strings.TrimSpace(info.OSType),
+		Architecture:  strings.TrimSpace(info.Architecture),
+		NanoCPUs:      int64(info.NCPU) * 1_000_000_000,
+		MemoryBytes:   info.MemTotal,
+	}
+	return []agentsdocker.Node{node}
 }
 
 func serviceMode(mode swarmtypes.ServiceMode) string {
@@ -602,6 +706,15 @@ func copyStringMap(source map[string]string) map[string]string {
 		result[k] = v
 	}
 	return result
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func isTaskCompletedState(state string) bool {

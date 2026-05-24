@@ -403,6 +403,23 @@ func TestDockerNativeInventoryAdapters(t *testing.T) {
 	if taskResource.Type != ResourceTypeDockerTask || taskResource.Name != "api.2" || taskResource.Status != StatusOnline || taskIdentity.Hostnames[0] != "api.2" {
 		t.Fatalf("unexpected task resource: resource=%+v identity=%+v", taskResource, taskIdentity)
 	}
+
+	nodeResource, nodeIdentity := resourceFromDockerSwarmNode(models.DockerNode{
+		ID:                  "node-1",
+		Hostname:            "manager-1",
+		Role:                "manager",
+		Availability:        "active",
+		State:               "ready",
+		ManagerReachability: "reachable",
+		Leader:              true,
+		EngineVersion:       "27.5.1",
+		NanoCPUs:            4_000_000_000,
+		MemoryBytes:         16 * 1024 * 1024 * 1024,
+		Labels:              map[string]string{"zone": "rack-a"},
+	}, host)
+	if nodeResource.Type != ResourceTypeDockerSwarmNode || nodeResource.Docker == nil || nodeResource.Docker.NodeID != "node-1" || nodeResource.Docker.NodeRole != "manager" || nodeIdentity.Hostnames[0] != "manager-1" {
+		t.Fatalf("unexpected swarm node resource: resource=%+v identity=%+v", nodeResource, nodeIdentity)
+	}
 }
 
 func TestKubernetesNativeInventoryAdapters(t *testing.T) {

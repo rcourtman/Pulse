@@ -168,6 +168,77 @@ func TestApplyDockerReport_RecreatedContainerAgentIDKeepsTokenBinding(t *testing
 	}
 }
 
+func TestApplyDockerReportPreservesDockerSwarmNodes(t *testing.T) {
+	monitor := newTestMonitor(t)
+	now := time.Now().UTC()
+	report := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "docker-agent-1",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:       "docker-host",
+			MachineID:      "machine-docker-1",
+			Runtime:        "docker",
+			RuntimeVersion: "27.5.1",
+			Swarm: &agentsdocker.SwarmInfo{
+				NodeID:           "node-manager",
+				NodeRole:         "manager",
+				LocalState:       "active",
+				ControlAvailable: true,
+				ClusterID:        "cluster-1",
+				ClusterName:      "prod-swarm",
+				Scope:            "cluster",
+			},
+		},
+		Nodes: []agentsdocker.Node{{
+			ID:                  " node-manager ",
+			Hostname:            " manager-1 ",
+			Role:                " manager ",
+			Availability:        " active ",
+			State:               " ready ",
+			Address:             " 192.0.2.10 ",
+			ManagerReachability: " reachable ",
+			ManagerAddress:      " 192.0.2.10:2377 ",
+			Leader:              true,
+			EngineVersion:       " 27.5.1 ",
+			OS:                  " linux ",
+			Architecture:        " amd64 ",
+			NanoCPUs:            8_000_000_000,
+			MemoryBytes:         32 * 1024 * 1024 * 1024,
+			Labels:              map[string]string{"zone": "rack-a"},
+			EngineLabels:        map[string]string{"engine": "primary"},
+			CreatedAt:           now.Add(-time.Hour),
+			UpdatedAt:           &now,
+		}},
+		Timestamp: now,
+	}
+
+	host, err := monitor.ApplyDockerReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyDockerReport: %v", err)
+	}
+	if len(host.Nodes) != 1 {
+		t.Fatalf("expected host node inventory, got %+v", host.Nodes)
+	}
+	node := host.Nodes[0]
+	if node.ID != "node-manager" || node.Hostname != "manager-1" || node.Role != "manager" {
+		t.Fatalf("unexpected host node identity: %+v", node)
+	}
+	if !node.Leader || node.ManagerReachability != "reachable" || node.EngineLabels["engine"] != "primary" {
+		t.Fatalf("expected manager metadata to be preserved, got %+v", node)
+	}
+
+	snapshot := monitor.state.GetSnapshot()
+	if len(snapshot.DockerHosts) != 1 || len(snapshot.DockerHosts[0].Nodes) != 1 {
+		t.Fatalf("expected state snapshot to preserve nodes, got %+v", snapshot.DockerHosts)
+	}
+	if got := snapshot.DockerHosts[0].Nodes[0].ID; got != "node-manager" {
+		t.Fatalf("snapshot node id = %q, want node-manager", got)
+	}
+}
+
 func TestEvaluateHostAgentsTriggersOfflineAlert(t *testing.T) {
 	t.Helper()
 

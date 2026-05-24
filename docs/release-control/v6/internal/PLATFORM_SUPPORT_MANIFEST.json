@@ -86,7 +86,8 @@
         "docker-volume",
         "docker-network",
         "docker-service",
-        "docker-task"
+        "docker-task",
+        "docker-swarm-node"
       ],
       "support_floor": {
         "setup": "supported",

@@ -3881,6 +3881,14 @@ func TestRegistryIngestSnapshotPublishesDockerNativeInventory(t *testing.T) {
 			Tasks: []models.DockerTask{{
 				ID: "task-1", ServiceID: "svc-1", ServiceName: "api", Slot: 1, DesiredState: "running", CurrentState: "running",
 			}},
+			Swarm: &models.DockerSwarmInfo{
+				NodeID:     "node-1",
+				NodeRole:   "manager",
+				LocalState: "active",
+			},
+			Nodes: []models.DockerNode{{
+				ID: "node-1", Hostname: "manager-1", Role: "manager", State: "ready",
+			}},
 		}},
 	})
 
@@ -3893,6 +3901,7 @@ func TestRegistryIngestSnapshotPublishesDockerNativeInventory(t *testing.T) {
 		ResourceTypeDockerVolume,
 		ResourceTypeDockerNetwork,
 		ResourceTypeDockerTask,
+		ResourceTypeDockerSwarmNode,
 	} {
 		if counts[resourceType] != 1 {
 			t.Fatalf("expected one %s resource, got counts %#v", resourceType, counts)

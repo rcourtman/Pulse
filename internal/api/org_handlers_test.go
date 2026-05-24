@@ -1240,6 +1240,7 @@ func TestIsUnsupportedOrganizationShareResourceType(t *testing.T) {
 		{name: "docker volume supported", in: "docker-volume", want: false},
 		{name: "docker network supported", in: "docker-network", want: false},
 		{name: "docker task supported", in: "docker-task", want: false},
+		{name: "docker swarm node supported", in: "docker-swarm-node", want: false},
 		{name: "kubernetes namespace supported", in: "k8s-namespace", want: false},
 		{name: "kubernetes service supported", in: "k8s-service", want: false},
 		{name: "kubernetes replicaset supported", in: "k8s-replicaset", want: false},

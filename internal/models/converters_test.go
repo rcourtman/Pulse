@@ -865,6 +865,44 @@ func TestVMToFrontend_TagsJoinedCorrectly(t *testing.T) {
 	}
 }
 
+func TestDockerNodeToFrontend(t *testing.T) {
+	now := time.Now()
+	updatedAt := now.Add(5 * time.Minute)
+	node := DockerNode{
+		ID:                  "node-1",
+		Hostname:            "manager-1",
+		Role:                "manager",
+		Availability:        "active",
+		State:               "ready",
+		ManagerReachability: "reachable",
+		ManagerAddress:      "192.0.2.10:2377",
+		Leader:              true,
+		EngineVersion:       "27.5.1",
+		OS:                  "linux",
+		Architecture:        "amd64",
+		NanoCPUs:            4_000_000_000,
+		MemoryBytes:         16 * 1024 * 1024 * 1024,
+		Labels:              map[string]string{"zone": "rack-a"},
+		EngineLabels:        map[string]string{"engine": "primary"},
+		CreatedAt:           now,
+		UpdatedAt:           &updatedAt,
+	}
+
+	frontend := node.ToFrontend()
+	if frontend.ID != node.ID || frontend.Hostname != node.Hostname || frontend.Role != node.Role {
+		t.Fatalf("unexpected frontend node identity: %+v", frontend)
+	}
+	if frontend.ManagerReachability != node.ManagerReachability || !frontend.Leader {
+		t.Fatalf("unexpected frontend manager metadata: %+v", frontend)
+	}
+	if frontend.CreatedAt == nil || *frontend.CreatedAt != now.Unix()*1000 {
+		t.Fatalf("CreatedAt = %v, want %d", frontend.CreatedAt, now.Unix()*1000)
+	}
+	if frontend.UpdatedAt == nil || *frontend.UpdatedAt != updatedAt.Unix()*1000 {
+		t.Fatalf("UpdatedAt = %v, want %d", frontend.UpdatedAt, updatedAt.Unix()*1000)
+	}
+}
+
 func TestDockerHostToFrontend(t *testing.T) {
 	now := time.Now()
 	tokenLastUsed := now.Add(-1 * time.Hour)
@@ -900,6 +938,9 @@ func TestDockerHostToFrontend(t *testing.T) {
 		NetworkInterfaces: []HostNetworkInterface{{Name: "eth0", Addresses: []string{"192.168.1.100"}}},
 		Containers: []DockerContainer{
 			{ID: "ct-1", Name: "nginx", State: "running"},
+		},
+		Nodes: []DockerNode{
+			{ID: "node-1", Hostname: "manager-1", Role: "manager"},
 		},
 	}
 
@@ -943,6 +984,9 @@ func TestDockerHostToFrontend(t *testing.T) {
 	}
 	if len(frontend.Containers) != 1 {
 		t.Errorf("Containers length = %d, want 1", len(frontend.Containers))
+	}
+	if len(frontend.Nodes) != 1 {
+		t.Errorf("Nodes length = %d, want 1", len(frontend.Nodes))
 	}
 }
 

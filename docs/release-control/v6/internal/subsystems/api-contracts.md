@@ -118,14 +118,15 @@ checks, merge tenants, or become the source of truth for telemetry freshness.
 
 The `/api/resources` type filter is the REST contract boundary for platform
 page native inventory. It must accept canonical Docker / Podman runtime tokens
-(`docker-image`, `docker-volume`, `docker-network`, `docker-task`) and
-canonical Kubernetes API object tokens (`k8s-namespace`, `k8s-service`,
-`k8s-replicaset`, `k8s-statefulset`, `k8s-daemonset`, `k8s-job`,
-`k8s-cronjob`, `k8s-ingress`, `k8s-endpoint-slice`,
-`k8s-network-policy`, `k8s-persistent-volume`,
+(`docker-image`, `docker-volume`, `docker-network`, `docker-task`,
+`docker-swarm-node`) and canonical Kubernetes API object tokens
+(`k8s-namespace`, `k8s-service`, `k8s-replicaset`, `k8s-statefulset`,
+`k8s-daemonset`, `k8s-job`, `k8s-cronjob`, `k8s-ingress`,
+`k8s-endpoint-slice`, `k8s-network-policy`, `k8s-persistent-volume`,
 `k8s-persistent-volume-claim`, `k8s-storage-class`, `k8s-configmap`,
-`k8s-serviceaccount`, `k8s-event`) whenever
-unified resources can publish those records. Unsupported legacy aliases should
+`k8s-serviceaccount`, `k8s-event`) whenever unified resources can publish
+those records. Docker node and Swarm node aliases may normalize to the
+canonical `docker-swarm-node` token, but unsupported legacy aliases should
 continue to fail closed instead of silently widening platform queries.
 
 Discovery read endpoints are a canonical API payload boundary even when Pulse

@@ -120,6 +120,29 @@ func TestDockerInventoryConvertersPreserveNativeRuntimeFields(t *testing.T) {
 	if usage == nil || usage.Images.TotalCount != 3 || usage.Images.ReclaimableBytes != 512 {
 		t.Fatalf("unexpected storage usage conversion: %+v", usage)
 	}
+
+	nodes := convertDockerNodes([]agentsdocker.Node{{
+		ID:                  " node-manager ",
+		Hostname:            " manager-1 ",
+		Role:                " manager ",
+		Availability:        " active ",
+		State:               " ready ",
+		Address:             " 192.0.2.10 ",
+		ManagerReachability: " reachable ",
+		ManagerAddress:      " 192.0.2.10:2377 ",
+		Leader:              true,
+		EngineVersion:       " 27.5.1 ",
+		OS:                  " linux ",
+		Architecture:        " amd64 ",
+		NanoCPUs:            8_000_000_000,
+		MemoryBytes:         32 * 1024 * 1024 * 1024,
+		Labels:              map[string]string{"zone": "rack-a"},
+		EngineLabels:        map[string]string{"engine": "primary"},
+		CreatedAt:           createdAt,
+	}})
+	if len(nodes) != 1 || nodes[0].ID != "node-manager" || nodes[0].ManagerReachability != "reachable" || nodes[0].EngineLabels["engine"] != "primary" {
+		t.Fatalf("unexpected swarm node conversion: %+v", nodes)
+	}
 }
 
 func TestPVEBackupPermissionWarningsPreserveTokenACLRepair(t *testing.T) {

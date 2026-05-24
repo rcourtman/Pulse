@@ -15,6 +15,7 @@ const DOCKER_IMAGE_TYPES = new Set<ResourceType>(['docker-image']);
 const DOCKER_VOLUME_TYPES = new Set<ResourceType>(['docker-volume']);
 const DOCKER_NETWORK_TYPES = new Set<ResourceType>(['docker-network']);
 const DOCKER_TASK_TYPES = new Set<ResourceType>(['docker-task']);
+const DOCKER_SWARM_NODE_TYPES = new Set<ResourceType>(['docker-swarm-node']);
 
 export type DockerPageTabId =
   | 'overview'
@@ -22,6 +23,8 @@ export type DockerPageTabId =
   | 'images'
   | 'volumes'
   | 'networks'
+  | 'storage'
+  | 'swarm-nodes'
   | 'services'
   | 'tasks';
 
@@ -35,6 +38,8 @@ export const DOCKER_TAB_SPECS: readonly {
   { id: 'images', label: 'Images', path: '/docker/images' },
   { id: 'volumes', label: 'Volumes', path: '/docker/volumes' },
   { id: 'networks', label: 'Networks', path: '/docker/networks' },
+  { id: 'storage', label: 'Storage', path: '/docker/storage' },
+  { id: 'swarm-nodes', label: 'Swarm Nodes', path: '/docker/swarm-nodes' },
   { id: 'services', label: 'Services', path: '/docker/services' },
   { id: 'tasks', label: 'Tasks', path: '/docker/tasks' },
 ] as const;
@@ -76,6 +81,7 @@ export type DockerPageModel = {
   images: Resource[];
   volumes: Resource[];
   networks: Resource[];
+  nodes: Resource[];
   tasks: Resource[];
 };
 
@@ -147,6 +153,7 @@ export function buildDockerPageModel(resources: Resource[]): DockerPageModel {
       DOCKER_IMAGE_TYPES.has(resource.type) ||
       DOCKER_VOLUME_TYPES.has(resource.type) ||
       DOCKER_NETWORK_TYPES.has(resource.type) ||
+      DOCKER_SWARM_NODE_TYPES.has(resource.type) ||
       DOCKER_TASK_TYPES.has(resource.type),
   );
 
@@ -160,6 +167,7 @@ export function buildDockerPageModel(resources: Resource[]): DockerPageModel {
   const images = dockerResources.filter((resource) => DOCKER_IMAGE_TYPES.has(resource.type));
   const volumes = dockerResources.filter((resource) => DOCKER_VOLUME_TYPES.has(resource.type));
   const networks = dockerResources.filter((resource) => DOCKER_NETWORK_TYPES.has(resource.type));
+  const nodes = dockerResources.filter((resource) => DOCKER_SWARM_NODE_TYPES.has(resource.type));
   const tasks = dockerResources.filter((resource) => DOCKER_TASK_TYPES.has(resource.type));
 
   return {
@@ -170,6 +178,7 @@ export function buildDockerPageModel(resources: Resource[]): DockerPageModel {
     images,
     volumes,
     networks,
+    nodes,
     tasks,
   };
 }
@@ -197,6 +206,13 @@ const resourceSearchCandidates = (resource: Resource): Array<string | undefined>
   resource.docker?.scope,
   resource.docker?.taskId,
   resource.docker?.serviceName,
+  resource.docker?.nodeId,
+  resource.docker?.nodeName,
+  resource.docker?.nodeRole,
+  resource.docker?.availability,
+  resource.docker?.managerReachability,
+  resource.docker?.engineVersion,
+  resource.docker?.address,
   resource.docker?.currentState,
   ...(resource.docker?.repoTags ?? []),
   ...(resource.docker?.repoDigests ?? []),

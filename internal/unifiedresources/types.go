@@ -129,6 +129,7 @@ const (
 	ResourceTypeDockerVolume      ResourceType = "docker-volume"
 	ResourceTypeDockerNetwork     ResourceType = "docker-network"
 	ResourceTypeDockerTask        ResourceType = "docker-task"
+	ResourceTypeDockerSwarmNode   ResourceType = "docker-swarm-node"
 	ResourceTypeK8sCluster        ResourceType = "k8s-cluster"
 	ResourceTypeK8sNode           ResourceType = "k8s-node"
 	ResourceTypePod               ResourceType = "pod"
@@ -836,6 +837,7 @@ type DockerData struct {
 	ImageCount            int                             `json:"imageCount,omitempty"`
 	VolumeCount           int                             `json:"volumeCount,omitempty"`
 	NetworkCount          int                             `json:"networkCount,omitempty"`
+	NodeCount             int                             `json:"nodeCount,omitempty"`
 	UpdatesAvailableCount int                             `json:"updatesAvailableCount,omitempty"`
 	UpdatesLastCheckedAt  *time.Time                      `json:"updatesLastCheckedAt,omitempty"`
 	ImagesUsage           *DockerStorageUsageMeta         `json:"imagesUsage,omitempty"`
@@ -912,6 +914,18 @@ type DockerData struct {
 	StartedAt    *time.Time `json:"startedAt,omitempty"`
 	CompletedAt  *time.Time `json:"completedAt,omitempty"`
 
+	// Swarm-node-specific fields (populated when Resource.Type == ResourceTypeDockerSwarmNode)
+	NodeRole            string            `json:"nodeRole,omitempty"`
+	Availability        string            `json:"availability,omitempty"`
+	Address             string            `json:"address,omitempty"`
+	ManagerReachability string            `json:"managerReachability,omitempty"`
+	ManagerAddress      string            `json:"managerAddress,omitempty"`
+	Leader              bool              `json:"leader,omitempty"`
+	EngineVersion       string            `json:"engineVersion,omitempty"`
+	NanoCPUs            int64             `json:"nanoCpus,omitempty"`
+	MemoryBytes         int64             `json:"memoryBytes,omitempty"`
+	EngineLabels        map[string]string `json:"engineLabels,omitempty"`
+
 	Swarm             *DockerSwarmInfo   `json:"swarm,omitempty"`
 	NetworkInterfaces []NetworkInterface `json:"networkInterfaces,omitempty"`
 	Disks             []DiskInfo         `json:"disks,omitempty"`
@@ -923,6 +937,7 @@ type DockerData struct {
 	NetworksRaw []models.DockerNetwork   `json:"-"`
 	Services    []models.DockerService   `json:"-"`
 	Tasks       []models.DockerTask      `json:"-"`
+	Nodes       []models.DockerNode      `json:"-"`
 }
 
 // PBSData contains Proxmox Backup Server data.

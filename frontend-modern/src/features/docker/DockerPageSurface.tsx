@@ -16,6 +16,7 @@ import { APP_CONTAINER_COLUMN_LABEL_OVERRIDES } from '@/features/platformPage/ap
 import { DockerHostsTable } from './DockerHostsTable';
 import { DockerInventoryTable } from './DockerInventoryTable';
 import { DockerServicesTable } from './DockerServicesTable';
+import { DockerStorageUsageTable } from './DockerStorageUsageTable';
 import {
   DOCKER_TAB_SPECS,
   buildDockerPageModel,
@@ -27,7 +28,7 @@ import {
 } from './dockerPageModel';
 
 const DOCKER_RESOURCE_QUERY =
-  'type=agent,docker-host,app-container,docker-service,docker-image,docker-volume,docker-network,docker-task';
+  'type=agent,docker-host,app-container,docker-service,docker-image,docker-volume,docker-network,docker-task,docker-swarm-node';
 const DOCKER_PLATFORM_FILTER = 'docker';
 const DOCKER_WORKLOAD_FORCED_VIEW_MODE = 'app-container';
 const DOCKER_WORKLOAD_DEFAULT_SORT_KEY = 'name';
@@ -178,6 +179,24 @@ export function DockerPageSurface() {
                 emptyIcon={dockerIcon()}
                 emptyTitle="No networks"
                 emptyDescription="Networks appear here when the container runtime reports network inventory."
+              />
+            </Show>
+            <Show when={activeTab() === 'storage'}>
+              <DockerStorageUsageTable
+                hosts={filteredHosts()}
+                sourceCount={model().hosts.length}
+                emptyIcon={dockerIcon()}
+                emptyTitle="No engine storage usage"
+                emptyDescription="Docker / Podman storage usage appears here when hosts report the engine disk-usage snapshot."
+              />
+            </Show>
+            <Show when={activeTab() === 'swarm-nodes'}>
+              <DockerInventoryTable
+                resources={model().nodes}
+                variant="nodes"
+                emptyIcon={dockerIcon()}
+                emptyTitle="No Swarm nodes"
+                emptyDescription="Swarm nodes appear here when a Docker manager reports the cluster node inventory."
               />
             </Show>
             <Show when={activeTab() === 'services'}>

@@ -68,16 +68,21 @@ truth for live infrastructure data.
 3. Add typed read access through `internal/unifiedresources/views.go`
 4. Add unified supplemental ingest through `internal/monitoring/poll_providers.go`
 5. Add or change container startup ownership/bootstrap behavior for hosted or managed Pulse runtime mounts through `docker-entrypoint.sh`
-6. Add or change Docker Swarm manager task/service runtime collection through `internal/dockeragent/swarm.go`
+6. Add or change Docker Swarm manager service, task, or node runtime collection through `internal/dockeragent/swarm.go`
+   Swarm node inventory is manager-sourced through the documented nodes API
+   when available and falls back to the local `system/info` Swarm node
+   metadata when a worker or non-manager runtime cannot list cluster nodes.
+   Manager-side list failures are warnings, not host-report failures.
 7. Add or change Docker or Podman container stats compatibility and runtime metric semantics through `internal/dockeragent/collect.go`
    Docker / Podman collection now owns native runtime inventory as well as
    container metrics. It may collect image summaries, volume summaries,
-   network summaries, Swarm tasks, and daemon storage-usage buckets from the
-   documented runtime API, then publish those records through the Docker agent
-   report for unified-resource ingestion. Failures in image, volume, network,
-   or storage-usage collection are best-effort warnings and must not make the
-   whole host report fail when container/runtime health data is otherwise
-   usable.
+   network summaries, Swarm services, Swarm tasks, Swarm nodes, and daemon
+   storage-usage buckets from the documented runtime API, then publish those
+   records through the Docker agent report for unified-resource ingestion.
+   Failures in image, volume, network, node, or storage-usage collection are
+   best-effort warnings and must not make the whole host report fail when
+   container/runtime health data is otherwise usable. Podman libpod pods remain
+   outside this collector until a libpod-native collector owns that API shape.
 8. Add or change Proxmox Ceph compatibility payload decoding through `pkg/proxmox/ceph.go`
 9. Add or change Proxmox ZFS compatibility payload decoding and vdev-role normalization through `pkg/proxmox/zfs.go`
 10. Add or change mock chart synthesis, seeded history continuity, or mock-owned

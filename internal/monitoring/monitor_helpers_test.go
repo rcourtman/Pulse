@@ -403,6 +403,52 @@ func TestConvertDockerServices_LabelIsolation(t *testing.T) {
 	}
 }
 
+// --- convertDockerNodes ---
+
+func TestConvertDockerNodes_WithManagerFields(t *testing.T) {
+	now := time.Now().UTC()
+	updated := now.Add(5 * time.Minute)
+	src := []agentsdocker.Node{
+		{
+			ID:                  " node-1 ",
+			Hostname:            " manager-1 ",
+			Role:                " manager ",
+			Availability:        " active ",
+			State:               " ready ",
+			Message:             " ready ",
+			Address:             " 192.0.2.10 ",
+			ManagerReachability: " reachable ",
+			ManagerAddress:      " 192.0.2.10:2377 ",
+			Leader:              true,
+			EngineVersion:       " 27.5.1 ",
+			OS:                  " linux ",
+			Architecture:        " amd64 ",
+			NanoCPUs:            4_000_000_000,
+			MemoryBytes:         16 * 1024 * 1024 * 1024,
+			Labels:              map[string]string{"zone": "rack-a"},
+			EngineLabels:        map[string]string{"engine": "primary"},
+			CreatedAt:           now,
+			UpdatedAt:           &updated,
+		},
+	}
+
+	result := convertDockerNodes(src)
+	if len(result) != 1 {
+		t.Fatalf("expected one converted node, got %+v", result)
+	}
+	node := result[0]
+	if node.ID != "node-1" || node.Hostname != "manager-1" || node.Role != "manager" {
+		t.Fatalf("unexpected converted identity: %+v", node)
+	}
+	if node.ManagerReachability != "reachable" || node.ManagerAddress != "192.0.2.10:2377" || !node.Leader {
+		t.Fatalf("unexpected manager metadata: %+v", node)
+	}
+	result[0].Labels["mutated"] = "yes"
+	if _, ok := src[0].Labels["mutated"]; ok {
+		t.Fatal("node labels should be cloned")
+	}
+}
+
 // --- extractSnapshotName ---
 
 func TestExtractSnapshotName_WithAt(t *testing.T) {

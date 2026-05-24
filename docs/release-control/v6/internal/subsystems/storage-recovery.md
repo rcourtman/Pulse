@@ -163,6 +163,11 @@ volume rows or Kubernetes PV/PVC/StorageClass rows. Other Kubernetes native
 inventory objects that flow through the shared resource decoder, such as
 ConfigMaps and ServiceAccounts, remain platform configuration evidence only and
 must not become storage/recovery ownership, restore scope, or secret material.
+Docker engine `/system/df` storage-usage buckets are host-level runtime
+capacity evidence for the Docker page and unified-resource Docker host facet;
+they are not storage/recovery resources, recovery-point sources, or restore
+entitlements. Docker Swarm node records are likewise runtime topology context,
+not storage owners or recovery scope.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 2. Add or change recovery page UX through `frontend-modern/src/components/Recovery/` and keep canonical route/query/filter state ownership in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`

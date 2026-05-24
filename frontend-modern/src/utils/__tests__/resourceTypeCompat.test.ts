@@ -20,6 +20,9 @@ describe('resourceTypeCompat', () => {
     expect(canonicalizeFrontendResourceType('docker-volume')).toBe('docker-volume');
     expect(canonicalizeFrontendResourceType('docker-network')).toBe('docker-network');
     expect(canonicalizeFrontendResourceType('docker-task')).toBe('docker-task');
+    expect(canonicalizeFrontendResourceType('docker-swarm-node')).toBe('docker-swarm-node');
+    expect(canonicalizeFrontendResourceType('docker-node')).toBe('docker-swarm-node');
+    expect(canonicalizeFrontendResourceType('swarm_node')).toBe('docker-swarm-node');
     expect(canonicalizeFrontendResourceType('k8s-namespace')).toBe('k8s-namespace');
     expect(canonicalizeFrontendResourceType('k8s-service')).toBe('k8s-service');
     expect(canonicalizeFrontendResourceType('k8s-replicaset')).toBe('k8s-replicaset');

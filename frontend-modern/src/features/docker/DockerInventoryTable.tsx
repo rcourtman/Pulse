@@ -28,7 +28,7 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 
-type DockerInventoryVariant = 'images' | 'volumes' | 'networks' | 'tasks';
+type DockerInventoryVariant = 'images' | 'volumes' | 'networks' | 'nodes' | 'tasks';
 
 const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
 const numberValue = (value: number | undefined): JSX.Element => (
@@ -36,6 +36,11 @@ const numberValue = (value: number | undefined): JSX.Element => (
 );
 const byteValue = (value: number | undefined): string =>
   typeof value === 'number' && value > 0 ? formatBytes(value) : '—';
+const cpuValue = (nanoCpus: number | undefined): string => {
+  if (typeof nanoCpus !== 'number' || nanoCpus <= 0) return '—';
+  const cpus = nanoCpus / 1_000_000_000;
+  return cpus >= 10 ? `${Math.round(cpus)}` : cpus.toFixed(cpus % 1 === 0 ? 0 : 1);
+};
 
 const joinValues = (values: readonly (string | undefined)[] | undefined, empty = '—'): string => {
   const joined = (values ?? [])
@@ -54,6 +59,8 @@ const dockerTableTitle = (variant: DockerInventoryVariant, explicit?: string): s
       return 'Volumes';
     case 'networks':
       return 'Networks';
+    case 'nodes':
+      return 'Swarm Nodes';
     case 'tasks':
       return 'Swarm Tasks';
   }
@@ -67,6 +74,8 @@ const searchPlaceholder = (variant: DockerInventoryVariant): string => {
       return 'Search volumes';
     case 'networks':
       return 'Search networks';
+    case 'nodes':
+      return 'Search Swarm nodes';
     case 'tasks':
       return 'Search Swarm tasks';
   }
@@ -221,6 +230,35 @@ const DockerInventoryHeader: Component<{ variant: DockerInventoryVariant }> = (p
       </TableRow>
     );
   }
+  if (props.variant === 'nodes') {
+    return (
+      <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+        <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>Node</TableHead>
+        <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[10%]`}>Role</TableHead>
+        <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
+          Availability
+        </TableHead>
+        <TableHead
+          class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+        >
+          Reachability
+        </TableHead>
+        <TableHead
+          class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[18%]`}
+        >
+          Engine
+        </TableHead>
+        <TableHead
+          class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
+        >
+          CPUs
+        </TableHead>
+        <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[16%]`}>
+          Memory
+        </TableHead>
+      </TableRow>
+    );
+  }
   return (
     <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
       <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>Task</TableHead>
@@ -351,6 +389,36 @@ const DockerInventoryRow: Component<{ resource: Resource; variant: DockerInvento
           class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
         >
           {textValue(props.resource.docker?.nodeName || props.resource.docker?.nodeId)}
+        </TableCell>
+      </Show>
+      <Show when={props.variant === 'nodes'}>
+        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+          {textValue(props.resource.docker?.nodeRole)}
+        </TableCell>
+        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+          {textValue(props.resource.docker?.availability)}
+        </TableCell>
+        <TableCell
+          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+        >
+          {textValue(
+            props.resource.docker?.leader
+              ? 'leader'
+              : props.resource.docker?.managerReachability,
+          )}
+        </TableCell>
+        <TableCell
+          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+        >
+          {textValue(props.resource.docker?.engineVersion || props.resource.docker?.runtimeVersion)}
+        </TableCell>
+        <TableCell
+          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+        >
+          {cpuValue(props.resource.docker?.nanoCpus)}
+        </TableCell>
+        <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}>
+          {byteValue(props.resource.docker?.memoryBytes)}
         </TableCell>
       </Show>
     </TableRow>

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 import {
+  DOCKER_TAB_SPECS,
   buildDockerContainerDefaultHiddenColumnIds,
   buildDockerPageModel,
   buildDockerWorkloadGroupLabelBadges,
@@ -62,7 +63,7 @@ const makeDockerService = (overrides: Partial<Resource> = {}): Resource => ({
 });
 
 describe('dockerPageModel', () => {
-  it('buckets Docker hosts, containers, images, volumes, networks, tasks, and Swarm services from canonical resources', () => {
+  it('buckets Docker hosts, containers, images, volumes, networks, nodes, tasks, and Swarm services from canonical resources', () => {
     const model = buildDockerPageModel([
       makeResource({ id: 'docker-host-1', type: 'agent' }),
       makeResource({
@@ -74,6 +75,7 @@ describe('dockerPageModel', () => {
       makeResource({ id: 'image-1', type: 'docker-image' }),
       makeResource({ id: 'volume-1', type: 'docker-volume' }),
       makeResource({ id: 'network-1', type: 'docker-network' }),
+      makeResource({ id: 'node-1', type: 'docker-swarm-node' }),
       makeResource({ id: 'task-1', type: 'docker-task' }),
       makeResource({
         id: 'pve-node-1',
@@ -88,10 +90,34 @@ describe('dockerPageModel', () => {
     expect(model.images.map((resource) => resource.id)).toEqual(['image-1']);
     expect(model.volumes.map((resource) => resource.id)).toEqual(['volume-1']);
     expect(model.networks.map((resource) => resource.id)).toEqual(['network-1']);
+    expect(model.nodes.map((resource) => resource.id)).toEqual(['node-1']);
     expect(model.tasks.map((resource) => resource.id)).toEqual(['task-1']);
     expect(model.resources.map((resource) => resource.id).sort()).toEqual(
-      ['ctr-1', 'docker-host-1', 'image-1', 'network-1', 'svc-1', 'task-1', 'volume-1'].sort(),
+      [
+        'ctr-1',
+        'docker-host-1',
+        'image-1',
+        'network-1',
+        'node-1',
+        'svc-1',
+        'task-1',
+        'volume-1',
+      ].sort(),
     );
+  });
+
+  it('declares bespoke Docker storage and Swarm node tabs', () => {
+    expect(DOCKER_TAB_SPECS.map((tab) => tab.id)).toEqual([
+      'overview',
+      'containers',
+      'images',
+      'volumes',
+      'networks',
+      'storage',
+      'swarm-nodes',
+      'services',
+      'tasks',
+    ]);
   });
 
   it('excludes non-Docker hosts that share the agent type', () => {

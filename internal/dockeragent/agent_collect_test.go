@@ -13,6 +13,7 @@ import (
 	containertypes "github.com/moby/moby/api/types/container"
 	imagetypes "github.com/moby/moby/api/types/image"
 	networktypes "github.com/moby/moby/api/types/network"
+	swarmtypes "github.com/moby/moby/api/types/swarm"
 	systemtypes "github.com/moby/moby/api/types/system"
 	volumetypes "github.com/moby/moby/api/types/volume"
 	dockerclient "github.com/moby/moby/client"
@@ -131,6 +132,81 @@ func TestCollectDockerNativeInventory(t *testing.T) {
 	}
 	if len(networks[0].Subnets) != 1 || networks[0].Subnets[0].Subnet != "10.88.0.0/24" || networks[0].Subnets[0].Gateway != "10.88.0.1" {
 		t.Fatalf("unexpected network subnets: %+v", networks[0].Subnets)
+	}
+}
+
+func TestCollectSwarmNodesMapsManagerInventory(t *testing.T) {
+	createdAt := time.Date(2026, 5, 24, 8, 15, 0, 0, time.UTC)
+	updatedAt := createdAt.Add(2 * time.Minute)
+	agent := &Agent{
+		logger: zerolog.Nop(),
+		docker: &fakeDockerClient{
+			nodeListFn: func(context.Context, dockerNodeListOptions) ([]swarmtypes.Node, error) {
+				return []swarmtypes.Node{{
+					ID: " node-1 ",
+					Spec: swarmtypes.NodeSpec{
+						Role:         swarmtypes.NodeRoleManager,
+						Availability: swarmtypes.NodeAvailabilityActive,
+						Annotations: swarmtypes.Annotations{
+							Labels: map[string]string{"zone": "rack-a"},
+						},
+					},
+					Description: swarmtypes.NodeDescription{
+						Hostname: " manager-1 ",
+						Platform: swarmtypes.Platform{
+							OS:           "linux",
+							Architecture: "amd64",
+						},
+						Resources: swarmtypes.Resources{
+							NanoCPUs:    8_000_000_000,
+							MemoryBytes: 32 * 1024 * 1024 * 1024,
+						},
+						Engine: swarmtypes.EngineDescription{
+							EngineVersion: "27.5.1",
+							Labels:        map[string]string{"engine": "primary"},
+						},
+					},
+					Status: swarmtypes.NodeStatus{
+						State:   swarmtypes.NodeStateReady,
+						Message: "ready",
+						Addr:    "192.0.2.10",
+					},
+					ManagerStatus: &swarmtypes.ManagerStatus{
+						Leader:       true,
+						Reachability: swarmtypes.ReachabilityReachable,
+						Addr:         "192.0.2.10:2377",
+					},
+					Meta: swarmtypes.Meta{
+						CreatedAt: createdAt,
+						UpdatedAt: updatedAt,
+					},
+				}}, nil
+			},
+		},
+	}
+
+	nodes, err := agent.collectSwarmNodes(context.Background())
+	if err != nil {
+		t.Fatalf("collectSwarmNodes: %v", err)
+	}
+	if len(nodes) != 1 {
+		t.Fatalf("expected one node, got %+v", nodes)
+	}
+	node := nodes[0]
+	if node.ID != "node-1" || node.Hostname != "manager-1" || node.Role != string(swarmtypes.NodeRoleManager) {
+		t.Fatalf("unexpected node identity: %+v", node)
+	}
+	if node.ManagerReachability != string(swarmtypes.ReachabilityReachable) || node.ManagerAddress != "192.0.2.10:2377" || !node.Leader {
+		t.Fatalf("expected manager status to be preserved, got %+v", node)
+	}
+	if node.EngineVersion != "27.5.1" || node.NanoCPUs != 8_000_000_000 || node.MemoryBytes == 0 {
+		t.Fatalf("expected engine capacity to be preserved, got %+v", node)
+	}
+	if node.Labels["zone"] != "rack-a" || node.EngineLabels["engine"] != "primary" {
+		t.Fatalf("expected node labels to be preserved, got labels=%+v engine=%+v", node.Labels, node.EngineLabels)
+	}
+	if !node.CreatedAt.Equal(createdAt) || node.UpdatedAt == nil || !node.UpdatedAt.Equal(updatedAt) {
+		t.Fatalf("expected timestamps to be preserved, got %+v", node)
 	}
 }
 

@@ -37,6 +37,9 @@ func canonicalPrimaryID(resource Resource) string {
 	if identity := formatTargetIdentity(resource.DiscoveryTarget); identity != "" {
 		return identity
 	}
+	if identity := canonicalDockerSwarmNodePrimaryID(resource); identity != "" {
+		return identity
+	}
 	if runtimeID := strings.TrimSpace(canonicalDockerRuntimeID(resource)); runtimeID != "" {
 		return "docker-host:" + runtimeID
 	}
@@ -81,6 +84,8 @@ func canonicalAliases(resource Resource, primaryID, platformID, hostname string)
 		targetResourceID(resource.MetricsTarget),
 		targetAgentID(resource.DiscoveryTarget),
 		targetResourceID(resource.DiscoveryTarget),
+		canonicalDockerNodeID(resource),
+		canonicalDockerNodeName(resource),
 		canonicalDockerRuntimeID(resource),
 		canonicalKubernetesClusterID(resource),
 		canonicalAgentID(resource),
@@ -221,6 +226,35 @@ func canonicalDockerRuntimeID(resource Resource) string {
 		}
 	}
 	return ""
+}
+
+func canonicalDockerSwarmNodePrimaryID(resource Resource) string {
+	if CanonicalResourceType(resource.Type) != ResourceTypeDockerSwarmNode || resource.Docker == nil {
+		return ""
+	}
+	nodeID := firstTrimmed(resource.Docker.NodeID, resource.Docker.NodeName, resource.Name)
+	if nodeID == "" {
+		return ""
+	}
+	scope := firstTrimmed(dockerSwarmClusterKeyFromMeta(resource.Docker.Swarm), resource.Docker.HostSourceID)
+	if scope == "" {
+		return "docker-swarm-node:" + nodeID
+	}
+	return "docker-swarm-node:" + scope + ":" + nodeID
+}
+
+func canonicalDockerNodeID(resource Resource) string {
+	if resource.Docker == nil {
+		return ""
+	}
+	return strings.TrimSpace(resource.Docker.NodeID)
+}
+
+func canonicalDockerNodeName(resource Resource) string {
+	if resource.Docker == nil {
+		return ""
+	}
+	return strings.TrimSpace(resource.Docker.NodeName)
 }
 
 func canonicalKubernetesClusterID(resource Resource) string {

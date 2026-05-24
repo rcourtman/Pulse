@@ -81,7 +81,7 @@ create, review, and approve cross-organization shares.
    Organization resource shares may reference the canonical Docker / Podman
    and Kubernetes inventory resource types exposed by `/api/resources`, but the
    organization layer only validates the bounded resource-type vocabulary. It
-   must not reinterpret a Docker image/volume/network/task or Kubernetes
+   must not reinterpret a Docker image/volume/network/task/Swarm-node row or Kubernetes
    Service/controller/storage/networking/config/event row, including
    ReplicaSets, EndpointSlices, NetworkPolicies, StorageClasses, ConfigMaps, or
    ServiceAccounts, as a broader organization role, agent enrollment authority,

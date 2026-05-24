@@ -27,6 +27,7 @@ export function toReportingResourceType(resourceType: ResourceType): ReportingRe
     case 'docker-service':
     case 'docker-image':
     case 'docker-task':
+    case 'docker-swarm-node':
       return 'app-container';
     case 'docker-volume':
       return 'storage';

@@ -70,6 +70,10 @@ const RESOURCE_TYPE_PRESENTATION: Partial<Record<ResourceType | string, Resource
       label: 'Swarm Task',
       badgeClasses: DEFAULT_BADGE_CLASSES,
     },
+    'docker-swarm-node': {
+      label: 'Swarm Node',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
     'k8s-deployment': {
       label: 'K8s Deployment',
       badgeClasses: DEFAULT_BADGE_CLASSES,

@@ -457,6 +457,21 @@ func cloneDockerTasks(src []DockerTask) []DockerTask {
 	return dest
 }
 
+func cloneDockerNodes(src []DockerNode) []DockerNode {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]DockerNode, len(src))
+	for i, node := range src {
+		nodeCopy := node
+		nodeCopy.Labels = cloneStringMap(node.Labels)
+		nodeCopy.EngineLabels = cloneStringMap(node.EngineLabels)
+		nodeCopy.UpdatedAt = cloneTimePtr(node.UpdatedAt)
+		dest[i] = nodeCopy.NormalizeCollections()
+	}
+	return dest
+}
+
 func cloneDockerSwarmInfo(src *DockerSwarmInfo) *DockerSwarmInfo {
 	if src == nil {
 		return nil
@@ -498,6 +513,7 @@ func cloneDockerHost(src DockerHost) DockerHost {
 	dest.Networks = cloneDockerNetworks(src.Networks)
 	dest.Services = cloneDockerServices(src.Services)
 	dest.Tasks = cloneDockerTasks(src.Tasks)
+	dest.Nodes = cloneDockerNodes(src.Nodes)
 	dest.StorageUsage = cloneDockerStorageUsage(src.StorageUsage)
 	dest.Swarm = cloneDockerSwarmInfo(src.Swarm)
 	dest.Security = cloneDockerHostSecurity(src.Security)

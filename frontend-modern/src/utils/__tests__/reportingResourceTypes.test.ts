@@ -13,6 +13,7 @@ describe('toReportingResourceType', () => {
     expect(toReportingResourceType('docker-volume')).toBe('storage');
     expect(toReportingResourceType('docker-network')).toBe('network');
     expect(toReportingResourceType('docker-task')).toBe('app-container');
+    expect(toReportingResourceType('docker-swarm-node')).toBe('app-container');
     expect(toReportingResourceType('network-endpoint')).toBe('network-endpoint');
     expect(toReportingResourceType('network-share')).toBe('network-share');
     expect(toReportingResourceType('storage')).toBe('storage');

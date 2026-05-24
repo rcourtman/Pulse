@@ -658,6 +658,7 @@ type DockerHost struct {
 	Networks          []DockerNetwork          `json:"networks,omitempty"`
 	Services          []DockerService          `json:"services,omitempty"`
 	Tasks             []DockerTask             `json:"tasks,omitempty"`
+	Nodes             []DockerNode             `json:"nodes,omitempty"`
 	StorageUsage      *DockerStorageUsage      `json:"storageUsage,omitempty"`
 	Swarm             *DockerSwarmInfo         `json:"swarm,omitempty"`
 	Security          *DockerHostSecurity      `json:"security,omitempty"`
@@ -723,6 +724,12 @@ func (h DockerHost) NormalizeCollections() DockerHost {
 	}
 	if h.Tasks == nil {
 		h.Tasks = []DockerTask{}
+	}
+	if h.Nodes == nil {
+		h.Nodes = []DockerNode{}
+	}
+	for i := range h.Nodes {
+		h.Nodes[i] = h.Nodes[i].NormalizeCollections()
 	}
 	if h.Security != nil {
 		security := h.Security.NormalizeCollections()
@@ -1656,6 +1663,39 @@ type DockerTask struct {
 	UpdatedAt     *time.Time `json:"updatedAt,omitempty"`
 	StartedAt     *time.Time `json:"startedAt,omitempty"`
 	CompletedAt   *time.Time `json:"completedAt,omitempty"`
+}
+
+// DockerNode summarises a Docker Swarm node.
+type DockerNode struct {
+	ID                  string            `json:"id"`
+	Hostname            string            `json:"hostname,omitempty"`
+	Role                string            `json:"role,omitempty"`
+	Availability        string            `json:"availability,omitempty"`
+	State               string            `json:"state,omitempty"`
+	Message             string            `json:"message,omitempty"`
+	Address             string            `json:"address,omitempty"`
+	ManagerReachability string            `json:"managerReachability,omitempty"`
+	ManagerAddress      string            `json:"managerAddress,omitempty"`
+	Leader              bool              `json:"leader,omitempty"`
+	EngineVersion       string            `json:"engineVersion,omitempty"`
+	OS                  string            `json:"os,omitempty"`
+	Architecture        string            `json:"architecture,omitempty"`
+	NanoCPUs            int64             `json:"nanoCpus,omitempty"`
+	MemoryBytes         int64             `json:"memoryBytes,omitempty"`
+	Labels              map[string]string `json:"labels,omitempty"`
+	EngineLabels        map[string]string `json:"engineLabels,omitempty"`
+	CreatedAt           time.Time         `json:"createdAt,omitempty"`
+	UpdatedAt           *time.Time        `json:"updatedAt,omitempty"`
+}
+
+func (n DockerNode) NormalizeCollections() DockerNode {
+	if n.Labels == nil {
+		n.Labels = map[string]string{}
+	}
+	if n.EngineLabels == nil {
+		n.EngineLabels = map[string]string{}
+	}
+	return n
 }
 
 // DockerSwarmInfo captures node-level swarm metadata.

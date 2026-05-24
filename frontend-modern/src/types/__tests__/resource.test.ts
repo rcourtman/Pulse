@@ -66,6 +66,7 @@ describe('Resource Type Guards', () => {
     const infrastructureTypes: ResourceType[] = [
       'agent',
       'docker-host',
+      'docker-swarm-node',
       'k8s-node',
       'k8s-cluster',
       'network-endpoint',
@@ -102,6 +103,7 @@ describe('Resource Type Guards', () => {
     const nonWorkloadTypes: ResourceType[] = [
       'agent',
       'docker-host',
+      'docker-swarm-node',
       'network-endpoint',
       'network',
       'storage',
@@ -558,6 +560,7 @@ describe('Resource Interface', () => {
       'docker-volume',
       'docker-network',
       'docker-task',
+      'docker-swarm-node',
       'k8s-deployment',
       'k8s-replicaset',
       'k8s-service',

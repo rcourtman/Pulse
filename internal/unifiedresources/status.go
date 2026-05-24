@@ -123,6 +123,28 @@ func statusFromDockerTask(task models.DockerTask) ResourceStatus {
 	}
 }
 
+func statusFromDockerSwarmNode(node models.DockerNode) ResourceStatus {
+	state := strings.ToLower(strings.TrimSpace(node.State))
+	reachability := strings.ToLower(strings.TrimSpace(node.ManagerReachability))
+	availability := strings.ToLower(strings.TrimSpace(node.Availability))
+
+	switch {
+	case state == "ready" || state == "active":
+		if reachability == "unreachable" || availability == "pause" || availability == "drain" {
+			return StatusWarning
+		}
+		return StatusOnline
+	case state == "down" || state == "disconnected":
+		return StatusOffline
+	case state == "unknown":
+		return StatusUnknown
+	case reachability == "unreachable":
+		return StatusWarning
+	default:
+		return StatusUnknown
+	}
+}
+
 func statusFromPBSInstance(instance models.PBSInstance) ResourceStatus {
 	primary := strings.ToLower(strings.TrimSpace(instance.Status))
 	health := strings.ToLower(strings.TrimSpace(instance.ConnectionHealth))

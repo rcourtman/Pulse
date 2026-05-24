@@ -119,7 +119,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 		}
 	}
 
-	services, tasks, swarmInfo := a.collectSwarmData(ctx, info, containers)
+	services, tasks, nodes, swarmInfo := a.collectSwarmData(ctx, info, containers)
 	diskUsageResult, storageUsage, err := a.collectStorageUsage(ctx)
 	if err != nil {
 		a.logger.Warn().Err(err).Msg("failed to collect Docker storage usage")
@@ -195,6 +195,9 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 	}
 	if a.cfg.IncludeTasks && len(tasks) > 0 {
 		report.Tasks = tasks
+	}
+	if len(nodes) > 0 {
+		report.Nodes = nodes
 	}
 	if storageUsage != nil {
 		report.StorageUsage = storageUsage

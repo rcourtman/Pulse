@@ -46,6 +46,7 @@ var supportedOrganizationShareResourceTypes = map[string]struct{}{
 	"docker-volume":               {},
 	"docker-network":              {},
 	"docker-task":                 {},
+	"docker-swarm-node":           {},
 	"k8s-deployment":              {},
 	"k8s-replicaset":              {},
 	"k8s-service":                 {},

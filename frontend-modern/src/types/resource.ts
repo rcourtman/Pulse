@@ -42,6 +42,7 @@ export type ResourceType =
   | 'docker-volume' // Docker/Podman volume
   | 'docker-network' // Docker/Podman network
   | 'docker-task' // Docker Swarm task
+  | 'docker-swarm-node' // Docker Swarm node
   | 'k8s-deployment' // Kubernetes deployment
   | 'k8s-replicaset' // Kubernetes replica set
   | 'k8s-service' // Kubernetes service
@@ -584,6 +585,7 @@ export interface ResourceDockerMeta {
   imageCount?: number;
   volumeCount?: number;
   networkCount?: number;
+  nodeCount?: number;
   updatesAvailableCount?: number;
   updatesLastCheckedAt?: string;
   imagesUsage?: DockerStorageUsageMeta;
@@ -649,6 +651,16 @@ export interface ResourceDockerMeta {
   taskId?: string;
   nodeId?: string;
   nodeName?: string;
+  nodeRole?: string;
+  availability?: string;
+  address?: string;
+  managerReachability?: string;
+  managerAddress?: string;
+  leader?: boolean;
+  engineVersion?: string;
+  nanoCpus?: number;
+  memoryBytes?: number;
+  engineLabels?: Record<string, string>;
   slot?: number;
   desiredState?: string;
   currentState?: string;
@@ -1253,7 +1265,14 @@ export interface Resource {
  * Helper type guards
  */
 export function isInfrastructure(r: Resource): boolean {
-  return ['agent', 'docker-host', 'k8s-cluster', 'k8s-node', 'network-endpoint'].includes(r.type);
+  return [
+    'agent',
+    'docker-host',
+    'docker-swarm-node',
+    'k8s-cluster',
+    'k8s-node',
+    'network-endpoint',
+  ].includes(r.type);
 }
 
 export function isWorkload(r: Resource): boolean {

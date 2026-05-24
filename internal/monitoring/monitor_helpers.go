@@ -390,6 +390,43 @@ func convertDockerTasks(tasks []agentsdocker.Task) []models.DockerTask {
 	return result
 }
 
+func convertDockerNodes(nodes []agentsdocker.Node) []models.DockerNode {
+	if len(nodes) == 0 {
+		return nil
+	}
+
+	result := make([]models.DockerNode, 0, len(nodes))
+	for _, node := range nodes {
+		modelNode := models.DockerNode{
+			ID:                  strings.TrimSpace(node.ID),
+			Hostname:            strings.TrimSpace(node.Hostname),
+			Role:                strings.TrimSpace(node.Role),
+			Availability:        strings.TrimSpace(node.Availability),
+			State:               strings.TrimSpace(node.State),
+			Message:             strings.TrimSpace(node.Message),
+			Address:             strings.TrimSpace(node.Address),
+			ManagerReachability: strings.TrimSpace(node.ManagerReachability),
+			ManagerAddress:      strings.TrimSpace(node.ManagerAddress),
+			Leader:              node.Leader,
+			EngineVersion:       strings.TrimSpace(node.EngineVersion),
+			OS:                  strings.TrimSpace(node.OS),
+			Architecture:        strings.TrimSpace(node.Architecture),
+			NanoCPUs:            node.NanoCPUs,
+			MemoryBytes:         node.MemoryBytes,
+			Labels:              cloneStringMap(node.Labels),
+			EngineLabels:        cloneStringMap(node.EngineLabels),
+			CreatedAt:           node.CreatedAt,
+		}
+		if node.UpdatedAt != nil && !node.UpdatedAt.IsZero() {
+			updated := *node.UpdatedAt
+			modelNode.UpdatedAt = &updated
+		}
+		result = append(result, modelNode.NormalizeCollections())
+	}
+
+	return result
+}
+
 func normalizeAgentVersion(version string) string {
 	version = strings.TrimSpace(version)
 	if version == "" {

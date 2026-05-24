@@ -1154,6 +1154,7 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 		ImageCount:            len(host.Images),
 		VolumeCount:           len(host.Volumes),
 		NetworkCount:          len(host.Networks),
+		NodeCount:             len(host.Nodes),
 		UpdatesAvailableCount: updatesAvailableCount,
 		UpdatesLastCheckedAt:  updatesLastCheckedPtr,
 		TokenID:               host.TokenID,
@@ -1173,6 +1174,7 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 		NetworksRaw:           append([]models.DockerNetwork(nil), host.Networks...),
 		Services:              append([]models.DockerService(nil), host.Services...),
 		Tasks:                 append([]models.DockerTask(nil), host.Tasks...),
+		Nodes:                 append([]models.DockerNode(nil), host.Nodes...),
 	}
 	if host.StorageUsage != nil {
 		docker.ImagesUsage = dockerStorageUsageMeta(host.StorageUsage.Images)
@@ -2182,6 +2184,54 @@ func resourceFromDockerTask(task models.DockerTask, host models.DockerHost) (Res
 	identity := ResourceIdentity{
 		Hostnames:   uniqueStrings([]string{name, strings.TrimSpace(task.ID)}),
 		ClusterName: dockerSwarmClusterKeyFromMeta(docker.Swarm),
+	}
+	return resource, identity
+}
+
+func resourceFromDockerSwarmNode(node models.DockerNode, host models.DockerHost) (Resource, ResourceIdentity) {
+	name := firstNonEmpty(strings.TrimSpace(node.Hostname), shortDigest(node.ID), node.ID)
+	clusterName := dockerSwarmClusterKeyFromMeta(convertSwarm(host.Swarm))
+	labels := cloneLabelMap(node.Labels)
+	docker := &DockerData{
+		HostSourceID:        host.ID,
+		Hostname:            strings.TrimSpace(host.Hostname),
+		NodeID:              strings.TrimSpace(node.ID),
+		NodeName:            strings.TrimSpace(node.Hostname),
+		NodeRole:            strings.TrimSpace(node.Role),
+		Availability:        strings.TrimSpace(node.Availability),
+		CurrentState:        strings.TrimSpace(node.State),
+		Message:             strings.TrimSpace(node.Message),
+		Address:             strings.TrimSpace(node.Address),
+		ManagerReachability: strings.TrimSpace(node.ManagerReachability),
+		ManagerAddress:      strings.TrimSpace(node.ManagerAddress),
+		Leader:              node.Leader,
+		EngineVersion:       strings.TrimSpace(node.EngineVersion),
+		RuntimeVersion:      strings.TrimSpace(node.EngineVersion),
+		OS:                  strings.TrimSpace(node.OS),
+		Architecture:        strings.TrimSpace(node.Architecture),
+		NanoCPUs:            node.NanoCPUs,
+		MemoryBytes:         node.MemoryBytes,
+		Runtime:             "docker",
+		Labels:              labels,
+		EngineLabels:        cloneLabelMap(node.EngineLabels),
+		Swarm:               convertSwarm(host.Swarm),
+	}
+	resource := Resource{
+		Type:       ResourceTypeDockerSwarmNode,
+		Technology: "docker",
+		Name:       name,
+		Status:     statusFromDockerSwarmNode(node),
+		LastSeen:   host.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Docker:     docker,
+		Tags:       labelsToTags(labels),
+	}
+	identity := ResourceIdentity{
+		Hostnames: uniqueStrings([]string{name, strings.TrimSpace(node.ID)}),
+	}
+	if clusterName != "" {
+		identity.ClusterName = clusterName
+		identity.Hostnames = uniqueStrings(append(identity.Hostnames, clusterName+":"+name))
 	}
 	return resource, identity
 }
