@@ -148,21 +148,28 @@ cross-source deduplication.
 
 ## Shared Boundaries
 
-Kubernetes workload presentation is API-native, not generic inventory. Pods
+Kubernetes workload presentation is API-native, not generic inventory. Pods,
+Deployments, controllers, and autoscalers render under the `/kubernetes/workloads`
+workflow tab; legacy object routes such as `/kubernetes/pods`,
+`/kubernetes/deployments`, `/kubernetes/controllers`, and
+`/kubernetes/autoscaling` are compatibility aliases for that workflow. Pods
 render through `frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx`
-on `/kubernetes/pods` with Pod phase, container readiness, restart, owner,
-node, image, and age fields from the Kubernetes API projection. StatefulSet,
-DaemonSet, Job, and CronJob rows render through
-`frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx` on
-`/kubernetes/controllers` and must preserve the Kubernetes API status semantics
-for desired replica/node/job targets, current or active counts, ready/succeeded
-counts, availability, misscheduled/unavailable/failed/suspended exceptions,
-service names, schedules, and controller timing fields instead of falling back
-to infrastructure columns. Deployment rows render through
+with Pod phase, container readiness, restart, owner, node, image, and age fields
+from the Kubernetes API projection. StatefulSet, DaemonSet, Job, and CronJob rows
+render through
+`frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx` and must
+preserve the Kubernetes API status semantics for desired replica/node/job
+targets, current or active counts, ready/succeeded counts, availability,
+misscheduled/unavailable/failed/suspended exceptions, service names, schedules,
+and controller timing fields instead of falling back to infrastructure columns.
+Deployment rows render through
 `frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx` with
 Deployment status replica counts, `status.observedGeneration`, and metadata
 creation age carried by the canonical Kubernetes resource facet rather than
-page-local derivation or generic host columns.
+page-local derivation or generic host columns. HorizontalPodAutoscaler rows in
+the same workflow preserve scale target, min/max replica bounds, current and
+desired replicas, and metric source types instead of routing HPA rows through the
+generic controller/event inventory table.
 
 Container runtime navigation is a unified-resource consumer boundary: the
 `/docker` route is the Docker / Podman runtime lens, not an exclusive owning
@@ -173,18 +180,18 @@ service-surface proof. The unified-resource adapter is the backend fail-closed
 layer for that rule, so persisted or older-agent inactive Swarm payloads cannot
 reintroduce false Swarm capability surfaces.
 
-Kubernetes policy inventory is a unified-resource consumer boundary: the
-`/kubernetes/policy` route must render NetworkPolicy, PodDisruptionBudget,
-ResourceQuota, and LimitRange rows through a policy-native table that preserves
-API-specific policy types, ingress/egress rule counts, disruption-budget health
-and allowed disruptions, quota hard/used maps, and LimitRange item types instead
-of collapsing those resources into generic detail text.
-
-Kubernetes autoscaling inventory is a unified-resource consumer boundary: the
-`/kubernetes/autoscaling` route must render HorizontalPodAutoscaler rows through
-an autoscaling-native table that preserves the API scale target, min/max replica
-bounds, current and desired replicas, and metric source types instead of routing
-HPA rows through the generic controller/event inventory table.
+Kubernetes configuration and policy inventory are unified-resource consumer
+boundaries: the `/kubernetes/configuration` workflow tab must render Namespace,
+ConfigMap, Secret, ServiceAccount, NetworkPolicy, PodDisruptionBudget,
+ResourceQuota, and LimitRange rows through API-native config and policy tables.
+Legacy `/kubernetes/config` and `/kubernetes/policy` routes resolve to that
+workflow tab. Config rows preserve cluster/namespace scope, Namespace lifecycle
+phase, ConfigMap/Secret immutable and type metadata, ServiceAccount
+token/image-pull/secret references, and metadata-only collection wording without
+rendering ConfigMap or Secret payload values. Policy rows preserve API-specific
+policy types, ingress/egress rule counts, disruption-budget health and allowed
+disruptions, quota hard/used maps, and LimitRange item types instead of
+collapsing those resources into generic detail text.
 
 Kubernetes events inventory is a unified-resource consumer boundary: the
 `/kubernetes/events` route must render Event rows through an event-native table
@@ -347,21 +354,24 @@ proof can distinguish a populated disk-usage tab from an empty fixture.
    or phase, class, size/request, access/reclaim policy, provisioner, and
    PV/PVC binding targets instead of routing those API objects through the
    generic Kubernetes inventory table.
-   Kubernetes networking inventory follows the same native-table rule:
-   `/kubernetes/networking` must render Service, Ingress, and EndpointSlice
-   rows through a networking-specific table that preserves cluster/namespace
-   scope, Service type, ClusterIP/external IPs, service ports, selectors,
-   Ingress class, hosts and addresses, EndpointSlice address type, ready
-   endpoint counts, endpoint ports, and service targets instead of routing
-   those API objects through the generic Kubernetes inventory table.
-   Kubernetes config inventory is likewise API-native and trust-sensitive:
-   `/kubernetes/config` must render Namespace, ConfigMap, Secret, and
-   ServiceAccount rows through a config-specific table that preserves
-   cluster/namespace scope, Namespace lifecycle phase, ConfigMap/Secret
-   immutable and type metadata, ServiceAccount token/image-pull/secret
-   references, and metadata-only collection wording. That table must not render
-   ConfigMap or Secret payload values, and metadata-only rows must not expose
-   key names as if payload fields had been read.
+   Kubernetes services inventory follows the same native-table rule:
+   `/kubernetes/services` must render Service, Ingress, and EndpointSlice rows
+   through service and networking-specific tables that preserve
+   cluster/namespace scope, Service type, ClusterIP/external IPs, service ports,
+   selectors, Ingress class, hosts and addresses, EndpointSlice address type,
+   ready endpoint counts, endpoint ports, and service targets instead of routing
+   those API objects through the generic Kubernetes inventory table. Legacy
+   `/kubernetes/networking` resolves to that Services workflow tab.
+   Kubernetes configuration inventory is likewise API-native and trust-sensitive:
+   `/kubernetes/configuration` must render Namespace, ConfigMap, Secret,
+   ServiceAccount, and policy rows through config and policy-specific tables
+   that preserve cluster/namespace scope, Namespace lifecycle phase,
+   ConfigMap/Secret immutable and type metadata, ServiceAccount
+   token/image-pull/secret references, metadata-only collection wording, and
+   policy-specific health/count fields. Legacy `/kubernetes/config` and
+   `/kubernetes/policy` resolve to that Configuration workflow tab. Config
+   tables must not render ConfigMap or Secret payload values, and metadata-only
+   rows must not expose key names as if payload fields had been read.
 2. Add typed accessors and views in `internal/unifiedresources/views.go`
 3. Add source ingestion/adaptation in the adapter layer only
    Frontend resource platform contracts in

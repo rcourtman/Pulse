@@ -833,15 +833,19 @@ not a replacement status card, CTA band, or page-local nested card.
    the container-runtime lens and may be labelled `Containers` in the shell,
    while shared source badges, filters, and runtime management copy continue
    to use `Docker / Podman` where the capability itself is being named.
-   Kubernetes pods on `/kubernetes/pods` must render through
+   Kubernetes workload rows on `/kubernetes/workloads` must render through the
+   Kubernetes-native workload tables rather than a generic infrastructure or
+   inventory table. Pods render through
    `frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx` with
-   Pod-native phase, readiness, restart, owner, node, image, and age columns.
-   Kubernetes controller rows on `/kubernetes/controllers` must render through
-   `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx`
-   rather than a generic infrastructure or inventory table. The table boundary
-   preserves platform-native API fields for StatefulSets, DaemonSets, Jobs, and
-   CronJobs, including targets, active/current counts, ready/succeeded counts,
-   availability, exceptions, service names, schedules, and last run metadata.
+   Pod-native phase, readiness, restart, owner, node, image, and age columns;
+   legacy `/kubernetes/pods` resolves to the same workflow. Controller rows
+   render through
+   `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx`;
+   legacy `/kubernetes/controllers` resolves to the same workflow. The table
+   boundary preserves platform-native API fields for StatefulSets, DaemonSets,
+   Jobs, and CronJobs, including targets, active/current counts,
+   ready/succeeded counts, availability, exceptions, service names, schedules,
+   and last run metadata.
 8. Keep shared source/platform vocabulary on the governed manifest boundary. `frontend-modern/src/utils/platformSupportManifest.generated.ts` must be the tracked frontend projection of `docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json`, `frontend-modern/src/utils/platformSupportManifest.ts`, `frontend-modern/src/utils/sourcePlatforms.ts`, and `frontend-modern/src/utils/sourcePlatformOptions.ts` must consume that generated projection instead of embedding divergent future-label lists, setup/onboarding path allowlists, host-profile labels, surface-kind guesses, readiness-state guesses, or presentation-only guesses, and `frontend-modern/scripts/canonical-platform-audit.mjs` must fail when the generated projection drifts from the governed manifest. The generated governance/readiness split is authoritative: supported platform arrays drive current support claims, while admitted platform arrays may keep route/navigation and add-flow vocabulary available without turning `first-lab-ready` entries such as VMware into supported-source copy. Kubernetes manifest projections must enumerate the native API-backed page sections the shared tab shell can expose, including controllers, networking, storage, config, policy, autoscaling, and events, so platform pages do not invent local support claims outside the governed JSON. The generated `surface_kind` is the machine-readable boundary between owning platform entries and runtime lenses: `docker` is a `runtime-lens`, not a `platform`, even when the container-runtime route stays available as a primary shell destination. The generic `docker` source-platform label is "Docker / Podman" in shared selectors, badges, and filter options so v5 Docker users can find the runtime surface while Podman-backed rows are not mislabeled as Docker-only; "Container runtime" remains the governed runtime family, not the primary customer-facing label. Identity colour is semantic, not page-local decoration: shared source/platform badges, host identity badges, and container runtime badges must use the shared presentation helpers so Docker remains on the Docker/Podman blue runtime tone, Podman uses its distinct runtime tone, Proxmox PVE remains orange, and those meanings do not drift across table rows, filters, drawers, or platform pages. Agent host-profile entries, including Unraid, stay in the generated `agentHostProfiles` projection and shared wrapper helpers; frontend primitives may render those labels for Pulse Agent install/identity copy but must not add them to the first-class platform union.
    The generated host-profile projection also carries runtime platform fallback
    metadata for shared explanation and parity with backend normalization, but
@@ -1563,7 +1567,7 @@ Command palette and keyboard shortcuts moved to platform-first on 2026-05-16
 with the `g i` / `g w` / `g s` / `g b` chord bindings — were retired and
 replaced with `nav-proxmox`, `nav-docker`, `nav-kubernetes`, `nav-truenas`,
 `nav-vmware` (chords `g p` / `g d` / `g k` / `g n` / `g v`) plus a dedicated
-`nav-kubernetes-pods` entry that lands on `/kubernetes/pods`. The shell
+`nav-kubernetes-workloads` entry that lands on `/kubernetes/workloads`. The shell
 preload set and `getActiveTabForPath` matcher no longer recognize the legacy
 top-level routes. New palette commands and shortcut chords must therefore
 anchor on canonical platform routes and must flow through the same platform

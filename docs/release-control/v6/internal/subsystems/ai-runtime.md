@@ -674,8 +674,9 @@ AI-adjacent shell and must not be kept as disabled placeholders. The legacy
 `/infrastructure`, `/workloads`, `/storage`, `/recovery`, and `/ceph` route
 shells were retired alongside their page wrappers. The AI Chat launcher, the
 Patrol surfaces, and the `AssistantHandoffPayload` deep links must use
-platform routes (`/proxmox/overview`, `/proxmox/storage`, `/kubernetes/pods`,
-etc.) as canonical anchors rather than the retired top-level paths; adding a
+platform routes (`/proxmox/overview`, `/proxmox/storage`,
+`/kubernetes/workloads`, etc.) as canonical anchors rather than the retired
+top-level paths; adding a
 platform tab through the same shell files must not fork Assistant or Patrol
 shell state or smuggle in AI-owned platform reads.
 Post-auth `/` and `/login` resolution follows that same provider-first
