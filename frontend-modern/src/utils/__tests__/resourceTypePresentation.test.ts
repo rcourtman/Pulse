@@ -11,6 +11,15 @@ describe('resourceTypePresentation', () => {
     expect(getResourceTypeLabel('network-endpoint')).toBe('Network Endpoint');
     expect(getResourceTypeLabel('network-share')).toBe('Network Share');
     expect(getResourceTypeLabel('truenas')).toBe('Agent');
+    expect(getResourceTypeLabel('docker-image')).toBe('Image');
+    expect(getResourceTypeLabel('docker-volume')).toBe('Volume');
+    expect(getResourceTypeLabel('docker-network')).toBe('Network');
+    expect(getResourceTypeLabel('docker-task')).toBe('Swarm Task');
+    expect(getResourceTypeLabel('k8s-service')).toBe('K8s Service');
+    expect(getResourceTypeLabel('k8s-ingress')).toBe('Ingress');
+    expect(getResourceTypeLabel('k8s-persistent-volume')).toBe('PV');
+    expect(getResourceTypeLabel('k8s-persistent-volume-claim')).toBe('PVC');
+    expect(getResourceTypeLabel('k8s-event')).toBe('Event');
   });
 
   it('returns shared presentations for external recovery subject aliases', () => {

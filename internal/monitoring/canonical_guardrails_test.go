@@ -85,6 +85,43 @@ func TestStandaloneInactiveDockerSwarmMetadataIsNotCapabilityEvidence(t *testing
 	}
 }
 
+func TestDockerInventoryConvertersPreserveNativeRuntimeFields(t *testing.T) {
+	createdAt := time.Date(2026, 5, 24, 8, 0, 0, 0, time.UTC)
+
+	images := convertDockerImages([]agentsdocker.Image{{
+		ID:          " sha256:image1 ",
+		RepoTags:    []string{"repo/app:latest"},
+		RepoDigests: []string{"repo/app@sha256:abc"},
+		SizeBytes:   1024,
+		CreatedAt:   createdAt,
+		Labels:      map[string]string{"tier": "web"},
+	}})
+	if len(images) != 1 || images[0].ID != "sha256:image1" || images[0].Labels["tier"] != "web" {
+		t.Fatalf("unexpected image conversion: %+v", images)
+	}
+
+	volumes := convertDockerVolumes([]agentsdocker.Volume{{
+		Name: " app-data ", Driver: " local ", SizeBytes: 2048, RefCount: 3, Labels: map[string]string{"backup": "true"},
+	}})
+	if len(volumes) != 1 || volumes[0].Name != "app-data" || volumes[0].SizeBytes != 2048 || volumes[0].Labels["backup"] != "true" {
+		t.Fatalf("unexpected volume conversion: %+v", volumes)
+	}
+
+	networks := convertDockerNetworks([]agentsdocker.Network{{
+		ID: " net1 ", Name: " app-net ", Driver: " bridge ", EnableIPv4: true, Subnets: []agentsdocker.NetworkSubnet{{Subnet: " 10.88.0.0/24 ", Gateway: " 10.88.0.1 "}},
+	}})
+	if len(networks) != 1 || networks[0].Name != "app-net" || networks[0].Subnets[0].Subnet != "10.88.0.0/24" {
+		t.Fatalf("unexpected network conversion: %+v", networks)
+	}
+
+	usage := convertDockerStorageUsage(&agentsdocker.StorageUsage{
+		Images: agentsdocker.StorageUsageBucket{TotalCount: 3, ActiveCount: 2, TotalSizeBytes: 4096, ReclaimableBytes: 512},
+	})
+	if usage == nil || usage.Images.TotalCount != 3 || usage.Images.ReclaimableBytes != 512 {
+		t.Fatalf("unexpected storage usage conversion: %+v", usage)
+	}
+}
+
 func TestPVEBackupPermissionWarningsPreserveTokenACLRepair(t *testing.T) {
 	warning := pveBackupPermissionWarning(&config.PVEInstance{
 		TokenName: "pulse-monitor@pve!pulse-example",

@@ -1237,8 +1237,12 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		containers = append(containers, container)
 	}
 
+	images := convertDockerImages(report.Images)
+	volumes := convertDockerVolumes(report.Volumes)
+	networks := convertDockerNetworks(report.Networks)
 	services := convertDockerServices(report.Services)
 	tasks := convertDockerTasks(report.Tasks)
+	storageUsage := convertDockerStorageUsage(report.StorageUsage)
 	swarmInfo := convertDockerSwarmInfo(report.Host.Swarm)
 	security := deriveDockerHostSecurity(report.Host.Security, runtime)
 
@@ -1341,8 +1345,12 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		IntervalSeconds:   report.Agent.IntervalSeconds,
 		AgentVersion:      agentVersion,
 		Containers:        containers,
+		Images:            images,
+		Volumes:           volumes,
+		Networks:          networks,
 		Services:          services,
 		Tasks:             tasks,
+		StorageUsage:      storageUsage,
 		Swarm:             swarmInfo,
 		Security:          security,
 		IsLegacy:          isLegacyAgent(report.Agent.Type),

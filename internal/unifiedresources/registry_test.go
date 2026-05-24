@@ -3860,3 +3860,42 @@ func TestRegistryIngestKeepsDockerContainersScopedToTheirHost(t *testing.T) {
 		}
 	}
 }
+
+func TestRegistryIngestSnapshotPublishesDockerNativeInventory(t *testing.T) {
+	now := time.Date(2026, 5, 24, 8, 0, 0, 0, time.UTC)
+	rr := NewRegistry(NewMemoryStore())
+	rr.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{{
+			ID:       "docker-host-1",
+			Hostname: "edge",
+			Runtime:  "docker",
+			Status:   "online",
+			LastSeen: now,
+			Images: []models.DockerImage{{
+				ID: "sha256:image1", RepoTags: []string{"repo/app:latest"}, SizeBytes: 1024,
+			}},
+			Volumes: []models.DockerVolume{{Name: "app-data", Driver: "local", SizeBytes: 2048}},
+			Networks: []models.DockerNetwork{{
+				ID: "net1", Name: "app-net", Driver: "bridge", Subnets: []models.DockerNetworkSubnet{{Subnet: "10.88.0.0/24", Gateway: "10.88.0.1"}},
+			}},
+			Tasks: []models.DockerTask{{
+				ID: "task-1", ServiceID: "svc-1", ServiceName: "api", Slot: 1, DesiredState: "running", CurrentState: "running",
+			}},
+		}},
+	})
+
+	counts := map[ResourceType]int{}
+	for _, resource := range rr.List() {
+		counts[resource.Type]++
+	}
+	for _, resourceType := range []ResourceType{
+		ResourceTypeDockerImage,
+		ResourceTypeDockerVolume,
+		ResourceTypeDockerNetwork,
+		ResourceTypeDockerTask,
+	} {
+		if counts[resourceType] != 1 {
+			t.Fatalf("expected one %s resource, got counts %#v", resourceType, counts)
+		}
+	}
+}

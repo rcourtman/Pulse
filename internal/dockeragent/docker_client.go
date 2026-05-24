@@ -9,6 +9,7 @@ import (
 	"github.com/moby/moby/api/types/network"
 	swarmtypes "github.com/moby/moby/api/types/swarm"
 	systemtypes "github.com/moby/moby/api/types/system"
+	"github.com/moby/moby/api/types/volume"
 	"github.com/moby/moby/client"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
@@ -91,6 +92,28 @@ type dockerServiceListOptions struct {
 	Status bool
 }
 
+type dockerImageListOptions struct {
+	All        bool
+	SharedSize bool
+	Filters    dockerFilters
+}
+
+type dockerVolumeListOptions struct {
+	Filters dockerFilters
+}
+
+type dockerNetworkListOptions struct {
+	Filters dockerFilters
+}
+
+type dockerDiskUsageOptions struct {
+	Containers bool
+	Images     bool
+	BuildCache bool
+	Volumes    bool
+	Verbose    bool
+}
+
 type dockerTaskListOptions struct {
 	Filters dockerFilters
 }
@@ -109,6 +132,10 @@ type dockerClient interface {
 	NetworkConnect(ctx context.Context, networkID, containerID string, config *network.EndpointSettings) error
 	ContainerStart(ctx context.Context, containerID string, options dockerContainerStartOptions) error
 	ContainerRemove(ctx context.Context, containerID string, options dockerContainerRemoveOptions) error
+	ImageList(ctx context.Context, options dockerImageListOptions) ([]image.Summary, error)
+	VolumeList(ctx context.Context, options dockerVolumeListOptions) ([]volume.Volume, error)
+	NetworkList(ctx context.Context, options dockerNetworkListOptions) ([]network.Summary, error)
+	DiskUsage(ctx context.Context, options dockerDiskUsageOptions) (client.DiskUsageResult, error)
 	ServiceList(ctx context.Context, options dockerServiceListOptions) ([]swarmtypes.Service, error)
 	TaskList(ctx context.Context, options dockerTaskListOptions) ([]swarmtypes.Task, error)
 	ImageInspectWithRaw(ctx context.Context, imageID string) (image.InspectResponse, []byte, error)
@@ -227,6 +254,44 @@ func (m *mobyDockerClient) ContainerRemove(ctx context.Context, containerID stri
 		Force:         options.Force,
 	})
 	return err
+}
+
+func (m *mobyDockerClient) ImageList(ctx context.Context, options dockerImageListOptions) ([]image.Summary, error) {
+	result, err := m.Client.ImageList(ctx, client.ImageListOptions{
+		All:        options.All,
+		SharedSize: options.SharedSize,
+		Filters:    options.Filters.toClientFilters(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result.Items, nil
+}
+
+func (m *mobyDockerClient) VolumeList(ctx context.Context, options dockerVolumeListOptions) ([]volume.Volume, error) {
+	result, err := m.Client.VolumeList(ctx, client.VolumeListOptions{Filters: options.Filters.toClientFilters()})
+	if err != nil {
+		return nil, err
+	}
+	return result.Items, nil
+}
+
+func (m *mobyDockerClient) NetworkList(ctx context.Context, options dockerNetworkListOptions) ([]network.Summary, error) {
+	result, err := m.Client.NetworkList(ctx, client.NetworkListOptions{Filters: options.Filters.toClientFilters()})
+	if err != nil {
+		return nil, err
+	}
+	return result.Items, nil
+}
+
+func (m *mobyDockerClient) DiskUsage(ctx context.Context, options dockerDiskUsageOptions) (client.DiskUsageResult, error) {
+	return m.Client.DiskUsage(ctx, client.DiskUsageOptions{
+		Containers: options.Containers,
+		Images:     options.Images,
+		BuildCache: options.BuildCache,
+		Volumes:    options.Volumes,
+		Verbose:    options.Verbose,
+	})
 }
 
 func (m *mobyDockerClient) ServiceList(ctx context.Context, options dockerServiceListOptions) ([]swarmtypes.Service, error) {

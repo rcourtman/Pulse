@@ -1,3 +1,4 @@
+import { useLocation } from '@solidjs/router';
 import ShipWheelIcon from 'lucide-solid/icons/ship-wheel';
 import { Show, createMemo, type Accessor } from 'solid-js';
 import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
@@ -14,18 +15,21 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import { KubernetesClustersTable } from './KubernetesClustersTable';
 import { KubernetesDeploymentsTable } from './KubernetesDeploymentsTable';
+import { KubernetesInventoryTable } from './KubernetesInventoryTable';
 import { KubernetesNodesTable } from './KubernetesNodesTable';
 import {
   KUBERNETES_TAB_SPECS,
   buildKubernetesPageModel,
   type KubernetesPageModel,
+  type KubernetesPageTabId,
 } from './kubernetesPageModel';
 
 // Include `agent` rows so K8s nodes that the backend registry merged onto
 // the linked agent host (sources=['agent','kubernetes']) still appear in the
 // Nodes section of the Overview stack; the page model filters them down to
 // those tagged kubernetes.
-const KUBERNETES_RESOURCE_QUERY = 'type=k8s-cluster,k8s-node,pod,k8s-deployment,agent';
+const KUBERNETES_RESOURCE_QUERY =
+  'type=k8s-cluster,k8s-node,pod,k8s-deployment,k8s-namespace,k8s-service,k8s-statefulset,k8s-daemonset,k8s-job,k8s-cronjob,k8s-ingress,k8s-persistent-volume,k8s-persistent-volume-claim,k8s-event,agent';
 const KUBERNETES_PLATFORM_FILTER = 'kubernetes';
 const KUBERNETES_WORKLOAD_FORCED_VIEW_MODE = 'pod';
 const KUBERNETES_WORKLOAD_COLUMN_SCOPE = 'kubernetes-pods';
@@ -35,14 +39,22 @@ const KUBERNETES_POD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
   { value: 'degraded', label: 'Needs attention' },
   { value: 'stopped', label: 'Not running' },
 ];
+const VALID_TABS = new Set<KubernetesPageTabId>(KUBERNETES_TAB_SPECS.map((tab) => tab.id));
 
 const k8sIcon = () => <ShipWheelIcon class="h-6 w-6 text-slate-400" />;
 
 export function KubernetesPageSurface() {
+  const location = useLocation();
   const { resources, loading, error, refetch } = useUnifiedResources({
     query: KUBERNETES_RESOURCE_QUERY,
     cacheKey: 'kubernetes-workspace',
     initialHydration: 'prefer-ws-then-rest',
+  });
+  const activeTab = createMemo<KubernetesPageTabId>(() => {
+    const segment = location.pathname.split('/').filter(Boolean)[1] as
+      | KubernetesPageTabId
+      | undefined;
+    return segment && VALID_TABS.has(segment) ? segment : 'overview';
   });
   const model = createMemo(() => buildKubernetesPageModel(resources()));
 
@@ -50,7 +62,7 @@ export function KubernetesPageSurface() {
     <div data-testid="kubernetes-page" class="space-y-3">
       <PlatformSectionTabs
         tabs={KUBERNETES_TAB_SPECS}
-        active="overview"
+        active={activeTab()}
         ariaLabel="Kubernetes sections"
       />
 
@@ -83,7 +95,57 @@ export function KubernetesPageSurface() {
               />
             }
           >
-            <KubernetesOverview model={model} />
+            <Show when={activeTab() === 'overview'}>
+              <KubernetesOverview model={model} />
+            </Show>
+            <Show when={activeTab() === 'workloads'}>
+              <KubernetesWorkloads model={model} />
+            </Show>
+            <Show when={activeTab() === 'services'}>
+              <KubernetesInventoryTable
+                resources={model().services}
+                variant="services"
+                emptyIcon={k8sIcon()}
+                emptyTitle="No services reported"
+                emptyDescription="Services appear here once the agent can read Service resources."
+              />
+            </Show>
+            <Show when={activeTab() === 'storage'}>
+              <KubernetesInventoryTable
+                resources={model().storage}
+                variant="storage"
+                emptyIcon={k8sIcon()}
+                emptyTitle="No PV or PVC resources reported"
+                emptyDescription="Persistent volumes and claims appear here once the agent can read volume inventory."
+              />
+            </Show>
+            <Show when={activeTab() === 'networking'}>
+              <KubernetesInventoryTable
+                resources={model().networking}
+                variant="networking"
+                emptyIcon={k8sIcon()}
+                emptyTitle="No networking resources reported"
+                emptyDescription="Services and ingresses appear here once the agent can read networking inventory."
+              />
+            </Show>
+            <Show when={activeTab() === 'config'}>
+              <KubernetesInventoryTable
+                resources={model().config}
+                variant="config"
+                emptyIcon={k8sIcon()}
+                emptyTitle="No config resources reported"
+                emptyDescription="Namespaces appear here once the agent can read cluster configuration inventory."
+              />
+            </Show>
+            <Show when={activeTab() === 'events'}>
+              <KubernetesInventoryTable
+                resources={model().events}
+                variant="events"
+                emptyIcon={k8sIcon()}
+                emptyTitle="No events reported"
+                emptyDescription="Events appear here when the agent can read the Kubernetes Events API."
+              />
+            </Show>
           </Show>
         </Show>
       </Show>
@@ -96,6 +158,16 @@ interface KubernetesOverviewProps {
 }
 
 function KubernetesOverview(props: KubernetesOverviewProps) {
+  return <KubernetesWorkloadStack model={props.model} mode="overview" />;
+}
+
+function KubernetesWorkloads(props: KubernetesOverviewProps) {
+  return <KubernetesWorkloadStack model={props.model} mode="workloads" />;
+}
+
+function KubernetesWorkloadStack(
+  props: KubernetesOverviewProps & { mode: 'overview' | 'workloads' },
+) {
   const workloadsState = useWorkloadsState({
     vms: [],
     containers: [],
@@ -136,6 +208,16 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
     return props
       .model()
       .deployments.filter((deployment) => resourceMatchesSearch(deployment, searchTerm()));
+  });
+  const filteredControllers = createMemo(() => {
+    const controllers = [
+      ...props.model().statefulSets,
+      ...props.model().daemonSets,
+      ...props.model().jobs,
+      ...props.model().cronJobs,
+    ];
+    if (!searchTerm()) return controllers;
+    return controllers.filter((controller) => resourceMatchesSearch(controller, searchTerm()));
   });
 
   return (
@@ -178,27 +260,39 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
           />
         </div>
       </Show>
-      <KubernetesClustersTable
-        clusters={filteredClusters()}
-        scope={props.model().resources}
-        emptyIcon={k8sIcon()}
-        emptyTitle="No clusters reported"
-        emptyDescription="Kubernetes clusters appear here once at least one agent reports cluster context."
-        showToolbar={false}
-      />
-      <KubernetesNodesTable
-        resources={filteredNodes()}
-        emptyIcon={k8sIcon()}
-        emptyTitle="No nodes reported"
-        emptyDescription="Kubernetes nodes appear here as soon as the agent enumerates them."
-        showToolbar={false}
-      />
+      <Show when={props.mode === 'overview'}>
+        <KubernetesClustersTable
+          clusters={filteredClusters()}
+          scope={props.model().resources}
+          emptyIcon={k8sIcon()}
+          emptyTitle="No clusters reported"
+          emptyDescription="Kubernetes clusters appear here once at least one agent reports cluster context."
+          showToolbar={false}
+        />
+        <KubernetesNodesTable
+          resources={filteredNodes()}
+          emptyIcon={k8sIcon()}
+          emptyTitle="No nodes reported"
+          emptyDescription="Kubernetes nodes appear here as soon as the agent enumerates them."
+          showToolbar={false}
+        />
+      </Show>
       <Show when={props.model().deployments.length > 0}>
         <KubernetesDeploymentsTable
           resources={filteredDeployments()}
           emptyIcon={k8sIcon()}
           emptyTitle="No deployments reported"
           emptyDescription="Deployments appear here once the cluster reports them."
+          showToolbar={false}
+        />
+      </Show>
+      <Show when={filteredControllers().length > 0}>
+        <KubernetesInventoryTable
+          resources={filteredControllers()}
+          variant="controllers"
+          emptyIcon={k8sIcon()}
+          emptyTitle="No controllers reported"
+          emptyDescription="StatefulSets, DaemonSets, Jobs, and CronJobs appear here when the agent reports them."
           showToolbar={false}
         />
       </Show>

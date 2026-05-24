@@ -14,7 +14,11 @@ import (
 	"time"
 
 	containertypes "github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/image"
+	networktypes "github.com/moby/moby/api/types/network"
 	systemtypes "github.com/moby/moby/api/types/system"
+	"github.com/moby/moby/api/types/volume"
+	"github.com/moby/moby/client"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
@@ -116,6 +120,22 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 	}
 
 	services, tasks, swarmInfo := a.collectSwarmData(ctx, info, containers)
+	diskUsageResult, storageUsage, err := a.collectStorageUsage(ctx)
+	if err != nil {
+		a.logger.Warn().Err(err).Msg("failed to collect Docker storage usage")
+	}
+	images, err := a.collectImages(ctx)
+	if err != nil {
+		a.logger.Warn().Err(err).Msg("failed to collect Docker images")
+	}
+	volumes, err := a.collectVolumes(ctx, diskUsageResult.Volumes.Items)
+	if err != nil {
+		a.logger.Warn().Err(err).Msg("failed to collect Docker volumes")
+	}
+	networks, err := a.collectNetworks(ctx)
+	if err != nil {
+		a.logger.Warn().Err(err).Msg("failed to collect Docker networks")
+	}
 
 	// Use Docker's MemTotal, but fall back to gopsutil's reading if Docker returns 0.
 	// This can happen in Docker-in-LXC setups where Docker daemon can't read host memory.
@@ -161,11 +181,23 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 	if a.cfg.IncludeContainers {
 		report.Containers = containers
 	}
+	if len(images) > 0 {
+		report.Images = images
+	}
+	if len(volumes) > 0 {
+		report.Volumes = volumes
+	}
+	if len(networks) > 0 {
+		report.Networks = networks
+	}
 	if a.cfg.IncludeServices && len(services) > 0 {
 		report.Services = services
 	}
 	if a.cfg.IncludeTasks && len(tasks) > 0 {
 		report.Tasks = tasks
+	}
+	if storageUsage != nil {
+		report.StorageUsage = storageUsage
 	}
 
 	if report.Agent.IntervalSeconds <= 0 {
@@ -207,6 +239,17 @@ func normalizedNonEmptyStrings(values []string) []string {
 		return nil
 	}
 	return normalized
+}
+
+func cloneStringMap(src map[string]string) map[string]string {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
 }
 
 func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container, error) {
@@ -251,6 +294,167 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 	}
 	a.pruneStaleCPUSamples(active)
 	return containers, nil
+}
+
+func (a *Agent) collectImages(ctx context.Context) ([]agentsdocker.Image, error) {
+	list, err := dockerCallWithRetry(ctx, dockerInventoryCallTimeout, func(callCtx context.Context) ([]image.Summary, error) {
+		return a.docker.ImageList(callCtx, dockerImageListOptions{All: true, SharedSize: true})
+	})
+	if err != nil {
+		return nil, annotateDockerConnectionError(err)
+	}
+
+	images := make([]agentsdocker.Image, 0, len(list))
+	for _, summary := range list {
+		images = append(images, agentsdocker.Image{
+			ID:              strings.TrimSpace(summary.ID),
+			RepoTags:        normalizedNonEmptyStrings(summary.RepoTags),
+			RepoDigests:     normalizedNonEmptyStrings(summary.RepoDigests),
+			SizeBytes:       summary.Size,
+			SharedSizeBytes: summary.SharedSize,
+			Containers:      summary.Containers,
+			CreatedAt:       dockerUnixTimestamp(summary.Created),
+			Labels:          cloneStringMap(summary.Labels),
+		})
+	}
+	return images, nil
+}
+
+func (a *Agent) collectVolumes(ctx context.Context, usageVolumes []volume.Volume) ([]agentsdocker.Volume, error) {
+	usageByName := make(map[string]volume.UsageData, len(usageVolumes))
+	for _, volume := range usageVolumes {
+		name := strings.TrimSpace(volume.Name)
+		if name == "" || volume.UsageData == nil {
+			continue
+		}
+		usageByName[name] = *volume.UsageData
+	}
+
+	list, err := dockerCallWithRetry(ctx, dockerInventoryCallTimeout, func(callCtx context.Context) ([]volume.Volume, error) {
+		return a.docker.VolumeList(callCtx, dockerVolumeListOptions{})
+	})
+	if err != nil {
+		return nil, annotateDockerConnectionError(err)
+	}
+
+	volumes := make([]agentsdocker.Volume, 0, len(list))
+	for _, v := range list {
+		sizeBytes := int64(0)
+		refCount := int64(0)
+		if v.UsageData != nil {
+			sizeBytes = v.UsageData.Size
+			refCount = v.UsageData.RefCount
+		} else if usage, ok := usageByName[strings.TrimSpace(v.Name)]; ok {
+			sizeBytes = usage.Size
+			refCount = usage.RefCount
+		}
+		volumes = append(volumes, agentsdocker.Volume{
+			Name:       strings.TrimSpace(v.Name),
+			Driver:     strings.TrimSpace(v.Driver),
+			Mountpoint: strings.TrimSpace(v.Mountpoint),
+			Scope:      strings.TrimSpace(v.Scope),
+			CreatedAt:  strings.TrimSpace(v.CreatedAt),
+			SizeBytes:  sizeBytes,
+			RefCount:   refCount,
+			Labels:     cloneStringMap(v.Labels),
+			Options:    cloneStringMap(v.Options),
+		})
+	}
+	return volumes, nil
+}
+
+func (a *Agent) collectNetworks(ctx context.Context) ([]agentsdocker.Network, error) {
+	list, err := dockerCallWithRetry(ctx, dockerInventoryCallTimeout, func(callCtx context.Context) ([]networktypes.Summary, error) {
+		return a.docker.NetworkList(callCtx, dockerNetworkListOptions{})
+	})
+	if err != nil {
+		return nil, annotateDockerConnectionError(err)
+	}
+
+	networks := make([]agentsdocker.Network, 0, len(list))
+	for _, n := range list {
+		subnets := make([]agentsdocker.NetworkSubnet, 0, len(n.IPAM.Config))
+		for _, config := range n.IPAM.Config {
+			subnet := ""
+			if config.Subnet.IsValid() {
+				subnet = config.Subnet.String()
+			}
+			gateway := ""
+			if config.Gateway.IsValid() {
+				gateway = config.Gateway.String()
+			}
+			subnets = append(subnets, agentsdocker.NetworkSubnet{
+				Subnet:  subnet,
+				Gateway: gateway,
+			})
+		}
+		networks = append(networks, agentsdocker.Network{
+			ID:         strings.TrimSpace(n.ID),
+			Name:       strings.TrimSpace(n.Name),
+			Driver:     strings.TrimSpace(n.Driver),
+			Scope:      strings.TrimSpace(n.Scope),
+			CreatedAt:  n.Created,
+			EnableIPv4: n.EnableIPv4,
+			EnableIPv6: n.EnableIPv6,
+			Internal:   n.Internal,
+			Attachable: n.Attachable,
+			Ingress:    n.Ingress,
+			ConfigOnly: n.ConfigOnly,
+			Subnets:    subnets,
+			Labels:     cloneStringMap(n.Labels),
+			Options:    cloneStringMap(n.Options),
+		})
+	}
+	return networks, nil
+}
+
+func (a *Agent) collectStorageUsage(ctx context.Context) (client.DiskUsageResult, *agentsdocker.StorageUsage, error) {
+	result, err := dockerCallWithRetry(ctx, dockerInventoryCallTimeout, func(callCtx context.Context) (client.DiskUsageResult, error) {
+		return a.docker.DiskUsage(callCtx, dockerDiskUsageOptions{
+			Containers: true,
+			Images:     true,
+			Volumes:    true,
+			BuildCache: true,
+			Verbose:    true,
+		})
+	})
+	if err != nil {
+		return client.DiskUsageResult{}, nil, annotateDockerConnectionError(err)
+	}
+
+	return result, &agentsdocker.StorageUsage{
+		Images: agentsdocker.StorageUsageBucket{
+			TotalCount:       result.Images.TotalCount,
+			ActiveCount:      result.Images.ActiveCount,
+			TotalSizeBytes:   result.Images.TotalSize,
+			ReclaimableBytes: result.Images.Reclaimable,
+		},
+		Containers: agentsdocker.StorageUsageBucket{
+			TotalCount:       result.Containers.TotalCount,
+			ActiveCount:      result.Containers.ActiveCount,
+			TotalSizeBytes:   result.Containers.TotalSize,
+			ReclaimableBytes: result.Containers.Reclaimable,
+		},
+		Volumes: agentsdocker.StorageUsageBucket{
+			TotalCount:       result.Volumes.TotalCount,
+			ActiveCount:      result.Volumes.ActiveCount,
+			TotalSizeBytes:   result.Volumes.TotalSize,
+			ReclaimableBytes: result.Volumes.Reclaimable,
+		},
+		BuildCache: agentsdocker.StorageUsageBucket{
+			TotalCount:       result.BuildCache.TotalCount,
+			ActiveCount:      result.BuildCache.ActiveCount,
+			TotalSizeBytes:   result.BuildCache.TotalSize,
+			ReclaimableBytes: result.BuildCache.Reclaimable,
+		},
+	}, nil
+}
+
+func dockerUnixTimestamp(seconds int64) time.Time {
+	if seconds <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(seconds, 0).UTC()
 }
 
 func (a *Agent) pruneStaleCPUSamples(active map[string]struct{}) {

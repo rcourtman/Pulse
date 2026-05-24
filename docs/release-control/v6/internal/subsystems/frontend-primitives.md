@@ -165,6 +165,12 @@ work extends shared components instead of creating new local variants.
 
 ## Shared Boundaries
 
+Platform page subnavigation is a shared frontend primitive. Docker / Podman
+and Kubernetes platform pages may add native API-backed sections, but the tabs
+must use `PlatformSectionTabs`, canonical table alignment helpers, and shared
+resource type presentation/reporting helpers rather than page-local tab shells,
+alignment classes, or ad hoc report-category coercion.
+
 1. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `security-privacy`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
    The panel may own shell placement and local action layout, but
    token-specific Docker / Podman copy must come from

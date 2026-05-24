@@ -521,10 +521,23 @@ const resolveType = (value?: string): ResourceType => {
     case 'agent':
     case 'storage':
     case 'docker-host':
+    case 'docker-image':
+    case 'docker-volume':
+    case 'docker-network':
+    case 'docker-task':
     case 'k8s-cluster':
     case 'k8s-node':
     case 'k8s-deployment':
     case 'k8s-service':
+    case 'k8s-namespace':
+    case 'k8s-statefulset':
+    case 'k8s-daemonset':
+    case 'k8s-job':
+    case 'k8s-cronjob':
+    case 'k8s-ingress':
+    case 'k8s-persistent-volume':
+    case 'k8s-persistent-volume-claim':
+    case 'k8s-event':
     case 'vm':
     case 'system-container':
     case 'oci-container':
@@ -548,10 +561,36 @@ const resolveType = (value?: string): ResourceType => {
       return 'jail';
     case 'docker-service':
       return 'docker-service';
+    case 'docker-image':
+      return 'docker-image';
+    case 'docker-volume':
+      return 'docker-volume';
+    case 'docker-network':
+      return 'docker-network';
+    case 'docker-task':
+      return 'docker-task';
     case 'k8s-deployment':
       return 'k8s-deployment';
     case 'k8s-service':
       return 'k8s-service';
+    case 'k8s-namespace':
+      return 'k8s-namespace';
+    case 'k8s-statefulset':
+      return 'k8s-statefulset';
+    case 'k8s-daemonset':
+      return 'k8s-daemonset';
+    case 'k8s-job':
+      return 'k8s-job';
+    case 'k8s-cronjob':
+      return 'k8s-cronjob';
+    case 'k8s-ingress':
+      return 'k8s-ingress';
+    case 'k8s-persistent-volume':
+      return 'k8s-persistent-volume';
+    case 'k8s-persistent-volume-claim':
+      return 'k8s-persistent-volume-claim';
+    case 'k8s-event':
+      return 'k8s-event';
     case 'storage':
       return 'storage';
     case 'datastore':

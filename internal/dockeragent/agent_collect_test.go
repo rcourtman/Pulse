@@ -11,7 +11,11 @@ import (
 	"time"
 
 	containertypes "github.com/moby/moby/api/types/container"
+	imagetypes "github.com/moby/moby/api/types/image"
+	networktypes "github.com/moby/moby/api/types/network"
 	systemtypes "github.com/moby/moby/api/types/system"
+	volumetypes "github.com/moby/moby/api/types/volume"
+	dockerclient "github.com/moby/moby/client"
 	"github.com/rs/zerolog"
 )
 
@@ -27,6 +31,106 @@ func TestBuildHostSecurityInfoAuthorizationPlugins(t *testing.T) {
 	}
 	if got := security.AuthorizationPlugins; len(got) != 2 || got[0] != "opa" || got[1] != "audit" {
 		t.Fatalf("expected normalized authorization plugins, got %#v", got)
+	}
+}
+
+func TestCollectDockerNativeInventory(t *testing.T) {
+	createdAt := time.Date(2026, 5, 24, 8, 0, 0, 0, time.UTC)
+	agent := &Agent{
+		logger: zerolog.Nop(),
+		docker: &fakeDockerClient{
+			imageListFn: func(context.Context, dockerImageListOptions) ([]imagetypes.Summary, error) {
+				return []imagetypes.Summary{{
+					ID:          " sha256:image1 ",
+					RepoTags:    []string{"repo/app:latest", " "},
+					RepoDigests: []string{"repo/app@sha256:abc"},
+					Size:        1024,
+					SharedSize:  256,
+					Containers:  2,
+					Created:     createdAt.Unix(),
+					Labels:      map[string]string{"tier": "web"},
+				}}, nil
+			},
+			volumeListFn: func(context.Context, dockerVolumeListOptions) ([]volumetypes.Volume, error) {
+				return []volumetypes.Volume{{
+					Name:       " app-data ",
+					Driver:     " local ",
+					Mountpoint: "/var/lib/docker/volumes/app-data",
+					Scope:      " local ",
+					Labels:     map[string]string{"backup": "true"},
+				}}, nil
+			},
+			networkListFn: func(context.Context, dockerNetworkListOptions) ([]networktypes.Summary, error) {
+				return []networktypes.Summary{{
+					Network: networktypes.Network{
+						ID:         " net1 ",
+						Name:       " app-net ",
+						Driver:     " bridge ",
+						Scope:      " local ",
+						EnableIPv4: true,
+						Attachable: true,
+						IPAM: networktypes.IPAM{Config: []networktypes.IPAMConfig{{
+							Subnet:  netip.MustParsePrefix("10.88.0.0/24"),
+							Gateway: netip.MustParseAddr("10.88.0.1"),
+						}}},
+						Labels:  map[string]string{"env": "prod"},
+						Options: map[string]string{"mtu": "1500"},
+					},
+				}}, nil
+			},
+			diskUsageFn: func(context.Context, dockerDiskUsageOptions) (dockerclient.DiskUsageResult, error) {
+				return dockerclient.DiskUsageResult{
+					Images: dockerclient.ImagesDiskUsage{
+						TotalCount: 3, ActiveCount: 2, TotalSize: 4096, Reclaimable: 512,
+					},
+					Volumes: dockerclient.VolumesDiskUsage{
+						TotalCount: 1,
+						Items: []volumetypes.Volume{{
+							Name:      "app-data",
+							UsageData: &volumetypes.UsageData{Size: 2048, RefCount: 4},
+						}},
+					},
+				}, nil
+			},
+		},
+	}
+
+	images, err := agent.collectImages(context.Background())
+	if err != nil {
+		t.Fatalf("collectImages: %v", err)
+	}
+	if len(images) != 1 || images[0].ID != "sha256:image1" || images[0].CreatedAt != createdAt {
+		t.Fatalf("unexpected images: %+v", images)
+	}
+	if len(images[0].RepoTags) != 1 || images[0].RepoTags[0] != "repo/app:latest" {
+		t.Fatalf("expected normalized repo tags, got %#v", images[0].RepoTags)
+	}
+
+	usageResult, storageUsage, err := agent.collectStorageUsage(context.Background())
+	if err != nil {
+		t.Fatalf("collectStorageUsage: %v", err)
+	}
+	if storageUsage.Images.TotalCount != 3 || storageUsage.Images.ReclaimableBytes != 512 {
+		t.Fatalf("unexpected storage usage: %+v", storageUsage)
+	}
+
+	volumes, err := agent.collectVolumes(context.Background(), usageResult.Volumes.Items)
+	if err != nil {
+		t.Fatalf("collectVolumes: %v", err)
+	}
+	if len(volumes) != 1 || volumes[0].Name != "app-data" || volumes[0].SizeBytes != 2048 || volumes[0].RefCount != 4 {
+		t.Fatalf("unexpected volumes: %+v", volumes)
+	}
+
+	networks, err := agent.collectNetworks(context.Background())
+	if err != nil {
+		t.Fatalf("collectNetworks: %v", err)
+	}
+	if len(networks) != 1 || networks[0].Name != "app-net" || !networks[0].EnableIPv4 || !networks[0].Attachable {
+		t.Fatalf("unexpected networks: %+v", networks)
+	}
+	if len(networks[0].Subnets) != 1 || networks[0].Subnets[0].Subnet != "10.88.0.0/24" || networks[0].Subnets[0].Gateway != "10.88.0.1" {
+		t.Fatalf("unexpected network subnets: %+v", networks[0].Subnets)
 	}
 }
 

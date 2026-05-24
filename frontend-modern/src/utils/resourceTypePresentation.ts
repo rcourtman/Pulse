@@ -54,12 +54,64 @@ const RESOURCE_TYPE_PRESENTATION: Partial<Record<ResourceType | string, Resource
       label: 'Docker Service',
       badgeClasses: DEFAULT_BADGE_CLASSES,
     },
+    'docker-image': {
+      label: 'Image',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'docker-volume': {
+      label: 'Volume',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'docker-network': {
+      label: 'Network',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'docker-task': {
+      label: 'Swarm Task',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
     'k8s-deployment': {
       label: 'K8s Deployment',
       badgeClasses: DEFAULT_BADGE_CLASSES,
     },
     'k8s-service': {
       label: 'K8s Service',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'k8s-namespace': {
+      label: 'Namespace',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'k8s-statefulset': {
+      label: 'StatefulSet',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'k8s-daemonset': {
+      label: 'DaemonSet',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'k8s-job': {
+      label: 'Job',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'k8s-cronjob': {
+      label: 'CronJob',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'k8s-ingress': {
+      label: 'Ingress',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'k8s-persistent-volume': {
+      label: 'PV',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'k8s-persistent-volume-claim': {
+      label: 'PVC',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'k8s-event': {
+      label: 'Event',
       badgeClasses: DEFAULT_BADGE_CLASSES,
     },
     storage: {

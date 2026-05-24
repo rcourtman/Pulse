@@ -1857,6 +1857,14 @@ func resourceTypeFilterAdapter(token string) []unified.ResourceType {
 		return []unified.ResourceType{unified.ResourceTypeAgent}
 	case "docker-host":
 		return []unified.ResourceType{"docker-host"}
+	case "docker-image", "docker-images":
+		return []unified.ResourceType{unified.ResourceTypeDockerImage}
+	case "docker-volume", "docker-volumes":
+		return []unified.ResourceType{unified.ResourceTypeDockerVolume}
+	case "docker-network", "docker-networks":
+		return []unified.ResourceType{unified.ResourceTypeDockerNetwork}
+	case "docker-task", "docker-tasks":
+		return []unified.ResourceType{unified.ResourceTypeDockerTask}
 	case "vm", "vms":
 		return []unified.ResourceType{unified.ResourceTypeVM}
 	case "system-container", "system-containers", "oci-container":
@@ -1873,6 +1881,26 @@ func resourceTypeFilterAdapter(token string) []unified.ResourceType {
 		return []unified.ResourceType{unified.ResourceTypeK8sNode}
 	case "k8s-deployment", "k8s-deployments":
 		return []unified.ResourceType{unified.ResourceTypeK8sDeployment}
+	case "k8s-namespace", "k8s-namespaces":
+		return []unified.ResourceType{unified.ResourceTypeK8sNamespace}
+	case "k8s-service", "k8s-services":
+		return []unified.ResourceType{unified.ResourceTypeK8sService}
+	case "k8s-statefulset", "k8s-statefulsets":
+		return []unified.ResourceType{unified.ResourceTypeK8sStatefulSet}
+	case "k8s-daemonset", "k8s-daemonsets":
+		return []unified.ResourceType{unified.ResourceTypeK8sDaemonSet}
+	case "k8s-job", "k8s-jobs":
+		return []unified.ResourceType{unified.ResourceTypeK8sJob}
+	case "k8s-cronjob", "k8s-cronjobs":
+		return []unified.ResourceType{unified.ResourceTypeK8sCronJob}
+	case "k8s-ingress", "k8s-ingresses":
+		return []unified.ResourceType{unified.ResourceTypeK8sIngress}
+	case "k8s-persistent-volume", "k8s-persistent-volumes":
+		return []unified.ResourceType{unified.ResourceTypeK8sPV}
+	case "k8s-persistent-volume-claim", "k8s-persistent-volume-claims":
+		return []unified.ResourceType{unified.ResourceTypeK8sPVC}
+	case "k8s-event", "k8s-events":
+		return []unified.ResourceType{unified.ResourceTypeK8sEvent}
 	case "storage":
 		return []unified.ResourceType{unified.ResourceTypeStorage}
 	case "network", "networks":

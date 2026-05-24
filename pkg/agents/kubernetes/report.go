@@ -5,13 +5,23 @@ import "time"
 // Report represents a single heartbeat from the Kubernetes agent to Pulse.
 // It is designed to be useful without requiring Metrics Server (metrics.k8s.io).
 type Report struct {
-	Agent       AgentInfo       `json:"agent"`
-	Cluster     ClusterInfo     `json:"cluster"`
-	Nodes       []Node          `json:"nodes,omitempty"`
-	Pods        []Pod           `json:"pods,omitempty"`
-	Deployments []Deployment    `json:"deployments,omitempty"`
-	Recovery    *RecoveryReport `json:"recovery,omitempty"`
-	Timestamp   time.Time       `json:"timestamp"`
+	Agent                  AgentInfo               `json:"agent"`
+	Cluster                ClusterInfo             `json:"cluster"`
+	Nodes                  []Node                  `json:"nodes,omitempty"`
+	Namespaces             []Namespace             `json:"namespaces,omitempty"`
+	Pods                   []Pod                   `json:"pods,omitempty"`
+	Deployments            []Deployment            `json:"deployments,omitempty"`
+	StatefulSets           []StatefulSet           `json:"statefulSets,omitempty"`
+	DaemonSets             []DaemonSet             `json:"daemonSets,omitempty"`
+	Services               []Service               `json:"services,omitempty"`
+	Jobs                   []Job                   `json:"jobs,omitempty"`
+	CronJobs               []CronJob               `json:"cronJobs,omitempty"`
+	Ingresses              []Ingress               `json:"ingresses,omitempty"`
+	PersistentVolumes      []PersistentVolume      `json:"persistentVolumes,omitempty"`
+	PersistentVolumeClaims []PersistentVolumeClaim `json:"persistentVolumeClaims,omitempty"`
+	Events                 []Event                 `json:"events,omitempty"`
+	Recovery               *RecoveryReport         `json:"recovery,omitempty"`
+	Timestamp              time.Time               `json:"timestamp"`
 }
 
 // AgentInfo describes the reporting agent instance.
@@ -112,6 +122,152 @@ type Deployment struct {
 	ReadyReplicas     int32             `json:"readyReplicas,omitempty"`
 	AvailableReplicas int32             `json:"availableReplicas,omitempty"`
 	Labels            map[string]string `json:"labels,omitempty"`
+}
+
+// Namespace represents a Kubernetes namespace at report time.
+type Namespace struct {
+	UID       string            `json:"uid"`
+	Name      string            `json:"name"`
+	Phase     string            `json:"phase,omitempty"`
+	CreatedAt time.Time         `json:"createdAt,omitempty"`
+	Labels    map[string]string `json:"labels,omitempty"`
+}
+
+// StatefulSet represents a Kubernetes stateful set at report time.
+type StatefulSet struct {
+	UID               string            `json:"uid"`
+	Name              string            `json:"name"`
+	Namespace         string            `json:"namespace"`
+	DesiredReplicas   int32             `json:"desiredReplicas,omitempty"`
+	ReadyReplicas     int32             `json:"readyReplicas,omitempty"`
+	CurrentReplicas   int32             `json:"currentReplicas,omitempty"`
+	UpdatedReplicas   int32             `json:"updatedReplicas,omitempty"`
+	AvailableReplicas int32             `json:"availableReplicas,omitempty"`
+	ServiceName       string            `json:"serviceName,omitempty"`
+	Labels            map[string]string `json:"labels,omitempty"`
+}
+
+// DaemonSet represents a Kubernetes daemon set at report time.
+type DaemonSet struct {
+	UID                    string            `json:"uid"`
+	Name                   string            `json:"name"`
+	Namespace              string            `json:"namespace"`
+	DesiredNumberScheduled int32             `json:"desiredNumberScheduled,omitempty"`
+	CurrentNumberScheduled int32             `json:"currentNumberScheduled,omitempty"`
+	NumberReady            int32             `json:"numberReady,omitempty"`
+	UpdatedNumberScheduled int32             `json:"updatedNumberScheduled,omitempty"`
+	NumberAvailable        int32             `json:"numberAvailable,omitempty"`
+	NumberUnavailable      int32             `json:"numberUnavailable,omitempty"`
+	NumberMisscheduled     int32             `json:"numberMisscheduled,omitempty"`
+	Labels                 map[string]string `json:"labels,omitempty"`
+}
+
+// Service represents a Kubernetes service at report time.
+type Service struct {
+	UID         string            `json:"uid"`
+	Name        string            `json:"name"`
+	Namespace   string            `json:"namespace"`
+	Type        string            `json:"type,omitempty"`
+	ClusterIP   string            `json:"clusterIp,omitempty"`
+	ExternalIPs []string          `json:"externalIps,omitempty"`
+	Ports       []ServicePort     `json:"ports,omitempty"`
+	Selector    map[string]string `json:"selector,omitempty"`
+	CreatedAt   time.Time         `json:"createdAt,omitempty"`
+	Labels      map[string]string `json:"labels,omitempty"`
+}
+
+// ServicePort describes one Kubernetes service port.
+type ServicePort struct {
+	Name       string `json:"name,omitempty"`
+	Protocol   string `json:"protocol,omitempty"`
+	Port       int32  `json:"port,omitempty"`
+	TargetPort string `json:"targetPort,omitempty"`
+	NodePort   int32  `json:"nodePort,omitempty"`
+}
+
+// Job represents a Kubernetes job at report time.
+type Job struct {
+	UID                string            `json:"uid"`
+	Name               string            `json:"name"`
+	Namespace          string            `json:"namespace"`
+	DesiredCompletions int32             `json:"desiredCompletions,omitempty"`
+	Succeeded          int32             `json:"succeeded,omitempty"`
+	Failed             int32             `json:"failed,omitempty"`
+	Active             int32             `json:"active,omitempty"`
+	StartTime          *time.Time        `json:"startTime,omitempty"`
+	CompletionTime     *time.Time        `json:"completionTime,omitempty"`
+	Labels             map[string]string `json:"labels,omitempty"`
+}
+
+// CronJob represents a Kubernetes cron job at report time.
+type CronJob struct {
+	UID                string            `json:"uid"`
+	Name               string            `json:"name"`
+	Namespace          string            `json:"namespace"`
+	Schedule           string            `json:"schedule,omitempty"`
+	Suspend            bool              `json:"suspend,omitempty"`
+	Active             int               `json:"active,omitempty"`
+	LastScheduleTime   *time.Time        `json:"lastScheduleTime,omitempty"`
+	LastSuccessfulTime *time.Time        `json:"lastSuccessfulTime,omitempty"`
+	Labels             map[string]string `json:"labels,omitempty"`
+}
+
+// Ingress represents a Kubernetes ingress at report time.
+type Ingress struct {
+	UID       string            `json:"uid"`
+	Name      string            `json:"name"`
+	Namespace string            `json:"namespace"`
+	ClassName string            `json:"className,omitempty"`
+	Hosts     []string          `json:"hosts,omitempty"`
+	Addresses []string          `json:"addresses,omitempty"`
+	CreatedAt time.Time         `json:"createdAt,omitempty"`
+	Labels    map[string]string `json:"labels,omitempty"`
+}
+
+// PersistentVolume represents a Kubernetes persistent volume at report time.
+type PersistentVolume struct {
+	UID            string            `json:"uid"`
+	Name           string            `json:"name"`
+	Phase          string            `json:"phase,omitempty"`
+	StorageClass   string            `json:"storageClass,omitempty"`
+	CapacityBytes  int64             `json:"capacityBytes,omitempty"`
+	AccessModes    []string          `json:"accessModes,omitempty"`
+	ReclaimPolicy  string            `json:"reclaimPolicy,omitempty"`
+	ClaimNamespace string            `json:"claimNamespace,omitempty"`
+	ClaimName      string            `json:"claimName,omitempty"`
+	CreatedAt      time.Time         `json:"createdAt,omitempty"`
+	Labels         map[string]string `json:"labels,omitempty"`
+}
+
+// PersistentVolumeClaim represents a Kubernetes persistent volume claim at report time.
+type PersistentVolumeClaim struct {
+	UID            string            `json:"uid"`
+	Name           string            `json:"name"`
+	Namespace      string            `json:"namespace"`
+	Phase          string            `json:"phase,omitempty"`
+	StorageClass   string            `json:"storageClass,omitempty"`
+	RequestedBytes int64             `json:"requestedBytes,omitempty"`
+	CapacityBytes  int64             `json:"capacityBytes,omitempty"`
+	AccessModes    []string          `json:"accessModes,omitempty"`
+	VolumeName     string            `json:"volumeName,omitempty"`
+	CreatedAt      time.Time         `json:"createdAt,omitempty"`
+	Labels         map[string]string `json:"labels,omitempty"`
+}
+
+// Event represents a Kubernetes event at report time.
+type Event struct {
+	UID          string     `json:"uid"`
+	Name         string     `json:"name"`
+	Namespace    string     `json:"namespace,omitempty"`
+	Type         string     `json:"type,omitempty"`
+	Reason       string     `json:"reason,omitempty"`
+	Message      string     `json:"message,omitempty"`
+	InvolvedKind string     `json:"involvedKind,omitempty"`
+	InvolvedName string     `json:"involvedName,omitempty"`
+	Count        int32      `json:"count,omitempty"`
+	FirstSeen    *time.Time `json:"firstSeen,omitempty"`
+	LastSeen     *time.Time `json:"lastSeen,omitempty"`
+	EventTime    *time.Time `json:"eventTime,omitempty"`
 }
 
 // RecoveryReport contains optional, best-effort "recovery point" artifacts discovered by the agent.

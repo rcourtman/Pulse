@@ -38,8 +38,21 @@ export type ResourceType =
   | 'pod' // Kubernetes pod
   | 'jail' // BSD jail
   | 'docker-service' // Docker Swarm service
+  | 'docker-image' // Docker/Podman image
+  | 'docker-volume' // Docker/Podman volume
+  | 'docker-network' // Docker/Podman network
+  | 'docker-task' // Docker Swarm task
   | 'k8s-deployment' // Kubernetes deployment
   | 'k8s-service' // Kubernetes service
+  | 'k8s-namespace' // Kubernetes namespace
+  | 'k8s-statefulset' // Kubernetes stateful set
+  | 'k8s-daemonset' // Kubernetes daemon set
+  | 'k8s-job' // Kubernetes job
+  | 'k8s-cronjob' // Kubernetes cron job
+  | 'k8s-ingress' // Kubernetes ingress
+  | 'k8s-persistent-volume' // Kubernetes persistent volume
+  | 'k8s-persistent-volume-claim' // Kubernetes persistent volume claim
+  | 'k8s-event' // Kubernetes event
   | 'storage' // Storage resource
   | 'network' // Virtual/network topology resource
   | 'datastore' // PBS datastore
@@ -545,6 +558,7 @@ export interface ResourceProxmoxMeta {
 // Swarm services table.
 export interface ResourceDockerMeta {
   serviceId?: string;
+  serviceName?: string;
   hostSourceId?: string;
   containerId?: string;
   hostname?: string;
@@ -561,10 +575,23 @@ export interface ResourceDockerMeta {
   agentVersion?: string;
   uptimeSeconds?: number;
   containerCount?: number;
+  imageCount?: number;
+  volumeCount?: number;
+  networkCount?: number;
   updatesAvailableCount?: number;
   updatesLastCheckedAt?: string;
+  imagesUsage?: DockerStorageUsageMeta;
+  containersUsage?: DockerStorageUsageMeta;
+  volumesUsage?: DockerStorageUsageMeta;
+  buildCacheUsage?: DockerStorageUsageMeta;
   command?: Record<string, unknown>;
   image?: string;
+  imageId?: string;
+  repoTags?: string[];
+  repoDigests?: string[];
+  sizeBytes?: number;
+  sharedSizeBytes?: number;
+  imageContainers?: number;
   containerState?: string;
   ports?: Array<{
     privatePort?: number;
@@ -587,6 +614,7 @@ export interface ResourceDockerMeta {
   mode?: string;
   desiredTasks?: number;
   runningTasks?: number;
+  completedTasks?: number;
   endpointPorts?: Array<{
     protocol?: string;
     targetPort?: number;
@@ -594,6 +622,34 @@ export interface ResourceDockerMeta {
     publishMode?: string;
   }>;
   labels?: Record<string, string>;
+  volumeName?: string;
+  driver?: string;
+  mountpoint?: string;
+  scope?: string;
+  createdAt?: string;
+  refCount?: number;
+  options?: Record<string, string>;
+  networkId?: string;
+  enableIpv4?: boolean;
+  enableIpv6?: boolean;
+  internal?: boolean;
+  attachable?: boolean;
+  ingress?: boolean;
+  configOnly?: boolean;
+  subnets?: Array<{
+    subnet?: string;
+    gateway?: string;
+  }>;
+  taskId?: string;
+  nodeId?: string;
+  nodeName?: string;
+  slot?: number;
+  desiredState?: string;
+  currentState?: string;
+  error?: string;
+  message?: string;
+  startedAt?: string;
+  completedAt?: string;
   swarm?: {
     clusterId?: string;
     clusterName?: string;
@@ -604,6 +660,13 @@ export interface ResourceDockerMeta {
     scope?: string;
     error?: string;
   };
+}
+
+export interface DockerStorageUsageMeta {
+  totalCount?: number;
+  activeCount?: number;
+  totalSizeBytes?: number;
+  reclaimableBytes?: number;
 }
 
 export interface ResourceTrueNASAppHostPort {
@@ -760,6 +823,8 @@ export interface ResourceKubernetesMeta {
   clusterId?: string;
   agentId?: string;
   clusterName?: string;
+  resourceUid?: string;
+  resourceKind?: string;
   context?: string;
   nodeName?: string;
   namespace?: string;
@@ -775,10 +840,69 @@ export interface ResourceKubernetesMeta {
   // the generic infrastructure table are not the meaningful operator
   // columns; replica counts are.
   deploymentUid?: string;
+  statefulSetUid?: string;
+  daemonSetUid?: string;
+  serviceUid?: string;
+  jobUid?: string;
+  cronJobUid?: string;
+  ingressUid?: string;
+  persistentVolumeUid?: string;
+  persistentVolumeClaimUid?: string;
+  eventUid?: string;
+  namespaceUid?: string;
   desiredReplicas?: number;
   updatedReplicas?: number;
   readyReplicas?: number;
   availableReplicas?: number;
+  currentReplicas?: number;
+  desiredNumberScheduled?: number;
+  currentNumberScheduled?: number;
+  numberReady?: number;
+  numberAvailable?: number;
+  numberUnavailable?: number;
+  numberMisscheduled?: number;
+  serviceName?: string;
+  serviceType?: string;
+  clusterIp?: string;
+  externalIps?: string[];
+  servicePorts?: Array<{
+    name?: string;
+    protocol?: string;
+    port?: number;
+    targetPort?: string;
+    nodePort?: number;
+  }>;
+  selector?: Record<string, string>;
+  succeeded?: number;
+  failed?: number;
+  active?: number;
+  schedule?: string;
+  suspend?: boolean;
+  lastScheduleTime?: string;
+  lastSuccessfulTime?: string;
+  startTime?: string;
+  completionTime?: string;
+  className?: string;
+  hosts?: string[];
+  addresses?: string[];
+  phase?: string;
+  storageClass?: string;
+  capacityBytes?: number;
+  requestedBytes?: number;
+  accessModes?: string[];
+  reclaimPolicy?: string;
+  claimNamespace?: string;
+  claimName?: string;
+  volumeName?: string;
+  eventType?: string;
+  reason?: string;
+  message?: string;
+  involvedKind?: string;
+  involvedName?: string;
+  count?: number;
+  firstSeen?: string;
+  eventTime?: string;
+  createdAt?: string;
   // Cluster-only fields surfaced on the Kubernetes platform-page
   // Clusters table for at-a-glance fleet posture.
   version?: string;

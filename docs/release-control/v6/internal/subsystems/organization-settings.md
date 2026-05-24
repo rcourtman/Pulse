@@ -78,6 +78,12 @@ create, review, and approve cross-organization shares.
    compensation around grids.
 3. Route organization and RBAC frontend transport changes through `frontend-modern/src/api/orgs.ts` and `frontend-modern/src/api/rbac.ts`
 4. Keep backend organization management and lifecycle handlers aligned through `internal/api/org_handlers.go` and `internal/api/org_lifecycle_handlers.go`
+   Organization resource shares may reference the canonical Docker / Podman
+   and Kubernetes inventory resource types exposed by `/api/resources`, but the
+   organization layer only validates the bounded resource-type vocabulary. It
+   must not reinterpret a Docker image/volume/network/task or Kubernetes
+   Service/controller/storage/networking/event row as a broader organization
+   role, agent enrollment authority, or command capability.
 5. Keep RBAC role, assignment, and admin recovery transport aligned through `internal/api/access_control_handlers.go` and `internal/api/enterprise_extension_rbac_admin.go`
 
 ## Forbidden Paths

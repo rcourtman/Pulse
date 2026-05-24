@@ -364,6 +364,58 @@ func cloneDockerContainers(src []DockerContainer) []DockerContainer {
 	return dest
 }
 
+func cloneDockerImages(src []DockerImage) []DockerImage {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]DockerImage, len(src))
+	for i, image := range src {
+		imageCopy := image
+		imageCopy.RepoTags = append([]string(nil), image.RepoTags...)
+		imageCopy.RepoDigests = append([]string(nil), image.RepoDigests...)
+		imageCopy.Labels = cloneStringMap(image.Labels)
+		dest[i] = imageCopy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneDockerVolumes(src []DockerVolume) []DockerVolume {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]DockerVolume, len(src))
+	for i, volume := range src {
+		volumeCopy := volume
+		volumeCopy.Labels = cloneStringMap(volume.Labels)
+		volumeCopy.Options = cloneStringMap(volume.Options)
+		dest[i] = volumeCopy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneDockerNetworks(src []DockerNetwork) []DockerNetwork {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]DockerNetwork, len(src))
+	for i, network := range src {
+		networkCopy := network
+		networkCopy.Subnets = append([]DockerNetworkSubnet(nil), network.Subnets...)
+		networkCopy.Labels = cloneStringMap(network.Labels)
+		networkCopy.Options = cloneStringMap(network.Options)
+		dest[i] = networkCopy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneDockerStorageUsage(src *DockerStorageUsage) *DockerStorageUsage {
+	if src == nil {
+		return nil
+	}
+	dest := *src
+	return &dest
+}
+
 func cloneDockerServiceUpdate(src *DockerServiceUpdate) *DockerServiceUpdate {
 	if src == nil {
 		return nil
@@ -441,8 +493,12 @@ func cloneDockerHost(src DockerHost) DockerHost {
 	dest.Disks = append([]Disk(nil), src.Disks...)
 	dest.NetworkInterfaces = cloneHostNetworkInterfaces(src.NetworkInterfaces)
 	dest.Containers = cloneDockerContainers(src.Containers)
+	dest.Images = cloneDockerImages(src.Images)
+	dest.Volumes = cloneDockerVolumes(src.Volumes)
+	dest.Networks = cloneDockerNetworks(src.Networks)
 	dest.Services = cloneDockerServices(src.Services)
 	dest.Tasks = cloneDockerTasks(src.Tasks)
+	dest.StorageUsage = cloneDockerStorageUsage(src.StorageUsage)
 	dest.Swarm = cloneDockerSwarmInfo(src.Swarm)
 	dest.Security = cloneDockerHostSecurity(src.Security)
 	dest.Temperature = cloneFloat64Ptr(src.Temperature)
@@ -471,6 +527,19 @@ func cloneKubernetesNodes(src []KubernetesNode) []KubernetesNode {
 		nodeCopy := node
 		nodeCopy.Roles = append([]string(nil), node.Roles...)
 		dest[i] = nodeCopy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneKubernetesNamespaces(src []KubernetesNamespace) []KubernetesNamespace {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesNamespace, len(src))
+	for i, namespace := range src {
+		namespaceCopy := namespace
+		namespaceCopy.Labels = cloneStringMap(namespace.Labels)
+		dest[i] = namespaceCopy.NormalizeCollections()
 	}
 	return dest
 }
@@ -507,11 +576,151 @@ func cloneKubernetesDeployments(src []KubernetesDeployment) []KubernetesDeployme
 	return dest
 }
 
+func cloneKubernetesStatefulSets(src []KubernetesStatefulSet) []KubernetesStatefulSet {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesStatefulSet, len(src))
+	for i, statefulSet := range src {
+		copy := statefulSet
+		copy.Labels = cloneStringMap(statefulSet.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneKubernetesDaemonSets(src []KubernetesDaemonSet) []KubernetesDaemonSet {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesDaemonSet, len(src))
+	for i, daemonSet := range src {
+		copy := daemonSet
+		copy.Labels = cloneStringMap(daemonSet.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneKubernetesServices(src []KubernetesService) []KubernetesService {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesService, len(src))
+	for i, service := range src {
+		copy := service
+		copy.ExternalIPs = append([]string(nil), service.ExternalIPs...)
+		copy.Ports = append([]KubernetesServicePort(nil), service.Ports...)
+		copy.Selector = cloneStringMap(service.Selector)
+		copy.Labels = cloneStringMap(service.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneKubernetesJobs(src []KubernetesJob) []KubernetesJob {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesJob, len(src))
+	for i, job := range src {
+		copy := job
+		copy.StartTime = cloneTimePtr(job.StartTime)
+		copy.CompletionTime = cloneTimePtr(job.CompletionTime)
+		copy.Labels = cloneStringMap(job.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneKubernetesCronJobs(src []KubernetesCronJob) []KubernetesCronJob {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesCronJob, len(src))
+	for i, cronJob := range src {
+		copy := cronJob
+		copy.LastScheduleTime = cloneTimePtr(cronJob.LastScheduleTime)
+		copy.LastSuccessfulTime = cloneTimePtr(cronJob.LastSuccessfulTime)
+		copy.Labels = cloneStringMap(cronJob.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneKubernetesIngresses(src []KubernetesIngress) []KubernetesIngress {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesIngress, len(src))
+	for i, ingress := range src {
+		copy := ingress
+		copy.Hosts = append([]string(nil), ingress.Hosts...)
+		copy.Addresses = append([]string(nil), ingress.Addresses...)
+		copy.Labels = cloneStringMap(ingress.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneKubernetesPersistentVolumes(src []KubernetesPersistentVolume) []KubernetesPersistentVolume {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesPersistentVolume, len(src))
+	for i, volume := range src {
+		copy := volume
+		copy.AccessModes = append([]string(nil), volume.AccessModes...)
+		copy.Labels = cloneStringMap(volume.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneKubernetesPersistentVolumeClaims(src []KubernetesPersistentVolumeClaim) []KubernetesPersistentVolumeClaim {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesPersistentVolumeClaim, len(src))
+	for i, claim := range src {
+		copy := claim
+		copy.AccessModes = append([]string(nil), claim.AccessModes...)
+		copy.Labels = cloneStringMap(claim.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneKubernetesEvents(src []KubernetesEvent) []KubernetesEvent {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesEvent, len(src))
+	for i, event := range src {
+		copy := event
+		copy.FirstSeen = cloneTimePtr(event.FirstSeen)
+		copy.LastSeen = cloneTimePtr(event.LastSeen)
+		copy.EventTime = cloneTimePtr(event.EventTime)
+		dest[i] = copy
+	}
+	return dest
+}
+
 func cloneKubernetesCluster(src KubernetesCluster) KubernetesCluster {
 	dest := src
 	dest.Nodes = cloneKubernetesNodes(src.Nodes)
+	dest.Namespaces = cloneKubernetesNamespaces(src.Namespaces)
 	dest.Pods = cloneKubernetesPods(src.Pods)
 	dest.Deployments = cloneKubernetesDeployments(src.Deployments)
+	dest.StatefulSets = cloneKubernetesStatefulSets(src.StatefulSets)
+	dest.DaemonSets = cloneKubernetesDaemonSets(src.DaemonSets)
+	dest.Services = cloneKubernetesServices(src.Services)
+	dest.Jobs = cloneKubernetesJobs(src.Jobs)
+	dest.CronJobs = cloneKubernetesCronJobs(src.CronJobs)
+	dest.Ingresses = cloneKubernetesIngresses(src.Ingresses)
+	dest.PersistentVolumes = cloneKubernetesPersistentVolumes(src.PersistentVolumes)
+	dest.PersistentVolumeClaims = cloneKubernetesPersistentVolumeClaims(src.PersistentVolumeClaims)
+	dest.Events = cloneKubernetesEvents(src.Events)
 	dest.TokenLastUsedAt = cloneTimePtr(src.TokenLastUsedAt)
 	return dest.NormalizeCollections()
 }

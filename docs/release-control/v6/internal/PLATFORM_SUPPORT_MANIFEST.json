@@ -82,13 +82,17 @@
       "canonical_projections": [
         "agent",
         "app-container",
-        "docker-service"
+        "docker-image",
+        "docker-volume",
+        "docker-network",
+        "docker-service",
+        "docker-task"
       ],
       "support_floor": {
         "setup": "supported",
         "visibility": "supported",
         "workloads": "supported",
-        "storage": "n/a",
+        "storage": "supported",
         "recovery": "n/a",
         "alerts": "supported",
         "assistant_read": "supported",
@@ -118,13 +122,23 @@
         "k8s-cluster",
         "k8s-node",
         "pod",
-        "k8s-deployment"
+        "k8s-deployment",
+        "k8s-statefulset",
+        "k8s-daemonset",
+        "k8s-service",
+        "k8s-job",
+        "k8s-cronjob",
+        "k8s-ingress",
+        "k8s-persistent-volume",
+        "k8s-persistent-volume-claim",
+        "k8s-namespace",
+        "k8s-event"
       ],
       "support_floor": {
         "setup": "supported",
         "visibility": "supported",
         "workloads": "supported",
-        "storage": "n/a",
+        "storage": "supported",
         "recovery": "supported",
         "alerts": "supported",
         "assistant_read": "supported",

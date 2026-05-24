@@ -374,6 +374,89 @@ func TestUnifiedAIAdapterClassificationAndStats(t *testing.T) {
 	}
 }
 
+func TestDockerNativeInventoryAdapters(t *testing.T) {
+	now := time.Date(2026, 5, 24, 8, 0, 0, 0, time.UTC)
+	host := models.DockerHost{ID: "docker-host-1", Hostname: "edge", Runtime: "podman", RuntimeVersion: "5.0.0", LastSeen: now}
+
+	imageResource, imageIdentity := resourceFromDockerImage(models.DockerImage{
+		ID: "sha256:image1", RepoTags: []string{"repo/app:latest"}, SizeBytes: 1024, Labels: map[string]string{"tier": "web"},
+	}, host)
+	if imageResource.Type != ResourceTypeDockerImage || imageResource.Docker == nil || imageResource.Docker.ImageID != "sha256:image1" || imageIdentity.Hostnames[0] != "repo/app:latest" {
+		t.Fatalf("unexpected image resource: resource=%+v identity=%+v", imageResource, imageIdentity)
+	}
+
+	volumeResource, _ := resourceFromDockerVolume(models.DockerVolume{Name: "app-data", Driver: "local", SizeBytes: 2048, RefCount: 3}, host)
+	if volumeResource.Type != ResourceTypeDockerVolume || volumeResource.Docker == nil || volumeResource.Docker.VolumeName != "app-data" || volumeResource.Docker.SizeBytes != 2048 {
+		t.Fatalf("unexpected volume resource: %+v", volumeResource)
+	}
+
+	networkResource, _ := resourceFromDockerNetwork(models.DockerNetwork{
+		ID: "net1", Name: "app-net", Driver: "bridge", EnableIPv4: true, Subnets: []models.DockerNetworkSubnet{{Subnet: "10.88.0.0/24", Gateway: "10.88.0.1"}},
+	}, host)
+	if networkResource.Type != ResourceTypeDockerNetwork || networkResource.Docker == nil || networkResource.Docker.NetworkID != "net1" || networkResource.Docker.Subnets[0].Gateway != "10.88.0.1" {
+		t.Fatalf("unexpected network resource: %+v", networkResource)
+	}
+
+	taskResource, taskIdentity := resourceFromDockerTask(models.DockerTask{
+		ID: "task-1", ServiceName: "api", ServiceID: "svc-1", Slot: 2, DesiredState: "running", CurrentState: "running", NodeName: "edge",
+	}, host)
+	if taskResource.Type != ResourceTypeDockerTask || taskResource.Name != "api.2" || taskResource.Status != StatusOnline || taskIdentity.Hostnames[0] != "api.2" {
+		t.Fatalf("unexpected task resource: resource=%+v identity=%+v", taskResource, taskIdentity)
+	}
+}
+
+func TestKubernetesNativeInventoryAdapters(t *testing.T) {
+	now := time.Date(2026, 5, 24, 8, 0, 0, 0, time.UTC)
+	cluster := models.KubernetesCluster{ID: "cluster-1", Name: "prod", DisplayName: "Production", LastSeen: now}
+
+	service, serviceIdentity := resourceFromKubernetesService(cluster, models.KubernetesService{
+		UID: "svc-1", Name: "checkout", Namespace: "services", ServiceType: "ClusterIP", ClusterIP: "10.96.0.10", Ports: []models.KubernetesServicePort{{Name: "http", Protocol: "TCP", Port: 80, TargetPort: "8080"}},
+	}, nil)
+	if service.Type != ResourceTypeK8sService || service.Kubernetes == nil || service.Kubernetes.ServiceType != "ClusterIP" || serviceIdentity.ClusterName != "Production" {
+		t.Fatalf("unexpected service resource: resource=%+v identity=%+v", service, serviceIdentity)
+	}
+
+	statefulSet, _ := resourceFromKubernetesStatefulSet(cluster, models.KubernetesStatefulSet{Name: "db", Namespace: "services", DesiredReplicas: 3, ReadyReplicas: 2}, nil)
+	if statefulSet.Type != ResourceTypeK8sStatefulSet || statefulSet.Status != StatusWarning {
+		t.Fatalf("unexpected statefulset resource: %+v", statefulSet)
+	}
+
+	daemonSet, _ := resourceFromKubernetesDaemonSet(cluster, models.KubernetesDaemonSet{Name: "node-agent", Namespace: "kube-system", DesiredNumberScheduled: 3, NumberReady: 3}, nil)
+	if daemonSet.Type != ResourceTypeK8sDaemonSet || daemonSet.Status != StatusOnline {
+		t.Fatalf("unexpected daemonset resource: %+v", daemonSet)
+	}
+
+	job, _ := resourceFromKubernetesJob(cluster, models.KubernetesJob{Name: "backup", Namespace: "services", DesiredCompletions: 1, Succeeded: 1}, nil)
+	if job.Type != ResourceTypeK8sJob || job.Status != StatusOnline {
+		t.Fatalf("unexpected job resource: %+v", job)
+	}
+
+	cronJob, _ := resourceFromKubernetesCronJob(cluster, models.KubernetesCronJob{Name: "nightly", Namespace: "services", Schedule: "0 1 * * *"}, nil)
+	if cronJob.Type != ResourceTypeK8sCronJob || cronJob.Kubernetes == nil || cronJob.Kubernetes.Schedule != "0 1 * * *" {
+		t.Fatalf("unexpected cronjob resource: %+v", cronJob)
+	}
+
+	ingress, _ := resourceFromKubernetesIngress(cluster, models.KubernetesIngress{Name: "checkout", Namespace: "services", Hosts: []string{"checkout.example.test"}}, nil)
+	if ingress.Type != ResourceTypeK8sIngress || ingress.Kubernetes == nil || ingress.Kubernetes.Hosts[0] != "checkout.example.test" {
+		t.Fatalf("unexpected ingress resource: %+v", ingress)
+	}
+
+	pv, _ := resourceFromKubernetesPersistentVolume(cluster, models.KubernetesPersistentVolume{Name: "pv-checkout", Phase: "Bound", CapacityBytes: 10_000, ClaimName: "checkout-data"}, nil)
+	if pv.Type != ResourceTypeK8sPV || pv.Kubernetes == nil || pv.Kubernetes.ClaimName != "checkout-data" {
+		t.Fatalf("unexpected pv resource: %+v", pv)
+	}
+
+	pvc, _ := resourceFromKubernetesPersistentVolumeClaim(cluster, models.KubernetesPersistentVolumeClaim{Name: "checkout-data", Namespace: "services", Phase: "Bound", VolumeName: "pv-checkout"}, nil)
+	if pvc.Type != ResourceTypeK8sPVC || pvc.Kubernetes == nil || pvc.Kubernetes.VolumeName != "pv-checkout" {
+		t.Fatalf("unexpected pvc resource: %+v", pvc)
+	}
+
+	event, _ := resourceFromKubernetesEvent(cluster, models.KubernetesEvent{Name: "checkout.1", Namespace: "services", EventType: "Warning", Reason: "BackOff", Count: 2}, nil)
+	if event.Type != ResourceTypeK8sEvent || event.Status != StatusWarning || event.Kubernetes == nil || event.Kubernetes.Reason != "BackOff" {
+		t.Fatalf("unexpected event resource: %+v", event)
+	}
+}
+
 func TestUnifiedAIAdapterGetTopByMetric(t *testing.T) {
 	registry := testRegistry(
 		Resource{

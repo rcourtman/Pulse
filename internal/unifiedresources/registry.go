@@ -179,6 +179,15 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 		for _, dc := range dh.Containers {
 			rr.ingestDockerContainer(dc, dh)
 		}
+		for _, image := range dh.Images {
+			rr.ingestDockerImage(image, dh)
+		}
+		for _, volume := range dh.Volumes {
+			rr.ingestDockerVolume(volume, dh)
+		}
+		for _, network := range dh.Networks {
+			rr.ingestDockerNetwork(network, dh)
+		}
 	}
 
 	// Swarm services are cluster-scoped; multiple nodes can report identical
@@ -221,6 +230,11 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 	for _, candidate := range serviceByID {
 		rr.ingestDockerService(candidate.service, candidate.host)
 	}
+	for _, dh := range snapshot.DockerHosts {
+		for _, task := range dh.Tasks {
+			rr.ingestDockerTask(task, dh)
+		}
+	}
 
 	kubernetesHostLookup := buildKubernetesNodeHostLookup(snapshot.Hosts)
 	for _, cluster := range snapshot.KubernetesClusters {
@@ -239,6 +253,36 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 		}
 		for _, deployment := range cluster.Deployments {
 			rr.ingestKubernetesDeployment(cluster, deployment, clusterID, capabilities)
+		}
+		for _, namespace := range cluster.Namespaces {
+			rr.ingestKubernetesNamespace(cluster, namespace, clusterID, capabilities)
+		}
+		for _, service := range cluster.Services {
+			rr.ingestKubernetesService(cluster, service, clusterID, capabilities)
+		}
+		for _, statefulSet := range cluster.StatefulSets {
+			rr.ingestKubernetesStatefulSet(cluster, statefulSet, clusterID, capabilities)
+		}
+		for _, daemonSet := range cluster.DaemonSets {
+			rr.ingestKubernetesDaemonSet(cluster, daemonSet, clusterID, capabilities)
+		}
+		for _, job := range cluster.Jobs {
+			rr.ingestKubernetesJob(cluster, job, clusterID, capabilities)
+		}
+		for _, cronJob := range cluster.CronJobs {
+			rr.ingestKubernetesCronJob(cluster, cronJob, clusterID, capabilities)
+		}
+		for _, ingress := range cluster.Ingresses {
+			rr.ingestKubernetesIngress(cluster, ingress, clusterID, capabilities)
+		}
+		for _, volume := range cluster.PersistentVolumes {
+			rr.ingestKubernetesPersistentVolume(cluster, volume, clusterID, capabilities)
+		}
+		for _, claim := range cluster.PersistentVolumeClaims {
+			rr.ingestKubernetesPersistentVolumeClaim(cluster, claim, clusterID, capabilities)
+		}
+		for _, event := range cluster.Events {
+			rr.ingestKubernetesEvent(cluster, event, clusterID, capabilities)
 		}
 	}
 
@@ -454,6 +498,52 @@ func (rr *ResourceRegistry) seedSourceIDForResourceLocked(resource *Resource, so
 				return ""
 			}
 			return fmt.Sprintf("%s:service:%s", clusterKey, serviceID)
+		case ResourceTypeDockerImage:
+			hostSourceID := strings.TrimSpace(resource.Docker.HostSourceID)
+			imageID := strings.TrimSpace(resource.Docker.ImageID)
+			if imageID == "" {
+				imageID = strings.TrimSpace(resource.Name)
+			}
+			if hostSourceID == "" || imageID == "" {
+				return ""
+			}
+			return hostSourceID + "/image/" + imageID
+		case ResourceTypeDockerVolume:
+			hostSourceID := strings.TrimSpace(resource.Docker.HostSourceID)
+			volumeName := strings.TrimSpace(resource.Docker.VolumeName)
+			if volumeName == "" {
+				volumeName = strings.TrimSpace(resource.Name)
+			}
+			if hostSourceID == "" || volumeName == "" {
+				return ""
+			}
+			return hostSourceID + "/volume/" + volumeName
+		case ResourceTypeDockerNetwork:
+			hostSourceID := strings.TrimSpace(resource.Docker.HostSourceID)
+			networkID := strings.TrimSpace(resource.Docker.NetworkID)
+			if networkID == "" {
+				networkID = strings.TrimSpace(resource.Name)
+			}
+			if hostSourceID == "" || networkID == "" {
+				return ""
+			}
+			return hostSourceID + "/network/" + networkID
+		case ResourceTypeDockerTask:
+			taskID := strings.TrimSpace(resource.Docker.TaskID)
+			if taskID == "" {
+				taskID = strings.TrimSpace(resource.Name)
+			}
+			if taskID == "" {
+				return ""
+			}
+			if clusterKey := dockerSwarmClusterKeyFromMeta(resource.Docker.Swarm); clusterKey != "" {
+				return fmt.Sprintf("%s:task:%s", clusterKey, taskID)
+			}
+			hostSourceID := strings.TrimSpace(resource.Docker.HostSourceID)
+			if hostSourceID == "" {
+				return ""
+			}
+			return hostSourceID + "/task/" + taskID
 		default:
 			return strings.TrimSpace(resource.Docker.HostSourceID)
 		}
@@ -501,6 +591,26 @@ func (rr *ResourceRegistry) seedSourceIDForResourceLocked(resource *Resource, so
 				return ""
 			}
 			return fmt.Sprintf("%s:deployment:%s", clusterSourceID, deploymentID)
+		case ResourceTypeK8sNamespace:
+			return seededKubernetesTypedSourceID(clusterSourceID, "namespace", resource, resource.Kubernetes.NamespaceUID)
+		case ResourceTypeK8sService:
+			return seededKubernetesTypedSourceID(clusterSourceID, "service", resource, resource.Kubernetes.ServiceUID)
+		case ResourceTypeK8sStatefulSet:
+			return seededKubernetesTypedSourceID(clusterSourceID, "statefulset", resource, resource.Kubernetes.StatefulSetUID)
+		case ResourceTypeK8sDaemonSet:
+			return seededKubernetesTypedSourceID(clusterSourceID, "daemonset", resource, resource.Kubernetes.DaemonSetUID)
+		case ResourceTypeK8sJob:
+			return seededKubernetesTypedSourceID(clusterSourceID, "job", resource, resource.Kubernetes.JobUID)
+		case ResourceTypeK8sCronJob:
+			return seededKubernetesTypedSourceID(clusterSourceID, "cronjob", resource, resource.Kubernetes.CronJobUID)
+		case ResourceTypeK8sIngress:
+			return seededKubernetesTypedSourceID(clusterSourceID, "ingress", resource, resource.Kubernetes.IngressUID)
+		case ResourceTypeK8sPV:
+			return seededKubernetesTypedSourceID(clusterSourceID, "persistentvolume", resource, resource.Kubernetes.PersistentVolumeUID)
+		case ResourceTypeK8sPVC:
+			return seededKubernetesTypedSourceID(clusterSourceID, "persistentvolumeclaim", resource, resource.Kubernetes.PersistentVolumeClaimUID)
+		case ResourceTypeK8sEvent:
+			return seededKubernetesTypedSourceID(clusterSourceID, "event", resource, resource.Kubernetes.EventUID)
 		}
 	case SourceVMware:
 		return seededVMwareSourceID(resource)
@@ -593,6 +703,28 @@ func seededKubernetesDeploymentIdentity(resource *Resource) string {
 		return ""
 	}
 	return namespace + "/" + name
+}
+
+func seededKubernetesTypedSourceID(clusterSourceID, kind string, resource *Resource, uid string) string {
+	if resource == nil || resource.Kubernetes == nil {
+		return ""
+	}
+	id := strings.TrimSpace(uid)
+	if id == "" {
+		namespace := strings.TrimSpace(resource.Kubernetes.Namespace)
+		name := strings.TrimSpace(resource.Name)
+		if namespace != "" && name != "" {
+			id = namespace + "/" + name
+		} else {
+			id = name
+		}
+	}
+	clusterSourceID = strings.TrimSpace(clusterSourceID)
+	kind = strings.TrimSpace(kind)
+	if clusterSourceID == "" || kind == "" || id == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:%s:%s", clusterSourceID, kind, id)
 }
 
 func seededVMwareSourceID(resource *Resource) string {
@@ -1087,6 +1219,61 @@ func (rr *ResourceRegistry) ingestDockerService(service models.DockerService, ho
 	rr.ingest(SourceDocker, sourceID, resource, identity)
 }
 
+func (rr *ResourceRegistry) ingestDockerImage(image models.DockerImage, host models.DockerHost) {
+	resource, identity := resourceFromDockerImage(image, host)
+	if parentID := rr.sourceResourceID(SourceDocker, host.ID); parentID != "" {
+		resource.ParentID = &parentID
+	}
+	sourceID := dockerImageSourceID(host, image)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceDocker, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestDockerVolume(volume models.DockerVolume, host models.DockerHost) {
+	resource, identity := resourceFromDockerVolume(volume, host)
+	if parentID := rr.sourceResourceID(SourceDocker, host.ID); parentID != "" {
+		resource.ParentID = &parentID
+	}
+	sourceID := dockerVolumeSourceID(host, volume)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceDocker, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestDockerNetwork(network models.DockerNetwork, host models.DockerHost) {
+	resource, identity := resourceFromDockerNetwork(network, host)
+	if parentID := rr.sourceResourceID(SourceDocker, host.ID); parentID != "" {
+		resource.ParentID = &parentID
+	}
+	sourceID := dockerNetworkSourceID(host, network)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceDocker, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestDockerTask(task models.DockerTask, host models.DockerHost) {
+	resource, identity := resourceFromDockerTask(task, host)
+	parentID := ""
+	if serviceSourceID := dockerServiceSourceID(host, models.DockerService{ID: task.ServiceID, Name: task.ServiceName}); serviceSourceID != "" {
+		parentID = rr.sourceResourceID(SourceDocker, serviceSourceID)
+	}
+	if parentID == "" {
+		parentID = rr.sourceResourceID(SourceDocker, host.ID)
+	}
+	if parentID != "" {
+		resource.ParentID = &parentID
+	}
+	sourceID := dockerTaskSourceID(host, task)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceDocker, sourceID, resource, identity)
+}
+
 func (rr *ResourceRegistry) ingestKubernetesCluster(cluster models.KubernetesCluster, linkedHosts []*models.Host, capabilities *K8sMetricCapabilities) string {
 	resource, identity := resourceFromKubernetesCluster(cluster, linkedHosts, capabilities)
 	sourceID := kubernetesClusterSourceID(cluster)
@@ -1106,6 +1293,126 @@ func (rr *ResourceRegistry) ingestKubernetesNode(cluster models.KubernetesCluste
 		return
 	}
 	if rr.mergeLinkedKubernetesNode(sourceID, resource, identity, linkedHost) {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesNamespace(cluster models.KubernetesCluster, namespace models.KubernetesNamespace, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesNamespace(cluster, namespace, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesNamespaceSourceID(kubernetesClusterSourceID(cluster), namespace)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesService(cluster models.KubernetesCluster, service models.KubernetesService, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesService(cluster, service, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesServiceSourceID(kubernetesClusterSourceID(cluster), service)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesStatefulSet(cluster models.KubernetesCluster, statefulSet models.KubernetesStatefulSet, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesStatefulSet(cluster, statefulSet, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesStatefulSetSourceID(kubernetesClusterSourceID(cluster), statefulSet)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesDaemonSet(cluster models.KubernetesCluster, daemonSet models.KubernetesDaemonSet, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesDaemonSet(cluster, daemonSet, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesDaemonSetSourceID(kubernetesClusterSourceID(cluster), daemonSet)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesJob(cluster models.KubernetesCluster, job models.KubernetesJob, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesJob(cluster, job, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesJobSourceID(kubernetesClusterSourceID(cluster), job)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesCronJob(cluster models.KubernetesCluster, cronJob models.KubernetesCronJob, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesCronJob(cluster, cronJob, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesCronJobSourceID(kubernetesClusterSourceID(cluster), cronJob)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesIngress(cluster models.KubernetesCluster, ingress models.KubernetesIngress, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesIngress(cluster, ingress, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesIngressSourceID(kubernetesClusterSourceID(cluster), ingress)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesPersistentVolume(cluster models.KubernetesCluster, volume models.KubernetesPersistentVolume, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesPersistentVolume(cluster, volume, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesPersistentVolumeSourceID(kubernetesClusterSourceID(cluster), volume)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesPersistentVolumeClaim(cluster models.KubernetesCluster, claim models.KubernetesPersistentVolumeClaim, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesPersistentVolumeClaim(cluster, claim, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesPersistentVolumeClaimSourceID(kubernetesClusterSourceID(cluster), claim)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesEvent(cluster models.KubernetesCluster, event models.KubernetesEvent, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesEvent(cluster, event, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesEventSourceID(kubernetesClusterSourceID(cluster), event)
+	if sourceID == "" {
 		return
 	}
 	rr.ingest(SourceK8s, sourceID, resource, identity)
@@ -2352,6 +2659,65 @@ func kubernetesDeploymentSourceID(clusterSourceID string, deployment models.Kube
 	return CanonicalKubernetesDeploymentSourceID(clusterSourceID, deployment)
 }
 
+func kubernetesNamespaceSourceID(clusterSourceID string, namespace models.KubernetesNamespace) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "namespace", namespace.UID, "", namespace.Name)
+}
+
+func kubernetesServiceSourceID(clusterSourceID string, service models.KubernetesService) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "service", service.UID, service.Namespace, service.Name)
+}
+
+func kubernetesStatefulSetSourceID(clusterSourceID string, statefulSet models.KubernetesStatefulSet) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "statefulset", statefulSet.UID, statefulSet.Namespace, statefulSet.Name)
+}
+
+func kubernetesDaemonSetSourceID(clusterSourceID string, daemonSet models.KubernetesDaemonSet) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "daemonset", daemonSet.UID, daemonSet.Namespace, daemonSet.Name)
+}
+
+func kubernetesJobSourceID(clusterSourceID string, job models.KubernetesJob) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "job", job.UID, job.Namespace, job.Name)
+}
+
+func kubernetesCronJobSourceID(clusterSourceID string, cronJob models.KubernetesCronJob) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "cronjob", cronJob.UID, cronJob.Namespace, cronJob.Name)
+}
+
+func kubernetesIngressSourceID(clusterSourceID string, ingress models.KubernetesIngress) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "ingress", ingress.UID, ingress.Namespace, ingress.Name)
+}
+
+func kubernetesPersistentVolumeSourceID(clusterSourceID string, volume models.KubernetesPersistentVolume) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "persistentvolume", volume.UID, "", volume.Name)
+}
+
+func kubernetesPersistentVolumeClaimSourceID(clusterSourceID string, claim models.KubernetesPersistentVolumeClaim) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "persistentvolumeclaim", claim.UID, claim.Namespace, claim.Name)
+}
+
+func kubernetesEventSourceID(clusterSourceID string, event models.KubernetesEvent) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "event", event.UID, event.Namespace, event.Name)
+}
+
+func canonicalKubernetesTypedSourceID(clusterSourceID, kind, uid, namespace, name string) string {
+	clusterKey := strings.TrimSpace(clusterSourceID)
+	kind = strings.TrimSpace(kind)
+	id := strings.TrimSpace(uid)
+	if id == "" {
+		namespace = strings.TrimSpace(namespace)
+		name = strings.TrimSpace(name)
+		if namespace != "" && name != "" {
+			id = namespace + "/" + name
+		} else {
+			id = name
+		}
+	}
+	if clusterKey == "" || kind == "" || id == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:%s:%s", clusterKey, kind, id)
+}
+
 func buildKubernetesNodeHostLookup(hosts []models.Host) map[string]*models.Host {
 	lookup := make(map[string]*models.Host, len(hosts)*2)
 	for i := range hosts {
@@ -2492,6 +2858,63 @@ func dockerServiceSourceID(host models.DockerHost, service models.DockerService)
 		return ""
 	}
 	return fmt.Sprintf("%s:service:%s", cluster, serviceID)
+}
+
+func dockerImageSourceID(host models.DockerHost, image models.DockerImage) string {
+	hostID := strings.TrimSpace(host.ID)
+	imageID := strings.TrimSpace(image.ID)
+	if imageID == "" {
+		imageID = firstDockerImageReference(image)
+	}
+	if hostID == "" || imageID == "" {
+		return ""
+	}
+	return hostID + "/image/" + imageID
+}
+
+func dockerVolumeSourceID(host models.DockerHost, volume models.DockerVolume) string {
+	hostID := strings.TrimSpace(host.ID)
+	name := strings.TrimSpace(volume.Name)
+	if hostID == "" || name == "" {
+		return ""
+	}
+	return hostID + "/volume/" + name
+}
+
+func dockerNetworkSourceID(host models.DockerHost, network models.DockerNetwork) string {
+	hostID := strings.TrimSpace(host.ID)
+	networkID := strings.TrimSpace(network.ID)
+	if networkID == "" {
+		networkID = strings.TrimSpace(network.Name)
+	}
+	if hostID == "" || networkID == "" {
+		return ""
+	}
+	return hostID + "/network/" + networkID
+}
+
+func dockerTaskSourceID(host models.DockerHost, task models.DockerTask) string {
+	taskID := strings.TrimSpace(task.ID)
+	if taskID == "" {
+		taskID = strings.TrimSpace(task.ContainerID)
+	}
+	if taskID == "" {
+		taskID = strings.TrimSpace(task.ServiceName)
+		if task.Slot > 0 && taskID != "" {
+			taskID = fmt.Sprintf("%s.%d", taskID, task.Slot)
+		}
+	}
+	if taskID == "" {
+		return ""
+	}
+	if cluster := dockerSwarmClusterKey(host); cluster != "" {
+		return fmt.Sprintf("%s:task:%s", cluster, taskID)
+	}
+	hostID := strings.TrimSpace(host.ID)
+	if hostID == "" {
+		return ""
+	}
+	return hostID + "/task/" + taskID
 }
 
 func mergeIdentity(existing ResourceIdentity, incoming ResourceIdentity) ResourceIdentity {

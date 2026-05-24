@@ -25,12 +25,27 @@ export function toReportingResourceType(resourceType: ResourceType): ReportingRe
     case 'jail':
       return 'system-container';
     case 'docker-service':
+    case 'docker-image':
+    case 'docker-task':
       return 'app-container';
+    case 'docker-volume':
+      return 'storage';
+    case 'docker-network':
+      return 'network';
     case 'k8s-cluster':
     case 'k8s-node':
     case 'pod':
     case 'k8s-deployment':
     case 'k8s-service':
+    case 'k8s-namespace':
+    case 'k8s-statefulset':
+    case 'k8s-daemonset':
+    case 'k8s-job':
+    case 'k8s-cronjob':
+    case 'k8s-ingress':
+    case 'k8s-persistent-volume':
+    case 'k8s-persistent-volume-claim':
+    case 'k8s-event':
       return 'k8s';
     case 'physical_disk':
       return 'disk';

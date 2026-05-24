@@ -11,6 +11,33 @@ import { buildAppContainerDefaultHiddenColumnIds } from '@/features/platformPage
 const DOCKER_HOST_TYPES = new Set<ResourceType>(['agent', 'docker-host']);
 const DOCKER_CONTAINER_TYPES = new Set<ResourceType>(['app-container']);
 const DOCKER_SERVICE_TYPES = new Set<ResourceType>(['docker-service']);
+const DOCKER_IMAGE_TYPES = new Set<ResourceType>(['docker-image']);
+const DOCKER_VOLUME_TYPES = new Set<ResourceType>(['docker-volume']);
+const DOCKER_NETWORK_TYPES = new Set<ResourceType>(['docker-network']);
+const DOCKER_TASK_TYPES = new Set<ResourceType>(['docker-task']);
+
+export type DockerPageTabId =
+  | 'overview'
+  | 'containers'
+  | 'images'
+  | 'volumes'
+  | 'networks'
+  | 'services'
+  | 'tasks';
+
+export const DOCKER_TAB_SPECS: readonly {
+  id: DockerPageTabId;
+  label: string;
+  path: string;
+}[] = [
+  { id: 'overview', label: 'Overview', path: '/docker/overview' },
+  { id: 'containers', label: 'Containers', path: '/docker/containers' },
+  { id: 'images', label: 'Images', path: '/docker/images' },
+  { id: 'volumes', label: 'Volumes', path: '/docker/volumes' },
+  { id: 'networks', label: 'Networks', path: '/docker/networks' },
+  { id: 'services', label: 'Services', path: '/docker/services' },
+  { id: 'tasks', label: 'Tasks', path: '/docker/tasks' },
+] as const;
 
 const asTrimmedString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
@@ -46,6 +73,10 @@ export type DockerPageModel = {
   hosts: Resource[];
   containers: Resource[];
   services: Resource[];
+  images: Resource[];
+  volumes: Resource[];
+  networks: Resource[];
+  tasks: Resource[];
 };
 
 export interface DockerPageFilters {
@@ -112,7 +143,11 @@ export function buildDockerPageModel(resources: Resource[]): DockerPageModel {
     (resource) =>
       isDockerPlatform(resource) ||
       DOCKER_CONTAINER_TYPES.has(resource.type) ||
-      DOCKER_SERVICE_TYPES.has(resource.type),
+      DOCKER_SERVICE_TYPES.has(resource.type) ||
+      DOCKER_IMAGE_TYPES.has(resource.type) ||
+      DOCKER_VOLUME_TYPES.has(resource.type) ||
+      DOCKER_NETWORK_TYPES.has(resource.type) ||
+      DOCKER_TASK_TYPES.has(resource.type),
   );
 
   const hosts = dockerResources.filter(
@@ -122,12 +157,20 @@ export function buildDockerPageModel(resources: Resource[]): DockerPageModel {
     (resource) => DOCKER_CONTAINER_TYPES.has(resource.type) && isDockerPlatform(resource),
   );
   const services = dockerResources.filter((resource) => DOCKER_SERVICE_TYPES.has(resource.type));
+  const images = dockerResources.filter((resource) => DOCKER_IMAGE_TYPES.has(resource.type));
+  const volumes = dockerResources.filter((resource) => DOCKER_VOLUME_TYPES.has(resource.type));
+  const networks = dockerResources.filter((resource) => DOCKER_NETWORK_TYPES.has(resource.type));
+  const tasks = dockerResources.filter((resource) => DOCKER_TASK_TYPES.has(resource.type));
 
   return {
     resources: dockerResources,
     hosts,
     containers,
     services,
+    images,
+    volumes,
+    networks,
+    tasks,
   };
 }
 
@@ -146,6 +189,18 @@ const resourceSearchCandidates = (resource: Resource): Array<string | undefined>
   resource.docker?.architecture,
   resource.docker?.swarm?.clusterName,
   resource.docker?.swarm?.nodeRole,
+  resource.docker?.imageId,
+  resource.docker?.volumeName,
+  resource.docker?.networkId,
+  resource.docker?.driver,
+  resource.docker?.mountpoint,
+  resource.docker?.scope,
+  resource.docker?.taskId,
+  resource.docker?.serviceName,
+  resource.docker?.currentState,
+  ...(resource.docker?.repoTags ?? []),
+  ...(resource.docker?.repoDigests ?? []),
+  ...(resource.docker?.subnets?.map((subnet) => subnet.subnet) ?? []),
   resource.identity?.hostname,
   resource.canonicalIdentity?.displayName,
   resource.canonicalIdentity?.hostname,
@@ -255,6 +310,19 @@ export function filterDockerServices(
           return needle.length === 0 ? true : value.toLowerCase().includes(needle);
         }) &&
       matchesStatusMode(resource, filters.statusMode) &&
+      matchesHostScope(resource, filters.selectedHostScope),
+  );
+}
+
+export function filterDockerInventoryResources(
+  resources: readonly Resource[],
+  filters: DockerPageFilters,
+): Resource[] {
+  return resources.filter(
+    (resource) =>
+      matchesSearch(resource, filters.searchTerm || '') &&
+      matchesStatusMode(resource, filters.statusMode) &&
+      matchesContainerRuntime(resource, filters.containerRuntime) &&
       matchesHostScope(resource, filters.selectedHostScope),
   );
 }

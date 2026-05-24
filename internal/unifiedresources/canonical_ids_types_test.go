@@ -75,6 +75,26 @@ func TestContractResourceType(t *testing.T) {
 			},
 			want: ResourceTypeNetworkShare,
 		},
+		{
+			name:     "docker image passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeDockerImage, Docker: &DockerData{ImageID: "sha256:image1"}},
+			want:     ResourceTypeDockerImage,
+		},
+		{
+			name:     "docker volume passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeDockerVolume, Docker: &DockerData{VolumeName: "app-data"}},
+			want:     ResourceTypeDockerVolume,
+		},
+		{
+			name:     "kubernetes service passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeK8sService, Kubernetes: &K8sData{ServiceType: "ClusterIP"}},
+			want:     ResourceTypeK8sService,
+		},
+		{
+			name:     "kubernetes event passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeK8sEvent, Kubernetes: &K8sData{Reason: "BackOff"}},
+			want:     ResourceTypeK8sEvent,
+		},
 	}
 
 	for _, tt := range tests {

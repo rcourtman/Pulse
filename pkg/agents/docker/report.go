@@ -12,12 +12,16 @@ type NetworkInterface = hostagent.NetworkInterface
 
 // Report represents a single heartbeat from the Docker agent to Pulse.
 type Report struct {
-	Agent      AgentInfo   `json:"agent"`
-	Host       HostInfo    `json:"host"`
-	Containers []Container `json:"containers"`
-	Services   []Service   `json:"services,omitempty"`
-	Tasks      []Task      `json:"tasks,omitempty"`
-	Timestamp  time.Time   `json:"timestamp"`
+	Agent        AgentInfo     `json:"agent"`
+	Host         HostInfo      `json:"host"`
+	Containers   []Container   `json:"containers"`
+	Images       []Image       `json:"images,omitempty"`
+	Volumes      []Volume      `json:"volumes,omitempty"`
+	Networks     []Network     `json:"networks,omitempty"`
+	Services     []Service     `json:"services,omitempty"`
+	Tasks        []Task        `json:"tasks,omitempty"`
+	StorageUsage *StorageUsage `json:"storageUsage,omitempty"`
+	Timestamp    time.Time     `json:"timestamp"`
 }
 
 // AgentInfo describes the reporting agent instance.
@@ -143,6 +147,71 @@ type UpdateStatus struct {
 	LatestDigest    string    `json:"latestDigest,omitempty"`
 	LastChecked     time.Time `json:"lastChecked"`
 	Error           string    `json:"error,omitempty"` // e.g., "rate limited", "auth required"
+}
+
+// Image summarises a local image available through the Docker-compatible API.
+type Image struct {
+	ID              string            `json:"id"`
+	RepoTags        []string          `json:"repoTags,omitempty"`
+	RepoDigests     []string          `json:"repoDigests,omitempty"`
+	SizeBytes       int64             `json:"sizeBytes,omitempty"`
+	SharedSizeBytes int64             `json:"sharedSizeBytes,omitempty"`
+	Containers      int64             `json:"containers,omitempty"`
+	CreatedAt       time.Time         `json:"createdAt,omitempty"`
+	Labels          map[string]string `json:"labels,omitempty"`
+}
+
+// Volume summarises a local volume available through the Docker-compatible API.
+type Volume struct {
+	Name       string            `json:"name"`
+	Driver     string            `json:"driver,omitempty"`
+	Mountpoint string            `json:"mountpoint,omitempty"`
+	Scope      string            `json:"scope,omitempty"`
+	CreatedAt  string            `json:"createdAt,omitempty"`
+	SizeBytes  int64             `json:"sizeBytes,omitempty"`
+	RefCount   int64             `json:"refCount,omitempty"`
+	Labels     map[string]string `json:"labels,omitempty"`
+	Options    map[string]string `json:"options,omitempty"`
+}
+
+// Network summarises a local network available through the Docker-compatible API.
+type Network struct {
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	Driver     string            `json:"driver,omitempty"`
+	Scope      string            `json:"scope,omitempty"`
+	CreatedAt  time.Time         `json:"createdAt,omitempty"`
+	EnableIPv4 bool              `json:"enableIpv4,omitempty"`
+	EnableIPv6 bool              `json:"enableIpv6,omitempty"`
+	Internal   bool              `json:"internal,omitempty"`
+	Attachable bool              `json:"attachable,omitempty"`
+	Ingress    bool              `json:"ingress,omitempty"`
+	ConfigOnly bool              `json:"configOnly,omitempty"`
+	Subnets    []NetworkSubnet   `json:"subnets,omitempty"`
+	Labels     map[string]string `json:"labels,omitempty"`
+	Options    map[string]string `json:"options,omitempty"`
+}
+
+// NetworkSubnet summarises a network IPAM subnet.
+type NetworkSubnet struct {
+	Subnet  string `json:"subnet,omitempty"`
+	Gateway string `json:"gateway,omitempty"`
+}
+
+// StorageUsage summarises the Docker-compatible /system/df API buckets.
+type StorageUsage struct {
+	Images     StorageUsageBucket `json:"images,omitempty"`
+	Containers StorageUsageBucket `json:"containers,omitempty"`
+	Volumes    StorageUsageBucket `json:"volumes,omitempty"`
+	BuildCache StorageUsageBucket `json:"buildCache,omitempty"`
+}
+
+// StorageUsageBucket captures one /system/df resource family.
+type StorageUsageBucket struct {
+	TotalCount       int64 `json:"totalCount,omitempty"`
+	ActiveCount      int64 `json:"activeCount,omitempty"`
+	TotalSizeBytes   int64 `json:"totalSizeBytes,omitempty"`
+	ReclaimableBytes int64 `json:"reclaimableBytes,omitempty"`
 }
 
 // AgentKey returns the stable identifier for a reporting agent.

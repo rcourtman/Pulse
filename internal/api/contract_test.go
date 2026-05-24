@@ -11069,6 +11069,51 @@ func TestContract_AlertResourceTypeConsistency(t *testing.T) {
 	}
 }
 
+func TestContractResourceFiltersAcceptNativeDockerAndKubernetesInventory(t *testing.T) {
+	raw := strings.Join([]string{
+		"docker-image",
+		"docker-volume",
+		"docker-network",
+		"docker-task",
+		"k8s-namespace",
+		"k8s-service",
+		"k8s-statefulset",
+		"k8s-daemonset",
+		"k8s-job",
+		"k8s-cronjob",
+		"k8s-ingress",
+		"k8s-persistent-volume",
+		"k8s-persistent-volume-claim",
+		"k8s-event",
+	}, ",")
+
+	if unsupported := unsupportedResourceTypeFilterTokens(raw); len(unsupported) != 0 {
+		t.Fatalf("native platform inventory filters should be supported, got unsupported=%v", unsupported)
+	}
+
+	got := parseResourceTypes(raw)
+	for _, resourceType := range []unifiedresources.ResourceType{
+		unifiedresources.ResourceTypeDockerImage,
+		unifiedresources.ResourceTypeDockerVolume,
+		unifiedresources.ResourceTypeDockerNetwork,
+		unifiedresources.ResourceTypeDockerTask,
+		unifiedresources.ResourceTypeK8sNamespace,
+		unifiedresources.ResourceTypeK8sService,
+		unifiedresources.ResourceTypeK8sStatefulSet,
+		unifiedresources.ResourceTypeK8sDaemonSet,
+		unifiedresources.ResourceTypeK8sJob,
+		unifiedresources.ResourceTypeK8sCronJob,
+		unifiedresources.ResourceTypeK8sIngress,
+		unifiedresources.ResourceTypeK8sPV,
+		unifiedresources.ResourceTypeK8sPVC,
+		unifiedresources.ResourceTypeK8sEvent,
+	} {
+		if _, ok := got[resourceType]; !ok {
+			t.Fatalf("parseResourceTypes(%q) missing %q in %#v", raw, resourceType, got)
+		}
+	}
+}
+
 func TestContract_TenantResourcesDoNotFallbackToRawSnapshotSeeding(t *testing.T) {
 	now := time.Date(2026, 3, 17, 9, 0, 0, 0, time.UTC)
 	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})

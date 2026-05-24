@@ -199,16 +199,30 @@ func cloneDockerData(in *DockerData) *DockerData {
 	out.Temperature = cloneFloat64Ptr(in.Temperature)
 	out.LoadAverage = cloneFloat64Slice(in.LoadAverage)
 	out.TokenLastUsedAt = cloneTimePtr(in.TokenLastUsedAt)
+	out.UpdatesLastCheckedAt = cloneTimePtr(in.UpdatesLastCheckedAt)
+	out.ImagesUsage = cloneDockerStorageUsageMeta(in.ImagesUsage)
+	out.ContainersUsage = cloneDockerStorageUsageMeta(in.ContainersUsage)
+	out.VolumesUsage = cloneDockerStorageUsageMeta(in.VolumesUsage)
+	out.BuildCacheUsage = cloneDockerStorageUsageMeta(in.BuildCacheUsage)
 	out.Ports = cloneDockerPortMetaSlice(in.Ports)
 	out.Labels = cloneStringMap(in.Labels)
 	out.Networks = cloneDockerNetworkMetaSlice(in.Networks)
 	out.Mounts = cloneDockerMountMetaSlice(in.Mounts)
 	out.UpdateStatus = cloneDockerUpdateStatusMeta(in.UpdateStatus)
+	out.RepoTags = cloneStringSlice(in.RepoTags)
+	out.RepoDigests = cloneStringSlice(in.RepoDigests)
+	out.Options = cloneStringMap(in.Options)
+	out.Subnets = cloneDockerNetworkSubnetMetaSlice(in.Subnets)
+	out.StartedAt = cloneTimePtr(in.StartedAt)
+	out.CompletedAt = cloneTimePtr(in.CompletedAt)
 	out.Command = cloneDockerHostCommandStatus(in.Command)
 	out.Swarm = cloneDockerSwarmInfo(in.Swarm)
 	out.NetworkInterfaces = cloneNetworkInterfaces(in.NetworkInterfaces)
 	out.Disks = cloneDiskInfos(in.Disks)
 	out.Containers = append([]models.DockerContainer(nil), in.Containers...)
+	out.Images = append([]models.DockerImage(nil), in.Images...)
+	out.Volumes = append([]models.DockerVolume(nil), in.Volumes...)
+	out.NetworksRaw = append([]models.DockerNetwork(nil), in.NetworksRaw...)
 	out.Services = append([]models.DockerService(nil), in.Services...)
 	out.Tasks = append([]models.DockerTask(nil), in.Tasks...)
 	return &out
@@ -398,9 +412,31 @@ func cloneK8sData(in *K8sData) *K8sData {
 	out.Roles = cloneStringSlice(in.Roles)
 	out.Temperature = cloneFloat64Ptr(in.Temperature)
 	out.Labels = cloneStringMap(in.Labels)
+	out.ExternalIPs = cloneStringSlice(in.ExternalIPs)
+	out.ServicePorts = cloneK8sServicePortSlice(in.ServicePorts)
+	out.Selector = cloneStringMap(in.Selector)
+	out.LastScheduleTime = cloneTimePtr(in.LastScheduleTime)
+	out.LastSuccessfulTime = cloneTimePtr(in.LastSuccessfulTime)
+	out.StartTime = cloneTimePtr(in.StartTime)
+	out.CompletionTime = cloneTimePtr(in.CompletionTime)
+	out.Hosts = cloneStringSlice(in.Hosts)
+	out.Addresses = cloneStringSlice(in.Addresses)
+	out.AccessModes = cloneStringSlice(in.AccessModes)
+	out.FirstSeen = cloneTimePtr(in.FirstSeen)
+	out.EventTime = cloneTimePtr(in.EventTime)
+	out.CreatedAt = cloneTimePtr(in.CreatedAt)
 	out.MetricCapabilities = cloneKubernetesMetricCapabilities(in.MetricCapabilities)
 	out.PodContainers = cloneK8sPodContainerSlice(in.PodContainers)
 	return &out
+}
+
+func cloneK8sServicePortSlice(in []K8sServicePort) []K8sServicePort {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]K8sServicePort, len(in))
+	copy(out, in)
+	return out
 }
 
 func cloneK8sPodContainerSlice(in []K8sPodContainer) []K8sPodContainer {
@@ -620,6 +656,14 @@ func cloneDockerUpdateStatusMeta(in *DockerUpdateStatusMeta) *DockerUpdateStatus
 	return &out
 }
 
+func cloneDockerStorageUsageMeta(in *DockerStorageUsageMeta) *DockerStorageUsageMeta {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
+}
+
 func cloneDockerSwarmInfo(in *DockerSwarmInfo) *DockerSwarmInfo {
 	if in == nil {
 		return nil
@@ -810,6 +854,15 @@ func cloneDockerNetworkMetaSlice(in []DockerNetworkMeta) []DockerNetworkMeta {
 		return nil
 	}
 	out := make([]DockerNetworkMeta, len(in))
+	copy(out, in)
+	return out
+}
+
+func cloneDockerNetworkSubnetMetaSlice(in []DockerNetworkSubnetMeta) []DockerNetworkSubnetMeta {
+	if in == nil {
+		return nil
+	}
+	out := make([]DockerNetworkSubnetMeta, len(in))
 	copy(out, in)
 	return out
 }

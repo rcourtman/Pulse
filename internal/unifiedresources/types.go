@@ -125,10 +125,24 @@ const (
 	ResourceTypeSystemContainer ResourceType = "system-container"
 	ResourceTypeAppContainer    ResourceType = "app-container"
 	ResourceTypeDockerService   ResourceType = "docker-service"
+	ResourceTypeDockerImage     ResourceType = "docker-image"
+	ResourceTypeDockerVolume    ResourceType = "docker-volume"
+	ResourceTypeDockerNetwork   ResourceType = "docker-network"
+	ResourceTypeDockerTask      ResourceType = "docker-task"
 	ResourceTypeK8sCluster      ResourceType = "k8s-cluster"
 	ResourceTypeK8sNode         ResourceType = "k8s-node"
 	ResourceTypePod             ResourceType = "pod"
 	ResourceTypeK8sDeployment   ResourceType = "k8s-deployment"
+	ResourceTypeK8sNamespace    ResourceType = "k8s-namespace"
+	ResourceTypeK8sService      ResourceType = "k8s-service"
+	ResourceTypeK8sStatefulSet  ResourceType = "k8s-statefulset"
+	ResourceTypeK8sDaemonSet    ResourceType = "k8s-daemonset"
+	ResourceTypeK8sJob          ResourceType = "k8s-job"
+	ResourceTypeK8sCronJob      ResourceType = "k8s-cronjob"
+	ResourceTypeK8sIngress      ResourceType = "k8s-ingress"
+	ResourceTypeK8sPV           ResourceType = "k8s-persistent-volume"
+	ResourceTypeK8sPVC          ResourceType = "k8s-persistent-volume-claim"
+	ResourceTypeK8sEvent        ResourceType = "k8s-event"
 	ResourceTypeStorage         ResourceType = "storage"
 	ResourceTypeNetwork         ResourceType = "network"
 	ResourceTypePBS             ResourceType = "pbs"
@@ -735,6 +749,12 @@ type DockerNetworkMeta struct {
 	IPv6 string `json:"ipv6,omitempty"`
 }
 
+// DockerNetworkSubnetMeta describes an IPAM subnet on a Docker network.
+type DockerNetworkSubnetMeta struct {
+	Subnet  string `json:"subnet,omitempty"`
+	Gateway string `json:"gateway,omitempty"`
+}
+
 // DockerMountMeta describes a container volume mount.
 type DockerMountMeta struct {
 	Type        string `json:"type,omitempty"`
@@ -769,6 +789,14 @@ type DockerServicePortMeta struct {
 	PublishMode   string `json:"publishMode,omitempty"`
 }
 
+// DockerStorageUsageMeta captures one /system/df resource bucket.
+type DockerStorageUsageMeta struct {
+	TotalCount       int64 `json:"totalCount,omitempty"`
+	ActiveCount      int64 `json:"activeCount,omitempty"`
+	TotalSizeBytes   int64 `json:"totalSizeBytes,omitempty"`
+	ReclaimableBytes int64 `json:"reclaimableBytes,omitempty"`
+}
+
 // DockerData contains Docker host- and container-specific data.
 type DockerData struct {
 	HostSourceID      string    `json:"hostSourceId,omitempty"` // raw model ID for the docker host
@@ -799,8 +827,15 @@ type DockerData struct {
 
 	// Host-level summary fields (populated when Resource.Type == ResourceTypeAgent and Docker != nil)
 	ContainerCount        int                             `json:"containerCount,omitempty"`
+	ImageCount            int                             `json:"imageCount,omitempty"`
+	VolumeCount           int                             `json:"volumeCount,omitempty"`
+	NetworkCount          int                             `json:"networkCount,omitempty"`
 	UpdatesAvailableCount int                             `json:"updatesAvailableCount,omitempty"`
 	UpdatesLastCheckedAt  *time.Time                      `json:"updatesLastCheckedAt,omitempty"`
+	ImagesUsage           *DockerStorageUsageMeta         `json:"imagesUsage,omitempty"`
+	ContainersUsage       *DockerStorageUsageMeta         `json:"containersUsage,omitempty"`
+	VolumesUsage          *DockerStorageUsageMeta         `json:"volumesUsage,omitempty"`
+	BuildCacheUsage       *DockerStorageUsageMeta         `json:"buildCacheUsage,omitempty"`
 	TokenID               string                          `json:"tokenId,omitempty"`
 	TokenName             string                          `json:"tokenName,omitempty"`
 	TokenHint             string                          `json:"tokenHint,omitempty"`
@@ -823,6 +858,7 @@ type DockerData struct {
 
 	// Service-specific fields (populated when Resource.Type == ResourceTypeDockerService)
 	ServiceID      string                   `json:"serviceId,omitempty"`
+	ServiceName    string                   `json:"serviceName,omitempty"`
 	Stack          string                   `json:"stack,omitempty"`
 	Mode           string                   `json:"mode,omitempty"`
 	DesiredTasks   int                      `json:"desiredTasks,omitempty"`
@@ -831,14 +867,56 @@ type DockerData struct {
 	ServiceUpdate  *DockerServiceUpdateMeta `json:"serviceUpdate,omitempty"`
 	EndpointPorts  []DockerServicePortMeta  `json:"endpointPorts,omitempty"`
 
+	// Image-specific fields (populated when Resource.Type == ResourceTypeDockerImage)
+	ImageID         string   `json:"imageId,omitempty"`
+	RepoTags        []string `json:"repoTags,omitempty"`
+	RepoDigests     []string `json:"repoDigests,omitempty"`
+	SizeBytes       int64    `json:"sizeBytes,omitempty"`
+	SharedSizeBytes int64    `json:"sharedSizeBytes,omitempty"`
+	ImageContainers int64    `json:"imageContainers,omitempty"`
+
+	// Volume-specific fields (populated when Resource.Type == ResourceTypeDockerVolume)
+	VolumeName string            `json:"volumeName,omitempty"`
+	Driver     string            `json:"driver,omitempty"`
+	Mountpoint string            `json:"mountpoint,omitempty"`
+	Scope      string            `json:"scope,omitempty"`
+	CreatedAt  string            `json:"createdAt,omitempty"`
+	RefCount   int64             `json:"refCount,omitempty"`
+	Options    map[string]string `json:"options,omitempty"`
+
+	// Network-specific fields (populated when Resource.Type == ResourceTypeDockerNetwork)
+	NetworkID  string                    `json:"networkId,omitempty"`
+	EnableIPv4 bool                      `json:"enableIpv4,omitempty"`
+	EnableIPv6 bool                      `json:"enableIpv6,omitempty"`
+	Internal   bool                      `json:"internal,omitempty"`
+	Attachable bool                      `json:"attachable,omitempty"`
+	Ingress    bool                      `json:"ingress,omitempty"`
+	ConfigOnly bool                      `json:"configOnly,omitempty"`
+	Subnets    []DockerNetworkSubnetMeta `json:"subnets,omitempty"`
+
+	// Task-specific fields (populated when Resource.Type == ResourceTypeDockerTask)
+	TaskID       string     `json:"taskId,omitempty"`
+	NodeID       string     `json:"nodeId,omitempty"`
+	NodeName     string     `json:"nodeName,omitempty"`
+	Slot         int        `json:"slot,omitempty"`
+	DesiredState string     `json:"desiredState,omitempty"`
+	CurrentState string     `json:"currentState,omitempty"`
+	Error        string     `json:"error,omitempty"`
+	Message      string     `json:"message,omitempty"`
+	StartedAt    *time.Time `json:"startedAt,omitempty"`
+	CompletedAt  *time.Time `json:"completedAt,omitempty"`
+
 	Swarm             *DockerSwarmInfo   `json:"swarm,omitempty"`
 	NetworkInterfaces []NetworkInterface `json:"networkInterfaces,omitempty"`
 	Disks             []DiskInfo         `json:"disks,omitempty"`
 
 	// These hold raw data for tools access
-	Containers []models.DockerContainer `json:"-"`
-	Services   []models.DockerService   `json:"-"`
-	Tasks      []models.DockerTask      `json:"-"`
+	Containers  []models.DockerContainer `json:"-"`
+	Images      []models.DockerImage     `json:"-"`
+	Volumes     []models.DockerVolume    `json:"-"`
+	NetworksRaw []models.DockerNetwork   `json:"-"`
+	Services    []models.DockerService   `json:"-"`
+	Tasks       []models.DockerTask      `json:"-"`
 }
 
 // PBSData contains Proxmox Backup Server data.
@@ -1349,52 +1427,116 @@ type K8sMetricCapabilities struct {
 
 // K8sData contains Kubernetes data.
 type K8sData struct {
-	ClusterID               string                 `json:"clusterId,omitempty"`
-	ClusterName             string                 `json:"clusterName,omitempty"`
-	SourceName              string                 `json:"sourceName,omitempty"`   // raw model Name before display-name resolution
-	SourceStatus            string                 `json:"sourceStatus,omitempty"` // raw model Status before normalization
-	AgentID                 string                 `json:"agentId,omitempty"`
-	Context                 string                 `json:"context,omitempty"`
-	Server                  string                 `json:"server,omitempty"`
-	Version                 string                 `json:"version,omitempty"`
-	PendingUninstall        bool                   `json:"pendingUninstall,omitempty"`
-	AgentVersion            string                 `json:"agentVersion,omitempty"`    // cluster: k8s agent version
-	IntervalSeconds         int                    `json:"intervalSeconds,omitempty"` // cluster: telemetry interval
-	NodeUID                 string                 `json:"nodeUid,omitempty"`
-	NodeName                string                 `json:"nodeName,omitempty"`
-	Ready                   bool                   `json:"ready,omitempty"`
-	Unschedulable           bool                   `json:"unschedulable,omitempty"`
-	Roles                   []string               `json:"roles,omitempty"`
-	KubeletVersion          string                 `json:"kubeletVersion,omitempty"`
-	ContainerRuntimeVersion string                 `json:"containerRuntimeVersion,omitempty"`
-	OSImage                 string                 `json:"osImage,omitempty"`
-	KernelVersion           string                 `json:"kernelVersion,omitempty"`
-	Architecture            string                 `json:"architecture,omitempty"`
-	CapacityCPU             int64                  `json:"capacityCpuCores,omitempty"`
-	CapacityMemoryBytes     int64                  `json:"capacityMemoryBytes,omitempty"`
-	CapacityPods            int64                  `json:"capacityPods,omitempty"`
-	AllocCPU                int64                  `json:"allocatableCpuCores,omitempty"`
-	AllocMemoryBytes        int64                  `json:"allocatableMemoryBytes,omitempty"`
-	AllocPods               int64                  `json:"allocatablePods,omitempty"`
-	Namespace               string                 `json:"namespace,omitempty"`
-	PodUID                  string                 `json:"podUid,omitempty"`
-	PodPhase                string                 `json:"podPhase,omitempty"`
-	PodReason               string                 `json:"podReason,omitempty"`     // pod: status reason
-	PodMessage              string                 `json:"podMessage,omitempty"`    // pod: status message
-	PodContainers           []K8sPodContainer      `json:"podContainers,omitempty"` // pod: sub-containers
-	UptimeSeconds           int64                  `json:"uptimeSeconds,omitempty"`
-	Temperature             *float64               `json:"temperature,omitempty"`
-	Restarts                int                    `json:"restarts,omitempty"`
-	OwnerKind               string                 `json:"ownerKind,omitempty"`
-	OwnerName               string                 `json:"ownerName,omitempty"`
-	Image                   string                 `json:"image,omitempty"`
-	Labels                  map[string]string      `json:"labels,omitempty"`
-	DeploymentUID           string                 `json:"deploymentUid,omitempty"`
-	DesiredReplicas         int32                  `json:"desiredReplicas,omitempty"`
-	UpdatedReplicas         int32                  `json:"updatedReplicas,omitempty"`
-	ReadyReplicas           int32                  `json:"readyReplicas,omitempty"`
-	AvailableReplicas       int32                  `json:"availableReplicas,omitempty"`
-	MetricCapabilities      *K8sMetricCapabilities `json:"metricCapabilities,omitempty"`
+	ClusterID                string                 `json:"clusterId,omitempty"`
+	ClusterName              string                 `json:"clusterName,omitempty"`
+	ResourceUID              string                 `json:"resourceUid,omitempty"`
+	ResourceKind             string                 `json:"resourceKind,omitempty"`
+	SourceName               string                 `json:"sourceName,omitempty"`   // raw model Name before display-name resolution
+	SourceStatus             string                 `json:"sourceStatus,omitempty"` // raw model Status before normalization
+	AgentID                  string                 `json:"agentId,omitempty"`
+	Context                  string                 `json:"context,omitempty"`
+	Server                   string                 `json:"server,omitempty"`
+	Version                  string                 `json:"version,omitempty"`
+	PendingUninstall         bool                   `json:"pendingUninstall,omitempty"`
+	AgentVersion             string                 `json:"agentVersion,omitempty"`    // cluster: k8s agent version
+	IntervalSeconds          int                    `json:"intervalSeconds,omitempty"` // cluster: telemetry interval
+	NodeUID                  string                 `json:"nodeUid,omitempty"`
+	NodeName                 string                 `json:"nodeName,omitempty"`
+	Ready                    bool                   `json:"ready,omitempty"`
+	Unschedulable            bool                   `json:"unschedulable,omitempty"`
+	Roles                    []string               `json:"roles,omitempty"`
+	KubeletVersion           string                 `json:"kubeletVersion,omitempty"`
+	ContainerRuntimeVersion  string                 `json:"containerRuntimeVersion,omitempty"`
+	OSImage                  string                 `json:"osImage,omitempty"`
+	KernelVersion            string                 `json:"kernelVersion,omitempty"`
+	Architecture             string                 `json:"architecture,omitempty"`
+	CapacityCPU              int64                  `json:"capacityCpuCores,omitempty"`
+	CapacityMemoryBytes      int64                  `json:"capacityMemoryBytes,omitempty"`
+	CapacityPods             int64                  `json:"capacityPods,omitempty"`
+	AllocCPU                 int64                  `json:"allocatableCpuCores,omitempty"`
+	AllocMemoryBytes         int64                  `json:"allocatableMemoryBytes,omitempty"`
+	AllocPods                int64                  `json:"allocatablePods,omitempty"`
+	Namespace                string                 `json:"namespace,omitempty"`
+	PodUID                   string                 `json:"podUid,omitempty"`
+	PodPhase                 string                 `json:"podPhase,omitempty"`
+	PodReason                string                 `json:"podReason,omitempty"`     // pod: status reason
+	PodMessage               string                 `json:"podMessage,omitempty"`    // pod: status message
+	PodContainers            []K8sPodContainer      `json:"podContainers,omitempty"` // pod: sub-containers
+	UptimeSeconds            int64                  `json:"uptimeSeconds,omitempty"`
+	Temperature              *float64               `json:"temperature,omitempty"`
+	Restarts                 int                    `json:"restarts,omitempty"`
+	OwnerKind                string                 `json:"ownerKind,omitempty"`
+	OwnerName                string                 `json:"ownerName,omitempty"`
+	Image                    string                 `json:"image,omitempty"`
+	Labels                   map[string]string      `json:"labels,omitempty"`
+	DeploymentUID            string                 `json:"deploymentUid,omitempty"`
+	StatefulSetUID           string                 `json:"statefulSetUid,omitempty"`
+	DaemonSetUID             string                 `json:"daemonSetUid,omitempty"`
+	ServiceUID               string                 `json:"serviceUid,omitempty"`
+	JobUID                   string                 `json:"jobUid,omitempty"`
+	CronJobUID               string                 `json:"cronJobUid,omitempty"`
+	IngressUID               string                 `json:"ingressUid,omitempty"`
+	PersistentVolumeUID      string                 `json:"persistentVolumeUid,omitempty"`
+	PersistentVolumeClaimUID string                 `json:"persistentVolumeClaimUid,omitempty"`
+	EventUID                 string                 `json:"eventUid,omitempty"`
+	NamespaceUID             string                 `json:"namespaceUid,omitempty"`
+	DesiredReplicas          int32                  `json:"desiredReplicas,omitempty"`
+	UpdatedReplicas          int32                  `json:"updatedReplicas,omitempty"`
+	ReadyReplicas            int32                  `json:"readyReplicas,omitempty"`
+	AvailableReplicas        int32                  `json:"availableReplicas,omitempty"`
+	CurrentReplicas          int32                  `json:"currentReplicas,omitempty"`
+	DesiredNumberScheduled   int32                  `json:"desiredNumberScheduled,omitempty"`
+	CurrentNumberScheduled   int32                  `json:"currentNumberScheduled,omitempty"`
+	NumberReady              int32                  `json:"numberReady,omitempty"`
+	NumberAvailable          int32                  `json:"numberAvailable,omitempty"`
+	NumberUnavailable        int32                  `json:"numberUnavailable,omitempty"`
+	NumberMisscheduled       int32                  `json:"numberMisscheduled,omitempty"`
+	ServiceName              string                 `json:"serviceName,omitempty"`
+	ServiceType              string                 `json:"serviceType,omitempty"`
+	ClusterIP                string                 `json:"clusterIp,omitempty"`
+	ExternalIPs              []string               `json:"externalIps,omitempty"`
+	ServicePorts             []K8sServicePort       `json:"servicePorts,omitempty"`
+	Selector                 map[string]string      `json:"selector,omitempty"`
+	Succeeded                int32                  `json:"succeeded,omitempty"`
+	Failed                   int32                  `json:"failed,omitempty"`
+	Active                   int32                  `json:"active,omitempty"`
+	Schedule                 string                 `json:"schedule,omitempty"`
+	Suspend                  bool                   `json:"suspend,omitempty"`
+	LastScheduleTime         *time.Time             `json:"lastScheduleTime,omitempty"`
+	LastSuccessfulTime       *time.Time             `json:"lastSuccessfulTime,omitempty"`
+	StartTime                *time.Time             `json:"startTime,omitempty"`
+	CompletionTime           *time.Time             `json:"completionTime,omitempty"`
+	ClassName                string                 `json:"className,omitempty"`
+	Hosts                    []string               `json:"hosts,omitempty"`
+	Addresses                []string               `json:"addresses,omitempty"`
+	Phase                    string                 `json:"phase,omitempty"`
+	StorageClass             string                 `json:"storageClass,omitempty"`
+	CapacityBytes            int64                  `json:"capacityBytes,omitempty"`
+	RequestedBytes           int64                  `json:"requestedBytes,omitempty"`
+	AccessModes              []string               `json:"accessModes,omitempty"`
+	ReclaimPolicy            string                 `json:"reclaimPolicy,omitempty"`
+	ClaimNamespace           string                 `json:"claimNamespace,omitempty"`
+	ClaimName                string                 `json:"claimName,omitempty"`
+	VolumeName               string                 `json:"volumeName,omitempty"`
+	EventType                string                 `json:"eventType,omitempty"`
+	Reason                   string                 `json:"reason,omitempty"`
+	Message                  string                 `json:"message,omitempty"`
+	InvolvedKind             string                 `json:"involvedKind,omitempty"`
+	InvolvedName             string                 `json:"involvedName,omitempty"`
+	Count                    int32                  `json:"count,omitempty"`
+	FirstSeen                *time.Time             `json:"firstSeen,omitempty"`
+	EventTime                *time.Time             `json:"eventTime,omitempty"`
+	CreatedAt                *time.Time             `json:"createdAt,omitempty"`
+	MetricCapabilities       *K8sMetricCapabilities `json:"metricCapabilities,omitempty"`
+}
+
+// K8sServicePort describes a Kubernetes service port.
+type K8sServicePort struct {
+	Name       string `json:"name,omitempty"`
+	Protocol   string `json:"protocol,omitempty"`
+	Port       int32  `json:"port,omitempty"`
+	TargetPort string `json:"targetPort,omitempty"`
+	NodePort   int32  `json:"nodePort,omitempty"`
 }
 
 // K8sPodContainer describes a container within a Kubernetes pod.

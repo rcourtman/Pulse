@@ -17,6 +17,29 @@ describe('reportableResourceTypes', () => {
     expect(REPORTABLE_RESOURCE_TYPES.has('truenas' as any)).toBe(false);
   });
 
+  it('keeps native platform inventory rows out of the metric reporting picker', () => {
+    const inventoryOnlyTypes = [
+      'docker-image',
+      'docker-volume',
+      'docker-network',
+      'docker-task',
+      'k8s-namespace',
+      'k8s-service',
+      'k8s-statefulset',
+      'k8s-daemonset',
+      'k8s-job',
+      'k8s-cronjob',
+      'k8s-ingress',
+      'k8s-persistent-volume',
+      'k8s-persistent-volume-claim',
+      'k8s-event',
+    ] as const;
+
+    for (const type of inventoryOnlyTypes) {
+      expect(REPORTABLE_RESOURCE_TYPES.has(type)).toBe(false);
+    }
+  });
+
   it('normalizes resource types for picker ordering', () => {
     expect(normalizeReportableResourceType('k8s-cluster')).toBe('k8s');
     expect(normalizeReportableResourceType('oci-container')).toBe('system-container');

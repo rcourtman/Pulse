@@ -106,6 +106,23 @@ func statusFromDockerService(service models.DockerService) ResourceStatus {
 	return StatusWarning
 }
 
+func statusFromDockerTask(task models.DockerTask) ResourceStatus {
+	current := strings.ToLower(strings.TrimSpace(task.CurrentState))
+	desired := strings.ToLower(strings.TrimSpace(task.DesiredState))
+	switch {
+	case strings.Contains(current, "running"):
+		return StatusOnline
+	case strings.Contains(current, "failed"), strings.Contains(current, "rejected"), strings.TrimSpace(task.Error) != "":
+		return StatusOffline
+	case strings.Contains(current, "pending"), strings.Contains(current, "starting"), strings.Contains(current, "preparing"), strings.Contains(current, "accepted"):
+		return StatusWarning
+	case desired == "shutdown" || strings.Contains(current, "complete"):
+		return StatusOffline
+	default:
+		return StatusUnknown
+	}
+}
+
 func statusFromPBSInstance(instance models.PBSInstance) ResourceStatus {
 	primary := strings.ToLower(strings.TrimSpace(instance.Status))
 	health := strings.ToLower(strings.TrimSpace(instance.ConnectionHealth))
@@ -234,6 +251,78 @@ func statusFromKubernetesDeployment(deployment models.KubernetesDeployment) Reso
 		return StatusOnline
 	}
 	if available == 0 {
+		return StatusOffline
+	}
+	return StatusWarning
+}
+
+func statusFromKubernetesStatefulSet(statefulSet models.KubernetesStatefulSet) ResourceStatus {
+	return statusFromReplicaAvailability(statefulSet.DesiredReplicas, statefulSet.ReadyReplicas)
+}
+
+func statusFromKubernetesDaemonSet(daemonSet models.KubernetesDaemonSet) ResourceStatus {
+	desired := daemonSet.DesiredNumberScheduled
+	ready := daemonSet.NumberReady
+	if daemonSet.NumberMisscheduled > 0 || daemonSet.NumberUnavailable > 0 {
+		if ready > 0 {
+			return StatusWarning
+		}
+		return StatusOffline
+	}
+	return statusFromReplicaAvailability(desired, ready)
+}
+
+func statusFromKubernetesJob(job models.KubernetesJob) ResourceStatus {
+	if job.Failed > 0 {
+		return StatusOffline
+	}
+	if job.Succeeded > 0 {
+		return StatusOnline
+	}
+	if job.Active > 0 {
+		return StatusWarning
+	}
+	return StatusUnknown
+}
+
+func statusFromKubernetesCronJob(cronJob models.KubernetesCronJob) ResourceStatus {
+	if cronJob.Suspend {
+		return StatusWarning
+	}
+	return StatusOnline
+}
+
+func statusFromKubernetesPhase(phase string) ResourceStatus {
+	switch strings.ToLower(strings.TrimSpace(phase)) {
+	case "active", "bound", "available":
+		return StatusOnline
+	case "pending", "released":
+		return StatusWarning
+	case "failed", "lost", "terminating":
+		return StatusOffline
+	default:
+		return StatusUnknown
+	}
+}
+
+func statusFromKubernetesEvent(event models.KubernetesEvent) ResourceStatus {
+	if strings.EqualFold(strings.TrimSpace(event.EventType), "warning") {
+		return StatusWarning
+	}
+	return StatusOnline
+}
+
+func statusFromReplicaAvailability(desired, ready int32) ResourceStatus {
+	if desired <= 0 {
+		if ready > 0 {
+			return StatusOnline
+		}
+		return StatusUnknown
+	}
+	if ready >= desired {
+		return StatusOnline
+	}
+	if ready == 0 {
 		return StatusOffline
 	}
 	return StatusWarning

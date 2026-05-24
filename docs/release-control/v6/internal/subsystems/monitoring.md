@@ -70,6 +70,14 @@ truth for live infrastructure data.
 5. Add or change container startup ownership/bootstrap behavior for hosted or managed Pulse runtime mounts through `docker-entrypoint.sh`
 6. Add or change Docker Swarm manager task/service runtime collection through `internal/dockeragent/swarm.go`
 7. Add or change Docker or Podman container stats compatibility and runtime metric semantics through `internal/dockeragent/collect.go`
+   Docker / Podman collection now owns native runtime inventory as well as
+   container metrics. It may collect image summaries, volume summaries,
+   network summaries, Swarm tasks, and daemon storage-usage buckets from the
+   documented runtime API, then publish those records through the Docker agent
+   report for unified-resource ingestion. Failures in image, volume, network,
+   or storage-usage collection are best-effort warnings and must not make the
+   whole host report fail when container/runtime health data is otherwise
+   usable.
 8. Add or change Proxmox Ceph compatibility payload decoding through `pkg/proxmox/ceph.go`
 9. Add or change Proxmox ZFS compatibility payload decoding and vdev-role normalization through `pkg/proxmox/zfs.go`
 10. Add or change mock chart synthesis, seeded history continuity, or mock-owned
@@ -149,6 +157,14 @@ truth for live infrastructure data.
     `platform_event` provenance, then recorded by monitoring's supplemental
     resource-change bridge. Monitoring must not create a frontend-only VMware
     activity fixture or bypass the unified resource-change store.
+18. Add or change Kubernetes native API inventory through
+    `internal/kubernetesagent/agent.go` and
+    `internal/monitoring/kubernetes_agents.go`. The Kubernetes agent may read
+    Namespaces, Services, StatefulSets, DaemonSets, Jobs, CronJobs, Ingresses,
+    PersistentVolumes, PersistentVolumeClaims, and Events as bounded
+    best-effort inventory, but monitoring must preserve those objects as native
+    cluster inventory instead of flattening them into pods, deployments, or
+    generic storage rows.
 
 ## Forbidden Paths
 

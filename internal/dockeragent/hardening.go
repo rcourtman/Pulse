@@ -13,6 +13,7 @@ import (
 const (
 	dockerInfoCallTimeout          = 8 * time.Second
 	dockerContainerListCallTimeout = 20 * time.Second
+	dockerInventoryCallTimeout     = 20 * time.Second
 	dockerSwarmListCallTimeout     = 20 * time.Second
 	dockerCleanupCallTimeout       = 15 * time.Second
 	dockerUpdateCallTimeout        = 2 * time.Minute

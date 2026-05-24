@@ -13,6 +13,8 @@ import (
 	"github.com/moby/moby/api/types/network"
 	swarmtypes "github.com/moby/moby/api/types/swarm"
 	systemtypes "github.com/moby/moby/api/types/system"
+	"github.com/moby/moby/api/types/volume"
+	"github.com/moby/moby/client"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -30,6 +32,10 @@ type fakeDockerClient struct {
 	networkConnectFn          func(ctx context.Context, netName, containerID string, endpoint *network.EndpointSettings) error
 	containerStartFn          func(ctx context.Context, id string, opts dockerContainerStartOptions) error
 	containerRemoveFn         func(ctx context.Context, id string, opts dockerContainerRemoveOptions) error
+	imageListFn               func(ctx context.Context, opts dockerImageListOptions) ([]image.Summary, error)
+	volumeListFn              func(ctx context.Context, opts dockerVolumeListOptions) ([]volume.Volume, error)
+	networkListFn             func(ctx context.Context, opts dockerNetworkListOptions) ([]network.Summary, error)
+	diskUsageFn               func(ctx context.Context, opts dockerDiskUsageOptions) (client.DiskUsageResult, error)
 	serviceListFn             func(ctx context.Context, opts dockerServiceListOptions) ([]swarmtypes.Service, error)
 	taskListFn                func(ctx context.Context, opts dockerTaskListOptions) ([]swarmtypes.Task, error)
 	imageInspectWithRawFn     func(ctx context.Context, imageID string) (image.InspectResponse, []byte, error)
@@ -122,6 +128,34 @@ func (f *fakeDockerClient) ContainerRemove(ctx context.Context, id string, opts 
 		return errors.New("unexpected ContainerRemove call")
 	}
 	return f.containerRemoveFn(ctx, id, opts)
+}
+
+func (f *fakeDockerClient) ImageList(ctx context.Context, opts dockerImageListOptions) ([]image.Summary, error) {
+	if f.imageListFn == nil {
+		return nil, nil
+	}
+	return f.imageListFn(ctx, opts)
+}
+
+func (f *fakeDockerClient) VolumeList(ctx context.Context, opts dockerVolumeListOptions) ([]volume.Volume, error) {
+	if f.volumeListFn == nil {
+		return nil, nil
+	}
+	return f.volumeListFn(ctx, opts)
+}
+
+func (f *fakeDockerClient) NetworkList(ctx context.Context, opts dockerNetworkListOptions) ([]network.Summary, error) {
+	if f.networkListFn == nil {
+		return nil, nil
+	}
+	return f.networkListFn(ctx, opts)
+}
+
+func (f *fakeDockerClient) DiskUsage(ctx context.Context, opts dockerDiskUsageOptions) (client.DiskUsageResult, error) {
+	if f.diskUsageFn == nil {
+		return client.DiskUsageResult{}, nil
+	}
+	return f.diskUsageFn(ctx, opts)
 }
 
 func (f *fakeDockerClient) ServiceList(ctx context.Context, opts dockerServiceListOptions) ([]swarmtypes.Service, error) {

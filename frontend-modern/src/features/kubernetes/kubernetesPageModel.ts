@@ -1,20 +1,14 @@
-import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import type { Resource, ResourceType } from '@/types/resource';
+import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 
-// The Overview tab stacks the K8s object graph from logical aggregate down
-// to runtime detail: clusters → nodes → deployments → pods. Deployments
-// (desired state) sit above pods (the actual runtime result) so a reader
-// scanning for "did my rollout converge?" hits Ready/Available before
-// scrolling into the per-pod list. The deployments table is gated on the
-// cluster reporting any; when it's empty the pods section follows nodes
-// directly. The standalone Nodes / Pods / Deployments tabs that used to
-// live here were pure duplicates of the Overview stack, so they're
-// intentionally absent — the Workloads filter inside Overview owns
-// search/grouping for pods. Services are not surfaced by the canonical
-// unified resource model today (no ResourceTypeK8sService projection on
-// the backend), so a Services tab is similarly absent until that gap is
-// closed in the canonical adapter.
-export type KubernetesPageTabId = 'overview';
+export type KubernetesPageTabId =
+  | 'overview'
+  | 'workloads'
+  | 'services'
+  | 'storage'
+  | 'networking'
+  | 'config'
+  | 'events';
 
 export type KubernetesTabSpec = {
   id: KubernetesPageTabId;
@@ -24,6 +18,12 @@ export type KubernetesTabSpec = {
 
 export const KUBERNETES_TAB_SPECS: readonly KubernetesTabSpec[] = [
   { id: 'overview', label: 'Overview', path: '/kubernetes/overview' },
+  { id: 'workloads', label: 'Workloads', path: '/kubernetes/workloads' },
+  { id: 'services', label: 'Services', path: '/kubernetes/services' },
+  { id: 'storage', label: 'Storage', path: '/kubernetes/storage' },
+  { id: 'networking', label: 'Networking', path: '/kubernetes/networking' },
+  { id: 'config', label: 'Config', path: '/kubernetes/config' },
+  { id: 'events', label: 'Events', path: '/kubernetes/events' },
 ] as const;
 
 const KUBERNETES_RESOURCE_TYPES = new Set<ResourceType>([
@@ -31,6 +31,16 @@ const KUBERNETES_RESOURCE_TYPES = new Set<ResourceType>([
   'k8s-node',
   'pod',
   'k8s-deployment',
+  'k8s-namespace',
+  'k8s-service',
+  'k8s-statefulset',
+  'k8s-daemonset',
+  'k8s-job',
+  'k8s-cronjob',
+  'k8s-ingress',
+  'k8s-persistent-volume',
+  'k8s-persistent-volume-claim',
+  'k8s-event',
 ]);
 
 const isKubernetesPlatform = (resource: Resource): boolean => {
@@ -54,6 +64,20 @@ export type KubernetesPageModel = {
   nodes: Resource[];
   pods: Resource[];
   deployments: Resource[];
+  namespaces: Resource[];
+  services: Resource[];
+  statefulSets: Resource[];
+  daemonSets: Resource[];
+  jobs: Resource[];
+  cronJobs: Resource[];
+  ingresses: Resource[];
+  persistentVolumes: Resource[];
+  persistentVolumeClaims: Resource[];
+  events: Resource[];
+  workloads: Resource[];
+  storage: Resource[];
+  networking: Resource[];
+  config: Resource[];
 };
 
 export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageModel {
@@ -62,6 +86,24 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
   const nodes = k8sResources.filter(isKubernetesNodeRow);
   const pods = k8sResources.filter((resource) => resource.type === 'pod');
   const deployments = k8sResources.filter((resource) => resource.type === 'k8s-deployment');
+  const namespaces = k8sResources.filter((resource) => resource.type === 'k8s-namespace');
+  const services = k8sResources.filter((resource) => resource.type === 'k8s-service');
+  const statefulSets = k8sResources.filter((resource) => resource.type === 'k8s-statefulset');
+  const daemonSets = k8sResources.filter((resource) => resource.type === 'k8s-daemonset');
+  const jobs = k8sResources.filter((resource) => resource.type === 'k8s-job');
+  const cronJobs = k8sResources.filter((resource) => resource.type === 'k8s-cronjob');
+  const ingresses = k8sResources.filter((resource) => resource.type === 'k8s-ingress');
+  const persistentVolumes = k8sResources.filter(
+    (resource) => resource.type === 'k8s-persistent-volume',
+  );
+  const persistentVolumeClaims = k8sResources.filter(
+    (resource) => resource.type === 'k8s-persistent-volume-claim',
+  );
+  const events = k8sResources.filter((resource) => resource.type === 'k8s-event');
+  const workloads = [...deployments, ...statefulSets, ...daemonSets, ...jobs, ...cronJobs, ...pods];
+  const storage = [...persistentVolumes, ...persistentVolumeClaims];
+  const networking = [...services, ...ingresses];
+  const config = [...namespaces];
 
   return {
     resources: k8sResources,
@@ -69,5 +111,19 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
     nodes,
     pods,
     deployments,
+    namespaces,
+    services,
+    statefulSets,
+    daemonSets,
+    jobs,
+    cronJobs,
+    ingresses,
+    persistentVolumes,
+    persistentVolumeClaims,
+    events,
+    workloads,
+    storage,
+    networking,
+    config,
   };
 }

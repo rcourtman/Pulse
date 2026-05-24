@@ -153,6 +153,12 @@ unified-resource/platform truth sourced from the TrueNAS API; storage/recovery
 must not reinterpret app containers, VM device inventory, service PIDs, share
 paths, volumes, or update posture as storage ownership, restore entitlement, or
 a separate Docker-only or TrueNAS-local inventory path.
+Docker / Podman volume inventory and Kubernetes PersistentVolume /
+PersistentVolumeClaim inventory are also read-only platform context for this
+subsystem. Storage and recovery surfaces may use those records to explain
+runtime attachment or protected workload context, but restore entitlement,
+storage risk, and recovery-point ownership remain on the storage/recovery and
+provider contracts rather than on Docker volume rows or Kubernetes PV/PVC rows.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 2. Add or change recovery page UX through `frontend-modern/src/components/Recovery/` and keep canonical route/query/filter state ownership in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`

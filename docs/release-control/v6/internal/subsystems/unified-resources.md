@@ -225,6 +225,16 @@ reintroduce false Swarm capability surfaces.
    `TrueNASData.Services` on the canonical top-level `agent` resource,
    preserving service name, boot enablement, runtime state, and process IDs
    through clone, merge, transport, and frontend decode paths.
+   Docker / Podman inventory extends that same canonical type contract beyond
+   containers and Swarm services. Runtime image, volume, network, task, and
+   storage-usage evidence must enter through `DockerData` and the typed Docker
+   resource records (`docker-image`, `docker-volume`, `docker-network`,
+   `docker-task`) rather than being inferred inside the container page.
+   Kubernetes inventory likewise projects native API objects as first-class
+   unified resources: namespaces, Services, StatefulSets, DaemonSets, Jobs,
+   CronJobs, Ingresses, PersistentVolumes, PersistentVolumeClaims, and Events
+   must preserve their API identity and source metadata through clone, merge,
+   REST, websocket, and frontend decode paths.
 2. Add typed accessors and views in `internal/unifiedresources/views.go`
 3. Add source ingestion/adaptation in the adapter layer only
    Frontend resource platform contracts in
@@ -326,6 +336,11 @@ reintroduce false Swarm capability surfaces.
    alias while the current Proxmox metadata exposes a renamed instance or
    cluster label; current node metadata is the fallback source of truth when
    source-key lookup misses.
+   Platform pages that bucket Docker / Podman or Kubernetes resources must use
+   these canonical resource types and source facets directly. Page-local
+   scraping, generic type coercion, or "single table for every native object"
+   fallbacks are not a substitute for adapter-owned image, volume, network,
+   service, controller, storage, ingress, and event resource projections.
 
 Resource detail mappers now reuse the shared
 `frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor

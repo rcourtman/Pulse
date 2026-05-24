@@ -653,8 +653,12 @@ type DockerHost struct {
 	IntervalSeconds   int                      `json:"intervalSeconds"`
 	AgentVersion      string                   `json:"agentVersion,omitempty"`
 	Containers        []DockerContainer        `json:"containers"`
+	Images            []DockerImage            `json:"images,omitempty"`
+	Volumes           []DockerVolume           `json:"volumes,omitempty"`
+	Networks          []DockerNetwork          `json:"networks,omitempty"`
 	Services          []DockerService          `json:"services,omitempty"`
 	Tasks             []DockerTask             `json:"tasks,omitempty"`
+	StorageUsage      *DockerStorageUsage      `json:"storageUsage,omitempty"`
 	Swarm             *DockerSwarmInfo         `json:"swarm,omitempty"`
 	Security          *DockerHostSecurity      `json:"security,omitempty"`
 	Temperature       *float64                 `json:"temperature,omitempty"` // Optional host temperature in Celsius
@@ -692,6 +696,24 @@ func (h DockerHost) NormalizeCollections() DockerHost {
 	}
 	for i := range h.Containers {
 		h.Containers[i] = h.Containers[i].NormalizeCollections()
+	}
+	if h.Images == nil {
+		h.Images = []DockerImage{}
+	}
+	for i := range h.Images {
+		h.Images[i] = h.Images[i].NormalizeCollections()
+	}
+	if h.Volumes == nil {
+		h.Volumes = []DockerVolume{}
+	}
+	for i := range h.Volumes {
+		h.Volumes[i] = h.Volumes[i].NormalizeCollections()
+	}
+	if h.Networks == nil {
+		h.Networks = []DockerNetwork{}
+	}
+	for i := range h.Networks {
+		h.Networks[i] = h.Networks[i].NormalizeCollections()
 	}
 	if h.Services == nil {
 		h.Services = []DockerService{}
@@ -791,6 +813,107 @@ func (c DockerContainer) NormalizeCollections() DockerContainer {
 	return c
 }
 
+// DockerImage represents a local image on a monitored Docker-compatible host.
+type DockerImage struct {
+	ID              string            `json:"id"`
+	RepoTags        []string          `json:"repoTags,omitempty"`
+	RepoDigests     []string          `json:"repoDigests,omitempty"`
+	SizeBytes       int64             `json:"sizeBytes,omitempty"`
+	SharedSizeBytes int64             `json:"sharedSizeBytes,omitempty"`
+	Containers      int64             `json:"containers,omitempty"`
+	CreatedAt       time.Time         `json:"createdAt,omitempty"`
+	Labels          map[string]string `json:"labels,omitempty"`
+}
+
+func (i DockerImage) NormalizeCollections() DockerImage {
+	if i.RepoTags == nil {
+		i.RepoTags = []string{}
+	}
+	if i.RepoDigests == nil {
+		i.RepoDigests = []string{}
+	}
+	if i.Labels == nil {
+		i.Labels = map[string]string{}
+	}
+	return i
+}
+
+// DockerVolume represents a local volume on a monitored Docker-compatible host.
+type DockerVolume struct {
+	Name       string            `json:"name"`
+	Driver     string            `json:"driver,omitempty"`
+	Mountpoint string            `json:"mountpoint,omitempty"`
+	Scope      string            `json:"scope,omitempty"`
+	CreatedAt  string            `json:"createdAt,omitempty"`
+	SizeBytes  int64             `json:"sizeBytes,omitempty"`
+	RefCount   int64             `json:"refCount,omitempty"`
+	Labels     map[string]string `json:"labels,omitempty"`
+	Options    map[string]string `json:"options,omitempty"`
+}
+
+func (v DockerVolume) NormalizeCollections() DockerVolume {
+	if v.Labels == nil {
+		v.Labels = map[string]string{}
+	}
+	if v.Options == nil {
+		v.Options = map[string]string{}
+	}
+	return v
+}
+
+// DockerNetwork represents a local network on a monitored Docker-compatible host.
+type DockerNetwork struct {
+	ID         string                `json:"id"`
+	Name       string                `json:"name"`
+	Driver     string                `json:"driver,omitempty"`
+	Scope      string                `json:"scope,omitempty"`
+	CreatedAt  time.Time             `json:"createdAt,omitempty"`
+	EnableIPv4 bool                  `json:"enableIpv4,omitempty"`
+	EnableIPv6 bool                  `json:"enableIpv6,omitempty"`
+	Internal   bool                  `json:"internal,omitempty"`
+	Attachable bool                  `json:"attachable,omitempty"`
+	Ingress    bool                  `json:"ingress,omitempty"`
+	ConfigOnly bool                  `json:"configOnly,omitempty"`
+	Subnets    []DockerNetworkSubnet `json:"subnets,omitempty"`
+	Labels     map[string]string     `json:"labels,omitempty"`
+	Options    map[string]string     `json:"options,omitempty"`
+}
+
+func (n DockerNetwork) NormalizeCollections() DockerNetwork {
+	if n.Subnets == nil {
+		n.Subnets = []DockerNetworkSubnet{}
+	}
+	if n.Labels == nil {
+		n.Labels = map[string]string{}
+	}
+	if n.Options == nil {
+		n.Options = map[string]string{}
+	}
+	return n
+}
+
+// DockerNetworkSubnet describes one Docker network IPAM subnet.
+type DockerNetworkSubnet struct {
+	Subnet  string `json:"subnet,omitempty"`
+	Gateway string `json:"gateway,omitempty"`
+}
+
+// DockerStorageUsage summarises Docker-compatible /system/df usage.
+type DockerStorageUsage struct {
+	Images     DockerStorageUsageBucket `json:"images,omitempty"`
+	Containers DockerStorageUsageBucket `json:"containers,omitempty"`
+	Volumes    DockerStorageUsageBucket `json:"volumes,omitempty"`
+	BuildCache DockerStorageUsageBucket `json:"buildCache,omitempty"`
+}
+
+// DockerStorageUsageBucket captures one /system/df resource bucket.
+type DockerStorageUsageBucket struct {
+	TotalCount       int64 `json:"totalCount,omitempty"`
+	ActiveCount      int64 `json:"activeCount,omitempty"`
+	TotalSizeBytes   int64 `json:"totalSizeBytes,omitempty"`
+	ReclaimableBytes int64 `json:"reclaimableBytes,omitempty"`
+}
+
 // DockerContainerUpdateStatus tracks the image update status for a container.
 type DockerContainerUpdateStatus struct {
 	UpdateAvailable bool      `json:"updateAvailable"`
@@ -864,9 +987,19 @@ type KubernetesCluster struct {
 	IntervalSeconds   int       `json:"intervalSeconds"`
 	AgentVersion      string    `json:"agentVersion,omitempty"`
 
-	Nodes       []KubernetesNode       `json:"nodes,omitempty"`
-	Pods        []KubernetesPod        `json:"pods,omitempty"`
-	Deployments []KubernetesDeployment `json:"deployments,omitempty"`
+	Nodes                  []KubernetesNode                  `json:"nodes,omitempty"`
+	Namespaces             []KubernetesNamespace             `json:"namespaces,omitempty"`
+	Pods                   []KubernetesPod                   `json:"pods,omitempty"`
+	Deployments            []KubernetesDeployment            `json:"deployments,omitempty"`
+	StatefulSets           []KubernetesStatefulSet           `json:"statefulSets,omitempty"`
+	DaemonSets             []KubernetesDaemonSet             `json:"daemonSets,omitempty"`
+	Services               []KubernetesService               `json:"services,omitempty"`
+	Jobs                   []KubernetesJob                   `json:"jobs,omitempty"`
+	CronJobs               []KubernetesCronJob               `json:"cronJobs,omitempty"`
+	Ingresses              []KubernetesIngress               `json:"ingresses,omitempty"`
+	PersistentVolumes      []KubernetesPersistentVolume      `json:"persistentVolumes,omitempty"`
+	PersistentVolumeClaims []KubernetesPersistentVolumeClaim `json:"persistentVolumeClaims,omitempty"`
+	Events                 []KubernetesEvent                 `json:"events,omitempty"`
 
 	// Token information
 	TokenID         string     `json:"tokenId,omitempty"`
@@ -885,6 +1018,12 @@ func (c KubernetesCluster) NormalizeCollections() KubernetesCluster {
 	for i := range c.Nodes {
 		c.Nodes[i] = c.Nodes[i].NormalizeCollections()
 	}
+	if c.Namespaces == nil {
+		c.Namespaces = []KubernetesNamespace{}
+	}
+	for i := range c.Namespaces {
+		c.Namespaces[i] = c.Namespaces[i].NormalizeCollections()
+	}
 	if c.Pods == nil {
 		c.Pods = []KubernetesPod{}
 	}
@@ -896,6 +1035,57 @@ func (c KubernetesCluster) NormalizeCollections() KubernetesCluster {
 	}
 	for i := range c.Deployments {
 		c.Deployments[i] = c.Deployments[i].NormalizeCollections()
+	}
+	if c.StatefulSets == nil {
+		c.StatefulSets = []KubernetesStatefulSet{}
+	}
+	for i := range c.StatefulSets {
+		c.StatefulSets[i] = c.StatefulSets[i].NormalizeCollections()
+	}
+	if c.DaemonSets == nil {
+		c.DaemonSets = []KubernetesDaemonSet{}
+	}
+	for i := range c.DaemonSets {
+		c.DaemonSets[i] = c.DaemonSets[i].NormalizeCollections()
+	}
+	if c.Services == nil {
+		c.Services = []KubernetesService{}
+	}
+	for i := range c.Services {
+		c.Services[i] = c.Services[i].NormalizeCollections()
+	}
+	if c.Jobs == nil {
+		c.Jobs = []KubernetesJob{}
+	}
+	for i := range c.Jobs {
+		c.Jobs[i] = c.Jobs[i].NormalizeCollections()
+	}
+	if c.CronJobs == nil {
+		c.CronJobs = []KubernetesCronJob{}
+	}
+	for i := range c.CronJobs {
+		c.CronJobs[i] = c.CronJobs[i].NormalizeCollections()
+	}
+	if c.Ingresses == nil {
+		c.Ingresses = []KubernetesIngress{}
+	}
+	for i := range c.Ingresses {
+		c.Ingresses[i] = c.Ingresses[i].NormalizeCollections()
+	}
+	if c.PersistentVolumes == nil {
+		c.PersistentVolumes = []KubernetesPersistentVolume{}
+	}
+	for i := range c.PersistentVolumes {
+		c.PersistentVolumes[i] = c.PersistentVolumes[i].NormalizeCollections()
+	}
+	if c.PersistentVolumeClaims == nil {
+		c.PersistentVolumeClaims = []KubernetesPersistentVolumeClaim{}
+	}
+	for i := range c.PersistentVolumeClaims {
+		c.PersistentVolumeClaims[i] = c.PersistentVolumeClaims[i].NormalizeCollections()
+	}
+	if c.Events == nil {
+		c.Events = []KubernetesEvent{}
 	}
 	return c
 }
@@ -1003,6 +1193,225 @@ func (d KubernetesDeployment) NormalizeCollections() KubernetesDeployment {
 		d.Labels = map[string]string{}
 	}
 	return d
+}
+
+type KubernetesNamespace struct {
+	UID       string            `json:"uid"`
+	Name      string            `json:"name"`
+	Phase     string            `json:"phase,omitempty"`
+	CreatedAt time.Time         `json:"createdAt,omitempty"`
+	Labels    map[string]string `json:"labels,omitempty"`
+}
+
+func (n KubernetesNamespace) NormalizeCollections() KubernetesNamespace {
+	if n.Labels == nil {
+		n.Labels = map[string]string{}
+	}
+	return n
+}
+
+type KubernetesStatefulSet struct {
+	UID               string            `json:"uid"`
+	Name              string            `json:"name"`
+	Namespace         string            `json:"namespace"`
+	DesiredReplicas   int32             `json:"desiredReplicas,omitempty"`
+	ReadyReplicas     int32             `json:"readyReplicas,omitempty"`
+	CurrentReplicas   int32             `json:"currentReplicas,omitempty"`
+	UpdatedReplicas   int32             `json:"updatedReplicas,omitempty"`
+	AvailableReplicas int32             `json:"availableReplicas,omitempty"`
+	ServiceName       string            `json:"serviceName,omitempty"`
+	Labels            map[string]string `json:"labels,omitempty"`
+}
+
+func (s KubernetesStatefulSet) NormalizeCollections() KubernetesStatefulSet {
+	if s.Labels == nil {
+		s.Labels = map[string]string{}
+	}
+	return s
+}
+
+type KubernetesDaemonSet struct {
+	UID                    string            `json:"uid"`
+	Name                   string            `json:"name"`
+	Namespace              string            `json:"namespace"`
+	DesiredNumberScheduled int32             `json:"desiredNumberScheduled,omitempty"`
+	CurrentNumberScheduled int32             `json:"currentNumberScheduled,omitempty"`
+	NumberReady            int32             `json:"numberReady,omitempty"`
+	UpdatedNumberScheduled int32             `json:"updatedNumberScheduled,omitempty"`
+	NumberAvailable        int32             `json:"numberAvailable,omitempty"`
+	NumberUnavailable      int32             `json:"numberUnavailable,omitempty"`
+	NumberMisscheduled     int32             `json:"numberMisscheduled,omitempty"`
+	Labels                 map[string]string `json:"labels,omitempty"`
+}
+
+func (d KubernetesDaemonSet) NormalizeCollections() KubernetesDaemonSet {
+	if d.Labels == nil {
+		d.Labels = map[string]string{}
+	}
+	return d
+}
+
+type KubernetesService struct {
+	UID         string                  `json:"uid"`
+	Name        string                  `json:"name"`
+	Namespace   string                  `json:"namespace"`
+	ServiceType string                  `json:"type,omitempty"`
+	ClusterIP   string                  `json:"clusterIp,omitempty"`
+	ExternalIPs []string                `json:"externalIps,omitempty"`
+	Ports       []KubernetesServicePort `json:"ports,omitempty"`
+	Selector    map[string]string       `json:"selector,omitempty"`
+	CreatedAt   time.Time               `json:"createdAt,omitempty"`
+	Labels      map[string]string       `json:"labels,omitempty"`
+}
+
+func (s KubernetesService) NormalizeCollections() KubernetesService {
+	if s.ExternalIPs == nil {
+		s.ExternalIPs = []string{}
+	}
+	if s.Ports == nil {
+		s.Ports = []KubernetesServicePort{}
+	}
+	if s.Selector == nil {
+		s.Selector = map[string]string{}
+	}
+	if s.Labels == nil {
+		s.Labels = map[string]string{}
+	}
+	return s
+}
+
+type KubernetesServicePort struct {
+	Name       string `json:"name,omitempty"`
+	Protocol   string `json:"protocol,omitempty"`
+	Port       int32  `json:"port,omitempty"`
+	TargetPort string `json:"targetPort,omitempty"`
+	NodePort   int32  `json:"nodePort,omitempty"`
+}
+
+type KubernetesJob struct {
+	UID                string            `json:"uid"`
+	Name               string            `json:"name"`
+	Namespace          string            `json:"namespace"`
+	DesiredCompletions int32             `json:"desiredCompletions,omitempty"`
+	Succeeded          int32             `json:"succeeded,omitempty"`
+	Failed             int32             `json:"failed,omitempty"`
+	Active             int32             `json:"active,omitempty"`
+	StartTime          *time.Time        `json:"startTime,omitempty"`
+	CompletionTime     *time.Time        `json:"completionTime,omitempty"`
+	Labels             map[string]string `json:"labels,omitempty"`
+}
+
+func (j KubernetesJob) NormalizeCollections() KubernetesJob {
+	if j.Labels == nil {
+		j.Labels = map[string]string{}
+	}
+	return j
+}
+
+type KubernetesCronJob struct {
+	UID                string            `json:"uid"`
+	Name               string            `json:"name"`
+	Namespace          string            `json:"namespace"`
+	Schedule           string            `json:"schedule,omitempty"`
+	Suspend            bool              `json:"suspend,omitempty"`
+	Active             int               `json:"active,omitempty"`
+	LastScheduleTime   *time.Time        `json:"lastScheduleTime,omitempty"`
+	LastSuccessfulTime *time.Time        `json:"lastSuccessfulTime,omitempty"`
+	Labels             map[string]string `json:"labels,omitempty"`
+}
+
+func (j KubernetesCronJob) NormalizeCollections() KubernetesCronJob {
+	if j.Labels == nil {
+		j.Labels = map[string]string{}
+	}
+	return j
+}
+
+type KubernetesIngress struct {
+	UID       string            `json:"uid"`
+	Name      string            `json:"name"`
+	Namespace string            `json:"namespace"`
+	ClassName string            `json:"className,omitempty"`
+	Hosts     []string          `json:"hosts,omitempty"`
+	Addresses []string          `json:"addresses,omitempty"`
+	CreatedAt time.Time         `json:"createdAt,omitempty"`
+	Labels    map[string]string `json:"labels,omitempty"`
+}
+
+func (i KubernetesIngress) NormalizeCollections() KubernetesIngress {
+	if i.Hosts == nil {
+		i.Hosts = []string{}
+	}
+	if i.Addresses == nil {
+		i.Addresses = []string{}
+	}
+	if i.Labels == nil {
+		i.Labels = map[string]string{}
+	}
+	return i
+}
+
+type KubernetesPersistentVolume struct {
+	UID            string            `json:"uid"`
+	Name           string            `json:"name"`
+	Phase          string            `json:"phase,omitempty"`
+	StorageClass   string            `json:"storageClass,omitempty"`
+	CapacityBytes  int64             `json:"capacityBytes,omitempty"`
+	AccessModes    []string          `json:"accessModes,omitempty"`
+	ReclaimPolicy  string            `json:"reclaimPolicy,omitempty"`
+	ClaimNamespace string            `json:"claimNamespace,omitempty"`
+	ClaimName      string            `json:"claimName,omitempty"`
+	CreatedAt      time.Time         `json:"createdAt,omitempty"`
+	Labels         map[string]string `json:"labels,omitempty"`
+}
+
+func (p KubernetesPersistentVolume) NormalizeCollections() KubernetesPersistentVolume {
+	if p.AccessModes == nil {
+		p.AccessModes = []string{}
+	}
+	if p.Labels == nil {
+		p.Labels = map[string]string{}
+	}
+	return p
+}
+
+type KubernetesPersistentVolumeClaim struct {
+	UID            string            `json:"uid"`
+	Name           string            `json:"name"`
+	Namespace      string            `json:"namespace"`
+	Phase          string            `json:"phase,omitempty"`
+	StorageClass   string            `json:"storageClass,omitempty"`
+	RequestedBytes int64             `json:"requestedBytes,omitempty"`
+	CapacityBytes  int64             `json:"capacityBytes,omitempty"`
+	AccessModes    []string          `json:"accessModes,omitempty"`
+	VolumeName     string            `json:"volumeName,omitempty"`
+	CreatedAt      time.Time         `json:"createdAt,omitempty"`
+	Labels         map[string]string `json:"labels,omitempty"`
+}
+
+func (p KubernetesPersistentVolumeClaim) NormalizeCollections() KubernetesPersistentVolumeClaim {
+	if p.AccessModes == nil {
+		p.AccessModes = []string{}
+	}
+	if p.Labels == nil {
+		p.Labels = map[string]string{}
+	}
+	return p
+}
+
+type KubernetesEvent struct {
+	UID          string     `json:"uid"`
+	Name         string     `json:"name"`
+	Namespace    string     `json:"namespace,omitempty"`
+	EventType    string     `json:"type,omitempty"`
+	Reason       string     `json:"reason,omitempty"`
+	Message      string     `json:"message,omitempty"`
+	InvolvedKind string     `json:"involvedKind,omitempty"`
+	InvolvedName string     `json:"involvedName,omitempty"`
+	Count        int32      `json:"count,omitempty"`
+	FirstSeen    *time.Time `json:"firstSeen,omitempty"`
+	LastSeen     *time.Time `json:"lastSeen,omitempty"`
+	EventTime    *time.Time `json:"eventTime,omitempty"`
 }
 
 // DockerService summarises a Docker Swarm service.

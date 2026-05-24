@@ -55,6 +55,28 @@ func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
 						AvailableReplicas: 2,
 					},
 				},
+				Namespaces: []models.KubernetesNamespace{{UID: "namespace-uid-1", Name: "default", Phase: "Active"}},
+				Services: []models.KubernetesService{{
+					UID: "service-uid-1", Name: "api", Namespace: "default", ServiceType: "ClusterIP", ClusterIP: "10.96.0.10",
+				}},
+				StatefulSets: []models.KubernetesStatefulSet{{
+					UID: "statefulset-uid-1", Name: "db", Namespace: "default", DesiredReplicas: 3, ReadyReplicas: 2,
+				}},
+				DaemonSets: []models.KubernetesDaemonSet{{
+					UID: "daemonset-uid-1", Name: "node-agent", Namespace: "kube-system", DesiredNumberScheduled: 1, NumberReady: 1,
+				}},
+				Jobs:     []models.KubernetesJob{{UID: "job-uid-1", Name: "backup", Namespace: "default", DesiredCompletions: 1, Succeeded: 1}},
+				CronJobs: []models.KubernetesCronJob{{UID: "cronjob-uid-1", Name: "nightly", Namespace: "default", Schedule: "0 1 * * *"}},
+				Ingresses: []models.KubernetesIngress{{
+					UID: "ingress-uid-1", Name: "api", Namespace: "default", Hosts: []string{"api.example.test"},
+				}},
+				PersistentVolumes: []models.KubernetesPersistentVolume{{
+					UID: "pv-uid-1", Name: "pv-api", Phase: "Bound", ClaimNamespace: "default", ClaimName: "api-data",
+				}},
+				PersistentVolumeClaims: []models.KubernetesPersistentVolumeClaim{{
+					UID: "pvc-uid-1", Name: "api-data", Namespace: "default", Phase: "Bound", VolumeName: "pv-api",
+				}},
+				Events: []models.KubernetesEvent{{UID: "event-uid-1", Name: "api.1", Namespace: "default", EventType: "Warning", Reason: "BackOff", Count: 2}},
 			},
 		},
 	}
@@ -63,17 +85,19 @@ func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
 	registry.IngestSnapshot(snapshot)
 
 	resources := registry.List()
-	if len(resources) != 4 {
-		t.Fatalf("expected 4 kubernetes resources, got %d", len(resources))
+	if len(resources) != 14 {
+		t.Fatalf("expected 14 kubernetes resources, got %d", len(resources))
 	}
 
 	var clusterResource *Resource
 	var nodeResource *Resource
 	var podResource *Resource
 	var deploymentResource *Resource
+	seenTypes := make(map[ResourceType]int)
 
 	for i := range resources {
 		resource := resources[i]
+		seenTypes[resource.Type]++
 		switch resource.Type {
 		case ResourceTypeK8sCluster:
 			clusterResource = &resource
@@ -83,6 +107,22 @@ func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
 			podResource = &resource
 		case ResourceTypeK8sDeployment:
 			deploymentResource = &resource
+		}
+	}
+	for _, resourceType := range []ResourceType{
+		ResourceTypeK8sNamespace,
+		ResourceTypeK8sService,
+		ResourceTypeK8sStatefulSet,
+		ResourceTypeK8sDaemonSet,
+		ResourceTypeK8sJob,
+		ResourceTypeK8sCronJob,
+		ResourceTypeK8sIngress,
+		ResourceTypeK8sPV,
+		ResourceTypeK8sPVC,
+		ResourceTypeK8sEvent,
+	} {
+		if seenTypes[resourceType] != 1 {
+			t.Fatalf("expected one %s resource, got counts %#v", resourceType, seenTypes)
 		}
 	}
 

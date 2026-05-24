@@ -116,6 +116,15 @@ transport-only. It may amortize polling and remount cost, but it must not
 change normalized response shape, bypass monitor or read-state availability
 checks, merge tenants, or become the source of truth for telemetry freshness.
 
+The `/api/resources` type filter is the REST contract boundary for platform
+page native inventory. It must accept canonical Docker / Podman runtime tokens
+(`docker-image`, `docker-volume`, `docker-network`, `docker-task`) and
+canonical Kubernetes API object tokens (`k8s-namespace`, `k8s-service`,
+`k8s-statefulset`, `k8s-daemonset`, `k8s-job`, `k8s-cronjob`, `k8s-ingress`,
+`k8s-persistent-volume`, `k8s-persistent-volume-claim`, `k8s-event`) whenever
+unified resources can publish those records. Unsupported legacy aliases should
+continue to fail closed instead of silently widening platform queries.
+
 Discovery read endpoints are a canonical API payload boundary even when Pulse
 is running in mock mode. `/api/discovery`, typed discovery detail/progress
 routes, type filters, agent filters, and status must expose mock-authored

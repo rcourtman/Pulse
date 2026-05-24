@@ -86,6 +86,81 @@ func TestApplyKubernetesReport(t *testing.T) {
 	}
 }
 
+func TestApplyKubernetesReportPreservesNativeAPIInventory(t *testing.T) {
+	monitor := newKubernetesTestMonitor()
+	now := time.Date(2026, 5, 24, 8, 0, 0, 0, time.UTC)
+	report := agentsk8s.Report{
+		Agent:   agentsk8s.AgentInfo{ID: "agent-1", IntervalSeconds: 10},
+		Cluster: agentsk8s.ClusterInfo{ID: "cluster-1", Name: "cluster"},
+		Namespaces: []agentsk8s.Namespace{{
+			UID:       "ns-1",
+			Name:      " services ",
+			Phase:     " Active ",
+			CreatedAt: now,
+			Labels:    map[string]string{"team": "checkout"},
+		}},
+		Services: []agentsk8s.Service{{
+			UID:         "svc-1",
+			Name:        " checkout ",
+			Namespace:   " services ",
+			Type:        " ClusterIP ",
+			ClusterIP:   "10.96.0.10",
+			ExternalIPs: []string{"192.0.2.10"},
+			Ports:       []agentsk8s.ServicePort{{Name: " http ", Protocol: " TCP ", Port: 80, TargetPort: "8080"}},
+			Selector:    map[string]string{"app": "checkout"},
+			CreatedAt:   now,
+		}},
+		StatefulSets: []agentsk8s.StatefulSet{{UID: "sts-1", Name: "db", Namespace: "services", DesiredReplicas: 3, ReadyReplicas: 2, ServiceName: "db-headless"}},
+		DaemonSets:   []agentsk8s.DaemonSet{{UID: "ds-1", Name: "node-agent", Namespace: "kube-system", DesiredNumberScheduled: 3, NumberReady: 3}},
+		Jobs:         []agentsk8s.Job{{UID: "job-1", Name: "backup", Namespace: "services", DesiredCompletions: 1, Succeeded: 1}},
+		CronJobs:     []agentsk8s.CronJob{{UID: "cron-1", Name: "nightly", Namespace: "services", Schedule: "0 1 * * *"}},
+		Ingresses:    []agentsk8s.Ingress{{UID: "ing-1", Name: "checkout", Namespace: "services", ClassName: "nginx", Hosts: []string{"checkout.example.test"}, Addresses: []string{"192.0.2.20"}, CreatedAt: now}},
+		PersistentVolumes: []agentsk8s.PersistentVolume{{
+			UID: "pv-1", Name: "pv-checkout", Phase: " Bound ", StorageClass: "fast", CapacityBytes: 10_000, AccessModes: []string{"ReadWriteOnce"}, ReclaimPolicy: "Retain", ClaimNamespace: "services", ClaimName: "checkout-data", CreatedAt: now,
+		}},
+		PersistentVolumeClaims: []agentsk8s.PersistentVolumeClaim{{
+			UID: "pvc-1", Name: "checkout-data", Namespace: "services", Phase: " Bound ", StorageClass: "fast", RequestedBytes: 10_000, CapacityBytes: 10_000, AccessModes: []string{"ReadWriteOnce"}, VolumeName: "pv-checkout", CreatedAt: now,
+		}},
+		Events:    []agentsk8s.Event{{UID: "evt-1", Name: "checkout.1", Namespace: "services", Type: "Warning", Reason: "BackOff", Message: "retrying", InvolvedKind: "Pod", InvolvedName: "checkout-0", Count: 2}},
+		Timestamp: now,
+	}
+
+	cluster, err := monitor.ApplyKubernetesReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyKubernetesReport: %v", err)
+	}
+	if len(cluster.Namespaces) != 1 || cluster.Namespaces[0].Name != "services" {
+		t.Fatalf("expected namespace inventory, got %+v", cluster.Namespaces)
+	}
+	if len(cluster.Services) != 1 || cluster.Services[0].ServiceType != "ClusterIP" || cluster.Services[0].Ports[0].TargetPort != "8080" {
+		t.Fatalf("expected service inventory, got %+v", cluster.Services)
+	}
+	if len(cluster.StatefulSets) != 1 || cluster.StatefulSets[0].ReadyReplicas != 2 {
+		t.Fatalf("expected statefulset inventory, got %+v", cluster.StatefulSets)
+	}
+	if len(cluster.DaemonSets) != 1 || cluster.DaemonSets[0].NumberReady != 3 {
+		t.Fatalf("expected daemonset inventory, got %+v", cluster.DaemonSets)
+	}
+	if len(cluster.Jobs) != 1 || cluster.Jobs[0].Succeeded != 1 {
+		t.Fatalf("expected job inventory, got %+v", cluster.Jobs)
+	}
+	if len(cluster.CronJobs) != 1 || cluster.CronJobs[0].Schedule != "0 1 * * *" {
+		t.Fatalf("expected cronjob inventory, got %+v", cluster.CronJobs)
+	}
+	if len(cluster.Ingresses) != 1 || cluster.Ingresses[0].Hosts[0] != "checkout.example.test" {
+		t.Fatalf("expected ingress inventory, got %+v", cluster.Ingresses)
+	}
+	if len(cluster.PersistentVolumes) != 1 || cluster.PersistentVolumes[0].ClaimName != "checkout-data" {
+		t.Fatalf("expected PV inventory, got %+v", cluster.PersistentVolumes)
+	}
+	if len(cluster.PersistentVolumeClaims) != 1 || cluster.PersistentVolumeClaims[0].VolumeName != "pv-checkout" {
+		t.Fatalf("expected PVC inventory, got %+v", cluster.PersistentVolumeClaims)
+	}
+	if len(cluster.Events) != 1 || cluster.Events[0].Reason != "BackOff" || cluster.Events[0].Count != 2 {
+		t.Fatalf("expected event inventory, got %+v", cluster.Events)
+	}
+}
+
 func TestApplyKubernetesReport_PodNetworkAndEphemeralMetrics(t *testing.T) {
 	monitor := newKubernetesTestMonitor()
 	monitor.rateTracker = NewRateTracker()

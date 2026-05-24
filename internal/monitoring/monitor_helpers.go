@@ -190,6 +190,101 @@ func cloneStringMap(src map[string]string) map[string]string {
 	return out
 }
 
+func convertDockerImages(images []agentsdocker.Image) []models.DockerImage {
+	if len(images) == 0 {
+		return nil
+	}
+	result := make([]models.DockerImage, 0, len(images))
+	for _, image := range images {
+		result = append(result, models.DockerImage{
+			ID:              strings.TrimSpace(image.ID),
+			RepoTags:        append([]string(nil), image.RepoTags...),
+			RepoDigests:     append([]string(nil), image.RepoDigests...),
+			SizeBytes:       image.SizeBytes,
+			SharedSizeBytes: image.SharedSizeBytes,
+			Containers:      image.Containers,
+			CreatedAt:       image.CreatedAt,
+			Labels:          cloneStringMap(image.Labels),
+		}.NormalizeCollections())
+	}
+	return result
+}
+
+func convertDockerVolumes(volumes []agentsdocker.Volume) []models.DockerVolume {
+	if len(volumes) == 0 {
+		return nil
+	}
+	result := make([]models.DockerVolume, 0, len(volumes))
+	for _, volume := range volumes {
+		result = append(result, models.DockerVolume{
+			Name:       strings.TrimSpace(volume.Name),
+			Driver:     strings.TrimSpace(volume.Driver),
+			Mountpoint: strings.TrimSpace(volume.Mountpoint),
+			Scope:      strings.TrimSpace(volume.Scope),
+			CreatedAt:  strings.TrimSpace(volume.CreatedAt),
+			SizeBytes:  volume.SizeBytes,
+			RefCount:   volume.RefCount,
+			Labels:     cloneStringMap(volume.Labels),
+			Options:    cloneStringMap(volume.Options),
+		}.NormalizeCollections())
+	}
+	return result
+}
+
+func convertDockerNetworks(networks []agentsdocker.Network) []models.DockerNetwork {
+	if len(networks) == 0 {
+		return nil
+	}
+	result := make([]models.DockerNetwork, 0, len(networks))
+	for _, network := range networks {
+		subnets := make([]models.DockerNetworkSubnet, 0, len(network.Subnets))
+		for _, subnet := range network.Subnets {
+			subnets = append(subnets, models.DockerNetworkSubnet{
+				Subnet:  strings.TrimSpace(subnet.Subnet),
+				Gateway: strings.TrimSpace(subnet.Gateway),
+			})
+		}
+		result = append(result, models.DockerNetwork{
+			ID:         strings.TrimSpace(network.ID),
+			Name:       strings.TrimSpace(network.Name),
+			Driver:     strings.TrimSpace(network.Driver),
+			Scope:      strings.TrimSpace(network.Scope),
+			CreatedAt:  network.CreatedAt,
+			EnableIPv4: network.EnableIPv4,
+			EnableIPv6: network.EnableIPv6,
+			Internal:   network.Internal,
+			Attachable: network.Attachable,
+			Ingress:    network.Ingress,
+			ConfigOnly: network.ConfigOnly,
+			Subnets:    subnets,
+			Labels:     cloneStringMap(network.Labels),
+			Options:    cloneStringMap(network.Options),
+		}.NormalizeCollections())
+	}
+	return result
+}
+
+func convertDockerStorageUsage(usage *agentsdocker.StorageUsage) *models.DockerStorageUsage {
+	if usage == nil {
+		return nil
+	}
+	return &models.DockerStorageUsage{
+		Images:     convertDockerStorageUsageBucket(usage.Images),
+		Containers: convertDockerStorageUsageBucket(usage.Containers),
+		Volumes:    convertDockerStorageUsageBucket(usage.Volumes),
+		BuildCache: convertDockerStorageUsageBucket(usage.BuildCache),
+	}
+}
+
+func convertDockerStorageUsageBucket(bucket agentsdocker.StorageUsageBucket) models.DockerStorageUsageBucket {
+	return models.DockerStorageUsageBucket{
+		TotalCount:       bucket.TotalCount,
+		ActiveCount:      bucket.ActiveCount,
+		TotalSizeBytes:   bucket.TotalSizeBytes,
+		ReclaimableBytes: bucket.ReclaimableBytes,
+	}
+}
+
 func convertDockerServices(services []agentsdocker.Service) []models.DockerService {
 	if len(services) == 0 {
 		return nil

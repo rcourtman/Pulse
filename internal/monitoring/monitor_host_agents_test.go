@@ -384,6 +384,59 @@ func TestApplyHostReportAllowsTokenReuseAcrossHosts(t *testing.T) {
 	}
 }
 
+func TestApplyDockerReportPreservesNativeRuntimeInventory(t *testing.T) {
+	monitor := newTestMonitor(t)
+	now := time.Date(2026, 5, 24, 8, 0, 0, 0, time.UTC)
+	report := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{ID: "docker-agent-1", Version: "1.0.0", IntervalSeconds: 30},
+		Host: agentsdocker.HostInfo{
+			Hostname:       "docker-host",
+			Name:           "Docker Host",
+			Runtime:        "podman",
+			RuntimeVersion: "5.0.0",
+		},
+		Images: []agentsdocker.Image{{
+			ID:              "sha256:image1",
+			RepoTags:        []string{"repo/app:latest"},
+			RepoDigests:     []string{"repo/app@sha256:abc"},
+			SizeBytes:       1024,
+			SharedSizeBytes: 128,
+			Containers:      2,
+			CreatedAt:       now,
+			Labels:          map[string]string{"tier": "web"},
+		}},
+		Volumes: []agentsdocker.Volume{{
+			Name: "app-data", Driver: "local", Mountpoint: "/var/lib/volumes/app-data", Scope: "local", SizeBytes: 2048, RefCount: 3,
+		}},
+		Networks: []agentsdocker.Network{{
+			ID: "net1", Name: "app-net", Driver: "bridge", Scope: "local", EnableIPv4: true, Attachable: true, Subnets: []agentsdocker.NetworkSubnet{{Subnet: "10.88.0.0/24", Gateway: "10.88.0.1"}},
+		}},
+		StorageUsage: &agentsdocker.StorageUsage{
+			Images:     agentsdocker.StorageUsageBucket{TotalCount: 3, ActiveCount: 2, TotalSizeBytes: 4096, ReclaimableBytes: 512},
+			Volumes:    agentsdocker.StorageUsageBucket{TotalCount: 1, ActiveCount: 1, TotalSizeBytes: 2048},
+			Containers: agentsdocker.StorageUsageBucket{TotalCount: 2, ActiveCount: 2},
+		},
+		Timestamp: now,
+	}
+
+	host, err := monitor.ApplyDockerReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyDockerReport: %v", err)
+	}
+	if len(host.Images) != 1 || host.Images[0].ID != "sha256:image1" || host.Images[0].RepoTags[0] != "repo/app:latest" {
+		t.Fatalf("expected image inventory, got %+v", host.Images)
+	}
+	if len(host.Volumes) != 1 || host.Volumes[0].Name != "app-data" || host.Volumes[0].SizeBytes != 2048 {
+		t.Fatalf("expected volume inventory, got %+v", host.Volumes)
+	}
+	if len(host.Networks) != 1 || host.Networks[0].Name != "app-net" || host.Networks[0].Subnets[0].Gateway != "10.88.0.1" {
+		t.Fatalf("expected network inventory, got %+v", host.Networks)
+	}
+	if host.StorageUsage == nil || host.StorageUsage.Images.ReclaimableBytes != 512 {
+		t.Fatalf("expected storage usage inventory, got %+v", host.StorageUsage)
+	}
+}
+
 func TestApplyDockerReportDerivesCanonicalDockerSecurityPosture(t *testing.T) {
 	t.Helper()
 

@@ -180,6 +180,12 @@ impact previews, or cross-organization sharing only through the API and
 unified-resource contracts; lifecycle code must not treat that share as an
 agent install target, a command-agent authority, or a reason to widen setup
 tokens.
+Docker / Podman native inventory and Kubernetes native API inventory follow
+that same lifecycle boundary. Images, volumes, networks, Swarm tasks,
+Kubernetes Services, controllers, PV/PVC records, ingresses, namespaces, and
+events may appear as API/unified-resource evidence, but lifecycle surfaces must
+not treat those child inventory rows as agent enrollment candidates, install
+targets, fleet command authorities, or setup-token scopes.
 VMware vSphere `network` resources follow that same lifecycle boundary. A
 vCenter connection may project networks into platform tables, resource
 pickers, Assistant context, or monitored-system previews through the shared

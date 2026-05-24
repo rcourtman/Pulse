@@ -25,7 +25,9 @@ import (
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
 	"github.com/rs/zerolog"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -101,6 +103,8 @@ const (
 	initialRetryBackoff                = 300 * time.Millisecond
 	maxRetryBackoff                    = 3 * time.Second
 	maxSummaryMetricNodes              = 200
+	maxInventoryItems                  = 1000
+	maxEventItems                      = 200
 	summaryMetricsWorkers              = 8
 	reportUserAgent                    = "pulse-kubernetes-agent/"
 	maxMetricsResponseBodyBytes  int64 = 32 * 1024 * 1024 // 32 MB
@@ -452,6 +456,47 @@ func (a *Agent) collectReport(ctx context.Context) (agentsk8s.Report, error) {
 		return agentsk8s.Report{}, fmt.Errorf("collect deployments: %w", err)
 	}
 
+	namespaces, err := a.collectNamespaces(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes namespaces unavailable, continuing without namespace inventory")
+	}
+	services, err := a.collectServices(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes services unavailable, continuing without service inventory")
+	}
+	statefulSets, err := a.collectStatefulSets(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes statefulsets unavailable, continuing without statefulset inventory")
+	}
+	daemonSets, err := a.collectDaemonSets(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes daemonsets unavailable, continuing without daemonset inventory")
+	}
+	jobs, err := a.collectJobs(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes jobs unavailable, continuing without job inventory")
+	}
+	cronJobs, err := a.collectCronJobs(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes cronjobs unavailable, continuing without cronjob inventory")
+	}
+	ingresses, err := a.collectIngresses(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes ingresses unavailable, continuing without ingress inventory")
+	}
+	persistentVolumes, err := a.collectPersistentVolumes(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes persistent volumes unavailable, continuing without persistent volume inventory")
+	}
+	persistentVolumeClaims, err := a.collectPersistentVolumeClaims(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes persistent volume claims unavailable, continuing without persistent volume claim inventory")
+	}
+	events, err := a.collectEvents(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes events unavailable, continuing without event inventory")
+	}
+
 	nodeUsage, podUsage, usageErr := a.collectUsageMetrics(ctx, nodes)
 	if usageErr != nil {
 		a.logger.Debug().Err(usageErr).Str("cluster_id", a.clusterID).Msg("kubernetes usage metrics unavailable, continuing with inventory-only report")
@@ -478,11 +523,21 @@ func (a *Agent) collectReport(ctx context.Context) (agentsk8s.Report, error) {
 			Context: a.clusterContext,
 			Version: a.clusterVersion,
 		},
-		Nodes:       nodes,
-		Pods:        pods,
-		Deployments: deployments,
-		Recovery:    recoveryReport,
-		Timestamp:   time.Now().UTC(),
+		Nodes:                  nodes,
+		Namespaces:             namespaces,
+		Pods:                   pods,
+		Deployments:            deployments,
+		StatefulSets:           statefulSets,
+		DaemonSets:             daemonSets,
+		Services:               services,
+		Jobs:                   jobs,
+		CronJobs:               cronJobs,
+		Ingresses:              ingresses,
+		PersistentVolumes:      persistentVolumes,
+		PersistentVolumeClaims: persistentVolumeClaims,
+		Events:                 events,
+		Recovery:               recoveryReport,
+		Timestamp:              time.Now().UTC(),
 	}, nil
 }
 
@@ -1813,6 +1868,605 @@ func (a *Agent) collectDeployments(ctx context.Context) ([]agentsk8s.Deployment,
 	}
 
 	return items, nil
+}
+
+func (a *Agent) inventoryNamespaces() []string {
+	namespaces, explicit := explicitNamespaces(a.includeNamespaces)
+	if !explicit {
+		return []string{metav1.NamespaceAll}
+	}
+	return namespaces
+}
+
+func copyKubernetesStringMap(src map[string]string) map[string]string {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
+}
+
+func timePtrFromMeta(t metav1.Time) *time.Time {
+	if t.Time.IsZero() {
+		return nil
+	}
+	out := t.Time
+	return &out
+}
+
+func timePtrFromMicro(t metav1.MicroTime) *time.Time {
+	if t.Time.IsZero() {
+		return nil
+	}
+	out := t.Time
+	return &out
+}
+
+func accessModes(modes []corev1.PersistentVolumeAccessMode) []string {
+	if len(modes) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(modes))
+	for _, mode := range modes {
+		value := strings.TrimSpace(string(mode))
+		if value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+func storageClassNamePtr(name *string) string {
+	if name == nil {
+		return ""
+	}
+	return strings.TrimSpace(*name)
+}
+
+func statefulSetDesiredReplicas(statefulSet appsv1.StatefulSet) int32 {
+	if statefulSet.Spec.Replicas == nil {
+		return 0
+	}
+	return *statefulSet.Spec.Replicas
+}
+
+func jobDesiredCompletions(job batchv1.Job) int32 {
+	if job.Spec.Completions == nil {
+		return 0
+	}
+	return *job.Spec.Completions
+}
+
+func cronJobSuspended(cronJob batchv1.CronJob) bool {
+	return cronJob.Spec.Suspend != nil && *cronJob.Spec.Suspend
+}
+
+func ingressClassName(ingress networkingv1.Ingress) string {
+	if ingress.Spec.IngressClassName == nil {
+		return ""
+	}
+	return strings.TrimSpace(*ingress.Spec.IngressClassName)
+}
+
+func ingressHosts(ingress networkingv1.Ingress) []string {
+	hosts := make([]string, 0, len(ingress.Spec.Rules))
+	seen := make(map[string]struct{}, len(ingress.Spec.Rules))
+	for _, rule := range ingress.Spec.Rules {
+		host := strings.TrimSpace(rule.Host)
+		if host == "" {
+			continue
+		}
+		if _, ok := seen[host]; ok {
+			continue
+		}
+		seen[host] = struct{}{}
+		hosts = append(hosts, host)
+	}
+	return hosts
+}
+
+func ingressAddresses(ingress networkingv1.Ingress) []string {
+	addresses := make([]string, 0, len(ingress.Status.LoadBalancer.Ingress))
+	seen := make(map[string]struct{}, len(ingress.Status.LoadBalancer.Ingress))
+	for _, entry := range ingress.Status.LoadBalancer.Ingress {
+		for _, value := range []string{entry.IP, entry.Hostname} {
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+			if _, ok := seen[value]; ok {
+				continue
+			}
+			seen[value] = struct{}{}
+			addresses = append(addresses, value)
+		}
+	}
+	return addresses
+}
+
+func (a *Agent) collectNamespaces(ctx context.Context) ([]agentsk8s.Namespace, error) {
+	items := make([]agentsk8s.Namespace, 0)
+	opts := metav1.ListOptions{Limit: listPageSize}
+	for {
+		var list *corev1.NamespaceList
+		err := a.runKubernetesCallWithRetry(ctx, "list namespaces", func(callCtx context.Context) error {
+			var err error
+			list, err = a.kubeClient.CoreV1().Namespaces().List(callCtx, opts)
+			return err
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, namespace := range list.Items {
+			if !a.namespaceAllowed(namespace.Name) {
+				continue
+			}
+			items = append(items, agentsk8s.Namespace{
+				UID:       string(namespace.UID),
+				Name:      namespace.Name,
+				Phase:     string(namespace.Status.Phase),
+				CreatedAt: namespace.CreationTimestamp.Time,
+				Labels:    copyKubernetesStringMap(namespace.Labels),
+			})
+			if len(items) >= maxInventoryItems {
+				return items, nil
+			}
+		}
+		if list.Continue == "" {
+			break
+		}
+		opts.Continue = list.Continue
+	}
+	return items, nil
+}
+
+func (a *Agent) collectServices(ctx context.Context) ([]agentsk8s.Service, error) {
+	items := make([]agentsk8s.Service, 0)
+	for _, namespace := range a.inventoryNamespaces() {
+		opts := metav1.ListOptions{Limit: listPageSize}
+		for {
+			var list *corev1.ServiceList
+			action := "list services"
+			if namespace != metav1.NamespaceAll {
+				action = fmt.Sprintf("list services in namespace %q", namespace)
+			}
+			err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+				var err error
+				list, err = a.kubeClient.CoreV1().Services(namespace).List(callCtx, opts)
+				return err
+			})
+			if err != nil {
+				return nil, err
+			}
+			for _, service := range list.Items {
+				if !a.namespaceAllowed(service.Namespace) {
+					continue
+				}
+				ports := make([]agentsk8s.ServicePort, 0, len(service.Spec.Ports))
+				for _, port := range service.Spec.Ports {
+					ports = append(ports, agentsk8s.ServicePort{
+						Name:       strings.TrimSpace(port.Name),
+						Protocol:   string(port.Protocol),
+						Port:       port.Port,
+						TargetPort: port.TargetPort.String(),
+						NodePort:   port.NodePort,
+					})
+				}
+				items = append(items, agentsk8s.Service{
+					UID:         string(service.UID),
+					Name:        service.Name,
+					Namespace:   service.Namespace,
+					Type:        string(service.Spec.Type),
+					ClusterIP:   service.Spec.ClusterIP,
+					ExternalIPs: append([]string(nil), service.Spec.ExternalIPs...),
+					Ports:       ports,
+					Selector:    copyKubernetesStringMap(service.Spec.Selector),
+					CreatedAt:   service.CreationTimestamp.Time,
+					Labels:      copyKubernetesStringMap(service.Labels),
+				})
+				if len(items) >= maxInventoryItems {
+					return items, nil
+				}
+			}
+			if list.Continue == "" {
+				break
+			}
+			opts.Continue = list.Continue
+		}
+	}
+	return items, nil
+}
+
+func (a *Agent) collectStatefulSets(ctx context.Context) ([]agentsk8s.StatefulSet, error) {
+	items := make([]agentsk8s.StatefulSet, 0)
+	for _, namespace := range a.inventoryNamespaces() {
+		opts := metav1.ListOptions{Limit: listPageSize}
+		for {
+			var list *appsv1.StatefulSetList
+			action := "list statefulsets"
+			if namespace != metav1.NamespaceAll {
+				action = fmt.Sprintf("list statefulsets in namespace %q", namespace)
+			}
+			err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+				var err error
+				list, err = a.kubeClient.AppsV1().StatefulSets(namespace).List(callCtx, opts)
+				return err
+			})
+			if err != nil {
+				return nil, err
+			}
+			for _, statefulSet := range list.Items {
+				if !a.namespaceAllowed(statefulSet.Namespace) {
+					continue
+				}
+				items = append(items, agentsk8s.StatefulSet{
+					UID:               string(statefulSet.UID),
+					Name:              statefulSet.Name,
+					Namespace:         statefulSet.Namespace,
+					DesiredReplicas:   statefulSetDesiredReplicas(statefulSet),
+					ReadyReplicas:     statefulSet.Status.ReadyReplicas,
+					CurrentReplicas:   statefulSet.Status.CurrentReplicas,
+					UpdatedReplicas:   statefulSet.Status.UpdatedReplicas,
+					AvailableReplicas: statefulSet.Status.AvailableReplicas,
+					ServiceName:       statefulSet.Spec.ServiceName,
+					Labels:            copyKubernetesStringMap(statefulSet.Labels),
+				})
+				if len(items) >= maxInventoryItems {
+					return items, nil
+				}
+			}
+			if list.Continue == "" {
+				break
+			}
+			opts.Continue = list.Continue
+		}
+	}
+	return items, nil
+}
+
+func (a *Agent) collectDaemonSets(ctx context.Context) ([]agentsk8s.DaemonSet, error) {
+	items := make([]agentsk8s.DaemonSet, 0)
+	for _, namespace := range a.inventoryNamespaces() {
+		opts := metav1.ListOptions{Limit: listPageSize}
+		for {
+			var list *appsv1.DaemonSetList
+			action := "list daemonsets"
+			if namespace != metav1.NamespaceAll {
+				action = fmt.Sprintf("list daemonsets in namespace %q", namespace)
+			}
+			err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+				var err error
+				list, err = a.kubeClient.AppsV1().DaemonSets(namespace).List(callCtx, opts)
+				return err
+			})
+			if err != nil {
+				return nil, err
+			}
+			for _, daemonSet := range list.Items {
+				if !a.namespaceAllowed(daemonSet.Namespace) {
+					continue
+				}
+				items = append(items, agentsk8s.DaemonSet{
+					UID:                    string(daemonSet.UID),
+					Name:                   daemonSet.Name,
+					Namespace:              daemonSet.Namespace,
+					DesiredNumberScheduled: daemonSet.Status.DesiredNumberScheduled,
+					CurrentNumberScheduled: daemonSet.Status.CurrentNumberScheduled,
+					NumberReady:            daemonSet.Status.NumberReady,
+					UpdatedNumberScheduled: daemonSet.Status.UpdatedNumberScheduled,
+					NumberAvailable:        daemonSet.Status.NumberAvailable,
+					NumberUnavailable:      daemonSet.Status.NumberUnavailable,
+					NumberMisscheduled:     daemonSet.Status.NumberMisscheduled,
+					Labels:                 copyKubernetesStringMap(daemonSet.Labels),
+				})
+				if len(items) >= maxInventoryItems {
+					return items, nil
+				}
+			}
+			if list.Continue == "" {
+				break
+			}
+			opts.Continue = list.Continue
+		}
+	}
+	return items, nil
+}
+
+func (a *Agent) collectJobs(ctx context.Context) ([]agentsk8s.Job, error) {
+	items := make([]agentsk8s.Job, 0)
+	for _, namespace := range a.inventoryNamespaces() {
+		opts := metav1.ListOptions{Limit: listPageSize}
+		for {
+			var list *batchv1.JobList
+			action := "list jobs"
+			if namespace != metav1.NamespaceAll {
+				action = fmt.Sprintf("list jobs in namespace %q", namespace)
+			}
+			err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+				var err error
+				list, err = a.kubeClient.BatchV1().Jobs(namespace).List(callCtx, opts)
+				return err
+			})
+			if err != nil {
+				return nil, err
+			}
+			for _, job := range list.Items {
+				if !a.namespaceAllowed(job.Namespace) {
+					continue
+				}
+				items = append(items, agentsk8s.Job{
+					UID:                string(job.UID),
+					Name:               job.Name,
+					Namespace:          job.Namespace,
+					DesiredCompletions: jobDesiredCompletions(job),
+					Succeeded:          job.Status.Succeeded,
+					Failed:             job.Status.Failed,
+					Active:             job.Status.Active,
+					StartTime:          timePtrFromMetaPtr(job.Status.StartTime),
+					CompletionTime:     timePtrFromMetaPtr(job.Status.CompletionTime),
+					Labels:             copyKubernetesStringMap(job.Labels),
+				})
+				if len(items) >= maxInventoryItems {
+					return items, nil
+				}
+			}
+			if list.Continue == "" {
+				break
+			}
+			opts.Continue = list.Continue
+		}
+	}
+	return items, nil
+}
+
+func (a *Agent) collectCronJobs(ctx context.Context) ([]agentsk8s.CronJob, error) {
+	items := make([]agentsk8s.CronJob, 0)
+	for _, namespace := range a.inventoryNamespaces() {
+		opts := metav1.ListOptions{Limit: listPageSize}
+		for {
+			var list *batchv1.CronJobList
+			action := "list cronjobs"
+			if namespace != metav1.NamespaceAll {
+				action = fmt.Sprintf("list cronjobs in namespace %q", namespace)
+			}
+			err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+				var err error
+				list, err = a.kubeClient.BatchV1().CronJobs(namespace).List(callCtx, opts)
+				return err
+			})
+			if err != nil {
+				return nil, err
+			}
+			for _, cronJob := range list.Items {
+				if !a.namespaceAllowed(cronJob.Namespace) {
+					continue
+				}
+				items = append(items, agentsk8s.CronJob{
+					UID:                string(cronJob.UID),
+					Name:               cronJob.Name,
+					Namespace:          cronJob.Namespace,
+					Schedule:           cronJob.Spec.Schedule,
+					Suspend:            cronJobSuspended(cronJob),
+					Active:             len(cronJob.Status.Active),
+					LastScheduleTime:   timePtrFromMetaPtr(cronJob.Status.LastScheduleTime),
+					LastSuccessfulTime: timePtrFromMetaPtr(cronJob.Status.LastSuccessfulTime),
+					Labels:             copyKubernetesStringMap(cronJob.Labels),
+				})
+				if len(items) >= maxInventoryItems {
+					return items, nil
+				}
+			}
+			if list.Continue == "" {
+				break
+			}
+			opts.Continue = list.Continue
+		}
+	}
+	return items, nil
+}
+
+func (a *Agent) collectIngresses(ctx context.Context) ([]agentsk8s.Ingress, error) {
+	items := make([]agentsk8s.Ingress, 0)
+	for _, namespace := range a.inventoryNamespaces() {
+		opts := metav1.ListOptions{Limit: listPageSize}
+		for {
+			var list *networkingv1.IngressList
+			action := "list ingresses"
+			if namespace != metav1.NamespaceAll {
+				action = fmt.Sprintf("list ingresses in namespace %q", namespace)
+			}
+			err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+				var err error
+				list, err = a.kubeClient.NetworkingV1().Ingresses(namespace).List(callCtx, opts)
+				return err
+			})
+			if err != nil {
+				return nil, err
+			}
+			for _, ingress := range list.Items {
+				if !a.namespaceAllowed(ingress.Namespace) {
+					continue
+				}
+				items = append(items, agentsk8s.Ingress{
+					UID:       string(ingress.UID),
+					Name:      ingress.Name,
+					Namespace: ingress.Namespace,
+					ClassName: ingressClassName(ingress),
+					Hosts:     ingressHosts(ingress),
+					Addresses: ingressAddresses(ingress),
+					CreatedAt: ingress.CreationTimestamp.Time,
+					Labels:    copyKubernetesStringMap(ingress.Labels),
+				})
+				if len(items) >= maxInventoryItems {
+					return items, nil
+				}
+			}
+			if list.Continue == "" {
+				break
+			}
+			opts.Continue = list.Continue
+		}
+	}
+	return items, nil
+}
+
+func (a *Agent) collectPersistentVolumes(ctx context.Context) ([]agentsk8s.PersistentVolume, error) {
+	items := make([]agentsk8s.PersistentVolume, 0)
+	opts := metav1.ListOptions{Limit: listPageSize}
+	for {
+		var list *corev1.PersistentVolumeList
+		err := a.runKubernetesCallWithRetry(ctx, "list persistent volumes", func(callCtx context.Context) error {
+			var err error
+			list, err = a.kubeClient.CoreV1().PersistentVolumes().List(callCtx, opts)
+			return err
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, volume := range list.Items {
+			claimNamespace := ""
+			claimName := ""
+			if volume.Spec.ClaimRef != nil {
+				claimNamespace = volume.Spec.ClaimRef.Namespace
+				claimName = volume.Spec.ClaimRef.Name
+			}
+			if claimNamespace != "" && !a.namespaceAllowed(claimNamespace) {
+				continue
+			}
+			items = append(items, agentsk8s.PersistentVolume{
+				UID:            string(volume.UID),
+				Name:           volume.Name,
+				Phase:          string(volume.Status.Phase),
+				StorageClass:   volume.Spec.StorageClassName,
+				CapacityBytes:  volume.Spec.Capacity.Storage().Value(),
+				AccessModes:    accessModes(volume.Spec.AccessModes),
+				ReclaimPolicy:  string(volume.Spec.PersistentVolumeReclaimPolicy),
+				ClaimNamespace: claimNamespace,
+				ClaimName:      claimName,
+				CreatedAt:      volume.CreationTimestamp.Time,
+				Labels:         copyKubernetesStringMap(volume.Labels),
+			})
+			if len(items) >= maxInventoryItems {
+				return items, nil
+			}
+		}
+		if list.Continue == "" {
+			break
+		}
+		opts.Continue = list.Continue
+	}
+	return items, nil
+}
+
+func (a *Agent) collectPersistentVolumeClaims(ctx context.Context) ([]agentsk8s.PersistentVolumeClaim, error) {
+	items := make([]agentsk8s.PersistentVolumeClaim, 0)
+	for _, namespace := range a.inventoryNamespaces() {
+		opts := metav1.ListOptions{Limit: listPageSize}
+		for {
+			var list *corev1.PersistentVolumeClaimList
+			action := "list persistent volume claims"
+			if namespace != metav1.NamespaceAll {
+				action = fmt.Sprintf("list persistent volume claims in namespace %q", namespace)
+			}
+			err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+				var err error
+				list, err = a.kubeClient.CoreV1().PersistentVolumeClaims(namespace).List(callCtx, opts)
+				return err
+			})
+			if err != nil {
+				return nil, err
+			}
+			for _, claim := range list.Items {
+				if !a.namespaceAllowed(claim.Namespace) {
+					continue
+				}
+				requested := int64(0)
+				if storageRequest, ok := claim.Spec.Resources.Requests[corev1.ResourceStorage]; ok {
+					requested = storageRequest.Value()
+				}
+				items = append(items, agentsk8s.PersistentVolumeClaim{
+					UID:            string(claim.UID),
+					Name:           claim.Name,
+					Namespace:      claim.Namespace,
+					Phase:          string(claim.Status.Phase),
+					StorageClass:   storageClassNamePtr(claim.Spec.StorageClassName),
+					RequestedBytes: requested,
+					CapacityBytes:  claim.Status.Capacity.Storage().Value(),
+					AccessModes:    accessModes(claim.Spec.AccessModes),
+					VolumeName:     claim.Spec.VolumeName,
+					CreatedAt:      claim.CreationTimestamp.Time,
+					Labels:         copyKubernetesStringMap(claim.Labels),
+				})
+				if len(items) >= maxInventoryItems {
+					return items, nil
+				}
+			}
+			if list.Continue == "" {
+				break
+			}
+			opts.Continue = list.Continue
+		}
+	}
+	return items, nil
+}
+
+func (a *Agent) collectEvents(ctx context.Context) ([]agentsk8s.Event, error) {
+	items := make([]agentsk8s.Event, 0)
+	for _, namespace := range a.inventoryNamespaces() {
+		opts := metav1.ListOptions{Limit: listPageSize}
+		for {
+			var list *corev1.EventList
+			action := "list events"
+			if namespace != metav1.NamespaceAll {
+				action = fmt.Sprintf("list events in namespace %q", namespace)
+			}
+			err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+				var err error
+				list, err = a.kubeClient.CoreV1().Events(namespace).List(callCtx, opts)
+				return err
+			})
+			if err != nil {
+				return nil, err
+			}
+			for _, event := range list.Items {
+				if event.Namespace != "" && !a.namespaceAllowed(event.Namespace) {
+					continue
+				}
+				items = append(items, agentsk8s.Event{
+					UID:          string(event.UID),
+					Name:         event.Name,
+					Namespace:    event.Namespace,
+					Type:         event.Type,
+					Reason:       event.Reason,
+					Message:      event.Message,
+					InvolvedKind: event.InvolvedObject.Kind,
+					InvolvedName: event.InvolvedObject.Name,
+					Count:        event.Count,
+					FirstSeen:    timePtrFromMeta(event.FirstTimestamp),
+					LastSeen:     timePtrFromMeta(event.LastTimestamp),
+					EventTime:    timePtrFromMicro(event.EventTime),
+				})
+				if len(items) >= maxEventItems {
+					return items, nil
+				}
+			}
+			if list.Continue == "" {
+				break
+			}
+			opts.Continue = list.Continue
+		}
+	}
+	return items, nil
+}
+
+func timePtrFromMetaPtr(t *metav1.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+	return timePtrFromMeta(*t)
 }
 
 func desiredReplicas(dep appsv1.Deployment) int32 {

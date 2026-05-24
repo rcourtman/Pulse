@@ -252,23 +252,44 @@ func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *co
 		})
 	}
 
+	namespaces := convertKubernetesNamespaces(report.Namespaces)
+	statefulSets := convertKubernetesStatefulSets(report.StatefulSets)
+	daemonSets := convertKubernetesDaemonSets(report.DaemonSets)
+	services := convertKubernetesServices(report.Services)
+	jobs := convertKubernetesJobs(report.Jobs)
+	cronJobs := convertKubernetesCronJobs(report.CronJobs)
+	ingresses := convertKubernetesIngresses(report.Ingresses)
+	persistentVolumes := convertKubernetesPersistentVolumes(report.PersistentVolumes)
+	persistentVolumeClaims := convertKubernetesPersistentVolumeClaims(report.PersistentVolumeClaims)
+	events := convertKubernetesEvents(report.Events)
+
 	agentVersion := normalizeAgentVersion(report.Agent.Version)
 
 	cluster := models.KubernetesCluster{
-		ID:              identifier,
-		AgentID:         agentID,
-		Name:            name,
-		DisplayName:     displayName,
-		Server:          strings.TrimSpace(report.Cluster.Server),
-		Context:         strings.TrimSpace(report.Cluster.Context),
-		Version:         strings.TrimSpace(report.Cluster.Version),
-		Status:          "online",
-		LastSeen:        timestamp,
-		IntervalSeconds: report.Agent.IntervalSeconds,
-		AgentVersion:    agentVersion,
-		Nodes:           nodes,
-		Pods:            pods,
-		Deployments:     deployments,
+		ID:                     identifier,
+		AgentID:                agentID,
+		Name:                   name,
+		DisplayName:            displayName,
+		Server:                 strings.TrimSpace(report.Cluster.Server),
+		Context:                strings.TrimSpace(report.Cluster.Context),
+		Version:                strings.TrimSpace(report.Cluster.Version),
+		Status:                 "online",
+		LastSeen:               timestamp,
+		IntervalSeconds:        report.Agent.IntervalSeconds,
+		AgentVersion:           agentVersion,
+		Nodes:                  nodes,
+		Namespaces:             namespaces,
+		Pods:                   pods,
+		Deployments:            deployments,
+		StatefulSets:           statefulSets,
+		DaemonSets:             daemonSets,
+		Services:               services,
+		Jobs:                   jobs,
+		CronJobs:               cronJobs,
+		Ingresses:              ingresses,
+		PersistentVolumes:      persistentVolumes,
+		PersistentVolumeClaims: persistentVolumeClaims,
+		Events:                 events,
 	}
 
 	if tokenRecord != nil {
@@ -283,6 +304,241 @@ func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *co
 	m.recordKubernetesPodMetrics(cluster, timestamp)
 
 	return cluster, nil
+}
+
+func convertKubernetesNamespaces(namespaces []agentsk8s.Namespace) []models.KubernetesNamespace {
+	if len(namespaces) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesNamespace, 0, len(namespaces))
+	for _, namespace := range namespaces {
+		out = append(out, models.KubernetesNamespace{
+			UID:       strings.TrimSpace(namespace.UID),
+			Name:      strings.TrimSpace(namespace.Name),
+			Phase:     strings.TrimSpace(namespace.Phase),
+			CreatedAt: namespace.CreatedAt,
+			Labels:    cloneStringMap(namespace.Labels),
+		}.NormalizeCollections())
+	}
+	return out
+}
+
+func convertKubernetesStatefulSets(statefulSets []agentsk8s.StatefulSet) []models.KubernetesStatefulSet {
+	if len(statefulSets) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesStatefulSet, 0, len(statefulSets))
+	for _, statefulSet := range statefulSets {
+		out = append(out, models.KubernetesStatefulSet{
+			UID:               strings.TrimSpace(statefulSet.UID),
+			Name:              strings.TrimSpace(statefulSet.Name),
+			Namespace:         strings.TrimSpace(statefulSet.Namespace),
+			DesiredReplicas:   statefulSet.DesiredReplicas,
+			ReadyReplicas:     statefulSet.ReadyReplicas,
+			CurrentReplicas:   statefulSet.CurrentReplicas,
+			UpdatedReplicas:   statefulSet.UpdatedReplicas,
+			AvailableReplicas: statefulSet.AvailableReplicas,
+			ServiceName:       strings.TrimSpace(statefulSet.ServiceName),
+			Labels:            cloneStringMap(statefulSet.Labels),
+		}.NormalizeCollections())
+	}
+	return out
+}
+
+func convertKubernetesDaemonSets(daemonSets []agentsk8s.DaemonSet) []models.KubernetesDaemonSet {
+	if len(daemonSets) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesDaemonSet, 0, len(daemonSets))
+	for _, daemonSet := range daemonSets {
+		out = append(out, models.KubernetesDaemonSet{
+			UID:                    strings.TrimSpace(daemonSet.UID),
+			Name:                   strings.TrimSpace(daemonSet.Name),
+			Namespace:              strings.TrimSpace(daemonSet.Namespace),
+			DesiredNumberScheduled: daemonSet.DesiredNumberScheduled,
+			CurrentNumberScheduled: daemonSet.CurrentNumberScheduled,
+			NumberReady:            daemonSet.NumberReady,
+			UpdatedNumberScheduled: daemonSet.UpdatedNumberScheduled,
+			NumberAvailable:        daemonSet.NumberAvailable,
+			NumberUnavailable:      daemonSet.NumberUnavailable,
+			NumberMisscheduled:     daemonSet.NumberMisscheduled,
+			Labels:                 cloneStringMap(daemonSet.Labels),
+		}.NormalizeCollections())
+	}
+	return out
+}
+
+func convertKubernetesServices(services []agentsk8s.Service) []models.KubernetesService {
+	if len(services) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesService, 0, len(services))
+	for _, service := range services {
+		ports := make([]models.KubernetesServicePort, 0, len(service.Ports))
+		for _, port := range service.Ports {
+			ports = append(ports, models.KubernetesServicePort{
+				Name:       strings.TrimSpace(port.Name),
+				Protocol:   strings.TrimSpace(port.Protocol),
+				Port:       port.Port,
+				TargetPort: strings.TrimSpace(port.TargetPort),
+				NodePort:   port.NodePort,
+			})
+		}
+		out = append(out, models.KubernetesService{
+			UID:         strings.TrimSpace(service.UID),
+			Name:        strings.TrimSpace(service.Name),
+			Namespace:   strings.TrimSpace(service.Namespace),
+			ServiceType: strings.TrimSpace(service.Type),
+			ClusterIP:   strings.TrimSpace(service.ClusterIP),
+			ExternalIPs: append([]string(nil), service.ExternalIPs...),
+			Ports:       ports,
+			Selector:    cloneStringMap(service.Selector),
+			CreatedAt:   service.CreatedAt,
+			Labels:      cloneStringMap(service.Labels),
+		}.NormalizeCollections())
+	}
+	return out
+}
+
+func convertKubernetesJobs(jobs []agentsk8s.Job) []models.KubernetesJob {
+	if len(jobs) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesJob, 0, len(jobs))
+	for _, job := range jobs {
+		out = append(out, models.KubernetesJob{
+			UID:                strings.TrimSpace(job.UID),
+			Name:               strings.TrimSpace(job.Name),
+			Namespace:          strings.TrimSpace(job.Namespace),
+			DesiredCompletions: job.DesiredCompletions,
+			Succeeded:          job.Succeeded,
+			Failed:             job.Failed,
+			Active:             job.Active,
+			StartTime:          cloneReportTimePtr(job.StartTime),
+			CompletionTime:     cloneReportTimePtr(job.CompletionTime),
+			Labels:             cloneStringMap(job.Labels),
+		}.NormalizeCollections())
+	}
+	return out
+}
+
+func convertKubernetesCronJobs(cronJobs []agentsk8s.CronJob) []models.KubernetesCronJob {
+	if len(cronJobs) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesCronJob, 0, len(cronJobs))
+	for _, cronJob := range cronJobs {
+		out = append(out, models.KubernetesCronJob{
+			UID:                strings.TrimSpace(cronJob.UID),
+			Name:               strings.TrimSpace(cronJob.Name),
+			Namespace:          strings.TrimSpace(cronJob.Namespace),
+			Schedule:           strings.TrimSpace(cronJob.Schedule),
+			Suspend:            cronJob.Suspend,
+			Active:             cronJob.Active,
+			LastScheduleTime:   cloneReportTimePtr(cronJob.LastScheduleTime),
+			LastSuccessfulTime: cloneReportTimePtr(cronJob.LastSuccessfulTime),
+			Labels:             cloneStringMap(cronJob.Labels),
+		}.NormalizeCollections())
+	}
+	return out
+}
+
+func convertKubernetesIngresses(ingresses []agentsk8s.Ingress) []models.KubernetesIngress {
+	if len(ingresses) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesIngress, 0, len(ingresses))
+	for _, ingress := range ingresses {
+		out = append(out, models.KubernetesIngress{
+			UID:       strings.TrimSpace(ingress.UID),
+			Name:      strings.TrimSpace(ingress.Name),
+			Namespace: strings.TrimSpace(ingress.Namespace),
+			ClassName: strings.TrimSpace(ingress.ClassName),
+			Hosts:     append([]string(nil), ingress.Hosts...),
+			Addresses: append([]string(nil), ingress.Addresses...),
+			CreatedAt: ingress.CreatedAt,
+			Labels:    cloneStringMap(ingress.Labels),
+		}.NormalizeCollections())
+	}
+	return out
+}
+
+func convertKubernetesPersistentVolumes(volumes []agentsk8s.PersistentVolume) []models.KubernetesPersistentVolume {
+	if len(volumes) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesPersistentVolume, 0, len(volumes))
+	for _, volume := range volumes {
+		out = append(out, models.KubernetesPersistentVolume{
+			UID:            strings.TrimSpace(volume.UID),
+			Name:           strings.TrimSpace(volume.Name),
+			Phase:          strings.TrimSpace(volume.Phase),
+			StorageClass:   strings.TrimSpace(volume.StorageClass),
+			CapacityBytes:  volume.CapacityBytes,
+			AccessModes:    append([]string(nil), volume.AccessModes...),
+			ReclaimPolicy:  strings.TrimSpace(volume.ReclaimPolicy),
+			ClaimNamespace: strings.TrimSpace(volume.ClaimNamespace),
+			ClaimName:      strings.TrimSpace(volume.ClaimName),
+			CreatedAt:      volume.CreatedAt,
+			Labels:         cloneStringMap(volume.Labels),
+		}.NormalizeCollections())
+	}
+	return out
+}
+
+func convertKubernetesPersistentVolumeClaims(claims []agentsk8s.PersistentVolumeClaim) []models.KubernetesPersistentVolumeClaim {
+	if len(claims) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesPersistentVolumeClaim, 0, len(claims))
+	for _, claim := range claims {
+		out = append(out, models.KubernetesPersistentVolumeClaim{
+			UID:            strings.TrimSpace(claim.UID),
+			Name:           strings.TrimSpace(claim.Name),
+			Namespace:      strings.TrimSpace(claim.Namespace),
+			Phase:          strings.TrimSpace(claim.Phase),
+			StorageClass:   strings.TrimSpace(claim.StorageClass),
+			RequestedBytes: claim.RequestedBytes,
+			CapacityBytes:  claim.CapacityBytes,
+			AccessModes:    append([]string(nil), claim.AccessModes...),
+			VolumeName:     strings.TrimSpace(claim.VolumeName),
+			CreatedAt:      claim.CreatedAt,
+			Labels:         cloneStringMap(claim.Labels),
+		}.NormalizeCollections())
+	}
+	return out
+}
+
+func convertKubernetesEvents(events []agentsk8s.Event) []models.KubernetesEvent {
+	if len(events) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesEvent, 0, len(events))
+	for _, event := range events {
+		out = append(out, models.KubernetesEvent{
+			UID:          strings.TrimSpace(event.UID),
+			Name:         strings.TrimSpace(event.Name),
+			Namespace:    strings.TrimSpace(event.Namespace),
+			EventType:    strings.TrimSpace(event.Type),
+			Reason:       strings.TrimSpace(event.Reason),
+			Message:      strings.TrimSpace(event.Message),
+			InvolvedKind: strings.TrimSpace(event.InvolvedKind),
+			InvolvedName: strings.TrimSpace(event.InvolvedName),
+			Count:        event.Count,
+			FirstSeen:    cloneReportTimePtr(event.FirstSeen),
+			LastSeen:     cloneReportTimePtr(event.LastSeen),
+			EventTime:    cloneReportTimePtr(event.EventTime),
+		})
+	}
+	return out
+}
+
+func cloneReportTimePtr(src *time.Time) *time.Time {
+	if src == nil {
+		return nil
+	}
+	dest := *src
+	return &dest
 }
 
 func kubernetesCPUUsagePercent(usageMilli, allocCPU, capacityCPU int64) float64 {

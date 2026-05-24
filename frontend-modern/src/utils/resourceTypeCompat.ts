@@ -9,6 +9,10 @@ export type CanonicalFrontendResourceType =
   | 'storage'
   | 'disk'
   | 'docker-host'
+  | 'docker-image'
+  | 'docker-volume'
+  | 'docker-network'
+  | 'docker-task'
   | 'network'
   | 'network-share'
   | 'pbs'
@@ -17,6 +21,15 @@ export type CanonicalFrontendResourceType =
   | 'k8s-cluster'
   | 'k8s-deployment'
   | 'k8s-service'
+  | 'k8s-namespace'
+  | 'k8s-statefulset'
+  | 'k8s-daemonset'
+  | 'k8s-job'
+  | 'k8s-cronjob'
+  | 'k8s-ingress'
+  | 'k8s-persistent-volume'
+  | 'k8s-persistent-volume-claim'
+  | 'k8s-event'
   | 'network-endpoint';
 
 const asNormalizedString = (value: unknown): string | undefined => {
@@ -68,6 +81,10 @@ export const canonicalizeFrontendResourceType = (
     case 'storage':
     case 'disk':
     case 'docker-host':
+    case 'docker-image':
+    case 'docker-volume':
+    case 'docker-network':
+    case 'docker-task':
     case 'network':
     case 'network-share':
     case 'pbs':
@@ -76,6 +93,15 @@ export const canonicalizeFrontendResourceType = (
     case 'k8s-cluster':
     case 'k8s-deployment':
     case 'k8s-service':
+    case 'k8s-namespace':
+    case 'k8s-statefulset':
+    case 'k8s-daemonset':
+    case 'k8s-job':
+    case 'k8s-cronjob':
+    case 'k8s-ingress':
+    case 'k8s-persistent-volume':
+    case 'k8s-persistent-volume-claim':
+    case 'k8s-event':
     case 'network-endpoint':
       return normalized;
     default:

@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"fmt"
 	"net"
 	"net/url"
 	"strconv"
@@ -1150,6 +1151,9 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 		DiskReadRate:          host.DiskReadRate,
 		DiskWriteRate:         host.DiskWriteRate,
 		ContainerCount:        len(host.Containers),
+		ImageCount:            len(host.Images),
+		VolumeCount:           len(host.Volumes),
+		NetworkCount:          len(host.Networks),
 		UpdatesAvailableCount: updatesAvailableCount,
 		UpdatesLastCheckedAt:  updatesLastCheckedPtr,
 		TokenID:               host.TokenID,
@@ -1164,8 +1168,17 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 		NetworkInterfaces:     convertInterfaces(host.NetworkInterfaces),
 		Disks:                 convertDisks(host.Disks),
 		Containers:            append([]models.DockerContainer(nil), host.Containers...),
+		Images:                append([]models.DockerImage(nil), host.Images...),
+		Volumes:               append([]models.DockerVolume(nil), host.Volumes...),
+		NetworksRaw:           append([]models.DockerNetwork(nil), host.Networks...),
 		Services:              append([]models.DockerService(nil), host.Services...),
 		Tasks:                 append([]models.DockerTask(nil), host.Tasks...),
+	}
+	if host.StorageUsage != nil {
+		docker.ImagesUsage = dockerStorageUsageMeta(host.StorageUsage.Images)
+		docker.ContainersUsage = dockerStorageUsageMeta(host.StorageUsage.Containers)
+		docker.VolumesUsage = dockerStorageUsageMeta(host.StorageUsage.Volumes)
+		docker.BuildCacheUsage = dockerStorageUsageMeta(host.StorageUsage.BuildCache)
 	}
 
 	metrics := metricsFromDockerHost(host)
@@ -2023,6 +2036,192 @@ func resourceFromDockerService(service models.DockerService, host models.DockerH
 	return resource, identity
 }
 
+func resourceFromDockerImage(image models.DockerImage, host models.DockerHost) (Resource, ResourceIdentity) {
+	name := firstNonEmpty(firstDockerImageReference(image), shortDigest(image.ID), image.ID)
+	labels := cloneLabelMap(image.Labels)
+	docker := &DockerData{
+		HostSourceID:    host.ID,
+		Hostname:        host.Hostname,
+		ImageID:         strings.TrimSpace(image.ID),
+		Image:           name,
+		RepoTags:        append([]string(nil), image.RepoTags...),
+		RepoDigests:     append([]string(nil), image.RepoDigests...),
+		SizeBytes:       image.SizeBytes,
+		SharedSizeBytes: image.SharedSizeBytes,
+		ImageContainers: image.Containers,
+		Runtime:         strings.TrimSpace(host.Runtime),
+		RuntimeVersion:  strings.TrimSpace(host.RuntimeVersion),
+		DockerVersion:   strings.TrimSpace(host.DockerVersion),
+		Labels:          labels,
+	}
+	resource := Resource{
+		Type:       ResourceTypeDockerImage,
+		Technology: firstNonEmpty(strings.TrimSpace(host.Runtime), "docker"),
+		Name:       name,
+		Status:     StatusOnline,
+		LastSeen:   host.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Docker:     docker,
+		Tags:       labelsToTags(labels),
+	}
+	identity := ResourceIdentity{
+		Hostnames: uniqueStrings([]string{name, host.Hostname + ":" + name}),
+	}
+	return resource, identity
+}
+
+func resourceFromDockerVolume(volume models.DockerVolume, host models.DockerHost) (Resource, ResourceIdentity) {
+	name := strings.TrimSpace(volume.Name)
+	labels := cloneLabelMap(volume.Labels)
+	docker := &DockerData{
+		HostSourceID: host.ID,
+		Hostname:     host.Hostname,
+		VolumeName:   name,
+		Driver:       strings.TrimSpace(volume.Driver),
+		Mountpoint:   strings.TrimSpace(volume.Mountpoint),
+		Scope:        strings.TrimSpace(volume.Scope),
+		CreatedAt:    strings.TrimSpace(volume.CreatedAt),
+		SizeBytes:    volume.SizeBytes,
+		RefCount:     volume.RefCount,
+		Runtime:      strings.TrimSpace(host.Runtime),
+		Labels:       labels,
+		Options:      cloneLabelMap(volume.Options),
+	}
+	resource := Resource{
+		Type:       ResourceTypeDockerVolume,
+		Technology: firstNonEmpty(strings.TrimSpace(host.Runtime), "docker"),
+		Name:       name,
+		Status:     StatusOnline,
+		LastSeen:   host.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Docker:     docker,
+		Tags:       labelsToTags(labels),
+	}
+	identity := ResourceIdentity{
+		Hostnames: uniqueStrings([]string{name, host.Hostname + ":" + name}),
+	}
+	return resource, identity
+}
+
+func resourceFromDockerNetwork(network models.DockerNetwork, host models.DockerHost) (Resource, ResourceIdentity) {
+	name := strings.TrimSpace(network.Name)
+	labels := cloneLabelMap(network.Labels)
+	subnets := make([]DockerNetworkSubnetMeta, 0, len(network.Subnets))
+	for _, subnet := range network.Subnets {
+		subnets = append(subnets, DockerNetworkSubnetMeta{
+			Subnet:  strings.TrimSpace(subnet.Subnet),
+			Gateway: strings.TrimSpace(subnet.Gateway),
+		})
+	}
+	docker := &DockerData{
+		HostSourceID: host.ID,
+		Hostname:     host.Hostname,
+		NetworkID:    strings.TrimSpace(network.ID),
+		Driver:       strings.TrimSpace(network.Driver),
+		Scope:        strings.TrimSpace(network.Scope),
+		EnableIPv4:   network.EnableIPv4,
+		EnableIPv6:   network.EnableIPv6,
+		Internal:     network.Internal,
+		Attachable:   network.Attachable,
+		Ingress:      network.Ingress,
+		ConfigOnly:   network.ConfigOnly,
+		Runtime:      strings.TrimSpace(host.Runtime),
+		Labels:       labels,
+		Options:      cloneLabelMap(network.Options),
+		Subnets:      subnets,
+	}
+	resource := Resource{
+		Type:       ResourceTypeDockerNetwork,
+		Technology: firstNonEmpty(strings.TrimSpace(host.Runtime), "docker"),
+		Name:       name,
+		Status:     StatusOnline,
+		LastSeen:   host.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Docker:     docker,
+		Tags:       labelsToTags(labels),
+	}
+	identity := ResourceIdentity{
+		Hostnames: uniqueStrings([]string{name, host.Hostname + ":" + name}),
+	}
+	return resource, identity
+}
+
+func resourceFromDockerTask(task models.DockerTask, host models.DockerHost) (Resource, ResourceIdentity) {
+	name := firstNonEmpty(strings.TrimSpace(task.ServiceName), strings.TrimSpace(task.ContainerName), shortDigest(task.ID), task.ID)
+	if task.Slot > 0 && task.ServiceName != "" {
+		name = fmt.Sprintf("%s.%d", task.ServiceName, task.Slot)
+	}
+	docker := &DockerData{
+		HostSourceID:   host.ID,
+		Hostname:       host.Hostname,
+		TaskID:         strings.TrimSpace(task.ID),
+		ServiceID:      strings.TrimSpace(task.ServiceID),
+		ServiceName:    strings.TrimSpace(task.ServiceName),
+		Slot:           task.Slot,
+		NodeID:         strings.TrimSpace(task.NodeID),
+		NodeName:       strings.TrimSpace(task.NodeName),
+		DesiredState:   strings.TrimSpace(task.DesiredState),
+		CurrentState:   strings.TrimSpace(task.CurrentState),
+		Error:          strings.TrimSpace(task.Error),
+		Message:        strings.TrimSpace(task.Message),
+		ContainerID:    strings.TrimSpace(task.ContainerID),
+		ContainerState: strings.TrimSpace(task.CurrentState),
+		StartedAt:      task.StartedAt,
+		CompletedAt:    task.CompletedAt,
+		Swarm:          convertSwarm(host.Swarm),
+	}
+	resource := Resource{
+		Type:       ResourceTypeDockerTask,
+		Technology: "docker",
+		Name:       name,
+		Status:     statusFromDockerTask(task),
+		LastSeen:   host.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Docker:     docker,
+	}
+	identity := ResourceIdentity{
+		Hostnames:   uniqueStrings([]string{name, strings.TrimSpace(task.ID)}),
+		ClusterName: dockerSwarmClusterKeyFromMeta(docker.Swarm),
+	}
+	return resource, identity
+}
+
+func firstDockerImageReference(image models.DockerImage) string {
+	for _, candidate := range image.RepoTags {
+		candidate = strings.TrimSpace(candidate)
+		if candidate != "" && candidate != "<none>:<none>" {
+			return candidate
+		}
+	}
+	for _, candidate := range image.RepoDigests {
+		if value := strings.TrimSpace(candidate); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func shortDigest(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.TrimPrefix(value, "sha256:")
+	if len(value) > 12 {
+		return value[:12]
+	}
+	return value
+}
+
+func dockerStorageUsageMeta(bucket models.DockerStorageUsageBucket) *DockerStorageUsageMeta {
+	if bucket.TotalCount == 0 && bucket.ActiveCount == 0 && bucket.TotalSizeBytes == 0 && bucket.ReclaimableBytes == 0 {
+		return nil
+	}
+	return &DockerStorageUsageMeta{
+		TotalCount:       bucket.TotalCount,
+		ActiveCount:      bucket.ActiveCount,
+		TotalSizeBytes:   bucket.TotalSizeBytes,
+		ReclaimableBytes: bucket.ReclaimableBytes,
+	}
+}
+
 func resourceFromKubernetesCluster(cluster models.KubernetesCluster, linkedHosts []*models.Host, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
 	clusterName := kubernetesClusterDisplayName(cluster)
 	metrics := metricsFromKubernetesCluster(cluster, linkedHosts)
@@ -2216,6 +2415,329 @@ func resourceFromKubernetesDeployment(cluster models.KubernetesCluster, deployme
 		ClusterName: clusterName,
 	}
 	return resource, identity
+}
+
+func baseKubernetesData(cluster models.KubernetesCluster, clusterName, resourceKind string, capabilities *K8sMetricCapabilities) K8sData {
+	return K8sData{
+		ClusterID:          cluster.ID,
+		ClusterName:        clusterName,
+		ResourceKind:       resourceKind,
+		AgentID:            cluster.AgentID,
+		Context:            cluster.Context,
+		Server:             cluster.Server,
+		Version:            cluster.Version,
+		MetricCapabilities: cloneKubernetesMetricCapabilities(capabilities),
+	}
+}
+
+func resourceFromKubernetesNamespace(cluster models.KubernetesCluster, namespace models.KubernetesNamespace, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(namespace.Labels)
+	data := baseKubernetesData(cluster, clusterName, "Namespace", capabilities)
+	data.NamespaceUID = namespace.UID
+	data.ResourceUID = namespace.UID
+	data.Namespace = namespace.Name
+	data.Phase = namespace.Phase
+	data.Labels = labels
+	data.CreatedAt = zeroTimeToPtr(namespace.CreatedAt)
+	resource := Resource{
+		Type:       ResourceTypeK8sNamespace,
+		Technology: "kubernetes",
+		Name:       namespace.Name,
+		Status:     statusFromKubernetesPhase(namespace.Phase),
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+		Tags:       labelsToTags(labels),
+	}
+	identity := ResourceIdentity{
+		Hostnames:   uniqueStrings([]string{namespace.Name, clusterName + ":" + namespace.Name}),
+		ClusterName: clusterName,
+	}
+	return resource, identity
+}
+
+func resourceFromKubernetesService(cluster models.KubernetesCluster, service models.KubernetesService, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(service.Labels)
+	data := baseKubernetesData(cluster, clusterName, "Service", capabilities)
+	data.ServiceUID = service.UID
+	data.ResourceUID = service.UID
+	data.Namespace = service.Namespace
+	data.ServiceType = service.ServiceType
+	data.ClusterIP = service.ClusterIP
+	data.ExternalIPs = append([]string(nil), service.ExternalIPs...)
+	data.ServicePorts = k8sServicePorts(service.Ports)
+	data.Selector = cloneLabelMap(service.Selector)
+	data.Labels = labels
+	data.CreatedAt = zeroTimeToPtr(service.CreatedAt)
+	resource := Resource{
+		Type:       ResourceTypeK8sService,
+		Technology: "kubernetes",
+		Name:       service.Name,
+		Status:     StatusOnline,
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+		Tags:       labelsToTags(labels),
+	}
+	identity := namespacedKubernetesIdentity(clusterName, service.Namespace, service.Name)
+	return resource, identity
+}
+
+func resourceFromKubernetesStatefulSet(cluster models.KubernetesCluster, statefulSet models.KubernetesStatefulSet, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(statefulSet.Labels)
+	data := baseKubernetesData(cluster, clusterName, "StatefulSet", capabilities)
+	data.StatefulSetUID = statefulSet.UID
+	data.ResourceUID = statefulSet.UID
+	data.Namespace = statefulSet.Namespace
+	data.DesiredReplicas = statefulSet.DesiredReplicas
+	data.ReadyReplicas = statefulSet.ReadyReplicas
+	data.CurrentReplicas = statefulSet.CurrentReplicas
+	data.UpdatedReplicas = statefulSet.UpdatedReplicas
+	data.AvailableReplicas = statefulSet.AvailableReplicas
+	data.ServiceName = statefulSet.ServiceName
+	data.Labels = labels
+	resource := Resource{
+		Type:       ResourceTypeK8sStatefulSet,
+		Technology: "kubernetes",
+		Name:       statefulSet.Name,
+		Status:     statusFromKubernetesStatefulSet(statefulSet),
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+		Tags:       labelsToTags(labels),
+	}
+	return resource, namespacedKubernetesIdentity(clusterName, statefulSet.Namespace, statefulSet.Name)
+}
+
+func resourceFromKubernetesDaemonSet(cluster models.KubernetesCluster, daemonSet models.KubernetesDaemonSet, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(daemonSet.Labels)
+	data := baseKubernetesData(cluster, clusterName, "DaemonSet", capabilities)
+	data.DaemonSetUID = daemonSet.UID
+	data.ResourceUID = daemonSet.UID
+	data.Namespace = daemonSet.Namespace
+	data.DesiredNumberScheduled = daemonSet.DesiredNumberScheduled
+	data.CurrentNumberScheduled = daemonSet.CurrentNumberScheduled
+	data.NumberReady = daemonSet.NumberReady
+	data.UpdatedReplicas = daemonSet.UpdatedNumberScheduled
+	data.NumberAvailable = daemonSet.NumberAvailable
+	data.NumberUnavailable = daemonSet.NumberUnavailable
+	data.NumberMisscheduled = daemonSet.NumberMisscheduled
+	data.Labels = labels
+	resource := Resource{
+		Type:       ResourceTypeK8sDaemonSet,
+		Technology: "kubernetes",
+		Name:       daemonSet.Name,
+		Status:     statusFromKubernetesDaemonSet(daemonSet),
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+		Tags:       labelsToTags(labels),
+	}
+	return resource, namespacedKubernetesIdentity(clusterName, daemonSet.Namespace, daemonSet.Name)
+}
+
+func resourceFromKubernetesJob(cluster models.KubernetesCluster, job models.KubernetesJob, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(job.Labels)
+	data := baseKubernetesData(cluster, clusterName, "Job", capabilities)
+	data.JobUID = job.UID
+	data.ResourceUID = job.UID
+	data.Namespace = job.Namespace
+	data.DesiredReplicas = job.DesiredCompletions
+	data.Succeeded = job.Succeeded
+	data.Failed = job.Failed
+	data.Active = job.Active
+	data.StartTime = job.StartTime
+	data.CompletionTime = job.CompletionTime
+	data.Labels = labels
+	resource := Resource{
+		Type:       ResourceTypeK8sJob,
+		Technology: "kubernetes",
+		Name:       job.Name,
+		Status:     statusFromKubernetesJob(job),
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+		Tags:       labelsToTags(labels),
+	}
+	return resource, namespacedKubernetesIdentity(clusterName, job.Namespace, job.Name)
+}
+
+func resourceFromKubernetesCronJob(cluster models.KubernetesCluster, cronJob models.KubernetesCronJob, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(cronJob.Labels)
+	data := baseKubernetesData(cluster, clusterName, "CronJob", capabilities)
+	data.CronJobUID = cronJob.UID
+	data.ResourceUID = cronJob.UID
+	data.Namespace = cronJob.Namespace
+	data.Schedule = cronJob.Schedule
+	data.Suspend = cronJob.Suspend
+	data.Active = int32(cronJob.Active)
+	data.LastScheduleTime = cronJob.LastScheduleTime
+	data.LastSuccessfulTime = cronJob.LastSuccessfulTime
+	data.Labels = labels
+	resource := Resource{
+		Type:       ResourceTypeK8sCronJob,
+		Technology: "kubernetes",
+		Name:       cronJob.Name,
+		Status:     statusFromKubernetesCronJob(cronJob),
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+		Tags:       labelsToTags(labels),
+	}
+	return resource, namespacedKubernetesIdentity(clusterName, cronJob.Namespace, cronJob.Name)
+}
+
+func resourceFromKubernetesIngress(cluster models.KubernetesCluster, ingress models.KubernetesIngress, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(ingress.Labels)
+	data := baseKubernetesData(cluster, clusterName, "Ingress", capabilities)
+	data.IngressUID = ingress.UID
+	data.ResourceUID = ingress.UID
+	data.Namespace = ingress.Namespace
+	data.ClassName = ingress.ClassName
+	data.Hosts = append([]string(nil), ingress.Hosts...)
+	data.Addresses = append([]string(nil), ingress.Addresses...)
+	data.Labels = labels
+	data.CreatedAt = zeroTimeToPtr(ingress.CreatedAt)
+	resource := Resource{
+		Type:       ResourceTypeK8sIngress,
+		Technology: "kubernetes",
+		Name:       ingress.Name,
+		Status:     StatusOnline,
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+		Tags:       labelsToTags(labels),
+	}
+	return resource, namespacedKubernetesIdentity(clusterName, ingress.Namespace, ingress.Name)
+}
+
+func resourceFromKubernetesPersistentVolume(cluster models.KubernetesCluster, volume models.KubernetesPersistentVolume, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(volume.Labels)
+	data := baseKubernetesData(cluster, clusterName, "PersistentVolume", capabilities)
+	data.PersistentVolumeUID = volume.UID
+	data.ResourceUID = volume.UID
+	data.Phase = volume.Phase
+	data.StorageClass = volume.StorageClass
+	data.CapacityBytes = volume.CapacityBytes
+	data.AccessModes = append([]string(nil), volume.AccessModes...)
+	data.ReclaimPolicy = volume.ReclaimPolicy
+	data.ClaimNamespace = volume.ClaimNamespace
+	data.ClaimName = volume.ClaimName
+	data.Labels = labels
+	data.CreatedAt = zeroTimeToPtr(volume.CreatedAt)
+	resource := Resource{
+		Type:       ResourceTypeK8sPV,
+		Technology: "kubernetes",
+		Name:       volume.Name,
+		Status:     statusFromKubernetesPhase(volume.Phase),
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+		Tags:       labelsToTags(labels),
+	}
+	identity := ResourceIdentity{
+		Hostnames:   uniqueStrings([]string{volume.Name, clusterName + ":" + volume.Name}),
+		ClusterName: clusterName,
+	}
+	return resource, identity
+}
+
+func resourceFromKubernetesPersistentVolumeClaim(cluster models.KubernetesCluster, claim models.KubernetesPersistentVolumeClaim, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(claim.Labels)
+	data := baseKubernetesData(cluster, clusterName, "PersistentVolumeClaim", capabilities)
+	data.PersistentVolumeClaimUID = claim.UID
+	data.ResourceUID = claim.UID
+	data.Namespace = claim.Namespace
+	data.Phase = claim.Phase
+	data.StorageClass = claim.StorageClass
+	data.RequestedBytes = claim.RequestedBytes
+	data.CapacityBytes = claim.CapacityBytes
+	data.AccessModes = append([]string(nil), claim.AccessModes...)
+	data.VolumeName = claim.VolumeName
+	data.Labels = labels
+	data.CreatedAt = zeroTimeToPtr(claim.CreatedAt)
+	resource := Resource{
+		Type:       ResourceTypeK8sPVC,
+		Technology: "kubernetes",
+		Name:       claim.Name,
+		Status:     statusFromKubernetesPhase(claim.Phase),
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+		Tags:       labelsToTags(labels),
+	}
+	return resource, namespacedKubernetesIdentity(clusterName, claim.Namespace, claim.Name)
+}
+
+func resourceFromKubernetesEvent(cluster models.KubernetesCluster, event models.KubernetesEvent, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	data := baseKubernetesData(cluster, clusterName, "Event", capabilities)
+	data.EventUID = event.UID
+	data.ResourceUID = event.UID
+	data.Namespace = event.Namespace
+	data.EventType = event.EventType
+	data.Reason = event.Reason
+	data.Message = event.Message
+	data.InvolvedKind = event.InvolvedKind
+	data.InvolvedName = event.InvolvedName
+	data.Count = event.Count
+	data.FirstSeen = event.FirstSeen
+	data.EventTime = event.EventTime
+	if event.LastSeen != nil {
+		data.CreatedAt = event.LastSeen
+	}
+	resource := Resource{
+		Type:       ResourceTypeK8sEvent,
+		Technology: "kubernetes",
+		Name:       firstNonEmpty(event.Name, event.Reason, event.InvolvedName),
+		Status:     statusFromKubernetesEvent(event),
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+	}
+	return resource, namespacedKubernetesIdentity(clusterName, event.Namespace, resource.Name)
+}
+
+func k8sServicePorts(in []models.KubernetesServicePort) []K8sServicePort {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]K8sServicePort, 0, len(in))
+	for _, port := range in {
+		out = append(out, K8sServicePort{
+			Name:       strings.TrimSpace(port.Name),
+			Protocol:   strings.TrimSpace(port.Protocol),
+			Port:       port.Port,
+			TargetPort: strings.TrimSpace(port.TargetPort),
+			NodePort:   port.NodePort,
+		})
+	}
+	return out
+}
+
+func namespacedKubernetesIdentity(clusterName, namespace, name string) ResourceIdentity {
+	namespace = strings.TrimSpace(namespace)
+	name = strings.TrimSpace(name)
+	values := []string{name}
+	if namespace != "" && name != "" {
+		values = append(values, namespace+"/"+name)
+	}
+	if clusterName != "" && name != "" {
+		values = append(values, clusterName+":"+name)
+	}
+	return ResourceIdentity{
+		Hostnames:   uniqueStrings(values),
+		ClusterName: clusterName,
+	}
 }
 
 func kubernetesClusterDisplayName(cluster models.KubernetesCluster) string {
