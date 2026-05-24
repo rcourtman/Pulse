@@ -91,6 +91,36 @@ func TestContractResourceType(t *testing.T) {
 			want:     ResourceTypeK8sService,
 		},
 		{
+			name:     "kubernetes replicaset passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeK8sReplicaSet, Kubernetes: &K8sData{OwnerKind: "Deployment"}},
+			want:     ResourceTypeK8sReplicaSet,
+		},
+		{
+			name:     "kubernetes endpoint slice passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeK8sEndpointSlice, Kubernetes: &K8sData{ServiceName: "checkout"}},
+			want:     ResourceTypeK8sEndpointSlice,
+		},
+		{
+			name:     "kubernetes network policy passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeK8sNetworkPolicy, Kubernetes: &K8sData{PolicyTypes: []string{"Ingress"}}},
+			want:     ResourceTypeK8sNetworkPolicy,
+		},
+		{
+			name:     "kubernetes storage class passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeK8sStorageClass, Kubernetes: &K8sData{Provisioner: "csi.example.test"}},
+			want:     ResourceTypeK8sStorageClass,
+		},
+		{
+			name:     "kubernetes configmap passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeK8sConfigMap, Kubernetes: &K8sData{DataKeys: []string{"app.yaml"}}},
+			want:     ResourceTypeK8sConfigMap,
+		},
+		{
+			name:     "kubernetes serviceaccount passthrough remains canonical",
+			resource: Resource{Type: ResourceTypeK8sServiceAccount, Kubernetes: &K8sData{SecretCount: 1}},
+			want:     ResourceTypeK8sServiceAccount,
+		},
+		{
 			name:     "kubernetes event passthrough remains canonical",
 			resource: Resource{Type: ResourceTypeK8sEvent, Kubernetes: &K8sData{Reason: "BackOff"}},
 			want:     ResourceTypeK8sEvent,

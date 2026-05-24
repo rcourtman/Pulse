@@ -576,6 +576,19 @@ func cloneKubernetesDeployments(src []KubernetesDeployment) []KubernetesDeployme
 	return dest
 }
 
+func cloneKubernetesReplicaSets(src []KubernetesReplicaSet) []KubernetesReplicaSet {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesReplicaSet, len(src))
+	for i, replicaSet := range src {
+		copy := replicaSet
+		copy.Labels = cloneStringMap(replicaSet.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
 func cloneKubernetesStatefulSets(src []KubernetesStatefulSet) []KubernetesStatefulSet {
 	if len(src) == 0 {
 		return nil
@@ -663,6 +676,34 @@ func cloneKubernetesIngresses(src []KubernetesIngress) []KubernetesIngress {
 	return dest
 }
 
+func cloneKubernetesEndpointSlices(src []KubernetesEndpointSlice) []KubernetesEndpointSlice {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesEndpointSlice, len(src))
+	for i, endpointSlice := range src {
+		copy := endpointSlice
+		copy.Ports = append([]KubernetesEndpointPort(nil), endpointSlice.Ports...)
+		copy.Labels = cloneStringMap(endpointSlice.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneKubernetesNetworkPolicies(src []KubernetesNetworkPolicy) []KubernetesNetworkPolicy {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesNetworkPolicy, len(src))
+	for i, policy := range src {
+		copy := policy
+		copy.PolicyTypes = append([]string(nil), policy.PolicyTypes...)
+		copy.Labels = cloneStringMap(policy.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
 func cloneKubernetesPersistentVolumes(src []KubernetesPersistentVolume) []KubernetesPersistentVolume {
 	if len(src) == 0 {
 		return nil
@@ -691,6 +732,51 @@ func cloneKubernetesPersistentVolumeClaims(src []KubernetesPersistentVolumeClaim
 	return dest
 }
 
+func cloneKubernetesStorageClasses(src []KubernetesStorageClass) []KubernetesStorageClass {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesStorageClass, len(src))
+	for i, class := range src {
+		copy := class
+		copy.AllowVolumeExpansion = cloneBoolPtr(class.AllowVolumeExpansion)
+		copy.ParameterKeys = append([]string(nil), class.ParameterKeys...)
+		copy.Labels = cloneStringMap(class.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneKubernetesConfigMaps(src []KubernetesConfigMap) []KubernetesConfigMap {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesConfigMap, len(src))
+	for i, configMap := range src {
+		copy := configMap
+		copy.DataKeys = append([]string(nil), configMap.DataKeys...)
+		copy.BinaryDataKeys = append([]string(nil), configMap.BinaryDataKeys...)
+		copy.Labels = cloneStringMap(configMap.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
+func cloneKubernetesServiceAccounts(src []KubernetesServiceAccount) []KubernetesServiceAccount {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]KubernetesServiceAccount, len(src))
+	for i, account := range src {
+		copy := account
+		copy.AutomountServiceAccountToken = cloneBoolPtr(account.AutomountServiceAccountToken)
+		copy.ImagePullSecrets = append([]string(nil), account.ImagePullSecrets...)
+		copy.Labels = cloneStringMap(account.Labels)
+		dest[i] = copy.NormalizeCollections()
+	}
+	return dest
+}
+
 func cloneKubernetesEvents(src []KubernetesEvent) []KubernetesEvent {
 	if len(src) == 0 {
 		return nil
@@ -712,14 +798,20 @@ func cloneKubernetesCluster(src KubernetesCluster) KubernetesCluster {
 	dest.Namespaces = cloneKubernetesNamespaces(src.Namespaces)
 	dest.Pods = cloneKubernetesPods(src.Pods)
 	dest.Deployments = cloneKubernetesDeployments(src.Deployments)
+	dest.ReplicaSets = cloneKubernetesReplicaSets(src.ReplicaSets)
 	dest.StatefulSets = cloneKubernetesStatefulSets(src.StatefulSets)
 	dest.DaemonSets = cloneKubernetesDaemonSets(src.DaemonSets)
 	dest.Services = cloneKubernetesServices(src.Services)
 	dest.Jobs = cloneKubernetesJobs(src.Jobs)
 	dest.CronJobs = cloneKubernetesCronJobs(src.CronJobs)
 	dest.Ingresses = cloneKubernetesIngresses(src.Ingresses)
+	dest.EndpointSlices = cloneKubernetesEndpointSlices(src.EndpointSlices)
+	dest.NetworkPolicies = cloneKubernetesNetworkPolicies(src.NetworkPolicies)
 	dest.PersistentVolumes = cloneKubernetesPersistentVolumes(src.PersistentVolumes)
 	dest.PersistentVolumeClaims = cloneKubernetesPersistentVolumeClaims(src.PersistentVolumeClaims)
+	dest.StorageClasses = cloneKubernetesStorageClasses(src.StorageClasses)
+	dest.ConfigMaps = cloneKubernetesConfigMaps(src.ConfigMaps)
+	dest.ServiceAccounts = cloneKubernetesServiceAccounts(src.ServiceAccounts)
 	dest.Events = cloneKubernetesEvents(src.Events)
 	dest.TokenLastUsedAt = cloneTimePtr(src.TokenLastUsedAt)
 	return dest.NormalizeCollections()

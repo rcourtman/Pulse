@@ -18,13 +18,19 @@ describe('canonicalResourceTypes', () => {
     expect(CANONICAL_RESOURCE_TYPES).toContain('docker-task');
     expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-namespace');
     expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-service');
+    expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-replicaset');
     expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-statefulset');
     expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-daemonset');
     expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-job');
     expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-cronjob');
     expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-ingress');
+    expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-endpoint-slice');
+    expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-network-policy');
     expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-persistent-volume');
     expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-persistent-volume-claim');
+    expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-storage-class');
+    expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-configmap');
+    expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-serviceaccount');
     expect(CANONICAL_RESOURCE_TYPES).toContain('k8s-event');
   });
 

@@ -256,6 +256,10 @@ func statusFromKubernetesDeployment(deployment models.KubernetesDeployment) Reso
 	return StatusWarning
 }
 
+func statusFromKubernetesReplicaSet(replicaSet models.KubernetesReplicaSet) ResourceStatus {
+	return statusFromReplicaAvailability(replicaSet.DesiredReplicas, replicaSet.ReadyReplicas)
+}
+
 func statusFromKubernetesStatefulSet(statefulSet models.KubernetesStatefulSet) ResourceStatus {
 	return statusFromReplicaAvailability(statefulSet.DesiredReplicas, statefulSet.ReadyReplicas)
 }
@@ -287,6 +291,16 @@ func statusFromKubernetesJob(job models.KubernetesJob) ResourceStatus {
 
 func statusFromKubernetesCronJob(cronJob models.KubernetesCronJob) ResourceStatus {
 	if cronJob.Suspend {
+		return StatusWarning
+	}
+	return StatusOnline
+}
+
+func statusFromKubernetesEndpointSlice(slice models.KubernetesEndpointSlice) ResourceStatus {
+	if slice.EndpointCount <= 0 {
+		return StatusUnknown
+	}
+	if slice.ReadyEndpointCount <= 0 {
 		return StatusWarning
 	}
 	return StatusOnline

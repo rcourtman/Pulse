@@ -137,6 +137,22 @@ func classifyResourceSensitivity(resource Resource) ResourceSensitivity {
 		ResourceTypeAppContainer,
 		ResourceTypePod,
 		ResourceTypeK8sDeployment,
+		ResourceTypeK8sReplicaSet,
+		ResourceTypeK8sNamespace,
+		ResourceTypeK8sService,
+		ResourceTypeK8sStatefulSet,
+		ResourceTypeK8sDaemonSet,
+		ResourceTypeK8sJob,
+		ResourceTypeK8sCronJob,
+		ResourceTypeK8sIngress,
+		ResourceTypeK8sEndpointSlice,
+		ResourceTypeK8sNetworkPolicy,
+		ResourceTypeK8sPV,
+		ResourceTypeK8sPVC,
+		ResourceTypeK8sStorageClass,
+		ResourceTypeK8sConfigMap,
+		ResourceTypeK8sServiceAccount,
+		ResourceTypeK8sEvent,
 		ResourceTypeDockerService,
 		ResourceTypeStorage,
 		ResourceTypeNetwork,
@@ -271,6 +287,38 @@ func resourceSummaryType(resource Resource) string {
 		return "kubernetes pod"
 	case ResourceTypeK8sDeployment:
 		return "kubernetes deployment"
+	case ResourceTypeK8sReplicaSet:
+		return "kubernetes replicaset"
+	case ResourceTypeK8sNamespace:
+		return "kubernetes namespace"
+	case ResourceTypeK8sService:
+		return "kubernetes service"
+	case ResourceTypeK8sStatefulSet:
+		return "kubernetes statefulset"
+	case ResourceTypeK8sDaemonSet:
+		return "kubernetes daemonset"
+	case ResourceTypeK8sJob:
+		return "kubernetes job"
+	case ResourceTypeK8sCronJob:
+		return "kubernetes cronjob"
+	case ResourceTypeK8sIngress:
+		return "kubernetes ingress"
+	case ResourceTypeK8sEndpointSlice:
+		return "kubernetes endpointslice"
+	case ResourceTypeK8sNetworkPolicy:
+		return "kubernetes network policy"
+	case ResourceTypeK8sPV:
+		return "kubernetes persistent volume"
+	case ResourceTypeK8sPVC:
+		return "kubernetes persistent volume claim"
+	case ResourceTypeK8sStorageClass:
+		return "kubernetes storage class"
+	case ResourceTypeK8sConfigMap:
+		return "kubernetes configmap"
+	case ResourceTypeK8sServiceAccount:
+		return "kubernetes serviceaccount"
+	case ResourceTypeK8sEvent:
+		return "kubernetes event"
 	case ResourceTypeStorage:
 		return "storage"
 	case ResourceTypeNetwork:

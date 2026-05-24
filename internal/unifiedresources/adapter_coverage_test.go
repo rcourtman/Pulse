@@ -407,6 +407,8 @@ func TestDockerNativeInventoryAdapters(t *testing.T) {
 
 func TestKubernetesNativeInventoryAdapters(t *testing.T) {
 	now := time.Date(2026, 5, 24, 8, 0, 0, 0, time.UTC)
+	allowExpansion := true
+	automountToken := true
 	cluster := models.KubernetesCluster{ID: "cluster-1", Name: "prod", DisplayName: "Production", LastSeen: now}
 
 	service, serviceIdentity := resourceFromKubernetesService(cluster, models.KubernetesService{
@@ -414,6 +416,11 @@ func TestKubernetesNativeInventoryAdapters(t *testing.T) {
 	}, nil)
 	if service.Type != ResourceTypeK8sService || service.Kubernetes == nil || service.Kubernetes.ServiceType != "ClusterIP" || serviceIdentity.ClusterName != "Production" {
 		t.Fatalf("unexpected service resource: resource=%+v identity=%+v", service, serviceIdentity)
+	}
+
+	replicaSet, _ := resourceFromKubernetesReplicaSet(cluster, models.KubernetesReplicaSet{Name: "checkout-6d4", Namespace: "services", DesiredReplicas: 3, ReadyReplicas: 2, OwnerKind: "Deployment", OwnerName: "checkout"}, nil)
+	if replicaSet.Type != ResourceTypeK8sReplicaSet || replicaSet.Status != StatusWarning || replicaSet.Kubernetes == nil || replicaSet.Kubernetes.OwnerName != "checkout" {
+		t.Fatalf("unexpected replicaset resource: %+v", replicaSet)
 	}
 
 	statefulSet, _ := resourceFromKubernetesStatefulSet(cluster, models.KubernetesStatefulSet{Name: "db", Namespace: "services", DesiredReplicas: 3, ReadyReplicas: 2}, nil)
@@ -441,6 +448,16 @@ func TestKubernetesNativeInventoryAdapters(t *testing.T) {
 		t.Fatalf("unexpected ingress resource: %+v", ingress)
 	}
 
+	endpointSlice, _ := resourceFromKubernetesEndpointSlice(cluster, models.KubernetesEndpointSlice{Name: "checkout-abc", Namespace: "services", AddressType: "IPv4", ServiceName: "checkout", EndpointCount: 3, ReadyEndpointCount: 2, Ports: []models.KubernetesEndpointPort{{Name: "http", Protocol: "TCP", Port: 80}}}, nil)
+	if endpointSlice.Type != ResourceTypeK8sEndpointSlice || endpointSlice.Status != StatusOnline || endpointSlice.Kubernetes == nil || endpointSlice.Kubernetes.ServiceName != "checkout" || endpointSlice.Kubernetes.EndpointPorts[0].Port != 80 {
+		t.Fatalf("unexpected endpoint slice resource: %+v", endpointSlice)
+	}
+
+	networkPolicy, _ := resourceFromKubernetesNetworkPolicy(cluster, models.KubernetesNetworkPolicy{Name: "checkout-deny", Namespace: "services", PolicyTypes: []string{"Ingress", "Egress"}, IngressRuleCount: 1, EgressRuleCount: 2}, nil)
+	if networkPolicy.Type != ResourceTypeK8sNetworkPolicy || networkPolicy.Kubernetes == nil || len(networkPolicy.Kubernetes.PolicyTypes) != 2 || networkPolicy.Kubernetes.EgressRuleCount != 2 {
+		t.Fatalf("unexpected network policy resource: %+v", networkPolicy)
+	}
+
 	pv, _ := resourceFromKubernetesPersistentVolume(cluster, models.KubernetesPersistentVolume{Name: "pv-checkout", Phase: "Bound", CapacityBytes: 10_000, ClaimName: "checkout-data"}, nil)
 	if pv.Type != ResourceTypeK8sPV || pv.Kubernetes == nil || pv.Kubernetes.ClaimName != "checkout-data" {
 		t.Fatalf("unexpected pv resource: %+v", pv)
@@ -449,6 +466,21 @@ func TestKubernetesNativeInventoryAdapters(t *testing.T) {
 	pvc, _ := resourceFromKubernetesPersistentVolumeClaim(cluster, models.KubernetesPersistentVolumeClaim{Name: "checkout-data", Namespace: "services", Phase: "Bound", VolumeName: "pv-checkout"}, nil)
 	if pvc.Type != ResourceTypeK8sPVC || pvc.Kubernetes == nil || pvc.Kubernetes.VolumeName != "pv-checkout" {
 		t.Fatalf("unexpected pvc resource: %+v", pvc)
+	}
+
+	storageClass, _ := resourceFromKubernetesStorageClass(cluster, models.KubernetesStorageClass{Name: "fast", Provisioner: "csi.example.test", ReclaimPolicy: "Delete", VolumeBindingMode: "WaitForFirstConsumer", AllowVolumeExpansion: &allowExpansion, ParameterKeys: []string{"type"}}, nil)
+	if storageClass.Type != ResourceTypeK8sStorageClass || storageClass.Kubernetes == nil || storageClass.Kubernetes.Provisioner != "csi.example.test" || storageClass.Kubernetes.AllowVolumeExpansion == nil || !*storageClass.Kubernetes.AllowVolumeExpansion {
+		t.Fatalf("unexpected storage class resource: %+v", storageClass)
+	}
+
+	configMap, _ := resourceFromKubernetesConfigMap(cluster, models.KubernetesConfigMap{Name: "checkout-config", Namespace: "services", DataKeys: []string{"app.yaml"}, BinaryDataKeys: []string{"logo.png"}, Immutable: true}, nil)
+	if configMap.Type != ResourceTypeK8sConfigMap || configMap.Kubernetes == nil || configMap.Kubernetes.DataKeys[0] != "app.yaml" || !configMap.Kubernetes.Immutable {
+		t.Fatalf("unexpected configmap resource: %+v", configMap)
+	}
+
+	serviceAccount, _ := resourceFromKubernetesServiceAccount(cluster, models.KubernetesServiceAccount{Name: "checkout", Namespace: "services", AutomountServiceAccountToken: &automountToken, SecretCount: 1, ImagePullSecrets: []string{"pull-secret"}}, nil)
+	if serviceAccount.Type != ResourceTypeK8sServiceAccount || serviceAccount.Kubernetes == nil || serviceAccount.Kubernetes.SecretCount != 1 || serviceAccount.Kubernetes.AutomountServiceAccountToken == nil || !*serviceAccount.Kubernetes.AutomountServiceAccountToken {
+		t.Fatalf("unexpected serviceaccount resource: %+v", serviceAccount)
 	}
 
 	event, _ := resourceFromKubernetesEvent(cluster, models.KubernetesEvent{Name: "checkout.1", Namespace: "services", EventType: "Warning", Reason: "BackOff", Count: 2}, nil)

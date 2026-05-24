@@ -11,14 +11,20 @@ type Report struct {
 	Namespaces             []Namespace             `json:"namespaces,omitempty"`
 	Pods                   []Pod                   `json:"pods,omitempty"`
 	Deployments            []Deployment            `json:"deployments,omitempty"`
+	ReplicaSets            []ReplicaSet            `json:"replicaSets,omitempty"`
 	StatefulSets           []StatefulSet           `json:"statefulSets,omitempty"`
 	DaemonSets             []DaemonSet             `json:"daemonSets,omitempty"`
 	Services               []Service               `json:"services,omitempty"`
 	Jobs                   []Job                   `json:"jobs,omitempty"`
 	CronJobs               []CronJob               `json:"cronJobs,omitempty"`
 	Ingresses              []Ingress               `json:"ingresses,omitempty"`
+	EndpointSlices         []EndpointSlice         `json:"endpointSlices,omitempty"`
+	NetworkPolicies        []NetworkPolicy         `json:"networkPolicies,omitempty"`
 	PersistentVolumes      []PersistentVolume      `json:"persistentVolumes,omitempty"`
 	PersistentVolumeClaims []PersistentVolumeClaim `json:"persistentVolumeClaims,omitempty"`
+	StorageClasses         []StorageClass          `json:"storageClasses,omitempty"`
+	ConfigMaps             []ConfigMap             `json:"configMaps,omitempty"`
+	ServiceAccounts        []ServiceAccount        `json:"serviceAccounts,omitempty"`
 	Events                 []Event                 `json:"events,omitempty"`
 	Recovery               *RecoveryReport         `json:"recovery,omitempty"`
 	Timestamp              time.Time               `json:"timestamp"`
@@ -124,6 +130,21 @@ type Deployment struct {
 	Labels            map[string]string `json:"labels,omitempty"`
 }
 
+// ReplicaSet represents a Kubernetes replica set at report time.
+type ReplicaSet struct {
+	UID                  string            `json:"uid"`
+	Name                 string            `json:"name"`
+	Namespace            string            `json:"namespace"`
+	DesiredReplicas      int32             `json:"desiredReplicas,omitempty"`
+	ReadyReplicas        int32             `json:"readyReplicas,omitempty"`
+	AvailableReplicas    int32             `json:"availableReplicas,omitempty"`
+	FullyLabeledReplicas int32             `json:"fullyLabeledReplicas,omitempty"`
+	ObservedGeneration   int64             `json:"observedGeneration,omitempty"`
+	OwnerKind            string            `json:"ownerKind,omitempty"`
+	OwnerName            string            `json:"ownerName,omitempty"`
+	Labels               map[string]string `json:"labels,omitempty"`
+}
+
 // Namespace represents a Kubernetes namespace at report time.
 type Namespace struct {
 	UID       string            `json:"uid"`
@@ -224,6 +245,40 @@ type Ingress struct {
 	Labels    map[string]string `json:"labels,omitempty"`
 }
 
+// EndpointSlice represents a Kubernetes discovery EndpointSlice at report time.
+type EndpointSlice struct {
+	UID                string            `json:"uid"`
+	Name               string            `json:"name"`
+	Namespace          string            `json:"namespace"`
+	AddressType        string            `json:"addressType,omitempty"`
+	ServiceName        string            `json:"serviceName,omitempty"`
+	Ports              []EndpointPort    `json:"ports,omitempty"`
+	EndpointCount      int               `json:"endpointCount,omitempty"`
+	ReadyEndpointCount int               `json:"readyEndpointCount,omitempty"`
+	CreatedAt          time.Time         `json:"createdAt,omitempty"`
+	Labels             map[string]string `json:"labels,omitempty"`
+}
+
+// EndpointPort describes one EndpointSlice port.
+type EndpointPort struct {
+	Name        string `json:"name,omitempty"`
+	Protocol    string `json:"protocol,omitempty"`
+	Port        int32  `json:"port,omitempty"`
+	AppProtocol string `json:"appProtocol,omitempty"`
+}
+
+// NetworkPolicy represents a Kubernetes network policy at report time.
+type NetworkPolicy struct {
+	UID              string            `json:"uid"`
+	Name             string            `json:"name"`
+	Namespace        string            `json:"namespace"`
+	PolicyTypes      []string          `json:"policyTypes,omitempty"`
+	IngressRuleCount int               `json:"ingressRuleCount,omitempty"`
+	EgressRuleCount  int               `json:"egressRuleCount,omitempty"`
+	CreatedAt        time.Time         `json:"createdAt,omitempty"`
+	Labels           map[string]string `json:"labels,omitempty"`
+}
+
 // PersistentVolume represents a Kubernetes persistent volume at report time.
 type PersistentVolume struct {
 	UID            string            `json:"uid"`
@@ -252,6 +307,44 @@ type PersistentVolumeClaim struct {
 	VolumeName     string            `json:"volumeName,omitempty"`
 	CreatedAt      time.Time         `json:"createdAt,omitempty"`
 	Labels         map[string]string `json:"labels,omitempty"`
+}
+
+// StorageClass represents a Kubernetes storage class at report time.
+type StorageClass struct {
+	UID                  string            `json:"uid"`
+	Name                 string            `json:"name"`
+	Provisioner          string            `json:"provisioner,omitempty"`
+	ReclaimPolicy        string            `json:"reclaimPolicy,omitempty"`
+	VolumeBindingMode    string            `json:"volumeBindingMode,omitempty"`
+	AllowVolumeExpansion *bool             `json:"allowVolumeExpansion,omitempty"`
+	ParameterKeys        []string          `json:"parameterKeys,omitempty"`
+	CreatedAt            time.Time         `json:"createdAt,omitempty"`
+	Labels               map[string]string `json:"labels,omitempty"`
+}
+
+// ConfigMap represents Kubernetes ConfigMap metadata at report time.
+// Data values are intentionally omitted; only keys are reported.
+type ConfigMap struct {
+	UID            string            `json:"uid"`
+	Name           string            `json:"name"`
+	Namespace      string            `json:"namespace"`
+	DataKeys       []string          `json:"dataKeys,omitempty"`
+	BinaryDataKeys []string          `json:"binaryDataKeys,omitempty"`
+	Immutable      bool              `json:"immutable,omitempty"`
+	CreatedAt      time.Time         `json:"createdAt,omitempty"`
+	Labels         map[string]string `json:"labels,omitempty"`
+}
+
+// ServiceAccount represents Kubernetes ServiceAccount metadata at report time.
+type ServiceAccount struct {
+	UID                          string            `json:"uid"`
+	Name                         string            `json:"name"`
+	Namespace                    string            `json:"namespace"`
+	AutomountServiceAccountToken *bool             `json:"automountServiceAccountToken,omitempty"`
+	SecretCount                  int               `json:"secretCount,omitempty"`
+	ImagePullSecrets             []string          `json:"imagePullSecrets,omitempty"`
+	CreatedAt                    time.Time         `json:"createdAt,omitempty"`
+	Labels                       map[string]string `json:"labels,omitempty"`
 }
 
 // Event represents a Kubernetes event at report time.

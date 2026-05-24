@@ -74,6 +74,10 @@ const RESOURCE_TYPE_PRESENTATION: Partial<Record<ResourceType | string, Resource
       label: 'K8s Deployment',
       badgeClasses: DEFAULT_BADGE_CLASSES,
     },
+    'k8s-replicaset': {
+      label: 'ReplicaSet',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
     'k8s-service': {
       label: 'K8s Service',
       badgeClasses: DEFAULT_BADGE_CLASSES,
@@ -102,12 +106,32 @@ const RESOURCE_TYPE_PRESENTATION: Partial<Record<ResourceType | string, Resource
       label: 'Ingress',
       badgeClasses: DEFAULT_BADGE_CLASSES,
     },
+    'k8s-endpoint-slice': {
+      label: 'EndpointSlice',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'k8s-network-policy': {
+      label: 'NetworkPolicy',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
     'k8s-persistent-volume': {
       label: 'PV',
       badgeClasses: DEFAULT_BADGE_CLASSES,
     },
     'k8s-persistent-volume-claim': {
       label: 'PVC',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'k8s-storage-class': {
+      label: 'StorageClass',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'k8s-configmap': {
+      label: 'ConfigMap',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
+    'k8s-serviceaccount': {
+      label: 'ServiceAccount',
       badgeClasses: DEFAULT_BADGE_CLASSES,
     },
     'k8s-event': {

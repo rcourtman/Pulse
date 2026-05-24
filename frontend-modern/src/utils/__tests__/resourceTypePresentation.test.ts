@@ -16,9 +16,15 @@ describe('resourceTypePresentation', () => {
     expect(getResourceTypeLabel('docker-network')).toBe('Network');
     expect(getResourceTypeLabel('docker-task')).toBe('Swarm Task');
     expect(getResourceTypeLabel('k8s-service')).toBe('K8s Service');
+    expect(getResourceTypeLabel('k8s-replicaset')).toBe('ReplicaSet');
     expect(getResourceTypeLabel('k8s-ingress')).toBe('Ingress');
+    expect(getResourceTypeLabel('k8s-endpoint-slice')).toBe('EndpointSlice');
+    expect(getResourceTypeLabel('k8s-network-policy')).toBe('NetworkPolicy');
     expect(getResourceTypeLabel('k8s-persistent-volume')).toBe('PV');
     expect(getResourceTypeLabel('k8s-persistent-volume-claim')).toBe('PVC');
+    expect(getResourceTypeLabel('k8s-storage-class')).toBe('StorageClass');
+    expect(getResourceTypeLabel('k8s-configmap')).toBe('ConfigMap');
+    expect(getResourceTypeLabel('k8s-serviceaccount')).toBe('ServiceAccount');
     expect(getResourceTypeLabel('k8s-event')).toBe('Event');
   });
 

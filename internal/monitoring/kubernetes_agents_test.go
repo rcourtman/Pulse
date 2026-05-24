@@ -89,6 +89,8 @@ func TestApplyKubernetesReport(t *testing.T) {
 func TestApplyKubernetesReportPreservesNativeAPIInventory(t *testing.T) {
 	monitor := newKubernetesTestMonitor()
 	now := time.Date(2026, 5, 24, 8, 0, 0, 0, time.UTC)
+	allowExpansion := true
+	automountToken := true
 	report := agentsk8s.Report{
 		Agent:   agentsk8s.AgentInfo{ID: "agent-1", IntervalSeconds: 10},
 		Cluster: agentsk8s.ClusterInfo{ID: "cluster-1", Name: "cluster"},
@@ -99,6 +101,7 @@ func TestApplyKubernetesReportPreservesNativeAPIInventory(t *testing.T) {
 			CreatedAt: now,
 			Labels:    map[string]string{"team": "checkout"},
 		}},
+		ReplicaSets: []agentsk8s.ReplicaSet{{UID: "rs-1", Name: "checkout-6d4", Namespace: "services", DesiredReplicas: 3, ReadyReplicas: 2, FullyLabeledReplicas: 3, ObservedGeneration: 7, OwnerKind: "Deployment", OwnerName: "checkout"}},
 		Services: []agentsk8s.Service{{
 			UID:         "svc-1",
 			Name:        " checkout ",
@@ -115,14 +118,21 @@ func TestApplyKubernetesReportPreservesNativeAPIInventory(t *testing.T) {
 		Jobs:         []agentsk8s.Job{{UID: "job-1", Name: "backup", Namespace: "services", DesiredCompletions: 1, Succeeded: 1}},
 		CronJobs:     []agentsk8s.CronJob{{UID: "cron-1", Name: "nightly", Namespace: "services", Schedule: "0 1 * * *"}},
 		Ingresses:    []agentsk8s.Ingress{{UID: "ing-1", Name: "checkout", Namespace: "services", ClassName: "nginx", Hosts: []string{"checkout.example.test"}, Addresses: []string{"192.0.2.20"}, CreatedAt: now}},
+		EndpointSlices: []agentsk8s.EndpointSlice{{
+			UID: "eps-1", Name: "checkout-abc", Namespace: "services", AddressType: "IPv4", ServiceName: "checkout", EndpointCount: 3, ReadyEndpointCount: 2, Ports: []agentsk8s.EndpointPort{{Name: "http", Protocol: "TCP", Port: 80, AppProtocol: "kubernetes.io/http"}},
+		}},
+		NetworkPolicies: []agentsk8s.NetworkPolicy{{UID: "netpol-1", Name: "checkout-deny", Namespace: "services", PolicyTypes: []string{"Ingress", "Egress"}, IngressRuleCount: 1, EgressRuleCount: 2}},
 		PersistentVolumes: []agentsk8s.PersistentVolume{{
 			UID: "pv-1", Name: "pv-checkout", Phase: " Bound ", StorageClass: "fast", CapacityBytes: 10_000, AccessModes: []string{"ReadWriteOnce"}, ReclaimPolicy: "Retain", ClaimNamespace: "services", ClaimName: "checkout-data", CreatedAt: now,
 		}},
 		PersistentVolumeClaims: []agentsk8s.PersistentVolumeClaim{{
 			UID: "pvc-1", Name: "checkout-data", Namespace: "services", Phase: " Bound ", StorageClass: "fast", RequestedBytes: 10_000, CapacityBytes: 10_000, AccessModes: []string{"ReadWriteOnce"}, VolumeName: "pv-checkout", CreatedAt: now,
 		}},
-		Events:    []agentsk8s.Event{{UID: "evt-1", Name: "checkout.1", Namespace: "services", Type: "Warning", Reason: "BackOff", Message: "retrying", InvolvedKind: "Pod", InvolvedName: "checkout-0", Count: 2}},
-		Timestamp: now,
+		StorageClasses:  []agentsk8s.StorageClass{{UID: "sc-1", Name: "fast", Provisioner: "csi.example.test", ReclaimPolicy: "Delete", VolumeBindingMode: "WaitForFirstConsumer", AllowVolumeExpansion: &allowExpansion, ParameterKeys: []string{"type"}}},
+		ConfigMaps:      []agentsk8s.ConfigMap{{UID: "cm-1", Name: "checkout-config", Namespace: "services", DataKeys: []string{"app.yaml"}, BinaryDataKeys: []string{"logo.png"}, Immutable: true}},
+		ServiceAccounts: []agentsk8s.ServiceAccount{{UID: "sa-1", Name: "checkout", Namespace: "services", AutomountServiceAccountToken: &automountToken, SecretCount: 1, ImagePullSecrets: []string{"pull-secret"}}},
+		Events:          []agentsk8s.Event{{UID: "evt-1", Name: "checkout.1", Namespace: "services", Type: "Warning", Reason: "BackOff", Message: "retrying", InvolvedKind: "Pod", InvolvedName: "checkout-0", Count: 2}},
+		Timestamp:       now,
 	}
 
 	cluster, err := monitor.ApplyKubernetesReport(report, nil)
@@ -134,6 +144,9 @@ func TestApplyKubernetesReportPreservesNativeAPIInventory(t *testing.T) {
 	}
 	if len(cluster.Services) != 1 || cluster.Services[0].ServiceType != "ClusterIP" || cluster.Services[0].Ports[0].TargetPort != "8080" {
 		t.Fatalf("expected service inventory, got %+v", cluster.Services)
+	}
+	if len(cluster.ReplicaSets) != 1 || cluster.ReplicaSets[0].OwnerName != "checkout" || cluster.ReplicaSets[0].FullyLabeledReplicas != 3 {
+		t.Fatalf("expected replicaset inventory, got %+v", cluster.ReplicaSets)
 	}
 	if len(cluster.StatefulSets) != 1 || cluster.StatefulSets[0].ReadyReplicas != 2 {
 		t.Fatalf("expected statefulset inventory, got %+v", cluster.StatefulSets)
@@ -150,11 +163,26 @@ func TestApplyKubernetesReportPreservesNativeAPIInventory(t *testing.T) {
 	if len(cluster.Ingresses) != 1 || cluster.Ingresses[0].Hosts[0] != "checkout.example.test" {
 		t.Fatalf("expected ingress inventory, got %+v", cluster.Ingresses)
 	}
+	if len(cluster.EndpointSlices) != 1 || cluster.EndpointSlices[0].ServiceName != "checkout" || cluster.EndpointSlices[0].ReadyEndpointCount != 2 {
+		t.Fatalf("expected endpoint slice inventory, got %+v", cluster.EndpointSlices)
+	}
+	if len(cluster.NetworkPolicies) != 1 || cluster.NetworkPolicies[0].EgressRuleCount != 2 {
+		t.Fatalf("expected network policy inventory, got %+v", cluster.NetworkPolicies)
+	}
 	if len(cluster.PersistentVolumes) != 1 || cluster.PersistentVolumes[0].ClaimName != "checkout-data" {
 		t.Fatalf("expected PV inventory, got %+v", cluster.PersistentVolumes)
 	}
 	if len(cluster.PersistentVolumeClaims) != 1 || cluster.PersistentVolumeClaims[0].VolumeName != "pv-checkout" {
 		t.Fatalf("expected PVC inventory, got %+v", cluster.PersistentVolumeClaims)
+	}
+	if len(cluster.StorageClasses) != 1 || cluster.StorageClasses[0].Provisioner != "csi.example.test" || cluster.StorageClasses[0].AllowVolumeExpansion == nil || !*cluster.StorageClasses[0].AllowVolumeExpansion {
+		t.Fatalf("expected storage class inventory, got %+v", cluster.StorageClasses)
+	}
+	if len(cluster.ConfigMaps) != 1 || cluster.ConfigMaps[0].DataKeys[0] != "app.yaml" || !cluster.ConfigMaps[0].Immutable {
+		t.Fatalf("expected configmap inventory, got %+v", cluster.ConfigMaps)
+	}
+	if len(cluster.ServiceAccounts) != 1 || cluster.ServiceAccounts[0].SecretCount != 1 || cluster.ServiceAccounts[0].AutomountServiceAccountToken == nil || !*cluster.ServiceAccounts[0].AutomountServiceAccountToken {
+		t.Fatalf("expected serviceaccount inventory, got %+v", cluster.ServiceAccounts)
 	}
 	if len(cluster.Events) != 1 || cluster.Events[0].Reason != "BackOff" || cluster.Events[0].Count != 2 {
 		t.Fatalf("expected event inventory, got %+v", cluster.Events)

@@ -160,11 +160,12 @@ truth for live infrastructure data.
 18. Add or change Kubernetes native API inventory through
     `internal/kubernetesagent/agent.go` and
     `internal/monitoring/kubernetes_agents.go`. The Kubernetes agent may read
-    Namespaces, Services, StatefulSets, DaemonSets, Jobs, CronJobs, Ingresses,
-    PersistentVolumes, PersistentVolumeClaims, and Events as bounded
-    best-effort inventory, but monitoring must preserve those objects as native
-    cluster inventory instead of flattening them into pods, deployments, or
-    generic storage rows.
+    Namespaces, Services, ReplicaSets, StatefulSets, DaemonSets, Jobs,
+    CronJobs, Ingresses, EndpointSlices, NetworkPolicies, PersistentVolumes,
+    PersistentVolumeClaims, StorageClasses, ConfigMaps, ServiceAccounts, and
+    Events as bounded best-effort inventory, but monitoring must preserve those
+    objects as native cluster inventory instead of flattening them into pods,
+    deployments, or generic storage/configuration rows.
 
 ## Forbidden Paths
 

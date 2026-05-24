@@ -1881,6 +1881,8 @@ func resourceTypeFilterAdapter(token string) []unified.ResourceType {
 		return []unified.ResourceType{unified.ResourceTypeK8sNode}
 	case "k8s-deployment", "k8s-deployments":
 		return []unified.ResourceType{unified.ResourceTypeK8sDeployment}
+	case "k8s-replicaset", "k8s-replicasets":
+		return []unified.ResourceType{unified.ResourceTypeK8sReplicaSet}
 	case "k8s-namespace", "k8s-namespaces":
 		return []unified.ResourceType{unified.ResourceTypeK8sNamespace}
 	case "k8s-service", "k8s-services":
@@ -1895,10 +1897,20 @@ func resourceTypeFilterAdapter(token string) []unified.ResourceType {
 		return []unified.ResourceType{unified.ResourceTypeK8sCronJob}
 	case "k8s-ingress", "k8s-ingresses":
 		return []unified.ResourceType{unified.ResourceTypeK8sIngress}
+	case "k8s-endpoint-slice", "k8s-endpoint-slices":
+		return []unified.ResourceType{unified.ResourceTypeK8sEndpointSlice}
+	case "k8s-network-policy", "k8s-network-policies":
+		return []unified.ResourceType{unified.ResourceTypeK8sNetworkPolicy}
 	case "k8s-persistent-volume", "k8s-persistent-volumes":
 		return []unified.ResourceType{unified.ResourceTypeK8sPV}
 	case "k8s-persistent-volume-claim", "k8s-persistent-volume-claims":
 		return []unified.ResourceType{unified.ResourceTypeK8sPVC}
+	case "k8s-storage-class", "k8s-storage-classes":
+		return []unified.ResourceType{unified.ResourceTypeK8sStorageClass}
+	case "k8s-configmap", "k8s-configmaps":
+		return []unified.ResourceType{unified.ResourceTypeK8sConfigMap}
+	case "k8s-serviceaccount", "k8s-serviceaccounts":
+		return []unified.ResourceType{unified.ResourceTypeK8sServiceAccount}
 	case "k8s-event", "k8s-events":
 		return []unified.ResourceType{unified.ResourceTypeK8sEvent}
 	case "storage":

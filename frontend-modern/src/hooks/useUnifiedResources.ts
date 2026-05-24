@@ -528,6 +528,7 @@ const resolveType = (value?: string): ResourceType => {
     case 'k8s-cluster':
     case 'k8s-node':
     case 'k8s-deployment':
+    case 'k8s-replicaset':
     case 'k8s-service':
     case 'k8s-namespace':
     case 'k8s-statefulset':
@@ -535,8 +536,13 @@ const resolveType = (value?: string): ResourceType => {
     case 'k8s-job':
     case 'k8s-cronjob':
     case 'k8s-ingress':
+    case 'k8s-endpoint-slice':
+    case 'k8s-network-policy':
     case 'k8s-persistent-volume':
     case 'k8s-persistent-volume-claim':
+    case 'k8s-storage-class':
+    case 'k8s-configmap':
+    case 'k8s-serviceaccount':
     case 'k8s-event':
     case 'vm':
     case 'system-container':
@@ -571,6 +577,8 @@ const resolveType = (value?: string): ResourceType => {
       return 'docker-task';
     case 'k8s-deployment':
       return 'k8s-deployment';
+    case 'k8s-replicaset':
+      return 'k8s-replicaset';
     case 'k8s-service':
       return 'k8s-service';
     case 'k8s-namespace':
@@ -585,10 +593,20 @@ const resolveType = (value?: string): ResourceType => {
       return 'k8s-cronjob';
     case 'k8s-ingress':
       return 'k8s-ingress';
+    case 'k8s-endpoint-slice':
+      return 'k8s-endpoint-slice';
+    case 'k8s-network-policy':
+      return 'k8s-network-policy';
     case 'k8s-persistent-volume':
       return 'k8s-persistent-volume';
     case 'k8s-persistent-volume-claim':
       return 'k8s-persistent-volume-claim';
+    case 'k8s-storage-class':
+      return 'k8s-storage-class';
+    case 'k8s-configmap':
+      return 'k8s-configmap';
+    case 'k8s-serviceaccount':
+      return 'k8s-serviceaccount';
     case 'k8s-event':
       return 'k8s-event';
     case 'storage':

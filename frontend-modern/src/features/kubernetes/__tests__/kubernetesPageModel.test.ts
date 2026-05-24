@@ -33,15 +33,21 @@ describe('kubernetesPageModel', () => {
       makeResource({ id: 'node-1', type: 'k8s-node' }),
       makeResource({ id: 'pod-1', type: 'pod' }),
       makeResource({ id: 'dep-1', type: 'k8s-deployment' }),
+      makeResource({ id: 'rs-1', type: 'k8s-replicaset' }),
       makeResource({ id: 'svc-1', type: 'k8s-service' }),
       makeResource({ id: 'sts-1', type: 'k8s-statefulset' }),
       makeResource({ id: 'ds-1', type: 'k8s-daemonset' }),
       makeResource({ id: 'job-1', type: 'k8s-job' }),
       makeResource({ id: 'cron-1', type: 'k8s-cronjob' }),
       makeResource({ id: 'ing-1', type: 'k8s-ingress' }),
+      makeResource({ id: 'eps-1', type: 'k8s-endpoint-slice' }),
+      makeResource({ id: 'netpol-1', type: 'k8s-network-policy' }),
       makeResource({ id: 'pv-1', type: 'k8s-persistent-volume' }),
       makeResource({ id: 'pvc-1', type: 'k8s-persistent-volume-claim' }),
+      makeResource({ id: 'sc-1', type: 'k8s-storage-class' }),
       makeResource({ id: 'ns-1', type: 'k8s-namespace' }),
+      makeResource({ id: 'cm-1', type: 'k8s-configmap' }),
+      makeResource({ id: 'sa-1', type: 'k8s-serviceaccount' }),
       makeResource({ id: 'event-1', type: 'k8s-event' }),
       makeResource({ id: 'proxmox-vm', type: 'vm', platformType: 'proxmox-pve' }),
     ]);
@@ -50,23 +56,31 @@ describe('kubernetesPageModel', () => {
     expect(model.nodes.map((r) => r.id)).toEqual(['node-1']);
     expect(model.pods.map((r) => r.id)).toEqual(['pod-1']);
     expect(model.deployments.map((r) => r.id)).toEqual(['dep-1']);
+    expect(model.replicaSets.map((r) => r.id)).toEqual(['rs-1']);
     expect(model.services.map((r) => r.id)).toEqual(['svc-1']);
     expect(model.statefulSets.map((r) => r.id)).toEqual(['sts-1']);
     expect(model.daemonSets.map((r) => r.id)).toEqual(['ds-1']);
     expect(model.jobs.map((r) => r.id)).toEqual(['job-1']);
     expect(model.cronJobs.map((r) => r.id)).toEqual(['cron-1']);
     expect(model.ingresses.map((r) => r.id)).toEqual(['ing-1']);
+    expect(model.endpointSlices.map((r) => r.id)).toEqual(['eps-1']);
+    expect(model.networkPolicies.map((r) => r.id)).toEqual(['netpol-1']);
     expect(model.persistentVolumes.map((r) => r.id)).toEqual(['pv-1']);
     expect(model.persistentVolumeClaims.map((r) => r.id)).toEqual(['pvc-1']);
+    expect(model.storageClasses.map((r) => r.id)).toEqual(['sc-1']);
     expect(model.namespaces.map((r) => r.id)).toEqual(['ns-1']);
+    expect(model.configMaps.map((r) => r.id)).toEqual(['cm-1']);
+    expect(model.serviceAccounts.map((r) => r.id)).toEqual(['sa-1']);
     expect(model.events.map((r) => r.id)).toEqual(['event-1']);
     expect(model.workloads.map((r) => r.id).sort()).toEqual(
-      ['cron-1', 'dep-1', 'ds-1', 'job-1', 'pod-1', 'sts-1'].sort(),
+      ['cron-1', 'dep-1', 'ds-1', 'job-1', 'pod-1', 'rs-1', 'sts-1'].sort(),
     );
-    expect(model.storage.map((r) => r.id).sort()).toEqual(['pv-1', 'pvc-1']);
-    expect(model.networking.map((r) => r.id).sort()).toEqual(['ing-1', 'svc-1']);
-    expect(model.config.map((r) => r.id)).toEqual(['ns-1']);
-    expect(model.resources).toHaveLength(14);
+    expect(model.storage.map((r) => r.id).sort()).toEqual(['pv-1', 'pvc-1', 'sc-1']);
+    expect(model.networking.map((r) => r.id).sort()).toEqual(
+      ['eps-1', 'ing-1', 'netpol-1', 'svc-1'].sort(),
+    );
+    expect(model.config.map((r) => r.id).sort()).toEqual(['cm-1', 'ns-1', 'sa-1']);
+    expect(model.resources).toHaveLength(20);
   });
 
   it('treats agent rows that report a kubernetes source as Kubernetes nodes', () => {

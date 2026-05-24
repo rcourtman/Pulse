@@ -254,6 +254,9 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 		for _, deployment := range cluster.Deployments {
 			rr.ingestKubernetesDeployment(cluster, deployment, clusterID, capabilities)
 		}
+		for _, replicaSet := range cluster.ReplicaSets {
+			rr.ingestKubernetesReplicaSet(cluster, replicaSet, clusterID, capabilities)
+		}
 		for _, namespace := range cluster.Namespaces {
 			rr.ingestKubernetesNamespace(cluster, namespace, clusterID, capabilities)
 		}
@@ -275,11 +278,26 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 		for _, ingress := range cluster.Ingresses {
 			rr.ingestKubernetesIngress(cluster, ingress, clusterID, capabilities)
 		}
+		for _, endpointSlice := range cluster.EndpointSlices {
+			rr.ingestKubernetesEndpointSlice(cluster, endpointSlice, clusterID, capabilities)
+		}
+		for _, policy := range cluster.NetworkPolicies {
+			rr.ingestKubernetesNetworkPolicy(cluster, policy, clusterID, capabilities)
+		}
 		for _, volume := range cluster.PersistentVolumes {
 			rr.ingestKubernetesPersistentVolume(cluster, volume, clusterID, capabilities)
 		}
 		for _, claim := range cluster.PersistentVolumeClaims {
 			rr.ingestKubernetesPersistentVolumeClaim(cluster, claim, clusterID, capabilities)
+		}
+		for _, class := range cluster.StorageClasses {
+			rr.ingestKubernetesStorageClass(cluster, class, clusterID, capabilities)
+		}
+		for _, configMap := range cluster.ConfigMaps {
+			rr.ingestKubernetesConfigMap(cluster, configMap, clusterID, capabilities)
+		}
+		for _, account := range cluster.ServiceAccounts {
+			rr.ingestKubernetesServiceAccount(cluster, account, clusterID, capabilities)
 		}
 		for _, event := range cluster.Events {
 			rr.ingestKubernetesEvent(cluster, event, clusterID, capabilities)
@@ -591,6 +609,8 @@ func (rr *ResourceRegistry) seedSourceIDForResourceLocked(resource *Resource, so
 				return ""
 			}
 			return fmt.Sprintf("%s:deployment:%s", clusterSourceID, deploymentID)
+		case ResourceTypeK8sReplicaSet:
+			return seededKubernetesTypedSourceID(clusterSourceID, "replicaset", resource, resource.Kubernetes.ReplicaSetUID)
 		case ResourceTypeK8sNamespace:
 			return seededKubernetesTypedSourceID(clusterSourceID, "namespace", resource, resource.Kubernetes.NamespaceUID)
 		case ResourceTypeK8sService:
@@ -605,10 +625,20 @@ func (rr *ResourceRegistry) seedSourceIDForResourceLocked(resource *Resource, so
 			return seededKubernetesTypedSourceID(clusterSourceID, "cronjob", resource, resource.Kubernetes.CronJobUID)
 		case ResourceTypeK8sIngress:
 			return seededKubernetesTypedSourceID(clusterSourceID, "ingress", resource, resource.Kubernetes.IngressUID)
+		case ResourceTypeK8sEndpointSlice:
+			return seededKubernetesTypedSourceID(clusterSourceID, "endpointslice", resource, resource.Kubernetes.EndpointSliceUID)
+		case ResourceTypeK8sNetworkPolicy:
+			return seededKubernetesTypedSourceID(clusterSourceID, "networkpolicy", resource, resource.Kubernetes.NetworkPolicyUID)
 		case ResourceTypeK8sPV:
 			return seededKubernetesTypedSourceID(clusterSourceID, "persistentvolume", resource, resource.Kubernetes.PersistentVolumeUID)
 		case ResourceTypeK8sPVC:
 			return seededKubernetesTypedSourceID(clusterSourceID, "persistentvolumeclaim", resource, resource.Kubernetes.PersistentVolumeClaimUID)
+		case ResourceTypeK8sStorageClass:
+			return seededKubernetesTypedSourceID(clusterSourceID, "storageclass", resource, resource.Kubernetes.StorageClassUID)
+		case ResourceTypeK8sConfigMap:
+			return seededKubernetesTypedSourceID(clusterSourceID, "configmap", resource, resource.Kubernetes.ConfigMapUID)
+		case ResourceTypeK8sServiceAccount:
+			return seededKubernetesTypedSourceID(clusterSourceID, "serviceaccount", resource, resource.Kubernetes.ServiceAccountUID)
 		case ResourceTypeK8sEvent:
 			return seededKubernetesTypedSourceID(clusterSourceID, "event", resource, resource.Kubernetes.EventUID)
 		}
@@ -1382,6 +1412,30 @@ func (rr *ResourceRegistry) ingestKubernetesIngress(cluster models.KubernetesClu
 	rr.ingest(SourceK8s, sourceID, resource, identity)
 }
 
+func (rr *ResourceRegistry) ingestKubernetesEndpointSlice(cluster models.KubernetesCluster, slice models.KubernetesEndpointSlice, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesEndpointSlice(cluster, slice, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesEndpointSliceSourceID(kubernetesClusterSourceID(cluster), slice)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesNetworkPolicy(cluster models.KubernetesCluster, policy models.KubernetesNetworkPolicy, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesNetworkPolicy(cluster, policy, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesNetworkPolicySourceID(kubernetesClusterSourceID(cluster), policy)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
 func (rr *ResourceRegistry) ingestKubernetesPersistentVolume(cluster models.KubernetesCluster, volume models.KubernetesPersistentVolume, clusterResourceID string, capabilities *K8sMetricCapabilities) {
 	resource, identity := resourceFromKubernetesPersistentVolume(cluster, volume, capabilities)
 	if clusterResourceID != "" {
@@ -1400,6 +1454,42 @@ func (rr *ResourceRegistry) ingestKubernetesPersistentVolumeClaim(cluster models
 		resource.ParentID = &clusterResourceID
 	}
 	sourceID := kubernetesPersistentVolumeClaimSourceID(kubernetesClusterSourceID(cluster), claim)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesStorageClass(cluster models.KubernetesCluster, class models.KubernetesStorageClass, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesStorageClass(cluster, class, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesStorageClassSourceID(kubernetesClusterSourceID(cluster), class)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesConfigMap(cluster models.KubernetesCluster, configMap models.KubernetesConfigMap, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesConfigMap(cluster, configMap, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesConfigMapSourceID(kubernetesClusterSourceID(cluster), configMap)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesServiceAccount(cluster models.KubernetesCluster, account models.KubernetesServiceAccount, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesServiceAccount(cluster, account, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesServiceAccountSourceID(kubernetesClusterSourceID(cluster), account)
 	if sourceID == "" {
 		return
 	}
@@ -1436,6 +1526,18 @@ func (rr *ResourceRegistry) ingestKubernetesDeployment(cluster models.Kubernetes
 		resource.ParentID = &clusterResourceID
 	}
 	sourceID := kubernetesDeploymentSourceID(kubernetesClusterSourceID(cluster), deployment)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesReplicaSet(cluster models.KubernetesCluster, replicaSet models.KubernetesReplicaSet, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesReplicaSet(cluster, replicaSet, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesReplicaSetSourceID(kubernetesClusterSourceID(cluster), replicaSet)
 	if sourceID == "" {
 		return
 	}
@@ -2659,6 +2761,10 @@ func kubernetesDeploymentSourceID(clusterSourceID string, deployment models.Kube
 	return CanonicalKubernetesDeploymentSourceID(clusterSourceID, deployment)
 }
 
+func kubernetesReplicaSetSourceID(clusterSourceID string, replicaSet models.KubernetesReplicaSet) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "replicaset", replicaSet.UID, replicaSet.Namespace, replicaSet.Name)
+}
+
 func kubernetesNamespaceSourceID(clusterSourceID string, namespace models.KubernetesNamespace) string {
 	return canonicalKubernetesTypedSourceID(clusterSourceID, "namespace", namespace.UID, "", namespace.Name)
 }
@@ -2687,12 +2793,32 @@ func kubernetesIngressSourceID(clusterSourceID string, ingress models.Kubernetes
 	return canonicalKubernetesTypedSourceID(clusterSourceID, "ingress", ingress.UID, ingress.Namespace, ingress.Name)
 }
 
+func kubernetesEndpointSliceSourceID(clusterSourceID string, slice models.KubernetesEndpointSlice) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "endpointslice", slice.UID, slice.Namespace, slice.Name)
+}
+
+func kubernetesNetworkPolicySourceID(clusterSourceID string, policy models.KubernetesNetworkPolicy) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "networkpolicy", policy.UID, policy.Namespace, policy.Name)
+}
+
 func kubernetesPersistentVolumeSourceID(clusterSourceID string, volume models.KubernetesPersistentVolume) string {
 	return canonicalKubernetesTypedSourceID(clusterSourceID, "persistentvolume", volume.UID, "", volume.Name)
 }
 
 func kubernetesPersistentVolumeClaimSourceID(clusterSourceID string, claim models.KubernetesPersistentVolumeClaim) string {
 	return canonicalKubernetesTypedSourceID(clusterSourceID, "persistentvolumeclaim", claim.UID, claim.Namespace, claim.Name)
+}
+
+func kubernetesStorageClassSourceID(clusterSourceID string, class models.KubernetesStorageClass) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "storageclass", class.UID, "", class.Name)
+}
+
+func kubernetesConfigMapSourceID(clusterSourceID string, configMap models.KubernetesConfigMap) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "configmap", configMap.UID, configMap.Namespace, configMap.Name)
+}
+
+func kubernetesServiceAccountSourceID(clusterSourceID string, account models.KubernetesServiceAccount) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "serviceaccount", account.UID, account.Namespace, account.Name)
 }
 
 func kubernetesEventSourceID(clusterSourceID string, event models.KubernetesEvent) string {

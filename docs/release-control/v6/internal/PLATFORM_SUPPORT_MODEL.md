@@ -210,9 +210,12 @@ physical host.
    `docker-image`, `docker-volume`, `docker-network`, `docker-service`, and
    `docker-task` under the `docker` runtime lens.
 6. Kubernetes projects as `k8s-cluster`, `k8s-node`, `pod`,
-   `k8s-deployment`, `k8s-statefulset`, `k8s-daemonset`, `k8s-service`,
-   `k8s-job`, `k8s-cronjob`, `k8s-ingress`, `k8s-persistent-volume`,
-   `k8s-persistent-volume-claim`, `k8s-namespace`, and `k8s-event`.
+   `k8s-deployment`, `k8s-replicaset`, `k8s-statefulset`,
+   `k8s-daemonset`, `k8s-service`, `k8s-job`, `k8s-cronjob`,
+   `k8s-ingress`, `k8s-endpoint-slice`, `k8s-network-policy`,
+   `k8s-persistent-volume`, `k8s-persistent-volume-claim`,
+   `k8s-storage-class`, `k8s-namespace`, `k8s-configmap`,
+   `k8s-serviceaccount`, and `k8s-event`.
 7. Storage projects through shared `storage`, `ceph`, and `physical-disk`
    resources instead of provider-local storage types.
 8. Recovery artifacts stay in `internal/recovery` and reference canonical
@@ -322,7 +325,7 @@ Support floor fields are recorded in this order: `setup`, `visibility`,
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `agent` | `platform` | `supported` | `supported` | `agent-backed` | `install-workspace` | `agent`, `storage`, `physical-disk` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=supported`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
 | `docker` | `runtime-lens` | `supported` | `supported` | `agent-backed` | `install-workspace` | `agent`, `app-container`, `docker-image`, `docker-volume`, `docker-network`, `docker-service`, `docker-task` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
-| `kubernetes` | `platform` | `supported` | `supported` | `agent-backed` | `install-workspace` | `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`, `k8s-statefulset`, `k8s-daemonset`, `k8s-service`, `k8s-job`, `k8s-cronjob`, `k8s-ingress`, `k8s-persistent-volume`, `k8s-persistent-volume-claim`, `k8s-namespace`, `k8s-event` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
+| `kubernetes` | `platform` | `supported` | `supported` | `agent-backed` | `install-workspace` | `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`, `k8s-replicaset`, `k8s-statefulset`, `k8s-daemonset`, `k8s-service`, `k8s-job`, `k8s-cronjob`, `k8s-ingress`, `k8s-endpoint-slice`, `k8s-network-policy`, `k8s-persistent-volume`, `k8s-persistent-volume-claim`, `k8s-storage-class`, `k8s-namespace`, `k8s-configmap`, `k8s-serviceaccount`, `k8s-event` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
 | `proxmox-pve` | `platform` | `supported` | `supported` | `api-backed` | `platform-connections` | `agent`, `vm`, `system-container`, `storage`, `ceph`, `physical-disk` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=augmentation-only` |
 | `proxmox-pbs` | `platform` | `supported` | `supported` | `api-backed` | `platform-connections` | `pbs`, `storage` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
 | `proxmox-pmg` | `platform` | `supported` | `supported` | `api-backed` | `platform-connections` | `pmg` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=n/a`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
@@ -381,7 +384,7 @@ or runtime platform fallbacks that are not declared in this document.
 | ---------------- | ------------- | ------------------ | ------------ | ------------------------------------- | --------------------------------------------------------------------- |
 | `agent`          | platform      | Pulse-managed host | agent-backed | none                                  | `agent`, `storage`, `physical-disk`                                   |
 | `docker`         | runtime-lens  | container runtime  | agent-backed | none                                  | `agent`, `app-container`, `docker-image`, `docker-volume`, `docker-network`, `docker-service`, `docker-task` |
-| `kubernetes`     | platform      | cluster runtime    | agent-backed | none                                  | `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`, `k8s-statefulset`, `k8s-daemonset`, `k8s-service`, `k8s-job`, `k8s-cronjob`, `k8s-ingress`, `k8s-persistent-volume`, `k8s-persistent-volume-claim`, `k8s-namespace`, `k8s-event` |
+| `kubernetes`     | platform      | cluster runtime    | agent-backed | none                                  | `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`, `k8s-replicaset`, `k8s-statefulset`, `k8s-daemonset`, `k8s-service`, `k8s-job`, `k8s-cronjob`, `k8s-ingress`, `k8s-endpoint-slice`, `k8s-network-policy`, `k8s-persistent-volume`, `k8s-persistent-volume-claim`, `k8s-storage-class`, `k8s-namespace`, `k8s-configmap`, `k8s-serviceaccount`, `k8s-event` |
 | `proxmox-pve`    | platform      | Proxmox            | api-backed   | host agent may augment into hybrid    | `agent`, `vm`, `system-container`, `storage`, `ceph`, `physical-disk` |
 | `proxmox-pbs`    | platform      | Proxmox            | api-backed   | host agent may augment into hybrid    | `pbs`, `storage`                                                      |
 | `proxmox-pmg`    | platform      | Proxmox            | api-backed   | none today                            | `pmg`                                                                 |

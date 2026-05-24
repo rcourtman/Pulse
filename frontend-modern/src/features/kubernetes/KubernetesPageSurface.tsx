@@ -29,7 +29,7 @@ import {
 // Nodes section of the Overview stack; the page model filters them down to
 // those tagged kubernetes.
 const KUBERNETES_RESOURCE_QUERY =
-  'type=k8s-cluster,k8s-node,pod,k8s-deployment,k8s-namespace,k8s-service,k8s-statefulset,k8s-daemonset,k8s-job,k8s-cronjob,k8s-ingress,k8s-persistent-volume,k8s-persistent-volume-claim,k8s-event,agent';
+  'type=k8s-cluster,k8s-node,pod,k8s-deployment,k8s-replicaset,k8s-namespace,k8s-service,k8s-statefulset,k8s-daemonset,k8s-job,k8s-cronjob,k8s-ingress,k8s-endpoint-slice,k8s-network-policy,k8s-persistent-volume,k8s-persistent-volume-claim,k8s-storage-class,k8s-configmap,k8s-serviceaccount,k8s-event,agent';
 const KUBERNETES_PLATFORM_FILTER = 'kubernetes';
 const KUBERNETES_WORKLOAD_FORCED_VIEW_MODE = 'pod';
 const KUBERNETES_WORKLOAD_COLUMN_SCOPE = 'kubernetes-pods';
@@ -115,8 +115,8 @@ export function KubernetesPageSurface() {
                 resources={model().storage}
                 variant="storage"
                 emptyIcon={k8sIcon()}
-                emptyTitle="No PV or PVC resources reported"
-                emptyDescription="Persistent volumes and claims appear here once the agent can read volume inventory."
+                emptyTitle="No Kubernetes volume resources reported"
+                emptyDescription="StorageClasses, persistent volumes, and claims appear here once the agent can read storage inventory."
               />
             </Show>
             <Show when={activeTab() === 'networking'}>
@@ -125,7 +125,7 @@ export function KubernetesPageSurface() {
                 variant="networking"
                 emptyIcon={k8sIcon()}
                 emptyTitle="No networking resources reported"
-                emptyDescription="Services and ingresses appear here once the agent can read networking inventory."
+                emptyDescription="Services, ingresses, endpoint slices, and network policies appear here once the agent can read networking inventory."
               />
             </Show>
             <Show when={activeTab() === 'config'}>
@@ -134,7 +134,7 @@ export function KubernetesPageSurface() {
                 variant="config"
                 emptyIcon={k8sIcon()}
                 emptyTitle="No config resources reported"
-                emptyDescription="Namespaces appear here once the agent can read cluster configuration inventory."
+                emptyDescription="Namespaces, ConfigMaps, and ServiceAccounts appear here once the agent can read cluster configuration inventory."
               />
             </Show>
             <Show when={activeTab() === 'events'}>

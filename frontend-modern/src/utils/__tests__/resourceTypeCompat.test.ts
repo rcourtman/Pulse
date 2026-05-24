@@ -22,17 +22,23 @@ describe('resourceTypeCompat', () => {
     expect(canonicalizeFrontendResourceType('docker-task')).toBe('docker-task');
     expect(canonicalizeFrontendResourceType('k8s-namespace')).toBe('k8s-namespace');
     expect(canonicalizeFrontendResourceType('k8s-service')).toBe('k8s-service');
+    expect(canonicalizeFrontendResourceType('k8s-replicaset')).toBe('k8s-replicaset');
     expect(canonicalizeFrontendResourceType('k8s-statefulset')).toBe('k8s-statefulset');
     expect(canonicalizeFrontendResourceType('k8s-daemonset')).toBe('k8s-daemonset');
     expect(canonicalizeFrontendResourceType('k8s-job')).toBe('k8s-job');
     expect(canonicalizeFrontendResourceType('k8s-cronjob')).toBe('k8s-cronjob');
     expect(canonicalizeFrontendResourceType('k8s-ingress')).toBe('k8s-ingress');
+    expect(canonicalizeFrontendResourceType('k8s-endpoint-slice')).toBe('k8s-endpoint-slice');
+    expect(canonicalizeFrontendResourceType('k8s-network-policy')).toBe('k8s-network-policy');
     expect(canonicalizeFrontendResourceType('k8s-persistent-volume')).toBe(
       'k8s-persistent-volume',
     );
     expect(canonicalizeFrontendResourceType('k8s-persistent-volume-claim')).toBe(
       'k8s-persistent-volume-claim',
     );
+    expect(canonicalizeFrontendResourceType('k8s-storage-class')).toBe('k8s-storage-class');
+    expect(canonicalizeFrontendResourceType('k8s-configmap')).toBe('k8s-configmap');
+    expect(canonicalizeFrontendResourceType('k8s-serviceaccount')).toBe('k8s-serviceaccount');
     expect(canonicalizeFrontendResourceType('k8s-event')).toBe('k8s-event');
   });
 

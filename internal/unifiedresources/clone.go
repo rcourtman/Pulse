@@ -421,6 +421,14 @@ func cloneK8sData(in *K8sData) *K8sData {
 	out.CompletionTime = cloneTimePtr(in.CompletionTime)
 	out.Hosts = cloneStringSlice(in.Hosts)
 	out.Addresses = cloneStringSlice(in.Addresses)
+	out.EndpointPorts = cloneK8sEndpointPortSlice(in.EndpointPorts)
+	out.PolicyTypes = cloneStringSlice(in.PolicyTypes)
+	out.AllowVolumeExpansion = cloneBoolPtr(in.AllowVolumeExpansion)
+	out.ParameterKeys = cloneStringSlice(in.ParameterKeys)
+	out.DataKeys = cloneStringSlice(in.DataKeys)
+	out.BinaryDataKeys = cloneStringSlice(in.BinaryDataKeys)
+	out.AutomountServiceAccountToken = cloneBoolPtr(in.AutomountServiceAccountToken)
+	out.ImagePullSecrets = cloneStringSlice(in.ImagePullSecrets)
 	out.AccessModes = cloneStringSlice(in.AccessModes)
 	out.FirstSeen = cloneTimePtr(in.FirstSeen)
 	out.EventTime = cloneTimePtr(in.EventTime)
@@ -435,6 +443,15 @@ func cloneK8sServicePortSlice(in []K8sServicePort) []K8sServicePort {
 		return nil
 	}
 	out := make([]K8sServicePort, len(in))
+	copy(out, in)
+	return out
+}
+
+func cloneK8sEndpointPortSlice(in []K8sEndpointPort) []K8sEndpointPort {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]K8sEndpointPort, len(in))
 	copy(out, in)
 	return out
 }

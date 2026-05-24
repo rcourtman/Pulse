@@ -31,6 +31,7 @@ const KUBERNETES_RESOURCE_TYPES = new Set<ResourceType>([
   'k8s-node',
   'pod',
   'k8s-deployment',
+  'k8s-replicaset',
   'k8s-namespace',
   'k8s-service',
   'k8s-statefulset',
@@ -38,8 +39,13 @@ const KUBERNETES_RESOURCE_TYPES = new Set<ResourceType>([
   'k8s-job',
   'k8s-cronjob',
   'k8s-ingress',
+  'k8s-endpoint-slice',
+  'k8s-network-policy',
   'k8s-persistent-volume',
   'k8s-persistent-volume-claim',
+  'k8s-storage-class',
+  'k8s-configmap',
+  'k8s-serviceaccount',
   'k8s-event',
 ]);
 
@@ -64,6 +70,7 @@ export type KubernetesPageModel = {
   nodes: Resource[];
   pods: Resource[];
   deployments: Resource[];
+  replicaSets: Resource[];
   namespaces: Resource[];
   services: Resource[];
   statefulSets: Resource[];
@@ -71,8 +78,13 @@ export type KubernetesPageModel = {
   jobs: Resource[];
   cronJobs: Resource[];
   ingresses: Resource[];
+  endpointSlices: Resource[];
+  networkPolicies: Resource[];
   persistentVolumes: Resource[];
   persistentVolumeClaims: Resource[];
+  storageClasses: Resource[];
+  configMaps: Resource[];
+  serviceAccounts: Resource[];
   events: Resource[];
   workloads: Resource[];
   storage: Resource[];
@@ -86,6 +98,7 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
   const nodes = k8sResources.filter(isKubernetesNodeRow);
   const pods = k8sResources.filter((resource) => resource.type === 'pod');
   const deployments = k8sResources.filter((resource) => resource.type === 'k8s-deployment');
+  const replicaSets = k8sResources.filter((resource) => resource.type === 'k8s-replicaset');
   const namespaces = k8sResources.filter((resource) => resource.type === 'k8s-namespace');
   const services = k8sResources.filter((resource) => resource.type === 'k8s-service');
   const statefulSets = k8sResources.filter((resource) => resource.type === 'k8s-statefulset');
@@ -93,17 +106,32 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
   const jobs = k8sResources.filter((resource) => resource.type === 'k8s-job');
   const cronJobs = k8sResources.filter((resource) => resource.type === 'k8s-cronjob');
   const ingresses = k8sResources.filter((resource) => resource.type === 'k8s-ingress');
+  const endpointSlices = k8sResources.filter((resource) => resource.type === 'k8s-endpoint-slice');
+  const networkPolicies = k8sResources.filter((resource) => resource.type === 'k8s-network-policy');
   const persistentVolumes = k8sResources.filter(
     (resource) => resource.type === 'k8s-persistent-volume',
   );
   const persistentVolumeClaims = k8sResources.filter(
     (resource) => resource.type === 'k8s-persistent-volume-claim',
   );
+  const storageClasses = k8sResources.filter((resource) => resource.type === 'k8s-storage-class');
+  const configMaps = k8sResources.filter((resource) => resource.type === 'k8s-configmap');
+  const serviceAccounts = k8sResources.filter(
+    (resource) => resource.type === 'k8s-serviceaccount',
+  );
   const events = k8sResources.filter((resource) => resource.type === 'k8s-event');
-  const workloads = [...deployments, ...statefulSets, ...daemonSets, ...jobs, ...cronJobs, ...pods];
-  const storage = [...persistentVolumes, ...persistentVolumeClaims];
-  const networking = [...services, ...ingresses];
-  const config = [...namespaces];
+  const workloads = [
+    ...deployments,
+    ...replicaSets,
+    ...statefulSets,
+    ...daemonSets,
+    ...jobs,
+    ...cronJobs,
+    ...pods,
+  ];
+  const storage = [...storageClasses, ...persistentVolumes, ...persistentVolumeClaims];
+  const networking = [...services, ...ingresses, ...endpointSlices, ...networkPolicies];
+  const config = [...namespaces, ...configMaps, ...serviceAccounts];
 
   return {
     resources: k8sResources,
@@ -111,6 +139,7 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
     nodes,
     pods,
     deployments,
+    replicaSets,
     namespaces,
     services,
     statefulSets,
@@ -118,8 +147,13 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
     jobs,
     cronJobs,
     ingresses,
+    endpointSlices,
+    networkPolicies,
     persistentVolumes,
     persistentVolumeClaims,
+    storageClasses,
+    configMaps,
+    serviceAccounts,
     events,
     workloads,
     storage,

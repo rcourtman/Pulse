@@ -231,10 +231,11 @@ reintroduce false Swarm capability surfaces.
    resource records (`docker-image`, `docker-volume`, `docker-network`,
    `docker-task`) rather than being inferred inside the container page.
    Kubernetes inventory likewise projects native API objects as first-class
-   unified resources: namespaces, Services, StatefulSets, DaemonSets, Jobs,
-   CronJobs, Ingresses, PersistentVolumes, PersistentVolumeClaims, and Events
-   must preserve their API identity and source metadata through clone, merge,
-   REST, websocket, and frontend decode paths.
+   unified resources: namespaces, Services, ReplicaSets, StatefulSets,
+   DaemonSets, Jobs, CronJobs, Ingresses, EndpointSlices, NetworkPolicies,
+   PersistentVolumes, PersistentVolumeClaims, StorageClasses, ConfigMaps,
+   ServiceAccounts, and Events must preserve their API identity and source
+   metadata through clone, merge, REST, websocket, and frontend decode paths.
 2. Add typed accessors and views in `internal/unifiedresources/views.go`
 3. Add source ingestion/adaptation in the adapter layer only
    Frontend resource platform contracts in
@@ -375,6 +376,7 @@ AI-only summary payloads, or page-local heuristics.
    `AgentData` or `ProxmoxData` must populate those top-level fields
    from the nested source values, and adapters for resource types that
    have no native uptime/temperature concept (e.g. `k8s-deployment`,
+   `k8s-replicaset`, `k8s-configmap`,
    `docker-service`, `k8s-cluster` aggregates) must leave them unset so
    bespoke platform-page tables can hide the column entirely.
    Kubernetes deployment metrics live on the canonical adapter through

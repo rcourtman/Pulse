@@ -17,5 +17,11 @@ describe('toReportingResourceType', () => {
     expect(toReportingResourceType('k8s-cluster')).toBe('k8s');
     expect(toReportingResourceType('k8s-node')).toBe('k8s');
     expect(toReportingResourceType('pod')).toBe('k8s');
+    expect(toReportingResourceType('k8s-replicaset')).toBe('k8s');
+    expect(toReportingResourceType('k8s-endpoint-slice')).toBe('k8s');
+    expect(toReportingResourceType('k8s-network-policy')).toBe('k8s');
+    expect(toReportingResourceType('k8s-storage-class')).toBe('k8s');
+    expect(toReportingResourceType('k8s-configmap')).toBe('k8s');
+    expect(toReportingResourceType('k8s-serviceaccount')).toBe('k8s');
   });
 });

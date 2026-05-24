@@ -12,6 +12,8 @@ func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
 
 	now := time.Now().UTC()
 	podStart := now.Add(-15 * time.Minute)
+	allowExpansion := true
+	automountToken := true
 	snapshot := models.StateSnapshot{
 		KubernetesClusters: []models.KubernetesCluster{
 			{
@@ -55,6 +57,9 @@ func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
 						AvailableReplicas: 2,
 					},
 				},
+				ReplicaSets: []models.KubernetesReplicaSet{{
+					UID: "replicaset-uid-1", Name: "api-6d4", Namespace: "default", DesiredReplicas: 3, ReadyReplicas: 2, OwnerKind: "Deployment", OwnerName: "api",
+				}},
 				Namespaces: []models.KubernetesNamespace{{UID: "namespace-uid-1", Name: "default", Phase: "Active"}},
 				Services: []models.KubernetesService{{
 					UID: "service-uid-1", Name: "api", Namespace: "default", ServiceType: "ClusterIP", ClusterIP: "10.96.0.10",
@@ -70,11 +75,26 @@ func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
 				Ingresses: []models.KubernetesIngress{{
 					UID: "ingress-uid-1", Name: "api", Namespace: "default", Hosts: []string{"api.example.test"},
 				}},
+				EndpointSlices: []models.KubernetesEndpointSlice{{
+					UID: "endpointslice-uid-1", Name: "api-abc", Namespace: "default", AddressType: "IPv4", ServiceName: "api", EndpointCount: 2, ReadyEndpointCount: 2,
+				}},
+				NetworkPolicies: []models.KubernetesNetworkPolicy{{
+					UID: "networkpolicy-uid-1", Name: "api-deny", Namespace: "default", PolicyTypes: []string{"Ingress"}, IngressRuleCount: 1,
+				}},
 				PersistentVolumes: []models.KubernetesPersistentVolume{{
 					UID: "pv-uid-1", Name: "pv-api", Phase: "Bound", ClaimNamespace: "default", ClaimName: "api-data",
 				}},
 				PersistentVolumeClaims: []models.KubernetesPersistentVolumeClaim{{
 					UID: "pvc-uid-1", Name: "api-data", Namespace: "default", Phase: "Bound", VolumeName: "pv-api",
+				}},
+				StorageClasses: []models.KubernetesStorageClass{{
+					UID: "storageclass-uid-1", Name: "fast", Provisioner: "csi.example.test", AllowVolumeExpansion: &allowExpansion,
+				}},
+				ConfigMaps: []models.KubernetesConfigMap{{
+					UID: "configmap-uid-1", Name: "api-config", Namespace: "default", DataKeys: []string{"app.yaml"},
+				}},
+				ServiceAccounts: []models.KubernetesServiceAccount{{
+					UID: "serviceaccount-uid-1", Name: "api", Namespace: "default", AutomountServiceAccountToken: &automountToken, SecretCount: 1,
 				}},
 				Events: []models.KubernetesEvent{{UID: "event-uid-1", Name: "api.1", Namespace: "default", EventType: "Warning", Reason: "BackOff", Count: 2}},
 			},
@@ -85,8 +105,8 @@ func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
 	registry.IngestSnapshot(snapshot)
 
 	resources := registry.List()
-	if len(resources) != 14 {
-		t.Fatalf("expected 14 kubernetes resources, got %d", len(resources))
+	if len(resources) != 20 {
+		t.Fatalf("expected 20 kubernetes resources, got %d", len(resources))
 	}
 
 	var clusterResource *Resource
@@ -112,13 +132,19 @@ func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
 	for _, resourceType := range []ResourceType{
 		ResourceTypeK8sNamespace,
 		ResourceTypeK8sService,
+		ResourceTypeK8sReplicaSet,
 		ResourceTypeK8sStatefulSet,
 		ResourceTypeK8sDaemonSet,
 		ResourceTypeK8sJob,
 		ResourceTypeK8sCronJob,
 		ResourceTypeK8sIngress,
+		ResourceTypeK8sEndpointSlice,
+		ResourceTypeK8sNetworkPolicy,
 		ResourceTypeK8sPV,
 		ResourceTypeK8sPVC,
+		ResourceTypeK8sStorageClass,
+		ResourceTypeK8sConfigMap,
+		ResourceTypeK8sServiceAccount,
 		ResourceTypeK8sEvent,
 	} {
 		if seenTypes[resourceType] != 1 {

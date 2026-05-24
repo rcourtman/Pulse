@@ -151,7 +151,9 @@ const KubernetesInventoryHeader: Component<{ variant: KubernetesInventoryVariant
       Namespace
     </TableHead>
     <Show when={props.variant === 'storage'}>
-      <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>Phase</TableHead>
+      <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
+        Phase / mode
+      </TableHead>
       <TableHead
         class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
       >
@@ -163,7 +165,7 @@ const KubernetesInventoryHeader: Component<{ variant: KubernetesInventoryVariant
       <TableHead
         class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[21%]`}
       >
-        Bound To
+        Detail
       </TableHead>
     </Show>
     <Show when={props.variant === 'services' || props.variant === 'networking'}>
@@ -193,11 +195,11 @@ const KubernetesInventoryHeader: Component<{ variant: KubernetesInventoryVariant
       </TableHead>
     </Show>
     <Show when={props.variant === 'config'}>
-      <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[14%]`}>Phase</TableHead>
+      <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[14%]`}>State</TableHead>
       <TableHead
         class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[31%]`}
       >
-        Cluster
+        Detail
       </TableHead>
     </Show>
     <Show when={props.variant === 'events'}>
@@ -231,15 +233,84 @@ const KubernetesInventoryRow: Component<{
     textValue(
       props.resource.kubernetes?.clusterIp ||
         props.resource.kubernetes?.addresses?.[0] ||
-        props.resource.kubernetes?.externalIps?.[0],
+        props.resource.kubernetes?.externalIps?.[0] ||
+        (typeof props.resource.kubernetes?.endpointCount === 'number'
+          ? `${props.resource.kubernetes.endpointCount} endpoints`
+          : undefined),
     );
   const ports = () =>
     joinValues(
-      props.resource.kubernetes?.servicePorts?.map((port) => {
-        const protocol = port.protocol ? `/${port.protocol.toLowerCase()}` : '';
-        const target = port.targetPort ? `:${port.targetPort}` : '';
-        return port.port ? `${port.port}${target}${protocol}` : undefined;
-      }) ?? props.resource.kubernetes?.hosts,
+      props.resource.kubernetes?.servicePorts?.length
+        ? props.resource.kubernetes.servicePorts.map((port) => {
+            const protocol = port.protocol ? `/${port.protocol.toLowerCase()}` : '';
+            const target = port.targetPort ? `:${port.targetPort}` : '';
+            return port.port ? `${port.port}${target}${protocol}` : undefined;
+          })
+        : props.resource.kubernetes?.endpointPorts?.length
+          ? props.resource.kubernetes.endpointPorts.map((port) => {
+              const protocol = port.protocol ? `/${port.protocol.toLowerCase()}` : '';
+              return port.port ? `${port.port}${protocol}` : undefined;
+            })
+          : props.resource.kubernetes?.hosts?.length
+            ? props.resource.kubernetes.hosts
+            : props.resource.kubernetes?.policyTypes?.length
+              ? props.resource.kubernetes.policyTypes
+              : [
+                  typeof props.resource.kubernetes?.ingressRuleCount === 'number'
+                    ? `${props.resource.kubernetes.ingressRuleCount} ingress`
+                    : undefined,
+                  typeof props.resource.kubernetes?.egressRuleCount === 'number'
+                    ? `${props.resource.kubernetes.egressRuleCount} egress`
+                    : undefined,
+                ],
+    );
+  const networkType = () =>
+    textValue(
+      props.resource.kubernetes?.serviceType ||
+        props.resource.kubernetes?.className ||
+        props.resource.kubernetes?.addressType ||
+        props.resource.kubernetes?.policyTypes?.join(', '),
+    );
+  const storagePhase = () =>
+    textValue(
+      props.resource.kubernetes?.phase ||
+        props.resource.kubernetes?.volumeBindingMode ||
+        props.resource.kubernetes?.reclaimPolicy,
+    );
+  const storageClass = () =>
+    textValue(props.resource.kubernetes?.storageClass || props.resource.name);
+  const storageDetail = () =>
+    textValue(
+      props.resource.kubernetes?.volumeName ||
+        [props.resource.kubernetes?.claimNamespace, props.resource.kubernetes?.claimName]
+          .filter(Boolean)
+          .join('/') ||
+        props.resource.kubernetes?.provisioner ||
+        props.resource.kubernetes?.parameterKeys?.join(', '),
+    );
+  const configState = () =>
+    textValue(
+      props.resource.kubernetes?.phase ||
+        (props.resource.type === 'k8s-configmap'
+          ? props.resource.kubernetes?.immutable
+            ? 'Immutable'
+            : 'Mutable'
+          : undefined) ||
+        (props.resource.type === 'k8s-serviceaccount'
+          ? props.resource.kubernetes?.automountServiceAccountToken === false
+            ? 'No auto token'
+            : 'Auto token'
+          : undefined),
+    );
+  const configDetail = () =>
+    textValue(
+      props.resource.kubernetes?.dataKeys?.join(', ') ||
+        props.resource.kubernetes?.binaryDataKeys?.join(', ') ||
+        props.resource.kubernetes?.imagePullSecrets?.join(', ') ||
+        (typeof props.resource.kubernetes?.secretCount === 'number'
+          ? `${props.resource.kubernetes.secretCount} secrets`
+          : undefined) ||
+        props.resource.kubernetes?.clusterName,
     );
   const desired = () =>
     props.resource.kubernetes?.desiredReplicas ??
@@ -281,12 +352,12 @@ const KubernetesInventoryRow: Component<{
       </TableCell>
       <Show when={props.variant === 'storage'}>
         <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          {textValue(props.resource.kubernetes?.phase)}
+          {storagePhase()}
         </TableCell>
         <TableCell
           class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
         >
-          {textValue(props.resource.kubernetes?.storageClass)}
+          {storageClass()}
         </TableCell>
         <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}>
           {byteValue(
@@ -296,19 +367,12 @@ const KubernetesInventoryRow: Component<{
         <TableCell
           class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
         >
-          {textValue(
-            props.resource.kubernetes?.volumeName ||
-              [props.resource.kubernetes?.claimNamespace, props.resource.kubernetes?.claimName]
-                .filter(Boolean)
-                .join('/'),
-          )}
+          {storageDetail()}
         </TableCell>
       </Show>
       <Show when={props.variant === 'services' || props.variant === 'networking'}>
         <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          {textValue(
-            props.resource.kubernetes?.serviceType || props.resource.kubernetes?.className,
-          )}
+          {networkType()}
         </TableCell>
         <TableCell
           class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
@@ -336,12 +400,12 @@ const KubernetesInventoryRow: Component<{
       </Show>
       <Show when={props.variant === 'config'}>
         <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          {textValue(props.resource.kubernetes?.phase)}
+          {configState()}
         </TableCell>
         <TableCell
           class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
         >
-          {textValue(props.resource.kubernetes?.clusterName)}
+          {configDetail()}
         </TableCell>
       </Show>
       <Show when={props.variant === 'events'}>

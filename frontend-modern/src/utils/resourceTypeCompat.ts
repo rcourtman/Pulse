@@ -20,6 +20,7 @@ export type CanonicalFrontendResourceType =
   | 'k8s-node'
   | 'k8s-cluster'
   | 'k8s-deployment'
+  | 'k8s-replicaset'
   | 'k8s-service'
   | 'k8s-namespace'
   | 'k8s-statefulset'
@@ -27,8 +28,13 @@ export type CanonicalFrontendResourceType =
   | 'k8s-job'
   | 'k8s-cronjob'
   | 'k8s-ingress'
+  | 'k8s-endpoint-slice'
+  | 'k8s-network-policy'
   | 'k8s-persistent-volume'
   | 'k8s-persistent-volume-claim'
+  | 'k8s-storage-class'
+  | 'k8s-configmap'
+  | 'k8s-serviceaccount'
   | 'k8s-event'
   | 'network-endpoint';
 
@@ -92,6 +98,7 @@ export const canonicalizeFrontendResourceType = (
     case 'k8s-node':
     case 'k8s-cluster':
     case 'k8s-deployment':
+    case 'k8s-replicaset':
     case 'k8s-service':
     case 'k8s-namespace':
     case 'k8s-statefulset':
@@ -99,8 +106,13 @@ export const canonicalizeFrontendResourceType = (
     case 'k8s-job':
     case 'k8s-cronjob':
     case 'k8s-ingress':
+    case 'k8s-endpoint-slice':
+    case 'k8s-network-policy':
     case 'k8s-persistent-volume':
     case 'k8s-persistent-volume-claim':
+    case 'k8s-storage-class':
+    case 'k8s-configmap':
+    case 'k8s-serviceaccount':
     case 'k8s-event':
     case 'network-endpoint':
       return normalized;

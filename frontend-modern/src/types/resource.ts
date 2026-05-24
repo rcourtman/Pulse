@@ -43,6 +43,7 @@ export type ResourceType =
   | 'docker-network' // Docker/Podman network
   | 'docker-task' // Docker Swarm task
   | 'k8s-deployment' // Kubernetes deployment
+  | 'k8s-replicaset' // Kubernetes replica set
   | 'k8s-service' // Kubernetes service
   | 'k8s-namespace' // Kubernetes namespace
   | 'k8s-statefulset' // Kubernetes stateful set
@@ -50,8 +51,13 @@ export type ResourceType =
   | 'k8s-job' // Kubernetes job
   | 'k8s-cronjob' // Kubernetes cron job
   | 'k8s-ingress' // Kubernetes ingress
+  | 'k8s-endpoint-slice' // Kubernetes endpoint slice
+  | 'k8s-network-policy' // Kubernetes network policy
   | 'k8s-persistent-volume' // Kubernetes persistent volume
   | 'k8s-persistent-volume-claim' // Kubernetes persistent volume claim
+  | 'k8s-storage-class' // Kubernetes storage class
+  | 'k8s-configmap' // Kubernetes config map
+  | 'k8s-serviceaccount' // Kubernetes service account
   | 'k8s-event' // Kubernetes event
   | 'storage' // Storage resource
   | 'network' // Virtual/network topology resource
@@ -840,14 +846,20 @@ export interface ResourceKubernetesMeta {
   // the generic infrastructure table are not the meaningful operator
   // columns; replica counts are.
   deploymentUid?: string;
+  replicaSetUid?: string;
   statefulSetUid?: string;
   daemonSetUid?: string;
   serviceUid?: string;
   jobUid?: string;
   cronJobUid?: string;
   ingressUid?: string;
+  endpointSliceUid?: string;
+  networkPolicyUid?: string;
   persistentVolumeUid?: string;
   persistentVolumeClaimUid?: string;
+  storageClassUid?: string;
+  configMapUid?: string;
+  serviceAccountUid?: string;
   eventUid?: string;
   namespaceUid?: string;
   desiredReplicas?: number;
@@ -855,6 +867,8 @@ export interface ResourceKubernetesMeta {
   readyReplicas?: number;
   availableReplicas?: number;
   currentReplicas?: number;
+  fullyLabeledReplicas?: number;
+  observedGeneration?: number;
   desiredNumberScheduled?: number;
   currentNumberScheduled?: number;
   numberReady?: number;
@@ -885,8 +899,30 @@ export interface ResourceKubernetesMeta {
   className?: string;
   hosts?: string[];
   addresses?: string[];
+  addressType?: string;
+  endpointCount?: number;
+  readyEndpointCount?: number;
+  endpointPorts?: Array<{
+    name?: string;
+    protocol?: string;
+    port?: number;
+    appProtocol?: string;
+  }>;
+  policyTypes?: string[];
+  ingressRuleCount?: number;
+  egressRuleCount?: number;
   phase?: string;
   storageClass?: string;
+  provisioner?: string;
+  volumeBindingMode?: string;
+  allowVolumeExpansion?: boolean;
+  parameterKeys?: string[];
+  dataKeys?: string[];
+  binaryDataKeys?: string[];
+  immutable?: boolean;
+  automountServiceAccountToken?: boolean;
+  secretCount?: number;
+  imagePullSecrets?: string[];
   capacityBytes?: number;
   requestedBytes?: number;
   accessModes?: string[];
