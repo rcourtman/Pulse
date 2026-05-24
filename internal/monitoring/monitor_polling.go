@@ -1978,19 +1978,35 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 	var cephDF *proxmox.CephDF
 	cephFetchAttempted := false
 	cephFetchFailed := false
+	var cephPoolCheckTargets []models.Storage
+	var cephPoolSyncTargets []models.Storage
+	var cephClusterForState *models.CephCluster
 	if (instanceCfg == nil || !instanceCfg.DisableCeph) && cephDetected {
 		cephFetchAttempted = true
 		var err error
 		cephStatus, cephDF, err = fetchCephClusterData(ctx, instanceName, client)
 		if err != nil {
 			cephFetchFailed = true
+			cephPoolSyncTargets = cephPoolAlertStorageTargetsForInstance(m.state.GetSnapshot(), instanceName)
 		} else if cephStatus != nil {
 			hydrateCephStorageUsageFromDF(allStorage, cephDF)
+			cluster := buildCephClusterModel(instanceName, cephStatus, cephDF)
+			if cluster.ID == "" {
+				cluster.ID = instanceName
+			}
+			cephClusterForState = &cluster
+			cephPoolCheckTargets = cephPoolAlertStorageTargets(cluster)
+			cephPoolSyncTargets = cephPoolCheckTargets
 		}
 	}
 
+	storageCheckTargets := append([]models.Storage{}, allStorage...)
+	storageCheckTargets = append(storageCheckTargets, cephPoolCheckTargets...)
+	storageSyncTargets := append([]models.Storage{}, allStorage...)
+	storageSyncTargets = append(storageSyncTargets, cephPoolSyncTargets...)
+
 	// Record metrics and check alerts for all storage devices
-	for _, storage := range allStorage {
+	for _, storage := range storageCheckTargets {
 		if m.metricsHistory != nil {
 			timestamp := time.Now()
 			m.metricsHistory.AddStorageMetric(storage.ID, "usage", storage.Usage, timestamp)
@@ -2012,7 +2028,10 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 		}
 	}
 	if m.alertManager != nil {
-		m.alertManager.SyncStorageAlertsForInstance(storageInstanceName, allStorage)
+		m.alertManager.SyncStorageAlertsForInstance(storageInstanceName, storageSyncTargets)
+		if instanceName != storageInstanceName {
+			m.alertManager.SyncStorageAlertsForInstance(instanceName, storageSyncTargets)
+		}
 	}
 
 	// Update state with all storage
@@ -2027,6 +2046,8 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 			// Preserve previous Ceph state when the refresh fails.
 		case cephFetchAttempted && cephStatus == nil:
 			m.state.UpdateCephClustersForInstance(instanceName, []models.CephCluster{})
+		case cephClusterForState != nil:
+			m.state.UpdateCephClustersForInstance(instanceName, []models.CephCluster{*cephClusterForState})
 		default:
 			cluster := buildCephClusterModel(instanceName, cephStatus, cephDF)
 			if cluster.ID == "" {

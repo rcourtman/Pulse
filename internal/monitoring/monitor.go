@@ -12175,6 +12175,15 @@ func (m *Monitor) checkMockAlerts() {
 			Msg("Checking storage for alerts")
 		m.alertManager.CheckStorage(storage)
 	}
+	for _, cluster := range state.CephClusters {
+		for _, storage := range cephPoolAlertStorageTargets(cluster) {
+			log.Debug().
+				Str("name", storage.Name).
+				Float64("usage", storage.Usage).
+				Msg("Checking Ceph pool storage for alerts")
+			m.alertManager.CheckStorage(storage)
+		}
+	}
 
 	// Check alerts for PBS instances
 	log.Info().Int("pbsCount", len(state.PBSInstances)).Msg("Checking PBS alerts")

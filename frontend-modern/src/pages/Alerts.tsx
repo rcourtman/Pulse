@@ -26,6 +26,7 @@ import type { Alert, Incident, IncidentEvent, State, VM, Container, DockerHost, 
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { logger } from '@/utils/logger';
+import { buildThresholdStorageResources } from '@/utils/cephThresholdStorage';
 import LayoutDashboard from 'lucide-solid/icons/layout-dashboard';
 import History from 'lucide-solid/icons/history';
 import Gauge from 'lucide-solid/icons/gauge';
@@ -716,12 +717,15 @@ export function Alerts() {
   const [rawOverridesConfig, setRawOverridesConfig] = createSignal<
     Record<string, RawOverrideConfig>
   >({}); // Store raw config
+  const thresholdStorageResources = createMemo(() =>
+    buildThresholdStorageResources(state.storage || [], state.cephClusters || []),
+  );
 
   createEffect(() => {
     const currentRawOverrides = rawOverridesConfig();
     const normalized = normalizeRawOverrideConfigKeys(
       currentRawOverrides,
-      state.storage || [],
+      thresholdStorageResources(),
       [...(state.vms || []), ...(state.containers || [])],
     );
     if (JSON.stringify(normalized) !== JSON.stringify(currentRawOverrides)) {
@@ -976,7 +980,7 @@ export function Alerts() {
             });
           } else {
             // Check if it's a storage device
-            const storage = (state.storage || []).find((s) => s.id === key);
+            const storage = thresholdStorageResources().find((s) => s.id === key);
             if (storage) {
               overridesList.push({
                 id: key,
@@ -1341,7 +1345,7 @@ export function Alerts() {
       setRawOverridesConfig(
         normalizeRawOverrideConfigKeys(
           config.overrides || {},
-          state.storage || [],
+          thresholdStorageResources(),
           [...(state.vms || []), ...(state.containers || [])],
         ),
       );
@@ -3115,6 +3119,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       nodes={props.state.nodes || []}
       hosts={props.hosts}
       storage={props.state.storage || []}
+      cephClusters={props.state.cephClusters || []}
       dockerHosts={props.state.dockerHosts || []}
       pbsInstances={props.state.pbs || []}
       pmgInstances={props.state.pmg || []}
@@ -4742,7 +4747,10 @@ function HistoryTab(props: {
     if (node) return 'Node';
 
     // Check storage
-    const storage = state.storage?.find((s) => s.name === resourceName || s.id === resourceName);
+    const storage = buildThresholdStorageResources(
+      state.storage || [],
+      state.cephClusters || [],
+    ).find((s) => s.name === resourceName || s.id === resourceName);
     if (storage) return 'Storage';
 
     // Docker hosts

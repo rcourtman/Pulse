@@ -118,6 +118,113 @@ func hydrateCephStorageUsageFromDF(storage []models.Storage, df *proxmox.CephDF)
 	return updated
 }
 
+func sanitizeCephPoolStorageComponent(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+
+	var builder strings.Builder
+	lastDash := false
+	for _, r := range value {
+		allowed := (r >= 'a' && r <= 'z') ||
+			(r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') ||
+			r == '_' ||
+			r == '.' ||
+			r == ':' ||
+			r == '-'
+		if allowed {
+			builder.WriteRune(r)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			builder.WriteByte('-')
+			lastDash = true
+		}
+	}
+
+	result := builder.String()
+	for strings.Contains(result, "--") {
+		result = strings.ReplaceAll(result, "--", "-")
+	}
+	return strings.Trim(result, "-")
+}
+
+func cephPoolStorageID(instanceName string, pool models.CephPool) string {
+	instance := sanitizeCephPoolStorageComponent(instanceName)
+	if instance == "" {
+		instance = "ceph"
+	}
+
+	poolName := sanitizeCephPoolStorageComponent(pool.Name)
+	if poolName == "" {
+		poolName = fmt.Sprintf("pool-%d", pool.ID)
+	}
+
+	return fmt.Sprintf("%s-ceph-pool-%s", instance, poolName)
+}
+
+func cephPoolAlertStorageTargets(cluster models.CephCluster) []models.Storage {
+	if len(cluster.Pools) == 0 {
+		return nil
+	}
+
+	instanceName := strings.TrimSpace(cluster.Instance)
+	if instanceName == "" {
+		instanceName = cluster.ID
+	}
+
+	targets := make([]models.Storage, 0, len(cluster.Pools))
+	for _, pool := range cluster.Pools {
+		name := strings.TrimSpace(pool.Name)
+		if name == "" {
+			name = fmt.Sprintf("pool-%d", pool.ID)
+		}
+
+		used := pool.StoredBytes
+		free := pool.AvailableBytes
+		total := used + free
+		usage := pool.PercentUsed
+		if usage <= 0 && total > 0 {
+			usage = safePercentage(float64(used), float64(total))
+		}
+
+		targets = append(targets, models.Storage{
+			ID:       cephPoolStorageID(instanceName, pool),
+			Name:     name,
+			Node:     "cluster",
+			Instance: instanceName,
+			Type:     "ceph-pool",
+			Status:   "available",
+			Pool:     name,
+			Total:    total,
+			Used:     used,
+			Free:     free,
+			Usage:    usage,
+			Content:  "ceph",
+			Shared:   true,
+			Enabled:  true,
+			Active:   true,
+		})
+	}
+
+	return targets
+}
+
+func cephPoolAlertStorageTargetsForInstance(state models.StateSnapshot, instanceName string) []models.Storage {
+	instanceName = strings.TrimSpace(instanceName)
+	targets := make([]models.Storage, 0)
+	for _, cluster := range state.CephClusters {
+		if instanceName != "" && strings.TrimSpace(cluster.Instance) != instanceName {
+			continue
+		}
+		targets = append(targets, cephPoolAlertStorageTargets(cluster)...)
+	}
+	return targets
+}
+
 // pollCephCluster gathers Ceph cluster information when Ceph-backed storage is detected.
 func (m *Monitor) pollCephCluster(ctx context.Context, instanceName string, client PVEClientInterface, cephDetected bool) {
 	if !cephDetected {

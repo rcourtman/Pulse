@@ -24,6 +24,7 @@ import type {
   Host,
   Alert,
   Storage,
+  CephCluster,
   PBSInstance,
   PMGInstance,
   DockerHost,
@@ -43,6 +44,7 @@ import { ResourceTable, Resource, GroupHeaderMeta } from './ResourceTable';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { logger } from '@/utils/logger';
 import { formatTemperature } from '@/utils/temperature';
+import { buildThresholdStorageResources } from '@/utils/cephThresholdStorage';
 type OverrideType =
   | 'guest'
   | 'node'
@@ -167,6 +169,7 @@ interface ThresholdsTableProps {
   nodes: Node[];
   hosts: Host[];
   storage: Storage[];
+  cephClusters?: CephCluster[];
   dockerHosts: DockerHost[];
   pbsInstances?: PBSInstance[]; // PBS instances from state
   pmgInstances?: PMGInstance[]; // PMG instances from state
@@ -1715,8 +1718,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
     const search = searchTerm().toLowerCase();
     const overridesMap = new Map((props.overrides() ?? []).map((o) => [o.id, o]));
+    const storageResources = buildThresholdStorageResources(
+      props.storage ?? [],
+      props.cephClusters ?? [],
+    );
 
-    const storageDevices = (props.storage ?? []).map((storage) => {
+    const storageDevices = storageResources.map((storage) => {
       const override = overridesMap.get(storage.id);
 
       // Storage only has usage threshold
@@ -1801,7 +1808,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         {
           key: 'storage' as const,
           label: 'Storage',
-          total: props.storage?.length ?? 0,
+          total: storageWithOverrides().length,
           overrides: countOverrides(storageWithOverrides()),
           tab: 'proxmox' as const,
         },
@@ -3253,7 +3260,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
             <CollapsibleSection
               id="storage"
               title="Storage Devices"
-              resourceCount={props.storage.length}
+              resourceCount={storageWithOverrides().length}
               collapsed={isCollapsed('storage')}
               onToggle={() => toggleSection('storage')}
               icon={<HardDrive class="w-5 h-5" />}

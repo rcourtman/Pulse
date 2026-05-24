@@ -100,6 +100,7 @@ const baseProps = () => ({
   nodes: [],
   hosts: [],
   storage: [],
+  cephClusters: [],
   dockerHosts: [],
   pbsInstances: [],
   pmgInstances: [],
@@ -300,6 +301,50 @@ describe('ThresholdsTable Resource Rendering', () => {
 
     expect(screen.getByTestId('section-VMs & Containers')).toBeInTheDocument();
     expect(screen.getByTestId('resource-name-guest1')).toHaveTextContent('vm1');
+  });
+
+  it('renders Ceph pools as storage threshold resources', async () => {
+    setPathname('/alerts/thresholds/proxmox');
+
+    render(() => <ThresholdsTable
+      {...(baseProps() as any)}
+      cephClusters={[
+        {
+          id: 'ceph-fsid',
+          instance: 'inst1',
+          name: 'Ceph',
+          health: 'HEALTH_OK',
+          totalBytes: 1000,
+          usedBytes: 910,
+          availableBytes: 90,
+          usagePercent: 91,
+          numMons: 3,
+          numMgrs: 1,
+          numOsds: 3,
+          numOsdsUp: 3,
+          numOsdsIn: 3,
+          numPGs: 64,
+          lastUpdated: 1,
+          pools: [
+            {
+              id: 2,
+              name: 'data_replication',
+              storedBytes: 910,
+              availableBytes: 90,
+              objects: 42,
+              percentUsed: 91,
+            },
+          ],
+        },
+      ]}
+    />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('section-Storage Devices')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('resource-row-inst1-ceph-pool-data_replication')).toBeInTheDocument();
+    expect(screen.getByTestId('resource-name-inst1-ceph-pool-data_replication')).toHaveTextContent('data_replication');
   });
 
 });

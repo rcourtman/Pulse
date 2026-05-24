@@ -541,6 +541,103 @@ func TestPollStorageWithNodesOptimizedHydratesSharedCephStorageFromDF(t *testing
 	}
 }
 
+func TestPollStorageWithNodesOptimizedChecksCephPoolAlerts(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	monitor := &Monitor{
+		state:          &models.State{},
+		metricsHistory: NewMetricsHistory(16, time.Hour),
+		alertManager:   alerts.NewManager(),
+	}
+	t.Cleanup(func() {
+		monitor.alertManager.Stop()
+	})
+
+	cfg := monitor.alertManager.GetConfig()
+	cfg.MinimumDelta = 0
+	if cfg.TimeThresholds == nil {
+		cfg.TimeThresholds = make(map[string]int)
+	}
+	cfg.TimeThresholds["storage"] = 0
+	cfg.StorageDefault = alerts.HysteresisThreshold{Trigger: 80, Clear: 70}
+	monitor.alertManager.UpdateConfig(cfg)
+
+	cephStorage := proxmox.Storage{
+		Storage: "ceph-shared",
+		Type:    "rbd",
+		Content: "images,rootdir",
+		Nodes:   "pve1,pve2",
+		Pool:    "ceph-pool",
+	}
+
+	client := &fakeStorageClient{
+		allStorage: []proxmox.Storage{cephStorage},
+		storageByNode: map[string][]proxmox.Storage{
+			"pve1": {},
+			"pve2": {},
+		},
+		cephStatus: &proxmox.CephStatus{
+			FSID: "ceph-fsid",
+			PGMap: proxmox.CephPGMap{
+				BytesTotal: 5000,
+				BytesUsed:  4500,
+				BytesAvail: 500,
+			},
+		},
+		cephDF: &proxmox.CephDF{
+			Data: proxmox.CephDFData{
+				Pools: []proxmox.CephDFPool{
+					{
+						ID:   2,
+						Name: "data_replication",
+						Stats: proxmox.CephDFPoolStat{
+							BytesUsed:   910,
+							MaxAvail:    90,
+							PercentUsed: 91,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	nodes := []proxmox.Node{
+		{Node: "pve1", Status: "online"},
+		{Node: "pve2", Status: "online"},
+	}
+
+	monitor.pollStorageWithNodes(context.Background(), "inst1", client, nodes)
+
+	for _, storage := range monitor.state.Storage {
+		if storage.ID == "inst1-ceph-pool-data_replication" {
+			t.Fatal("Ceph pool alert target should not be inserted into the main storage inventory")
+		}
+	}
+
+	metrics := monitor.metricsHistory.GetAllStorageMetrics("inst1-ceph-pool-data_replication", time.Minute)
+	if len(metrics["usage"]) != 1 {
+		t.Fatalf("expected one Ceph pool usage metric entry, got %d", len(metrics["usage"]))
+	}
+	if diff := math.Abs(metrics["usage"][0].Value - 91); diff > 0.001 {
+		t.Fatalf("expected Ceph pool usage metric 91, diff %.4f", diff)
+	}
+
+	alerts := monitor.alertManager.GetActiveAlerts()
+	found := false
+	for _, alert := range alerts {
+		if alert.ID == "inst1-ceph-pool-data_replication-usage" {
+			found = true
+			if alert.ResourceName != "data_replication" {
+				t.Fatalf("Ceph pool alert resource name = %q, want data_replication", alert.ResourceName)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatal("expected Ceph pool usage alert to be active")
+	}
+}
+
 func TestPollStorageWithNodesOptimizedClearsStaleStorageAlertsWhenIdentityChanges(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 
