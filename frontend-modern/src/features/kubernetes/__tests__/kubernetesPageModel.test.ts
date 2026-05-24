@@ -3,8 +3,21 @@ import type { Resource } from '@/types/resource';
 import {
   KUBERNETES_TAB_SPECS,
   buildKubernetesPageModel,
+  compareKubernetesControllers,
+  compareKubernetesDeployments,
   compareKubernetesEvents,
+  compareKubernetesNodes,
+  compareKubernetesPods,
+  mapKubernetesControllerStatus,
+  mapKubernetesCronJobStatus,
+  mapKubernetesDaemonSetStatus,
+  mapKubernetesDeploymentStatus,
   mapKubernetesEventSeverity,
+  mapKubernetesJobStatus,
+  mapKubernetesNodeStatus,
+  mapKubernetesPodStatus,
+  mapKubernetesReplicaSetStatus,
+  mapKubernetesStatefulSetStatus,
   resolveKubernetesPageTabId,
 } from '../kubernetesPageModel';
 
@@ -183,5 +196,388 @@ describe('kubernetesPageModel', () => {
         (event) => event.id,
       ),
     ).toEqual(['newest-created', 'newer-first-seen', 'older']);
+  });
+
+  describe('mapKubernetesPodStatus', () => {
+    it('escalates CrashLoopBackOff to danger regardless of phase', () => {
+      const indicator = mapKubernetesPodStatus(
+        makeResource({
+          id: 'crash',
+          type: 'pod',
+          kubernetes: {
+            podPhase: 'Running',
+            podContainers: [
+              { name: 'app', ready: false, state: 'waiting', reason: 'CrashLoopBackOff' },
+            ],
+          },
+        }),
+      );
+      expect(indicator.variant).toBe('danger');
+      expect(indicator.label).toBe('CrashLoopBackOff');
+    });
+
+    it('flags ImagePullBackOff and OOMKilled as danger', () => {
+      expect(
+        mapKubernetesPodStatus(
+          makeResource({
+            id: 'pull',
+            type: 'pod',
+            kubernetes: {
+              podPhase: 'Pending',
+              podContainers: [{ ready: false, state: 'waiting', reason: 'ImagePullBackOff' }],
+            },
+          }),
+        ).variant,
+      ).toBe('danger');
+      expect(
+        mapKubernetesPodStatus(
+          makeResource({
+            id: 'oom',
+            type: 'pod',
+            kubernetes: {
+              podPhase: 'Running',
+              podContainers: [{ ready: false, state: 'terminated', reason: 'OOMKilled' }],
+            },
+          }),
+        ).variant,
+      ).toBe('danger');
+    });
+
+    it('warns on Running pods whose containers are not all ready', () => {
+      expect(
+        mapKubernetesPodStatus(
+          makeResource({
+            id: 'not-ready',
+            type: 'pod',
+            kubernetes: {
+              podPhase: 'Running',
+              podContainers: [
+                { ready: true, state: 'running' },
+                { ready: false, state: 'running' },
+              ],
+            },
+          }),
+        ),
+      ).toEqual({ variant: 'warning', label: 'Not ready' });
+    });
+
+    it('returns success when phase is Running and all containers ready', () => {
+      expect(
+        mapKubernetesPodStatus(
+          makeResource({
+            id: 'happy',
+            type: 'pod',
+            kubernetes: {
+              podPhase: 'Running',
+              podContainers: [{ ready: true, state: 'running' }],
+            },
+          }),
+        ),
+      ).toEqual({ variant: 'success', label: 'Running' });
+    });
+
+    it('treats Pending and Failed phases distinctly', () => {
+      expect(
+        mapKubernetesPodStatus(
+          makeResource({
+            id: 'pending',
+            type: 'pod',
+            kubernetes: { podPhase: 'Pending', podContainers: [] },
+          }),
+        ),
+      ).toEqual({ variant: 'warning', label: 'Pending' });
+      expect(
+        mapKubernetesPodStatus(
+          makeResource({
+            id: 'failed',
+            type: 'pod',
+            kubernetes: { podPhase: 'Failed', podContainers: [] },
+          }),
+        ),
+      ).toEqual({ variant: 'danger', label: 'Failed' });
+    });
+  });
+
+  describe('mapKubernetesNodeStatus', () => {
+    it('returns danger when ready is false even if status reports online', () => {
+      expect(
+        mapKubernetesNodeStatus(
+          makeResource({
+            id: 'not-ready',
+            type: 'k8s-node',
+            status: 'online',
+            kubernetes: { ready: false },
+          }),
+        ),
+      ).toEqual({ variant: 'danger', label: 'NotReady' });
+    });
+
+    it('returns success when ready is true', () => {
+      expect(
+        mapKubernetesNodeStatus(
+          makeResource({
+            id: 'ready',
+            type: 'k8s-node',
+            status: 'online',
+            kubernetes: { ready: true },
+          }),
+        ),
+      ).toEqual({ variant: 'success', label: 'Ready' });
+    });
+
+    it('falls back to resource.status when ready is undefined', () => {
+      expect(
+        mapKubernetesNodeStatus(makeResource({ id: 'fallback-ok', type: 'k8s-node', status: 'online' })),
+      ).toEqual({ variant: 'success', label: 'Ready' });
+      expect(
+        mapKubernetesNodeStatus(
+          makeResource({ id: 'fallback-off', type: 'k8s-node', status: 'offline' }),
+        ),
+      ).toEqual({ variant: 'danger', label: 'NotReady' });
+    });
+  });
+
+  describe('controller status mappers', () => {
+    it('classifies Deployments by ready vs desired replicas', () => {
+      const fullyReady = makeResource({
+        id: 'dep-ok',
+        type: 'k8s-deployment',
+        kubernetes: { desiredReplicas: 3, readyReplicas: 3 },
+      });
+      const partiallyReady = makeResource({
+        id: 'dep-partial',
+        type: 'k8s-deployment',
+        kubernetes: { desiredReplicas: 3, readyReplicas: 1 },
+      });
+      const zeroReady = makeResource({
+        id: 'dep-zero',
+        type: 'k8s-deployment',
+        kubernetes: { desiredReplicas: 3, readyReplicas: 0 },
+      });
+      const scaledToZero = makeResource({
+        id: 'dep-scaled-zero',
+        type: 'k8s-deployment',
+        kubernetes: { desiredReplicas: 0, readyReplicas: 0 },
+      });
+
+      expect(mapKubernetesDeploymentStatus(fullyReady).variant).toBe('success');
+      expect(mapKubernetesDeploymentStatus(partiallyReady).variant).toBe('warning');
+      expect(mapKubernetesDeploymentStatus(zeroReady).variant).toBe('danger');
+      expect(mapKubernetesDeploymentStatus(scaledToZero).variant).toBe('muted');
+    });
+
+    it('shares the replica indicator across ReplicaSet and StatefulSet', () => {
+      const partial = {
+        kubernetes: { desiredReplicas: 5, readyReplicas: 2 },
+      } as const;
+      expect(
+        mapKubernetesReplicaSetStatus(makeResource({ id: 'rs', type: 'k8s-replicaset', ...partial }))
+          .variant,
+      ).toBe('warning');
+      expect(
+        mapKubernetesStatefulSetStatus(
+          makeResource({ id: 'sts', type: 'k8s-statefulset', ...partial }),
+        ).variant,
+      ).toBe('warning');
+    });
+
+    it('flags misscheduled DaemonSet pods even when scheduling is otherwise complete', () => {
+      const indicator = mapKubernetesDaemonSetStatus(
+        makeResource({
+          id: 'ds',
+          type: 'k8s-daemonset',
+          kubernetes: {
+            desiredNumberScheduled: 3,
+            numberReady: 3,
+            numberMisscheduled: 1,
+          },
+        }),
+      );
+      expect(indicator).toEqual({ variant: 'warning', label: '1 misscheduled' });
+    });
+
+    it('classifies Jobs by failed/active/succeeded counts', () => {
+      expect(
+        mapKubernetesJobStatus(
+          makeResource({ id: 'j-fail', type: 'k8s-job', kubernetes: { failed: 2 } }),
+        ).variant,
+      ).toBe('danger');
+      expect(
+        mapKubernetesJobStatus(
+          makeResource({ id: 'j-active', type: 'k8s-job', kubernetes: { active: 1 } }),
+        ).variant,
+      ).toBe('warning');
+      expect(
+        mapKubernetesJobStatus(
+          makeResource({ id: 'j-done', type: 'k8s-job', kubernetes: { succeeded: 1 } }),
+        ).variant,
+      ).toBe('success');
+    });
+
+    it('treats suspended CronJobs as muted', () => {
+      expect(
+        mapKubernetesCronJobStatus(
+          makeResource({ id: 'cj', type: 'k8s-cronjob', kubernetes: { suspend: true } }),
+        ),
+      ).toEqual({ variant: 'muted', label: 'Suspended' });
+      expect(
+        mapKubernetesCronJobStatus(
+          makeResource({ id: 'cj-on', type: 'k8s-cronjob', kubernetes: { suspend: false } }),
+        ),
+      ).toEqual({ variant: 'success', label: 'Scheduled' });
+    });
+
+    it('routes controllers to the correct mapper by resource type', () => {
+      expect(
+        mapKubernetesControllerStatus(
+          makeResource({
+            id: 'rs-routed',
+            type: 'k8s-replicaset',
+            kubernetes: { desiredReplicas: 2, readyReplicas: 0 },
+          }),
+        ).variant,
+      ).toBe('danger');
+      expect(
+        mapKubernetesControllerStatus(
+          makeResource({ id: 'cj-routed', type: 'k8s-cronjob', kubernetes: { suspend: true } }),
+        ).variant,
+      ).toBe('muted');
+    });
+  });
+
+  describe('rank comparators float attention rows above healthy rows', () => {
+    it('orders pods danger → warning → success', () => {
+      const happy = makeResource({
+        id: 'happy',
+        type: 'pod',
+        kubernetes: {
+          podPhase: 'Running',
+          podContainers: [{ ready: true, state: 'running' }],
+        },
+      });
+      const pending = makeResource({
+        id: 'pending',
+        type: 'pod',
+        kubernetes: { podPhase: 'Pending', podContainers: [] },
+      });
+      const crashing = makeResource({
+        id: 'crashing',
+        type: 'pod',
+        kubernetes: {
+          podPhase: 'Running',
+          podContainers: [{ ready: false, state: 'waiting', reason: 'CrashLoopBackOff' }],
+        },
+      });
+
+      expect([happy, pending, crashing].sort(compareKubernetesPods).map((r) => r.id)).toEqual([
+        'crashing',
+        'pending',
+        'happy',
+      ]);
+    });
+
+    it('floats NotReady nodes above Ready nodes', () => {
+      const ready = makeResource({
+        id: 'node-ready',
+        type: 'k8s-node',
+        kubernetes: { ready: true },
+      });
+      const notReady = makeResource({
+        id: 'node-not-ready',
+        type: 'k8s-node',
+        kubernetes: { ready: false },
+      });
+      expect([ready, notReady].sort(compareKubernetesNodes).map((r) => r.id)).toEqual([
+        'node-not-ready',
+        'node-ready',
+      ]);
+    });
+
+    it('orders Deployments by replica health', () => {
+      const happy = makeResource({
+        id: 'dep-happy',
+        type: 'k8s-deployment',
+        kubernetes: { desiredReplicas: 2, readyReplicas: 2 },
+      });
+      const partial = makeResource({
+        id: 'dep-partial',
+        type: 'k8s-deployment',
+        kubernetes: { desiredReplicas: 2, readyReplicas: 1 },
+      });
+      const broken = makeResource({
+        id: 'dep-broken',
+        type: 'k8s-deployment',
+        kubernetes: { desiredReplicas: 2, readyReplicas: 0 },
+      });
+      expect(
+        [happy, partial, broken].sort(compareKubernetesDeployments).map((r) => r.id),
+      ).toEqual(['dep-broken', 'dep-partial', 'dep-happy']);
+    });
+
+    it('mixes controller kinds in a single attention-first order', () => {
+      const cronOk = makeResource({
+        id: 'cron-ok',
+        type: 'k8s-cronjob',
+        kubernetes: { suspend: false },
+      });
+      const jobFailed = makeResource({
+        id: 'job-fail',
+        type: 'k8s-job',
+        kubernetes: { failed: 1 },
+      });
+      const dsMisscheduled = makeResource({
+        id: 'ds-mis',
+        type: 'k8s-daemonset',
+        kubernetes: { desiredNumberScheduled: 2, numberReady: 2, numberMisscheduled: 1 },
+      });
+      const rsHappy = makeResource({
+        id: 'rs-ok',
+        type: 'k8s-replicaset',
+        kubernetes: { desiredReplicas: 1, readyReplicas: 1 },
+      });
+      // `muted` (suspended CronJob, scaled-to-zero Deployment, etc.) sits between
+      // `warning` and `success` so deliberate-non-running rows float above
+      // fully-healthy rows — matches the rank ordering vSphere already uses for
+      // its VM status table.
+      expect(
+        [cronOk, jobFailed, dsMisscheduled, rsHappy].sort(compareKubernetesControllers).map(
+          (r) => r.id,
+        ),
+      ).toEqual(['job-fail', 'ds-mis', 'cron-ok', 'rs-ok']);
+    });
+
+    it('emits pre-sorted buckets from buildKubernetesPageModel', () => {
+      const crashing = makeResource({
+        id: 'pod-crash',
+        type: 'pod',
+        kubernetes: {
+          podPhase: 'Running',
+          podContainers: [{ ready: false, state: 'waiting', reason: 'CrashLoopBackOff' }],
+        },
+      });
+      const happy = makeResource({
+        id: 'pod-happy',
+        type: 'pod',
+        kubernetes: {
+          podPhase: 'Running',
+          podContainers: [{ ready: true, state: 'running' }],
+        },
+      });
+      const partial = makeResource({
+        id: 'dep-partial',
+        type: 'k8s-deployment',
+        kubernetes: { desiredReplicas: 3, readyReplicas: 1 },
+      });
+      const broken = makeResource({
+        id: 'dep-broken',
+        type: 'k8s-deployment',
+        kubernetes: { desiredReplicas: 3, readyReplicas: 0 },
+      });
+
+      const model = buildKubernetesPageModel([happy, crashing, partial, broken]);
+      expect(model.pods.map((r) => r.id)).toEqual(['pod-crash', 'pod-happy']);
+      expect(model.deployments.map((r) => r.id)).toEqual(['dep-broken', 'dep-partial']);
+      expect(model.workloads.slice(0, 2).map((r) => r.id)).toEqual(['dep-broken', 'dep-partial']);
+    });
   });
 });

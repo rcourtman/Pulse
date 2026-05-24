@@ -93,4 +93,51 @@ describe('KubernetesPodsTable', () => {
       document.querySelector('[data-kubernetes-pod-row="checkout-api-6c746d5bcf-c7z2p"]'),
     ).not.toBeNull();
   });
+
+  it('renders pod rows with status mapped from podPhase + container readiness, attention rows first', () => {
+    render(() => (
+      <KubernetesPodsTable
+        resources={[
+          makeResource({
+            id: 'happy-pod',
+            kubernetes: {
+              podPhase: 'Running',
+              podContainers: [{ ready: true, state: 'running' }],
+            },
+          }),
+          makeResource({
+            id: 'crashing-pod',
+            kubernetes: {
+              podPhase: 'Running',
+              podContainers: [
+                { ready: false, state: 'waiting', reason: 'CrashLoopBackOff' },
+              ],
+            },
+          }),
+          makeResource({
+            id: 'not-ready-pod',
+            kubernetes: {
+              podPhase: 'Running',
+              podContainers: [
+                { ready: true, state: 'running' },
+                { ready: false, state: 'running' },
+              ],
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No pods"
+        emptyDescription="No pods"
+        showToolbar={false}
+      />
+    ));
+
+    const rows = Array.from(document.querySelectorAll('[data-kubernetes-pod-row]')).map(
+      (row) => row.getAttribute('data-kubernetes-pod-row'),
+    );
+    expect(rows).toEqual(['crashing-pod', 'not-ready-pod', 'happy-pod']);
+    expect(screen.getByTitle('CrashLoopBackOff')).toHaveClass('bg-red-500');
+    expect(screen.getByTitle('Not ready')).toHaveClass('bg-amber-500');
+    expect(screen.getByTitle('Running')).toHaveClass('bg-emerald-500');
+  });
 });

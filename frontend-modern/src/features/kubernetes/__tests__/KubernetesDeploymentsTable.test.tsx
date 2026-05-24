@@ -81,4 +81,37 @@ describe('KubernetesDeploymentsTable', () => {
       document.querySelector('[data-kubernetes-deployment-row="checkout-api"]'),
     ).not.toBeNull();
   });
+
+  it('maps Deployment status from replica progress and orders attention rows first', () => {
+    render(() => (
+      <KubernetesDeploymentsTable
+        resources={[
+          makeResource({
+            id: 'healthy',
+            kubernetes: { desiredReplicas: 3, readyReplicas: 3 },
+          }),
+          makeResource({
+            id: 'partial',
+            kubernetes: { desiredReplicas: 3, readyReplicas: 1 },
+          }),
+          makeResource({
+            id: 'broken',
+            kubernetes: { desiredReplicas: 3, readyReplicas: 0 },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No deployments"
+        emptyDescription="No deployments"
+        showToolbar={false}
+      />
+    ));
+
+    const rows = Array.from(
+      document.querySelectorAll('[data-kubernetes-deployment-row]'),
+    ).map((row) => row.getAttribute('data-kubernetes-deployment-row'));
+    expect(rows).toEqual(['broken', 'partial', 'healthy']);
+    expect(screen.getByTitle('0 / 3 ready')).toHaveClass('bg-red-500');
+    expect(screen.getByTitle('1 / 3 ready')).toHaveClass('bg-amber-500');
+    expect(screen.getByTitle('Ready')).toHaveClass('bg-emerald-500');
+  });
 });

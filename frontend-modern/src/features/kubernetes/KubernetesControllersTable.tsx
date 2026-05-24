@@ -1,4 +1,4 @@
-import { For, Show, type Component, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
@@ -11,7 +11,6 @@ import {
   TableRow,
 } from '@/components/shared/Table';
 import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
-import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
@@ -27,6 +26,10 @@ import {
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
+import {
+  compareKubernetesControllers,
+  mapKubernetesControllerStatus,
+} from './kubernetesPageModel';
 
 const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
 
@@ -173,6 +176,9 @@ export const KubernetesControllersTable: Component<{
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterPlatformResources,
   });
+  const sortedRows = createMemo(() =>
+    [...tableState.filtered()].sort(compareKubernetesControllers),
+  );
 
   return (
     <Show
@@ -255,9 +261,9 @@ export const KubernetesControllersTable: Component<{
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(resource) => {
-                    const indicator = () => getSimpleStatusIndicator(resource.status);
+                    const indicator = () => mapKubernetesControllerStatus(resource);
                     const name = () => controllerName(resource);
                     const kind = () => controllerKind(resource);
                     const scope = () => controllerScope(resource);
@@ -275,7 +281,7 @@ export const KubernetesControllersTable: Component<{
                             <StatusDot
                               size="sm"
                               variant={indicator().variant}
-                              title={resource.status || 'unknown'}
+                              title={indicator().label}
                               ariaHidden
                             />
                             <span class="truncate font-semibold text-base-content" title={name()}>

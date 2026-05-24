@@ -1,4 +1,4 @@
-import { For, Show, type Component, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
@@ -10,7 +10,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
-import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { formatRelativeTime } from '@/utils/format';
 import {
@@ -27,6 +26,10 @@ import {
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
+import {
+  compareKubernetesDeployments,
+  mapKubernetesDeploymentStatus,
+} from './kubernetesPageModel';
 
 // Kubernetes Deployments are scheduling abstractions over their controlled
 // pods, so the generic infrastructure table's CPU / Memory / Disk I/O /
@@ -57,6 +60,9 @@ export const KubernetesDeploymentsTable: Component<{
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterPlatformResources,
   });
+  const sortedRows = createMemo(() =>
+    [...tableState.filtered()].sort(compareKubernetesDeployments),
+  );
 
   return (
     <Show
@@ -152,7 +158,7 @@ export const KubernetesDeploymentsTable: Component<{
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(deployment) => {
                     const name = () => asTrimmedString(deployment.name) || deployment.id;
                     const ns = () => asTrimmedString(deployment.kubernetes?.namespace) || '—';
@@ -160,7 +166,7 @@ export const KubernetesDeploymentsTable: Component<{
                       asTrimmedString(deployment.kubernetes?.clusterName) ||
                       asTrimmedString(deployment.kubernetes?.clusterId) ||
                       '—';
-                    const indicator = () => getSimpleStatusIndicator(deployment.status);
+                    const indicator = () => mapKubernetesDeploymentStatus(deployment);
                     const age = () => formatAge(deployment.kubernetes?.createdAt);
                     return (
                       <TableRow
@@ -172,7 +178,7 @@ export const KubernetesDeploymentsTable: Component<{
                             <StatusDot
                               size="sm"
                               variant={indicator().variant}
-                              title={deployment.status || 'unknown'}
+                              title={indicator().label}
                               ariaHidden
                             />
                             <span class="truncate font-semibold text-base-content" title={name()}>

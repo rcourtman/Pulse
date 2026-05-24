@@ -1,5 +1,9 @@
-import type { Resource, ResourceType } from '@/types/resource';
-import type { StatusIndicator } from '@/utils/status';
+import type {
+  Resource,
+  ResourceKubernetesPodContainerStatus,
+  ResourceType,
+} from '@/types/resource';
+import type { StatusIndicator, StatusIndicatorVariant } from '@/utils/status';
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 
 export type KubernetesPageTabId =
@@ -64,6 +68,184 @@ export const compareKubernetesEvents = (left: Resource, right: Resource): number
   if (timeDelta !== 0) return timeDelta;
   return left.id.localeCompare(right.id);
 };
+
+// Container-state reasons that mean "the kubelet can't get this container
+// to a running state". Distinct from a transient `Pending` phase: these
+// are the reasons that should escalate the pod row to a danger dot regardless
+// of the surrounding phase.
+const POD_CONTAINER_FATAL_REASONS = new Set([
+  'crashloopbackoff',
+  'imagepullbackoff',
+  'errimagepull',
+  'createcontainerconfigerror',
+  'createcontainererror',
+  'invalidimagename',
+  'runcontainererror',
+  'oomkilled',
+]);
+
+const normalizeKubernetesToken = (value: unknown): string =>
+  typeof value === 'string' ? value.trim().toLowerCase().replace(/[\s_-]/g, '') : '';
+
+const displayName = (resource: Resource): string =>
+  asTrimmedString(resource.displayName) ||
+  asTrimmedString(resource.name) ||
+  asTrimmedString(resource.kubernetes?.podName) ||
+  resource.id;
+
+const containerHasFatalReason = (container: ResourceKubernetesPodContainerStatus): boolean => {
+  const reason = normalizeKubernetesToken(container.reason);
+  if (reason && POD_CONTAINER_FATAL_REASONS.has(reason)) return true;
+  const state = normalizeKubernetesToken(container.state);
+  return state === 'terminated' && !container.ready;
+};
+
+const podHasFatalContainer = (containers: ResourceKubernetesPodContainerStatus[]): boolean =>
+  containers.some(containerHasFatalReason);
+
+const podAllContainersReady = (containers: ResourceKubernetesPodContainerStatus[]): boolean =>
+  containers.length > 0 && containers.every((container) => container.ready === true);
+
+export function mapKubernetesPodStatus(resource: Resource): StatusIndicator {
+  const phase = normalizeKubernetesToken(resource.kubernetes?.podPhase || resource.kubernetes?.phase);
+  const containers = resource.kubernetes?.podContainers ?? [];
+
+  if (phase === 'failed') return { variant: 'danger', label: 'Failed' };
+  if (podHasFatalContainer(containers)) {
+    const reason =
+      containers.find(containerHasFatalReason)?.reason?.trim() || 'Container error';
+    return { variant: 'danger', label: reason };
+  }
+  if (phase === 'pending') return { variant: 'warning', label: 'Pending' };
+  if (phase === 'running') {
+    if (containers.length === 0) return { variant: 'success', label: 'Running' };
+    if (podAllContainersReady(containers)) return { variant: 'success', label: 'Running' };
+    return { variant: 'warning', label: 'Not ready' };
+  }
+  if (phase === 'succeeded') return { variant: 'success', label: 'Succeeded' };
+  if (phase === 'unknown') return { variant: 'muted', label: 'Unknown' };
+  if (!phase) return { variant: 'muted', label: 'Unknown' };
+  return { variant: 'muted', label: eventTypeLabel(resource.kubernetes?.podPhase ?? '', 'Unknown') };
+}
+
+export function mapKubernetesNodeStatus(resource: Resource): StatusIndicator {
+  const ready = resource.kubernetes?.ready;
+  if (ready === false) return { variant: 'danger', label: 'NotReady' };
+  if (ready === true) return { variant: 'success', label: 'Ready' };
+
+  const status = normalizeKubernetesToken(resource.status);
+  if (status === 'online' || status === 'running' || status === 'healthy') {
+    return { variant: 'success', label: 'Ready' };
+  }
+  if (status === 'offline' || status === 'stopped' || status === 'failed') {
+    return { variant: 'danger', label: 'NotReady' };
+  }
+  if (status === 'degraded' || status === 'warning' || status === 'pending') {
+    return { variant: 'warning', label: 'Degraded' };
+  }
+  return { variant: 'muted', label: 'Unknown' };
+}
+
+const replicaIndicator = (
+  desired: number | undefined,
+  ready: number | undefined,
+  readyLabel = 'Ready',
+): StatusIndicator => {
+  const desiredCount = typeof desired === 'number' ? desired : 0;
+  const readyCount = typeof ready === 'number' ? ready : 0;
+  if (desiredCount <= 0) return { variant: 'muted', label: 'Scaled to 0' };
+  if (readyCount >= desiredCount) return { variant: 'success', label: readyLabel };
+  if (readyCount <= 0) return { variant: 'danger', label: `0 / ${desiredCount} ready` };
+  return { variant: 'warning', label: `${readyCount} / ${desiredCount} ready` };
+};
+
+export function mapKubernetesDeploymentStatus(resource: Resource): StatusIndicator {
+  return replicaIndicator(
+    resource.kubernetes?.desiredReplicas,
+    resource.kubernetes?.readyReplicas,
+  );
+}
+
+export function mapKubernetesReplicaSetStatus(resource: Resource): StatusIndicator {
+  return replicaIndicator(
+    resource.kubernetes?.desiredReplicas,
+    resource.kubernetes?.readyReplicas,
+  );
+}
+
+export function mapKubernetesStatefulSetStatus(resource: Resource): StatusIndicator {
+  return replicaIndicator(
+    resource.kubernetes?.desiredReplicas,
+    resource.kubernetes?.readyReplicas,
+  );
+}
+
+export function mapKubernetesDaemonSetStatus(resource: Resource): StatusIndicator {
+  const desired = resource.kubernetes?.desiredNumberScheduled;
+  const ready = resource.kubernetes?.numberReady;
+  const misscheduled = resource.kubernetes?.numberMisscheduled ?? 0;
+  const base = replicaIndicator(desired, ready, 'Scheduled');
+  if (base.variant === 'success' && misscheduled > 0) {
+    return { variant: 'warning', label: `${misscheduled} misscheduled` };
+  }
+  return base;
+}
+
+export function mapKubernetesJobStatus(resource: Resource): StatusIndicator {
+  const failed = resource.kubernetes?.failed ?? 0;
+  const succeeded = resource.kubernetes?.succeeded ?? 0;
+  const active = resource.kubernetes?.active ?? 0;
+  if (failed > 0) return { variant: 'danger', label: `${failed} failed` };
+  if (active > 0) return { variant: 'warning', label: `${active} active` };
+  if (succeeded > 0) return { variant: 'success', label: 'Succeeded' };
+  return { variant: 'muted', label: 'Idle' };
+}
+
+export function mapKubernetesCronJobStatus(resource: Resource): StatusIndicator {
+  if (resource.kubernetes?.suspend === true) return { variant: 'muted', label: 'Suspended' };
+  return { variant: 'success', label: 'Scheduled' };
+}
+
+export function mapKubernetesControllerStatus(resource: Resource): StatusIndicator {
+  switch (resource.type) {
+    case 'k8s-replicaset':
+      return mapKubernetesReplicaSetStatus(resource);
+    case 'k8s-statefulset':
+      return mapKubernetesStatefulSetStatus(resource);
+    case 'k8s-daemonset':
+      return mapKubernetesDaemonSetStatus(resource);
+    case 'k8s-job':
+      return mapKubernetesJobStatus(resource);
+    case 'k8s-cronjob':
+      return mapKubernetesCronJobStatus(resource);
+    default:
+      return { variant: 'muted', label: 'Unknown' };
+  }
+}
+
+// Attention-first ordering: rows that need an operator's eye float to the
+// top of the table. Tie-broken by display name for stable rendering.
+const STATUS_VARIANT_RANK: Record<StatusIndicatorVariant, number> = {
+  danger: 0,
+  warning: 1,
+  muted: 2,
+  success: 3,
+};
+
+const compareByStatus = (
+  mapper: (resource: Resource) => StatusIndicator,
+): ((left: Resource, right: Resource) => number) => {
+  return (left, right) => {
+    const rankDelta = STATUS_VARIANT_RANK[mapper(left).variant] - STATUS_VARIANT_RANK[mapper(right).variant];
+    if (rankDelta !== 0) return rankDelta;
+    return displayName(left).localeCompare(displayName(right));
+  };
+};
+
+export const compareKubernetesPods = compareByStatus(mapKubernetesPodStatus);
+export const compareKubernetesNodes = compareByStatus(mapKubernetesNodeStatus);
+export const compareKubernetesDeployments = compareByStatus(mapKubernetesDeploymentStatus);
+export const compareKubernetesControllers = compareByStatus(mapKubernetesControllerStatus);
 
 const KUBERNETES_ROUTE_TAB_ALIASES: Record<string, KubernetesPageTabId> = {
   autoscaling: 'workloads',
@@ -164,9 +346,13 @@ export type KubernetesPageModel = {
 export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageModel {
   const k8sResources = resources.filter(isKubernetesPlatform);
   const clusters = k8sResources.filter((resource) => resource.type === 'k8s-cluster');
-  const nodes = k8sResources.filter(isKubernetesNodeRow);
-  const pods = k8sResources.filter((resource) => resource.type === 'pod');
-  const deployments = k8sResources.filter((resource) => resource.type === 'k8s-deployment');
+  const nodes = k8sResources.filter(isKubernetesNodeRow).sort(compareKubernetesNodes);
+  const pods = k8sResources
+    .filter((resource) => resource.type === 'pod')
+    .sort(compareKubernetesPods);
+  const deployments = k8sResources
+    .filter((resource) => resource.type === 'k8s-deployment')
+    .sort(compareKubernetesDeployments);
   const replicaSets = k8sResources.filter((resource) => resource.type === 'k8s-replicaset');
   const namespaces = k8sResources.filter((resource) => resource.type === 'k8s-namespace');
   const services = k8sResources.filter((resource) => resource.type === 'k8s-service');
@@ -198,15 +384,14 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
   const events = k8sResources
     .filter((resource) => resource.type === 'k8s-event')
     .sort(compareKubernetesEvents);
-  const workloads = [
-    ...deployments,
+  const sortedControllers = [
     ...replicaSets,
     ...statefulSets,
     ...daemonSets,
     ...jobs,
     ...cronJobs,
-    ...pods,
-  ];
+  ].sort(compareKubernetesControllers);
+  const workloads = [...deployments, ...sortedControllers, ...pods];
   const storage = [...storageClasses, ...persistentVolumes, ...persistentVolumeClaims];
   const serviceNetworking = [...ingresses, ...endpointSlices];
   const config = [...namespaces, ...configMaps, ...secrets, ...serviceAccounts];

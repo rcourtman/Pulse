@@ -1,4 +1,4 @@
-import { For, Show, type Component, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
@@ -10,7 +10,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
-import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
@@ -26,6 +25,7 @@ import {
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource, ResourceKubernetesPodContainerStatus } from '@/types/resource';
+import { compareKubernetesPods, mapKubernetesPodStatus } from './kubernetesPageModel';
 
 const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
 
@@ -99,6 +99,7 @@ export const KubernetesPodsTable: Component<{
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterPlatformResources,
   });
+  const sortedRows = createMemo(() => [...tableState.filtered()].sort(compareKubernetesPods));
 
   return (
     <Show
@@ -185,9 +186,9 @@ export const KubernetesPodsTable: Component<{
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(resource) => {
-                    const indicator = () => getSimpleStatusIndicator(resource.status);
+                    const indicator = () => mapKubernetesPodStatus(resource);
                     const name = () => podName(resource);
                     const scope = () => podScope(resource);
                     const node = () => textValue(resource.kubernetes?.nodeName);
@@ -206,7 +207,7 @@ export const KubernetesPodsTable: Component<{
                             <StatusDot
                               size="sm"
                               variant={indicator().variant}
-                              title={resource.status || 'unknown'}
+                              title={indicator().label}
                               ariaHidden
                             />
                             <span class="truncate font-semibold text-base-content" title={name()}>

@@ -1,4 +1,4 @@
-import { For, Show, type Component, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCard } from '@/components/shared/TableCard';
@@ -12,7 +12,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
-import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
@@ -35,6 +34,7 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
+import { compareKubernetesNodes, mapKubernetesNodeStatus } from './kubernetesPageModel';
 
 // Kubernetes nodes carry richer Kubelet/runtime metadata than a generic
 // Pulse Agent — kubelet version, container runtime, roles
@@ -101,6 +101,7 @@ export const KubernetesNodesTable: Component<{
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-node-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
+  const sortedRows = createMemo(() => [...tableState.filtered()].sort(compareKubernetesNodes));
 
   return (
     <Show
@@ -195,7 +196,7 @@ export const KubernetesNodesTable: Component<{
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(node) => {
                     const meta = () => node.kubernetes;
                     const name = () => asTrimmedString(node.name) || node.id;
@@ -218,7 +219,7 @@ export const KubernetesNodesTable: Component<{
                       if (typeof cores === 'number' && cores > 0) return `${cores} cores`;
                       return capacityLabel();
                     };
-                    const indicator = () => getSimpleStatusIndicator(node.status);
+                    const indicator = () => mapKubernetesNodeStatus(node);
                     const metricsKey = () => buildMetricKeyForUnifiedResource(node);
                     const cpuPercent = () => finiteMetric(node.cpu?.current);
                     const memoryTotal = () => finiteMetric(node.memory?.total) ?? 0;
@@ -246,7 +247,7 @@ export const KubernetesNodesTable: Component<{
                               <StatusDot
                                 size="sm"
                                 variant={indicator().variant}
-                                title={node.status || 'unknown'}
+                                title={indicator().label}
                                 ariaHidden
                               />
                               <span class="truncate font-semibold text-base-content" title={name()}>
