@@ -1,7 +1,7 @@
 import { createSignal, createMemo, createEffect, For, Show, onMount } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
-import { GuestRow, GUEST_COLUMNS, type GuestColumnDef } from './GuestRow';
+import { GuestRow, GUEST_COLUMNS, getGuestColumnWidth, getGuestTableWidthPx, type GuestColumnDef } from './GuestRow';
 import { GuestDrawer } from './GuestDrawer';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
@@ -313,6 +313,7 @@ export function Dashboard(props: DashboardProps) {
   );
   const visibleColumns = columnVisibility.visibleColumns;
   const visibleColumnIds = createMemo(() => visibleColumns().map(c => c.id));
+  const tableWidthPx = createMemo(() => getGuestTableWidthPx(visibleColumns(), isMobile()));
 
   // Total columns for colspan calculations
   const totalColumns = createMemo(() => visibleColumns().length);
@@ -1038,7 +1039,30 @@ export function Dashboard(props: DashboardProps) {
         <ComponentErrorBoundary name="Guest Table">
           <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
             <div ref={tableRef} class="overflow-x-auto">
-              <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": isMobile() ? "800px" : "900px" }}>
+              <table
+                class="border-collapse whitespace-nowrap"
+                style={{
+                  "table-layout": "fixed",
+                  width: `${tableWidthPx()}px`,
+                  "min-width": `${tableWidthPx()}px`,
+                }}
+              >
+                <colgroup>
+                  <For each={visibleColumns()}>
+                    {(col) => {
+                      const width = () => getGuestColumnWidth(col, isMobile());
+                      return (
+                        <col
+                          style={{
+                            width: width(),
+                            "min-width": width(),
+                            "max-width": width(),
+                          }}
+                        />
+                      );
+                    }}
+                  </For>
+                </colgroup>
                 <thead>
                   <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                     <For each={visibleColumns()}>
@@ -1054,9 +1078,9 @@ export function Dashboard(props: DashboardProps) {
                                   ${isFirst() ? 'pl-4 pr-2 text-left' : 'px-2 text-center'}
                                   ${isSortable ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : ''}`}
                             style={{
-                              ...((['cpu', 'memory', 'disk'].includes(col.id))
-                                ? { "width": isMobile() ? "60px" : "140px" }
-                                : (col.width ? { "width": col.width } : {})),
+                              "width": getGuestColumnWidth(col, isMobile()),
+                              "min-width": getGuestColumnWidth(col, isMobile()),
+                              "max-width": getGuestColumnWidth(col, isMobile()),
                               "vertical-align": 'middle'
                             }}
                             onClick={() => isSortable && handleSort(sortKeyForCol!)}

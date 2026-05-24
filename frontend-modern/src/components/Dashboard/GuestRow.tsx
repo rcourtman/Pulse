@@ -458,6 +458,38 @@ export const GUEST_COLUMNS: GuestColumnDef[] = [
   { id: 'link', label: '', priority: 'essential', width: '28px' },
 ];
 
+const GUEST_TABLE_MIN_WIDTH = {
+  desktop: 900,
+  mobile: 800,
+} as const;
+
+const MOBILE_METRIC_COLUMN_IDS = new Set(['cpu', 'memory', 'disk']);
+
+export function getGuestColumnWidth(column: Pick<GuestColumnDef, 'id' | 'width'>, isMobile: boolean): string {
+  if (isMobile && MOBILE_METRIC_COLUMN_IDS.has(column.id)) {
+    return '60px';
+  }
+  return column.width ?? '0px';
+}
+
+function parsePixelWidth(width: string | undefined): number {
+  if (!width) {
+    return 0;
+  }
+  const match = /^(\d+(?:\.\d+)?)px$/.exec(width.trim());
+  if (!match) {
+    return 0;
+  }
+  return Number(match[1]);
+}
+
+export function getGuestTableWidthPx(columns: readonly Pick<GuestColumnDef, 'id' | 'width'>[], isMobile: boolean): number {
+  const explicitWidth = columns.reduce((total, column) => {
+    return total + parsePixelWidth(getGuestColumnWidth(column, isMobile));
+  }, 0);
+  return Math.max(explicitWidth, isMobile ? GUEST_TABLE_MIN_WIDTH.mobile : GUEST_TABLE_MIN_WIDTH.desktop);
+}
+
 interface GuestRowProps {
   guest: Guest;
   alertStyles?: {
