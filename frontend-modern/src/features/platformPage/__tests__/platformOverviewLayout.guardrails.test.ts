@@ -2,9 +2,16 @@ import { describe, expect, it } from 'vitest';
 import agentsMachinesTableSource from '@/features/agents/AgentsMachinesTable.tsx?raw';
 import agentsPageModelSource from '@/features/agents/agentsPageModel.ts?raw';
 import agentsPageSurfaceSource from '@/features/agents/AgentsPageSurface.tsx?raw';
+import dockerConfigsTableSource from '@/features/docker/DockerConfigsTable.tsx?raw';
 import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
+import dockerImagesTableSource from '@/features/docker/DockerImagesTable.tsx?raw';
+import dockerNetworksTableSource from '@/features/docker/DockerNetworksTable.tsx?raw';
 import dockerPageSurfaceSource from '@/features/docker/DockerPageSurface.tsx?raw';
+import dockerSecretsTableSource from '@/features/docker/DockerSecretsTable.tsx?raw';
 import dockerServicesTableSource from '@/features/docker/DockerServicesTable.tsx?raw';
+import dockerSwarmNodesTableSource from '@/features/docker/DockerSwarmNodesTable.tsx?raw';
+import dockerTasksTableSource from '@/features/docker/DockerTasksTable.tsx?raw';
+import dockerVolumesTableSource from '@/features/docker/DockerVolumesTable.tsx?raw';
 import kubernetesAutoscalingTableSource from '@/features/kubernetes/KubernetesAutoscalingTable.tsx?raw';
 import kubernetesClustersTableSource from '@/features/kubernetes/KubernetesClustersTable.tsx?raw';
 import kubernetesConfigTableSource from '@/features/kubernetes/KubernetesConfigTable.tsx?raw';
@@ -43,7 +50,14 @@ const platformTableSources = [
   agentsMachinesTableSource,
   proxmoxNodesTableSource,
   dockerHostsTableSource,
+  dockerImagesTableSource,
+  dockerVolumesTableSource,
+  dockerNetworksTableSource,
+  dockerSwarmNodesTableSource,
   dockerServicesTableSource,
+  dockerTasksTableSource,
+  dockerSecretsTableSource,
+  dockerConfigsTableSource,
   kubernetesAutoscalingTableSource,
   kubernetesClustersTableSource,
   kubernetesConfigTableSource,
@@ -70,7 +84,14 @@ const platformTableSources = [
 const platformToolbarTableSources = [
   agentsMachinesTableSource,
   dockerHostsTableSource,
+  dockerImagesTableSource,
+  dockerVolumesTableSource,
+  dockerNetworksTableSource,
+  dockerSwarmNodesTableSource,
   dockerServicesTableSource,
+  dockerTasksTableSource,
+  dockerSecretsTableSource,
+  dockerConfigsTableSource,
   kubernetesAutoscalingTableSource,
   kubernetesClustersTableSource,
   kubernetesConfigTableSource,
@@ -194,8 +215,15 @@ describe('platform overview layout guardrails', () => {
     expect(proxmoxPageSurfaceSource).toContain('<ProxmoxNodesTable');
     expect(proxmoxPageSurfaceSource).toContain('<WorkloadsSurface');
     expect(dockerPageSurfaceSource).toContain('<DockerHostsTable');
+    expect(dockerPageSurfaceSource).toContain('<DockerImagesTable');
+    expect(dockerPageSurfaceSource).toContain('<DockerVolumesTable');
+    expect(dockerPageSurfaceSource).toContain('<DockerNetworksTable');
     expect(dockerPageSurfaceSource).toContain('<WorkloadsSurface');
+    expect(dockerPageSurfaceSource).toContain('<DockerSwarmNodesTable');
     expect(dockerPageSurfaceSource).toContain('<DockerServicesTable');
+    expect(dockerPageSurfaceSource).toContain('<DockerTasksTable');
+    expect(dockerPageSurfaceSource).toContain('<DockerSecretsTable');
+    expect(dockerPageSurfaceSource).toContain('<DockerConfigsTable');
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesClustersTable');
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesNodesTable');
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesDeploymentsTable');

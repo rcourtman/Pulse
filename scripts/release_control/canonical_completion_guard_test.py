@@ -768,6 +768,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
                         "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
                         "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
+                        "frontend-modern/src/features/docker/__tests__/DockerNativeTables.test.tsx",
                         "frontend-modern/src/features/docker/__tests__/DockerPageSurface.test.tsx",
                         "frontend-modern/src/features/docker/__tests__/dockerPageModel.test.ts",
                         "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",

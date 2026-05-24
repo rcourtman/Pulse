@@ -199,6 +199,9 @@ bounds, current/desired replicas, and metric source columns.
 Kubernetes events inventory follows that same primitive boundary while the
 unified-resource owner supplies Event type, reason, involved-object, count,
 observed-time, and message columns.
+Docker / Podman inventory follows that same primitive boundary while the
+unified-resource owner supplies API-object-specific image, volume, network,
+Swarm node, task, secret, and config columns through dedicated native tables.
 
 1. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `security-privacy`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
    The panel may own shell placement and local action layout, but

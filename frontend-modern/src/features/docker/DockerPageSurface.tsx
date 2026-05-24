@@ -13,10 +13,16 @@ import {
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
 import { APP_CONTAINER_COLUMN_LABEL_OVERRIDES } from '@/features/platformPage/appContainerColumns';
+import { DockerConfigsTable } from './DockerConfigsTable';
 import { DockerHostsTable } from './DockerHostsTable';
-import { DockerInventoryTable } from './DockerInventoryTable';
+import { DockerImagesTable } from './DockerImagesTable';
+import { DockerNetworksTable } from './DockerNetworksTable';
+import { DockerSecretsTable } from './DockerSecretsTable';
 import { DockerServicesTable } from './DockerServicesTable';
 import { DockerStorageUsageTable } from './DockerStorageUsageTable';
+import { DockerSwarmNodesTable } from './DockerSwarmNodesTable';
+import { DockerTasksTable } from './DockerTasksTable';
+import { DockerVolumesTable } from './DockerVolumesTable';
 import {
   DOCKER_TAB_SPECS,
   buildDockerPageModel,
@@ -155,27 +161,24 @@ export function DockerPageSurface() {
               <DockerContainers workloadsState={workloadsState} />
             </Show>
             <Show when={activeTab() === 'images'}>
-              <DockerInventoryTable
+              <DockerImagesTable
                 resources={model().images}
-                variant="images"
                 emptyIcon={dockerIcon()}
                 emptyTitle="No images"
                 emptyDescription="Images appear here when a Docker or Podman host reports local image inventory."
               />
             </Show>
             <Show when={activeTab() === 'volumes'}>
-              <DockerInventoryTable
+              <DockerVolumesTable
                 resources={model().volumes}
-                variant="volumes"
                 emptyIcon={dockerIcon()}
                 emptyTitle="No volumes"
                 emptyDescription="Volumes appear here when the container runtime reports volume inventory."
               />
             </Show>
             <Show when={activeTab() === 'networks'}>
-              <DockerInventoryTable
+              <DockerNetworksTable
                 resources={model().networks}
-                variant="networks"
                 emptyIcon={dockerIcon()}
                 emptyTitle="No networks"
                 emptyDescription="Networks appear here when the container runtime reports network inventory."
@@ -191,9 +194,8 @@ export function DockerPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'swarm-nodes'}>
-              <DockerInventoryTable
+              <DockerSwarmNodesTable
                 resources={model().nodes}
-                variant="nodes"
                 emptyIcon={dockerIcon()}
                 emptyTitle="No Swarm nodes"
                 emptyDescription="Swarm nodes appear here when a Docker manager reports the cluster node inventory."
@@ -209,27 +211,24 @@ export function DockerPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'tasks'}>
-              <DockerInventoryTable
+              <DockerTasksTable
                 resources={model().tasks}
-                variant="tasks"
                 emptyIcon={dockerIcon()}
                 emptyTitle="No Swarm tasks"
                 emptyDescription="Swarm tasks appear here when a Swarm manager reports replica task inventory."
               />
             </Show>
             <Show when={activeTab() === 'secrets'}>
-              <DockerInventoryTable
+              <DockerSecretsTable
                 resources={model().secrets}
-                variant="secrets"
                 emptyIcon={dockerIcon()}
                 emptyTitle="No Swarm secrets"
                 emptyDescription="Swarm secret metadata appears here when a Docker manager reports the secrets API."
               />
             </Show>
             <Show when={activeTab() === 'configs'}>
-              <DockerInventoryTable
+              <DockerConfigsTable
                 resources={model().configs}
-                variant="configs"
                 emptyIcon={dockerIcon()}
                 emptyTitle="No Swarm configs"
                 emptyDescription="Swarm config metadata appears here when a Docker manager reports the configs API."
