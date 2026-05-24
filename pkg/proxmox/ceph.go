@@ -61,7 +61,44 @@ type CephServiceDaemon struct {
 
 // CephMonMap captures monitor summary information.
 type CephMonMap struct {
-	NumMons int `json:"num_mons"`
+	NumMons     int               `json:"num_mons"`
+	Mons        []CephMonitor     `json:"mons"`
+	QuorumNames []string          `json:"quorum_names"`
+	Quorum      []json.RawMessage `json:"quorum"`
+}
+
+// CephMonitor captures monitor entries from Ceph's monmap payload.
+type CephMonitor struct {
+	Name string `json:"name"`
+	Rank int    `json:"rank"`
+	Addr string `json:"addr"`
+}
+
+func (m *CephMonMap) UnmarshalJSON(data []byte) error {
+	type rawCephMonMap struct {
+		NumMons     int               `json:"num_mons"`
+		Mons        []CephMonitor     `json:"mons"`
+		QuorumNames []string          `json:"quorum_names"`
+		Quorum      []json.RawMessage `json:"quorum"`
+	}
+
+	var raw rawCephMonMap
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	m.NumMons = raw.NumMons
+	m.Mons = raw.Mons
+	m.QuorumNames = raw.QuorumNames
+	m.Quorum = raw.Quorum
+
+	for _, candidate := range []int{len(m.Mons), len(m.QuorumNames), len(m.Quorum)} {
+		if candidate > m.NumMons {
+			m.NumMons = candidate
+		}
+	}
+
+	return nil
 }
 
 // CephMgrMap captures manager summary information.

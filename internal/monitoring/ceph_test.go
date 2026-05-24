@@ -296,6 +296,75 @@ func TestCountCephDaemonSummaries(t *testing.T) {
 	}
 }
 
+func TestCountCephMonitorDaemonsUsesDetailedMonMapFallbacks(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		monMap proxmox.CephMonMap
+		want   int
+	}{
+		{
+			name: "mons array",
+			monMap: proxmox.CephMonMap{
+				Mons: []proxmox.CephMonitor{
+					{Name: "mon-a"},
+					{Name: "mon-b"},
+					{Name: "mon-c"},
+				},
+			},
+			want: 3,
+		},
+		{
+			name: "quorum names",
+			monMap: proxmox.CephMonMap{
+				QuorumNames: []string{"mon-a", "mon-b", "mon-c"},
+			},
+			want: 3,
+		},
+		{
+			name: "quorum ranks",
+			monMap: proxmox.CephMonMap{
+				Quorum: []json.RawMessage{
+					json.RawMessage(`0`),
+					json.RawMessage(`1`),
+					json.RawMessage(`2`),
+				},
+			},
+			want: 3,
+		},
+		{
+			name:   "service map fallback",
+			monMap: proxmox.CephMonMap{},
+			want:   2,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			status := &proxmox.CephStatus{
+				MonMap: tc.monMap,
+				ServiceMap: proxmox.CephServiceMap{
+					Services: map[string]proxmox.CephServiceDefinition{
+						"mon": {
+							Daemons: map[string]proxmox.CephServiceDaemon{
+								"mon-a": {Status: "running"},
+								"mon-b": {Status: "running"},
+							},
+						},
+					},
+				},
+			}
+			if got := countCephMonitorDaemons(status); got != tc.want {
+				t.Fatalf("countCephMonitorDaemons() = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestExtractCephCheckSummary(t *testing.T) {
 	t.Parallel()
 
