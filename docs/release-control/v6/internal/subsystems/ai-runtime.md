@@ -1227,7 +1227,14 @@ that are known read-only by construction or proven read-only by an explicit
 content inspector. The runtime must not preserve a model-trusted fallback for
 unknown binaries, custom scripts, downloads, shells, or dual-use interpreters
 such as `python`, `node`, `ruby`, `perl`, `bash`, or `sh`, because those
-surfaces can mutate state even when invoked in non-interactive forms.
+surfaces can mutate state even when invoked in non-interactive forms. Wrapper
+and inspection-shaped commands must inherit the same fail-closed boundary:
+`timeout` may only bound an inner command that independently classifies as
+read-only, `env` with a utility is executable and therefore blocked, `find`
+must reject write or exec actions, `awk` and `sed` must not regain read-only
+status through direct invocation or pipes, `wget` is read-only only for spider
+checks, and `curl` must reject request-body, mutation-method, config, cookie
+jar, upload, and file-output forms while preserving ordinary HTTP(S) probes.
 That same AI tool ownership now also includes canonical resource-native
 control. `internal/ai/tools/executor.go`,
 `internal/ai/tools/tools_control.go`, and `internal/api/router.go` must keep

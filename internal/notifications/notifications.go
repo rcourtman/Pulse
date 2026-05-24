@@ -98,6 +98,9 @@ func (n *NotificationManager) createSecureWebhookClientWithTLS(timeout time.Dura
 
 			// Validate IP if it's already an IP
 			if ip := net.ParseIP(host); ip != nil {
+				if ip.IsUnspecified() {
+					return nil, fmt.Errorf("blocked unspecified IP: %s", ip)
+				}
 				if isPrivateIP(ip) && !n.isIPInAllowlist(ip) {
 					return nil, fmt.Errorf("blocked private IP: %s", ip)
 				}
@@ -2774,6 +2777,9 @@ func (n *NotificationManager) ValidateWebhookURL(webhookURL string) error {
 	if host == "" {
 		return fmt.Errorf("webhook URL missing hostname")
 	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsUnspecified() {
+		return fmt.Errorf("webhook URLs pointing to unspecified addresses are not allowed")
+	}
 
 	// Block localhost and loopback addresses (SSRF protection) unless allowlisted
 	if host == "localhost" || host == "127.0.0.1" || host == "::1" || strings.HasPrefix(host, "127.") {
@@ -2918,11 +2924,21 @@ func ParseAllowedPrivateCIDRs(cidrsString string) ([]*net.IPNet, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid CIDR range %s: %w", cidr, err)
 		}
+		if cidrContainsUnspecifiedIP(ipNet) {
+			return nil, fmt.Errorf("CIDR range %s includes an unspecified address", cidr)
+		}
 
 		parsedNets = append(parsedNets, ipNet)
 	}
 
 	return parsedNets, nil
+}
+
+func cidrContainsUnspecifiedIP(ipNet *net.IPNet) bool {
+	if ipNet == nil {
+		return false
+	}
+	return ipNet.Contains(net.IPv4zero) || ipNet.Contains(net.IPv6zero)
 }
 
 // ApplyAllowedPrivateCIDRs atomically replaces the runtime allowlist with

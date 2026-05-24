@@ -159,6 +159,21 @@ func TestUpdateAllowedPrivateCIDRs(t *testing.T) {
 			cidrs:   "192.168.1.0/24, bad/cidr",
 			wantErr: "invalid CIDR range bad/cidr",
 		},
+		{
+			name:    "IPv4 unspecified network",
+			cidrs:   "0.0.0.0/8",
+			wantErr: "includes an unspecified address",
+		},
+		{
+			name:    "IPv4 unspecified bare address",
+			cidrs:   "0.0.0.0",
+			wantErr: "includes an unspecified address",
+		},
+		{
+			name:    "IPv6 unspecified bare address",
+			cidrs:   "::",
+			wantErr: "includes an unspecified address",
+		},
 	}
 
 	for _, tt := range tests {
@@ -398,6 +413,19 @@ func TestValidateWebhookURL_IPv6Unspecified(t *testing.T) {
 	err := nm.ValidateWebhookURL("http://[::]/webhook")
 	if err == nil {
 		t.Error("Expected error for IPv6 unspecified address (::)")
+	}
+}
+
+func TestValidateWebhookURL_IPv4Unspecified(t *testing.T) {
+	nm := NewNotificationManager("")
+
+	if err := nm.UpdateAllowedPrivateCIDRs("0.0.0.0/8"); err == nil {
+		t.Fatal("expected allowlist update to reject IPv4 unspecified network")
+	}
+
+	err := nm.ValidateWebhookURL("http://0.0.0.0/webhook")
+	if err == nil {
+		t.Error("Expected error for IPv4 unspecified address (0.0.0.0)")
 	}
 }
 

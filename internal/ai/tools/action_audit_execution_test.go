@@ -13,6 +13,12 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+const (
+	testAuditVerificationCommandRedacted = "[redacted-verification-command]"
+	testAuditVerificationOutputRedacted  = "[redacted-verification-output]"
+	testAuditVerificationNoteRedacted    = "[redacted-verification-note]"
+)
+
 func TestExecuteCommandWithAuditUsesExecutionStateMachine(t *testing.T) {
 	store := unifiedresources.NewMemoryStore()
 	agentServer := &mockAgentServer{}
@@ -645,14 +651,14 @@ func TestExecuteCommandWithAuditRunsClassDerivedVerificationAfterDispatch(t *tes
 	if !verification.Ran {
 		t.Fatalf("expected Verification.Ran=true")
 	}
-	if verification.Command != "systemctl is-active 'nginx'" {
-		t.Fatalf("Verification.Command = %q, want %q", verification.Command, "systemctl is-active 'nginx'")
+	if verification.Command != testAuditVerificationCommandRedacted {
+		t.Fatalf("Verification.Command = %q, want stored audit redaction marker", verification.Command)
 	}
 	if !verification.Success {
 		t.Fatalf("expected Verification.Success=true after exit code 0")
 	}
-	if verification.Output != "active" {
-		t.Fatalf("Verification.Output = %q, want %q", verification.Output, "active")
+	if verification.Output != testAuditVerificationOutputRedacted {
+		t.Fatalf("Verification.Output = %q, want stored audit redaction marker", verification.Output)
 	}
 	agentServer.AssertExpectations(t)
 }
@@ -712,11 +718,11 @@ func TestExecuteCommandWithAuditMarksVerificationFailedWhenReadbackDoesNotConfir
 	if verification.Success {
 		t.Fatalf("expected Verification.Success=false after exit code 3")
 	}
-	if verification.Output != "failed" {
-		t.Fatalf("Verification.Output = %q, want %q", verification.Output, "failed")
+	if verification.Output != testAuditVerificationOutputRedacted {
+		t.Fatalf("Verification.Output = %q, want stored audit redaction marker", verification.Output)
 	}
-	if !strings.Contains(verification.Note, "exit code 3") {
-		t.Fatalf("Verification.Note missing exit code, got: %q", verification.Note)
+	if verification.Note != testAuditVerificationNoteRedacted {
+		t.Fatalf("Verification.Note = %q, want stored audit redaction marker", verification.Note)
 	}
 }
 

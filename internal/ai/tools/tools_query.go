@@ -180,6 +180,10 @@ type IntentResult struct {
 	NonInteractiveBlock *NonInteractiveBlockResult // Non-nil if blocked by NonInteractiveOnly guardrail
 }
 
+type executionClassificationOptions struct {
+	TimeoutBounded bool
+}
+
 // ContentInspector examines command content to determine if it's read-only.
 // Different inspectors handle different tool families (SQL, Redis, kubectl, etc.)
 type ContentInspector interface {
@@ -262,6 +266,10 @@ func ClassifyExecutionIntent(command string) IntentResult {
 
 // classifySingleCommand classifies a single (non-chained) command.
 func classifySingleCommand(command string) IntentResult {
+	return classifySingleCommandWithOptions(command, executionClassificationOptions{})
+}
+
+func classifySingleCommandWithOptions(command string, opts executionClassificationOptions) IntentResult {
 	cmdLower := strings.ToLower(command)
 
 	// === PHASE 1: Mutation-capability guards ===
@@ -271,11 +279,15 @@ func classifySingleCommand(command string) IntentResult {
 		return IntentResult{Intent: IntentWriteOrUnknown, Reason: reason}
 	}
 
+	if result, handled := classifyTimeoutWrapper(command); handled {
+		return result
+	}
+
 	// === PHASE 1.5: NonInteractiveOnly guardrails ===
 	// MUST be checked before Phase 3 (read-only by construction) because even
 	// read-only commands like `tail -f` and `journalctl -f` can hang indefinitely.
 	// pulse_read requires commands that terminate deterministically.
-	if niBlock := checkNonInteractiveGuardrails(command, cmdLower); niBlock != nil {
+	if niBlock := checkNonInteractiveGuardrails(command, cmdLower, opts); niBlock != nil {
 		return IntentResult{
 			Intent:              IntentWriteOrUnknown,
 			Reason:              niBlock.Message,
@@ -286,8 +298,21 @@ func classifySingleCommand(command string) IntentResult {
 	// === PHASE 2: Known write patterns ===
 	// Check BEFORE read-only patterns to catch write variants like "sed -i"
 	// before generic patterns like "sed " match.
-	if reason := matchesWritePatterns(cmdLower); reason != "" {
+	if reason := matchesWritePatterns(command, cmdLower); reason != "" {
 		return IntentResult{Intent: IntentWriteOrUnknown, Reason: reason}
+	}
+
+	if result, handled := classifyCurlCommand(command); handled {
+		return result
+	}
+	if result, handled := classifyEnvCommand(command); handled {
+		return result
+	}
+	if result, handled := classifyFindCommand(command); handled {
+		return result
+	}
+	if result, handled := classifyWgetCommand(command); handled {
+		return result
 	}
 
 	// === PHASE 3: Known read-only by construction ===
@@ -319,6 +344,243 @@ func classifySingleCommand(command string) IntentResult {
 	// pulse_read must only execute commands that are known read-only by construction
 	// or proven read-only by an explicit content inspector.
 	return IntentResult{Intent: IntentWriteOrUnknown, Reason: "unknown command is not on the read-only allowlist"}
+}
+
+func classifyTimeoutWrapper(command string) (IntentResult, bool) {
+	fields := strings.Fields(command)
+	if len(fields) == 0 || strings.ToLower(commandTokenBase(fields[0])) != "timeout" {
+		return IntentResult{}, false
+	}
+
+	innerCommand, ok := timeoutInnerCommand(fields)
+	if !ok {
+		return IntentResult{Intent: IntentWriteOrUnknown, Reason: "timeout wrapper must include a duration and command"}, true
+	}
+
+	innerResult := classifySingleCommandWithOptions(innerCommand, executionClassificationOptions{TimeoutBounded: true})
+	if innerResult.Intent == IntentReadOnlyCertain || innerResult.Intent == IntentReadOnlyConditional {
+		return IntentResult{Intent: innerResult.Intent, Reason: "timeout-bounded " + innerResult.Reason}, true
+	}
+
+	return IntentResult{
+		Intent:              IntentWriteOrUnknown,
+		Reason:              "timeout-wrapped command not read-only: " + innerResult.Reason,
+		NonInteractiveBlock: innerResult.NonInteractiveBlock,
+	}, true
+}
+
+func timeoutInnerCommand(fields []string) (string, bool) {
+	if len(fields) < 3 {
+		return "", false
+	}
+
+	i := 1
+	for i < len(fields) {
+		field := fields[i]
+		switch {
+		case field == "--":
+			i++
+			goto duration
+		case field == "--preserve-status" || field == "--foreground" || field == "--verbose" || field == "-v":
+			i++
+			continue
+		case field == "-s" || field == "--signal" || field == "-k" || field == "--kill-after":
+			i += 2
+			continue
+		case strings.HasPrefix(field, "--signal=") || strings.HasPrefix(field, "--kill-after="):
+			i++
+			continue
+		case strings.HasPrefix(field, "-s") && len(field) > 2:
+			i++
+			continue
+		case strings.HasPrefix(field, "-k") && len(field) > 2:
+			i++
+			continue
+		case strings.HasPrefix(field, "-"):
+			return "", false
+		default:
+			goto duration
+		}
+	}
+
+duration:
+	if i >= len(fields) || !isTimeoutDurationToken(fields[i]) {
+		return "", false
+	}
+	i++
+	if i >= len(fields) {
+		return "", false
+	}
+	return strings.Join(fields[i:], " "), true
+}
+
+func isTimeoutDurationToken(token string) bool {
+	if token == "" {
+		return false
+	}
+	seenDigit := false
+	seenDot := false
+	for i, r := range token {
+		if r >= '0' && r <= '9' {
+			seenDigit = true
+			continue
+		}
+		if r == '.' && !seenDot {
+			seenDot = true
+			continue
+		}
+		suffix := token[i:]
+		return seenDigit && (suffix == "s" || suffix == "m" || suffix == "h" || suffix == "d")
+	}
+	return seenDigit
+}
+
+func classifyEnvCommand(command string) (IntentResult, bool) {
+	fields := strings.Fields(strings.ToLower(command))
+	if len(fields) == 0 || fields[0] != "env" {
+		return IntentResult{}, false
+	}
+	if envCommandHasUtility(fields) {
+		return IntentResult{Intent: IntentWriteOrUnknown, Reason: "env can execute wrapped commands and is not read-only by construction"}, true
+	}
+	return IntentResult{Intent: IntentReadOnlyCertain, Reason: "bare env command prints environment only"}, true
+}
+
+func envCommandHasUtility(fields []string) bool {
+	for i := 1; i < len(fields); i++ {
+		field := strings.Trim(fields[i], `"'`)
+		switch {
+		case field == "--":
+			return i+1 < len(fields)
+		case field == "-0" || field == "-i" || field == "-" ||
+			field == "--ignore-environment" || field == "--null" ||
+			field == "--help" || field == "--version":
+			continue
+		case field == "-u" || field == "--unset" || field == "--chdir":
+			i++
+			continue
+		case strings.HasPrefix(field, "--unset=") || strings.HasPrefix(field, "--chdir="):
+			continue
+		case field == "-s" || field == "--split-string" || strings.HasPrefix(field, "--split-string="):
+			return true
+		case strings.Contains(field, "=") && !strings.HasPrefix(field, "="):
+			continue
+		default:
+			return true
+		}
+	}
+	return false
+}
+
+func classifyFindCommand(command string) (IntentResult, bool) {
+	fields := strings.Fields(strings.ToLower(command))
+	if len(fields) == 0 || fields[0] != "find" {
+		return IntentResult{}, false
+	}
+	if findHasWriteOrExecAction(fields) {
+		return IntentResult{Intent: IntentWriteOrUnknown, Reason: "find action can execute commands or write files"}, true
+	}
+	return IntentResult{Intent: IntentReadOnlyConditional, Reason: "find command without write or exec actions"}, true
+}
+
+func findHasWriteOrExecAction(fields []string) bool {
+	for _, field := range fields[1:] {
+		field = strings.Trim(field, `"'`)
+		if field == "-exec" || field == "-execdir" ||
+			field == "-ok" || field == "-okdir" ||
+			field == "-delete" ||
+			field == "-fprint" || field == "-fprint0" ||
+			field == "-fprintf" || field == "-fls" {
+			return true
+		}
+	}
+	return false
+}
+
+func classifyCurlCommand(command string) (IntentResult, bool) {
+	fields := strings.Fields(command)
+	if len(fields) == 0 || strings.ToLower(commandTokenBase(fields[0])) != "curl" {
+		return IntentResult{}, false
+	}
+	if isCurlMutationOrFileOutput(command) {
+		return IntentResult{Intent: IntentWriteOrUnknown, Reason: "curl option can mutate requests or write files"}, true
+	}
+	if curlHasHTTPURL(fields[1:]) {
+		return IntentResult{Intent: IntentReadOnlyConditional, Reason: "curl HTTP(S) request without mutation or file-output options"}, true
+	}
+	return IntentResult{Intent: IntentWriteOrUnknown, Reason: "curl command is not read-only without an explicit HTTP(S) URL"}, true
+}
+
+func curlHasHTTPURL(fields []string) bool {
+	for i := 0; i < len(fields); i++ {
+		token := strings.Trim(fields[i], `"'`)
+		tokenLower := strings.ToLower(token)
+		switch {
+		case strings.HasPrefix(tokenLower, "http://") || strings.HasPrefix(tokenLower, "https://"):
+			return true
+		case tokenLower == "--url" && i+1 < len(fields):
+			next := strings.ToLower(strings.Trim(fields[i+1], `"'`))
+			if strings.HasPrefix(next, "http://") || strings.HasPrefix(next, "https://") {
+				return true
+			}
+		case strings.HasPrefix(tokenLower, "--url="):
+			url := strings.TrimPrefix(tokenLower, "--url=")
+			if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func classifyWgetCommand(command string) (IntentResult, bool) {
+	fields := strings.Fields(command)
+	if len(fields) == 0 || strings.ToLower(commandTokenBase(fields[0])) != "wget" {
+		return IntentResult{}, false
+	}
+	hasSpider := false
+	for _, field := range fields[1:] {
+		token := strings.Trim(field, `"'`)
+		tokenLower := strings.ToLower(token)
+		if tokenLower == "--spider" {
+			hasSpider = true
+			continue
+		}
+		if isWgetWriteOrMutationOption(token, tokenLower) {
+			return IntentResult{Intent: IntentWriteOrUnknown, Reason: "wget option can write files or send mutation requests"}, true
+		}
+	}
+	if hasSpider {
+		return IntentResult{Intent: IntentReadOnlyConditional, Reason: "wget spider check is read-only"}, true
+	}
+	return IntentResult{Intent: IntentWriteOrUnknown, Reason: "wget can write downloaded content and is not on the read-only allowlist unless --spider is used"}, true
+}
+
+func isWgetWriteOrMutationOption(token, tokenLower string) bool {
+	switch {
+	case token == "-O" || strings.HasPrefix(token, "-O") ||
+		tokenLower == "--output-document" || strings.HasPrefix(tokenLower, "--output-document="):
+		return true
+	case token == "-o" || strings.HasPrefix(token, "-o") ||
+		token == "-a" || strings.HasPrefix(token, "-a") ||
+		tokenLower == "--output-file" || strings.HasPrefix(tokenLower, "--output-file=") ||
+		tokenLower == "--append-output" || strings.HasPrefix(tokenLower, "--append-output="):
+		return true
+	case token == "-P" || strings.HasPrefix(token, "-P") ||
+		tokenLower == "--directory-prefix" || strings.HasPrefix(tokenLower, "--directory-prefix="):
+		return true
+	case tokenLower == "--post-data" || strings.HasPrefix(tokenLower, "--post-data=") ||
+		tokenLower == "--post-file" || strings.HasPrefix(tokenLower, "--post-file=") ||
+		tokenLower == "--body-data" || strings.HasPrefix(tokenLower, "--body-data=") ||
+		tokenLower == "--body-file" || strings.HasPrefix(tokenLower, "--body-file="):
+		return true
+	case tokenLower == "--method" || strings.HasPrefix(tokenLower, "--method="):
+		return true
+	case tokenLower == "--warc-file" || strings.HasPrefix(tokenLower, "--warc-file="):
+		return true
+	default:
+		return false
+	}
 }
 
 // checkMutationCapabilityGuards checks for shell patterns that enable mutation
@@ -386,7 +648,7 @@ type NonInteractiveBlockResult struct {
 //   - interactive_repl: commands that open REPL/shell without non-interactive flags
 //
 // Returns nil if command passes all guardrails.
-func checkNonInteractiveGuardrails(command, cmdLower string) *NonInteractiveBlockResult {
+func checkNonInteractiveGuardrails(command, cmdLower string, opts executionClassificationOptions) *NonInteractiveBlockResult {
 	// [tty_flag] Interactive TTY flags allocate a terminal
 	if hasInteractiveTTYFlags(cmdLower) {
 		return &NonInteractiveBlockResult{
@@ -412,7 +674,7 @@ func checkNonInteractiveGuardrails(command, cmdLower string) *NonInteractiveBloc
 	}
 
 	// [unbounded_stream] Follow mode without explicit bound
-	if isUnboundedStreaming(cmdLower) {
+	if !opts.TimeoutBounded && isUnboundedStreaming(cmdLower) {
 		return &NonInteractiveBlockResult{
 			Category: "unbounded_stream",
 			Message:  "[unbounded_stream] follow mode without bound; pulse_read requires commands that terminate deterministically",
@@ -799,7 +1061,7 @@ func pipedToDualUseTool(cmdLower string) bool {
 		"redis-cli", "mongo", "mongosh",
 		"sh ", "sh\t", "bash ", "bash\t", "zsh ", "zsh\t",
 		"python", "perl", "ruby", "node",
-		"xargs",
+		"awk", "sed", "env", "timeout", "xargs",
 	}
 	for _, tool := range dualUseTools {
 		if strings.HasPrefix(afterPipe, tool) {
@@ -831,11 +1093,11 @@ func isReadOnlyByConstruction(cmdLower string) bool {
 		"cat", "head", "tail",
 		"ls", "ll", "dir",
 		"ps", "free", "df", "du", "iostat", "vmstat", "mpstat", "sar",
-		"grep", "awk", "sed", "find", "locate", "which", "whereis",
+		"grep", "locate", "which", "whereis",
 		"journalctl", "dmesg",
 		"uname", "hostname", "whoami", "id", "groups",
 		"echo", "printf",
-		"date", "uptime", "env", "printenv", "locale",
+		"date", "uptime", "printenv", "locale",
 		"netstat", "ss", "ifconfig", "route", "arp",
 		"ping", "traceroute", "tracepath", "nslookup", "dig", "host",
 		"file", "stat", "wc", "sort", "uniq", "cut", "tr",
@@ -865,7 +1127,6 @@ func isReadOnlyByConstruction(cmdLower string) bool {
 		"curl -k", "curl --insecure",
 		"curl -sk", "curl -ks", "curl -ki", "curl -ik",
 		"curl http", "curl https",
-		"wget -q", "wget --spider",
 		// Docker read-only
 		"docker ps", "docker logs", "docker inspect", "docker stats",
 		"docker images", "docker info", "docker version",
@@ -904,8 +1165,6 @@ func isReadOnlyByConstruction(cmdLower string) bool {
 		// Network connectivity checks (zero-I/O port scan, read-only)
 		"nc -z", "nc -vz", "nc -zv", "nc -zw", "nc -zvw",
 		"netcat -z", "netcat -zv",
-		// Timeout wrapper (makes any command bounded)
-		"timeout ",
 	}
 
 	// Extract first word of command
@@ -960,7 +1219,7 @@ func containsFlag(cmd, flag string) bool {
 
 // matchesWritePatterns checks for known write-capable command patterns.
 // Returns reason if a write pattern matches.
-func matchesWritePatterns(cmdLower string) string {
+func matchesWritePatterns(command, cmdLower string) string {
 	// High-risk patterns
 	highRiskPatterns := map[string]string{
 		"rm ": "file deletion", "rm\t": "file deletion", "rmdir": "directory deletion",
@@ -1025,21 +1284,99 @@ func matchesWritePatterns(cmdLower string) string {
 	}
 
 	// Curl with mutation verbs
-	if strings.Contains(cmdLower, "curl") {
-		if strings.Contains(cmdLower, "-d ") || strings.Contains(cmdLower, "--data") ||
-			strings.Contains(cmdLower, "--upload") ||
-			strings.Contains(cmdLower, "-x post") || strings.Contains(cmdLower, "-x put") ||
-			strings.Contains(cmdLower, "-x delete") || strings.Contains(cmdLower, "-x patch") {
-			return "HTTP mutation request"
-		}
+	if isCurlMutationOrFileOutput(command) {
+		return "curl mutation or file-output request"
 	}
 
 	return ""
 }
 
+func isCurlMutationOrFileOutput(command string) bool {
+	if !containsCommandToken(strings.ToLower(command), "curl") {
+		return false
+	}
+	fields := strings.Fields(command)
+	for i, field := range fields {
+		if strings.ToLower(commandTokenBase(field)) != "curl" {
+			continue
+		}
+		for j := i + 1; j < len(fields); j++ {
+			token := strings.Trim(fields[j], `"'`)
+			tokenLower := strings.ToLower(token)
+			switch {
+			case token == "-X" || tokenLower == "--request":
+				if j+1 < len(fields) && isHTTPMutationMethod(strings.Trim(fields[j+1], `"'`)) {
+					return true
+				}
+				j++
+			case strings.HasPrefix(token, "-X") && len(token) > 2:
+				if isHTTPMutationMethod(token[2:]) {
+					return true
+				}
+			case strings.HasPrefix(tokenLower, "--request="):
+				if isHTTPMutationMethod(strings.TrimPrefix(tokenLower, "--request=")) {
+					return true
+				}
+			case token == "-d" || strings.HasPrefix(token, "-d") ||
+				strings.HasPrefix(tokenLower, "--data") || tokenLower == "--json":
+				return true
+			case token == "-F" || strings.HasPrefix(token, "-F") || strings.HasPrefix(tokenLower, "--form"):
+				return true
+			case token == "-T" || strings.HasPrefix(token, "-T") || strings.HasPrefix(tokenLower, "--upload"):
+				return true
+			case token == "-o" || strings.HasPrefix(token, "-o") ||
+				token == "-O" || strings.Contains(shortCurlOptionCluster(token), "o") || strings.Contains(shortCurlOptionCluster(token), "O") ||
+				tokenLower == "--output" || strings.HasPrefix(tokenLower, "--output=") ||
+				tokenLower == "--output-dir" || strings.HasPrefix(tokenLower, "--output-dir=") ||
+				tokenLower == "--remote-name" || tokenLower == "--remote-header-name":
+				return true
+			case token == "-c" || strings.HasPrefix(token, "-c") ||
+				tokenLower == "--cookie-jar" || strings.HasPrefix(tokenLower, "--cookie-jar="):
+				return true
+			case token == "-K" || strings.Contains(shortCurlOptionCluster(token), "K") ||
+				tokenLower == "--dump-header" || strings.HasPrefix(tokenLower, "--dump-header=") ||
+				tokenLower == "--config" || strings.HasPrefix(tokenLower, "--config="):
+				return true
+			case strings.Contains(shortCurlOptionCluster(token), "F") ||
+				strings.Contains(shortCurlOptionCluster(token), "T") ||
+				strings.Contains(shortCurlOptionCluster(token), "c"):
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func shortCurlOptionCluster(token string) string {
+	if !strings.HasPrefix(token, "-") || strings.HasPrefix(token, "--") || len(token) < 3 {
+		return ""
+	}
+	if strings.HasPrefix(token, "-X") || strings.HasPrefix(token, "-d") {
+		return ""
+	}
+	return token[1:]
+}
+
+func commandTokenBase(field string) string {
+	field = strings.Trim(field, `"'`)
+	if idx := strings.LastIndex(field, "/"); idx >= 0 {
+		return field[idx+1:]
+	}
+	return field
+}
+
+func isHTTPMutationMethod(method string) bool {
+	switch strings.ToLower(strings.TrimSpace(method)) {
+	case "post", "put", "patch", "delete":
+		return true
+	default:
+		return false
+	}
+}
+
 func containsCommandToken(cmdLower, token string) bool {
 	for _, field := range strings.Fields(cmdLower) {
-		if field == token {
+		if commandTokenBase(field) == token {
 			return true
 		}
 		if strings.HasPrefix(field, "/") || strings.HasPrefix(field, "./") ||
