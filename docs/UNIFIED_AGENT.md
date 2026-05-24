@@ -170,6 +170,7 @@ These flags are accepted by the `pulse-agent` binary directly but are **not** av
 | `--kube-max-pods` | `PULSE_KUBE_MAX_PODS` | Max pods per report | `200` |
 | `--disable-auto-update` | `PULSE_DISABLE_AUTO_UPDATE` | Disable auto-updates | `false` |
 | `--disable-docker-update-checks` | `PULSE_DISABLE_DOCKER_UPDATE_CHECKS` | Disable Docker image update detection | `false` |
+| `--agent-id-file` | `PULSE_AGENT_ID_FILE` | Read and persist the agent ID in a file; mount this path when running the agent in a container | *(unset)* |
 | `--report-ip` | `PULSE_REPORT_IP` | Override reported IP (multi-NIC) | *(auto)* |
 | `--disable-ceph` | `PULSE_DISABLE_CEPH` | Disable local Ceph status polling | `false` |
 | `--tag` | `PULSE_TAGS` | Apply tags (repeatable or CSV) | *(none)* |

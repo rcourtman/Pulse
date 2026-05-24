@@ -205,12 +205,20 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 
 # Create shim for pulse-docker-agent to maintain backward compatibility
 RUN echo '#!/bin/sh' > /usr/local/bin/pulse-docker-agent && \
-    echo 'exec /usr/local/bin/pulse-agent --enable-docker "$@"' >> /usr/local/bin/pulse-docker-agent && \
+    echo 'exec /usr/local/bin/pulse-agent "$@"' >> /usr/local/bin/pulse-docker-agent && \
     chmod +x /usr/local/bin/pulse-docker-agent
 
 COPY --from=backend-builder /app/VERSION /VERSION
 
-ENV PULSE_NO_AUTO_UPDATE=true
+RUN mkdir -p /var/lib/pulse-agent && chmod 700 /var/lib/pulse-agent
+
+ENV PULSE_NO_AUTO_UPDATE=true \
+    PULSE_DISABLE_AUTO_UPDATE=true \
+    PULSE_ENABLE_HOST=false \
+    PULSE_ENABLE_DOCKER=true \
+    PULSE_AGENT_ID_FILE=/var/lib/pulse-agent/agent-id
+
+VOLUME ["/var/lib/pulse-agent"]
 
 ENTRYPOINT ["/usr/local/bin/pulse-docker-agent"]
 

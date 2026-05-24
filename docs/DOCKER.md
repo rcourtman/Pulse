@@ -147,6 +147,28 @@ When multiple containers have updates available, an **"Update All"** button appe
 - Agent must have Docker socket access (`/var/run/docker.sock`)
 - Registry must be accessible for update detection (public registries work automatically)
 
+### Running the agent as a Docker container
+
+For container-only Docker monitoring, use the Docker-agent image with a persistent state volume. The agent stores its server-bound identity at `/var/lib/pulse-agent/agent-id`; keeping that directory on a named volume prevents token binding failures after the agent container is recreated.
+
+```yaml
+services:
+  pulse-docker-agent:
+    image: rcourtman/pulse-docker-agent:latest
+    restart: unless-stopped
+    environment:
+      PULSE_URL: http://<pulse-ip>:7655
+      PULSE_TOKEN: <agent-token>
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - pulse_agent_state:/var/lib/pulse-agent
+
+volumes:
+  pulse_agent_state:
+```
+
+The image defaults to Docker monitoring only (`PULSE_ENABLE_DOCKER=true`, `PULSE_ENABLE_HOST=false`) and disables in-container binary self-updates. Update it by pulling a newer container image.
+
 ### Private Registries
 
 For private registries, ensure your Docker daemon has credentials configured:
