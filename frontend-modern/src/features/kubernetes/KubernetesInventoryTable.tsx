@@ -28,7 +28,7 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 
-type KubernetesInventoryVariant = 'controllers' | 'events';
+type KubernetesInventoryVariant = 'controllers';
 
 const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
 const numberValue = (value: number | undefined): JSX.Element => (
@@ -43,8 +43,6 @@ const tableTitle = (variant: KubernetesInventoryVariant, explicit?: string): str
   switch (variant) {
     case 'controllers':
       return 'Controllers';
-    case 'events':
-      return 'Events';
   }
 };
 
@@ -141,22 +139,6 @@ const KubernetesInventoryHeader: Component<{ variant: KubernetesInventoryVariant
         Detail
       </TableHead>
     </Show>
-    <Show when={props.variant === 'events'}>
-      <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[13%]`}>Reason</TableHead>
-      <TableHead
-        class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[18%]`}
-      >
-        Object
-      </TableHead>
-      <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}>
-        Count
-      </TableHead>
-      <TableHead
-        class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[30%]`}
-      >
-        Message
-      </TableHead>
-    </Show>
   </TableRow>
 );
 
@@ -217,33 +199,6 @@ const KubernetesInventoryRow: Component<{
           class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
         >
           {detail()}
-        </TableCell>
-      </Show>
-      <Show when={props.variant === 'events'}>
-        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          {textValue(props.resource.kubernetes?.reason)}
-        </TableCell>
-        <TableCell
-          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-        >
-          {textValue(
-            [props.resource.kubernetes?.involvedKind, props.resource.kubernetes?.involvedName]
-              .filter(Boolean)
-              .join('/'),
-          )}
-        </TableCell>
-        <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}>
-          {numberValue(props.resource.kubernetes?.count)}
-        </TableCell>
-        <TableCell
-          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-        >
-          <span
-            class="inline-block max-w-[28rem] truncate"
-            title={textValue(props.resource.kubernetes?.message)}
-          >
-            {textValue(props.resource.kubernetes?.message)}
-          </span>
         </TableCell>
       </Show>
     </TableRow>

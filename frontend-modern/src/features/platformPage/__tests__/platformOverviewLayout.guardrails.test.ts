@@ -9,6 +9,7 @@ import kubernetesAutoscalingTableSource from '@/features/kubernetes/KubernetesAu
 import kubernetesClustersTableSource from '@/features/kubernetes/KubernetesClustersTable.tsx?raw';
 import kubernetesConfigTableSource from '@/features/kubernetes/KubernetesConfigTable.tsx?raw';
 import kubernetesDeploymentsTableSource from '@/features/kubernetes/KubernetesDeploymentsTable.tsx?raw';
+import kubernetesEventsTableSource from '@/features/kubernetes/KubernetesEventsTable.tsx?raw';
 import kubernetesNetworkingTableSource from '@/features/kubernetes/KubernetesNetworkingTable.tsx?raw';
 import kubernetesNodesTableSource from '@/features/kubernetes/KubernetesNodesTable.tsx?raw';
 import kubernetesPageSurfaceSource from '@/features/kubernetes/KubernetesPageSurface.tsx?raw';
@@ -48,6 +49,7 @@ const platformTableSources = [
   kubernetesConfigTableSource,
   kubernetesNodesTableSource,
   kubernetesDeploymentsTableSource,
+  kubernetesEventsTableSource,
   kubernetesNetworkingTableSource,
   kubernetesPolicyTableSource,
   kubernetesServicesTableSource,
@@ -74,6 +76,7 @@ const platformToolbarTableSources = [
   kubernetesConfigTableSource,
   kubernetesNodesTableSource,
   kubernetesDeploymentsTableSource,
+  kubernetesEventsTableSource,
   kubernetesNetworkingTableSource,
   kubernetesPolicyTableSource,
   kubernetesServicesTableSource,
@@ -202,6 +205,7 @@ describe('platform overview layout guardrails', () => {
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesConfigTable');
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesPolicyTable');
     expect(kubernetesPageSurfaceSource).toContain('<KubernetesAutoscalingTable');
+    expect(kubernetesPageSurfaceSource).toContain('<KubernetesEventsTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASSystemsTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASAlertsTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASVirtualMachinesTable');

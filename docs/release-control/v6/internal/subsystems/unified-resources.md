@@ -135,6 +135,7 @@ cross-source deduplication.
 111. `frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx`
 112. `frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx`
 113. `frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx`
+114. `frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx`
 
 ## Shared Boundaries
 
@@ -159,6 +160,12 @@ Kubernetes autoscaling inventory is a unified-resource consumer boundary: the
 an autoscaling-native table that preserves the API scale target, min/max replica
 bounds, current and desired replicas, and metric source types instead of routing
 HPA rows through the generic controller/event inventory table.
+
+Kubernetes events inventory is a unified-resource consumer boundary: the
+`/kubernetes/events` route must render Event rows through an event-native table
+that preserves event type, reason, involved object, occurrence count, observed
+time, and message instead of routing event rows through the generic controller
+inventory table.
 
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `performance-and-scalability`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx` shared with `performance-and-scalability`: the infrastructure summary surface is both a canonical unified-resource consumer and a fleet-scale summary chart hot-path boundary.

@@ -27,39 +27,36 @@ afterEach(() => {
 });
 
 describe('KubernetesInventoryTable', () => {
-  it('renders event inventory fields in the remaining generic table', () => {
+  it('renders controller inventory fields in the remaining generic table', () => {
     render(() => (
       <KubernetesInventoryTable
         resources={[
           makeResource({
-            id: 'event-1',
-            type: 'k8s-event',
+            id: 'checkout-api-rs',
+            type: 'k8s-replicaset',
             kubernetes: {
               namespace: 'apps',
-              resourceKind: 'Event',
-              reason: 'FailedScheduling',
-              involvedKind: 'Pod',
-              involvedName: 'checkout-api-123',
-              count: 3,
-              message: '0/3 nodes are available',
+              resourceKind: 'ReplicaSet',
+              desiredReplicas: 5,
+              readyReplicas: 4,
+              reason: 'ReplicaFailure',
             },
           }),
         ]}
-        variant="events"
+        variant="controllers"
         emptyIcon={<span />}
-        emptyTitle="No events"
-        emptyDescription="No events"
+        emptyTitle="No controllers"
+        emptyDescription="No controllers"
         showToolbar={false}
       />
     ));
 
-    expect(screen.getByText('Reason')).toBeInTheDocument();
-    expect(screen.getByText('Object')).toBeInTheDocument();
-    expect(screen.getByText('Count')).toBeInTheDocument();
-    expect(screen.getByText('Message')).toBeInTheDocument();
-    expect(screen.getByText('FailedScheduling')).toBeInTheDocument();
-    expect(screen.getByText('Pod/checkout-api-123')).toBeInTheDocument();
-    expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getByText('0/3 nodes are available')).toBeInTheDocument();
+    expect(screen.getByText('Desired')).toBeInTheDocument();
+    expect(screen.getByText('Ready')).toBeInTheDocument();
+    expect(screen.getByText('Detail')).toBeInTheDocument();
+    expect(screen.getByText('ReplicaSet')).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
+    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.getByText('ReplicaFailure')).toBeInTheDocument();
   });
 });

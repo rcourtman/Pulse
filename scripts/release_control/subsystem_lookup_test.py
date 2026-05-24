@@ -4813,6 +4813,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/features/kubernetes/__tests__/KubernetesAutoscalingTable.test.tsx",
                 "frontend-modern/src/features/kubernetes/__tests__/KubernetesClustersTable.test.tsx",
                 "frontend-modern/src/features/kubernetes/__tests__/KubernetesConfigTable.test.tsx",
+                "frontend-modern/src/features/kubernetes/__tests__/KubernetesEventsTable.test.tsx",
                 "frontend-modern/src/features/kubernetes/__tests__/KubernetesInventoryTable.test.tsx",
                 "frontend-modern/src/features/kubernetes/__tests__/KubernetesNetworkingTable.test.tsx",
                 "frontend-modern/src/features/kubernetes/__tests__/KubernetesPageSurface.contract.test.tsx",

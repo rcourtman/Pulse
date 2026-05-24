@@ -17,6 +17,7 @@ import { KubernetesAutoscalingTable } from './KubernetesAutoscalingTable';
 import { KubernetesClustersTable } from './KubernetesClustersTable';
 import { KubernetesConfigTable } from './KubernetesConfigTable';
 import { KubernetesDeploymentsTable } from './KubernetesDeploymentsTable';
+import { KubernetesEventsTable } from './KubernetesEventsTable';
 import { KubernetesInventoryTable } from './KubernetesInventoryTable';
 import { KubernetesNetworkingTable } from './KubernetesNetworkingTable';
 import { KubernetesNodesTable } from './KubernetesNodesTable';
@@ -164,9 +165,8 @@ export function KubernetesPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'events'}>
-              <KubernetesInventoryTable
+              <KubernetesEventsTable
                 resources={model().events}
-                variant="events"
                 emptyIcon={k8sIcon()}
                 emptyTitle="No events reported"
                 emptyDescription="Events appear here when the agent can read the Kubernetes Events API."
