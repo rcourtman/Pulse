@@ -217,7 +217,7 @@ func TestFixtureGraphRecoveryPointsUseReadableKubernetesPVCUIDs(t *testing.T) {
 		}
 		if point.SubjectRef.Name == "prometheus-pvc" {
 			foundPrometheus = true
-			if uid != "production/monitoring/prometheus-pvc" {
+			if !strings.HasSuffix(uid, "/monitoring/prometheus-pvc") {
 				t.Fatalf("expected prometheus pvc uid to stay human readable, got %q", uid)
 			}
 		}

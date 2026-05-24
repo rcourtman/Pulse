@@ -180,6 +180,14 @@ service-surface proof. The unified-resource adapter is the backend fail-closed
 layer for that rule, so persisted or older-agent inactive Swarm payloads cannot
 reintroduce false Swarm capability surfaces.
 
+Platform Overview tabs are rollup boundaries, not duplicate inventory dumps.
+Docker / Podman Overview owns runtime host rows only; container, image, storage,
+network, and Swarm object rows belong in their workflow tabs. Kubernetes
+Overview owns cluster/control-plane rollup rows only; node, workload, service,
+storage, configuration, policy, and event object rows belong in their workflow
+tabs. If a future Overview repeats a detailed table, the owning workflow must be
+retired or the Overview content must be reduced to aggregate signal.
+
 Kubernetes configuration and policy inventory are unified-resource consumer
 boundaries: the `/kubernetes/configuration` workflow tab must render Namespace,
 ConfigMap, Secret, ServiceAccount, NetworkPolicy, PodDisruptionBudget,

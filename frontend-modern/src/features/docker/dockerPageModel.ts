@@ -29,6 +29,10 @@ export const DOCKER_TAB_SPECS: readonly {
   label: string;
   path: string;
 }[] = [
+  // Keep the runtime lens at operator-workflow granularity. Overview owns
+  // runtime hosts; detailed object inventory belongs in the Containers,
+  // Images, Storage, Networks, and Swarm workflows so the page does not repeat
+  // the same tables in multiple places.
   { id: 'overview', label: 'Overview', path: '/docker/overview' },
   { id: 'containers', label: 'Containers', path: '/docker/containers' },
   { id: 'images', label: 'Images', path: '/docker/images' },

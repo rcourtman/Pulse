@@ -59,6 +59,13 @@ type demoKubernetesPodProfile struct {
 	Restarts    int32
 }
 
+type demoKubernetesClusterProfile struct {
+	Name        string
+	DisplayName string
+	Context     string
+	ServerSlug  string
+}
+
 var demoVMProfiles = []demoWorkloadProfile{
 	{Name: "checkout-web-01", Tags: []string{"production", "web", "customer-facing"}, BackupAge: 6 * time.Hour},
 	{Name: "checkout-web-02", Tags: []string{"production", "web", "customer-facing"}, BackupAge: 7 * time.Hour},
@@ -118,6 +125,13 @@ var demoKubernetesNodeProfiles = []demoKubernetesNodeProfile{
 	{Name: "prod-euw1-k8s-01", Roles: []string{"control-plane"}},
 	{Name: "prod-euw1-k8s-02", Roles: []string{"worker"}},
 	{Name: "prod-euw1-k8s-03", Roles: []string{"worker"}},
+}
+
+var demoKubernetesClusterProfiles = []demoKubernetesClusterProfile{
+	{Name: "production-eu", DisplayName: "Production EU", Context: "production-eu-context", ServerSlug: "production-eu"},
+	{Name: "staging-eu", DisplayName: "Staging EU", Context: "staging-eu-context", ServerSlug: "staging-eu"},
+	{Name: "development-eu", DisplayName: "Development EU", Context: "development-eu-context", ServerSlug: "development-eu"},
+	{Name: "edge", DisplayName: "Edge", Context: "edge-context", ServerSlug: "edge"},
 }
 
 var demoKubernetesDeploymentProfiles = []demoKubernetesDeploymentProfile{
@@ -520,8 +534,11 @@ func applyDemoKubernetesScenario(state *models.StateSnapshot, now time.Time) {
 
 	for clusterIndex := range state.KubernetesClusters {
 		cluster := &state.KubernetesClusters[clusterIndex]
-		cluster.Name = "Production"
-		cluster.DisplayName = "Production"
+		profile := demoKubernetesClusterProfileFor(clusterIndex, *cluster)
+		cluster.Name = profile.Name
+		cluster.DisplayName = profile.DisplayName
+		cluster.Context = profile.Context
+		cluster.Server = fmt.Sprintf("https://%s.k8s.local:6443", profile.ServerSlug)
 		cluster.Status = "online"
 
 		// The last cluster simulates a worker outage: nodes that resolve to the
@@ -618,6 +635,23 @@ func applyDemoKubernetesScenario(state *models.StateSnapshot, now time.Time) {
 	}
 
 	syncMockKubernetesNodeHosts(state)
+}
+
+func demoKubernetesClusterProfileFor(index int, cluster models.KubernetesCluster) demoKubernetesClusterProfile {
+	if index >= 0 && index < len(demoKubernetesClusterProfiles) {
+		return demoKubernetesClusterProfiles[index]
+	}
+	name := strings.TrimSpace(cluster.Name)
+	if name == "" {
+		name = fmt.Sprintf("cluster-%d", index+1)
+	}
+	slug := strings.ToLower(strings.ReplaceAll(name, " ", "-"))
+	return demoKubernetesClusterProfile{
+		Name:        slug,
+		DisplayName: titleCase(name),
+		Context:     slug + "-context",
+		ServerSlug:  slug,
+	}
 }
 
 func applyDemoKubernetesNativeInventory(cluster *models.KubernetesCluster, now time.Time) {

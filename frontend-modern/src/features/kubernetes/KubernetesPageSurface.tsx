@@ -90,7 +90,7 @@ export function KubernetesPageSurface() {
             }
           >
             <Show when={activeTab() === 'overview'}>
-              <KubernetesOverview model={model} controllers={controllerResources} />
+              <KubernetesOverview model={model} />
             </Show>
             <Show when={activeTab() === 'nodes'}>
               <KubernetesNodesTable
@@ -134,7 +134,6 @@ export function KubernetesPageSurface() {
 
 interface KubernetesOverviewProps {
   model: Accessor<KubernetesPageModel>;
-  controllers: Accessor<Resource[]>;
 }
 
 const getKubernetesControllerResources = (model: KubernetesPageModel): Resource[] => [
@@ -289,40 +288,6 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
         emptyDescription="Kubernetes clusters appear here once at least one agent reports cluster context."
         showToolbar={false}
       />
-      <KubernetesNodesTable
-        resources={props.model().nodes}
-        emptyIcon={k8sIcon()}
-        emptyTitle="No nodes reported"
-        emptyDescription="Kubernetes nodes appear here as soon as the agent enumerates them."
-        showToolbar={false}
-      />
-      <Show when={props.model().pods.length > 0}>
-        <KubernetesPodsTable
-          resources={props.model().pods}
-          emptyIcon={k8sIcon()}
-          emptyTitle="No pods reported"
-          emptyDescription="Pods appear here once the agent can read Pod resources."
-          showToolbar={false}
-        />
-      </Show>
-      <Show when={props.model().deployments.length > 0}>
-        <KubernetesDeploymentsTable
-          resources={props.model().deployments}
-          emptyIcon={k8sIcon()}
-          emptyTitle="No deployments reported"
-          emptyDescription="Deployments appear here once the cluster reports them."
-          showToolbar={false}
-        />
-      </Show>
-      <Show when={props.controllers().length > 0}>
-        <KubernetesControllersTable
-          resources={props.controllers()}
-          emptyIcon={k8sIcon()}
-          emptyTitle="No controllers reported"
-          emptyDescription="StatefulSets, DaemonSets, Jobs, and CronJobs appear here when the agent reports them."
-          showToolbar={false}
-        />
-      </Show>
     </div>
   );
 }

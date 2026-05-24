@@ -145,6 +145,12 @@ truth for live infrastructure data.
     services, tasks, nodes, secrets, and configs so platform pages and browser
     proof exercise the live report/resource contracts rather than a
     frontend-only demo inventory.
+    Mock Kubernetes clusters must likewise keep distinct display names,
+    contexts, and server hints when the fixture graph authors multiple
+    clusters, so platform Overview rows read as real cluster identities instead
+    of duplicated placeholder labels. Recovery-point fixture assertions should
+    verify readable `cluster/namespace/object` identity, not rely on one
+    hard-coded cluster name.
 16. Add or change TrueNAS supplemental inventory only through the native
     TrueNAS provider path and unified-resource projection. TrueNAS apps are
     API-owned application records: `app.query` is the preferred live inventory

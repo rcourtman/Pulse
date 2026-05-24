@@ -7,6 +7,17 @@ import { DockerPageSurface } from '../DockerPageSurface';
 const mocks = vi.hoisted(() => ({
   pathname: '/docker/overview',
   useUnifiedResources: vi.fn(),
+  DockerHostsTable: vi.fn(
+    (props: { resources: Resource[]; showToolbar?: boolean; emptyTitle: string }) => (
+      <div
+        data-testid="docker-hosts-table"
+        data-resource-count={props.resources.length}
+        data-show-toolbar={String(props.showToolbar)}
+      >
+        {props.emptyTitle}
+      </div>
+    ),
+  ),
   DockerContainersTable: vi.fn(
     (props: { resources: Resource[]; showToolbar?: boolean; emptyTitle: string }) => (
       <div
@@ -34,6 +45,10 @@ vi.mock('@solidjs/router', () => ({
 
 vi.mock('../DockerContainersTable', () => ({
   DockerContainersTable: mocks.DockerContainersTable,
+}));
+
+vi.mock('../DockerHostsTable', () => ({
+  DockerHostsTable: mocks.DockerHostsTable,
 }));
 
 vi.mock('@/features/platformPage/sharedPlatformPage', async () => {
@@ -98,7 +113,7 @@ afterEach(() => {
 });
 
 describe('DockerPageSurface', () => {
-  it('uses native Docker inventory tables instead of the shared workload surface on overview', () => {
+  it('keeps overview focused on runtime hosts while detailed inventory owns the object tabs', () => {
     render(() => <DockerPageSurface />);
 
     expect(mocks.useUnifiedResources).toHaveBeenCalledWith(
@@ -116,14 +131,15 @@ describe('DockerPageSurface', () => {
         query: expect.stringContaining('docker-config'),
       }),
     );
-    expect(screen.getByTestId('docker-containers-table')).toHaveAttribute(
+    expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute(
       'data-resource-count',
       '1',
     );
-    expect(screen.getByTestId('docker-containers-table')).toHaveAttribute(
+    expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute(
       'data-show-toolbar',
       'false',
     );
+    expect(screen.queryByTestId('docker-containers-table')).toBeNull();
   });
 
   it('renders the dedicated containers route through the Docker containers table', () => {

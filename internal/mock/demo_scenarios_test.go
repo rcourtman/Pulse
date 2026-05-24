@@ -57,6 +57,9 @@ func TestBuildFixtureGraphAppliesCuratedDemoScenarioAcrossEstate(t *testing.T) {
 	if !kubernetesNativeInventoryExists(graph) {
 		t.Fatal("expected curated kubernetes native API inventory in canonical demo graph")
 	}
+	if duplicate := firstDuplicateKubernetesClusterDisplayName(graph); duplicate != "" {
+		t.Fatalf("expected curated kubernetes clusters to have distinct display names, duplicate %q", duplicate)
+	}
 	for _, want := range []string{"platform-observability", "node-exporter", "nightly-backfill-28918234", "cron-nightly-backfill"} {
 		if !kubernetesControllerExists(graph, want) {
 			t.Fatalf("expected curated kubernetes controller %q in canonical demo graph", want)
@@ -430,6 +433,21 @@ func kubernetesNativeInventoryExists(graph FixtureGraph) bool {
 		}
 	}
 	return true
+}
+
+func firstDuplicateKubernetesClusterDisplayName(graph FixtureGraph) string {
+	seen := map[string]struct{}{}
+	for _, cluster := range graph.State.KubernetesClusters {
+		name := firstNonEmptyTrimmed(cluster.DisplayName, cluster.CustomDisplayName, cluster.Name, cluster.ID)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			return name
+		}
+		seen[name] = struct{}{}
+	}
+	return ""
 }
 
 func storageNameExists(graph FixtureGraph, want string) bool {

@@ -180,7 +180,10 @@ Docker `Swarm` owns services, tasks, nodes, secrets, and configs; Kubernetes
 owns Services plus ingress/endpoint inventory, and `Configuration` owns config
 plus policy inventory. Legacy object-specific URLs may resolve to the owning
 workflow tab, but they must not reappear as top-level platform navigation unless
-the product IA is intentionally changed. Docker / Podman native subsections now
+the product IA is intentionally changed. Overview tabs must stay deliberately
+narrow instead of repeating every detail table: Docker / Podman Overview owns
+runtime hosts, while Kubernetes Overview owns cluster/control-plane rollup; the
+object tables live in their dedicated workflow tabs. Docker / Podman native subsections now
 include runtime containers, engine storage usage, Swarm node inventory, and
 metadata-only Swarm secret/config inventory where the documented Docker APIs
 report those resources; Podman-only libpod pod inventory must not be represented

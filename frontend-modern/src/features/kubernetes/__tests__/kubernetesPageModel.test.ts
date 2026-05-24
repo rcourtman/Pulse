@@ -44,7 +44,7 @@ describe('kubernetesPageModel', () => {
     expect(resolveKubernetesPageTabId('unknown')).toBe('overview');
   });
 
-  it('buckets clusters, nodes, workloads, services, storage, networking, config, policy, autoscaling, and events', () => {
+  it('buckets clusters, nodes, workloads, services, storage, config, policy, autoscaling, and events', () => {
     const model = buildKubernetesPageModel([
       makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
       makeResource({ id: 'node-1', type: 'k8s-node' }),
@@ -103,7 +103,6 @@ describe('kubernetesPageModel', () => {
       ['cron-1', 'dep-1', 'ds-1', 'job-1', 'pod-1', 'rs-1', 'sts-1'].sort(),
     );
     expect(model.storage.map((r) => r.id).sort()).toEqual(['pv-1', 'pvc-1', 'sc-1']);
-    expect(model.networking.map((r) => r.id).sort()).toEqual(['eps-1', 'ing-1', 'svc-1'].sort());
     expect(model.serviceNetworking.map((r) => r.id).sort()).toEqual(['eps-1', 'ing-1']);
     expect(model.config.map((r) => r.id).sort()).toEqual(
       ['cm-1', 'ns-1', 'sa-1', 'secret-1'].sort(),

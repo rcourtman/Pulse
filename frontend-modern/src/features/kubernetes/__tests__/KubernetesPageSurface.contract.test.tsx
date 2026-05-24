@@ -175,9 +175,10 @@ describe('KubernetesPageSurface contract', () => {
       'overview,nodes,workloads,services,storage,configuration,events',
     );
     expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'overview');
-    expect(screen.getByTestId('pods-table')).toHaveAttribute('data-rows', '1');
-    expect(screen.getByTestId('deployments-table')).toHaveAttribute('data-rows', '1');
-    expect(screen.getByTestId('controllers-table')).toHaveAttribute('data-rows', '1');
+    expect(screen.getByTestId('clusters-table')).toHaveAttribute('data-rows', '1');
+    expect(screen.queryByTestId('pods-table')).toBeNull();
+    expect(screen.queryByTestId('deployments-table')).toBeNull();
+    expect(screen.queryByTestId('controllers-table')).toBeNull();
   });
 
   it('groups workload API tables under the Workloads tab', () => {

@@ -16,6 +16,10 @@ export type KubernetesTabSpec = {
   path: string;
 };
 
+// Keep Kubernetes tabs at the operator-workflow level. The API exposes many
+// object kinds, but the page should not become one tab per kind or repeat a
+// detailed table in Overview when that table already has a dedicated workflow
+// home.
 export const KUBERNETES_TAB_SPECS: readonly KubernetesTabSpec[] = [
   { id: 'overview', label: 'Overview', path: '/kubernetes/overview' },
   { id: 'nodes', label: 'Nodes', path: '/kubernetes/nodes' },
@@ -118,7 +122,6 @@ export type KubernetesPageModel = {
   events: Resource[];
   workloads: Resource[];
   storage: Resource[];
-  networking: Resource[];
   serviceNetworking: Resource[];
   config: Resource[];
   policy: Resource[];
@@ -170,7 +173,6 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
     ...pods,
   ];
   const storage = [...storageClasses, ...persistentVolumes, ...persistentVolumeClaims];
-  const networking = [...services, ...ingresses, ...endpointSlices];
   const serviceNetworking = [...ingresses, ...endpointSlices];
   const config = [...namespaces, ...configMaps, ...secrets, ...serviceAccounts];
   const policy = [...networkPolicies, ...podDisruptionBudgets, ...resourceQuotas, ...limitRanges];
@@ -205,7 +207,6 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
     events,
     workloads,
     storage,
-    networking,
     serviceNetworking,
     config,
     policy,

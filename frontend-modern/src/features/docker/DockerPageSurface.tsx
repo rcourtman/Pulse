@@ -44,7 +44,6 @@ export function DockerPageSurface() {
     return resolveDockerPageTabId(segment);
   });
   const model = createMemo(() => buildDockerPageModel(resources()));
-  const showServicesSection = createMemo(() => model().services.length > 0);
 
   return (
     <div data-testid="docker-page" class="space-y-3">
@@ -87,10 +86,6 @@ export function DockerPageSurface() {
               <DockerOverview
                 hosts={model().hosts}
                 hostSourceCount={model().hosts.length}
-                containers={model().containers}
-                services={model().services}
-                serviceSourceCount={model().services.length}
-                showServicesSection={showServicesSection()}
               />
             </Show>
             <Show when={activeTab() === 'containers'}>
@@ -223,10 +218,6 @@ function DockerSwarm(props: { model: DockerPageModel }) {
 function DockerOverview(props: {
   hosts: ReturnType<typeof buildDockerPageModel>['hosts'];
   hostSourceCount: number;
-  containers: ReturnType<typeof buildDockerPageModel>['containers'];
-  services: ReturnType<typeof buildDockerPageModel>['services'];
-  serviceSourceCount: number;
-  showServicesSection: boolean;
 }) {
   return (
     <div class="space-y-4">
@@ -238,23 +229,6 @@ function DockerOverview(props: {
         emptyDescription="Container hosts appear here once a Pulse agent registers them."
         showToolbar={false}
       />
-      <DockerContainersTable
-        resources={props.containers}
-        emptyIcon={dockerIcon()}
-        emptyTitle="No Docker or Podman containers"
-        emptyDescription="Containers appear here when a Docker or Podman host reports workload inventory."
-        showToolbar={false}
-      />
-      <Show when={props.showServicesSection}>
-        <DockerServicesTable
-          resources={props.services}
-          sourceCount={props.serviceSourceCount}
-          emptyIcon={dockerIcon()}
-          emptyTitle="No Swarm services"
-          emptyDescription="Docker Swarm services appear here when a Swarm manager reports them."
-          showToolbar={false}
-        />
-      </Show>
     </div>
   );
 }
