@@ -62,6 +62,8 @@ const estimateTextWidth = (text: string): number => {
   return text.length * 5.5 + 8;
 };
 
+const hasMeasuredUsage = (disk: Disk): boolean => disk.usage !== -1 && disk.total > 0;
+
 export function StackedDiskBar(props: StackedDiskBarProps) {
   const [containerWidth, setContainerWidth] = createSignal(100);
   const [showTooltip, setShowTooltip] = createSignal(false);
@@ -100,20 +102,21 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
   const aggregateMode = createMemo(() => props.mode === 'aggregate');
   const miniMode = createMemo(() => props.mode === 'mini');
   const useStackedSegments = createMemo(() => hasMultipleDisks() && !aggregateMode() && !miniMode());
+  const measuredDisks = createMemo(() => (props.disks ?? []).filter(hasMeasuredUsage));
 
   // Calculate total capacity across all disks
   const totalCapacity = createMemo(() => {
     if (!props.disks || props.disks.length === 0) {
       return props.aggregateDisk?.total ?? 0;
     }
-    return props.disks.reduce((sum, d) => sum + (d.total || 0), 0);
+    return measuredDisks().reduce((sum, d) => sum + (d.total || 0), 0);
   });
 
   const totalUsed = createMemo(() => {
     if (!props.disks || props.disks.length === 0) {
       return props.aggregateDisk?.used ?? 0;
     }
-    return props.disks.reduce((sum, d) => sum + (d.used || 0), 0);
+    return measuredDisks().reduce((sum, d) => sum + (d.used || 0), 0);
   });
 
   const overallPercent = createMemo(() => {
@@ -131,7 +134,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
     const total = totalCapacity();
     if (total <= 0) return [];
 
-    return props.disks.map((disk, idx) => {
+    return measuredDisks().map((disk, idx) => {
       const usedPercent = (disk.used / total) * 100;
       const diskPercent = disk.total > 0 ? (disk.used / disk.total) * 100 : 0;
       // Use warning/critical colors for high usage, otherwise use the color palette
@@ -160,7 +163,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
   const miniDisks = createMemo(() => {
     if (!props.disks) return [];
     return props.disks.map((disk, idx) => {
-      const percent = disk.total > 0 ? (disk.used / disk.total) * 100 : 0;
+      const percent = hasMeasuredUsage(disk) ? (disk.used / disk.total) * 100 : 0;
       const label = disk.mountpoint || disk.device || `Disk ${idx + 1}`;
       return {
         label,
@@ -175,6 +178,9 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
     let maxPercent = -1;
     let maxLabel = '';
     for (const disk of props.disks) {
+      if (!hasMeasuredUsage(disk)) {
+        continue;
+      }
       const percent = disk.total > 0 ? (disk.used / disk.total) * 100 : 0;
       if (percent > maxPercent) {
         maxPercent = percent;
@@ -211,13 +217,14 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
     const useUsageColors = aggregateMode() || miniMode();
     if (hasDisks() && props.disks) {
       return props.disks.map((disk, idx) => {
-        const percent = disk.total > 0 ? (disk.used / disk.total) * 100 : 0;
+        const measured = hasMeasuredUsage(disk);
+        const percent = measured ? (disk.used / disk.total) * 100 : 0;
         const label = disk.mountpoint || disk.device || `Disk ${idx + 1}`;
         return {
           label,
-          used: formatBytes(disk.used),
-          total: formatBytes(disk.total),
-          percent: formatPercent(percent),
+          used: measured ? formatBytes(disk.used) : 'Usage',
+          total: measured ? formatBytes(disk.total) : 'unavailable',
+          percent: measured ? formatPercent(percent) : '—',
           color: useUsageColors
             ? getUsageColor(percent, props.thresholds)
             : getMetricSeverity(

@@ -1119,6 +1119,67 @@ func TestConvertContainerDiskInfo(t *testing.T) {
 			},
 		},
 		{
+			name: "metadata mount missing from status is retained as unavailable",
+			status: &proxmox.Container{
+				DiskInfo: map[string]proxmox.ContainerDiskUsage{
+					"rootfs": {
+						Total: 8589934592,
+						Used:  4294967296,
+					},
+				},
+			},
+			metadata: map[string]containerMountMetadata{
+				"mp0": {
+					Key:        "mp0",
+					Mountpoint: "/data",
+					Source:     "local-lvm:vm-100-disk-1",
+				},
+				"rootfs": {
+					Key:        "rootfs",
+					Mountpoint: "/",
+					Source:     "local-lvm:vm-100-disk-0",
+				},
+			},
+			want: []models.Disk{
+				{
+					Total:      8589934592,
+					Used:       4294967296,
+					Free:       4294967296,
+					Usage:      50.0,
+					Mountpoint: "/",
+					Type:       "rootfs",
+					Device:     "local-lvm:vm-100-disk-0",
+				},
+				{
+					Usage:      -1,
+					Mountpoint: "/data",
+					Type:       "mp0",
+					Device:     "local-lvm:vm-100-disk-1",
+				},
+			},
+		},
+		{
+			name: "metadata only disks are surfaced with unavailable usage",
+			status: &proxmox.Container{
+				DiskInfo: map[string]proxmox.ContainerDiskUsage{},
+			},
+			metadata: map[string]containerMountMetadata{
+				"mp0": {
+					Key:        "mp0",
+					Mountpoint: "/mnt/media",
+					Source:     "/mnt/pve/media/subvol-100-disk-1",
+				},
+			},
+			want: []models.Disk{
+				{
+					Usage:      -1,
+					Mountpoint: "/mnt/media",
+					Type:       "mp0",
+					Device:     "/mnt/pve/media/subvol-100-disk-1",
+				},
+			},
+		},
+		{
 			name: "disk with used > total clamped",
 			status: &proxmox.Container{
 				DiskInfo: map[string]proxmox.ContainerDiskUsage{
@@ -1383,6 +1444,28 @@ func TestConvertContainerDiskInfo(t *testing.T) {
 				t.Errorf("convertContainerDiskInfo() =\n%+v\nwant:\n%+v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestMergeContainerDisksPreservingExisting(t *testing.T) {
+	t.Parallel()
+
+	existing := []models.Disk{
+		{Mountpoint: "/", Type: "rootfs", Total: 1000, Used: 500, Free: 500, Usage: 50},
+	}
+	discovered := []models.Disk{
+		{Mountpoint: "/", Type: "rootfs", Usage: -1},
+		{Mountpoint: "/data", Type: "mp0", Device: "local:vm-100-disk-1", Usage: -1},
+	}
+
+	got := mergeContainerDisksPreservingExisting(existing, discovered)
+	want := []models.Disk{
+		{Mountpoint: "/", Type: "rootfs", Total: 1000, Used: 500, Free: 500, Usage: 50},
+		{Mountpoint: "/data", Type: "mp0", Device: "local:vm-100-disk-1", Usage: -1},
+	}
+
+	if !diskSlicesEqual(got, want) {
+		t.Fatalf("mergeContainerDisksPreservingExisting() = %+v, want %+v", got, want)
 	}
 }
 

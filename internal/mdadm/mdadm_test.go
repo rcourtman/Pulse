@@ -714,6 +714,49 @@ func TestCollectArraysSuccess(t *testing.T) {
 	}
 }
 
+func TestCollectArraysUsesFallbackMdadmPath(t *testing.T) {
+	detail := `/dev/md0:
+        Raid Level : raid1
+             State : clean
+     Total Devices : 2
+    Active Devices : 2
+   Working Devices : 2
+    Failed Devices : 0
+     Spare Devices : 0
+
+    Number   Major   Minor   RaidDevice State
+       0       8        1        0      active sync   /dev/sda1`
+
+	var detailCommand string
+	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		switch name {
+		case "mdadm":
+			return nil, errors.New("not in PATH")
+		case "/usr/sbin/mdadm":
+			if len(args) > 0 && args[0] == "--version" {
+				return []byte("mdadm"), nil
+			}
+			detailCommand = name
+			return []byte(detail), nil
+		case "cat":
+			return []byte("md0 : active raid1 sda1[0]"), nil
+		default:
+			return nil, errors.New("unexpected")
+		}
+	})
+
+	arrays, err := CollectArrays(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(arrays) != 1 || arrays[0].Device != "/dev/md0" {
+		t.Fatalf("unexpected arrays: %v", arrays)
+	}
+	if detailCommand != "/usr/sbin/mdadm" {
+		t.Fatalf("expected fallback mdadm path for detail, got %q", detailCommand)
+	}
+}
+
 func TestGetMdstatProgress(t *testing.T) {
 	tests := []struct {
 		name      string

@@ -50,6 +50,59 @@ func newOIDCTestServer(t *testing.T, tokenStatus int, tokenBody map[string]inter
 	}))
 }
 
+func TestShouldRefreshOIDCSessionTokensAt(t *testing.T) {
+	now := time.Date(2026, 5, 24, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name    string
+		session *SessionData
+		want    bool
+	}{
+		{
+			name: "nil session",
+			want: false,
+		},
+		{
+			name:    "no refresh token",
+			session: &SessionData{OIDCAccessTokenExp: now.Add(time.Minute)},
+			want:    false,
+		},
+		{
+			name:    "long lived token outside refresh lead",
+			session: &SessionData{OIDCRefreshToken: "refresh", OIDCAccessTokenExp: now.Add(10 * time.Minute), OIDCLastRefreshAt: now},
+			want:    false,
+		},
+		{
+			name:    "near expiry legacy session without refresh timestamp",
+			session: &SessionData{OIDCRefreshToken: "refresh", OIDCAccessTokenExp: now.Add(4 * time.Minute)},
+			want:    true,
+		},
+		{
+			name:    "short lived token just refreshed",
+			session: &SessionData{OIDCRefreshToken: "refresh", OIDCAccessTokenExp: now.Add(4*time.Minute + 55*time.Second), OIDCLastRefreshAt: now},
+			want:    false,
+		},
+		{
+			name:    "short lived token inside final refresh lead",
+			session: &SessionData{OIDCRefreshToken: "refresh", OIDCAccessTokenExp: now.Add(20 * time.Second), OIDCLastRefreshAt: now.Add(-4 * time.Minute)},
+			want:    true,
+		},
+		{
+			name:    "expired token",
+			session: &SessionData{OIDCRefreshToken: "refresh", OIDCAccessTokenExp: now.Add(-time.Second), OIDCLastRefreshAt: now},
+			want:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := shouldRefreshOIDCSessionTokensAt(now, tt.session); got != tt.want {
+				t.Fatalf("shouldRefreshOIDCSessionTokensAt() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRefreshOIDCSessionTokens_Success(t *testing.T) {
 	InitSessionStore(t.TempDir())
 	store := GetSessionStore()

@@ -320,7 +320,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           </td>
                           <td class="px-1 py-1.5 text-xs">
                             <Show
-                              when={typeof disk.temperature === 'number'}
+                              when={typeof disk.temperature === 'number' && disk.temperature > 0}
                               fallback={<span class="font-medium text-gray-400">-</span>}
                             >
                               <span

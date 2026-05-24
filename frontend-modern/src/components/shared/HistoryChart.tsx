@@ -24,6 +24,28 @@ function formatTooltipValue(value: number, unit?: string): string {
     return `${Number.isInteger(value) ? value : value.toFixed(1)} ${unit}`;
 }
 
+const chartLeftPadding = 40;
+const chartBottomPadding = 20;
+const chartVerticalPadding = 40;
+const tooltipWidth = 180;
+const tooltipHeight = 56;
+const tooltipOffset = 12;
+const viewportMargin = 8;
+
+function chartScale(points: AggregatedMetricPoint[], unit?: string) {
+    const isPercentLike = unit === '%';
+    const isByteLike = !unit || unit === 'B/s';
+    const minValue = 0;
+    let maxValue = 100;
+
+    if (points.length > 0) {
+        const rawMax = Math.max(...points.map(p => p.max || p.value));
+        maxValue = isPercentLike ? Math.max(100, rawMax) : Math.max(1, rawMax * 1.15);
+    }
+
+    return { minValue, maxValue, isPercentLike, isByteLike };
+}
+
 interface HistoryChartProps {
     resourceType: ResourceType;
     resourceId: string;
@@ -278,17 +300,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         if (props.metric === 'memory') mainColor = '#f59e0b'; // amber-500
         if (props.metric === 'disk') mainColor = '#10b981'; // emerald-500
 
-        // Unit classification (doesn't depend on data)
-        const isPercentLike = props.unit === '%';
-        const isByteLike = !props.unit || props.unit === 'B/s';
-
-        // Calculate scale (needs data for absolute metrics)
-        const minValue = 0;
-        let maxValue = 100; // default for empty/percentage
-        if (points.length > 0) {
-            const rawMax = Math.max(...points.map(p => p.max || p.value));
-            maxValue = isPercentLike ? Math.max(100, rawMax) : Math.max(1, rawMax * 1.15);
-        }
+        const { minValue, maxValue, isPercentLike, isByteLike } = chartScale(points, props.unit);
 
         // Draw grid lines (horizontal)
         ctx.strokeStyle = gridColor;
@@ -296,9 +308,9 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
 
         // 0%, 50%, 100% lines
         [0, 0.5, 1].forEach(pct => {
-            const y = h - 20 - (pct * (h - 40)); // padding
+            const y = h - chartBottomPadding - (pct * (h - chartVerticalPadding)); // padding
             ctx.beginPath();
-            ctx.moveTo(40, y);
+            ctx.moveTo(chartLeftPadding, y);
             ctx.lineTo(w, y);
             ctx.stroke();
 
@@ -337,17 +349,17 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         const timeSpan = Math.max(1, endTime - startTime);
 
         // Plot
-        const getX = (ts: number) => 40 + ((ts - startTime) / timeSpan) * (w - 40);
-        const getY = (val: number) => (h - 20) - ((val - minValue) / (maxValue - minValue)) * (h - 40);
+        const getX = (ts: number) => chartLeftPadding + ((ts - startTime) / timeSpan) * (w - chartLeftPadding);
+        const getY = (val: number) => (h - chartBottomPadding) - ((val - minValue) / (maxValue - minValue)) * (h - chartVerticalPadding);
 
         // Fill area
         ctx.beginPath();
         points.forEach((p, i) => {
-            if (i === 0) ctx.moveTo(getX(p.timestamp), h - 20);
+            if (i === 0) ctx.moveTo(getX(p.timestamp), h - chartBottomPadding);
             ctx.lineTo(getX(p.timestamp), getY(p.value));
         });
         if (points.length > 0) {
-            ctx.lineTo(getX(points[points.length - 1].timestamp), h - 20);
+            ctx.lineTo(getX(points[points.length - 1].timestamp), h - chartBottomPadding);
         }
         ctx.closePath();
 
@@ -388,7 +400,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
 
         // Draw crosshair vertical line and point circle if cursor is hovering
         const cursor = cursorX();
-        if (cursor !== null && cursor >= 40 && points.length > 0) {
+        if (cursor !== null && cursor >= chartLeftPadding && points.length > 0) {
             // Draw the vertical dashed line
             ctx.save();
             ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.3)';
@@ -396,12 +408,12 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
             ctx.setLineDash([4, 4]); // Dotted line pattern
             ctx.beginPath();
             ctx.moveTo(cursor, 0);
-            ctx.lineTo(cursor, h - 20); // Stop at x-axis labels area
+            ctx.lineTo(cursor, h - chartBottomPadding); // Stop at x-axis labels area
             ctx.stroke();
             ctx.restore();
 
             // Calculate which point is nearest to the cursor X position
-            const ratio = (cursor - 40) / (w - 40);
+            const ratio = (cursor - chartLeftPadding) / (w - chartLeftPadding);
             const hoverTs = startTime + ratio * timeSpan;
 
             // Find the nearest point
@@ -485,11 +497,11 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         // Map x to timestamp
         const startTime = points[0].timestamp;
         const endTime = points[points.length - 1].timestamp;
-        const timeSpan = endTime - startTime;
+        const timeSpan = Math.max(1, endTime - startTime);
 
-        // Inverse getX: x = 40 + ratio * (w-40)
-        // ratio = (x - 40) / (w - 40)
-        if (x < 40) {
+        // Inverse getX: x = chartLeftPadding + ratio * (w-chartLeftPadding)
+        // ratio = (x - chartLeftPadding) / (w - chartLeftPadding)
+        if (x < chartLeftPadding || x > w) {
             setCursorX(null);
             setHoveredPoint(null);
             return;
@@ -498,7 +510,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         // Update cursor position for crosshair line
         setCursorX(x);
 
-        const ratio = (x - 40) / (w - 40);
+        const ratio = (x - chartLeftPadding) / Math.max(1, w - chartLeftPadding);
         const hoverTs = startTime + ratio * timeSpan;
 
         // Find nearest point
@@ -517,11 +529,27 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
             }
         }
 
+        const { minValue, maxValue } = chartScale(points, props.unit);
+        const pointX = chartLeftPadding + ((closest.timestamp - startTime) / timeSpan) * (w - chartLeftPadding);
+        const pointY = (rect.height - chartBottomPadding) - ((closest.value - minValue) / (maxValue - minValue)) * (rect.height - chartVerticalPadding);
+        const pointClientX = rect.left + pointX;
+        const pointClientY = rect.top + pointY;
+        let tooltipX = pointClientX + tooltipOffset;
+        if (tooltipX + tooltipWidth > window.innerWidth - viewportMargin) {
+            tooltipX = pointClientX - tooltipWidth - tooltipOffset;
+        }
+        const maxTooltipX = Math.max(viewportMargin, window.innerWidth - tooltipWidth - viewportMargin);
+        tooltipX = Math.max(viewportMargin, Math.min(tooltipX, maxTooltipX));
+
+        let tooltipY = pointClientY - tooltipHeight / 2;
+        const maxTooltipY = Math.max(viewportMargin, window.innerHeight - tooltipHeight - viewportMargin);
+        tooltipY = Math.max(viewportMargin, Math.min(tooltipY, maxTooltipY));
+
         setHoveredPoint({
             value: closest.value,
             timestamp: closest.timestamp,
-            x: rect.left + x,
-            y: rect.top + 20, // Approximate
+            x: tooltipX,
+            y: tooltipY,
         });
     };
 
@@ -652,7 +680,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                             style={{
                                 left: `${point().x}px`,
                                 top: `${point().y}px`,
-                                transform: 'translateX(-50%)' // Center
+                                width: `${tooltipWidth}px`,
                             }}
                         >
                             <div class="font-medium text-center mb-0.5">{new Date(point().timestamp).toLocaleString()}</div>

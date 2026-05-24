@@ -233,8 +233,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 					// Check if OIDC tokens need refresh
 					session := GetSessionStore().GetSession(cookie.Value)
 					if session != nil && session.OIDCRefreshToken != "" {
-						// Check if access token is expired or about to expire (5 min buffer)
-						if time.Now().Add(5 * time.Minute).After(session.OIDCAccessTokenExp) {
+						if shouldRefreshOIDCSessionTokensAt(time.Now(), session) {
 							// Token needs refresh - attempt it asynchronously
 							go refreshOIDCSessionTokens(cfg, cookie.Value, session)
 						}
@@ -893,7 +892,7 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 					// Trigger token refresh if access token is near expiry
 					session := GetSessionStore().GetSession(cookie.Value)
 					if session != nil && session.OIDCRefreshToken != "" {
-						if time.Now().Add(5 * time.Minute).After(session.OIDCAccessTokenExp) {
+						if shouldRefreshOIDCSessionTokensAt(time.Now(), session) {
 							go refreshOIDCSessionTokens(cfg, cookie.Value, session)
 						}
 					}
@@ -1037,6 +1036,33 @@ func adminBypassEnabled() bool {
 
 // oidcRefreshMutex prevents concurrent refresh attempts for the same session
 var oidcRefreshMutex sync.Map
+
+const (
+	oidcDefaultRefreshLead     = 5 * time.Minute
+	oidcMinimumRefreshInterval = 5 * time.Minute
+	oidcShortTokenRefreshLead  = 30 * time.Second
+)
+
+func shouldRefreshOIDCSessionTokensAt(now time.Time, session *SessionData) bool {
+	if session == nil || session.OIDCRefreshToken == "" || session.OIDCAccessTokenExp.IsZero() {
+		return false
+	}
+
+	remaining := session.OIDCAccessTokenExp.Sub(now)
+	if remaining <= 0 {
+		return true
+	}
+	if remaining <= oidcShortTokenRefreshLead {
+		return true
+	}
+	if remaining > oidcDefaultRefreshLead {
+		return false
+	}
+	if session.OIDCLastRefreshAt.IsZero() {
+		return true
+	}
+	return now.Sub(session.OIDCLastRefreshAt) >= oidcMinimumRefreshInterval
+}
 
 // refreshOIDCSessionTokens refreshes OIDC tokens for a session in the background
 // If refresh fails, the session is invalidated and the user will need to re-login

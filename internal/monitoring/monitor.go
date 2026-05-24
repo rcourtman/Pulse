@@ -4451,7 +4451,11 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 	}
 
 	if disks := convertContainerDiskInfo(status, mountMetadata); len(disks) > 0 {
-		container.Disks = disks
+		if (status == nil || len(status.DiskInfo) == 0) && len(container.Disks) > 0 {
+			container.Disks = mergeContainerDisksPreservingExisting(container.Disks, disks)
+		} else {
+			container.Disks = disks
+		}
 	}
 
 	ensureContainerRootDiskEntry(container)

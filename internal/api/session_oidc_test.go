@@ -54,6 +54,10 @@ func TestCreateOIDCSession(t *testing.T) {
 	if session.OIDCAccessTokenExp.IsZero() {
 		t.Error("AccessTokenExp should not be zero")
 	}
+
+	if session.OIDCLastRefreshAt.IsZero() {
+		t.Error("LastRefreshAt should be initialized for OIDC sessions")
+	}
 }
 
 func TestUpdateOIDCTokens(t *testing.T) {
@@ -92,6 +96,10 @@ func TestUpdateOIDCTokens(t *testing.T) {
 
 	if !session.OIDCAccessTokenExp.After(originalExpiry) {
 		t.Error("AccessTokenExp should be updated to new expiry")
+	}
+
+	if session.OIDCLastRefreshAt.IsZero() {
+		t.Error("LastRefreshAt should be updated")
 	}
 }
 
@@ -135,6 +143,10 @@ func TestOIDCSessionPersistence(t *testing.T) {
 
 	if session.OIDCIssuer != oidcInfo.Issuer {
 		t.Errorf("Issuer should persist: got %q, want %q", session.OIDCIssuer, oidcInfo.Issuer)
+	}
+
+	if session.OIDCLastRefreshAt.IsZero() {
+		t.Error("LastRefreshAt should persist")
 	}
 }
 

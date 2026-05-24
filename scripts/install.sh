@@ -1482,8 +1482,11 @@ if [[ "$QNAP" == true ]]; then
     WATCHDOG_PIDFILE="${QNAP_STATE_DIR}/${AGENT_NAME}.watchdog.pid"
     AGENT_PIDFILE="${QNAP_STATE_DIR}/${AGENT_NAME}.pid"
     LOCK_DIR="${QNAP_STATE_DIR}/${AGENT_NAME}.lock"
+    QNAP_LOG_DIR="${QNAP_STATE_DIR}/logs"
+    QNAP_LOG_FILE="${QNAP_LOG_DIR}/${AGENT_NAME}.log"
 
     log_info "Binary installed to ${STORED_BINARY} (persistent storage)."
+    mkdir -p "$QNAP_LOG_DIR"
 
     # Build command line args
     build_exec_args
@@ -1492,6 +1495,10 @@ if [[ "$QNAP" == true ]]; then
     # Kill any existing pulse agents (wrappers + binaries at old and new paths)
     log_info "Stopping any existing pulse agents..."
     stop_qnap_agents
+    if [[ -f "/var/log/${AGENT_NAME}.log" ]]; then
+        LEGACY_QNAP_LOG="${QNAP_LOG_DIR}/${AGENT_NAME}.legacy.$(date +%Y%m%d%H%M%S).log"
+        mv "/var/log/${AGENT_NAME}.log" "$LEGACY_QNAP_LOG" 2>/dev/null || : > "/var/log/${AGENT_NAME}.log" 2>/dev/null || true
+    fi
 
     # Create a wrapper script (stored persistently)
     # At boot the RAM disk is empty, so the wrapper copies the binary there for
@@ -1506,7 +1513,9 @@ if [[ "$QNAP" == true ]]; then
 WATCHDOG_PIDFILE="${WATCHDOG_PIDFILE}"
 AGENT_PIDFILE="${AGENT_PIDFILE}"
 LOCK_DIR="${LOCK_DIR}"
+LOG_FILE="${QNAP_LOG_FILE}"
 CURRENT_AGENT_PID=""
+mkdir -p "\$(dirname "\$LOG_FILE")" 2>/dev/null || true
 
 kill_pidfile_process() {
     pidfile="\$1"
@@ -1610,11 +1619,11 @@ acquire_watchdog_lock() {
     while ! mkdir "\$LOCK_DIR" 2>/dev/null; do
         lock_attempts=\$((lock_attempts + 1))
         if [ "\$lock_attempts" -ge "\$max_lock_attempts" ]; then
-            echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] Stale lock detected, forcing removal" >> /var/log/${AGENT_NAME}.log
+            echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] Stale lock detected, forcing removal" >> "\$LOG_FILE"
             rm -f "\$AGENT_PIDFILE" "\$WATCHDOG_PIDFILE" 2>/dev/null || true
             rmdir "\$LOCK_DIR" 2>/dev/null || true
             if ! mkdir "\$LOCK_DIR" 2>/dev/null; then
-                echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] WARNING: Could not acquire lock, proceeding anyway" >> /var/log/${AGENT_NAME}.log
+                echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] WARNING: Could not acquire lock, proceeding anyway" >> "\$LOG_FILE"
             fi
             break
         fi
@@ -1656,8 +1665,8 @@ RESTART_DELAY=5
 MAX_RESTART_DELAY=60
 
 while true; do
-    echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] Starting pulse-agent..." >> /var/log/${AGENT_NAME}.log
-    \${AGENT_BIN} ${EXEC_ARGS} >> /var/log/${AGENT_NAME}.log 2>&1 &
+    echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] Starting pulse-agent..." >> "\$LOG_FILE"
+    \${AGENT_BIN} ${EXEC_ARGS} >> "\$LOG_FILE" 2>&1 &
     CURRENT_AGENT_PID=\$!
     echo "\$CURRENT_AGENT_PID" > "\$AGENT_PIDFILE"
     wait "\$CURRENT_AGENT_PID"
@@ -1665,7 +1674,7 @@ while true; do
     CURRENT_AGENT_PID=""
     rm -f "\$AGENT_PIDFILE" 2>/dev/null || true
 
-    echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] pulse-agent exited with code \$EXIT_CODE, restarting in \${RESTART_DELAY}s..." >> /var/log/${AGENT_NAME}.log
+    echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] pulse-agent exited with code \$EXIT_CODE, restarting in \${RESTART_DELAY}s..." >> "\$LOG_FILE"
     sleep \$RESTART_DELAY
 
     RESTART_DELAY=\$((RESTART_DELAY * 2))
@@ -1707,9 +1716,10 @@ EOF
 ${AUTORUN_MARKER}
 (
     _pulse_wrapper="${WRAPPER_SCRIPT}"
-    _pulse_log="/var/log/${AGENT_NAME}.log"
+    _pulse_log="${QNAP_LOG_FILE}"
     _pulse_waited=0
     _pulse_wait_max=1800
+    mkdir -p "\$(dirname "\$_pulse_log")" 2>/dev/null || true
     while [ ! -x "\$_pulse_wrapper" ] && [ "\$_pulse_waited" -lt "\$_pulse_wait_max" ]; do
         sleep 2
         _pulse_waited=\$((_pulse_waited + 2))
@@ -1741,14 +1751,14 @@ AUTORUNEOF
     if [[ "$AUTORUN_CONFIGURED" != true ]]; then
         log_warn "Could not configure autorun.sh automatically."
         log_warn "To persist across reboots, add the following to your QNAP autorun.sh:"
-        log_warn "  (w='${WRAPPER_SCRIPT}'; i=0; while [ ! -x \"\$w\" ] && [ \$i -lt 1800 ]; do sleep 2; i=\$((i+2)); done; [ -x \"\$w\" ] && \"\$w\" >> /var/log/${AGENT_NAME}.log 2>&1) &"
+        log_warn "  (w='${WRAPPER_SCRIPT}'; l='${QNAP_LOG_FILE}'; mkdir -p \"\$(dirname \"\$l\")\" 2>/dev/null || true; i=0; while [ ! -x \"\$w\" ] && [ \$i -lt 1800 ]; do sleep 2; i=\$((i+2)); done; [ -x \"\$w\" ] && \"\$w\" >> \"\$l\" 2>&1) &"
         log_warn "The waiter accommodates encrypted data volumes that unlock after autorun."
         log_warn "See: https://wiki.qnap.com/wiki/Running_Your_Own_Application_at_Startup"
     fi
 
     # Start the agent now
     log_info "Starting agent with watchdog..."
-    bash "${WRAPPER_SCRIPT}" >> "/var/log/${AGENT_NAME}.log" 2>&1 &
+    bash "${WRAPPER_SCRIPT}" >> "${QNAP_LOG_FILE}" 2>&1 &
     disown 2>/dev/null || true
 
     log_info "Installation complete!"
@@ -1758,7 +1768,7 @@ AUTORUNEOF
         log_info "  in QNAP Control Panel > Hardware > General."
     fi
     log_info "To check status: pgrep -a pulse-agent"
-    log_info "To view logs: tail -f /var/log/${AGENT_NAME}.log"
+    log_info "To view logs: tail -f ${QNAP_LOG_FILE}"
     exit 0
 fi
 

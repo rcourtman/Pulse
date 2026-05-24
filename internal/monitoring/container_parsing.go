@@ -61,65 +61,89 @@ func ensureContainerRootDiskEntry(container *models.Container) {
 
 // convertContainerDiskInfo converts Proxmox container disk info to the models format.
 func convertContainerDiskInfo(status *proxmox.Container, metadata map[string]containerMountMetadata) []models.Disk {
-	if status == nil || len(status.DiskInfo) == 0 {
-		return nil
+	disks := make([]models.Disk, 0)
+	seen := make(map[string]struct{})
+
+	if status != nil && len(status.DiskInfo) > 0 {
+		for name, info := range status.DiskInfo {
+			total := clampToInt64(info.Total)
+			used := clampToInt64(info.Used)
+			if total > 0 && used > total {
+				used = total
+			}
+			free := total - used
+			if free < 0 {
+				free = 0
+			}
+
+			disk := models.Disk{
+				Total: total,
+				Used:  used,
+				Free:  free,
+			}
+
+			if total > 0 {
+				disk.Usage = safePercentage(float64(used), float64(total))
+			}
+
+			label := strings.TrimSpace(name)
+			lowerLabel := strings.ToLower(label)
+			metadataKey := lowerLabel
+			if strings.EqualFold(label, "rootfs") || label == "" {
+				metadataKey = "rootfs"
+			}
+			seen[metadataKey] = struct{}{}
+			mountpoint := ""
+			device := ""
+
+			if metadata != nil {
+				if meta, ok := metadata[metadataKey]; ok {
+					mountpoint = strings.TrimSpace(meta.Mountpoint)
+					device = strings.TrimSpace(meta.Source)
+				}
+			}
+
+			if strings.EqualFold(label, "rootfs") || label == "" {
+				if mountpoint == "" {
+					mountpoint = "/"
+				}
+				disk.Type = "rootfs"
+				if device == "" {
+					device = sanitizeRootFSDevice(status.RootFS)
+				}
+			} else {
+				if mountpoint == "" {
+					mountpoint = label
+				}
+				disk.Type = lowerLabel
+			}
+
+			disk.Mountpoint = mountpoint
+			if disk.Device == "" && device != "" {
+				disk.Device = device
+			}
+
+			disks = append(disks, disk)
+		}
 	}
 
-	disks := make([]models.Disk, 0, len(status.DiskInfo))
-	for name, info := range status.DiskInfo {
-		total := clampToInt64(info.Total)
-		used := clampToInt64(info.Used)
-		if total > 0 && used > total {
-			used = total
+	if len(metadata) > 0 {
+		keys := make([]string, 0, len(metadata))
+		for key := range metadata {
+			keys = append(keys, key)
 		}
-		free := total - used
-		if free < 0 {
-			free = 0
-		}
+		sort.Strings(keys)
 
-		disk := models.Disk{
-			Total: total,
-			Used:  used,
-			Free:  free,
-		}
-
-		if total > 0 {
-			disk.Usage = safePercentage(float64(used), float64(total))
-		}
-
-		label := strings.TrimSpace(name)
-		lowerLabel := strings.ToLower(label)
-		mountpoint := ""
-		device := ""
-
-		if metadata != nil {
-			if meta, ok := metadata[lowerLabel]; ok {
-				mountpoint = strings.TrimSpace(meta.Mountpoint)
-				device = strings.TrimSpace(meta.Source)
+		for _, key := range keys {
+			if _, ok := seen[key]; ok {
+				continue
 			}
-		}
-
-		if strings.EqualFold(label, "rootfs") || label == "" {
-			if mountpoint == "" {
-				mountpoint = "/"
+			meta := metadata[key]
+			if strings.TrimSpace(meta.Key) == "" {
+				meta.Key = key
 			}
-			disk.Type = "rootfs"
-			if device == "" {
-				device = sanitizeRootFSDevice(status.RootFS)
-			}
-		} else {
-			if mountpoint == "" {
-				mountpoint = label
-			}
-			disk.Type = lowerLabel
+			disks = append(disks, diskFromContainerMountMetadata(meta))
 		}
-
-		disk.Mountpoint = mountpoint
-		if disk.Device == "" && device != "" {
-			disk.Device = device
-		}
-
-		disks = append(disks, disk)
 	}
 
 	if len(disks) > 1 {
@@ -128,7 +152,76 @@ func convertContainerDiskInfo(status *proxmox.Container, metadata map[string]con
 		})
 	}
 
+	if len(disks) == 0 {
+		return nil
+	}
+
 	return disks
+}
+
+func diskFromContainerMountMetadata(meta containerMountMetadata) models.Disk {
+	diskType := strings.ToLower(strings.TrimSpace(meta.Key))
+	if diskType == "" {
+		diskType = "rootfs"
+	}
+
+	mountpoint := strings.TrimSpace(meta.Mountpoint)
+	if mountpoint == "" {
+		if diskType == "rootfs" {
+			mountpoint = "/"
+		} else {
+			mountpoint = diskType
+		}
+	}
+
+	return models.Disk{
+		Mountpoint: mountpoint,
+		Device:     strings.TrimSpace(meta.Source),
+		Type:       diskType,
+		Usage:      -1,
+	}
+}
+
+func mergeContainerDisksPreservingExisting(existing, discovered []models.Disk) []models.Disk {
+	if len(existing) == 0 {
+		return discovered
+	}
+	if len(discovered) == 0 {
+		return existing
+	}
+
+	merged := append([]models.Disk{}, existing...)
+	seen := make(map[string]struct{}, len(existing))
+	for _, disk := range existing {
+		seen[containerDiskIdentity(disk)] = struct{}{}
+	}
+
+	for _, disk := range discovered {
+		key := containerDiskIdentity(disk)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, disk)
+	}
+
+	if len(merged) > 1 {
+		sort.SliceStable(merged, func(i, j int) bool {
+			return merged[i].Mountpoint < merged[j].Mountpoint
+		})
+	}
+
+	return merged
+}
+
+func containerDiskIdentity(disk models.Disk) string {
+	if mountpoint := strings.ToLower(strings.TrimSpace(disk.Mountpoint)); mountpoint != "" {
+		return "mount:" + mountpoint
+	}
+	if diskType := strings.ToLower(strings.TrimSpace(disk.Type)); diskType != "" {
+		return "type:" + diskType
+	}
+	return "device:" + strings.ToLower(strings.TrimSpace(disk.Device))
 }
 
 // sanitizeRootFSDevice extracts the device path from a rootfs config string.

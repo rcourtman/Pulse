@@ -98,6 +98,18 @@ func TestParseAIResponse(t *testing.T) {
 			},
 		},
 		{
+			name:     "JSON in inline markdown code block",
+			response: "```json {\"service_type\": \"pbs\", \"service_name\": \"Proxmox Backup Server\", \"category\": \"backup\", \"cli_command\": \"\", \"confidence\": 0.92, \"reasoning\": \"PBS environment\"}\n```",
+			want: &DiscoveryResult{
+				ServiceType: "pbs",
+				ServiceName: "Proxmox Backup Server",
+				Category:    "backup",
+				CLICommand:  "",
+				Confidence:  0.92,
+				Reasoning:   "PBS environment",
+			},
+		},
+		{
 			name:     "invalid JSON",
 			response: "not json at all",
 			want:     nil,

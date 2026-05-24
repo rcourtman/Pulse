@@ -295,6 +295,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/health", r.handleHealth)
 	r.mux.HandleFunc("/api/monitoring/scheduler/health", RequireAuth(r.config, r.handleSchedulerHealth))
 	r.mux.HandleFunc("/api/state", r.handleState)
+	r.mux.HandleFunc("/api/state/summary", r.handleStateSummary)
 
 	// Log management routes
 	r.mux.HandleFunc("/api/logs/stream", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.logHandlers.HandleStreamLogs)))
@@ -5030,6 +5031,86 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 		log.Error().Err(err).Msg("Failed to encode state response")
 		writeErrorResponse(w, http.StatusInternalServerError, "encoding_error",
 			"Failed to encode state data", nil)
+	}
+}
+
+type stateSummaryResponse struct {
+	ActiveAlerts int                      `json:"activeAlerts"`
+	Nodes        int                      `json:"nodes"`
+	VMs          int                      `json:"vms"`
+	Containers   int                      `json:"containers"`
+	DockerHosts  []stateSummaryDockerHost `json:"dockerHosts"`
+	LastUpdate   time.Time                `json:"lastUpdate"`
+}
+
+type stateSummaryDockerHost struct {
+	Name            string  `json:"name"`
+	Containers      int     `json:"containers"`
+	UptimeSeconds   int64   `json:"uptimeSeconds"`
+	CPUUsagePercent float64 `json:"cpuUsagePercent"`
+}
+
+func buildStateSummary(state models.StateSnapshot) stateSummaryResponse {
+	dockerHosts := make([]stateSummaryDockerHost, 0, len(state.DockerHosts))
+	for _, host := range state.DockerHosts {
+		name := strings.TrimSpace(host.CustomDisplayName)
+		if name == "" {
+			name = strings.TrimSpace(host.DisplayName)
+		}
+		if name == "" {
+			name = strings.TrimSpace(host.Hostname)
+		}
+		if name == "" {
+			name = host.ID
+		}
+
+		dockerHosts = append(dockerHosts, stateSummaryDockerHost{
+			Name:            name,
+			Containers:      len(host.Containers),
+			UptimeSeconds:   host.UptimeSeconds,
+			CPUUsagePercent: host.CPUUsage,
+		})
+	}
+
+	return stateSummaryResponse{
+		ActiveAlerts: len(state.ActiveAlerts),
+		Nodes:        len(state.Nodes),
+		VMs:          len(state.VMs),
+		Containers:   len(state.Containers),
+		DockerHosts:  dockerHosts,
+		LastUpdate:   state.LastUpdate,
+	}
+}
+
+func (r *Router) handleStateSummary(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed",
+			"Only GET method is allowed", nil)
+		return
+	}
+
+	if !CheckAuth(r.config, w, req) {
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized",
+			"Authentication required", nil)
+		return
+	}
+
+	if record := getAPITokenRecordFromRequest(req); record != nil && !record.HasScope(config.ScopeMonitoringRead) {
+		respondMissingScope(w, config.ScopeMonitoringRead)
+		return
+	}
+
+	monitor := r.getTenantMonitor(req.Context())
+	if monitor == nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "no_monitor",
+			"Monitor not available", nil)
+		return
+	}
+
+	if err := utils.WriteJSONResponse(w, buildStateSummary(monitor.GetState())); err != nil {
+		log.Error().Err(err).Msg("Failed to encode state summary response")
+		writeErrorResponse(w, http.StatusInternalServerError, "encoding_error",
+			"Failed to encode state summary", nil)
 	}
 }
 

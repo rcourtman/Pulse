@@ -24,6 +24,7 @@ var (
 	// "check" indicates a data scrub. Reshape can also appear during
 	// level/geometry changes.
 	mdstatOperationRe = regexp.MustCompile(`(?i)\b(recovery|resync|check|reshape)\b\s*=`)
+	mdadmSearchPaths  = []string{"mdadm", "/usr/sbin/mdadm", "/sbin/mdadm", "/usr/bin/mdadm", "/bin/mdadm"}
 	runCommandOutput  = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		cmd := exec.CommandContext(ctx, name, args...)
 		return cmd.Output()
@@ -33,8 +34,8 @@ var (
 // CollectArrays discovers and collects status for all mdadm RAID arrays on the system.
 // Returns an empty slice if mdadm is not available or no arrays are found.
 func CollectArrays(ctx context.Context) ([]host.RAIDArray, error) {
-	// Check if mdadm is available
-	if !isMdadmAvailable(ctx) {
+	mdadmPath, ok := findMdadmCommand(ctx)
+	if !ok {
 		return nil, nil
 	}
 
@@ -51,7 +52,7 @@ func CollectArrays(ctx context.Context) ([]host.RAIDArray, error) {
 	// Collect detailed info for each array
 	var arrays []host.RAIDArray
 	for _, device := range devices {
-		array, err := collectArrayDetail(ctx, device)
+		array, err := collectArrayDetailWithCommand(ctx, mdadmPath, device)
 		if err != nil {
 			// Log but don't fail - continue with other arrays
 			continue
@@ -64,11 +65,21 @@ func CollectArrays(ctx context.Context) ([]host.RAIDArray, error) {
 
 // isMdadmAvailable checks if mdadm binary is accessible
 func isMdadmAvailable(ctx context.Context) bool {
+	_, ok := findMdadmCommand(ctx)
+	return ok
+}
+
+func findMdadmCommand(ctx context.Context) (string, bool) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	_, err := runCommandOutput(ctx, "mdadm", "--version")
-	return err == nil
+	for _, path := range mdadmSearchPaths {
+		if _, err := runCommandOutput(ctx, path, "--version"); err == nil {
+			return path, true
+		}
+	}
+
+	return "", false
 }
 
 // listArrayDevices scans /proc/mdstat to find all md devices
@@ -96,10 +107,14 @@ func listArrayDevices(ctx context.Context) ([]string, error) {
 
 // collectArrayDetail runs mdadm --detail on a specific device and parses the output
 func collectArrayDetail(ctx context.Context, device string) (host.RAIDArray, error) {
+	return collectArrayDetailWithCommand(ctx, "mdadm", device)
+}
+
+func collectArrayDetailWithCommand(ctx context.Context, mdadmPath, device string) (host.RAIDArray, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	output, err := runCommandOutput(ctx, "mdadm", "--detail", device)
+	output, err := runCommandOutput(ctx, mdadmPath, "--detail", device)
 	if err != nil {
 		return host.RAIDArray{}, fmt.Errorf("mdadm --detail %s: %w", device, err)
 	}

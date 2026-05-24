@@ -9,6 +9,7 @@ interface DiskListProps {
 
 export function DiskList(props: DiskListProps) {
   const getUsagePercent = (disk: Disk) => {
+    if (disk.usage === -1) return 0;
     if (!disk.total || disk.total <= 0) return 0;
     return (disk.used / disk.total) * 100;
   };
@@ -59,6 +60,7 @@ export function DiskList(props: DiskListProps) {
             const usage = getUsagePercent(disk);
             const label = disk.mountpoint || disk.device || 'Unknown';
             const hasCapacity = disk.total && disk.total > 0;
+            const hasUsage = hasCapacity && disk.usage !== -1;
 
             return (
               <div class="rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-[10px] leading-tight shadow-sm dark:border-gray-700 dark:bg-gray-800/80">
@@ -69,8 +71,10 @@ export function DiskList(props: DiskListProps) {
                   {label}
                 </div>
                 <div class="mt-0.5 text-[9px] text-gray-500 dark:text-gray-400">
-                  {hasCapacity
+                  {hasUsage
                     ? `${formatBytes(disk.used)}/${formatBytes(disk.total)}`
+                    : hasCapacity
+                    ? `Capacity ${formatBytes(disk.total)}`
                     : 'Usage unavailable'}
                 </div>
                 <div class="relative mt-1 h-1.5 w-full overflow-hidden rounded bg-gray-200 dark:bg-gray-600">
@@ -80,7 +84,7 @@ export function DiskList(props: DiskListProps) {
                   />
                 </div>
                 <div class="mt-0.5 flex items-center justify-between text-[9px] font-medium text-gray-600 dark:text-gray-300">
-                  <span>{hasCapacity ? `${usage.toFixed(0)}%` : '—'}</span>
+                  <span>{hasUsage ? `${usage.toFixed(0)}%` : '—'}</span>
                   <span>{disk.type?.toUpperCase() ?? ''}</span>
                 </div>
               </div>

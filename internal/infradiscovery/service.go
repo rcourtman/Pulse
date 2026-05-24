@@ -465,19 +465,16 @@ func (s *Service) parseAIResponse(response string) *DiscoveryResult {
 
 	// Handle markdown code blocks
 	if strings.HasPrefix(response, "```") {
-		lines := strings.Split(response, "\n")
-		var jsonLines []string
-		inBlock := false
-		for _, line := range lines {
-			if strings.HasPrefix(line, "```") {
-				inBlock = !inBlock
-				continue
-			}
-			if inBlock {
-				jsonLines = append(jsonLines, line)
+		response = strings.TrimSpace(strings.TrimPrefix(response, "```"))
+		if end := strings.LastIndex(response, "```"); end >= 0 {
+			response = strings.TrimSpace(response[:end])
+		}
+		if start := strings.Index(response, "{"); start > 0 {
+			prefix := strings.TrimSpace(response[:start])
+			if !strings.ContainsAny(prefix, "\r\n{}[]") {
+				response = strings.TrimSpace(response[start:])
 			}
 		}
-		response = strings.Join(jsonLines, "\n")
 	}
 
 	// Find JSON object in response
