@@ -31,6 +31,42 @@ func (m *mockPVEClientSnapshots) GetVMMemAvailableFromAgent(ctx context.Context,
 	return 0, fmt.Errorf("not implemented")
 }
 
+type backupStorageTimeoutSnapshotClient struct {
+	mockPVEClientExtra
+	snapshots     []proxmox.Snapshot
+	snapshotCalls int
+	storageCalls  int
+}
+
+func (m *backupStorageTimeoutSnapshotClient) GetBackupTasks(ctx context.Context) ([]proxmox.Task, error) {
+	return nil, nil
+}
+
+func (m *backupStorageTimeoutSnapshotClient) GetStorage(ctx context.Context, node string) ([]proxmox.Storage, error) {
+	m.storageCalls++
+	if m.storageCalls > 1 {
+		return nil, nil
+	}
+
+	<-ctx.Done()
+	return nil, fmt.Errorf("storage scan exceeded backup inventory budget")
+}
+
+func (m *backupStorageTimeoutSnapshotClient) GetVMSnapshots(ctx context.Context, node string, vmid int) ([]proxmox.Snapshot, error) {
+	m.snapshotCalls++
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return m.snapshots, nil
+}
+
+func (m *backupStorageTimeoutSnapshotClient) GetContainerSnapshots(ctx context.Context, node string, vmid int) ([]proxmox.Snapshot, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
 func TestMonitor_PollGuestSnapshots_Coverage(t *testing.T) {
 	m := &Monitor{
 		state: models.NewState(),
@@ -141,6 +177,48 @@ func TestMonitor_PollGuestSnapshots_PreservesPreviousOnPerVMError(t *testing.T) 
 	// was deleted (#1437).
 	if _, persisted := byName["snap_persisted"]; !persisted {
 		t.Errorf("expected snap_persisted (vm999) to be carried forward after fetch failure, got names=%v", keys(byName))
+	}
+}
+
+func TestMonitor_PollPVEBackupsAndSnapshots_DoesNotStarveSnapshotsAfterStorageTimeout(t *testing.T) {
+	m := &Monitor{state: models.NewState()}
+
+	m.state.UpdateVMsForInstance("pve1", []models.VM{{
+		ID:       "qemu/100",
+		VMID:     100,
+		Node:     "node1",
+		Instance: "pve1",
+		Name:     "vm100",
+		Template: false,
+	}})
+
+	client := &backupStorageTimeoutSnapshotClient{
+		snapshots: []proxmox.Snapshot{{
+			Name:        "snap_after_storage_timeout",
+			SnapTime:    4000,
+			Description: "created while storage scan was slow",
+		}},
+	}
+
+	m.pollPVEBackupsAndSnapshots(
+		context.Background(),
+		"pve1",
+		client,
+		[]proxmox.Node{{Node: "node1", Status: "online"}},
+		map[string]string{"node1": "online"},
+		time.Millisecond,
+	)
+
+	if client.snapshotCalls == 0 {
+		t.Fatal("expected guest snapshot polling to run even after storage backup polling exhausted its budget")
+	}
+
+	got := m.state.GetSnapshot().PVEBackups.GuestSnapshots
+	if len(got) != 1 {
+		t.Fatalf("expected one guest snapshot after storage timeout, got %#v", got)
+	}
+	if got[0].Name != "snap_after_storage_timeout" {
+		t.Fatalf("expected fresh snapshot after storage timeout, got %#v", got[0])
 	}
 }
 
