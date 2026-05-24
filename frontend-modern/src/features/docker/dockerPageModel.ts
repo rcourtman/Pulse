@@ -1,5 +1,5 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
-import type { Resource, ResourceType } from '@/types/resource';
+import type { DockerStorageUsageMeta, Resource, ResourceType } from '@/types/resource';
 import {
   getInfrastructureSystemIdentityBadges,
   type ResourceBadge,
@@ -24,11 +24,13 @@ export type DockerPageTabId =
   | 'networks'
   | 'swarm';
 
-export const DOCKER_TAB_SPECS: readonly {
+export type DockerTabSpec = {
   id: DockerPageTabId;
   label: string;
   path: string;
-}[] = [
+};
+
+export const DOCKER_TAB_SPECS: readonly DockerTabSpec[] = [
   // Keep the runtime lens at operator-workflow granularity. Overview owns
   // runtime hosts; detailed object inventory belongs in the Containers,
   // Images, Storage, Networks, and Swarm workflows so the page does not repeat
@@ -100,6 +102,32 @@ export type DockerPageModel = {
   secrets: Resource[];
   configs: Resource[];
 };
+
+export const hasDockerStorageUsageBucket = (bucket?: DockerStorageUsageMeta): boolean =>
+  Boolean(
+    bucket &&
+      ((bucket.totalCount ?? 0) > 0 ||
+        (bucket.activeCount ?? 0) > 0 ||
+        (bucket.totalSizeBytes ?? 0) > 0 ||
+        (bucket.reclaimableBytes ?? 0) > 0),
+  );
+
+export const hasDockerEngineStorageUsage = (host: Resource): boolean =>
+  hasDockerStorageUsageBucket(host.docker?.imagesUsage) ||
+  hasDockerStorageUsageBucket(host.docker?.containersUsage) ||
+  hasDockerStorageUsageBucket(host.docker?.volumesUsage) ||
+  hasDockerStorageUsageBucket(host.docker?.buildCacheUsage);
+
+export const hasDockerSwarmInventory = (model: DockerPageModel): boolean =>
+  model.hosts.some(hasDockerSwarmEvidence) ||
+  model.services.length > 0 ||
+  model.tasks.length > 0 ||
+  model.nodes.length > 0 ||
+  model.secrets.length > 0 ||
+  model.configs.length > 0;
+
+export const getDockerPageTabSpecs = (model: DockerPageModel): readonly DockerTabSpec[] =>
+  DOCKER_TAB_SPECS.filter((tab) => tab.id !== 'swarm' || hasDockerSwarmInventory(model));
 
 const RUNTIME_ONLY_SYSTEM_LABELS = new Set(['docker', 'docker / podman', 'podman']);
 

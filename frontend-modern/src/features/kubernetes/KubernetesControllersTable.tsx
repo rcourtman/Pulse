@@ -50,6 +50,7 @@ const controllerScope = (resource: Resource): string => {
 
 const targetValue = (resource: Resource): string => {
   switch (resource.type) {
+    case 'k8s-replicaset':
     case 'k8s-statefulset':
       return `${resource.kubernetes?.desiredReplicas ?? 0} pods`;
     case 'k8s-daemonset':
@@ -90,6 +91,7 @@ const readyOrDoneValue = (resource: Resource): number | undefined => {
 
 const availableValue = (resource: Resource): number | undefined => {
   switch (resource.type) {
+    case 'k8s-replicaset':
     case 'k8s-statefulset':
       return resource.kubernetes?.availableReplicas;
     case 'k8s-daemonset':
@@ -101,6 +103,7 @@ const availableValue = (resource: Resource): number | undefined => {
 
 const exceptionSummary = (resource: Resource): string => {
   switch (resource.type) {
+    case 'k8s-replicaset':
     case 'k8s-statefulset': {
       const desired = resource.kubernetes?.desiredReplicas ?? 0;
       const ready = resource.kubernetes?.readyReplicas ?? 0;
@@ -126,6 +129,14 @@ const exceptionSummary = (resource: Resource): string => {
 
 const apiDetail = (resource: Resource): string => {
   switch (resource.type) {
+    case 'k8s-replicaset': {
+      if (typeof resource.kubernetes?.fullyLabeledReplicas === 'number') {
+        return `Fully labeled: ${resource.kubernetes.fullyLabeledReplicas}`;
+      }
+      return typeof resource.kubernetes?.observedGeneration === 'number'
+        ? `Observed: ${resource.kubernetes.observedGeneration}`
+        : '—';
+    }
     case 'k8s-statefulset':
       return resource.kubernetes?.serviceName ? `Service: ${resource.kubernetes.serviceName}` : '—';
     case 'k8s-daemonset':

@@ -29,6 +29,12 @@ const mocks = vi.hoisted(() => ({
       </div>
     ),
   ),
+  DockerStorageUsageTable: vi.fn((props: { hosts: Resource[] }) => (
+    <div data-testid="docker-storage-usage-table" data-host-count={props.hosts.length} />
+  )),
+  DockerVolumesTable: vi.fn((props: { resources: Resource[] }) => (
+    <div data-testid="docker-volumes-table" data-resource-count={props.resources.length} />
+  )),
 }));
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
@@ -51,13 +57,35 @@ vi.mock('../DockerHostsTable', () => ({
   DockerHostsTable: mocks.DockerHostsTable,
 }));
 
+vi.mock('../DockerStorageUsageTable', () => ({
+  DockerStorageUsageTable: mocks.DockerStorageUsageTable,
+}));
+
+vi.mock('../DockerVolumesTable', () => ({
+  DockerVolumesTable: mocks.DockerVolumesTable,
+}));
+
 vi.mock('@/features/platformPage/sharedPlatformPage', async () => {
   const actual = await vi.importActual<typeof import('@/features/platformPage/sharedPlatformPage')>(
     '@/features/platformPage/sharedPlatformPage',
   );
   return {
     ...actual,
-    PlatformSectionTabs: () => <div data-testid="docker-section-tabs" />,
+    PlatformSectionTabs: (props: {
+      active: string;
+      tabs: Array<{ id: string; label: string; path: string }>;
+    }) => (
+      <div
+        data-testid="docker-section-tabs"
+        data-active={props.active}
+        data-tabs={props.tabs.map((tab) => tab.id).join(',')}
+      />
+    ),
+    PlatformTableEmptyState: (props: { title: string; description: string }) => (
+      <div data-testid="platform-table-empty-state" data-title={props.title}>
+        {props.description}
+      </div>
+    ),
   };
 });
 
@@ -93,6 +121,23 @@ const makeDockerContainer = (overrides: Partial<Resource> = {}): Resource => ({
     runtime: 'docker',
     hostname: 'docker-01',
     image: 'nginx:latest',
+  } as NonNullable<Resource['docker']>,
+  ...overrides,
+});
+
+const makeDockerVolume = (overrides: Partial<Resource> = {}): Resource => ({
+  id: 'docker-volume:docker-01:checkout-data',
+  name: 'checkout-data',
+  displayName: 'checkout-data',
+  platformId: 'lab',
+  platformType: 'docker',
+  sourceType: 'agent',
+  status: 'online',
+  type: 'docker-volume',
+  lastSeen: 1_700_000_000_000,
+  docker: {
+    runtime: 'docker',
+    driver: 'local',
   } as NonNullable<Resource['docker']>,
   ...overrides,
 });
@@ -139,6 +184,10 @@ describe('DockerPageSurface', () => {
       'data-show-toolbar',
       'false',
     );
+    expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute(
+      'data-tabs',
+      'overview,containers,images,storage,networks',
+    );
     expect(screen.queryByTestId('docker-containers-table')).toBeNull();
   });
 
@@ -154,6 +203,110 @@ describe('DockerPageSurface', () => {
     expect(screen.getByTestId('docker-containers-table')).toHaveAttribute(
       'data-show-toolbar',
       'undefined',
+    );
+  });
+
+  it('shows the Swarm tab only when Docker hosts report Swarm evidence', () => {
+    mocks.useUnifiedResources.mockReturnValue({
+      error: () => null,
+      loading: () => false,
+      refetch: vi.fn(),
+      resources: () => [
+        makeDockerHost({
+          docker: {
+            runtime: 'docker',
+            swarm: {
+              nodeId: 'node-1',
+              nodeRole: 'manager',
+              localState: 'active',
+            },
+          } as NonNullable<Resource['docker']>,
+        }),
+      ],
+    });
+
+    render(() => <DockerPageSurface />);
+
+    expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute(
+      'data-tabs',
+      'overview,containers,images,storage,networks,swarm',
+    );
+  });
+
+  it('falls back to Overview when the Swarm route is requested without Swarm evidence', () => {
+    mocks.pathname = '/docker/swarm';
+
+    render(() => <DockerPageSurface />);
+
+    expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute('data-active', 'overview');
+    expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute(
+      'data-resource-count',
+      '1',
+    );
+  });
+
+  it('renders only volume storage inventory when engine storage usage is absent', () => {
+    mocks.pathname = '/docker/storage';
+    mocks.useUnifiedResources.mockReturnValue({
+      error: () => null,
+      loading: () => false,
+      refetch: vi.fn(),
+      resources: () => [makeDockerHost(), makeDockerVolume()],
+    });
+
+    render(() => <DockerPageSurface />);
+
+    expect(screen.queryByTestId('docker-storage-usage-table')).toBeNull();
+    expect(screen.getByTestId('docker-volumes-table')).toHaveAttribute('data-resource-count', '1');
+    expect(screen.queryByTestId('platform-table-empty-state')).toBeNull();
+  });
+
+  it('renders only engine storage usage when volume inventory is absent', () => {
+    mocks.pathname = '/docker/storage';
+    mocks.useUnifiedResources.mockReturnValue({
+      error: () => null,
+      loading: () => false,
+      refetch: vi.fn(),
+      resources: () => [
+        makeDockerHost({
+          docker: {
+            runtime: 'docker',
+            imagesUsage: {
+              totalCount: 1,
+              totalSizeBytes: 1024,
+            },
+          } as NonNullable<Resource['docker']>,
+        }),
+      ],
+    });
+
+    render(() => <DockerPageSurface />);
+
+    expect(screen.getByTestId('docker-storage-usage-table')).toHaveAttribute(
+      'data-host-count',
+      '1',
+    );
+    expect(screen.queryByTestId('docker-volumes-table')).toBeNull();
+    expect(screen.queryByTestId('platform-table-empty-state')).toBeNull();
+  });
+
+  it('uses one Storage tab empty state when no storage inventory exists', () => {
+    mocks.pathname = '/docker/storage';
+    mocks.useUnifiedResources.mockReturnValue({
+      error: () => null,
+      loading: () => false,
+      refetch: vi.fn(),
+      resources: () => [makeDockerHost()],
+    });
+
+    render(() => <DockerPageSurface />);
+
+    expect(screen.queryByTestId('docker-storage-usage-table')).toBeNull();
+    expect(screen.queryByTestId('docker-volumes-table')).toBeNull();
+    expect(screen.getAllByTestId('platform-table-empty-state')).toHaveLength(1);
+    expect(screen.getByTestId('platform-table-empty-state')).toHaveAttribute(
+      'data-title',
+      'No Docker or Podman storage inventory',
     );
   });
 });

@@ -27,10 +27,24 @@ afterEach(() => {
 });
 
 describe('KubernetesControllersTable', () => {
-  it('renders native controller fields for StatefulSet, DaemonSet, Job, and CronJob rows', () => {
+  it('renders native controller fields for ReplicaSet, StatefulSet, DaemonSet, Job, and CronJob rows', () => {
     render(() => (
       <KubernetesControllersTable
         resources={[
+          makeResource({
+            id: 'checkout-api-replicaset',
+            type: 'k8s-replicaset',
+            kubernetes: {
+              clusterName: 'prod',
+              namespace: 'apps',
+              resourceKind: 'ReplicaSet',
+              desiredReplicas: 4,
+              currentReplicas: 4,
+              readyReplicas: 3,
+              availableReplicas: 3,
+              fullyLabeledReplicas: 4,
+            },
+          }),
           makeResource({
             id: 'checkout-api-stateful',
             type: 'k8s-statefulset',
@@ -102,9 +116,13 @@ describe('KubernetesControllersTable', () => {
     expect(screen.getByText('Exceptions')).toBeInTheDocument();
     expect(screen.getByText('Detail')).toBeInTheDocument();
 
+    expect(screen.getByText('ReplicaSet')).toBeInTheDocument();
+    expect(screen.getByText('4 pods')).toBeInTheDocument();
+    expect(screen.getAllByText('1 not ready')).toHaveLength(2);
+    expect(screen.getByText('Fully labeled: 4')).toBeInTheDocument();
+
     expect(screen.getByText('StatefulSet')).toBeInTheDocument();
     expect(screen.getByText('3 pods')).toBeInTheDocument();
-    expect(screen.getByText('1 not ready')).toBeInTheDocument();
     expect(screen.getByText('Service: checkout-headless')).toBeInTheDocument();
 
     expect(screen.getByText('DaemonSet')).toBeInTheDocument();

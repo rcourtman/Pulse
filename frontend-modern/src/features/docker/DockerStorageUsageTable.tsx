@@ -27,24 +27,13 @@ import {
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { DockerStorageUsageMeta, Resource } from '@/types/resource';
-
-const hasStorageBucket = (bucket?: DockerStorageUsageMeta): boolean =>
-  Boolean(
-    bucket &&
-    ((bucket.totalCount ?? 0) > 0 ||
-      (bucket.activeCount ?? 0) > 0 ||
-      (bucket.totalSizeBytes ?? 0) > 0 ||
-      (bucket.reclaimableBytes ?? 0) > 0),
-  );
-
-const hasEngineStorageUsage = (host: Resource): boolean =>
-  hasStorageBucket(host.docker?.imagesUsage) ||
-  hasStorageBucket(host.docker?.containersUsage) ||
-  hasStorageBucket(host.docker?.volumesUsage) ||
-  hasStorageBucket(host.docker?.buildCacheUsage);
+import {
+  hasDockerEngineStorageUsage,
+  hasDockerStorageUsageBucket,
+} from './dockerPageModel';
 
 const bucketValue = (bucket?: DockerStorageUsageMeta): JSX.Element => {
-  if (!hasStorageBucket(bucket)) return <span class="text-muted">—</span>;
+  if (!hasDockerStorageUsageBucket(bucket)) return <span class="text-muted">—</span>;
   const totalSize = bucket?.totalSizeBytes ?? 0;
   const reclaimable = bucket?.reclaimableBytes ?? 0;
   const count = bucket?.totalCount ?? 0;
@@ -66,7 +55,7 @@ export const DockerStorageUsageTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
 }> = (props) => {
-  const storageHosts = () => props.hosts.filter(hasEngineStorageUsage);
+  const storageHosts = () => props.hosts.filter(hasDockerEngineStorageUsage);
   const tableState = createPlatformTableFilterState({
     resources: storageHosts,
     initialStatus: 'all' as PlatformResourceStatusFilter,

@@ -137,6 +137,7 @@ interface KubernetesOverviewProps {
 }
 
 const getKubernetesControllerResources = (model: KubernetesPageModel): Resource[] => [
+  ...model.replicaSets,
   ...model.statefulSets,
   ...model.daemonSets,
   ...model.jobs,
@@ -145,11 +146,7 @@ const getKubernetesControllerResources = (model: KubernetesPageModel): Resource[
 
 function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: Resource[] }) {
   const hasWorkloadInventory = createMemo(
-    () =>
-      props.model.pods.length > 0 ||
-      props.model.deployments.length > 0 ||
-      props.controllers.length > 0 ||
-      props.model.autoscaling.length > 0,
+    () => props.model.workloads.length > 0 || props.model.autoscaling.length > 0,
   );
 
   return (
@@ -185,7 +182,7 @@ function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: R
             resources={props.controllers}
             emptyIcon={k8sIcon()}
             emptyTitle="No workload controllers reported"
-            emptyDescription="StatefulSets, DaemonSets, Jobs, and CronJobs appear here when the agent reports them."
+            emptyDescription="ReplicaSets, StatefulSets, DaemonSets, Jobs, and CronJobs appear here when the agent reports them."
           />
         </Show>
         <Show when={props.model.autoscaling.length > 0}>

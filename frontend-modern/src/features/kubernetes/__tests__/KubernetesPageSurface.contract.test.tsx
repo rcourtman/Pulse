@@ -167,6 +167,11 @@ describe('KubernetesPageSurface contract', () => {
     );
     expect(mockUseUnifiedResources).toHaveBeenCalledWith(
       expect.objectContaining({
+        query: expect.stringContaining('k8s-replicaset'),
+      }),
+    );
+    expect(mockUseUnifiedResources).toHaveBeenCalledWith(
+      expect.objectContaining({
         query: expect.stringContaining('k8s-statefulset'),
       }),
     );
@@ -186,6 +191,7 @@ describe('KubernetesPageSurface contract', () => {
     setResources([
       makeResource({ id: 'checkout-api', type: 'pod' }),
       makeResource({ id: 'checkout-deployment', type: 'k8s-deployment' }),
+      makeResource({ id: 'checkout-replicaset', type: 'k8s-replicaset' }),
       makeResource({ id: 'checkout-stateful', type: 'k8s-statefulset' }),
       makeResource({ id: 'checkout-hpa', type: 'k8s-horizontal-pod-autoscaler' }),
     ]);
@@ -195,8 +201,19 @@ describe('KubernetesPageSurface contract', () => {
     expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'workloads');
     expect(screen.getByTestId('pods-table')).toHaveAttribute('data-rows', '1');
     expect(screen.getByTestId('deployments-table')).toHaveAttribute('data-rows', '1');
-    expect(screen.getByTestId('controllers-table')).toHaveAttribute('data-rows', '1');
+    expect(screen.getByTestId('controllers-table')).toHaveAttribute('data-rows', '2');
     expect(screen.getByTestId('autoscaling-table')).toHaveAttribute('data-rows', '1');
+  });
+
+  it('routes ReplicaSets to the rendered workload controllers table', () => {
+    mockPathname.mockReturnValue('/kubernetes/workloads');
+    setResources([makeResource({ id: 'checkout-replicaset', type: 'k8s-replicaset' })]);
+
+    renderSurface();
+
+    expect(screen.getByTestId('controllers-table')).toHaveAttribute('data-rows', '1');
+    expect(screen.queryByTestId('pods-table')).toBeNull();
+    expect(screen.queryByTestId('deployments-table')).toBeNull();
   });
 
   it('groups Services, ingress, and endpoints under the Services tab without duplicating services in networking', () => {

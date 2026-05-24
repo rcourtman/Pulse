@@ -27,23 +27,10 @@ afterEach(() => {
 });
 
 describe('KubernetesNetworkingTable', () => {
-  it('renders Service, Ingress, and EndpointSlice fields from the Kubernetes networking APIs', () => {
+  it('renders Ingress and EndpointSlice fields from the Kubernetes networking APIs', () => {
     render(() => (
       <KubernetesNetworkingTable
         resources={[
-          makeResource({
-            id: 'checkout-api',
-            type: 'k8s-service',
-            kubernetes: {
-              clusterId: 'cluster-1',
-              namespace: 'services',
-              resourceKind: 'Service',
-              serviceType: 'ClusterIP',
-              clusterIp: '10.96.18.24',
-              servicePorts: [{ name: 'http', protocol: 'TCP', port: 8080, targetPort: '8080' }],
-              selector: { app: 'checkout-api' },
-            },
-          }),
           makeResource({
             id: 'checkout-web',
             type: 'k8s-ingress',
@@ -81,14 +68,11 @@ describe('KubernetesNetworkingTable', () => {
     expect(screen.getByText('Type / class')).toBeInTheDocument();
     expect(screen.getByText('Address / hosts')).toBeInTheDocument();
     expect(screen.getByText('Targets')).toBeInTheDocument();
-    expect(screen.getByText('ClusterIP')).toBeInTheDocument();
-    expect(screen.getByText('10.96.18.24')).toBeInTheDocument();
-    expect(screen.getAllByText('8080:8080/tcp')).toHaveLength(1);
-    expect(screen.getByText('app=checkout-api')).toBeInTheDocument();
     expect(screen.getByText('nginx')).toBeInTheDocument();
     expect(screen.getByText('shop.example.com')).toBeInTheDocument();
     expect(screen.getByText('2 rules')).toBeInTheDocument();
     expect(screen.getByText('IPv4')).toBeInTheDocument();
+    expect(screen.getByText('8080/tcp')).toBeInTheDocument();
     expect(screen.getAllByText('3/3 ready')).toHaveLength(1);
     expect(screen.getByText('checkout-api · 3/3 ready')).toBeInTheDocument();
   });

@@ -5,7 +5,10 @@ import {
   DOCKER_TAB_SPECS,
   buildDockerPageModel,
   getDockerHostSystemBadge,
+  getDockerPageTabSpecs,
+  hasDockerEngineStorageUsage,
   hasDockerSwarmEvidence,
+  hasDockerSwarmInventory,
   resolveDockerPageTabId,
 } from '../dockerPageModel';
 
@@ -177,6 +180,89 @@ describe('dockerPageModel', () => {
               nodeId: 'node-1',
               nodeRole: 'manager',
               localState: 'active',
+            },
+          },
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it('derives the visible Docker workflow tabs from Swarm evidence', () => {
+    const nonSwarmModel = buildDockerPageModel([
+      makeResource({
+        id: 'docker-host-1',
+        type: 'agent',
+        docker: {
+          runtime: 'docker',
+          swarm: {
+            nodeRole: 'worker',
+            localState: 'inactive',
+          },
+        },
+      }),
+    ]);
+    const swarmModel = buildDockerPageModel([
+      makeResource({
+        id: 'docker-host-1',
+        type: 'agent',
+        docker: {
+          runtime: 'docker',
+          swarm: {
+            nodeId: 'node-1',
+            nodeRole: 'manager',
+            localState: 'active',
+          },
+        },
+      }),
+    ]);
+
+    expect(hasDockerSwarmInventory(nonSwarmModel)).toBe(false);
+    expect(getDockerPageTabSpecs(nonSwarmModel).map((tab) => tab.id)).toEqual([
+      'overview',
+      'containers',
+      'images',
+      'storage',
+      'networks',
+    ]);
+    expect(hasDockerSwarmInventory(swarmModel)).toBe(true);
+    expect(getDockerPageTabSpecs(swarmModel).map((tab) => tab.id)).toEqual([
+      'overview',
+      'containers',
+      'images',
+      'storage',
+      'networks',
+      'swarm',
+    ]);
+  });
+
+  it('detects engine storage usage only from populated disk-usage buckets', () => {
+    expect(
+      hasDockerEngineStorageUsage(
+        makeResource({
+          id: 'docker-host-empty',
+          type: 'agent',
+          docker: {
+            runtime: 'docker',
+            imagesUsage: {
+              totalCount: 0,
+              totalSizeBytes: 0,
+              reclaimableBytes: 0,
+            },
+          },
+        }),
+      ),
+    ).toBe(false);
+
+    expect(
+      hasDockerEngineStorageUsage(
+        makeResource({
+          id: 'docker-host-storage',
+          type: 'agent',
+          docker: {
+            runtime: 'docker',
+            buildCacheUsage: {
+              totalCount: 1,
+              totalSizeBytes: 1024,
             },
           },
         }),

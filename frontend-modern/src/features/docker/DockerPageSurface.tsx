@@ -20,8 +20,10 @@ import { DockerSwarmNodesTable } from './DockerSwarmNodesTable';
 import { DockerTasksTable } from './DockerTasksTable';
 import { DockerVolumesTable } from './DockerVolumesTable';
 import {
-  DOCKER_TAB_SPECS,
   buildDockerPageModel,
+  getDockerPageTabSpecs,
+  hasDockerEngineStorageUsage,
+  hasDockerSwarmInventory,
   resolveDockerPageTabId,
   type DockerPageModel,
   type DockerPageTabId,
@@ -39,16 +41,20 @@ export function DockerPageSurface() {
     cacheKey: 'docker-workspace',
     initialHydration: 'prefer-ws-then-rest',
   });
-  const activeTab = createMemo<DockerPageTabId>(() => {
+  const requestedTab = createMemo<DockerPageTabId>(() => {
     const segment = location.pathname.split('/').filter(Boolean)[1];
     return resolveDockerPageTabId(segment);
   });
   const model = createMemo(() => buildDockerPageModel(resources()));
+  const tabs = createMemo(() => getDockerPageTabSpecs(model()));
+  const activeTab = createMemo<DockerPageTabId>(() =>
+    tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
+  );
 
   return (
     <div data-testid="docker-page" class="space-y-3">
       <PlatformSectionTabs
-        tabs={DOCKER_TAB_SPECS}
+        tabs={tabs()}
         active={activeTab()}
         ariaLabel="Container runtime sections"
       />
@@ -128,34 +134,47 @@ export function DockerPageSurface() {
 export default DockerPageSurface;
 
 function DockerStorage(props: { model: DockerPageModel }) {
+  const hasEngineUsage = createMemo(() => props.model.hosts.some(hasDockerEngineStorageUsage));
+  const hasStorageInventory = createMemo(
+    () => hasEngineUsage() || props.model.volumes.length > 0,
+  );
+
   return (
-    <div class="space-y-4">
-      <DockerStorageUsageTable
-        hosts={props.model.hosts}
-        sourceCount={props.model.hosts.length}
-        emptyIcon={dockerIcon()}
-        emptyTitle="No Docker or Podman storage usage"
-        emptyDescription="Engine disk-usage snapshots appear here when a Docker or Podman host reports them."
-      />
-      <DockerVolumesTable
-        resources={props.model.volumes}
-        emptyIcon={dockerIcon()}
-        emptyTitle="No volumes"
-        emptyDescription="Volumes appear here when the container runtime reports volume inventory."
-      />
-    </div>
+    <Show
+      when={hasStorageInventory()}
+      fallback={
+        <PlatformTableEmptyState
+          icon={dockerIcon()}
+          title="No Docker or Podman storage inventory"
+          description="Engine disk-usage snapshots and volumes appear here when Docker or Podman hosts report storage inventory."
+        />
+      }
+    >
+      <div class="space-y-4">
+        <Show when={hasEngineUsage()}>
+          <DockerStorageUsageTable
+            hosts={props.model.hosts}
+            sourceCount={props.model.hosts.length}
+            emptyIcon={dockerIcon()}
+            emptyTitle="No Docker or Podman storage usage"
+            emptyDescription="Engine disk-usage snapshots appear here when a Docker or Podman host reports them."
+          />
+        </Show>
+        <Show when={props.model.volumes.length > 0}>
+          <DockerVolumesTable
+            resources={props.model.volumes}
+            emptyIcon={dockerIcon()}
+            emptyTitle="No volumes"
+            emptyDescription="Volumes appear here when the container runtime reports volume inventory."
+          />
+        </Show>
+      </div>
+    </Show>
   );
 }
 
 function DockerSwarm(props: { model: DockerPageModel }) {
-  const hasSwarmInventory = createMemo(
-    () =>
-      props.model.services.length > 0 ||
-      props.model.tasks.length > 0 ||
-      props.model.nodes.length > 0 ||
-      props.model.secrets.length > 0 ||
-      props.model.configs.length > 0,
-  );
+  const hasSwarmInventory = createMemo(() => hasDockerSwarmInventory(props.model));
 
   return (
     <Show

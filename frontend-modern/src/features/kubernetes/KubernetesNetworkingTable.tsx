@@ -39,7 +39,6 @@ const resourceName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
 
 const networkKind = (resource: Resource): string => {
-  if (resource.type === 'k8s-service') return 'Service';
   if (resource.type === 'k8s-ingress') return 'Ingress';
   if (resource.type === 'k8s-endpoint-slice') return 'EndpointSlice';
   return resource.kubernetes?.resourceKind || resource.type;
@@ -68,17 +67,6 @@ const summarizeValues = (
 };
 
 const portLabel = (resource: Resource): { label: string; title: string } => {
-  if (resource.kubernetes?.servicePorts?.length) {
-    return summarizeValues(
-      resource.kubernetes.servicePorts.map((port) => {
-        if (!port.port) return undefined;
-        const protocol = port.protocol ? `/${port.protocol.toLowerCase()}` : '';
-        const target = port.targetPort ? `:${port.targetPort}` : '';
-        const nodePort = port.nodePort ? ` node:${port.nodePort}` : '';
-        return `${port.port}${target}${protocol}${nodePort}`;
-      }),
-    );
-  }
   if (resource.kubernetes?.endpointPorts?.length) {
     return summarizeValues(
       resource.kubernetes.endpointPorts.map((port) => {
@@ -93,19 +81,9 @@ const portLabel = (resource: Resource): { label: string; title: string } => {
 };
 
 const typeOrClass = (resource: Resource): string =>
-  textValue(
-    resource.kubernetes?.serviceType ||
-      resource.kubernetes?.className ||
-      resource.kubernetes?.addressType,
-  );
+  textValue(resource.kubernetes?.className || resource.kubernetes?.addressType);
 
 const addressOrHosts = (resource: Resource): { label: string; title: string } => {
-  if (resource.type === 'k8s-service') {
-    return summarizeValues([
-      resource.kubernetes?.clusterIp,
-      ...(resource.kubernetes?.externalIps ?? []),
-    ]);
-  }
   if (resource.type === 'k8s-ingress') {
     return summarizeValues([
       ...(resource.kubernetes?.hosts ?? []),
@@ -125,17 +103,7 @@ const addressOrHosts = (resource: Resource): { label: string; title: string } =>
   return summarizeValues(resource.kubernetes?.addresses);
 };
 
-const selectorSummary = (resource: Resource): { label: string; title: string } => {
-  const selector = resource.kubernetes?.selector;
-  if (!selector || Object.keys(selector).length === 0) return { label: '—', title: '' };
-  const pairs = Object.entries(selector)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, value]) => `${key}=${value}`);
-  return summarizeValues(pairs, 2);
-};
-
 const targetSummary = (resource: Resource): { label: string; title: string } => {
-  if (resource.type === 'k8s-service') return selectorSummary(resource);
   if (resource.type === 'k8s-ingress') {
     const rules = resource.kubernetes?.ingressRuleCount;
     const hosts = summarizeValues(resource.kubernetes?.hosts);
@@ -214,7 +182,7 @@ export const KubernetesNetworkingTable: Component<{
           }
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-            <TableCardHeader title={props.title ?? 'Services, Ingresses, and EndpointSlices'} />
+            <TableCardHeader title={props.title ?? 'Ingresses and EndpointSlices'} />
             <Table class="min-w-full table-fixed text-xs md:min-w-[1180px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
