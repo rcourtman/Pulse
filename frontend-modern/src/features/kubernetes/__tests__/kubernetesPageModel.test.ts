@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
   KUBERNETES_TAB_SPECS,
+  buildKubernetesClusterChildCounts,
   buildKubernetesPageModel,
   compareKubernetesControllers,
   compareKubernetesDeployments,
@@ -578,6 +579,81 @@ describe('kubernetesPageModel', () => {
       expect(model.pods.map((r) => r.id)).toEqual(['pod-crash', 'pod-happy']);
       expect(model.deployments.map((r) => r.id)).toEqual(['dep-broken', 'dep-partial']);
       expect(model.workloads.slice(0, 2).map((r) => r.id)).toEqual(['dep-broken', 'dep-partial']);
+    });
+  });
+
+  describe('buildKubernetesClusterChildCounts', () => {
+    const cluster = (id: string, k: { clusterId?: string; clusterName?: string }): Resource =>
+      makeResource({ id, type: 'k8s-cluster', kubernetes: k });
+
+    it('walks resources once and rolls per-cluster nodes / pods / deployments', () => {
+      const prod = cluster('cluster-prod', { clusterId: 'prod', clusterName: 'Production' });
+      const stg = cluster('cluster-stg', { clusterId: 'stg', clusterName: 'Staging' });
+      const resources = [
+        prod,
+        stg,
+        makeResource({ id: 'n1', type: 'k8s-node', kubernetes: { clusterId: 'prod' } }),
+        makeResource({ id: 'n2', type: 'k8s-node', kubernetes: { clusterId: 'prod' } }),
+        makeResource({ id: 'n3', type: 'k8s-node', kubernetes: { clusterId: 'stg' } }),
+        makeResource({ id: 'p1', type: 'pod', kubernetes: { clusterId: 'prod' } }),
+        makeResource({ id: 'p2', type: 'pod', kubernetes: { clusterId: 'prod' } }),
+        makeResource({ id: 'p3', type: 'pod', kubernetes: { clusterId: 'prod' } }),
+        makeResource({ id: 'p4', type: 'pod', kubernetes: { clusterName: 'Staging' } }),
+        makeResource({
+          id: 'd1',
+          type: 'k8s-deployment',
+          kubernetes: { clusterId: 'prod' },
+        }),
+      ];
+
+      const counts = buildKubernetesClusterChildCounts(resources, [prod, stg]);
+      expect(counts.get('cluster-prod')).toEqual({ nodes: 2, pods: 3, deployments: 1 });
+      expect(counts.get('cluster-stg')).toEqual({ nodes: 1, pods: 1, deployments: 0 });
+    });
+
+    it('counts agent rows that report a kubernetes source as cluster nodes', () => {
+      const prod = cluster('cluster-prod', { clusterId: 'prod' });
+      const counts = buildKubernetesClusterChildCounts(
+        [
+          prod,
+          makeResource({
+            id: 'merged-node',
+            type: 'agent',
+            sources: ['agent', 'kubernetes'],
+            kubernetes: { clusterId: 'prod' },
+          }),
+          makeResource({
+            id: 'plain-agent',
+            type: 'agent',
+            sources: ['agent'],
+            kubernetes: { clusterId: 'prod' },
+          }),
+        ],
+        [prod],
+      );
+      expect(counts.get('cluster-prod')).toEqual({ nodes: 1, pods: 0, deployments: 0 });
+    });
+
+    it('ignores resources whose kubernetes.clusterId / clusterName matches no cluster row', () => {
+      const prod = cluster('cluster-prod', { clusterId: 'prod' });
+      const counts = buildKubernetesClusterChildCounts(
+        [
+          prod,
+          makeResource({ id: 'orphan-pod', type: 'pod', kubernetes: { clusterId: 'gone' } }),
+          makeResource({ id: 'no-cluster', type: 'pod', kubernetes: {} }),
+        ],
+        [prod],
+      );
+      expect(counts.get('cluster-prod')).toEqual({ nodes: 0, pods: 0, deployments: 0 });
+    });
+
+    it('returns an empty map when there are no clusters', () => {
+      expect(
+        buildKubernetesClusterChildCounts(
+          [makeResource({ id: 'p', type: 'pod', kubernetes: { clusterId: 'x' } })],
+          [],
+        ).size,
+      ).toBe(0);
     });
   });
 });

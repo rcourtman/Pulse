@@ -35,6 +35,7 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
+import { buildKubernetesClusterChildCounts } from './kubernetesPageModel';
 
 // Kubernetes clusters are control-plane aggregates, not single processes —
 // they have no per-cluster Disk I/O / Uptime / Temperature concepts that
@@ -77,42 +78,9 @@ export const KubernetesClustersTable: Component<{
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-cluster-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
 
-  const countsByCluster = createMemo(() => {
-    const map = new Map<string, { nodes: number; pods: number; deployments: number }>();
-    for (const cluster of props.clusters) {
-      map.set(cluster.id, { nodes: 0, pods: 0, deployments: 0 });
-    }
-    for (const resource of props.scope) {
-      const clusterId =
-        asTrimmedString(resource.kubernetes?.clusterId) ||
-        asTrimmedString(resource.kubernetes?.clusterName);
-      if (!clusterId) continue;
-      // Match against the cluster row by clusterId. The cluster row's
-      // own canonical id differs from its `kubernetes.clusterId`, so map
-      // by the kubernetes-side identifier first, then fall back to row id.
-      let bucket = null as { nodes: number; pods: number; deployments: number } | null;
-      for (const cluster of props.clusters) {
-        const k = cluster.kubernetes;
-        if (!k) continue;
-        if (
-          asTrimmedString(k.clusterId) === clusterId ||
-          asTrimmedString(k.clusterName) === clusterId
-        ) {
-          bucket = map.get(cluster.id) ?? null;
-          break;
-        }
-      }
-      if (!bucket) continue;
-      if (resource.type === 'k8s-node') bucket.nodes += 1;
-      else if (resource.type === 'agent' && resource.sources?.includes('kubernetes'))
-        bucket.nodes += 1;
-      else if (resource.type === 'pod') bucket.pods += 1;
-      else if (resource.type === 'k8s-deployment') bucket.deployments += 1;
-    }
-    // Fallback when scope-based counts come back empty (e.g. tests that
-    // only supply the cluster rows): keep the rendered counts honest at 0.
-    return map;
-  });
+  const countsByCluster = createMemo(() =>
+    buildKubernetesClusterChildCounts(props.scope, props.clusters),
+  );
 
   return (
     <Show

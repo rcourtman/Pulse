@@ -343,6 +343,72 @@ export type KubernetesPageModel = {
   autoscaling: Resource[];
 };
 
+export type KubernetesClusterChildCounts = {
+  nodes: number;
+  pods: number;
+  deployments: number;
+};
+
+const emptyKubernetesClusterChildCounts = (): KubernetesClusterChildCounts => ({
+  nodes: 0,
+  pods: 0,
+  deployments: 0,
+});
+
+const matchClusterFor = (
+  resource: Resource,
+  clusters: readonly Resource[],
+): Resource | undefined => {
+  const clusterId =
+    asTrimmedString(resource.kubernetes?.clusterId) ||
+    asTrimmedString(resource.kubernetes?.clusterName);
+  if (!clusterId) return undefined;
+  for (const cluster of clusters) {
+    const k = cluster.kubernetes;
+    if (!k) continue;
+    if (
+      asTrimmedString(k.clusterId) === clusterId ||
+      asTrimmedString(k.clusterName) === clusterId
+    ) {
+      return cluster;
+    }
+  }
+  return undefined;
+};
+
+// Walks the resource snapshot once and rolls per-cluster Nodes / Pods /
+// Deployments into a Map keyed by cluster row id. The Overview clusters
+// table calls this instead of computing counts inline, so the same
+// rollup is testable and reusable by other consumers (incident rollups,
+// future Overview "active issues" cards).
+export function buildKubernetesClusterChildCounts(
+  resources: readonly Resource[],
+  clusters: readonly Resource[],
+): Map<string, KubernetesClusterChildCounts> {
+  const counts = new Map<string, KubernetesClusterChildCounts>();
+  for (const cluster of clusters) {
+    counts.set(cluster.id, emptyKubernetesClusterChildCounts());
+  }
+  if (clusters.length === 0) return counts;
+
+  for (const resource of resources) {
+    const cluster = matchClusterFor(resource, clusters);
+    if (!cluster) continue;
+    const bucket = counts.get(cluster.id);
+    if (!bucket) continue;
+    if (resource.type === 'k8s-node') {
+      bucket.nodes += 1;
+    } else if (resource.type === 'agent' && resource.sources?.includes('kubernetes')) {
+      bucket.nodes += 1;
+    } else if (resource.type === 'pod') {
+      bucket.pods += 1;
+    } else if (resource.type === 'k8s-deployment') {
+      bucket.deployments += 1;
+    }
+  }
+  return counts;
+}
+
 export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageModel {
   const k8sResources = resources.filter(isKubernetesPlatform);
   const clusters = k8sResources.filter((resource) => resource.type === 'k8s-cluster');
