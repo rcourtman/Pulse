@@ -10,7 +10,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
-import { formatBytes } from '@/utils/format';
 import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
@@ -32,7 +31,6 @@ import type { Resource } from '@/types/resource';
 type KubernetesInventoryVariant =
   | 'controllers'
   | 'services'
-  | 'storage'
   | 'networking'
   | 'config'
   | 'policy'
@@ -43,8 +41,6 @@ const textValue = (value: string | undefined): string => asTrimmedString(value) 
 const numberValue = (value: number | undefined): JSX.Element => (
   <span class="tabular-nums">{value ?? 0}</span>
 );
-const byteValue = (value: number | undefined): string =>
-  typeof value === 'number' && value > 0 ? formatBytes(value) : '—';
 const joinValues = (values: readonly (string | undefined)[] | undefined): string =>
   (values ?? [])
     .map((value) => asTrimmedString(value))
@@ -61,8 +57,6 @@ const tableTitle = (variant: KubernetesInventoryVariant, explicit?: string): str
       return 'Controllers';
     case 'services':
       return 'Services';
-    case 'storage':
-      return 'Storage';
     case 'networking':
       return 'Networking';
     case 'config':
@@ -156,24 +150,6 @@ const KubernetesInventoryHeader: Component<{ variant: KubernetesInventoryVariant
     >
       Namespace
     </TableHead>
-    <Show when={props.variant === 'storage'}>
-      <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
-        Phase / mode
-      </TableHead>
-      <TableHead
-        class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
-      >
-        Class
-      </TableHead>
-      <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[12%]`}>
-        Size
-      </TableHead>
-      <TableHead
-        class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[21%]`}
-      >
-        Detail
-      </TableHead>
-    </Show>
     <Show when={props.variant === 'services' || props.variant === 'networking'}>
       <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[14%]`}>Type</TableHead>
       <TableHead
@@ -309,23 +285,6 @@ const KubernetesInventoryRow: Component<{
         props.resource.kubernetes?.addressType ||
         props.resource.kubernetes?.policyTypes?.join(', '),
     );
-  const storagePhase = () =>
-    textValue(
-      props.resource.kubernetes?.phase ||
-        props.resource.kubernetes?.volumeBindingMode ||
-        props.resource.kubernetes?.reclaimPolicy,
-    );
-  const storageClass = () =>
-    textValue(props.resource.kubernetes?.storageClass || props.resource.name);
-  const storageDetail = () =>
-    textValue(
-      props.resource.kubernetes?.volumeName ||
-        [props.resource.kubernetes?.claimNamespace, props.resource.kubernetes?.claimName]
-          .filter(Boolean)
-          .join('/') ||
-        props.resource.kubernetes?.provisioner ||
-        props.resource.kubernetes?.parameterKeys?.join(', '),
-    );
   const configState = () =>
     textValue(
       props.resource.kubernetes?.phase ||
@@ -450,26 +409,6 @@ const KubernetesInventoryRow: Component<{
       >
         {namespace()}
       </TableCell>
-      <Show when={props.variant === 'storage'}>
-        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          {storagePhase()}
-        </TableCell>
-        <TableCell
-          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-        >
-          {storageClass()}
-        </TableCell>
-        <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}>
-          {byteValue(
-            props.resource.kubernetes?.capacityBytes || props.resource.kubernetes?.requestedBytes,
-          )}
-        </TableCell>
-        <TableCell
-          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-        >
-          {storageDetail()}
-        </TableCell>
-      </Show>
       <Show when={props.variant === 'services' || props.variant === 'networking'}>
         <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
           {networkType()}

@@ -58,6 +58,10 @@ vi.mock('../KubernetesDeploymentsTable', () => ({
   KubernetesDeploymentsTable: () => <div data-testid="deployments-table" />,
 }));
 
+vi.mock('../KubernetesStorageTable', () => ({
+  KubernetesStorageTable: () => <div data-testid="storage-table" />,
+}));
+
 describe('KubernetesPageSurface contract', () => {
   beforeEach(() => {
     mockPathname.mockReturnValue('/');
@@ -201,6 +205,63 @@ describe('KubernetesPageSurface contract', () => {
     ));
 
     expect(screen.getByTestId('nodes-table')).toBeInTheDocument();
+    expect(screen.queryByTestId('kubernetes-workloads-surface')).not.toBeInTheDocument();
+  });
+
+  it('renders Kubernetes storage inventory through the storage-native table', () => {
+    mockPathname.mockReturnValue('/kubernetes/storage');
+    mockUseUnifiedResources.mockReturnValue({
+      resources: () => [
+        {
+          id: 'fast-csi',
+          type: 'k8s-storage-class',
+          name: 'fast-csi',
+          displayName: 'fast-csi',
+          platformId: 'cluster-1',
+          platformType: 'kubernetes',
+          sourceType: 'agent',
+          sources: ['kubernetes'],
+          status: 'online',
+          lastSeen: 1_700_000_000_000,
+        },
+      ],
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    });
+    mockUseWorkloadsState.mockReturnValue({
+      allGuests: () => [],
+      clearPinnedSummaryScope: vi.fn(),
+      containerRuntimeFilterConfig: () => undefined,
+      focusedSummaryWorkloadGroupId: () => null,
+      groupingMode: () => 'grouped',
+      handleBeforeAutoFocus: vi.fn(),
+      search: () => '',
+      selectedGuestId: () => null,
+      setGroupingMode: vi.fn(),
+      setMetricDisplayMode: vi.fn(),
+      setSearch: vi.fn(),
+      setSortDirection: vi.fn(),
+      setSortKey: vi.fn(),
+      setStatusMode: vi.fn(),
+      setViewMode: vi.fn(),
+      setWorkloadMetricHistoryRange: vi.fn(),
+      statusMode: () => 'all',
+      surfaceConnected: () => false,
+      surfaceInitialDataReceived: () => false,
+      viewMode: () => 'pod',
+      workloadMetricDisplayMode: () => 'bars',
+      workloadMetricHistoryRange: () => '1h',
+      workloadsFilterColumnVisibility: () => undefined,
+    });
+
+    render(() => (
+      <Router>
+        <Route path="/" component={KubernetesPageSurface} />
+      </Router>
+    ));
+
+    expect(screen.getByTestId('storage-table')).toBeInTheDocument();
     expect(screen.queryByTestId('kubernetes-workloads-surface')).not.toBeInTheDocument();
   });
 });

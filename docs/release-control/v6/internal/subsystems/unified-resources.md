@@ -129,6 +129,7 @@ cross-source deduplication.
 105. `frontend-modern/src/features/kubernetes/KubernetesClustersTable.tsx`
 106. `frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx`
 107. `frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx`
+108. `frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx`
 
 ## Shared Boundaries
 
@@ -271,6 +272,12 @@ reintroduce false Swarm capability surfaces.
    Kubernetes Node inventory is an API-native resource surface, not merely
    overview chrome: `/kubernetes/nodes` must expose the bespoke node table while
    the overview may still include the same rows for cluster orientation.
+   Kubernetes storage inventory is likewise API-native: `/kubernetes/storage`
+   must render StorageClass, PersistentVolume, and PersistentVolumeClaim rows
+   through a storage-specific table that preserves cluster scope, binding mode
+   or phase, class, size/request, access/reclaim policy, provisioner, and
+   PV/PVC binding targets instead of routing those API objects through the
+   generic Kubernetes inventory table.
 2. Add typed accessors and views in `internal/unifiedresources/views.go`
 3. Add source ingestion/adaptation in the adapter layer only
    Frontend resource platform contracts in

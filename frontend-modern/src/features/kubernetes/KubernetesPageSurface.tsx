@@ -17,6 +17,7 @@ import { KubernetesClustersTable } from './KubernetesClustersTable';
 import { KubernetesDeploymentsTable } from './KubernetesDeploymentsTable';
 import { KubernetesInventoryTable } from './KubernetesInventoryTable';
 import { KubernetesNodesTable } from './KubernetesNodesTable';
+import { KubernetesStorageTable } from './KubernetesStorageTable';
 import {
   KUBERNETES_TAB_SPECS,
   buildKubernetesPageModel,
@@ -119,9 +120,8 @@ export function KubernetesPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'storage'}>
-              <KubernetesInventoryTable
+              <KubernetesStorageTable
                 resources={model().storage}
-                variant="storage"
                 emptyIcon={k8sIcon()}
                 emptyTitle="No Kubernetes volume resources reported"
                 emptyDescription="StorageClasses, persistent volumes, and claims appear here once the agent can read storage inventory."
