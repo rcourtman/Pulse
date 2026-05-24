@@ -23,6 +23,10 @@ const lookupMock = vi.fn();
 const createTokenMock = vi.fn();
 const deleteHostAgentMock = vi.fn();
 const deleteDockerHostMock = vi.fn();
+const getHostMetadataMock = vi.fn();
+const updateHostMetadataMock = vi.fn();
+const getDockerMetadataMock = vi.fn();
+const updateDockerMetadataMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const notificationInfoMock = vi.fn();
@@ -54,6 +58,20 @@ vi.mock('@/api/agentProfiles', () => ({
   AgentProfilesAPI: {
     listProfiles: (...args: unknown[]) => listProfilesMock(...args),
     listAssignments: (...args: unknown[]) => listAssignmentsMock(...args),
+  },
+}));
+
+vi.mock('@/api/hostMetadata', () => ({
+  HostMetadataAPI: {
+    getMetadata: (...args: unknown[]) => getHostMetadataMock(...args),
+    updateMetadata: (...args: unknown[]) => updateHostMetadataMock(...args),
+  },
+}));
+
+vi.mock('@/api/dockerMetadata', () => ({
+  DockerMetadataAPI: {
+    getMetadata: (...args: unknown[]) => getDockerMetadataMock(...args),
+    updateMetadata: (...args: unknown[]) => updateDockerMetadataMock(...args),
   },
 }));
 
@@ -171,6 +189,10 @@ beforeEach(() => {
   createTokenMock.mockReset();
   deleteHostAgentMock.mockReset();
   deleteDockerHostMock.mockReset();
+  getHostMetadataMock.mockReset().mockResolvedValue({ id: 'host-1', customUrl: '' });
+  updateHostMetadataMock.mockReset().mockResolvedValue({ id: 'host-1', customUrl: '' });
+  getDockerMetadataMock.mockReset().mockResolvedValue({ id: 'docker-resource', customUrl: '' });
+  updateDockerMetadataMock.mockReset().mockResolvedValue({ id: 'docker-resource', customUrl: '' });
   notificationSuccessMock.mockReset();
   notificationErrorMock.mockReset();
   notificationInfoMock.mockReset();
@@ -403,6 +425,74 @@ describe('UnifiedAgents managed agents table', () => {
     expect(detailsRow).not.toBeNull();
     const details = within(detailsRow as HTMLElement);
     expect(details.getByText('Docker')).toBeInTheDocument();
+  });
+
+  it('merges hostname-matched host and docker agents while preserving each backend ID', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    deleteHostAgentMock.mockResolvedValue(undefined);
+    deleteDockerHostMock.mockResolvedValue(undefined);
+
+    const host = createHost({
+      id: 'qnap-host-id',
+      hostname: 'qnap.local',
+      displayName: 'QNAP',
+    });
+    const dockerHost = createDockerHost({
+      id: 'qnap-docker-id',
+      agentId: 'qnap-docker-agent',
+      hostname: 'qnap.local',
+      displayName: 'QNAP',
+      containers: [
+        {
+          id: 'container-1',
+          name: 'web',
+          image: 'nginx:latest',
+          state: 'running',
+          status: 'Up 5 minutes',
+          cpuPercent: 1,
+          memoryUsageBytes: 128,
+          memoryLimitBytes: 256,
+          memoryPercent: 50,
+          uptimeSeconds: 300,
+          restartCount: 0,
+          exitCode: 0,
+          createdAt: Date.now(),
+        },
+      ],
+    });
+
+    setupComponent([host], [dockerHost]);
+
+    await waitFor(() => {
+      expect(screen.getByText('Managed Agents')).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText('QNAP')).toHaveLength(1);
+
+    const toggle = screen.getByRole('button', { name: /details for QNAP/i });
+    fireEvent.click(toggle);
+
+    const detailsRow = document.getElementById('agent-details-agent-qnap-host-id');
+    expect(detailsRow).not.toBeNull();
+    const details = within(detailsRow as HTMLElement);
+    expect(details.getByText('Host')).toBeInTheDocument();
+    expect(details.getByText('Docker')).toBeInTheDocument();
+    expect(details.getByText('qnap-docker-id')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(getDockerMetadataMock).toHaveBeenCalledWith('qnap-docker-id:container:container-1');
+    });
+    await waitFor(() => {
+      expect(document.getElementById('agent-details-agent-qnap-host-id')?.textContent).toContain('web');
+    });
+
+    const removeButton = screen.getByRole('button', { name: /^Remove$/i });
+    fireEvent.click(removeButton);
+
+    await waitFor(() => {
+      expect(deleteHostAgentMock).toHaveBeenCalledWith('qnap-host-id');
+      expect(deleteDockerHostMock).toHaveBeenCalledWith('qnap-docker-id');
+    });
   });
 
   it('shows empty state when no agents are installed', async () => {

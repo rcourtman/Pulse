@@ -40,6 +40,8 @@ type ScopeCategory = 'default' | 'profile' | 'ai-managed' | 'na';
 type UnifiedAgentRow = {
     rowKey: string;
     id: string;
+    hostId?: string;
+    dockerHostId?: string;
     name: string;
     hostname?: string;
     displayName?: string;
@@ -383,6 +385,8 @@ export const UnifiedAgents: Component = () => {
         // Create a unified list
         const unified = new Map<string, {
             id: string;
+            hostId?: string;
+            dockerHostId?: string;
             hostname: string;
             displayName?: string;
             types: ('host' | 'docker')[];
@@ -401,6 +405,7 @@ export const UnifiedAgents: Component = () => {
             const key = h.id;
             unified.set(key, {
                 id: h.id,
+                hostId: h.id,
                 agentId: h.id,
                 hostname: h.hostname || 'Unknown',
                 displayName: h.displayName,
@@ -420,6 +425,7 @@ export const UnifiedAgents: Component = () => {
             const key = d.id;
             const existing = unified.get(key);
             if (existing) {
+                existing.dockerHostId = d.id;
                 if (!existing.types.includes('docker')) {
                     existing.types.push('docker');
                 }
@@ -432,6 +438,7 @@ export const UnifiedAgents: Component = () => {
             } else {
                 unified.set(key, {
                     id: d.id,
+                    dockerHostId: d.id,
                     agentId: d.agentId || d.id,
                     hostname: d.hostname || 'Unknown',
                     displayName: d.displayName,
@@ -464,6 +471,7 @@ export const UnifiedAgents: Component = () => {
             const dockerEntry = unified.get(dockerKeys[0]);
             if (!hostEntry || !dockerEntry) return;
             hostEntry.types = ['host', 'docker'];
+            hostEntry.dockerHostId = dockerEntry.dockerHostId || dockerEntry.id;
             if (!hostEntry.version && dockerEntry.version) hostEntry.version = dockerEntry.version;
             if (dockerEntry.isLegacy) hostEntry.isLegacy = true;
             unified.delete(dockerKeys[0]);
@@ -678,6 +686,8 @@ export const UnifiedAgents: Component = () => {
             rows.push({
                 rowKey: `agent-${agent.id}`,
                 id: agent.id,
+                hostId: agent.hostId,
+                dockerHostId: agent.dockerHostId,
                 name,
                 hostname: agent.hostname,
                 displayName: agent.displayName,
@@ -725,6 +735,7 @@ export const UnifiedAgents: Component = () => {
             rows.push({
                 rowKey: `removed-docker-${host.id}`,
                 id: host.id,
+                dockerHostId: host.id,
                 name,
                 hostname: host.hostname,
                 displayName: host.displayName,
@@ -741,6 +752,7 @@ export const UnifiedAgents: Component = () => {
             rows.push({
                 rowKey: `removed-host-${host.id}`,
                 id: host.id,
+                hostId: host.id,
                 name,
                 hostname: host.hostname,
                 displayName: host.displayName,
@@ -789,10 +801,11 @@ export const UnifiedAgents: Component = () => {
             return;
         }
 
+        const hostId = row.hostId || row.id;
         const currentKey = key;
         void (async () => {
             try {
-                const metadata = await HostMetadataAPI.getMetadata(row.id);
+                const metadata = await HostMetadataAPI.getMetadata(hostId);
                 if (expandedRowKey() !== currentKey) return;
                 setHostCustomUrl(metadata.customUrl || '');
             } catch (err) {
@@ -816,13 +829,14 @@ export const UnifiedAgents: Component = () => {
             return;
         }
 
-        const dockerHost = untrack(() => (state.dockerHosts || []).find(h => h.id === row.id));
+        const dockerHostId = row.dockerHostId || row.id;
+        const dockerHost = untrack(() => (state.dockerHosts || []).find(h => h.id === dockerHostId));
         if (!dockerHost?.containers?.length) {
             setContainerUrls({});
             return;
         }
 
-        const hostId = row.id;
+        const hostId = dockerHostId;
         const containers = dockerHost.containers;
         const currentKey = key;
         void (async () => {
@@ -886,12 +900,22 @@ export const UnifiedAgents: Component = () => {
         return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | bash -s -- --url ${url} --token ${token}${getInsecureFlag()}${getEnvFlags()}`;
     };
 
-    const handleRemoveAgent = async (id: string, types: ('host' | 'docker')[]) => {
+    const handleRemoveAgent = async (row: UnifiedAgentRow) => {
         if (!confirm('Are you sure you want to remove this agent? This will stop monitoring but will not uninstall the agent from the remote machine.')) return;
 
         try {
-            // Delete all types associated with this agent
-            for (const type of types) {
+            const removals: { type: 'host' | 'docker'; id: string }[] = [];
+            if (row.types.includes('host')) {
+                const hostId = row.hostId || row.id;
+                if (hostId) removals.push({ type: 'host', id: hostId });
+            }
+            if (row.types.includes('docker')) {
+                const dockerHostId = row.dockerHostId || row.id;
+                if (dockerHostId) removals.push({ type: 'docker', id: dockerHostId });
+            }
+
+            // Delete all types associated with this agent using each backend's own ID.
+            for (const { type, id } of removals) {
                 if (type === 'host') {
                     await MonitoringAPI.deleteHostAgent(id);
                 } else if (type === 'docker') {
@@ -1640,6 +1664,8 @@ export const UnifiedAgents: Component = () => {
                                     const assignment = () => resolvedAgentId ? assignmentByAgent().get(resolvedAgentId) : undefined;
                                     const isScopeUpdating = () => resolvedAgentId ? Boolean(pendingScopeUpdates()[resolvedAgentId]) : false;
                                     const agentName = row.displayName || row.hostname || row.name;
+                                    const hostId = () => row.hostId || (row.types.includes('host') ? row.id : '');
+                                    const dockerHostId = () => row.dockerHostId || (row.types.includes('docker') ? row.id : '');
                                     const typeBadgeClass = (type: UnifiedAgentType) => {
                                         if (type === 'host') {
                                             return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
@@ -1757,13 +1783,14 @@ export const UnifiedAgents: Component = () => {
                                                     }>
                                                         {(() => {
                                                             const pending = pendingCommandConfig();
-                                                            const isPending = row.id in pending;
-                                                            const effectiveEnabled = isPending ? pending[row.id].enabled : Boolean(row.commandsEnabled);
+                                                            const id = hostId();
+                                                            const isPending = id in pending;
+                                                            const effectiveEnabled = isPending ? pending[id].enabled : Boolean(row.commandsEnabled);
 
                                                             return (
                                                                 <div class="flex items-center gap-2">
                                                                     <button
-                                                                        onClick={() => handleToggleCommands(row.id, !effectiveEnabled)}
+                                                                        onClick={() => handleToggleCommands(id, !effectiveEnabled)}
                                                                         disabled={isPending}
                                                                         class={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${isPending ? 'opacity-60 cursor-wait' : ''
                                                                             } ${effectiveEnabled
@@ -1803,7 +1830,7 @@ export const UnifiedAgents: Component = () => {
                                                     <Show when={isRemoved()} fallback={
                                                         <Show when={isKubernetes()} fallback={
                                                             <button
-                                                                onClick={() => handleRemoveAgent(row.id, row.types.filter(type => type !== 'kubernetes') as ('host' | 'docker')[])}
+                                                                onClick={() => handleRemoveAgent(row)}
                                                                 class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                                                             >
                                                                 Remove
@@ -1827,7 +1854,7 @@ export const UnifiedAgents: Component = () => {
                                                                 </button>
                                                             }>
                                                                 <button
-                                                                    onClick={() => handleAllowHostReenroll(row.id, row.hostname)}
+                                                                    onClick={() => handleAllowHostReenroll(hostId(), row.hostname)}
                                                                     class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                                                                 >
                                                                     Allow re-enroll
@@ -1835,7 +1862,7 @@ export const UnifiedAgents: Component = () => {
                                                             </Show>
                                                         }>
                                                             <button
-                                                                onClick={() => handleAllowReenroll(row.id, row.hostname)}
+                                                                onClick={() => handleAllowReenroll(dockerHostId(), row.hostname)}
                                                                 class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                                                             >
                                                                 Allow re-enroll
@@ -1876,6 +1903,11 @@ export const UnifiedAgents: Component = () => {
                                                                         Agent ID: <span class="font-mono text-gray-700 dark:text-gray-200">{row.agentId}</span>
                                                                     </div>
                                                                 </Show>
+                                                                <Show when={row.dockerHostId && row.dockerHostId !== row.id}>
+                                                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                                        Docker ID: <span class="font-mono text-gray-700 dark:text-gray-200">{row.dockerHostId}</span>
+                                                                    </div>
+                                                                </Show>
                                                                 <Show when={row.linkedNodeId}>
                                                                     <div class="text-xs text-gray-500 dark:text-gray-400">
                                                                         Linked node ID: <span class="font-mono text-gray-700 dark:text-gray-200">{row.linkedNodeId}</span>
@@ -1893,7 +1925,7 @@ export const UnifiedAgents: Component = () => {
                                                                                 onInput={(event) => setHostCustomUrl(event.currentTarget.value)}
                                                                                 onKeyDown={(event) => {
                                                                                     if (event.key === 'Enter' && !hostCustomUrlSaving()) {
-                                                                                        void saveHostUrl(row.id);
+                                                                                        void saveHostUrl(hostId());
                                                                                     }
                                                                                 }}
                                                                                 placeholder="https://host.example.com"
@@ -1901,7 +1933,7 @@ export const UnifiedAgents: Component = () => {
                                                                             />
                                                                             <button
                                                                                 type="button"
-                                                                                onClick={() => void saveHostUrl(row.id)}
+                                                                                onClick={() => void saveHostUrl(hostId())}
                                                                                 disabled={hostCustomUrlSaving()}
                                                                                 class="inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                                                                             >
@@ -2000,7 +2032,7 @@ export const UnifiedAgents: Component = () => {
                                                         </div>
                                                         <Show when={row.status === 'active' && row.types.includes('docker')}>
                                                             {(() => {
-                                                                const containers = () => (state.dockerHosts || []).find(h => h.id === row.id)?.containers || [];
+                                                                const containers = () => (state.dockerHosts || []).find(h => h.id === dockerHostId())?.containers || [];
                                                                 return (
                                                                     <Show when={containers().length > 0}>
                                                                         <div class="mt-4 rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900/30">
@@ -2026,7 +2058,7 @@ export const UnifiedAgents: Component = () => {
                                                                                                         onInput={(e) => setContainerUrls(prev => ({ ...prev, [cid]: e.currentTarget.value }))}
                                                                                                         onKeyDown={(e) => {
                                                                                                             if (e.key === 'Enter' && !containerUrlSaving()[cid]) {
-                                                                                                                void saveContainerUrl(row.id, cid);
+                                                                                                                void saveContainerUrl(dockerHostId(), cid);
                                                                                                             }
                                                                                                         }}
                                                                                                         placeholder="https://container.example.com"
@@ -2034,7 +2066,7 @@ export const UnifiedAgents: Component = () => {
                                                                                                     />
                                                                                                     <button
                                                                                                         type="button"
-                                                                                                        onClick={() => void saveContainerUrl(row.id, cid)}
+                                                                                                        onClick={() => void saveContainerUrl(dockerHostId(), cid)}
                                                                                                         disabled={Boolean(containerUrlSaving()[cid])}
                                                                                                         class="inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                                                                                                     >
