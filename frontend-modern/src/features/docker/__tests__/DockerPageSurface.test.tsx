@@ -5,8 +5,19 @@ import type { Resource } from '@/types/resource';
 import { DockerPageSurface } from '../DockerPageSurface';
 
 const mocks = vi.hoisted(() => ({
+  pathname: '/docker/overview',
   useUnifiedResources: vi.fn(),
-  useWorkloadsState: vi.fn(),
+  DockerContainersTable: vi.fn(
+    (props: { resources: Resource[]; showToolbar?: boolean; emptyTitle: string }) => (
+      <div
+        data-testid="docker-containers-table"
+        data-resource-count={props.resources.length}
+        data-show-toolbar={String(props.showToolbar)}
+      >
+        {props.emptyTitle}
+      </div>
+    ),
+  ),
 }));
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
@@ -14,24 +25,15 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
 }));
 
 vi.mock('@solidjs/router', () => ({
-  useLocation: () => ({ pathname: '/docker/overview' }),
+  useLocation: () => ({
+    get pathname() {
+      return mocks.pathname;
+    },
+  }),
 }));
 
-vi.mock('@/components/Workloads/useWorkloadsState', () => ({
-  useWorkloadsState: mocks.useWorkloadsState,
-}));
-
-vi.mock('@/components/Workloads/WorkloadsSurface', () => ({
-  WorkloadsSurface: (props: {
-    groupNodeDrawerMode?: string;
-    state?: { groupNodeDrawerMode?: () => string };
-  }) => (
-    <div
-      data-testid="docker-workloads-surface"
-      data-group-node-drawer-mode={props.groupNodeDrawerMode ?? ''}
-      data-state-group-node-drawer-mode={props.state?.groupNodeDrawerMode?.() ?? ''}
-    />
-  ),
+vi.mock('../DockerContainersTable', () => ({
+  DockerContainersTable: mocks.DockerContainersTable,
 }));
 
 vi.mock('@/features/platformPage/sharedPlatformPage', async () => {
@@ -75,49 +77,19 @@ const makeDockerContainer = (overrides: Partial<Resource> = {}): Resource => ({
   docker: {
     runtime: 'docker',
     hostname: 'docker-01',
+    image: 'nginx:latest',
   } as NonNullable<Resource['docker']>,
   ...overrides,
 });
 
-const makeWorkloadsState = (props: { groupNodeDrawerMode?: 'inline' | 'disabled' }) =>
-  ({
-    allGuests: () => [],
-    clearPinnedSummaryScope: vi.fn(),
-    containerRuntime: () => '',
-    containerRuntimeFilterConfig: () => undefined,
-    focusedSummaryWorkloadGroupId: () => null,
-    groupNodeDrawerMode: () => props.groupNodeDrawerMode ?? 'inline',
-    groupingMode: () => 'grouped',
-    handleBeforeAutoFocus: vi.fn(),
-    hostFilterConfig: () => undefined,
-    search: () => '',
-    selectedGuestId: () => null,
-    selectedNode: () => null,
-    setGroupingMode: vi.fn(),
-    setMetricDisplayMode: vi.fn(),
-    setSearch: vi.fn(),
-    setSortDirection: vi.fn(),
-    setSortKey: vi.fn(),
-    setStatusMode: vi.fn(),
-    setViewMode: vi.fn(),
-    setWorkloadMetricHistoryRange: vi.fn(),
-    statusMode: () => 'all',
-    surfaceConnected: () => false,
-    surfaceInitialDataReceived: () => false,
-    viewMode: () => 'app-container',
-    workloadMetricDisplayMode: () => 'bars',
-    workloadMetricHistoryRange: () => '1h',
-    workloadsFilterColumnVisibility: () => undefined,
-  }) as const;
-
 beforeEach(() => {
+  mocks.pathname = '/docker/overview';
   mocks.useUnifiedResources.mockReturnValue({
     error: () => null,
     loading: () => false,
     refetch: vi.fn(),
     resources: () => [makeDockerHost(), makeDockerContainer()],
   });
-  mocks.useWorkloadsState.mockImplementation(makeWorkloadsState);
 });
 
 afterEach(() => {
@@ -126,7 +98,7 @@ afterEach(() => {
 });
 
 describe('DockerPageSurface', () => {
-  it('keeps host drawer ownership on the Docker hosts table instead of workload groups', () => {
+  it('uses native Docker inventory tables instead of the shared workload surface on overview', () => {
     render(() => <DockerPageSurface />);
 
     expect(mocks.useUnifiedResources).toHaveBeenCalledWith(
@@ -144,22 +116,28 @@ describe('DockerPageSurface', () => {
         query: expect.stringContaining('docker-config'),
       }),
     );
-    expect(mocks.useWorkloadsState).toHaveBeenCalledWith(
-      expect.objectContaining({
-        compactGroupHeaders: true,
-        forcedPlatform: 'docker',
-        forcedViewMode: 'app-container',
-        groupNodeDrawerMode: 'disabled',
-        tableOnly: true,
-      }),
+    expect(screen.getByTestId('docker-containers-table')).toHaveAttribute(
+      'data-resource-count',
+      '1',
     );
-    expect(screen.getByTestId('docker-workloads-surface')).toHaveAttribute(
-      'data-group-node-drawer-mode',
-      'disabled',
+    expect(screen.getByTestId('docker-containers-table')).toHaveAttribute(
+      'data-show-toolbar',
+      'false',
     );
-    expect(screen.getByTestId('docker-workloads-surface')).toHaveAttribute(
-      'data-state-group-node-drawer-mode',
-      'disabled',
+  });
+
+  it('renders the dedicated containers route through the Docker containers table', () => {
+    mocks.pathname = '/docker/containers';
+
+    render(() => <DockerPageSurface />);
+
+    expect(screen.getByTestId('docker-containers-table')).toHaveAttribute(
+      'data-resource-count',
+      '1',
+    );
+    expect(screen.getByTestId('docker-containers-table')).toHaveAttribute(
+      'data-show-toolbar',
+      'undefined',
     );
   });
 });

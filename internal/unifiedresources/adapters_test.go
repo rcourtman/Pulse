@@ -143,14 +143,16 @@ func TestResourceFromDockerContainerIncludesContainerID(t *testing.T) {
 		Name:          "web",
 		State:         "running",
 		Image:         "ghcr.io/example/web:1.0.0",
+		ImageDigest:   "sha256:current",
 		UptimeSeconds: 1234,
 		CPUPercent:    12.5,
 	}
 
 	host := models.DockerHost{
-		ID:       "docker-1",
-		Hostname: "docker-1",
-		Runtime:  "podman",
+		ID:             "docker-1",
+		Hostname:       "docker-1",
+		Runtime:        "podman",
+		RuntimeVersion: "5.2.0",
 	}
 	resource, _ := resourceFromDockerContainer(container, host)
 	if resource.Docker == nil {
@@ -161,6 +163,15 @@ func TestResourceFromDockerContainerIncludesContainerID(t *testing.T) {
 	}
 	if got, want := resource.Docker.Runtime, host.Runtime; got != want {
 		t.Fatalf("runtime = %q, want %q", got, want)
+	}
+	if got, want := resource.Docker.Hostname, host.Hostname; got != want {
+		t.Fatalf("hostname = %q, want %q", got, want)
+	}
+	if got, want := resource.Docker.RuntimeVersion, host.RuntimeVersion; got != want {
+		t.Fatalf("runtimeVersion = %q, want %q", got, want)
+	}
+	if got, want := resource.Docker.ImageID, container.ImageDigest; got != want {
+		t.Fatalf("imageId = %q, want %q", got, want)
 	}
 }
 

@@ -566,10 +566,11 @@ export interface ResourceProxmoxMeta {
   kernelVersion?: string;
 }
 
-// Docker runtime and Swarm service projection emitted by the canonical
-// adapter. Host resources use the runtime fields on the Docker platform
-// hosts table; `docker-service` resources use the service fields on the
-// Swarm services table.
+// Docker runtime, container, and Swarm service projection emitted by the
+// canonical adapter. Host resources use the runtime fields on the Docker
+// platform hosts table; `app-container` resources use the container fields
+// on the Docker containers table; `docker-service` resources use the service
+// fields on the Swarm services table.
 export interface ResourceDockerMeta {
   serviceId?: string;
   serviceName?: string;
@@ -610,6 +611,9 @@ export interface ResourceDockerMeta {
   sharedSizeBytes?: number;
   imageContainers?: number;
   containerState?: string;
+  health?: string;
+  restartCount?: number;
+  exitCode?: number;
   ports?: Array<{
     privatePort?: number;
     publicPort?: number;
@@ -628,6 +632,13 @@ export interface ResourceDockerMeta {
     ipv4?: string;
     ipv6?: string;
   }>;
+  updateStatus?: {
+    updateAvailable?: boolean;
+    currentDigest?: string;
+    latestDigest?: string;
+    lastChecked?: string;
+    error?: string;
+  };
   mode?: string;
   desiredTasks?: number;
   runningTasks?: number;

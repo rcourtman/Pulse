@@ -3,6 +3,7 @@ import agentsMachinesTableSource from '@/features/agents/AgentsMachinesTable.tsx
 import agentsPageModelSource from '@/features/agents/agentsPageModel.ts?raw';
 import agentsPageSurfaceSource from '@/features/agents/AgentsPageSurface.tsx?raw';
 import dockerConfigsTableSource from '@/features/docker/DockerConfigsTable.tsx?raw';
+import dockerContainersTableSource from '@/features/docker/DockerContainersTable.tsx?raw';
 import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
 import dockerImagesTableSource from '@/features/docker/DockerImagesTable.tsx?raw';
 import dockerNetworksTableSource from '@/features/docker/DockerNetworksTable.tsx?raw';
@@ -51,6 +52,7 @@ import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw
 const platformTableSources = [
   agentsMachinesTableSource,
   proxmoxNodesTableSource,
+  dockerContainersTableSource,
   dockerHostsTableSource,
   dockerImagesTableSource,
   dockerVolumesTableSource,
@@ -87,6 +89,7 @@ const platformTableSources = [
 
 const platformToolbarTableSources = [
   agentsMachinesTableSource,
+  dockerContainersTableSource,
   dockerHostsTableSource,
   dockerImagesTableSource,
   dockerVolumesTableSource,
@@ -221,10 +224,11 @@ describe('platform overview layout guardrails', () => {
     expect(proxmoxPageSurfaceSource).toContain('<ProxmoxNodesTable');
     expect(proxmoxPageSurfaceSource).toContain('<WorkloadsSurface');
     expect(dockerPageSurfaceSource).toContain('<DockerHostsTable');
+    expect(dockerPageSurfaceSource).toContain('<DockerContainersTable');
     expect(dockerPageSurfaceSource).toContain('<DockerImagesTable');
     expect(dockerPageSurfaceSource).toContain('<DockerVolumesTable');
     expect(dockerPageSurfaceSource).toContain('<DockerNetworksTable');
-    expect(dockerPageSurfaceSource).toContain('<WorkloadsSurface');
+    expect(dockerPageSurfaceSource).not.toContain('<WorkloadsSurface');
     expect(dockerPageSurfaceSource).toContain('<DockerSwarmNodesTable');
     expect(dockerPageSurfaceSource).toContain('<DockerServicesTable');
     expect(dockerPageSurfaceSource).toContain('<DockerTasksTable');

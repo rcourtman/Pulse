@@ -1,10 +1,6 @@
 import { useLocation } from '@solidjs/router';
 import ContainerIcon from 'lucide-solid/icons/container';
 import { Show, createMemo } from 'solid-js';
-import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
-import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
-import type { WorkloadsStatusOption } from '@/components/Workloads/workloadsFilterModel';
-import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PlatformErrorState,
@@ -12,8 +8,8 @@ import {
   PlatformTableEmptyState,
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
-import { APP_CONTAINER_COLUMN_LABEL_OVERRIDES } from '@/features/platformPage/appContainerColumns';
 import { DockerConfigsTable } from './DockerConfigsTable';
+import { DockerContainersTable } from './DockerContainersTable';
 import { DockerHostsTable } from './DockerHostsTable';
 import { DockerImagesTable } from './DockerImagesTable';
 import { DockerNetworksTable } from './DockerNetworksTable';
@@ -23,32 +19,10 @@ import { DockerStorageUsageTable } from './DockerStorageUsageTable';
 import { DockerSwarmNodesTable } from './DockerSwarmNodesTable';
 import { DockerTasksTable } from './DockerTasksTable';
 import { DockerVolumesTable } from './DockerVolumesTable';
-import {
-  DOCKER_TAB_SPECS,
-  buildDockerPageModel,
-  buildDockerContainerDefaultHiddenColumnIds,
-  buildDockerWorkloadGroupLabelBadges,
-  filterDockerHosts,
-  filterDockerServices,
-  type DockerPageTabId,
-} from './dockerPageModel';
+import { DOCKER_TAB_SPECS, buildDockerPageModel, type DockerPageTabId } from './dockerPageModel';
 
 const DOCKER_RESOURCE_QUERY =
   'type=agent,docker-host,app-container,docker-service,docker-image,docker-volume,docker-network,docker-task,docker-swarm-node,docker-secret,docker-config';
-const DOCKER_PLATFORM_FILTER = 'docker';
-const DOCKER_WORKLOAD_FORCED_VIEW_MODE = 'app-container';
-const DOCKER_WORKLOAD_DEFAULT_SORT_KEY = 'name';
-const DOCKER_WORKLOAD_COLUMN_SCOPE = 'docker-runtime-containers';
-const DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES = {
-  ...APP_CONTAINER_COLUMN_LABEL_OVERRIDES,
-  context: 'Host',
-} as const;
-const DOCKER_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
-  { value: 'all', label: 'All' },
-  { value: 'running', label: 'Running' },
-  { value: 'degraded', label: 'Attention' },
-  { value: 'stopped', label: 'Stopped' },
-];
 const VALID_TABS = new Set<DockerPageTabId>(DOCKER_TAB_SPECS.map((tab) => tab.id));
 
 const dockerIcon = () => <ContainerIcon class="h-6 w-6 text-slate-400" />;
@@ -65,49 +39,7 @@ export function DockerPageSurface() {
     return segment && VALID_TABS.has(segment) ? segment : 'overview';
   });
   const model = createMemo(() => buildDockerPageModel(resources()));
-  const dockerWorkloadDefaultHiddenColumns = createMemo(() =>
-    buildDockerContainerDefaultHiddenColumnIds(model().containers),
-  );
-  const dockerWorkloadGroupLabelBadges = createMemo(() =>
-    buildDockerWorkloadGroupLabelBadges(model().hosts),
-  );
-  const workloadsState = useWorkloadsState({
-    vms: [],
-    containers: [],
-    nodes: [],
-    useWorkloads: true,
-    embedded: true,
-    tableOnly: true,
-    forcedPlatform: DOCKER_PLATFORM_FILTER,
-    forcedViewMode: DOCKER_WORKLOAD_FORCED_VIEW_MODE,
-    defaultSortKey: DOCKER_WORKLOAD_DEFAULT_SORT_KEY,
-    showFilterToolbar: true,
-    suppressPlatformFilter: true,
-    allowEmbeddedScopeFilters: true,
-    columnVisibilityStorageScope: DOCKER_WORKLOAD_COLUMN_SCOPE,
-    additionalDefaultHiddenColumnIds: dockerWorkloadDefaultHiddenColumns(),
-    columnLabelOverrides: DOCKER_WORKLOAD_COLUMN_LABEL_OVERRIDES,
-    groupLabelBadges: dockerWorkloadGroupLabelBadges(),
-    compactGroupHeaders: true,
-    groupNodeDrawerMode: 'disabled',
-  });
-  const pageFilters = createMemo(() => ({
-    containerRuntime: workloadsState.containerRuntime().trim() || null,
-    searchTerm: workloadsState.search().trim() || null,
-    selectedHostScope: workloadsState.selectedNode(),
-    statusMode: workloadsState.statusMode(),
-  }));
-  const filteredHosts = createMemo(() => filterDockerHosts(model().hosts, pageFilters()));
-  const filteredServices = createMemo(() => filterDockerServices(model().services, pageFilters()));
-  const showSharedFilterToolbar = createMemo(
-    () =>
-      workloadsState.surfaceConnected() &&
-      workloadsState.surfaceInitialDataReceived() &&
-      workloadsState.allGuests().length > 0,
-  );
-  const showServicesSection = createMemo(
-    () => pageFilters().containerRuntime?.toLowerCase() !== 'podman' && model().services.length > 0,
-  );
+  const showServicesSection = createMemo(() => model().services.length > 0);
 
   return (
     <div data-testid="docker-page" class="space-y-3">
@@ -148,17 +80,21 @@ export function DockerPageSurface() {
           >
             <Show when={activeTab() === 'overview'}>
               <DockerOverview
-                showSharedFilterToolbar={showSharedFilterToolbar()}
-                workloadsState={workloadsState}
-                hosts={filteredHosts()}
+                hosts={model().hosts}
                 hostSourceCount={model().hosts.length}
-                filteredServices={filteredServices()}
+                containers={model().containers}
+                services={model().services}
                 serviceSourceCount={model().services.length}
                 showServicesSection={showServicesSection()}
               />
             </Show>
             <Show when={activeTab() === 'containers'}>
-              <DockerContainers workloadsState={workloadsState} />
+              <DockerContainersTable
+                resources={model().containers}
+                emptyIcon={dockerIcon()}
+                emptyTitle="No Docker or Podman containers"
+                emptyDescription="Containers appear here when a Docker or Podman host reports workload inventory."
+              />
             </Show>
             <Show when={activeTab() === 'images'}>
               <DockerImagesTable
@@ -186,7 +122,7 @@ export function DockerPageSurface() {
             </Show>
             <Show when={activeTab() === 'storage'}>
               <DockerStorageUsageTable
-                hosts={filteredHosts()}
+                hosts={model().hosts}
                 sourceCount={model().hosts.length}
                 emptyIcon={dockerIcon()}
                 emptyTitle="No engine storage usage"
@@ -243,87 +179,16 @@ export function DockerPageSurface() {
 
 export default DockerPageSurface;
 
-type DockerWorkloadsState = ReturnType<typeof useWorkloadsState>;
-
-function DockerWorkloadsFilter(props: { workloadsState: DockerWorkloadsState }) {
-  return (
-    <div data-summary-clear-ignore>
-      <WorkloadsFilter
-        search={props.workloadsState.search}
-        setSearch={props.workloadsState.setSearch}
-        viewMode={props.workloadsState.viewMode}
-        setViewMode={props.workloadsState.setViewMode}
-        statusMode={props.workloadsState.statusMode}
-        setStatusMode={props.workloadsState.setStatusMode}
-        groupingMode={props.workloadsState.groupingMode}
-        setGroupingMode={props.workloadsState.setGroupingMode}
-        defaultSortKey={DOCKER_WORKLOAD_DEFAULT_SORT_KEY}
-        setSortKey={props.workloadsState.setSortKey}
-        setSortDirection={props.workloadsState.setSortDirection}
-        onBeforeAutoFocus={props.workloadsState.handleBeforeAutoFocus}
-        ariaLabel="Container runtime workload filters"
-        searchPlaceholder="Search containers by name, image, host, or runtime"
-        searchEmptyMessage="Recent Docker container searches appear here."
-        statusOptions={DOCKER_WORKLOAD_STATUS_OPTIONS}
-        columnVisibility={props.workloadsState.workloadsFilterColumnVisibility()}
-        containerRuntimeFilter={props.workloadsState.containerRuntimeFilterConfig()}
-        hostFilter={undefined}
-        platformFilter={undefined}
-        namespaceFilter={undefined}
-        suppressTypeFilter
-        metricDisplayMode={props.workloadsState.workloadMetricDisplayMode}
-        setMetricDisplayMode={props.workloadsState.setWorkloadMetricDisplayMode}
-        metricHistoryRange={props.workloadsState.workloadMetricHistoryRange}
-        setMetricHistoryRange={props.workloadsState.setWorkloadMetricHistoryRange}
-        forcedPlatform={DOCKER_PLATFORM_FILTER}
-        pinnedSelectionActive={() =>
-          Boolean(
-            props.workloadsState.selectedGuestId() ||
-            props.workloadsState.focusedSummaryWorkloadGroupId(),
-          )
-        }
-        onClearPinnedSelection={props.workloadsState.clearPinnedSummaryScope}
-      />
-    </div>
-  );
-}
-
-function DockerContainers(props: { workloadsState: DockerWorkloadsState }) {
-  return (
-    <div class="space-y-4">
-      <DockerWorkloadsFilter workloadsState={props.workloadsState} />
-      <WorkloadsSurface
-        state={props.workloadsState}
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
-        embedded
-        tableOnly
-        forcedPlatform={DOCKER_PLATFORM_FILTER}
-        forcedViewMode={DOCKER_WORKLOAD_FORCED_VIEW_MODE}
-        groupNodeDrawerMode="disabled"
-        emptyStateTitle="No Docker or Podman containers"
-        emptyStateDescription="Containers appear here when a Docker or Podman host reports workload inventory."
-      />
-    </div>
-  );
-}
-
 function DockerOverview(props: {
-  showSharedFilterToolbar: boolean;
-  workloadsState: DockerWorkloadsState;
   hosts: ReturnType<typeof buildDockerPageModel>['hosts'];
   hostSourceCount: number;
-  filteredServices: ReturnType<typeof buildDockerPageModel>['services'];
+  containers: ReturnType<typeof buildDockerPageModel>['containers'];
+  services: ReturnType<typeof buildDockerPageModel>['services'];
   serviceSourceCount: number;
   showServicesSection: boolean;
 }) {
   return (
     <div class="space-y-4">
-      <Show when={props.showSharedFilterToolbar}>
-        <DockerWorkloadsFilter workloadsState={props.workloadsState} />
-      </Show>
       <DockerHostsTable
         resources={props.hosts}
         sourceCount={props.hostSourceCount}
@@ -332,23 +197,16 @@ function DockerOverview(props: {
         emptyDescription="Container hosts appear here once a Pulse agent registers them."
         showToolbar={false}
       />
-      <WorkloadsSurface
-        state={props.workloadsState}
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
-        embedded
-        tableOnly
-        forcedPlatform={DOCKER_PLATFORM_FILTER}
-        forcedViewMode={DOCKER_WORKLOAD_FORCED_VIEW_MODE}
-        groupNodeDrawerMode="disabled"
-        emptyStateTitle="No Docker or Podman containers"
-        emptyStateDescription="Containers appear here when a Docker or Podman host reports workload inventory."
+      <DockerContainersTable
+        resources={props.containers}
+        emptyIcon={dockerIcon()}
+        emptyTitle="No Docker or Podman containers"
+        emptyDescription="Containers appear here when a Docker or Podman host reports workload inventory."
+        showToolbar={false}
       />
       <Show when={props.showServicesSection}>
         <DockerServicesTable
-          resources={props.filteredServices}
+          resources={props.services}
           sourceCount={props.serviceSourceCount}
           emptyIcon={dockerIcon()}
           emptyTitle="No Swarm services"

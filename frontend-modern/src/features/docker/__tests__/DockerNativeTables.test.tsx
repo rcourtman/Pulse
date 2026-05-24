@@ -2,6 +2,7 @@ import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
+import { DockerContainersTable } from '../DockerContainersTable';
 import { DockerConfigsTable } from '../DockerConfigsTable';
 import { DockerImagesTable } from '../DockerImagesTable';
 import { DockerNetworksTable } from '../DockerNetworksTable';
@@ -33,6 +34,66 @@ afterEach(() => {
 });
 
 describe('Docker native tables', () => {
+  it('renders Docker container API fields', () => {
+    render(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: {
+              hostname: 'edge-01',
+              runtime: 'docker',
+              runtimeVersion: '27.5.1',
+              image: 'nginx:latest',
+              containerState: 'running',
+              health: 'healthy',
+              restartCount: 2,
+              ports: [{ ip: '0.0.0.0', publicPort: 8080, privatePort: 80, protocol: 'tcp' }],
+              networks: [{ name: 'frontend', ipv4: '172.18.0.2' }],
+              mounts: [
+                {
+                  type: 'volume',
+                  source: 'nginx-html',
+                  destination: '/usr/share/nginx/html',
+                  mode: 'rw',
+                  rw: true,
+                },
+              ],
+              updateStatus: {
+                updateAvailable: true,
+                currentDigest: 'sha256:current',
+                latestDigest: 'sha256:latest',
+                lastChecked: '2026-05-24T13:00:00Z',
+              },
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByText('Container')).toBeInTheDocument();
+    expect(screen.getByText('Runtime')).toBeInTheDocument();
+    expect(screen.getByText('Restarts')).toBeInTheDocument();
+    expect(screen.getByText('Updates')).toBeInTheDocument();
+    expect(screen.getByText('edge-web')).toBeInTheDocument();
+    expect(screen.getByText('edge-01')).toBeInTheDocument();
+    expect(screen.getByText('docker 27.5.1')).toBeInTheDocument();
+    expect(screen.getByText('nginx:latest')).toBeInTheDocument();
+    expect(screen.getByText('healthy')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('0.0.0.0:8080->80/tcp')).toBeInTheDocument();
+    expect(screen.getByText('frontend 172.18.0.2')).toBeInTheDocument();
+    expect(screen.getByText('volume:/usr/share/nginx/html (rw)')).toBeInTheDocument();
+    expect(screen.getByText('Available')).toBeInTheDocument();
+  });
+
   it('renders Docker image API fields', () => {
     render(() => (
       <DockerImagesTable

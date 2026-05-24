@@ -170,10 +170,10 @@ and Kubernetes platform pages may add native API-backed sections, but the tabs
 must use `PlatformSectionTabs`, canonical table alignment helpers, and shared
 resource type presentation/reporting helpers rather than page-local tab shells,
 alignment classes, or ad hoc report-category coercion. Docker / Podman native
-subsections now include engine storage usage, Swarm node inventory, and
-metadata-only Swarm secret/config inventory where the documented Docker APIs
-report those resources; Podman-only libpod pod inventory must not be
-represented until the collector has a libpod-native source. Kubernetes config
+subsections now include runtime containers, engine storage usage, Swarm node
+inventory, and metadata-only Swarm secret/config inventory where the documented
+Docker APIs report those resources; Podman-only libpod pod inventory must not
+be represented until the collector has a libpod-native source. Kubernetes config
 inventory must preserve the same trust boundary for metadata-only ConfigMap
 and Secret rows: the shared table wording may indicate metadata-only inventory,
 but must not imply payload fields were read when the agent used Kubernetes
@@ -200,8 +200,12 @@ Kubernetes events inventory follows that same primitive boundary while the
 unified-resource owner supplies Event type, reason, involved-object, count,
 observed-time, and message columns.
 Docker / Podman inventory follows that same primitive boundary while the
-unified-resource owner supplies API-object-specific image, volume, network,
-Swarm node, task, secret, and config columns through dedicated native tables.
+unified-resource owner supplies API-object-specific container, image, volume,
+network, Swarm node, task, secret, and config columns through dedicated native
+tables. The Docker containers tab must use the native
+`DockerContainersTable` for container state, health, restart, image, port,
+network, mount, update, and host/runtime columns rather than embedding
+`WorkloadsSurface`.
 
 1. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `security-privacy`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
    The panel may own shell placement and local action layout, but

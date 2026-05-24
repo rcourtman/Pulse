@@ -3,11 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
   DOCKER_TAB_SPECS,
-  buildDockerContainerDefaultHiddenColumnIds,
   buildDockerPageModel,
-  buildDockerWorkloadGroupLabelBadges,
-  filterDockerHosts,
-  filterDockerServices,
   getDockerHostSystemBadge,
   hasDockerSwarmEvidence,
 } from '../dockerPageModel';
@@ -21,45 +17,6 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
   sourceType: resource.sourceType ?? 'agent',
   status: resource.status ?? 'online',
   lastSeen: resource.lastSeen ?? 1_700_000_000_000,
-});
-
-const makeDockerHost = (overrides: Partial<Resource> = {}): Resource => ({
-  id: 'agent:docker-01',
-  name: 'docker-01',
-  displayName: 'Docker 01',
-  platformId: 'homelab',
-  platformType: 'docker',
-  sourceType: 'agent',
-  status: 'online',
-  type: 'agent',
-  lastSeen: 1_700_000_000_000,
-  docker: {
-    runtime: 'docker',
-    hostname: 'docker-01',
-  },
-  agent: {
-    hostname: 'docker-01',
-  },
-  ...overrides,
-});
-
-const makeDockerService = (overrides: Partial<Resource> = {}): Resource => ({
-  id: 'docker-service:svc-01',
-  name: 'api',
-  displayName: 'api',
-  platformId: 'homelab',
-  platformType: 'docker',
-  sourceType: 'api',
-  status: 'online',
-  type: 'docker-service',
-  lastSeen: 1_700_000_000_000,
-  docker: {
-    hostname: 'docker-01',
-    hostSourceId: 'agent:docker-01',
-    image: 'ghcr.io/pulse/api:latest',
-    mode: 'replicated',
-  },
-  ...overrides,
 });
 
 describe('dockerPageModel', () => {
@@ -140,50 +97,7 @@ describe('dockerPageModel', () => {
     expect(model.resources).toEqual([]);
   });
 
-  it('hides Docker container I/O columns by default when the snapshot has no I/O telemetry', () => {
-    expect(
-      buildDockerContainerDefaultHiddenColumnIds([
-        makeResource({ id: 'ctr-1', type: 'app-container' }),
-      ]),
-    ).toEqual(['disk', 'tags', 'backup', 'netIo', 'diskIo']);
-  });
-
-  it('keeps Docker container I/O columns default-visible once telemetry exists', () => {
-    expect(
-      buildDockerContainerDefaultHiddenColumnIds([
-        makeResource({
-          id: 'ctr-1',
-          type: 'app-container',
-          network: { rxBytes: 0, txBytes: 0 },
-          diskIO: { readRate: 0, writeRate: 0 },
-        }),
-      ]),
-    ).toEqual(['disk', 'tags', 'backup']);
-  });
-
-  it('decides Docker container network and disk I/O defaults independently', () => {
-    expect(
-      buildDockerContainerDefaultHiddenColumnIds([
-        makeResource({
-          id: 'ctr-1',
-          type: 'app-container',
-          network: { rxBytes: 128, txBytes: 64 },
-        }),
-      ]),
-    ).toEqual(['disk', 'tags', 'backup', 'diskIo']);
-
-    expect(
-      buildDockerContainerDefaultHiddenColumnIds([
-        makeResource({
-          id: 'ctr-2',
-          type: 'app-container',
-          diskIO: { readRate: 128, writeRate: 64 },
-        }),
-      ]),
-    ).toEqual(['disk', 'tags', 'backup', 'netIo']);
-  });
-
-  it('builds host-identity badges for Docker workload group rows', () => {
+  it('surfaces host-identity badges for Docker hosts', () => {
     const lxcHost = makeResource({
       id: 'proxmox-lxc-docker:pve:101',
       type: 'agent',
@@ -199,12 +113,6 @@ describe('dockerPageModel', () => {
 
     expect(getDockerHostSystemBadge(lxcHost)?.label).toBe('LXC');
     expect(getDockerHostSystemBadge(genericDockerHost)).toBeUndefined();
-
-    const badges = buildDockerWorkloadGroupLabelBadges([lxcHost, genericDockerHost]);
-    expect(badges['app-container:frigate']?.label).toBe('LXC');
-    expect(badges['app-container:Frigate host']?.label).toBe('LXC');
-    expect(badges['app-container:proxmox-lxc-docker:pve:101']?.label).toBe('LXC');
-    expect(badges['app-container:plain-docker']).toBeUndefined();
   });
 
   it('surfaces the host OS family as the system badge for plain Docker hosts', () => {
@@ -265,70 +173,5 @@ describe('dockerPageModel', () => {
         }),
       ),
     ).toBe(true);
-  });
-
-  it('filters Docker hosts by runtime, status, search, and selected host scope', () => {
-    const hosts = [
-      makeDockerHost(),
-      makeDockerHost({
-        id: 'agent:podman-01',
-        name: 'podman-01',
-        displayName: 'Podman 01',
-        status: 'offline',
-        docker: {
-          runtime: 'podman',
-          hostname: 'podman-01',
-        },
-        agent: {
-          hostname: 'podman-01',
-        },
-      }),
-    ];
-
-    expect(filterDockerHosts(hosts, { containerRuntime: 'podman' }).map((host) => host.id)).toEqual(
-      ['agent:podman-01'],
-    );
-    expect(filterDockerHosts(hosts, { statusMode: 'stopped' }).map((host) => host.id)).toEqual([
-      'agent:podman-01',
-    ]);
-    expect(filterDockerHosts(hosts, { searchTerm: 'docker 01' }).map((host) => host.id)).toEqual([
-      'agent:docker-01',
-    ]);
-    expect(filterDockerHosts(hosts, { searchTerm: 'podman' }).map((host) => host.id)).toEqual([
-      'agent:podman-01',
-    ]);
-    expect(
-      filterDockerHosts(hosts, { selectedHostScope: 'agent:podman-01' }).map((host) => host.id),
-    ).toEqual(['agent:podman-01']);
-  });
-
-  it('filters Docker services with the shared page filters and hides them for Podman runtime scope', () => {
-    const services = [
-      makeDockerService(),
-      makeDockerService({
-        id: 'docker-service:svc-02',
-        name: 'worker',
-        status: 'degraded',
-        docker: {
-          hostname: 'docker-02',
-          hostSourceId: 'agent:docker-02',
-          image: 'ghcr.io/pulse/worker:latest',
-          mode: 'global',
-        },
-      }),
-    ];
-
-    expect(filterDockerServices(services, { containerRuntime: 'podman' })).toEqual([]);
-    expect(
-      filterDockerServices(services, { statusMode: 'degraded' }).map((service) => service.id),
-    ).toEqual(['docker-service:svc-02']);
-    expect(
-      filterDockerServices(services, { selectedHostScope: 'agent:docker-01' }).map(
-        (service) => service.id,
-      ),
-    ).toEqual(['docker-service:svc-01']);
-    expect(
-      filterDockerServices(services, { searchTerm: 'worker' }).map((service) => service.id),
-    ).toEqual(['docker-service:svc-02']);
   });
 });

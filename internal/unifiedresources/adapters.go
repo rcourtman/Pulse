@@ -1904,7 +1904,9 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 	docker := &DockerData{
 		HostSourceID:   host.ID,
 		ContainerID:    ct.ID,
+		Hostname:       host.Hostname,
 		Image:          ct.Image,
+		ImageID:        ct.ImageDigest,
 		UptimeSeconds:  ct.UptimeSeconds,
 		ContainerState: ct.State,
 		Health:         ct.Health,
@@ -1912,6 +1914,11 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 		ExitCode:       ct.ExitCode,
 		Labels:         cloneLabelMap(ct.Labels),
 		Runtime:        runtime,
+		RuntimeVersion: host.RuntimeVersion,
+		DockerVersion:  host.DockerVersion,
+	}
+	if !ct.CreatedAt.IsZero() {
+		docker.CreatedAt = ct.CreatedAt.UTC().Format(time.RFC3339)
 	}
 	if len(ct.Ports) > 0 {
 		docker.Ports = make([]DockerPortMeta, len(ct.Ports))

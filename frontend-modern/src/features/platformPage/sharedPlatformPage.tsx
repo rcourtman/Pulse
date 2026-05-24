@@ -182,6 +182,9 @@ const mapResourceStatusToTriad = (
   return 'unknown';
 };
 
+const platformSearchNumber = (value: number | undefined): string | undefined =>
+  typeof value === 'number' ? String(value) : undefined;
+
 const matchesPlatformSearch = (resource: Resource, search: string): boolean => {
   if (!search) return true;
   const needle = search.trim().toLowerCase();
@@ -203,8 +206,16 @@ const matchesPlatformSearch = (resource: Resource, search: string): boolean => {
     resource.docker?.runtime,
     resource.docker?.runtimeVersion,
     resource.docker?.dockerVersion,
+    resource.docker?.containerId,
     resource.docker?.image,
     resource.docker?.imageId,
+    resource.docker?.containerState,
+    resource.docker?.health,
+    platformSearchNumber(resource.docker?.restartCount),
+    platformSearchNumber(resource.docker?.exitCode),
+    resource.docker?.updateStatus?.error,
+    resource.docker?.updateStatus?.currentDigest,
+    resource.docker?.updateStatus?.latestDigest,
     resource.docker?.volumeName,
     resource.docker?.networkId,
     resource.docker?.driver,
@@ -247,6 +258,24 @@ const matchesPlatformSearch = (resource: Resource, search: string): boolean => {
     resource.vmware?.networkType,
     resource.vmware?.networkHostNames?.join(' '),
     resource.vmware?.networkVmNames?.join(' '),
+    ...(resource.docker?.ports?.flatMap((port) => [
+      port.ip,
+      port.protocol,
+      platformSearchNumber(port.privatePort),
+      platformSearchNumber(port.publicPort),
+    ]) ?? []),
+    ...(resource.docker?.networks?.flatMap((network) => [
+      network.name,
+      network.ipv4,
+      network.ipv6,
+    ]) ?? []),
+    ...(resource.docker?.mounts?.flatMap((mount) => [
+      mount.type,
+      mount.source,
+      mount.destination,
+      mount.mode,
+      mount.rw === false ? 'read-only' : mount.rw === true ? 'read-write' : undefined,
+    ]) ?? []),
     ...(resource.docker?.repoTags ?? []),
     ...(resource.docker?.repoDigests ?? []),
     ...(resource.kubernetes?.externalIps ?? []),
