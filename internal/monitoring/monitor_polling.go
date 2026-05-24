@@ -866,7 +866,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 					})
 				}
 
-				if vm.Status == "running" && !diskFromAgent {
+				if vm.Status == "running" {
 					if hostDisk, hostDisks, ok := resolveGuestDiskFromLinkedHostAgent(guestID, vmIDToHostAgent); ok && hostDisk.Total > 0 {
 						diskTotal = uint64(hostDisk.Total)
 						diskUsed = uint64(hostDisk.Used)
@@ -880,7 +880,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 							Str("node", n.Node).
 							Int("vmid", vm.VMID).
 							Float64("usage", hostDisk.Usage).
-							Msg("QEMU disk: using linked Pulse host agent disk summary")
+							Msg("QEMU disk: using linked Pulse host agent disk inventory")
 					}
 				}
 

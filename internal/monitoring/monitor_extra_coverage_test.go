@@ -932,6 +932,97 @@ func TestPollVMsWithNodes_UsesLinkedHostAgentDiskFallback(t *testing.T) {
 	}
 }
 
+func TestPollVMsWithNodes_PrefersLinkedHostAgentDiskInventoryOverPartialGuestAgentFilesystems(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	m := &Monitor{
+		state:                    models.NewState(),
+		guestAgentFSInfoTimeout:  time.Second,
+		guestAgentRetries:        1,
+		guestAgentNetworkTimeout: time.Second,
+		guestAgentOSInfoTimeout:  time.Second,
+		guestAgentVersionTimeout: time.Second,
+		guestMetadataCache:       make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter:     make(map[string]time.Time),
+		rateTracker:              NewRateTracker(),
+		metricsHistory:           NewMetricsHistory(100, time.Hour),
+		alertManager:             alerts.NewManager(),
+		stalenessTracker:         NewStalenessTracker(nil),
+		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
+		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
+		vmAgentMemCache:          make(map[string]agentMemCacheEntry),
+	}
+	defer m.alertManager.Stop()
+
+	m.state.UpsertHost(models.Host{
+		ID:         "host-pbs",
+		Hostname:   "pbs01",
+		Status:     "online",
+		LinkedVMID: makeGuestID("pve1", "node1", 100),
+		Disks: []models.Disk{
+			{
+				Total:      100 * 1024 * 1024 * 1024,
+				Used:       40 * 1024 * 1024 * 1024,
+				Free:       60 * 1024 * 1024 * 1024,
+				Usage:      40,
+				Mountpoint: "/",
+				Type:       "ext4",
+				Device:     "/dev/vda2",
+			},
+			{
+				Total:      200 * 1024 * 1024 * 1024,
+				Used:       120 * 1024 * 1024 * 1024,
+				Free:       80 * 1024 * 1024 * 1024,
+				Usage:      60,
+				Mountpoint: "/mnt/datastore/pbs01rep01",
+				Type:       "zfs",
+				Device:     "rpool/pbs01rep01",
+			},
+		},
+	})
+
+	client := &mockPVEClientExtra{
+		vms: []proxmox.VM{
+			{VMID: 100, Name: "pbs01", Node: "node1", Status: "running", MaxMem: 8 * 1024, Mem: 4 * 1024, MaxDisk: 300 * 1024 * 1024 * 1024},
+		},
+		vmStatus: &proxmox.VMStatus{
+			Status: "running",
+			Agent:  proxmox.VMAgentField{Value: 1},
+			MaxMem: 8 * 1024,
+			Mem:    4 * 1024,
+		},
+		fsInfo: []proxmox.VMFileSystem{
+			{Mountpoint: "/", Type: "ext4", TotalBytes: 100 * 1024 * 1024 * 1024, UsedBytes: 55 * 1024 * 1024 * 1024, Disk: "/dev/vda2"},
+		},
+	}
+
+	m.pollVMsWithNodes(
+		context.Background(),
+		"pve1",
+		"",
+		false,
+		client,
+		[]proxmox.Node{{Node: "node1", Status: "online"}},
+		map[string]string{"node1": "online"},
+	)
+
+	state := m.GetState()
+	if len(state.VMs) != 1 {
+		t.Fatalf("expected 1 VM, got %d", len(state.VMs))
+	}
+
+	vm := state.VMs[0]
+	if vm.Disk.Usage != 40 {
+		t.Fatalf("expected linked host-agent root disk summary, got %.2f", vm.Disk.Usage)
+	}
+	if len(vm.Disks) != 2 {
+		t.Fatalf("expected linked host-agent disk inventory, got %#v", vm.Disks)
+	}
+	if vm.Disks[1].Mountpoint != "/mnt/datastore/pbs01rep01" || vm.Disks[1].Type != "zfs" {
+		t.Fatalf("expected linked host-agent ZFS datastore disk, got %#v", vm.Disks[1])
+	}
+}
+
 func TestPollVMsWithNodes_RotatesGuestAgentPriorityAcrossPolls(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 
