@@ -536,6 +536,10 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 					Memory: &alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
 					Disk:   &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
 				},
+				PBSDefaults: alerts.ThresholdConfig{
+					CPU:    &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
+					Memory: &alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
+				},
 				StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
 				TimeThreshold:  5,
 				TimeThresholds: map[string]int{
@@ -707,6 +711,27 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 		config.HostDefaults.Disk.Clear = config.HostDefaults.Disk.Trigger - 5
 		if config.HostDefaults.Disk.Clear <= 0 {
 			config.HostDefaults.Disk.Clear = 85
+		}
+	}
+	// PBS defaults: Allow Trigger=0 to disable specific alerts
+	if config.PBSDefaults.CPU == nil || config.PBSDefaults.CPU.Trigger < 0 {
+		config.PBSDefaults.CPU = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
+	} else if config.PBSDefaults.CPU.Trigger == 0 {
+		config.PBSDefaults.CPU.Clear = 0
+	} else if config.PBSDefaults.CPU.Clear <= 0 {
+		config.PBSDefaults.CPU.Clear = config.PBSDefaults.CPU.Trigger - 5
+		if config.PBSDefaults.CPU.Clear <= 0 {
+			config.PBSDefaults.CPU.Clear = 75
+		}
+	}
+	if config.PBSDefaults.Memory == nil || config.PBSDefaults.Memory.Trigger < 0 {
+		config.PBSDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 85, Clear: 80}
+	} else if config.PBSDefaults.Memory.Trigger == 0 {
+		config.PBSDefaults.Memory.Clear = 0
+	} else if config.PBSDefaults.Memory.Clear <= 0 {
+		config.PBSDefaults.Memory.Clear = config.PBSDefaults.Memory.Trigger - 5
+		if config.PBSDefaults.Memory.Clear <= 0 {
+			config.PBSDefaults.Memory.Clear = 80
 		}
 	}
 	if config.TimeThreshold <= 0 {

@@ -704,3 +704,39 @@ func TestEmailTemplate(t *testing.T) {
 		})
 	}
 }
+
+func TestEmailTemplateIncludesResourceType(t *testing.T) {
+	t.Parallel()
+
+	alert := &alerts.Alert{
+		ID:           "host:pbs-memory",
+		Level:        "warning",
+		Type:         "memory",
+		ResourceID:   "host:pbs",
+		ResourceName: "pbs",
+		Node:         "pbs",
+		Value:        90.8,
+		Threshold:    85.0,
+		StartTime:    time.Now(),
+		Message:      "Host memory at 90.8%",
+		Metadata: map[string]interface{}{
+			"resourceType": "Host",
+		},
+	}
+
+	_, singleHTML, singleText := EmailTemplate([]*alerts.Alert{alert}, true)
+	if !strings.Contains(singleHTML, "Resource Type") || !strings.Contains(singleHTML, "Host") {
+		t.Fatalf("single alert HTML should include resource type, got %s", singleHTML)
+	}
+	if !strings.Contains(singleText, "Resource Type: Host") {
+		t.Fatalf("single alert text should include resource type, got %s", singleText)
+	}
+
+	_, groupedHTML, groupedText := EmailTemplate([]*alerts.Alert{alert}, false)
+	if !strings.Contains(groupedHTML, "Host memory on pbs") {
+		t.Fatalf("grouped alert HTML should include typed metric context, got %s", groupedHTML)
+	}
+	if !strings.Contains(groupedText, "Resource Type: Host") {
+		t.Fatalf("grouped alert text should include resource type, got %s", groupedText)
+	}
+}

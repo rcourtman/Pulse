@@ -163,6 +163,35 @@ func TestLoadAlertConfig_Normalization(t *testing.T) {
 			},
 		},
 		{
+			name: "PBSDefaults missing",
+			input: map[string]interface{}{
+				"pbsDefaults": map[string]interface{}{},
+			},
+			verify: func(t *testing.T, cfg *alerts.AlertConfig) {
+				require.NotNil(t, cfg.PBSDefaults.CPU)
+				require.NotNil(t, cfg.PBSDefaults.Memory)
+				assert.Equal(t, 80.0, cfg.PBSDefaults.CPU.Trigger)
+				assert.Equal(t, 85.0, cfg.PBSDefaults.Memory.Trigger)
+			},
+		},
+		{
+			name: "PBSDefaults memory zero",
+			input: map[string]interface{}{
+				"pbsDefaults": map[string]interface{}{
+					"cpu":    map[string]interface{}{"trigger": 99},
+					"memory": map[string]interface{}{"trigger": 0, "clear": 50},
+				},
+			},
+			verify: func(t *testing.T, cfg *alerts.AlertConfig) {
+				require.NotNil(t, cfg.PBSDefaults.CPU)
+				require.NotNil(t, cfg.PBSDefaults.Memory)
+				assert.Equal(t, 99.0, cfg.PBSDefaults.CPU.Trigger)
+				assert.Equal(t, 94.0, cfg.PBSDefaults.CPU.Clear)
+				assert.Equal(t, 0.0, cfg.PBSDefaults.Memory.Trigger)
+				assert.Equal(t, 0.0, cfg.PBSDefaults.Memory.Clear)
+			},
+		},
+		{
 			name: "TimeThreshold and TimeThresholds",
 			input: map[string]interface{}{
 				"timeThreshold": 0,

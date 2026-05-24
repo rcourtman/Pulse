@@ -1116,6 +1116,7 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	normalizeStorageDefaults(&config)
 	normalizeDockerDefaults(&config)
 	normalizePMGDefaults(&config)
+	normalizePBSDefaults(&config)
 	normalizeSnapshotDefaults(&config)
 	normalizeBackupDefaults(&config)
 	normalizeNodeDefaults(&config)
@@ -1305,6 +1306,32 @@ func normalizePMGDefaults(config *AlertConfig) {
 	}
 	if config.PMGDefaults.QuarantineGrowthCritMin <= 0 {
 		config.PMGDefaults.QuarantineGrowthCritMin = 500
+	}
+}
+
+// normalizePBSDefaults ensures PBS server threshold defaults exist.
+// Trigger=0 is allowed and means "disable alerting for this metric".
+func normalizePBSDefaults(config *AlertConfig) {
+	if config.PBSDefaults.CPU == nil || config.PBSDefaults.CPU.Trigger < 0 {
+		config.PBSDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	} else if config.PBSDefaults.CPU.Trigger == 0 {
+		config.PBSDefaults.CPU.Clear = 0
+	} else if config.PBSDefaults.CPU.Clear <= 0 {
+		config.PBSDefaults.CPU.Clear = config.PBSDefaults.CPU.Trigger - 5
+		if config.PBSDefaults.CPU.Clear <= 0 {
+			config.PBSDefaults.CPU.Clear = 75
+		}
+	}
+
+	if config.PBSDefaults.Memory == nil || config.PBSDefaults.Memory.Trigger < 0 {
+		config.PBSDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+	} else if config.PBSDefaults.Memory.Trigger == 0 {
+		config.PBSDefaults.Memory.Clear = 0
+	} else if config.PBSDefaults.Memory.Clear <= 0 {
+		config.PBSDefaults.Memory.Clear = config.PBSDefaults.Memory.Trigger - 5
+		if config.PBSDefaults.Memory.Clear <= 0 {
+			config.PBSDefaults.Memory.Clear = 80
+		}
 	}
 }
 
@@ -1530,6 +1557,8 @@ func validateHysteresisThresholds(config *AlertConfig) {
 	ensureValidHysteresis(config.NodeDefaults.CPU, "node.cpu")
 	ensureValidHysteresis(config.NodeDefaults.Memory, "node.memory")
 	ensureValidHysteresis(config.NodeDefaults.Temperature, "node.temperature")
+	ensureValidHysteresis(config.PBSDefaults.CPU, "pbs.cpu")
+	ensureValidHysteresis(config.PBSDefaults.Memory, "pbs.memory")
 	ensureValidHysteresis(&config.StorageDefault, "storage")
 }
 

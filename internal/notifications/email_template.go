@@ -36,6 +36,25 @@ func alertNodeDisplay(alert *alerts.Alert) string {
 	return alert.Node
 }
 
+func alertResourceTypeDisplay(alert *alerts.Alert) string {
+	if alert == nil || alert.Metadata == nil {
+		return ""
+	}
+	resourceType, ok := alert.Metadata["resourceType"].(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(resourceType)
+}
+
+func alertMetricContext(alert *alerts.Alert) string {
+	context := fmt.Sprintf("%s on %s", alert.Type, alertNodeDisplay(alert))
+	if resourceType := alertResourceTypeDisplay(alert); resourceType != "" {
+		return fmt.Sprintf("%s %s", resourceType, context)
+	}
+	return context
+}
+
 // EmailTemplate generates a professional HTML email template for alerts
 func EmailTemplate(alertList []*alerts.Alert, isSingle bool) (subject, htmlBody, textBody string) {
 	if isSingle && len(alertList) == 1 {
@@ -65,6 +84,18 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 		alertType = "I/O"
 	default:
 		alertType = titleCase(alertType)
+	}
+
+	resourceType := alertResourceTypeDisplay(alert)
+	resourceTypeHTML := ""
+	resourceTypeText := ""
+	if resourceType != "" {
+		resourceTypeHTML = fmt.Sprintf(`
+                <div class="detail-row">
+                    <span class="detail-label">Resource Type</span>
+                    <span class="detail-value">%s</span>
+                </div>`, resourceType)
+		resourceTypeText = fmt.Sprintf("- Resource Type: %s\n", resourceType)
 	}
 
 	subject = fmt.Sprintf("[Pulse Alert] %s: %s on %s",
@@ -138,6 +169,7 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
                     <span class="detail-label">Alert Type</span>
                     <span class="detail-value">%s</span>
                 </div>
+                %s
                 <div class="detail-row">
                     <span class="detail-label">Node</span>
                     <span class="detail-value">%s</span>
@@ -171,6 +203,7 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 		formatMetricThreshold(alert.Type, alert.Threshold),
 		alert.ResourceID,
 		alertType,
+		resourceTypeHTML,
 		alertNodeDisplay(alert),
 		alert.Instance,
 		alert.StartTime.Format("Jan 2, 2006 at 3:04 PM"),
@@ -188,6 +221,8 @@ Current Value: %s (Threshold: %s)
 Message: %s
 
 Details:
+- Resource ID: %s
+%s- Alert Metric: %s
 - Node: %s  
 - Instance: %s
 - Started: %s
@@ -203,6 +238,9 @@ View alerts and configure settings in your Pulse dashboard.`,
 		formatMetricValue(alert.Type, alert.Value),
 		formatMetricThreshold(alert.Type, alert.Threshold),
 		alert.Message,
+		alert.ResourceID,
+		resourceTypeText,
+		alert.Type,
 		alertNodeDisplay(alert),
 		alert.Instance,
 		alert.StartTime.Format("Jan 2, 2006 at 3:04 PM"),
@@ -247,7 +285,7 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
                             <span style="display: inline-block; width: 8px; height: 8px; background: %s; border-radius: 50%%; margin-right: 10px;"></span>
                             <div>
                                 <div style="font-weight: 500; color: #1a1a1a;">%s</div>
-                                <div style="font-size: 12px; color: #666; margin-top: 2px;">%s on %s</div>
+                                <div style="font-size: 12px; color: #666; margin-top: 2px;">%s</div>
                             </div>
                         </div>
                     </td>
@@ -264,7 +302,7 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
                 </tr>`,
 			levelColor,
 			alert.ResourceName,
-			alert.Type, alertNodeDisplay(alert),
+			alertMetricContext(alert),
 			levelColor, alert.Level,
 			formatMetricValue(alert.Type, alert.Value), formatMetricThreshold(alert.Type, alert.Threshold),
 			formatDuration(time.Since(alert.StartTime)),
@@ -370,7 +408,11 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
 	textBuilder.WriteString("─────────────────────────────────────────────────────────────\n")
 
 	for i, alert := range alertList {
+		resourceType := alertResourceTypeDisplay(alert)
 		textBuilder.WriteString(fmt.Sprintf("\n%d. %s (%s)\n", i+1, alert.ResourceName, alert.ResourceID))
+		if resourceType != "" {
+			textBuilder.WriteString(fmt.Sprintf("   Resource Type: %s\n", resourceType))
+		}
 		textBuilder.WriteString(fmt.Sprintf("   Level: %s | Type: %s\n", strings.ToUpper(string(alert.Level)), alert.Type))
 		textBuilder.WriteString(fmt.Sprintf("   Value: %s (Threshold: %s)\n", formatMetricValue(alert.Type, alert.Value), formatMetricThreshold(alert.Type, alert.Threshold)))
 		textBuilder.WriteString(fmt.Sprintf("   Node: %s | Started: %s ago\n", alertNodeDisplay(alert), formatDuration(time.Since(alert.StartTime))))
