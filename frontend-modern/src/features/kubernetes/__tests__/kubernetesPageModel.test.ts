@@ -3,6 +3,8 @@ import type { Resource } from '@/types/resource';
 import {
   KUBERNETES_TAB_SPECS,
   buildKubernetesPageModel,
+  compareKubernetesEvents,
+  mapKubernetesEventSeverity,
   resolveKubernetesPageTabId,
 } from '../kubernetesPageModel';
 
@@ -131,5 +133,55 @@ describe('kubernetesPageModel', () => {
     ]);
 
     expect(model.nodes.map((r) => r.id)).toEqual(['merged-node-1']);
+  });
+
+  it('maps Kubernetes Event severity from the event type instead of generic resource status', () => {
+    expect(mapKubernetesEventSeverity('Warning')).toEqual({
+      variant: 'warning',
+      label: 'Warning',
+    });
+    expect(mapKubernetesEventSeverity('Normal')).toEqual({
+      variant: 'muted',
+      label: 'Normal',
+    });
+    expect(mapKubernetesEventSeverity(undefined)).toEqual({
+      variant: 'muted',
+      label: 'Unknown',
+    });
+  });
+
+  it('orders Kubernetes Events by observed time from newest to oldest', () => {
+    const older = makeResource({
+      id: 'older',
+      type: 'k8s-event',
+      kubernetes: {
+        eventTime: '2026-05-24T11:00:00Z',
+      },
+    });
+    const newerFromFirstSeen = makeResource({
+      id: 'newer-first-seen',
+      type: 'k8s-event',
+      kubernetes: {
+        firstSeen: '2026-05-24T13:00:00Z',
+      },
+    });
+    const newestFromCreatedAt = makeResource({
+      id: 'newest-created',
+      type: 'k8s-event',
+      kubernetes: {
+        createdAt: '2026-05-24T14:00:00Z',
+      },
+    });
+
+    expect([older, newestFromCreatedAt, newerFromFirstSeen].sort(compareKubernetesEvents)).toEqual([
+      newestFromCreatedAt,
+      newerFromFirstSeen,
+      older,
+    ]);
+    expect(
+      buildKubernetesPageModel([older, newestFromCreatedAt, newerFromFirstSeen]).events.map(
+        (event) => event.id,
+      ),
+    ).toEqual(['newest-created', 'newer-first-seen', 'older']);
   });
 });

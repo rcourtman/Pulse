@@ -27,13 +27,31 @@ afterEach(() => {
 });
 
 describe('KubernetesEventsTable', () => {
-  it('renders Kubernetes Event fields with object, count, time, and message context', () => {
+  it('renders Kubernetes Event fields with severity, newest-first ordering, and message context', () => {
     render(() => (
       <KubernetesEventsTable
         resources={[
           makeResource({
-            id: 'event-1',
+            id: 'normal-event',
             type: 'k8s-event',
+            status: 'degraded',
+            kubernetes: {
+              clusterName: 'prod',
+              namespace: 'apps',
+              resourceKind: 'Event',
+              eventType: 'Normal',
+              reason: 'Scheduled',
+              involvedKind: 'Pod',
+              involvedName: 'checkout-web-456',
+              count: 1,
+              eventTime: '2026-05-24T12:00:00Z',
+              message: 'Successfully assigned apps/checkout-web-456 to prod-k8s-01',
+            },
+          }),
+          makeResource({
+            id: 'warning-event',
+            type: 'k8s-event',
+            status: 'online',
             kubernetes: {
               clusterName: 'prod',
               namespace: 'apps',
@@ -60,11 +78,19 @@ describe('KubernetesEventsTable', () => {
     expect(screen.getByText('Reason')).toBeInTheDocument();
     expect(screen.getByText('Object')).toBeInTheDocument();
     expect(screen.getByText('Observed')).toBeInTheDocument();
+    expect(screen.getByTitle('Warning')).toHaveClass('bg-amber-500');
+    expect(screen.getByTitle('Normal')).toHaveClass('bg-slate-400');
     expect(screen.getByText('Warning')).toBeInTheDocument();
     expect(screen.getByText('FailedScheduling')).toBeInTheDocument();
     expect(screen.getByText('Pod/checkout-api-123')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('2026-05-24T13:00:00Z')).toBeInTheDocument();
     expect(screen.getByText('0/3 nodes are available')).toBeInTheDocument();
+
+    expect(
+      Array.from(document.querySelectorAll('[data-kubernetes-event-row]')).map((row) =>
+        row.getAttribute('data-kubernetes-event-row'),
+      ),
+    ).toEqual(['warning-event', 'normal-event']);
   });
 });

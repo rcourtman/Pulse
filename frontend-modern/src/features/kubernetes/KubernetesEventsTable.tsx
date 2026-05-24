@@ -1,4 +1,4 @@
-import { For, Show, type Component, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
@@ -10,7 +10,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
-import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
@@ -26,6 +25,7 @@ import {
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
+import { compareKubernetesEvents, mapKubernetesEventSeverity } from './kubernetesPageModel';
 
 const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
 
@@ -66,8 +66,9 @@ export const KubernetesEventsTable: Component<{
   title?: string;
   showToolbar?: boolean;
 }> = (props) => {
+  const sortedEvents = createMemo(() => [...props.resources].sort(compareKubernetesEvents));
   const tableState = createPlatformTableFilterState({
-    resources: () => props.resources,
+    resources: sortedEvents,
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterPlatformResources,
   });
@@ -148,7 +149,8 @@ export const KubernetesEventsTable: Component<{
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                 <For each={tableState.filtered()}>
                   {(resource) => {
-                    const indicator = () => getSimpleStatusIndicator(resource.status);
+                    const indicator = () =>
+                      mapKubernetesEventSeverity(resource.kubernetes?.eventType);
                     const name = () => eventName(resource);
                     const scope = () => eventScope(resource);
                     const observed = () => observedTime(resource);
@@ -164,7 +166,7 @@ export const KubernetesEventsTable: Component<{
                             <StatusDot
                               size="sm"
                               variant={indicator().variant}
-                              title={resource.status || 'unknown'}
+                              title={indicator().label}
                               ariaHidden
                             />
                             <span class="truncate font-semibold text-base-content" title={name()}>

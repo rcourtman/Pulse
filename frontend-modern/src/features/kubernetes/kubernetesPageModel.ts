@@ -1,4 +1,5 @@
 import type { Resource, ResourceType } from '@/types/resource';
+import type { StatusIndicator } from '@/utils/status';
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 
 export type KubernetesPageTabId =
@@ -31,6 +32,38 @@ export const KUBERNETES_TAB_SPECS: readonly KubernetesTabSpec[] = [
 ] as const;
 
 const asTrimmedString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+const eventTypeLabel = (value: string, fallback: string): string => {
+  const trimmed = asTrimmedString(value);
+  if (!trimmed) return fallback;
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+};
+
+export function mapKubernetesEventSeverity(eventType: string | undefined): StatusIndicator {
+  const normalized = asTrimmedString(eventType).toLowerCase();
+  if (normalized === 'warning') return { variant: 'warning', label: 'Warning' };
+  if (normalized === 'normal') return { variant: 'muted', label: 'Normal' };
+  return {
+    variant: 'muted',
+    label: eventTypeLabel(eventType ?? '', 'Unknown'),
+  };
+}
+
+const parseKubernetesEventObservedTime = (resource: Resource): number => {
+  const observed =
+    asTrimmedString(resource.kubernetes?.eventTime) ||
+    asTrimmedString(resource.kubernetes?.firstSeen) ||
+    asTrimmedString(resource.kubernetes?.createdAt);
+  if (!observed) return 0;
+  const timestamp = Date.parse(observed);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+export const compareKubernetesEvents = (left: Resource, right: Resource): number => {
+  const timeDelta = parseKubernetesEventObservedTime(right) - parseKubernetesEventObservedTime(left);
+  if (timeDelta !== 0) return timeDelta;
+  return left.id.localeCompare(right.id);
+};
 
 const KUBERNETES_ROUTE_TAB_ALIASES: Record<string, KubernetesPageTabId> = {
   autoscaling: 'workloads',
@@ -162,7 +195,9 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
   const horizontalPodAutoscalers = k8sResources.filter(
     (resource) => resource.type === 'k8s-horizontal-pod-autoscaler',
   );
-  const events = k8sResources.filter((resource) => resource.type === 'k8s-event');
+  const events = k8sResources
+    .filter((resource) => resource.type === 'k8s-event')
+    .sort(compareKubernetesEvents);
   const workloads = [
     ...deployments,
     ...replicaSets,
