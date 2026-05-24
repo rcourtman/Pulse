@@ -70,6 +70,44 @@ func TestUnifiedResourceSnapshotIncludesPlatformFixtures(t *testing.T) {
 	}
 }
 
+func TestUnifiedResourceSnapshotIncludesRuntimeNativeTabFixtures(t *testing.T) {
+	previous := IsMockEnabled()
+	SetEnabled(true)
+	t.Cleanup(func() { SetEnabled(previous) })
+
+	resources, _ := UnifiedResourceSnapshot()
+	counts := make(map[unifiedresources.ResourceType]int)
+	dockerStorageHosts := 0
+	for _, resource := range resources {
+		counts[resource.Type]++
+		if resource.Docker != nil &&
+			(resource.Docker.ImagesUsage != nil ||
+				resource.Docker.ContainersUsage != nil ||
+				resource.Docker.VolumesUsage != nil ||
+				resource.Docker.BuildCacheUsage != nil) {
+			dockerStorageHosts++
+		}
+	}
+
+	requiredTypes := []unifiedresources.ResourceType{
+		unifiedresources.ResourceTypeDockerImage,
+		unifiedresources.ResourceTypeDockerVolume,
+		unifiedresources.ResourceTypeDockerNetwork,
+		unifiedresources.ResourceTypeDockerSwarmNode,
+		unifiedresources.ResourceTypeK8sStorageClass,
+		unifiedresources.ResourceTypeK8sPV,
+		unifiedresources.ResourceTypeK8sPVC,
+	}
+	for _, resourceType := range requiredTypes {
+		if counts[resourceType] == 0 {
+			t.Fatalf("expected mock unified resources to include %s rows", resourceType)
+		}
+	}
+	if dockerStorageHosts == 0 {
+		t.Fatal("expected mock unified resources to include Docker / Podman storage usage on host rows")
+	}
+}
+
 func TestUnifiedResourceSnapshotParentsDemoProxmoxWorkloads(t *testing.T) {
 	previous := IsMockEnabled()
 	SetEnabled(true)

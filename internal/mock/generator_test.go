@@ -27,6 +27,18 @@ func TestBuildFixtureStateIncludesDockerHosts(t *testing.T) {
 		if len(host.Containers) == 0 {
 			t.Fatalf("docker host %s has no containers", host.Hostname)
 		}
+		if len(host.Images) == 0 {
+			t.Fatalf("docker host %s has no image inventory", host.Hostname)
+		}
+		if len(host.Volumes) == 0 {
+			t.Fatalf("docker host %s has no volume inventory", host.Hostname)
+		}
+		if len(host.Networks) == 0 {
+			t.Fatalf("docker host %s has no network inventory", host.Hostname)
+		}
+		if host.StorageUsage == nil || host.StorageUsage.Images.TotalCount == 0 || host.StorageUsage.Volumes.TotalCount == 0 {
+			t.Fatalf("docker host %s has no engine storage usage inventory: %+v", host.Hostname, host.StorageUsage)
+		}
 	}
 }
 
@@ -90,6 +102,9 @@ func TestBuildFixtureStateIncludesSwarmServices(t *testing.T) {
 		}
 		if len(host.Configs) == 0 {
 			t.Fatalf("expected configs for service host %s", host.ID)
+		}
+		if len(host.Nodes) == 0 {
+			t.Fatalf("expected swarm nodes for service host %s", host.ID)
 		}
 		found = true
 		break
@@ -387,6 +402,30 @@ func TestBuildFixtureStateCreatesHostEntriesForKubernetesNodes(t *testing.T) {
 		if len(host.Sensors.TemperatureCelsius) == 0 {
 			t.Fatalf("kubernetes node host %s missing temperature sensors", host.Hostname)
 		}
+	}
+}
+
+func TestBuildFixtureStateIncludesKubernetesStorageInventory(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.K8sClusterCount = 1
+	cfg.K8sNodesPerCluster = 3
+	cfg.K8sPodsPerCluster = 8
+	cfg.RandomMetrics = false
+
+	data := buildFixtureState(cfg)
+	if len(data.KubernetesClusters) != 1 {
+		t.Fatalf("expected exactly one kubernetes cluster, got %d", len(data.KubernetesClusters))
+	}
+
+	cluster := data.KubernetesClusters[0]
+	if len(cluster.StorageClasses) == 0 {
+		t.Fatal("expected kubernetes storage class inventory")
+	}
+	if len(cluster.PersistentVolumes) == 0 {
+		t.Fatal("expected kubernetes persistent volume inventory")
+	}
+	if len(cluster.PersistentVolumeClaims) == 0 {
+		t.Fatal("expected kubernetes persistent volume claim inventory")
 	}
 }
 

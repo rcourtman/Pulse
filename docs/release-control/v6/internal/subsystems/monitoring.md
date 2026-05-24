@@ -136,8 +136,9 @@ truth for live infrastructure data.
     must not create a second frontend-only fixture path for service versions,
     config paths, bind mounts, ports, or suggested URLs.
     Mock Docker runtime inventory must use the same authored Docker host graph
-    for Swarm services, tasks, nodes, secrets, and configs so platform pages and
-    browser proof exercise the live report/resource contracts rather than a
+    for images, volumes, networks, engine storage-usage buckets, Swarm
+    services, tasks, nodes, secrets, and configs so platform pages and browser
+    proof exercise the live report/resource contracts rather than a
     frontend-only demo inventory.
 16. Add or change TrueNAS supplemental inventory only through the native
     TrueNAS provider path and unified-resource projection. TrueNAS apps are
@@ -195,7 +196,10 @@ truth for live infrastructure data.
     agent reports may still carry key names, but Secret values remain outside
     the report contract. Mock/demo Kubernetes ConfigMap and Secret inventory
     must mirror the current metadata-only trust boundary rather than seeding
-    payload key names. Monitoring must preserve those objects as native cluster
+    payload key names. Mock/demo Kubernetes inventory must also seed
+    representative storage-class, persistent-volume, and persistent-volume-claim
+    rows so the native storage tab exercises the same report/resource contract
+    as live agents. Monitoring must preserve those objects as native cluster
     inventory instead of flattening them into pods, deployments, or generic
     storage/configuration rows.
 

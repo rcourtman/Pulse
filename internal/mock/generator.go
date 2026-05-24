@@ -1309,6 +1309,7 @@ func generateKubernetesClusters(config MockConfig) []models.KubernetesCluster {
 		nodes := generateKubernetesNodes(clusterID, nodeCount)
 		pods := generateKubernetesPods(clusterID, nodes, podCount)
 		deployments := generateKubernetesDeployments(clusterID, deploymentCount)
+		storageClasses, persistentVolumes, persistentVolumeClaims := generateKubernetesStorageInventory(clusterID, now)
 
 		lastSeen := now.Add(-time.Duration(rand.Intn(20)) * time.Second)
 		status := "online"
@@ -1318,28 +1319,100 @@ func generateKubernetesClusters(config MockConfig) []models.KubernetesCluster {
 		}
 
 		cluster := models.KubernetesCluster{
-			ID:               clusterID,
-			AgentID:          fmt.Sprintf("%s-agent", clusterID),
-			Name:             name,
-			DisplayName:      titleCase(name),
-			Server:           server,
-			Context:          context,
-			Version:          k8sVersions[rand.Intn(len(k8sVersions))],
-			Status:           status,
-			LastSeen:         lastSeen,
-			IntervalSeconds:  30,
-			AgentVersion:     "0.1.0-mock",
-			Nodes:            nodes,
-			Pods:             pods,
-			Deployments:      deployments,
-			Hidden:           false,
-			PendingUninstall: false,
+			ID:                     clusterID,
+			AgentID:                fmt.Sprintf("%s-agent", clusterID),
+			Name:                   name,
+			DisplayName:            titleCase(name),
+			Server:                 server,
+			Context:                context,
+			Version:                k8sVersions[rand.Intn(len(k8sVersions))],
+			Status:                 status,
+			LastSeen:               lastSeen,
+			IntervalSeconds:        30,
+			AgentVersion:           "0.1.0-mock",
+			Nodes:                  nodes,
+			Pods:                   pods,
+			Deployments:            deployments,
+			PersistentVolumes:      persistentVolumes,
+			PersistentVolumeClaims: persistentVolumeClaims,
+			StorageClasses:         storageClasses,
+			Hidden:                 false,
+			PendingUninstall:       false,
 		}
 		initializeMockKubernetesClusterUsage(&cluster, now, true)
 		clusters = append(clusters, cluster)
 	}
 
 	return clusters
+}
+
+func generateKubernetesStorageInventory(
+	clusterID string,
+	now time.Time,
+) ([]models.KubernetesStorageClass, []models.KubernetesPersistentVolume, []models.KubernetesPersistentVolumeClaim) {
+	createdAt := now.Add(-72 * time.Hour)
+	allowExpansion := true
+	storageClassName := "fast-ssd"
+	pvName := fmt.Sprintf("%s-pv-postgres-data", clusterID)
+	claimName := "postgres-data"
+	claimNamespace := "services"
+
+	storageClasses := []models.KubernetesStorageClass{
+		{
+			UID:                  clusterID + "-sc-fast-ssd",
+			Name:                 storageClassName,
+			Provisioner:          "csi.pulse-demo.local",
+			ReclaimPolicy:        "Delete",
+			VolumeBindingMode:    "WaitForFirstConsumer",
+			AllowVolumeExpansion: &allowExpansion,
+			ParameterKeys:        []string{"type", "iops", "encrypted"},
+			CreatedAt:            createdAt,
+			Labels: map[string]string{
+				"app.kubernetes.io/part-of": "pulse-demo-estate",
+				"storage.pulse.local/tier":  "fast",
+			},
+		},
+	}
+
+	persistentVolumes := []models.KubernetesPersistentVolume{
+		{
+			UID:            clusterID + "-pv-postgres-data",
+			Name:           pvName,
+			Phase:          "Bound",
+			StorageClass:   storageClassName,
+			CapacityBytes:  int64(80) << 30,
+			AccessModes:    []string{"ReadWriteOnce"},
+			ReclaimPolicy:  "Delete",
+			ClaimNamespace: claimNamespace,
+			ClaimName:      claimName,
+			CreatedAt:      createdAt.Add(15 * time.Minute),
+			Labels: map[string]string{
+				"app.kubernetes.io/name":    "postgres",
+				"app.kubernetes.io/part-of": "pulse-demo-estate",
+			},
+		},
+	}
+
+	persistentVolumeClaims := []models.KubernetesPersistentVolumeClaim{
+		{
+			UID:            clusterID + "-pvc-postgres-data",
+			Name:           claimName,
+			Namespace:      claimNamespace,
+			Phase:          "Bound",
+			StorageClass:   storageClassName,
+			RequestedBytes: int64(80) << 30,
+			CapacityBytes:  int64(80) << 30,
+			AccessModes:    []string{"ReadWriteOnce"},
+			VolumeName:     pvName,
+			CreatedAt:      createdAt.Add(30 * time.Minute),
+			Labels: map[string]string{
+				"app.kubernetes.io/name":    "postgres",
+				"app.kubernetes.io/part-of": "pulse-demo-estate",
+			},
+		},
+	}
+
+	return storageClasses, persistentVolumes, persistentVolumeClaims
 }
 
 func initializeMockKubernetesClusterUsage(cluster *models.KubernetesCluster, now time.Time, randomize bool) {
@@ -2286,10 +2359,404 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 			host.DiskWriteRate = 0
 		}
 
+		ensureMockDockerNativeInventory(&host, i, now)
 		hosts = append(hosts, host)
 	}
 
+	populateMockDockerSwarmNodeInventories(hosts, now)
+
 	return hosts
+}
+
+func ensureMockDockerNativeInventory(host *models.DockerHost, hostIndex int, now time.Time) {
+	if host == nil {
+		return
+	}
+
+	host.Images = generateMockDockerImages(*host, hostIndex, now)
+	host.Volumes = generateMockDockerVolumes(*host, hostIndex, now)
+	host.Networks = generateMockDockerEngineNetworks(*host, hostIndex, now)
+	host.StorageUsage = generateMockDockerStorageUsage(*host)
+}
+
+func mockDockerSafeName(parts ...string) string {
+	joined := strings.ToLower(strings.TrimSpace(strings.Join(parts, "-")))
+	if joined == "" {
+		return "runtime"
+	}
+
+	var out strings.Builder
+	lastWasDash := false
+	for _, r := range joined {
+		allowed := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '.'
+		if allowed {
+			out.WriteRune(r)
+			lastWasDash = false
+			continue
+		}
+		if !lastWasDash {
+			out.WriteRune('-')
+			lastWasDash = true
+		}
+	}
+
+	safe := strings.Trim(out.String(), "-")
+	if safe == "" {
+		return "runtime"
+	}
+	return safe
+}
+
+func normalizeMockDockerImageReference(image string) string {
+	image = strings.TrimSpace(image)
+	if image == "" {
+		return "ghcr.io/pulse-demo/runtime:latest"
+	}
+	if strings.Contains(image, "@sha256:") {
+		return image
+	}
+	lastSlash := strings.LastIndex(image, "/")
+	lastColon := strings.LastIndex(image, ":")
+	if lastColon > lastSlash {
+		return image
+	}
+	return image + ":latest"
+}
+
+func mockDockerRepositoryForDigest(image string) string {
+	image = strings.TrimSpace(image)
+	if image == "" {
+		return "ghcr.io/pulse-demo/runtime"
+	}
+	if before, _, ok := strings.Cut(image, "@"); ok {
+		image = before
+	}
+	lastSlash := strings.LastIndex(image, "/")
+	lastColon := strings.LastIndex(image, ":")
+	if lastColon > lastSlash {
+		image = image[:lastColon]
+	}
+	return image
+}
+
+func generateMockDockerImages(host models.DockerHost, hostIndex int, now time.Time) []models.DockerImage {
+	imageCounts := make(map[string]int64)
+	imageOrder := make([]string, 0)
+	for _, container := range host.Containers {
+		image := normalizeMockDockerImageReference(container.Image)
+		if image == "" {
+			continue
+		}
+		if _, exists := imageCounts[image]; !exists {
+			imageOrder = append(imageOrder, image)
+		}
+		imageCounts[image]++
+	}
+	if len(imageOrder) == 0 {
+		fallback := normalizeMockDockerImageReference(fmt.Sprintf("ghcr.io/pulse-demo/%s-base:2026.05", mockDockerSafeName(host.Runtime, host.Hostname)))
+		imageOrder = append(imageOrder, fallback)
+		imageCounts[fallback] = 0
+	}
+
+	images := make([]models.DockerImage, 0, len(imageOrder))
+	for index, image := range imageOrder {
+		sizeBytes := int64(180+mockStableChoice(900, host.ID, image, "image-size")) * 1024 * 1024
+		imageID := "sha256:" + mockStableHexString(64, host.ID, image, "image")
+		digest := fmt.Sprintf(
+			"%s@sha256:%s",
+			mockDockerRepositoryForDigest(image),
+			mockStableHexString(64, host.ID, image, "digest"),
+		)
+		images = append(images, models.DockerImage{
+			ID:              imageID,
+			RepoTags:        []string{image},
+			RepoDigests:     []string{digest},
+			SizeBytes:       sizeBytes,
+			SharedSizeBytes: sizeBytes / 8,
+			Containers:      imageCounts[image],
+			CreatedAt:       now.Add(-time.Duration(12+hostIndex*3+index*5) * time.Hour),
+			Labels: map[string]string{
+				"com.pulse.mock.host":    host.Hostname,
+				"com.pulse.mock.runtime": firstNonEmpty(host.Runtime, "docker"),
+			},
+		})
+	}
+	return images
+}
+
+func generateMockDockerVolumes(host models.DockerHost, hostIndex int, now time.Time) []models.DockerVolume {
+	prefix := mockDockerSafeName(host.Hostname)
+	basePath := "/var/lib/docker/volumes"
+	if strings.EqualFold(host.Runtime, "podman") {
+		basePath = "/var/lib/containers/storage/volumes"
+	}
+
+	profiles := []struct {
+		suffix   string
+		sizeGiB  int64
+		refCount int64
+	}{
+		{"config", 2, 1},
+		{"data", 32 + int64(hostIndex%4)*8, 2},
+		{"cache", 8 + int64(hostIndex%3)*4, 1},
+	}
+
+	volumes := make([]models.DockerVolume, 0, len(profiles))
+	for _, profile := range profiles {
+		name := fmt.Sprintf("%s_%s", prefix, profile.suffix)
+		volumes = append(volumes, models.DockerVolume{
+			Name:       name,
+			Driver:     "local",
+			Mountpoint: fmt.Sprintf("%s/%s/_data", basePath, name),
+			Scope:      "local",
+			CreatedAt:  now.Add(-time.Duration(96+hostIndex*6) * time.Hour).Format(time.RFC3339),
+			SizeBytes:  profile.sizeGiB << 30,
+			RefCount:   profile.refCount,
+			Labels: map[string]string{
+				"com.pulse.mock.host": host.Hostname,
+				"com.pulse.mock.role": profile.suffix,
+			},
+			Options: map[string]string{},
+		})
+	}
+	return volumes
+}
+
+func generateMockDockerEngineNetworks(host models.DockerHost, hostIndex int, now time.Time) []models.DockerNetwork {
+	prefix := mockDockerSafeName(host.Hostname)
+	runtime := firstNonEmpty(host.Runtime, "docker")
+	networks := []models.DockerNetwork{
+		{
+			ID:         mockStableHexString(12, host.ID, "network", "bridge"),
+			Name:       "bridge",
+			Driver:     "bridge",
+			Scope:      "local",
+			CreatedAt:  now.Add(-120 * time.Hour),
+			EnableIPv4: true,
+			Subnets: []models.DockerNetworkSubnet{{
+				Subnet:  fmt.Sprintf("172.%d.0.0/16", 18+hostIndex%10),
+				Gateway: fmt.Sprintf("172.%d.0.1", 18+hostIndex%10),
+			}},
+			Labels: map[string]string{"com.pulse.mock.runtime": runtime},
+		},
+		{
+			ID:         mockStableHexString(12, host.ID, "network", "app"),
+			Name:       fmt.Sprintf("%s_app", prefix),
+			Driver:     "bridge",
+			Scope:      "local",
+			CreatedAt:  now.Add(-72 * time.Hour),
+			EnableIPv4: true,
+			Attachable: true,
+			Subnets: []models.DockerNetworkSubnet{{
+				Subnet:  fmt.Sprintf("10.%d.%d.0/24", 40+hostIndex%20, hostIndex%200),
+				Gateway: fmt.Sprintf("10.%d.%d.1", 40+hostIndex%20, hostIndex%200),
+			}},
+			Labels: map[string]string{"com.pulse.mock.host": host.Hostname},
+		},
+	}
+
+	if host.Swarm != nil && strings.EqualFold(host.Swarm.LocalState, "active") {
+		networks = append(networks, models.DockerNetwork{
+			ID:         mockStableHexString(12, host.ID, "network", "ingress"),
+			Name:       "ingress",
+			Driver:     "overlay",
+			Scope:      "swarm",
+			CreatedAt:  now.Add(-168 * time.Hour),
+			EnableIPv4: true,
+			Attachable: true,
+			Ingress:    true,
+			Subnets: []models.DockerNetworkSubnet{{
+				Subnet:  fmt.Sprintf("10.%d.0.0/24", 200+hostIndex%30),
+				Gateway: fmt.Sprintf("10.%d.0.1", 200+hostIndex%30),
+			}},
+			Labels: map[string]string{
+				"com.docker.swarm.scope": "ingress",
+				"com.pulse.mock.cluster": firstNonEmpty(host.Swarm.ClusterName, "edge-swarm"),
+			},
+		})
+	}
+
+	return networks
+}
+
+func generateMockDockerStorageUsage(host models.DockerHost) *models.DockerStorageUsage {
+	var imageBytes int64
+	var activeImages int64
+	for _, image := range host.Images {
+		imageBytes += image.SizeBytes
+		if image.Containers > 0 {
+			activeImages++
+		}
+	}
+
+	var volumeBytes int64
+	var activeVolumes int64
+	for _, volume := range host.Volumes {
+		volumeBytes += volume.SizeBytes
+		if volume.RefCount > 0 {
+			activeVolumes++
+		}
+	}
+
+	var containerBytes int64
+	var activeContainers int64
+	for _, container := range host.Containers {
+		if container.RootFilesystemBytes > 0 {
+			containerBytes += container.RootFilesystemBytes
+		}
+		if strings.EqualFold(container.State, "running") {
+			activeContainers++
+		}
+	}
+	if containerBytes == 0 {
+		containerBytes = int64(len(host.Containers)) * 2 << 30
+	}
+
+	buildCacheBytes := int64(1+mockStableChoice(10, host.ID, "build-cache")) << 30
+
+	return &models.DockerStorageUsage{
+		Images: models.DockerStorageUsageBucket{
+			TotalCount:       int64(len(host.Images)),
+			ActiveCount:      activeImages,
+			TotalSizeBytes:   imageBytes,
+			ReclaimableBytes: imageBytes / 5,
+		},
+		Containers: models.DockerStorageUsageBucket{
+			TotalCount:       int64(len(host.Containers)),
+			ActiveCount:      activeContainers,
+			TotalSizeBytes:   containerBytes,
+			ReclaimableBytes: containerBytes / 10,
+		},
+		Volumes: models.DockerStorageUsageBucket{
+			TotalCount:       int64(len(host.Volumes)),
+			ActiveCount:      activeVolumes,
+			TotalSizeBytes:   volumeBytes,
+			ReclaimableBytes: volumeBytes / 12,
+		},
+		BuildCache: models.DockerStorageUsageBucket{
+			TotalCount:       4 + int64(mockStableChoice(9, host.ID, "build-cache-count")),
+			ActiveCount:      1,
+			TotalSizeBytes:   buildCacheBytes,
+			ReclaimableBytes: buildCacheBytes * 3 / 4,
+		},
+	}
+}
+
+func firstMockDockerHostAddress(host models.DockerHost) string {
+	for _, iface := range host.NetworkInterfaces {
+		for _, address := range iface.Addresses {
+			address = strings.TrimSpace(address)
+			if address == "" {
+				continue
+			}
+			if before, _, ok := strings.Cut(address, "/"); ok {
+				return before
+			}
+			return address
+		}
+	}
+	return ""
+}
+
+func cloneMockDockerNodes(nodes []models.DockerNode) []models.DockerNode {
+	if len(nodes) == 0 {
+		return []models.DockerNode{}
+	}
+	out := make([]models.DockerNode, len(nodes))
+	copy(out, nodes)
+	for i := range out {
+		out[i].Labels = cloneStringMap(out[i].Labels)
+		out[i].EngineLabels = cloneStringMap(out[i].EngineLabels)
+	}
+	return out
+}
+
+func populateMockDockerSwarmNodeInventories(hosts []models.DockerHost, now time.Time) {
+	managerLeaderID := ""
+	for _, host := range hosts {
+		if host.Swarm == nil || !strings.EqualFold(host.Swarm.NodeRole, "manager") {
+			continue
+		}
+		managerLeaderID = host.Swarm.NodeID
+		break
+	}
+
+	nodes := make([]models.DockerNode, 0, len(hosts))
+	nodeByID := make(map[string]models.DockerNode, len(hosts))
+	for _, host := range hosts {
+		if host.Swarm == nil || strings.EqualFold(host.Runtime, "podman") {
+			continue
+		}
+		nodeID := strings.TrimSpace(host.Swarm.NodeID)
+		if nodeID == "" {
+			nodeID = fmt.Sprintf("%s-node", host.ID)
+		}
+		role := firstNonEmpty(host.Swarm.NodeRole, "worker")
+		state := "ready"
+		availability := "active"
+		message := ""
+		if strings.EqualFold(host.Status, "offline") {
+			state = "down"
+			availability = "pause"
+			message = "Host agent offline"
+		}
+		reachability := ""
+		managerAddress := ""
+		leader := false
+		if strings.EqualFold(role, "manager") {
+			reachability = "reachable"
+			managerAddress = firstMockDockerHostAddress(host)
+			if managerAddress != "" {
+				managerAddress += ":2377"
+			}
+			leader = nodeID == managerLeaderID
+		}
+
+		node := models.DockerNode{
+			ID:                  nodeID,
+			Hostname:            host.Hostname,
+			Role:                role,
+			Availability:        availability,
+			State:               state,
+			Message:             message,
+			Address:             firstMockDockerHostAddress(host),
+			ManagerReachability: reachability,
+			ManagerAddress:      managerAddress,
+			Leader:              leader,
+			EngineVersion:       firstNonEmpty(host.DockerVersion, host.RuntimeVersion),
+			OS:                  host.OS,
+			Architecture:        host.Architecture,
+			NanoCPUs:            int64(host.CPUs) * 1_000_000_000,
+			MemoryBytes:         host.TotalMemoryBytes,
+			Labels: map[string]string{
+				"com.pulse.mock.cluster": firstNonEmpty(host.Swarm.ClusterName, "edge-swarm"),
+				"com.pulse.mock.host":    host.Hostname,
+			},
+			EngineLabels: map[string]string{
+				"pulse.runtime": firstNonEmpty(host.Runtime, "docker"),
+			},
+			CreatedAt: now.Add(-168 * time.Hour),
+		}
+		nodes = append(nodes, node)
+		nodeByID[nodeID] = node
+	}
+
+	for i := range hosts {
+		host := &hosts[i]
+		if host.Swarm == nil || strings.EqualFold(host.Runtime, "podman") {
+			host.Nodes = []models.DockerNode{}
+			continue
+		}
+		if strings.EqualFold(host.Swarm.NodeRole, "manager") && host.Swarm.ControlAvailable {
+			host.Nodes = cloneMockDockerNodes(nodes)
+			continue
+		}
+		if node, ok := nodeByID[host.Swarm.NodeID]; ok {
+			host.Nodes = []models.DockerNode{node}
+		} else {
+			host.Nodes = []models.DockerNode{}
+		}
+	}
 }
 
 func generateHosts(config MockConfig) []models.Host {

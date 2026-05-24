@@ -381,11 +381,33 @@ func assertDockerMockCoverage(t *testing.T, graph FixtureGraph) {
 	}
 
 	containerCount := 0
+	imageCount := 0
+	volumeCount := 0
+	networkCount := 0
+	storageUsageCount := 0
+	swarmNodeCount := 0
 	for _, host := range graph.State.DockerHosts {
 		containerCount += len(host.Containers)
+		imageCount += len(host.Images)
+		volumeCount += len(host.Volumes)
+		networkCount += len(host.Networks)
+		swarmNodeCount += len(host.Nodes)
+		if host.StorageUsage != nil {
+			storageUsageCount++
+		}
 	}
 	if containerCount == 0 {
 		t.Fatal("expected docker container fixtures for the supported docker platform")
+	}
+	if imageCount == 0 || volumeCount == 0 || networkCount == 0 || storageUsageCount == 0 || swarmNodeCount == 0 {
+		t.Fatalf(
+			"expected docker fixtures to include images, volumes, networks, storage usage, and swarm nodes; got images=%d volumes=%d networks=%d storage=%d swarmNodes=%d",
+			imageCount,
+			volumeCount,
+			networkCount,
+			storageUsageCount,
+			swarmNodeCount,
+		)
 	}
 }
 
@@ -399,10 +421,16 @@ func assertKubernetesMockCoverage(t *testing.T, graph FixtureGraph) {
 	nodeCount := 0
 	deploymentCount := 0
 	podCount := 0
+	storageClassCount := 0
+	persistentVolumeCount := 0
+	persistentVolumeClaimCount := 0
 	for _, cluster := range graph.State.KubernetesClusters {
 		nodeCount += len(cluster.Nodes)
 		deploymentCount += len(cluster.Deployments)
 		podCount += len(cluster.Pods)
+		storageClassCount += len(cluster.StorageClasses)
+		persistentVolumeCount += len(cluster.PersistentVolumes)
+		persistentVolumeClaimCount += len(cluster.PersistentVolumeClaims)
 	}
 	if nodeCount == 0 || deploymentCount == 0 || podCount == 0 {
 		t.Fatalf(
@@ -410,6 +438,14 @@ func assertKubernetesMockCoverage(t *testing.T, graph FixtureGraph) {
 			nodeCount,
 			deploymentCount,
 			podCount,
+		)
+	}
+	if storageClassCount == 0 || persistentVolumeCount == 0 || persistentVolumeClaimCount == 0 {
+		t.Fatalf(
+			"expected kubernetes fixtures to include storage classes, persistent volumes, and persistent volume claims; got classes=%d pvs=%d pvcs=%d",
+			storageClassCount,
+			persistentVolumeCount,
+			persistentVolumeClaimCount,
 		)
 	}
 }

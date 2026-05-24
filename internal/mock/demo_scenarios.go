@@ -426,6 +426,7 @@ func applyDemoDockerScenario(state *models.StateSnapshot, now time.Time) {
 			host.DisplayName = "Field Office Edge 01"
 			host.Status = "offline"
 			host.Containers = applyDemoOfflineDockerContainers(host.Containers, now)
+			ensureMockDockerNativeInventory(host, i, now)
 			continue
 		}
 		hostProfile := demoDockerHostProfiles[i%len(demoDockerHostProfiles)]
@@ -433,6 +434,7 @@ func applyDemoDockerScenario(state *models.StateSnapshot, now time.Time) {
 		host.DisplayName = hostProfile.DisplayName
 		host.Status = "online"
 		host.Containers = applyDemoDockerContainerProfiles(host.Containers, hostProfile.Containers, now)
+		ensureMockDockerNativeInventory(host, i, now)
 		flagged := 0
 		for _, container := range host.Containers {
 			switch strings.ToLower(strings.TrimSpace(container.Health)) {
@@ -444,6 +446,7 @@ func applyDemoDockerScenario(state *models.StateSnapshot, now time.Time) {
 			host.Status = "degraded"
 		}
 	}
+	populateMockDockerSwarmNodeInventories(state.DockerHosts, now)
 }
 
 func applyDemoOfflineDockerContainers(containers []models.DockerContainer, now time.Time) []models.DockerContainer {
@@ -641,6 +644,16 @@ func applyDemoKubernetesNativeInventory(cluster *models.KubernetesCluster, now t
 	}
 	cluster.EndpointSlices = []models.KubernetesEndpointSlice{
 		{UID: cluster.ID + "-eps-checkout-api", Name: "checkout-api-abc12", Namespace: "services", AddressType: "IPv4", ServiceName: "checkout-api", EndpointCount: 3, ReadyEndpointCount: 3, Ports: []models.KubernetesEndpointPort{{Name: "http", Protocol: "TCP", Port: 8080, AppProtocol: "kubernetes.io/http"}}, CreatedAt: createdAt, Labels: labels("checkout-api")},
+	}
+	allowExpansion := true
+	cluster.StorageClasses = []models.KubernetesStorageClass{
+		{UID: cluster.ID + "-sc-fast-ssd", Name: "fast-ssd", Provisioner: "csi.pulse-demo.local", ReclaimPolicy: "Delete", VolumeBindingMode: "WaitForFirstConsumer", AllowVolumeExpansion: &allowExpansion, ParameterKeys: []string{"type", "iops", "encrypted"}, CreatedAt: createdAt, Labels: labels("fast-ssd")},
+	}
+	cluster.PersistentVolumes = []models.KubernetesPersistentVolume{
+		{UID: cluster.ID + "-pv-checkout-postgres", Name: cluster.ID + "-pv-checkout-postgres", Phase: "Bound", StorageClass: "fast-ssd", CapacityBytes: int64(80) << 30, AccessModes: []string{"ReadWriteOnce"}, ReclaimPolicy: "Delete", ClaimNamespace: "services", ClaimName: "checkout-postgres-data", CreatedAt: createdAt, Labels: labels("checkout-postgres")},
+	}
+	cluster.PersistentVolumeClaims = []models.KubernetesPersistentVolumeClaim{
+		{UID: cluster.ID + "-pvc-checkout-postgres", Name: "checkout-postgres-data", Namespace: "services", Phase: "Bound", StorageClass: "fast-ssd", RequestedBytes: int64(80) << 30, CapacityBytes: int64(80) << 30, AccessModes: []string{"ReadWriteOnce"}, VolumeName: cluster.ID + "-pv-checkout-postgres", CreatedAt: createdAt, Labels: labels("checkout-postgres")},
 	}
 	cluster.NetworkPolicies = []models.KubernetesNetworkPolicy{
 		{UID: cluster.ID + "-netpol-default-deny", Name: "default-deny", Namespace: "services", PolicyTypes: []string{"Ingress", "Egress"}, IngressRuleCount: 1, EgressRuleCount: 1, CreatedAt: createdAt, Labels: labels("default-deny")},
