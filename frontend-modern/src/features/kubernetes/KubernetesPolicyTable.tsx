@@ -20,12 +20,14 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
-  filterPlatformResources,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
+import {
+  filterKubernetesResources,
+  type KubernetesResourceStatusFilter,
+} from './kubernetesPageModel';
 
 // Kubernetes policy resources carry very different API fields. Keep this table
 // on the documented NetworkPolicy, PDB, ResourceQuota, and LimitRange shapes
@@ -209,8 +211,8 @@ export const KubernetesPolicyTable: Component<{
 }> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
-    initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
+    initialStatus: 'all' as KubernetesResourceStatusFilter,
+    filter: filterKubernetesResources,
   });
 
   return (

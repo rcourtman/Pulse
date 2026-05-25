@@ -17,10 +17,8 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
-  filterPlatformResources,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   DockerResourceNameCell,
@@ -28,13 +26,18 @@ import {
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
-import { compareDockerTasks, mapDockerTaskStatus } from './dockerPageModel';
+import {
+  compareDockerTasks,
+  filterDockerResources,
+  mapDockerTaskStatus,
+  type DockerResourceStatusFilter,
+} from './dockerPageModel';
 
 export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
-    initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
+    initialStatus: 'all' as DockerResourceStatusFilter,
+    filter: filterDockerResources,
   });
   const sortedRows = createMemo(() => [...tableState.filtered()].sort(compareDockerTasks));
 

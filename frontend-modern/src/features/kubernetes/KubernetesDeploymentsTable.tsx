@@ -20,15 +20,15 @@ import {
   PlatformTableToolbar,
   PlatformTableEmptyState,
   createPlatformTableFilterState,
-  filterPlatformResources,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 import {
   compareKubernetesDeployments,
+  filterKubernetesResources,
   mapKubernetesDeploymentStatus,
+  type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
 
 // Kubernetes Deployments are scheduling abstractions over their controlled
@@ -57,8 +57,8 @@ export const KubernetesDeploymentsTable: Component<{
 }> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
-    initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
+    initialStatus: 'all' as KubernetesResourceStatusFilter,
+    filter: filterKubernetesResources,
   });
   const sortedRows = createMemo(() =>
     [...tableState.filtered()].sort(compareKubernetesDeployments),

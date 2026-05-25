@@ -23,10 +23,8 @@ import {
   PlatformTableToolbar,
   PlatformTableEmptyState,
   createPlatformTableFilterState,
-  filterPlatformResources,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailTableRow,
@@ -35,7 +33,11 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
-import { buildKubernetesClusterChildCounts } from './kubernetesPageModel';
+import {
+  buildKubernetesClusterChildCounts,
+  filterKubernetesResources,
+  type KubernetesResourceStatusFilter,
+} from './kubernetesPageModel';
 
 // Kubernetes clusters are control-plane aggregates, not single processes —
 // they have no per-cluster Disk I/O / Uptime / Temperature concepts that
@@ -72,8 +74,8 @@ export const KubernetesClustersTable: Component<{
 }> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.clusters,
-    initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
+    initialStatus: 'all' as KubernetesResourceStatusFilter,
+    filter: filterKubernetesResources,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-cluster-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);

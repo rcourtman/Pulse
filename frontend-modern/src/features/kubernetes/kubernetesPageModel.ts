@@ -247,6 +247,119 @@ export const compareKubernetesNodes = compareByStatus(mapKubernetesNodeStatus);
 export const compareKubernetesDeployments = compareByStatus(mapKubernetesDeploymentStatus);
 export const compareKubernetesControllers = compareByStatus(mapKubernetesControllerStatus);
 
+export type KubernetesResourceStatusFilter = 'all' | 'online' | 'degraded' | 'offline';
+
+const ONLINE_RESOURCE_STATUSES = new Set<string>(['online', 'running']);
+const DEGRADED_RESOURCE_STATUSES = new Set<string>(['degraded', 'paused']);
+const OFFLINE_RESOURCE_STATUSES = new Set<string>(['offline', 'stopped']);
+
+const mapResourceStatusToTriad = (
+  status: string | undefined,
+): Exclude<KubernetesResourceStatusFilter, 'all'> | 'unknown' => {
+  if (!status) return 'unknown';
+  if (ONLINE_RESOURCE_STATUSES.has(status)) return 'online';
+  if (DEGRADED_RESOURCE_STATUSES.has(status)) return 'degraded';
+  if (OFFLINE_RESOURCE_STATUSES.has(status)) return 'offline';
+  return 'unknown';
+};
+
+// Builds the lowercase search haystack a Kubernetes page table consults when
+// filtering rows. The shared platformPage helper carries only generic Resource
+// fields; kubernetes.* lookups live here so the cross-platform helper does not
+// have to know which platforms exist.
+export function kubernetesResourceSearchHaystack(resource: Resource): string {
+  const k = resource.kubernetes;
+  return [
+    resource.id,
+    resource.name,
+    resource.displayName,
+    resource.parentName,
+    resource.platformId,
+    resource.platformType,
+    resource.agent?.hostname,
+    resource.identity?.hostname,
+    resource.canonicalIdentity?.displayName,
+    resource.canonicalIdentity?.hostname,
+    resource.canonicalIdentity?.primaryId,
+    ...(resource.canonicalIdentity?.aliases ?? []),
+    k?.clusterId,
+    k?.clusterName,
+    k?.context,
+    k?.namespace,
+    k?.podName,
+    k?.podPhase,
+    k?.podReason,
+    k?.podMessage,
+    k?.ownerKind,
+    k?.ownerName,
+    k?.image,
+    k?.nodeName,
+    k?.resourceKind,
+    k?.serviceName,
+    k?.serviceType,
+    k?.clusterIp,
+    k?.storageClass,
+    k?.phase,
+    k?.reason,
+    k?.message,
+    k?.involvedKind,
+    k?.involvedName,
+    k?.eventType,
+    k?.volumeName,
+    k?.version,
+    k?.kubeletVersion,
+    k?.containerRuntimeVersion,
+    k?.osImage,
+    k?.architecture,
+    k?.provisioner,
+    k?.addressType,
+    k?.secretType,
+    k?.targetKind,
+    k?.targetName,
+    k?.server,
+    ...(k?.externalIps ?? []),
+    ...(k?.hosts ?? []),
+    ...(k?.addresses ?? []),
+    ...(k?.accessModes ?? []),
+    ...(k?.roles ?? []),
+    ...(k?.policyTypes ?? []),
+    ...(k?.metricTypes ?? []),
+    ...(k?.podContainers?.flatMap((container) => [
+      container.name,
+      container.image,
+      container.state,
+      container.reason,
+    ]) ?? []),
+    ...(resource.tags ?? []),
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' ')
+    .toLowerCase();
+}
+
+export function filterKubernetesResources(
+  resources: Resource[],
+  search: string,
+  status: KubernetesResourceStatusFilter,
+): Resource[] {
+  const needle = search.trim().toLowerCase();
+  const result: Resource[] = [];
+  for (const resource of resources) {
+    if (status !== 'all') {
+      const triad = mapResourceStatusToTriad(resource.status);
+      if (triad !== status) continue;
+    }
+    if (!needle) {
+      result.push(resource);
+      continue;
+    }
+    if (kubernetesResourceSearchHaystack(resource).includes(needle)) {
+      result.push(resource);
+    }
+  }
+  return result;
+}
+
 const KUBERNETES_ROUTE_TAB_ALIASES: Record<string, KubernetesPageTabId> = {
   autoscaling: 'workloads',
   config: 'configuration',

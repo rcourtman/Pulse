@@ -182,9 +182,13 @@ const mapResourceStatusToTriad = (
   return 'unknown';
 };
 
-const platformSearchNumber = (value: number | undefined): string | undefined =>
-  typeof value === 'number' ? String(value) : undefined;
-
+// Cross-platform fallback haystack used by tables that do not have a
+// domain-specific search helper. Docker and Kubernetes provide their own
+// platform-page filters (filterDockerResources / filterKubernetesResources)
+// that already cover docker.* and kubernetes.* fields, so this helper stays
+// platform-agnostic and only knows about the generic Resource surface plus
+// the small number of provider blocks that still consume it directly
+// (Proxmox Mail Gateway, vSphere hosts table).
 const matchesPlatformSearch = (resource: Resource, search: string): boolean => {
   if (!search) return true;
   const needle = search.trim().toLowerCase();
@@ -202,51 +206,6 @@ const matchesPlatformSearch = (resource: Resource, search: string): boolean => {
     resource.canonicalIdentity?.hostname,
     resource.canonicalIdentity?.primaryId,
     ...(resource.canonicalIdentity?.aliases ?? []),
-    resource.docker?.hostname,
-    resource.docker?.runtime,
-    resource.docker?.runtimeVersion,
-    resource.docker?.dockerVersion,
-    resource.docker?.containerId,
-    resource.docker?.image,
-    resource.docker?.imageId,
-    resource.docker?.containerState,
-    resource.docker?.health,
-    platformSearchNumber(resource.docker?.restartCount),
-    platformSearchNumber(resource.docker?.exitCode),
-    resource.docker?.updateStatus?.error,
-    resource.docker?.updateStatus?.currentDigest,
-    resource.docker?.updateStatus?.latestDigest,
-    resource.docker?.volumeName,
-    resource.docker?.networkId,
-    resource.docker?.driver,
-    resource.docker?.mountpoint,
-    resource.docker?.serviceName,
-    resource.docker?.taskId,
-    resource.docker?.mode,
-    resource.docker?.swarm?.clusterName,
-    resource.docker?.swarm?.nodeRole,
-    resource.kubernetes?.clusterName,
-    resource.kubernetes?.clusterId,
-    resource.kubernetes?.context,
-    resource.kubernetes?.namespace,
-    resource.kubernetes?.podName,
-    resource.kubernetes?.podPhase,
-    resource.kubernetes?.podReason,
-    resource.kubernetes?.ownerKind,
-    resource.kubernetes?.ownerName,
-    resource.kubernetes?.image,
-    resource.kubernetes?.nodeName,
-    resource.kubernetes?.resourceKind,
-    resource.kubernetes?.serviceType,
-    resource.kubernetes?.clusterIp,
-    resource.kubernetes?.storageClass,
-    resource.kubernetes?.phase,
-    resource.kubernetes?.reason,
-    resource.kubernetes?.involvedName,
-    resource.kubernetes?.volumeName,
-    resource.kubernetes?.version,
-    resource.kubernetes?.kubeletVersion,
-    resource.kubernetes?.containerRuntimeVersion,
     resource.pmg?.hostname,
     resource.pmg?.version,
     resource.vmware?.connectionName,
@@ -258,36 +217,6 @@ const matchesPlatformSearch = (resource: Resource, search: string): boolean => {
     resource.vmware?.networkType,
     resource.vmware?.networkHostNames?.join(' '),
     resource.vmware?.networkVmNames?.join(' '),
-    ...(resource.docker?.ports?.flatMap((port) => [
-      port.ip,
-      port.protocol,
-      platformSearchNumber(port.privatePort),
-      platformSearchNumber(port.publicPort),
-    ]) ?? []),
-    ...(resource.docker?.networks?.flatMap((network) => [
-      network.name,
-      network.ipv4,
-      network.ipv6,
-    ]) ?? []),
-    ...(resource.docker?.mounts?.flatMap((mount) => [
-      mount.type,
-      mount.source,
-      mount.destination,
-      mount.mode,
-      mount.rw === false ? 'read-only' : mount.rw === true ? 'read-write' : undefined,
-    ]) ?? []),
-    ...(resource.docker?.repoTags ?? []),
-    ...(resource.docker?.repoDigests ?? []),
-    ...(resource.kubernetes?.externalIps ?? []),
-    ...(resource.kubernetes?.hosts ?? []),
-    ...(resource.kubernetes?.addresses ?? []),
-    ...(resource.kubernetes?.accessModes ?? []),
-    ...(resource.kubernetes?.podContainers?.flatMap((container) => [
-      container.name,
-      container.image,
-      container.state,
-      container.reason,
-    ]) ?? []),
     ...(resource.tags ?? []),
   ]
     .filter((value): value is string => typeof value === 'string')

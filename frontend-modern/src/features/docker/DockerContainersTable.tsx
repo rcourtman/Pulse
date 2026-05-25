@@ -18,10 +18,8 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
-  filterPlatformResources,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   DockerResourceNameCell,
@@ -31,7 +29,12 @@ import {
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
-import { compareDockerContainers, mapDockerContainerStatus } from './dockerPageModel';
+import {
+  compareDockerContainers,
+  filterDockerResources,
+  mapDockerContainerStatus,
+  type DockerResourceStatusFilter,
+} from './dockerPageModel';
 import type { Resource } from '@/types/resource';
 
 type DockerPort = NonNullable<NonNullable<Resource['docker']>['ports']>[number];
@@ -119,82 +122,11 @@ const updateStatusTitle = (resource: Resource): string => {
   );
 };
 
-const dockerContainerSearchCandidates = (resource: Resource): Array<string | undefined> => [
-  resource.name,
-  resource.displayName,
-  resource.id,
-  resource.parentName,
-  resource.platformId,
-  resource.platformType,
-  resource.agent?.hostname,
-  resource.identity?.hostname,
-  resource.canonicalIdentity?.displayName,
-  resource.canonicalIdentity?.hostname,
-  resource.canonicalIdentity?.primaryId,
-  ...(resource.canonicalIdentity?.aliases ?? []),
-  resource.docker?.containerId,
-  resource.docker?.displayName,
-  resource.docker?.hostname,
-  resource.docker?.runtime,
-  resource.docker?.runtimeVersion,
-  resource.docker?.dockerVersion,
-  resource.docker?.image,
-  resource.docker?.imageId,
-  resource.docker?.containerState,
-  resource.docker?.health,
-  numberSearchValue(resource.docker?.restartCount),
-  numberSearchValue(resource.docker?.exitCode),
-  updateStatusLabel(resource),
-  resource.docker?.updateStatus?.error,
-  resource.docker?.updateStatus?.currentDigest,
-  resource.docker?.updateStatus?.latestDigest,
-  ...(resource.docker?.ports?.flatMap((port) => [
-    portLabel(port),
-    port.ip,
-    numberSearchValue(port.privatePort),
-    numberSearchValue(port.publicPort),
-    port.protocol,
-  ]) ?? []),
-  ...(resource.docker?.networks?.flatMap((network) => [
-    networkLabel(network),
-    network.name,
-    network.ipv4,
-    network.ipv6,
-  ]) ?? []),
-  ...(resource.docker?.mounts?.flatMap((mount) => [
-    mountLabel(mount),
-    mount.type,
-    mount.source,
-    mount.destination,
-    mount.mode,
-    mount.rw === false ? 'read-only' : mount.rw === true ? 'read-write' : undefined,
-  ]) ?? []),
-  ...(resource.tags ?? []),
-];
-
-const matchesDockerContainerSearch = (resource: Resource, search: string): boolean => {
-  const needle = search.trim().toLowerCase();
-  if (!needle) return true;
-
-  return dockerContainerSearchCandidates(resource)
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .some((value) => value.toLowerCase().includes(needle));
-};
-
-const filterDockerContainerResources = (
-  resources: Resource[],
-  search: string,
-  status: PlatformResourceStatusFilter,
-): Resource[] =>
-  filterPlatformResources(resources, '', status).filter((resource) =>
-    matchesDockerContainerSearch(resource, search),
-  );
-
 export const DockerContainersTable: Component<DockerNativeTableProps> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
-    initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterDockerContainerResources,
+    initialStatus: 'all' as DockerResourceStatusFilter,
+    filter: filterDockerResources,
   });
   const sortedRows = createMemo(() => [...tableState.filtered()].sort(compareDockerContainers));
 

@@ -8,6 +8,7 @@ import {
   compareDockerServices,
   compareDockerSwarmNodes,
   compareDockerTasks,
+  filterDockerResources,
   getDockerHostSystemBadge,
   getDockerPageTabSpecs,
   hasDockerEngineStorageUsage,
@@ -629,6 +630,80 @@ describe('dockerPageModel', () => {
       const model = buildDockerPageModel([happy, dead, svcOk, svcDown]);
       expect(model.containers.map((r) => r.id)).toEqual(['c-dead', 'c-happy']);
       expect(model.services.map((r) => r.id)).toEqual(['svc-down', 'svc-ok']);
+    });
+  });
+
+  describe('filterDockerResources', () => {
+    const rows: Resource[] = [
+      makeResource({ id: 'web', type: 'app-container', status: 'online' }),
+      makeResource({
+        id: 'edge-proxy',
+        type: 'app-container',
+        status: 'online',
+        docker: {
+          hostname: 'edge-01',
+          image: 'traefik:v3.1',
+          runtime: 'docker',
+          runtimeVersion: '27.5.1',
+          containerState: 'running',
+          ports: [{ ip: '0.0.0.0', publicPort: 8080, privatePort: 80, protocol: 'tcp' }],
+        },
+      }),
+      makeResource({
+        id: 'svc-payments',
+        type: 'docker-service',
+        status: 'degraded',
+        docker: {
+          serviceName: 'payments-worker',
+          swarm: { clusterName: 'prod-swarm', nodeRole: 'manager' },
+        },
+      }),
+      makeResource({
+        id: 'redis-vol',
+        type: 'docker-volume',
+        status: 'online',
+        docker: { volumeName: 'redis-data', driver: 'local' },
+      }),
+    ];
+
+    it('matches docker.* fields the shared filter no longer carries', () => {
+      expect(filterDockerResources(rows, 'edge-01', 'all').map((r) => r.id)).toEqual([
+        'edge-proxy',
+      ]);
+      expect(filterDockerResources(rows, 'traefik', 'all').map((r) => r.id)).toEqual([
+        'edge-proxy',
+      ]);
+      expect(filterDockerResources(rows, 'payments-worker', 'all').map((r) => r.id)).toEqual([
+        'svc-payments',
+      ]);
+      expect(filterDockerResources(rows, 'prod-swarm', 'all').map((r) => r.id)).toEqual([
+        'svc-payments',
+      ]);
+      expect(filterDockerResources(rows, 'redis-data', 'all').map((r) => r.id)).toEqual([
+        'redis-vol',
+      ]);
+    });
+
+    it('matches composite port tokens like host:public->private/proto', () => {
+      expect(filterDockerResources(rows, '0.0.0.0:8080->80/tcp', 'all').map((r) => r.id)).toEqual([
+        'edge-proxy',
+      ]);
+    });
+
+    it('still combines status and search', () => {
+      expect(
+        filterDockerResources(rows, 'payments-worker', 'degraded').map((r) => r.id),
+      ).toEqual(['svc-payments']);
+      expect(filterDockerResources(rows, 'payments-worker', 'online')).toEqual([]);
+    });
+
+    it('returns all rows for empty search and triad filters by status', () => {
+      expect(filterDockerResources(rows, '', 'all').map((r) => r.id).sort()).toEqual(
+        ['edge-proxy', 'redis-vol', 'svc-payments', 'web'].sort(),
+      );
+      expect(filterDockerResources(rows, '', 'degraded').map((r) => r.id)).toEqual([
+        'svc-payments',
+      ]);
     });
   });
 });

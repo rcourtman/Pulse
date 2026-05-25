@@ -20,12 +20,14 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
-  filterPlatformResources,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
+import {
+  filterKubernetesResources,
+  type KubernetesResourceStatusFilter,
+} from './kubernetesPageModel';
 
 // ConfigMaps and Secrets are intentionally rendered as API metadata. Pulse may
 // know that keys exist, but metadata-only collection must never imply that
@@ -157,8 +159,8 @@ export const KubernetesConfigTable: Component<{
 }> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
-    initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
+    initialStatus: 'all' as KubernetesResourceStatusFilter,
+    filter: filterKubernetesResources,
   });
 
   return (

@@ -21,15 +21,15 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
-  filterPlatformResources,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { DockerStorageUsageMeta, Resource } from '@/types/resource';
 import {
+  filterDockerResources,
   hasDockerEngineStorageUsage,
   hasDockerStorageUsageBucket,
+  type DockerResourceStatusFilter,
 } from './dockerPageModel';
 
 const bucketValue = (bucket?: DockerStorageUsageMeta): JSX.Element => {
@@ -58,8 +58,8 @@ export const DockerStorageUsageTable: Component<{
   const storageHosts = () => props.hosts.filter(hasDockerEngineStorageUsage);
   const tableState = createPlatformTableFilterState({
     resources: storageHosts,
-    initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
+    initialStatus: 'all' as DockerResourceStatusFilter,
+    filter: filterDockerResources,
   });
   const hasFilteredSourceRows = () => (props.sourceCount ?? props.hosts.length) > 0;
 

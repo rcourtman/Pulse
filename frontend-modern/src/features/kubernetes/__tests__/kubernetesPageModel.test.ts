@@ -5,6 +5,7 @@ import {
   buildKubernetesClusterChildCounts,
   buildKubernetesPageModel,
   compareKubernetesControllers,
+  filterKubernetesResources,
   compareKubernetesDeployments,
   compareKubernetesEvents,
   compareKubernetesNodes,
@@ -654,6 +655,70 @@ describe('kubernetesPageModel', () => {
           [],
         ).size,
       ).toBe(0);
+    });
+  });
+
+  describe('filterKubernetesResources', () => {
+    const rows: Resource[] = [
+      makeResource({
+        id: 'pod-checkout',
+        type: 'pod',
+        status: 'online',
+        kubernetes: {
+          clusterName: 'prod-cluster',
+          namespace: 'payments',
+          podName: 'checkout-api-abc',
+          ownerKind: 'Deployment',
+          ownerName: 'checkout-api',
+          image: 'ghcr.io/pulse-demo/checkout-api:2026.04',
+        },
+      }),
+      makeResource({
+        id: 'svc-checkout',
+        type: 'k8s-service',
+        status: 'online',
+        kubernetes: { serviceType: 'ClusterIP', clusterIp: '10.0.5.4', namespace: 'payments' },
+      }),
+      makeResource({
+        id: 'node-worker',
+        type: 'k8s-node',
+        status: 'degraded',
+        kubernetes: { kubeletVersion: 'v1.30.4', roles: ['worker'] },
+      }),
+      makeResource({
+        id: 'event-warn',
+        type: 'k8s-event',
+        status: 'online',
+        kubernetes: { eventType: 'Warning', reason: 'BackOff', involvedName: 'checkout-api-abc' },
+      }),
+    ];
+
+    it('matches kubernetes.* fields the shared filter no longer carries', () => {
+      expect(filterKubernetesResources(rows, 'payments', 'all').map((r) => r.id).sort()).toEqual(
+        ['pod-checkout', 'svc-checkout'].sort(),
+      );
+      expect(filterKubernetesResources(rows, 'prod-cluster', 'all').map((r) => r.id)).toEqual([
+        'pod-checkout',
+      ]);
+      expect(filterKubernetesResources(rows, 'v1.30.4', 'all').map((r) => r.id)).toEqual([
+        'node-worker',
+      ]);
+      expect(filterKubernetesResources(rows, 'BackOff', 'all').map((r) => r.id)).toEqual([
+        'event-warn',
+      ]);
+    });
+
+    it('matches node-role labels via kubernetes.roles', () => {
+      expect(filterKubernetesResources(rows, 'worker', 'all').map((r) => r.id)).toEqual([
+        'node-worker',
+      ]);
+    });
+
+    it('combines status and search', () => {
+      expect(filterKubernetesResources(rows, 'v1.30', 'degraded').map((r) => r.id)).toEqual([
+        'node-worker',
+      ]);
+      expect(filterKubernetesResources(rows, 'v1.30', 'online')).toEqual([]);
     });
   });
 });

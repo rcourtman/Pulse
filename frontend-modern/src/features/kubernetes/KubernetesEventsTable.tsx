@@ -19,13 +19,16 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
-  filterPlatformResources,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
-import { compareKubernetesEvents, mapKubernetesEventSeverity } from './kubernetesPageModel';
+import {
+  compareKubernetesEvents,
+  filterKubernetesResources,
+  mapKubernetesEventSeverity,
+  type KubernetesResourceStatusFilter,
+} from './kubernetesPageModel';
 
 const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
 
@@ -69,8 +72,8 @@ export const KubernetesEventsTable: Component<{
   const sortedEvents = createMemo(() => [...props.resources].sort(compareKubernetesEvents));
   const tableState = createPlatformTableFilterState({
     resources: sortedEvents,
-    initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
+    initialStatus: 'all' as KubernetesResourceStatusFilter,
+    filter: filterKubernetesResources,
   });
 
   return (

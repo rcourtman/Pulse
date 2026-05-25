@@ -66,32 +66,51 @@ describe('filterPlatformResources', () => {
     ]);
   });
 
-  it('searches platform-native metadata used by bespoke tables', () => {
+  it('searches the platform-native metadata that bespoke tables still consume directly', () => {
+    // Docker / Kubernetes lookups moved to their per-platform helpers
+    // (filterDockerResources / filterKubernetesResources) so the shared
+    // helper stays platform-agnostic. The two providers that still consume
+    // this filter directly — Proxmox Mail Gateway and the vSphere hosts
+    // table — keep their native-metadata coverage here.
     const nativeRows: Resource[] = [
       makeResource({
-        id: 'docker-host',
+        id: 'pmg-host',
         type: 'agent',
         status: 'online',
-        docker: { runtimeVersion: '24.0.7', swarm: { nodeRole: 'manager' } },
+        pmg: { hostname: 'pmg-primary', version: '8.2.4' },
       }),
       makeResource({
-        id: 'k8s-deploy',
-        type: 'k8s-deployment',
+        id: 'vsphere-host',
+        type: 'agent',
         status: 'online',
-        kubernetes: {
-          clusterName: 'prod-cluster',
-          namespace: 'payments',
-          containerRuntimeVersion: 'containerd://1.7',
-        },
+        vmware: { clusterName: 'prod-cluster', runtimeHostName: 'esxi-04' },
       }),
     ];
 
-    expect(filterPlatformResources(nativeRows, 'manager', 'all').map((r) => r.id)).toEqual([
-      'docker-host',
+    expect(filterPlatformResources(nativeRows, 'pmg-primary', 'all').map((r) => r.id)).toEqual([
+      'pmg-host',
     ]);
-    expect(filterPlatformResources(nativeRows, 'payments', 'all').map((r) => r.id)).toEqual([
-      'k8s-deploy',
+    expect(filterPlatformResources(nativeRows, 'prod-cluster', 'all').map((r) => r.id)).toEqual([
+      'vsphere-host',
     ]);
+  });
+
+  it('no longer matches docker.* or kubernetes.* fields directly', () => {
+    const dockerOnlyRow = makeResource({
+      id: 'docker-host',
+      type: 'agent',
+      status: 'online',
+      docker: { runtimeVersion: '24.0.7', swarm: { nodeRole: 'manager' } },
+    });
+    const k8sOnlyRow = makeResource({
+      id: 'k8s-deploy',
+      type: 'k8s-deployment',
+      status: 'online',
+      kubernetes: { clusterName: 'prod-cluster', namespace: 'payments' },
+    });
+
+    expect(filterPlatformResources([dockerOnlyRow], 'manager', 'all')).toEqual([]);
+    expect(filterPlatformResources([k8sOnlyRow], 'payments', 'all')).toEqual([]);
   });
 
   it('combines search and status filters', () => {

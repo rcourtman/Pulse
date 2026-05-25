@@ -17,10 +17,8 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
-  filterPlatformResources,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   DockerResourceNameCell,
@@ -29,6 +27,7 @@ import {
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
+import { filterDockerResources, type DockerResourceStatusFilter } from './dockerPageModel';
 import type { Resource } from '@/types/resource';
 
 const networkFlags = (resource: Resource): string =>
@@ -61,8 +60,8 @@ const networkSubnets = (resource: Resource): string =>
 export const DockerNetworksTable: Component<DockerNativeTableProps> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
-    initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
+    initialStatus: 'all' as DockerResourceStatusFilter,
+    filter: filterDockerResources,
   });
 
   return (

@@ -20,10 +20,8 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
-  filterPlatformResources,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailTableRow,
@@ -32,6 +30,10 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
+import {
+  filterKubernetesResources,
+  type KubernetesResourceStatusFilter,
+} from './kubernetesPageModel';
 
 // Services have a distinct API contract from Ingress and EndpointSlice:
 // operators need the Service type, virtual IP, exposed ports, node ports, and
@@ -98,8 +100,8 @@ export const KubernetesServicesTable: Component<{
 }> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
-    initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
+    initialStatus: 'all' as KubernetesResourceStatusFilter,
+    filter: filterKubernetesResources,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-service-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);

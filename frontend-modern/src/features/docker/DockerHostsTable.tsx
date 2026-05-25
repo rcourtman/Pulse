@@ -26,14 +26,17 @@ import {
   PlatformTableToolbar,
   PlatformTableEmptyState,
   createPlatformTableFilterState,
-  filterPlatformResources,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Disk } from '@/types/api';
 import type { Resource } from '@/types/resource';
-import { getDockerHostSystemBadge, hasDockerSwarmEvidence } from './dockerPageModel';
+import {
+  filterDockerResources,
+  getDockerHostSystemBadge,
+  hasDockerSwarmEvidence,
+  type DockerResourceStatusFilter,
+} from './dockerPageModel';
 
 // Docker / Podman hosts are container hosts, not generic Pulse Agents.
 // The operator columns that matter are runtime version, container count,
@@ -106,8 +109,8 @@ export const DockerHostsTable: Component<{
 }> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
-    initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
+    initialStatus: 'all' as DockerResourceStatusFilter,
+    filter: filterDockerResources,
   });
   const showSwarmColumn = createMemo(() => props.resources.some(hasDockerSwarmEvidence));
   const [selectedHostId, setSelectedHostId] = createSignal<string | null>(null);

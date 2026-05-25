@@ -19,13 +19,16 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
-  filterPlatformResources,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource, ResourceKubernetesPodContainerStatus } from '@/types/resource';
-import { compareKubernetesPods, mapKubernetesPodStatus } from './kubernetesPageModel';
+import {
+  compareKubernetesPods,
+  filterKubernetesResources,
+  mapKubernetesPodStatus,
+  type KubernetesResourceStatusFilter,
+} from './kubernetesPageModel';
 
 const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
 
@@ -96,8 +99,8 @@ export const KubernetesPodsTable: Component<{
 }> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
-    initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
+    initialStatus: 'all' as KubernetesResourceStatusFilter,
+    filter: filterKubernetesResources,
   });
   const sortedRows = createMemo(() => [...tableState.filtered()].sort(compareKubernetesPods));
 

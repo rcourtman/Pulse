@@ -209,6 +209,146 @@ export const compareDockerServices = compareByDockerStatus(mapDockerServiceStatu
 export const compareDockerTasks = compareByDockerStatus(mapDockerTaskStatus);
 export const compareDockerSwarmNodes = compareByDockerStatus(mapDockerSwarmNodeStatus);
 
+export type DockerResourceStatusFilter = 'all' | 'online' | 'degraded' | 'offline';
+
+const ONLINE_STATUSES = new Set<string>(['online', 'running']);
+const DEGRADED_STATUSES = new Set<string>(['degraded', 'paused']);
+const OFFLINE_STATUSES = new Set<string>(['offline', 'stopped']);
+
+const mapResourceStatusToTriad = (
+  status: string | undefined,
+): Exclude<DockerResourceStatusFilter, 'all'> | 'unknown' => {
+  if (!status) return 'unknown';
+  if (ONLINE_STATUSES.has(status)) return 'online';
+  if (DEGRADED_STATUSES.has(status)) return 'degraded';
+  if (OFFLINE_STATUSES.has(status)) return 'offline';
+  return 'unknown';
+};
+
+const numberToken = (value: number | undefined): string | undefined =>
+  typeof value === 'number' ? String(value) : undefined;
+
+const dockerPortToken = (
+  port: NonNullable<NonNullable<Resource['docker']>['ports']>[number],
+): string => {
+  const protocol = asTrimmedString(port.protocol)?.toLowerCase() || 'tcp';
+  const privatePort = numberToken(port.privatePort);
+  const publicPort = numberToken(port.publicPort);
+  const ip = asTrimmedString(port.ip);
+  if (privatePort && publicPort) {
+    return `${ip ? `${ip}:` : ''}${publicPort}->${privatePort}/${protocol}`;
+  }
+  if (privatePort) return `${privatePort}/${protocol}`;
+  if (publicPort) return `${ip ? `${ip}:` : ''}${publicPort}/${protocol}`;
+  return protocol;
+};
+
+// Builds the lowercase search haystack a Docker page table consults when
+// filtering rows. The shared platformPage helper carries only generic Resource
+// fields; docker.* lookups live here so the cross-platform helper does not
+// have to know which platforms exist.
+export function dockerResourceSearchHaystack(resource: Resource): string {
+  const docker = resource.docker;
+  return [
+    resource.id,
+    resource.name,
+    resource.displayName,
+    resource.parentName,
+    resource.platformId,
+    resource.platformType,
+    resource.agent?.hostname,
+    resource.identity?.hostname,
+    resource.canonicalIdentity?.displayName,
+    resource.canonicalIdentity?.hostname,
+    resource.canonicalIdentity?.primaryId,
+    ...(resource.canonicalIdentity?.aliases ?? []),
+    docker?.hostname,
+    docker?.displayName,
+    docker?.runtime,
+    docker?.runtimeVersion,
+    docker?.dockerVersion,
+    docker?.containerId,
+    docker?.image,
+    docker?.imageId,
+    docker?.containerState,
+    docker?.health,
+    numberToken(docker?.restartCount),
+    numberToken(docker?.exitCode),
+    docker?.updateStatus?.error,
+    docker?.updateStatus?.currentDigest,
+    docker?.updateStatus?.latestDigest,
+    docker?.volumeName,
+    docker?.networkId,
+    docker?.driver,
+    docker?.mountpoint,
+    docker?.serviceName,
+    docker?.taskId,
+    docker?.nodeId,
+    docker?.nodeName,
+    docker?.nodeRole,
+    docker?.availability,
+    docker?.address,
+    docker?.managerReachability,
+    docker?.managerAddress,
+    docker?.engineVersion,
+    docker?.secretName,
+    docker?.configName,
+    docker?.mode,
+    docker?.currentState,
+    docker?.desiredState,
+    docker?.message,
+    docker?.error,
+    docker?.swarm?.clusterId,
+    docker?.swarm?.clusterName,
+    docker?.swarm?.nodeRole,
+    docker?.swarm?.localState,
+    ...(docker?.ports?.flatMap((port) => [
+      dockerPortToken(port),
+      port.ip,
+      port.protocol,
+      numberToken(port.privatePort),
+      numberToken(port.publicPort),
+    ]) ?? []),
+    ...(docker?.networks?.flatMap((network) => [network.name, network.ipv4, network.ipv6]) ?? []),
+    ...(docker?.mounts?.flatMap((mount) => [
+      mount.type,
+      mount.source,
+      mount.destination,
+      mount.mode,
+      mount.rw === false ? 'read-only' : mount.rw === true ? 'read-write' : undefined,
+    ]) ?? []),
+    ...(docker?.repoTags ?? []),
+    ...(docker?.repoDigests ?? []),
+    ...(resource.tags ?? []),
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' ')
+    .toLowerCase();
+}
+
+export function filterDockerResources(
+  resources: Resource[],
+  search: string,
+  status: DockerResourceStatusFilter,
+): Resource[] {
+  const needle = search.trim().toLowerCase();
+  const result: Resource[] = [];
+  for (const resource of resources) {
+    if (status !== 'all') {
+      const triad = mapResourceStatusToTriad(resource.status);
+      if (triad !== status) continue;
+    }
+    if (!needle) {
+      result.push(resource);
+      continue;
+    }
+    if (dockerResourceSearchHaystack(resource).includes(needle)) {
+      result.push(resource);
+    }
+  }
+  return result;
+}
+
 export function hasDockerSwarmEvidence(resource: Resource): boolean {
   const swarm = resource.docker?.swarm;
   if (!swarm) return false;

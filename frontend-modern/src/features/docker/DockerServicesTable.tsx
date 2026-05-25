@@ -19,13 +19,16 @@ import {
   PlatformTableToolbar,
   PlatformTableEmptyState,
   createPlatformTableFilterState,
-  filterPlatformResources,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
-import { compareDockerServices, mapDockerServiceStatus } from './dockerPageModel';
+import {
+  compareDockerServices,
+  filterDockerResources,
+  mapDockerServiceStatus,
+  type DockerResourceStatusFilter,
+} from './dockerPageModel';
 
 // Docker Swarm services are cluster-scoped declarations, not running
 // processes — they have no CPU / Memory / Disk / Disk I/O / Uptime /
@@ -89,8 +92,8 @@ export const DockerServicesTable: Component<{
 }> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
-    initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
+    initialStatus: 'all' as DockerResourceStatusFilter,
+    filter: filterDockerResources,
   });
   const sortedRows = createMemo(() => [...tableState.filtered()].sort(compareDockerServices));
 

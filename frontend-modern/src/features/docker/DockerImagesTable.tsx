@@ -17,10 +17,8 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
-  filterPlatformResources,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   DockerResourceNameCell,
@@ -30,12 +28,13 @@ import {
   dockerNumberValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
+import { filterDockerResources, type DockerResourceStatusFilter } from './dockerPageModel';
 
 export const DockerImagesTable: Component<DockerNativeTableProps> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
-    initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
+    initialStatus: 'all' as DockerResourceStatusFilter,
+    filter: filterDockerResources,
   });
 
   return (
