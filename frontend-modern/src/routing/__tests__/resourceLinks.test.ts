@@ -42,8 +42,8 @@ describe('resource link routing contract', () => {
 
   it('builds canonical Standalone, container runtime, Kubernetes, TrueNAS, and vSphere tab paths', () => {
     expect(STANDALONE_PATH).toBe('/standalone');
-    expect(STANDALONE_DEFAULT_TAB).toBe('overview');
-    expect(buildStandalonePath()).toBe('/standalone/overview');
+    expect(STANDALONE_DEFAULT_TAB).toBe('machines');
+    expect(buildStandalonePath()).toBe('/standalone/machines');
     expect(buildStandalonePath('')).toBe('/standalone');
 
     expect(DOCKER_PATH).toBe('/docker');

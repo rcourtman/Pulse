@@ -5,7 +5,8 @@ import type { Resource } from '@/types/resource';
 import { StandalonePageSurface } from '../StandalonePageSurface';
 
 const mocks = vi.hoisted(() => ({
-  pathname: '/standalone/overview',
+  pathname: '/standalone/machines',
+  navigate: vi.fn(),
   useUnifiedResources: vi.fn(),
   AgentsMachinesTable: vi.fn((props: { resources: Resource[] }) => (
     <div data-testid="agents-machines-table" data-resource-count={props.resources.length} />
@@ -28,7 +29,7 @@ vi.mock('@solidjs/router', async () => {
         return mocks.pathname;
       },
     }),
-    useNavigate: () => vi.fn(),
+    useNavigate: () => mocks.navigate,
     A: (props: { href: string; children: JSX.Element }) => (
       <a href={props.href}>{props.children}</a>
     ),
@@ -79,7 +80,8 @@ const resource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 beforeEach(() => {
-  mocks.pathname = '/standalone/overview';
+  mocks.pathname = '/standalone/machines';
+  mocks.navigate.mockClear();
   mocks.useUnifiedResources.mockReturnValue({
     resources: () => [
       resource({ id: 'mac-mini', type: 'agent', platformType: 'agent', sources: ['agent'] }),
@@ -112,13 +114,25 @@ describe('StandalonePageSurface', () => {
     );
     expect(screen.getByTestId('standalone-section-tabs')).toHaveAttribute(
       'data-tabs',
-      'overview,availability',
+      'machines,availability',
     );
     expect(screen.getByTestId('agents-machines-table')).toHaveAttribute(
       'data-resource-count',
       '1',
     );
     expect(screen.queryByTestId('availability-checks-table')).not.toBeInTheDocument();
+  });
+
+  it('redirects retired Standalone overview links to the machines tab', () => {
+    mocks.pathname = '/standalone/overview';
+
+    render(() => <StandalonePageSurface />);
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/standalone/machines', { replace: true });
+    expect(screen.getByTestId('standalone-section-tabs')).toHaveAttribute(
+      'data-active',
+      'machines',
+    );
   });
 
   it('uses the availability tab as a focused check monitor', () => {

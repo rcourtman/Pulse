@@ -688,6 +688,10 @@ AI-only summary payloads, or page-local heuristics.
     derive every internal link from those builders so the canonical resource
     URL vocabulary stays single-sourced; ad hoc string concatenation of
     platform routes inside feature directories is not permitted.
+    Standalone's default resource route is the machines projection
+    (`/standalone/machines`); agentless endpoint rows use the
+    `/standalone/availability` projection and must not be collapsed into a
+    generic overview URL.
     The frontend-primitives-owned Standalone IA contract consumes the
     unified-resource projection for Pulse-managed standalone agent rows and
     agentless availability endpoint rows; this subsystem owns only the

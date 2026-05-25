@@ -13,14 +13,14 @@ import {
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
-import { buildStandalonePath } from '@/routing/resourceLinks';
+import { STANDALONE_PATH, buildStandalonePath } from '@/routing/resourceLinks';
 import { AvailabilityChecksTable } from './AvailabilityChecksTable';
 import { AgentsMachinesTable } from './AgentsMachinesTable';
 import { buildStandalonePageModel } from './standalonePageModel';
 
 const STANDALONE_RESOURCE_QUERY = 'type=agent,network-endpoint';
 const STANDALONE_TAB_SPECS = [
-  { id: 'overview', label: 'Overview', path: buildStandalonePath('overview') },
+  { id: 'machines', label: 'Machines', path: buildStandalonePath('machines') },
   { id: 'availability', label: 'Availability checks', path: buildStandalonePath('availability') },
 ] as const;
 type StandaloneTabId = (typeof STANDALONE_TAB_SPECS)[number]['id'];
@@ -33,7 +33,7 @@ const overviewActionClass =
 const resolveStandaloneTab = (pathname: string): StandaloneTabId =>
   pathname.replace(/\/+$/, '') === buildStandalonePath('availability')
     ? 'availability'
-    : 'overview';
+    : 'machines';
 
 export function StandalonePageSurface() {
   const location = useLocation();
@@ -66,6 +66,13 @@ export function StandalonePageSurface() {
   createEffect(() => {
     if (!loading() && !initialLoadComplete()) {
       setInitialLoadComplete(true);
+    }
+  });
+
+  createEffect(() => {
+    const normalizedPath = location.pathname.replace(/\/+$/, '');
+    if (normalizedPath === STANDALONE_PATH || normalizedPath === `${STANDALONE_PATH}/overview`) {
+      navigate(buildStandalonePath('machines'), { replace: true });
     }
   });
 
@@ -105,7 +112,7 @@ export function StandalonePageSurface() {
             />
           </Show>
 
-          <Show when={activeTab() === 'overview'}>
+          <Show when={activeTab() === 'machines'}>
             <Show
               when={!showOverviewEmpty()}
               fallback={

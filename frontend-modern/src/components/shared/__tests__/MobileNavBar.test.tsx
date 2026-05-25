@@ -91,7 +91,7 @@ describe('MobileNavBar', () => {
           {
             id: 'standalone',
             label: 'Standalone',
-            route: '/standalone/overview',
+            route: '/standalone/machines',
             settingsRoute: '/settings/infrastructure',
             tooltip: 'Standalone',
             enabled: true,
@@ -136,7 +136,7 @@ describe('MobileNavBar', () => {
           {
             id: 'standalone',
             label: 'Standalone',
-            route: '/standalone/overview',
+            route: '/standalone/machines',
             settingsRoute: '/settings/infrastructure',
             tooltip: 'Standalone',
             enabled: true,

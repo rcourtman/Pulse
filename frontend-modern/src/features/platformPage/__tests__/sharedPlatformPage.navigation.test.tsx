@@ -16,18 +16,16 @@ describe('PlatformSectionTabs', () => {
           path="/"
           component={() => (
             <PlatformSectionTabs
-              tabs={
-                [{ id: 'overview', label: 'Overview', path: '/standalone/overview' }] as const
-              }
+              tabs={[{ id: 'overview', label: 'Overview', path: '/example/overview' }] as const}
               active="overview"
-              ariaLabel="Standalone sections"
+              ariaLabel="Example sections"
             />
           )}
         />
       </Router>
     ));
 
-    expect(screen.queryByRole('navigation', { name: 'Standalone sections' })).toBeNull();
+    expect(screen.queryByRole('navigation', { name: 'Example sections' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Overview' })).toBeNull();
   });
 

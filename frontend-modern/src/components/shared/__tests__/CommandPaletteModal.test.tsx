@@ -95,7 +95,7 @@ describe('CommandPaletteModal', () => {
     ));
 
     expect(screen.getByText('Go to Standalone')).toBeInTheDocument();
-    expect(screen.getByText('/standalone/overview')).toBeInTheDocument();
+    expect(screen.getByText('/standalone/machines')).toBeInTheDocument();
     expect(screen.getByText('Go to Proxmox')).toBeInTheDocument();
     expect(screen.getByText('Go to Containers')).toBeInTheDocument();
     expect(screen.getByText('Go to Kubernetes Workloads')).toBeInTheDocument();

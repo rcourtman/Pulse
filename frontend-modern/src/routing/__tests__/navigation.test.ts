@@ -6,7 +6,7 @@ describe('navigation routing helpers', () => {
     expect(getActiveTabForPath('/unknown')).toBeNull();
     expect(getActiveTabForPath('/dashboard')).toBeNull();
     expect(getActiveTabForPath('/standalone')).toBe('standalone');
-    expect(getActiveTabForPath('/standalone/overview')).toBe('standalone');
+    expect(getActiveTabForPath('/standalone/machines')).toBe('standalone');
     expect(getActiveTabForPath('/agents')).toBeNull();
     expect(getActiveTabForPath('/proxmox')).toBe('proxmox');
     expect(getActiveTabForPath('/proxmox/storage')).toBe('proxmox');
