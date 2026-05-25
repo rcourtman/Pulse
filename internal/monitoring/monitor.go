@@ -3701,6 +3701,11 @@ func (m *Monitor) PVEBackupsSnapshot() models.PVEBackups {
 	return m.GetState().PVEBackups
 }
 
+// PBSBackupsSnapshot returns the current PBS recovery artifacts.
+func (m *Monitor) PBSBackupsSnapshot() []models.PBSBackup {
+	return m.GetState().PBSBackups
+}
+
 // BuildFrontendState returns the current state converted to frontend format.
 // This replaces the GetState().ToFrontend() pattern in consumer code.
 func (m *Monitor) BuildFrontendState() models.StateFrontend {

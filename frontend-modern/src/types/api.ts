@@ -650,6 +650,34 @@ export interface GuestSnapshot {
   sizeBytes?: number;
 }
 
+export interface PBSBackup {
+  id: string;
+  instance: string;
+  datastore: string;
+  namespace: string;
+  backupType: string;
+  vmid: string;
+  backupTime: string;
+  size: number;
+  protected: boolean;
+  verified: boolean;
+  verificationRaw?: unknown;
+  comment?: string;
+  files: string[];
+  owner?: string;
+}
+
+export interface PBSBackupsPayload {
+  backups: PBSBackup[];
+}
+
+export interface PBSBackupsResponse {
+  data: PBSBackupsPayload;
+  meta: {
+    totalBackups: number;
+  };
+}
+
 export interface PVEBackupsPayload {
   backupTasks: BackupTask[];
   storageBackups: StorageBackup[];

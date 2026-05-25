@@ -1,6 +1,7 @@
 import {
   For,
   Show,
+  createEffect,
   createMemo,
   createResource,
   createSignal,
@@ -11,6 +12,7 @@ import {
 import ArchiveIcon from 'lucide-solid/icons/archive';
 import CameraIcon from 'lucide-solid/icons/camera';
 import ActivityIcon from 'lucide-solid/icons/activity';
+import ServerIcon from 'lucide-solid/icons/server';
 import ArrowDownIcon from 'lucide-solid/icons/arrow-down';
 import ArrowUpIcon from 'lucide-solid/icons/arrow-up';
 import ArrowUpDownIcon from 'lucide-solid/icons/arrow-up-down';
@@ -47,6 +49,9 @@ import {
 import type {
   BackupTask,
   GuestSnapshot,
+  PBSBackup,
+  PBSBackupsPayload,
+  PBSBackupsResponse,
   PVEBackupsPayload,
   PVEBackupsResponse,
   StorageBackup,
@@ -71,16 +76,16 @@ import {
 } from './proxmoxBackupSummaryPresentation';
 import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
 
-// Proxmox VE backups split into three meaningfully different surfaces:
+// Proxmox backups split into source-owned surfaces:
+//   - PBS artifacts: deduplicated backup snapshots owned by Proxmox Backup
+//     Server, including verification/protection state from PBS itself.
 //   - Snapshots: qm/pct snapshots taken on the host (no external storage)
 //   - vzdump files: backup archives written to a PVE storage (often a
 //     remote PBS or NFS share). Each is a discrete restorable artifact.
 //   - Recent tasks: the rolling backup-job execution log; this is what
 //     surfaces "did last night's backup actually run?"
-// PBS-resident backups (deduplicated server-side) get their own platform
-// page, so this table is explicitly the PVE backup story.
 
-type BackupTabId = 'snapshots' | 'archives' | 'tasks';
+type BackupTabId = 'pbs' | 'snapshots' | 'archives' | 'tasks';
 
 interface BackupTabSpec {
   id: BackupTabId;
@@ -91,6 +96,13 @@ interface BackupTabSpec {
 }
 
 const TABS: BackupTabSpec[] = [
+  {
+    id: 'pbs',
+    label: 'PBS artifacts',
+    icon: () => <ServerIcon class="h-4 w-4" aria-hidden="true" />,
+    emptyTitle: 'No PBS artifacts',
+    emptyDescription: 'Deduplicated backup snapshots from Proxmox Backup Server will appear here.',
+  },
   {
     id: 'snapshots',
     label: 'Snapshots',
@@ -113,6 +125,10 @@ const TABS: BackupTabSpec[] = [
     emptyDescription: 'Backup-job task results from the past few days will appear here.',
   },
 ];
+
+function tabSpecFor(id: BackupTabId): BackupTabSpec {
+  return TABS.find((spec) => spec.id === id)!;
+}
 
 // Replication colours the per-row status word to match its dot (emerald
 // text for Healthy, red for Failed, etc.). Mirror that here so the
@@ -150,6 +166,20 @@ function guestLabel(type: string | undefined, vmid: number): string {
   return `${kind} ${vmid}`;
 }
 
+function pbsWorkloadLabel(backup: PBSBackup): string {
+  const t = (backup.backupType ?? '').toLowerCase();
+  if (t === 'ct') return `CT ${backup.vmid}`;
+  if (t === 'vm') return `VM ${backup.vmid}`;
+  if (t === 'host') return backup.vmid ? `Host ${backup.vmid}` : 'Host';
+  const kind = backup.backupType?.trim().toUpperCase() || 'Backup';
+  return backup.vmid ? `${kind} ${backup.vmid}` : kind;
+}
+
+function pbsRepositoryLabel(backup: PBSBackup): string {
+  const namespace = backup.namespace?.trim() || '(root)';
+  return `${backup.datastore || '—'} / ${namespace}`;
+}
+
 function formatDuration(start: string | undefined, end: string | undefined): string {
   if (!start || !end) return '—';
   const startMs = new Date(start).getTime();
@@ -178,9 +208,25 @@ async function fetchPVEBackups(): Promise<PVEBackupsPayload> {
   );
 }
 
+async function fetchPBSBackups(): Promise<PBSBackupsPayload> {
+  const response = await apiFetch('/api/backups/pbs');
+  if (!response.ok) {
+    throw new Error(`Failed to load PBS backups (${response.status})`);
+  }
+  const payload = (await response.json()) as PBSBackupsResponse;
+  return payload?.data ?? { backups: [] };
+}
+
 const statusDot = (className: string) => <span class={`h-2 w-2 rounded-full ${className}`} />;
 
 const ARCHIVE_STATUS_FILTERS: FilterOption<'all' | 'protected' | 'verified' | 'unverified'>[] = [
+  { value: 'all', label: 'All' },
+  { value: 'protected', label: 'Protected', tone: 'info', leading: statusDot('bg-blue-500') },
+  { value: 'verified', label: 'Verified', tone: 'success', leading: statusDot('bg-emerald-500') },
+  { value: 'unverified', label: 'Unverified', tone: 'warning', leading: statusDot('bg-amber-500') },
+];
+
+const PBS_STATUS_FILTERS: FilterOption<'all' | 'protected' | 'verified' | 'unverified'>[] = [
   { value: 'all', label: 'All' },
   { value: 'protected', label: 'Protected', tone: 'info', leading: statusDot('bg-blue-500') },
   { value: 'verified', label: 'Verified', tone: 'success', leading: statusDot('bg-emerald-500') },
@@ -367,6 +413,16 @@ function cmpBool(a: boolean, b: boolean, direction: 'asc' | 'desc'): number {
 // sysadmin-default question on a backup page. String columns default to
 // `asc` (A→Z). Boolean columns default to `desc` so "true" sorts first.
 
+type PBSSortKey = 'workload' | 'repository' | 'created' | 'size' | 'protected' | 'verified';
+const PBS_SORT_DEFAULT_DIRECTION: Record<PBSSortKey, 'asc' | 'desc'> = {
+  workload: 'asc',
+  repository: 'asc',
+  created: 'desc',
+  size: 'desc',
+  protected: 'desc',
+  verified: 'desc',
+};
+
 type SnapshotSortKey = 'guest' | 'node' | 'latest' | 'count' | 'size';
 const SNAPSHOT_SORT_DEFAULT_DIRECTION: Record<SnapshotSortKey, 'asc' | 'desc'> = {
   guest: 'asc',
@@ -410,10 +466,15 @@ const TASK_SORT_DEFAULT_DIRECTION: Record<TaskSortKey, 'asc' | 'desc'> = {
 
 export const ProxmoxBackupsTable: Component<{
   emptyIcon: JSX.Element;
+  hasPBS?: boolean;
 }> = (props) => {
   const [backups, { refetch }] = createResource<PVEBackupsPayload>(fetchPVEBackups);
-  const [tab, setTab] = createSignal<BackupTabId>('snapshots');
+  const [pbsBackups, { refetch: refetchPBS }] = createResource<PBSBackupsPayload>(fetchPBSBackups);
+  const [tab, setTab] = createSignal<BackupTabId>(props.hasPBS ? 'pbs' : 'snapshots');
   const [search, setSearch] = createSignal('');
+  const [pbsFilter, setPBSFilter] = createSignal<'all' | 'protected' | 'verified' | 'unverified'>(
+    'all',
+  );
   const [archiveFilter, setArchiveFilter] = createSignal<
     'all' | 'protected' | 'verified' | 'unverified'
   >('all');
@@ -421,9 +482,12 @@ export const ProxmoxBackupsTable: Component<{
   const [snapshotFilter, setSnapshotFilter] = createSignal<SnapshotFilterValue>('all');
   const [chartRange, setChartRange] = createSignal<BackupActivityRangeDays>(30);
   const [selectedDateKey, setSelectedDateKey] = createSignal<string | null>(null);
+  const [pbsMetricMode, setPBSMetricMode] = createSignal<BackupActivityMetricMode>('count');
   const [archiveMetricMode, setArchiveMetricMode] = createSignal<BackupActivityMetricMode>('count');
   const [expandedGuests, setExpandedGuests] = createSignal<ReadonlySet<string>>(new Set<string>());
 
+  const [pbsSortKey, setPBSSortKey] = createSignal<PBSSortKey>('created');
+  const [pbsSortDirection, setPBSSortDirection] = createSignal<'asc' | 'desc'>('desc');
   const [snapshotSortKey, setSnapshotSortKey] = createSignal<SnapshotSortKey>('latest');
   const [snapshotSortDirection, setSnapshotSortDirection] = createSignal<'asc' | 'desc'>('desc');
   const [archiveSortKey, setArchiveSortKey] = createSignal<ArchiveSortKey>('created');
@@ -431,6 +495,23 @@ export const ProxmoxBackupsTable: Component<{
   const [taskSortKey, setTaskSortKey] = createSignal<TaskSortKey>('started');
   const [taskSortDirection, setTaskSortDirection] = createSignal<'asc' | 'desc'>('desc');
 
+  const activeTabs = createMemo(() =>
+    props.hasPBS ? TABS : TABS.filter((spec) => spec.id !== 'pbs'),
+  );
+  createEffect(() => {
+    if (!activeTabs().some((spec) => spec.id === tab())) {
+      setTab(activeTabs()[0]?.id ?? 'snapshots');
+    }
+  });
+
+  const handlePBSSort = (key: PBSSortKey) => {
+    if (pbsSortKey() === key) {
+      setPBSSortDirection(pbsSortDirection() === 'asc' ? 'desc' : 'asc');
+    } else {
+      setPBSSortKey(key);
+      setPBSSortDirection(PBS_SORT_DEFAULT_DIRECTION[key]);
+    }
+  };
   const handleSnapshotSort = (key: SnapshotSortKey) => {
     if (snapshotSortKey() === key) {
       setSnapshotSortDirection(snapshotSortDirection() === 'asc' ? 'desc' : 'asc');
@@ -465,6 +546,7 @@ export const ProxmoxBackupsTable: Component<{
       return next;
     });
 
+  const pbsArtifacts = createMemo<PBSBackup[]>(() => pbsBackups()?.backups ?? []);
   const snapshots = createMemo<GuestSnapshot[]>(() => backups()?.guestSnapshots ?? []);
   const archives = createMemo<StorageBackup[]>(() => backups()?.storageBackups ?? []);
   const tasks = createMemo<BackupTask[]>(() => backups()?.backupTasks ?? []);
@@ -476,7 +558,32 @@ export const ProxmoxBackupsTable: Component<{
   const snapshotCoverage = createMemo(() => buildSnapshotCoverageSummary(snapshots(), nowMs()));
   const archiveCoverage = createMemo(() => buildArchiveCoverageSummary(archives(), nowMs()));
   const taskOutcome = createMemo(() => buildTaskOutcomeSummary(tasks()));
+  const pbsCoverage = createMemo(() => {
+    const backups = pbsArtifacts();
+    const namespaces = new Set<string>();
+    let totalBytes = 0;
+    let protectedCount = 0;
+    let verifiedCount = 0;
+    for (const backup of backups) {
+      namespaces.add(pbsRepositoryLabel(backup));
+      if (typeof backup.size === 'number' && backup.size > 0) totalBytes += backup.size;
+      if (backup.protected) protectedCount += 1;
+      if (backup.verified) verifiedCount += 1;
+    }
+    return {
+      total: backups.length,
+      totalBytes,
+      protectedCount,
+      verifiedCount,
+      unverifiedCount: backups.length - verifiedCount,
+      namespaceCount: namespaces.size,
+    };
+  });
 
+  const pbsTimestampMs = (backup: PBSBackup): number | undefined => {
+    const ms = Date.parse(backup.backupTime ?? '');
+    return Number.isFinite(ms) ? ms : undefined;
+  };
   const archiveTimestampMs = (arc: StorageBackup): number | undefined => {
     const ms = Date.parse(arc.time ?? '');
     return Number.isFinite(ms) ? ms : undefined;
@@ -529,6 +636,22 @@ export const ProxmoxBackupsTable: Component<{
   const ARCHIVE_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = ['archive'];
   const TASK_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = ['ok', 'failed', 'running'];
   const SNAPSHOT_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = ['snapshot'];
+  const PBS_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = ['pbs'];
+
+  const pbsTimeline = createMemo(() =>
+    buildBackupActivityTimeline<PBSBackup>(
+      chartRange(),
+      pbsArtifacts(),
+      pbsTimestampMs,
+      () => 'pbs',
+      {
+        getValue:
+          pbsMetricMode() === 'volume'
+            ? (backup) => (backup.size > 0 ? backup.size : 0)
+            : undefined,
+      },
+    ),
+  );
 
   const snapshotMatchesSearch = (snap: GuestSnapshot, term: string): boolean => {
     if (!term) return true;
@@ -538,6 +661,61 @@ export const ProxmoxBackupsTable: Component<{
       .toLowerCase()
       .includes(term);
   };
+
+  const pbsMatchesSearch = (backup: PBSBackup, term: string): boolean => {
+    if (!term) return true;
+    return [
+      pbsWorkloadLabel(backup),
+      pbsRepositoryLabel(backup),
+      backup.instance,
+      backup.datastore,
+      backup.namespace,
+      backup.backupType,
+      backup.vmid,
+      backup.comment,
+      backup.owner,
+      ...(backup.files ?? []),
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(term);
+  };
+
+  const filteredPBSBackups = createMemo(() => {
+    const term = search().trim().toLowerCase();
+    const filter = pbsFilter();
+    const dateKey = selectedDateKey();
+    const list = pbsArtifacts().filter((backup) => {
+      if (filter === 'protected' && !backup.protected) return false;
+      if (filter === 'verified' && !backup.verified) return false;
+      if (filter === 'unverified' && backup.verified) return false;
+      if (dateKey) {
+        const ms = pbsTimestampMs(backup);
+        if (ms === undefined || recoveryDateKeyFromTimestamp(ms) !== dateKey) return false;
+      }
+      return pbsMatchesSearch(backup, term);
+    });
+    const sortKey = pbsSortKey();
+    const direction = pbsSortDirection();
+    list.sort((a, b) => {
+      switch (sortKey) {
+        case 'workload':
+          return cmpString(pbsWorkloadLabel(a), pbsWorkloadLabel(b), direction);
+        case 'repository':
+          return cmpString(pbsRepositoryLabel(a), pbsRepositoryLabel(b), direction);
+        case 'created':
+          return cmpNumber(pbsTimestampMs(a), pbsTimestampMs(b), direction);
+        case 'size':
+          return cmpNumber(a.size, b.size, direction);
+        case 'protected':
+          return cmpBool(a.protected, b.protected, direction);
+        case 'verified':
+          return cmpBool(a.verified, b.verified, direction);
+      }
+    });
+    return list;
+  });
 
   const filteredSnapshots = createMemo(() => {
     const term = search().trim().toLowerCase();
@@ -610,7 +788,8 @@ export const ProxmoxBackupsTable: Component<{
       row.snapshots.push(snap);
       row.count += 1;
       if (snap.vmstate) row.withRamCount += 1;
-      if (typeof snap.sizeBytes === 'number' && snap.sizeBytes > 0) row.totalBytes += snap.sizeBytes;
+      if (typeof snap.sizeBytes === 'number' && snap.sizeBytes > 0)
+        row.totalBytes += snap.sizeBytes;
       const ms = snapshotTimestampMs(snap);
       if (ms !== undefined && (row.newestMs === undefined || ms > row.newestMs)) {
         row.newestMs = ms;
@@ -656,9 +835,7 @@ export const ProxmoxBackupsTable: Component<{
           return ms > newest ? ms : newest;
         }, undefined),
         isStale: ((): boolean => {
-          const newest = visibleSnapshots[0]
-            ? snapshotTimestampMs(visibleSnapshots[0])
-            : undefined;
+          const newest = visibleSnapshots[0] ? snapshotTimestampMs(visibleSnapshots[0]) : undefined;
           if (newest === undefined) return true;
           return now - newest > 30 * 24 * 60 * 60 * 1000;
         })(),
@@ -778,8 +955,25 @@ export const ProxmoxBackupsTable: Component<{
     return list;
   });
 
+  const showSnapshotSizeColumn = createMemo(() =>
+    snapshots().some((snap) => typeof snap.sizeBytes === 'number' && snap.sizeBytes > 0),
+  );
+  const showSnapshotRAMColumn = createMemo(() => snapshots().some((snap) => snap.vmstate));
+  const snapshotColumnCount = createMemo(
+    () => 4 + (showSnapshotSizeColumn() ? 1 : 0) + (showSnapshotRAMColumn() ? 1 : 0),
+  );
+  const showArchivePBSColumns = createMemo(() =>
+    archives().some((arc) => arc.isPBS || arc.protected || arc.verified || !!arc.verification),
+  );
+  const showTaskSizeColumn = createMemo(() =>
+    tasks().some((task) => typeof task.size === 'number' && task.size > 0),
+  );
+  const showTaskErrorColumn = createMemo(() => tasks().some((task) => !!task.error?.trim()));
+
   const totalForTab = createMemo<number>(() => {
     switch (tab()) {
+      case 'pbs':
+        return pbsArtifacts().length;
       case 'snapshots':
         return snapshots().length;
       case 'archives':
@@ -793,6 +987,8 @@ export const ProxmoxBackupsTable: Component<{
 
   const visibleForTab = createMemo<number>(() => {
     switch (tab()) {
+      case 'pbs':
+        return filteredPBSBackups().length;
       case 'snapshots':
         return filteredSnapshots().length;
       case 'archives':
@@ -812,6 +1008,15 @@ export const ProxmoxBackupsTable: Component<{
     computeMedianTaskDurationSeconds(filteredTasks()),
   );
 
+  // The largest PBS artifact in the filtered set anchors the size bar.
+  const pbsSizeMaxBytes = createMemo(() => {
+    let max = 0;
+    for (const backup of filteredPBSBackups()) {
+      if (backup.size > max) max = backup.size;
+    }
+    return max;
+  });
+
   // The largest archive in the filtered set anchors the size bar.
   const archiveSizeMaxBytes = createMemo(() => {
     let max = 0;
@@ -830,7 +1035,7 @@ export const ProxmoxBackupsTable: Component<{
         <Card padding="lg">
           <EmptyState
             icon={props.emptyIcon}
-            title="Could not load PVE backups"
+            title="Could not load Proxmox backup inventory"
             description={(backups.error as Error | undefined)?.message ?? 'Refresh to retry.'}
             actions={
               <button
@@ -851,15 +1056,15 @@ export const ProxmoxBackupsTable: Component<{
           <Card padding="lg">
             <EmptyState
               icon={props.emptyIcon}
-              title="Loading PVE backups"
-              description="Reading snapshots, archives and recent backup tasks."
+              title="Loading Proxmox backup inventory"
+              description="Reading PBS artifacts, PVE snapshots, archives and recent backup tasks."
             />
           </Card>
         }
       >
         <div class="space-y-3">
           <div class="flex flex-wrap items-center gap-1 rounded-md border border-border bg-surface p-1">
-            <For each={TABS}>
+            <For each={activeTabs()}>
               {(spec) => (
                 <button
                   type="button"
@@ -874,16 +1079,65 @@ export const ProxmoxBackupsTable: Component<{
                   {spec.icon()}
                   <span>{spec.label}</span>
                   <span class="text-[10px] text-muted tabular-nums">
-                    {spec.id === 'snapshots'
-                      ? snapshots().length
-                      : spec.id === 'archives'
-                        ? archives().length
-                        : tasks().length}
+                    {spec.id === 'pbs'
+                      ? pbsArtifacts().length
+                      : spec.id === 'snapshots'
+                        ? snapshots().length
+                        : spec.id === 'archives'
+                          ? archives().length
+                          : tasks().length}
                   </span>
                 </button>
               )}
             </For>
           </div>
+
+          <Show when={tab() === 'pbs' && pbsArtifacts().length > 0}>
+            <BackupActivityChart
+              title={
+                pbsMetricMode() === 'volume' ? 'PBS backup volume per day' : 'PBS backups per day'
+              }
+              noun="artifact"
+              segmentKinds={PBS_SEGMENT_KINDS}
+              range={chartRange}
+              onRangeChange={setChartRange}
+              timeline={pbsTimeline}
+              selectedDateKey={selectedDateKey}
+              onToggleDay={toggleDay}
+              metricToggle={{ mode: pbsMetricMode, onChange: setPBSMetricMode }}
+            />
+            <ProxmoxBackupsCoverageStrip
+              title="PBS verification"
+              tail={
+                <span>
+                  {pbsCoverage().total} artifacts · {formatBytes(pbsCoverage().totalBytes)} logical
+                  <Show when={pbsCoverage().namespaceCount > 0}>
+                    {' · '}
+                    {pbsCoverage().namespaceCount} namespaces
+                  </Show>
+                  <Show when={pbsCoverage().protectedCount > 0}>
+                    {' · '}
+                    {pbsCoverage().protectedCount} protected
+                  </Show>
+                </span>
+              }
+              segments={[
+                {
+                  key: 'verified',
+                  value: pbsCoverage().verifiedCount,
+                  label: 'verified',
+                  toneClass: 'bg-emerald-500',
+                },
+                {
+                  key: 'unverified',
+                  value: pbsCoverage().unverifiedCount,
+                  label: 'unverified',
+                  toneClass: 'bg-amber-500',
+                  muted: pbsCoverage().unverifiedCount === 0,
+                },
+              ]}
+            />
+          </Show>
 
           <Show when={tab() === 'snapshots' && snapshots().length > 0}>
             <BackupActivityChart
@@ -1039,14 +1293,24 @@ export const ProxmoxBackupsTable: Component<{
                 value={search}
                 onChange={setSearch}
                 placeholder={
-                  tab() === 'snapshots'
-                    ? 'Search snapshots, guests, nodes'
-                    : tab() === 'archives'
-                      ? 'Search archives, storages, nodes'
-                      : 'Search tasks, nodes, errors'
+                  tab() === 'pbs'
+                    ? 'Search PBS artifacts, namespaces, guests'
+                    : tab() === 'snapshots'
+                      ? 'Search snapshots, guests, nodes'
+                      : tab() === 'archives'
+                        ? 'Search archives, storages, nodes'
+                        : 'Search tasks, nodes, errors'
                 }
               />
             </div>
+            <Show when={tab() === 'pbs'}>
+              <FilterButtonGroup
+                variant="compact"
+                options={PBS_STATUS_FILTERS}
+                value={pbsFilter()}
+                onChange={setPBSFilter}
+              />
+            </Show>
             <Show when={tab() === 'snapshots'}>
               <FilterButtonGroup
                 variant="compact"
@@ -1055,7 +1319,7 @@ export const ProxmoxBackupsTable: Component<{
                 onChange={setSnapshotFilter}
               />
             </Show>
-            <Show when={tab() === 'archives'}>
+            <Show when={tab() === 'archives' && showArchivePBSColumns()}>
               <FilterButtonGroup
                 variant="compact"
                 options={ARCHIVE_STATUS_FILTERS}
@@ -1095,12 +1359,21 @@ export const ProxmoxBackupsTable: Component<{
                     when={visibleForTab() !== totalForTab()}
                     fallback={
                       <>
-                        {totalForTab()} {tab() === 'archives' ? 'archives' : 'tasks'}
+                        {totalForTab()}{' '}
+                        {tab() === 'pbs'
+                          ? 'PBS artifacts'
+                          : tab() === 'archives'
+                            ? 'archives'
+                            : 'tasks'}
                       </>
                     }
                   >
                     {visibleForTab()} of {totalForTab()}{' '}
-                    {tab() === 'archives' ? 'archives' : 'tasks'}
+                    {tab() === 'pbs'
+                      ? 'PBS artifacts'
+                      : tab() === 'archives'
+                        ? 'archives'
+                        : 'tasks'}
                   </Show>
                 }
               >
@@ -1114,6 +1387,229 @@ export const ProxmoxBackupsTable: Component<{
             </span>
           </div>
 
+          <Show when={tab() === 'pbs'}>
+            <Show
+              when={!pbsBackups.error}
+              fallback={
+                <Card padding="lg">
+                  <EmptyState
+                    icon={props.emptyIcon}
+                    title="Could not load PBS artifacts"
+                    description={
+                      (pbsBackups.error as Error | undefined)?.message ?? 'Refresh to retry.'
+                    }
+                    actions={
+                      <button
+                        type="button"
+                        onClick={() => void refetchPBS()}
+                        class="inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover"
+                      >
+                        Refresh
+                      </button>
+                    }
+                  />
+                </Card>
+              }
+            >
+              <Show
+                when={pbsBackups() !== undefined}
+                fallback={
+                  <Card padding="lg">
+                    <EmptyState
+                      icon={props.emptyIcon}
+                      title="Loading PBS artifacts"
+                      description="Reading deduplicated backup snapshots from Proxmox Backup Server."
+                    />
+                  </Card>
+                }
+              >
+                <Show
+                  when={filteredPBSBackups().length > 0}
+                  fallback={
+                    <Card padding="lg">
+                      <EmptyState
+                        icon={props.emptyIcon}
+                        title={
+                          pbsArtifacts().length === 0
+                            ? tabSpecFor('pbs').emptyTitle
+                            : 'No PBS artifacts match current filters'
+                        }
+                        description={
+                          pbsArtifacts().length === 0
+                            ? tabSpecFor('pbs').emptyDescription
+                            : 'Adjust the search or status filter to see more PBS artifacts.'
+                        }
+                      />
+                    </Card>
+                  }
+                >
+                  <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+                    <Table class="min-w-[1050px] text-xs">
+                      <TableHeader>
+                        <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                          <SortableHead
+                            label="Workload"
+                            sortKey="workload"
+                            currentSort={pbsSortKey}
+                            direction={pbsSortDirection}
+                            onSort={handlePBSSort}
+                            align="left"
+                            headClass={getPlatformTableHeadClassForKind('name')}
+                          />
+                          <SortableHead
+                            label="Repository"
+                            sortKey="repository"
+                            currentSort={pbsSortKey}
+                            direction={pbsSortDirection}
+                            onSort={handlePBSSort}
+                            align="left"
+                            headClass={getPlatformTableHeadClassForKind('text')}
+                          />
+                          <SortableHead
+                            label="Created"
+                            sortKey="created"
+                            currentSort={pbsSortKey}
+                            direction={pbsSortDirection}
+                            onSort={handlePBSSort}
+                            align="right"
+                            headClass={getPlatformTableHeadClassForKind('numeric-value')}
+                          />
+                          <SortableHead
+                            label="Size"
+                            sortKey="size"
+                            currentSort={pbsSortKey}
+                            direction={pbsSortDirection}
+                            onSort={handlePBSSort}
+                            align="center"
+                            headClass={getPlatformTableHeadClassForKind('metric-bar')}
+                          />
+                          <SortableHead
+                            label="Verified"
+                            sortKey="verified"
+                            currentSort={pbsSortKey}
+                            direction={pbsSortDirection}
+                            onSort={handlePBSSort}
+                            align="left"
+                            headClass={getPlatformTableHeadClassForKind('text')}
+                          />
+                          <SortableHead
+                            label="Protection"
+                            sortKey="protected"
+                            currentSort={pbsSortKey}
+                            direction={pbsSortDirection}
+                            onSort={handlePBSSort}
+                            align="left"
+                            headClass={getPlatformTableHeadClassForKind('text')}
+                          />
+                          <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                            Files
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+                        <For each={filteredPBSBackups()}>
+                          {(backup) => (
+                            <TableRow class="hover:bg-surface-hover">
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
+                              >
+                                <div class="min-w-0">
+                                  <div class="font-semibold">{pbsWorkloadLabel(backup)}</div>
+                                  <div class="font-mono text-[10px] uppercase text-muted">
+                                    {backup.backupType || 'backup'}
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                              >
+                                <div class="min-w-0">
+                                  <div class="font-mono text-[11px]">
+                                    {pbsRepositoryLabel(backup)}
+                                  </div>
+                                  <div
+                                    class="truncate text-[10px] text-muted"
+                                    title={backup.instance}
+                                  >
+                                    {backup.instance || '—'}
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                              >
+                                <Show
+                                  when={pbsTimestampMs(backup) !== undefined}
+                                  fallback={<span class="text-muted">—</span>}
+                                >
+                                  {formatRelativeTime(backup.backupTime, { compact: true })}
+                                </Show>
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}
+                              >
+                                <RowMetricBar
+                                  valuePct={
+                                    pbsSizeMaxBytes() > 0
+                                      ? (backup.size / pbsSizeMaxBytes()) * 100
+                                      : 0
+                                  }
+                                  fillClass="bg-blue-500/40 dark:bg-blue-500/40"
+                                  label={formatBytes(backup.size)}
+                                  tooltip={`${formatBytes(backup.size)} (relative to largest PBS artifact in view)`}
+                                />
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                              >
+                                <Show
+                                  when={backup.verified}
+                                  fallback={
+                                    <span class="text-amber-600 dark:text-amber-300">
+                                      Unverified
+                                    </span>
+                                  }
+                                >
+                                  <span class="inline-flex items-center rounded-sm bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
+                                    Verified
+                                  </span>
+                                </Show>
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                              >
+                                <Show
+                                  when={backup.protected}
+                                  fallback={<span class="text-muted">Unprotected</span>}
+                                >
+                                  <span class="inline-flex items-center rounded-sm bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                    Protected
+                                  </span>
+                                </Show>
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                              >
+                                <span
+                                  class="inline-block max-w-[16rem] truncate"
+                                  title={(backup.files ?? []).join(', ')}
+                                >
+                                  {(backup.files ?? []).length > 0
+                                    ? `${backup.files.length} files`
+                                    : '—'}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </For>
+                      </TableBody>
+                    </Table>
+                  </TableCard>
+                </Show>
+              </Show>
+            </Show>
+          </Show>
+
           <Show when={tab() === 'snapshots'}>
             <Show
               when={filteredSnapshotGuests().length > 0}
@@ -1123,12 +1619,12 @@ export const ProxmoxBackupsTable: Component<{
                     icon={props.emptyIcon}
                     title={
                       snapshots().length === 0
-                        ? TABS[0].emptyTitle
+                        ? tabSpecFor('snapshots').emptyTitle
                         : 'No snapshots match current filters'
                     }
                     description={
                       snapshots().length === 0
-                        ? TABS[0].emptyDescription
+                        ? tabSpecFor('snapshots').emptyDescription
                         : 'Adjust the search or filters to see more snapshots.'
                     }
                   />
@@ -1175,16 +1671,20 @@ export const ProxmoxBackupsTable: Component<{
                         align="right"
                         headClass={getPlatformTableHeadClassForKind('numeric-value')}
                       />
-                      <SortableHead
-                        label="Total size"
-                        sortKey="size"
-                        currentSort={snapshotSortKey}
-                        direction={snapshotSortDirection}
-                        onSort={handleSnapshotSort}
-                        align="right"
-                        headClass={getPlatformTableHeadClassForKind('numeric-value')}
-                      />
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>RAM</TableHead>
+                      <Show when={showSnapshotSizeColumn()}>
+                        <SortableHead
+                          label="Total size"
+                          sortKey="size"
+                          currentSort={snapshotSortKey}
+                          direction={snapshotSortDirection}
+                          onSort={handleSnapshotSort}
+                          align="right"
+                          headClass={getPlatformTableHeadClassForKind('numeric-value')}
+                        />
+                      </Show>
+                      <Show when={showSnapshotRAMColumn()}>
+                        <TableHead class={getPlatformTableHeadClassForKind('text')}>RAM</TableHead>
+                      </Show>
                     </TableRow>
                   </TableHeader>
                   <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
@@ -1231,7 +1731,9 @@ export const ProxmoxBackupsTable: Component<{
                                       aria-hidden="true"
                                       title={`Newest snapshot: ${rowAge.label}`}
                                     />
-                                    <span>{formatRelativeTime(row.newestMs, { compact: true })}</span>
+                                    <span>
+                                      {formatRelativeTime(row.newestMs, { compact: true })}
+                                    </span>
                                   </div>
                                 </Show>
                               </TableCell>
@@ -1240,32 +1742,36 @@ export const ProxmoxBackupsTable: Component<{
                               >
                                 {row.count}
                               </TableCell>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
-                              >
-                                <Show
-                                  when={row.totalBytes > 0}
-                                  fallback={<span class="text-muted">—</span>}
+                              <Show when={showSnapshotSizeColumn()}>
+                                <TableCell
+                                  class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
                                 >
-                                  {formatBytes(row.totalBytes)}
-                                </Show>
-                              </TableCell>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                              >
-                                <Show
-                                  when={row.withRamCount > 0}
-                                  fallback={<span class="text-muted">—</span>}
+                                  <Show
+                                    when={row.totalBytes > 0}
+                                    fallback={<span class="text-muted">—</span>}
+                                  >
+                                    {formatBytes(row.totalBytes)}
+                                  </Show>
+                                </TableCell>
+                              </Show>
+                              <Show when={showSnapshotRAMColumn()}>
+                                <TableCell
+                                  class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                                 >
-                                  <span class="inline-flex items-center rounded-sm bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-200">
-                                    {row.withRamCount} with RAM
-                                  </span>
-                                </Show>
-                              </TableCell>
+                                  <Show
+                                    when={row.withRamCount > 0}
+                                    fallback={<span class="text-muted">—</span>}
+                                  >
+                                    <span class="inline-flex items-center rounded-sm bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-200">
+                                      {row.withRamCount} with RAM
+                                    </span>
+                                  </Show>
+                                </TableCell>
+                              </Show>
                             </TableRow>
                             <Show when={isExpanded()}>
                               <TableRow class="bg-surface-alt/40">
-                                <TableCell class="px-2 py-2" colspan={6}>
+                                <TableCell class="px-2 py-2" colspan={snapshotColumnCount()}>
                                   <div class="overflow-hidden">
                                     <table class="w-full text-[11px]">
                                       <thead>
@@ -1275,17 +1781,18 @@ export const ProxmoxBackupsTable: Component<{
                                           <th class="px-2 py-0.5 text-right font-medium">
                                             Captured
                                           </th>
-                                          <th class="px-2 py-0.5 text-right font-medium">Size</th>
-                                          <th class="px-2 py-0.5 text-left font-medium">RAM</th>
+                                          <Show when={showSnapshotSizeColumn()}>
+                                            <th class="px-2 py-0.5 text-right font-medium">Size</th>
+                                          </Show>
+                                          <Show when={showSnapshotRAMColumn()}>
+                                            <th class="px-2 py-0.5 text-left font-medium">RAM</th>
+                                          </Show>
                                         </tr>
                                       </thead>
                                       <tbody class="divide-y divide-border-subtle">
                                         <For each={row.snapshots}>
                                           {(snap) => {
-                                            const age = classifySnapshotRowAge(
-                                              snap.time,
-                                              nowMs(),
-                                            );
+                                            const age = classifySnapshotRowAge(snap.time, nowMs());
                                             return (
                                               <tr class="hover:bg-surface-hover">
                                                 <td class="px-2 py-1">
@@ -1318,24 +1825,28 @@ export const ProxmoxBackupsTable: Component<{
                                                     compact: true,
                                                   })}
                                                 </td>
-                                                <td class="px-2 py-1 text-right tabular-nums text-base-content">
-                                                  <Show
-                                                    when={snap.sizeBytes && snap.sizeBytes > 0}
-                                                    fallback={<span class="text-muted">—</span>}
-                                                  >
-                                                    {formatBytes(snap.sizeBytes ?? 0)}
-                                                  </Show>
-                                                </td>
-                                                <td class="px-2 py-1">
-                                                  <Show
-                                                    when={snap.vmstate}
-                                                    fallback={<span class="text-muted">—</span>}
-                                                  >
-                                                    <span class="inline-flex items-center rounded-sm bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-200">
-                                                      with RAM
-                                                    </span>
-                                                  </Show>
-                                                </td>
+                                                <Show when={showSnapshotSizeColumn()}>
+                                                  <td class="px-2 py-1 text-right tabular-nums text-base-content">
+                                                    <Show
+                                                      when={snap.sizeBytes && snap.sizeBytes > 0}
+                                                      fallback={<span class="text-muted">—</span>}
+                                                    >
+                                                      {formatBytes(snap.sizeBytes ?? 0)}
+                                                    </Show>
+                                                  </td>
+                                                </Show>
+                                                <Show when={showSnapshotRAMColumn()}>
+                                                  <td class="px-2 py-1">
+                                                    <Show
+                                                      when={snap.vmstate}
+                                                      fallback={<span class="text-muted">—</span>}
+                                                    >
+                                                      <span class="inline-flex items-center rounded-sm bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-200">
+                                                        with RAM
+                                                      </span>
+                                                    </Show>
+                                                  </td>
+                                                </Show>
                                               </tr>
                                             );
                                           }}
@@ -1365,12 +1876,12 @@ export const ProxmoxBackupsTable: Component<{
                     icon={props.emptyIcon}
                     title={
                       archives().length === 0
-                        ? TABS[1].emptyTitle
+                        ? tabSpecFor('archives').emptyTitle
                         : 'No archives match current filters'
                     }
                     description={
                       archives().length === 0
-                        ? TABS[1].emptyDescription
+                        ? tabSpecFor('archives').emptyDescription
                         : 'Adjust the search or status filter to see more archives.'
                     }
                   />
@@ -1444,24 +1955,26 @@ export const ProxmoxBackupsTable: Component<{
                         align="center"
                         headClass={getPlatformTableHeadClassForKind('metric-bar')}
                       />
-                      <SortableHead
-                        label="Protection"
-                        sortKey="protected"
-                        currentSort={archiveSortKey}
-                        direction={archiveSortDirection}
-                        onSort={handleArchiveSort}
-                        align="left"
-                        headClass={getPlatformTableHeadClassForKind('text')}
-                      />
-                      <SortableHead
-                        label="Verified"
-                        sortKey="verified"
-                        currentSort={archiveSortKey}
-                        direction={archiveSortDirection}
-                        onSort={handleArchiveSort}
-                        align="left"
-                        headClass={getPlatformTableHeadClassForKind('text')}
-                      />
+                      <Show when={showArchivePBSColumns()}>
+                        <SortableHead
+                          label="Protection"
+                          sortKey="protected"
+                          currentSort={archiveSortKey}
+                          direction={archiveSortDirection}
+                          onSort={handleArchiveSort}
+                          align="left"
+                          headClass={getPlatformTableHeadClassForKind('text')}
+                        />
+                        <SortableHead
+                          label="Verified"
+                          sortKey="verified"
+                          currentSort={archiveSortKey}
+                          direction={archiveSortDirection}
+                          onSort={handleArchiveSort}
+                          align="left"
+                          headClass={getPlatformTableHeadClassForKind('text')}
+                        />
+                      </Show>
                     </TableRow>
                   </TableHeader>
                   <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
@@ -1526,31 +2039,39 @@ export const ProxmoxBackupsTable: Component<{
                               tooltip={`${formatBytes(arc.size)} (relative to largest file in view)`}
                             />
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <Show when={arc.protected} fallback={<span class="text-muted">—</span>}>
-                              <span class="inline-flex items-center rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
-                                Protected
-                              </span>
-                            </Show>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <Show
-                              when={arc.verified}
-                              fallback={
-                                <Show when={arc.isPBS} fallback={<span class="text-muted">—</span>}>
-                                  <span class="text-muted">Pending</span>
-                                </Show>
-                              }
+                          <Show when={showArchivePBSColumns()}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                             >
-                              <span class="inline-flex items-center rounded-sm bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
-                                Verified
-                              </span>
-                            </Show>
-                          </TableCell>
+                              <Show
+                                when={arc.protected}
+                                fallback={<span class="text-muted">Unprotected</span>}
+                              >
+                                <span class="inline-flex items-center rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
+                                  Protected
+                                </span>
+                              </Show>
+                            </TableCell>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            >
+                              <Show
+                                when={arc.verified}
+                                fallback={
+                                  <Show
+                                    when={arc.isPBS}
+                                    fallback={<span class="text-muted">n/a</span>}
+                                  >
+                                    <span class="text-muted">Pending</span>
+                                  </Show>
+                                }
+                              >
+                                <span class="inline-flex items-center rounded-sm bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
+                                  Verified
+                                </span>
+                              </Show>
+                            </TableCell>
+                          </Show>
                         </TableRow>
                       )}
                     </For>
@@ -1568,11 +2089,13 @@ export const ProxmoxBackupsTable: Component<{
                   <EmptyState
                     icon={props.emptyIcon}
                     title={
-                      tasks().length === 0 ? TABS[2].emptyTitle : 'No tasks match current filters'
+                      tasks().length === 0
+                        ? tabSpecFor('tasks').emptyTitle
+                        : 'No tasks match current filters'
                     }
                     description={
                       tasks().length === 0
-                        ? TABS[2].emptyDescription
+                        ? tabSpecFor('tasks').emptyDescription
                         : 'Adjust the search or status filter to see more tasks.'
                     }
                   />
@@ -1628,16 +2151,22 @@ export const ProxmoxBackupsTable: Component<{
                         align="center"
                         headClass={getPlatformTableHeadClassForKind('metric-bar')}
                       />
-                      <SortableHead
-                        label="Size"
-                        sortKey="size"
-                        currentSort={taskSortKey}
-                        direction={taskSortDirection}
-                        onSort={handleTaskSort}
-                        align="right"
-                        headClass={getPlatformTableHeadClassForKind('numeric-value')}
-                      />
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Error</TableHead>
+                      <Show when={showTaskSizeColumn()}>
+                        <SortableHead
+                          label="Size"
+                          sortKey="size"
+                          currentSort={taskSortKey}
+                          direction={taskSortDirection}
+                          onSort={handleTaskSort}
+                          align="right"
+                          headClass={getPlatformTableHeadClassForKind('numeric-value')}
+                        />
+                      </Show>
+                      <Show when={showTaskErrorColumn()}>
+                        <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                          Error
+                        </TableHead>
+                      </Show>
                     </TableRow>
                   </TableHeader>
                   <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
@@ -1664,8 +2193,7 @@ export const ProxmoxBackupsTable: Component<{
                           if (!durationSec || baseline <= 0)
                             return 'bg-slate-500/30 dark:bg-slate-500/30';
                           const ratio = durationSec / baseline;
-                          if (ratio >= 1.5)
-                            return 'bg-metric-warning-bg dark:bg-metric-warning-bg';
+                          if (ratio >= 1.5) return 'bg-metric-warning-bg dark:bg-metric-warning-bg';
                           return 'bg-metric-normal-bg dark:bg-metric-normal-bg';
                         };
                         return (
@@ -1712,31 +2240,35 @@ export const ProxmoxBackupsTable: Component<{
                                 tooltip={`Duration ${formatDuration(task.startTime, task.endTime)} (median ${formatDurationFromSeconds(taskDurationBaselineSeconds())})`}
                               />
                             </TableCell>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
-                            >
-                              <Show
-                                when={task.size && task.size > 0}
-                                fallback={<span class="text-muted">—</span>}
+                            <Show when={showTaskSizeColumn()}>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
                               >
-                                {formatBytes(task.size ?? 0)}
-                              </Show>
-                            </TableCell>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                            >
-                              <Show
-                                when={!!task.error?.trim()}
-                                fallback={<span class="text-muted">—</span>}
-                              >
-                                <span
-                                  class="inline-block max-w-[18rem] truncate text-red-600 dark:text-red-300"
-                                  title={task.error}
+                                <Show
+                                  when={task.size && task.size > 0}
+                                  fallback={<span class="text-muted">—</span>}
                                 >
-                                  {task.error}
-                                </span>
-                              </Show>
-                            </TableCell>
+                                  {formatBytes(task.size ?? 0)}
+                                </Show>
+                              </TableCell>
+                            </Show>
+                            <Show when={showTaskErrorColumn()}>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                              >
+                                <Show
+                                  when={!!task.error?.trim()}
+                                  fallback={<span class="text-muted">—</span>}
+                                >
+                                  <span
+                                    class="inline-block max-w-[18rem] truncate text-red-600 dark:text-red-300"
+                                    title={task.error}
+                                  >
+                                    {task.error}
+                                  </span>
+                                </Show>
+                              </TableCell>
+                            </Show>
                           </TableRow>
                         );
                       }}

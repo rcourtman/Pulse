@@ -114,6 +114,12 @@ truth for live infrastructure data.
    `Disabled=false` must remain the migration-safe default for existing
    `nodes.json` content; the poller must never create a client or mark an
    instance reachable when `Disabled` is true.
+   Source-specific backup snapshot accessors in `internal/monitoring/monitor.go`
+   are monitor-state read surfaces, not recovery-store projections. PVE backup
+   consumers read `PVEBackupsSnapshot()`, while PBS artifact consumers read
+   `PBSBackupsSnapshot()` so PBS size, protection, verification, file, owner,
+   datastore, and namespace facts remain the live PBS poller result carried on
+   `models.PBSBackup`.
 12. Add or change agentless availability monitoring only through the
    poll-provider path. `internal/monitoring/availability_poller.go` owns ICMP,
    TCP, and HTTP probes, provider health, scheduler task construction, and

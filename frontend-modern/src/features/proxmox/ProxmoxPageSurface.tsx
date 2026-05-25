@@ -164,7 +164,10 @@ export function ProxmoxPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'backups'}>
-              <ProxmoxBackupsTable emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />} />
+              <ProxmoxBackupsTable
+                emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
+                hasPBS={model().pbs.length > 0}
+              />
             </Show>
             <Show when={activeTab() === 'ceph'}>
               <ProxmoxCephTable

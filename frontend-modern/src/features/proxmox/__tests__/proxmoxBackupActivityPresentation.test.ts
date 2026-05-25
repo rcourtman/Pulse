@@ -50,7 +50,7 @@ describe('proxmoxBackupActivityPresentation', () => {
     const point = {
       key: '2026-05-20',
       total: 4,
-      counts: { archive: 0, ok: 3, failed: 1, running: 0, snapshot: 0 },
+      counts: { archive: 0, pbs: 0, ok: 3, failed: 1, running: 0, snapshot: 0 },
     };
 
     expect(getBackupActivityColumnAriaLabel('Wed 20 May', point.total, true, 'task')).toBe(

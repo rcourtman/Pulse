@@ -83,6 +83,7 @@ product API routes free of maintainer commercial analytics.
 49. `internal/cloudcp/portal/frontend/tsconfig.json`
 50. `internal/cloudcp/portal/frontend_sync_test.go`
 51. `internal/api/recovery_handlers.go`
+51a. `internal/api/pbs_backups.go`
 52. `internal/api/config_setup_handlers.go`
 53. `internal/api/demo_mode_commercial.go`
 54. `internal/api/demo_mode_operations.go`
@@ -150,6 +151,15 @@ summary response shapes used by the live discovery service. Live service data
 remains primary when a service is configured; mock fixtures may supplement or
 stand in for that data only in mock mode, and they must not expose raw command
 output or bypass the normal non-admin redaction path.
+
+Source-specific backup artifact routes are canonical API payload boundaries.
+`/api/backups/pve` owns Proxmox VE task, storage-archive, and guest-snapshot
+collections. `/api/backups/pbs` owns Proxmox Backup Server artifacts and must
+carry the PBS-authored `models.PBSBackup` fields, including datastore,
+namespace, backup type, VMID, backup time, size, protection, verification,
+files, owner, and comment. Recovery history may index those artifacts, but it
+must not be the only API path for PBS protection or verification state when a
+platform page needs source-native backup columns.
 
 1. `frontend-modern/src/api/agentProfiles.ts` shared with `agent-lifecycle`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/api/ai.ts` shared with `ai-runtime`: the AI frontend client is both an AI runtime control surface and a canonical API payload contract boundary.

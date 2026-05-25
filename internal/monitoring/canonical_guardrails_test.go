@@ -160,6 +160,41 @@ func TestPVEBackupPermissionWarningsPreserveTokenACLRepair(t *testing.T) {
 	}
 }
 
+func TestPBSBackupsSnapshotPreservesSourceArtifactFields(t *testing.T) {
+	state := models.NewState()
+	backupTime := time.Date(2026, 5, 25, 1, 34, 25, 0, time.UTC)
+	state.UpdatePBSBackups("pbs-main", []models.PBSBackup{{
+		ID:         "pbs-main/main/minipc/ct/112/2026-05-25T01:34:25Z",
+		Instance:   "pbs-main",
+		Datastore:  "main",
+		Namespace:  "minipc",
+		BackupType: "ct",
+		VMID:       "112",
+		BackupTime: backupTime,
+		Size:       8_589_934_592,
+		Protected:  true,
+		Verified:   true,
+		Comment:    "debian-go",
+		Files:      []string{"index.json.blob", "root.pxar.didx"},
+		Owner:      "backup@pbs",
+	}})
+	monitor := &Monitor{state: state}
+
+	got := monitor.PBSBackupsSnapshot()
+	if len(got) != 1 {
+		t.Fatalf("expected one PBS backup, got %d", len(got))
+	}
+	if got[0].Datastore != "main" || got[0].Namespace != "minipc" || got[0].VMID != "112" {
+		t.Fatalf("unexpected PBS artifact identity: %+v", got[0])
+	}
+	if got[0].Size != 8_589_934_592 || !got[0].Protected || !got[0].Verified {
+		t.Fatalf("PBS artifact source fields were not preserved: %+v", got[0])
+	}
+	if got[0].Owner != "backup@pbs" || len(got[0].Files) != 2 {
+		t.Fatalf("PBS artifact owner/files were not preserved: %+v", got[0])
+	}
+}
+
 func TestGuestSnapshotPollingStaysBoundedConcurrent(t *testing.T) {
 	data, err := os.ReadFile("monitor_backups.go")
 	if err != nil {

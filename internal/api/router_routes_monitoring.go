@@ -29,6 +29,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 	r.mux.HandleFunc("/api/recovery/rollups", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.recoveryHandlers.HandleListRollups)))
 	r.registerReplicationRoutes()
 	r.registerPVEBackupsRoutes()
+	r.registerPBSBackupsRoutes()
 	r.registerPMGRoutes()
 
 	// Unified resources API

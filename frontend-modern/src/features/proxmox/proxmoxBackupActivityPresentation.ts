@@ -17,7 +17,13 @@ export const BACKUP_ACTIVITY_RANGE_DAYS = [
 // switches the chart from "how many files" to "how much space".)
 export type BackupActivityMetricMode = 'count' | 'volume';
 
-export type BackupActivitySegmentKind = 'archive' | 'ok' | 'failed' | 'running' | 'snapshot';
+export type BackupActivitySegmentKind =
+  | 'archive'
+  | 'pbs'
+  | 'ok'
+  | 'failed'
+  | 'running'
+  | 'snapshot';
 
 interface BackupActivitySegmentPresentation {
   label: string;
@@ -30,6 +36,11 @@ const SEGMENT_PRESENTATION: Record<BackupActivitySegmentKind, BackupActivitySegm
     label: 'Archives',
     segmentClassName: 'bg-blue-500',
     swatchClassName: 'bg-blue-500',
+  },
+  pbs: {
+    label: 'PBS artifacts',
+    segmentClassName: 'bg-cyan-500',
+    swatchClassName: 'bg-cyan-500',
   },
   ok: {
     label: 'OK',
@@ -72,7 +83,7 @@ export interface BackupActivityTimeline {
 }
 
 function emptyCounts(): Record<BackupActivitySegmentKind, number> {
-  return { archive: 0, ok: 0, failed: 0, running: 0, snapshot: 0 };
+  return { archive: 0, pbs: 0, ok: 0, failed: 0, running: 0, snapshot: 0 };
 }
 
 function startOfLocalDayMs(date: Date): number {
@@ -141,7 +152,7 @@ export interface BackupActivityTooltipRow {
   muted: boolean;
 }
 
-export type BackupActivityNoun = 'archive' | 'task' | 'snapshot';
+export type BackupActivityNoun = 'archive' | 'artifact' | 'task' | 'snapshot';
 
 function formatActivityValue(value: number, mode: BackupActivityMetricMode): string {
   if (mode === 'volume') return formatBytes(Math.max(0, value));
@@ -194,10 +205,7 @@ export function getBackupActivityColumnAriaLabel(
   return selected ? `${dateLabel}: ${countLabel}, selected` : `${dateLabel}: ${countLabel}`;
 }
 
-export function getBackupActivityAxisLabel(
-  value: number,
-  mode: BackupActivityMetricMode,
-): string {
+export function getBackupActivityAxisLabel(value: number, mode: BackupActivityMetricMode): string {
   if (mode === 'volume') return formatBytes(Math.max(0, value));
   return String(Math.max(0, Math.round(value)));
 }

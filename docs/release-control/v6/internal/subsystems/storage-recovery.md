@@ -78,6 +78,14 @@ storage/recovery-adjacent: optional PVE `/storage` grants must remain effective
 for privilege-separated tokens by assigning the same `PVEDatastoreAdmin` role to
 both the service user and the concrete token id.
 
+Proxmox platform backup surfaces may embed source-specific backup evidence, but
+the source of truth must stay explicit. PBS artifacts on the Proxmox Backups tab
+consume `/api/backups/pbs` and render PBS-authored size, protection,
+verification, namespace, owner, and file facts from `models.PBSBackup`. PVE
+snapshot, storage-archive, and task tables consume `/api/backups/pve` and must
+keep columns source-aware: columns that PVE cannot populate for the current data
+set are omitted rather than rendered as all-dash placeholders.
+
 Storage/recovery auth-adjacent changes may consume SSO-authenticated sessions,
 but they must not reinterpret SAML or multi-provider SSO availability as a
 storage/recovery entitlement; that provider-route and license truth belongs to

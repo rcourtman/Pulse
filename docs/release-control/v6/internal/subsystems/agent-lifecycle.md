@@ -179,6 +179,13 @@ impact previews, or cross-organization sharing only through the API and
 unified-resource contracts; lifecycle code must not treat that share as an
 agent install target, a command-agent authority, or a reason to widen setup
 tokens.
+Source-specific backup artifact routes under shared `internal/api/`, including
+`/api/backups/pve` and `/api/backups/pbs`, are also read-only monitoring and
+storage/recovery evidence for lifecycle-adjacent surfaces. Lifecycle code may
+display those backup facts as connection or workload context, but it must not
+treat a backup artifact, datastore, namespace, owner, or verification record as
+an agent enrollment candidate, install target, setup-token scope, credential
+grant, or fleet-command authority.
 Docker / Podman native inventory and Kubernetes native API inventory follow
 that same lifecycle boundary. Images, volumes, networks, Swarm tasks,
 Swarm nodes, Swarm secrets, Swarm configs, engine storage-usage buckets,
