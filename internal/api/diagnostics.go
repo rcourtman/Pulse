@@ -24,6 +24,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/sync/singleflight"
 )
 
 // DiagnosticsInfo contains comprehensive diagnostic information
@@ -394,6 +395,12 @@ var (
 	diagnosticsCacheMu sync.RWMutex
 	diagnosticsCache   = map[string]cachedDiagnosticsEntry{}
 
+	// diagnosticsComputeGroup dedupes concurrent cache-miss compute calls
+	// keyed by scope. Without this, N concurrent requests on cache miss
+	// each pay the full computeDiagnostics cost; with it, only the first
+	// goroutine runs and the rest wait on the shared result.
+	diagnosticsComputeGroup singleflight.Group
+
 	diagnosticsCacheHits = prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: "pulse",
 		Subsystem: "diagnostics",
@@ -729,19 +736,39 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 	ctx, cancel := context.WithTimeout(req.Context(), 30*time.Second)
 	defer cancel()
 
-	start := time.Now()
-	fresh := r.computeDiagnostics(ctx)
-	diagnosticsRefreshDuration.Observe(time.Since(start).Seconds())
-
-	diagnosticsCacheMu.Lock()
-	cachedAt := time.Now()
-	diagnosticsCache[scopeKey] = cachedDiagnosticsEntry{
-		diag:     fresh,
-		cachedAt: cachedAt,
+	type diagResult struct {
+		diag     DiagnosticsInfo
+		cachedAt time.Time
 	}
-	diagnosticsCacheMu.Unlock()
 
-	writeDiagnosticsResponse(w, fresh, cachedAt)
+	v, _, _ := diagnosticsComputeGroup.Do(scopeKey, func() (any, error) {
+		// Re-check cache inside the singleflight barrier: an earlier
+		// caller may have populated it between our miss above and us
+		// acquiring the singleflight slot.
+		diagnosticsCacheMu.RLock()
+		entry, ok := diagnosticsCache[scopeKey]
+		diagnosticsCacheMu.RUnlock()
+		if ok && !entry.cachedAt.IsZero() && time.Since(entry.cachedAt) <= diagnosticsCacheTTL {
+			return diagResult{diag: entry.diag, cachedAt: entry.cachedAt}, nil
+		}
+
+		start := time.Now()
+		fresh := r.computeDiagnostics(ctx)
+		diagnosticsRefreshDuration.Observe(time.Since(start).Seconds())
+
+		diagnosticsCacheMu.Lock()
+		cachedAt := time.Now()
+		diagnosticsCache[scopeKey] = cachedDiagnosticsEntry{
+			diag:     fresh,
+			cachedAt: cachedAt,
+		}
+		diagnosticsCacheMu.Unlock()
+
+		return diagResult{diag: fresh, cachedAt: cachedAt}, nil
+	})
+
+	result := v.(diagResult)
+	writeDiagnosticsResponse(w, result.diag, result.cachedAt)
 }
 
 func writeDiagnosticsResponse(w http.ResponseWriter, diag DiagnosticsInfo, cachedAt time.Time) {

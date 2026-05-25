@@ -801,10 +801,14 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Create upgrader with our origin check
+	// Create upgrader with our origin check.
+	// Buffers are 64 KB: gorilla streams larger payloads across the buffer
+	// automatically, so the previous 4 MB allocation per connection was
+	// unnecessary overhead that scaled badly with concurrent clients
+	// (100 clients × 8 MB = 800 MB just in buffers).
 	upgrader := websocket.Upgrader{
-		ReadBufferSize:    1024 * 1024 * 4, // 4MB to handle large state messages
-		WriteBufferSize:   1024 * 1024 * 4, // 4MB to handle large state messages
+		ReadBufferSize:    64 * 1024,
+		WriteBufferSize:   64 * 1024,
 		CheckOrigin:       h.checkOrigin,
 		EnableCompression: true,
 	}

@@ -64,7 +64,14 @@ import (
 	metricstore "github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/sync/singleflight"
 )
+
+// stateComputeGroup dedupes concurrent /api/state callers per tenant. Without
+// it, N concurrent dashboards each rebuild + serialize the full 1.6 MB state
+// snapshot, serializing on the monitor lock. With it, only the first goroutine
+// per tenant runs and the rest reuse the already-encoded bytes.
+var stateComputeGroup singleflight.Group
 
 // Router handles HTTP routing
 type Router struct {
@@ -5171,12 +5178,27 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 			"Monitor not available", nil)
 		return
 	}
-	frontendState := monitor.BuildFrontendState()
 
-	if err := utils.WriteJSONResponse(w, frontendState); err != nil {
+	// Dedupe concurrent callers per tenant: only one goroutine builds +
+	// marshals the snapshot; the rest receive the shared byte slice.
+	orgID := GetOrgID(req.Context())
+	if orgID == "" {
+		orgID = "default"
+	}
+	v, err, _ := stateComputeGroup.Do(orgID, func() (any, error) {
+		frontendState := monitor.BuildFrontendState()
+		return json.Marshal(frontendState)
+	})
+	if err != nil {
 		log.Error().Err(err).Msg("Failed to encode state response")
 		writeErrorResponse(w, http.StatusInternalServerError, "encoding_error",
 			"Failed to encode state data", nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if _, err := w.Write(v.([]byte)); err != nil {
+		log.Error().Err(err).Msg("Failed to write state response")
 	}
 }
 
