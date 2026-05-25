@@ -8,7 +8,7 @@ import {
   type Accessor,
   type Component,
 } from 'solid-js';
-import { Cpu, Plus, RotateCw, Search, SlidersHorizontal } from 'lucide-solid';
+import { Activity, Cpu, Plus, RotateCw, Search, SlidersHorizontal } from 'lucide-solid';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import {
   Table,
@@ -360,6 +360,9 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   );
   const connectedSystemCount = createMemo(() => props.rows().length);
   const discoveredCandidateCount = createMemo(() => props.discoveredNodes().length);
+  const availabilityEndpointCount = createMemo(
+    () => props.rows().filter((row) => row.ownerType === 'availability').length,
+  );
   // Scoped to Proxmox VE: PBS/PMG/TrueNAS/etc. are fully covered by their
   // own API and don't benefit from a paired agent in the way PVE hosts do
   // (where the agent adds temps, SMART, host identity). Counting them here
@@ -457,6 +460,14 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       label: 'Systems',
       value: formatCount(connectedSystemCount(), 'system'),
     },
+    ...(availabilityEndpointCount() > 0
+      ? [
+          {
+            label: 'Endpoints',
+            value: formatCount(availabilityEndpointCount(), 'endpoint'),
+          },
+        ]
+      : []),
     {
       label: 'Live',
       value: formatCount(liveFleetSystemCount(), 'system'),
@@ -514,6 +525,14 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   });
   const useCardLayout = createMemo(() => layoutWidth() <= CARD_LAYOUT_MAX_WIDTH_PX);
 
+  const handleMonitorEndpointShortcut = () => {
+    if (props.onAddSourceStep) {
+      props.onAddSourceStep('availability');
+      return;
+    }
+    props.onAddSource?.('availability');
+  };
+
   const headerActions = () => (
     <Show when={!props.readOnly}>
       <div class="border-b border-border bg-surface px-4 py-3">
@@ -526,6 +545,17 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
             >
               <Plus class="h-4 w-4" />
               Add infrastructure
+            </button>
+          </Show>
+          <Show when={props.onAddSourceStep || props.onAddSource}>
+            <button
+              type="button"
+              onClick={handleMonitorEndpointShortcut}
+              class={workspaceSecondaryButtonClass}
+              title="Monitor a device or service with ICMP, TCP, or HTTP availability checks."
+            >
+              <Activity class="h-4 w-4" />
+              Monitor endpoint
             </button>
           </Show>
 

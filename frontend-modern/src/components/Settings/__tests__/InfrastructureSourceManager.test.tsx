@@ -96,6 +96,7 @@ describe('InfrastructureSourceManager setup summary', () => {
   it('renders manual discovery as a visible operator action', () => {
     const onRunDiscovery = vi.fn();
     const onOpenDiscoverySettings = vi.fn();
+    const onAddSourceStep = vi.fn();
 
     render(() => (
       <InfrastructureSourceManager
@@ -104,10 +105,14 @@ describe('InfrastructureSourceManager setup summary', () => {
         discoveryEnabled
         discoveryScanStatus={() => ({ scanning: false })}
         readOnly={false}
+        onAddSourceStep={onAddSourceStep}
         onRunDiscovery={onRunDiscovery}
         onOpenDiscoverySettings={onOpenDiscoverySettings}
       />
     ));
+
+    fireEvent.click(screen.getByRole('button', { name: /^Monitor endpoint$/i }));
+    expect(onAddSourceStep).toHaveBeenCalledWith('availability');
 
     fireEvent.click(screen.getByRole('button', { name: /^Run discovery$/i }));
     expect(onRunDiscovery).toHaveBeenCalledTimes(1);
@@ -120,6 +125,26 @@ describe('InfrastructureSourceManager setup summary', () => {
     render(() => (
       <InfrastructureSourceManager
         rows={() => [
+          row({
+            id: 'availability:meter',
+            ownerType: 'availability',
+            name: 'MQTT power meter',
+            subtitle: 'via availability probe',
+            source: 'probe',
+            host: 'power-meter-01.lab.local',
+            coverageLabels: ['Availability'],
+            connection: connectionFixture({
+              id: 'availability:meter',
+              type: 'availability',
+              name: 'MQTT power meter',
+              address: 'power-meter-01.lab.local',
+              source: 'manual',
+              surfaces: ['availability'],
+              scope: { availability: true },
+            }),
+            fleetSignals: [signal({ key: 'liveness', label: 'Live', tone: 'ok' })],
+            fleetHighlights: [],
+          }),
           row({
             fleetSignals: [
               signal({ key: 'liveness', label: 'Live', tone: 'ok' }),
@@ -159,6 +184,8 @@ describe('InfrastructureSourceManager setup summary', () => {
 
     expect(screen.getByText('Setup status')).toBeInTheDocument();
     expect(screen.getByText('Systems')).toBeInTheDocument();
+    expect(screen.getByText('Endpoints')).toBeInTheDocument();
+    expect(screen.getByText('1 endpoint')).toBeInTheDocument();
     expect(screen.getByText('Live')).toBeInTheDocument();
     expect(screen.getByText('Needs attention')).toBeInTheDocument();
     expect(screen.getByText('Needs agent')).toBeInTheDocument();

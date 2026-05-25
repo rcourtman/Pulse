@@ -342,6 +342,11 @@ describe('InfrastructureWorkspace', () => {
     expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure?add=pick', {
       scroll: false,
     });
+
+    fireEvent.click(screen.getByRole('button', { name: /^Monitor endpoint$/i }));
+    expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure?add=availability', {
+      scroll: false,
+    });
   });
 
   it('keeps source groups in the catalog order instead of count order', async () => {

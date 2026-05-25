@@ -4,12 +4,13 @@ import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrast
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
 import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
-import { ChartVisibilityToggleButton } from '@/components/shared/FilterToolbar';
+import { ChartVisibilityToggleButton, FilterActionButton } from '@/components/shared/FilterToolbar';
 import { GroupedTableModeSegmentedControl } from '@/components/shared/GroupedTableModeSegmentedControl';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StickySummarySection } from '@/components/shared/StickySummarySection';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import { InfrastructureSummary } from '@/components/Infrastructure/InfrastructureSummary';
+import ActivityIcon from 'lucide-solid/icons/activity';
 import ServerIcon from 'lucide-solid/icons/server';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import SettingsIcon from 'lucide-solid/icons/settings';
@@ -77,6 +78,12 @@ export function InfrastructurePageSurface() {
   const infrastructureEmptyState = () => getInfrastructureEmptyState();
   const infrastructureFilterEmptyState = () => getInfrastructureFilterEmptyState();
   const infrastructureLoadFailureState = () => getInfrastructureLoadFailureState();
+  const hasAvailabilitySource = () =>
+    sourceOptions().some((source) => source.key === 'availability');
+  const availabilitySourceActive = () => selectedSource() === 'availability';
+  const toggleAvailabilitySource = () => {
+    setSelectedSource(availabilitySourceActive() ? '' : 'availability');
+  };
 
   return (
     <div ref={setSummaryClearSurfaceRootRef} data-testid="infrastructure-page" class="space-y-4">
@@ -181,6 +188,28 @@ export function InfrastructurePageSurface() {
                         historyKey: STORAGE_KEYS.RESOURCES_SEARCH_HISTORY,
                         emptyMessage: 'Recent infrastructure searches appear here.',
                       }}
+                      searchTrailing={
+                        <Show when={hasAvailabilitySource()}>
+                          <FilterActionButton
+                            active={availabilitySourceActive()}
+                            aria-label={
+                              availabilitySourceActive()
+                                ? 'Show all infrastructure sources'
+                                : 'Show availability endpoints'
+                            }
+                            aria-pressed={availabilitySourceActive()}
+                            title={
+                              availabilitySourceActive()
+                                ? 'Show all infrastructure sources'
+                                : 'Show availability endpoints'
+                            }
+                            onClick={toggleAvailabilitySource}
+                          >
+                            <ActivityIcon class="h-3 w-3" />
+                            Endpoints
+                          </FilterActionButton>
+                        </Show>
+                      }
                       filters={
                         [
                           {
