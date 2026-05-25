@@ -1,5 +1,10 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
-import type { DockerStorageUsageMeta, Resource, ResourceType } from '@/types/resource';
+import type {
+  DockerStorageUsageMeta,
+  Resource,
+  ResourceIncident,
+  ResourceType,
+} from '@/types/resource';
 import type { StatusIndicator, StatusIndicatorVariant } from '@/utils/status';
 import {
   getInfrastructureSystemIdentityBadges,
@@ -349,6 +354,193 @@ export function filterDockerResources(
   return result;
 }
 
+export type DockerIncidentSeverityFilter = 'all' | 'critical' | 'warning' | 'info';
+
+export type DockerIncidentRow = {
+  id: string;
+  resource: Resource;
+  resourceId: string;
+  resourceName: string;
+  resourceType: ResourceType;
+  severity: string;
+  severityBucket: Exclude<DockerIncidentSeverityFilter, 'all'>;
+  code: string;
+  source: string;
+  summary: string;
+  label: string;
+  category: string;
+  startedAt?: string;
+  action: string;
+  priority: number;
+};
+
+export function mapDockerIncidentSeverity(
+  severity: string | undefined,
+): Exclude<DockerIncidentSeverityFilter, 'all'> {
+  const normalized = asTrimmedString(severity).toLowerCase();
+  if (['critical', 'crit', 'fatal', 'error', 'failed', 'failure'].includes(normalized)) {
+    return 'critical';
+  }
+  if (['warning', 'warn', 'alert', 'degraded'].includes(normalized)) return 'warning';
+  return 'info';
+}
+
+const incidentSeverityRank = (severity: string): number => {
+  switch (mapDockerIncidentSeverity(severity)) {
+    case 'critical':
+      return 3;
+    case 'warning':
+      return 2;
+    case 'info':
+      return 1;
+  }
+};
+
+const titleCaseIncidentCode = (value: string): string =>
+  value
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+
+const dockerIncidentLabel = (resource: Resource, incident: ResourceIncident): string => {
+  const label = asTrimmedString(resource.incidentLabel);
+  if (label) return label;
+  const code = asTrimmedString(incident.code);
+  return code ? titleCaseIncidentCode(code.replace(/^docker_/, '')) : 'Docker Alert';
+};
+
+const dockerIncidentResourceDisplayName = (resource: Resource): string =>
+  asTrimmedString(resource.displayName) ||
+  asTrimmedString(resource.name) ||
+  asTrimmedString(resource.docker?.serviceName) ||
+  asTrimmedString(resource.docker?.hostname) ||
+  resource.id;
+
+const hasIncidentSignal = (incident: ResourceIncident): boolean =>
+  Boolean(asTrimmedString(incident.code) || asTrimmedString(incident.summary));
+
+const hasIncidentRollup = (resource: Resource): boolean =>
+  (resource.incidentCount ?? 0) > 0 ||
+  Boolean(
+    asTrimmedString(resource.incidentCode) ||
+      asTrimmedString(resource.incidentSummary) ||
+      asTrimmedString(resource.incidentLabel),
+  );
+
+const buildDockerIncidentRow = (
+  resource: Resource,
+  incident: ResourceIncident,
+  index: number,
+): DockerIncidentRow => {
+  const severity =
+    asTrimmedString(incident.severity) || asTrimmedString(resource.incidentSeverity) || 'info';
+  const code =
+    asTrimmedString(incident.code) || asTrimmedString(resource.incidentCode) || 'docker_alert';
+  const summary =
+    asTrimmedString(incident.summary) ||
+    asTrimmedString(resource.incidentSummary) ||
+    dockerIncidentLabel(resource, incident);
+  const nativeId = asTrimmedString(incident.nativeId);
+  const rowKey = nativeId || code || String(index);
+  return {
+    id: `${resource.id}:incident:${rowKey}:${index}`,
+    resource,
+    resourceId: resource.id,
+    resourceName: dockerIncidentResourceDisplayName(resource),
+    resourceType: resource.type,
+    severity,
+    severityBucket: mapDockerIncidentSeverity(severity),
+    code,
+    source: asTrimmedString(incident.source) || asTrimmedString(incident.provider) || 'docker',
+    summary,
+    label: dockerIncidentLabel(resource, incident),
+    category: asTrimmedString(resource.incidentCategory) || 'docker-health',
+    startedAt: incident.startedAt,
+    action: asTrimmedString(resource.incidentAction) || 'Investigate in Pulse alerts',
+    priority: resource.incidentPriority ?? incidentSeverityRank(severity) * 1000,
+  };
+};
+
+const buildDockerRollupIncidentRow = (resource: Resource): DockerIncidentRow => {
+  const severity = asTrimmedString(resource.incidentSeverity) || 'info';
+  const code = asTrimmedString(resource.incidentCode) || 'docker_alert';
+  const count = resource.incidentCount ?? 0;
+  const summary =
+    asTrimmedString(resource.incidentSummary) ||
+    asTrimmedString(resource.incidentLabel) ||
+    `${count || 1} active Docker alert${count === 1 ? '' : 's'}`;
+  const incident: ResourceIncident = { code, severity, summary, source: 'docker' };
+  return {
+    ...buildDockerIncidentRow(resource, incident, 0),
+    id: `${resource.id}:incident:rollup`,
+  };
+};
+
+// Walks resource.incidents[] for each row; when a resource carries only
+// rollup-level incident fields (incidentCount / incidentSeverity / etc.) but
+// no per-incident list, emits a single synthesized row so the operator still
+// sees the alert on the Overview. Mirrors buildTrueNASIncidentRows /
+// buildVmwareIncidentRows.
+export function buildDockerIncidentRows(resources: Resource[]): DockerIncidentRow[] {
+  const rows: DockerIncidentRow[] = [];
+  for (const resource of resources) {
+    const incidents = (resource.incidents ?? []).filter(hasIncidentSignal);
+    if (incidents.length > 0) {
+      incidents.forEach((incident, index) =>
+        rows.push(buildDockerIncidentRow(resource, incident, index)),
+      );
+      continue;
+    }
+    if (hasIncidentRollup(resource)) {
+      rows.push(buildDockerRollupIncidentRow(resource));
+    }
+  }
+  return rows.sort((a, b) => {
+    const severityDelta = incidentSeverityRank(b.severity) - incidentSeverityRank(a.severity);
+    if (severityDelta !== 0) return severityDelta;
+    const priorityDelta = b.priority - a.priority;
+    if (priorityDelta !== 0) return priorityDelta;
+    return a.resourceName.localeCompare(b.resourceName);
+  });
+}
+
+const dockerIncidentSearchHaystack = (row: DockerIncidentRow): string =>
+  [
+    row.resourceName,
+    row.resourceId,
+    row.resourceType,
+    row.resource.parentName,
+    row.resource.platformId,
+    row.resource.docker?.hostname,
+    row.resource.docker?.serviceName,
+    row.resource.docker?.swarm?.clusterName,
+    row.severity,
+    row.code,
+    row.source,
+    row.summary,
+    row.label,
+    row.category,
+    row.action,
+    ...(row.resource.tags ?? []),
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' ')
+    .toLowerCase();
+
+export function filterDockerIncidents(
+  incidents: DockerIncidentRow[],
+  search: string,
+  severity: DockerIncidentSeverityFilter,
+): DockerIncidentRow[] {
+  const needle = search.trim().toLowerCase();
+  return incidents.filter((incident) => {
+    if (severity !== 'all' && incident.severityBucket !== severity) return false;
+    if (!needle) return true;
+    return dockerIncidentSearchHaystack(incident).includes(needle);
+  });
+}
+
 export function hasDockerSwarmEvidence(resource: Resource): boolean {
   const swarm = resource.docker?.swarm;
   if (!swarm) return false;
@@ -385,6 +577,7 @@ export type DockerPageModel = {
   tasks: Resource[];
   secrets: Resource[];
   configs: Resource[];
+  incidents: DockerIncidentRow[];
 };
 
 export const hasDockerStorageUsageBucket = (bucket?: DockerStorageUsageMeta): boolean =>
@@ -455,6 +648,7 @@ export function buildDockerPageModel(resources: Resource[]): DockerPageModel {
     .sort(compareDockerTasks);
   const secrets = dockerResources.filter((resource) => DOCKER_SECRET_TYPES.has(resource.type));
   const configs = dockerResources.filter((resource) => DOCKER_CONFIG_TYPES.has(resource.type));
+  const incidents = buildDockerIncidentRows(dockerResources);
 
   return {
     resources: dockerResources,
@@ -468,5 +662,6 @@ export function buildDockerPageModel(resources: Resource[]): DockerPageModel {
     tasks,
     secrets,
     configs,
+    incidents,
   };
 }

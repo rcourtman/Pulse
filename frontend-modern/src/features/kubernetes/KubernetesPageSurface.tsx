@@ -9,6 +9,7 @@ import {
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
+import { KubernetesAlertsTable } from './KubernetesAlertsTable';
 import { KubernetesAutoscalingTable } from './KubernetesAutoscalingTable';
 import { KubernetesClustersTable } from './KubernetesClustersTable';
 import { KubernetesConfigTable } from './KubernetesConfigTable';
@@ -285,6 +286,14 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
         emptyDescription="Kubernetes clusters appear here once at least one agent reports cluster context."
         showToolbar={false}
       />
+      <Show when={props.model().incidents.length > 0}>
+        <KubernetesAlertsTable
+          incidents={props.model().incidents}
+          emptyIcon={k8sIcon()}
+          emptyTitle="No active Kubernetes alerts"
+          emptyDescription="Kubernetes health alerts appear here when the Pulse alert engine reports active workload, node, or cluster incidents."
+        />
+      </Show>
     </div>
   );
 }

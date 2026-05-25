@@ -1,5 +1,6 @@
 import type {
   Resource,
+  ResourceIncident,
   ResourceKubernetesPodContainerStatus,
   ResourceType,
 } from '@/types/resource';
@@ -247,6 +248,193 @@ export const compareKubernetesNodes = compareByStatus(mapKubernetesNodeStatus);
 export const compareKubernetesDeployments = compareByStatus(mapKubernetesDeploymentStatus);
 export const compareKubernetesControllers = compareByStatus(mapKubernetesControllerStatus);
 
+export type KubernetesIncidentSeverityFilter = 'all' | 'critical' | 'warning' | 'info';
+
+export type KubernetesIncidentRow = {
+  id: string;
+  resource: Resource;
+  resourceId: string;
+  resourceName: string;
+  resourceType: ResourceType;
+  severity: string;
+  severityBucket: Exclude<KubernetesIncidentSeverityFilter, 'all'>;
+  code: string;
+  source: string;
+  summary: string;
+  label: string;
+  category: string;
+  startedAt?: string;
+  action: string;
+  priority: number;
+};
+
+export function mapKubernetesIncidentSeverity(
+  severity: string | undefined,
+): Exclude<KubernetesIncidentSeverityFilter, 'all'> {
+  const normalized = asTrimmedString(severity).toLowerCase();
+  if (['critical', 'crit', 'fatal', 'error', 'failed', 'failure'].includes(normalized)) {
+    return 'critical';
+  }
+  if (['warning', 'warn', 'alert', 'degraded'].includes(normalized)) return 'warning';
+  return 'info';
+}
+
+const kubernetesIncidentSeverityRank = (severity: string): number => {
+  switch (mapKubernetesIncidentSeverity(severity)) {
+    case 'critical':
+      return 3;
+    case 'warning':
+      return 2;
+    case 'info':
+      return 1;
+  }
+};
+
+const titleCaseIncidentCode = (value: string): string =>
+  value
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+
+const kubernetesIncidentLabel = (resource: Resource, incident: ResourceIncident): string => {
+  const label = asTrimmedString(resource.incidentLabel);
+  if (label) return label;
+  const code = asTrimmedString(incident.code);
+  return code ? titleCaseIncidentCode(code.replace(/^k8s_/, '')) : 'Kubernetes Alert';
+};
+
+const kubernetesIncidentResourceDisplayName = (resource: Resource): string =>
+  asTrimmedString(resource.displayName) ||
+  asTrimmedString(resource.name) ||
+  asTrimmedString(resource.kubernetes?.podName) ||
+  resource.id;
+
+const hasKubernetesIncidentSignal = (incident: ResourceIncident): boolean =>
+  Boolean(asTrimmedString(incident.code) || asTrimmedString(incident.summary));
+
+const hasKubernetesIncidentRollup = (resource: Resource): boolean =>
+  (resource.incidentCount ?? 0) > 0 ||
+  Boolean(
+    asTrimmedString(resource.incidentCode) ||
+      asTrimmedString(resource.incidentSummary) ||
+      asTrimmedString(resource.incidentLabel),
+  );
+
+const buildKubernetesIncidentRow = (
+  resource: Resource,
+  incident: ResourceIncident,
+  index: number,
+): KubernetesIncidentRow => {
+  const severity =
+    asTrimmedString(incident.severity) || asTrimmedString(resource.incidentSeverity) || 'info';
+  const code =
+    asTrimmedString(incident.code) || asTrimmedString(resource.incidentCode) || 'k8s_alert';
+  const summary =
+    asTrimmedString(incident.summary) ||
+    asTrimmedString(resource.incidentSummary) ||
+    kubernetesIncidentLabel(resource, incident);
+  const nativeId = asTrimmedString(incident.nativeId);
+  const rowKey = nativeId || code || String(index);
+  return {
+    id: `${resource.id}:incident:${rowKey}:${index}`,
+    resource,
+    resourceId: resource.id,
+    resourceName: kubernetesIncidentResourceDisplayName(resource),
+    resourceType: resource.type,
+    severity,
+    severityBucket: mapKubernetesIncidentSeverity(severity),
+    code,
+    source: asTrimmedString(incident.source) || asTrimmedString(incident.provider) || 'kubernetes',
+    summary,
+    label: kubernetesIncidentLabel(resource, incident),
+    category: asTrimmedString(resource.incidentCategory) || 'kubernetes-health',
+    startedAt: incident.startedAt,
+    action: asTrimmedString(resource.incidentAction) || 'Investigate in Pulse alerts',
+    priority: resource.incidentPriority ?? kubernetesIncidentSeverityRank(severity) * 1000,
+  };
+};
+
+const buildKubernetesRollupIncidentRow = (resource: Resource): KubernetesIncidentRow => {
+  const severity = asTrimmedString(resource.incidentSeverity) || 'info';
+  const code = asTrimmedString(resource.incidentCode) || 'k8s_alert';
+  const count = resource.incidentCount ?? 0;
+  const summary =
+    asTrimmedString(resource.incidentSummary) ||
+    asTrimmedString(resource.incidentLabel) ||
+    `${count || 1} active Kubernetes alert${count === 1 ? '' : 's'}`;
+  const incident: ResourceIncident = { code, severity, summary, source: 'kubernetes' };
+  return {
+    ...buildKubernetesIncidentRow(resource, incident, 0),
+    id: `${resource.id}:incident:rollup`,
+  };
+};
+
+// Walks resource.incidents[] for each row; when a resource carries only
+// rollup-level incident fields but no per-incident list, emits a single
+// synthesized row. Mirrors buildVmwareIncidentRows / buildTrueNASIncidentRows.
+export function buildKubernetesIncidentRows(resources: Resource[]): KubernetesIncidentRow[] {
+  const rows: KubernetesIncidentRow[] = [];
+  for (const resource of resources) {
+    const incidents = (resource.incidents ?? []).filter(hasKubernetesIncidentSignal);
+    if (incidents.length > 0) {
+      incidents.forEach((incident, index) =>
+        rows.push(buildKubernetesIncidentRow(resource, incident, index)),
+      );
+      continue;
+    }
+    if (hasKubernetesIncidentRollup(resource)) {
+      rows.push(buildKubernetesRollupIncidentRow(resource));
+    }
+  }
+  return rows.sort((a, b) => {
+    const severityDelta =
+      kubernetesIncidentSeverityRank(b.severity) - kubernetesIncidentSeverityRank(a.severity);
+    if (severityDelta !== 0) return severityDelta;
+    const priorityDelta = b.priority - a.priority;
+    if (priorityDelta !== 0) return priorityDelta;
+    return a.resourceName.localeCompare(b.resourceName);
+  });
+}
+
+const kubernetesIncidentSearchHaystack = (row: KubernetesIncidentRow): string =>
+  [
+    row.resourceName,
+    row.resourceId,
+    row.resourceType,
+    row.resource.parentName,
+    row.resource.platformId,
+    row.resource.kubernetes?.clusterName,
+    row.resource.kubernetes?.namespace,
+    row.resource.kubernetes?.nodeName,
+    row.resource.kubernetes?.podName,
+    row.resource.kubernetes?.ownerName,
+    row.severity,
+    row.code,
+    row.source,
+    row.summary,
+    row.label,
+    row.category,
+    row.action,
+    ...(row.resource.tags ?? []),
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' ')
+    .toLowerCase();
+
+export function filterKubernetesIncidents(
+  incidents: KubernetesIncidentRow[],
+  search: string,
+  severity: KubernetesIncidentSeverityFilter,
+): KubernetesIncidentRow[] {
+  const needle = search.trim().toLowerCase();
+  return incidents.filter((incident) => {
+    if (severity !== 'all' && incident.severityBucket !== severity) return false;
+    if (!needle) return true;
+    return kubernetesIncidentSearchHaystack(incident).includes(needle);
+  });
+}
+
 export type KubernetesResourceStatusFilter = 'all' | 'online' | 'degraded' | 'offline';
 
 const ONLINE_RESOURCE_STATUSES = new Set<string>(['online', 'running']);
@@ -454,6 +642,7 @@ export type KubernetesPageModel = {
   config: Resource[];
   policy: Resource[];
   autoscaling: Resource[];
+  incidents: KubernetesIncidentRow[];
 };
 
 export type KubernetesClusterChildCounts = {
@@ -576,6 +765,7 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
   const config = [...namespaces, ...configMaps, ...secrets, ...serviceAccounts];
   const policy = [...networkPolicies, ...podDisruptionBudgets, ...resourceQuotas, ...limitRanges];
   const autoscaling = [...horizontalPodAutoscalers];
+  const incidents = buildKubernetesIncidentRows(k8sResources);
 
   return {
     resources: k8sResources,
@@ -610,5 +800,6 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
     config,
     policy,
     autoscaling,
+    incidents,
   };
 }

@@ -8,6 +8,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
+import { DockerAlertsTable } from './DockerAlertsTable';
 import { DockerConfigsTable } from './DockerConfigsTable';
 import { DockerContainersTable } from './DockerContainersTable';
 import { DockerHostsTable } from './DockerHostsTable';
@@ -92,6 +93,7 @@ export function DockerPageSurface() {
               <DockerOverview
                 hosts={model().hosts}
                 hostSourceCount={model().hosts.length}
+                incidents={model().incidents}
               />
             </Show>
             <Show when={activeTab() === 'containers'}>
@@ -237,6 +239,7 @@ function DockerSwarm(props: { model: DockerPageModel }) {
 function DockerOverview(props: {
   hosts: ReturnType<typeof buildDockerPageModel>['hosts'];
   hostSourceCount: number;
+  incidents: ReturnType<typeof buildDockerPageModel>['incidents'];
 }) {
   return (
     <div class="space-y-4">
@@ -248,6 +251,14 @@ function DockerOverview(props: {
         emptyDescription="Container hosts appear here once a Pulse agent registers them."
         showToolbar={false}
       />
+      <Show when={props.incidents.length > 0}>
+        <DockerAlertsTable
+          incidents={props.incidents}
+          emptyIcon={dockerIcon()}
+          emptyTitle="No active Docker alerts"
+          emptyDescription="Docker health alerts appear here when the Pulse alert engine reports active container, host, or Swarm incidents."
+        />
+      </Show>
     </div>
   );
 }

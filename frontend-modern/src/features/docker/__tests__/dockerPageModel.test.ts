@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
   DOCKER_TAB_SPECS,
+  buildDockerIncidentRows,
   buildDockerPageModel,
   compareDockerContainers,
   compareDockerServices,
   compareDockerSwarmNodes,
   compareDockerTasks,
+  filterDockerIncidents,
   filterDockerResources,
   getDockerHostSystemBadge,
   getDockerPageTabSpecs,
@@ -15,6 +17,7 @@ import {
   hasDockerSwarmEvidence,
   hasDockerSwarmInventory,
   mapDockerContainerStatus,
+  mapDockerIncidentSeverity,
   mapDockerServiceStatus,
   mapDockerSwarmNodeStatus,
   mapDockerTaskStatus,
@@ -704,6 +707,136 @@ describe('dockerPageModel', () => {
       expect(filterDockerResources(rows, '', 'degraded').map((r) => r.id)).toEqual([
         'svc-payments',
       ]);
+    });
+  });
+
+  describe('mapDockerIncidentSeverity', () => {
+    it('buckets severity strings into critical / warning / info', () => {
+      expect(mapDockerIncidentSeverity('critical')).toBe('critical');
+      expect(mapDockerIncidentSeverity('FATAL')).toBe('critical');
+      expect(mapDockerIncidentSeverity('error')).toBe('critical');
+      expect(mapDockerIncidentSeverity('warning')).toBe('warning');
+      expect(mapDockerIncidentSeverity('degraded')).toBe('warning');
+      expect(mapDockerIncidentSeverity('info')).toBe('info');
+      expect(mapDockerIncidentSeverity(undefined)).toBe('info');
+      expect(mapDockerIncidentSeverity('whatever')).toBe('info');
+    });
+  });
+
+  describe('buildDockerIncidentRows', () => {
+    it('emits one row per ResourceIncident and rolls up severity sort order', () => {
+      const rows = buildDockerIncidentRows([
+        makeResource({
+          id: 'host-edge',
+          type: 'agent',
+          name: 'edge-01',
+          docker: { hostname: 'edge-01' },
+          incidents: [
+            { code: 'docker_host_down', severity: 'critical', summary: 'Engine unreachable' },
+            { code: 'docker_image_update', severity: 'info', summary: 'Image update available' },
+          ],
+        }),
+        makeResource({
+          id: 'ctr-payments',
+          type: 'app-container',
+          name: 'payments-worker',
+          docker: { hostname: 'edge-01' },
+          incidents: [
+            {
+              code: 'docker_container_restarting',
+              severity: 'warning',
+              summary: 'Restarted 7 times in 5m',
+            },
+          ],
+        }),
+      ]);
+
+      expect(rows.map((r) => ({ id: r.id, severity: r.severityBucket }))).toEqual([
+        { id: 'host-edge:incident:docker_host_down:0', severity: 'critical' },
+        { id: 'ctr-payments:incident:docker_container_restarting:0', severity: 'warning' },
+        { id: 'host-edge:incident:docker_image_update:1', severity: 'info' },
+      ]);
+      expect(rows[0].summary).toBe('Engine unreachable');
+      expect(rows[0].source).toBe('docker');
+    });
+
+    it('falls back to a rollup row when only incidentCount / incidentSummary are present', () => {
+      const rows = buildDockerIncidentRows([
+        makeResource({
+          id: 'host-stale',
+          type: 'agent',
+          name: 'stale-01',
+          incidentCount: 2,
+          incidentSeverity: 'warning',
+          incidentSummary: 'Two alerts firing',
+          incidentLabel: 'Docker Alerts',
+        }),
+      ]);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].id).toBe('host-stale:incident:rollup');
+      expect(rows[0].severityBucket).toBe('warning');
+      expect(rows[0].summary).toBe('Two alerts firing');
+    });
+
+    it('skips resources with no incident signal', () => {
+      expect(
+        buildDockerIncidentRows([makeResource({ id: 'clean', type: 'app-container' })]),
+      ).toEqual([]);
+    });
+
+    it('surfaces incidents on the page model output', () => {
+      const model = buildDockerPageModel([
+        makeResource({
+          id: 'host-edge',
+          type: 'agent',
+          incidents: [{ code: 'docker_host_down', severity: 'critical', summary: 'down' }],
+        }),
+        makeResource({ id: 'clean', type: 'app-container' }),
+      ]);
+      expect(model.incidents.map((r) => r.resourceId)).toEqual(['host-edge']);
+    });
+  });
+
+  describe('filterDockerIncidents', () => {
+    const incidents = buildDockerIncidentRows([
+      makeResource({
+        id: 'host-edge',
+        type: 'agent',
+        name: 'edge-01',
+        docker: { hostname: 'edge-01' },
+        incidents: [{ code: 'docker_host_down', severity: 'critical', summary: 'Engine down' }],
+      }),
+      makeResource({
+        id: 'ctr-payments',
+        type: 'app-container',
+        name: 'payments-worker',
+        docker: { hostname: 'edge-01' },
+        incidents: [
+          { code: 'docker_container_restarting', severity: 'warning', summary: 'Restart loop' },
+        ],
+      }),
+    ]);
+
+    it('filters by severity bucket', () => {
+      expect(
+        filterDockerIncidents(incidents, '', 'critical').map((r) => r.resourceId),
+      ).toEqual(['host-edge']);
+      expect(
+        filterDockerIncidents(incidents, '', 'warning').map((r) => r.resourceId),
+      ).toEqual(['ctr-payments']);
+    });
+
+    it('matches resource name, code, summary, and host', () => {
+      expect(filterDockerIncidents(incidents, 'payments', 'all').map((r) => r.resourceId)).toEqual([
+        'ctr-payments',
+      ]);
+      expect(filterDockerIncidents(incidents, 'host_down', 'all').map((r) => r.resourceId)).toEqual([
+        'host-edge',
+      ]);
+      expect(filterDockerIncidents(incidents, 'engine down', 'all').map((r) => r.resourceId)).toEqual([
+        'host-edge',
+      ]);
+      expect(filterDockerIncidents(incidents, 'edge-01', 'all').length).toBe(2);
     });
   });
 });

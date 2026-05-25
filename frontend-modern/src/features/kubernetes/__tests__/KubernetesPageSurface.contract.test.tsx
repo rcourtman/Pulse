@@ -63,6 +63,12 @@ vi.mock('@/features/platformPage/sharedPlatformPage', () => ({
   PlatformTableLoadingState: () => <div data-testid="platform-table-loading-state" />,
 }));
 
+vi.mock('../KubernetesAlertsTable', () => ({
+  KubernetesAlertsTable: (props: { incidents: unknown[] }) => (
+    <div data-testid="alerts-table" data-rows={props.incidents.length} />
+  ),
+}));
+
 vi.mock('../KubernetesAutoscalingTable', () => ({
   KubernetesAutoscalingTable: (props: { resources: Resource[] }) => (
     <div data-testid="autoscaling-table" data-rows={props.resources.length} />

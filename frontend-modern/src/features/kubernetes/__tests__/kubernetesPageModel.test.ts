@@ -3,8 +3,10 @@ import type { Resource } from '@/types/resource';
 import {
   KUBERNETES_TAB_SPECS,
   buildKubernetesClusterChildCounts,
+  buildKubernetesIncidentRows,
   buildKubernetesPageModel,
   compareKubernetesControllers,
+  filterKubernetesIncidents,
   filterKubernetesResources,
   compareKubernetesDeployments,
   compareKubernetesEvents,
@@ -15,6 +17,7 @@ import {
   mapKubernetesDaemonSetStatus,
   mapKubernetesDeploymentStatus,
   mapKubernetesEventSeverity,
+  mapKubernetesIncidentSeverity,
   mapKubernetesJobStatus,
   mapKubernetesNodeStatus,
   mapKubernetesPodStatus,
@@ -719,6 +722,121 @@ describe('kubernetesPageModel', () => {
         'node-worker',
       ]);
       expect(filterKubernetesResources(rows, 'v1.30', 'online')).toEqual([]);
+    });
+  });
+
+  describe('mapKubernetesIncidentSeverity', () => {
+    it('buckets severity strings into critical / warning / info', () => {
+      expect(mapKubernetesIncidentSeverity('critical')).toBe('critical');
+      expect(mapKubernetesIncidentSeverity('FATAL')).toBe('critical');
+      expect(mapKubernetesIncidentSeverity('warning')).toBe('warning');
+      expect(mapKubernetesIncidentSeverity('degraded')).toBe('warning');
+      expect(mapKubernetesIncidentSeverity('info')).toBe('info');
+      expect(mapKubernetesIncidentSeverity(undefined)).toBe('info');
+    });
+  });
+
+  describe('buildKubernetesIncidentRows', () => {
+    it('emits one row per ResourceIncident and sorts by severity then name', () => {
+      const rows = buildKubernetesIncidentRows([
+        makeResource({
+          id: 'pod-payments',
+          type: 'pod',
+          kubernetes: { clusterName: 'prod', namespace: 'payments' },
+          incidents: [
+            { code: 'k8s_pod_crashloop', severity: 'critical', summary: 'CrashLoopBackOff' },
+          ],
+        }),
+        makeResource({
+          id: 'dep-checkout',
+          type: 'k8s-deployment',
+          kubernetes: { clusterName: 'prod', namespace: 'apps' },
+          incidents: [
+            {
+              code: 'k8s_deployment_under_replicated',
+              severity: 'warning',
+              summary: '1 / 3 ready',
+            },
+          ],
+        }),
+      ]);
+
+      expect(rows.map((r) => ({ id: r.resourceId, severity: r.severityBucket }))).toEqual([
+        { id: 'pod-payments', severity: 'critical' },
+        { id: 'dep-checkout', severity: 'warning' },
+      ]);
+      expect(rows[0].source).toBe('kubernetes');
+      expect(rows[0].category).toBe('kubernetes-health');
+    });
+
+    it('falls back to a rollup row when only incidentSummary is present', () => {
+      const rows = buildKubernetesIncidentRows([
+        makeResource({
+          id: 'node-worker',
+          type: 'k8s-node',
+          incidentSeverity: 'warning',
+          incidentSummary: 'Disk pressure',
+        }),
+      ]);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].id).toBe('node-worker:incident:rollup');
+      expect(rows[0].summary).toBe('Disk pressure');
+    });
+
+    it('surfaces incidents on the page model output', () => {
+      const model = buildKubernetesPageModel([
+        makeResource({
+          id: 'pod-crash',
+          type: 'pod',
+          incidents: [{ code: 'k8s_pod_crashloop', severity: 'critical', summary: 'crash' }],
+        }),
+        makeResource({ id: 'pod-ok', type: 'pod' }),
+      ]);
+      expect(model.incidents.map((r) => r.resourceId)).toEqual(['pod-crash']);
+    });
+  });
+
+  describe('filterKubernetesIncidents', () => {
+    const incidents = buildKubernetesIncidentRows([
+      makeResource({
+        id: 'pod-payments',
+        type: 'pod',
+        kubernetes: { clusterName: 'prod', namespace: 'payments' },
+        incidents: [
+          { code: 'k8s_pod_crashloop', severity: 'critical', summary: 'CrashLoopBackOff' },
+        ],
+      }),
+      makeResource({
+        id: 'dep-checkout',
+        type: 'k8s-deployment',
+        kubernetes: { clusterName: 'prod', namespace: 'apps' },
+        incidents: [
+          {
+            code: 'k8s_deployment_under_replicated',
+            severity: 'warning',
+            summary: '1 / 3 ready',
+          },
+        ],
+      }),
+    ]);
+
+    it('filters by severity bucket', () => {
+      expect(
+        filterKubernetesIncidents(incidents, '', 'critical').map((r) => r.resourceId),
+      ).toEqual(['pod-payments']);
+      expect(
+        filterKubernetesIncidents(incidents, '', 'warning').map((r) => r.resourceId),
+      ).toEqual(['dep-checkout']);
+    });
+
+    it('matches resource name, code, cluster, and namespace', () => {
+      expect(
+        filterKubernetesIncidents(incidents, 'crashloop', 'all').map((r) => r.resourceId),
+      ).toEqual(['pod-payments']);
+      expect(
+        filterKubernetesIncidents(incidents, 'payments', 'all').map((r) => r.resourceId),
+      ).toEqual(['pod-payments']);
+      expect(filterKubernetesIncidents(incidents, 'prod', 'all').length).toBe(2);
     });
   });
 });
