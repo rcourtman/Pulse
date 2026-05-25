@@ -4305,7 +4305,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(appSource).not.toContain("import('./pages/Operations')");
     expect(appSource).not.toContain('<Route path="/operations/*"');
-    expect(settingsNavigationModelSource).toContain(
+    expect(settingsNavigationModelSource).not.toContain(
       'export function buildLegacyOperationsSettingsPath',
     );
     expect(reportingPanelSource).toContain('OperationsPanel');

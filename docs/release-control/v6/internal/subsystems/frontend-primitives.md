@@ -1126,6 +1126,12 @@ not a replacement status card, CTA band, or page-local nested card.
    conversion, or infrastructure onboarding telemetry. Those signals belong in
    admin-owned metrics surfaces, not the product diagnostics UI or customer
    frontend event emission.
+6. Settings route models normalizing retired aliases such as
+   `/settings/operations/*`, `/settings/integrations/api`,
+   `/settings/system-pro`, `/settings/workloads/*`, or nested
+   `/settings/infrastructure/*` paths back into current settings panels.
+   Retired aliases must fail route eligibility instead of being kept as
+   compatibility redirects.
 
 ## Completion Obligations
 
@@ -2839,11 +2845,11 @@ infrastructure workspace props, registry context maps, system panel prop maps,
 lazy loader definitions, or discovery draft state inline.
 That same settings-routing contract now also owns the Support group for
 `Diagnostics & Health`, `Data & Reports`, and `System Logs`: the navigation
-model may normalize old `/settings/operations/*` settings paths into
-`/settings/support/*`, but the top-level `/operations/*` browser path must stay
-unregistered. The catalog plus visibility owners must treat those support
-surfaces as Settings-native pages rather than as a second top-level utility
-destination.
+model must reject old `/settings/operations/*` settings paths instead of
+normalizing them into `/settings/support/*`, and the top-level `/operations/*`
+browser path must stay unregistered. The catalog plus visibility owners must
+still treat support surfaces as Settings-native pages rather than as a second
+top-level utility destination.
 
 The resource incident panel's collapsed activity summary is now part of that
 same shared primitive boundary. Event-type count chips, visible-event copy,

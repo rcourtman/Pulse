@@ -1237,10 +1237,11 @@ when older workspaces need membership continuity repaired at open time. Cloud,
 MSP, and commercial account roles therefore have one canonical translation into
 tenant org permissions instead of drifting between provisioning-time seeds and
 handoff-time access repair.
-The old self-hosted trial activation return notice on `/settings/system-pro` is
-retired with that callback: the `trial` query result must not produce owned
-activation UI, a success banner, or retry copy in v6 GA. Purchase activation
-continues through the Pulse Account return contract instead.
+The old self-hosted trial activation return notice and `/settings/system-pro`
+route are retired with that callback: the `trial` query result must not produce
+owned activation UI, a success banner, retry copy, or a settings compatibility
+redirect in v6 GA. Purchase activation continues through the Pulse Account
+return contract instead.
 That same retirement applies to the old hosted control-plane completion and
 redeem routes: `/trial-signup/complete` and `/api/trial-signup/redeem` must
 not return customer-facing trial UX or raw acquisition errors in v6 GA.

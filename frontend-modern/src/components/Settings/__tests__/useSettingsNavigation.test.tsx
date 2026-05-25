@@ -104,4 +104,20 @@ describe('useSettingsNavigation', () => {
       expect(navigateSpy).not.toHaveBeenCalled();
     });
   });
+
+  it('does not translate remaining retired settings aliases', async () => {
+    for (const path of [
+      '/settings/operations/reporting',
+      '/settings/integrations/api',
+      '/settings/system-pro',
+    ]) {
+      cleanup();
+      navigateSpy.mockReset();
+      renderHarness(path);
+
+      await waitFor(() => {
+        expect(navigateSpy).not.toHaveBeenCalled();
+      });
+    }
+  });
 });

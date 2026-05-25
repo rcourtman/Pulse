@@ -126,11 +126,12 @@ describe('settings architecture guardrails', () => {
     );
   });
 
-  it('keeps retired operations browser paths out of the settings routing model', () => {
+  it('keeps retired operations paths out of the settings routing model', () => {
     expect(settingsNavigationModelSource).toContain(
-      "const LEGACY_SETTINGS_OPERATIONS_PREFIX = '/settings/operations';",
+      "const RETIRED_SETTINGS_OPERATIONS_PREFIX = '/settings/operations';",
     );
-    expect(settingsNavigationModelSource).toContain('buildLegacyOperationsSettingsPath');
+    expect(settingsNavigationModelSource).not.toContain('buildLegacyOperationsSettingsPath');
+    expect(settingsNavigationModelSource).not.toContain('LEGACY_SETTINGS_OPERATIONS_PREFIX');
     expect(settingsNavigationModelSource).not.toContain("normalizedPath === '/operations/logs'");
     expect(settingsNavigationModelSource).not.toContain(
       "normalizedPath.startsWith('/operations/logs/')",

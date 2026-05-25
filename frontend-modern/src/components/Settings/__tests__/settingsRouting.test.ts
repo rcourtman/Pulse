@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildLegacyOperationsSettingsPath,
   agentKeyFromPlatformType,
   DEFAULT_SETTINGS_TAB,
   deriveTabFromPath,
@@ -82,24 +81,14 @@ describe('settingsNavigationModel', () => {
     expect(resolveCanonicalSettingsPath('/settings/infrastructure/api')).toBeNull();
     expect(resolveCanonicalSettingsPath('/settings/infrastructure/api/pve')).toBeNull();
     expect(resolveCanonicalSettingsPath('/settings/infrastructure/proxmox')).toBeNull();
-    expect(resolveCanonicalSettingsPath('/settings/integrations/api')).toBe(
-      '/settings/security/api',
-    );
-    expect(resolveCanonicalSettingsPath('/settings/operations')).toBe(
-      '/settings/support/diagnostics',
-    );
-    expect(resolveCanonicalSettingsPath('/settings/operations/reporting')).toBe(
-      '/settings/support/reporting',
-    );
-    expect(resolveCanonicalSettingsPath('/settings/operations/logs')).toBe(
-      '/settings/support/logs',
-    );
+    expect(resolveCanonicalSettingsPath('/settings/integrations/api')).toBeNull();
+    expect(resolveCanonicalSettingsPath('/settings/operations')).toBeNull();
+    expect(resolveCanonicalSettingsPath('/settings/operations/reporting')).toBeNull();
+    expect(resolveCanonicalSettingsPath('/settings/operations/logs')).toBeNull();
     expect(resolveCanonicalSettingsPath('/settings/system/billing')).toBe(
       '/settings/system/billing/plan',
     );
-    expect(resolveCanonicalSettingsPath('/settings/system-pro')).toBe(
-      '/settings/system/billing/plan',
-    );
+    expect(resolveCanonicalSettingsPath('/settings/system-pro')).toBeNull();
     expect(resolveCanonicalSettingsPath('/not-settings')).toBeNull();
   });
 
@@ -115,6 +104,11 @@ describe('settingsNavigationModel', () => {
       '/settings/infrastructure/proxmox',
       '/settings/infrastructure/truenas',
       '/settings/infrastructure/vmware',
+      '/settings/operations',
+      '/settings/operations/reporting',
+      '/settings/operations/logs',
+      '/settings/integrations/api',
+      '/settings/system-pro',
     ];
 
     for (const path of retiredPaths) {
@@ -150,7 +144,6 @@ describe('settingsNavigationModel', () => {
       ['?tab=infrastructure', 'infrastructure-systems'],
       ['?tab=system-ai', 'system-ai'],
       ['?tab=system-relay', 'system-relay'],
-      ['?tab=system-pro', 'system-billing'],
       ['?tab=system-billing', 'system-billing'],
       ['?tab=diagnostics', 'support-diagnostics'],
       ['?tab=reporting', 'support-reporting'],
@@ -164,6 +157,7 @@ describe('settingsNavigationModel', () => {
       ['?tab=workloads', null],
       ['?tab=install', null],
       ['?tab=docker', null],
+      ['?tab=system-pro', null],
       ['?tab=unknown', null],
     ];
     for (const [query, expectedTab] of queryCases) {
@@ -223,18 +217,12 @@ describe('settingsNavigationModel', () => {
     expect(agentKeyFromPlatformType('agent')).toBeNull();
   });
 
-  it('maps support and legacy settings operations routes back to support tabs', () => {
+  it('maps support routes back to support tabs without legacy operations aliases', () => {
     expect(deriveTabFromPath('/settings/support/diagnostics')).toBe('support-diagnostics');
     expect(deriveTabFromPath('/settings/support/reporting')).toBe('support-reporting');
     expect(deriveTabFromPath('/settings/support/logs')).toBe('support-logs');
-    expect(buildLegacyOperationsSettingsPath('/settings/operations')).toBe(
-      '/settings/support/diagnostics',
-    );
-    expect(buildLegacyOperationsSettingsPath('/settings/operations/reporting')).toBe(
-      '/settings/support/reporting',
-    );
-    expect(buildLegacyOperationsSettingsPath('/settings/operations/logs')).toBe(
-      '/settings/support/logs',
-    );
+    expect(isRouteableSettingsPath('/settings/operations')).toBe(false);
+    expect(isRouteableSettingsPath('/settings/operations/reporting')).toBe(false);
+    expect(isRouteableSettingsPath('/settings/operations/logs')).toBe(false);
   });
 });

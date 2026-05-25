@@ -2027,7 +2027,8 @@ found the value.
 Command-availability guidance inside that analysis surface must consume the
 shared `frontend-modern/src/utils/discoveryPresentation.ts` settings targets
 and scan-error copy instead of hard-coding legacy settings labels such as
-Unified Agents, API Tokens, or `/settings/integrations/api`.
+Unified Agents, API Tokens, or `/settings/integrations/api`; the canonical API
+access route is `/settings/security/api`.
 The overview keeps access, investigation detail, service detail, and host
 detail as collapsed sibling disclosures under the primary card pair, so the
 drawer keeps

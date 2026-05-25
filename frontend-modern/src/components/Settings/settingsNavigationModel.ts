@@ -87,15 +87,15 @@ export type SettingsHeaderMetaMap = Record<SettingsTab, SettingsHeaderMeta>;
 export const DEFAULT_SETTINGS_TAB: SettingsTab = 'infrastructure-systems';
 const INFRASTRUCTURE_SYSTEMS_PREFIX = '/settings/infrastructure';
 const RETIRED_SETTINGS_WORKLOADS_PREFIX = '/settings/workloads';
+const RETIRED_SETTINGS_OPERATIONS_PREFIX = '/settings/operations';
+const RETIRED_SETTINGS_INTEGRATIONS_API_PREFIX = '/settings/integrations/api';
+const RETIRED_SETTINGS_SYSTEM_PRO_PREFIX = '/settings/system-pro';
 const SUPPORT_PREFIX = '/settings/support';
 const SUPPORT_DIAGNOSTICS_PREFIX = `${SUPPORT_PREFIX}/diagnostics`;
 const SUPPORT_REPORTING_PREFIX = `${SUPPORT_PREFIX}/reporting`;
 const SUPPORT_LOGS_PREFIX = `${SUPPORT_PREFIX}/logs`;
-const LEGACY_INTEGRATIONS_API_PREFIX = '/settings/integrations/api';
-const LEGACY_SETTINGS_OPERATIONS_PREFIX = '/settings/operations';
 const SECURITY_API_PREFIX = '/settings/security/api';
 const SYSTEM_BILLING_PREFIX = SELF_HOSTED_PRO_BILLING_ROUTE;
-const LEGACY_SYSTEM_PRO_PREFIX = '/settings/system-pro';
 
 const PROXMOX_AGENT_META: Record<
   AgentKey,
@@ -136,6 +136,12 @@ export function isRetiredSettingsCompatibilityPath(path: string): boolean {
   return (
     normalizedPath === RETIRED_SETTINGS_WORKLOADS_PREFIX ||
     normalizedPath.startsWith(`${RETIRED_SETTINGS_WORKLOADS_PREFIX}/`) ||
+    normalizedPath === RETIRED_SETTINGS_OPERATIONS_PREFIX ||
+    normalizedPath.startsWith(`${RETIRED_SETTINGS_OPERATIONS_PREFIX}/`) ||
+    normalizedPath === RETIRED_SETTINGS_INTEGRATIONS_API_PREFIX ||
+    normalizedPath.startsWith(`${RETIRED_SETTINGS_INTEGRATIONS_API_PREFIX}/`) ||
+    normalizedPath === RETIRED_SETTINGS_SYSTEM_PRO_PREFIX ||
+    normalizedPath.startsWith(`${RETIRED_SETTINGS_SYSTEM_PRO_PREFIX}/`) ||
     normalizedPath.startsWith(`${INFRASTRUCTURE_SYSTEMS_PREFIX}/`)
   );
 }
@@ -153,19 +159,7 @@ export function resolveCanonicalSettingsPath(path: string): string | null {
   if (normalizedPath === SUPPORT_PREFIX) {
     return SUPPORT_DIAGNOSTICS_PREFIX;
   }
-  if (normalizedPath === LEGACY_SETTINGS_OPERATIONS_PREFIX) {
-    return SUPPORT_DIAGNOSTICS_PREFIX;
-  }
-  if (normalizedPath.startsWith(`${LEGACY_SETTINGS_OPERATIONS_PREFIX}/`)) {
-    return buildLegacyOperationsSettingsPath(normalizedPath);
-  }
-  if (normalizedPath === LEGACY_INTEGRATIONS_API_PREFIX) {
-    return SECURITY_API_PREFIX;
-  }
   if (normalizedPath === SYSTEM_BILLING_PREFIX) {
-    return SELF_HOSTED_PRO_BILLING_PLAN_ROUTE;
-  }
-  if (normalizedPath === LEGACY_SYSTEM_PRO_PREFIX) {
     return SELF_HOSTED_PRO_BILLING_PLAN_ROUTE;
   }
   return normalizedPath;
@@ -185,11 +179,7 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath.includes('/settings/system-recovery')) return 'system-recovery';
   if (canonicalPath.includes('/settings/system-ai')) return 'system-ai';
   if (canonicalPath.includes('/settings/system-relay')) return 'system-relay';
-  if (
-    canonicalPath.includes(SYSTEM_BILLING_PREFIX) ||
-    canonicalPath.includes(LEGACY_SYSTEM_PRO_PREFIX)
-  )
-    return 'system-billing';
+  if (canonicalPath.includes(SYSTEM_BILLING_PREFIX)) return 'system-billing';
   if (canonicalPath.startsWith(SUPPORT_LOGS_PREFIX)) return 'support-logs';
   if (canonicalPath.startsWith(SUPPORT_REPORTING_PREFIX)) return 'support-reporting';
   if (canonicalPath.startsWith(SUPPORT_DIAGNOSTICS_PREFIX) || canonicalPath === SUPPORT_PREFIX)
@@ -202,7 +192,6 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath.includes('/settings/organization')) return 'organization-overview';
 
   if (canonicalPath.includes(SECURITY_API_PREFIX)) return 'api';
-  if (canonicalPath.includes(LEGACY_INTEGRATIONS_API_PREFIX)) return 'api';
 
   if (canonicalPath.includes('/settings/security-overview')) return 'security-overview';
   if (canonicalPath.includes('/settings/security-data-handling')) return 'security-data-handling';
@@ -262,7 +251,6 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
       return 'system-ai';
     case 'system-relay':
       return 'system-relay';
-    case 'system-pro':
     case 'system-billing':
       return 'system-billing';
     case 'diagnostics':
@@ -382,24 +370,4 @@ export function isRouteableSettingsPath(path: string): boolean {
 
 export function isInfrastructureSettingsTab(tab: SettingsTab): tab is InfrastructureSettingsTab {
   return tab === 'infrastructure-systems';
-}
-
-export function buildLegacyOperationsSettingsPath(path: string): string {
-  const normalizedPath = normalizeSettingsPath(path);
-
-  if (
-    normalizedPath === `${LEGACY_SETTINGS_OPERATIONS_PREFIX}/logs` ||
-    normalizedPath.startsWith(`${LEGACY_SETTINGS_OPERATIONS_PREFIX}/logs/`)
-  ) {
-    return SUPPORT_LOGS_PREFIX;
-  }
-
-  if (
-    normalizedPath === `${LEGACY_SETTINGS_OPERATIONS_PREFIX}/reporting` ||
-    normalizedPath.startsWith(`${LEGACY_SETTINGS_OPERATIONS_PREFIX}/reporting/`)
-  ) {
-    return SUPPORT_REPORTING_PREFIX;
-  }
-
-  return SUPPORT_DIAGNOSTICS_PREFIX;
 }
