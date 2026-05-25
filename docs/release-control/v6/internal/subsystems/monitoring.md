@@ -592,10 +592,21 @@ exercise table density, sorting, grouping, drawer behavior, and
 responsive layout out of the box: 5 Proxmox cluster + standalone nodes
 with 6 VMs and 8 LXCs each, 5 Docker/Podman hosts with 14 containers
 each, 4 standalone Pulse-managed hosts, and 3 Kubernetes clusters
-(production + staging + edge) with 5 nodes, 40 pods, 14
-deployments each, and curated native controller inventory so the
-Kubernetes platform-page overview tab shows multiple clusters and the
+(Production EU + Staging EU + Development EU; a fourth Edge / k3s
+profile is curated in `demo_scenarios.go` and instantiates when
+`K8sClusterCount` is bumped) with 5 nodes, 40 pods, 14 deployments
+each, and curated native controller inventory so the Kubernetes
+platform-page overview tab shows multiple clusters and the
 nodes/pods/deployments/controller tabs exercise multi-cluster grouping.
+Each Kubernetes cluster carries its own node-name prefix
+(`prod-euw1-k8s-*` / `stage-euw1-k8s-*` / `dev-euw1-*`), a distinct
+kubelet version, and exactly one degraded scenario — Production EU
+runs a NotReady worker (`prod-euw1-k8s-03`), Staging EU runs the
+payments-worker CrashLoopBackOff, Development EU runs the
+cron-nightly-backfill ImagePullBackOff — so the demo tells three
+distinct stories instead of three clones. The
+`TestKubernetesDemoClustersTellDistinctStories` test in
+`internal/mock/demo_scenarios_test.go` guards that distribution.
 Bumps to those defaults must keep the
 curated demo scenario's per-node hostname seasoning in
 `demo_scenarios.go` aligned (today: pve1..pve6 with regional labels,

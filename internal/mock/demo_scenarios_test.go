@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func TestBuildFixtureGraphAppliesCuratedDemoScenarioAcrossEstate(t *testing.T) {
@@ -85,6 +87,117 @@ func TestBuildFixtureGraphAppliesCuratedDemoScenarioAcrossEstate(t *testing.T) {
 	if leak := firstLegacyMockClusterLeak(graph); leak != "" {
 		t.Fatalf("expected demo scenario to replace legacy mock-cluster labels, found %s", leak)
 	}
+}
+
+// TestKubernetesDemoClustersTellDistinctStories guards the slice-F goal:
+// each curated cluster carries its own node naming and exactly one
+// degraded scenario, so four cluster screenshots don't look like four
+// copies of the same one.
+func TestKubernetesDemoClustersTellDistinctStories(t *testing.T) {
+	cfg := DefaultConfig
+	graph := buildFixtureGraph(cfg, time.Date(2026, time.April, 10, 12, 0, 0, 0, time.UTC))
+
+	clusters := graph.State.KubernetesClusters
+	if len(clusters) < 3 {
+		t.Fatalf("expected at least 3 curated Kubernetes clusters, got %d", len(clusters))
+	}
+
+	// Node-name prefixes per cluster must be distinct.
+	prefixByCluster := map[string]string{
+		"Production EU":  "prod-euw1-",
+		"Staging EU":     "stage-euw1-",
+		"Development EU": "dev-euw1-",
+	}
+	for _, cluster := range clusters {
+		prefix, ok := prefixByCluster[cluster.DisplayName]
+		if !ok {
+			continue
+		}
+		if len(cluster.Nodes) == 0 {
+			t.Fatalf("cluster %q has no nodes", cluster.DisplayName)
+		}
+		for _, node := range cluster.Nodes {
+			if !strings.HasPrefix(node.Name, prefix) {
+				t.Fatalf(
+					"cluster %q node %q does not use the curated %q prefix",
+					cluster.DisplayName, node.Name, prefix,
+				)
+			}
+		}
+	}
+
+	// Exactly one cluster carries each degraded scenario.
+	crashLoopClusters := 0
+	imagePullClusters := 0
+	notReadyClusters := 0
+	for _, cluster := range clusters {
+		if clusterHasCrashLoopPaymentsWorker(cluster) {
+			crashLoopClusters++
+		}
+		if clusterHasImagePullBackOffPod(cluster) {
+			imagePullClusters++
+		}
+		if clusterHasNotReadyNode(cluster) {
+			notReadyClusters++
+		}
+	}
+	if crashLoopClusters != 1 {
+		t.Fatalf("expected exactly one cluster with CrashLoopBackOff payments-worker, got %d", crashLoopClusters)
+	}
+	if imagePullClusters != 1 {
+		t.Fatalf("expected exactly one cluster with ImagePullBackOff pod, got %d", imagePullClusters)
+	}
+	if notReadyClusters != 1 {
+		t.Fatalf("expected exactly one cluster with a NotReady worker, got %d", notReadyClusters)
+	}
+
+	// Cluster versions must be distinct so the operator sees real
+	// version drift instead of three identical entries.
+	seenVersions := make(map[string]string, len(clusters))
+	for _, cluster := range clusters {
+		if cluster.Version == "" {
+			t.Fatalf("cluster %q has no curated version", cluster.DisplayName)
+		}
+		if other, ok := seenVersions[cluster.Version]; ok {
+			t.Fatalf("cluster %q duplicates kubelet version %q already used by %q",
+				cluster.DisplayName, cluster.Version, other)
+		}
+		seenVersions[cluster.Version] = cluster.DisplayName
+	}
+}
+
+func clusterHasCrashLoopPaymentsWorker(cluster models.KubernetesCluster) bool {
+	for _, pod := range cluster.Pods {
+		if pod.OwnerName != "payments-worker" {
+			continue
+		}
+		for _, container := range pod.Containers {
+			if !container.Ready && container.Reason == "CrashLoopBackOff" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func clusterHasImagePullBackOffPod(cluster models.KubernetesCluster) bool {
+	for _, pod := range cluster.Pods {
+		for _, container := range pod.Containers {
+			if container.Reason == "ImagePullBackOff" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func clusterHasNotReadyNode(cluster models.KubernetesCluster) bool {
+	for _, node := range cluster.Nodes {
+		if !node.Ready {
+			return true
+		}
+	}
+	return false
 }
 
 func TestBuildFixtureGraphIncludesDiscoveryContextFixtures(t *testing.T) {

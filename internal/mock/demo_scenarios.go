@@ -60,11 +60,28 @@ type demoKubernetesPodProfile struct {
 }
 
 type demoKubernetesClusterProfile struct {
-	Name        string
-	DisplayName string
-	Context     string
-	ServerSlug  string
+	Name            string
+	DisplayName     string
+	Context         string
+	ServerSlug      string
+	Version         string
+	NodeProfiles    []demoKubernetesNodeProfile
+	OfflineNodeName string
+	// Scenario selects which degraded story this cluster carries.
+	// "" = all-healthy. Each value flips a specific pod profile's
+	// container reason inside applyDemoKubernetesScenario without
+	// polluting the global pod profile arrays.
+	Scenario demoKubernetesScenario
 }
+
+type demoKubernetesScenario string
+
+const (
+	demoK8sScenarioHealthy          demoKubernetesScenario = ""
+	demoK8sScenarioNotReadyWorker   demoKubernetesScenario = "not-ready-worker"
+	demoK8sScenarioCrashLoopBackOff demoKubernetesScenario = "crashloopbackoff"
+	demoK8sScenarioImagePullBackOff demoKubernetesScenario = "imagepullbackoff"
+)
 
 var demoVMProfiles = []demoWorkloadProfile{
 	{Name: "checkout-web-01", Tags: []string{"production", "web", "customer-facing"}, BackupAge: 6 * time.Hour},
@@ -121,17 +138,75 @@ var demoDockerHostProfiles = []demoDockerHostProfile{
 	},
 }
 
-var demoKubernetesNodeProfiles = []demoKubernetesNodeProfile{
-	{Name: "prod-euw1-k8s-01", Roles: []string{"control-plane"}},
-	{Name: "prod-euw1-k8s-02", Roles: []string{"worker"}},
-	{Name: "prod-euw1-k8s-03", Roles: []string{"worker"}},
-}
-
+// Per-cluster demo identities. Each cluster carries its own node naming
+// scheme, kubelet version, and a single degraded scenario so the four
+// clusters tell distinct stories rather than each rendering an identical
+// CrashLoopBackOff payments-worker. Production EU stays at "real outage"
+// (NotReady worker), Staging EU stays at "deploy that crashed before
+// promotion" (CrashLoopBackOff), Development EU stays at "forgot to push
+// the image" (ImagePullBackOff), Edge stays healthy.
 var demoKubernetesClusterProfiles = []demoKubernetesClusterProfile{
-	{Name: "production-eu", DisplayName: "Production EU", Context: "production-eu-context", ServerSlug: "production-eu"},
-	{Name: "staging-eu", DisplayName: "Staging EU", Context: "staging-eu-context", ServerSlug: "staging-eu"},
-	{Name: "development-eu", DisplayName: "Development EU", Context: "development-eu-context", ServerSlug: "development-eu"},
-	{Name: "edge", DisplayName: "Edge", Context: "edge-context", ServerSlug: "edge"},
+	{
+		Name:        "production-eu",
+		DisplayName: "Production EU",
+		Context:     "production-eu-context",
+		ServerSlug:  "production-eu",
+		Version:     "v1.30.4",
+		NodeProfiles: []demoKubernetesNodeProfile{
+			{Name: "prod-euw1-k8s-01", Roles: []string{"control-plane"}},
+			{Name: "prod-euw1-k8s-02", Roles: []string{"worker"}},
+			{Name: "prod-euw1-k8s-03", Roles: []string{"worker"}},
+			{Name: "prod-euw1-k8s-04", Roles: []string{"worker"}},
+			{Name: "prod-euw1-k8s-05", Roles: []string{"worker"}},
+		},
+		OfflineNodeName: "prod-euw1-k8s-03",
+		Scenario:        demoK8sScenarioNotReadyWorker,
+	},
+	{
+		Name:        "staging-eu",
+		DisplayName: "Staging EU",
+		Context:     "staging-eu-context",
+		ServerSlug:  "staging-eu",
+		Version:     "v1.31.2",
+		NodeProfiles: []demoKubernetesNodeProfile{
+			{Name: "stage-euw1-k8s-01", Roles: []string{"control-plane"}},
+			{Name: "stage-euw1-k8s-02", Roles: []string{"worker"}},
+			{Name: "stage-euw1-k8s-03", Roles: []string{"worker"}},
+			{Name: "stage-euw1-k8s-04", Roles: []string{"worker"}},
+			{Name: "stage-euw1-k8s-05", Roles: []string{"worker"}},
+		},
+		Scenario: demoK8sScenarioCrashLoopBackOff,
+	},
+	{
+		Name:        "development-eu",
+		DisplayName: "Development EU",
+		Context:     "development-eu-context",
+		ServerSlug:  "development-eu",
+		Version:     "v1.32.0-rc.1",
+		NodeProfiles: []demoKubernetesNodeProfile{
+			{Name: "dev-euw1-01", Roles: []string{"control-plane"}},
+			{Name: "dev-euw1-02", Roles: []string{"worker"}},
+			{Name: "dev-euw1-03", Roles: []string{"worker"}},
+			{Name: "dev-euw1-04", Roles: []string{"worker"}},
+			{Name: "dev-euw1-05", Roles: []string{"worker"}},
+		},
+		Scenario: demoK8sScenarioImagePullBackOff,
+	},
+	{
+		Name:        "edge",
+		DisplayName: "Edge",
+		Context:     "edge-context",
+		ServerSlug:  "edge",
+		Version:     "v1.29.6+k3s1",
+		NodeProfiles: []demoKubernetesNodeProfile{
+			{Name: "edge-pop-lax-01", Roles: []string{"control-plane"}},
+			{Name: "edge-pop-nrt-01", Roles: []string{"worker"}},
+			{Name: "edge-pop-fra-01", Roles: []string{"worker"}},
+			{Name: "edge-pop-iad-01", Roles: []string{"worker"}},
+			{Name: "edge-pop-sin-01", Roles: []string{"worker"}},
+		},
+		Scenario: demoK8sScenarioHealthy,
+	},
 }
 
 var demoKubernetesDeploymentProfiles = []demoKubernetesDeploymentProfile{
@@ -540,23 +615,23 @@ func applyDemoKubernetesScenario(state *models.StateSnapshot, now time.Time) {
 		cluster.Context = profile.Context
 		cluster.Server = fmt.Sprintf("https://%s.k8s.local:6443", profile.ServerSlug)
 		cluster.Status = "online"
+		if strings.TrimSpace(profile.Version) != "" {
+			cluster.Version = profile.Version
+		}
 
-		// The last cluster simulates a worker outage: nodes that resolve to the
-		// `prod-euw1-k8s-03` profile are reported NotReady, which cascades to a
-		// degraded host status in syncMockKubernetesNodeHosts.
-		offlineWorkerProfile := ""
-		if clusterIndex == len(state.KubernetesClusters)-1 {
-			offlineWorkerProfile = "prod-euw1-k8s-03"
+		nodeProfiles := profile.NodeProfiles
+		if len(nodeProfiles) == 0 {
+			nodeProfiles = demoKubernetesClusterProfiles[0].NodeProfiles
 		}
 		nodeNameMap := make(map[string]string, len(cluster.Nodes))
 		for i := range cluster.Nodes {
-			profile := demoKubernetesNodeProfiles[i%len(demoKubernetesNodeProfiles)]
+			nodeProfile := nodeProfiles[i%len(nodeProfiles)]
 			oldName := cluster.Nodes[i].Name
-			cluster.Nodes[i].Name = profile.Name
-			cluster.Nodes[i].Ready = profile.Name != offlineWorkerProfile
+			cluster.Nodes[i].Name = nodeProfile.Name
+			cluster.Nodes[i].Ready = nodeProfile.Name != profile.OfflineNodeName
 			cluster.Nodes[i].Unschedulable = false
-			cluster.Nodes[i].Roles = append([]string(nil), profile.Roles...)
-			nodeNameMap[oldName] = profile.Name
+			cluster.Nodes[i].Roles = append([]string(nil), nodeProfile.Roles...)
+			nodeNameMap[oldName] = nodeProfile.Name
 		}
 
 		for i := range state.Hosts {
@@ -567,66 +642,74 @@ func applyDemoKubernetesScenario(state *models.StateSnapshot, now time.Time) {
 			}
 		}
 
+		clusterCarriesDeployCrash := profile.Scenario == demoK8sScenarioCrashLoopBackOff
 		for i := range cluster.Deployments {
-			profile := demoKubernetesDeploymentProfiles[i%len(demoKubernetesDeploymentProfiles)]
-			cluster.Deployments[i].Name = profile.Name
-			cluster.Deployments[i].Namespace = profile.Namespace
-			cluster.Deployments[i].DesiredReplicas = profile.DesiredReplicas
-			cluster.Deployments[i].UpdatedReplicas = profile.ReadyReplicas
-			cluster.Deployments[i].ReadyReplicas = profile.ReadyReplicas
-			cluster.Deployments[i].AvailableReplicas = profile.ReadyReplicas
+			deploymentProfile := demoKubernetesDeploymentProfiles[i%len(demoKubernetesDeploymentProfiles)]
+			desired := deploymentProfile.DesiredReplicas
+			ready := deploymentProfile.ReadyReplicas
+			// payments-worker is under-replicated only in the cluster that
+			// carries the crashloop story; everywhere else it runs healthy.
+			if deploymentProfile.Name == "payments-worker" && !clusterCarriesDeployCrash {
+				ready = desired
+			}
+			cluster.Deployments[i].Name = deploymentProfile.Name
+			cluster.Deployments[i].Namespace = deploymentProfile.Namespace
+			cluster.Deployments[i].DesiredReplicas = desired
+			cluster.Deployments[i].UpdatedReplicas = ready
+			cluster.Deployments[i].ReadyReplicas = ready
+			cluster.Deployments[i].AvailableReplicas = ready
 			cluster.Deployments[i].Labels = map[string]string{
-				"app.kubernetes.io/name": profile.Name,
+				"app.kubernetes.io/name": deploymentProfile.Name,
 				"cluster":                cluster.ID,
 				"environment":            "production",
 			}
 		}
 
 		for i := range cluster.Pods {
-			profile := demoKubernetesPodProfiles[i%len(demoKubernetesPodProfiles)]
+			podProfile := applyDemoKubernetesPodScenario(
+				demoKubernetesPodProfiles[i%len(demoKubernetesPodProfiles)],
+				profile.Scenario,
+			)
 			pod := &cluster.Pods[i]
-			pod.Name = profile.Name
-			pod.Namespace = profile.Namespace
-			if profile.NodeIndex >= 0 && profile.NodeIndex < len(cluster.Nodes) {
-				pod.NodeName = cluster.Nodes[profile.NodeIndex].Name
+			pod.Name = podProfile.Name
+			pod.Namespace = podProfile.Namespace
+			if podProfile.NodeIndex >= 0 && podProfile.NodeIndex < len(cluster.Nodes) {
+				pod.NodeName = cluster.Nodes[podProfile.NodeIndex].Name
 			} else if renamed, ok := nodeNameMap[pod.NodeName]; ok {
 				pod.NodeName = renamed
 			}
-			pod.OwnerKind = profile.OwnerKind
-			pod.OwnerName = profile.OwnerName
-			pod.Phase = profile.Phase
-			pod.Reason = profile.Reason
-			pod.Message = profile.Message
-			pod.Restarts = int(profile.Restarts)
+			pod.OwnerKind = podProfile.OwnerKind
+			pod.OwnerName = podProfile.OwnerName
+			pod.Phase = podProfile.Phase
+			pod.Reason = podProfile.Reason
+			pod.Message = podProfile.Message
+			pod.Restarts = int(podProfile.Restarts)
 			if len(pod.Containers) == 0 {
 				pod.Containers = []models.KubernetesPodContainer{{}}
 			}
 			for j := range pod.Containers {
-				pod.Containers[j].Name = profile.Container
-				pod.Containers[j].Image = profile.Image
-				pod.Containers[j].RestartCount = profile.Restarts
-				if profile.ContainerOK {
+				pod.Containers[j].Name = podProfile.Container
+				pod.Containers[j].Image = podProfile.Image
+				pod.Containers[j].RestartCount = podProfile.Restarts
+				if podProfile.ContainerOK {
 					pod.Containers[j].Ready = true
 					pod.Containers[j].State = "running"
 					pod.Containers[j].Reason = ""
 					pod.Containers[j].Message = ""
 				} else {
 					pod.Containers[j].Ready = false
-					switch strings.ToLower(strings.TrimSpace(profile.Phase)) {
-					case "pending":
-						pod.Containers[j].State = "waiting"
-						pod.Containers[j].Reason = "PodInitializing"
-					default:
-						pod.Containers[j].State = "waiting"
+					pod.Containers[j].State = "waiting"
+					pod.Containers[j].Reason = podProfile.Reason
+					if pod.Containers[j].Reason == "" {
 						pod.Containers[j].Reason = "CrashLoopBackOff"
 					}
-					pod.Containers[j].Message = profile.Message
+					pod.Containers[j].Message = podProfile.Message
 				}
 			}
 			pod.Labels = map[string]string{
-				"app.kubernetes.io/name":     profile.OwnerName,
+				"app.kubernetes.io/name":     podProfile.OwnerName,
 				"app.kubernetes.io/part-of":  "pulse-demo-estate",
-				"app.kubernetes.io/instance": profile.OwnerName,
+				"app.kubernetes.io/instance": podProfile.OwnerName,
 			}
 		}
 
@@ -635,6 +718,47 @@ func applyDemoKubernetesScenario(state *models.StateSnapshot, now time.Time) {
 	}
 
 	syncMockKubernetesNodeHosts(state)
+}
+
+// applyDemoKubernetesPodScenario rewrites a global pod profile so the
+// cluster's chosen scenario is the only place its degraded state appears.
+// Production EU stays healthy across the board; Staging EU keeps the
+// payments-worker CrashLoopBackOff; Development EU re-labels the Pending
+// cron-nightly-backfill pod as ImagePullBackOff to tell a distinct
+// "forgot to push the image" story.
+func applyDemoKubernetesPodScenario(
+	profile demoKubernetesPodProfile,
+	scenario demoKubernetesScenario,
+) demoKubernetesPodProfile {
+	switch scenario {
+	case demoK8sScenarioCrashLoopBackOff:
+		return profile
+	case demoK8sScenarioImagePullBackOff:
+		if profile.OwnerName == "payments-worker" {
+			profile.ContainerOK = true
+			profile.Reason = ""
+			profile.Message = ""
+			profile.Restarts = 0
+		}
+		if profile.OwnerName == "cron-nightly-backfill" {
+			// Phase must be Running so the curated reconciler doesn't
+			// "recover" the pod and wipe the container's waiting state.
+			profile.Phase = "Running"
+			profile.Reason = "ImagePullBackOff"
+			profile.Message = "Back-off pulling image " + profile.Image
+		}
+		return profile
+	default:
+		// healthy / not-ready-worker scenarios: scrub any pod-level
+		// crashloop story so only the cluster's own scenario shows.
+		if profile.OwnerName == "payments-worker" {
+			profile.ContainerOK = true
+			profile.Reason = ""
+			profile.Message = ""
+			profile.Restarts = 0
+		}
+		return profile
+	}
 }
 
 func demoKubernetesClusterProfileFor(index int, cluster models.KubernetesCluster) demoKubernetesClusterProfile {
