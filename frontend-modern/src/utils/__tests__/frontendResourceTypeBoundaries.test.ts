@@ -142,7 +142,6 @@ import environmentLockPresentationSource from '@/utils/environmentLockPresentati
 import dockerRuntimeSettingsCardSource from '@/components/Settings/DockerRuntimeSettingsCard.tsx?raw';
 import operationsPageRouteSource from '@/pages/Operations.tsx?raw';
 import discoveryTargetSource from '@/utils/discoveryTarget.ts?raw';
-import infrastructureEmptyStatePresentationSource from '@/utils/infrastructureEmptyStatePresentation.ts?raw';
 import recoveryComponentSource from '@/components/Recovery/Recovery.tsx?raw';
 import recoveryActivitySectionSource from '@/components/Recovery/RecoveryActivitySection.tsx?raw';
 import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
@@ -308,6 +307,7 @@ import securityAuthPresentationSource from '@/utils/securityAuthPresentation.ts?
 import resourceDetailDrawerShellSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import resourceDetailDrawerDebugSource from '@/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx?raw';
+import resourceDetailSummarySource from '@/components/Infrastructure/ResourceDetailSummary.tsx?raw';
 import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
 import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
 import infrastructureSummaryModelSource from '@/components/Infrastructure/infrastructureSummaryModel.ts?raw';
@@ -574,10 +574,6 @@ import remediationPresentationSource from '@/utils/remediationPresentation.ts?ra
 import aiChatPresentationSource from '@/utils/aiChatPresentation.ts?raw';
 import infrastructureDetailsDrawerSource from '@/components/shared/InfrastructureDetailsDrawer.tsx?raw';
 import infrastructureDetailsDrawerModelSource from '@/components/shared/infrastructureDetailsDrawerModel.ts?raw';
-import infrastructurePageSurfaceSource from '@/features/infrastructure/InfrastructurePageSurface.tsx?raw';
-import infrastructurePageModelSource from '@/features/infrastructure/infrastructurePageModel.ts?raw';
-import infrastructurePageStateSource from '@/features/infrastructure/useInfrastructurePageState.ts?raw';
-import infrastructurePageRouteStateSource from '@/features/infrastructure/useInfrastructurePageRouteState.ts?raw';
 import infrastructureDetailsDrawerStateSource from '@/components/shared/useInfrastructureDetailsDrawerState.ts?raw';
 
 const aiSettingsSource = [
@@ -599,12 +595,6 @@ const resourceDetailDrawerSource = [
   resourceDetailDrawerHistoryStateSource,
   resourceDetailDrawerDerivedStateSource,
   resourceDetailDrawerStateSource,
-].join('\n');
-
-const infrastructurePageSource = [
-  infrastructurePageSurfaceSource,
-  infrastructurePageRouteStateSource,
-  infrastructurePageStateSource,
 ].join('\n');
 
 describe('frontend resource type boundaries', () => {
@@ -959,9 +949,9 @@ describe('frontend resource type boundaries', () => {
     expect(guestRowCellsSource).toContain('useTooltip');
     expect(guestRowSource).not.toContain('buildGuestId');
     expect(tagBadgesSource).toContain("from '@/components/shared/Tooltip'");
-    expect(resourceDetailDrawerOverviewSource).toContain("from '@/components/shared/TagBadges'");
+    expect(resourceDetailSummarySource).toContain("from '@/components/shared/TagBadges'");
     expect(resourceDetailDrawerOverviewSource).toContain('getAllFilterOptionLabel');
-    expect(resourceDetailDrawerOverviewSource).not.toContain(
+    expect(resourceDetailSummarySource).not.toContain(
       "from '@/components/Workloads/TagBadges'",
     );
     expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerOverviewTab'");
@@ -4583,63 +4573,6 @@ describe('frontend resource type boundaries', () => {
     );
     expect(workloadGuestPresentationSource).toContain(
       'export function getWorkloadGuestDiskStatusMessage',
-    );
-  });
-
-  it('keeps infrastructure page empty-state copy in a shared presentation utility', () => {
-    expect(infrastructurePageSurfaceSource).toContain('useInfrastructurePageState');
-    expect(infrastructurePageSurfaceSource).toContain('useNavigate');
-    expect(infrastructurePageSurfaceSource).not.toContain('useLocation(');
-    expect(infrastructurePageSurfaceSource).not.toContain('buildInfrastructurePath(');
-    expect(infrastructurePageStateSource).toContain('useInfrastructurePageRouteState');
-    expect(infrastructurePageStateSource).toContain('buildInfrastructurePageFilterDerivation');
-    expect(infrastructurePageStateSource).not.toContain('useLocation(');
-    expect(infrastructurePageStateSource).not.toContain('useNavigate(');
-    expect(infrastructurePageStateSource).not.toContain('parseInfrastructureLinkSearch(');
-    expect(infrastructurePageStateSource).not.toContain('buildInfrastructurePath(');
-    expect(infrastructurePageStateSource).not.toContain('areSearchParamsEquivalent(');
-    expect(infrastructurePageStateSource).not.toContain('collectAvailableSources(');
-    expect(infrastructurePageStateSource).not.toContain('collectAvailableStatuses(');
-    expect(infrastructurePageStateSource).not.toContain('buildStatusOptions(');
-    expect(infrastructurePageStateSource).not.toContain('tokenizeSearch(');
-    expect(infrastructurePageStateSource).not.toContain('filterResources(');
-    expect(infrastructurePageRouteStateSource).toContain('useLocation');
-    expect(infrastructurePageRouteStateSource).toContain('useNavigate');
-    expect(infrastructurePageRouteStateSource).toContain('parseInfrastructureLinkSearch');
-    expect(infrastructurePageRouteStateSource).toContain('buildInfrastructurePath');
-    expect(infrastructurePageRouteStateSource).toContain('areSearchParamsEquivalent');
-    expect(infrastructurePageModelSource).toContain(
-      'export function buildInfrastructurePageFilterDerivation',
-    );
-    expect(infrastructurePageModelSource).toContain('collectAvailableSources');
-    expect(infrastructurePageModelSource).toContain('collectAvailableStatuses');
-    expect(infrastructurePageModelSource).toContain('buildStatusOptions');
-    expect(infrastructurePageModelSource).toContain('tokenizeSearch');
-    expect(infrastructurePageModelSource).toContain('filterResources');
-    expect(infrastructurePageSource).toContain('getInfrastructureEmptyState');
-    expect(infrastructurePageSource).toContain('getInfrastructureFilterEmptyState');
-    expect(infrastructurePageSource).toContain('getInfrastructureLoadFailureState');
-    expect(infrastructurePageSource).not.toContain('No infrastructure resources yet');
-    expect(infrastructurePageSource).not.toContain('No resources match filters');
-    expect(infrastructurePageSource).not.toContain(
-      'Add Proxmox VE nodes or install the Pulse agent on your infrastructure to start monitoring.',
-    );
-    expect(infrastructurePageSource).not.toContain(
-      'Try adjusting the search, source, or status filters.',
-    );
-    expect(infrastructurePageSource).not.toContain('Unable to load infrastructure');
-    expect(infrastructurePageSource).not.toContain(
-      'We couldn’t fetch unified resources. Check connectivity or retry.',
-    );
-    expect(infrastructurePageSource).not.toContain('Retry');
-    expect(infrastructureEmptyStatePresentationSource).toContain(
-      'export function getInfrastructureEmptyState',
-    );
-    expect(infrastructureEmptyStatePresentationSource).toContain(
-      'export function getInfrastructureFilterEmptyState',
-    );
-    expect(infrastructureEmptyStatePresentationSource).toContain(
-      'export function getInfrastructureLoadFailureState',
     );
   });
 

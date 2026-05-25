@@ -1405,9 +1405,10 @@ the canonical monitored-system blocked payload.
     boundary: when
     `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`
     receives a successful connected-agent lookup result, the canonical install
-    flow must expose direct navigation into `/infrastructure` and
-    `/settings/infrastructure/operations` rather than leaving the operator on a
-    transport-only status readout.
+    flow must expose direct navigation into `/settings/infrastructure` and the
+    first visible platform/runtime page rather than leaving the operator on a
+    transport-only status readout or reviving the removed `/infrastructure`
+    route.
 21. Keep the shared first-host detection contract explicit on `/api/state` as
     used by
     `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`:

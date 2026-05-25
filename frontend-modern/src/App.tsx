@@ -41,7 +41,6 @@ import { useKioskMode } from '@/hooks/useKioskMode';
 import {
   AGENTS_PATH,
   DOCKER_PATH,
-  INFRASTRUCTURE_PATH,
   KUBERNETES_PATH,
   PATROL_PATH,
   PROXMOX_PATH,
@@ -83,9 +82,6 @@ const AlertsPage = lazy(() =>
   import('./pages/Alerts').then((module) => ({ default: module.Alerts })),
 );
 const SettingsPage = lazy(() => import('./components/Settings/Settings'));
-const InfrastructurePage = lazy(
-  () => import('./features/infrastructure/InfrastructurePageSurface'),
-);
 const WorkloadsPage = lazy(() =>
   import('./components/Workloads/WorkloadsSurface').then((module) => ({
     default: () => <module.WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />,
@@ -555,8 +551,6 @@ function App() {
       <Route path="/preview/setup-complete" component={SetupCompletionPreviewPage} />
       <Route path="/login" component={RuntimeHomePage} />
       <Route path="/" component={RuntimeHomePage} />
-      <Route path={INFRASTRUCTURE_PATH} component={InfrastructurePage} />
-      <Route path={`${INFRASTRUCTURE_PATH}/*`} component={InfrastructurePage} />
       <Route path={WORKLOADS_PATH} component={WorkloadsPage} />
       <Route path={`${WORKLOADS_PATH}/*`} component={WorkloadsPage} />
       <Route path={STORAGE_PATH} component={StoragePage} />

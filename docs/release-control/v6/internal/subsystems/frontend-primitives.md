@@ -415,11 +415,12 @@ not a replacement status card, CTA band, or page-local nested card.
    labels operator-readable: count-led labels may aggregate repeated resources,
    but uncountable or category-like resource types such as storage must use
    resource wording instead of naive pluralization.
-   Infrastructure filter chrome under `frontend-modern/src/features/infrastructure/`
-   must use mode-oriented labels for table presentation controls: grouped table
-   mode is `Grouped`, not `Cluster`, because cluster remains a
-   platform/resource concept for Proxmox, Kubernetes, and similar inventory
-   details.
+   Infrastructure table chrome on active platform/runtime pages must use
+   mode-oriented labels for table presentation controls: grouped table mode is
+   `Grouped`, not `Cluster`, because cluster remains a platform/resource
+   concept for Proxmox, Kubernetes, and similar inventory details. The retired
+   top-level infrastructure feature directory must not be recreated for table
+   chrome ownership.
    Settings shell search copy belongs to
    `frontend-modern/src/utils/settingsShellPresentation.ts`. Shared settings
    search must not display non-actionable shortcut chips such as `Any key`;
@@ -460,7 +461,9 @@ not a replacement status card, CTA band, or page-local nested card.
    frontend primitives must not register `/cloud` or `/cloud/signup` as public
    product-runtime routes, because Cloud signup belongs to Pulse Account and
    the Cloud control plane rather than a local in-product trial page.
-   Compatibility top-level operator routes such as `/infrastructure`,
+   The former top-level `/infrastructure` operator route never shipped as a
+   stable v6 surface and must remain unregistered instead of being kept as a
+   compatibility redirect. Other retired top-level operator routes such as
    `/workloads`, `/storage`, `/recovery`, and `/ceph` may remain registered in
    `frontend-modern/src/App.tsx` only as thin routes into their owning product
    surfaces or canonical redirect targets. They must not become preloaded
@@ -798,16 +801,16 @@ not a replacement status card, CTA band, or page-local nested card.
    carries only the connection-scoped `SystemManageAction` variant —
    `inventory-active` / `inventory-ignored` manage kinds must not
    return.
-   Frontend infrastructure feature surfaces inherit that same source/platform
-   vocabulary. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-   must keep the operator-facing resource filter on `Platform`, not `Source`,
-   while the infrastructure table labels its primary identity column as
-   `System`. Lower-level unified-resource contracts preserve merged-source
-   detail for tooltips, accessibility metadata, and routing. Collection methods
-   such as Pulse Agent and runtime capabilities such as Docker may appear as
-   option or detail labels, but they must not become the primary top-level
-   system wording when a provider/API platform or reported host OS/appliance
-   identity better explains what the operator is looking at.
+   Active infrastructure settings and platform/runtime surfaces inherit that
+   same source/platform vocabulary. Settings may label configured ingestion
+   entries and endpoint probes as `Source`, while resource tables label their
+   primary identity column as `System`. Lower-level unified-resource contracts
+   preserve merged-source detail for tooltips, accessibility metadata, and
+   routing. Collection methods such as Pulse Agent and runtime capabilities
+   such as Docker may appear as option or detail labels, but they must not
+   become the primary top-level system wording when a provider/API platform or
+   reported host OS/appliance identity better explains what the operator is
+   looking at.
 6. Keep Proxmox deep-link route selection on the shared settings-navigation boundary. `frontend-modern/src/components/Settings/settingsNavigationModel.ts` and `frontend-modern/src/components/Settings/useSettingsNavigation.ts` must treat the canonical PBS and PMG Proxmox deep links as agent-selection authority even though those URLs resolve to the shared `infrastructure-operations` tab. Reloading or remounting on a PBS or PMG deep link must not silently fall back to the PVE selector state.
 7. Keep shared storage feature presenters on canonical platform truth. When reusable storage presenters under `frontend-modern/src/features/storageBackups/` classify canonical resources for the shared storage route, API-backed virtualization datastores such as VMware must stay inventory-only datastores instead of inheriting PBS-specific backup-repository or protected-target copy from older fallback branches.
    Those reusable storage presenters must also keep primary issue copy separate
@@ -1311,11 +1314,11 @@ not a replacement status card, CTA band, or page-local nested card.
     or proposed fix, must pass `autonomousMode:false` as a request-local
     override so the drawer shows approval-required posture without mutating the
     persistent Assistant control setting.
-11. Keep shared filter primitives coherent with route-owned option hydration.
-    Feature shells such as `frontend-modern/src/features/infrastructure/`
-    must keep a route-owned canonical option visible in shared selects like
-    `LabeledFilterSelect` even when current results do not contain that
-    option, so provider-scoped handoffs do not flash back to `All`.
+11. Keep shared filter primitives coherent with source-owned option hydration.
+    Active platform/runtime pages and Settings infrastructure surfaces must keep
+    canonical options visible in shared filter controls even when current
+    results do not contain that option, so provider- or endpoint-scoped
+    handoffs do not flash back to generic host-only language.
 12. Keep the first welcome screen in
     `frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx`
     explicit about operator context. The shell must explain that the bootstrap
@@ -1494,13 +1497,12 @@ not a replacement status card, CTA band, or page-local nested card.
     `frontend-modern/src/components/shared/useUpgradeNavigation.ts` instead of
     guessing from labels, hardcoding `target="_blank"`, or calling
     `window.open(...)` from each feature surface.
-35. Keep same-shell infrastructure route transitions on retained shared state.
-    `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-    may show its full-page loading shell only before the first compatible
-    resource snapshot exists; once a fresh canonical snapshot is already
-    present in the shared app shell, top-level tab switches must reuse that
-    state boundary instead of flashing a transient infrastructure page
-    takeover between tabs.
+35. Keep same-shell platform/runtime route transitions on retained shared state.
+    Active infrastructure consumers may show full-page loading only before the
+    first compatible resource snapshot exists; once a fresh canonical snapshot
+    is already present in the shared app shell, top-level platform/runtime tab
+    switches must reuse that state boundary instead of flashing a transient
+    page takeover between tabs.
 36. Keep self-hosted paid-service prompts opt-in at the shared shell layer.
     `settingsNavCatalog.ts`, `settingsNavVisibility.ts`, shared upgrade link
     primitives, trial banners, monitored-system warning banners, history-lock
@@ -2023,21 +2025,15 @@ handoff remains limited to explicit Plans, hosted, activation, recovery, or
 support surfaces; feature gates may show neutral "View plans" links through
 `frontend-modern/src/utils/upgradePresentation.ts` only where presentation
 policy allows commercial discovery.
-Top-level route files are now also expected to stay thin when a feature owns
-the real product surface. `frontend-modern/src/pages/Infrastructure.tsx` now
-acts only as the route boundary, while
-`frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-owns the shell, `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
-owns page-control composition, persistence, and route composition,
-`frontend-modern/src/features/infrastructure/infrastructurePageModel.ts`
-owns filter/search/catalog derivation, and
-`frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
-owns infrastructure route/deep-link synchronization. Future feature
-surfaces under `frontend-modern/src/features/` should follow that same pattern
-instead of letting page files accumulate route sync, filter, and modal
-orchestration inline.
-The infrastructure feature state owner may opt into websocket-first unified
-resource hydration only when it also schedules canonical REST revalidation
+Top-level route files are now expected to stay thin when a feature owns the
+real product surface, but the former `/infrastructure` surface is not one of
+those compatibility cases. It never shipped as a stable v6 route, so
+`frontend-modern/src/App.tsx` must not register it and future feature surfaces
+must extend Settings infrastructure, platform/runtime pages, or shared
+Infrastructure components instead of recreating
+`frontend-modern/src/features/infrastructure/` as a hidden page shell.
+Infrastructure resource consumers may opt into websocket-first unified
+resource hydration only when they also schedule canonical REST revalidation
 after the first-paint settle window; shared route composition must not re-route
 the table through a blocking resource fetch just to confirm infrastructure that
 the realtime store has already reported. Authenticated cold starts must render
@@ -3421,7 +3417,6 @@ path inside Infrastructure.
 `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
 `frontend-modern/src/components/Settings/settingsNavigationModel.ts`,
 `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`,
-`frontend-modern/src/utils/infrastructureEmptyStatePresentation.ts`, and
 adjacent setup guidance must use `Add infrastructure` as the operator-facing
 first-run label for API-backed onboarding, resolve that label to the shared
 `Infrastructure` destination and its inline `ConnectionEditor` add flow, and
@@ -3447,13 +3442,14 @@ summary vocabulary for connection health and contribution counts. While VMware
 remains admitted rather than supported, shared settings primitives must render
 its source-picker card with the manifest-derived preview badge and keep
 supported-source empty-state copy from listing VMware as available now.
-That same shared filter-presentation boundary also owns infrastructure
-route-filter continuity. `frontend-modern/src/features/infrastructure/`
-must keep a route-owned canonical source option such as `truenas` visible in
-the shared `LabeledFilterSelect` even when current unified-resource results do
-not contain that source, so platform handoffs from settings and other
-surfaces do not flash back to `All` while the operator is still in a
-provider-scoped investigation flow.
+That same shared filter-presentation boundary also owns infrastructure source
+continuity on active surfaces. Settings infrastructure and platform/runtime
+pages must keep known canonical source options such as `truenas` and
+`availability` visible when configuration or route context establishes them,
+even when current unified-resource results do not contain that source, so
+platform handoffs from settings and other surfaces do not flash back to
+generic host-only language while the operator is still in a provider- or
+endpoint-scoped investigation flow.
 That same shared feature-presentation boundary also owns storage disk-detail
 fallback messaging in `frontend-modern/src/features/storageBackups/`. Shared
 detail presenters must describe the actual capability or identity gap that

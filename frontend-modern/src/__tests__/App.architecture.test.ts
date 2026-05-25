@@ -38,21 +38,19 @@ describe('App architecture', () => {
     expect(routePreloadSource).toContain('PATROL_PATH,');
     // Legacy top-level routes (Infrastructure/Workloads/Storage/Recovery/Ceph)
     // were retired as primary nav tabs when navigation moved to platform-first.
-    // Keep them out of shell preloading, but leave lightweight route
-    // compatibility wired through the current component-owned surfaces so
-    // deep links and managed-dev browser proofs do not land on Not Found.
+    // Infrastructure never shipped as a stable top-level route, so it must not
+    // remain wired as a hidden compatibility surface.
     expect(routePreloadSource).not.toContain('ROOT_INFRASTRUCTURE_PATH');
     expect(routePreloadSource).not.toContain('ROOT_WORKLOADS_PATH');
     expect(routePreloadSource).not.toContain('RECOVERY_ROUTE_PATH');
     expect(routePreloadSource).not.toContain('STORAGE_PATH');
-    expect(appSource).toContain('const InfrastructurePage = lazy(');
-    expect(appSource).toContain("import('./features/infrastructure/InfrastructurePageSurface')");
+    expect(appSource).not.toContain('const InfrastructurePage = lazy(');
+    expect(appSource).not.toContain("import('./features/infrastructure/InfrastructurePageSurface')");
+    expect(appSource).not.toContain('component={InfrastructurePage}');
+    expect(appSource).not.toContain('INFRASTRUCTURE_PATH');
     expect(appSource).toContain("import('./components/Workloads/WorkloadsSurface')");
     expect(appSource).toContain("import('./components/Storage/Storage')");
     expect(appSource).toContain("import('./components/Recovery/Recovery')");
-    expect(appSource).toContain(
-      '<Route path={INFRASTRUCTURE_PATH} component={InfrastructurePage} />',
-    );
     expect(appSource).toContain('<Route path={WORKLOADS_PATH} component={WorkloadsPage} />');
     expect(appSource).toContain('<Route path={STORAGE_PATH} component={StoragePage} />');
     expect(appSource).toContain('<Route path={RECOVERY_PATH} component={RecoveryPage} />');

@@ -992,9 +992,11 @@ profile and assignment columns, but embedded table framing must route through
     platform-management shell. The secondary agent handoff must land on
     `/settings/infrastructure?add=agent`.
     When the first host reports successfully, the install workflow must treat
-    that as a completion handoff with direct navigation into `/infrastructure`
-    and `/settings/infrastructure/operations` instead of leaving operators on a
-    generic lookup result. When the workspace starts from zero active connected
+    that as a completion handoff with direct navigation into
+    `/settings/infrastructure` and the first visible platform/runtime page
+    instead of leaving operators on a generic lookup result or reviving the
+    removed `/infrastructure` route. When the workspace starts from zero
+    active connected
     infrastructure and install commands are available, the same lifecycle path
     must auto-watch the canonical `/api/state` projection for the first
     reporting host rather than requiring a brand-new operator to know and type

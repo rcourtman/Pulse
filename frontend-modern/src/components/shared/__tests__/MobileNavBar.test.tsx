@@ -12,11 +12,9 @@ window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
   return 1;
 }) as typeof window.requestAnimationFrame;
 
-const InfrastructureIcon: Component<{ class?: string }> = (props) => (
-  <span class={props.class}>IN</span>
-);
 const AgentsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>AG</span>;
 const ProxmoxIcon: Component<{ class?: string }> = (props) => <span class={props.class}>PX</span>;
+const WorkloadsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>WO</span>;
 const StorageIcon: Component<{ class?: string }> = (props) => <span class={props.class}>ST</span>;
 const AlertsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>AL</span>;
 const SettingsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>SE</span>;
@@ -91,14 +89,14 @@ describe('MobileNavBar', () => {
         activeTab={() => null}
         primaryTabs={() => [
           {
-            id: 'infrastructure',
-            label: 'Infrastructure',
-            route: '/infrastructure',
+            id: 'workloads',
+            label: 'Workloads',
+            route: '/workloads',
             settingsRoute: '/settings',
-            tooltip: 'Infrastructure',
+            tooltip: 'Workloads',
             enabled: true,
             live: true,
-            icon: InfrastructureIcon,
+            icon: WorkloadsIcon,
             alwaysShow: true,
           },
         ]}
@@ -133,7 +131,7 @@ describe('MobileNavBar', () => {
 
     const { container } = render(() => (
       <MobileNavBar
-        activeTab={() => 'infrastructure'}
+        activeTab={() => 'workloads'}
         primaryTabs={() => [
           {
             id: 'agents',
@@ -158,14 +156,14 @@ describe('MobileNavBar', () => {
             alwaysShow: true,
           },
           {
-            id: 'infrastructure',
-            label: 'Infrastructure',
-            route: '/infrastructure',
+            id: 'workloads',
+            label: 'Workloads',
+            route: '/workloads',
             settingsRoute: '/settings',
-            tooltip: 'Infrastructure',
+            tooltip: 'Workloads',
             enabled: true,
             live: true,
-            icon: InfrastructureIcon,
+            icon: WorkloadsIcon,
             alwaysShow: true,
           },
           {
@@ -217,7 +215,7 @@ describe('MobileNavBar', () => {
     const buttons = container.querySelectorAll('button[data-tab-id]');
     expect(buttons[0]).toHaveAttribute('data-tab-id', 'proxmox');
     expect(buttons[1]).toHaveAttribute('data-tab-id', 'agents');
-    expect(buttons[2]).toHaveAttribute('data-tab-id', 'infrastructure');
+    expect(buttons[2]).toHaveAttribute('data-tab-id', 'workloads');
     expect(buttons[3]).toHaveAttribute('data-tab-id', 'storage');
     expect(buttons[4]).toHaveAttribute('data-tab-id', 'alerts');
     expect(buttons[5]).toHaveAttribute('data-tab-id', 'settings');

@@ -36,15 +36,6 @@ export const AI_PATROL_PATH = PATROL_PATH;
 // Canonical "Recovery" surface (was historically called Backups).
 export const RECOVERY_PATH = '/recovery';
 
-export const INFRASTRUCTURE_QUERY_PARAMS = {
-  source: 'source',
-  query: 'q',
-  resource: 'resource',
-  summaryGroup: 'summaryGroup',
-} as const;
-
-export const INFRASTRUCTURE_PATH = '/infrastructure';
-
 export const STORAGE_QUERY_PARAMS = {
   tab: 'tab',
   group: 'group',
@@ -106,13 +97,6 @@ type WorkloadsLinkOptions = {
   context?: string | null;
   namespace?: string | null;
   agent?: string | null;
-  resource?: string | null;
-  summaryGroup?: string | null;
-};
-
-type InfrastructureLinkOptions = {
-  source?: string | null;
-  query?: string | null;
   resource?: string | null;
   summaryGroup?: string | null;
 };
@@ -217,30 +201,6 @@ export const buildTrueNASPath = (tab: string = TRUENAS_DEFAULT_TAB): string => {
 export const buildVmwarePath = (tab: string = VMWARE_DEFAULT_TAB): string => {
   const normalized = tab.trim().replace(/^\/+|\/+$/g, '');
   return normalized ? `${VMWARE_PATH}/${normalized}` : VMWARE_PATH;
-};
-
-export const parseInfrastructureLinkSearch = (search: string) => {
-  const params = new URLSearchParams(search);
-  return {
-    source: normalizeSourcePlatformQueryValue(params.get(INFRASTRUCTURE_QUERY_PARAMS.source)),
-    query: normalizeQueryValue(params.get(INFRASTRUCTURE_QUERY_PARAMS.query)),
-    resource: normalizeQueryValue(params.get(INFRASTRUCTURE_QUERY_PARAMS.resource)),
-    summaryGroup: normalizeQueryValue(params.get(INFRASTRUCTURE_QUERY_PARAMS.summaryGroup)),
-  };
-};
-
-export const buildInfrastructurePath = (options: InfrastructureLinkOptions = {}): string => {
-  const params = new URLSearchParams();
-  const source = normalizeSourcePlatformQueryValue(options.source);
-  const query = normalizeQueryValue(options.query);
-  const resource = normalizeQueryValue(options.resource);
-  const summaryGroup = normalizeQueryValue(options.summaryGroup);
-  if (source) params.set(INFRASTRUCTURE_QUERY_PARAMS.source, source);
-  if (query) params.set(INFRASTRUCTURE_QUERY_PARAMS.query, query);
-  if (resource) params.set(INFRASTRUCTURE_QUERY_PARAMS.resource, resource);
-  if (summaryGroup) params.set(INFRASTRUCTURE_QUERY_PARAMS.summaryGroup, summaryGroup);
-  const serialized = params.toString();
-  return serialized ? `${INFRASTRUCTURE_PATH}?${serialized}` : INFRASTRUCTURE_PATH;
 };
 
 export const parseStorageLinkSearch = (search: string) => {

@@ -74,7 +74,6 @@ import animatedNumberSource from '@/components/shared/AnimatedNumber.tsx?raw';
 import animatedNumberModelSource from '@/components/shared/animatedNumberModel.ts?raw';
 import animatedNumberStateSource from '@/components/shared/useAnimatedNumberState.ts?raw';
 import workloadsFilterSource from '@/components/Workloads/WorkloadsFilter.tsx?raw';
-import infrastructurePageSurfaceSource from '@/features/infrastructure/InfrastructurePageSurface.tsx?raw';
 import infrastructureSourceManagerSource from '@/components/Settings/InfrastructureSourceManager.tsx?raw';
 import configuredNodeTablesSource from '@/components/Settings/ConfiguredNodeTables.tsx?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
@@ -161,7 +160,7 @@ import deployPreflightStepSource from '@/components/Infrastructure/deploy/Prefli
 import deployResultsStepSource from '@/components/Infrastructure/deploy/ResultsStep.tsx?raw';
 import pmgMailGatewaySource from '@/components/PMG/MailGateway.tsx?raw';
 import pmgInstancePanelSource from '@/components/PMG/PMGInstancePanel.tsx?raw';
-import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
+import resourceDetailSummarySource from '@/components/Infrastructure/ResourceDetailSummary.tsx?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
 import agentProfilesPanelSource from '@/components/Settings/AgentProfilesPanel.tsx?raw';
 import apiTokenManagerSource from '@/components/Settings/APITokenManager.tsx?raw';
@@ -685,7 +684,7 @@ describe('shared primitive guardrails', () => {
       "import ListIcon from 'lucide-solid/icons/list'",
     );
 
-    for (const source of [workloadsFilterSource, infrastructurePageSurfaceSource]) {
+    for (const source of [workloadsFilterSource]) {
       expect(source).toContain('GroupedTableModeSegmentedControl');
       expect(source).not.toContain("title: 'Group by node'");
       expect(source).not.toContain("title: 'Grouped table view'");
@@ -886,8 +885,8 @@ describe('shared primitive guardrails', () => {
     expect(tagBadgesSource).toContain("from '@/components/shared/Tooltip'");
     expect(guestRowSource).toContain("from '@/components/shared/TagBadges'");
     expect(guestRowSource).not.toContain("from './TagBadges'");
-    expect(resourceDetailDrawerOverviewSource).toContain("from '@/components/shared/TagBadges'");
-    expect(resourceDetailDrawerOverviewSource).not.toContain(
+    expect(resourceDetailSummarySource).toContain("from '@/components/shared/TagBadges'");
+    expect(resourceDetailSummarySource).not.toContain(
       "from '@/components/Workloads/TagBadges'",
     );
   });

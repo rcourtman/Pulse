@@ -5,7 +5,6 @@ import workloadsFilterSource from '@/components/Workloads/WorkloadsFilter.tsx?ra
 import recoveryPageSource from '@/components/Recovery/Recovery.tsx?raw';
 import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
 import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
-import infrastructurePageSurfaceSource from '@/features/infrastructure/InfrastructurePageSurface.tsx?raw';
 import subtabsSource from '@/components/shared/Subtabs.tsx?raw';
 
 const tsxSources = import.meta.glob('../../**/*.tsx', {
@@ -58,9 +57,6 @@ describe('page controls guardrails', () => {
     // RecoveryHistorySection migrated to FilterBar; defensive guards remain.
     expect(recoveryHistorySectionSource).not.toContain('<FilterHeader');
 
-    // InfrastructurePageSurface migrated to FilterBar; the FilterHeader
-    // assertion stays as a regression guard.
-    expect(infrastructurePageSurfaceSource).not.toContain('<FilterHeader');
   });
 
   it('limits raw FilterHeader and ColumnPicker usage to the known allowlist', () => {
@@ -140,14 +136,12 @@ describe('page controls guardrails', () => {
   });
 
   it('keeps display controls and utility actions on the shared toolbar rail', () => {
-    // Workloads / Infrastructure / Storage migrated to FilterBar's
-    // viewOptionsTrailing slot; the toolbarTrailing PageControls prop is no
-    // longer used. ChartVisibilityToggleButton and the
-    // no-aria-label-Charts regression guard still apply.
+    // Workloads migrated to FilterBar's viewOptionsTrailing slot; the
+    // toolbarTrailing PageControls prop is no longer used. The
+    // ChartVisibilityToggleButton and no-aria-label-Charts regression guard
+    // still apply.
     expect(workloadsFilterSource).toContain('ChartVisibilityToggleButton');
-    expect(infrastructurePageSurfaceSource).toContain('ChartVisibilityToggleButton');
     expect(workloadsFilterSource).not.toContain('aria-label="Charts"');
-    expect(infrastructurePageSurfaceSource).not.toContain('aria-label="Charts"');
     expect(pageControlsSource).toContain('page-controls-filter-controls');
     expect(pageControlsSource).toContain('page-controls-toolbar-actions ml-auto');
     expect(pageControlsSource).toContain('pageControlsControlDeckClass');
@@ -188,18 +182,15 @@ describe('page controls guardrails', () => {
     // / LabeledFilterSelect no longer rendered.
     expect(recoveryHistorySectionSource).not.toContain('LabeledFilterToggleGroup');
     expect(recoveryHistorySectionSource).not.toContain('LabeledFilterSelect');
-    // Infrastructure migrated to FilterBar; chip popover replaces the labelled
-    // select. Regression guard ensures the legacy primitive stays out.
-    expect(infrastructurePageSurfaceSource).not.toContain('<LabeledFilterSelect');
   });
 
-  it('keeps embedded workspace tabs on the canonical shared subtabs class pattern', () => {
+  it('keeps embedded workspace tabs on the canonical shared segmented-control pattern', () => {
     expect(subtabsSource).not.toContain("variant?: 'default' | 'control'");
     expect(recoveryPageSource).not.toContain('variant="control"');
     expect(recoveryPageSource).not.toContain('listClass=');
     expect(recoveryPageSource).not.toContain('tabClass=');
-    expect(recoveryPageSource).toContain('const workspaceControls = () => (');
-    expect(recoveryPageSource).toContain('<Subtabs');
+    expect(recoveryPageSource).toContain('FilterSegmentedControl');
+    expect(recoveryPageSource).toContain('RECOVERY_WORKSPACE_OPTIONS');
     expect(recoveryPageSource).not.toContain('Focused drill-in');
   });
 });

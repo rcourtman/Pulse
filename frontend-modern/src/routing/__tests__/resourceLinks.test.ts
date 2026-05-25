@@ -16,16 +16,13 @@ import {
   buildDockerPath,
   buildKubernetesPath,
   buildRecoveryPath,
-  buildInfrastructurePath,
   buildProxmoxPath,
   buildStoragePath,
   buildTrueNASPath,
   buildVmwarePath,
   buildWorkloadsPath,
   parseRecoveryLinkSearch,
-  INFRASTRUCTURE_QUERY_PARAMS,
   parseStorageLinkSearch,
-  parseInfrastructureLinkSearch,
   parseWorkloadsLinkSearch,
   STORAGE_QUERY_PARAMS,
   WORKLOADS_QUERY_PARAMS,
@@ -120,40 +117,6 @@ describe('resource link routing contract', () => {
     expect(
       buildWorkloadsPath({ type: 'kubernetes', platform: 'kubernetes', context: 'cluster-a' }),
     ).toBe('/workloads?type=pod&platform=kubernetes&context=cluster-a');
-  });
-
-  it('builds and parses infrastructure query params', () => {
-    const href = buildInfrastructurePath({
-      source: 'docker',
-      query: 'docker-host-1',
-      resource: 'docker-host-1',
-    });
-    expect(href).toBe('/infrastructure?source=docker&q=docker-host-1&resource=docker-host-1');
-
-    const parsed = parseInfrastructureLinkSearch(href.slice('/infrastructure'.length));
-    expect(parsed).toEqual({
-      source: 'docker',
-      query: 'docker-host-1',
-      resource: 'docker-host-1',
-      summaryGroup: '',
-    });
-
-    expect(INFRASTRUCTURE_QUERY_PARAMS.source).toBe('source');
-    expect(INFRASTRUCTURE_QUERY_PARAMS.query).toBe('q');
-    expect(INFRASTRUCTURE_QUERY_PARAMS.resource).toBe('resource');
-    expect(INFRASTRUCTURE_QUERY_PARAMS.summaryGroup).toBe('summaryGroup');
-  });
-
-  it('canonicalizes infrastructure source aliases when building and parsing links', () => {
-    expect(buildInfrastructurePath({ source: 'proxmox', query: 'pve1' })).toBe(
-      '/infrastructure?source=proxmox-pve&q=pve1',
-    );
-    expect(parseInfrastructureLinkSearch('?source=pbs&q=archive')).toEqual({
-      source: 'proxmox-pbs',
-      query: 'archive',
-      resource: '',
-      summaryGroup: '',
-    });
   });
 
   it('builds and parses storage query params', () => {

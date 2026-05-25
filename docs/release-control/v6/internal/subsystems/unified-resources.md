@@ -94,57 +94,53 @@ cross-source deduplication.
 70. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
 71. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
 72. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
-73. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-74. `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
-75. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
-76. `frontend-modern/src/features/infrastructure/infrastructurePageModel.ts`
-77. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
-78. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-79. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
-80. `frontend-modern/src/utils/agentResources.ts`
-81. `frontend-modern/src/utils/canonicalResourceTypes.ts`
-82. `frontend-modern/src/utils/resourceBadgePresentation.ts`
-83. `frontend-modern/src/utils/resourceChangePresentation.ts`
-84. `frontend-modern/src/utils/actionAuditPresentation.ts`
-85. `frontend-modern/src/utils/resourceCorrelationPresentation.ts`
-86. `frontend-modern/src/utils/resourcePlatformData.ts`
-87. `frontend-modern/src/utils/resourcePolicyPresentation.ts`
-88. `frontend-modern/src/utils/resourceStateAdapters.ts`
-89. `frontend-modern/src/utils/resourceTypeCompat.ts`
-90. `frontend-modern/src/utils/resourceTypePresentation.ts`
-91. `frontend-modern/src/utils/serviceHealthPresentation.ts`
-92. `frontend-modern/src/utils/sourceTypePresentation.ts`
-93. `frontend-modern/src/utils/workloadTypePresentation.ts`
-94. `frontend-modern/src/components/PMG/ServiceHealthBadge.tsx`
-95. `frontend-modern/src/utils/resourceIdentity.ts`
-96. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
-97. `frontend-modern/src/hooks/useUnifiedResources.ts`
-98. `frontend-modern/src/types/resource.ts`
-99. `frontend-modern/src/utils/sourcePlatforms.ts`
-100. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
-101. `internal/unifiedresources/kubernetes_metric_ids.go`
-102. `internal/unifiedresources/policy_posture.go`
-103. `internal/unifiedresources/clone.go`
-104. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerPresentation.ts`
-105. `internal/unifiedresources/storage_consumers.go`
-106. `frontend-modern/src/features/agents/agentsPageModel.ts`
-107. `frontend-modern/src/features/agents/AgentsPageSurface.tsx`
-108. `frontend-modern/src/features/agents/AgentsMachinesTable.tsx`
-109. `internal/platformsupport/manifest_generated.go`
-110. `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx`
-111. `frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx`
-112. `frontend-modern/src/features/kubernetes/kubernetesPageModel.ts`
-113. `frontend-modern/src/features/kubernetes/KubernetesClustersTable.tsx`
-114. `frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx`
-115. `frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx`
-116. `frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx`
-117. `frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx`
-118. `frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx`
-119. `frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx`
-120. `frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx`
-121. `frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx`
-122. `frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx`
-123. `frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx`
+73. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
+74. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
+75. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
+76. `frontend-modern/src/utils/agentResources.ts`
+77. `frontend-modern/src/utils/canonicalResourceTypes.ts`
+78. `frontend-modern/src/utils/resourceBadgePresentation.ts`
+79. `frontend-modern/src/utils/resourceChangePresentation.ts`
+80. `frontend-modern/src/utils/actionAuditPresentation.ts`
+81. `frontend-modern/src/utils/resourceCorrelationPresentation.ts`
+82. `frontend-modern/src/utils/resourcePlatformData.ts`
+83. `frontend-modern/src/utils/resourcePolicyPresentation.ts`
+84. `frontend-modern/src/utils/resourceStateAdapters.ts`
+85. `frontend-modern/src/utils/resourceTypeCompat.ts`
+86. `frontend-modern/src/utils/resourceTypePresentation.ts`
+87. `frontend-modern/src/utils/serviceHealthPresentation.ts`
+88. `frontend-modern/src/utils/sourceTypePresentation.ts`
+89. `frontend-modern/src/utils/workloadTypePresentation.ts`
+90. `frontend-modern/src/components/PMG/ServiceHealthBadge.tsx`
+91. `frontend-modern/src/utils/resourceIdentity.ts`
+92. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
+93. `frontend-modern/src/hooks/useUnifiedResources.ts`
+94. `frontend-modern/src/types/resource.ts`
+95. `frontend-modern/src/utils/sourcePlatforms.ts`
+96. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
+97. `internal/unifiedresources/kubernetes_metric_ids.go`
+98. `internal/unifiedresources/policy_posture.go`
+99. `internal/unifiedresources/clone.go`
+100. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerPresentation.ts`
+101. `internal/unifiedresources/storage_consumers.go`
+102. `frontend-modern/src/features/agents/agentsPageModel.ts`
+103. `frontend-modern/src/features/agents/AgentsPageSurface.tsx`
+104. `frontend-modern/src/features/agents/AgentsMachinesTable.tsx`
+105. `internal/platformsupport/manifest_generated.go`
+106. `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx`
+107. `frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx`
+108. `frontend-modern/src/features/kubernetes/kubernetesPageModel.ts`
+109. `frontend-modern/src/features/kubernetes/KubernetesClustersTable.tsx`
+110. `frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx`
+111. `frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx`
+112. `frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx`
+113. `frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx`
+114. `frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx`
+115. `frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx`
+116. `frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx`
+117. `frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx`
+118. `frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx`
+119. `frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx`
 
 ## Shared Boundaries
 
@@ -725,18 +721,20 @@ AI-only summary payloads, or page-local heuristics.
 3. Route runtime changes through the explicit unified-resource proof policies in `registry.json`; default fallback proof routing is not allowed
 4. Tighten banned-path tests when a compatibility bridge is removed
 5. Keep the infrastructure landing empty state on canonical first-run routing:
-   when inventory is empty, `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-   and `frontend-modern/src/utils/infrastructureEmptyStatePresentation.ts`
+   when inventory is empty, `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`
+   and `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx`
    must send operators directly to `/settings/infrastructure?add=pick`, name
    source strategy selection as the default next step, and present platform
-   API inventory plus Pulse Agent telemetry as peer source options instead of
-   regressing to generic settings-root CTAs, an agent-only install jump, the
-   retired `Platform connections` split, or provider-specific one-off routes.
-6. Keep infrastructure route-backed source filters on canonical unified-resource
-   truth. `frontend-modern/src/features/infrastructure/` must preserve a
-   route-owned source such as `truenas` in the filter option set even when the
-   current unified-resource snapshot does not contain that source, so
-   cross-surface handoffs do not silently fall back to `All`.
+   API inventory, endpoint probes, and Pulse Agent telemetry as peer source
+   options instead of regressing to generic settings-root CTAs, an agent-only
+   install jump, the retired `Platform connections` split, provider-specific
+   one-off routes, or the removed top-level `/infrastructure` page.
+6. Keep infrastructure source visibility on canonical unified-resource truth.
+   Settings infrastructure source filters and summaries must preserve known
+   sources such as `truenas` and `availability` through the shared source
+   normalization boundary even when the current unified-resource snapshot has
+   no matching rows, so cross-surface context does not silently fall back to
+   generic host-only wording during hydration or empty-filter states.
 7. Keep first-class platform classification on
    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`. New platform
    work must declare its primary ingestion mode and canonical resource
@@ -782,21 +780,18 @@ AI-only summary payloads, or page-local heuristics.
     the row may highlight in place through the shared active-resource id; if it
     is off-screen, the page must offer an explicit `Jump to row` affordance
     rather than auto-scrolling or collapsing the table on hover.
-12a. Keep infrastructure summary visibility as a page-display preference, not a
-    unified-resource filter. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-    may hide or restore the summary section through the shared
-    `ChartVisibilityToggleButton`, but that control must not mutate resource
-    identity, table membership, route-backed focus, or summary-hover scope.
-    Infrastructure may also opt into the shared saved-views primitive
-    (`savedViewsKey="infrastructure"`) so operators can save and recall named
-    filter combos through `SavedViewsMenu`; saved views are URL query
-    snapshots and must not introduce a parallel resource-identity path.
+12a. Keep infrastructure summary visibility as display preference, not a
+    unified-resource filter. Platform/runtime pages and shared infrastructure
+    summary consumers may hide or restore chart sections through shared
+    presentation controls, but those controls must not mutate resource
+    identity, table membership, source scope, or summary-hover state. The
+    retired top-level `/infrastructure` page and its saved-view/route-state
+    machinery must not be reintroduced for this purpose.
 13. Keep infrastructure cluster headers as canonical summary scope. Grouped
     headers in `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
     must publish cluster scope from the same `ResourceGroup` / unified-resource
     ids that power the table rows, and
-    `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
-    plus `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
+    `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
     must consume that scope through the shared page/group/entity interaction
     contract rather than inventing infrastructure-local summary filters or
     route-backed cluster hover state. Host and service infrastructure table
@@ -874,13 +869,13 @@ AI-only summary payloads, or page-local heuristics.
     `/api/charts/storage-summary` contract instead of rebuilding page-local
     per-resource storage history fetches, storage-type aliases, or full
     storage-page `/api/storage-charts` fetches.
-19. Keep infrastructure page-header framing presentation-only on the page
-    shell. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-    may render the shared `PageHeader`, but canonical source/status/search
-    state, summary scope, and row selection must remain on
-    `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
-    and the unified-resource selectors it composes. The header must not become
-    a second state owner, scope banner, or provider-local filter surface.
+19. Keep infrastructure framing presentation-only on active product surfaces.
+    Platform/runtime pages, shared infrastructure tables, and Settings
+    infrastructure panels may render page or section headers, but canonical
+    source/status/search state, summary scope, and row selection must remain on
+    their owning shared selectors and settings state. The removed top-level
+    `/infrastructure` page must not return as a second state owner, scope
+    banner, or provider-local filter surface.
 20. Keep audit-log persistence credential-safe.
     `internal/unifiedresources/audit_redaction.go` provides
     `RedactAuditText` and `RedactAuditRecord`, and every
@@ -2737,13 +2732,11 @@ status facets. The selector layer may accept arbitrary user-visible filter
 strings, but it must not widen the canonical unified-resource source/status
 contracts that feed the infrastructure table and workload links.
 
-The same source-filter boundary now also applies to infrastructure filter UI
-options: `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-and `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
-may render friendly string keys, but membership checks against available
-sources must normalize through the shared
-`frontend-modern/src/utils/sourcePlatforms.ts` helper before consulting
-`KnownSourcePlatform` sets.
+The same source-filter boundary now also applies to infrastructure source UI
+options in Settings and platform/runtime pages. Those surfaces may render
+friendly string keys, but membership checks against available sources must
+normalize through the shared `frontend-modern/src/utils/sourcePlatforms.ts`
+helper before consulting `KnownSourcePlatform` sets.
 That same shared source-platform boundary now also owns TrueNAS-backed hybrid
 resources. When a canonical resource carries both `agent` and `truenas`
 sources, `frontend-modern/src/utils/sourcePlatforms.ts` must still resolve the
@@ -2773,19 +2766,13 @@ implementation or action surfaces that are explicitly scoped to Docker-native
 behavior. Agent telemetry is collection-method detail when a stronger platform
 or host identity is present, not a peer platform label that should crowd the
 table or drive the primary system sort.
-The route file `frontend-modern/src/pages/Infrastructure.tsx` is now only the
-navigation boundary for that surface; canonical infrastructure filter, search,
-deep-link, and expansion state now live behind the dedicated infrastructure
-feature owner instead of accumulating in the page shell itself.
-That infrastructure feature now also follows an explicit shell/composition/route
-split: `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-owns the render shell, `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
-owns page controls, persistence, and route composition,
-`frontend-modern/src/features/infrastructure/infrastructurePageModel.ts`
-owns filter/search/catalog derivation, and
-`frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
-owns URL-sync, deep-link expansion, highlight continuity, and managed
-infrastructure-route navigation.
+The former top-level infrastructure feature route never shipped as a stable v6
+surface and is intentionally removed rather than preserved as a compatibility
+redirect. Canonical infrastructure management lives under
+`/settings/infrastructure`; day-to-day resource inspection lives on the
+platform/runtime pages and shared resource components. Future infrastructure
+work must extend those owners rather than recreating
+`frontend-modern/src/features/infrastructure/` or a `/infrastructure` route.
 Shared unified-resource consumers now also normalize org scope through
 `frontend-modern/src/utils/orgScope.ts` before building cache keys or
 multi-tenant resource fetch state, so the canonical resource hooks do not
@@ -2910,12 +2897,13 @@ presentation. `frontend-modern/src/components/Infrastructure/`
 placement, signal, and snapshot context through the canonical resource drawer
 and debug/source sections rather than introducing a VMware-only detail route,
 drawer tab, or provider-local investigation shell.
-That same infrastructure consumer boundary also owns route-backed source
-selection continuity. `frontend-modern/src/features/infrastructure/`
-must keep a route-owned canonical source such as `truenas` present in the
-source filter option set even when the currently loaded unified-resource
-snapshot does not contain that source yet, so cross-surface handoffs from
-settings, alerts, or findings do not collapse back to `All` during hydration
+That same infrastructure consumer boundary also owns source selection
+continuity. Settings infrastructure panels and platform/runtime pages must
+keep canonical sources such as `truenas` and `availability` present in their
+source option sets when the source is known from configuration or route
+context, even when the currently loaded unified-resource snapshot does not
+contain matching rows yet, so cross-surface handoffs from settings, alerts, or
+findings do not collapse back to generic host-only language during hydration
 or empty-filter states.
 That same frontend-owned compatibility boundary must remain intentionally
 narrow. Shared resource adapters may admit explicit aliases such as `host`,

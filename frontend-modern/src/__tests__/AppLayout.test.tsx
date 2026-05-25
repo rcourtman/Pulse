@@ -10,7 +10,7 @@ HTMLElement.prototype.scrollIntoView = vi.fn();
 
 describe('AppLayout navigation icons', () => {
   beforeEach(() => {
-    window.history.replaceState({}, '', '/infrastructure');
+    window.history.replaceState({}, '', '/settings/infrastructure');
     aiChatStore.close();
     aiChatStore.setEnabled(true);
   });
@@ -39,7 +39,7 @@ describe('AppLayout navigation icons', () => {
     render(() => (
       <Router>
         <Route
-          path="/infrastructure"
+          path="/settings/infrastructure"
           component={() => (
             <AppLayout
               connectionStatus={() => ({
