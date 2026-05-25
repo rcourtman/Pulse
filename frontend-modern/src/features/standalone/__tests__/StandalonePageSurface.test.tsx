@@ -2,10 +2,10 @@ import { cleanup, render, screen } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
-import { AgentsPageSurface } from '../AgentsPageSurface';
+import { StandalonePageSurface } from '../StandalonePageSurface';
 
 const mocks = vi.hoisted(() => ({
-  pathname: '/agents/overview',
+  pathname: '/standalone/overview',
   useUnifiedResources: vi.fn(),
   AgentsMachinesTable: vi.fn((props: { resources: Resource[] }) => (
     <div data-testid="agents-machines-table" data-resource-count={props.resources.length} />
@@ -50,7 +50,7 @@ vi.mock('@/features/platformPage/sharedPlatformPage', () => ({
     tabs: Array<{ id: string; label: string; path: string }>;
   }) => (
     <div
-      data-testid="agents-section-tabs"
+      data-testid="standalone-section-tabs"
       data-active={props.active}
       data-tabs={props.tabs.map((tab) => tab.id).join(',')}
     />
@@ -74,7 +74,7 @@ const resource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 beforeEach(() => {
-  mocks.pathname = '/agents/overview';
+  mocks.pathname = '/standalone/overview';
   mocks.useUnifiedResources.mockReturnValue({
     resources: () => [
       resource({ id: 'mac-mini', type: 'agent', platformType: 'agent', sources: ['agent'] }),
@@ -96,16 +96,16 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('AgentsPageSurface', () => {
-  it('loads standalone machines and agentless availability checks into the Agents surface', () => {
-    render(() => <AgentsPageSurface />);
+describe('StandalonePageSurface', () => {
+  it('loads standalone machines and agentless availability checks into the Standalone surface', () => {
+    render(() => <StandalonePageSurface />);
 
     expect(mocks.useUnifiedResources).toHaveBeenCalledWith(
       expect.objectContaining({
         query: 'type=agent,network-endpoint',
       }),
     );
-    expect(screen.getByTestId('agents-section-tabs')).toHaveAttribute(
+    expect(screen.getByTestId('standalone-section-tabs')).toHaveAttribute(
       'data-tabs',
       'overview,availability',
     );
@@ -120,11 +120,11 @@ describe('AgentsPageSurface', () => {
   });
 
   it('uses the availability tab as a focused check monitor', () => {
-    mocks.pathname = '/agents/availability';
+    mocks.pathname = '/standalone/availability';
 
-    render(() => <AgentsPageSurface />);
+    render(() => <StandalonePageSurface />);
 
-    expect(screen.getByTestId('agents-section-tabs')).toHaveAttribute(
+    expect(screen.getByTestId('standalone-section-tabs')).toHaveAttribute(
       'data-active',
       'availability',
     );

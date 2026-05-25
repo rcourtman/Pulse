@@ -23,12 +23,12 @@ const resource = (overrides: Partial<Resource>): Resource =>
 describe('infrastructureNavigationModel', () => {
   it('shows primary infrastructure destinations only when supported or admitted resource evidence is present', () => {
     expect(buildPrimaryInfrastructureNavigationVisibility([])).toEqual({
-      agents: false,
       proxmox: false,
       docker: false,
       kubernetes: false,
       truenas: false,
       vmware: false,
+      standalone: false,
     });
 
     expect(
@@ -45,12 +45,12 @@ describe('infrastructureNavigationModel', () => {
         resource({ id: 'vcenter-1', platformType: 'vmware-vsphere', type: 'vm' }),
       ]),
     ).toEqual({
-      agents: true,
       proxmox: true,
       docker: false,
       kubernetes: true,
       truenas: true,
       vmware: true,
+      standalone: true,
     });
   });
 
@@ -95,12 +95,12 @@ describe('infrastructureNavigationModel', () => {
         }),
       ]),
     ).toEqual({
-      agents: false,
       proxmox: false,
       docker: false,
       kubernetes: false,
       truenas: true,
       vmware: false,
+      standalone: false,
     });
 
     expect(
@@ -122,16 +122,16 @@ describe('infrastructureNavigationModel', () => {
     });
   });
 
-  it('does not show Agents for incidental agent platform hints on non-agent resources', () => {
+  it('does not show Standalone for incidental agent platform hints on non-agent resources', () => {
     expect(
       buildPrimaryInfrastructureNavigationVisibility([
         resource({ id: 'pod-1', type: 'pod', platformType: 'agent' }),
         resource({ id: 'pve-node-1', type: 'agent', platformType: 'proxmox-pve' }),
-      ]).agents,
+      ]).standalone,
     ).toBe(false);
   });
 
-  it('shows Agents for agent-primary machine source evidence', () => {
+  it('shows Standalone for agent-primary machine source evidence', () => {
     expect(
       buildPrimaryInfrastructureNavigationVisibility([
         resource({
@@ -142,11 +142,11 @@ describe('infrastructureNavigationModel', () => {
           sources: ['agent'],
           platformScopes: ['agent'],
         }),
-      ]).agents,
+      ]).standalone,
     ).toBe(true);
   });
 
-  it('shows Agents for agentless availability endpoints', () => {
+  it('shows Standalone for agentless availability endpoints', () => {
     expect(
       buildPrimaryInfrastructureNavigationVisibility([
         resource({
@@ -156,11 +156,11 @@ describe('infrastructureNavigationModel', () => {
           sourceType: 'api',
           sources: ['availability'],
         }),
-      ]).agents,
+      ]).standalone,
     ).toBe(true);
   });
 
-  it('does not show Agents for provider-owned host rows even when the agent source is present', () => {
+  it('does not show Standalone for provider-owned host rows even when the agent source is present', () => {
     expect(
       buildPrimaryInfrastructureNavigationVisibility([
         resource({
@@ -180,52 +180,52 @@ describe('infrastructureNavigationModel', () => {
           platformScopes: ['agent', 'vmware-vsphere'],
           agent: { agentId: 'vc-host-101', platform: 'vmware-vsphere' },
         }),
-      ]).agents,
+      ]).standalone,
     ).toBe(false);
   });
 
-  it('selects provider platforms before Agents using the canonical primary navigation order', () => {
+  it('selects provider platforms before Standalone using the canonical primary navigation order', () => {
     expect(
       selectFirstVisiblePrimaryInfrastructureNavigationId({
-        agents: true,
         proxmox: true,
         docker: false,
         kubernetes: false,
         truenas: false,
         vmware: false,
+        standalone: true,
       }),
     ).toBe('proxmox');
 
     expect(
       selectFirstVisiblePrimaryInfrastructureNavigationId({
-        agents: false,
         proxmox: false,
         docker: false,
         kubernetes: true,
         truenas: true,
         vmware: false,
+        standalone: false,
       }),
     ).toBe('kubernetes');
 
     expect(
       selectFirstVisiblePrimaryInfrastructureNavigationId({
-        agents: true,
         proxmox: false,
         docker: false,
         kubernetes: false,
         truenas: false,
         vmware: false,
+        standalone: true,
       }),
-    ).toBe('agents');
+    ).toBe('standalone');
 
     expect(
       selectFirstVisiblePrimaryInfrastructureNavigationId({
-        agents: false,
         proxmox: false,
         docker: false,
         kubernetes: false,
         truenas: false,
         vmware: false,
+        standalone: false,
       }),
     ).toBeNull();
   });

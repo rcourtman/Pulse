@@ -19,7 +19,7 @@ export type CommandPaletteModalCommand = {
 };
 
 export type CommandPaletteCommandPaths = {
-  agentsPath: string;
+  standalonePath: string;
   proxmoxPath: string;
   dockerPath: string;
   kubernetesPath: string;
@@ -109,14 +109,28 @@ export function buildCommandPaletteCommands(options: {
     );
   }
 
-  if (primaryInfrastructureNavigationIsVisible(options.infrastructureVisibility, 'agents')) {
+  if (primaryInfrastructureNavigationIsVisible(options.infrastructureVisibility, 'standalone')) {
     commands.push({
-      id: 'nav-agents',
-      label: 'Go to Agents',
-      description: options.paths.agentsPath,
-      shortcut: 'g e',
-      keywords: ['agents', 'hosts', 'machines', 'linux', 'macos', 'windows', 'unraid'],
-      action: () => options.navigate(options.paths.agentsPath),
+      id: 'nav-standalone',
+      label: 'Go to Standalone',
+      description: options.paths.standalonePath,
+      shortcut: 'g s',
+      keywords: [
+        'standalone',
+        'agents',
+        'hosts',
+        'machines',
+        'availability',
+        'endpoints',
+        'mqtt',
+        'http',
+        'ping',
+        'linux',
+        'macos',
+        'windows',
+        'unraid',
+      ],
+      action: () => options.navigate(options.paths.standalonePath),
     });
   }
 

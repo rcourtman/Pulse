@@ -5,8 +5,9 @@ describe('navigation routing helpers', () => {
   it('maps paths to the correct primary tab', () => {
     expect(getActiveTabForPath('/unknown')).toBeNull();
     expect(getActiveTabForPath('/dashboard')).toBeNull();
-    expect(getActiveTabForPath('/agents')).toBe('agents');
-    expect(getActiveTabForPath('/agents/overview')).toBe('agents');
+    expect(getActiveTabForPath('/standalone')).toBe('standalone');
+    expect(getActiveTabForPath('/standalone/overview')).toBe('standalone');
+    expect(getActiveTabForPath('/agents')).toBeNull();
     expect(getActiveTabForPath('/proxmox')).toBe('proxmox');
     expect(getActiveTabForPath('/proxmox/storage')).toBe('proxmox');
     // Infrastructure, Ceph, and aggregate workspace URLs are not standalone

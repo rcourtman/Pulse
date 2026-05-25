@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Resource } from '@/types/resource';
-import { AgentsMachinesTable } from '@/features/agents/AgentsMachinesTable';
+import { AgentsMachinesTable } from '@/features/standalone/AgentsMachinesTable';
 import { KubernetesClustersTable } from '@/features/kubernetes/KubernetesClustersTable';
 import { KubernetesNodesTable } from '@/features/kubernetes/KubernetesNodesTable';
 import { TrueNASStorageTopologyTable } from '@/features/truenas/TrueNASStorageTopologyTable';

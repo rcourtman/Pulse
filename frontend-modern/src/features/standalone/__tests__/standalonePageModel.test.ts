@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
-import { buildAgentsPageModel } from '../agentsPageModel';
+import { buildStandalonePageModel } from '../standalonePageModel';
 
 const resource = (overrides: Partial<Resource>): Resource =>
   ({
@@ -16,9 +16,9 @@ const resource = (overrides: Partial<Resource>): Resource =>
     ...overrides,
   }) as Resource;
 
-describe('agentsPageModel', () => {
+describe('standalonePageModel', () => {
   it('projects standalone agent machine resources without admitting provider-owned host rows', () => {
-    const model = buildAgentsPageModel([
+    const model = buildStandalonePageModel([
       resource({ id: 'mac-mini', platformType: 'agent', type: 'agent', sources: ['agent'] }),
       resource({
         id: 'linux-docker-host',
@@ -57,7 +57,7 @@ describe('agentsPageModel', () => {
   });
 
   it('keeps legacy source-less agent platform rows visible', () => {
-    const model = buildAgentsPageModel([
+    const model = buildStandalonePageModel([
       resource({ id: 'legacy-agent', platformType: 'agent', type: 'agent', sources: undefined }),
     ]);
 
@@ -67,7 +67,7 @@ describe('agentsPageModel', () => {
   });
 
   it('keeps agentless availability checks beside standalone machines', () => {
-    const model = buildAgentsPageModel([
+    const model = buildStandalonePageModel([
       resource({ id: 'mac-mini', platformType: 'agent', type: 'agent', sources: ['agent'] }),
       resource({
         id: 'endpoint-1',

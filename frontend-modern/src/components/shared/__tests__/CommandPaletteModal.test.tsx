@@ -57,7 +57,7 @@ describe('CommandPaletteModal', () => {
 
     expect(commandPaletteStateSource).toContain('useNavigate');
     expect(commandPaletteStateSource).toContain('createSignal');
-    expect(commandPaletteStateSource).toContain('buildAgentsPath');
+    expect(commandPaletteStateSource).toContain('buildStandalonePath');
     expect(commandPaletteStateSource).toContain('buildProxmoxPath');
     expect(commandPaletteStateSource).toContain('export function useCommandPaletteState');
 
@@ -71,7 +71,7 @@ describe('CommandPaletteModal', () => {
     expect(commandPaletteModelSource).toContain('buildCommandPaletteCommands');
     expect(commandPaletteModelSource).toContain('normalizeCommandPaletteQuery');
     expect(commandPaletteModelSource).toContain('filterCommandPaletteCommands');
-    expect(commandPaletteModelSource).toContain("id: 'nav-agents'");
+    expect(commandPaletteModelSource).toContain("id: 'nav-standalone'");
     expect(commandPaletteModelSource).toContain("id: 'nav-proxmox'");
     expect(commandPaletteModelSource).toContain("id: 'nav-docker'");
     expect(commandPaletteModelSource).toContain("id: 'nav-kubernetes'");
@@ -94,7 +94,8 @@ describe('CommandPaletteModal', () => {
       />
     ));
 
-    expect(screen.getByText('Go to Agents')).toBeInTheDocument();
+    expect(screen.getByText('Go to Standalone')).toBeInTheDocument();
+    expect(screen.getByText('/standalone/overview')).toBeInTheDocument();
     expect(screen.getByText('Go to Proxmox')).toBeInTheDocument();
     expect(screen.getByText('Go to Containers')).toBeInTheDocument();
     expect(screen.getByText('Go to Kubernetes Workloads')).toBeInTheDocument();
@@ -111,7 +112,7 @@ describe('CommandPaletteModal', () => {
 
     const commandLabels = screen.getAllByRole('button').map((button) => button.textContent ?? '');
     expect(commandLabels.findIndex((label) => label.includes('Go to Proxmox'))).toBeLessThan(
-      commandLabels.findIndex((label) => label.includes('Go to Agents')),
+      commandLabels.findIndex((label) => label.includes('Go to Standalone')),
     );
   });
 
@@ -182,7 +183,7 @@ describe('CommandPaletteModal', () => {
     expect(screen.queryByText('Go to Workloads')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Storage')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Recovery')).not.toBeInTheDocument();
-    expect(screen.queryByText('Go to Agents')).not.toBeInTheDocument();
+    expect(screen.queryByText('Go to Standalone')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Containers')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Kubernetes')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to TrueNAS')).not.toBeInTheDocument();

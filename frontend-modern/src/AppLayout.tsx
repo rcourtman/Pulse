@@ -36,10 +36,10 @@ import { logger } from '@/utils/logger';
 import { getActiveTabForPath } from '@/routing/navigation';
 import { preloadRouteModule } from '@/routing/routePreload';
 import {
-  buildAgentsPath,
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
+  buildStandalonePath,
   buildTrueNASPath,
   buildVmwarePath,
 } from '@/routing/resourceLinks';
@@ -57,7 +57,7 @@ const ROOT_DOCKER_PATH = buildDockerPath();
 const ROOT_KUBERNETES_PATH = buildKubernetesPath();
 const ROOT_TRUENAS_PATH = buildTrueNASPath();
 const ROOT_VMWARE_PATH = buildVmwarePath();
-const ROOT_AGENTS_PATH = buildAgentsPath();
+const ROOT_STANDALONE_PATH = buildStandalonePath();
 const ROOT_INFRASTRUCTURE_SETTINGS_PATH = buildInfrastructureWorkspacePath();
 const ROOT_ALERTS_PATH = '/alerts';
 const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
@@ -213,7 +213,7 @@ export function AppLayout(props: AppLayoutProps) {
     kubernetes: 'Kubernetes',
     truenas: 'TrueNAS',
     vmware: 'vSphere',
-    agents: 'Agents',
+    standalone: 'Standalone',
     alerts: 'Alerts',
     ai: 'Patrol',
     settings: 'Settings',
@@ -236,7 +236,7 @@ export function AppLayout(props: AppLayoutProps) {
     kubernetes: ROOT_KUBERNETES_PATH,
     truenas: ROOT_TRUENAS_PATH,
     vmware: ROOT_VMWARE_PATH,
-    agents: ROOT_AGENTS_PATH,
+    standalone: ROOT_STANDALONE_PATH,
   };
   const primaryWorkspacePath = createMemo(() => {
     const navId = selectFirstVisiblePrimaryInfrastructureNavigationId(
@@ -386,13 +386,13 @@ export function AppLayout(props: AppLayoutProps) {
         alwaysShow: false,
       },
       {
-        id: 'agents',
-        label: 'Agents',
-        route: ROOT_AGENTS_PATH,
+        id: 'standalone',
+        label: 'Standalone',
+        route: ROOT_STANDALONE_PATH,
         settingsRoute: ROOT_INFRASTRUCTURE_SETTINGS_PATH,
-        tooltip: 'Standalone Pulse Agent machines, OS telemetry, storage, and command eligibility',
-        enabled: isVisible('agents'),
-        live: isVisible('agents'),
+        tooltip: 'Standalone Pulse Agent machines and agentless availability checks',
+        enabled: isVisible('standalone'),
+        live: isVisible('standalone'),
         icon: ServerIcon,
         alwaysShow: false,
       },

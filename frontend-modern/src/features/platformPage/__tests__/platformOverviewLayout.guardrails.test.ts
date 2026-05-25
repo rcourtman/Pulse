@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import agentsMachinesTableSource from '@/features/agents/AgentsMachinesTable.tsx?raw';
-import agentsPageModelSource from '@/features/agents/agentsPageModel.ts?raw';
-import agentsPageSurfaceSource from '@/features/agents/AgentsPageSurface.tsx?raw';
+import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable.tsx?raw';
+import standalonePageModelSource from '@/features/standalone/standalonePageModel.ts?raw';
+import standalonePageSurfaceSource from '@/features/standalone/StandalonePageSurface.tsx?raw';
 import dockerConfigsTableSource from '@/features/docker/DockerConfigsTable.tsx?raw';
 import dockerContainersTableSource from '@/features/docker/DockerContainersTable.tsx?raw';
 import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
@@ -116,7 +116,7 @@ const platformToolbarTableSources = [
 ];
 
 const overviewSurfaceSources = [
-  agentsPageSurfaceSource,
+  standalonePageSurfaceSource,
   proxmoxPageSurfaceSource,
   dockerPageSurfaceSource,
   kubernetesPageSurfaceSource,
@@ -282,16 +282,17 @@ describe('platform overview layout guardrails', () => {
     expect(vmwarePageSurfaceSource).not.toContain('<StorageSurface');
     expect(vmwarePageSurfaceSource).not.toContain('forcedView="pools"');
     expect(proxmoxPageSurfaceSource).toContain('suppressNodeFilter');
-    expect(agentsPageSurfaceSource).toContain('<AgentsMachinesTable');
-    expect(agentsPageSurfaceSource).not.toContain('InfrastructureSummary');
-    expect(agentsPageSurfaceSource).not.toContain('StickySummarySection');
-    expect(agentsPageSurfaceSource).not.toContain('ChartVisibilityToggleButton');
-    expect(agentsPageSurfaceSource).not.toContain('FilterBar');
-    expect(agentsPageSurfaceSource).not.toContain('UnifiedResourceTable');
+    expect(standalonePageSurfaceSource).toContain('<AgentsMachinesTable');
+    expect(standalonePageSurfaceSource).not.toContain('InfrastructureSummary');
+    expect(standalonePageSurfaceSource).not.toContain('StickySummarySection');
+    expect(standalonePageSurfaceSource).not.toContain('ChartVisibilityToggleButton');
+    expect(standalonePageSurfaceSource).not.toContain('FilterBar');
+    expect(standalonePageSurfaceSource).not.toContain('UnifiedResourceTable');
     expect(agentsMachinesTableSource).toContain('PlatformResourceDetailTableRow');
     expect(agentsMachinesTableSource).not.toContain('ResourceDetailDrawer');
-    expect(agentsPageModelSource).not.toContain('infrastructureSelectors');
-    expect(agentsPageModelSource).not.toContain('buildAgentsPageFilterModel');
+    expect(standalonePageModelSource).not.toContain('infrastructureSelectors');
+    expect(standalonePageModelSource).not.toContain('buildAgentsPageFilterModel');
+    expect(standalonePageModelSource).not.toContain('buildStandalonePageFilterModel');
   });
 
   it('keeps TrueNAS overview inventory in tables instead of summary cards', () => {

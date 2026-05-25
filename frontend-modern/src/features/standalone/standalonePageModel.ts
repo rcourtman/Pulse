@@ -1,13 +1,13 @@
 import type { Resource } from '@/types/resource';
 import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 
-export interface AgentsPageModel {
+export interface StandalonePageModel {
   machines: Resource[];
   availabilityChecks: Resource[];
   resources: Resource[];
 }
 
-export const isAgentsPageResource = (resource: Resource): boolean =>
+export const isStandaloneMachineResource = (resource: Resource): boolean =>
   isPulseAgentPlatformResource(resource);
 
 export const isAgentlessAvailabilityResource = (resource: Resource): boolean =>
@@ -15,8 +15,8 @@ export const isAgentlessAvailabilityResource = (resource: Resource): boolean =>
   resource.platformType === 'availability' ||
   resource.sources?.includes('availability') === true;
 
-export function buildAgentsPageModel(resources: readonly Resource[]): AgentsPageModel {
-  const machines = resources.filter(isAgentsPageResource);
+export function buildStandalonePageModel(resources: readonly Resource[]): StandalonePageModel {
+  const machines = resources.filter(isStandaloneMachineResource);
   const availabilityChecks = resources.filter(isAgentlessAvailabilityResource);
   return {
     machines,

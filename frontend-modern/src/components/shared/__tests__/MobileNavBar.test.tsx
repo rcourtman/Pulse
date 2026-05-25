@@ -12,7 +12,9 @@ window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
   return 1;
 }) as typeof window.requestAnimationFrame;
 
-const AgentsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>AG</span>;
+const StandaloneIcon: Component<{ class?: string }> = (props) => (
+  <span class={props.class}>SA</span>
+);
 const ProxmoxIcon: Component<{ class?: string }> = (props) => <span class={props.class}>PX</span>;
 const AlertsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>AL</span>;
 const SettingsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>SE</span>;
@@ -87,14 +89,14 @@ describe('MobileNavBar', () => {
         activeTab={() => null}
         primaryTabs={() => [
           {
-            id: 'agents',
-            label: 'Agents',
-            route: '/agents/overview',
+            id: 'standalone',
+            label: 'Standalone',
+            route: '/standalone/overview',
             settingsRoute: '/settings/infrastructure',
-            tooltip: 'Agents',
+            tooltip: 'Standalone',
             enabled: true,
             live: true,
-            icon: AgentsIcon,
+            icon: StandaloneIcon,
             alwaysShow: true,
           },
         ]}
@@ -132,14 +134,14 @@ describe('MobileNavBar', () => {
         activeTab={() => 'proxmox'}
         primaryTabs={() => [
           {
-            id: 'agents',
-            label: 'Agents',
-            route: '/agents/overview',
+            id: 'standalone',
+            label: 'Standalone',
+            route: '/standalone/overview',
             settingsRoute: '/settings/infrastructure',
-            tooltip: 'Agents',
+            tooltip: 'Standalone',
             enabled: true,
             live: true,
-            icon: AgentsIcon,
+            icon: StandaloneIcon,
             alwaysShow: true,
           },
           {
@@ -190,7 +192,7 @@ describe('MobileNavBar', () => {
 
     const buttons = container.querySelectorAll('button[data-tab-id]');
     expect(buttons[0]).toHaveAttribute('data-tab-id', 'proxmox');
-    expect(buttons[1]).toHaveAttribute('data-tab-id', 'agents');
+    expect(buttons[1]).toHaveAttribute('data-tab-id', 'standalone');
     expect(buttons[2]).toHaveAttribute('data-tab-id', 'alerts');
     expect(buttons[3]).toHaveAttribute('data-tab-id', 'settings');
 
@@ -198,8 +200,8 @@ describe('MobileNavBar', () => {
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('Pro')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTitle('Agents'));
-    expect(onPrimaryClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'agents' }));
+    fireEvent.click(screen.getByTitle('Standalone'));
+    expect(onPrimaryClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'standalone' }));
 
     fireEvent.click(screen.getByTitle('Alerts'));
     expect(onUtilityClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'alerts' }));

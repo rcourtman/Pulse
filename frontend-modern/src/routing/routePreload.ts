@@ -1,11 +1,11 @@
 import {
-  AGENTS_PATH,
-  buildAgentsPath,
   buildProxmoxPath,
+  buildStandalonePath,
   DOCKER_PATH,
   KUBERNETES_PATH,
   PATROL_PATH,
   PROXMOX_PATH,
+  STANDALONE_PATH,
   TRUENAS_PATH,
   VMWARE_PATH,
 } from '@/routing/resourceLinks';
@@ -17,14 +17,14 @@ type RoutePreloader = {
 };
 
 const ROOT_PROXMOX_PATH = buildProxmoxPath();
-const ROOT_AGENTS_PATH = buildAgentsPath();
+const ROOT_STANDALONE_PATH = buildStandalonePath();
 const ALERTS_PATH = '/alerts';
 const SETTINGS_PATH = '/settings';
 const routePreloadCache = new Map<string, Promise<void>>();
 
 export const APP_SHELL_ROUTE_PRELOAD_PATHS = [
   ROOT_PROXMOX_PATH,
-  ROOT_AGENTS_PATH,
+  ROOT_STANDALONE_PATH,
   PATROL_PATH,
   ALERTS_PATH,
   SETTINGS_PATH,
@@ -66,9 +66,9 @@ const ROUTE_PRELOADERS: readonly RoutePreloader[] = [
     preload: () => import('@/pages/Vmware').then(() => undefined),
   },
   {
-    id: 'agents',
-    matches: (route) => route === AGENTS_PATH || route.startsWith(`${AGENTS_PATH}/`),
-    preload: () => import('@/pages/Agents').then(() => undefined),
+    id: 'standalone',
+    matches: (route) => route === STANDALONE_PATH || route.startsWith(`${STANDALONE_PATH}/`),
+    preload: () => import('@/pages/Standalone').then(() => undefined),
   },
   {
     id: 'alerts',

@@ -123,10 +123,10 @@ cross-source deduplication.
 99. `internal/unifiedresources/clone.go`
 100. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerPresentation.ts`
 101. `internal/unifiedresources/storage_consumers.go`
-102. `frontend-modern/src/features/agents/agentsPageModel.ts`
-103. `frontend-modern/src/features/agents/AgentsPageSurface.tsx`
-104. `frontend-modern/src/features/agents/AgentsMachinesTable.tsx`
-105. `frontend-modern/src/features/agents/AvailabilityChecksTable.tsx`
+102. `frontend-modern/src/features/standalone/standalonePageModel.ts`
+103. `frontend-modern/src/features/standalone/StandalonePageSurface.tsx`
+104. `frontend-modern/src/features/standalone/AgentsMachinesTable.tsx`
+105. `frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx`
 106. `internal/platformsupport/manifest_generated.go`
 107. `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx`
 108. `frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx`
@@ -681,20 +681,21 @@ AI-only summary payloads, or page-local heuristics.
     rather than spawning page-local policy summary shells.
 16. Keep platform/runtime top-level route paths on the canonical resource-link
     helper. `frontend-modern/src/routing/resourceLinks.ts` owns the
-    `AGENTS_PATH`, `DOCKER_PATH`, `KUBERNETES_PATH`, `TRUENAS_PATH`,
-    `VMWARE_PATH` constants and the `buildAgentsPath`, `buildDockerPath`,
+    `STANDALONE_PATH`, `DOCKER_PATH`, `KUBERNETES_PATH`, `TRUENAS_PATH`,
+    `VMWARE_PATH` constants and the `buildStandalonePath`, `buildDockerPath`,
     `buildKubernetesPath`, `buildTrueNASPath`, `buildVmwarePath` builders.
     Per-platform surfaces and tab specs must
     derive every internal link from those builders so the canonical resource
     URL vocabulary stays single-sourced; ad hoc string concatenation of
     platform routes inside feature directories is not permitted.
-    The `Agents` route is the canonical browser projection of Pulse-managed
-    unified-resource agent rows: membership must require
+    The `Standalone` route is the canonical browser projection of Pulse-managed
+    standalone agent rows and agentless availability endpoint rows: agent
+    membership must require
     `resource.type === "agent"`, canonical Pulse-agent source evidence from
     resource sources or source status, and no stronger provider-owner evidence
     from Proxmox, VMware, TrueNAS, or Kubernetes. Source-less legacy snapshots
     may fall back to a normalized `platformType === "agent"`, but
-    provider-owned nodes must not become Agents-page members through hostname,
+    provider-owned nodes must not become Standalone-page members through hostname,
     `agent` platform scope, or agent telemetry alone; those facts surface as
     facets on the owning provider page.
     The default tab for each platform path must point at a sub-tab whose
@@ -1139,10 +1140,10 @@ or the live-state `platformData.availability` mirror: the System column uses
 the probe protocol as the compact identity badge (`ICMP`, `TCP`, or `HTTP`),
 while the metric cell shows only the target detail and latest latency or
 failure result, such as `6053: 11 ms`, `/status: 503`, `3 ms`, or `timed out`.
-The standalone Agents surface is the operational home for those same
-agentless checks, not a new top-level platform page. `AgentsPageSurface.tsx`
+The Standalone surface is the operational home for those same
+agentless checks, not a new top-level platform page. `StandalonePageSurface.tsx`
 must fetch both `agent` and `network-endpoint` resources, keep standalone
-machines and availability checks as separate buckets in `agentsPageModel.ts`,
+machines and availability checks as separate buckets in `standalonePageModel.ts`,
 and let `AvailabilityChecksTable.tsx` render saved probe method, target,
 latest result, check age, failure count, and cadence from the canonical
 availability payload.
@@ -2792,7 +2793,7 @@ redirect. Canonical infrastructure management lives under
 `/settings/infrastructure`, while agentless endpoint availability management
 lives under `/settings/monitoring/availability`; day-to-day resource
 inspection lives on the platform/runtime pages, with standalone agent machines
-and agentless endpoint checks sharing the Agents surface. Future
+and agentless endpoint checks sharing the Standalone surface. Future
 infrastructure work must extend those owners rather than recreating
 `frontend-modern/src/features/infrastructure/`, a `/infrastructure` route, or
 a separate top-level availability route.

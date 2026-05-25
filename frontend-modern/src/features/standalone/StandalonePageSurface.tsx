@@ -13,36 +13,39 @@ import {
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import { buildStandalonePath } from '@/routing/resourceLinks';
 import { AvailabilityChecksTable } from './AvailabilityChecksTable';
 import { AgentsMachinesTable } from './AgentsMachinesTable';
-import { buildAgentsPageModel } from './agentsPageModel';
+import { buildStandalonePageModel } from './standalonePageModel';
 
-const AGENTS_RESOURCE_QUERY = 'type=agent,network-endpoint';
-const AGENTS_TAB_SPECS = [
-  { id: 'overview', label: 'Overview', path: '/agents/overview' },
-  { id: 'availability', label: 'Availability checks', path: '/agents/availability' },
+const STANDALONE_RESOURCE_QUERY = 'type=agent,network-endpoint';
+const STANDALONE_TAB_SPECS = [
+  { id: 'overview', label: 'Overview', path: buildStandalonePath('overview') },
+  { id: 'availability', label: 'Availability checks', path: buildStandalonePath('availability') },
 ] as const;
-type AgentsTabId = (typeof AGENTS_TAB_SPECS)[number]['id'];
+type StandaloneTabId = (typeof STANDALONE_TAB_SPECS)[number]['id'];
 
-const agentsIcon = () => <ServerIcon class="h-6 w-6 text-slate-400" />;
+const machineIcon = () => <ServerIcon class="h-6 w-6 text-slate-400" />;
 const availabilityIcon = () => <ActivityIcon class="h-6 w-6 text-slate-400" />;
 
-const resolveAgentsTab = (pathname: string): AgentsTabId =>
-  pathname.replace(/\/+$/, '') === '/agents/availability' ? 'availability' : 'overview';
+const resolveStandaloneTab = (pathname: string): StandaloneTabId =>
+  pathname.replace(/\/+$/, '') === buildStandalonePath('availability')
+    ? 'availability'
+    : 'overview';
 
-export function AgentsPageSurface() {
+export function StandalonePageSurface() {
   const location = useLocation();
   const navigate = useNavigate();
   const { resources, loading, error, refetch } = useUnifiedResources({
-    query: AGENTS_RESOURCE_QUERY,
-    cacheKey: 'agents-workspace',
+    query: STANDALONE_RESOURCE_QUERY,
+    cacheKey: 'standalone-workspace',
     initialHydration: 'prefer-ws-then-rest',
   });
 
   const [initialLoadComplete, setInitialLoadComplete] = createSignal(false);
 
-  const model = createMemo(() => buildAgentsPageModel(resources()));
-  const activeTab = createMemo(() => resolveAgentsTab(location.pathname));
+  const model = createMemo(() => buildStandalonePageModel(resources()));
+  const activeTab = createMemo(() => resolveStandaloneTab(location.pathname));
   const showLoading = createMemo(
     () =>
       loading() &&
@@ -65,15 +68,19 @@ export function AgentsPageSurface() {
   });
 
   return (
-    <div data-testid="agents-page" class="space-y-4">
-      <PlatformSectionTabs tabs={AGENTS_TAB_SPECS} active={activeTab()} ariaLabel="Agents sections" />
+    <div data-testid="standalone-page" class="space-y-4">
+      <PlatformSectionTabs
+        tabs={STANDALONE_TAB_SPECS}
+        active={activeTab()}
+        ariaLabel="Standalone sections"
+      />
 
       <Show
         when={!showLoading()}
         fallback={
           <PlatformTableLoadingState
-            title="Loading Pulse Agent resources"
-            description="Pulse is loading the agent-backed machine snapshot."
+            title="Loading standalone resources"
+            description="Pulse is loading standalone machines and availability checks."
           />
         }
       >
@@ -81,7 +88,7 @@ export function AgentsPageSurface() {
           when={!error()}
           fallback={
             <PlatformErrorState
-              title="Could not load Pulse Agent resources"
+              title="Could not load standalone resources"
               description="Refresh the resource snapshot or check the API connection state."
               onRefresh={() => void refetch()}
             />
@@ -101,7 +108,7 @@ export function AgentsPageSurface() {
               when={!showOverviewEmpty()}
               fallback={
                 <PlatformTableEmptyState
-                  icon={agentsIcon()}
+                  icon={machineIcon()}
                   title="No standalone monitored endpoints"
                   description="Install Pulse Agent on standalone machines, or add agentless availability checks for devices and services that only need reachability monitoring."
                   actions={
@@ -130,7 +137,7 @@ export function AgentsPageSurface() {
                 <Show when={model().machines.length > 0}>
                   <AgentsMachinesTable
                     resources={model().machines}
-                    emptyIcon={agentsIcon()}
+                    emptyIcon={machineIcon()}
                     emptyTitle="No standalone Pulse Agent machines"
                     emptyDescription="Install the Pulse Agent on Linux, macOS, Windows, or Unraid systems that are not already represented by a platform integration."
                   />
@@ -152,4 +159,4 @@ export function AgentsPageSurface() {
   );
 }
 
-export default AgentsPageSurface;
+export default StandalonePageSurface;

@@ -40,7 +40,7 @@ const MOBILE_NAV_PRIMARY_PRIORITY = [
   'kubernetes',
   'truenas',
   'vmware',
-  'agents',
+  'standalone',
 ] as const;
 
 const MOBILE_NAV_UTILITY_PRIORITY = ['alerts', 'ai', 'settings'] as const;

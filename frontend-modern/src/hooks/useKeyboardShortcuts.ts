@@ -1,10 +1,10 @@
 import { createSignal, onCleanup, type Accessor } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import {
-  buildAgentsPath,
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
+  buildStandalonePath,
   buildTrueNASPath,
   buildVmwarePath,
 } from '@/routing/resourceLinks';
@@ -92,7 +92,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
         kubernetes: { key: 'k', route: buildKubernetesPath() },
         truenas: { key: 'n', route: buildTrueNASPath() },
         vmware: { key: 'v', route: buildVmwarePath() },
-        agents: { key: 'e', route: buildAgentsPath() },
+        standalone: { key: 's', route: buildStandalonePath() },
       },
       infrastructureVisibility,
     );

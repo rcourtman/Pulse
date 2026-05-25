@@ -15,7 +15,7 @@ export type PrimaryInfrastructureNavId =
   | 'kubernetes'
   | 'truenas'
   | 'vmware'
-  | 'agents';
+  | 'standalone';
 
 export type InfrastructureNavigationVisibility = Record<PrimaryInfrastructureNavId, boolean>;
 
@@ -30,7 +30,7 @@ export const PRIMARY_INFRASTRUCTURE_NAV_IDS: readonly PrimaryInfrastructureNavId
   'kubernetes',
   'truenas',
   'vmware',
-  'agents',
+  'standalone',
 ] as const;
 
 export const PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS: Record<
@@ -42,7 +42,7 @@ export const PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS: Record<
   kubernetes: ['kubernetes'],
   truenas: ['truenas'],
   vmware: ['vmware-vsphere'],
-  agents: ['agent'],
+  standalone: ['agent'],
 };
 
 const NAVIGABLE_PLATFORM_ID_SET = new Set<string>([
@@ -182,7 +182,7 @@ export function buildPrimaryInfrastructureNavigationVisibility(
     vmware: PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS.vmware.some((id) =>
       presentNavigableScopes.has(id),
     ),
-    agents: resources.some(isPulseAgentPlatformResource) || hasAvailabilityEndpoints,
+    standalone: resources.some(isPulseAgentPlatformResource) || hasAvailabilityEndpoints,
   };
 }
 
@@ -226,7 +226,7 @@ export function createEmptyInfrastructureNavigationVisibility(): InfrastructureN
     kubernetes: false,
     truenas: false,
     vmware: false,
-    agents: false,
+    standalone: false,
   };
 }
 

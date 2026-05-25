@@ -499,9 +499,10 @@ or other self-hosted uncapped continuity plans.
     directly replyable by customers.
     `App.tsx` and `AppLayout.tsx` own the governed platform/runtime primary
     navigation. `App.tsx` registers one top-level route per supported platform
-    or runtime family (Agents for the support-manifest `agent` platform,
-    Proxmox, the Docker / Podman container-runtime lens, Kubernetes, TrueNAS,
-    vSphere) using the canonical path constants from
+    or runtime family: Standalone for the support-manifest `agent` platform
+    plus agentless availability endpoints, Proxmox, the Docker / Podman
+    container-runtime lens, Kubernetes, TrueNAS, and vSphere, using the
+    canonical path constants from
     `frontend-modern/src/routing/resourceLinks.ts`. The `PrimaryTab` list in
     `AppLayout.tsx` must enumerate exactly those supported platform/runtime
     destinations, but product navigation is support-and-evidence gated:
@@ -525,14 +526,14 @@ or other self-hosted uncapped continuity plans.
     bespoke per-family tables, synthetic placeholder data, or reintroduce
     Infrastructure as a primary navigation entry without a governed contract
     decision recorded here.
-    The presence of an `Agents` tab is not a new commercial usage unit:
+    The presence of a `Standalone` tab is not a new commercial usage unit:
     hosted and paid surfaces continue to meter the governed monitored-system
     grouping result rather than counting primary navigation destinations.
-    Agents is also not the paid or hosted estate landing default when concrete
+    Standalone is also not the paid or hosted estate landing default when concrete
     provider/runtime platform evidence exists; the authenticated shell order
     and post-auth landing fallback must prefer Proxmox, Containers,
-    Kubernetes, TrueNAS, and vSphere ahead of Agents, with Agents first only in
-    an agent-only estate.
+    Kubernetes, TrueNAS, and vSphere ahead of Standalone, with Standalone first
+    only in a standalone-only estate.
 
 ## Forbidden Paths
 
@@ -1500,7 +1501,7 @@ path. `frontend-modern/src/App.tsx` and
 `frontend-modern/src/pages/RuntimeHome.tsx` must send authenticated `/`
 through the runtime-home landing contract first: existing operators and
 self-hosted sessions land on the first visible provider/runtime platform in
-the canonical shell order, with Agents only for agent-only estates. Hosted
+the canonical shell order, with Standalone only for standalone-only estates. Hosted
 workspaces with no connected infrastructure may still fall through to the
 single `/settings/infrastructure` ownership path, but the shell must not
 regress into a root-only settings redirect, legacy Infrastructure default, or

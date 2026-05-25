@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AGENTS_PATH,
-  AGENTS_DEFAULT_TAB,
   DOCKER_PATH,
   KUBERNETES_PATH,
   PMG_THRESHOLDS_PATH,
@@ -9,13 +7,15 @@ import {
   PROXMOX_DEFAULT_TAB,
   PROXMOX_PATH,
   RECOVERY_QUERY_PARAMS,
+  STANDALONE_DEFAULT_TAB,
+  STANDALONE_PATH,
   TRUENAS_PATH,
   VMWARE_PATH,
-  buildAgentsPath,
   buildDockerPath,
   buildKubernetesPath,
   buildRecoveryRouteSearch,
   buildProxmoxPath,
+  buildStandalonePath,
   buildStorageRouteSearch,
   buildTrueNASPath,
   buildVmwarePath,
@@ -40,11 +40,11 @@ describe('resource link routing contract', () => {
     expect(buildProxmoxPath('')).toBe('/proxmox');
   });
 
-  it('builds canonical Agents, container runtime, Kubernetes, TrueNAS, and vSphere tab paths', () => {
-    expect(AGENTS_PATH).toBe('/agents');
-    expect(AGENTS_DEFAULT_TAB).toBe('overview');
-    expect(buildAgentsPath()).toBe('/agents/overview');
-    expect(buildAgentsPath('')).toBe('/agents');
+  it('builds canonical Standalone, container runtime, Kubernetes, TrueNAS, and vSphere tab paths', () => {
+    expect(STANDALONE_PATH).toBe('/standalone');
+    expect(STANDALONE_DEFAULT_TAB).toBe('overview');
+    expect(buildStandalonePath()).toBe('/standalone/overview');
+    expect(buildStandalonePath('')).toBe('/standalone');
 
     expect(DOCKER_PATH).toBe('/docker');
     expect(buildDockerPath()).toBe('/docker/overview');

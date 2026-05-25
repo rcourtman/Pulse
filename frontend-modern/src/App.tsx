@@ -39,17 +39,17 @@ import { aiChatStore } from './stores/aiChat';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import {
-  AGENTS_PATH,
   DOCKER_PATH,
   KUBERNETES_PATH,
   PATROL_PATH,
   PROXMOX_PATH,
+  STANDALONE_PATH,
   TRUENAS_PATH,
   VMWARE_PATH,
-  buildAgentsPath,
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
+  buildStandalonePath,
   buildTrueNASPath,
   buildVmwarePath,
 } from './routing/resourceLinks';
@@ -84,7 +84,7 @@ const DockerPage = lazy(() => import('./pages/Docker'));
 const KubernetesPage = lazy(() => import('./pages/Kubernetes'));
 const TrueNASPage = lazy(() => import('./pages/TrueNAS'));
 const VmwarePage = lazy(() => import('./pages/Vmware'));
-const AgentsPage = lazy(() => import('./pages/Agents'));
+const StandalonePage = lazy(() => import('./pages/Standalone'));
 const AIIntelligencePage = lazy(() =>
   import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
 );
@@ -103,7 +103,7 @@ const PRIMARY_INFRASTRUCTURE_ROUTE_BY_ID: Record<PrimaryInfrastructureNavId, str
   kubernetes: buildKubernetesPath(),
   truenas: buildTrueNASPath(),
   vmware: buildVmwarePath(),
-  agents: buildAgentsPath(),
+  standalone: buildStandalonePath(),
 };
 
 function getDefaultWorkspaceRoute(
@@ -535,8 +535,8 @@ function App() {
       <Route path={`${TRUENAS_PATH}/*`} component={TrueNASPage} />
       <Route path={VMWARE_PATH} component={VmwarePage} />
       <Route path={`${VMWARE_PATH}/*`} component={VmwarePage} />
-      <Route path={AGENTS_PATH} component={AgentsPage} />
-      <Route path={`${AGENTS_PATH}/*`} component={AgentsPage} />
+      <Route path={STANDALONE_PATH} component={StandalonePage} />
+      <Route path={`${STANDALONE_PATH}/*`} component={StandalonePage} />
 
       <Route path="/alerts/*" component={AlertsPage} />
       <Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />

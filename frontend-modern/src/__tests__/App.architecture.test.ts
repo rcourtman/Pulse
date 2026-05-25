@@ -67,9 +67,15 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).not.toContain('fetchInfrastructureSummaryAndCache');
     expect(appRuntimeStateSource).not.toContain('fetchWorkloadsSummaryAndCache');
     expect(appRuntimeStateSource).not.toContain('requestIdleCallback');
-    expect(appSource).toContain("const AgentsPage = lazy(() => import('./pages/Agents'));");
-    expect(appSource).toContain('<Route path={AGENTS_PATH} component={AgentsPage} />');
-    expect(appSource).toContain('<Route path={`${AGENTS_PATH}/*`} component={AgentsPage} />');
+    expect(appSource).toContain(
+      "const StandalonePage = lazy(() => import('./pages/Standalone'));",
+    );
+    expect(appSource).toContain('<Route path={STANDALONE_PATH} component={StandalonePage} />');
+    expect(appSource).toContain(
+      '<Route path={`${STANDALONE_PATH}/*`} component={StandalonePage} />',
+    );
+    expect(appSource).not.toContain("import('./pages/Agents')");
+    expect(appSource).not.toContain('AGENTS_PATH');
     expect(appSource).toContain('<Route path={PROXMOX_PATH} component={ProxmoxPage} />');
     expect(appSource).toContain('<Route path={`${PROXMOX_PATH}/*`} component={ProxmoxPage} />');
     expect(appSource).toContain("const DockerPage = lazy(() => import('./pages/Docker'));");
@@ -80,15 +86,15 @@ describe('App architecture', () => {
     expect(appSource).toContain('<Route path={KUBERNETES_PATH} component={KubernetesPage} />');
     expect(appSource).toContain('<Route path={TRUENAS_PATH} component={TrueNASPage} />');
     expect(appSource).toContain('<Route path={VMWARE_PATH} component={VmwarePage} />');
-    expect(routePreloadSource).toContain("id: 'agents',");
+    expect(routePreloadSource).toContain("id: 'standalone',");
     expect(routePreloadSource).toContain("id: 'docker',");
     expect(routePreloadSource).toContain("id: 'kubernetes',");
     expect(routePreloadSource).toContain("id: 'truenas',");
     expect(routePreloadSource).toContain("id: 'vmware',");
     expect(routePreloadSource.indexOf("id: 'proxmox',")).toBeLessThan(
-      routePreloadSource.indexOf("id: 'agents',"),
+      routePreloadSource.indexOf("id: 'standalone',"),
     );
-    expect(appLayoutSource).toContain("id: 'agents',");
+    expect(appLayoutSource).toContain("id: 'standalone',");
     expect(appLayoutSource).toContain("id: 'docker',");
     expect(appLayoutSource).toContain("id: 'kubernetes',");
     expect(appLayoutSource).toContain("id: 'truenas',");
@@ -97,7 +103,7 @@ describe('App architecture', () => {
       "tooltip: 'VMware vSphere hosts, virtual machines, datastores, and networks'",
     );
     expect(appLayoutSource).toContain(
-      "tooltip: 'Standalone Pulse Agent machines, OS telemetry, storage, and command eligibility'",
+      "tooltip: 'Standalone Pulse Agent machines and agentless availability checks'",
     );
     // Governed shell nav: Infrastructure, Workloads, Storage, and Recovery are
     // not standalone shell tabs; platform/runtime pages own those workflows.
@@ -353,13 +359,13 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).not.toContain('function AppLayout(');
     expect(routePreloadSource).toContain('const ROUTE_PRELOADERS: readonly RoutePreloader[] = [');
     expect(routePreloadSource).toContain('export const APP_SHELL_ROUTE_PRELOAD_PATHS = [');
-    expect(routePreloadSource).toContain("id: 'agents',");
+    expect(routePreloadSource).toContain("id: 'standalone',");
     expect(routePreloadSource).toContain("id: 'proxmox',");
     expect(routePreloadSource).toContain("id: 'patrol',");
     expect(routePreloadSource).toContain(
       'const routePreloadCache = new Map<string, Promise<void>>();',
     );
-    expect(routePreloadSource).toContain("import('@/pages/Agents')");
+    expect(routePreloadSource).toContain("import('@/pages/Standalone')");
     expect(routePreloadSource).toContain("import('@/pages/Proxmox')");
     expect(routePreloadSource).not.toContain("import('@/pages/Infrastructure')");
     expect(routePreloadSource).not.toContain("import('@/pages/Workloads')");
