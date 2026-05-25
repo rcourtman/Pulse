@@ -1919,6 +1919,14 @@ func resourceTypeFilterAdapter(token string) []unified.ResourceType {
 		return []unified.ResourceType{unified.ResourceTypeK8sSecret}
 	case "k8s-serviceaccount", "k8s-serviceaccounts":
 		return []unified.ResourceType{unified.ResourceTypeK8sServiceAccount}
+	case "k8s-role", "k8s-roles":
+		return []unified.ResourceType{unified.ResourceTypeK8sRole}
+	case "k8s-cluster-role", "k8s-cluster-roles":
+		return []unified.ResourceType{unified.ResourceTypeK8sClusterRole}
+	case "k8s-role-binding", "k8s-role-bindings":
+		return []unified.ResourceType{unified.ResourceTypeK8sRoleBinding}
+	case "k8s-cluster-role-binding", "k8s-cluster-role-bindings":
+		return []unified.ResourceType{unified.ResourceTypeK8sClusterRoleBinding}
 	case "k8s-resource-quota", "k8s-resource-quotas":
 		return []unified.ResourceType{unified.ResourceTypeK8sResourceQuota}
 	case "k8s-limit-range", "k8s-limit-ranges":

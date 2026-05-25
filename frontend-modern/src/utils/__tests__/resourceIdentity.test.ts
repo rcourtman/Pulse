@@ -554,4 +554,18 @@ describe('resourceIdentity', () => {
       ),
     ).toBe('truenas-main');
   });
+
+  it('resolves canonical cluster names for Kubernetes RBAC inventory rows', () => {
+    for (const type of ['k8s-role', 'k8s-cluster-role', 'k8s-role-binding', 'k8s-cluster-role-binding'] as const) {
+      expect(
+        getPreferredResourceClusterName(
+          makeResource({
+            type,
+            name: type === 'k8s-role' || type === 'k8s-role-binding' ? 'api-runtime' : 'platform-monitoring',
+            kubernetes: { clusterName: 'prod-eu', context: 'prod-eu-context' },
+          }),
+        ),
+      ).toBe('prod-eu');
+    }
+  });
 });

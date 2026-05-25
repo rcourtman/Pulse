@@ -587,6 +587,10 @@ const KUBERNETES_RESOURCE_TYPES = new Set<ResourceType>([
   'k8s-configmap',
   'k8s-secret',
   'k8s-serviceaccount',
+  'k8s-role',
+  'k8s-cluster-role',
+  'k8s-role-binding',
+  'k8s-cluster-role-binding',
   'k8s-resource-quota',
   'k8s-limit-range',
   'k8s-pod-disruption-budget',
@@ -631,6 +635,10 @@ export type KubernetesPageModel = {
   configMaps: Resource[];
   secrets: Resource[];
   serviceAccounts: Resource[];
+  roles: Resource[];
+  clusterRoles: Resource[];
+  roleBindings: Resource[];
+  clusterRoleBindings: Resource[];
   resourceQuotas: Resource[];
   limitRanges: Resource[];
   podDisruptionBudgets: Resource[];
@@ -741,6 +749,12 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
   const configMaps = k8sResources.filter((resource) => resource.type === 'k8s-configmap');
   const secrets = k8sResources.filter((resource) => resource.type === 'k8s-secret');
   const serviceAccounts = k8sResources.filter((resource) => resource.type === 'k8s-serviceaccount');
+  const roles = k8sResources.filter((resource) => resource.type === 'k8s-role');
+  const clusterRoles = k8sResources.filter((resource) => resource.type === 'k8s-cluster-role');
+  const roleBindings = k8sResources.filter((resource) => resource.type === 'k8s-role-binding');
+  const clusterRoleBindings = k8sResources.filter(
+    (resource) => resource.type === 'k8s-cluster-role-binding',
+  );
   const resourceQuotas = k8sResources.filter((resource) => resource.type === 'k8s-resource-quota');
   const limitRanges = k8sResources.filter((resource) => resource.type === 'k8s-limit-range');
   const podDisruptionBudgets = k8sResources.filter(
@@ -762,7 +776,16 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
   const workloads = [...deployments, ...sortedControllers, ...pods];
   const storage = [...storageClasses, ...persistentVolumes, ...persistentVolumeClaims];
   const serviceNetworking = [...ingresses, ...endpointSlices];
-  const config = [...namespaces, ...configMaps, ...secrets, ...serviceAccounts];
+  const config = [
+    ...namespaces,
+    ...configMaps,
+    ...secrets,
+    ...serviceAccounts,
+    ...roles,
+    ...clusterRoles,
+    ...roleBindings,
+    ...clusterRoleBindings,
+  ];
   const policy = [...networkPolicies, ...podDisruptionBudgets, ...resourceQuotas, ...limitRanges];
   const autoscaling = [...horizontalPodAutoscalers];
   const incidents = buildKubernetesIncidentRows(k8sResources);
@@ -789,6 +812,10 @@ export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageM
     configMaps,
     secrets,
     serviceAccounts,
+    roles,
+    clusterRoles,
+    roleBindings,
+    clusterRoleBindings,
     resourceQuotas,
     limitRanges,
     podDisruptionBudgets,

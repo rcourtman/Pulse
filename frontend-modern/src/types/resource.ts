@@ -62,6 +62,10 @@ export type ResourceType =
   | 'k8s-configmap' // Kubernetes config map
   | 'k8s-secret' // Kubernetes secret metadata
   | 'k8s-serviceaccount' // Kubernetes service account
+  | 'k8s-role' // Kubernetes namespaced RBAC role
+  | 'k8s-cluster-role' // Kubernetes cluster-scoped RBAC role
+  | 'k8s-role-binding' // Kubernetes namespaced RBAC role binding
+  | 'k8s-cluster-role-binding' // Kubernetes cluster-scoped RBAC role binding
   | 'k8s-resource-quota' // Kubernetes resource quota
   | 'k8s-limit-range' // Kubernetes limit range
   | 'k8s-pod-disruption-budget' // Kubernetes pod disruption budget
@@ -992,6 +996,18 @@ export interface ResourceKubernetesMeta {
   automountServiceAccountToken?: boolean;
   secretCount?: number;
   imagePullSecrets?: string[];
+  // RBAC inventory surfaced on the Kubernetes platform-page Configuration
+  // tab. ruleCount is the number of PolicyRule entries on the (Cluster)Role;
+  // subjectCount + subjectKinds describe how many subjects the
+  // (Cluster)RoleBinding binds and which Kinds those subjects use (e.g.
+  // ServiceAccount / Group / User). Individual subject names are not
+  // surfaced — see KubernetesRole / KubernetesRoleBinding contracts.
+  ruleCount?: number;
+  roleKind?: string;
+  roleName?: string;
+  subjectCount?: number;
+  subjectKinds?: string[];
+  aggregationLabels?: Record<string, string>;
   hard?: Record<string, string>;
   used?: Record<string, string>;
   limitTypes?: string[];

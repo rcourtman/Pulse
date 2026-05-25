@@ -270,6 +270,10 @@ func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *co
 	configMaps := convertKubernetesConfigMaps(report.ConfigMaps)
 	secrets := convertKubernetesSecrets(report.Secrets)
 	serviceAccounts := convertKubernetesServiceAccounts(report.ServiceAccounts)
+	roles := convertKubernetesRoles(report.Roles)
+	clusterRoles := convertKubernetesClusterRoles(report.ClusterRoles)
+	roleBindings := convertKubernetesRoleBindings(report.RoleBindings)
+	clusterRoleBindings := convertKubernetesClusterRoleBindings(report.ClusterRoleBindings)
 	resourceQuotas := convertKubernetesResourceQuotas(report.ResourceQuotas)
 	limitRanges := convertKubernetesLimitRanges(report.LimitRanges)
 	podDisruptionBudgets := convertKubernetesPodDisruptionBudgets(report.PodDisruptionBudgets)
@@ -309,6 +313,10 @@ func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *co
 		ConfigMaps:               configMaps,
 		Secrets:                  secrets,
 		ServiceAccounts:          serviceAccounts,
+		Roles:                    roles,
+		ClusterRoles:             clusterRoles,
+		RoleBindings:             roleBindings,
+		ClusterRoleBindings:      clusterRoleBindings,
 		ResourceQuotas:           resourceQuotas,
 		LimitRanges:              limitRanges,
 		PodDisruptionBudgets:     podDisruptionBudgets,
@@ -685,6 +693,83 @@ func convertKubernetesServiceAccounts(accounts []agentsk8s.ServiceAccount) []mod
 			ImagePullSecrets:             append([]string(nil), account.ImagePullSecrets...),
 			CreatedAt:                    account.CreatedAt,
 			Labels:                       cloneStringMap(account.Labels),
+		}.NormalizeCollections())
+	}
+	return out
+}
+
+func convertKubernetesRoles(roles []agentsk8s.Role) []models.KubernetesRole {
+	if len(roles) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesRole, 0, len(roles))
+	for _, role := range roles {
+		out = append(out, models.KubernetesRole{
+			UID:       strings.TrimSpace(role.UID),
+			Name:      strings.TrimSpace(role.Name),
+			Namespace: strings.TrimSpace(role.Namespace),
+			RuleCount: role.RuleCount,
+			CreatedAt: role.CreatedAt,
+			Labels:    cloneStringMap(role.Labels),
+		}.NormalizeCollections())
+	}
+	return out
+}
+
+func convertKubernetesClusterRoles(roles []agentsk8s.ClusterRole) []models.KubernetesClusterRole {
+	if len(roles) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesClusterRole, 0, len(roles))
+	for _, role := range roles {
+		out = append(out, models.KubernetesClusterRole{
+			UID:               strings.TrimSpace(role.UID),
+			Name:              strings.TrimSpace(role.Name),
+			RuleCount:         role.RuleCount,
+			AggregationLabels: cloneStringMap(role.AggregationLabels),
+			CreatedAt:         role.CreatedAt,
+			Labels:            cloneStringMap(role.Labels),
+		}.NormalizeCollections())
+	}
+	return out
+}
+
+func convertKubernetesRoleBindings(bindings []agentsk8s.RoleBinding) []models.KubernetesRoleBinding {
+	if len(bindings) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesRoleBinding, 0, len(bindings))
+	for _, binding := range bindings {
+		out = append(out, models.KubernetesRoleBinding{
+			UID:          strings.TrimSpace(binding.UID),
+			Name:         strings.TrimSpace(binding.Name),
+			Namespace:    strings.TrimSpace(binding.Namespace),
+			RoleKind:     strings.TrimSpace(binding.RoleKind),
+			RoleName:     strings.TrimSpace(binding.RoleName),
+			SubjectCount: binding.SubjectCount,
+			SubjectKinds: append([]string(nil), binding.SubjectKinds...),
+			CreatedAt:    binding.CreatedAt,
+			Labels:       cloneStringMap(binding.Labels),
+		}.NormalizeCollections())
+	}
+	return out
+}
+
+func convertKubernetesClusterRoleBindings(bindings []agentsk8s.ClusterRoleBinding) []models.KubernetesClusterRoleBinding {
+	if len(bindings) == 0 {
+		return nil
+	}
+	out := make([]models.KubernetesClusterRoleBinding, 0, len(bindings))
+	for _, binding := range bindings {
+		out = append(out, models.KubernetesClusterRoleBinding{
+			UID:          strings.TrimSpace(binding.UID),
+			Name:         strings.TrimSpace(binding.Name),
+			RoleKind:     strings.TrimSpace(binding.RoleKind),
+			RoleName:     strings.TrimSpace(binding.RoleName),
+			SubjectCount: binding.SubjectCount,
+			SubjectKinds: append([]string(nil), binding.SubjectKinds...),
+			CreatedAt:    binding.CreatedAt,
+			Labels:       cloneStringMap(binding.Labels),
 		}.NormalizeCollections())
 	}
 	return out

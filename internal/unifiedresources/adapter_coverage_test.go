@@ -559,6 +559,26 @@ func TestKubernetesNativeInventoryAdapters(t *testing.T) {
 		t.Fatalf("unexpected serviceaccount resource: %+v", serviceAccount)
 	}
 
+	role, _ := resourceFromKubernetesRole(cluster, models.KubernetesRole{Name: "api-runtime", Namespace: "services", RuleCount: 4}, nil)
+	if role.Type != ResourceTypeK8sRole || role.Kubernetes == nil || role.Kubernetes.RuleCount != 4 || role.Kubernetes.Namespace != "services" {
+		t.Fatalf("unexpected role resource: %+v", role)
+	}
+
+	clusterRole, _ := resourceFromKubernetesClusterRole(cluster, models.KubernetesClusterRole{Name: "platform-monitoring", RuleCount: 12, AggregationLabels: map[string]string{"rbac.authorization.k8s.io/aggregate-to-admin": "true"}}, nil)
+	if clusterRole.Type != ResourceTypeK8sClusterRole || clusterRole.Kubernetes == nil || clusterRole.Kubernetes.RuleCount != 12 || clusterRole.Kubernetes.AggregationLabels["rbac.authorization.k8s.io/aggregate-to-admin"] != "true" {
+		t.Fatalf("unexpected clusterrole resource: %+v", clusterRole)
+	}
+
+	roleBinding, _ := resourceFromKubernetesRoleBinding(cluster, models.KubernetesRoleBinding{Name: "api-runtime", Namespace: "services", RoleKind: "Role", RoleName: "api-runtime", SubjectCount: 2, SubjectKinds: []string{"Group", "ServiceAccount"}}, nil)
+	if roleBinding.Type != ResourceTypeK8sRoleBinding || roleBinding.Kubernetes == nil || roleBinding.Kubernetes.RoleKind != "Role" || roleBinding.Kubernetes.SubjectCount != 2 {
+		t.Fatalf("unexpected rolebinding resource: %+v", roleBinding)
+	}
+
+	clusterRoleBinding, _ := resourceFromKubernetesClusterRoleBinding(cluster, models.KubernetesClusterRoleBinding{Name: "platform-monitoring", RoleKind: "ClusterRole", RoleName: "platform-monitoring", SubjectCount: 3, SubjectKinds: []string{"Group", "ServiceAccount", "User"}}, nil)
+	if clusterRoleBinding.Type != ResourceTypeK8sClusterRoleBinding || clusterRoleBinding.Kubernetes == nil || clusterRoleBinding.Kubernetes.SubjectCount != 3 || len(clusterRoleBinding.Kubernetes.SubjectKinds) != 3 {
+		t.Fatalf("unexpected clusterrolebinding resource: %+v", clusterRoleBinding)
+	}
+
 	resourceQuota, _ := resourceFromKubernetesResourceQuota(cluster, models.KubernetesResourceQuota{Name: "services-quota", Namespace: "services", Hard: map[string]string{"pods": "10"}, Used: map[string]string{"pods": "4"}}, nil)
 	if resourceQuota.Type != ResourceTypeK8sResourceQuota || resourceQuota.Kubernetes == nil || resourceQuota.Kubernetes.Hard["pods"] != "10" || resourceQuota.Kubernetes.Used["pods"] != "4" {
 		t.Fatalf("unexpected resource quota resource: %+v", resourceQuota)

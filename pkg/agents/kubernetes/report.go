@@ -26,6 +26,10 @@ type Report struct {
 	ConfigMaps               []ConfigMap               `json:"configMaps,omitempty"`
 	Secrets                  []Secret                  `json:"secrets,omitempty"`
 	ServiceAccounts          []ServiceAccount          `json:"serviceAccounts,omitempty"`
+	Roles                    []Role                    `json:"roles,omitempty"`
+	ClusterRoles             []ClusterRole             `json:"clusterRoles,omitempty"`
+	RoleBindings             []RoleBinding             `json:"roleBindings,omitempty"`
+	ClusterRoleBindings      []ClusterRoleBinding      `json:"clusterRoleBindings,omitempty"`
 	ResourceQuotas           []ResourceQuota           `json:"resourceQuotas,omitempty"`
 	LimitRanges              []LimitRange              `json:"limitRanges,omitempty"`
 	PodDisruptionBudgets     []PodDisruptionBudget     `json:"podDisruptionBudgets,omitempty"`
@@ -371,6 +375,60 @@ type ServiceAccount struct {
 	ImagePullSecrets             []string          `json:"imagePullSecrets,omitempty"`
 	CreatedAt                    time.Time         `json:"createdAt,omitempty"`
 	Labels                       map[string]string `json:"labels,omitempty"`
+}
+
+// Role represents Kubernetes RBAC Role metadata at report time. The agent
+// deliberately reports only summary counts (RuleCount) rather than the full
+// PolicyRule list so the operator can answer "what permissions exist where"
+// without Pulse becoming an RBAC enumeration surface.
+type Role struct {
+	UID       string            `json:"uid"`
+	Name      string            `json:"name"`
+	Namespace string            `json:"namespace"`
+	RuleCount int               `json:"ruleCount,omitempty"`
+	CreatedAt time.Time         `json:"createdAt,omitempty"`
+	Labels    map[string]string `json:"labels,omitempty"`
+}
+
+// ClusterRole represents Kubernetes RBAC ClusterRole metadata at report time.
+// AggregationLabels surfaces whether this is an aggregated role; full
+// PolicyRule contents are intentionally omitted (see Role).
+type ClusterRole struct {
+	UID               string            `json:"uid"`
+	Name              string            `json:"name"`
+	RuleCount         int               `json:"ruleCount,omitempty"`
+	AggregationLabels map[string]string `json:"aggregationLabels,omitempty"`
+	CreatedAt         time.Time         `json:"createdAt,omitempty"`
+	Labels            map[string]string `json:"labels,omitempty"`
+}
+
+// RoleBinding represents Kubernetes RBAC RoleBinding metadata at report time.
+// RoleKind / RoleName describe what role this binding grants; SubjectCount
+// and SubjectKinds describe who the role is granted to without leaking
+// individual user / group names.
+type RoleBinding struct {
+	UID          string            `json:"uid"`
+	Name         string            `json:"name"`
+	Namespace    string            `json:"namespace"`
+	RoleKind     string            `json:"roleKind"`
+	RoleName     string            `json:"roleName"`
+	SubjectCount int               `json:"subjectCount,omitempty"`
+	SubjectKinds []string          `json:"subjectKinds,omitempty"`
+	CreatedAt    time.Time         `json:"createdAt,omitempty"`
+	Labels       map[string]string `json:"labels,omitempty"`
+}
+
+// ClusterRoleBinding represents Kubernetes RBAC ClusterRoleBinding metadata
+// at report time. See RoleBinding for field semantics.
+type ClusterRoleBinding struct {
+	UID          string            `json:"uid"`
+	Name         string            `json:"name"`
+	RoleKind     string            `json:"roleKind"`
+	RoleName     string            `json:"roleName"`
+	SubjectCount int               `json:"subjectCount,omitempty"`
+	SubjectKinds []string          `json:"subjectKinds,omitempty"`
+	CreatedAt    time.Time         `json:"createdAt,omitempty"`
+	Labels       map[string]string `json:"labels,omitempty"`
 }
 
 // ResourceQuota represents Kubernetes ResourceQuota metadata and observed usage.

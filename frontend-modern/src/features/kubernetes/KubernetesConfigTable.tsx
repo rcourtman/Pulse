@@ -43,6 +43,10 @@ const configKind = (resource: Resource): string => {
   if (resource.type === 'k8s-configmap') return 'ConfigMap';
   if (resource.type === 'k8s-secret') return 'Secret';
   if (resource.type === 'k8s-serviceaccount') return 'ServiceAccount';
+  if (resource.type === 'k8s-role') return 'Role';
+  if (resource.type === 'k8s-cluster-role') return 'ClusterRole';
+  if (resource.type === 'k8s-role-binding') return 'RoleBinding';
+  if (resource.type === 'k8s-cluster-role-binding') return 'ClusterRoleBinding';
   return resource.kubernetes?.resourceKind || resource.type;
 };
 
@@ -101,10 +105,37 @@ const lifecycleOrTrust = (resource: Resource): string => {
     if (resource.kubernetes?.automountServiceAccountToken === true) return 'Auto token';
     return 'Default token';
   }
+  if (resource.type === 'k8s-role' || resource.type === 'k8s-cluster-role') {
+    const rules = resource.kubernetes?.ruleCount ?? 0;
+    const aggregated =
+      resource.type === 'k8s-cluster-role' &&
+      resource.kubernetes?.aggregationLabels &&
+      Object.keys(resource.kubernetes.aggregationLabels).length > 0;
+    const parts = [plural(rules, 'rule'), aggregated ? 'Aggregated' : undefined].filter(Boolean);
+    return parts.join(' · ');
+  }
+  if (resource.type === 'k8s-role-binding' || resource.type === 'k8s-cluster-role-binding') {
+    const kind = asTrimmedString(resource.kubernetes?.roleKind);
+    const name = asTrimmedString(resource.kubernetes?.roleName);
+    if (kind && name) return `${kind}/${name}`;
+    return kind || name || '—';
+  }
   return textValue(resource.status);
 };
 
 const dataShape = (resource: Resource): { label: string; title: string } => {
+  if (resource.type === 'k8s-role-binding' || resource.type === 'k8s-cluster-role-binding') {
+    const subjectCount = resource.kubernetes?.subjectCount ?? 0;
+    if (subjectCount === 0) {
+      return { label: 'No subjects', title: '' };
+    }
+    const kinds = summarizeValues(resource.kubernetes?.subjectKinds);
+    const label =
+      kinds.label !== '—'
+        ? `${plural(subjectCount, 'subject')} · ${kinds.label}`
+        : plural(subjectCount, 'subject');
+    return { label, title: kinds.title || label };
+  }
   if (resource.type !== 'k8s-configmap' && resource.type !== 'k8s-secret') {
     return { label: '—', title: '' };
   }
@@ -201,7 +232,7 @@ export const KubernetesConfigTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader
-              title={props.title ?? 'Namespaces, ConfigMaps, Secrets, and ServiceAccounts'}
+              title={props.title ?? 'Namespaces, ConfigMaps, Secrets, ServiceAccounts, RBAC'}
             />
             <Table class="min-w-full table-fixed text-xs md:min-w-[1160px]">
               <TableHeader>

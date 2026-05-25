@@ -99,6 +99,18 @@ func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
 				ServiceAccounts: []models.KubernetesServiceAccount{{
 					UID: "serviceaccount-uid-1", Name: "api", Namespace: "default", AutomountServiceAccountToken: &automountToken, SecretCount: 1,
 				}},
+				Roles: []models.KubernetesRole{{
+					UID: "role-uid-1", Name: "api-runtime", Namespace: "default", RuleCount: 4,
+				}},
+				ClusterRoles: []models.KubernetesClusterRole{{
+					UID: "clusterrole-uid-1", Name: "platform-monitoring", RuleCount: 12, AggregationLabels: map[string]string{"rbac.authorization.k8s.io/aggregate-to-admin": "true"},
+				}},
+				RoleBindings: []models.KubernetesRoleBinding{{
+					UID: "rolebinding-uid-1", Name: "api-runtime", Namespace: "default", RoleKind: "Role", RoleName: "api-runtime", SubjectCount: 2, SubjectKinds: []string{"Group", "ServiceAccount"},
+				}},
+				ClusterRoleBindings: []models.KubernetesClusterRoleBinding{{
+					UID: "clusterrolebinding-uid-1", Name: "platform-monitoring", RoleKind: "ClusterRole", RoleName: "platform-monitoring", SubjectCount: 3, SubjectKinds: []string{"Group", "ServiceAccount", "User"},
+				}},
 				ResourceQuotas: []models.KubernetesResourceQuota{{
 					UID: "resourcequota-uid-1", Name: "api-quota", Namespace: "default", Hard: map[string]string{"pods": "10"}, Used: map[string]string{"pods": "2"},
 				}},
@@ -120,8 +132,8 @@ func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
 	registry.IngestSnapshot(snapshot)
 
 	resources := registry.List()
-	if len(resources) != 25 {
-		t.Fatalf("expected 25 kubernetes resources, got %d", len(resources))
+	if len(resources) != 29 {
+		t.Fatalf("expected 29 kubernetes resources, got %d", len(resources))
 	}
 
 	var clusterResource *Resource
@@ -161,6 +173,10 @@ func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
 		ResourceTypeK8sConfigMap,
 		ResourceTypeK8sSecret,
 		ResourceTypeK8sServiceAccount,
+		ResourceTypeK8sRole,
+		ResourceTypeK8sClusterRole,
+		ResourceTypeK8sRoleBinding,
+		ResourceTypeK8sClusterRoleBinding,
 		ResourceTypeK8sResourceQuota,
 		ResourceTypeK8sLimitRange,
 		ResourceTypeK8sPDB,

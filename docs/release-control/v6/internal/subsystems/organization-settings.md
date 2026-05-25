@@ -85,10 +85,11 @@ create, review, and approve cross-organization shares.
    secret/Swarm config row or Kubernetes
    Service/controller/storage/networking/config/event row, including
    ReplicaSets, EndpointSlices, NetworkPolicies, StorageClasses, ConfigMaps,
-   Secrets, ServiceAccounts, ResourceQuotas, LimitRanges,
-   PodDisruptionBudgets, or HorizontalPodAutoscalers, as a broader
-   organization role, agent enrollment authority, secret-sharing channel,
-   config-sharing channel, or command capability.
+   Secrets, ServiceAccounts, Roles, ClusterRoles, RoleBindings,
+   ClusterRoleBindings, ResourceQuotas, LimitRanges, PodDisruptionBudgets, or
+   HorizontalPodAutoscalers, as a broader organization role, agent enrollment
+   authority, secret-sharing channel, config-sharing channel, or command
+   capability.
 5. Keep RBAC role, assignment, and admin recovery transport aligned through `internal/api/access_control_handlers.go` and `internal/api/enterprise_extension_rbac_admin.go`
 
 ## Forbidden Paths

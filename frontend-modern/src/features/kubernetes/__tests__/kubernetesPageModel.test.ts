@@ -86,6 +86,10 @@ describe('kubernetesPageModel', () => {
       makeResource({ id: 'cm-1', type: 'k8s-configmap' }),
       makeResource({ id: 'secret-1', type: 'k8s-secret' }),
       makeResource({ id: 'sa-1', type: 'k8s-serviceaccount' }),
+      makeResource({ id: 'role-1', type: 'k8s-role' }),
+      makeResource({ id: 'crole-1', type: 'k8s-cluster-role' }),
+      makeResource({ id: 'rb-1', type: 'k8s-role-binding' }),
+      makeResource({ id: 'crb-1', type: 'k8s-cluster-role-binding' }),
       makeResource({ id: 'quota-1', type: 'k8s-resource-quota' }),
       makeResource({ id: 'limits-1', type: 'k8s-limit-range' }),
       makeResource({ id: 'pdb-1', type: 'k8s-pod-disruption-budget' }),
@@ -114,6 +118,10 @@ describe('kubernetesPageModel', () => {
     expect(model.configMaps.map((r) => r.id)).toEqual(['cm-1']);
     expect(model.secrets.map((r) => r.id)).toEqual(['secret-1']);
     expect(model.serviceAccounts.map((r) => r.id)).toEqual(['sa-1']);
+    expect(model.roles.map((r) => r.id)).toEqual(['role-1']);
+    expect(model.clusterRoles.map((r) => r.id)).toEqual(['crole-1']);
+    expect(model.roleBindings.map((r) => r.id)).toEqual(['rb-1']);
+    expect(model.clusterRoleBindings.map((r) => r.id)).toEqual(['crb-1']);
     expect(model.resourceQuotas.map((r) => r.id)).toEqual(['quota-1']);
     expect(model.limitRanges.map((r) => r.id)).toEqual(['limits-1']);
     expect(model.podDisruptionBudgets.map((r) => r.id)).toEqual(['pdb-1']);
@@ -125,13 +133,13 @@ describe('kubernetesPageModel', () => {
     expect(model.storage.map((r) => r.id).sort()).toEqual(['pv-1', 'pvc-1', 'sc-1']);
     expect(model.serviceNetworking.map((r) => r.id).sort()).toEqual(['eps-1', 'ing-1']);
     expect(model.config.map((r) => r.id).sort()).toEqual(
-      ['cm-1', 'ns-1', 'sa-1', 'secret-1'].sort(),
+      ['cm-1', 'crb-1', 'crole-1', 'ns-1', 'rb-1', 'role-1', 'sa-1', 'secret-1'].sort(),
     );
     expect(model.policy.map((r) => r.id).sort()).toEqual(
       ['limits-1', 'netpol-1', 'pdb-1', 'quota-1'].sort(),
     );
     expect(model.autoscaling.map((r) => r.id)).toEqual(['hpa-1']);
-    expect(model.resources).toHaveLength(25);
+    expect(model.resources).toHaveLength(29);
   });
 
   it('treats agent rows that report a kubernetes source as Kubernetes nodes', () => {

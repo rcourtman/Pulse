@@ -184,12 +184,15 @@ Docker / Podman native inventory and Kubernetes native API inventory follow
 that same lifecycle boundary. Images, volumes, networks, Swarm tasks,
 Swarm nodes, Swarm secrets, Swarm configs, engine storage-usage buckets,
 Kubernetes Services, controllers, EndpointSlices, NetworkPolicies, PV/PVC
-records, StorageClasses, ConfigMaps, Secrets, ServiceAccounts, ResourceQuotas,
+records, StorageClasses, ConfigMaps, Secrets, ServiceAccounts, Roles,
+ClusterRoles, RoleBindings, ClusterRoleBindings, ResourceQuotas,
 LimitRanges, PodDisruptionBudgets, HorizontalPodAutoscalers, ingresses,
 namespaces, and events may appear as API/unified-resource evidence, but
 lifecycle surfaces must not treat those child inventory rows as agent
 enrollment candidates, install targets, fleet command authorities, setup-token
-scopes, credential grants, or command material. Podman libpod pod records are
+scopes, credential grants, or command material. RBAC inventory in particular
+reports summary counts only and never carries credentials, individual subject
+identities, or full policy rules into the lifecycle surface. Podman libpod pod records are
 not part of that lifecycle-visible inventory until a libpod-native collector
 owns them explicitly; Docker-compatible Podman container labels remain runtime
 metadata only.

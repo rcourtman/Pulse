@@ -1027,6 +1027,10 @@ type KubernetesCluster struct {
 	ConfigMaps               []KubernetesConfigMap               `json:"configMaps,omitempty"`
 	Secrets                  []KubernetesSecret                  `json:"secrets,omitempty"`
 	ServiceAccounts          []KubernetesServiceAccount          `json:"serviceAccounts,omitempty"`
+	Roles                    []KubernetesRole                    `json:"roles,omitempty"`
+	ClusterRoles             []KubernetesClusterRole             `json:"clusterRoles,omitempty"`
+	RoleBindings             []KubernetesRoleBinding             `json:"roleBindings,omitempty"`
+	ClusterRoleBindings      []KubernetesClusterRoleBinding      `json:"clusterRoleBindings,omitempty"`
 	ResourceQuotas           []KubernetesResourceQuota           `json:"resourceQuotas,omitempty"`
 	LimitRanges              []KubernetesLimitRange              `json:"limitRanges,omitempty"`
 	PodDisruptionBudgets     []KubernetesPodDisruptionBudget     `json:"podDisruptionBudgets,omitempty"`
@@ -1157,6 +1161,30 @@ func (c KubernetesCluster) NormalizeCollections() KubernetesCluster {
 	}
 	for i := range c.ServiceAccounts {
 		c.ServiceAccounts[i] = c.ServiceAccounts[i].NormalizeCollections()
+	}
+	if c.Roles == nil {
+		c.Roles = []KubernetesRole{}
+	}
+	for i := range c.Roles {
+		c.Roles[i] = c.Roles[i].NormalizeCollections()
+	}
+	if c.ClusterRoles == nil {
+		c.ClusterRoles = []KubernetesClusterRole{}
+	}
+	for i := range c.ClusterRoles {
+		c.ClusterRoles[i] = c.ClusterRoles[i].NormalizeCollections()
+	}
+	if c.RoleBindings == nil {
+		c.RoleBindings = []KubernetesRoleBinding{}
+	}
+	for i := range c.RoleBindings {
+		c.RoleBindings[i] = c.RoleBindings[i].NormalizeCollections()
+	}
+	if c.ClusterRoleBindings == nil {
+		c.ClusterRoleBindings = []KubernetesClusterRoleBinding{}
+	}
+	for i := range c.ClusterRoleBindings {
+		c.ClusterRoleBindings[i] = c.ClusterRoleBindings[i].NormalizeCollections()
 	}
 	if c.ResourceQuotas == nil {
 		c.ResourceQuotas = []KubernetesResourceQuota{}
@@ -1659,6 +1687,95 @@ func (s KubernetesServiceAccount) NormalizeCollections() KubernetesServiceAccoun
 		s.Labels = map[string]string{}
 	}
 	return s
+}
+
+// KubernetesRole mirrors the agent's namespaced RBAC Role contract. Full
+// PolicyRule contents are deliberately not propagated so Pulse stays a
+// "what permissions exist where" surface, not an RBAC enumeration tool.
+type KubernetesRole struct {
+	UID       string            `json:"uid"`
+	Name      string            `json:"name"`
+	Namespace string            `json:"namespace"`
+	RuleCount int               `json:"ruleCount,omitempty"`
+	CreatedAt time.Time         `json:"createdAt,omitempty"`
+	Labels    map[string]string `json:"labels,omitempty"`
+}
+
+func (r KubernetesRole) NormalizeCollections() KubernetesRole {
+	if r.Labels == nil {
+		r.Labels = map[string]string{}
+	}
+	return r
+}
+
+// KubernetesClusterRole mirrors the agent's cluster-scoped RBAC ClusterRole
+// contract. See KubernetesRole for the rule-count rationale.
+type KubernetesClusterRole struct {
+	UID               string            `json:"uid"`
+	Name              string            `json:"name"`
+	RuleCount         int               `json:"ruleCount,omitempty"`
+	AggregationLabels map[string]string `json:"aggregationLabels,omitempty"`
+	CreatedAt         time.Time         `json:"createdAt,omitempty"`
+	Labels            map[string]string `json:"labels,omitempty"`
+}
+
+func (r KubernetesClusterRole) NormalizeCollections() KubernetesClusterRole {
+	if r.AggregationLabels == nil {
+		r.AggregationLabels = map[string]string{}
+	}
+	if r.Labels == nil {
+		r.Labels = map[string]string{}
+	}
+	return r
+}
+
+// KubernetesRoleBinding mirrors the agent's namespaced RBAC RoleBinding.
+// SubjectKinds is the distinct, sorted set of subject Kinds bound by this
+// rule (User / Group / ServiceAccount); individual subject names are not
+// reported.
+type KubernetesRoleBinding struct {
+	UID          string            `json:"uid"`
+	Name         string            `json:"name"`
+	Namespace    string            `json:"namespace"`
+	RoleKind     string            `json:"roleKind"`
+	RoleName     string            `json:"roleName"`
+	SubjectCount int               `json:"subjectCount,omitempty"`
+	SubjectKinds []string          `json:"subjectKinds,omitempty"`
+	CreatedAt    time.Time         `json:"createdAt,omitempty"`
+	Labels       map[string]string `json:"labels,omitempty"`
+}
+
+func (b KubernetesRoleBinding) NormalizeCollections() KubernetesRoleBinding {
+	if b.SubjectKinds == nil {
+		b.SubjectKinds = []string{}
+	}
+	if b.Labels == nil {
+		b.Labels = map[string]string{}
+	}
+	return b
+}
+
+// KubernetesClusterRoleBinding mirrors the agent's cluster-scoped RBAC
+// ClusterRoleBinding. See KubernetesRoleBinding for the subject-kinds rationale.
+type KubernetesClusterRoleBinding struct {
+	UID          string            `json:"uid"`
+	Name         string            `json:"name"`
+	RoleKind     string            `json:"roleKind"`
+	RoleName     string            `json:"roleName"`
+	SubjectCount int               `json:"subjectCount,omitempty"`
+	SubjectKinds []string          `json:"subjectKinds,omitempty"`
+	CreatedAt    time.Time         `json:"createdAt,omitempty"`
+	Labels       map[string]string `json:"labels,omitempty"`
+}
+
+func (b KubernetesClusterRoleBinding) NormalizeCollections() KubernetesClusterRoleBinding {
+	if b.SubjectKinds == nil {
+		b.SubjectKinds = []string{}
+	}
+	if b.Labels == nil {
+		b.Labels = map[string]string{}
+	}
+	return b
 }
 
 type KubernetesResourceQuota struct {

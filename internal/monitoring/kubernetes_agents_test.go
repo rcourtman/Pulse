@@ -140,12 +140,16 @@ func TestApplyKubernetesReportPreservesNativeAPIInventory(t *testing.T) {
 		PersistentVolumeClaims: []agentsk8s.PersistentVolumeClaim{{
 			UID: "pvc-1", Name: "checkout-data", Namespace: "services", Phase: " Bound ", StorageClass: "fast", RequestedBytes: 10_000, CapacityBytes: 10_000, AccessModes: []string{"ReadWriteOnce"}, VolumeName: "pv-checkout", CreatedAt: now,
 		}},
-		StorageClasses:  []agentsk8s.StorageClass{{UID: "sc-1", Name: "fast", Provisioner: "csi.example.test", ReclaimPolicy: "Delete", VolumeBindingMode: "WaitForFirstConsumer", AllowVolumeExpansion: &allowExpansion, ParameterKeys: []string{"type"}}},
-		ConfigMaps:      []agentsk8s.ConfigMap{{UID: "cm-1", Name: "checkout-config", Namespace: "services", DataKeys: []string{"app.yaml"}, BinaryDataKeys: []string{"logo.png"}, Immutable: true, MetadataOnly: true}},
-		Secrets:         []agentsk8s.Secret{{UID: "sec-1", Name: "checkout-secret", Namespace: "services", Type: "Opaque", DataKeys: []string{"token"}, Immutable: true, MetadataOnly: true}},
-		ServiceAccounts: []agentsk8s.ServiceAccount{{UID: "sa-1", Name: "checkout", Namespace: "services", AutomountServiceAccountToken: &automountToken, SecretCount: 1, ImagePullSecrets: []string{"pull-secret"}}},
-		ResourceQuotas:  []agentsk8s.ResourceQuota{{UID: "rq-1", Name: "services-quota", Namespace: "services", Hard: map[string]string{"pods": "10"}, Used: map[string]string{"pods": "3"}}},
-		LimitRanges:     []agentsk8s.LimitRange{{UID: "lr-1", Name: "services-limits", Namespace: "services", LimitTypes: []string{"Container"}}},
+		StorageClasses:      []agentsk8s.StorageClass{{UID: "sc-1", Name: "fast", Provisioner: "csi.example.test", ReclaimPolicy: "Delete", VolumeBindingMode: "WaitForFirstConsumer", AllowVolumeExpansion: &allowExpansion, ParameterKeys: []string{"type"}}},
+		ConfigMaps:          []agentsk8s.ConfigMap{{UID: "cm-1", Name: "checkout-config", Namespace: "services", DataKeys: []string{"app.yaml"}, BinaryDataKeys: []string{"logo.png"}, Immutable: true, MetadataOnly: true}},
+		Secrets:             []agentsk8s.Secret{{UID: "sec-1", Name: "checkout-secret", Namespace: "services", Type: "Opaque", DataKeys: []string{"token"}, Immutable: true, MetadataOnly: true}},
+		ServiceAccounts:     []agentsk8s.ServiceAccount{{UID: "sa-1", Name: "checkout", Namespace: "services", AutomountServiceAccountToken: &automountToken, SecretCount: 1, ImagePullSecrets: []string{"pull-secret"}}},
+		Roles:               []agentsk8s.Role{{UID: "role-1", Name: "checkout-runtime", Namespace: "services", RuleCount: 4}},
+		ClusterRoles:        []agentsk8s.ClusterRole{{UID: "crole-1", Name: "platform-monitoring", RuleCount: 12, AggregationLabels: map[string]string{"rbac.authorization.k8s.io/aggregate-to-admin": "true"}}},
+		RoleBindings:        []agentsk8s.RoleBinding{{UID: "rb-1", Name: "checkout-runtime", Namespace: "services", RoleKind: "Role", RoleName: "checkout-runtime", SubjectCount: 2, SubjectKinds: []string{"Group", "ServiceAccount"}}},
+		ClusterRoleBindings: []agentsk8s.ClusterRoleBinding{{UID: "crb-1", Name: "platform-monitoring", RoleKind: "ClusterRole", RoleName: "platform-monitoring", SubjectCount: 3, SubjectKinds: []string{"Group", "ServiceAccount", "User"}}},
+		ResourceQuotas:      []agentsk8s.ResourceQuota{{UID: "rq-1", Name: "services-quota", Namespace: "services", Hard: map[string]string{"pods": "10"}, Used: map[string]string{"pods": "3"}}},
+		LimitRanges:         []agentsk8s.LimitRange{{UID: "lr-1", Name: "services-limits", Namespace: "services", LimitTypes: []string{"Container"}}},
 		PodDisruptionBudgets: []agentsk8s.PodDisruptionBudget{{
 			UID: "pdb-1", Name: "checkout-pdb", Namespace: "services", MinAvailable: "1", DesiredHealthy: 1, CurrentHealthy: 1, DisruptionsAllowed: 1, ExpectedPods: 2,
 		}},
@@ -210,6 +214,18 @@ func TestApplyKubernetesReportPreservesNativeAPIInventory(t *testing.T) {
 	}
 	if len(cluster.ServiceAccounts) != 1 || cluster.ServiceAccounts[0].SecretCount != 1 || cluster.ServiceAccounts[0].AutomountServiceAccountToken == nil || !*cluster.ServiceAccounts[0].AutomountServiceAccountToken {
 		t.Fatalf("expected serviceaccount inventory, got %+v", cluster.ServiceAccounts)
+	}
+	if len(cluster.Roles) != 1 || cluster.Roles[0].Name != "checkout-runtime" || cluster.Roles[0].RuleCount != 4 {
+		t.Fatalf("expected role inventory, got %+v", cluster.Roles)
+	}
+	if len(cluster.ClusterRoles) != 1 || cluster.ClusterRoles[0].RuleCount != 12 || cluster.ClusterRoles[0].AggregationLabels["rbac.authorization.k8s.io/aggregate-to-admin"] != "true" {
+		t.Fatalf("expected clusterrole inventory, got %+v", cluster.ClusterRoles)
+	}
+	if len(cluster.RoleBindings) != 1 || cluster.RoleBindings[0].RoleKind != "Role" || cluster.RoleBindings[0].SubjectCount != 2 || len(cluster.RoleBindings[0].SubjectKinds) != 2 {
+		t.Fatalf("expected rolebinding inventory, got %+v", cluster.RoleBindings)
+	}
+	if len(cluster.ClusterRoleBindings) != 1 || cluster.ClusterRoleBindings[0].RoleKind != "ClusterRole" || cluster.ClusterRoleBindings[0].SubjectCount != 3 {
+		t.Fatalf("expected clusterrolebinding inventory, got %+v", cluster.ClusterRoleBindings)
 	}
 	if len(cluster.ResourceQuotas) != 1 || cluster.ResourceQuotas[0].Hard["pods"] != "10" || cluster.ResourceQuotas[0].Used["pods"] != "3" {
 		t.Fatalf("expected resourcequota inventory, got %+v", cluster.ResourceQuotas)

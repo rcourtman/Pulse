@@ -3589,7 +3589,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Shared Boundaries",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 246,
+                    "line": 253,
                     "heading_line": 109,
                 }
             ],
@@ -3628,7 +3628,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Extension Points",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 92,
+                    "line": 93,
                     "heading_line": 70,
                 },
             ],

@@ -41,6 +41,10 @@ describe('toReportingResourceType', () => {
     expect(toReportingResourceType('k8s-configmap')).toBe('k8s');
     expect(toReportingResourceType('k8s-secret')).toBe('k8s');
     expect(toReportingResourceType('k8s-serviceaccount')).toBe('k8s');
+    expect(toReportingResourceType('k8s-role')).toBe('k8s');
+    expect(toReportingResourceType('k8s-cluster-role')).toBe('k8s');
+    expect(toReportingResourceType('k8s-role-binding')).toBe('k8s');
+    expect(toReportingResourceType('k8s-cluster-role-binding')).toBe('k8s');
     expect(toReportingResourceType('k8s-resource-quota')).toBe('k8s');
     expect(toReportingResourceType('k8s-limit-range')).toBe('k8s');
     expect(toReportingResourceType('k8s-pod-disruption-budget')).toBe('k8s');

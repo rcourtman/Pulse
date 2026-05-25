@@ -3016,6 +3016,111 @@ func resourceFromKubernetesServiceAccount(cluster models.KubernetesCluster, acco
 	return resource, namespacedKubernetesIdentity(clusterName, account.Namespace, account.Name)
 }
 
+func resourceFromKubernetesRole(cluster models.KubernetesCluster, role models.KubernetesRole, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(role.Labels)
+	data := baseKubernetesData(cluster, clusterName, "Role", capabilities)
+	data.RoleUID = role.UID
+	data.ResourceUID = role.UID
+	data.Namespace = role.Namespace
+	data.RuleCount = role.RuleCount
+	data.Labels = labels
+	data.CreatedAt = zeroTimeToPtr(role.CreatedAt)
+	resource := Resource{
+		Type:       ResourceTypeK8sRole,
+		Technology: "kubernetes",
+		Name:       role.Name,
+		Status:     StatusOnline,
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+		Tags:       labelsToTags(labels),
+	}
+	return resource, namespacedKubernetesIdentity(clusterName, role.Namespace, role.Name)
+}
+
+func resourceFromKubernetesClusterRole(cluster models.KubernetesCluster, role models.KubernetesClusterRole, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(role.Labels)
+	data := baseKubernetesData(cluster, clusterName, "ClusterRole", capabilities)
+	data.ClusterRoleUID = role.UID
+	data.ResourceUID = role.UID
+	data.RuleCount = role.RuleCount
+	data.AggregationLabels = cloneStringMap(role.AggregationLabels)
+	data.Labels = labels
+	data.CreatedAt = zeroTimeToPtr(role.CreatedAt)
+	resource := Resource{
+		Type:       ResourceTypeK8sClusterRole,
+		Technology: "kubernetes",
+		Name:       role.Name,
+		Status:     StatusOnline,
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+		Tags:       labelsToTags(labels),
+	}
+	identity := ResourceIdentity{
+		Hostnames:   uniqueStrings([]string{role.Name, clusterName + ":" + role.Name}),
+		ClusterName: clusterName,
+	}
+	return resource, identity
+}
+
+func resourceFromKubernetesRoleBinding(cluster models.KubernetesCluster, binding models.KubernetesRoleBinding, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(binding.Labels)
+	data := baseKubernetesData(cluster, clusterName, "RoleBinding", capabilities)
+	data.RoleBindingUID = binding.UID
+	data.ResourceUID = binding.UID
+	data.Namespace = binding.Namespace
+	data.RoleKind = binding.RoleKind
+	data.RoleName = binding.RoleName
+	data.SubjectCount = binding.SubjectCount
+	data.SubjectKinds = append([]string(nil), binding.SubjectKinds...)
+	data.Labels = labels
+	data.CreatedAt = zeroTimeToPtr(binding.CreatedAt)
+	resource := Resource{
+		Type:       ResourceTypeK8sRoleBinding,
+		Technology: "kubernetes",
+		Name:       binding.Name,
+		Status:     StatusOnline,
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+		Tags:       labelsToTags(labels),
+	}
+	return resource, namespacedKubernetesIdentity(clusterName, binding.Namespace, binding.Name)
+}
+
+func resourceFromKubernetesClusterRoleBinding(cluster models.KubernetesCluster, binding models.KubernetesClusterRoleBinding, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(binding.Labels)
+	data := baseKubernetesData(cluster, clusterName, "ClusterRoleBinding", capabilities)
+	data.ClusterRoleBindingUID = binding.UID
+	data.ResourceUID = binding.UID
+	data.RoleKind = binding.RoleKind
+	data.RoleName = binding.RoleName
+	data.SubjectCount = binding.SubjectCount
+	data.SubjectKinds = append([]string(nil), binding.SubjectKinds...)
+	data.Labels = labels
+	data.CreatedAt = zeroTimeToPtr(binding.CreatedAt)
+	resource := Resource{
+		Type:       ResourceTypeK8sClusterRoleBinding,
+		Technology: "kubernetes",
+		Name:       binding.Name,
+		Status:     StatusOnline,
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Kubernetes: &data,
+		Tags:       labelsToTags(labels),
+	}
+	identity := ResourceIdentity{
+		Hostnames:   uniqueStrings([]string{binding.Name, clusterName + ":" + binding.Name}),
+		ClusterName: clusterName,
+	}
+	return resource, identity
+}
+
 func resourceFromKubernetesResourceQuota(cluster models.KubernetesCluster, quota models.KubernetesResourceQuota, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
 	clusterName := kubernetesClusterDisplayName(cluster)
 	labels := cloneLabelMap(quota.Labels)

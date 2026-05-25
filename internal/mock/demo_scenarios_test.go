@@ -516,6 +516,10 @@ func kubernetesNativeInventoryExists(graph FixtureGraph) bool {
 			len(cluster.ConfigMaps) == 0 ||
 			len(cluster.Secrets) == 0 ||
 			len(cluster.ServiceAccounts) == 0 ||
+			len(cluster.Roles) == 0 ||
+			len(cluster.ClusterRoles) == 0 ||
+			len(cluster.RoleBindings) == 0 ||
+			len(cluster.ClusterRoleBindings) == 0 ||
 			len(cluster.ResourceQuotas) == 0 ||
 			len(cluster.LimitRanges) == 0 ||
 			len(cluster.PodDisruptionBudgets) == 0 ||

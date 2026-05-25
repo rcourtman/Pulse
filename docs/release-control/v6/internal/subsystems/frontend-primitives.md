@@ -1542,6 +1542,18 @@ not a replacement status card, CTA band, or page-local nested card.
 
 ## Current State
 
+Kubernetes RBAC inventory (Roles, ClusterRoles, RoleBindings,
+ClusterRoleBindings) is part of the existing Kubernetes platform-page
+Configuration tab, not a new sidebar entry or top-level route, and the
+reporting-resource-type mapping at
+`frontend-modern/src/utils/reportingResourceTypes.ts` folds all four RBAC
+kinds into the existing `k8s` transport token alongside ConfigMaps, Secrets,
+and ServiceAccounts. Configuration tab rendering keeps RBAC summary fields
+(rule count, role kind / role name, subject count, subject Kinds, aggregation
+labels) bounded — individual subject names and full PolicyRule contents stay
+outside the rendered surface, mirroring the agent and unified-resource
+contracts.
+
 Embedded Recovery workspace controls now use the shared filter-toolbar
 primitive boundary. Platform pages may choose a default Recovery workspace,
 such as TrueNAS opening on protection coverage, but the compact
@@ -2709,10 +2721,17 @@ range/status copy. The compatibility re-export in
 `frontend-modern/src/components/Settings/reportingResourceTypes.ts` stays part
 of that same reporting boundary. Native Kubernetes inventory-only resource
 types, including ReplicaSets, EndpointSlices, NetworkPolicies, StorageClasses,
-ConfigMaps, Secrets, ServiceAccounts, ResourceQuotas, LimitRanges,
-PodDisruptionBudgets, and HorizontalPodAutoscalers, must map to the existing
-reporting `k8s` transport token at this edge rather than widening the
-metric-report picker into platform-object inventory. The shell must not
+ConfigMaps, Secrets, ServiceAccounts, Roles, ClusterRoles, RoleBindings,
+ClusterRoleBindings, ResourceQuotas, LimitRanges, PodDisruptionBudgets, and
+HorizontalPodAutoscalers, must map to the existing reporting `k8s` transport
+token at this edge rather than widening the metric-report picker into
+platform-object inventory. Kubernetes RBAC inventory (Roles, ClusterRoles,
+RoleBindings, ClusterRoleBindings) joins the existing K8s inventory bucket on
+that transport without introducing a separate reporting token: from the
+reporting transport's point of view it is platform-object inventory the same
+way ConfigMaps and ServiceAccounts already are, even though the rendered
+Configuration tab surfaces it through RBAC-specific lifecycle/data-shape
+columns inside `KubernetesConfigTable`. The shell must not
 re-accumulate license
 bootstrapping, inline report API requests, blob-download plumbing, or local
 resource-type filter and reporting-token maps.

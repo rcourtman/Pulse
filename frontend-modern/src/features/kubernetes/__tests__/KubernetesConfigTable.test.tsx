@@ -101,4 +101,77 @@ describe('KubernetesConfigTable', () => {
     expect(document.body.textContent).not.toContain('db-password');
     expect(document.body.textContent).not.toContain('Mutable');
   });
+
+  it('renders RBAC Role / ClusterRole / RoleBinding / ClusterRoleBinding inventory', () => {
+    render(() => (
+      <KubernetesConfigTable
+        resources={[
+          makeResource({
+            id: 'role-checkout',
+            type: 'k8s-role',
+            name: 'checkout-api-runtime',
+            kubernetes: {
+              clusterId: 'cluster-1',
+              namespace: 'apps',
+              resourceKind: 'Role',
+              ruleCount: 4,
+            },
+          }),
+          makeResource({
+            id: 'clusterrole-mon',
+            type: 'k8s-cluster-role',
+            name: 'pulse-demo-monitoring',
+            kubernetes: {
+              clusterId: 'cluster-1',
+              resourceKind: 'ClusterRole',
+              ruleCount: 12,
+              aggregationLabels: { 'rbac.authorization.k8s.io/aggregate-to-admin': 'true' },
+            },
+          }),
+          makeResource({
+            id: 'rb-checkout',
+            type: 'k8s-role-binding',
+            name: 'checkout-api-runtime',
+            kubernetes: {
+              clusterId: 'cluster-1',
+              namespace: 'apps',
+              resourceKind: 'RoleBinding',
+              roleKind: 'Role',
+              roleName: 'checkout-api-runtime',
+              subjectCount: 2,
+              subjectKinds: ['Group', 'ServiceAccount'],
+            },
+          }),
+          makeResource({
+            id: 'crb-mon',
+            type: 'k8s-cluster-role-binding',
+            name: 'pulse-demo-monitoring',
+            kubernetes: {
+              clusterId: 'cluster-1',
+              resourceKind: 'ClusterRoleBinding',
+              roleKind: 'ClusterRole',
+              roleName: 'pulse-demo-monitoring',
+              subjectCount: 3,
+              subjectKinds: ['Group', 'ServiceAccount', 'User'],
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No RBAC"
+        emptyDescription="No RBAC"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByText('Role')).toBeInTheDocument();
+    expect(screen.getByText('ClusterRole')).toBeInTheDocument();
+    expect(screen.getByText('RoleBinding')).toBeInTheDocument();
+    expect(screen.getByText('ClusterRoleBinding')).toBeInTheDocument();
+    expect(screen.getByText('4 rules')).toBeInTheDocument();
+    expect(screen.getByText('12 rules · Aggregated')).toBeInTheDocument();
+    expect(screen.getByText('Role/checkout-api-runtime')).toBeInTheDocument();
+    expect(screen.getByText('ClusterRole/pulse-demo-monitoring')).toBeInTheDocument();
+    expect(screen.getByText('2 subjects · Group, ServiceAccount')).toBeInTheDocument();
+    expect(screen.getByText('3 subjects · Group, ServiceAccount +1')).toBeInTheDocument();
+  });
 });

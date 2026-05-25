@@ -120,51 +120,55 @@ type ResourceType string
 
 const (
 	// ResourceTypeAgent is the canonical v6 infrastructure parent type.
-	ResourceTypeAgent             ResourceType = "agent"
-	ResourceTypeVM                ResourceType = "vm"
-	ResourceTypeSystemContainer   ResourceType = "system-container"
-	ResourceTypeAppContainer      ResourceType = "app-container"
-	ResourceTypeDockerService     ResourceType = "docker-service"
-	ResourceTypeDockerImage       ResourceType = "docker-image"
-	ResourceTypeDockerVolume      ResourceType = "docker-volume"
-	ResourceTypeDockerNetwork     ResourceType = "docker-network"
-	ResourceTypeDockerTask        ResourceType = "docker-task"
-	ResourceTypeDockerSwarmNode   ResourceType = "docker-swarm-node"
-	ResourceTypeDockerSecret      ResourceType = "docker-secret"
-	ResourceTypeDockerConfig      ResourceType = "docker-config"
-	ResourceTypeK8sCluster        ResourceType = "k8s-cluster"
-	ResourceTypeK8sNode           ResourceType = "k8s-node"
-	ResourceTypePod               ResourceType = "pod"
-	ResourceTypeK8sDeployment     ResourceType = "k8s-deployment"
-	ResourceTypeK8sReplicaSet     ResourceType = "k8s-replicaset"
-	ResourceTypeK8sNamespace      ResourceType = "k8s-namespace"
-	ResourceTypeK8sService        ResourceType = "k8s-service"
-	ResourceTypeK8sStatefulSet    ResourceType = "k8s-statefulset"
-	ResourceTypeK8sDaemonSet      ResourceType = "k8s-daemonset"
-	ResourceTypeK8sJob            ResourceType = "k8s-job"
-	ResourceTypeK8sCronJob        ResourceType = "k8s-cronjob"
-	ResourceTypeK8sIngress        ResourceType = "k8s-ingress"
-	ResourceTypeK8sEndpointSlice  ResourceType = "k8s-endpoint-slice"
-	ResourceTypeK8sNetworkPolicy  ResourceType = "k8s-network-policy"
-	ResourceTypeK8sPV             ResourceType = "k8s-persistent-volume"
-	ResourceTypeK8sPVC            ResourceType = "k8s-persistent-volume-claim"
-	ResourceTypeK8sStorageClass   ResourceType = "k8s-storage-class"
-	ResourceTypeK8sConfigMap      ResourceType = "k8s-configmap"
-	ResourceTypeK8sSecret         ResourceType = "k8s-secret"
-	ResourceTypeK8sServiceAccount ResourceType = "k8s-serviceaccount"
-	ResourceTypeK8sResourceQuota  ResourceType = "k8s-resource-quota"
-	ResourceTypeK8sLimitRange     ResourceType = "k8s-limit-range"
-	ResourceTypeK8sPDB            ResourceType = "k8s-pod-disruption-budget"
-	ResourceTypeK8sHPA            ResourceType = "k8s-horizontal-pod-autoscaler"
-	ResourceTypeK8sEvent          ResourceType = "k8s-event"
-	ResourceTypeStorage           ResourceType = "storage"
-	ResourceTypeNetwork           ResourceType = "network"
-	ResourceTypePBS               ResourceType = "pbs"
-	ResourceTypePMG               ResourceType = "pmg"
-	ResourceTypeCeph              ResourceType = "ceph"
-	ResourceTypePhysicalDisk      ResourceType = "physical_disk"
-	ResourceTypeNetworkShare      ResourceType = "network-share"
-	ResourceTypeNetworkEndpoint   ResourceType = "network-endpoint"
+	ResourceTypeAgent                 ResourceType = "agent"
+	ResourceTypeVM                    ResourceType = "vm"
+	ResourceTypeSystemContainer       ResourceType = "system-container"
+	ResourceTypeAppContainer          ResourceType = "app-container"
+	ResourceTypeDockerService         ResourceType = "docker-service"
+	ResourceTypeDockerImage           ResourceType = "docker-image"
+	ResourceTypeDockerVolume          ResourceType = "docker-volume"
+	ResourceTypeDockerNetwork         ResourceType = "docker-network"
+	ResourceTypeDockerTask            ResourceType = "docker-task"
+	ResourceTypeDockerSwarmNode       ResourceType = "docker-swarm-node"
+	ResourceTypeDockerSecret          ResourceType = "docker-secret"
+	ResourceTypeDockerConfig          ResourceType = "docker-config"
+	ResourceTypeK8sCluster            ResourceType = "k8s-cluster"
+	ResourceTypeK8sNode               ResourceType = "k8s-node"
+	ResourceTypePod                   ResourceType = "pod"
+	ResourceTypeK8sDeployment         ResourceType = "k8s-deployment"
+	ResourceTypeK8sReplicaSet         ResourceType = "k8s-replicaset"
+	ResourceTypeK8sNamespace          ResourceType = "k8s-namespace"
+	ResourceTypeK8sService            ResourceType = "k8s-service"
+	ResourceTypeK8sStatefulSet        ResourceType = "k8s-statefulset"
+	ResourceTypeK8sDaemonSet          ResourceType = "k8s-daemonset"
+	ResourceTypeK8sJob                ResourceType = "k8s-job"
+	ResourceTypeK8sCronJob            ResourceType = "k8s-cronjob"
+	ResourceTypeK8sIngress            ResourceType = "k8s-ingress"
+	ResourceTypeK8sEndpointSlice      ResourceType = "k8s-endpoint-slice"
+	ResourceTypeK8sNetworkPolicy      ResourceType = "k8s-network-policy"
+	ResourceTypeK8sPV                 ResourceType = "k8s-persistent-volume"
+	ResourceTypeK8sPVC                ResourceType = "k8s-persistent-volume-claim"
+	ResourceTypeK8sStorageClass       ResourceType = "k8s-storage-class"
+	ResourceTypeK8sConfigMap          ResourceType = "k8s-configmap"
+	ResourceTypeK8sSecret             ResourceType = "k8s-secret"
+	ResourceTypeK8sServiceAccount     ResourceType = "k8s-serviceaccount"
+	ResourceTypeK8sRole               ResourceType = "k8s-role"
+	ResourceTypeK8sClusterRole        ResourceType = "k8s-cluster-role"
+	ResourceTypeK8sRoleBinding        ResourceType = "k8s-role-binding"
+	ResourceTypeK8sClusterRoleBinding ResourceType = "k8s-cluster-role-binding"
+	ResourceTypeK8sResourceQuota      ResourceType = "k8s-resource-quota"
+	ResourceTypeK8sLimitRange         ResourceType = "k8s-limit-range"
+	ResourceTypeK8sPDB                ResourceType = "k8s-pod-disruption-budget"
+	ResourceTypeK8sHPA                ResourceType = "k8s-horizontal-pod-autoscaler"
+	ResourceTypeK8sEvent              ResourceType = "k8s-event"
+	ResourceTypeStorage               ResourceType = "storage"
+	ResourceTypeNetwork               ResourceType = "network"
+	ResourceTypePBS                   ResourceType = "pbs"
+	ResourceTypePMG                   ResourceType = "pmg"
+	ResourceTypeCeph                  ResourceType = "ceph"
+	ResourceTypePhysicalDisk          ResourceType = "physical_disk"
+	ResourceTypeNetworkShare          ResourceType = "network-share"
+	ResourceTypeNetworkEndpoint       ResourceType = "network-endpoint"
 )
 
 // CanonicalResourceType normalizes resource type spellings into the internal
@@ -1526,6 +1530,16 @@ type K8sData struct {
 	ConfigMapUID                 string                 `json:"configMapUid,omitempty"`
 	SecretUID                    string                 `json:"secretUid,omitempty"`
 	ServiceAccountUID            string                 `json:"serviceAccountUid,omitempty"`
+	RoleUID                      string                 `json:"roleUid,omitempty"`
+	ClusterRoleUID               string                 `json:"clusterRoleUid,omitempty"`
+	RoleBindingUID               string                 `json:"roleBindingUid,omitempty"`
+	ClusterRoleBindingUID        string                 `json:"clusterRoleBindingUid,omitempty"`
+	RoleKind                     string                 `json:"roleKind,omitempty"`
+	RoleName                     string                 `json:"roleName,omitempty"`
+	RuleCount                    int                    `json:"ruleCount,omitempty"`
+	SubjectCount                 int                    `json:"subjectCount,omitempty"`
+	SubjectKinds                 []string               `json:"subjectKinds,omitempty"`
+	AggregationLabels            map[string]string      `json:"aggregationLabels,omitempty"`
 	ResourceQuotaUID             string                 `json:"resourceQuotaUid,omitempty"`
 	LimitRangeUID                string                 `json:"limitRangeUid,omitempty"`
 	PodDisruptionBudgetUID       string                 `json:"podDisruptionBudgetUid,omitempty"`

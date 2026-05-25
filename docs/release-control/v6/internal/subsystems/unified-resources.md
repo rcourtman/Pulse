@@ -190,16 +190,20 @@ retired or the Overview content must be reduced to aggregate signal.
 
 Kubernetes configuration and policy inventory are unified-resource consumer
 boundaries: the `/kubernetes/configuration` workflow tab must render Namespace,
-ConfigMap, Secret, ServiceAccount, NetworkPolicy, PodDisruptionBudget,
-ResourceQuota, and LimitRange rows through API-native config and policy tables.
-Legacy `/kubernetes/config` and `/kubernetes/policy` routes resolve to that
-workflow tab. Config rows preserve cluster/namespace scope, Namespace lifecycle
-phase, ConfigMap/Secret immutable and type metadata, ServiceAccount
-token/image-pull/secret references, and metadata-only collection wording without
-rendering ConfigMap or Secret payload values. Policy rows preserve API-specific
-policy types, ingress/egress rule counts, disruption-budget health and allowed
-disruptions, quota hard/used maps, and LimitRange item types instead of
-collapsing those resources into generic detail text.
+ConfigMap, Secret, ServiceAccount, Role, ClusterRole, RoleBinding,
+ClusterRoleBinding, NetworkPolicy, PodDisruptionBudget, ResourceQuota, and
+LimitRange rows through API-native config and policy tables. Legacy
+`/kubernetes/config` and `/kubernetes/policy` routes resolve to that workflow
+tab. Config rows preserve cluster/namespace scope, Namespace lifecycle phase,
+ConfigMap/Secret immutable and type metadata, ServiceAccount
+token/image-pull/secret references, RBAC summary counts (rule counts, role
+kind / role name, subject count, subject Kinds, ClusterRole aggregation
+labels), and metadata-only collection wording without rendering ConfigMap or
+Secret payload values, individual RBAC subject names, or full PolicyRule
+contents. Policy rows preserve API-specific policy types, ingress/egress rule
+counts, disruption-budget health and allowed disruptions, quota hard/used
+maps, and LimitRange item types instead of collapsing those resources into
+generic detail text.
 
 Kubernetes events inventory is a unified-resource consumer boundary: the
 `/kubernetes/events` route must render Event rows through an event-native table
@@ -338,10 +342,14 @@ proof can distinguish a populated disk-usage tab from an empty fixture.
    unified resources: Nodes, namespaces, Services, ReplicaSets, StatefulSets,
    DaemonSets, Jobs, CronJobs, Ingresses, EndpointSlices, NetworkPolicies,
    PersistentVolumes, PersistentVolumeClaims, StorageClasses, ConfigMaps,
-   Secrets, ServiceAccounts, ResourceQuotas, LimitRanges,
-   PodDisruptionBudgets, HorizontalPodAutoscalers, and Events must preserve
-   their API identity and source metadata through clone, merge, REST,
-   websocket, and frontend decode paths. `k8s-configmap` and `k8s-secret`
+   Secrets, ServiceAccounts, Roles, ClusterRoles, RoleBindings,
+   ClusterRoleBindings, ResourceQuotas, LimitRanges, PodDisruptionBudgets,
+   HorizontalPodAutoscalers, and Events must preserve their API identity and
+   source metadata through clone, merge, REST, websocket, and frontend decode
+   paths. RBAC resources carry summary counts only — rule count, role kind /
+   role name (for bindings), subject count, subject Kinds, and ClusterRole
+   aggregation labels — and never expose full PolicyRule contents or
+   individual subject names (User / Group / ServiceAccount). `k8s-configmap` and `k8s-secret`
    resources must preserve the `metadataOnly` flag when the agent used the
    Kubernetes metadata-only API path; current agents must not fetch ConfigMap
    or Secret payload values merely to build inventory rows. Older reports may
@@ -372,11 +380,13 @@ proof can distinguish a populated disk-usage tab from an empty fixture.
    `/kubernetes/networking` resolves to that Services workflow tab.
    Kubernetes configuration inventory is likewise API-native and trust-sensitive:
    `/kubernetes/configuration` must render Namespace, ConfigMap, Secret,
-   ServiceAccount, and policy rows through config and policy-specific tables
-   that preserve cluster/namespace scope, Namespace lifecycle phase,
-   ConfigMap/Secret immutable and type metadata, ServiceAccount
-   token/image-pull/secret references, metadata-only collection wording, and
-   policy-specific health/count fields. Legacy `/kubernetes/config` and
+   ServiceAccount, Role, ClusterRole, RoleBinding, ClusterRoleBinding, and
+   policy rows through config and policy-specific tables that preserve
+   cluster/namespace scope, Namespace lifecycle phase, ConfigMap/Secret
+   immutable and type metadata, ServiceAccount token/image-pull/secret
+   references, RBAC summary fields (rule counts, role kind / role name,
+   subject count, subject Kinds, aggregation labels), metadata-only collection
+   wording, and policy-specific health/count fields. Legacy `/kubernetes/config` and
    `/kubernetes/policy` resolve to that Configuration workflow tab. Config
    tables must not render ConfigMap or Secret payload values, and metadata-only
    rows must not expose key names as if payload fields had been read.

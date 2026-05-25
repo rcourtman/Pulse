@@ -156,6 +156,10 @@ func classifyResourceSensitivity(resource Resource) ResourceSensitivity {
 		ResourceTypeK8sStorageClass,
 		ResourceTypeK8sConfigMap,
 		ResourceTypeK8sServiceAccount,
+		ResourceTypeK8sRole,
+		ResourceTypeK8sClusterRole,
+		ResourceTypeK8sRoleBinding,
+		ResourceTypeK8sClusterRoleBinding,
 		ResourceTypeK8sResourceQuota,
 		ResourceTypeK8sLimitRange,
 		ResourceTypeK8sPDB,
@@ -335,6 +339,14 @@ func resourceSummaryType(resource Resource) string {
 		return "kubernetes secret"
 	case ResourceTypeK8sServiceAccount:
 		return "kubernetes serviceaccount"
+	case ResourceTypeK8sRole:
+		return "kubernetes role"
+	case ResourceTypeK8sClusterRole:
+		return "kubernetes clusterrole"
+	case ResourceTypeK8sRoleBinding:
+		return "kubernetes rolebinding"
+	case ResourceTypeK8sClusterRoleBinding:
+		return "kubernetes clusterrolebinding"
 	case ResourceTypeK8sResourceQuota:
 		return "kubernetes resource quota"
 	case ResourceTypeK8sLimitRange:

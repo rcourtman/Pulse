@@ -857,6 +857,20 @@ func applyDemoKubernetesNativeInventory(cluster *models.KubernetesCluster, now t
 	cluster.ServiceAccounts = []models.KubernetesServiceAccount{
 		{UID: cluster.ID + "-sa-checkout-api", Name: "checkout-api", Namespace: "services", SecretCount: 1, ImagePullSecrets: []string{"registry-pull"}, CreatedAt: createdAt, Labels: labels("checkout-api")},
 	}
+	cluster.Roles = []models.KubernetesRole{
+		{UID: cluster.ID + "-role-checkout-api", Name: "checkout-api-runtime", Namespace: "services", RuleCount: 4, CreatedAt: createdAt, Labels: labels("checkout-api")},
+		{UID: cluster.ID + "-role-payments-worker", Name: "payments-worker-runtime", Namespace: "services", RuleCount: 6, CreatedAt: createdAt, Labels: labels("payments-worker")},
+	}
+	cluster.ClusterRoles = []models.KubernetesClusterRole{
+		{UID: cluster.ID + "-clusterrole-monitoring", Name: "pulse-demo-monitoring", RuleCount: 12, AggregationLabels: map[string]string{"rbac.authorization.k8s.io/aggregate-to-admin": "true"}, CreatedAt: createdAt, Labels: labels("monitoring")},
+	}
+	cluster.RoleBindings = []models.KubernetesRoleBinding{
+		{UID: cluster.ID + "-rb-checkout-api", Name: "checkout-api-runtime", Namespace: "services", RoleKind: "Role", RoleName: "checkout-api-runtime", SubjectCount: 1, SubjectKinds: []string{"ServiceAccount"}, CreatedAt: createdAt, Labels: labels("checkout-api")},
+		{UID: cluster.ID + "-rb-payments-worker", Name: "payments-worker-runtime", Namespace: "services", RoleKind: "Role", RoleName: "payments-worker-runtime", SubjectCount: 2, SubjectKinds: []string{"Group", "ServiceAccount"}, CreatedAt: createdAt, Labels: labels("payments-worker")},
+	}
+	cluster.ClusterRoleBindings = []models.KubernetesClusterRoleBinding{
+		{UID: cluster.ID + "-crb-monitoring", Name: "pulse-demo-monitoring", RoleKind: "ClusterRole", RoleName: "pulse-demo-monitoring", SubjectCount: 3, SubjectKinds: []string{"Group", "ServiceAccount", "User"}, CreatedAt: createdAt, Labels: labels("monitoring")},
+	}
 	cluster.ResourceQuotas = []models.KubernetesResourceQuota{
 		{UID: cluster.ID + "-quota-services", Name: "services-quota", Namespace: "services", Hard: map[string]string{"pods": "80", "requests.cpu": "24", "requests.memory": "96Gi"}, Used: map[string]string{"pods": "34", "requests.cpu": "11", "requests.memory": "42Gi"}, CreatedAt: createdAt, Labels: labels("services-quota")},
 	}

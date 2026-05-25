@@ -125,10 +125,17 @@ Kubernetes API object tokens
 `k8s-daemonset`, `k8s-job`, `k8s-cronjob`, `k8s-ingress`,
 `k8s-endpoint-slice`, `k8s-network-policy`, `k8s-persistent-volume`,
 `k8s-persistent-volume-claim`, `k8s-storage-class`, `k8s-configmap`,
-`k8s-secret`, `k8s-serviceaccount`, `k8s-resource-quota`,
+`k8s-secret`, `k8s-serviceaccount`, `k8s-role`, `k8s-cluster-role`,
+`k8s-role-binding`, `k8s-cluster-role-binding`, `k8s-resource-quota`,
 `k8s-limit-range`, `k8s-pod-disruption-budget`,
 `k8s-horizontal-pod-autoscaler`, `k8s-event`) whenever unified resources can
-publish those records. Docker node and Swarm node aliases may normalize to the
+publish those records. RBAC tokens (`k8s-role`, `k8s-cluster-role`,
+`k8s-role-binding`, `k8s-cluster-role-binding`) accept singular and plural
+aliases identically to the rest of the K8s type allow-list, and the resource
+payload carries summary RBAC fields only (rule count, role kind / role name,
+subject count, subject Kinds, ClusterRole aggregation labels) — full
+PolicyRule contents and individual subject names are not exposed through any
+API surface. Docker node and Swarm node aliases may normalize to the
 canonical `docker-swarm-node` token, and Swarm secret/config aliases may
 normalize to `docker-secret` and `docker-config`, but unsupported legacy aliases
 should continue to fail closed instead of silently widening platform queries.

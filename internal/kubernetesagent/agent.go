@@ -31,6 +31,7 @@ import (
 	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sresource "k8s.io/apimachinery/pkg/api/resource"
@@ -545,6 +546,22 @@ func (a *Agent) collectReport(ctx context.Context) (agentsk8s.Report, error) {
 	if err != nil {
 		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes serviceaccounts unavailable, continuing without serviceaccount inventory")
 	}
+	roles, err := a.collectRoles(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes roles unavailable, continuing without role inventory")
+	}
+	clusterRoles, err := a.collectClusterRoles(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes clusterroles unavailable, continuing without clusterrole inventory")
+	}
+	roleBindings, err := a.collectRoleBindings(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes rolebindings unavailable, continuing without rolebinding inventory")
+	}
+	clusterRoleBindings, err := a.collectClusterRoleBindings(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes clusterrolebindings unavailable, continuing without clusterrolebinding inventory")
+	}
 	resourceQuotas, err := a.collectResourceQuotas(ctx)
 	if err != nil {
 		a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("kubernetes resourcequotas unavailable, continuing without quota inventory")
@@ -605,6 +622,10 @@ func (a *Agent) collectReport(ctx context.Context) (agentsk8s.Report, error) {
 		ConfigMaps:               configMaps,
 		Secrets:                  secrets,
 		ServiceAccounts:          serviceAccounts,
+		Roles:                    roles,
+		ClusterRoles:             clusterRoles,
+		RoleBindings:             roleBindings,
+		ClusterRoleBindings:      clusterRoleBindings,
 		ResourceQuotas:           resourceQuotas,
 		LimitRanges:              limitRanges,
 		Events:                   events,
@@ -2972,6 +2993,205 @@ func (a *Agent) collectServiceAccounts(ctx context.Context) ([]agentsk8s.Service
 			}
 			opts.Continue = list.Continue
 		}
+	}
+	return items, nil
+}
+
+// rbacSubjectKinds returns the distinct subject kinds bound by a Role
+// or ClusterRole binding, sorted for stable reporting. Names are
+// deliberately not reported so Pulse doesn't become an RBAC enumeration
+// surface for individual users / groups / service accounts.
+func rbacSubjectKinds(subjects []rbacv1.Subject) []string {
+	if len(subjects) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(subjects))
+	kinds := make([]string, 0, len(subjects))
+	for _, subject := range subjects {
+		kind := strings.TrimSpace(subject.Kind)
+		if kind == "" {
+			continue
+		}
+		if _, exists := seen[kind]; exists {
+			continue
+		}
+		seen[kind] = struct{}{}
+		kinds = append(kinds, kind)
+	}
+	if len(kinds) == 0 {
+		return nil
+	}
+	sort.Strings(kinds)
+	return kinds
+}
+
+func (a *Agent) collectRoles(ctx context.Context) ([]agentsk8s.Role, error) {
+	items := make([]agentsk8s.Role, 0)
+	for _, namespace := range a.inventoryNamespaces() {
+		opts := metav1.ListOptions{Limit: listPageSize}
+		for {
+			var list *rbacv1.RoleList
+			action := "list roles"
+			if namespace != metav1.NamespaceAll {
+				action = fmt.Sprintf("list roles in namespace %q", namespace)
+			}
+			err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+				var err error
+				list, err = a.kubeClient.RbacV1().Roles(namespace).List(callCtx, opts)
+				return err
+			})
+			if err != nil {
+				return nil, err
+			}
+			for _, role := range list.Items {
+				if !a.namespaceAllowed(role.Namespace) {
+					continue
+				}
+				items = append(items, agentsk8s.Role{
+					UID:       string(role.UID),
+					Name:      role.Name,
+					Namespace: role.Namespace,
+					RuleCount: len(role.Rules),
+					CreatedAt: role.CreationTimestamp.Time,
+					Labels:    copyKubernetesStringMap(role.Labels),
+				})
+				if len(items) >= maxInventoryItems {
+					return items, nil
+				}
+			}
+			if list.Continue == "" {
+				break
+			}
+			opts.Continue = list.Continue
+		}
+	}
+	return items, nil
+}
+
+func (a *Agent) collectClusterRoles(ctx context.Context) ([]agentsk8s.ClusterRole, error) {
+	items := make([]agentsk8s.ClusterRole, 0)
+	opts := metav1.ListOptions{Limit: listPageSize}
+	for {
+		var list *rbacv1.ClusterRoleList
+		err := a.runKubernetesCallWithRetry(ctx, "list clusterroles", func(callCtx context.Context) error {
+			var err error
+			list, err = a.kubeClient.RbacV1().ClusterRoles().List(callCtx, opts)
+			return err
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, role := range list.Items {
+			var aggregationLabels map[string]string
+			if role.AggregationRule != nil && len(role.AggregationRule.ClusterRoleSelectors) > 0 {
+				aggregationLabels = make(map[string]string)
+				for _, selector := range role.AggregationRule.ClusterRoleSelectors {
+					for k, v := range selector.MatchLabels {
+						aggregationLabels[k] = v
+					}
+				}
+				if len(aggregationLabels) == 0 {
+					aggregationLabels = nil
+				}
+			}
+			items = append(items, agentsk8s.ClusterRole{
+				UID:               string(role.UID),
+				Name:              role.Name,
+				RuleCount:         len(role.Rules),
+				AggregationLabels: aggregationLabels,
+				CreatedAt:         role.CreationTimestamp.Time,
+				Labels:            copyKubernetesStringMap(role.Labels),
+			})
+			if len(items) >= maxInventoryItems {
+				return items, nil
+			}
+		}
+		if list.Continue == "" {
+			break
+		}
+		opts.Continue = list.Continue
+	}
+	return items, nil
+}
+
+func (a *Agent) collectRoleBindings(ctx context.Context) ([]agentsk8s.RoleBinding, error) {
+	items := make([]agentsk8s.RoleBinding, 0)
+	for _, namespace := range a.inventoryNamespaces() {
+		opts := metav1.ListOptions{Limit: listPageSize}
+		for {
+			var list *rbacv1.RoleBindingList
+			action := "list rolebindings"
+			if namespace != metav1.NamespaceAll {
+				action = fmt.Sprintf("list rolebindings in namespace %q", namespace)
+			}
+			err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+				var err error
+				list, err = a.kubeClient.RbacV1().RoleBindings(namespace).List(callCtx, opts)
+				return err
+			})
+			if err != nil {
+				return nil, err
+			}
+			for _, binding := range list.Items {
+				if !a.namespaceAllowed(binding.Namespace) {
+					continue
+				}
+				items = append(items, agentsk8s.RoleBinding{
+					UID:          string(binding.UID),
+					Name:         binding.Name,
+					Namespace:    binding.Namespace,
+					RoleKind:     binding.RoleRef.Kind,
+					RoleName:     binding.RoleRef.Name,
+					SubjectCount: len(binding.Subjects),
+					SubjectKinds: rbacSubjectKinds(binding.Subjects),
+					CreatedAt:    binding.CreationTimestamp.Time,
+					Labels:       copyKubernetesStringMap(binding.Labels),
+				})
+				if len(items) >= maxInventoryItems {
+					return items, nil
+				}
+			}
+			if list.Continue == "" {
+				break
+			}
+			opts.Continue = list.Continue
+		}
+	}
+	return items, nil
+}
+
+func (a *Agent) collectClusterRoleBindings(ctx context.Context) ([]agentsk8s.ClusterRoleBinding, error) {
+	items := make([]agentsk8s.ClusterRoleBinding, 0)
+	opts := metav1.ListOptions{Limit: listPageSize}
+	for {
+		var list *rbacv1.ClusterRoleBindingList
+		err := a.runKubernetesCallWithRetry(ctx, "list clusterrolebindings", func(callCtx context.Context) error {
+			var err error
+			list, err = a.kubeClient.RbacV1().ClusterRoleBindings().List(callCtx, opts)
+			return err
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, binding := range list.Items {
+			items = append(items, agentsk8s.ClusterRoleBinding{
+				UID:          string(binding.UID),
+				Name:         binding.Name,
+				RoleKind:     binding.RoleRef.Kind,
+				RoleName:     binding.RoleRef.Name,
+				SubjectCount: len(binding.Subjects),
+				SubjectKinds: rbacSubjectKinds(binding.Subjects),
+				CreatedAt:    binding.CreationTimestamp.Time,
+				Labels:       copyKubernetesStringMap(binding.Labels),
+			})
+			if len(items) >= maxInventoryItems {
+				return items, nil
+			}
+		}
+		if list.Continue == "" {
+			break
+		}
+		opts.Continue = list.Continue
 	}
 	return items, nil
 }

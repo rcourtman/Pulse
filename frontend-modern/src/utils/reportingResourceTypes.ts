@@ -55,6 +55,10 @@ export function toReportingResourceType(resourceType: ResourceType): ReportingRe
     case 'k8s-configmap':
     case 'k8s-secret':
     case 'k8s-serviceaccount':
+    case 'k8s-role':
+    case 'k8s-cluster-role':
+    case 'k8s-role-binding':
+    case 'k8s-cluster-role-binding':
     case 'k8s-resource-quota':
     case 'k8s-limit-range':
     case 'k8s-pod-disruption-budget':

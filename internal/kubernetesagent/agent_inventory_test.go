@@ -10,6 +10,7 @@ import (
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -148,6 +149,95 @@ func TestCollectNativePolicyConfigAndAutoscalingInventory(t *testing.T) {
 	}
 	if len(autoscalers) != 1 || autoscalers[0].TargetName != "api" || autoscalers[0].MinReplicas != 2 || autoscalers[0].MaxReplicas != 10 || autoscalers[0].MetricTypes[0] != "Resource:cpu" {
 		t.Fatalf("unexpected autoscalers: %+v", autoscalers)
+	}
+}
+
+// TestCollectRBACInventoryReportsSummaryCountsOnly verifies that the four
+// RBAC collectors expose rule / subject counts and subject Kinds, but never
+// surface individual subject names or full PolicyRule contents from the
+// underlying k8s API objects.
+func TestCollectRBACInventoryReportsSummaryCountsOnly(t *testing.T) {
+	clientset := fake.NewSimpleClientset(
+		&rbacv1.Role{
+			ObjectMeta: metav1.ObjectMeta{UID: "role-uid", Namespace: "apps", Name: "api-runtime"},
+			Rules: []rbacv1.PolicyRule{
+				{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"get", "list"}},
+				{APIGroups: []string{""}, Resources: []string{"services"}, Verbs: []string{"get"}},
+			},
+		},
+		&rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{UID: "crole-uid", Name: "platform-monitoring"},
+			Rules: []rbacv1.PolicyRule{
+				{APIGroups: []string{""}, Resources: []string{"nodes"}, Verbs: []string{"get", "list", "watch"}},
+			},
+			AggregationRule: &rbacv1.AggregationRule{
+				ClusterRoleSelectors: []metav1.LabelSelector{
+					{MatchLabels: map[string]string{"rbac.authorization.k8s.io/aggregate-to-admin": "true"}},
+				},
+			},
+		},
+		&rbacv1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{UID: "rb-uid", Namespace: "apps", Name: "api-runtime"},
+			RoleRef:    rbacv1.RoleRef{Kind: "Role", Name: "api-runtime"},
+			Subjects: []rbacv1.Subject{
+				{Kind: "ServiceAccount", Name: "checkout", Namespace: "apps"},
+				{Kind: "Group", Name: "team-checkout"},
+			},
+		},
+		&rbacv1.ClusterRoleBinding{
+			ObjectMeta: metav1.ObjectMeta{UID: "crb-uid", Name: "platform-monitoring"},
+			RoleRef:    rbacv1.RoleRef{Kind: "ClusterRole", Name: "platform-monitoring"},
+			Subjects: []rbacv1.Subject{
+				{Kind: "User", Name: "alice@example.test"},
+				{Kind: "Group", Name: "ops-oncall"},
+				{Kind: "ServiceAccount", Name: "metrics", Namespace: "monitoring"},
+			},
+		},
+	)
+	a := &Agent{kubeClient: clientset}
+
+	roles, err := a.collectRoles(context.Background())
+	if err != nil {
+		t.Fatalf("collectRoles: %v", err)
+	}
+	if len(roles) != 1 || roles[0].Name != "api-runtime" || roles[0].RuleCount != 2 {
+		t.Fatalf("unexpected role inventory: %+v", roles)
+	}
+
+	clusterRoles, err := a.collectClusterRoles(context.Background())
+	if err != nil {
+		t.Fatalf("collectClusterRoles: %v", err)
+	}
+	if len(clusterRoles) != 1 || clusterRoles[0].RuleCount != 1 {
+		t.Fatalf("unexpected clusterrole inventory: %+v", clusterRoles)
+	}
+	if clusterRoles[0].AggregationLabels["rbac.authorization.k8s.io/aggregate-to-admin"] != "true" {
+		t.Fatalf("expected aggregation label, got %+v", clusterRoles[0].AggregationLabels)
+	}
+
+	roleBindings, err := a.collectRoleBindings(context.Background())
+	if err != nil {
+		t.Fatalf("collectRoleBindings: %v", err)
+	}
+	if len(roleBindings) != 1 || roleBindings[0].RoleKind != "Role" || roleBindings[0].SubjectCount != 2 {
+		t.Fatalf("unexpected rolebinding inventory: %+v", roleBindings)
+	}
+	// Subject Kinds are reported (sorted, deduplicated); individual subject
+	// names must not leak through the agent contract.
+	gotKinds := roleBindings[0].SubjectKinds
+	if len(gotKinds) != 2 || gotKinds[0] != "Group" || gotKinds[1] != "ServiceAccount" {
+		t.Fatalf("expected sorted subject kinds [Group, ServiceAccount], got %+v", gotKinds)
+	}
+
+	clusterRoleBindings, err := a.collectClusterRoleBindings(context.Background())
+	if err != nil {
+		t.Fatalf("collectClusterRoleBindings: %v", err)
+	}
+	if len(clusterRoleBindings) != 1 || clusterRoleBindings[0].SubjectCount != 3 {
+		t.Fatalf("unexpected clusterrolebinding inventory: %+v", clusterRoleBindings)
+	}
+	if len(clusterRoleBindings[0].SubjectKinds) != 3 {
+		t.Fatalf("expected three subject kinds, got %+v", clusterRoleBindings[0].SubjectKinds)
 	}
 }
 

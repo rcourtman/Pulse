@@ -161,10 +161,12 @@ context, but restore entitlement, storage risk, and recovery-point ownership
 remain on the storage/recovery and provider contracts rather than on Docker
 volume rows or Kubernetes PV/PVC/StorageClass rows. Other Kubernetes native
 inventory objects that flow through the shared resource decoder, such as
-ConfigMaps, Secrets, ServiceAccounts, ResourceQuotas, LimitRanges,
-PodDisruptionBudgets, and HorizontalPodAutoscalers, remain platform
-configuration, policy, or autoscaling evidence only and must not become
-storage/recovery ownership, restore scope, or secret material. If those
+ConfigMaps, Secrets, ServiceAccounts, Roles, ClusterRoles, RoleBindings,
+ClusterRoleBindings, ResourceQuotas, LimitRanges, PodDisruptionBudgets, and
+HorizontalPodAutoscalers, remain platform configuration, policy, RBAC, or
+autoscaling evidence only and must not become storage/recovery ownership,
+restore scope, or secret material. RBAC summary inventory in particular
+never carries credentials or restore inputs. If those
 ConfigMap or Secret rows are marked `metadataOnly`, storage and recovery may
 surface that trust state as context only; they must not infer payload
 availability, key names, or restore inputs from the row.

@@ -199,8 +199,14 @@ truth for live infrastructure data.
     Namespaces, Services, ReplicaSets, StatefulSets, DaemonSets, Jobs,
     CronJobs, Ingresses, EndpointSlices, NetworkPolicies, PersistentVolumes,
     PersistentVolumeClaims, StorageClasses, ConfigMaps, Secrets, ServiceAccounts,
-    ResourceQuotas, LimitRanges, PodDisruptionBudgets,
-    HorizontalPodAutoscalers, and Events as bounded best-effort inventory.
+    Roles, ClusterRoles, RoleBindings, ClusterRoleBindings, ResourceQuotas,
+    LimitRanges, PodDisruptionBudgets, HorizontalPodAutoscalers, and Events as
+    bounded best-effort inventory. RBAC inventory (Roles, ClusterRoles,
+    RoleBindings, ClusterRoleBindings) reports summary counts only — rule
+    counts, subject counts, subject Kinds, and ClusterRole aggregation labels
+    — so Pulse stays a "what permissions exist where" surface, not an RBAC
+    enumeration tool. Full PolicyRule contents and individual subject names
+    (User / Group / ServiceAccount) remain outside the report contract.
     ConfigMap and Secret payload values must not be collected for inventory.
     Current agents must prefer the Kubernetes metadata-only API path for
     ConfigMap and Secret inventory and mark those rows as metadata-only; older
@@ -604,7 +610,11 @@ kubelet version, and exactly one degraded scenario — Production EU
 runs a NotReady worker (`prod-euw1-k8s-03`), Staging EU runs the
 payments-worker CrashLoopBackOff, Development EU runs the
 cron-nightly-backfill ImagePullBackOff — so the demo tells three
-distinct stories instead of three clones. The
+distinct stories instead of three clones. Each cluster also seeds
+curated RBAC inventory (per-namespace Roles + RoleBindings plus an
+aggregated ClusterRole / ClusterRoleBinding for `pulse-demo-monitoring`)
+so the Kubernetes platform-page Configuration tab exercises the same
+RBAC summary-count contract live agents use. The
 `TestKubernetesDemoClustersTellDistinctStories` test in
 `internal/mock/demo_scenarios_test.go` guards that distribution.
 Bumps to those defaults must keep the

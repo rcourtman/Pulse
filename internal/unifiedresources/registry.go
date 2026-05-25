@@ -411,6 +411,18 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 		for _, account := range cluster.ServiceAccounts {
 			rr.ingestKubernetesServiceAccount(cluster, account, clusterID, capabilities)
 		}
+		for _, role := range cluster.Roles {
+			rr.ingestKubernetesRole(cluster, role, clusterID, capabilities)
+		}
+		for _, clusterRole := range cluster.ClusterRoles {
+			rr.ingestKubernetesClusterRole(cluster, clusterRole, clusterID, capabilities)
+		}
+		for _, binding := range cluster.RoleBindings {
+			rr.ingestKubernetesRoleBinding(cluster, binding, clusterID, capabilities)
+		}
+		for _, binding := range cluster.ClusterRoleBindings {
+			rr.ingestKubernetesClusterRoleBinding(cluster, binding, clusterID, capabilities)
+		}
 		for _, quota := range cluster.ResourceQuotas {
 			rr.ingestKubernetesResourceQuota(cluster, quota, clusterID, capabilities)
 		}
@@ -813,6 +825,14 @@ func (rr *ResourceRegistry) seedSourceIDForResourceLocked(resource *Resource, so
 			return seededKubernetesTypedSourceID(clusterSourceID, "secret", resource, resource.Kubernetes.SecretUID)
 		case ResourceTypeK8sServiceAccount:
 			return seededKubernetesTypedSourceID(clusterSourceID, "serviceaccount", resource, resource.Kubernetes.ServiceAccountUID)
+		case ResourceTypeK8sRole:
+			return seededKubernetesTypedSourceID(clusterSourceID, "role", resource, resource.Kubernetes.RoleUID)
+		case ResourceTypeK8sClusterRole:
+			return seededKubernetesTypedSourceID(clusterSourceID, "clusterrole", resource, resource.Kubernetes.ClusterRoleUID)
+		case ResourceTypeK8sRoleBinding:
+			return seededKubernetesTypedSourceID(clusterSourceID, "rolebinding", resource, resource.Kubernetes.RoleBindingUID)
+		case ResourceTypeK8sClusterRoleBinding:
+			return seededKubernetesTypedSourceID(clusterSourceID, "clusterrolebinding", resource, resource.Kubernetes.ClusterRoleBindingUID)
 		case ResourceTypeK8sResourceQuota:
 			return seededKubernetesTypedSourceID(clusterSourceID, "resourcequota", resource, resource.Kubernetes.ResourceQuotaUID)
 		case ResourceTypeK8sLimitRange:
@@ -1714,6 +1734,54 @@ func (rr *ResourceRegistry) ingestKubernetesServiceAccount(cluster models.Kubern
 		resource.ParentID = &clusterResourceID
 	}
 	sourceID := kubernetesServiceAccountSourceID(kubernetesClusterSourceID(cluster), account)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesRole(cluster models.KubernetesCluster, role models.KubernetesRole, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesRole(cluster, role, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesRoleSourceID(kubernetesClusterSourceID(cluster), role)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesClusterRole(cluster models.KubernetesCluster, role models.KubernetesClusterRole, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesClusterRole(cluster, role, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesClusterRoleSourceID(kubernetesClusterSourceID(cluster), role)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesRoleBinding(cluster models.KubernetesCluster, binding models.KubernetesRoleBinding, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesRoleBinding(cluster, binding, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesRoleBindingSourceID(kubernetesClusterSourceID(cluster), binding)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesClusterRoleBinding(cluster models.KubernetesCluster, binding models.KubernetesClusterRoleBinding, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesClusterRoleBinding(cluster, binding, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesClusterRoleBindingSourceID(kubernetesClusterSourceID(cluster), binding)
 	if sourceID == "" {
 		return
 	}
@@ -3095,6 +3163,22 @@ func kubernetesSecretSourceID(clusterSourceID string, secret models.KubernetesSe
 
 func kubernetesServiceAccountSourceID(clusterSourceID string, account models.KubernetesServiceAccount) string {
 	return canonicalKubernetesTypedSourceID(clusterSourceID, "serviceaccount", account.UID, account.Namespace, account.Name)
+}
+
+func kubernetesRoleSourceID(clusterSourceID string, role models.KubernetesRole) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "role", role.UID, role.Namespace, role.Name)
+}
+
+func kubernetesClusterRoleSourceID(clusterSourceID string, role models.KubernetesClusterRole) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "clusterrole", role.UID, "", role.Name)
+}
+
+func kubernetesRoleBindingSourceID(clusterSourceID string, binding models.KubernetesRoleBinding) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "rolebinding", binding.UID, binding.Namespace, binding.Name)
+}
+
+func kubernetesClusterRoleBindingSourceID(clusterSourceID string, binding models.KubernetesClusterRoleBinding) string {
+	return canonicalKubernetesTypedSourceID(clusterSourceID, "clusterrolebinding", binding.UID, "", binding.Name)
 }
 
 func kubernetesResourceQuotaSourceID(clusterSourceID string, quota models.KubernetesResourceQuota) string {
