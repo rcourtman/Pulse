@@ -268,7 +268,7 @@ export function AppLayout(props: AppLayoutProps) {
   createEffect(() => {
     if (!kioskMode()) return;
     const normalizedPath = location.pathname.replace(/\/+$/, '') || '/';
-    const blockedPrefixes = ['/settings', '/operations', '/patrol', '/ai'];
+    const blockedPrefixes = ['/settings', '/patrol'];
     const isBlocked = blockedPrefixes.some(
       (prefix) => normalizedPath === prefix || normalizedPath.startsWith(prefix + '/'),
     );

@@ -31,8 +31,6 @@ export const VMWARE_DEFAULT_TAB = 'overview';
 export const PMG_THRESHOLDS_PATH = '/alerts/thresholds/mail-gateway';
 export const ALERTS_OVERVIEW_PATH = '/alerts/overview';
 export const PATROL_PATH = '/patrol';
-// Deprecated compatibility alias while older callers migrate off `/ai`.
-export const AI_PATROL_PATH = PATROL_PATH;
 export const STORAGE_PATH = '/storage';
 // Canonical "Recovery" surface (was historically called Backups).
 export const RECOVERY_PATH = '/recovery';

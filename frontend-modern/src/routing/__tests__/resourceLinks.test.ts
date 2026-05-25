@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   AGENTS_PATH,
   AGENTS_DEFAULT_TAB,
-  AI_PATROL_PATH,
   DOCKER_PATH,
   KUBERNETES_PATH,
   PMG_THRESHOLDS_PATH,
@@ -32,7 +31,6 @@ import {
 describe('resource link routing contract', () => {
   it('keeps Patrol links on the canonical Patrol route', () => {
     expect(PATROL_PATH).toBe('/patrol');
-    expect(AI_PATROL_PATH).toBe(PATROL_PATH);
   });
 
   it('builds canonical Proxmox platform tab paths', () => {

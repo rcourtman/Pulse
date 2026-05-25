@@ -458,8 +458,8 @@ thin shell that delegates to the feature-owned
 `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx`, so Patrol
 runtime state and presentation no longer accumulate directly in the route
 component itself. The governed customer-facing route for that shell is now
-`/patrol`, while legacy `/ai` entry points remain compatibility redirects
-instead of the canonical product path.
+`/patrol`, while retired `/ai` browser entry points stay unregistered instead
+of remaining as compatibility redirects or a second product path.
 That route-shell ownership does not make `AI` the customer-facing Patrol
 product name. Internal file, store, and transport names may still carry the
 shared AI-runtime boundary where that is the real technical ownership, but the

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import appSource from '@/App.tsx?raw';
 import resourceTypeCompatSource from '@/utils/resourceTypeCompat.ts?raw';
 import discoveryTypesSource from '@/types/discovery.ts?raw';
 import resourceLinksSource from '@/routing/resourceLinks.ts?raw';
@@ -140,7 +141,6 @@ import updatesPresentationSource from '@/utils/updatesPresentation.ts?raw';
 import environmentLockBadgeSource from '@/components/shared/EnvironmentLockBadge.tsx?raw';
 import environmentLockPresentationSource from '@/utils/environmentLockPresentation.ts?raw';
 import dockerRuntimeSettingsCardSource from '@/components/Settings/DockerRuntimeSettingsCard.tsx?raw';
-import operationsPageRouteSource from '@/pages/Operations.tsx?raw';
 import discoveryTargetSource from '@/utils/discoveryTarget.ts?raw';
 import recoveryComponentSource from '@/components/Recovery/Recovery.tsx?raw';
 import recoveryActivitySectionSource from '@/components/Recovery/RecoveryActivitySection.tsx?raw';
@@ -4305,14 +4305,8 @@ describe('frontend resource type boundaries', () => {
     expect(patrolIntelligenceHeaderSource).toContain(
       '!presentationPolicyHidesUpgradePrompts() && state.alertAnalysisLocked()',
     );
-    expect(operationsPageRouteSource).toContain(
-      "import { Navigate, useLocation } from '@solidjs/router';",
-    );
-    expect(operationsPageRouteSource).toContain('buildLegacyOperationsSettingsPath');
-    expect(operationsPageRouteSource).toContain(
-      "<Navigate href={`${canonicalPath}${location.search ?? ''}`} />",
-    );
-    expect(operationsPageRouteSource).not.toContain('OperationsPageSurface');
+    expect(appSource).not.toContain("import('./pages/Operations')");
+    expect(appSource).not.toContain('<Route path="/operations/*"');
     expect(settingsNavigationModelSource).toContain(
       'export function buildLegacyOperationsSettingsPath',
     );

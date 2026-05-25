@@ -18,10 +18,10 @@ describe('navigation routing helpers', () => {
     expect(getActiveTabForPath('/recovery')).toBeNull();
     expect(getActiveTabForPath('/alerts/open')).toBe('alerts');
     expect(getActiveTabForPath('/patrol')).toBe('ai');
-    expect(getActiveTabForPath('/ai')).toBe('ai');
-    expect(getActiveTabForPath('/operations')).toBe('settings');
-    expect(getActiveTabForPath('/operations/diagnostics')).toBe('settings');
-    expect(getActiveTabForPath('/operations/logs')).toBe('settings');
+    expect(getActiveTabForPath('/ai')).toBeNull();
+    expect(getActiveTabForPath('/operations')).toBeNull();
+    expect(getActiveTabForPath('/operations/diagnostics')).toBeNull();
+    expect(getActiveTabForPath('/operations/logs')).toBeNull();
     expect(getActiveTabForPath('/settings/security')).toBe('settings');
   });
 });

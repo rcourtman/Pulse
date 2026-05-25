@@ -517,14 +517,13 @@ dashboard-specific overview, trend, or summary transport.
     full app bootstrap, a pre-auth org probe, or a deleted dashboard-route prewarm
     that duplicates the canonical summary fetch path or expands into another
     summary-fetch or org-bootstrap hot path.
-    The same protected hot path also owns Patrol route compatibility: if
-    `frontend-modern/src/App.tsx` keeps `/ai` as a legacy alias while `/patrol`
-    is canonical, that alias must stay a thin redirect and must not mount a
-    second Patrol shell or duplicate app bootstrap work before navigation
-    settles on the canonical route.
-    The same rule now applies to the retired `/operations` surface: legacy
-    `/operations/*` links may redirect into Settings support routes, but they
-    must not mount a second diagnostics/reporting shell or pay extra bootstrap
+    The same protected hot path also owns Patrol route canonicalization:
+    `/patrol` is canonical and retired `/ai` browser entry points must stay
+    unregistered rather than mounting a second Patrol shell or duplicate app
+    bootstrap work.
+    The same rule now applies to the retired `/operations` surface:
+    `/operations/*` browser entry points must stay unregistered rather than
+    mounting a second diagnostics/reporting shell or paying extra bootstrap
     work before the canonical Settings URL takes over.
     Authenticated `/login` recovery belongs to that same app-shell boundary:
     `frontend-modern/src/App.tsx` must redirect that route back to the

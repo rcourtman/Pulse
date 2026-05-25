@@ -1482,13 +1482,14 @@ parallel `connected`/`reconnecting` prop assumptions after the runtime model
 moves. Future hosted shell changes must update all chrome affordances together
 so a status-model refactor cannot leave stale prop calls behind that crash the
 authenticated cloud shell at render time.
-That same route/provider shell must stay page-oriented as well: `App.tsx`
-should lazy-load route shells like `frontend-modern/src/pages/Storage.tsx`
-and `frontend-modern/src/pages/Operations.tsx`
-instead of wiring product-surface components such as
-`frontend-modern/src/components/Storage/Storage.tsx` directly into the router,
-so hosted bootstrap ownership stays at the app boundary rather than leaking
-route concerns back into feature components.
+That same route/provider shell must stay page-oriented as well: where a
+browser route exists, `App.tsx` should lazy-load the route shell instead of
+wiring product-surface components such as
+`frontend-modern/src/components/Storage/Storage.tsx` directly into the router.
+Retired aggregate or utility aliases must stay unregistered rather than being
+kept as route-shell compatibility handoffs, so hosted bootstrap ownership stays
+at the app boundary rather than leaking route concerns back into feature
+components.
 That same authenticated route shell also owns the canonical post-auth landing
 path. `frontend-modern/src/App.tsx` and
 `frontend-modern/src/pages/RuntimeHome.tsx` must send authenticated `/`

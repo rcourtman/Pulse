@@ -1,6 +1,6 @@
 import { Show, lazy, createSignal, createEffect, createMemo, onCleanup, onMount } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { Router, Route, Navigate, useNavigate, useLocation } from '@solidjs/router';
+import { Router, Route, useNavigate, useLocation } from '@solidjs/router';
 import { ToastContainer } from './components/Toast/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { SecurityWarning } from './components/SecurityWarning';
@@ -90,7 +90,6 @@ const AIIntelligencePage = lazy(() =>
 );
 const NotFoundPage = lazy(() => import('./pages/NotFound'));
 const PricingHandoffPage = lazy(() => import('./pages/PricingHandoff'));
-const OperationsPage = lazy(() => import('./pages/Operations'));
 const SetupCompletionPreviewPage = lazy(() =>
   import('./components/SetupWizard/SetupCompletionPreview').then((module) => ({
     default: module.SetupCompletionPreview,
@@ -222,12 +221,6 @@ function GlobalUpdateProgressWatcher() {
 }
 
 function App() {
-  const LegacyPatrolRouteRedirect = () => {
-    const location = useLocation();
-    const canonicalPath =
-      location.pathname.replace(/^\/ai(?=\/|$)/, ROOT_PATROL_PATH) || ROOT_PATROL_PATH;
-    return <Navigate href={`${canonicalPath}${location.search ?? ''}`} />;
-  };
   const kioskMode = useKioskMode();
   const TooltipRoot = createTooltipSystem();
   const runtime = useAppRuntimeState();
@@ -532,8 +525,6 @@ function App() {
       <Route path="/preview/setup-complete" component={SetupCompletionPreviewPage} />
       <Route path="/login" component={RuntimeHomePage} />
       <Route path="/" component={RuntimeHomePage} />
-      <Route path="/ceph" component={() => <Navigate href="/proxmox/ceph" />} />
-      <Route path="/ceph/*" component={() => <Navigate href="/proxmox/ceph" />} />
       <Route path={PROXMOX_PATH} component={ProxmoxPage} />
       <Route path={`${PROXMOX_PATH}/*`} component={ProxmoxPage} />
       <Route path={DOCKER_PATH} component={DockerPage} />
@@ -549,9 +540,7 @@ function App() {
 
       <Route path="/alerts/*" component={AlertsPage} />
       <Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />
-      <Route path="/ai/*" component={LegacyPatrolRouteRedirect} />
       <Route path="/settings/*" component={SettingsRoute} />
-      <Route path="/operations/*" component={OperationsPage} />
       <Route path="*all" component={NotFoundPage} />
     </Router>
   );

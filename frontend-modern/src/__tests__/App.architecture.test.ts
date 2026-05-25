@@ -52,9 +52,10 @@ describe('App architecture', () => {
     expect(appSource).not.toContain('<Route path={WORKLOADS_PATH}');
     expect(appSource).not.toContain('<Route path={STORAGE_PATH}');
     expect(appSource).not.toContain('<Route path={RECOVERY_PATH}');
-    expect(appSource).toContain(
-      '<Route path="/ceph" component={() => <Navigate href="/proxmox/ceph" />} />',
-    );
+    expect(appSource).not.toContain('<Route path="/ceph"');
+    expect(appSource).not.toContain('<Route path="/ceph/*"');
+    expect(appSource).not.toContain('Route, Navigate,');
+    expect(appSource).not.toContain('<Navigate ');
     expect(appSource).toContain('await preloadRouteModule(route);');
     expect(appRuntimeStateSource).not.toContain('preloadLazyRoutes');
     expect(appRuntimeStateSource).not.toContain("import('@/pages/Alerts')");
@@ -119,7 +120,8 @@ describe('App architecture', () => {
     expect(appSource).toContain(
       '<Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />',
     );
-    expect(appSource).toContain('<Route path="/ai/*" component={LegacyPatrolRouteRedirect} />');
+    expect(appSource).not.toContain('LegacyPatrolRouteRedirect');
+    expect(appSource).not.toContain('<Route path="/ai/*"');
     expect(appSource).toContain(
       "const PricingHandoffPage = lazy(() => import('./pages/PricingHandoff'));",
     );
@@ -133,7 +135,8 @@ describe('App architecture', () => {
     expect(appSource).not.toContain('<Route path="/cloud" component=');
     expect(appSource).not.toContain('<Route path="/cloud/signup" component=');
     expect(appSource).toContain("const ProxmoxPage = lazy(() => import('./pages/Proxmox'));");
-    expect(appSource).toContain("const OperationsPage = lazy(() => import('./pages/Operations'));");
+    expect(appSource).not.toContain("import('./pages/Operations')");
+    expect(appSource).not.toContain('<Route path="/operations/*"');
     // Legacy page wrappers were deleted when primary nav moved to
     // platform-first; their tables are reused inside platform pages directly.
     expect(appSource).not.toContain("import('./pages/Storage')");
@@ -227,9 +230,8 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain(
       '<ReleaseCandidateBanner version={props.versionInfo()?.version} />',
     );
-    expect(appLayoutSource).toContain(
-      "const blockedPrefixes = ['/settings', '/operations', '/patrol', '/ai'];",
-    );
+    expect(appLayoutSource).toContain("const blockedPrefixes = ['/settings', '/patrol'];");
+    expect(appLayoutSource).not.toContain("'/operations', '/patrol', '/ai'");
     expect(appLayoutSource).toContain("route: '/patrol',");
     expect(appLayoutSource).not.toContain("route: '/operations',");
     expect(appLayoutSource).not.toContain('props.connected()');

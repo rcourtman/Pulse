@@ -98,14 +98,13 @@ work extends shared components instead of creating new local variants.
 67. `frontend-modern/src/components/Settings/useSystemLogsPanelState.ts`
 68. `frontend-modern/src/utils/systemLogsPresentation.ts`
 69. `frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx`
-70. `frontend-modern/src/pages/Operations.tsx`
-71. `frontend-modern/src/components/Settings/ResourcePicker.tsx`
-72. `frontend-modern/src/components/Settings/reportingResourceTypes.ts`
-73. `frontend-modern/src/utils/reportableResourceTypes.ts`
-74. `frontend-modern/src/utils/reportingResourceTypes.ts`
-75. `frontend-modern/src/utils/problemResourcePresentation.ts`
-76. `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`
-77. `frontend-modern/src/utils/workloadGuestPresentation.ts`
+70. `frontend-modern/src/components/Settings/ResourcePicker.tsx`
+71. `frontend-modern/src/components/Settings/reportingResourceTypes.ts`
+72. `frontend-modern/src/utils/reportableResourceTypes.ts`
+73. `frontend-modern/src/utils/reportingResourceTypes.ts`
+74. `frontend-modern/src/utils/problemResourcePresentation.ts`
+75. `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`
+76. `frontend-modern/src/utils/workloadGuestPresentation.ts`
 78. `frontend-modern/src/utils/emptyStatePresentation.ts`
 79. `frontend-modern/src/utils/semanticTonePresentation.ts`
 80. `frontend-modern/src/components/Toast/Toast.tsx`
@@ -113,12 +112,11 @@ work extends shared components instead of creating new local variants.
 82. `frontend-modern/src/utils/semanticTonePresentation.ts`
 83. `frontend-modern/src/utils/emptyStatePresentation.ts`
 84. `frontend-modern/src/utils/typeColumnPresentation.ts`
-85. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
-86. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
-87. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
-88. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
-89. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
-90. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
+85. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
+86. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
+87. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
+88. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
+89. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
 91. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
 92. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
 93. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
@@ -467,8 +465,8 @@ not a replacement status card, CTA band, or page-local nested card.
    Workload, storage, and recovery workflows live inside the owning
    platform/runtime pages and reusable component surfaces; they must not appear
    in navigation, command palette, shortcut, route-preload, or active-tab
-   owners as standalone aggregate destinations. `/ceph` remains a thin
-   redirect to the Proxmox-owned Ceph tab.
+   owners as standalone aggregate destinations. The old top-level `/ceph`
+   alias is also unregistered; Proxmox owns Ceph at `/proxmox/ceph`.
    The same settings-shell boundary owns read-only landing posture: when the
    session presentation policy says the operator cannot manage setup, `/settings`
    and sidebar navigation must land on the canonical reporting/control surface
@@ -507,9 +505,9 @@ not a replacement status card, CTA band, or page-local nested card.
    That same public-demo presentation boundary also owns Settings support
    posture: the authenticated demo shell must not advertise `Diagnostics &
    Health`, `Data & Reports`, or `System Logs` in the Settings navigation, and
-   legacy `/operations/*` links must resolve through the canonical Settings
-   routing boundary instead of reviving a standalone Operations utility tab or
-   route-local support shell.
+   the retired top-level `/operations/*` browser path must stay unregistered
+   instead of reviving a standalone Operations utility tab or route-local
+   support shell.
    Because `Data & Reports` is the `advanced_reporting` capability surface
    rather than a general diagnostics page, `settingsNavCatalog.ts` must hide it
    when that feature is unavailable; ordinary self-hosted users should see
@@ -979,8 +977,8 @@ not a replacement status card, CTA band, or page-local nested card.
     generic AI labels inside Patrol-owned shells. The shared app shell in
     `frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx` must
     likewise expose `/patrol` as the canonical route and navigation target,
-    keeping legacy `/ai` entry points as thin compatibility redirects rather
-    than a second Patrol-branded primary route. `PatrolIntelligenceHeader.tsx`
+    while retired `/ai` browser entry points stay unregistered rather than a
+    second Patrol-branded primary route. `PatrolIntelligenceHeader.tsx`
     must also keep the page heading's accessible name singular: when the
     `PulsePatrolLogo` appears beside visible Patrol heading text, it is
     decorative rather than a second label source. The Patrol-owned supporting-context
@@ -1385,10 +1383,9 @@ not a replacement status card, CTA band, or page-local nested card.
     local imports when a route shell composes `PageHeader` through a nested
     surface, and settings coverage must stay limited to top-level registry
     panels rather than every helper `*Panel.tsx` file. The canonical Settings
-    shell therefore owns the shared `PageHeader` for support tools, and
-    `frontend-modern/src/pages/Operations.tsx` must stay a redirect-only
-    compatibility handoff instead of regrowing a second route-local heading,
-    tab strip, or page shell for diagnostics, reporting, or logs. Because the
+    shell therefore owns the shared `PageHeader` for support tools, and the
+    retired top-level `/operations/*` browser path must not regrow a route-local
+    heading, tab strip, or page shell for diagnostics, reporting, or logs. Because the
     dashboard route is retired, that audit must also discover live top-level
     pages from `src/pages/` and may not keep a hard required-header entry for
     `frontend-modern/src/pages/Dashboard.tsx`.
@@ -2524,14 +2521,13 @@ must consume the direct Proxmox panel contract through
 registry stays a shell/composition owner and does not depend on
 `ProxmoxSettingsPanel.tsx` as though the panel still owned the runtime model.
 
-The retired `/operations` route is now a thin compatibility redirect only.
-`frontend-modern/src/pages/Operations.tsx` may normalize legacy `/operations/*`
-links into the canonical Settings support routes, but diagnostics, reports,
-and logs now belong to the shared Settings shell instead of a bespoke page-
-local tab surface. Support-only navigation must therefore route through the
-shared settings owners rather than rebuilding a second route-level shell, and
-public demo posture must keep those support entries hidden from the Settings
-navigation instead of reviving a standalone operations page.
+The retired `/operations` route is unregistered rather than a compatibility
+redirect. Diagnostics, reports, and logs belong to the shared Settings shell
+instead of a bespoke page-local tab surface. Support-only navigation must
+therefore route through the shared settings owners rather than rebuilding a
+second route-level shell, and public demo posture must keep those support
+entries hidden from the Settings navigation instead of reviving a standalone
+operations page.
 that are unavailable in demo mode.
 
 The dashboard overview route and its feature-owned summary surfaces are
@@ -2837,10 +2833,11 @@ infrastructure workspace props, registry context maps, system panel prop maps,
 lazy loader definitions, or discovery draft state inline.
 That same settings-routing contract now also owns the Support group for
 `Diagnostics & Health`, `Data & Reports`, and `System Logs`: the navigation
-model must normalize both `/settings/operations/*` and legacy `/operations/*`
-compatibility links into `/settings/support/*`, and the catalog plus visibility
-owners must treat those support surfaces as Settings-native pages rather than
-as a second top-level utility destination.
+model may normalize old `/settings/operations/*` settings paths into
+`/settings/support/*`, but the top-level `/operations/*` browser path must stay
+unregistered. The catalog plus visibility owners must treat those support
+surfaces as Settings-native pages rather than as a second top-level utility
+destination.
 
 The resource incident panel's collapsed activity summary is now part of that
 same shared primitive boundary. Event-type count chips, visible-event copy,

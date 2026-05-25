@@ -12,6 +12,7 @@ import dockerRuntimeSettingsCardSource from '../DockerRuntimeSettingsCard.tsx?ra
 import settingsHeaderMetaSource from '../settingsHeaderMeta.ts?raw';
 import settingsNavCatalogSource from '../settingsNavCatalog.ts?raw';
 import settingsNavVisibilitySource from '../settingsNavVisibility.ts?raw';
+import settingsNavigationModelSource from '../settingsNavigationModel.ts?raw';
 import settingsNavigationHookSource from '../useSettingsNavigation.ts?raw';
 import settingsAccessSource from '../useSettingsAccess.ts?raw';
 import aiSettingsStateSource from '../useAISettingsState.ts?raw';
@@ -124,6 +125,23 @@ describe('settings architecture guardrails', () => {
     );
     expect(infrastructureWorkspaceModelSource).toContain(
       'export function deriveAddStepFromSearch(',
+    );
+  });
+
+  it('keeps retired operations browser paths out of the settings routing model', () => {
+    expect(settingsNavigationModelSource).toContain(
+      "const LEGACY_SETTINGS_OPERATIONS_PREFIX = '/settings/operations';",
+    );
+    expect(settingsNavigationModelSource).toContain('buildLegacyOperationsSettingsPath');
+    expect(settingsNavigationModelSource).not.toContain("normalizedPath === '/operations/logs'");
+    expect(settingsNavigationModelSource).not.toContain(
+      "normalizedPath.startsWith('/operations/logs/')",
+    );
+    expect(settingsNavigationModelSource).not.toContain(
+      "normalizedPath === '/operations/reporting'",
+    );
+    expect(settingsNavigationModelSource).not.toContain(
+      "normalizedPath.startsWith('/operations/reporting/')",
     );
   });
 

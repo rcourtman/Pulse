@@ -255,14 +255,18 @@ describe('settingsNavigationModel', () => {
     expect(deriveTabFromPath('/settings/infrastructure/install')).toBe('infrastructure-systems');
   });
 
-  it('maps support and legacy operations routes back to support tabs', () => {
+  it('maps support and legacy settings operations routes back to support tabs', () => {
     expect(deriveTabFromPath('/settings/support/diagnostics')).toBe('support-diagnostics');
     expect(deriveTabFromPath('/settings/support/reporting')).toBe('support-reporting');
     expect(deriveTabFromPath('/settings/support/logs')).toBe('support-logs');
-    expect(buildLegacyOperationsSettingsPath('/operations')).toBe('/settings/support/diagnostics');
-    expect(buildLegacyOperationsSettingsPath('/operations/reporting')).toBe(
+    expect(buildLegacyOperationsSettingsPath('/settings/operations')).toBe(
+      '/settings/support/diagnostics',
+    );
+    expect(buildLegacyOperationsSettingsPath('/settings/operations/reporting')).toBe(
       '/settings/support/reporting',
     );
-    expect(buildLegacyOperationsSettingsPath('/operations/logs')).toBe('/settings/support/logs');
+    expect(buildLegacyOperationsSettingsPath('/settings/operations/logs')).toBe(
+      '/settings/support/logs',
+    );
   });
 });

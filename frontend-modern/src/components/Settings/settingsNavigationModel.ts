@@ -400,8 +400,6 @@ export function buildLegacyOperationsSettingsPath(path: string): string {
   const normalizedPath = normalizeSettingsPath(path);
 
   if (
-    normalizedPath === '/operations/logs' ||
-    normalizedPath.startsWith('/operations/logs/') ||
     normalizedPath === `${LEGACY_SETTINGS_OPERATIONS_PREFIX}/logs` ||
     normalizedPath.startsWith(`${LEGACY_SETTINGS_OPERATIONS_PREFIX}/logs/`)
   ) {
@@ -409,8 +407,6 @@ export function buildLegacyOperationsSettingsPath(path: string): string {
   }
 
   if (
-    normalizedPath === '/operations/reporting' ||
-    normalizedPath.startsWith('/operations/reporting/') ||
     normalizedPath === `${LEGACY_SETTINGS_OPERATIONS_PREFIX}/reporting` ||
     normalizedPath.startsWith(`${LEGACY_SETTINGS_OPERATIONS_PREFIX}/reporting/`)
   ) {

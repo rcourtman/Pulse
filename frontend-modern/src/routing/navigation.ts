@@ -29,8 +29,7 @@ export function getActiveTabForPath(path: string): ActiveAppTabId {
   if (path.startsWith(VMWARE_PATH)) return 'vmware';
   if (path.startsWith(AGENTS_PATH)) return 'agents';
   if (path.startsWith('/alerts')) return 'alerts';
-  if (path.startsWith(PATROL_PATH) || path.startsWith('/ai')) return 'ai';
+  if (path.startsWith(PATROL_PATH)) return 'ai';
   if (path.startsWith('/settings')) return 'settings';
-  if (path.startsWith('/operations')) return 'settings';
   return null;
 }

@@ -674,9 +674,9 @@ keyboard shortcuts, or landing fallbacks. Aggregate workspace tabs are retired
 top-level routes, not compatibility placeholders. Admitted-only or absent
 platform/runtime surfaces must stay hidden from the AI-adjacent shell and must
 not be kept as disabled placeholders. The legacy `/infrastructure` route shell
-was retired alongside its page wrapper, `/workloads`, `/storage`, and
-`/recovery` remain unregistered top-level routes, and `/ceph` remains only a
-thin redirect to `/proxmox/ceph`. The AI Chat launcher, Patrol surfaces, and
+was retired alongside its page wrapper, and `/workloads`, `/storage`,
+`/recovery`, `/ceph`, `/ai`, and `/operations/*` remain unregistered
+top-level routes. The AI Chat launcher, Patrol surfaces, and
 `AssistantHandoffPayload` deep links must use canonical platform or runtime
 routes (`/proxmox/overview`, `/proxmox/storage`, `/kubernetes/workloads`, etc.)
 rather than reviving retired Infrastructure or aggregate workspace paths;

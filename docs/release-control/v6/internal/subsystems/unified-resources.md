@@ -1844,9 +1844,9 @@ builders.
 That same shared routing boundary now also owns the canonical Patrol
 destination used by cross-surface findings and drill-down links. Shared
 dashboard, alert, and settings referrals may target `/patrol` through
-`frontend-modern/src/routing/resourceLinks.ts`, but legacy `/ai` route shapes
-must remain compatibility-only redirects rather than forked primary
-destinations in local link builders.
+`frontend-modern/src/routing/resourceLinks.ts`, but retired `/ai` browser route
+shapes must stay unregistered rather than compatibility redirects or forked
+primary destinations in local link builders.
 That same shared routing boundary now also owns storage route-state vocabulary
 for unified resources without restoring the retired `/storage` top-level route.
 Platform pages and other embedded owners may carry owned `source`, `node`, and

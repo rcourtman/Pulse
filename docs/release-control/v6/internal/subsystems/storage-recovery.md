@@ -258,7 +258,7 @@ recovery scope, or a storage/recovery-owned secret source.
    A selected timeline day is an active event-history filter: table totals,
    footer ranges, empty states, and search/date matching must describe the
    visible filtered recovery points, not the unfiltered API page metadata.
-3. Add or change storage UX through `frontend-modern/src/components/Storage/Storage.tsx` (the canonical `StorageSurface`, embedded inside platform pages), `frontend-modern/src/components/Storage/`, `frontend-modern/src/features/storageBackups/`, the shared storage-source contract in `frontend-modern/src/utils/storageSources.ts`, and the Proxmox-native Ceph table at `frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx`. The old standalone page wrappers under the legacy frontend-modern pages directory were retired with the platform-first primary nav (2026-05-16), and the top-level aggregate Workloads / Storage / Recovery routes were unregistered on 2026-05-25; the canonical component surfaces remain alive as embedded views inside matching platform page sub-tabs. The Ceph legacy route remains a thin redirect to the Proxmox-owned Ceph tab.
+3. Add or change storage UX through `frontend-modern/src/components/Storage/Storage.tsx` (the canonical `StorageSurface`, embedded inside platform pages), `frontend-modern/src/components/Storage/`, `frontend-modern/src/features/storageBackups/`, the shared storage-source contract in `frontend-modern/src/utils/storageSources.ts`, and the Proxmox-native Ceph table at `frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx`. The old standalone page wrappers under the legacy frontend-modern pages directory were retired with the platform-first primary nav (2026-05-16), and the top-level aggregate Workloads / Storage / Recovery routes were unregistered on 2026-05-25; the canonical component surfaces remain alive as embedded views inside matching platform page sub-tabs. The old top-level Ceph alias is unregistered; Proxmox owns the Ceph tab.
    The retired dashboard route must not reintroduce storage or recovery
    widgets as compatibility panels. Storage capacity, storage health,
    protected-item, and recovery-outcome readiness claims belong on the Storage
@@ -820,11 +820,10 @@ recovery scope, or a storage/recovery-owned secret source.
     commercial compatibility handoffs like `/pricing` must stay separate thin
     route exits rather than borrowing storage/recovery preview framing,
     first-session copy, or page-state assumptions. The same route-ownership
-    rule applies to Patrol aliases on the shared app shell: `/patrol` may be
-    the authenticated canonical surface while `/ai` survives only as a thin
-    compatibility redirect, but storage/recovery route owners must not depend
-    on or borrow that Patrol redirect path for their own preview or
-    compatibility entrypoints.
+    rule applies to Patrol aliases on the shared app shell: `/patrol` is the
+    authenticated canonical surface while retired `/ai` browser entry points
+    stay unregistered, and storage/recovery route owners must not depend on or
+    borrow that retired path for their own preview or compatibility entrypoints.
     The same route-ownership rule keeps retired self-hosted trial and
     managed-model acquisition banners out of shared app chrome: storage and
     recovery routes must not inherit commercial nudges simply because
@@ -844,10 +843,9 @@ recovery scope, or a storage/recovery-owned secret source.
     may hide top-bar org chrome for public demo posture, but it must not leak
     into storage/recovery preview route ownership, first-session recovery copy,
     or route-level framing decisions.
-    Legacy `/operations/*` entrypoints now redirect into Settings support
-    surfaces. That compatibility path must stay a thin redirect in
-    `frontend-modern/src/App.tsx` and must not grow a second authenticated
-    shell boundary that competes with storage/recovery route ownership.
+    Retired `/operations/*` browser entry points are unregistered. They must
+    not grow a second authenticated shell boundary that competes with
+    storage/recovery route ownership.
     That same shared app-shell boundary must also respect blocking shared
     dialogs: background assistant affordances may hide while a modal owns the
     viewport, but storage/recovery routes must not grow their own parallel
