@@ -312,6 +312,11 @@ suppression, monitor-only notification suppression, cooldown decisions, and
 per-alert rate limiting; future notification-gating changes should extend that
 policy owner rather than burying new checks inside metric or resource-specific
 evaluators.
+The same dispatch policy owns firing-notification evidence on active alerts:
+any alert that passes notification suppression and enters the fired callback
+fan-out must carry `LastNotified` before the callback clone is emitted. Resolved
+notification gating depends on that field to distinguish alerts whose firing
+notification actually entered delivery from alerts that were never sent.
 Alert read-side output now lives in `internal/alerts/read_model.go`. That file
 owns active alert projection and sorting, metadata coercion helpers,
 recently-resolved and history output wrappers, and notify-existing redispatch;

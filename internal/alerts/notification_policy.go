@@ -173,6 +173,9 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 		recordAlertFired(alert)
 	}
 
+	notifiedAt := time.Now()
+	alert.LastNotified = &notifiedAt
+
 	alertCopy := cloneAlertForOutput(alert)
 	if async {
 		go func(a *Alert, fns []func(*Alert)) {

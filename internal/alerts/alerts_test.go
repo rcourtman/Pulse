@@ -17169,6 +17169,38 @@ func TestDispatchAlert(t *testing.T) {
 		}
 	})
 
+	t.Run("records last notified when dispatch succeeds", func(t *testing.T) {
+		m := newTestManager(t)
+
+		var receivedAlert *Alert
+		m.SetAlertCallback(func(a *Alert) {
+			receivedAlert = a
+		})
+
+		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
+		m.mu.Unlock()
+
+		alert := &Alert{
+			ID:           "test-alert",
+			Type:         "powered-off",
+			ResourceName: "testvm",
+		}
+
+		if !m.dispatchAlert(alert, false) {
+			t.Fatal("expected dispatch to succeed")
+		}
+		if alert.LastNotified == nil {
+			t.Fatal("expected dispatched alert to record LastNotified")
+		}
+		if receivedAlert == nil || receivedAlert.LastNotified == nil {
+			t.Fatal("expected dispatched clone to include LastNotified")
+		}
+		if !receivedAlert.LastNotified.Equal(*alert.LastNotified) {
+			t.Fatalf("clone LastNotified = %v, want %v", receivedAlert.LastNotified, alert.LastNotified)
+		}
+	})
+
 	t.Run("dispatches asynchronously when async is true", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
