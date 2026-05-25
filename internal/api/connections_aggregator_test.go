@@ -839,6 +839,83 @@ func TestBuildConnections_VMwareAndTrueNASEnabledFlag(t *testing.T) {
 	}
 }
 
+func TestBuildConnections_PlatformPollerSummariesDriveRuntimeState(t *testing.T) {
+	now := time.Now().UTC()
+	vmwareSuccess := now.Add(-40 * time.Second)
+	trueNASSuccess := now.Add(-30 * time.Second)
+	in := aggregatorInputs{
+		vmwareInstances: []config.VMwareVCenterInstance{{
+			ID: "vc1", Name: "vc", Host: "vc.lan", Enabled: true,
+			MonitorVMs: true, MonitorHosts: true, MonitorDatastores: true,
+		}},
+		vmwareSummaries: map[string]monitoring.VMwareConnectionSummary{
+			"vc1": {
+				Poll: &monitoring.VMwareConnectionPollStatus{
+					LastSuccessAt: &vmwareSuccess,
+				},
+			},
+		},
+		truenasInstances: []config.TrueNASInstance{{
+			ID: "tn1", Name: "tn", Host: "tn.lan", Enabled: true, UseHTTPS: true,
+			APIKey: "secret", MonitorDatasets: true, MonitorPools: true, MonitorReplication: true,
+		}},
+		truenasSummaries: map[string]monitoring.TrueNASConnectionSummary{
+			"tn1": {
+				Poll: &monitoring.TrueNASConnectionPollStatus{
+					LastSuccessAt: &trueNASSuccess,
+				},
+			},
+		},
+		now: now,
+	}
+
+	got := buildConnections(in)
+	byID := map[string]Connection{}
+	for _, connection := range got {
+		byID[connection.ID] = connection
+	}
+
+	vmw := byID["vmware:vc1"]
+	if vmw.State != ConnectionStateActive {
+		t.Fatalf("vmware state = %q, want active", vmw.State)
+	}
+	if vmw.LastSeen == nil || !vmw.LastSeen.Equal(vmwareSuccess) {
+		t.Fatalf("vmware lastSeen = %+v, want %s", vmw.LastSeen, vmwareSuccess)
+	}
+	if vmw.Fleet.CredentialStatus != fleetStateVerified || vmw.Fleet.CredentialHealth == nil || vmw.Fleet.CredentialHealth.Status != fleetStateVerified {
+		t.Fatalf("vmware credential governance = %+v", vmw.Fleet)
+	}
+
+	tn := byID["truenas:tn1"]
+	if tn.State != ConnectionStateActive {
+		t.Fatalf("truenas state = %q, want active", tn.State)
+	}
+	if tn.LastSeen == nil || !tn.LastSeen.Equal(trueNASSuccess) {
+		t.Fatalf("truenas lastSeen = %+v, want %s", tn.LastSeen, trueNASSuccess)
+	}
+	if tn.Fleet.CredentialStatus != fleetStateVerified || tn.Fleet.CredentialHealth == nil || tn.Fleet.CredentialHealth.Status != fleetStateVerified {
+		t.Fatalf("truenas credential governance = %+v", tn.Fleet)
+	}
+}
+
+func TestDeriveConnectionState_FirstPollFailureIsUnreachable(t *testing.T) {
+	now := time.Now()
+	h := healthEntry(nil, "connection refused", "network", "closed")
+	state, reason, lastSeen, lastError := deriveConnectionState(true, h, now)
+	if state != ConnectionStateUnreachable {
+		t.Fatalf("state = %q, want unreachable", state)
+	}
+	if reason != "connection refused" {
+		t.Fatalf("reason = %q, want connection refused", reason)
+	}
+	if lastSeen != nil {
+		t.Fatalf("lastSeen = %+v, want nil", lastSeen)
+	}
+	if lastError == nil || lastError.Message != "connection refused" {
+		t.Fatalf("lastError = %+v, want connection refused", lastError)
+	}
+}
+
 func TestBuildConnections_UsesHealthLookup(t *testing.T) {
 	now := time.Now()
 	ls := now.Add(-15 * time.Second)

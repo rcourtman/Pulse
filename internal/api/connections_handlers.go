@@ -13,9 +13,11 @@ import (
 // any persistence of its own — it composes per-type stores and the
 // monitoring scheduler's in-memory health data into a single list.
 type ConnectionsHandlers struct {
-	getConfig      func(ctx context.Context) *config.Config
-	getPersistence func(ctx context.Context) *config.ConfigPersistence
-	getMonitor     func(ctx context.Context) *monitoring.Monitor
+	getConfig        func(ctx context.Context) *config.Config
+	getPersistence   func(ctx context.Context) *config.ConfigPersistence
+	getMonitor       func(ctx context.Context) *monitoring.Monitor
+	getTrueNASPoller func(ctx context.Context) *monitoring.TrueNASPoller
+	getVMwarePoller  func(ctx context.Context) *monitoring.VMwarePoller
 }
 
 // NewConnectionsHandlers wires the aggregator behind the request-scoped
@@ -33,6 +35,19 @@ func NewConnectionsHandlers(
 	}
 }
 
+// SetPlatformPollers wires runtime poller summaries into the unified
+// connections ledger for out-of-scheduler platform adapters.
+func (h *ConnectionsHandlers) SetPlatformPollers(
+	getTrueNASPoller func(ctx context.Context) *monitoring.TrueNASPoller,
+	getVMwarePoller func(ctx context.Context) *monitoring.VMwarePoller,
+) {
+	if h == nil {
+		return
+	}
+	h.getTrueNASPoller = getTrueNASPoller
+	h.getVMwarePoller = getVMwarePoller
+}
+
 // HandleList returns every configured connection as a unified Connection row.
 // No probing or network I/O happens here — state is derived purely from
 // cached poller health.
@@ -47,13 +62,27 @@ func (h *ConnectionsHandlers) HandleList(w http.ResponseWriter, r *http.Request)
 	persistence := h.getPersistence(ctx)
 	monitor := h.getMonitor(ctx)
 
-	inputs := buildAggregatorInputs(ctx, cfg, persistence, monitor)
+	inputs := buildAggregatorInputsWithRuntimeSources(ctx, cfg, persistence, monitor, h.runtimeSources(ctx, resolveTenantOrgID(r)))
 
 	connections := buildConnections(inputs)
 	writeJSON(w, http.StatusOK, ConnectionsListResponse{
 		Connections: connections,
 		Systems:     buildConnectionSystems(connections, monitor),
 	})
+}
+
+func (h *ConnectionsHandlers) runtimeSources(ctx context.Context, orgID string) aggregatorRuntimeSources {
+	runtime := aggregatorRuntimeSources{orgID: orgID}
+	if h == nil {
+		return runtime
+	}
+	if h.getTrueNASPoller != nil {
+		runtime.truenasPoller = h.getTrueNASPoller(ctx)
+	}
+	if h.getVMwarePoller != nil {
+		runtime.vmwarePoller = h.getVMwarePoller(ctx)
+	}
+	return runtime
 }
 
 // HandleProbe fingerprints a user-supplied address and returns the product

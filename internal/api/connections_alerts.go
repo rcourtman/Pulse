@@ -11,12 +11,28 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 )
 
+type aggregatorRuntimeSources struct {
+	orgID         string
+	vmwarePoller  *monitoring.VMwarePoller
+	truenasPoller *monitoring.TrueNASPoller
+}
+
 // buildAggregatorInputs gathers the same inputs the HTTP connections handler
 // uses so the alerts pipeline can derive identical Connection rows without
 // going through the HTTP layer. Returning an empty aggregatorInputs when a
 // dependency is unavailable keeps the alerts loop a no-op rather than a hard
 // failure.
 func buildAggregatorInputs(ctx context.Context, cfg *config.Config, persistence *config.ConfigPersistence, monitor *monitoring.Monitor) aggregatorInputs {
+	return buildAggregatorInputsWithRuntimeSources(ctx, cfg, persistence, monitor, aggregatorRuntimeSources{})
+}
+
+func buildAggregatorInputsWithRuntimeSources(
+	ctx context.Context,
+	cfg *config.Config,
+	persistence *config.ConfigPersistence,
+	monitor *monitoring.Monitor,
+	runtime aggregatorRuntimeSources,
+) aggregatorInputs {
 	inputs := aggregatorInputs{now: time.Now()}
 
 	if cfg != nil {
@@ -35,6 +51,17 @@ func buildAggregatorInputs(ctx context.Context, cfg *config.Config, persistence 
 		if availability, err := persistence.LoadAvailabilityTargets(); err == nil {
 			inputs.availabilityTargets = availability
 		}
+	}
+
+	orgID := runtime.orgID
+	if orgID == "" {
+		orgID = "default"
+	}
+	if runtime.vmwarePoller != nil && len(inputs.vmwareInstances) > 0 {
+		inputs.vmwareSummaries = runtime.vmwarePoller.ConnectionSummaries(orgID, inputs.vmwareInstances)
+	}
+	if runtime.truenasPoller != nil && len(inputs.truenasInstances) > 0 {
+		inputs.truenasSummaries = runtime.truenasPoller.ConnectionSummaries(orgID, inputs.truenasInstances)
 	}
 
 	if monitor != nil {
@@ -115,6 +142,16 @@ func snapshotConnectionsForAlerts(connections []Connection) []alerts.ConnectionS
 // monitor-loop counterpart to the HTTP connections handler — it runs the
 // same derivation but skips the JSON envelope.
 func BuildAlertConnectionSnapshots(ctx context.Context, cfg *config.Config, persistence *config.ConfigPersistence, monitor *monitoring.Monitor) []alerts.ConnectionSnapshot {
-	inputs := buildAggregatorInputs(ctx, cfg, persistence, monitor)
+	return buildAlertConnectionSnapshotsWithRuntimeSources(ctx, cfg, persistence, monitor, aggregatorRuntimeSources{})
+}
+
+func buildAlertConnectionSnapshotsWithRuntimeSources(
+	ctx context.Context,
+	cfg *config.Config,
+	persistence *config.ConfigPersistence,
+	monitor *monitoring.Monitor,
+	runtime aggregatorRuntimeSources,
+) []alerts.ConnectionSnapshot {
+	inputs := buildAggregatorInputsWithRuntimeSources(ctx, cfg, persistence, monitor, runtime)
 	return snapshotConnectionsForAlerts(buildConnections(inputs))
 }

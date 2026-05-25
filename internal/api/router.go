@@ -404,6 +404,10 @@ func (r *Router) setupRoutes() {
 		r.configHandlers.getPersistence,
 		r.configHandlers.getMonitor,
 	)
+	r.connectionsHandlers.SetPlatformPollers(
+		func(context.Context) *monitoring.TrueNASPoller { return r.trueNASPoller },
+		func(context.Context) *monitoring.VMwarePoller { return r.vmwarePoller },
+	)
 	if r.monitor != nil {
 		// Drive the connection-degraded alert off the same aggregator the
 		// HTTP handler uses, so the active-notification stream stays in
@@ -412,9 +416,15 @@ func (r *Router) setupRoutes() {
 		getCfg := r.configHandlers.getConfig
 		getPersist := r.configHandlers.getPersistence
 		monitor := r.monitor
+		trueNASPoller := r.trueNASPoller
+		vmwarePoller := r.vmwarePoller
 		r.monitor.SetConnectionsSnapshotLister(func() []alerts.ConnectionSnapshot {
 			ctx := context.Background()
-			return BuildAlertConnectionSnapshots(ctx, getCfg(ctx), getPersist(ctx), monitor)
+			return buildAlertConnectionSnapshotsWithRuntimeSources(ctx, getCfg(ctx), getPersist(ctx), monitor, aggregatorRuntimeSources{
+				orgID:         "default",
+				truenasPoller: trueNASPoller,
+				vmwarePoller:  vmwarePoller,
+			})
 		})
 	}
 	r.availabilityHandlers = NewAvailabilityHandlers(

@@ -89,3 +89,70 @@ func TestConnectionsHandleListIncludesContinuityBackedHostAgents(t *testing.T) {
 		t.Fatalf("expected continuity-backed connection to carry lastSeen, got %#v", conn.LastSeen)
 	}
 }
+
+func TestConnectionsHandleListUsesTrueNASPollerRuntimeSummary(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	connection := config.TrueNASInstance{
+		ID:                 "tn1",
+		Name:               "TrueNAS",
+		Host:               "truenas.lan",
+		APIKey:             "secret",
+		UseHTTPS:           true,
+		Enabled:            true,
+		PollIntervalSecs:   60,
+		MonitorDatasets:    true,
+		MonitorPools:       true,
+		MonitorReplication: true,
+	}
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatalf("SaveTrueNASConfig: %v", err)
+	}
+
+	poller := monitoring.NewTrueNASPoller(nil, time.Minute, nil)
+	successAt := time.Now().UTC().Add(-30 * time.Second)
+	poller.RecordConnectionTestSuccess("default", connection.ID, connection, successAt)
+
+	handler := NewConnectionsHandlers(
+		func(context.Context) *config.Config { return nil },
+		func(context.Context) *config.ConfigPersistence { return persistence },
+		func(context.Context) *monitoring.Monitor { return nil },
+	)
+	handler.SetPlatformPollers(
+		func(context.Context) *monitoring.TrueNASPoller { return poller },
+		nil,
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/connections", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleList(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ConnectionsListResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode connections response: %v", err)
+	}
+
+	var tn *Connection
+	for i := range resp.Connections {
+		if resp.Connections[i].ID == "truenas:tn1" {
+			tn = &resp.Connections[i]
+			break
+		}
+	}
+	if tn == nil {
+		t.Fatalf("expected TrueNAS connection, got %+v", resp.Connections)
+	}
+	if tn.State != ConnectionStateActive {
+		t.Fatalf("state = %q, want active", tn.State)
+	}
+	if tn.LastSeen == nil || !tn.LastSeen.Equal(successAt) {
+		t.Fatalf("lastSeen = %+v, want %s", tn.LastSeen, successAt)
+	}
+	if tn.Fleet.CredentialStatus != fleetStateVerified ||
+		tn.Fleet.CredentialHealth == nil ||
+		tn.Fleet.CredentialHealth.Status != fleetStateVerified {
+		t.Fatalf("credential governance = %+v", tn.Fleet)
+	}
+}

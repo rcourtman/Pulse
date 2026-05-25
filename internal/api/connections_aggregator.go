@@ -91,7 +91,9 @@ type aggregatorInputs struct {
 	pbsInstances         []config.PBSInstance
 	pmgInstances         []config.PMGInstance
 	vmwareInstances      []config.VMwareVCenterInstance
+	vmwareSummaries      map[string]monitoring.VMwareConnectionSummary
 	truenasInstances     []config.TrueNASInstance
+	truenasSummaries     map[string]monitoring.TrueNASConnectionSummary
 	availabilityTargets  []config.AvailabilityTarget
 	availabilityStatuses map[string]monitoring.AvailabilityProbeStatus
 	hosts                []models.Host
@@ -129,10 +131,10 @@ func buildConnections(in aggregatorInputs) []Connection {
 		out = append(out, buildPMGConnection(pmg, in.instanceHealth, now))
 	}
 	for _, vmw := range in.vmwareInstances {
-		out = append(out, buildVMwareConnection(vmw, in.instanceHealth, now))
+		out = append(out, buildVMwareConnection(vmw, in.instanceHealth, in.vmwareSummaries, now))
 	}
 	for _, tn := range in.truenasInstances {
-		out = append(out, buildTrueNASConnection(tn, in.instanceHealth, now))
+		out = append(out, buildTrueNASConnection(tn, in.instanceHealth, in.truenasSummaries, now))
 	}
 	for _, target := range in.availabilityTargets {
 		out = append(out, buildAvailabilityConnection(target, in.availabilityStatuses[target.ID], now))
@@ -247,7 +249,12 @@ func buildPMGConnection(inst config.PMGInstance, health map[string]monitoring.In
 	return conn
 }
 
-func buildVMwareConnection(inst config.VMwareVCenterInstance, health map[string]monitoring.InstanceHealth, now time.Time) Connection {
+func buildVMwareConnection(
+	inst config.VMwareVCenterInstance,
+	health map[string]monitoring.InstanceHealth,
+	summaries map[string]monitoring.VMwareConnectionSummary,
+	now time.Time,
+) Connection {
 	enabled := inst.Enabled
 	surfaces := []string{"vms", "hosts", "datastores"}
 	scope := map[string]bool{
@@ -256,6 +263,9 @@ func buildVMwareConnection(inst config.VMwareVCenterInstance, health map[string]
 		"datastores": inst.MonitorDatastores,
 	}
 	h := health["vmware::"+inst.ID]
+	if summary, ok := summaries[strings.TrimSpace(inst.ID)]; ok {
+		h = mergeVMwareSummaryHealth(h, summary)
+	}
 	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now)
 	port := inst.Port
 	if port == 0 {
@@ -281,7 +291,12 @@ func buildVMwareConnection(inst config.VMwareVCenterInstance, health map[string]
 	return conn
 }
 
-func buildTrueNASConnection(inst config.TrueNASInstance, health map[string]monitoring.InstanceHealth, now time.Time) Connection {
+func buildTrueNASConnection(
+	inst config.TrueNASInstance,
+	health map[string]monitoring.InstanceHealth,
+	summaries map[string]monitoring.TrueNASConnectionSummary,
+	now time.Time,
+) Connection {
 	enabled := inst.Enabled
 	surfaces := []string{"datasets", "pools", "replication"}
 	scope := map[string]bool{
@@ -290,6 +305,9 @@ func buildTrueNASConnection(inst config.TrueNASInstance, health map[string]monit
 		"replication": inst.MonitorReplication,
 	}
 	h := health["truenas::"+inst.ID]
+	if summary, ok := summaries[strings.TrimSpace(inst.ID)]; ok {
+		h = mergeTrueNASSummaryHealth(h, summary)
+	}
 	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now)
 	scheme := "https"
 	if !inst.UseHTTPS {
@@ -321,6 +339,113 @@ func buildTrueNASConnection(inst config.TrueNASInstance, health map[string]monit
 	}, now)
 	conn.Fleet.CredentialHealth = connectionFleetCredentialHealth(conn, connectionTrueNASCredentialKind(inst), nil, nil, now)
 	return conn
+}
+
+func mergeVMwareSummaryHealth(
+	h monitoring.InstanceHealth,
+	summary monitoring.VMwareConnectionSummary,
+) monitoring.InstanceHealth {
+	if summary.Poll == nil {
+		return h
+	}
+	return mergePlatformPollHealth(
+		h,
+		summary.Poll.LastSuccessAt,
+		vmwarePollErrorAt(summary.Poll.LastError),
+		vmwarePollErrorMessage(summary.Poll.LastError),
+		vmwarePollErrorCategory(summary.Poll.LastError),
+		summary.Poll.ConsecutiveFailures,
+	)
+}
+
+func mergeTrueNASSummaryHealth(
+	h monitoring.InstanceHealth,
+	summary monitoring.TrueNASConnectionSummary,
+) monitoring.InstanceHealth {
+	if summary.Poll == nil {
+		return h
+	}
+	return mergePlatformPollHealth(
+		h,
+		summary.Poll.LastSuccessAt,
+		trueNASPollErrorAt(summary.Poll.LastError),
+		trueNASPollErrorMessage(summary.Poll.LastError),
+		trueNASPollErrorCategory(summary.Poll.LastError),
+		summary.Poll.ConsecutiveFailures,
+	)
+}
+
+func mergePlatformPollHealth(
+	h monitoring.InstanceHealth,
+	lastSuccess *time.Time,
+	lastErrorAt *time.Time,
+	lastErrorMessage string,
+	lastErrorCategory string,
+	consecutiveFailures int,
+) monitoring.InstanceHealth {
+	if lastSuccess != nil && !lastSuccess.IsZero() {
+		t := *lastSuccess
+		h.PollStatus.LastSuccess = &t
+	}
+	if consecutiveFailures > h.PollStatus.ConsecutiveFailures {
+		h.PollStatus.ConsecutiveFailures = consecutiveFailures
+	}
+
+	lastErrorMessage = strings.TrimSpace(lastErrorMessage)
+	if lastErrorMessage != "" {
+		at := time.Time{}
+		if lastErrorAt != nil {
+			at = *lastErrorAt
+		}
+		h.PollStatus.LastError = &monitoring.ErrorDetail{
+			At:       at,
+			Message:  lastErrorMessage,
+			Category: strings.TrimSpace(lastErrorCategory),
+		}
+	}
+	return h
+}
+
+func vmwarePollErrorAt(err *monitoring.VMwareConnectionPollError) *time.Time {
+	if err == nil {
+		return nil
+	}
+	return err.At
+}
+
+func vmwarePollErrorMessage(err *monitoring.VMwareConnectionPollError) string {
+	if err == nil {
+		return ""
+	}
+	return err.Message
+}
+
+func vmwarePollErrorCategory(err *monitoring.VMwareConnectionPollError) string {
+	if err == nil {
+		return ""
+	}
+	return err.Category
+}
+
+func trueNASPollErrorAt(err *monitoring.TrueNASConnectionPollError) *time.Time {
+	if err == nil {
+		return nil
+	}
+	return err.At
+}
+
+func trueNASPollErrorMessage(err *monitoring.TrueNASConnectionPollError) string {
+	if err == nil {
+		return ""
+	}
+	return err.Message
+}
+
+func trueNASPollErrorCategory(err *monitoring.TrueNASConnectionPollError) string {
+	if err == nil {
+		return ""
+	}
+	return err.Category
 }
 
 func buildAvailabilityConnection(target config.AvailabilityTarget, status monitoring.AvailabilityProbeStatus, now time.Time) Connection {
@@ -1035,6 +1160,10 @@ func deriveConnectionState(enabled bool, h monitoring.InstanceHealth, now time.T
 
 	if lastError != nil && connectionAuthErrorPattern.MatchString(lastError.Message) {
 		return ConnectionStateUnauthorized, lastError.Message, lastSeen, lastError
+	}
+
+	if lastSeen == nil && lastError != nil {
+		return ConnectionStateUnreachable, lastError.Message, lastSeen, lastError
 	}
 
 	if strings.EqualFold(h.Breaker.State, "open") {
