@@ -19,7 +19,7 @@ interface KeyboardShortcutsModalProps {
 const UNIFIED_NAV_SHORTCUTS: ShortcutGroup = {
   title: 'Navigation',
   items: [
-    { keys: 'g then s', description: 'Go to Standalone' },
+    { keys: 'g then s', description: 'Go to Machines' },
     { keys: 'g then p', description: 'Go to Proxmox' },
     { keys: 'g then d', description: 'Go to Containers' },
     { keys: 'g then k', description: 'Go to Kubernetes' },

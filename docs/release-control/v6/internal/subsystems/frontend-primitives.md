@@ -1097,26 +1097,28 @@ not a replacement status card, CTA band, or page-local nested card.
     that platform-first set only, so mobile and desktop navigation stay aligned
     without reintroducing aggregate Workloads / Storage / Recovery workspace
     tabs or the legacy Infrastructure entry.
-    Frontend primitives owns the sole user-facing `Standalone` IA contract for
-    the support-manifest `agent` platform and agentless availability endpoints;
-    adjacent subsystem contracts may reference this owner for dependencies but
-    must not restate the route, navigation, or landing semantics. Its primary
-    tab, mobile priority, command-palette destination, and keyboard shortcut
-    must all route through `buildStandalonePath()` and the
-    `PrimaryInfrastructureNavId` `standalone` evidence gate; they must not
-    create a generic Hosts, Nodes, Other, or mixed-systems bucket, and they
-    must not include provider-owned platform nodes that are not canonical
-    standalone resources. The Standalone page is a platform/runtime page, not a
-    legacy Infrastructure page: it must use the shared platform tab, toolbar,
-    table-card, and kind-aligned column primitives, and it must not reintroduce
-    the old top-of-page InfrastructureSummary chart strip. Standalone must also
-    remain secondary in the shell hierarchy when provider/runtime platform
-    evidence exists: `PRIMARY_INFRASTRUCTURE_NAV_IDS`, desktop primary tabs,
-    mobile primary priority, app-shell preload order, authenticated landing
-    fallback, and command-palette ordering must prefer Proxmox, Containers,
-    Kubernetes, TrueNAS, and vSphere ahead of Standalone. Standalone may win
-    those first/default positions only when the current estate has standalone
-    Pulse Agent machines or agentless availability endpoints and no
+    Frontend primitives owns the sole user-facing `Machines` IA contract for
+    the support-manifest `agent` platform and agentless availability endpoints.
+    The compatibility route, internal navigation id, and builders remain
+    `standalone` / `buildStandalonePath()`; adjacent subsystem contracts may
+    reference this owner for dependencies but must not restate the route,
+    navigation, or landing semantics. Its primary tab, mobile priority,
+    command-palette destination, and keyboard shortcut must all route through
+    `buildStandalonePath()` and the `PrimaryInfrastructureNavId` `standalone`
+    evidence gate; they must not create a generic Hosts, Nodes, Other, or
+    mixed-systems bucket, and they must not include provider-owned platform
+    nodes that are not canonical machine-page resources. The Machines page is a
+    platform/runtime page, not a legacy Infrastructure page: it must use the
+    shared platform tab, toolbar, table-card, and kind-aligned column
+    primitives, and it must not reintroduce the old top-of-page
+    InfrastructureSummary chart strip. The Machines surface must also remain
+    secondary in the shell hierarchy when provider/runtime platform evidence exists:
+    `PRIMARY_INFRASTRUCTURE_NAV_IDS`, desktop primary tabs, mobile primary
+    priority, app-shell preload order, authenticated landing fallback, and
+    command-palette ordering must prefer Proxmox, Containers, Kubernetes,
+    TrueNAS, and vSphere ahead of Machines. The Machines surface may win those
+    first/default positions only when the current estate has standalone Pulse
+    Agent machines or agentless availability endpoints and no
     provider/runtime platform evidence.
 
 ## Forbidden Paths
@@ -1412,9 +1414,10 @@ not a replacement status card, CTA band, or page-local nested card.
     rules.
     `frontend-modern/src/App.tsx` must land authenticated `/` and `/login`
     handoffs through this subsystem's provider-first platform landing contract:
-    the first visible provider/runtime platform wins, and Standalone is eligible
-    only when the current estate has standalone Pulse Agent machines or
-    agentless availability endpoints and no provider/runtime evidence. The
+    the first visible provider/runtime platform wins, and the Machines surface
+    is eligible only when the current estate has standalone Pulse Agent
+    machines or agentless availability endpoints and no provider/runtime
+    evidence. The
     retired Infrastructure aggregate route and nested settings infrastructure
     aliases are not compatibility commitments:
     first-time operator setup must enter through the canonical Settings →
@@ -2564,7 +2567,7 @@ retired or unknown routes such as `/dashboard` must not be coerced into the
 nearest platform tab just because the authenticated shell has a provider-first
 landing fallback. Shared desktop and mobile navigation must tolerate a missing
 active tab for those paths while still highlighting canonical active routes
-such as Proxmox, Containers, Kubernetes, TrueNAS, vSphere, Standalone, Alerts,
+such as Proxmox, Containers, Kubernetes, TrueNAS, vSphere, Machines, Alerts,
 Patrol, and Settings.
 The recovery feature shell now also depends on the shared
 `frontend-modern/src/components/shared/Subtabs.tsx` primitive for its primary
@@ -3583,11 +3586,11 @@ metric slot, while keeping recent check timing and fuller failure context in
 the tooltip or drawer so operators can understand what was measured without
 duplicated row chrome.
 Operational navigation for those agentless endpoints belongs to the
-frontend-primitives-owned Standalone surface rather than a new primary nav item.
+frontend-primitives-owned Machines surface rather than a new primary nav item.
 The page may show availability checks beside standalone Pulse Agent machines and
 provide a focused availability tab, but Settings remains the add/edit owner and
 the app shell must not add a separate top-level Availability destination.
-The Standalone page must not pretend its machine list is a generic overview:
+The Machines page must not pretend its machine list is a generic overview:
 the default tab is `Machines`, and the full availability-check row list belongs
 to the `Availability checks` tab. Servers, laptops, desktops, and comparable
 computers that are monitored by agentless reachability checks are still

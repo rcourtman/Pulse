@@ -112,7 +112,7 @@ export function buildCommandPaletteCommands(options: {
   if (primaryInfrastructureNavigationIsVisible(options.infrastructureVisibility, 'standalone')) {
     commands.push({
       id: 'nav-standalone',
-      label: 'Go to Standalone',
+      label: 'Go to Machines',
       description: options.paths.standalonePath,
       shortcut: 'g s',
       keywords: [

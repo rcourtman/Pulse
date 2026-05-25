@@ -145,16 +145,17 @@ runtime cost control, and shared AI transport surfaces.
     the VMware page must not introduce VMware-local AI prompts, a provider
     model picker, or a vSphere-specific chat/runtime route just because
     networks are now rendered as a first-class API-native table.
-    The frontend-primitives-owned `Standalone` platform page follows the same
-    AI runtime boundary: route registration and primary-tab chrome may expose
-    the support-manifest `agent` platform plus agentless availability
-    endpoints, but the page must not add an agent-specific Assistant prompt
-    surface, AI launcher, model picker, or browser-owned model context.
-    Standalone rows may seed Assistant or Patrol only through the shared
-    unified resource handoff contracts. Its IA, primary shell position, and
-    landing eligibility belong to `frontend-primitives`; those changes must
-    not alter Patrol or Assistant utility-tab ordering, launcher visibility, or
-    shared keyboard handling in `frontend-modern/src/AppLayout.tsx`.
+    The frontend-primitives-owned Machines surface follows the same AI runtime
+    boundary while retaining the internal `standalone` route/id contract: route
+    registration and primary-tab chrome may expose the support-manifest `agent`
+    platform plus agentless availability endpoints, but the page must not add an
+    agent-specific Assistant prompt surface, AI launcher, model picker, or
+    browser-owned model context. Machine rows may seed Assistant or Patrol only
+    through the shared unified resource handoff contracts. Its IA, primary
+    shell position, and landing eligibility belong to `frontend-primitives`;
+    those changes must not alter Patrol or Assistant utility-tab ordering,
+    launcher visibility, or shared keyboard handling in
+    `frontend-modern/src/AppLayout.tsx`.
 
 ## Forbidden Paths
 
@@ -687,8 +688,10 @@ adding a platform tab through the same shell files must not fork Assistant or
 Patrol shell state or smuggle in AI-owned platform reads.
 Post-auth `/` and `/login` resolution follows the frontend-primitives-owned
 provider-first platform landing contract, so the assistant-capable shell never
-overrides Standalone eligibility or revives legacy Infrastructure as the
-default estate surface.
+overrides Machines-surface eligibility or revives legacy Infrastructure as the
+default estate surface. The user-facing Machines label is an app-shell
+presentation label for the existing `standalone` route/id and must not create a
+separate AI handoff or prompt namespace.
 
 The route-backed Proxmox platform tab is app-shell navigation only. Adding the
 tab through `frontend-modern/src/App.tsx` and

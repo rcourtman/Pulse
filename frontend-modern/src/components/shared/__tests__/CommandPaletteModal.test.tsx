@@ -94,7 +94,7 @@ describe('CommandPaletteModal', () => {
       />
     ));
 
-    expect(screen.getByText('Go to Standalone')).toBeInTheDocument();
+    expect(screen.getByText('Go to Machines')).toBeInTheDocument();
     expect(screen.getByText('/standalone/machines')).toBeInTheDocument();
     expect(screen.getByText('Go to Proxmox')).toBeInTheDocument();
     expect(screen.getByText('Go to Containers')).toBeInTheDocument();
@@ -112,7 +112,7 @@ describe('CommandPaletteModal', () => {
 
     const commandLabels = screen.getAllByRole('button').map((button) => button.textContent ?? '');
     expect(commandLabels.findIndex((label) => label.includes('Go to Proxmox'))).toBeLessThan(
-      commandLabels.findIndex((label) => label.includes('Go to Standalone')),
+      commandLabels.findIndex((label) => label.includes('Go to Machines')),
     );
   });
 
@@ -183,7 +183,7 @@ describe('CommandPaletteModal', () => {
     expect(screen.queryByText('Go to Workloads')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Storage')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Recovery')).not.toBeInTheDocument();
-    expect(screen.queryByText('Go to Standalone')).not.toBeInTheDocument();
+    expect(screen.queryByText('Go to Machines')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Containers')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Kubernetes')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to TrueNAS')).not.toBeInTheDocument();

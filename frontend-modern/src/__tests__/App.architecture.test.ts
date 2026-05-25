@@ -67,9 +67,7 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).not.toContain('fetchInfrastructureSummaryAndCache');
     expect(appRuntimeStateSource).not.toContain('fetchWorkloadsSummaryAndCache');
     expect(appRuntimeStateSource).not.toContain('requestIdleCallback');
-    expect(appSource).toContain(
-      "const StandalonePage = lazy(() => import('./pages/Standalone'));",
-    );
+    expect(appSource).toContain("const StandalonePage = lazy(() => import('./pages/Standalone'));");
     expect(appSource).toContain('<Route path={STANDALONE_PATH} component={StandalonePage} />');
     expect(appSource).toContain(
       '<Route path={`${STANDALONE_PATH}/*`} component={StandalonePage} />',
@@ -103,7 +101,7 @@ describe('App architecture', () => {
       "tooltip: 'VMware vSphere hosts, virtual machines, datastores, and networks'",
     );
     expect(appLayoutSource).toContain(
-      "tooltip: 'Standalone Pulse Agent machines and agentless availability checks'",
+      "tooltip: 'Pulse Agent machines, agentless computers, and availability checks'",
     );
     // Governed shell nav: Infrastructure, Workloads, Storage, and Recovery are
     // not standalone shell tabs; platform/runtime pages own those workflows.

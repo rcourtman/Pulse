@@ -500,7 +500,7 @@ or other self-hosted uncapped continuity plans.
     Paid and hosted app shells must inherit the frontend-primitives-owned
     platform/runtime primary navigation contract and canonical path constants
     from `frontend-modern/src/routing/resourceLinks.ts`; cloud-paid must not
-    carry a second copy of the platform list, shell order, or Standalone
+    carry a second copy of the platform list, shell order, or Machines-surface
     eligibility rules. Product navigation remains support-and-evidence gated:
     `enabled`, `live`, and inclusion in the rendered primary navigation derive
     from the governed support manifest plus canonical resource evidence in
@@ -521,9 +521,10 @@ or other self-hosted uncapped continuity plans.
     bespoke per-family tables, synthetic placeholder data, or reintroduce
     Infrastructure as a primary navigation entry without a governed contract
     decision recorded by the frontend-primitives owner.
-    The presence of a `Standalone` tab is not a new commercial usage unit:
-    hosted and paid surfaces continue to meter the governed monitored-system
-    grouping result rather than counting primary navigation destinations.
+    The presence of the user-facing `Machines` tab, backed by the internal
+    `standalone` route/id, is not a new commercial usage unit: hosted and paid
+    surfaces continue to meter the governed monitored-system grouping result
+    rather than counting primary navigation destinations.
     Landing behavior for paid and hosted shells must also defer to the
     frontend-primitives-owned provider-first landing contract instead of
     defining a cloud-paid-specific order.

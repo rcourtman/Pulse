@@ -176,7 +176,7 @@ describe('StandalonePageSurface', () => {
 
     expect(screen.queryByTestId('agents-machines-table')).not.toBeInTheDocument();
     expect(screen.queryByTestId('availability-checks-table')).not.toBeInTheDocument();
-    expect(screen.getByText('No standalone machines')).toBeInTheDocument();
+    expect(screen.getByText('No machines')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View checks' })).toHaveAttribute(
       'href',
       '/standalone/availability',
@@ -202,6 +202,6 @@ describe('StandalonePageSurface', () => {
     render(() => <StandalonePageSurface />);
 
     expect(screen.getByTestId('agents-machines-table')).toHaveAttribute('data-resource-count', '1');
-    expect(screen.queryByText('No standalone machines')).not.toBeInTheDocument();
+    expect(screen.queryByText('No machines')).not.toBeInTheDocument();
   });
 });

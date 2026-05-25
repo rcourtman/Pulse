@@ -81,15 +81,15 @@ export function StandalonePageSurface() {
       <PlatformSectionTabs
         tabs={STANDALONE_TAB_SPECS}
         active={activeTab()}
-        ariaLabel="Standalone sections"
+        ariaLabel="Machines sections"
       />
 
       <Show
         when={!showLoading()}
         fallback={
           <PlatformTableLoadingState
-            title="Loading standalone resources"
-            description="Pulse is loading standalone machines and availability checks."
+            title="Loading machines"
+            description="Pulse is loading Pulse Agent machines, agentless computers, and availability checks."
           />
         }
       >
@@ -97,7 +97,7 @@ export function StandalonePageSurface() {
           when={!error()}
           fallback={
             <PlatformErrorState
-              title="Could not load standalone resources"
+              title="Could not load machines"
               description="Refresh the resource snapshot or check the API connection state."
               onRefresh={() => void refetch()}
             />
@@ -118,7 +118,7 @@ export function StandalonePageSurface() {
               fallback={
                 <PlatformTableEmptyState
                   icon={machineIcon()}
-                  title="No standalone monitored endpoints"
+                  title="No monitored machines"
                   description="Install Pulse Agent on servers, laptops, and desktops for full telemetry, or add an agentless machine check when reachability is enough."
                   actions={
                     <div class="flex flex-wrap items-center justify-center gap-2">
@@ -149,7 +149,7 @@ export function StandalonePageSurface() {
                     <Show when={model().availabilityChecks.length > 0}>
                       <PlatformTableEmptyState
                         icon={machineIcon()}
-                        title="No standalone machines"
+                        title="No machines"
                         description="Service and device checks are monitored from the Availability checks tab. Mark an availability target as a machine when it represents a server, laptop, or desktop."
                         actions={
                           <A href={buildStandalonePath('availability')} class={overviewActionClass}>
@@ -164,7 +164,7 @@ export function StandalonePageSurface() {
                   <AgentsMachinesTable
                     resources={model().machines}
                     emptyIcon={machineIcon()}
-                    emptyTitle="No standalone machines"
+                    emptyTitle="No machines"
                     emptyDescription="Install the Pulse Agent on Linux, macOS, Windows, or Unraid systems for full telemetry, or add an agentless machine check when reachability is enough."
                   />
                 </Show>

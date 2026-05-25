@@ -688,11 +688,11 @@ AI-only summary payloads, or page-local heuristics.
     derive every internal link from those builders so the canonical resource
     URL vocabulary stays single-sourced; ad hoc string concatenation of
     platform routes inside feature directories is not permitted.
-    Standalone's default resource route is the machines projection
+    The user-facing Machines surface's default resource route is the machines projection
     (`/standalone/machines`); agentless endpoint rows use the
     `/standalone/availability` projection and must not be collapsed into a
     generic overview URL.
-    The frontend-primitives-owned Standalone IA contract consumes the
+    The frontend-primitives-owned Machines IA contract consumes the
     unified-resource projection for Pulse-managed standalone agent rows and
     agentless availability endpoint rows; this subsystem owns only the
     membership rules for those projected rows. Agent membership must require
@@ -700,7 +700,7 @@ AI-only summary payloads, or page-local heuristics.
     resource sources or source status, and no stronger provider-owner evidence
     from Proxmox, VMware, TrueNAS, or Kubernetes. Source-less legacy snapshots
     may fall back to a normalized `platformType === "agent"`, but
-    provider-owned nodes must not become Standalone-page members through
+    provider-owned nodes must not become machine-page members through
     hostname, `agent` platform scope, or agent telemetry alone; those facts
     surface as facets on the owning provider page.
     The default tab for each platform path must point at a sub-tab whose
@@ -740,9 +740,8 @@ AI-only summary payloads, or page-local heuristics.
    `/settings/monitoring/availability`, and the add flow for MQTT, ping, TCP,
    and HTTP checks is `/settings/monitoring/availability?add=target`. Saved
    availability targets carry a `targetKind` so agentless servers, laptops,
-   desktops, and comparable computers can participate in the Standalone
-   Machines inventory without reclassifying service or device checks as
-   machines.
+   desktops, and comparable computers can participate in the Machines inventory
+   without reclassifying service or device checks as machines.
 6. Keep infrastructure source visibility on canonical unified-resource truth.
    Settings infrastructure source filters and summaries must preserve known
    sources such as `truenas` and `availability` through the shared source
@@ -1149,7 +1148,7 @@ or the live-state `platformData.availability` mirror: the System column uses
 the probe protocol as the compact identity badge (`ICMP`, `TCP`, or `HTTP`),
 while the metric cell shows only the target detail and latest latency or
 failure result, such as `6053: 11 ms`, `/status: 503`, `3 ms`, or `timed out`.
-Frontend primitives owns Standalone as the operational presentation for those
+Frontend primitives owns Machines as the operational presentation for those
 same agentless checks; unified resources owns the projection contract consumed
 there. `StandalonePageSurface.tsx` must fetch both `agent` and
 `network-endpoint` resources, keep standalone machines and availability checks
@@ -2803,7 +2802,7 @@ redirect. Canonical infrastructure management lives under
 lives under `/settings/monitoring/availability`; day-to-day resource
 inspection lives on the platform/runtime pages named by the
 frontend-primitives-owned IA contract, with unified resources projecting
-standalone agent machines and agentless endpoint checks for the Standalone
+standalone agent machines and agentless endpoint checks for the Machines
 consumer. Future infrastructure work must extend those owners rather than
 recreating
 `frontend-modern/src/features/infrastructure/`, a `/infrastructure` route, or

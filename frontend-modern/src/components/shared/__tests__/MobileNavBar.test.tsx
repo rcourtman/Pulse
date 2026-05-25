@@ -90,10 +90,10 @@ describe('MobileNavBar', () => {
         primaryTabs={() => [
           {
             id: 'standalone',
-            label: 'Standalone',
+            label: 'Machines',
             route: '/standalone/machines',
             settingsRoute: '/settings/infrastructure',
-            tooltip: 'Standalone',
+            tooltip: 'Machines',
             enabled: true,
             live: true,
             icon: StandaloneIcon,
@@ -135,10 +135,10 @@ describe('MobileNavBar', () => {
         primaryTabs={() => [
           {
             id: 'standalone',
-            label: 'Standalone',
+            label: 'Machines',
             route: '/standalone/machines',
             settingsRoute: '/settings/infrastructure',
-            tooltip: 'Standalone',
+            tooltip: 'Machines',
             enabled: true,
             live: true,
             icon: StandaloneIcon,
@@ -200,7 +200,7 @@ describe('MobileNavBar', () => {
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('Pro')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTitle('Standalone'));
+    fireEvent.click(screen.getByTitle('Machines'));
     expect(onPrimaryClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'standalone' }));
 
     fireEvent.click(screen.getByTitle('Alerts'));

@@ -131,9 +131,9 @@ describe('AppLayout navigation icons', () => {
       within(infrastructureGroup as HTMLElement)
         .getAllByRole('tab')
         .map((tab) => tab.getAttribute('aria-label')),
-    ).toEqual(['Proxmox', 'Containers', 'vSphere', 'Standalone']);
+    ).toEqual(['Proxmox', 'Containers', 'vSphere', 'Machines']);
     expect(
-      within(infrastructureGroup as HTMLElement).getByRole('tab', { name: 'Standalone' }),
+      within(infrastructureGroup as HTMLElement).getByRole('tab', { name: 'Machines' }),
     ).toBeTruthy();
     expect(
       within(infrastructureGroup as HTMLElement).getByRole('tab', { name: 'Proxmox' }),

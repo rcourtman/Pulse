@@ -40,7 +40,7 @@ describe('resource link routing contract', () => {
     expect(buildProxmoxPath('')).toBe('/proxmox');
   });
 
-  it('builds canonical Standalone, container runtime, Kubernetes, TrueNAS, and vSphere tab paths', () => {
+  it('builds canonical Machines, container runtime, Kubernetes, TrueNAS, and vSphere tab paths', () => {
     expect(STANDALONE_PATH).toBe('/standalone');
     expect(STANDALONE_DEFAULT_TAB).toBe('machines');
     expect(buildStandalonePath()).toBe('/standalone/machines');
