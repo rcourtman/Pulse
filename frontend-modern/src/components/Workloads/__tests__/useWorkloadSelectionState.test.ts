@@ -14,7 +14,7 @@ const emptySummaryGroupScopes = () => new Map<string, SummarySeriesGroupScope>()
 
 vi.mock('@solidjs/router', () => ({
   useLocation: () => ({
-    pathname: '/workloads',
+    pathname: '/proxmox/overview',
     get search() {
       return locationSearch;
     },

@@ -1208,6 +1208,12 @@ the platform-page sub-tabs rather than offering external surface jumps.
 Future cross-surface storage or recovery affordances must compose against
 the embedded `StorageSurface` / `RecoverySurface` consumers rather than
 reintroducing top-level URL builders.
+The remaining storage and recovery route builders in
+`frontend-modern/src/routing/resourceLinks.ts` are query-state serializers, not
+destination builders: callers must append `buildStorageRouteSearch()` or
+`buildRecoveryRouteSearch()` to the current platform-owned pathname such as
+`/proxmox/storage`, `/proxmox/backups`, or `/truenas/protection`. They must not
+emit `/storage` or `/recovery` as hidden compatibility paths.
 
 Storage and Recovery can now be embedded by a platform page in table-only mode
 with a forced platform source/filter. Proxmox uses that embedding for
@@ -2067,12 +2073,13 @@ multi-tenant fetch state, so Dashboard, StorageSummary, and other storage
 adjacent consumers do not each keep a local `getOrgID() || 'default'`
 fallback.
 
-The frontend storage and recovery surfaces are also first-class runtime entry
-points. `frontend-modern/src/pages/Storage.tsx` is the storage route shell,
+The frontend storage and recovery surfaces are also first-class embedded
+runtime entry points. Platform page route shells own the path, while
 `frontend-modern/src/components/Storage/Storage.tsx` is the operator-facing
 storage surface owner, and `frontend-modern/src/components/Storage/` plus
 `frontend-modern/src/features/storageBackups/` define the storage health model
-and presentation, while
+and presentation. The retired standalone storage page shell must not be
+recreated, while
 the storage page's readiness now stays route-owned as well:
 `frontend-modern/src/components/Storage/useStoragePageModel.ts` and
 `frontend-modern/src/features/storageBackups/storagePageStatus.ts` must derive
@@ -2197,7 +2204,7 @@ implementation detail: `frontend-modern/src/hooks/useRecoveryPoints.ts`,
 `frontend-modern/src/hooks/useRecoveryPointsSeries.ts`, and
 `frontend-modern/src/hooks/useRecoveryRollups.ts` must stay on the explicit
 `recovery-product-surface` proof path instead of inheriting release-control
-coverage only through `frontend-modern/src/pages/Recovery.tsx`.
+coverage only through a retired standalone Recovery page shell.
 Those same hooks now also own recovery transport normalization at the frontend
 boundary: raw compatibility fields such as `provider` / `providers` may be
 accepted from older `/api/recovery/*` payloads, but the runtime values they

@@ -15,7 +15,6 @@ export const WORKLOADS_QUERY_PARAMS = {
   summaryGroup: 'summaryGroup',
 } as const;
 
-export const WORKLOADS_PATH = '/workloads';
 export const AGENTS_PATH = '/agents';
 export const AGENTS_DEFAULT_TAB = 'overview';
 export const PROXMOX_PATH = '/proxmox';
@@ -31,9 +30,6 @@ export const VMWARE_DEFAULT_TAB = 'overview';
 export const PMG_THRESHOLDS_PATH = '/alerts/thresholds/mail-gateway';
 export const ALERTS_OVERVIEW_PATH = '/alerts/overview';
 export const PATROL_PATH = '/patrol';
-export const STORAGE_PATH = '/storage';
-// Canonical "Recovery" surface (was historically called Backups).
-export const RECOVERY_PATH = '/recovery';
 
 export const STORAGE_QUERY_PARAMS = {
   tab: 'tab',
@@ -150,7 +146,12 @@ export const parseWorkloadsLinkSearch = (search: string) => {
   };
 };
 
-export const buildWorkloadsPath = (options: WorkloadsLinkOptions = {}): string => {
+const serializedRouteSearch = (params: URLSearchParams): string => {
+  const query = params.toString();
+  return query ? `?${query}` : '';
+};
+
+export const buildWorkloadsRouteSearch = (options: WorkloadsLinkOptions = {}): string => {
   const params = new URLSearchParams();
   const type = normalizeWorkloadsType(options.type);
   const platform = normalizeSourcePlatformQueryValue(options.platform);
@@ -168,8 +169,7 @@ export const buildWorkloadsPath = (options: WorkloadsLinkOptions = {}): string =
   if (agent) params.set(WORKLOADS_QUERY_PARAMS.agent, agent);
   if (resource) params.set(WORKLOADS_QUERY_PARAMS.resource, resource);
   if (summaryGroup) params.set(WORKLOADS_QUERY_PARAMS.summaryGroup, summaryGroup);
-  const query = params.toString();
-  return query ? `${WORKLOADS_PATH}?${query}` : WORKLOADS_PATH;
+  return serializedRouteSearch(params);
 };
 
 export const buildProxmoxPath = (tab: string = PROXMOX_DEFAULT_TAB): string => {
@@ -220,7 +220,7 @@ export const parseStorageLinkSearch = (search: string) => {
   };
 };
 
-export const buildStoragePath = (options: StorageLinkOptions = {}): string => {
+export const buildStorageRouteSearch = (options: StorageLinkOptions = {}): string => {
   const params = new URLSearchParams();
   const tab = normalizeQueryValue(options.tab);
   const group = normalizeQueryValue(options.group);
@@ -248,8 +248,7 @@ export const buildStoragePath = (options: StorageLinkOptions = {}): string => {
   if (order) params.set(STORAGE_QUERY_PARAMS.order, order);
   if (summaryGroup) params.set(STORAGE_QUERY_PARAMS.summaryGroup, summaryGroup);
 
-  const serialized = params.toString();
-  return serialized ? `${STORAGE_PATH}?${serialized}` : STORAGE_PATH;
+  return serializedRouteSearch(params);
 };
 
 export const parseRecoveryLinkSearch = (search: string) => {
@@ -280,7 +279,7 @@ export const parseRecoveryLinkSearch = (search: string) => {
   };
 };
 
-export const buildRecoveryPath = (options: RecoveryLinkOptions = {}): string => {
+export const buildRecoveryRouteSearch = (options: RecoveryLinkOptions = {}): string => {
   const params = new URLSearchParams();
   const rollupId = normalizeQueryValue(options.rollupId);
   const view = normalizeQueryValue(options.view);
@@ -316,6 +315,5 @@ export const buildRecoveryPath = (options: RecoveryLinkOptions = {}): string => 
   if (node) params.set(RECOVERY_QUERY_PARAMS.node, node);
   if (query) params.set(RECOVERY_QUERY_PARAMS.query, query);
 
-  const serialized = params.toString();
-  return serialized ? `${RECOVERY_PATH}?${serialized}` : RECOVERY_PATH;
+  return serializedRouteSearch(params);
 };

@@ -191,7 +191,7 @@ describe('resourceDetailDrawerOperationalModel', () => {
         hasWebInterface: true,
         links: [
           {
-            href: '/workloads?type=app-container&platform=docker&agent=agent-1',
+            href: '/docker/workloads?type=app-container&platform=docker&agent=agent-1',
             label: 'Open in Workloads',
             compactLabel: 'Workloads',
             ariaLabel: 'Open related workloads for Host 1',

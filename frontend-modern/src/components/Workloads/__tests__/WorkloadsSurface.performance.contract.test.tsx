@@ -110,7 +110,7 @@ vi.mock('@solidjs/router', async () => {
   const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
   return {
     ...actual,
-    useLocation: () => ({ pathname: '/workloads', search: mockLocationSearch }),
+    useLocation: () => ({ pathname: '/proxmox/overview', search: mockLocationSearch }),
     useNavigate: () => navigateSpy,
   };
 });
@@ -410,9 +410,11 @@ describe('Workloads platform-page embed contract', () => {
     expect(proxmoxSource).toContain('STORAGE_KEYS.WORKLOADS_METRIC_DISPLAY_MODE');
     expect(proxmoxSource).toContain('STORAGE_KEYS.WORKLOADS_METRIC_HISTORY_RANGE');
     expect(proxmoxSource).toContain('metricDisplayMode={metricDisplayMode}');
-    expect(proxmoxSource).toContain('onMetricDisplayModeChange={setMetricDisplayMode}');
+    expect(proxmoxSource).toContain('setMetricDisplayMode={workloadsState.setWorkloadMetricDisplayMode}');
+    expect(proxmoxSource).toContain('onMetricDisplayModeChange: props.setMetricDisplayMode,');
     expect(proxmoxSource).toContain('metricHistoryRange={metricHistoryRange}');
-    expect(proxmoxSource).toContain('onMetricHistoryRangeChange={setMetricHistoryRange}');
+    expect(proxmoxSource).toContain('setMetricHistoryRange={workloadsState.setWorkloadMetricHistoryRange}');
+    expect(proxmoxSource).toContain('onMetricHistoryRangeChange: props.setMetricHistoryRange,');
 
     const nodesTableSource = (await import('../../../features/proxmox/ProxmoxNodesTable.tsx?raw'))
       .default;
@@ -625,7 +627,7 @@ describe('Workloads performance contract', () => {
     });
 
     it('searches policy-redacted resources by their raw display name in operator-local UI', () => {
-      // /workloads search; redaction is a transmission-boundary policy
+      // owning route search; redaction is a transmission-boundary policy
       // (docs/PRIVACY.md), so the haystack must use the raw infra name.
       const resources = [makeResource()];
 
@@ -968,7 +970,7 @@ describe('Workloads performance contract', () => {
         'resolveWorkloadsManagedWorkloadsNavigateTarget({',
       );
       expect(workloadUrlSyncModelSource).toContain('parseWorkloadsLinkSearch(search)');
-      expect(workloadUrlSyncModelSource).toContain('buildWorkloadsPath({');
+      expect(workloadUrlSyncModelSource).toContain('buildWorkloadsRouteSearch({');
       expect(workloadUrlSyncModelSource).toContain(
         'resolveWorkloadsManagedWorkloadsNavigateTarget',
       );

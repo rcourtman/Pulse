@@ -310,6 +310,14 @@ regression protection.
 14. Extend workload deep-link selection and hovered-row continuity semantics through `frontend-modern/src/components/Workloads/workloadSelectionModel.ts`, and extend table scroll preservation plus reactive selection state through `frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts`, rather than rebuilding resource-query parsing, selected-row scroll pinning, or hovered-row invalidation inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`; canonical typed workload IDs such as `app-container:<host>:<provider-id>` must remain exact route/selection keys and must not be reinterpreted into synthetic node scopes
 15. Extend workload route ownership, route-driven option catalogs, and toolbar filter config through `frontend-modern/src/components/Workloads/useWorkloadRouteState.ts`, `frontend-modern/src/components/Workloads/useWorkloadFilterOptions.ts`, `frontend-modern/src/components/Workloads/workloadRouteModel.ts`, `frontend-modern/src/components/Workloads/workloadFilterConfigModel.ts`, and `frontend-modern/src/components/Workloads/workloadRouteStateModel.ts`, and extend query-param synchronization plus managed workload URL semantics through `frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts` and `frontend-modern/src/components/Workloads/workloadUrlSyncModel.ts`, rather than rebuilding route sync, alias parsing, option derivation, toolbar callback/config wiring, reset policy, node-selection compatibility rules, param precedence, or managed workload URLs inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
     Workloads route host scopes must resolve through `frontend-modern/src/components/Workloads/workloadTopology.ts`: app-container scopes use the canonical Docker/runtime host id before host labels or node fallbacks, while VM and system-container scopes keep the instance-node key. Route `agent` filters and option catalogs must consume that shared scope so Infrastructure related-workload links cannot drift from Workloads filtering.
+    Workloads route-state writes must preserve the owning platform/runtime
+    pathname instead of rebuilding the retired aggregate `/workloads` route.
+    `useWorkloadRouteState.ts` supplies the route-enabled boundary, while
+    `useWorkloadUrlSync.ts` and `workloadUrlSyncModel.ts` may serialize
+    canonical workload query params only after the embedding surface has opted
+    into route state. Embedded surfaces that are table-only or drawer-local
+    must stay route-state inert so the hot path does not schedule app-shell
+    navigations or revive aggregate-path redirects.
     The user-facing Workloads Type filter must expose the stable operator
     buckets `All`, `VMs`, `Containers`, and `Pods`. The internal
     `system-container` / `app-container` distinction may continue to parse for

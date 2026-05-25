@@ -1003,9 +1003,11 @@ in the same pass. The K8s Namespaces and Deployments drawer "Open Pods" /
 (`frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx`,
 `frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx`) now
 route to `/kubernetes/workloads` rather than building
-`/workloads?type=pod&context=...&namespace=...` URLs; the legacy
-context/namespace query filter does not carry forward because the new
-Kubernetes Workloads tab does not consume those parameters. New drawer or
+retired aggregate workload URLs; the legacy context/namespace query filter
+does not carry forward because the new Kubernetes Workloads tab does not
+consume those parameters. Workloads, storage, and recovery route-state helpers
+in `frontend-modern/src/routing/resourceLinks.ts` now serialize query state
+only; the owning platform/runtime route supplies the pathname. New drawer or
 correlation surfaces must anchor on platform routes (or stay-in-place drawer
 expansion) instead of resurrecting the retired top-level paths.
 

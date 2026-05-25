@@ -1,6 +1,6 @@
 import { batch, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildStoragePath } from '@/routing/resourceLinks';
+import { buildStorageRouteSearch } from '@/routing/resourceLinks';
 import { useStorageRouteState } from '@/components/Storage/useStorageRouteState';
 import { ROUTE_STATE_REPLACE_OPTIONS } from '@/utils/routeStateNavigation';
 
@@ -14,7 +14,7 @@ describe('useStorageRouteState', () => {
   });
 
   const setup = (initialSearch = '') => {
-    const [pathname] = createSignal('/storage');
+    const [pathname] = createSignal('/proxmox/storage');
     const [search, setSearch] = createSignal(initialSearch);
     const [tab, setTab] = createSignal('pools');
     const [source, setSource] = createSignal('all');
@@ -42,7 +42,7 @@ describe('useStorageRouteState', () => {
           },
         },
         navigate,
-        buildPath: buildStoragePath,
+        buildPath: (options) => `${pathname()}${buildStorageRouteSearch(options)}`,
         useCurrentPathForNavigation: true,
         fields: {
           tab: {
@@ -148,7 +148,7 @@ describe('useStorageRouteState', () => {
 
     expect(ctx.navigate).toHaveBeenCalledTimes(1);
     expect(ctx.navigate).toHaveBeenCalledWith(
-      '/storage?tab=disks&source=proxmox-pbs',
+      '/proxmox/storage?tab=disks&source=proxmox-pbs',
       ROUTE_STATE_REPLACE_OPTIONS,
     );
 

@@ -57,7 +57,7 @@ vi.mock('@solidjs/router', async () => {
   return {
     ...actual,
     useLocation: () => ({
-      pathname: '/workloads',
+      pathname: '/kubernetes/workloads',
       search: mockLocationSearch,
     }),
     useNavigate: () => navigateSpy,
@@ -705,7 +705,7 @@ describe('Workloads pod workloads integration', () => {
     });
 
     const [path, options] = navigateSpy.mock.calls.at(-1) as [string, { replace?: boolean }];
-    expect(path).toBe('/workloads');
+    expect(path).toBe('/kubernetes/workloads');
     expect(options?.replace).toBe(true);
   });
 

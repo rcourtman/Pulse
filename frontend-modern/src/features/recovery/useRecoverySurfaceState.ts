@@ -6,7 +6,7 @@ import { useRecoveryRollups, type RecoveryRollupsQuery } from '@/hooks/useRecove
 import { useRecoveryPoints } from '@/hooks/useRecoveryPoints';
 import { useRecoveryPointsFacets } from '@/hooks/useRecoveryPointsFacets';
 import { useRecoveryPointsSeries } from '@/hooks/useRecoveryPointsSeries';
-import { RECOVERY_PATH, buildRecoveryPath, parseRecoveryLinkSearch } from '@/routing/resourceLinks';
+import { buildRecoveryRouteSearch, parseRecoveryLinkSearch } from '@/routing/resourceLinks';
 import type { ProtectionRollup, RecoveryOutcome } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
@@ -417,12 +417,10 @@ export function useRecoverySurfaceState(options: RecoverySurfaceStateOptions = {
     protectedStateFilter();
     chartRangeDays();
     selectedDateKey();
-    if (location.pathname !== RECOVERY_PATH) return;
     if (untrack(currentPage) !== 1) setCurrentPage(1);
   });
 
   createEffect(() => {
-    if (location.pathname !== RECOVERY_PATH) return;
     const rid = rollupId().trim();
     const defaultView: RecoveryWorkspaceView = 'events';
     const status = historyOutcomeFilter() !== 'all' ? historyOutcomeFilter() : null;
@@ -430,7 +428,7 @@ export function useRecoverySurfaceState(options: RecoverySurfaceStateOptions = {
     const currentPath = `${location.pathname}${location.search || ''}`;
     if (hydratedLocationKey() !== currentPath) return;
 
-    const nextPath = buildRecoveryPath({
+    const nextSearch = buildRecoveryRouteSearch({
       rollupId: rid || null,
       view: workspaceView() !== defaultView ? workspaceView() : null,
       query: queryFilter().trim() || null,
@@ -451,6 +449,7 @@ export function useRecoverySurfaceState(options: RecoverySurfaceStateOptions = {
       node: nodeFilter() !== 'all' ? nodeFilter() : null,
       namespace: namespaceFilter() !== 'all' ? namespaceFilter() : null,
     });
+    const nextPath = `${location.pathname}${nextSearch}`;
 
     if (nextPath !== currentPath) {
       routeStateNavigate.schedule(nextPath);

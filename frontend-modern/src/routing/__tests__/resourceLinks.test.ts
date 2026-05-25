@@ -14,17 +14,16 @@ import {
   buildAgentsPath,
   buildDockerPath,
   buildKubernetesPath,
-  buildRecoveryPath,
+  buildRecoveryRouteSearch,
   buildProxmoxPath,
-  buildStoragePath,
+  buildStorageRouteSearch,
   buildTrueNASPath,
   buildVmwarePath,
-  buildWorkloadsPath,
+  buildWorkloadsRouteSearch,
   parseRecoveryLinkSearch,
   parseStorageLinkSearch,
   parseWorkloadsLinkSearch,
   STORAGE_QUERY_PARAMS,
-  STORAGE_PATH,
   WORKLOADS_QUERY_PARAMS,
 } from '@/routing/resourceLinks';
 
@@ -76,18 +75,18 @@ describe('resource link routing contract', () => {
   });
 
   it('builds and parses workloads query params', () => {
-    const href = buildWorkloadsPath({
+    const search = buildWorkloadsRouteSearch({
       type: 'k8s',
       platform: 'kubernetes',
       context: 'cluster-a',
       agent: 'worker-1',
       resource: 'cluster-a:worker-1:101',
     });
-    expect(href).toBe(
-      '/workloads?type=pod&platform=kubernetes&context=cluster-a&agent=worker-1&resource=cluster-a%3Aworker-1%3A101',
+    expect(search).toBe(
+      '?type=pod&platform=kubernetes&context=cluster-a&agent=worker-1&resource=cluster-a%3Aworker-1%3A101',
     );
 
-    const parsed = parseWorkloadsLinkSearch(href.slice('/workloads'.length));
+    const parsed = parseWorkloadsLinkSearch(search);
     expect(parsed).toEqual({
       type: 'pod',
       platform: 'kubernetes',
@@ -109,18 +108,32 @@ describe('resource link routing contract', () => {
     expect(WORKLOADS_QUERY_PARAMS.summaryGroup).toBe('summaryGroup');
   });
 
-  it('canonicalizes legacy workloads type aliases when building links', () => {
-    expect(buildWorkloadsPath({ type: 'docker', platform: 'docker', agent: 'runtime-1' })).toBe(
-      '/workloads?type=app-container&platform=docker&agent=runtime-1',
-    );
+  it('canonicalizes legacy workloads type aliases when building route search', () => {
     expect(
-      buildWorkloadsPath({ type: 'kubernetes', platform: 'kubernetes', context: 'cluster-a' }),
-    ).toBe('/workloads?type=pod&platform=kubernetes&context=cluster-a');
+      buildWorkloadsRouteSearch({ type: 'docker', platform: 'docker', agent: 'runtime-1' }),
+    ).toBe('?type=app-container&platform=docker&agent=runtime-1');
+    expect(
+      buildWorkloadsRouteSearch({
+        type: 'kubernetes',
+        platform: 'kubernetes',
+        context: 'cluster-a',
+      }),
+    ).toBe('?type=pod&platform=kubernetes&context=cluster-a');
+  });
+
+  it('does not expose retired aggregate route builders', () => {
+    const linkExports = {
+      buildWorkloadsRouteSearch,
+      buildStorageRouteSearch,
+      buildRecoveryRouteSearch,
+    };
+    expect(linkExports).not.toHaveProperty('buildWorkloadsPath');
+    expect(linkExports).not.toHaveProperty('buildStoragePath');
+    expect(linkExports).not.toHaveProperty('buildRecoveryPath');
   });
 
   it('builds and parses storage query params', () => {
-    expect(STORAGE_PATH).toBe('/storage');
-    const href = buildStoragePath({
+    const search = buildStorageRouteSearch({
       tab: 'disks',
       group: 'storage',
       source: 'pbs',
@@ -133,11 +146,11 @@ describe('resource link routing contract', () => {
       sort: 'usage',
       order: 'desc',
     });
-    expect(href).toBe(
-      '/storage?tab=disks&group=storage&source=proxmox-pbs&status=available&diskRole=nvme-disk&diskGroup=data&node=cluster-main-pve1&q=local-lvm&resource=storage-1&sort=usage&order=desc',
+    expect(search).toBe(
+      '?tab=disks&group=storage&source=proxmox-pbs&status=available&diskRole=nvme-disk&diskGroup=data&node=cluster-main-pve1&q=local-lvm&resource=storage-1&sort=usage&order=desc',
     );
 
-    const parsed = parseStorageLinkSearch(href.slice('/storage'.length));
+    const parsed = parseStorageLinkSearch(search);
     expect(parsed).toEqual({
       tab: 'disks',
       group: 'storage',
@@ -170,7 +183,7 @@ describe('resource link routing contract', () => {
   });
 
   it('builds and parses recovery query params', () => {
-    const href = buildRecoveryPath({
+    const search = buildRecoveryRouteSearch({
       view: 'events',
       platform: 'proxmox-pbs',
       state: 'stale',
@@ -187,8 +200,8 @@ describe('resource link routing contract', () => {
       node: 'cluster-main-pve1',
       query: 'node:pve1',
     });
-    const url = new URL(href, 'http://localhost');
-    expect(url.pathname).toBe('/recovery');
+    const url = new URL(search, 'http://localhost/truenas/protection');
+    expect(url.pathname).toBe('/truenas/protection');
     expect(url.searchParams.get('view')).toBe('events');
     expect(url.searchParams.get('platform')).toBe('proxmox-pbs');
     expect(url.searchParams.get('state')).toBe('stale');
@@ -205,7 +218,7 @@ describe('resource link routing contract', () => {
     expect(url.searchParams.get('node')).toBe('cluster-main-pve1');
     expect(url.searchParams.get('q')).toBe('node:pve1');
 
-    const parsed = parseRecoveryLinkSearch(href.slice('/recovery'.length));
+    const parsed = parseRecoveryLinkSearch(search);
     expect(parsed).toEqual({
       rollupId: '',
       view: 'events',
@@ -243,31 +256,31 @@ describe('resource link routing contract', () => {
   });
 
   it('canonicalizes recovery platform aliases when building and parsing links', () => {
-    expect(buildRecoveryPath({ platform: 'pbs', mode: 'remote' })).toBe(
-      '/recovery?platform=proxmox-pbs&mode=remote',
+    expect(buildRecoveryRouteSearch({ platform: 'pbs', mode: 'remote' })).toBe(
+      '?platform=proxmox-pbs&mode=remote',
     );
     const parsed = parseRecoveryLinkSearch('?provider=proxmox&mode=local');
     expect(parsed).toMatchObject({
       platform: 'proxmox-pve',
       mode: 'local',
     });
-    expect(buildRecoveryPath(parsed)).toBe('/recovery?platform=proxmox-pve&mode=local');
+    expect(buildRecoveryRouteSearch(parsed)).toBe('?platform=proxmox-pve&mode=local');
     expect(parseRecoveryLinkSearch('?itemType=proxmox-vm')).toMatchObject({
       itemType: 'vm',
     });
   });
 
   it('canonicalizes stale-only recovery route flags to the owned query shape', () => {
-    expect(buildRecoveryPath({ stale: 'true', platform: 'proxmox-pve' })).toBe(
-      '/recovery?platform=proxmox-pve&stale=1',
+    expect(buildRecoveryRouteSearch({ stale: 'true', platform: 'proxmox-pve' })).toBe(
+      '?platform=proxmox-pve&stale=1',
     );
     expect(parseRecoveryLinkSearch('?stale=%201%20')).toMatchObject({ stale: '1' });
   });
 
   it('preserves explicit recovery chart range values in route state', () => {
-    const href = buildRecoveryPath({ range: '30', platform: 'proxmox-pve' });
-    const url = new URL(href, 'http://localhost');
-    expect(url.pathname).toBe('/recovery');
+    const search = buildRecoveryRouteSearch({ range: '30', platform: 'proxmox-pve' });
+    const url = new URL(search, 'http://localhost/proxmox/backups');
+    expect(url.pathname).toBe('/proxmox/backups');
     expect(url.searchParams.get('platform')).toBe('proxmox-pve');
     expect(url.searchParams.get('range')).toBe('30');
     expect(parseRecoveryLinkSearch('?range=90')).toMatchObject({ range: '90' });

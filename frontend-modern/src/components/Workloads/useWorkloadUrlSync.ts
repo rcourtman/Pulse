@@ -9,7 +9,6 @@ import {
 } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import type { ViewMode } from '@/types/workloads';
-import { WORKLOADS_PATH } from '@/routing/resourceLinks';
 import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
 import { isContainerWorkloadViewMode } from '@/utils/workloads';
 import type { WorkloadNodeOption } from './workloadRouteModel';
@@ -23,6 +22,7 @@ import {
 export interface WorkloadsWorkloadUrlSyncOptions {
   containerRuntime: Accessor<string>;
   containerRuntimeOptions: Accessor<string[]>;
+  routeStateEnabled: Accessor<boolean>;
   kubernetesNamespaceOptions: Accessor<string[]>;
   selectedHostHint: Accessor<string | null>;
   selectedPlatform: Accessor<string | null>;
@@ -45,7 +45,7 @@ export interface WorkloadsWorkloadUrlSyncOptions {
 export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
   const navigate = useNavigate();
   const location = useLocation();
-  const isWorkloadsRoute = () => location.pathname === WORKLOADS_PATH;
+  const isWorkloadsRoute = () => options.routeStateEnabled();
   const workloadUrlParams = createMemo(() => parseWorkloadsWorkloadUrlParams(location.search));
   const routeStateNavigate = createRouteStateNavigateScheduler(
     navigate,
@@ -137,6 +137,7 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
   });
 
   createEffect(() => {
+    if (!isWorkloadsRoute()) return;
     const parsed = workloadUrlParams();
     const normalizedType = parsed.type;
     if (normalizedType === handledTypeParam()) return;
@@ -157,6 +158,7 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
   });
 
   createEffect(() => {
+    if (!isWorkloadsRoute()) return;
     const normalized = workloadUrlParams().platform;
     if (normalized === handledPlatformParam()) return;
     const currentSelected = untrack(() => options.selectedPlatform());
@@ -183,6 +185,7 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
   });
 
   createEffect(() => {
+    if (!isWorkloadsRoute()) return;
     const normalized = workloadUrlParams().context;
     if (normalized === handledContextParam()) return;
 
@@ -203,6 +206,7 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
   });
 
   createEffect(() => {
+    if (!isWorkloadsRoute()) return;
     const normalized = workloadUrlParams().namespace;
     if (normalized === handledNamespaceParam()) return;
 
@@ -223,6 +227,7 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
   });
 
   createEffect(() => {
+    if (!isWorkloadsRoute()) return;
     const normalized = workloadUrlParams().agent;
     if (normalized === handledAgentParam()) return;
 
@@ -243,6 +248,7 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
   });
 
   createEffect(() => {
+    if (!isWorkloadsRoute()) return;
     const parsed = workloadUrlParams();
     const urlRuntime = parsed.runtime;
     if (urlRuntime === handledRuntimeParam()) return;
@@ -284,6 +290,7 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
     if (urlResource) return;
 
     const nextPath = resolveWorkloadsManagedWorkloadsNavigateTarget({
+      currentPathname: location.pathname,
       currentSearch: location.search,
       viewMode: options.viewMode(),
       containerRuntime: options.containerRuntime(),

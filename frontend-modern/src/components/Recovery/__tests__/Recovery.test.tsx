@@ -26,7 +26,7 @@ import {
 } from '@/utils/recoveryPlatformModel';
 
 let mockLocationSearch = '';
-let mockLocationPath = '/recovery';
+let mockLocationPath = '/proxmox/backups';
 const navigateSpy = vi.hoisted(() => vi.fn());
 const mockLocationVersion = vi.hoisted(() => ({
   read: undefined as undefined | (() => number),
@@ -295,14 +295,14 @@ describe('Recovery', () => {
     localStorage.clear();
     navigateSpy.mockReset();
     navigateSpy.mockImplementation((path: string) => {
-      const next = new URL(String(path || '/recovery'), 'http://localhost');
+      const next = new URL(String(path || '/proxmox/backups'), 'http://localhost');
       mockLocationPath = next.pathname;
       mockLocationSearch = next.search;
       mockLocationVersion.bump?.();
     });
     apiFetchMock.mockClear();
     mockLocationSearch = '';
-    mockLocationPath = '/recovery';
+    mockLocationPath = '/proxmox/backups';
     wsState.resources = [
       {
         id: 'pbs-resource-1',
@@ -596,7 +596,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?view=inventory',
+        '/proxmox/backups?view=inventory',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -609,7 +609,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?view=inventory',
+        '/proxmox/backups?view=inventory',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -626,7 +626,7 @@ describe('Recovery', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back to recovery events' }));
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery', ROUTE_STATE_REPLACE_OPTIONS);
+      expect(navigateSpy).toHaveBeenCalledWith('/proxmox/backups', ROUTE_STATE_REPLACE_OPTIONS);
     });
     mockLocationSearch = '';
     mockLocationVersion.bump?.();
@@ -698,7 +698,7 @@ describe('Recovery', () => {
 
       await waitFor(() => {
         expect(navigateSpy).toHaveBeenCalledWith(
-          '/recovery?rollupId=res%3Avm-404',
+          '/proxmox/backups?rollupId=res%3Avm-404',
           ROUTE_STATE_REPLACE_OPTIONS,
         );
       });
@@ -971,7 +971,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?rollupId=res%3Avm-123',
+        '/proxmox/backups?rollupId=res%3Avm-123',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -1169,7 +1169,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?view=inventory&platform=truenas',
+        '/proxmox/backups?view=inventory&platform=truenas',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
       expect(screen.queryByText('VM 123')).not.toBeInTheDocument();
@@ -1312,7 +1312,7 @@ describe('Recovery', () => {
     fireEvent.click(within(controls).getByRole('button', { name: 'Clear all' }));
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery', ROUTE_STATE_REPLACE_OPTIONS);
+      expect(navigateSpy).toHaveBeenCalledWith('/proxmox/backups', ROUTE_STATE_REPLACE_OPTIONS);
       expect(screen.getByTestId('recovery-history-item-filter-trigger')).toHaveTextContent(
         'Any item',
       );
@@ -1337,7 +1337,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?day=2026-02-14',
+        '/proxmox/backups?day=2026-02-14',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -1351,7 +1351,7 @@ describe('Recovery', () => {
         }),
       ).not.toBeInTheDocument();
       expect(within(bars).queryByRole('button', { pressed: true })).not.toBeInTheDocument();
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery', ROUTE_STATE_REPLACE_OPTIONS);
+      expect(navigateSpy).toHaveBeenCalledWith('/proxmox/backups', ROUTE_STATE_REPLACE_OPTIONS);
     });
   });
 
@@ -1388,7 +1388,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?rollupId=ext%3Atruenas-1',
+        '/proxmox/backups?rollupId=ext%3Atruenas-1',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -1401,7 +1401,7 @@ describe('Recovery', () => {
     fireEvent.click(await screen.findByTestId('recovery-history-item-filter-clear'));
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery', ROUTE_STATE_REPLACE_OPTIONS);
+      expect(navigateSpy).toHaveBeenCalledWith('/proxmox/backups', ROUTE_STATE_REPLACE_OPTIONS);
       expect(screen.getByTestId('recovery-history-item-filter-trigger')).toHaveTextContent(
         'Any item',
       );
@@ -1432,7 +1432,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?itemType=dataset',
+        '/proxmox/backups?itemType=dataset',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
       expect(screen.queryByText('VM 123')).not.toBeInTheDocument();
@@ -1466,7 +1466,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?view=inventory&q=tank',
+        '/proxmox/backups?view=inventory&q=tank',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -1541,7 +1541,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?view=inventory&state=never-succeeded',
+        '/proxmox/backups?view=inventory&state=never-succeeded',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -1622,7 +1622,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?view=inventory&state=stale',
+        '/proxmox/backups?view=inventory&state=stale',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -1641,7 +1641,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?range=90&status=failed',
+        '/proxmox/backups?range=90&status=failed',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -1650,7 +1650,7 @@ describe('Recovery', () => {
     fireEvent.click(within(controls).getByRole('button', { name: 'Clear all' }));
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery', ROUTE_STATE_REPLACE_OPTIONS);
+      expect(navigateSpy).toHaveBeenCalledWith('/proxmox/backups', ROUTE_STATE_REPLACE_OPTIONS);
     });
   });
 
@@ -1660,7 +1660,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?platform=proxmox-pve',
+        '/proxmox/backups?platform=proxmox-pve',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -1672,7 +1672,7 @@ describe('Recovery', () => {
     render(() => <Recovery />);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery', ROUTE_STATE_REPLACE_OPTIONS);
+      expect(navigateSpy).toHaveBeenCalledWith('/proxmox/backups', ROUTE_STATE_REPLACE_OPTIONS);
     });
 
     await waitFor(() => {
@@ -1702,7 +1702,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?cluster=dev-cluster',
+        '/proxmox/backups?cluster=dev-cluster',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -1732,7 +1732,7 @@ describe('Recovery', () => {
     render(() => <Recovery />);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery', ROUTE_STATE_REPLACE_OPTIONS);
+      expect(navigateSpy).toHaveBeenCalledWith('/proxmox/backups', ROUTE_STATE_REPLACE_OPTIONS);
     });
 
     await waitFor(() => {
@@ -1781,7 +1781,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?namespace=tenant-a&node=node-agent-1',
+        '/proxmox/backups?namespace=tenant-a&node=node-agent-1',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -2000,7 +2000,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?range=7&day=2026-02-13',
+        '/proxmox/backups?range=7&day=2026-02-13',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -2012,7 +2012,7 @@ describe('Recovery', () => {
     fireEvent.click(await screen.findByRole('button', { name: '7d' }));
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?range=7', ROUTE_STATE_REPLACE_OPTIONS);
+      expect(navigateSpy).toHaveBeenCalledWith('/proxmox/backups?range=7', ROUTE_STATE_REPLACE_OPTIONS);
     });
   });
 
@@ -2075,7 +2075,7 @@ describe('Recovery', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery', ROUTE_STATE_REPLACE_OPTIONS);
+      expect(navigateSpy).toHaveBeenCalledWith('/proxmox/backups', ROUTE_STATE_REPLACE_OPTIONS);
     });
   });
 });

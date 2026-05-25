@@ -13,6 +13,7 @@ import { useWorkloadUrlSync } from './useWorkloadUrlSync';
 export interface WorkloadRouteStateOptions {
   allGuests: Accessor<WorkloadGuest[]>;
   allowEmbeddedScopeFilters?: boolean;
+  embedded?: boolean;
   forcedPlatform?: string;
   forcedViewMode?: ViewMode;
   showFilters: Accessor<boolean>;
@@ -74,6 +75,7 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
   const { isWorkloadsRoute } = useWorkloadUrlSync({
     containerRuntime,
     containerRuntimeOptions: () => filterOptions.containerRuntimeOptions(),
+    routeStateEnabled: () => options.allowEmbeddedScopeFilters === true || options.embedded !== true,
     kubernetesNamespaceOptions: () => filterOptions.kubernetesNamespaceOptions(),
     selectedHostHint,
     selectedKubernetesContext,

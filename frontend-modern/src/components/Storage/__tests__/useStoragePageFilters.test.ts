@@ -12,7 +12,7 @@ describe('useStoragePageFilters', () => {
   });
 
   const setup = (initialSearch = '') => {
-    const [pathname] = createSignal('/storage');
+    const [pathname] = createSignal('/proxmox/storage');
     const [searchValue, setSearchValue] = createSignal(initialSearch);
     const navigate = vi.fn((nextPath: string) => {
       const nextSearch = nextPath.includes('?') ? nextPath.slice(nextPath.indexOf('?')) : '';
@@ -61,7 +61,7 @@ describe('useStoragePageFilters', () => {
     vi.runAllTimers();
 
     expect(ctx.filters.sourceFilter()).toBe('proxmox-pve');
-    expect(ctx.navigate).toHaveBeenCalledWith('/storage?source=proxmox-pve', {
+    expect(ctx.navigate).toHaveBeenCalledWith('/proxmox/storage?source=proxmox-pve', {
       replace: true,
       scroll: false,
     });
@@ -75,7 +75,7 @@ describe('useStoragePageFilters', () => {
     vi.runAllTimers();
 
     expect(ctx.filters.selectedNodeId()).toBe('all');
-    expect(ctx.navigate).toHaveBeenCalledWith('/storage', {
+    expect(ctx.navigate).toHaveBeenCalledWith('/proxmox/storage', {
       replace: true,
       scroll: false,
     });
@@ -95,7 +95,7 @@ describe('useStoragePageFilters', () => {
     vi.runAllTimers();
 
     expect(ctx.navigate).toHaveBeenCalledTimes(1);
-    expect(ctx.navigate).toHaveBeenCalledWith('/storage?tab=disks&source=agent&q=tank', {
+    expect(ctx.navigate).toHaveBeenCalledWith('/proxmox/storage?tab=disks&source=agent&q=tank', {
       replace: true,
       scroll: false,
     });

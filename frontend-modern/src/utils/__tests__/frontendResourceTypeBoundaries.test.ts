@@ -741,7 +741,7 @@ describe('frontend resource type boundaries', () => {
       'resolveWorkloadsManagedWorkloadsNavigateTarget({',
     );
     expect(workloadUrlSyncModelSource).toContain('parseWorkloadsLinkSearch(search)');
-    expect(workloadUrlSyncModelSource).toContain('buildWorkloadsPath({');
+    expect(workloadUrlSyncModelSource).toContain('buildWorkloadsRouteSearch({');
     expect(workloadUrlSyncModelSource).toContain('resolveWorkloadsManagedWorkloadsNavigateTarget');
     expect(workloadUrlSyncModelSource).toContain('resolveWorkloadsWorkloadRuntimeParam');
     expect(workloadUrlSyncModelSource).toContain('normalizeWorkloadViewModeParam(params.type)');
@@ -1094,12 +1094,12 @@ describe('frontend resource type boundaries', () => {
       'export function useRecoveryHistorySectionState',
     );
     expect(recoverySource).not.toContain('parseRecoveryLinkSearch');
-    expect(recoverySource).not.toContain('buildRecoveryPath');
+    expect(recoverySource).not.toContain('buildRecoveryRouteSearch');
     expect(recoverySource).not.toContain('useRecoveryRollups');
     expect(recoverySource).not.toContain('useRecoveryPointsFacets');
     expect(recoverySurfaceStateSource).toContain('export function useRecoverySurfaceState');
     expect(recoverySurfaceStateSource).toContain('parseRecoveryLinkSearch');
-    expect(recoverySurfaceStateSource).toContain('buildRecoveryPath');
+    expect(recoverySurfaceStateSource).toContain('buildRecoveryRouteSearch');
     expect(recoverySurfaceStateSource).toContain('useRecoveryRollups');
     expect(recoverySurfaceStateSource).toContain('useRecoveryPoints');
     expect(recoverySurfaceStateSource).toContain('useRecoveryPointsFacets');

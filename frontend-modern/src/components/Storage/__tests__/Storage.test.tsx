@@ -58,7 +58,7 @@ if (typeof HTMLCanvasElement.prototype.getContext === 'function') {
 }
 
 let mockLocationSearch = '';
-let mockLocationPath = '/storage';
+let mockLocationPath = '/proxmox/storage';
 const navigateSpy = vi.fn();
 
 let wsConnected = true;
@@ -392,7 +392,7 @@ describe('Storage', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', fetchMock);
     fetchMock.mockClear();
-    mockLocationPath = '/storage';
+    mockLocationPath = '/proxmox/storage';
     mockLocationSearch = '';
     navigateSpy.mockReset();
 
@@ -887,7 +887,7 @@ describe('Storage', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/storage?source=proxmox-pve',
+        '/proxmox/storage?source=proxmox-pve',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -902,7 +902,7 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/storage', ROUTE_STATE_REPLACE_OPTIONS);
+      expect(navigateSpy).toHaveBeenCalledWith('/proxmox/storage', ROUTE_STATE_REPLACE_OPTIONS);
     });
 
     // Default Node selection ("all") collapses to no chip on the FilterBar.
@@ -941,7 +941,7 @@ describe('Storage', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/storage?group=node&summaryGroup=storage%3Anode%3Apve1',
+        '/proxmox/storage?group=node&summaryGroup=storage%3Anode%3Apve1',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -973,7 +973,7 @@ describe('Storage', () => {
     fireEvent.click(clearButton);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/storage?group=node', ROUTE_STATE_REPLACE_OPTIONS);
+      expect(navigateSpy).toHaveBeenCalledWith('/proxmox/storage?group=node', ROUTE_STATE_REPLACE_OPTIONS);
     });
   });
 
@@ -1021,7 +1021,7 @@ describe('Storage', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/storage?group=node&summaryGroup=storage%3Anode%3Apve1',
+        '/proxmox/storage?group=node&summaryGroup=storage%3Anode%3Apve1',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
       expect(
@@ -2030,11 +2030,11 @@ describe('Storage', () => {
     expect(screen.getByText('Loading storage resources...')).toBeInTheDocument();
   });
 
-  it('GA contract: Storage served at /storage is the only canonical path', async () => {
+  it('GA contract: storage route state stays on the owning platform storage path', async () => {
     hookResources = [
       buildStorageResource('storage-ga', 'GA-Store', 'pve1', { status: 'degraded' }),
     ];
-    mockLocationPath = '/storage';
+    mockLocationPath = '/proxmox/storage';
     mockLocationSearch = '?source=proxmox-pve&status=warning';
 
     render(() => <Storage />);
@@ -2047,8 +2047,8 @@ describe('Storage', () => {
       navigateSpy.mock.calls.length > 0
         ? (navigateSpy.mock.calls.at(-1) as [string])[0]
         : `${mockLocationPath}${mockLocationSearch}`;
-    expect(path.startsWith('/storage')).toBe(true);
-    expect(path).not.toContain('/storage-v2');
+    expect(path.startsWith('/proxmox/storage')).toBe(true);
+    expect(path).not.toContain('/proxmox/storage-v2');
     const params = new URLSearchParams(path.split('?')[1] || '');
     expect(params.get('source')).toBe('proxmox-pve');
     expect(params.get('status')).toBe('warning');

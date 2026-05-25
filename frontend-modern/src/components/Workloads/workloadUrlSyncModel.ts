@@ -1,8 +1,7 @@
 import type { ViewMode } from '@/types/workloads';
 import {
-  buildWorkloadsPath,
+  buildWorkloadsRouteSearch,
   parseWorkloadsLinkSearch,
-  WORKLOADS_PATH,
   WORKLOADS_QUERY_PARAMS,
 } from '@/routing/resourceLinks';
 import { areSearchParamsEquivalent } from '@/utils/searchParams';
@@ -26,6 +25,7 @@ export interface WorkloadsWorkloadRuntimeParamResolution {
 
 interface WorkloadsManagedWorkloadsNavigateTargetOptions {
   containerRuntime: string;
+  currentPathname: string;
   currentSearch: string;
   selectedHostHint: string | null;
   selectedPlatform: string | null;
@@ -83,6 +83,7 @@ export const resolveWorkloadsWorkloadRuntimeParam = (
 
 export const resolveWorkloadsManagedWorkloadsNavigateTarget = ({
   containerRuntime,
+  currentPathname,
   currentSearch,
   selectedHostHint,
   selectedPlatform,
@@ -100,7 +101,7 @@ export const resolveWorkloadsManagedWorkloadsNavigateTarget = ({
   const nextNamespace = viewMode === 'pod' ? (selectedKubernetesNamespace ?? '') : '';
   const nextAgent = viewMode === 'pod' ? '' : (selectedNode ?? selectedHostHint ?? '');
 
-  const managedPath = buildWorkloadsPath({
+  const managedSearch = buildWorkloadsRouteSearch({
     type: nextType || null,
     platform: nextPlatform || null,
     runtime: nextRuntime || null,
@@ -108,14 +109,13 @@ export const resolveWorkloadsManagedWorkloadsNavigateTarget = ({
     namespace: nextNamespace || null,
     agent: nextAgent || null,
   });
-  const managedUrl = new URL(managedPath, 'http://pulse.local');
   nextParams.delete(WORKLOADS_QUERY_PARAMS.type);
   nextParams.delete(WORKLOADS_QUERY_PARAMS.platform);
   nextParams.delete(WORKLOADS_QUERY_PARAMS.runtime);
   nextParams.delete(WORKLOADS_QUERY_PARAMS.context);
   nextParams.delete(WORKLOADS_QUERY_PARAMS.namespace);
   nextParams.delete(WORKLOADS_QUERY_PARAMS.agent);
-  managedUrl.searchParams.forEach((value, key) => {
+  new URLSearchParams(managedSearch).forEach((value, key) => {
     nextParams.set(key, value);
   });
 
@@ -124,5 +124,5 @@ export const resolveWorkloadsManagedWorkloadsNavigateTarget = ({
   }
 
   const nextSearch = nextParams.toString();
-  return nextSearch ? `${WORKLOADS_PATH}?${nextSearch}` : WORKLOADS_PATH;
+  return nextSearch ? `${currentPathname}?${nextSearch}` : currentPathname;
 };

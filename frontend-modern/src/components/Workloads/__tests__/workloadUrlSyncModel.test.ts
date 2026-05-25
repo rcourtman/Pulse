@@ -87,6 +87,7 @@ describe('workloadUrlSyncModel', () => {
   it('builds managed workload navigate targets without dropping unrelated resource params', () => {
     expect(
       resolveWorkloadsManagedWorkloadsNavigateTarget({
+        currentPathname: '/proxmox/overview',
         currentSearch: '?resource=guest-1&type=vm&agent=node-a',
         viewMode: 'pod',
         containerRuntime: 'docker',
@@ -97,11 +98,12 @@ describe('workloadUrlSyncModel', () => {
         selectedHostHint: null,
       }),
     ).toBe(
-      '/workloads?resource=guest-1&type=pod&platform=kubernetes&context=prod&namespace=default',
+      '/proxmox/overview?resource=guest-1&type=pod&platform=kubernetes&context=prod&namespace=default',
     );
 
     expect(
       resolveWorkloadsManagedWorkloadsNavigateTarget({
+        currentPathname: '/kubernetes/workloads',
         currentSearch: '?type=pod&context=prod&namespace=default',
         viewMode: 'pod',
         containerRuntime: '',

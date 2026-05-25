@@ -1092,9 +1092,9 @@ not a replacement status card, CTA band, or page-local nested card.
     families stay hidden rather than rendering as disabled placeholders.
     The `MOBILE_NAV_PLATFORM_PRIORITY` ordering in
     `frontend-modern/src/components/shared/mobileNavBarModel.ts` mirrors
-    that platform-first set plus the aggregate Workloads / Storage / Recovery
-    workspace tabs, so mobile and desktop navigation stay aligned while the
-    legacy Infrastructure entry remains absent from that priority list.
+    that platform-first set only, so mobile and desktop navigation stay aligned
+    without reintroducing aggregate Workloads / Storage / Recovery workspace
+    tabs or the legacy Infrastructure entry.
     The support-manifest `agent` platform may be presented as `Agents` in the
     same shell. Its primary tab, mobile priority, command-palette destination,
     and keyboard shortcut must all route through `buildAgentsPath()` and the
@@ -1590,6 +1590,10 @@ and `getActiveTabForPath` matcher must not recognize aggregate workspace URLs
 as owned shell destinations. New palette commands and shortcut chords must
 flow through the same shell owners; do not reintroduce hidden platform
 families or retired top-level aggregate routes by reanimating legacy paths.
+The shared route-state helpers follow the same boundary: workload, storage,
+and recovery helpers in `frontend-modern/src/routing/resourceLinks.ts` may
+build query strings for an already-owned platform/runtime route, but must not
+export pathname builders for `/workloads`, `/storage`, or `/recovery`.
 
 The shared table chrome now allows `TableCardHeader` to expose a right-aligned
 action slot, currently used by the Workloads/Proxmox metric display control.

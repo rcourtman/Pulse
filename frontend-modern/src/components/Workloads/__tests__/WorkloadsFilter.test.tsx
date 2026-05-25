@@ -24,7 +24,7 @@ vi.mock('@/hooks/useBreakpoint', () => ({
 // useLocation outside a Router context. The tests don't exercise navigation.
 vi.mock('@solidjs/router', () => ({
   useNavigate: () => () => undefined,
-  useLocation: () => ({ pathname: '/workloads', search: '', hash: '', state: null, query: {} }),
+  useLocation: () => ({ pathname: '/proxmox/overview', search: '', hash: '', state: null, query: {} }),
 }));
 
 vi.mock('@/components/shared/SearchInput', () => ({

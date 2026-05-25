@@ -26,7 +26,7 @@ const makeRecord = (overrides: Partial<StorageRecord> = {}): StorageRecord =>
 
 describe('useStorageResourceHighlight', () => {
   it('highlights matching deep-linked resources and expands ceph pools', () => {
-    const [locationPathname] = createSignal('/storage');
+    const [locationPathname] = createSignal('/proxmox/storage');
     const [locationSearch] = createSignal('?resource=storage-ceph');
     const [records] = createSignal<StorageRecord[]>([makeRecord()]);
     const navigate = vi.fn();
@@ -55,7 +55,7 @@ describe('useStorageResourceHighlight', () => {
   });
 
   it('does nothing when no resource match exists', () => {
-    const [locationPathname] = createSignal('/storage');
+    const [locationPathname] = createSignal('/proxmox/storage');
     const [locationSearch] = createSignal('?resource=missing');
     const [records] = createSignal<StorageRecord[]>([makeRecord()]);
     const navigate = vi.fn();
@@ -84,7 +84,7 @@ describe('useStorageResourceHighlight', () => {
   });
 
   it('rewrites whitespace-padded resource deep-links to the canonical storage URL', () => {
-    const [locationPathname] = createSignal('/storage');
+    const [locationPathname] = createSignal('/proxmox/storage');
     const [locationSearch] = createSignal('?resource=%20storage-ceph%20&from=overview');
     const [records] = createSignal<StorageRecord[]>([makeRecord()]);
     const navigate = vi.fn();
@@ -107,7 +107,7 @@ describe('useStorageResourceHighlight', () => {
       }),
     );
 
-    expect(navigate).toHaveBeenCalledWith('/storage?resource=storage-ceph&from=overview', {
+    expect(navigate).toHaveBeenCalledWith('/proxmox/storage?resource=storage-ceph&from=overview', {
       replace: true,
     });
     expect(result()).toBe('storage-ceph');

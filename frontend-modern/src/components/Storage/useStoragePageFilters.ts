@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import { buildStoragePath } from '@/routing/resourceLinks';
+import { buildStorageRouteSearch } from '@/routing/resourceLinks';
 import type { StorageHealthFilter } from '@/features/storageBackups/models';
 import { useStorageRouteState } from './useStorageRouteState';
 import {
@@ -38,12 +38,15 @@ export const useStoragePageFilters = (options: UseStoragePageFiltersOptions) => 
   );
   const [groupBy, setGroupBy] = createSignal<StorageGroupKey>(DEFAULT_STORAGE_GROUP_KEY);
 
-  const isActiveStorageRoute = () => options.location.pathname === '/storage';
+  const isActiveStorageRoute = () => true;
 
   useStorageRouteState({
     location: options.location,
     navigate: options.navigate,
-    buildPath: buildStoragePath,
+    buildPath: (routeOptions) => {
+      const search = buildStorageRouteSearch(routeOptions);
+      return `${options.location.pathname}${search}`;
+    },
     isReadEnabled: isActiveStorageRoute,
     isWriteEnabled: isActiveStorageRoute,
     useCurrentPathForNavigation: true,
