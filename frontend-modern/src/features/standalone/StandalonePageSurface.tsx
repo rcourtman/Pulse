@@ -27,6 +27,8 @@ type StandaloneTabId = (typeof STANDALONE_TAB_SPECS)[number]['id'];
 
 const machineIcon = () => <ServerIcon class="h-6 w-6 text-slate-400" />;
 const availabilityIcon = () => <ActivityIcon class="h-6 w-6 text-slate-400" />;
+const overviewActionClass =
+  'inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:bg-slate-50';
 
 const resolveStandaloneTab = (pathname: string): StandaloneTabId =>
   pathname.replace(/\/+$/, '') === buildStandalonePath('availability')
@@ -134,20 +136,29 @@ export function StandalonePageSurface() {
               }
             >
               <div class="space-y-4">
-                <Show when={model().machines.length > 0}>
+                <Show
+                  when={model().machines.length > 0}
+                  fallback={
+                    <Show when={model().availabilityChecks.length > 0}>
+                      <PlatformTableEmptyState
+                        icon={machineIcon()}
+                        title="No standalone Pulse Agent machines"
+                        description="Agentless devices and services are monitored from the Availability checks tab."
+                        actions={
+                          <A href={buildStandalonePath('availability')} class={overviewActionClass}>
+                            <ActivityIcon class="h-3.5 w-3.5" />
+                            View checks
+                          </A>
+                        }
+                      />
+                    </Show>
+                  }
+                >
                   <AgentsMachinesTable
                     resources={model().machines}
                     emptyIcon={machineIcon()}
                     emptyTitle="No standalone Pulse Agent machines"
                     emptyDescription="Install the Pulse Agent on Linux, macOS, Windows, or Unraid systems that are not already represented by a platform integration."
-                  />
-                </Show>
-                <Show when={model().availabilityChecks.length > 0}>
-                  <AvailabilityChecksTable
-                    resources={model().availabilityChecks}
-                    emptyIcon={availabilityIcon()}
-                    emptyTitle="No availability checks"
-                    emptyDescription="Add ping, TCP, MQTT, ESPHome, or HTTP checks for devices and services that cannot run Pulse Agent."
                   />
                 </Show>
               </div>

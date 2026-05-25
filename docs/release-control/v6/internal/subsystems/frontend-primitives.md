@@ -3586,3 +3586,7 @@ frontend-primitives-owned Standalone surface rather than a new primary nav item.
 The page may show availability checks beside standalone Pulse Agent machines and
 provide a focused availability tab, but Settings remains the add/edit owner and
 the app shell must not add a separate top-level Availability destination.
+The Standalone overview must not duplicate the focused availability table:
+overview may show standalone Pulse Agent machines and a compact handoff when an
+estate only has agentless checks, while the full availability-check row list
+belongs to the Availability checks tab.

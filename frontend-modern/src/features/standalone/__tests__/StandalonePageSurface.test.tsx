@@ -55,7 +55,12 @@ vi.mock('@/features/platformPage/sharedPlatformPage', () => ({
       data-tabs={props.tabs.map((tab) => tab.id).join(',')}
     />
   ),
-  PlatformTableEmptyState: () => <div data-testid="platform-table-empty-state" />,
+  PlatformTableEmptyState: (props: { title: string; actions?: JSX.Element }) => (
+    <div data-testid="platform-table-empty-state">
+      <span>{props.title}</span>
+      {props.actions}
+    </div>
+  ),
   PlatformTableLoadingState: () => <div data-testid="platform-table-loading-state" />,
 }));
 
@@ -97,7 +102,7 @@ afterEach(() => {
 });
 
 describe('StandalonePageSurface', () => {
-  it('loads standalone machines and agentless availability checks into the Standalone surface', () => {
+  it('keeps overview focused on standalone machines without duplicating availability rows', () => {
     render(() => <StandalonePageSurface />);
 
     expect(mocks.useUnifiedResources).toHaveBeenCalledWith(
@@ -113,10 +118,7 @@ describe('StandalonePageSurface', () => {
       'data-resource-count',
       '1',
     );
-    expect(screen.getByTestId('availability-checks-table')).toHaveAttribute(
-      'data-resource-count',
-      '1',
-    );
+    expect(screen.queryByTestId('availability-checks-table')).not.toBeInTheDocument();
   });
 
   it('uses the availability tab as a focused check monitor', () => {
@@ -132,6 +134,32 @@ describe('StandalonePageSurface', () => {
     expect(screen.getByTestId('availability-checks-table')).toHaveAttribute(
       'data-resource-count',
       '1',
+    );
+  });
+
+  it('uses an overview handoff when only agentless availability checks are present', () => {
+    mocks.useUnifiedResources.mockReturnValue({
+      resources: () => [
+        resource({
+          id: 'mqtt-meter',
+          type: 'network-endpoint',
+          platformType: 'availability',
+          sources: ['availability'],
+        }),
+      ],
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    });
+
+    render(() => <StandalonePageSurface />);
+
+    expect(screen.queryByTestId('agents-machines-table')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('availability-checks-table')).not.toBeInTheDocument();
+    expect(screen.getByText('No standalone Pulse Agent machines')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View checks' })).toHaveAttribute(
+      'href',
+      '/standalone/availability',
     );
   });
 });
