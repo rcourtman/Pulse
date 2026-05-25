@@ -11,6 +11,7 @@ import {
   AvailabilityTargetsAPI,
   type AvailabilityProbeProtocol,
   type AvailabilityTarget,
+  type AvailabilityTargetKind,
   type AvailabilityTestResponse,
 } from '@/api/availabilityTargets';
 import {
@@ -29,6 +30,7 @@ const primaryButtonClass =
 interface AvailabilityForm {
   id: string;
   name: string;
+  targetKind: AvailabilityTargetKind;
   address: string;
   protocol: AvailabilityProbeProtocol;
   port: string;
@@ -55,6 +57,7 @@ export interface AvailabilityTargetSlotProps {
 const newAvailabilityForm = (): AvailabilityForm => ({
   id: '',
   name: '',
+  targetKind: 'service',
   address: '',
   protocol: 'icmp',
   port: '',
@@ -68,6 +71,7 @@ const newAvailabilityForm = (): AvailabilityForm => ({
 const formFromTarget = (target: AvailabilityTarget): AvailabilityForm => ({
   id: target.id,
   name: target.name ?? '',
+  targetKind: target.targetKind ?? 'service',
   address: target.address ?? '',
   protocol: target.protocol ?? 'icmp',
   port: target.port ? String(target.port) : '',
@@ -88,6 +92,7 @@ const payloadFromForm = (form: AvailabilityForm): AvailabilityTarget => {
   return {
     id: form.id,
     name: form.name.trim(),
+    targetKind: form.targetKind,
     address: form.address.trim(),
     protocol: form.protocol,
     port: form.protocol === 'icmp' ? undefined : port,
@@ -108,6 +113,7 @@ const presetSensitiveFormKeys: ReadonlySet<keyof AvailabilityForm> = new Set([
   'path',
   'port',
   'protocol',
+  'targetKind',
 ]);
 
 export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (props) => {
@@ -228,6 +234,17 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
           {AVAILABILITY_TARGET_PRESETS.map((preset) => (
             <option value={preset.id}>{preset.label}</option>
           ))}
+        </FormSelect>
+        <FormSelect
+          label="Target type"
+          value={form().targetKind}
+          onChange={(event) =>
+            updateForm({ targetKind: event.currentTarget.value as AvailabilityTargetKind })
+          }
+        >
+          <option value="machine">Machine or server</option>
+          <option value="service">Service endpoint</option>
+          <option value="device">Device or controller</option>
         </FormSelect>
         <label class={formField}>
           <span class={formLabel}>Name</span>

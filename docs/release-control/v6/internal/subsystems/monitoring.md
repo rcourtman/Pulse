@@ -286,6 +286,12 @@ load from the config persistence boundary, schedule through
 the default low-overhead check, while TCP and HTTP are canonical fallbacks for
 devices or runtimes where ICMP is unavailable or the useful signal is a port or
 web interface.
+Availability target kind is monitoring-owned runtime metadata, not a frontend
+guess. Saved targets carry the bounded `targetKind` values `machine`, `service`,
+and `device`; monitoring must preserve that value in probe status, supplemental
+resource availability data, and availability tags. Missing legacy target kinds
+default to `service`, and monitoring must not promote a ping, TCP, or HTTP probe
+to a machine solely from address shape, protocol, name, or successful reachability.
 Mock-mode availability targets must use that same provider vocabulary. The
 mock fixture graph may author ping/TCP/HTTP endpoint examples, but monitoring
 and API consumers must receive them through `SourceAvailability` supplemental

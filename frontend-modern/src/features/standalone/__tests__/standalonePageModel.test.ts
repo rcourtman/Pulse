@@ -70,15 +70,23 @@ describe('standalonePageModel', () => {
     const model = buildStandalonePageModel([
       resource({ id: 'mac-mini', platformType: 'agent', type: 'agent', sources: ['agent'] }),
       resource({
+        id: 'router-ping',
+        platformType: 'availability',
+        type: 'network-endpoint',
+        sources: ['availability'],
+        availability: { targetKind: 'machine' },
+      }),
+      resource({
         id: 'endpoint-1',
         platformType: 'availability',
         type: 'network-endpoint',
         sources: ['availability'],
+        availability: { targetKind: 'service' },
       }),
     ]);
 
-    expect(model.machines.map((item) => item.id)).toEqual(['mac-mini']);
-    expect(model.availabilityChecks.map((item) => item.id)).toEqual(['endpoint-1']);
-    expect(model.resources.map((item) => item.id)).toEqual(['mac-mini']);
+    expect(model.machines.map((item) => item.id)).toEqual(['mac-mini', 'router-ping']);
+    expect(model.availabilityChecks.map((item) => item.id)).toEqual(['router-ping', 'endpoint-1']);
+    expect(model.resources.map((item) => item.id)).toEqual(['mac-mini', 'router-ping']);
   });
 });

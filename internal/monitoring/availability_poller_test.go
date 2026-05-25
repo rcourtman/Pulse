@@ -59,6 +59,7 @@ func TestAvailabilityPollProviderSupplementalRecordsProjectNetworkEndpointIncide
 	target := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
 		ID:               "sensor-1",
 		Name:             "Energy monitor",
+		TargetKind:       config.AvailabilityTargetDevice,
 		Address:          "192.0.2.10",
 		Protocol:         config.AvailabilityProbeICMP,
 		Enabled:          true,
@@ -101,6 +102,9 @@ func TestAvailabilityPollProviderSupplementalRecordsProjectNetworkEndpointIncide
 	}
 	if resource.Availability == nil || resource.Availability.TargetID != target.ID {
 		t.Fatalf("availability payload = %+v, want target %q", resource.Availability, target.ID)
+	}
+	if resource.Availability.TargetKind != string(config.AvailabilityTargetDevice) {
+		t.Fatalf("availability target kind = %q, want %q", resource.Availability.TargetKind, config.AvailabilityTargetDevice)
 	}
 	if len(resource.Incidents) != 1 || resource.Incidents[0].Code != "availability_unreachable" {
 		t.Fatalf("incidents = %+v, want availability_unreachable", resource.Incidents)

@@ -1913,6 +1913,7 @@ func TestAvailabilityPollProviderPublishesSupplementalNetworkEndpoints(t *testin
 	target := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
 		ID:               "energy-meter",
 		Name:             "Energy meter",
+		TargetKind:       config.AvailabilityTargetDevice,
 		Address:          "192.0.2.44",
 		Protocol:         config.AvailabilityProbeICMP,
 		Enabled:          true,
@@ -1977,6 +1978,9 @@ func TestAvailabilityPollProviderPublishesSupplementalNetworkEndpoints(t *testin
 	}
 	if record.Resource.Availability.TargetID != target.ID {
 		t.Fatalf("availability target id = %q, want %q", record.Resource.Availability.TargetID, target.ID)
+	}
+	if record.Resource.Availability.TargetKind != string(config.AvailabilityTargetDevice) {
+		t.Fatalf("availability target kind = %q, want %q", record.Resource.Availability.TargetKind, config.AvailabilityTargetDevice)
 	}
 	if record.Resource.Status != unifiedresources.StatusOffline {
 		t.Fatalf("resource status = %q, want %q", record.Resource.Status, unifiedresources.StatusOffline)

@@ -18,6 +18,9 @@ func TestNormalizeAvailabilityTargetPreservesHTTPAddress(t *testing.T) {
 	if target.Name != "Status page" {
 		t.Fatalf("Name = %q, want Status page", target.Name)
 	}
+	if target.TargetKind != AvailabilityTargetService {
+		t.Fatalf("TargetKind = %q, want %q", target.TargetKind, AvailabilityTargetService)
+	}
 	if target.Address != "https://device.local/status?ready=1" {
 		t.Fatalf("Address = %q, want preserved HTTP URL", target.Address)
 	}
@@ -83,15 +86,29 @@ func TestAvailabilityTargetValidateRejectsTCPWithoutPort(t *testing.T) {
 	}
 }
 
+func TestAvailabilityTargetValidateRejectsUnsupportedTargetKind(t *testing.T) {
+	target := NormalizeAvailabilityTarget(AvailabilityTarget{
+		TargetKind: AvailabilityTargetKind("database"),
+		Address:    "device.local",
+		Protocol:   AvailabilityProbeICMP,
+		Enabled:    true,
+	})
+
+	if err := target.Validate(); err == nil {
+		t.Fatal("Validate() error = nil, want target kind error")
+	}
+}
+
 func TestAvailabilityTargetsRoundTripThroughPersistence(t *testing.T) {
 	persistence := NewConfigPersistence(t.TempDir())
 	targets := []AvailabilityTarget{
 		{
-			ID:       "endpoint-1",
-			Name:     "Energy monitor",
-			Address:  "device.local",
-			Protocol: AvailabilityProbeICMP,
-			Enabled:  true,
+			ID:         "endpoint-1",
+			Name:       "Energy monitor",
+			TargetKind: AvailabilityTargetDevice,
+			Address:    "device.local",
+			Protocol:   AvailabilityProbeICMP,
+			Enabled:    true,
 		},
 	}
 
@@ -108,6 +125,9 @@ func TestAvailabilityTargetsRoundTripThroughPersistence(t *testing.T) {
 	}
 	if loaded[0].Name != "Energy monitor" {
 		t.Fatalf("loaded name = %q, want Energy monitor", loaded[0].Name)
+	}
+	if loaded[0].TargetKind != AvailabilityTargetDevice {
+		t.Fatalf("loaded target kind = %q, want %q", loaded[0].TargetKind, AvailabilityTargetDevice)
 	}
 	if loaded[0].PollIntervalSecs != DefaultAvailabilityPollIntervalSecs {
 		t.Fatalf("poll interval = %d, want default", loaded[0].PollIntervalSecs)

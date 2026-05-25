@@ -230,6 +230,12 @@ offer them from Add infrastructure, Manage, or the host connections ledger, and
 must not ask them for SSH, setup tokens, auto-registration, agent profiles, or
 install commands. Their managed actions remain availability-resource actions:
 pause, test, edit, and remove.
+An availability target classified as `machine` is still agentless unless a
+Pulse Agent actually registers for that host. That classification exists so
+servers, desktops, laptops, and comparable computers such as a Mac mini can
+appear in Standalone Machines when monitored by reachability probes; it must
+not create lifecycle authority, install state, agent profile membership, or
+host-command capability.
 The lifecycle-owned onboarding presentation helper must consume the governed
 platform support manifest for readiness stage, primary mode, canonical
 projections, and support-floor posture.
@@ -375,7 +381,10 @@ profile and assignment columns, but embedded table framing must route through
    with `frontend-modern/src/components/Settings/availabilitySettingsModel.ts`.
    They must remain settings/API availability resources and must not create
    install commands, agent tokens, host uninstall actions, stop-monitoring
-   lifecycle actions, or infrastructure add-flow states.
+   lifecycle actions, or infrastructure add-flow states. The `machine`
+   target-kind label may make an agentless server, desktop, laptop, or Mac mini
+   visible in Standalone Machines, but lifecycle code must still treat it as
+   reachability evidence rather than an enrolled host.
    Global resource timeline API changes are likewise adjacent when they touch
    shared `internal/api/` route wiring: `/api/resources/timeline` may expose
    monitoring-read provider activity for platform pages, but it must not create

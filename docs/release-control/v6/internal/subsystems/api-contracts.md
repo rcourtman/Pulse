@@ -420,6 +420,15 @@ the canonical monitored-system blocked payload.
     only a fetch lifecycle rule; it must not synthesize rows, downgrade backend
     fleet state, or replace the shared connection projection with page-local
     placeholders.
+2b. Route agentless availability target kind changes through
+    `internal/api/availability_handlers.go`,
+    `internal/api/platform_mock_connections.go`,
+    `frontend-modern/src/api/availabilityTargets.ts`, and the unified-resource
+    availability payload together. The bounded `targetKind` vocabulary is
+    `machine`, `service`, and `device`; missing legacy values default to
+    `service`, and browser consumers may place only explicitly classified
+    `machine` targets into Standalone Machines. API clients must not infer that
+    classification from protocol, hostname, port, or row label.
 3. Add dedicated contract tests for new stable payloads
    Unified resource type-filter and organization-share resource type additions
    must route through `internal/api/resources.go`, `internal/api/org_handlers.go`,

@@ -23,6 +23,7 @@ describe('AvailabilityTargetSlot', () => {
       id: 'target-1',
       name: 'Rack sensor',
       address: 'rack-sensor.local',
+      targetKind: 'device',
       protocol: 'tcp',
       port: 6053,
       enabled: true,
@@ -40,6 +41,7 @@ describe('AvailabilityTargetSlot', () => {
     });
 
     await waitFor(() => expect(screen.getByLabelText('Probe')).toHaveValue('tcp'));
+    expect(screen.getByLabelText('Target type')).toHaveValue('device');
     expect(screen.getByLabelText('Port')).toHaveValue('6053');
 
     fireEvent.input(screen.getByLabelText('Name'), {
@@ -54,6 +56,7 @@ describe('AvailabilityTargetSlot', () => {
       expect(mockedCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'Rack sensor',
+          targetKind: 'device',
           address: 'rack-sensor.local',
           protocol: 'tcp',
           port: 6053,

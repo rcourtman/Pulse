@@ -84,12 +84,20 @@ beforeEach(() => {
   mocks.navigate.mockClear();
   mocks.useUnifiedResources.mockReturnValue({
     resources: () => [
-      resource({ id: 'mac-mini', type: 'agent', platformType: 'agent', sources: ['agent'] }),
+      resource({ id: 'linux-server', type: 'agent', platformType: 'agent', sources: ['agent'] }),
+      resource({
+        id: 'mac-mini',
+        type: 'network-endpoint',
+        platformType: 'availability',
+        sources: ['availability'],
+        availability: { targetKind: 'machine' },
+      }),
       resource({
         id: 'mqtt-meter',
         type: 'network-endpoint',
         platformType: 'availability',
         sources: ['availability'],
+        availability: { targetKind: 'service' },
       }),
     ],
     loading: () => false,
@@ -104,7 +112,7 @@ afterEach(() => {
 });
 
 describe('StandalonePageSurface', () => {
-  it('keeps overview focused on standalone machines without duplicating availability rows', () => {
+  it('keeps overview focused on standalone machines, including agentless machines only', () => {
     render(() => <StandalonePageSurface />);
 
     expect(mocks.useUnifiedResources).toHaveBeenCalledWith(
@@ -116,10 +124,7 @@ describe('StandalonePageSurface', () => {
       'data-tabs',
       'machines,availability',
     );
-    expect(screen.getByTestId('agents-machines-table')).toHaveAttribute(
-      'data-resource-count',
-      '1',
-    );
+    expect(screen.getByTestId('agents-machines-table')).toHaveAttribute('data-resource-count', '2');
     expect(screen.queryByTestId('availability-checks-table')).not.toBeInTheDocument();
   });
 
@@ -147,7 +152,7 @@ describe('StandalonePageSurface', () => {
     expect(screen.queryByTestId('agents-machines-table')).not.toBeInTheDocument();
     expect(screen.getByTestId('availability-checks-table')).toHaveAttribute(
       'data-resource-count',
-      '1',
+      '2',
     );
   });
 
@@ -159,6 +164,7 @@ describe('StandalonePageSurface', () => {
           type: 'network-endpoint',
           platformType: 'availability',
           sources: ['availability'],
+          availability: { targetKind: 'service' },
         }),
       ],
       loading: () => false,
@@ -170,10 +176,32 @@ describe('StandalonePageSurface', () => {
 
     expect(screen.queryByTestId('agents-machines-table')).not.toBeInTheDocument();
     expect(screen.queryByTestId('availability-checks-table')).not.toBeInTheDocument();
-    expect(screen.getByText('No standalone Pulse Agent machines')).toBeInTheDocument();
+    expect(screen.getByText('No standalone machines')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View checks' })).toHaveAttribute(
       'href',
       '/standalone/availability',
     );
+  });
+
+  it('renders the machines table when only an agentless machine is present', () => {
+    mocks.useUnifiedResources.mockReturnValue({
+      resources: () => [
+        resource({
+          id: 'mac-mini',
+          type: 'network-endpoint',
+          platformType: 'availability',
+          sources: ['availability'],
+          availability: { targetKind: 'machine' },
+        }),
+      ],
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    });
+
+    render(() => <StandalonePageSurface />);
+
+    expect(screen.getByTestId('agents-machines-table')).toHaveAttribute('data-resource-count', '1');
+    expect(screen.queryByText('No standalone machines')).not.toBeInTheDocument();
   });
 });

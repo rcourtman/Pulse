@@ -22,6 +22,7 @@ import (
 type AvailabilityProbeStatus struct {
 	TargetID            string    `json:"targetId"`
 	Name                string    `json:"name"`
+	TargetKind          string    `json:"targetKind,omitempty"`
 	Address             string    `json:"address"`
 	Protocol            string    `json:"protocol"`
 	Enabled             bool      `json:"enabled"`
@@ -435,6 +436,7 @@ func availabilityStatusFromTarget(target config.AvailabilityTarget) Availability
 	return AvailabilityProbeStatus{
 		TargetID:         target.ID,
 		Name:             target.DisplayName(),
+		TargetKind:       string(target.TargetKind),
 		Address:          target.Address,
 		Protocol:         string(target.Protocol),
 		Enabled:          target.Enabled,
@@ -451,6 +453,7 @@ func availabilityResourceFromTarget(target config.AvailabilityTarget, status Ava
 	data := &unifiedresources.AvailabilityData{
 		TargetID:            target.ID,
 		Name:                target.DisplayName(),
+		TargetKind:          string(target.TargetKind),
 		Address:             target.Address,
 		Protocol:            string(target.Protocol),
 		Port:                target.Port,
@@ -474,7 +477,7 @@ func availabilityResourceFromTarget(target config.AvailabilityTarget, status Ava
 		LastSeen:     lastSeen,
 		UpdatedAt:    now,
 		Sources:      []unifiedresources.DataSource{unifiedresources.SourceAvailability},
-		Tags:         []string{"agentless"},
+		Tags:         availabilityResourceTags(target),
 		Availability: data,
 	}
 	if incident := availabilityIncident(target, status, lastSeen); incident != nil {
@@ -488,6 +491,14 @@ func availabilityResourceFromTarget(target config.AvailabilityTarget, status Ava
 		identity.Hostnames = []string{host}
 	}
 	return resource, identity
+}
+
+func availabilityResourceTags(target config.AvailabilityTarget) []string {
+	tags := []string{"agentless"}
+	if target.TargetKind != "" {
+		tags = append(tags, string(target.TargetKind))
+	}
+	return tags
 }
 
 func availabilityResourceStatus(target config.AvailabilityTarget, status AvailabilityProbeStatus) unifiedresources.ResourceStatus {

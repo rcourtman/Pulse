@@ -32,7 +32,7 @@ import {
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Disk } from '@/types/api';
-import type { Resource } from '@/types/resource';
+import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
 import { normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { getSimpleStatusIndicator } from '@/utils/status';
@@ -55,9 +55,23 @@ const formatTemperature = (celsius: number | undefined): JSX.Element => {
   return <span class="tabular-nums">{Math.round(celsius)}°C</span>;
 };
 
-const formatLastSeen = (value: number | undefined): string => {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return '—';
-  const ageSeconds = Math.max(0, Math.floor((Date.now() - value) / 1000));
+const timestampMillisFrom = (value: number | string | Date | undefined): number | undefined => {
+  if (value instanceof Date) {
+    const millis = value.getTime();
+    return Number.isFinite(millis) ? millis : undefined;
+  }
+  if (typeof value === 'string') {
+    const millis = Date.parse(value);
+    return Number.isFinite(millis) ? millis : undefined;
+  }
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined;
+  return value < 10_000_000_000 ? value * 1000 : value;
+};
+
+const formatLastSeen = (value: number | string | Date | undefined): string => {
+  const timestampMillis = timestampMillisFrom(value);
+  if (!timestampMillis) return '—';
+  const ageSeconds = Math.max(0, Math.floor((Date.now() - timestampMillis) / 1000));
   if (ageSeconds < 60) return 'now';
   const minutes = Math.floor(ageSeconds / 60);
   if (minutes < 60) return `${minutes}m`;
@@ -76,6 +90,29 @@ const metricFallback = () => (
 
 const finiteMetric = (value: number | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+const availabilityFor = (machine: Resource): ResourceAvailabilityMeta | undefined =>
+  machine.availability ??
+  (machine.platformData?.availability as ResourceAvailabilityMeta | undefined);
+
+const isAgentlessMachine = (machine: Resource): boolean =>
+  String(availabilityFor(machine)?.targetKind ?? '')
+    .trim()
+    .toLowerCase() === 'machine';
+
+const availabilityAddressFor = (machine: Resource): string => {
+  const availability = availabilityFor(machine);
+  const address = asTrimmedString(availability?.address);
+  if (address) return address;
+  const identityWithIPAddresses = machine.identity as
+    | (Resource['identity'] & { ipAddresses?: string[] })
+    | undefined;
+  const firstIP = asTrimmedString(
+    identityWithIPAddresses?.ipAddresses?.[0] ?? machine.identity?.ips?.[0],
+  );
+  if (firstIP) return firstIP;
+  return asTrimmedString(machine.identity?.hostname) ?? '';
+};
 
 const percentFromMetric = (metric: Resource['cpu'] | undefined): number | undefined =>
   finiteMetric(metric?.current);
@@ -110,11 +147,17 @@ const titleCase = (value: string): string =>
     .join(' ');
 
 const systemLabelFor = (machine: Resource): string => {
+  if (isAgentlessMachine(machine)) {
+    const protocol = (asTrimmedString(availabilityFor(machine)?.protocol) ?? '').toUpperCase();
+    return protocol ? `${protocol} availability` : 'Agentless availability';
+  }
   const osName = asTrimmedString(machine.agent?.osName);
   const osVersion = asTrimmedString(machine.agent?.osVersion);
   if (osName && osVersion) return `${osName} ${osVersion}`;
   if (osName) return osName;
-  return titleCase(asTrimmedString(machine.agent?.platform) || asTrimmedString(machine.technology) || 'Agent');
+  return titleCase(
+    asTrimmedString(machine.agent?.platform) || asTrimmedString(machine.technology) || 'Agent',
+  );
 };
 
 export const AgentsMachinesTable: Component<{
@@ -223,10 +266,15 @@ export const AgentsMachinesTable: Component<{
                   {(machine) => {
                     const name = () => asTrimmedString(machine.name) || machine.id;
                     const hostname = () =>
-                      asTrimmedString(machine.agent?.hostname) ||
-                      asTrimmedString(machine.identity?.hostname);
+                      isAgentlessMachine(machine)
+                        ? availabilityAddressFor(machine)
+                        : asTrimmedString(machine.agent?.hostname) ||
+                          asTrimmedString(machine.identity?.hostname);
                     const systemLabel = () => systemLabelFor(machine);
-                    const agentVersion = () => asTrimmedString(machine.agent?.agentVersion) || '—';
+                    const agentVersion = () =>
+                      isAgentlessMachine(machine)
+                        ? 'Agentless'
+                        : asTrimmedString(machine.agent?.agentVersion) || '—';
                     const indicator = () => getSimpleStatusIndicator(machine.status);
                     const canRenderMetrics = () => indicator().variant !== 'danger';
                     const metricsKey = () => buildMetricKeyForUnifiedResource(machine);
@@ -340,7 +388,11 @@ export const AgentsMachinesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
                           >
-                            {formatLastSeen(machine.lastSeen)}
+                            {formatLastSeen(
+                              isAgentlessMachine(machine)
+                                ? availabilityFor(machine)?.lastChecked
+                                : machine.lastSeen,
+                            )}
                           </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow

@@ -35,6 +35,20 @@ export function getAvailabilityTargetMethodLabel(target: AvailabilityTarget): st
   }
 }
 
+export function getAvailabilityTargetKindLabel(target: AvailabilityTarget): string {
+  switch (target.targetKind) {
+    case 'machine':
+      return 'Machine';
+    case 'device':
+      return 'Device';
+    case 'service':
+    case undefined:
+      return 'Service';
+    default:
+      return 'Endpoint';
+  }
+}
+
 export function getAvailabilityTargetAddressLabel(target: AvailabilityTarget): string {
   if (target.protocol === 'http') {
     const path = target.path?.trim();

@@ -16,6 +16,10 @@ const (
 	mockAvailabilityProbeTCP  = "tcp"
 	mockAvailabilityProbeHTTP = "http"
 
+	mockAvailabilityTargetMachine = "machine"
+	mockAvailabilityTargetService = "service"
+	mockAvailabilityTargetDevice  = "device"
+
 	mockAvailabilityDefaultPollIntervalSecs = 60
 	mockAvailabilityDefaultTimeoutMillis    = 2000
 	mockAvailabilityDefaultFailureThreshold = 2
@@ -27,6 +31,7 @@ const (
 type AvailabilityTargetFixture struct {
 	ID               string
 	Name             string
+	TargetKind       string
 	Address          string
 	Protocol         string
 	Port             int
@@ -72,6 +77,10 @@ func AvailabilityTargets() []AvailabilityTargetFixture {
 func normalizeAvailabilityTargetFixture(target AvailabilityTargetFixture) AvailabilityTargetFixture {
 	target.ID = strings.TrimSpace(target.ID)
 	target.Name = strings.TrimSpace(target.Name)
+	target.TargetKind = strings.ToLower(strings.TrimSpace(target.TargetKind))
+	if target.TargetKind == "" {
+		target.TargetKind = mockAvailabilityTargetService
+	}
 	target.Protocol = strings.ToLower(strings.TrimSpace(target.Protocol))
 	if target.Protocol == "" {
 		target.Protocol = mockAvailabilityProbeICMP
@@ -149,6 +158,7 @@ func defaultAvailabilityFixtures(now time.Time) []AvailabilityFixture {
 			Target: normalizeAvailabilityTargetFixture(AvailabilityTargetFixture{
 				ID:               "mock-availability-ups",
 				Name:             "Rack UPS network card",
+				TargetKind:       mockAvailabilityTargetDevice,
 				Address:          "ups-rack-a.lab.local",
 				Protocol:         mockAvailabilityProbeICMP,
 				Enabled:          true,
@@ -165,6 +175,7 @@ func defaultAvailabilityFixtures(now time.Time) []AvailabilityFixture {
 			Target: normalizeAvailabilityTargetFixture(AvailabilityTargetFixture{
 				ID:               "mock-availability-mqtt-meter",
 				Name:             "MQTT power meter",
+				TargetKind:       mockAvailabilityTargetDevice,
 				Address:          "power-meter-01.lab.local",
 				Protocol:         mockAvailabilityProbeTCP,
 				Port:             1883,
@@ -182,6 +193,7 @@ func defaultAvailabilityFixtures(now time.Time) []AvailabilityFixture {
 			Target: normalizeAvailabilityTargetFixture(AvailabilityTargetFixture{
 				ID:               "mock-availability-esphome-greenhouse",
 				Name:             "ESPHome greenhouse sensor",
+				TargetKind:       mockAvailabilityTargetDevice,
 				Address:          "greenhouse-sensor.lab.local",
 				Protocol:         mockAvailabilityProbeTCP,
 				Port:             6053,
@@ -199,6 +211,7 @@ func defaultAvailabilityFixtures(now time.Time) []AvailabilityFixture {
 			Target: normalizeAvailabilityTargetFixture(AvailabilityTargetFixture{
 				ID:               "mock-availability-solar-inverter",
 				Name:             "Solar inverter web panel",
+				TargetKind:       mockAvailabilityTargetDevice,
 				Address:          "http://solar-inverter.lab.local/",
 				Protocol:         mockAvailabilityProbeHTTP,
 				Path:             "/status",
@@ -217,6 +230,7 @@ func defaultAvailabilityFixtures(now time.Time) []AvailabilityFixture {
 			Target: normalizeAvailabilityTargetFixture(AvailabilityTargetFixture{
 				ID:               "mock-availability-door-controller",
 				Name:             "Workshop door controller",
+				TargetKind:       mockAvailabilityTargetDevice,
 				Address:          "10.24.40.45",
 				Protocol:         mockAvailabilityProbeICMP,
 				Enabled:          true,
@@ -288,6 +302,7 @@ func availabilityFixtureRecord(fixture AvailabilityFixture, now time.Time) (unif
 	data := &unifiedresources.AvailabilityData{
 		TargetID:            target.ID,
 		Name:                target.displayName(),
+		TargetKind:          target.TargetKind,
 		Address:             target.Address,
 		Protocol:            string(target.Protocol),
 		Port:                target.Port,
@@ -377,6 +392,9 @@ func availabilityFixtureIdentity(target AvailabilityTargetFixture) unifiedresour
 
 func availabilityFixtureTags(target AvailabilityTargetFixture) []string {
 	tags := []string{"agentless", "no-agent"}
+	if target.TargetKind != "" {
+		tags = append(tags, target.TargetKind)
+	}
 	switch target.Protocol {
 	case mockAvailabilityProbeHTTP:
 		tags = append(tags, "web-interface")

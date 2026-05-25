@@ -176,6 +176,7 @@ func mockAvailabilityConfigTarget(target mock.AvailabilityTargetFixture) config.
 	return config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
 		ID:               target.ID,
 		Name:             target.Name,
+		TargetKind:       config.AvailabilityTargetKind(target.TargetKind),
 		Address:          target.Address,
 		Protocol:         config.AvailabilityProbeProtocol(target.Protocol),
 		Port:             target.Port,
@@ -191,6 +192,7 @@ func mockAvailabilityProbeStatus(fixture mock.AvailabilityFixture, target config
 	return monitoring.AvailabilityProbeStatus{
 		TargetID:            target.ID,
 		Name:                target.DisplayName(),
+		TargetKind:          string(target.TargetKind),
 		Address:             target.Address,
 		Protocol:            string(target.Protocol),
 		Enabled:             target.Enabled,

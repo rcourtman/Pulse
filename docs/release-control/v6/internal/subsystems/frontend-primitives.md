@@ -3571,9 +3571,10 @@ the Monitoring availability settings surface without pretending to be a host
 agent install or a platform API connection.
 Availability setup presets for pingable devices, MQTT, ESPHome, or similar
 agentless endpoints must also stay on the shared settings form vocabulary:
-presets may fill protocol, port, and path defaults, but display badges and
-drawers still derive `Availability` and `Network Endpoint` labels from the
-shared resource presentation helpers rather than from preset-local copy.
+presets may fill target kind, protocol, port, and path defaults, but display
+badges and drawers still derive `Availability` and `Network Endpoint` labels
+from the shared resource presentation helpers rather than from preset-local
+copy.
 Infrastructure rows for those same agentless endpoints must surface probe
 evidence directly in the row, not just as a green status dot or an
 `Availability` badge. The shared row presentation must expose the probe method
@@ -3588,6 +3589,8 @@ provide a focused availability tab, but Settings remains the add/edit owner and
 the app shell must not add a separate top-level Availability destination.
 The Standalone page must not pretend its machine list is a generic overview:
 the default tab is `Machines`, and the full availability-check row list belongs
-to the `Availability checks` tab. The Machines tab may show a compact handoff
-when an estate only has agentless checks, but it must not duplicate the focused
-availability table.
+to the `Availability checks` tab. Servers, laptops, desktops, and comparable
+computers that are monitored by agentless reachability checks are still
+machines when the availability target is classified as `machine`; service and
+device checks stay in the focused availability tab and may only trigger a
+compact handoff from Machines.

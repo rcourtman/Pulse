@@ -1,4 +1,4 @@
-import type { AvailabilityProbeProtocol } from '@/api/availabilityTargets';
+import type { AvailabilityProbeProtocol, AvailabilityTargetKind } from '@/api/availabilityTargets';
 
 export const CUSTOM_AVAILABILITY_PRESET_ID = 'custom';
 
@@ -12,6 +12,7 @@ export type AvailabilityTargetPresetID =
 export interface AvailabilityTargetPreset {
   id: AvailabilityTargetPresetID;
   label: string;
+  targetKind: AvailabilityTargetKind;
   protocol: AvailabilityProbeProtocol;
   port?: string;
   path?: string;
@@ -20,6 +21,7 @@ export interface AvailabilityTargetPreset {
 }
 
 export interface AvailabilityPresetFields {
+  targetKind: AvailabilityTargetKind;
   protocol: AvailabilityProbeProtocol;
   port: string;
   path: string;
@@ -29,12 +31,14 @@ export const AVAILABILITY_TARGET_PRESETS: readonly AvailabilityTargetPreset[] = 
   {
     id: 'ping-device',
     label: 'Pingable device',
+    targetKind: 'device',
     protocol: 'icmp',
     addressPlaceholder: 'device.local',
   },
   {
     id: 'mqtt-broker',
     label: 'MQTT broker',
+    targetKind: 'service',
     protocol: 'tcp',
     port: '1883',
     addressPlaceholder: 'mqtt.local',
@@ -43,6 +47,7 @@ export const AVAILABILITY_TARGET_PRESETS: readonly AvailabilityTargetPreset[] = 
   {
     id: 'esphome-device',
     label: 'ESPHome device',
+    targetKind: 'device',
     protocol: 'tcp',
     port: '6053',
     addressPlaceholder: 'sensor.local',
@@ -51,6 +56,7 @@ export const AVAILABILITY_TARGET_PRESETS: readonly AvailabilityTargetPreset[] = 
   {
     id: 'esphome-dashboard',
     label: 'ESPHome dashboard',
+    targetKind: 'service',
     protocol: 'http',
     port: '6052',
     addressPlaceholder: 'http://esphome.local',
@@ -70,6 +76,7 @@ export const applyAvailabilityTargetPreset = <T extends AvailabilityPresetFields
 
   return {
     ...form,
+    targetKind: preset.targetKind,
     protocol: preset.protocol,
     port: preset.port ?? '',
     path: preset.path ?? '',

@@ -273,6 +273,50 @@ func TestResourceAPIUsesCanonicalTenantUnifiedSeed(t *testing.T) {
 	}
 }
 
+func TestAgentlessAvailabilityTargetKindStaysCanonical(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		filepath.Join("..", "config", "availability.go"): {
+			"AvailabilityTargetMachine AvailabilityTargetKind = \"machine\"",
+			"AvailabilityTargetService AvailabilityTargetKind = \"service\"",
+			"AvailabilityTargetDevice  AvailabilityTargetKind = \"device\"",
+			"TargetKind       AvailabilityTargetKind    `json:\"targetKind,omitempty\"`",
+			"target.TargetKind = AvailabilityTargetKind(strings.ToLower(strings.TrimSpace(string(target.TargetKind))))",
+		},
+		filepath.Join("..", "monitoring", "availability_poller.go"): {
+			"TargetKind          string    `json:\"targetKind,omitempty\"`",
+			"TargetKind:       string(target.TargetKind),",
+			"TargetKind:          string(target.TargetKind),",
+			"tags = append(tags, string(target.TargetKind))",
+		},
+		"types.go": {
+			"Availability *AvailabilityData `json:\"availability,omitempty\"`",
+			"TargetKind          string    `json:\"targetKind,omitempty\"`",
+		},
+		filepath.Join("..", "..", "frontend-modern", "src", "api", "availabilityTargets.ts"): {
+			"export type AvailabilityTargetKind = 'machine' | 'service' | 'device';",
+			"targetKind?: AvailabilityTargetKind;",
+		},
+		filepath.Join("..", "..", "frontend-modern", "src", "features", "standalone", "standalonePageModel.ts"): {
+			"resource.availability?.targetKind",
+			"resource.platformData?.availability as { targetKind?: string }",
+			"availabilityTargetKindFor(resource) === 'machine'",
+		},
+	}
+
+	for path, snippets := range requiredSnippets {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", path, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must keep agentless availability target kind contract via %q", path, snippet)
+			}
+		}
+	}
+}
+
 func TestCanonicalStorageMetadataPreservesBackingPoolField(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		"types.go": {

@@ -10,6 +10,7 @@ describe('availabilityTargetPresets', () => {
     expect(availabilityPresetById('esphome-device')).toEqual(
       expect.objectContaining({
         label: 'ESPHome device',
+        targetKind: 'device',
         protocol: 'tcp',
         port: '6053',
       }),
@@ -21,6 +22,7 @@ describe('availabilityTargetPresets', () => {
       id: '',
       name: 'Rack sensor',
       address: 'rack-sensor.local',
+      targetKind: 'service' as const,
       protocol: 'icmp' as const,
       port: '',
       path: '/health',
@@ -29,6 +31,7 @@ describe('availabilityTargetPresets', () => {
 
     expect(applyAvailabilityTargetPreset(form, 'mqtt-broker')).toEqual({
       ...form,
+      targetKind: 'service',
       protocol: 'tcp',
       port: '1883',
       path: '',

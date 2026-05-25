@@ -738,7 +738,11 @@ AI-only summary payloads, or page-local heuristics.
    the removed top-level `/infrastructure` page. Agentless availability
    endpoints are the separate monitoring source home at
    `/settings/monitoring/availability`, and the add flow for MQTT, ping, TCP,
-   and HTTP checks is `/settings/monitoring/availability?add=target`.
+   and HTTP checks is `/settings/monitoring/availability?add=target`. Saved
+   availability targets carry a `targetKind` so agentless servers, laptops,
+   desktops, and comparable computers can participate in the Standalone
+   Machines inventory without reclassifying service or device checks as
+   machines.
 6. Keep infrastructure source visibility on canonical unified-resource truth.
    Settings infrastructure source filters and summaries must preserve known
    sources such as `truenas` and `availability` through the shared source

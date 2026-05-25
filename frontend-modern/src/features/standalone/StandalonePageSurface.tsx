@@ -119,7 +119,7 @@ export function StandalonePageSurface() {
                 <PlatformTableEmptyState
                   icon={machineIcon()}
                   title="No standalone monitored endpoints"
-                  description="Install Pulse Agent on standalone machines, or add agentless availability checks for devices and services that only need reachability monitoring."
+                  description="Install Pulse Agent on servers, laptops, and desktops for full telemetry, or add an agentless machine check when reachability is enough."
                   actions={
                     <div class="flex flex-wrap items-center justify-center gap-2">
                       <button
@@ -149,8 +149,8 @@ export function StandalonePageSurface() {
                     <Show when={model().availabilityChecks.length > 0}>
                       <PlatformTableEmptyState
                         icon={machineIcon()}
-                        title="No standalone Pulse Agent machines"
-                        description="Agentless devices and services are monitored from the Availability checks tab."
+                        title="No standalone machines"
+                        description="Service and device checks are monitored from the Availability checks tab. Mark an availability target as a machine when it represents a server, laptop, or desktop."
                         actions={
                           <A href={buildStandalonePath('availability')} class={overviewActionClass}>
                             <ActivityIcon class="h-3.5 w-3.5" />
@@ -164,8 +164,8 @@ export function StandalonePageSurface() {
                   <AgentsMachinesTable
                     resources={model().machines}
                     emptyIcon={machineIcon()}
-                    emptyTitle="No standalone Pulse Agent machines"
-                    emptyDescription="Install the Pulse Agent on Linux, macOS, Windows, or Unraid systems that are not already represented by a platform integration."
+                    emptyTitle="No standalone machines"
+                    emptyDescription="Install the Pulse Agent on Linux, macOS, Windows, or Unraid systems for full telemetry, or add an agentless machine check when reachability is enough."
                   />
                 </Show>
               </div>

@@ -3,10 +3,12 @@ import { apiFetchJSON } from '@/utils/apiClient';
 const AVAILABILITY_TARGETS_PATH = '/api/availability-targets';
 
 export type AvailabilityProbeProtocol = 'icmp' | 'tcp' | 'http';
+export type AvailabilityTargetKind = 'machine' | 'service' | 'device';
 
 export interface AvailabilityProbeStatus {
   targetId: string;
   name: string;
+  targetKind?: AvailabilityTargetKind | string;
   address: string;
   protocol: AvailabilityProbeProtocol | string;
   enabled: boolean;
@@ -22,6 +24,7 @@ export interface AvailabilityProbeStatus {
 export interface AvailabilityTarget {
   id: string;
   name: string;
+  targetKind?: AvailabilityTargetKind;
   address: string;
   protocol: AvailabilityProbeProtocol;
   port?: number;

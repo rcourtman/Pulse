@@ -3,6 +3,7 @@ import {
   buildAvailabilitySettingsPath,
   buildAvailabilityTargetAddPath,
   getAvailabilityTargetAddressLabel,
+  getAvailabilityTargetKindLabel,
   getAvailabilityTargetMethodLabel,
   getAvailabilityTargetStatusLabel,
   getAvailabilityTargetsSummary,
@@ -48,6 +49,8 @@ describe('availabilitySettingsModel', () => {
     expect(getAvailabilityTargetMethodLabel(target({ protocol: 'icmp', port: undefined }))).toBe(
       'ICMP ping',
     );
+    expect(getAvailabilityTargetKindLabel(target({ targetKind: 'machine' }))).toBe('Machine');
+    expect(getAvailabilityTargetKindLabel(target())).toBe('Service');
   });
 
   it('summarizes saved availability targets from their probe state', () => {

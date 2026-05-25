@@ -23,11 +23,20 @@ const (
 	AvailabilityProbeHTTP AvailabilityProbeProtocol = "http"
 )
 
+type AvailabilityTargetKind string
+
+const (
+	AvailabilityTargetMachine AvailabilityTargetKind = "machine"
+	AvailabilityTargetService AvailabilityTargetKind = "service"
+	AvailabilityTargetDevice  AvailabilityTargetKind = "device"
+)
+
 // AvailabilityTarget represents an agentless endpoint monitored through a
 // lightweight availability probe.
 type AvailabilityTarget struct {
 	ID               string                    `json:"id"`
 	Name             string                    `json:"name"`
+	TargetKind       AvailabilityTargetKind    `json:"targetKind,omitempty"`
 	Address          string                    `json:"address"`
 	Protocol         AvailabilityProbeProtocol `json:"protocol"`
 	Port             int                       `json:"port,omitempty"`
@@ -42,6 +51,7 @@ type AvailabilityTarget struct {
 func NewAvailabilityTarget() AvailabilityTarget {
 	return AvailabilityTarget{
 		ID:               uuid.NewString(),
+		TargetKind:       AvailabilityTargetService,
 		Protocol:         AvailabilityProbeICMP,
 		Enabled:          true,
 		PollIntervalSecs: DefaultAvailabilityPollIntervalSecs,
@@ -59,6 +69,9 @@ func (t *AvailabilityTarget) ApplyDefaults() {
 	}
 	if strings.TrimSpace(string(t.Protocol)) == "" {
 		t.Protocol = AvailabilityProbeICMP
+	}
+	if strings.TrimSpace(string(t.TargetKind)) == "" {
+		t.TargetKind = AvailabilityTargetService
 	}
 	if t.PollIntervalSecs <= 0 {
 		t.PollIntervalSecs = DefaultAvailabilityPollIntervalSecs
@@ -106,6 +119,11 @@ func (t AvailabilityTarget) ProbeAddress() string {
 func (t AvailabilityTarget) Validate() error {
 	if strings.TrimSpace(t.Address) == "" {
 		return fmt.Errorf("availability target address is required")
+	}
+	switch t.TargetKind {
+	case AvailabilityTargetMachine, AvailabilityTargetService, AvailabilityTargetDevice:
+	default:
+		return fmt.Errorf("unsupported availability target kind %q", t.TargetKind)
 	}
 	switch t.Protocol {
 	case AvailabilityProbeICMP:
@@ -181,6 +199,7 @@ func (t AvailabilityTarget) HTTPURL() (*url.URL, error) {
 func NormalizeAvailabilityTarget(target AvailabilityTarget) AvailabilityTarget {
 	target.ID = strings.TrimSpace(target.ID)
 	target.Name = strings.TrimSpace(target.Name)
+	target.TargetKind = AvailabilityTargetKind(strings.ToLower(strings.TrimSpace(string(target.TargetKind))))
 	target.Protocol = AvailabilityProbeProtocol(strings.ToLower(strings.TrimSpace(string(target.Protocol))))
 	if target.Protocol == AvailabilityProbeHTTP {
 		target.Address = strings.TrimSpace(target.Address)

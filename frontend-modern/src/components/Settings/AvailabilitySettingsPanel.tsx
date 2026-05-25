@@ -20,6 +20,7 @@ import {
   buildAvailabilitySettingsPath,
   buildAvailabilityTargetAddPath,
   getAvailabilityTargetAddressLabel,
+  getAvailabilityTargetKindLabel,
   getAvailabilityTargetMethodLabel,
   getAvailabilityTargetStatusClass,
   getAvailabilityTargetStatusLabel,
@@ -252,6 +253,8 @@ export const AvailabilitySettingsPanel: Component = () => {
                         </span>
                       </div>
                       <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                        <span>{getAvailabilityTargetKindLabel(target)}</span>
+                        <span aria-hidden="true">·</span>
                         <span>{getAvailabilityTargetMethodLabel(target)}</span>
                         <span aria-hidden="true">·</span>
                         <span class="break-all">{getAvailabilityTargetAddressLabel(target)}</span>

@@ -17,6 +17,7 @@ describe('AvailabilityTargetsAPI', () => {
     const target: AvailabilityTarget = {
       id: 'sensor-1',
       name: 'Energy monitor',
+      targetKind: 'device',
       address: '192.0.2.10',
       protocol: 'icmp',
       enabled: true,

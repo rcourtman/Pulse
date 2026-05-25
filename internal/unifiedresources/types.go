@@ -1443,6 +1443,7 @@ type TrueNASShare struct {
 type AvailabilityData struct {
 	TargetID            string    `json:"targetId,omitempty"`
 	Name                string    `json:"name,omitempty"`
+	TargetKind          string    `json:"targetKind,omitempty"`
 	Address             string    `json:"address,omitempty"`
 	Protocol            string    `json:"protocol,omitempty"`
 	Port                int       `json:"port,omitempty"`

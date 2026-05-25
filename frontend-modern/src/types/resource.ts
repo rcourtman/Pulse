@@ -1243,6 +1243,7 @@ export interface ResourceVMwareMeta {
 export interface ResourceAvailabilityMeta {
   targetId?: string;
   name?: string;
+  targetKind?: 'machine' | 'service' | 'device' | string;
   address?: string;
   protocol?: string;
   port?: number;
