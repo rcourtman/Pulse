@@ -16,6 +16,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/jsonresponse"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
@@ -843,35 +844,16 @@ func (s *Service) parseAIResponse(response string) *DiscoveryResult {
 		return nil
 	}
 
-	// Handle markdown code blocks
-	if strings.HasPrefix(response, "```") {
-		lines := strings.Split(response, "\n")
-		var jsonLines []string
-		inBlock := false
-		for _, line := range lines {
-			if strings.HasPrefix(line, "```") {
-				inBlock = !inBlock
-				continue
-			}
-			if inBlock {
-				jsonLines = append(jsonLines, line)
-			}
-		}
-		response = strings.Join(jsonLines, "\n")
-	}
-
-	// Find JSON object in response
-	start := strings.Index(response, "{")
-	end := strings.LastIndex(response, "}")
-	if start >= 0 && end > start {
-		response = response[start : end+1]
+	payload, ok := jsonresponse.ExtractObject(response)
+	if !ok {
+		return nil
 	}
 
 	var result DiscoveryResult
-	if err := json.Unmarshal([]byte(response), &result); err != nil {
+	if err := json.Unmarshal([]byte(payload), &result); err != nil {
 		log.Debug().
 			Err(err).
-			Str("response", sanitizeText(response, maxAIParseLogFieldLength)).
+			Str("response", sanitizeText(payload, maxAIParseLogFieldLength)).
 			Msg("Failed to parse AI response as JSON")
 		return nil
 	}

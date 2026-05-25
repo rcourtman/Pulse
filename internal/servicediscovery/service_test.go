@@ -437,17 +437,40 @@ func TestService_GetSnapshot_WithoutReadStateReturnsCanonicalEmptySnapshot(t *te
 
 func TestService_parseAIResponse_Markdown(t *testing.T) {
 	service := &Service{}
-	response := "```json\n{\n  \"service_type\": \"nginx\",\n  \"service_name\": \"Nginx\",\n  \"service_version\": \"1.2\",\n  \"category\": \"web_server\",\n  \"cli_access\": \"docker exec {container} bash\",\n  \"facts\": [{\"category\": \"version\", \"key\": \"nginx\", \"value\": \"1.2\", \"source\": \"cmd\", \"confidence\": 0.9}],\n  \"config_paths\": [\"/etc/nginx/nginx.conf\"],\n  \"data_paths\": [\"/var/www\"],\n  \"ports\": [{\"port\": 80, \"protocol\": \"tcp\", \"process\": \"nginx\", \"address\": \"0.0.0.0\"}],\n  \"confidence\": 0.9,\n  \"reasoning\": \"image name\"\n}\n```"
 
-	parsed := service.parseAIResponse(response)
-	if parsed == nil {
-		t.Fatalf("expected parsed response")
+	tests := []struct {
+		name        string
+		response    string
+		wantService string
+		wantName    string
+	}{
+		{
+			name:        "markdown block",
+			response:    "```json\n{\n  \"service_type\": \"nginx\",\n  \"service_name\": \"Nginx\",\n  \"service_version\": \"1.2\",\n  \"category\": \"web_server\",\n  \"cli_access\": \"docker exec {container} bash\",\n  \"facts\": [{\"category\": \"version\", \"key\": \"nginx\", \"value\": \"1.2\", \"source\": \"cmd\", \"confidence\": 0.9}],\n  \"config_paths\": [\"/etc/nginx/nginx.conf\"],\n  \"data_paths\": [\"/var/www\"],\n  \"ports\": [{\"port\": 80, \"protocol\": \"tcp\", \"process\": \"nginx\", \"address\": \"0.0.0.0\"}],\n  \"confidence\": 0.9,\n  \"reasoning\": \"image name\"\n}\n```",
+			wantService: "nginx",
+			wantName:    "Nginx",
+		},
+		{
+			name:        "inline language fence",
+			response:    "```json {\"service_type\":\"debian\",\"service_name\":\"Debian 13 (Trixie) Server\",\"service_version\":\"13.5\",\"category\":\"virtualizer\",\"cli_access\":\"ssh user@pve-qdev\",\"facts\":[{\"category\":\"version\",\"key\":\"OS Codename\",\"value\":\"trixie\",\"source\":\"os_release\",\"confidence\":0.95}],\"config_paths\":[],\"data_paths\":[],\"ports\":[],\"confidence\":0.95,\"reasoning\":\"os release\"} ```",
+			wantService: "debian",
+			wantName:    "Debian 13 (Trixie) Server",
+		},
 	}
-	if parsed.ServiceType != "nginx" || parsed.ServiceName != "Nginx" {
-		t.Fatalf("unexpected parsed result: %#v", parsed)
-	}
-	if len(parsed.Facts) != 1 || parsed.Facts[0].DiscoveredAt.IsZero() {
-		t.Fatalf("expected fact timestamp set: %#v", parsed.Facts)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parsed := service.parseAIResponse(tt.response)
+			if parsed == nil {
+				t.Fatalf("expected parsed response")
+			}
+			if parsed.ServiceType != tt.wantService || parsed.ServiceName != tt.wantName {
+				t.Fatalf("unexpected parsed result: %#v", parsed)
+			}
+			if len(parsed.Facts) != 1 || parsed.Facts[0].DiscoveredAt.IsZero() {
+				t.Fatalf("expected fact timestamp set: %#v", parsed.Facts)
+			}
+		})
 	}
 
 	if service.parseAIResponse("not json") != nil {

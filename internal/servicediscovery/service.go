@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/jsonresponse"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -2502,35 +2503,14 @@ Respond with ONLY valid JSON.`, strings.Join(sections, "\n\n"))
 // parseAIResponse parses the AI's JSON response.
 func (s *Service) parseAIResponse(response string) *AIAnalysisResponse {
 	log.Debug().Str("raw_response", response).Msg("discovery raw response")
-	response = strings.TrimSpace(response)
-
-	// Handle markdown code blocks
-	if strings.HasPrefix(response, "```") {
-		lines := strings.Split(response, "\n")
-		var jsonLines []string
-		inBlock := false
-		for _, line := range lines {
-			if strings.HasPrefix(line, "```") {
-				inBlock = !inBlock
-				continue
-			}
-			if inBlock {
-				jsonLines = append(jsonLines, line)
-			}
-		}
-		response = strings.Join(jsonLines, "\n")
-	}
-
-	// Find JSON object
-	start := strings.Index(response, "{")
-	end := strings.LastIndex(response, "}")
-	if start >= 0 && end > start {
-		response = response[start : end+1]
+	payload, ok := jsonresponse.ExtractObject(response)
+	if !ok {
+		return nil
 	}
 
 	var result AIAnalysisResponse
-	if err := json.Unmarshal([]byte(response), &result); err != nil {
-		log.Debug().Err(err).Str("response", response).Msg("failed to parse AI response")
+	if err := json.Unmarshal([]byte(payload), &result); err != nil {
+		log.Debug().Err(err).Str("response", payload).Msg("failed to parse AI response")
 		return nil
 	}
 

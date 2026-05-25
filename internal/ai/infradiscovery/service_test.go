@@ -188,6 +188,18 @@ func TestParseAIResponse(t *testing.T) {
 			},
 		},
 		{
+			name:     "inline language fence",
+			response: "```json {\"service_type\":\"debian\",\"service_name\":\"Debian 13 (Trixie) Server\",\"category\":\"virtualizer\",\"cli_command\":\"docker exec {container} cat /etc/os-release\",\"confidence\":0.95,\"reasoning\":\"os release\"} ```",
+			want: &DiscoveryResult{
+				ServiceType: "debian",
+				ServiceName: "Debian 13 (Trixie) Server",
+				Category:    "virtualizer",
+				CLICommand:  "docker exec {container} cat /etc/os-release",
+				Confidence:  0.95,
+				Reasoning:   "os release",
+			},
+		},
+		{
 			name:     "invalid JSON",
 			response: "not json at all",
 			want:     nil,
