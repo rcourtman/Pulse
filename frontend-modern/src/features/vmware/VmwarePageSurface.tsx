@@ -284,6 +284,7 @@ function VmwareOverview(props: VmwareOverviewProps) {
             searchPlaceholder="Search vSphere VMs by name, host, cluster, or status"
             searchEmptyMessage="Recent vSphere workload searches appear here."
             statusOptions={VMWARE_WORKLOAD_STATUS_OPTIONS}
+            suppressTypeFilter
             columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
             containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
             hostFilter={undefined}

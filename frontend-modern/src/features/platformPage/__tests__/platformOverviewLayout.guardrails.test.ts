@@ -276,6 +276,7 @@ describe('platform overview layout guardrails', () => {
     expect(vmwarePageSurfaceSource).toContain('<WorkloadsSurface');
     expect(vmwarePageSurfaceSource).toContain('forcedPlatform={VMWARE_PLATFORM_FILTER}');
     expect(vmwarePageSurfaceSource).toContain('forcedViewMode="vm"');
+    expect(vmwarePageSurfaceSource).toContain('suppressTypeFilter');
     expect(vmwarePageSurfaceSource).toContain('<VsphereDatastoresTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereNetworksTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereActivityTable');
