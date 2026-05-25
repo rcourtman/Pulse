@@ -36,24 +36,22 @@ describe('App architecture', () => {
     expect(routePreloadSource).toContain('export const APP_SHELL_ROUTE_PRELOAD_PATHS = [');
     expect(routePreloadSource).toContain('ROOT_PROXMOX_PATH,');
     expect(routePreloadSource).toContain('PATROL_PATH,');
-    // Infrastructure never shipped as a stable top-level route, so it must not
-    // remain wired as a hidden compatibility surface. Workloads, Storage, and
-    // Recovery are explicit aggregate workspaces and must be owned by the shell
-    // instead of lingering as hidden routes.
+    // These aggregate pages never shipped as stable top-level routes, so they
+    // must not remain wired as hidden compatibility or shell workspace surfaces.
     expect(routePreloadSource).not.toContain('ROOT_INFRASTRUCTURE_PATH');
-    expect(routePreloadSource).toContain("id: 'workloads',");
-    expect(routePreloadSource).toContain("id: 'storage',");
-    expect(routePreloadSource).toContain("id: 'recovery',");
+    expect(routePreloadSource).not.toContain("id: 'workloads',");
+    expect(routePreloadSource).not.toContain("id: 'storage',");
+    expect(routePreloadSource).not.toContain("id: 'recovery',");
     expect(appSource).not.toContain('const InfrastructurePage = lazy(');
+    expect(appSource).not.toContain('const WorkloadsPage = lazy(');
+    expect(appSource).not.toContain('const StoragePage = lazy(');
+    expect(appSource).not.toContain('const RecoveryPage = lazy(');
     expect(appSource).not.toContain("import('./features/infrastructure/InfrastructurePageSurface')");
     expect(appSource).not.toContain('component={InfrastructurePage}');
     expect(appSource).not.toContain('INFRASTRUCTURE_PATH');
-    expect(appSource).toContain("import('./components/Workloads/WorkloadsSurface')");
-    expect(appSource).toContain("import('./components/Storage/Storage')");
-    expect(appSource).toContain("import('./components/Recovery/Recovery')");
-    expect(appSource).toContain('<Route path={WORKLOADS_PATH} component={WorkloadsPage} />');
-    expect(appSource).toContain('<Route path={STORAGE_PATH} component={StoragePage} />');
-    expect(appSource).toContain('<Route path={RECOVERY_PATH} component={RecoveryPage} />');
+    expect(appSource).not.toContain('<Route path={WORKLOADS_PATH}');
+    expect(appSource).not.toContain('<Route path={STORAGE_PATH}');
+    expect(appSource).not.toContain('<Route path={RECOVERY_PATH}');
     expect(appSource).toContain(
       '<Route path="/ceph" component={() => <Navigate href="/proxmox/ceph" />} />',
     );
@@ -98,10 +96,8 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain(
       "tooltip: 'Standalone Pulse Agent machines, OS telemetry, storage, and command eligibility'",
     );
-    // Governed shell nav: Infrastructure is not a standalone tab; the
-    // aggregate Workloads / Storage / Recovery destinations are first-class
-    // workspace tabs, and Docker / Podman is presented as the Containers
-    // runtime lens.
+    // Governed shell nav: Infrastructure, Workloads, Storage, and Recovery are
+    // not standalone shell tabs; platform/runtime pages own those workflows.
     expect(appSource).toContain('getDefaultWorkspaceRoute');
     expect(appSource).toContain('infrastructureNavigationResolved');
     expect(appSource).toContain('buildPrimaryInfrastructureNavigationVisibility');
@@ -110,10 +106,10 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain("label: 'Containers'");
     expect(appLayoutSource).toContain("'Docker / Podman runtime lens");
     expect(appLayoutSource).not.toContain("id: 'infrastructure',");
-    expect(appLayoutSource).toContain("id: 'workloads',");
-    expect(appLayoutSource).toContain("id: 'storage',");
-    expect(appLayoutSource).toContain("id: 'recovery',");
-    expect(appLayoutSource).toContain("aria-label=\"Workspaces\"");
+    expect(appLayoutSource).not.toContain("id: 'workloads',");
+    expect(appLayoutSource).not.toContain("id: 'storage',");
+    expect(appLayoutSource).not.toContain("id: 'recovery',");
+    expect(appLayoutSource).not.toContain("aria-label=\"Workspaces\"");
     expect(appLayoutSource).not.toContain('buildStorageRecoveryTabSpecs(');
     expect(appSource).not.toContain('DashboardPage');
     expect(headerAuditSource).not.toContain("['src/pages/Dashboard.tsx', 'PageHeader']");
@@ -357,9 +353,9 @@ describe('App architecture', () => {
     expect(routePreloadSource).not.toContain("import('@/pages/Recovery')");
     expect(routePreloadSource).not.toContain("import('@/pages/Storage')");
     expect(routePreloadSource).not.toContain("import('@/pages/Ceph')");
-    expect(routePreloadSource).toContain("import('@/components/Workloads/WorkloadsSurface')");
-    expect(routePreloadSource).toContain("import('@/components/Storage/Storage')");
-    expect(routePreloadSource).toContain("import('@/components/Recovery/Recovery')");
+    expect(routePreloadSource).not.toContain("import('@/components/Workloads/WorkloadsSurface')");
+    expect(routePreloadSource).not.toContain("import('@/components/Storage/Storage')");
+    expect(routePreloadSource).not.toContain("import('@/components/Recovery/Recovery')");
     expect(routePreloadSource).not.toContain("import('@/pages/RecoveryRoute')");
     expect(appRuntimeContextSource).toContain(
       "import { createContext, useContext } from 'solid-js';",

@@ -181,13 +181,14 @@ recovery scope, or a storage/recovery-owned secret source.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 2. Add or change recovery page UX through `frontend-modern/src/components/Recovery/` and keep canonical route/query/filter state ownership in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`
-   `/recovery` is a first-class authenticated aggregate workspace.
+   `/recovery` is no longer an authenticated top-level aggregate workspace.
    `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, the command
    palette, keyboard shortcuts, route preloading, and active-tab routing must
-   treat Recovery as canonical product navigation rather than hidden
-   compatibility. `/storage` has the same aggregate-workspace status for the
-   Storage owner surface. The app shell may route to those surfaces, but it
-   must not duplicate storage/recovery state outside their owning components.
+   keep Recovery unregistered as standalone product navigation rather than as
+   hidden compatibility. `/storage` has the same retired top-level status for
+   the Storage owner surface. Storage/recovery state remains owned by the
+   reusable surfaces that platform pages embed; the app shell must not
+   duplicate that state or expose it as a separate aggregate route.
    Recovery table surfaces must consume the frontend-primitives-owned
    `TableCard` frame and `TableCardHeader` header band for protected-item,
    recovery-event, and adjacent table-fallback chrome. Storage/recovery may own
@@ -199,10 +200,10 @@ recovery scope, or a storage/recovery-owned secret source.
    `overflow-x-auto` div around the shared table. Storage pools and physical
    disks inherit the surrounding `StorageContentCard` frame and must not add
    a nested `Card` or second scroll wrapper.
-   Recovery is event-first: the default `/recovery` surface is the recovery
-   events history, and protected-item rollups are a secondary Protection
-   coverage review reached from the explicit header action or
-   `view=inventory` compatibility links. Recovery must not present
+   Recovery is event-first: recovery surfaces open on recovery events history
+   by default, and protected-item rollups are a secondary Protection coverage
+   review reached from the explicit header action or route state owned by the
+   embedding surface. Recovery must not present
    protected rollups and recovery events as equal default sub-tabs because
    workload backup posture already belongs on Workloads, while Recovery owns
    concrete backup/snapshot/replication evidence. Both surfaces still opt into
@@ -257,7 +258,7 @@ recovery scope, or a storage/recovery-owned secret source.
    A selected timeline day is an active event-history filter: table totals,
    footer ranges, empty states, and search/date matching must describe the
    visible filtered recovery points, not the unfiltered API page metadata.
-3. Add or change storage UX through `frontend-modern/src/components/Storage/Storage.tsx` (the canonical `StorageSurface`, embedded inside platform pages and mounted by the aggregate Storage workspace), `frontend-modern/src/components/Storage/`, `frontend-modern/src/features/storageBackups/`, the shared storage-source contract in `frontend-modern/src/utils/storageSources.ts`, and the Proxmox-native Ceph table at `frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx`. The old standalone page wrappers under the legacy frontend-modern pages directory were retired with the platform-first primary nav (2026-05-16); the canonical component surfaces remain alive both as aggregate Workloads / Storage / Recovery workspaces and as embedded views inside matching platform page sub-tabs. The Ceph legacy route remains a thin redirect to the Proxmox-owned Ceph tab.
+3. Add or change storage UX through `frontend-modern/src/components/Storage/Storage.tsx` (the canonical `StorageSurface`, embedded inside platform pages), `frontend-modern/src/components/Storage/`, `frontend-modern/src/features/storageBackups/`, the shared storage-source contract in `frontend-modern/src/utils/storageSources.ts`, and the Proxmox-native Ceph table at `frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx`. The old standalone page wrappers under the legacy frontend-modern pages directory were retired with the platform-first primary nav (2026-05-16), and the top-level aggregate Workloads / Storage / Recovery routes were unregistered on 2026-05-25; the canonical component surfaces remain alive as embedded views inside matching platform page sub-tabs. The Ceph legacy route remains a thin redirect to the Proxmox-owned Ceph tab.
    The retired dashboard route must not reintroduce storage or recovery
    widgets as compatibility panels. Storage capacity, storage health,
    protected-item, and recovery-outcome readiness claims belong on the Storage
@@ -751,15 +752,15 @@ recovery scope, or a storage/recovery-owned secret source.
 23. Keep backend-native platform diagnostics on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app log reads for Assistant, storage and recovery may use those diagnostics during investigation, but they must not grow a parallel recovery-local log transport or diagnostic payload shape.
 24. Keep backend-native platform configuration reads on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app config for Assistant, storage and recovery may use that runtime shape during investigation, but they must not grow a parallel recovery-local config transport or provider-shaped configuration payload.
 25. Keep provider-backed poll cadence and settings-runtime health on the adjacent platform-connections contract. When shared `internal/api/` and poller wiring expose TrueNAS last-sync status, failure summaries, discovered contribution counts, manual saved-test status refresh, or platform handoff links in settings, storage and recovery may consume the resulting datasets, apps, disks, and recovery artifacts but must not redefine those settings-runtime health semantics or connection-level handoffs in storage/recovery-local transport or page flows.
-26. Keep cross-surface recovery handoffs on the shared route-helper contract. When infrastructure or other unified-resource consumers expose TrueNAS recovery links, they must reuse the canonical `frontend-modern/src/routing/resourceLinks.ts` recovery builder with owned `platform` and `node` queries instead of inventing drawer-local recovery URLs or treating PBS services as the only infrastructure-to-recovery path.
+26. Keep recovery filter/query state on the shared route-state parsing contract without restoring standalone recovery navigation. When platform pages or other embedded owners expose TrueNAS recovery context, they may reuse the canonical recovery query vocabulary with owned `platform` and `node` fields, but they must land inside an owning platform/runtime route instead of inventing drawer-local recovery URLs, treating PBS services as the only recovery path, or sending operators to the retired Recovery aggregate route.
     That same shared route-helper boundary also owns exact workload handoffs
     when storage or recovery surfaces send operators back to node-scoped
     workloads for investigation context. Proxmox VM and system-container links
     must carry the canonical workload identity (`<instance>:<node>:<vmid>`) in
-    the shared `/workloads` `resource` query rather than an opaque unified
-    resource id, so recovery/storage drill-downs reopen the intended workload
-    drawer instead of landing on an unselected table state.
-27. Keep alert-side recovery drill-ins on that same shared route-helper contract. When alert investigation surfaces such as resource-incident panels expose recovery follow-up links for TrueNAS or future API-backed platforms, they must route through the canonical `frontend-modern/src/routing/resourceLinks.ts` recovery builder instead of freezing alert-local recovery URLs or introducing another provider-shaped recovery handoff vocabulary.
+    the shared workload query state rather than an opaque unified resource id,
+    so recovery/storage drill-downs reopen the intended platform-owned
+    workload drawer instead of landing on an unselected table state.
+27. Keep alert-side recovery drill-ins on that same embedded-owner route-state contract. When alert investigation surfaces such as resource-incident panels expose recovery follow-up links for TrueNAS or future API-backed platforms, they must route through an owning platform/runtime destination using canonical recovery query vocabulary instead of freezing alert-local recovery URLs, reviving the retired Recovery aggregate route, or introducing another provider-shaped recovery handoff vocabulary.
 28. Keep VMware onboarding runtime and recovery semantics separate on that same adjacent platform-connections contract. When `internal/api/router.go`, `internal/api/router_routes_registration.go`, or `internal/api/vmware_handlers.go` evolve VMware connection CRUD, poller-owned `poll` / `observed` summary payloads, saved-test refresh, or observed datastore/VM snapshot visibility, storage and recovery may consume the resulting shared context but must not treat those onboarding/runtime payloads as canonical recovery artifacts, restore capability, or recovery-local control transport.
 29. Keep VMware datastore projection on the shared unified-resource and storage-source contracts. When `frontend-modern/src/hooks/useUnifiedResources.ts` or shared `internal/api/router.go` wiring starts surfacing VMware-backed canonical `storage` resources, storage and recovery may expose those datastores through the owned `vmware-vsphere` source/platform vocabulary for inventory, capacity, and handoff flows only; they must not reinterpret that projection as VMware recovery support, restore semantics, or a provider-local protection surface.
     The same shared unified-resource boundary also covers canonical
@@ -994,9 +995,9 @@ recovery scope, or a storage/recovery-owned secret source.
 11. Letting non-canonical recovery platform values survive in route or transport state; shared recovery URLs must collapse unsupported or fake `platform` values back to the canonical unset state, and only owned source-platform options or canonical legacy aliases may reach rollups, points, series, and facets transport filters
     11c. Letting route-owned recovery platform selections disappear while filter options are still hydrating; the recovery page state owner must keep the current canonical `platform` query value present in the platform option set until transport-backed facets and records arrive so shared filter selects keep the user-visible TrueNAS or other owned platform selection instead of flashing back to `All platforms`
     11d. Letting recovery filter default labels drift between protected inventory and recovery events; both recovery filter surfaces must consume the shared `recoveryTablePresentation` labels (`All item types`, `All platforms`, and `Any item`) instead of hard-coding title-case local variants.
-    11a. Letting adjacent workload-route changes in shared `frontend-modern/src/routing/resourceLinks.ts` perturb recovery parse/build semantics; expanding canonical `/workloads` platform scoping must not alter the owned `/recovery` `platform` and `itemType` vocabulary, legacy alias rewrites, or recovery drill-down workspace selection
-    11b. Letting adjacent storage-link additions in shared `frontend-modern/src/routing/resourceLinks.ts` perturb recovery route semantics; expanding canonical `/storage` deep links for unified resources must not reuse recovery-owned query names or alter the owned `/recovery` parse/build contract while those surfaces continue sharing the same route-helper module
-    11e. Letting adjacent platform-route additions in shared `frontend-modern/src/routing/resourceLinks.ts` perturb storage or recovery route semantics; adding canonical `/agents` paths or other platform paths must not reuse storage/recovery query names, alter `/storage` or `/recovery` parse/build behavior, or convert agent-platform membership into storage/recovery ownership
+    11a. Letting adjacent workload route-state changes in shared `frontend-modern/src/routing/resourceLinks.ts` perturb recovery parse/build semantics; expanding canonical workload platform scoping must not alter the owned recovery `platform` and `itemType` vocabulary, legacy alias rewrites, or recovery drill-down workspace selection
+    11b. Letting adjacent storage route-state additions in shared `frontend-modern/src/routing/resourceLinks.ts` perturb recovery route semantics; expanding canonical storage deep links for unified resources must not reuse recovery-owned query names or alter the owned recovery parse/build contract while those surfaces continue sharing the same route-helper module
+    11e. Letting adjacent platform-route additions in shared `frontend-modern/src/routing/resourceLinks.ts` perturb storage or recovery route semantics; adding canonical `/agents` paths or other platform paths must not reuse storage/recovery query names, alter storage or recovery parse/build behavior, or convert agent-platform membership into storage/recovery ownership
 12. Letting protected-inventory protection posture overload recovery-event outcome filtering; the protected inventory protection-state control must drive the route-backed `state` field and local rollup posture filtering, while the recovery events `status` field remains the canonical outcome filter for points, series, and facets transport filters
 13. Letting visible protected-item filters fall out of shared recovery links; protected inventory state such as stale, failed, warning, running, unknown, healthy, and never-succeeded must restore from the canonical recovery URL and rewrite to the owned `state=<value>` route form, with legacy `stale=1` accepted only as compatibility input
 14. Reintroducing stacked full-width recovery tables as the primary desktop layout; the governed recovery surface must expose one primary data region at a time with recovery events as the default workspace and protection coverage as an explicit secondary review so Pulse does not collapse back into a single-platform backup screen
@@ -1889,10 +1890,11 @@ default event routes should omit redundant `view=events` query state.
 That same shared route-helper contract now also has to preserve exact storage
 and recovery handoffs for unified resources discovered outside the storage or
 recovery pages. When alerts, Patrol, or infrastructure drawers route a
-TrueNAS-backed disk, app, or system into `/storage` or `/recovery`, the shared
-helper must keep the owned `source`, `node`, `platform`, `view`, and exact
-`resource` semantics intact instead of collapsing those handoffs back to
-provider-local URLs or generic top-level tabs.
+TrueNAS-backed disk, app, or system into an owning platform/runtime surface,
+the shared helper must keep the owned `source`, `node`, `platform`, `view`,
+and exact `resource` semantics intact instead of collapsing those handoffs
+back to provider-local URLs, retired aggregate workspace routes, or generic
+top-level tabs.
 That history table layout now also derives its minimum width from the same
 canonical column-width spec that owns the header sizing in
 `frontend-modern/src/utils/recoveryTablePresentation.ts`, so longer governed
@@ -2989,7 +2991,7 @@ reconstruct the same point-history window instead of silently widening back to
 the broader chart range.
 That same route continuity rule also applies to the selected chart window
 itself: changing the recovery timeline range to `7d`, `90d`, or `1y` must stay
-in canonical `/recovery` route state so reload, navigation, and shared links
+in canonical recovery route state so reload, navigation, and shared links
 reconstruct the same rollup and series transport window instead of widening
 back to the default `30d` range.
 
@@ -3182,11 +3184,11 @@ may surface VMware-backed datastores as canonical `storage` resources under
 the shared `vmware-vsphere` source/platform vocabulary, but that operator-
 facing storage visibility still ends at inventory, capacity, and navigation.
 That same shared storage adapter must classify those VMware-backed records as
-inventory-only datastores on `/storage`, not as backup repositories or
-recovery-protected targets. Shared storage rows may show datastore topology,
-capacity, accessibility, and multi-host context, but they must keep fallback
-protection semantics neutral unless a separately governed recovery slice adds
-real VMware protection contracts.
+inventory-only datastores on platform-owned storage surfaces, not as backup
+repositories or recovery-protected targets. Shared storage rows may show
+datastore topology, capacity, accessibility, and multi-host context, but they
+must keep fallback protection semantics neutral unless a separately governed
+recovery slice adds real VMware protection contracts.
 That same inventory-only contract also applies when the operator turns on
 runtime mock data. Mock TrueNAS pools/datasets and mock VMware datastores may
 surface through the shared storage and recovery-adjacent pages as canonical

@@ -11,9 +11,6 @@ import ServerIcon from 'lucide-solid/icons/server';
 import ShipWheelIcon from 'lucide-solid/icons/ship-wheel';
 import DatabaseIcon from 'lucide-solid/icons/database';
 import CpuIcon from 'lucide-solid/icons/cpu';
-import BoxesIcon from 'lucide-solid/icons/boxes';
-import HardDriveIcon from 'lucide-solid/icons/hard-drive';
-import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import {
   MobileNavBar,
@@ -43,11 +40,8 @@ import {
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
-  buildRecoveryPath,
-  buildStoragePath,
   buildTrueNASPath,
   buildVmwarePath,
-  buildWorkloadsPath,
 } from '@/routing/resourceLinks';
 import { getKioskModePreference, setKioskMode } from '@/utils/url';
 import { updateStore } from '@/stores/updates';
@@ -63,9 +57,6 @@ const ROOT_KUBERNETES_PATH = buildKubernetesPath();
 const ROOT_TRUENAS_PATH = buildTrueNASPath();
 const ROOT_VMWARE_PATH = buildVmwarePath();
 const ROOT_AGENTS_PATH = buildAgentsPath();
-const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
-const ROOT_STORAGE_PATH = buildStoragePath();
-const ROOT_RECOVERY_PATH = buildRecoveryPath();
 const ROOT_ALERTS_PATH = '/alerts';
 const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
 const AI_CHAT_LAUNCHER_BUTTON_CLASS =
@@ -221,9 +212,6 @@ export function AppLayout(props: AppLayoutProps) {
     truenas: 'TrueNAS',
     vmware: 'vSphere',
     agents: 'Agents',
-    workloads: 'Workloads',
-    storage: 'Storage',
-    recovery: 'Recovery',
     alerts: 'Alerts',
     ai: 'Patrol',
     settings: 'Settings',
@@ -410,44 +398,6 @@ export function AppLayout(props: AppLayoutProps) {
 
     return allPrimaryTabs.filter((tab) => tab.alwaysShow || tab.enabled);
   });
-
-  const workspaceTabs = createMemo<PrimaryTab[]>(() => [
-    {
-      id: 'workloads',
-      label: 'Workloads',
-      route: ROOT_WORKLOADS_PATH,
-      settingsRoute: '/settings/infrastructure',
-      tooltip: 'Aggregate workload inventory across VMs, containers, and Kubernetes resources',
-      enabled: true,
-      live: true,
-      icon: BoxesIcon,
-      alwaysShow: true,
-    },
-    {
-      id: 'storage',
-      label: 'Storage',
-      route: ROOT_STORAGE_PATH,
-      settingsRoute: '/settings/infrastructure',
-      tooltip: 'Aggregate storage pools, disks, datastores, and capacity posture',
-      enabled: true,
-      live: true,
-      icon: HardDriveIcon,
-      alwaysShow: true,
-    },
-    {
-      id: 'recovery',
-      label: 'Recovery',
-      route: ROOT_RECOVERY_PATH,
-      settingsRoute: '/settings/system-recovery',
-      tooltip: 'Backup, snapshot, replication, and recovery-point activity',
-      enabled: true,
-      live: true,
-      icon: RotateCcwIcon,
-      alwaysShow: true,
-    },
-  ]);
-
-  const mobilePrimaryTabs = createMemo<PrimaryTab[]>(() => [...primaryTabs(), ...workspaceTabs()]);
 
   const utilityTabs = createMemo(() => {
     const allAlerts = props.state().activeAlerts || [];
@@ -793,9 +743,6 @@ export function AppLayout(props: AppLayoutProps) {
           <div class="flex items-end gap-1" role="group" aria-label="Infrastructure">
             <For each={primaryTabs()}>{renderPrimaryNavigationTab}</For>
           </div>
-          <div class="flex items-end gap-1 pl-1 sm:pl-3" role="group" aria-label="Workspaces">
-            <For each={workspaceTabs()}>{renderPrimaryNavigationTab}</For>
-          </div>
           <div class="flex items-end gap-1 ml-auto" role="group" aria-label="System">
             <div class="flex items-end gap-1 pl-1 sm:pl-4">
               <For each={utilityTabs()}>
@@ -894,7 +841,7 @@ export function AppLayout(props: AppLayoutProps) {
       <Show when={!kioskMode()}>
         <MobileNavBar
           activeTab={getActiveTabMobile}
-          primaryTabs={mobilePrimaryTabs}
+          primaryTabs={primaryTabs}
           utilityTabs={utilityTabs}
           onPrimaryClick={handlePrimaryClick}
           onUtilityClick={handleUtilityClick}

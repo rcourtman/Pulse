@@ -24,9 +24,6 @@ export type CommandPaletteCommandPaths = {
   dockerPath: string;
   kubernetesPath: string;
   kubernetesWorkloadsPath: string;
-  workloadsPath: string;
-  storagePath: string;
-  recoveryPath: string;
   trueNasPath: string;
   vmwarePath: string;
   vmwareNetworksPath: string;
@@ -122,32 +119,6 @@ export function buildCommandPaletteCommands(options: {
       action: () => options.navigate(options.paths.agentsPath),
     });
   }
-
-  commands.push(
-    {
-      id: 'nav-workloads',
-      label: 'Go to Workloads',
-      description: options.paths.workloadsPath,
-      shortcut: 'g w',
-      keywords: ['workloads', 'vms', 'containers', 'pods', 'inventory'],
-      action: () => options.navigate(options.paths.workloadsPath),
-    },
-    {
-      id: 'nav-storage',
-      label: 'Go to Storage',
-      description: options.paths.storagePath,
-      shortcut: 'g s',
-      keywords: ['storage', 'pools', 'disks', 'datastores', 'capacity'],
-      action: () => options.navigate(options.paths.storagePath),
-    },
-    {
-      id: 'nav-recovery',
-      label: 'Go to Recovery',
-      description: options.paths.recoveryPath,
-      keywords: ['recovery', 'backups', 'snapshots', 'replication', 'protection'],
-      action: () => options.navigate(options.paths.recoveryPath),
-    },
-  );
 
   commands.push(
     {

@@ -575,12 +575,12 @@ shell clickable behind another overlay.
     canonical dock threshold, the assistant must switch to an overlay drawer so
     table filters, grouped rows, and other hot-path controls keep their
     existing layout budget instead of paying a second collapse cost.
-33. Keep hidden workload-route selector shells off the hot path. When the
-    workloads route keeps `frontend-modern/src/components/shared/InfrastructureSelector.tsx`
+33. Keep hidden workload selector shells off the hot path. When an owning
+    platform page keeps `frontend-modern/src/components/shared/InfrastructureSelector.tsx`
     mounted only for layout parity, `frontend-modern/src/components/shared/useInfrastructureSelectorState.ts`
     must not hydrate `all-resources` or recovery rollups behind a hidden node
     summary; selector-owned data hooks must be explicitly visibility-gated so
-    `/workloads` only pays for workload-owned transports.
+    workload surfaces only pay for workload-owned transports.
 34. Keep the retired dashboard page-header path absent from the compact hot
     path. New page headers must stay pure presentation on their owning route
     and must not introduce a second data load, widen suspense ownership, or
@@ -613,24 +613,22 @@ shell clickable behind another overlay.
     2s dial / 1s read with at most 5 concurrent fingerprints so the probe
     endpoint cannot be repurposed into a slow-leak scanner that starves the
     dashboard hot path.
-    Platform-first and aggregate workspace top-level pages must remain in the
-    app-shell route preload registry. `frontend-modern/src/routing/routePreload.ts`
-    carries a `ROUTE_PRELOADERS` entry per supported platform (Agents, Proxmox
-    plus the Docker, Kubernetes, TrueNAS, and vSphere families) and per
-    first-class aggregate workspace (Workloads, Storage, and Recovery) so
-    first-paint navigation between visible shell tabs stays warm and does not
-    depend on a cold dynamic import after the user clicks. New supported
-    platform families or first-class aggregate workspaces must extend that
-    registry rather than skipping the preload hot path; presentation-only or
-    retired routes must not be registered. Preload entries may warm route
-    modules, but they must not trigger additional unfiltered resource fetches,
-    metrics-history fan-out, recovery-history fan-out, storage scans, or
-    provider scans before the destination page owns its normal data query. The
-    preload order follows the provider-first shell order as a hot-path hint:
-    Proxmox remains ahead of Agents when both surfaces are available, while
-    Agents stays in the preload set so agent-only estates still get a warm
-    first destination; aggregate workspace entries are addressable for
-    hover/click warming without becoming generic app-bootstrap data work.
+    Platform-first top-level pages must remain in the app-shell route preload
+    registry. `frontend-modern/src/routing/routePreload.ts` carries a
+    `ROUTE_PRELOADERS` entry per supported platform (Agents, Proxmox plus the
+    Docker, Kubernetes, TrueNAS, and vSphere families) so first-paint
+    navigation between visible shell tabs stays warm and does not depend on a
+    cold dynamic import after the user clicks. New supported platform families
+    must extend that registry rather than skipping the preload hot path;
+    presentation-only or retired routes, including the top-level Workloads,
+    Storage, and Recovery aggregate routes, must not be registered. Preload
+    entries may warm route modules, but they must not trigger additional
+    unfiltered resource fetches, metrics-history fan-out, recovery-history
+    fan-out, storage scans, or provider scans before the destination page owns
+    its normal data query. The preload order follows the provider-first shell
+    order as a hot-path hint: Proxmox remains ahead of Agents when both
+    surfaces are available, while Agents stays in the preload set so
+    agent-only estates still get a warm first destination.
     The authenticated app shell must not separately prewarm retired
     Infrastructure or Workloads chart caches as a generic side effect; those
     chart fetches belong to the route that renders the chart surface or to the
@@ -1121,8 +1119,8 @@ runtime strings, but they must not inherit Docker-only update affordances or
 agent-only Discovery tabs on the Workloads row path unless the unified
 resource contract explicitly supplies discovery ownership.
 That same row-and-selection boundary also requires canonical app-container
-identity to stay intact on the workload surface. `/workloads` rows, deep links,
-drawer selection, anomaly correlation, and route-owned filters must key on the
+identity to stay intact on the workload surface. Workload rows, deep links,
+drawer selection, anomaly correlation, and route-state filters must key on the
 unified resource ID such as `app-container:truenas-main:nextcloud`, while
 Docker-native runtime IDs stay in a separate action-only field for Docker
 controls like image updates. Performance work must not collapse API-backed
@@ -1130,9 +1128,9 @@ platforms back onto runtime-native container IDs or derive fake node scopes
 from typed canonical resource IDs.
 That same summary hot path must also keep workload hover identity canonical
 across provider-backed history. Row hover and focus plus top-card isolation on
-`/workloads` must resolve against the same canonical workload ID even when the
-backing history is stored under a provider metrics target, so provider-backed
-VM rows do not silently drop out of summary emphasis.
+workload surfaces must resolve against the same canonical workload ID even
+when the backing history is stored under a provider metrics target, so
+provider-backed VM rows do not silently drop out of summary emphasis.
 The shared infrastructure table hot path now also treats operator-facing
 resource identity as a protected boundary: sorting, searching, summary-series
 matching, and row titles on the infrastructure page must use the canonical

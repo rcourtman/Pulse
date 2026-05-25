@@ -9,13 +9,13 @@ describe('navigation routing helpers', () => {
     expect(getActiveTabForPath('/agents/overview')).toBe('agents');
     expect(getActiveTabForPath('/proxmox')).toBe('proxmox');
     expect(getActiveTabForPath('/proxmox/storage')).toBe('proxmox');
-    // Infrastructure and Ceph are not standalone tabs. The aggregate
-    // Workloads, Storage, and Recovery workspaces remain first-class tabs.
+    // Infrastructure, Ceph, and aggregate workspace URLs are not standalone
+    // tabs. Platform/runtime pages own those workflows.
     expect(getActiveTabForPath('/infrastructure')).toBeNull();
-    expect(getActiveTabForPath('/workloads?type=pod')).toBe('workloads');
-    expect(getActiveTabForPath('/storage')).toBe('storage');
+    expect(getActiveTabForPath('/workloads?type=pod')).toBeNull();
+    expect(getActiveTabForPath('/storage')).toBeNull();
     expect(getActiveTabForPath('/ceph')).toBeNull();
-    expect(getActiveTabForPath('/recovery')).toBe('recovery');
+    expect(getActiveTabForPath('/recovery')).toBeNull();
     expect(getActiveTabForPath('/alerts/open')).toBe('alerts');
     expect(getActiveTabForPath('/patrol')).toBe('ai');
     expect(getActiveTabForPath('/ai')).toBe('ai');

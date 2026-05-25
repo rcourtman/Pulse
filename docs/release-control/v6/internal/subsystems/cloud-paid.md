@@ -510,10 +510,10 @@ or other self-hosted uncapped continuity plans.
     `state.resources`. Admitted-only, presentation-only, unsupported, or
     absent platform families must not render as disabled placeholders in the
     paid or hosted app shell. Infrastructure is not an equal primary tab in
-    that list. Workloads, Storage, and Recovery are explicit aggregate
-    workspace tabs, while their component surfaces also remain reusable inside
-    platform pages via embedded `tableOnly` surfaces. Each platform page must
-    remain chrome-only:
+    that list. Workloads, Storage, and Recovery are not standalone aggregate
+    workspace tabs; their component surfaces remain reusable inside platform
+    pages via embedded `tableOnly` surfaces. Each platform page must remain
+    chrome-only:
     routing plus sub-tab navigation that embeds the canonical
     `WorkloadsSurface`, `StorageSurface`, `RecoverySurface`, or
     `UnifiedResourceTable` in `embedded tableOnly` mode with a forced

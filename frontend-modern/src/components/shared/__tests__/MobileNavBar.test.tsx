@@ -14,9 +14,6 @@ window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
 
 const AgentsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>AG</span>;
 const ProxmoxIcon: Component<{ class?: string }> = (props) => <span class={props.class}>PX</span>;
-const WorkloadsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>WO</span>;
-const StorageIcon: Component<{ class?: string }> = (props) => <span class={props.class}>ST</span>;
-const RecoveryIcon: Component<{ class?: string }> = (props) => <span class={props.class}>RC</span>;
 const AlertsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>AL</span>;
 const SettingsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>SE</span>;
 const PatrolIcon: Component<{ class?: string }> = (props) => (
@@ -49,9 +46,9 @@ describe('MobileNavBar', () => {
     expect(mobileNavBarModelSource).toContain("'kubernetes'");
     expect(mobileNavBarModelSource).toContain("'truenas'");
     expect(mobileNavBarModelSource).toContain("'vmware'");
-    expect(mobileNavBarModelSource).toContain("'workloads'");
-    expect(mobileNavBarModelSource).toContain("'storage'");
-    expect(mobileNavBarModelSource).toContain("'recovery'");
+    expect(mobileNavBarModelSource).not.toContain("'workloads'");
+    expect(mobileNavBarModelSource).not.toContain("'storage'");
+    expect(mobileNavBarModelSource).not.toContain("'recovery'");
     expect(mobileNavBarModelSource).not.toContain("'infrastructure'");
   });
 
@@ -84,20 +81,20 @@ describe('MobileNavBar', () => {
     expect(within(navList).queryByRole('button', { name: 'Pulse Patrol Patrol' })).toBeNull();
   });
 
-  it('allows inactive workspace tabs to render without an active mobile tab', () => {
+  it('allows inactive platform tabs to render without an active mobile tab', () => {
     const { container } = render(() => (
       <MobileNavBar
         activeTab={() => null}
         primaryTabs={() => [
           {
-            id: 'workloads',
-            label: 'Workloads',
-            route: '/workloads',
-            settingsRoute: '/settings',
-            tooltip: 'Workloads',
+            id: 'agents',
+            label: 'Agents',
+            route: '/agents/overview',
+            settingsRoute: '/settings/infrastructure',
+            tooltip: 'Agents',
             enabled: true,
             live: true,
-            icon: WorkloadsIcon,
+            icon: AgentsIcon,
             alwaysShow: true,
           },
         ]}
@@ -132,7 +129,7 @@ describe('MobileNavBar', () => {
 
     const { container } = render(() => (
       <MobileNavBar
-        activeTab={() => 'workloads'}
+        activeTab={() => 'proxmox'}
         primaryTabs={() => [
           {
             id: 'agents',
@@ -154,39 +151,6 @@ describe('MobileNavBar', () => {
             enabled: true,
             live: true,
             icon: ProxmoxIcon,
-            alwaysShow: true,
-          },
-          {
-            id: 'workloads',
-            label: 'Workloads',
-            route: '/workloads',
-            settingsRoute: '/settings',
-            tooltip: 'Workloads',
-            enabled: true,
-            live: true,
-            icon: WorkloadsIcon,
-            alwaysShow: true,
-          },
-          {
-            id: 'storage',
-            label: 'Storage',
-            route: '/storage',
-            settingsRoute: '/settings/storage',
-            tooltip: 'Storage',
-            enabled: true,
-            live: true,
-            icon: StorageIcon,
-            alwaysShow: true,
-          },
-          {
-            id: 'recovery',
-            label: 'Recovery',
-            route: '/recovery',
-            settingsRoute: '/settings/system-recovery',
-            tooltip: 'Recovery',
-            enabled: true,
-            live: true,
-            icon: RecoveryIcon,
             alwaysShow: true,
           },
         ]}
@@ -227,18 +191,15 @@ describe('MobileNavBar', () => {
     const buttons = container.querySelectorAll('button[data-tab-id]');
     expect(buttons[0]).toHaveAttribute('data-tab-id', 'proxmox');
     expect(buttons[1]).toHaveAttribute('data-tab-id', 'agents');
-    expect(buttons[2]).toHaveAttribute('data-tab-id', 'workloads');
-    expect(buttons[3]).toHaveAttribute('data-tab-id', 'storage');
-    expect(buttons[4]).toHaveAttribute('data-tab-id', 'recovery');
-    expect(buttons[5]).toHaveAttribute('data-tab-id', 'alerts');
-    expect(buttons[6]).toHaveAttribute('data-tab-id', 'settings');
+    expect(buttons[2]).toHaveAttribute('data-tab-id', 'alerts');
+    expect(buttons[3]).toHaveAttribute('data-tab-id', 'settings');
 
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('Pro')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTitle('Storage'));
-    expect(onPrimaryClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'storage' }));
+    fireEvent.click(screen.getByTitle('Agents'));
+    expect(onPrimaryClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'agents' }));
 
     fireEvent.click(screen.getByTitle('Alerts'));
     expect(onUtilityClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'alerts' }));

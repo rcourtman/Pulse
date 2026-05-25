@@ -312,12 +312,12 @@ describe('shared primitive guardrails', () => {
     expect(commandPaletteStateSource).toContain('createSignal');
     expect(commandPaletteStateSource).toContain('buildProxmoxPath');
     expect(commandPaletteStateSource).toContain('export function useCommandPaletteState');
-    // Infrastructure was retired when shell navigation moved to explicit
-    // platform and aggregate workspace destinations.
+    // Infrastructure and aggregate workspace URLs are not command-palette
+    // destinations; platform/runtime pages own those workflows.
     expect(commandPaletteStateSource).not.toContain('buildInfrastructurePath');
-    expect(commandPaletteStateSource).toContain('buildWorkloadsPath');
-    expect(commandPaletteStateSource).toContain('buildStoragePath');
-    expect(commandPaletteStateSource).toContain('buildRecoveryPath');
+    expect(commandPaletteStateSource).not.toContain('buildWorkloadsPath');
+    expect(commandPaletteStateSource).not.toContain('buildStoragePath');
+    expect(commandPaletteStateSource).not.toContain('buildRecoveryPath');
 
     expect(commandPaletteModelSource).toContain('buildCommandPaletteCommands');
     expect(commandPaletteModelSource).toContain('normalizeCommandPaletteQuery');

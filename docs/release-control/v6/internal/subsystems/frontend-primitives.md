@@ -461,14 +461,14 @@ not a replacement status card, CTA band, or page-local nested card.
    frontend primitives must not register `/cloud` or `/cloud/signup` as public
    product-runtime routes, because Cloud signup belongs to Pulse Account and
    the Cloud control plane rather than a local in-product trial page.
-   The former top-level `/infrastructure` operator route never shipped as a
-   stable v6 surface and must remain unregistered instead of being kept as a
-   compatibility redirect. `/workloads`, `/storage`, and `/recovery` are
-   explicit aggregate workspace routes owned by their product surfaces and the
-   authenticated shell; they must appear through the same navigation, command
-   palette, shortcut, route-preload, and active-tab owners as other first-class
-   destinations rather than lingering as hidden compatibility routes. `/ceph`
-   remains a thin redirect to the Proxmox-owned Ceph tab.
+   The former top-level `/infrastructure`, `/workloads`, `/storage`, and
+   `/recovery` operator routes never shipped as stable v6 surfaces and must
+   remain unregistered instead of being kept as compatibility redirects.
+   Workload, storage, and recovery workflows live inside the owning
+   platform/runtime pages and reusable component surfaces; they must not appear
+   in navigation, command palette, shortcut, route-preload, or active-tab
+   owners as standalone aggregate destinations. `/ceph` remains a thin
+   redirect to the Proxmox-owned Ceph tab.
    The same settings-shell boundary owns read-only landing posture: when the
    session presentation policy says the operator cannot manage setup, `/settings`
    and sidebar navigation must land on the canonical reporting/control surface
@@ -631,8 +631,9 @@ not a replacement status card, CTA band, or page-local nested card.
    make only their immediate control shell overflow-visible rather than
    forking local z-index or popover positioning rules.
    The shared navigation guide owns route-aware first focus: when it opens
-   from a top-level product route such as `/recovery`, the first highlighted
-   step should match that route instead of always restarting at Dashboard.
+   from a platform-owned product surface such as a recovery tab, the first
+   highlighted step should match that route instead of always restarting at
+   Dashboard.
 5. Keep shared infrastructure shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts` and `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source — via the unified aggregator through `frontend-modern/src/components/Settings/useConnectionsLedger.ts` — instead of creating provider-local summary fetches or VMware-only shell vocabulary. Phase 9 retired the old `PlatformConnectionsWorkspace` per-type shell; setup guidance should now use `Add infrastructure` plus source-strategy language for API-backed onboarding. The standalone connections-table presenter is retired; `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx` is the only landing-ledger presenter for configured infrastructure rows.
    The first-run setup wizard inherits that same source-strategy vocabulary:
    step labels and completion copy must frame the final setup step as choosing
@@ -1573,8 +1574,8 @@ panel and Patrol findings panel that consumed them now keep investigation
 in-place through their existing handoff buttons and inline actions. Future
 cross-surface drilldown chips must not reanimate the legacy helpers.
 
-Command palette and keyboard shortcuts moved to platform-first on 2026-05-16
-and aggregate-workspace ownership was clarified on 2026-05-25
+Command palette and keyboard shortcuts moved to platform-first on 2026-05-16,
+and top-level aggregate workspace routes were retired on 2026-05-25
 (`frontend-modern/src/components/shared/commandPaletteModel.ts`,
 `frontend-modern/src/components/shared/useCommandPaletteState.ts`,
 `frontend-modern/src/components/shared/KeyboardShortcutsModal.tsx`,
@@ -1582,18 +1583,16 @@ and aggregate-workspace ownership was clarified on 2026-05-25
 `frontend-modern/src/routing/routePreload.ts`,
 `frontend-modern/src/routing/navigation.ts`). The legacy
 `nav-infrastructure` palette entry and `g i` chord remain retired with the
-unregistered Infrastructure route. `nav-workloads`, `nav-storage`, and
-`nav-recovery` are first-class aggregate workspace commands; Workloads and
-Storage own the `g w` / `g s` chord bindings, while Recovery is available
-through visible navigation and the command palette. Platform commands remain
-`nav-proxmox`, `nav-docker`, `nav-kubernetes`, `nav-truenas`, `nav-vmware`
-(chords `g p` / `g d` / `g k` / `g n` / `g v`) plus a dedicated
-`nav-kubernetes-workloads` entry that lands on `/kubernetes/workloads`.
-The route-module preload registry and `getActiveTabForPath` matcher must
-recognize the aggregate workspace routes as owned destinations. New palette
-commands and shortcut chords must flow through the same shell owners; do not
-reintroduce hidden platform families or the retired top-level Infrastructure
-entry by reanimating legacy paths.
+unregistered Infrastructure route. `nav-workloads`, `nav-storage`,
+`nav-recovery`, and the `g w` / `g s` aggregate chords are also retired rather
+than hidden as compatibility commands. Platform commands remain `nav-proxmox`,
+`nav-docker`, `nav-kubernetes`, `nav-truenas`, `nav-vmware` (chords `g p` /
+`g d` / `g k` / `g n` / `g v`) plus a dedicated `nav-kubernetes-workloads`
+entry that lands on `/kubernetes/workloads`. The route-module preload registry
+and `getActiveTabForPath` matcher must not recognize aggregate workspace URLs
+as owned shell destinations. New palette commands and shortcut chords must
+flow through the same shell owners; do not reintroduce hidden platform
+families or retired top-level aggregate routes by reanimating legacy paths.
 
 The shared table chrome now allows `TableCardHeader` to expose a right-aligned
 action slot, currently used by the Workloads/Proxmox metric display control.

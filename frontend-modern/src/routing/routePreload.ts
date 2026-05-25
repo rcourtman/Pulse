@@ -6,11 +6,8 @@ import {
   KUBERNETES_PATH,
   PATROL_PATH,
   PROXMOX_PATH,
-  RECOVERY_PATH,
-  STORAGE_PATH,
   TRUENAS_PATH,
   VMWARE_PATH,
-  WORKLOADS_PATH,
 } from '@/routing/resourceLinks';
 
 type RoutePreloader = {
@@ -72,21 +69,6 @@ const ROUTE_PRELOADERS: readonly RoutePreloader[] = [
     id: 'agents',
     matches: (route) => route === AGENTS_PATH || route.startsWith(`${AGENTS_PATH}/`),
     preload: () => import('@/pages/Agents').then(() => undefined),
-  },
-  {
-    id: 'workloads',
-    matches: (route) => route === WORKLOADS_PATH || route.startsWith(`${WORKLOADS_PATH}/`),
-    preload: () => import('@/components/Workloads/WorkloadsSurface').then(() => undefined),
-  },
-  {
-    id: 'storage',
-    matches: (route) => route === STORAGE_PATH || route.startsWith(`${STORAGE_PATH}/`),
-    preload: () => import('@/components/Storage/Storage').then(() => undefined),
-  },
-  {
-    id: 'recovery',
-    matches: (route) => route === RECOVERY_PATH || route.startsWith(`${RECOVERY_PATH}/`),
-    preload: () => import('@/components/Recovery/Recovery').then(() => undefined),
   },
   {
     id: 'alerts',
