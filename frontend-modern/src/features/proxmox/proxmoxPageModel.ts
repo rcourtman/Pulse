@@ -373,12 +373,11 @@ export function buildProxmoxPageModel(resources: Resource[]): ProxmoxPageModel {
 
 export function buildVisibleProxmoxTabSpecs(model: ProxmoxPageModel): ProxmoxTabSpec[] {
   const visible = new Set<ProxmoxPageTabId>(['overview']);
-  const hasPveEstate = model.pveNodes.length > 0 || model.guests.length > 0;
 
   if (model.storage.length > 0 || model.physicalDisks.length > 0) {
     visible.add('storage');
   }
-  if (hasPveEstate || model.replicationChanges.length > 0) {
+  if (model.replicationChanges.length > 0) {
     visible.add('replication');
   }
   if (model.resources.some(hasBackupSignal) || model.pbs.length > 0) {

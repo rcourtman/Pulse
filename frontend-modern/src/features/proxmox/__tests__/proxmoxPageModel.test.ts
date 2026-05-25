@@ -130,7 +130,7 @@ describe('proxmoxPageModel', () => {
     ]);
   });
 
-  it('keeps Replication available for a PVE estate without recent replication events', () => {
+  it('hides Replication for a PVE estate without replication signals', () => {
     const model = buildProxmoxPageModel([
       makeResource({
         id: 'pve-node-1',
@@ -148,10 +148,7 @@ describe('proxmoxPageModel', () => {
       }),
     ]);
 
-    expect(buildVisibleProxmoxTabSpecs(model).map((tab) => tab.id)).toEqual([
-      'overview',
-      'replication',
-    ]);
+    expect(buildVisibleProxmoxTabSpecs(model).map((tab) => tab.id)).toEqual(['overview']);
   });
 
   it('resolves Proxmox suite scope from canonical platform hints', () => {
