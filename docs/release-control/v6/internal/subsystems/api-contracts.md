@@ -99,6 +99,8 @@ product API routes free of maintainer commercial analytics.
 63. `internal/api/availability_handlers.go`
 64. `frontend-modern/src/api/availabilityTargets.ts`
 65. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx`
+65a. `frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx`
+65b. `frontend-modern/src/components/Settings/availabilitySettingsModel.ts`
 66. `pkg/aicontracts/investigation.go`
 67. `internal/api/ai_intelligence_handlers.go`
 68. `frontend-modern/src/api/ai.ts`
@@ -200,14 +202,17 @@ output or bypass the normal non-admin redaction path.
     `upgradeMetrics`, `conversionEvents`, or infrastructure onboarding metrics
     wrappers.
     Agentless availability targets and structured `/api/connections` fleet posture share this same settings/API boundary as
-    platform-managed infrastructure, not host-install lifecycle or prose-derived row labels.
+    monitoring-managed endpoint configuration, not host-install lifecycle or prose-derived row labels.
     `internal/api/availability_handlers.go` owns CRUD and test payloads for
     `/api/availability-targets`, while
     `frontend-modern/src/api/availabilityTargets.ts` and
-    `AvailabilityTargetSlot.tsx` own the browser transport shape. Connections
-    ledger rows with type `availability` must route pause, remove, and test
+    `frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx`,
+    `frontend-modern/src/components/Settings/availabilitySettingsModel.ts`,
+    and `AvailabilityTargetSlot.tsx` own the browser transport shape.
+    Connections ledger rows with type
+    `availability` must route management handoffs, pause, remove, and test
     actions to those availability-target endpoints and must not reuse node,
-    SSH, or Pulse Agent setup payloads.
+    SSH, platform API, or Pulse Agent setup payloads.
     Mock mode must expose authored availability targets through those same
     list, saved-test, and connections-ledger payloads so demo endpoints exercise
     the canonical API contract rather than a frontend-only fixture.
@@ -4585,12 +4590,14 @@ alongside `proxmox`, `pbs`, and `pmg`, and the settings reporting/install
 surfaces must keep those platform-managed rows navigable back to platform
 connections instead of presenting host uninstall or stop-monitoring actions
 that only apply to `agent`, `docker`, and `kubernetes`.
-Agentless availability targets extend that platform-managed distinction. The
+Agentless availability targets extend the managed-source distinction without
+living in the platform-source settings home. The
 API contract for `availability` rows is an address/protocol probe target plus
 runtime status, projected through the connections ledger and unified resources
 as a `network-endpoint`. Browser callers may test unsaved or saved targets, but
 the persisted target list remains owned by `/api/availability-targets` and
-must not be reconstructed from resource snapshots or monitored-system counts.
+must be managed from `/settings/monitoring/availability`, not reconstructed
+from resource snapshots or monitored-system counts.
 Mock availability fixtures must still behave like saved targets: `/api/connections`
 reports them as availability rows, `/api/availability-targets` lists them with
 probe status, and saved-test calls return the synthetic probe result instead of

@@ -2,14 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { deriveTabFromPath, settingsTabPath, type SettingsTab } from '../settingsNavigationModel';
 import { getTabLockReason, isTabLocked } from '../settingsFeatureGates';
 import { getSettingsNavItem } from '../settingsNavCatalog';
-import {
-  shouldBlockSettingsRouteItem,
-  shouldHideSettingsNavItem,
-} from '../settingsNavVisibility';
+import { shouldBlockSettingsRouteItem, shouldHideSettingsNavItem } from '../settingsNavVisibility';
 import { getSettingsTabSaveBehavior } from '../settingsTabSaveBehavior';
 
 const canonicalTabPaths = {
   'infrastructure-systems': '/settings/infrastructure',
+  'monitoring-availability': '/settings/monitoring/availability',
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',
   'system-updates': '/settings/system-updates',

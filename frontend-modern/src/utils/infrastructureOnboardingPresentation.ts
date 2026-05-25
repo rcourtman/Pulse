@@ -43,8 +43,7 @@ export type InfrastructureSourcePickerItemId =
   | 'pmg'
   | 'linux-host'
   | 'docker'
-  | 'kubernetes'
-  | 'availability';
+  | 'kubernetes';
 
 export type InfrastructureSourcePickerRouteStep = InfrastructureSourcePickerItemId;
 
@@ -343,7 +342,6 @@ const SOURCE_PICKER_PRODUCT_ITEMS: Partial<
   truenas: 'truenas',
   pbs: 'pbs',
   pmg: 'pmg',
-  availability: 'availability',
 };
 
 const governanceStateForType = (
@@ -365,7 +363,6 @@ const API_PRODUCT_ORDER: InfrastructureOnboardingConnectionType[] = [
   'pve',
   'pbs',
   'pmg',
-  'availability',
 ];
 
 const SOURCE_MANAGER_PRODUCT_ORDER: InfrastructureOnboardingConnectionType[] = [
@@ -430,9 +427,6 @@ const SOURCE_PICKER_ITEM_ORDER: InfrastructureSourcePickerItemId[] = [
   'docker',
   'kubernetes',
   'linux-host',
-  // Endpoint probe last; it is a fallback for hosts that expose neither an
-  // API nor an agent.
-  'availability',
 ];
 
 export const getInfrastructureOnboardingProductPresentation = (
@@ -558,7 +552,7 @@ export const getInfrastructureEmptyStateSummary = (): string =>
   'Choose an infrastructure source to start monitoring your environment.';
 
 export const getInfrastructureEmptyStateDetail = (): string =>
-  'Supported source types include TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, network endpoints, and standalone hosts through Pulse Agent. VMware vCenter is available as a preview platform pending live support proof. Docker and Kubernetes are discovered from supported agent hosts.';
+  'Supported source types include TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, and standalone hosts through Pulse Agent. VMware vCenter is available as a preview platform pending live support proof. Docker and Kubernetes are discovered from supported agent hosts.';
 
 export const getInfrastructureCoverageCompleteActionPresentation =
   (): InfrastructureCoverageCompleteActionPresentation => ({

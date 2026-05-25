@@ -11,6 +11,10 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     title: 'Infrastructure',
     description: 'Add, discover, and verify the infrastructure Pulse monitors.',
   },
+  'monitoring-availability': {
+    title: 'Availability checks',
+    description: 'Monitor endpoint-only devices and services with ping, TCP, and HTTP probes.',
+  },
   'system-general': {
     title: 'General',
     description: 'Manage appearance, layout, and default monitoring cadence.',

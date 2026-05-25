@@ -36,6 +36,18 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     ],
   },
   {
+    id: 'monitoring',
+    label: 'Monitoring',
+    items: [
+      {
+        id: 'monitoring-availability',
+        label: 'Availability checks',
+        icon: Activity,
+        iconProps: { strokeWidth: 2 },
+      },
+    ],
+  },
+  {
     id: 'organization',
     label: 'Organization',
     items: [

@@ -3,12 +3,21 @@ import type { SecurityStatusSettingsCapabilities } from '@/types/config';
 import { normalizeSourcePlatformKey } from '@/utils/sourcePlatforms';
 import type { PlatformType } from '@/types/resource';
 import {
+  deriveAddStepFromSearch,
+  INFRASTRUCTURE_ADD_QUERY_PARAM,
+} from './infrastructureWorkspaceModel';
+import {
+  AVAILABILITY_ADD_QUERY_PARAM,
+  shouldOpenAvailabilityTargetAddDialog,
+} from './availabilitySettingsModel';
+import {
   SELF_HOSTED_PRO_BILLING_PLAN_ROUTE,
   SELF_HOSTED_PRO_BILLING_ROUTE,
 } from '@/utils/pricingHandoff';
 
 export type SettingsTab =
   | 'infrastructure-systems'
+  | 'monitoring-availability'
   | 'system-general'
   | 'system-network'
   | 'system-updates'
@@ -44,6 +53,7 @@ export type ProxmoxPlatformType = Extract<
 
 export type SettingsNavGroupId =
   | 'infrastructure'
+  | 'monitoring'
   | 'organization'
   | 'system'
   | 'support'
@@ -86,6 +96,8 @@ export type SettingsHeaderMetaMap = Record<SettingsTab, SettingsHeaderMeta>;
 // Default landing tab for /settings when no deep-link tab is provided.
 export const DEFAULT_SETTINGS_TAB: SettingsTab = 'infrastructure-systems';
 const INFRASTRUCTURE_SYSTEMS_PREFIX = '/settings/infrastructure';
+const MONITORING_PREFIX = '/settings/monitoring';
+const MONITORING_AVAILABILITY_PREFIX = `${MONITORING_PREFIX}/availability`;
 const RETIRED_SETTINGS_WORKLOADS_PREFIX = '/settings/workloads';
 const RETIRED_SETTINGS_OPERATIONS_PREFIX = '/settings/operations';
 const RETIRED_SETTINGS_INTEGRATIONS_API_PREFIX = '/settings/integrations/api';
@@ -156,6 +168,9 @@ export function resolveCanonicalSettingsPath(path: string): string | null {
   if (normalizedPath === INFRASTRUCTURE_SYSTEMS_PREFIX) {
     return settingsTabPath(DEFAULT_SETTINGS_TAB);
   }
+  if (normalizedPath === MONITORING_PREFIX) {
+    return MONITORING_AVAILABILITY_PREFIX;
+  }
   if (normalizedPath === SUPPORT_PREFIX) {
     return SUPPORT_DIAGNOSTICS_PREFIX;
   }
@@ -171,6 +186,9 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath === '/settings') return DEFAULT_SETTINGS_TAB;
   if (canonicalPath === INFRASTRUCTURE_SYSTEMS_PREFIX) {
     return 'infrastructure-systems';
+  }
+  if (canonicalPath.startsWith(MONITORING_AVAILABILITY_PREFIX)) {
+    return 'monitoring-availability';
   }
 
   if (canonicalPath.includes('/settings/system-general')) return 'system-general';
@@ -239,6 +257,9 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
   switch (tab) {
     case 'infrastructure':
       return 'infrastructure-systems';
+    case 'availability':
+    case 'monitoring-availability':
+      return 'monitoring-availability';
     case 'system-recovery':
       return 'system-recovery';
     case 'system-updates':
@@ -301,6 +322,8 @@ export function settingsTabPath(tab: SettingsTab): string {
   switch (tab) {
     case 'infrastructure-systems':
       return INFRASTRUCTURE_SYSTEMS_PREFIX;
+    case 'monitoring-availability':
+      return MONITORING_AVAILABILITY_PREFIX;
     case 'system-recovery':
       return '/settings/system-recovery';
     case 'organization-overview':
@@ -332,6 +355,7 @@ export function settingsTabPath(tab: SettingsTab): string {
 
 const ROUTEABLE_SETTINGS_PATHS = new Set<string>([
   settingsTabPath('infrastructure-systems'),
+  settingsTabPath('monitoring-availability'),
   settingsTabPath('system-general'),
   settingsTabPath('system-network'),
   settingsTabPath('system-updates'),
@@ -366,6 +390,30 @@ export function isRouteableSettingsPath(path: string): boolean {
 
   const canonicalPath = resolveCanonicalSettingsPath(normalizedPath);
   return canonicalPath ? ROUTEABLE_SETTINGS_PATHS.has(canonicalPath) : false;
+}
+
+export function isRouteableSettingsLocation(path: string, search = ''): boolean {
+  if (!isRouteableSettingsPath(path)) return false;
+
+  const normalizedPath = normalizeSettingsPath(path);
+  const params = new URLSearchParams(search);
+  if (
+    normalizedPath === INFRASTRUCTURE_SYSTEMS_PREFIX &&
+    params.has(INFRASTRUCTURE_ADD_QUERY_PARAM) &&
+    deriveAddStepFromSearch(search) === null
+  ) {
+    return false;
+  }
+
+  if (
+    normalizedPath === MONITORING_AVAILABILITY_PREFIX &&
+    params.has(AVAILABILITY_ADD_QUERY_PARAM) &&
+    !shouldOpenAvailabilityTargetAddDialog(normalizedPath, search)
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 export function isInfrastructureSettingsTab(tab: SettingsTab): tab is InfrastructureSettingsTab {

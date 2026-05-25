@@ -51,6 +51,9 @@ export const createSettingsPanelRegistry = (
     component: SETTINGS_PANEL_REGISTRY_LOADERS.InfrastructureWorkspace,
     getProps: context.getInfrastructurePanelProps,
   },
+  'monitoring-availability': {
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.AvailabilitySettingsPanel,
+  },
   'system-general': {
     component: context.systemGeneralPanel,
   },

@@ -35,6 +35,8 @@ import infrastructureInstallerSectionSource from '../InfrastructureInstallerSect
 import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
 import infrastructureSourceManagerSource from '../InfrastructureSourceManager.tsx?raw';
 import infrastructureSourcePickerSource from '../InfrastructureSourcePicker.tsx?raw';
+import availabilitySettingsPanelSource from '../AvailabilitySettingsPanel.tsx?raw';
+import availabilitySettingsModelSource from '../availabilitySettingsModel.ts?raw';
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
 import useConnectionsLedgerSource from '../useConnectionsLedger.ts?raw';
 import agentProfileSettingsSource from '../agentProfileSettings.ts?raw';
@@ -100,13 +102,19 @@ describe('settings architecture guardrails', () => {
     expect(settingsHeaderMetaSource).toContain(
       'Add, discover, and verify the infrastructure Pulse monitors.',
     );
+    expect(settingsHeaderMetaSource).toContain("'monitoring-availability': {");
+    expect(settingsHeaderMetaSource).toContain(
+      'Monitor endpoint-only devices and services with ping, TCP, and HTTP probes.',
+    );
     expect(settingsHeaderMetaSource).toContain("'organization-access': {");
     expect(settingsHeaderMetaSource).toContain(
       'Manage organization invitations, member roles, and ownership transfers.',
     );
 
     expect(settingsSource).toContain("import NotFound from '@/pages/NotFound';");
-    expect(settingsSource).toContain('isRouteableSettingsPath(location.pathname)');
+    expect(settingsSource).toContain(
+      'isRouteableSettingsLocation(location.pathname, location.search)',
+    );
     expect(settingsNavigationHookSource).not.toContain('deriveAddStepFromLegacyPath');
     expect(settingsNavigationHookSource).not.toContain('buildInfrastructureOnboardingPath');
     expect(settingsNavigationHookSource).toContain(
@@ -120,9 +128,16 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceModelSource).toContain(
       'export function buildInfrastructureOnboardingPath(',
     );
+    expect(infrastructureWorkspaceModelSource).not.toContain("| 'availability'");
     expect(infrastructureWorkspaceModelSource).not.toContain('deriveAddStepFromLegacyPath');
     expect(infrastructureWorkspaceModelSource).toContain(
       'export function deriveAddStepFromSearch(',
+    );
+    expect(availabilitySettingsModelSource).toContain(
+      "export const AVAILABILITY_SETTINGS_PATH = '/settings/monitoring/availability';",
+    );
+    expect(availabilitySettingsModelSource).toContain(
+      'export function buildAvailabilityTargetAddPath()',
     );
   });
 
@@ -562,6 +577,7 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain('NodeCredentialSlot');
     expect(infrastructureWorkspaceSource).toContain('TrueNASCredentialSlot');
     expect(infrastructureWorkspaceSource).toContain('VMwareCredentialSlot');
+    expect(infrastructureWorkspaceSource).not.toContain('AvailabilityTargetSlot');
     expect(infrastructureWorkspaceSource).toContain(
       ": (type) => openAddFlow(type === 'agent' ? 'agent' : (type as ManagedAddTypeStep))",
     );
@@ -630,6 +646,7 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).not.toContain('Detect address');
     expect(infrastructureSourceManagerSource).not.toContain("'Install agent'");
     expect(infrastructureSourceManagerSource).toContain('Add infrastructure');
+    expect(infrastructureSourceManagerSource).not.toContain('Monitor endpoint');
     expect(infrastructureSourceManagerSource).toContain('getInfrastructureEmptyStateSummary');
     expect(infrastructureSourceManagerSource).toContain('Setup status');
     expect(infrastructureSourceManagerSource).toContain('Systems');
@@ -644,9 +661,14 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourcePickerSource).toContain('getInfrastructureSourcePickerItems');
     expect(infrastructureSourcePickerSource).toContain('itemMatchesQuery');
     expect(infrastructureSourcePickerSource).toContain('catalogDescription');
+    expect(infrastructureSourcePickerSource).not.toContain('Monitor network endpoint');
     expect(infrastructureSourcePickerSource).not.toContain(
       'getInfrastructureSourceStrategyPresentation',
     );
+    expect(availabilitySettingsPanelSource).toContain('AvailabilityTargetSlot');
+    expect(availabilitySettingsPanelSource).toContain('buildAvailabilityTargetAddPath');
+    expect(availabilitySettingsPanelSource).toContain('Availability checks');
+    expect(availabilitySettingsPanelSource).toContain('MQTT broker');
     expect(settingsHeaderMetaSource).toContain(
       "description: 'Configure the public URL, CORS, embedding, and webhook network boundaries.'",
     );

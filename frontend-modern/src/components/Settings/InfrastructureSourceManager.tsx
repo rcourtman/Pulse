@@ -8,7 +8,7 @@ import {
   type Accessor,
   type Component,
 } from 'solid-js';
-import { Activity, Cpu, Plus, RotateCw, Search, SlidersHorizontal } from 'lucide-solid';
+import { Cpu, Plus, RotateCw, Search, SlidersHorizontal } from 'lucide-solid';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import {
   Table,
@@ -201,6 +201,9 @@ const agentHostProfileGroupLabel = (row: InfrastructureSystemRow): string | null
 export const InfrastructureSourceManager: Component<InfrastructureSourceManagerProps> = (props) => {
   let layoutContainerRef: HTMLDivElement | undefined;
   const products = createMemo(() => getInfrastructureSourceManagerProducts());
+  const infrastructureRows = createMemo(() =>
+    props.rows().filter((row) => row.ownerType !== 'availability'),
+  );
 
   const groupedConfiguredRows = createMemo(() => {
     const next = new Map<InfrastructureOnboardingConnectionType, InfrastructureSystemRow[]>();
@@ -208,7 +211,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       next.set(product.type, []);
     }
 
-    for (const row of props.rows()) {
+    for (const row of infrastructureRows()) {
       const productRows = next.get(row.ownerType as InfrastructureOnboardingConnectionType);
       if (!productRows) continue;
       productRows.push(row);
@@ -348,7 +351,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     props.onAddSource?.('agent');
   };
 
-  const hasAnyConfigured = createMemo(() => props.rows().length > 0);
+  const hasAnyConfigured = createMemo(() => infrastructureRows().length > 0);
   const hasAnyDiscovered = createMemo(() => props.discoveredNodes().length > 0);
 
   const rowInteractive = (row: InfrastructureSystemRow): boolean =>
@@ -358,28 +361,25 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   const lastDiscoveryResultText = createMemo(() =>
     formatRelativeTimestamp(props.discoveryScanStatus().lastResultAt),
   );
-  const connectedSystemCount = createMemo(() => props.rows().length);
+  const connectedSystemCount = createMemo(() => infrastructureRows().length);
   const discoveredCandidateCount = createMemo(() => props.discoveredNodes().length);
-  const availabilityEndpointCount = createMemo(
-    () => props.rows().filter((row) => row.ownerType === 'availability').length,
-  );
   // Scoped to Proxmox VE: PBS/PMG/TrueNAS/etc. are fully covered by their
   // own API and don't benefit from a paired agent in the way PVE hosts do
   // (where the agent adds temps, SMART, host identity). Counting them here
   // would create "Needs agent" pressure for systems that need nothing.
   const apiOnlySystems = createMemo(() =>
-    props
-      .rows()
-      .filter(
-        (row) => row.ownerType === 'pve' && rowHasApiCoverage(row) && !rowHasAgentCoverage(row),
-      ),
+    infrastructureRows().filter(
+      (row) => row.ownerType === 'pve' && rowHasApiCoverage(row) && !rowHasAgentCoverage(row),
+    ),
   );
   const apiOnlySystemCount = createMemo(() => apiOnlySystems().length);
   // Names list keeps the descriptive 'Install agents' hint actionable: when
   // there are 1 or 2 systems missing an agent, surface their names directly
   // so the user knows exactly which boxes the install applies to.
   const apiOnlySystemNamesText = createMemo(() => {
-    const names = apiOnlySystems().map((row) => row.name).filter(Boolean);
+    const names = apiOnlySystems()
+      .map((row) => row.name)
+      .filter(Boolean);
     if (names.length === 0) return null;
     if (names.length === 1) return names[0];
     if (names.length === 2) return `${names[0]} and ${names[1]}`;
@@ -390,14 +390,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   // problem (or any member's) is non-empty. Going via signal predicates
   // duplicated the rollup logic and could disagree with what was rendered.
   const liveFleetSystemCount = createMemo(
-    () => props.rows().filter((row) => row.statusLabel === 'Active').length,
+    () => infrastructureRows().filter((row) => row.statusLabel === 'Active').length,
   );
   const fleetAttentionSystemCount = createMemo(
     () =>
-      props
-        .rows()
-        .filter((row) => Boolean(row.problem) || row.members.some((member) => member.problem))
-        .length,
+      infrastructureRows().filter(
+        (row) => Boolean(row.problem) || row.members.some((member) => member.problem),
+      ).length,
   );
   const discoveryReadinessLabel = createMemo(() => {
     if (props.discoveryScanStatus().scanning) return 'Scanning now';
@@ -421,7 +420,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       return {
         kind: 'add',
         label: 'Add infrastructure',
-        detail: 'Add a platform, host, NAS, cluster, or endpoint to start monitoring.',
+        detail: 'Add a platform, host, NAS, or cluster to start monitoring.',
         onClick: props.onAddInfrastructure,
       };
     }
@@ -460,14 +459,6 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       label: 'Systems',
       value: formatCount(connectedSystemCount(), 'system'),
     },
-    ...(availabilityEndpointCount() > 0
-      ? [
-          {
-            label: 'Endpoints',
-            value: formatCount(availabilityEndpointCount(), 'endpoint'),
-          },
-        ]
-      : []),
     {
       label: 'Live',
       value: formatCount(liveFleetSystemCount(), 'system'),
@@ -525,14 +516,6 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   });
   const useCardLayout = createMemo(() => layoutWidth() <= CARD_LAYOUT_MAX_WIDTH_PX);
 
-  const handleMonitorEndpointShortcut = () => {
-    if (props.onAddSourceStep) {
-      props.onAddSourceStep('availability');
-      return;
-    }
-    props.onAddSource?.('availability');
-  };
-
   const headerActions = () => (
     <Show when={!props.readOnly}>
       <div class="border-b border-border bg-surface px-4 py-3">
@@ -547,18 +530,6 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
               Add infrastructure
             </button>
           </Show>
-          <Show when={props.onAddSourceStep || props.onAddSource}>
-            <button
-              type="button"
-              onClick={handleMonitorEndpointShortcut}
-              class={workspaceSecondaryButtonClass}
-              title="Monitor a device or service with ICMP, TCP, or HTTP availability checks."
-            >
-              <Activity class="h-4 w-4" />
-              Monitor endpoint
-            </button>
-          </Show>
-
           {/* Discovery actions stay utility-tier but must remain explicit:
               manual scans are an operator command, not an icon-hunt. */}
           <div class="ml-auto flex flex-wrap items-center gap-1">
@@ -630,7 +601,9 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
             {(metric, index) => (
               <div class="flex items-baseline gap-1.5">
                 <Show when={index() > 0}>
-                  <span aria-hidden="true" class="text-muted">·</span>
+                  <span aria-hidden="true" class="text-muted">
+                    ·
+                  </span>
                 </Show>
                 <dt class="text-[11px] font-medium uppercase tracking-[0.06em] text-muted">
                   {metric.label}
@@ -679,10 +652,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
   return (
     <div ref={layoutContainerRef} class="min-w-0">
-      <SettingsPanel
-        title="Connected systems"
-        noPadding
-      >
+      <SettingsPanel title="Connected systems" noPadding>
         {headerActions()}
         {setupSummaryBand()}
 
@@ -826,7 +796,11 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       <TableCell class="px-3 py-1 align-top">
                                         <Show
                                           when={row.coverageLabels.length > 0}
-                                          fallback={<span class="text-xs text-muted" aria-hidden="true">—</span>}
+                                          fallback={
+                                            <span class="text-xs text-muted" aria-hidden="true">
+                                              —
+                                            </span>
+                                          }
                                         >
                                           <div
                                             class="whitespace-normal break-words text-[12px] leading-4 text-muted"
@@ -899,7 +873,9 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                   row.ownerType === 'pve' &&
                                                   rowHasApiCoverage(row) &&
                                                   !rowHasAgentCoverage(row) &&
-                                                  Boolean(props.onAddSourceStep || props.onAddSource)
+                                                  Boolean(
+                                                    props.onAddSourceStep || props.onAddSource,
+                                                  )
                                                 }
                                               >
                                                 <button
@@ -988,7 +964,12 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                 <Show
                                                   when={member.coverageLabels.length > 0}
                                                   fallback={
-                                                    <span class="text-xs text-muted" aria-hidden="true">—</span>
+                                                    <span
+                                                      class="text-xs text-muted"
+                                                      aria-hidden="true"
+                                                    >
+                                                      —
+                                                    </span>
                                                   }
                                                 >
                                                   <div

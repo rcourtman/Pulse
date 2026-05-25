@@ -1,6 +1,9 @@
 import { lazy } from 'solid-js';
 
 export const SETTINGS_PANEL_REGISTRY_LOADERS = {
+  AvailabilitySettingsPanel: lazy(() =>
+    import('./AvailabilitySettingsPanel').then((m) => ({ default: m.AvailabilitySettingsPanel })),
+  ),
   APIAccessPanel: lazy(() =>
     import('./APIAccessPanel').then((m) => ({ default: m.APIAccessPanel })),
   ),

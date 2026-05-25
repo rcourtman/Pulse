@@ -17,7 +17,7 @@ import { useSettingsSystemPanels } from './useSettingsSystemPanels';
 import { useSystemSettingsState } from './useSystemSettingsState';
 import { useSettingsNavigation } from './useSettingsNavigation';
 import { getSettingsLoadingState } from '@/utils/settingsShellPresentation';
-import { isRouteableSettingsPath } from './settingsNavigationModel';
+import { isRouteableSettingsLocation } from './settingsNavigationModel';
 import NotFound from '@/pages/NotFound';
 
 import { getRuntimeLimit, loadRuntimeCapabilities } from '@/stores/license';
@@ -223,7 +223,9 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
 
 const Settings: Component<SettingsProps> = (props) => {
   const location = useLocation();
-  const isRouteableSettingsRoute = createMemo(() => isRouteableSettingsPath(location.pathname));
+  const isRouteableSettingsRoute = createMemo(() =>
+    isRouteableSettingsLocation(location.pathname, location.search),
+  );
 
   return (
     <Show when={isRouteableSettingsRoute()} fallback={<NotFound />}>

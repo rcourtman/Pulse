@@ -220,13 +220,16 @@ platform-connection lifecycle state. Once a TrueNAS or VMware setup form marks
 the connection disabled, lifecycle surfaces must treat a canonical zero-delta
 or removal-only preview as a valid save path instead of holding the dialog in
 an add-only posture.
-Agentless availability targets belong to the infrastructure source-management
-surface but are not host-agent lifecycle. The lifecycle UI may expose them from
-Add infrastructure, Manage, and the connections ledger, but it must keep their
-credential slot on the availability target API and must not ask for SSH, setup
-tokens, auto-registration, agent profiles, or install commands. Their managed
-rows are platform-connection-style rows whose lifecycle actions are pause,
-test, edit, and remove only.
+Agentless availability targets no longer belong to the infrastructure
+source-management surface. MQTT, HTTP/S, ping, and TCP checks are monitoring
+availability resources owned by the Settings Monitoring availability panel and
+its model, while infrastructure remains limited to platform API connections,
+agent-backed systems, discovery, and install lifecycle. Lifecycle UI may
+observe availability rows only through shared API/resource facts; it must not
+offer them from Add infrastructure, Manage, or the host connections ledger, and
+must not ask them for SSH, setup tokens, auto-registration, agent profiles, or
+install commands. Their managed actions remain availability-resource actions:
+pause, test, edit, and remove.
 The lifecycle-owned onboarding presentation helper must consume the governed
 platform support manifest for readiness stage, primary mode, canonical
 projections, and support-floor posture.
@@ -245,16 +248,18 @@ Unraid is presented as an agent install/profile path sourced from the manifest
 `agent_host_profiles` section, not as `PLATFORM_TYPE_KEYS` membership or a
 peer API-backed platform.
 The add-infrastructure picker must preserve that boundary while presenting a
-plain operator-facing system finder: users choose recognizable systems such as
-Unraid, TrueNAS, Proxmox, Docker, Kubernetes, or standalone hosts, and the
-helper maps those choices into API-backed, agent-backed, or availability-probe
-routes only after selection. The first picker surface must support aliases for
-common operator terms and must not make API/agent/probe taxonomy the primary
-choice model. Agent-backed typed routes must keep that context in the
-installer: Unraid, Docker, Kubernetes, and generic host choices may share the
-same unified agent installer, but their visible title, recommendation copy,
-preferred install profile, and first command section must match the selected
-system instead of falling back to an all-platform generic agent screen.
+plain operator-facing system finder: users choose recognizable infrastructure
+systems such as Unraid, TrueNAS, Proxmox, Docker, Kubernetes, or standalone
+hosts, and the helper maps those choices into API-backed or agent-backed routes
+only after selection. The first picker surface must support aliases for common
+operator terms and must not make API/agent taxonomy the primary choice model.
+Agentless MQTT, HTTP/S, ping, and TCP probes are not infrastructure choices;
+their add flow belongs to the Settings Monitoring availability owner.
+Agent-backed typed routes must keep that context in the installer: Unraid,
+Docker, Kubernetes, and generic host choices may share the same unified agent
+installer, but their visible title, recommendation copy, preferred install
+profile, and first command section must match the selected system instead of
+falling back to an all-platform generic agent screen.
 The generic host installer route is `?add=linux-host`: setup completion,
 Proxmox "Install agent" shortcuts, detect-flow agent handoffs, and first-run
 test helpers must target that typed route so the operator sees the standalone
@@ -364,10 +369,13 @@ profile and assignment columns, but embedded table framing must route through
    auth boundary, but they must not reinterpret SSO or Stripe email as the
    canonical user identifier for setup, install, or fleet-management actions.
    Availability-target API changes are adjacent but not lifecycle-owned:
-   agentless ping/TCP/HTTP targets may appear in shared `internal/api/`
-   handlers and connection ledgers, but they must remain settings/API
-   availability resources and must not create install commands, agent tokens, or
-   host uninstall/stop-monitoring lifecycle actions.
+   agentless MQTT, HTTP/S, ping, and TCP targets may appear in shared
+   `internal/api/` handlers and resource projections, but their settings owner
+   is `frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx`
+   with `frontend-modern/src/components/Settings/availabilitySettingsModel.ts`.
+   They must remain settings/API availability resources and must not create
+   install commands, agent tokens, host uninstall actions, stop-monitoring
+   lifecycle actions, or infrastructure add-flow states.
    Global resource timeline API changes are likewise adjacent when they touch
    shared `internal/api/` route wiring: `/api/resources/timeline` may expose
    monitoring-read provider activity for platform pages, but it must not create

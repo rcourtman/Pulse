@@ -8,7 +8,6 @@ export type InfrastructureAddStep =
   | 'pve'
   | 'pbs'
   | 'pmg'
-  | 'availability'
   | 'truenas'
   | 'vmware';
 export type InfrastructurePanelStep = 'pick' | InfrastructureAddStep;
@@ -30,7 +29,6 @@ export function normalizeInfrastructurePanelStep(
     case 'pve':
     case 'pbs':
     case 'pmg':
-    case 'availability':
     case 'truenas':
     case 'vmware':
       return value!.trim() as InfrastructurePanelStep;

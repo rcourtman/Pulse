@@ -725,10 +725,13 @@ AI-only summary payloads, or page-local heuristics.
    and `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx`
    must send operators directly to `/settings/infrastructure?add=pick`, name
    source strategy selection as the default next step, and present platform
-   API inventory, endpoint probes, and Pulse Agent telemetry as peer source
-   options instead of regressing to generic settings-root CTAs, an agent-only
-   install jump, the retired `Platform connections` split, provider-specific
-   one-off routes, or the removed top-level `/infrastructure` page.
+   API inventory and Pulse Agent telemetry as peer source options instead of
+   regressing to generic settings-root CTAs, an agent-only install jump, the
+   retired `Platform connections` split, provider-specific one-off routes, or
+   the removed top-level `/infrastructure` page. Agentless availability
+   endpoints are the separate monitoring source home at
+   `/settings/monitoring/availability`, and the add flow for MQTT, ping, TCP,
+   and HTTP checks is `/settings/monitoring/availability?add=target`.
 6. Keep infrastructure source visibility on canonical unified-resource truth.
    Settings infrastructure source filters and summaries must preserve known
    sources such as `truenas` and `availability` through the shared source
@@ -2778,9 +2781,10 @@ table or drive the primary system sort.
 The former top-level infrastructure feature route never shipped as a stable v6
 surface and is intentionally removed rather than preserved as a compatibility
 redirect. Canonical infrastructure management lives under
-`/settings/infrastructure`; day-to-day resource inspection lives on the
-platform/runtime pages and shared resource components. Future infrastructure
-work must extend those owners rather than recreating
+`/settings/infrastructure`, while agentless endpoint availability management
+lives under `/settings/monitoring/availability`; day-to-day resource
+inspection lives on the platform/runtime pages and shared resource components.
+Future infrastructure work must extend those owners rather than recreating
 `frontend-modern/src/features/infrastructure/` or a `/infrastructure` route.
 Shared unified-resource consumers now also normalize org scope through
 `frontend-modern/src/utils/orgScope.ts` before building cache keys or

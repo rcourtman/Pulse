@@ -32,6 +32,7 @@ describe('infrastructureWorkspaceModel', () => {
     expect(deriveAddStepFromLocation('/settings/infrastructure', '?add=kubernetes')).toBe(
       'kubernetes',
     );
+    expect(deriveAddStepFromLocation('/settings/infrastructure', '?add=availability')).toBeNull();
     expect(deriveAddStepFromLocation('/settings/infrastructure/install', '')).toBeNull();
     expect(deriveAddStepFromLocation('/settings/infrastructure/platforms', '?add=pick')).toBeNull();
   });

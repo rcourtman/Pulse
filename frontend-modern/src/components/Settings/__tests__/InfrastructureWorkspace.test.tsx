@@ -148,10 +148,6 @@ vi.mock('../ConnectionEditor/CredentialSlots/NodeCredentialSlot', () => ({
   ),
 }));
 
-vi.mock('../ConnectionEditor/CredentialSlots/AvailabilityTargetSlot', () => ({
-  AvailabilityTargetSlot: () => <div data-testid="availability-section">availability</div>,
-}));
-
 vi.mock('../ConnectionEditor/CredentialSlots/TrueNASCredentialSlot', () => ({
   TrueNASCredentialSlot: () => <div data-testid="truenas-section">truenas</div>,
 }));
@@ -343,10 +339,7 @@ describe('InfrastructureWorkspace', () => {
       scroll: false,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /^Monitor endpoint$/i }));
-    expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure?add=availability', {
-      scroll: false,
-    });
+    expect(screen.queryByRole('button', { name: /^Monitor endpoint$/i })).toBeNull();
   });
 
   it('keeps source groups in the catalog order instead of count order', async () => {
@@ -642,9 +635,7 @@ describe('InfrastructureWorkspace', () => {
     expect(
       within(dialog).getByRole('button', { name: /Detect API platform/i }),
     ).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole('button', { name: /Monitor network endpoint/i }),
-    ).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /Monitor network endpoint/i })).toBeNull();
     expect(within(dialog).getByText('Choose how Pulse should connect')).toBeInTheDocument();
     expect(within(dialog).getByText('Or pick a specific source')).toBeInTheDocument();
     expect(within(dialog).queryByText('Agent telemetry')).toBeNull();
@@ -729,12 +720,12 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByTestId('truenas-section')).toBeInTheDocument();
   });
 
-  it('renders the agentless availability target route from the shared workspace', async () => {
+  it('does not render the agentless availability target route from the infrastructure workspace', async () => {
     routeState.search = '?add=availability';
     renderWorkspace();
 
-    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
-    expect(screen.getByTestId('availability-section')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Connected systems')).toBeInTheDocument());
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('opens the manage dialog directly from an existing source card', async () => {

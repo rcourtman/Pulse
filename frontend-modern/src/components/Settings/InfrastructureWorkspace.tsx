@@ -9,7 +9,6 @@ import { Dialog } from '@/components/shared/Dialog';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
 import { ConnectionEditor } from './ConnectionEditor/ConnectionEditor';
 import { NodeCredentialSlot } from './ConnectionEditor/CredentialSlots/NodeCredentialSlot';
-import { AvailabilityTargetSlot } from './ConnectionEditor/CredentialSlots/AvailabilityTargetSlot';
 import { TrueNASCredentialSlot } from './ConnectionEditor/CredentialSlots/TrueNASCredentialSlot';
 import { VMwareCredentialSlot } from './ConnectionEditor/CredentialSlots/VMwareCredentialSlot';
 import type { Connection, ConnectionType, ProbeCandidate } from '@/api/connections';
@@ -73,7 +72,6 @@ const ADD_STEP_TO_TYPE: Record<ManagedAddTypeStep, ConnectionType> = {
   pve: 'pve',
   pbs: 'pbs',
   pmg: 'pmg',
-  availability: 'availability',
   truenas: 'truenas',
   vmware: 'vmware',
 };
@@ -101,7 +99,6 @@ const describeManagedSourceType = (type: ConnectionType | null): string => {
     type === 'agent' ||
     type === 'vmware' ||
     type === 'truenas' ||
-    type === 'availability' ||
     type === 'pve' ||
     type === 'pbs' ||
     type === 'pmg'
@@ -735,23 +732,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             />
           );
         }
-        case 'availability': {
-          const targetId = aggregatorSuffix(connection.id);
-          return (
-            <AvailabilityTargetSlot
-              editingTargetId={targetId}
-              onCancel={context.onCancel}
-              onSaved={context.onSaved}
-              onToggleEnabled={() => void rowActions.togglePause(connection)}
-              togglePending={rowActions.pendingAction(connection.id) === 'pause'}
-              connectionEnabled={connection.enabled}
-              onDelete={() => void rowActions.requestRemove(connection)}
-              deletePending={rowActions.pendingAction(connection.id) === 'remove'}
-              deleteConfirming={rowActions.confirmingRemove(connection.id)}
-              deleteError={rowActions.actionError(connection.id)}
-            />
-          );
-        }
         default:
           return (
             <div class="text-sm text-muted">
@@ -812,8 +792,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             onSaved={context.onSaved}
           />
         );
-      case 'availability':
-        return <AvailabilityTargetSlot onCancel={context.onCancel} onSaved={context.onSaved} />;
       case 'agent':
         return renderAgentAddSlot();
       default:

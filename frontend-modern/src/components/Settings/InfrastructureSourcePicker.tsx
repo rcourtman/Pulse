@@ -1,15 +1,5 @@
 import { Component, For, Show, createMemo, createSignal } from 'solid-js';
-import {
-  Activity,
-  Archive,
-  Cpu,
-  Database,
-  Download,
-  Mail,
-  Search,
-  Server,
-  ServerCog,
-} from 'lucide-solid';
+import { Archive, Cpu, Database, Download, Mail, Search, Server, ServerCog } from 'lucide-solid';
 import type {
   InfrastructureSourcePickerItemId,
   InfrastructureSourcePickerItemPresentation,
@@ -47,12 +37,9 @@ const CARD_ICON: Record<InfrastructureSourcePickerItemId, Component<{ class?: st
   'linux-host': Cpu,
   docker: Server,
   kubernetes: ServerCog,
-  availability: Activity,
 };
 
-const PRIMARY_PATH_PICKER_ITEM_IDS: ReadonlySet<InfrastructureSourcePickerItemId> = new Set([
-  'availability',
-]);
+const PRIMARY_PATH_PICKER_ITEM_IDS: ReadonlySet<InfrastructureSourcePickerItemId> = new Set();
 
 // Popular sources shown by default. The rest are hidden behind 'Show more
 // sources' to keep the picker scannable at a glance and let users scroll to
@@ -139,25 +126,6 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
                 </div>
               </button>
             </Show>
-            <button
-              type="button"
-              onClick={() => props.onSelectStep('availability')}
-              class={primaryPathCardClass}
-            >
-              <div
-                aria-hidden="true"
-                class="flex h-10 w-10 flex-none items-center justify-center rounded-md border border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200"
-              >
-                <Activity class="h-5 w-5" />
-              </div>
-              <div class="min-w-0 flex-1 space-y-1">
-                <div class="text-sm font-semibold text-base-content">Monitor network endpoint</div>
-                <p class="text-xs leading-5 text-muted">
-                  Use ICMP ping, TCP port, or HTTP checks for devices and services that cannot run
-                  the agent.
-                </p>
-              </div>
-            </button>
             <button
               type="button"
               onClick={() => props.onSelectStep('linux-host')}

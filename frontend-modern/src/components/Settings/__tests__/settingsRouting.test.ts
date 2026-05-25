@@ -5,6 +5,7 @@ import {
   deriveTabFromPath,
   deriveTabFromQuery,
   isRetiredSettingsCompatibilityPath,
+  isRouteableSettingsLocation,
   isRouteableSettingsPath,
   resolveCanonicalSettingsPath,
   settingsAgentLabel,
@@ -17,6 +18,7 @@ import { isFeatureLocked, isTabLocked } from '../settingsFeatureGates';
 
 const canonicalTabPaths = {
   'infrastructure-systems': '/settings/infrastructure',
+  'monitoring-availability': '/settings/monitoring/availability',
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',
   'system-updates': '/settings/system-updates',
@@ -74,6 +76,12 @@ describe('settingsNavigationModel', () => {
     expect(resolveCanonicalSettingsPath('/settings/infrastructure')).toBe(
       '/settings/infrastructure',
     );
+    expect(resolveCanonicalSettingsPath('/settings/monitoring')).toBe(
+      '/settings/monitoring/availability',
+    );
+    expect(resolveCanonicalSettingsPath('/settings/monitoring/availability')).toBe(
+      '/settings/monitoring/availability',
+    );
     expect(resolveCanonicalSettingsPath('/settings/infrastructure/install')).toBeNull();
     expect(resolveCanonicalSettingsPath('/settings/infrastructure/platforms')).toBeNull();
     expect(resolveCanonicalSettingsPath('/settings/infrastructure/platforms/truenas')).toBeNull();
@@ -118,8 +126,22 @@ describe('settingsNavigationModel', () => {
 
     expect(isRouteableSettingsPath('/settings')).toBe(true);
     expect(isRouteableSettingsPath('/settings/infrastructure')).toBe(true);
+    expect(isRouteableSettingsPath('/settings/monitoring/availability')).toBe(true);
     expect(isRouteableSettingsPath('/settings/security/api')).toBe(true);
     expect(isRouteableSettingsPath('/settings/unknown')).toBe(false);
+  });
+
+  it('rejects invalid route-owned add query states instead of mounting the wrong panel', () => {
+    expect(isRouteableSettingsLocation('/settings/infrastructure', '?add=agent')).toBe(true);
+    expect(isRouteableSettingsLocation('/settings/infrastructure', '?add=availability')).toBe(
+      false,
+    );
+    expect(isRouteableSettingsLocation('/settings/monitoring/availability', '?add=target')).toBe(
+      true,
+    );
+    expect(
+      isRouteableSettingsLocation('/settings/monitoring/availability', '?add=availability'),
+    ).toBe(false);
   });
 
   it('maps organization routing contracts', () => {
@@ -142,6 +164,8 @@ describe('settingsNavigationModel', () => {
   it('maps query deep-links contract values', () => {
     const queryCases: Array<[string, SettingsTab | null]> = [
       ['?tab=infrastructure', 'infrastructure-systems'],
+      ['?tab=availability', 'monitoring-availability'],
+      ['?tab=monitoring-availability', 'monitoring-availability'],
       ['?tab=system-ai', 'system-ai'],
       ['?tab=system-relay', 'system-relay'],
       ['?tab=system-billing', 'system-billing'],

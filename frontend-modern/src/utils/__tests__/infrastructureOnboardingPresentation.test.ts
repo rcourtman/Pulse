@@ -90,13 +90,7 @@ describe('infrastructureOnboardingPresentation', () => {
   it('separates supported API products from admitted preview products', () => {
     expect(
       getInfrastructureApiProductsByGovernanceState('supported').map((product) => product.label),
-    ).toEqual([
-      'TrueNAS SCALE',
-      'Proxmox VE',
-      'Proxmox Backup Server',
-      'Proxmox Mail Gateway',
-      'Network endpoint',
-    ]);
+    ).toEqual(['TrueNAS SCALE', 'Proxmox VE', 'Proxmox Backup Server', 'Proxmox Mail Gateway']);
     expect(
       getInfrastructureApiProductsByGovernanceState('admitted').map((product) => product.label),
     ).toEqual(['VMware vCenter']);
@@ -133,11 +127,6 @@ describe('infrastructureOnboardingPresentation', () => {
         actionLabel: 'Add Proxmox Mail Gateway',
       }),
       expect.objectContaining({
-        type: 'availability',
-        label: 'Network endpoint',
-        actionLabel: 'Add Network endpoint',
-      }),
-      expect.objectContaining({
         type: 'agent',
         label: 'Standalone hosts',
         actionLabel: 'Install Pulse Agent',
@@ -146,8 +135,7 @@ describe('infrastructureOnboardingPresentation', () => {
 
     // Picker order pins the canonical card layout. Proxmox suite is grouped
     // first so PVE/PBS/PMG are scannable together, then other API platforms,
-    // then agent-install paths (named platforms before the generic host
-    // card), then the network probe fallback.
+    // then agent-install paths (named platforms before the generic host card).
     expect(getInfrastructureSourcePickerItems()).toEqual([
       expect.objectContaining({ id: 'pve', connectionType: 'pve', label: 'Proxmox VE' }),
       expect.objectContaining({
@@ -187,11 +175,6 @@ describe('infrastructureOnboardingPresentation', () => {
         connectionType: 'agent',
         label: 'Linux, macOS, Windows host',
       }),
-      expect.objectContaining({
-        id: 'availability',
-        connectionType: 'availability',
-        label: 'Network endpoint',
-      }),
     ]);
 
     expect(getInfrastructureAutoDetectLabels()).toEqual([
@@ -208,7 +191,6 @@ describe('infrastructureOnboardingPresentation', () => {
         'Proxmox VE',
         'Proxmox Backup Server',
         'Proxmox Mail Gateway',
-        'Network endpoint',
         'Pulse Agent hosts',
         'Docker',
         'Kubernetes',
@@ -235,6 +217,7 @@ describe('infrastructureOnboardingPresentation', () => {
     );
     expect(getInfrastructureEmptyStateDetail()).toContain('standalone hosts through Pulse Agent');
     expect(getInfrastructureEmptyStateDetail()).toContain('Docker and Kubernetes are discovered');
+    expect(getInfrastructureEmptyStateDetail()).not.toContain('network endpoints');
   });
 
   it('keeps user-facing agent-backed catalog choices on the agent setup route', () => {

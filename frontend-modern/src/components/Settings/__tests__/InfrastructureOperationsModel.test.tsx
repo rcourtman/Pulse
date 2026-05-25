@@ -165,7 +165,7 @@ describe('infrastructure operations model', () => {
     expect(row.installFlags).toEqual([]);
     expect(hasMachineInstallActions(row)).toBe(false);
     expect(getCapabilitySurfaceLabel('availability')).toBe('Availability data');
-    expect(getCapabilityManagementPath('availability')).toBe('/settings/infrastructure');
+    expect(getCapabilityManagementPath('availability')).toBe('/settings/monitoring/availability');
     expect(getCapabilityManagementPath('proxmox')).toBe('/settings/infrastructure');
     expect(getCapabilityManagementPath('pbs')).toBe('/settings/infrastructure');
     expect(getCapabilityManagementPath('pmg')).toBe('/settings/infrastructure');

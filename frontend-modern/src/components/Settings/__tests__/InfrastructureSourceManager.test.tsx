@@ -111,8 +111,8 @@ describe('InfrastructureSourceManager setup summary', () => {
       />
     ));
 
-    fireEvent.click(screen.getByRole('button', { name: /^Monitor endpoint$/i }));
-    expect(onAddSourceStep).toHaveBeenCalledWith('availability');
+    expect(screen.queryByRole('button', { name: /^Monitor endpoint$/i })).toBeNull();
+    expect(onAddSourceStep).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: /^Run discovery$/i }));
     expect(onRunDiscovery).toHaveBeenCalledTimes(1);
@@ -184,8 +184,8 @@ describe('InfrastructureSourceManager setup summary', () => {
 
     expect(screen.getByText('Setup status')).toBeInTheDocument();
     expect(screen.getByText('Systems')).toBeInTheDocument();
-    expect(screen.getByText('Endpoints')).toBeInTheDocument();
-    expect(screen.getByText('1 endpoint')).toBeInTheDocument();
+    expect(screen.queryByText('Endpoints')).toBeNull();
+    expect(screen.queryByText('MQTT power meter')).toBeNull();
     expect(screen.getByText('Live')).toBeInTheDocument();
     expect(screen.getByText('Needs attention')).toBeInTheDocument();
     expect(screen.getByText('Needs agent')).toBeInTheDocument();

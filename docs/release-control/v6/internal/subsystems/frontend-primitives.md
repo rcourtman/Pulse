@@ -116,50 +116,52 @@ work extends shared components instead of creating new local variants.
 86. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
 87. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
 88. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
-89. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
-91. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
-92. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
-93. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
-94. `frontend-modern/src/components/Settings/settingsNavVisibility.ts`
-95. `frontend-modern/src/components/Settings/settingsRouting.ts`
-96. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
-97. `frontend-modern/src/components/Settings/settingsTypes.ts`
-98. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
-99. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
-100. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
-101. `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`
-102. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
-103. `frontend-modern/src/utils/environmentLockPresentation.ts`
-104. `frontend-modern/src/utils/docsLinks.ts`
-105. `tests/integration/tests/20-local-doc-links.spec.ts`
-106. `frontend-modern/src/index.css`
-107. `frontend-modern/src/components/shared/summaryInteractionA11y.ts`
-108. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
-109. `frontend-modern/src/hooks/createNonSuspendingQuery.ts`
-110. `frontend-modern/src/components/shared/TableCardHeader.tsx`
-111. `frontend-modern/src/components/shared/SummaryTableCardHeader.tsx`
-112. `frontend-modern/src/components/shared/UpgradeLink.tsx`
-113. `frontend-modern/src/components/shared/useUpgradeNavigation.ts`
-114. `frontend-modern/src/utils/upgradeNavigation.ts`
-115. `frontend-modern/src/components/DemoBanner.tsx`
-116. `frontend-modern/src/components/Login.tsx`
-117. `frontend-modern/src/stores/demoMode.ts`
-118. `frontend-modern/src/stores/sessionCapabilities.ts`
-119. `frontend-modern/src/stores/sessionPresentationPolicy.ts`
-120. `frontend-modern/src/stores/licenseCommercial.ts`
-121. `frontend-modern/src/useAppRuntimeState.ts`
-122. `frontend-modern/src/routing/routePreload.ts`
-123. `frontend-modern/src/stores/aiChat.ts`
-124. `frontend-modern/scripts/header-audit.mjs`
-125. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
-126. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
-127. `frontend-modern/scripts/canonical-platform-audit.mjs`
-128. `frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs`
-129. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
-130. `frontend-modern/src/utils/platformSupportManifest.ts`
-131. `frontend-modern/src/utils/sourcePlatformOptions.ts`
-132. `frontend-modern/src/utils/sourcePlatforms.ts`
-133. `frontend-modern/src/utils/infrastructureOnboardingPresentation.ts`
+89. `frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx`
+90. `frontend-modern/src/components/Settings/availabilitySettingsModel.ts`
+91. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
+92. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
+93. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
+94. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
+95. `frontend-modern/src/components/Settings/settingsNavVisibility.ts`
+96. `frontend-modern/src/components/Settings/settingsRouting.ts`
+97. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
+98. `frontend-modern/src/components/Settings/settingsTypes.ts`
+99. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
+100. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
+101. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
+102. `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`
+103. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
+104. `frontend-modern/src/utils/environmentLockPresentation.ts`
+105. `frontend-modern/src/utils/docsLinks.ts`
+106. `tests/integration/tests/20-local-doc-links.spec.ts`
+107. `frontend-modern/src/index.css`
+108. `frontend-modern/src/components/shared/summaryInteractionA11y.ts`
+109. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
+110. `frontend-modern/src/hooks/createNonSuspendingQuery.ts`
+111. `frontend-modern/src/components/shared/TableCardHeader.tsx`
+112. `frontend-modern/src/components/shared/SummaryTableCardHeader.tsx`
+113. `frontend-modern/src/components/shared/UpgradeLink.tsx`
+114. `frontend-modern/src/components/shared/useUpgradeNavigation.ts`
+115. `frontend-modern/src/utils/upgradeNavigation.ts`
+116. `frontend-modern/src/components/DemoBanner.tsx`
+117. `frontend-modern/src/components/Login.tsx`
+118. `frontend-modern/src/stores/demoMode.ts`
+119. `frontend-modern/src/stores/sessionCapabilities.ts`
+120. `frontend-modern/src/stores/sessionPresentationPolicy.ts`
+121. `frontend-modern/src/stores/licenseCommercial.ts`
+122. `frontend-modern/src/useAppRuntimeState.ts`
+123. `frontend-modern/src/routing/routePreload.ts`
+124. `frontend-modern/src/stores/aiChat.ts`
+125. `frontend-modern/scripts/header-audit.mjs`
+126. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
+127. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
+128. `frontend-modern/scripts/canonical-platform-audit.mjs`
+129. `frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs`
+130. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
+131. `frontend-modern/src/utils/platformSupportManifest.ts`
+132. `frontend-modern/src/utils/sourcePlatformOptions.ts`
+133. `frontend-modern/src/utils/sourcePlatforms.ts`
+134. `frontend-modern/src/utils/infrastructureOnboardingPresentation.ts`
 
 ## Shared Boundaries
 
@@ -289,10 +291,10 @@ columns.
    filters, reportable-resource pickers, and type unions.
 10. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
     That shared boundary must preserve `availability` as the agentless
-    infrastructure source for `network-endpoint` resources and settings
-    presets, so source badges and platform/source type resolution do not fall
-    back to `generic` when an endpoint is represented by ping, TCP, or HTTP
-    probe data rather than an installed agent or provider API.
+    monitoring source for `network-endpoint` resources and settings presets,
+    so source badges and platform/source type resolution do not fall back to
+    `generic` when an endpoint is represented by ping, TCP, or HTTP probe data
+    rather than an installed agent or provider API.
 
 ## Extension Points
 
@@ -632,7 +634,7 @@ not a replacement status card, CTA band, or page-local nested card.
    from a platform-owned product surface such as a recovery tab, the first
    highlighted step should match that route instead of always restarting at
    Dashboard.
-5. Keep shared infrastructure shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts` and `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source — via the unified aggregator through `frontend-modern/src/components/Settings/useConnectionsLedger.ts` — instead of creating provider-local summary fetches or VMware-only shell vocabulary. Phase 9 retired the old `PlatformConnectionsWorkspace` per-type shell; setup guidance should now use `Add infrastructure` plus source-strategy language for API-backed onboarding. The standalone connections-table presenter is retired; `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx` is the only landing-ledger presenter for configured infrastructure rows.
+5. Keep shared infrastructure shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts` and `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx` must continue to derive provider counts and shared subtab copy from one infrastructure-settings source — via the unified aggregator through `frontend-modern/src/components/Settings/useConnectionsLedger.ts` — instead of creating provider-local summary fetches or VMware-only shell vocabulary. Phase 9 retired the old `PlatformConnectionsWorkspace` per-type shell; setup guidance should now use `Add infrastructure` plus source-strategy language for API-backed onboarding. The standalone connections-table presenter is retired; `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx` is the only landing-ledger presenter for configured infrastructure rows, and it must exclude agentless availability probes because those belong to `frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx`.
    The first-run setup wizard inherits that same source-strategy vocabulary:
    step labels and completion copy must frame the final setup step as choosing
    the first infrastructure source, not installing a host. Successful token
@@ -649,7 +651,7 @@ not a replacement status card, CTA band, or page-local nested card.
    infrastructure`, `Run discovery`, and `Discovery settings` inside the
    source manager. Per-source add actions, including `Install Pulse Agent`,
    belong on the governed source rows, and `Detect address` stays inside the
-   single add-flow probe path instead of a duplicate toolbar action. It may
+   single API-platform probe path instead of a duplicate toolbar action. It may
    also show a compact coverage strip derived from the same unified connection
    rows and discovered candidates so operators can confirm connected-system
    count, API coverage,
@@ -2818,8 +2820,11 @@ including the route-owned billing focus contract where
 base/hash links are compatibility inputs rather than primary runtime routes.
 Infrastructure settings no longer has route-level platform-selection state:
 `/settings/infrastructure` and `/settings/infrastructure?add=<step>` are the
-only routeable Infrastructure settings entry points. Former nested aliases such
-as `/settings/infrastructure/install`,
+only routeable Infrastructure settings entry points for platform/API and
+agent-backed source setup. Agentless ping/TCP/HTTP checks are monitoring
+availability settings at `/settings/monitoring/availability`, with
+`/settings/monitoring/availability?add=target` as the route-owned add dialog.
+Former nested aliases such as `/settings/infrastructure/install`,
 `/settings/infrastructure/platforms/proxmox/pbs`,
 `/settings/infrastructure/api/pve`, and `/settings/workloads/docker` must fail
 route eligibility instead of being normalized back into the Infrastructure
@@ -3552,12 +3557,12 @@ redirect `/settings` and still canonicalize current settings destinations, but
 it must not translate removed infrastructure subpaths into onboarding queries or
 derive Proxmox platform state from those paths.
 The shared frontend source/platform vocabulary now also includes
-`availability` as an agentless infrastructure source and `network-endpoint` as
-the canonical resource projection. Picker cards, source labels, badges, and
-settings add-flow copy must use the shared onboarding and source-platform
-helpers instead of feature-local wording, so availability probes stay visually
-aligned with the single Infrastructure settings surface without pretending to
-be a host agent install.
+`availability` as an agentless monitoring source and `network-endpoint` as the
+canonical resource projection. Source labels, badges, settings add-flow copy,
+and availability management copy must use shared presentation helpers instead
+of feature-local wording, so availability probes stay visually aligned with
+the Monitoring availability settings surface without pretending to be a host
+agent install or a platform API connection.
 Availability setup presets for pingable devices, MQTT, ESPHome, or similar
 agentless endpoints must also stay on the shared settings form vocabulary:
 presets may fill protocol, port, and path defaults, but display badges and

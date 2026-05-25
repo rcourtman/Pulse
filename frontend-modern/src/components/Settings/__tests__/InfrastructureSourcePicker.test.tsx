@@ -11,11 +11,10 @@ describe('InfrastructureSourcePicker', () => {
     render(() => <InfrastructureSourcePicker onSelectStep={vi.fn()} />);
 
     expect(screen.getByPlaceholderText('Search sources, devices, services...')).toBeInTheDocument();
-    // Picker now leads with the primary paths (API detect / endpoint probe /
-    // agent install); the per-source card grid below is framed as the
-    // alternative.
+    // Picker now leads with API detection and agent installation; endpoint
+    // probes live under Settings -> Monitoring -> Availability checks.
     expect(screen.getByText('Choose how Pulse should connect')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Monitor network endpoint/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Monitor network endpoint/i })).toBeNull();
     expect(screen.getByText('Or pick a specific source')).toBeInTheDocument();
     // VMware lives behind 'Show more sources' since it is a less common
     // homelab choice; expand the long tail to verify the Preview badge still
@@ -42,9 +41,6 @@ describe('InfrastructureSourcePicker', () => {
     expect(trueNasButton).not.toBeNull();
     fireEvent.click(trueNasButton!);
     expect(onSelectStep).toHaveBeenLastCalledWith('truenas');
-
-    fireEvent.click(screen.getByRole('button', { name: /Monitor network endpoint/i }));
-    expect(onSelectStep).toHaveBeenLastCalledWith('availability');
   });
 
   it('filters the catalog by user-recognizable names and aliases', () => {
@@ -63,6 +59,6 @@ describe('InfrastructureSourcePicker', () => {
       target: { value: 'mqtt' },
     });
 
-    expect(screen.getByText('Network endpoint')).toBeInTheDocument();
+    expect(screen.queryByText('Network endpoint')).toBeNull();
   });
 });

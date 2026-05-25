@@ -2,6 +2,7 @@ import type { JSX } from 'solid-js';
 import type { ConnectedInfrastructureItem, ConnectedInfrastructureSurface } from '@/types/api';
 import { getAgentCapabilityLabel, type AgentCapability } from '@/utils/agentCapabilityPresentation';
 import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
+import { buildAvailabilitySettingsPath } from './availabilitySettingsModel';
 import { buildInfrastructureWorkspacePath } from './infrastructureWorkspaceModel';
 
 export const TOKEN_PLACEHOLDER = '<api-token>';
@@ -182,7 +183,7 @@ export const getStopMonitoringSurfaces = (row: UnifiedAgentRow) => {
 };
 
 export const isPlatformConnectionsCapability = (capability: AgentCapability) =>
-  ['proxmox', 'pbs', 'pmg', 'truenas', 'availability'].includes(capability);
+  ['proxmox', 'pbs', 'pmg', 'truenas'].includes(capability);
 
 export const getPlatformConnectionsViewForCapability = (
   capability: AgentCapability,
@@ -201,8 +202,10 @@ export const getPlatformConnectionsViewForCapability = (
   }
 };
 
-export const getCapabilityManagementPath = (capability: AgentCapability) =>
-  isPlatformConnectionsCapability(capability) ? buildInfrastructureWorkspacePath() : null;
+export const getCapabilityManagementPath = (capability: AgentCapability) => {
+  if (capability === 'availability') return buildAvailabilitySettingsPath();
+  return isPlatformConnectionsCapability(capability) ? buildInfrastructureWorkspacePath() : null;
+};
 
 export const hasMachineInstallActions = (row: UnifiedAgentRow) =>
   Boolean(row.agentActionId?.trim() || row.agentId?.trim());
