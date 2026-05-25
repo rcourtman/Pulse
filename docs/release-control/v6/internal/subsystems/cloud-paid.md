@@ -497,15 +497,11 @@ or other self-hosted uncapped continuity plans.
     `PULSE_EMAIL_REPLY_TO`, defaulting to `support@pulserelay.pro`, so magic
     links, checkout handoffs, and other hosted-account messages remain
     directly replyable by customers.
-    `App.tsx` and `AppLayout.tsx` own the governed platform/runtime primary
-    navigation. `App.tsx` registers one top-level route per supported platform
-    or runtime family: Standalone for the support-manifest `agent` platform
-    plus agentless availability endpoints, Proxmox, the Docker / Podman
-    container-runtime lens, Kubernetes, TrueNAS, and vSphere, using the
-    canonical path constants from
-    `frontend-modern/src/routing/resourceLinks.ts`. The `PrimaryTab` list in
-    `AppLayout.tsx` must enumerate exactly those supported platform/runtime
-    destinations, but product navigation is support-and-evidence gated:
+    Paid and hosted app shells must inherit the frontend-primitives-owned
+    platform/runtime primary navigation contract and canonical path constants
+    from `frontend-modern/src/routing/resourceLinks.ts`; cloud-paid must not
+    carry a second copy of the platform list, shell order, or Standalone
+    eligibility rules. Product navigation remains support-and-evidence gated:
     `enabled`, `live`, and inclusion in the rendered primary navigation derive
     from the governed support manifest plus canonical resource evidence in
     `state.resources`. Admitted-only, presentation-only, unsupported, or
@@ -517,23 +513,20 @@ or other self-hosted uncapped continuity plans.
     handoffs in `AppLayout.tsx` must target the canonical
     `/settings/infrastructure` workspace and must not retain retired settings
     aliases such as `/settings/workloads/docker` or nested
-    `/settings/infrastructure/platforms/*` paths. Each platform page must remain
-    chrome-only:
-    routing plus sub-tab navigation that embeds the canonical
-    `WorkloadsSurface`, `StorageSurface`, `RecoverySurface`, or
+    `/settings/infrastructure/platforms/*` paths. Each platform page must
+    remain chrome-only: routing plus sub-tab navigation that embeds the
+    canonical `WorkloadsSurface`, `StorageSurface`, `RecoverySurface`, or
     `UnifiedResourceTable` in `embedded tableOnly` mode with a forced
     platform/source filter. The shell must not introduce dashboard cards,
     bespoke per-family tables, synthetic placeholder data, or reintroduce
     Infrastructure as a primary navigation entry without a governed contract
-    decision recorded here.
+    decision recorded by the frontend-primitives owner.
     The presence of a `Standalone` tab is not a new commercial usage unit:
     hosted and paid surfaces continue to meter the governed monitored-system
     grouping result rather than counting primary navigation destinations.
-    Standalone is also not the paid or hosted estate landing default when concrete
-    provider/runtime platform evidence exists; the authenticated shell order
-    and post-auth landing fallback must prefer Proxmox, Containers,
-    Kubernetes, TrueNAS, and vSphere ahead of Standalone, with Standalone first
-    only in a standalone-only estate.
+    Landing behavior for paid and hosted shells must also defer to the
+    frontend-primitives-owned provider-first landing contract instead of
+    defining a cloud-paid-specific order.
 
 ## Forbidden Paths
 
@@ -1496,15 +1489,13 @@ Retired aggregate or utility aliases must stay unregistered rather than being
 kept as route-shell compatibility handoffs, so hosted bootstrap ownership stays
 at the app boundary rather than leaking route concerns back into feature
 components.
-That same authenticated route shell also owns the canonical post-auth landing
-path. `frontend-modern/src/App.tsx` and
-`frontend-modern/src/pages/RuntimeHome.tsx` must send authenticated `/`
-through the runtime-home landing contract first: existing operators and
-self-hosted sessions land on the first visible provider/runtime platform in
-the canonical shell order, with Standalone only for standalone-only estates. Hosted
-workspaces with no connected infrastructure may still fall through to the
-single `/settings/infrastructure` ownership path, but the shell must not
-regress into a root-only settings redirect, legacy Infrastructure default, or
+That same authenticated route shell also defers to the
+frontend-primitives-owned post-auth landing path. `frontend-modern/src/App.tsx`
+and `frontend-modern/src/pages/RuntimeHome.tsx` must send authenticated `/`
+through the runtime-home landing contract first; hosted workspaces with no
+connected infrastructure may still fall through to the single
+`/settings/infrastructure` ownership path, but the shell must not regress into
+a root-only settings redirect, legacy Infrastructure default, or
 dashboard-only shortcut that strands first-time hosted tenants.
 That same landing contract also owns authenticated `/login`: once the browser
 has a valid session, `frontend-modern/src/App.tsx` must route `/login`

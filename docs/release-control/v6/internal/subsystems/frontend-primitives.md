@@ -1097,25 +1097,27 @@ not a replacement status card, CTA band, or page-local nested card.
     that platform-first set only, so mobile and desktop navigation stay aligned
     without reintroducing aggregate Workloads / Storage / Recovery workspace
     tabs or the legacy Infrastructure entry.
-    The support-manifest `agent` platform and agentless availability endpoints
-    are presented as `Standalone` in the same shell. Its primary tab, mobile
-    priority, command-palette destination, and keyboard shortcut must all route
-    through `buildStandalonePath()` and the `PrimaryInfrastructureNavId`
-    `standalone` evidence gate; they must not create a generic Hosts, Nodes,
-    Other, or mixed-systems bucket, and they must not include provider-owned
-    platform nodes that are not canonical standalone resources. The Standalone
-    page is a platform/runtime page, not a legacy Infrastructure page: it must
-    use the shared platform tab, toolbar, table-card, and kind-aligned column
-    primitives, and it must not reintroduce the old top-of-page
-    InfrastructureSummary chart strip. Standalone must also remain secondary
-    in the shell hierarchy when provider/runtime platform evidence exists:
-    `PRIMARY_INFRASTRUCTURE_NAV_IDS`, desktop primary tabs, mobile primary
-    priority, app-shell preload order, authenticated landing fallback, and
-    command-palette ordering must prefer Proxmox, Containers, Kubernetes,
-    TrueNAS, and vSphere ahead of Standalone. Standalone may win those
-    first/default positions only when the current estate has standalone Pulse
-    Agent machines or agentless availability endpoints and no provider/runtime
-    platform evidence.
+    Frontend primitives owns the sole user-facing `Standalone` IA contract for
+    the support-manifest `agent` platform and agentless availability endpoints;
+    adjacent subsystem contracts may reference this owner for dependencies but
+    must not restate the route, navigation, or landing semantics. Its primary
+    tab, mobile priority, command-palette destination, and keyboard shortcut
+    must all route through `buildStandalonePath()` and the
+    `PrimaryInfrastructureNavId` `standalone` evidence gate; they must not
+    create a generic Hosts, Nodes, Other, or mixed-systems bucket, and they
+    must not include provider-owned platform nodes that are not canonical
+    standalone resources. The Standalone page is a platform/runtime page, not a
+    legacy Infrastructure page: it must use the shared platform tab, toolbar,
+    table-card, and kind-aligned column primitives, and it must not reintroduce
+    the old top-of-page InfrastructureSummary chart strip. Standalone must also
+    remain secondary in the shell hierarchy when provider/runtime platform
+    evidence exists: `PRIMARY_INFRASTRUCTURE_NAV_IDS`, desktop primary tabs,
+    mobile primary priority, app-shell preload order, authenticated landing
+    fallback, and command-palette ordering must prefer Proxmox, Containers,
+    Kubernetes, TrueNAS, and vSphere ahead of Standalone. Standalone may win
+    those first/default positions only when the current estate has standalone
+    Pulse Agent machines or agentless availability endpoints and no
+    provider/runtime platform evidence.
 
 ## Forbidden Paths
 
@@ -1409,10 +1411,12 @@ not a replacement status card, CTA band, or page-local nested card.
     that helper instead of maintaining page-local copies of the same hover/focus
     rules.
     `frontend-modern/src/App.tsx` must land authenticated `/` and `/login`
-    handoffs on the first visible provider/runtime platform in the canonical
-    shell order: Proxmox, Containers, Kubernetes, TrueNAS, vSphere, then Standalone
-    only for standalone-only estates. The retired Infrastructure aggregate route and
-    nested settings infrastructure aliases are not compatibility commitments:
+    handoffs through this subsystem's provider-first platform landing contract:
+    the first visible provider/runtime platform wins, and Standalone is eligible
+    only when the current estate has standalone Pulse Agent machines or
+    agentless availability endpoints and no provider/runtime evidence. The
+    retired Infrastructure aggregate route and nested settings infrastructure
+    aliases are not compatibility commitments:
     first-time operator setup must enter through the canonical Settings →
     Infrastructure workspace and its query-backed add flow, while provider
     evidence still owns the operational landing surface.
@@ -3577,8 +3581,8 @@ and latest latency or failure result once, inline in the agentless endpoint's
 metric slot, while keeping recent check timing and fuller failure context in
 the tooltip or drawer so operators can understand what was measured without
 duplicated row chrome.
-Operational navigation for those agentless endpoints belongs to the existing
-Standalone surface rather than a new primary nav item. The page may show
-availability checks beside standalone Pulse Agent machines and provide a
-focused availability tab, but Settings remains the add/edit owner and the app
-shell must not add a separate top-level Availability destination.
+Operational navigation for those agentless endpoints belongs to the
+frontend-primitives-owned Standalone surface rather than a new primary nav item.
+The page may show availability checks beside standalone Pulse Agent machines and
+provide a focused availability tab, but Settings remains the add/edit owner and
+the app shell must not add a separate top-level Availability destination.

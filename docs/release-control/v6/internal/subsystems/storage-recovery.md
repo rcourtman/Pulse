@@ -834,11 +834,11 @@ recovery scope, or a storage/recovery-owned secret source.
     plane boundary.
     Authenticated `/login` must follow that same shared app-shell contract:
     once login succeeds, `frontend-modern/src/App.tsx` must hand the browser
-    back to the governed provider-first landing route instead of leaving
-    storage/recovery-adjacent authenticated shells on a page-local not-found
-    route. Standalone may only be that landing target in standalone-only
-    estates; legacy Infrastructure is retired and must not be restored as the
-    default storage/recovery-adjacent operational surface.
+    back to the frontend-primitives-owned provider-first landing route instead
+    of leaving storage/recovery-adjacent authenticated shells on a page-local
+    not-found route. Storage/recovery must not redefine Standalone landing
+    eligibility or restore legacy Infrastructure as the default
+    storage/recovery-adjacent operational surface.
     Authenticated-shell demo organization suppression on `frontend-modern/src/App.tsx`
     may hide top-bar org chrome for public demo posture, but it must not leak
     into storage/recovery preview route ownership, first-session recovery copy,

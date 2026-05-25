@@ -620,22 +620,21 @@ shell clickable behind another overlay.
     2s dial / 1s read with at most 5 concurrent fingerprints so the probe
     endpoint cannot be repurposed into a slow-leak scanner that starves the
     dashboard hot path.
-    Platform-first top-level pages must remain in the app-shell route preload
-    registry. `frontend-modern/src/routing/routePreload.ts` carries a
-    `ROUTE_PRELOADERS` entry per supported platform (Standalone, Proxmox plus the
-    Docker, Kubernetes, TrueNAS, and vSphere families) so first-paint
-    navigation between visible shell tabs stays warm and does not depend on a
-    cold dynamic import after the user clicks. New supported platform families
-    must extend that registry rather than skipping the preload hot path;
-    presentation-only or retired routes, including the top-level Workloads,
-    Storage, and Recovery aggregate routes, must not be registered. Preload
+    Platform-first top-level pages named by the frontend-primitives-owned IA
+    contract must remain in the app-shell route preload registry.
+    `frontend-modern/src/routing/routePreload.ts` carries a
+    `ROUTE_PRELOADERS` entry per supported platform so first-paint navigation
+    between visible shell tabs stays warm and does not depend on a cold dynamic
+    import after the user clicks. New supported platform families must extend
+    that registry rather than skipping the preload hot path; presentation-only
+    or retired routes, including the top-level Workloads, Storage, Recovery, or
+    legacy Infrastructure aggregate routes, must not be registered. Preload
     entries may warm route modules, but they must not trigger additional
     unfiltered resource fetches, metrics-history fan-out, recovery-history
     fan-out, storage scans, or provider scans before the destination page owns
-    its normal data query. The preload order follows the provider-first shell
-    order as a hot-path hint: Proxmox remains ahead of Standalone when both
-    surfaces are available, while Standalone stays in the preload set so
-    standalone-only estates still get a warm first destination.
+    its normal data query. The preload order is a frontend-primitives hot-path
+    hint; performance owns preload cost and side-effect boundaries, not
+    Standalone landing eligibility.
     The authenticated app shell must not separately prewarm retired
     Infrastructure or Workloads chart caches as a generic side effect; those
     chart fetches belong to the route that renders the chart surface or to the

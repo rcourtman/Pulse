@@ -292,9 +292,10 @@ and API consumers must receive them through `SourceAvailability` supplemental
 records and probe-status projections, not through a mock-only monitoring type.
 Frontend monitoring consumers should treat those supplemental records as
 day-to-day availability evidence. Settings owns saved target management, while
-the Standalone surface may read the same `network-endpoint` projection
-to show current reachability, latency, check age, and failure state without
-creating another monitoring provider or top-level availability route.
+the frontend-primitives-owned Standalone surface may read the same
+`network-endpoint` projection to show current reachability, latency, check age,
+and failure state without creating another monitoring provider or top-level
+availability route.
 Mock-mode Discovery context follows the same fixture-graph rule. Demo service
 details such as detected version, config/data/log paths, Docker bind mounts,
 ports, and suggested web URLs may be authored in mock fixtures, but consumers

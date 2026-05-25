@@ -688,16 +688,17 @@ AI-only summary payloads, or page-local heuristics.
     derive every internal link from those builders so the canonical resource
     URL vocabulary stays single-sourced; ad hoc string concatenation of
     platform routes inside feature directories is not permitted.
-    The `Standalone` route is the canonical browser projection of Pulse-managed
-    standalone agent rows and agentless availability endpoint rows: agent
-    membership must require
+    The frontend-primitives-owned Standalone IA contract consumes the
+    unified-resource projection for Pulse-managed standalone agent rows and
+    agentless availability endpoint rows; this subsystem owns only the
+    membership rules for those projected rows. Agent membership must require
     `resource.type === "agent"`, canonical Pulse-agent source evidence from
     resource sources or source status, and no stronger provider-owner evidence
     from Proxmox, VMware, TrueNAS, or Kubernetes. Source-less legacy snapshots
     may fall back to a normalized `platformType === "agent"`, but
-    provider-owned nodes must not become Standalone-page members through hostname,
-    `agent` platform scope, or agent telemetry alone; those facts surface as
-    facets on the owning provider page.
+    provider-owned nodes must not become Standalone-page members through
+    hostname, `agent` platform scope, or agent telemetry alone; those facts
+    surface as facets on the owning provider page.
     The default tab for each platform path must point at a sub-tab whose
     canonical unified-resource projection actually populates. The
     canonical TrueNAS adapter (`internal/truenas/provider.go::
@@ -1140,13 +1141,13 @@ or the live-state `platformData.availability` mirror: the System column uses
 the probe protocol as the compact identity badge (`ICMP`, `TCP`, or `HTTP`),
 while the metric cell shows only the target detail and latest latency or
 failure result, such as `6053: 11 ms`, `/status: 503`, `3 ms`, or `timed out`.
-The Standalone surface is the operational home for those same
-agentless checks, not a new top-level platform page. `StandalonePageSurface.tsx`
-must fetch both `agent` and `network-endpoint` resources, keep standalone
-machines and availability checks as separate buckets in `standalonePageModel.ts`,
-and let `AvailabilityChecksTable.tsx` render saved probe method, target,
-latest result, check age, failure count, and cadence from the canonical
-availability payload.
+Frontend primitives owns Standalone as the operational presentation for those
+same agentless checks; unified resources owns the projection contract consumed
+there. `StandalonePageSurface.tsx` must fetch both `agent` and
+`network-endpoint` resources, keep standalone machines and availability checks
+as separate buckets in `standalonePageModel.ts`, and let
+`AvailabilityChecksTable.tsx` render saved probe method, target, latest result,
+check age, failure count, and cadence from the canonical availability payload.
 Recent check timing and fuller failure context may stay in tooltip or drawer
 detail, but the table row must not duplicate the same probe protocol and
 result text across both identity and metric cells.
@@ -2792,9 +2793,11 @@ surface and is intentionally removed rather than preserved as a compatibility
 redirect. Canonical infrastructure management lives under
 `/settings/infrastructure`, while agentless endpoint availability management
 lives under `/settings/monitoring/availability`; day-to-day resource
-inspection lives on the platform/runtime pages, with standalone agent machines
-and agentless endpoint checks sharing the Standalone surface. Future
-infrastructure work must extend those owners rather than recreating
+inspection lives on the platform/runtime pages named by the
+frontend-primitives-owned IA contract, with unified resources projecting
+standalone agent machines and agentless endpoint checks for the Standalone
+consumer. Future infrastructure work must extend those owners rather than
+recreating
 `frontend-modern/src/features/infrastructure/`, a `/infrastructure` route, or
 a separate top-level availability route.
 Shared unified-resource consumers now also normalize org scope through

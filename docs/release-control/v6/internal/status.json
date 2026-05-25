@@ -7264,7 +7264,7 @@
     },
     {
       "id": "provider-first-platform-landing-surface",
-      "summary": "Pulse v6 authenticated root and login handoff lands on the first visible provider or runtime platform in canonical shell order: Proxmox, Containers, Kubernetes, TrueNAS, vSphere, then Standalone only for standalone-only estates. Standalone is the operational surface for standalone Pulse Agent machines plus agentless availability endpoints, not the primary estate landing when provider evidence exists; legacy Infrastructure is retired rather than route-compatible.",
+      "summary": "Pulse v6 authenticated root, login handoff, primary navigation, and Standalone eligibility are owned by the frontend-primitives provider-first platform contract; adjacent subsystem docs may reference that owner but must not carry a second route/order definition. Legacy Infrastructure is retired rather than route-compatible.",
       "kind": "contract",
       "decided_at": "2026-05-23",
       "subsystem_ids": [
