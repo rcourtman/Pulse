@@ -114,7 +114,9 @@ func (m *Monitor) GetGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResou
 		return inMemoryResult
 	}
 
-	best := cloneMetricPointMap(inMemoryResult)
+	// inMemoryResult is a fresh map from GetGuestMetrics (slices already
+	// owned); merge mutates and returns it in place — no clone needed.
+	best := inMemoryResult
 	if m.metricsStore != nil {
 		if converted, ok := m.queryStoreMetricMapWithGapFillAliases(sqlResourceType, sqlResourceID, duration); ok {
 			best = mergeGuestMetricHistory(best, converted, duration)
@@ -220,7 +222,9 @@ func (m *Monitor) GetStorageMetricsForChart(storageID string, duration time.Dura
 		return inMemoryResult
 	}
 
-	best := cloneMetricPointMap(inMemoryResult)
+	// inMemoryResult is a fresh map from GetAllStorageMetrics; merge mutates
+	// in place.
+	best := inMemoryResult
 	if converted, ok := m.queryStoreMetricMapWithGapFill("storage", storageID, duration); ok {
 		best = mergeMetricHistory(best, converted, duration)
 	}
@@ -600,18 +604,17 @@ func (m *Monitor) GetGuestMetricsForChartBatch(
 	nativeResults := m.nativeGuestMetricHistory(sqlResourceType, duration)
 
 	// Phase 3: Merge fallback data per metric type.
+	// result[id] is already owned (set from filterChartMetricMap output above);
+	// merge mutates in place.
 	for _, id := range needFallback {
-		best := cloneMetricPointMap(result[id])
-		storeData, ok := storeResults[id]
-		if ok {
+		best := result[id]
+		if storeData, ok := storeResults[id]; ok {
 			best = mergeGuestMetricHistory(best, filterChartMetricMap(storeData, requestedMetricTypes), duration)
 		}
-		nativeData, ok := nativeResults[id]
-		if !ok {
-			result[id] = best
-			continue
+		if nativeData, ok := nativeResults[id]; ok {
+			best = mergeGuestMetricHistory(best, filterChartMetricMap(nativeData, requestedMetricTypes), duration)
 		}
-		result[id] = mergeGuestMetricHistory(best, filterChartMetricMap(nativeData, requestedMetricTypes), duration)
+		result[id] = best
 	}
 
 	return result
@@ -1414,19 +1417,27 @@ func mergeGuestMetricHistory(base, candidate map[string][]MetricPoint, duration 
 	return mergeMetricHistory(base, candidate, duration)
 }
 
+// mergeMetricHistory selects the better series per metric between base and
+// candidate and returns the merged map.
+//
+// Ownership: caller transfers ownership of both maps (and their slice values)
+// to this function. The returned map reuses base's storage when present and
+// may share slices with candidate. Callers must not retain references to
+// base or candidate after this call, and must not pass shared/borrowed maps.
 func mergeMetricHistory(base, candidate map[string][]MetricPoint, duration time.Duration) map[string][]MetricPoint {
 	if len(candidate) == 0 {
-		return cloneMetricPointMap(base)
+		return base
 	}
-
-	merged := cloneMetricPointMap(base)
+	if base == nil {
+		base = make(map[string][]MetricPoint, len(candidate))
+	}
 	for metricType, candidateSeries := range candidate {
-		if !shouldPreferMetricSeries(merged[metricType], candidateSeries, duration) {
+		if !shouldPreferMetricSeries(base[metricType], candidateSeries, duration) {
 			continue
 		}
-		merged[metricType] = cloneMetricSeries(candidateSeries)
+		base[metricType] = candidateSeries
 	}
-	return merged
+	return base
 }
 
 func filterMetricPointMap(metricMap map[string][]MetricPoint, metricTypes []string) map[string][]MetricPoint {

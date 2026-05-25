@@ -67,11 +67,18 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-// stateComputeGroup dedupes concurrent /api/state callers per tenant. Without
-// it, N concurrent dashboards each rebuild + serialize the full 1.6 MB state
-// snapshot, serializing on the monitor lock. With it, only the first goroutine
-// per tenant runs and the rest reuse the already-encoded bytes.
-var stateComputeGroup singleflight.Group
+// workloadChartsCacheTTL absorbs repeated polls for the same sparkline data.
+// Workload chart data refreshes on the metrics polling cadence (5-30 s); a
+// short TTL is well below that and invisible for trend sparklines while
+// dropping the cost of repeated polls from many clients. The cache itself
+// lives on the Router so tests don't pollute each other and tenants don't
+// cross-contaminate.
+const workloadChartsCacheTTL = 3 * time.Second
+
+type cachedWorkloadChartsEntry struct {
+	body     []byte
+	cachedAt time.Time
+}
 
 // Router handles HTTP routing
 type Router struct {
@@ -168,6 +175,13 @@ type Router struct {
 	startedPatrolOrgs        map[string]bool
 	aiAutoFixEndpoints       extensions.AIAutoFixEndpoints
 	aiAlertAnalysisEndpoints extensions.AIAlertAnalysisEndpoints
+
+	// Per-router perf state: keeps caches and singleflight groups isolated
+	// between tests and prevents cross-tenant cache pollution.
+	stateComputeGroup          singleflight.Group
+	workloadChartsComputeGroup singleflight.Group
+	workloadChartsCacheMu      sync.RWMutex
+	workloadChartsCache        map[string]cachedWorkloadChartsEntry
 }
 
 const summaryChartsCacheTTL = 5 * time.Second
@@ -5185,7 +5199,7 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 	if orgID == "" {
 		orgID = "default"
 	}
-	v, err, _ := stateComputeGroup.Do(orgID, func() (any, error) {
+	v, err, _ := r.stateComputeGroup.Do(orgID, func() (any, error) {
 		frontendState := monitor.BuildFrontendState()
 		return json.Marshal(frontendState)
 	})
@@ -6680,7 +6694,8 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		timeRange = "1h"
 	}
 	selectedNodeID := strings.TrimSpace(query.Get("node"))
-	maxPoints := parseWorkloadMaxPoints(query.Get("maxPoints"))
+	maxPointsRaw := query.Get("maxPoints")
+	maxPoints := parseWorkloadMaxPoints(maxPointsRaw)
 	duration := parseChartsRangeDuration(timeRange)
 
 	monitor := r.getTenantMonitor(req.Context())
@@ -6688,11 +6703,76 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, "Tenant monitor is not available", http.StatusInternalServerError)
 		return
 	}
+
+	orgID := GetOrgID(req.Context())
+	if orgID == "" {
+		orgID = "default"
+	}
+	cacheKey := orgID + "|" + timeRange + "|" + selectedNodeID + "|" + maxPointsRaw
+
+	r.workloadChartsCacheMu.RLock()
+	if entry, ok := r.workloadChartsCache[cacheKey]; ok && time.Since(entry.cachedAt) <= workloadChartsCacheTTL {
+		body := entry.body
+		r.workloadChartsCacheMu.RUnlock()
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write(body); err != nil {
+			log.Error().Err(err).Msg("Failed to write cached workload chart data response")
+		}
+		return
+	}
+	r.workloadChartsCacheMu.RUnlock()
+
+	v, err, _ := r.workloadChartsComputeGroup.Do(cacheKey, func() (any, error) {
+		// Re-check cache inside the singleflight barrier in case an earlier
+		// caller already populated it while we were queued.
+		r.workloadChartsCacheMu.RLock()
+		if entry, ok := r.workloadChartsCache[cacheKey]; ok && time.Since(entry.cachedAt) <= workloadChartsCacheTTL {
+			r.workloadChartsCacheMu.RUnlock()
+			return entry.body, nil
+		}
+		r.workloadChartsCacheMu.RUnlock()
+
+		body, err := r.buildWorkloadChartsResponse(req.Context(), monitor, timeRange, selectedNodeID, maxPoints, duration, inMemoryChartThreshold)
+		if err != nil {
+			return nil, err
+		}
+		r.workloadChartsCacheMu.Lock()
+		if r.workloadChartsCache == nil {
+			r.workloadChartsCache = map[string]cachedWorkloadChartsEntry{}
+		}
+		r.workloadChartsCache[cacheKey] = cachedWorkloadChartsEntry{body: body, cachedAt: time.Now()}
+		r.workloadChartsCacheMu.Unlock()
+		return body, nil
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to build workload chart data response")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if _, err := w.Write(v.([]byte)); err != nil {
+		log.Error().Err(err).Msg("Failed to write workload chart data response")
+	}
+}
+
+// buildWorkloadChartsResponse runs the heavy compute path for handleWorkloadCharts
+// and returns the marshaled JSON body. Extracted so the handler can wrap it
+// with caching + singleflight.
+func (r *Router) buildWorkloadChartsResponse(
+	ctx context.Context,
+	monitor *monitoring.Monitor,
+	timeRange string,
+	selectedNodeID string,
+	maxPoints int,
+	duration time.Duration,
+	inMemoryChartThreshold time.Duration,
+) ([]byte, error) {
+	_ = ctx
 	nodes := monitor.NodesSnapshot()
 	readState := monitor.GetUnifiedReadStateOrSnapshot()
 	if readState == nil {
-		http.Error(w, "State unavailable", http.StatusInternalServerError)
-		return
+		return nil, fmt.Errorf("state unavailable")
 	}
 	metricsStoreEnabled := monitor.GetMetricsStore() != nil
 	primarySourceHint := "memory"
@@ -7013,12 +7093,11 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		},
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response.NormalizeCollections()); err != nil {
-		log.Error().Err(err).Msg("Failed to encode workload chart data response")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
+	body, err := json.Marshal(response.NormalizeCollections())
+	if err != nil {
+		return nil, fmt.Errorf("marshal workload chart response: %w", err)
 	}
+	return body, nil
 }
 
 // parseChartsRangeDuration converts the UI chart range query (e.g. "5m", "1h")
